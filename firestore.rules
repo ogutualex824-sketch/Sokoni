@@ -963,6 +963,20 @@ service cloud.firestore {
       allow update: if isAdmin()
                     || (isAuthed() && request.auth.uid == uid && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin();
+
+      // Click-and-collect orders placed by buyers, managed by the seller at POS
+      match /clickAndCollect/{orderId} {
+        // Seller sees all their C&C orders; buyer sees only their own
+        allow read: if isAuthed()
+                    && (request.auth.uid == uid
+                        || resource.data.customerId == request.auth.uid
+                        || isAdmin());
+        // Any signed-in user can place a C&C order (CF validates stock)
+        allow create: if isAuthed();
+        // Only seller / admin updates status (ready, collected, cancelled)
+        allow update: if isAuthed() && (request.auth.uid == uid || isAdmin());
+        allow delete: if false;
+      }
     }
 
     match /sellerBroadcasts/{sellerName}/broadcasts/{broadcastId} {
@@ -3310,6 +3324,32 @@ service cloud.firestore {
     match /impactMonthlySnapshots/{snapshotId} {
       allow read: if isAdmin();
       allow write: if false;
+    }
+
+    /* ── Async Jobs Engine v1.0 ────────────────────────────────────────── */
+    match /asyncJobs/{jobId} {
+      allow read: if isAuthed() && (
+        resource.data.ownerId == request.auth.uid || isAdmin()
+      );
+      allow write: if false; // CF-only
+    }
+    match /asyncJobsDLQ/{dlqId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only
+    }
+    match /asyncQueues/{queueId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only
+    }
+    match /asyncWorkers/{workerId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only
+    }
+    match /posReceipts/{receiptId} {
+      allow read: if isAuthed() && (
+        resource.data.sellerId == request.auth.uid || isAdmin()
+      );
+      allow write: if false; // CF-only
     }
 
   }

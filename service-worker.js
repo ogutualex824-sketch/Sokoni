@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260628-smartpos30-v1";
+const CACHE_VERSION = "sokoni-20260628-async-jobs-v1";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -133,6 +133,8 @@ const PRECACHE_STATIC = [
   "/pos-hardware-wizard.js", "/pos-hardware-wizard.html",
   "/pos-accounting.html", "/pos-crm-pro.html", "/pos-staff-ops.html",
   "/pos-hq.html", "/pos-bi.html", "/pos-ai.html",
+  /* SmartPOS 4.0 — Polish, Scale & Market Readiness */
+  "/pos-onboard.html", "/pos-daily.html", "/pos-observability.html", "/pos-marketplace.html",
   "/pos-checkout.html", "/pos-display.html", "/pos-loyalty-engine.js",
   "/print-station.html", "/pos-printer-setup.html", "/manager-auth.html", "/commissioning.html",
   /* Self-checkout kiosk */
@@ -206,6 +208,9 @@ const PRECACHE_STATIC = [
   /* ── Redis Infrastructure Layer v1.0 ── */
   "/sokoni-redis.js",
   "/redis-monitor.html",
+  /* ── Async Jobs Engine v1.0 ── */
+  "/sokoni-async-jobs.js",
+  "/async-jobs.html",
 ];
 
 const CDN_ORIGINS = [

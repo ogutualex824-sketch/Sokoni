@@ -7918,6 +7918,31 @@ exports.verifyTrustReceipt        = payTrust.verifyTrustReceipt;
 exports.getPaymentSecurityAlerts  = payTrust.getPaymentSecurityAlerts;
 exports.detectPaymentAnomalies    = payTrust.detectPaymentAnomalies;
 
+/* ── Security Fraud Engine v1.0 — velocity, travel, scoring, alerts ──────── */
+const secFraud = require('./security-fraud-engine');
+exports.recordSecurityEvent    = secFraud.recordSecurityEvent;
+exports.checkImpossibleTravel  = secFraud.checkImpossibleTravel;
+exports.checkPaymentVelocity   = secFraud.checkPaymentVelocity;
+exports.scoreFraudRisk         = secFraud.scoreFraudRisk;
+exports.getFraudAlerts         = secFraud.getFraudAlerts;
+exports.dismissFraudAlert      = secFraud.dismissFraudAlert;
+exports.escalateFraudAlert     = secFraud.escalateFraudAlert;
+exports.getFraudReport         = secFraud.getFraudReport;
+exports.scheduledFraudSweep    = secFraud.scheduledFraudSweep;
+
+/* ── Security Incident Response v1.0 — suspend, lock, incidents ─────────── */
+const secIncident = require('./security-incident-response');
+exports.suspendUser            = secIncident.suspendUser;
+exports.unsuspendUser          = secIncident.unsuspendUser;
+exports.lockStore              = secIncident.lockStore;
+exports.unlockStore            = secIncident.unlockStore;
+exports.revokeUserSessions     = secIncident.revokeUserSessions;
+exports.blockDevice            = secIncident.blockDevice;
+exports.disablePaymentMethod   = secIncident.disablePaymentMethod;
+exports.createIncident         = secIncident.createIncident;
+exports.updateIncident         = secIncident.updateIncident;
+exports.getIncidents           = secIncident.getIncidents;
+exports.getIncidentTimeline    = secIncident.getIncidentTimeline;
 
 /* ── MiniShop & Social Commerce Engine v1.0 ─────────────────────────────── */
 const minishop = require('./minishop');
@@ -8343,6 +8368,16 @@ exports.importBankStatement        = posIntegrations.importBankStatement;
 exports.getPOSSystemHealth         = posIntegrations.getPOSSystemHealth;
 exports.getPOSAlertHistory         = posIntegrations.getPOSAlertHistory;
 
+
+/* -- SmartPOS 4.0 -- Marketplace <-> POS Integration -------------------- */
+const posMarketplaceSync = require('./pos-marketplace-sync');
+exports.createClickAndCollect       = posMarketplaceSync.createClickAndCollect;
+exports.getPendingClickAndCollect   = posMarketplaceSync.getPendingClickAndCollect;
+exports.updateClickAndCollectStatus = posMarketplaceSync.updateClickAndCollectStatus;
+exports.getUnifiedSalesReport       = posMarketplaceSync.getUnifiedSalesReport;
+exports.syncPromotionToPOS          = posMarketplaceSync.syncPromotionToPOS;
+exports.getActivePOSPromotions      = posMarketplaceSync.getActivePOSPromotions;
+exports.getInventoryReserveStatus   = posMarketplaceSync.getInventoryReserveStatus;
 /* ── Platform Event Bus ─────────────────────────────────────── */
 const eventBus = require('./platform-event-bus');
 exports.publishEvent                = eventBus.publishEvent;
@@ -8425,3 +8460,79 @@ exports.redisAdminMetrics         = redisLayer.redisAdminMetrics;
 /* Scheduled */
 exports.redisScheduledPresenceCleanup = redisLayer.redisScheduledPresenceCleanup;
 exports.redisScheduledQueueWorker     = redisLayer.redisScheduledQueueWorker;
+
+/* ── Zero Trust Security Middleware v1.0 ───────────────────────────────── */
+const zeroTrust = require('./security-zero-trust');
+exports.evaluateAccessRequest    = zeroTrust.evaluateAccessRequest;
+exports.generateCorrelationId    = zeroTrust.generateCorrelationId;
+exports.getSessionRiskScore      = zeroTrust.getSessionRiskScore;
+exports.triggerStepUpAuth        = zeroTrust.triggerStepUpAuth;
+exports.verifyStepUpAuth         = zeroTrust.verifyStepUpAuth;
+exports.getRiskProfile           = zeroTrust.getRiskProfile;
+exports.updateRiskProfile        = zeroTrust.updateRiskProfile;
+exports.getZeroTrustPolicyStatus = zeroTrust.getZeroTrustPolicyStatus;
+
+/* ── Async Jobs Engine v1.0 ─────────────────────────────────────────────── */
+const asyncJobs = require('./async-jobs-engine');
+/* Core */
+exports.createJob              = asyncJobs.createJob;
+exports.getJob                 = asyncJobs.getJob;
+exports.getMyJobs              = asyncJobs.getMyJobs;
+exports.cancelJob              = asyncJobs.cancelJob;
+/* Convenience */
+exports.submitEmailJob         = asyncJobs.submitEmailJob;
+exports.submitWebhookJob       = asyncJobs.submitWebhookJob;
+/* Admin */
+exports.retryJob               = asyncJobs.retryJob;
+exports.replayDLQJob           = asyncJobs.replayDLQJob;
+exports.pauseQueue             = asyncJobs.pauseQueue;
+exports.resumeQueue            = asyncJobs.resumeQueue;
+exports.getQueueDepth          = asyncJobs.getQueueDepth;
+exports.getJobDashboard        = asyncJobs.getJobDashboard;
+exports.inspectJob             = asyncJobs.inspectJob;
+exports.bulkCancelJobs         = asyncJobs.bulkCancelJobs;
+exports.getWorkerStats         = asyncJobs.getWorkerStats;
+/* Scheduled + Trigger */
+exports.processJobQueue        = asyncJobs.processJobQueue;
+exports.jobStuckRecovery       = asyncJobs.jobStuckRecovery;
+exports.jobCleanupScheduled    = asyncJobs.jobCleanupScheduled;
+exports.onJobCreated           = asyncJobs.onJobCreated;
+
+/* -- Security 6.0 -- Enterprise Identity (MFA + Passkeys + Device Trust) -- */
+const secIdentity = require('./security-identity');
+exports.initiateTOTPEnrollment        = secIdentity.initiateTOTPEnrollment;
+exports.verifyTOTPEnrollment          = secIdentity.verifyTOTPEnrollment;
+exports.verifyTOTP                    = secIdentity.verifyTOTP;
+exports.disableMFA                    = secIdentity.disableMFA;
+exports.getMFAStatus                  = secIdentity.getMFAStatus;
+exports.regenerateBackupCodes         = secIdentity.regenerateBackupCodes;
+exports.initiatePasskeyRegistration   = secIdentity.initiatePasskeyRegistration;
+exports.verifyPasskeyRegistration     = secIdentity.verifyPasskeyRegistration;
+exports.initiatePasskeyAuthentication = secIdentity.initiatePasskeyAuthentication;
+exports.verifyPasskeyAuthentication   = secIdentity.verifyPasskeyAuthentication;
+exports.registerDevice                = secIdentity.registerDevice;
+exports.getDevices                    = secIdentity.getDevices;
+exports.removeDevice                  = secIdentity.removeDevice;
+exports.updateDeviceTrustScore        = secIdentity.updateDeviceTrustScore;
+
+/* -- Security 6.0 -- Audit Log + Scorecard + Pen Test -------------------- */
+const secAudit = require('./security-audit');
+exports.logSecurityEvent              = secAudit.logSecurityEvent;
+exports.getAuditLog                   = secAudit.getAuditLog;
+exports.verifyAuditIntegrity          = secAudit.verifyAuditIntegrity;
+exports.exportAuditLog                = secAudit.exportAuditLog;
+exports.getSecurityScorecard          = secAudit.getSecurityScorecard;
+exports.runSecurityScan               = secAudit.runSecurityScan;
+exports.getLatestSecurityScan         = secAudit.getLatestSecurityScan;
+exports.getComplianceReport           = secAudit.getComplianceReport;
+exports.scheduledDailySecurityReport  = secAudit.scheduledDailySecurityReport;
+
+/* -- Security 6.0 -- AI Security (Prompt Injection + PII + Rate Limits) -- */
+const secAI = require('./security-ai');
+exports.validateAIPrompt              = secAI.validateAIPrompt;
+exports.filterAIResponse              = secAI.filterAIResponse;
+exports.getAISecurityLog              = secAI.getAISecurityLog;
+exports.getAIRateLimitStatus          = secAI.getAIRateLimitStatus;
+exports.reportAIAbuse                 = secAI.reportAIAbuse;
+exports.getAIContextPolicy            = secAI.getAIContextPolicy;
+exports.blockAISession                = secAI.blockAISession;

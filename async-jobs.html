@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Async Jobs Dashboard — SOKONI</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="/sokoni-config.js"></script>
+<script src="/sokoni-appcheck.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d0d0d;color:#e4e4e4;min-height:100vh}
+header{background:#111;border-bottom:1px solid #222;padding:16px 24px;display:flex;align-items:center;gap:12px}
+header h1{font-size:18px;font-weight:600}
+header .badge{background:#7c3aed;color:#fff;font-size:11px;padding:2px 8px;border-radius:12px}
+.container{max-width:1400px;margin:0 auto;padding:24px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+@media(max-width:900px){.grid-4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:500px){.grid-4{grid-template-columns:1fr}}
+.card{background:#161616;border:1px solid #222;border-radius:12px;padding:20px}
+.card h3{font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.card .num{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums}
+.card .sub{font-size:12px;color:#666;margin-top:4px}
+.num.green{color:#34d399}
+.num.yellow{color:#fbbf24}
+.num.red{color:#f87171}
+.num.blue{color:#60a5fa}
+.num.purple{color:#a78bfa}
+.section{margin-bottom:32px}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.section-header h2{font-size:16px;font-weight:600}
+.btn{background:#7c3aed;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;transition:background .15s}
+.btn:hover{background:#6d28d9}
+.btn.sm{padding:5px 12px;font-size:12px}
+.btn.danger{background:#dc2626}
+.btn.danger:hover{background:#b91c1c}
+.btn.ghost{background:transparent;border:1px solid #333;color:#aaa}
+.btn.ghost:hover{border-color:#555;color:#eee}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;padding:8px 12px;border-bottom:1px solid #222}
+td{padding:10px 12px;border-bottom:1px solid #1a1a1a;font-size:13px;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1a1a1a}
+.badge-status{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:500}
+.s-queued{background:#1e3a5f;color:#60a5fa}
+.s-running{background:#1c3a2e;color:#34d399}
+.s-retrying{background:#3b2e10;color:#fbbf24}
+.s-completed{background:#1a2e1a;color:#4ade80}
+.s-failed{background:#3b1a1a;color:#f87171}
+.s-dead_letter{background:#2d1515;color:#ef4444}
+.s-cancelled{background:#222;color:#888}
+.s-waiting{background:#1e1e3a;color:#818cf8}
+.queue-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.queue-pill{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 14px;font-size:13px;display:flex;align-items:center;gap:8px}
+.queue-pill.paused{border-color:#ef4444;background:#1f0a0a}
+.pill-dot{width:8px;height:8px;border-radius:50%;background:#34d399}
+.pill-dot.paused{background:#ef4444}
+.queue-actions{display:flex;gap:6px;margin-top:6px}
+.tabs{display:flex;gap:4px;background:#111;border-radius:10px;padding:4px;margin-bottom:20px;width:fit-content}
+.tab{padding:7px 16px;border-radius:7px;font-size:13px;cursor:pointer;border:none;background:transparent;color:#888;transition:.15s}
+.tab.active{background:#7c3aed;color:#fff}
+.panel{display:none}
+.panel.active{display:block}
+.dlq-empty,.empty-state{text-align:center;padding:40px;color:#555;font-size:14px}
+.input-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+input,select{background:#111;border:1px solid #2a2a2a;color:#e4e4e4;padding:8px 12px;border-radius:8px;font-size:13px;outline:none}
+input:focus,select:focus{border-color:#7c3aed}
+.toast{position:fixed;bottom:24px;right:24px;background:#34d399;color:#111;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:500;z-index:999;display:none}
+.toast.err{background:#f87171}
+.progress-bar{width:100%;height:4px;background:#222;border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:#7c3aed;transition:width .3s}
+.refresh-row{display:flex;align-items:center;gap:12px;font-size:12px;color:#555}
+.spinner{width:14px;height:14px;border:2px solid #333;border-top-color:#7c3aed;border-radius:50%;animation:spin .8s linear infinite;display:none}
+.spinner.active{display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Async Jobs Dashboard</h1>
+    <div style="font-size:12px;color:#666;margin-top:2px">SOKONI Background Processing Engine</div>
+  </div>
+  <span class="badge">Admin</span>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+    <div class="refresh-row">
+      <div class="spinner" id="spinner"></div>
+      <span id="lastRefresh">—</span>
+    </div>
+    <button class="btn sm" onclick="loadAll()">Refresh</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- KPI Strip -->
+  <div class="grid-4" id="kpis">
+    <div class="card"><h3>Queued</h3><div class="num blue" id="kpiQueued">—</div><div class="sub">Waiting to run</div></div>
+    <div class="card"><h3>Running</h3><div class="num green" id="kpiRunning">—</div><div class="sub">In progress now</div></div>
+    <div class="card"><h3>Failed / DLQ</h3><div class="num red" id="kpiFailed">—</div><div class="sub">Need attention</div></div>
+    <div class="card"><h3>Success Rate</h3><div class="num purple" id="kpiSuccess">—</div><div class="sub">Last 24 hours</div></div>
+  </div>
+
+  <div class="grid-4" style="margin-bottom:24px">
+    <div class="card"><h3>Avg Exec Time</h3><div class="num blue" id="kpiAvgMs">—</div><div class="sub">p95: <span id="kpiP95">—</span></div></div>
+    <div class="card"><h3>Active Workers</h3><div class="num green" id="kpiWorkers">—</div><div class="sub">Live now</div></div>
+    <div class="card"><h3>Total (24h)</h3><div class="num" id="kpiTotal">—</div><div class="sub">All statuses</div></div>
+    <div class="card"><h3>Dead Letter</h3><div class="num red" id="kpiDLQ">—</div><div class="sub">Max-retries exhausted</div></div>
+  </div>
+
+  <!-- Queue State Pills -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Queue Status</h2>
+    </div>
+    <div class="queue-bar" id="queuePills">Loading...</div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('overview')">Overview</button>
+    <button class="tab" onclick="showTab('failed')">Failed Jobs</button>
+    <button class="tab" onclick="showTab('dlq')">Dead Letter</button>
+    <button class="tab" onclick="showTab('workers')">Workers</button>
+    <button class="tab" onclick="showTab('tools')">Admin Tools</button>
+  </div>
+
+  <!-- Overview Tab -->
+  <div class="panel active" id="tab-overview">
+    <div class="section">
+      <div class="section-header">
+        <h2>By Job Type (24h)</h2>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Type</th><th>Count</th><th>Distribution</th></tr></thead>
+          <tbody id="typeTable"><tr><td colspan="3" class="empty-state">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-header">
+        <h2>By Priority (queued)</h2>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Priority</th><th>Pending</th><th>Queue State</th></tr></thead>
+          <tbody id="priorityTable"><tr><td colspan="3" class="empty-state">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Failed Tab -->
+  <div class="panel" id="tab-failed">
+    <div class="section">
+      <div class="section-header">
+        <h2>Recently Failed Jobs</h2>
+        <div style="display:flex;gap:8px">
+          <button class="btn sm ghost" onclick="loadDashboard()">Refresh</button>
+        </div>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Job ID</th><th>Type</th><th>Error</th><th>Retries</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody id="failedTable"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- DLQ Tab -->
+  <div class="panel" id="tab-dlq">
+    <div class="section">
+      <div class="section-header"><h2>Dead Letter Queue</h2></div>
+      <div class="card">
+        <table>
+          <thead><tr><th>DLQ ID</th><th>Type</th><th>Reason</th><th>Moved At</th><th>Actions</th></tr></thead>
+          <tbody id="dlqTable"><tr><td colspan="5" class="empty-state">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workers Tab -->
+  <div class="panel" id="tab-workers">
+    <div class="section">
+      <div class="section-header"><h2>Active Workers</h2></div>
+      <div class="card">
+        <table>
+          <thead><tr><th>Worker ID</th><th>Current Job</th><th>Jobs Processed</th><th>Heartbeat</th></tr></thead>
+          <tbody id="workerTable"><tr><td colspan="4" class="empty-state">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Tools Tab -->
+  <div class="panel" id="tab-tools">
+    <div class="section">
+      <div class="section-header"><h2>Queue Control</h2></div>
+      <div class="card" style="padding:20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:600px">
+          <div>
+            <label style="font-size:12px;color:#888;display:block;margin-bottom:6px">Queue Priority</label>
+            <select id="queueSelect" style="width:100%">
+              <option value="CRITICAL">CRITICAL</option>
+              <option value="HIGH">HIGH</option>
+              <option value="NORMAL" selected>NORMAL</option>
+              <option value="LOW">LOW</option>
+              <option value="BACKGROUND">BACKGROUND</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:8px">
+            <button class="btn" onclick="pauseQueue()">Pause</button>
+            <button class="btn ghost" onclick="resumeQueue()">Resume</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header"><h2>Bulk Cancel</h2></div>
+      <div class="card" style="padding:20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:flex-end;max-width:700px">
+          <div>
+            <label style="font-size:12px;color:#888;display:block;margin-bottom:6px">Job Type</label>
+            <select id="bulkType" style="width:100%">
+              <option value="">All types</option>
+              <option>EMAIL</option><option>PUSH</option><option>ANALYTICS</option>
+              <option>WEBHOOK</option><option>BULK_IMPORT</option><option>BULK_EXPORT</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:#888;display:block;margin-bottom:6px">Priority</label>
+            <select id="bulkPriority" style="width:100%">
+              <option value="">All</option>
+              <option>CRITICAL</option><option>HIGH</option><option>NORMAL</option>
+              <option>LOW</option><option>BACKGROUND</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:#888;display:block;margin-bottom:6px">Older than (hours)</label>
+            <input type="number" id="bulkAge" value="24" style="width:100%"/>
+          </div>
+          <button class="btn danger" onclick="bulkCancel()">Cancel Jobs</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header"><h2>Inspect Job</h2></div>
+      <div class="card" style="padding:20px">
+        <div style="display:flex;gap:8px;max-width:500px">
+          <input type="text" id="inspectId" placeholder="job_... or DLQ ID" style="flex:1"/>
+          <button class="btn" onclick="inspectJob()">Inspect</button>
+        </div>
+        <pre id="inspectResult" style="margin-top:16px;background:#111;padding:16px;border-radius:8px;font-size:12px;overflow:auto;max-height:400px;display:none"></pre>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header"><h2>Retry / Replay</h2></div>
+      <div class="card" style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:24px">
+        <div>
+          <div style="font-size:13px;color:#aaa;margin-bottom:10px">Retry a FAILED or CANCELLED job</div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="retryId" placeholder="job_..." style="flex:1"/>
+            <button class="btn" onclick="retryJob()">Retry</button>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:13px;color:#aaa;margin-bottom:10px">Replay a DLQ entry</div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="dlqId" placeholder="DLQ job_..." style="flex:1"/>
+            <button class="btn" onclick="replayDLQ()">Replay</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+let db, fns, auth;
+let dashData = null;
+let depthData = null;
+let workerData = null;
+
+firebase.initializeApp(window.SOKONI_CONFIG || {});
+db   = firebase.firestore();
+fns  = firebase.functions();
+auth = firebase.auth();
+
+const call = (name, data = {}) => fns.httpsCallable(name)(data).then(r => r.data);
+
+auth.onAuthStateChanged(user => {
+  if (user) loadAll();
+  else window.location = '/index.html';
+});
+
+function showTab(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'workers') loadWorkers();
+}
+
+function toast(msg, err = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (err ? ' err' : '');
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+function spin(on) {
+  document.getElementById('spinner').classList.toggle('active', on);
+}
+
+async function loadAll() {
+  spin(true);
+  await Promise.allSettled([loadDashboard(), loadDepth()]);
+  document.getElementById('lastRefresh').textContent =
+    new Date().toLocaleTimeString('en-KE');
+  spin(false);
+}
+
+async function loadDashboard() {
+  try {
+    dashData = await call('getJobDashboard', { hours: 24 });
+    renderKPIs();
+    renderTypeTable();
+    renderFailedTable();
+    renderDLQTable();
+  } catch (e) { console.error(e); }
+}
+
+async function loadDepth() {
+  try {
+    depthData = await call('getQueueDepth', {});
+    renderQueuePills();
+    renderPriorityTable();
+  } catch (e) { console.error(e); }
+}
+
+async function loadWorkers() {
+  try {
+    workerData = await call('getWorkerStats', {});
+    renderWorkers();
+  } catch (e) { console.error(e); }
+}
+
+function renderKPIs() {
+  if (!dashData) return;
+  const { summary, successRate, avgExecMs, p95ExecMs } = dashData;
+  document.getElementById('kpiQueued').textContent   = (depthData?.queued ?? '—');
+  document.getElementById('kpiRunning').textContent  = summary.running;
+  document.getElementById('kpiFailed').textContent   = summary.failed;
+  document.getElementById('kpiSuccess').textContent  = successRate + '%';
+  document.getElementById('kpiAvgMs').textContent    = avgExecMs ? fmtMs(avgExecMs) : '—';
+  document.getElementById('kpiP95').textContent      = p95ExecMs ? fmtMs(p95ExecMs) : '—';
+  document.getElementById('kpiWorkers').textContent  = dashData.activeWorkers;
+  document.getElementById('kpiTotal').textContent    = summary.total;
+  document.getElementById('kpiDLQ').textContent      = summary.dlq;
+}
+
+function fmtMs(ms) {
+  if (ms < 1000) return ms + 'ms';
+  if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+  return (ms / 60000).toFixed(1) + 'm';
+}
+
+function renderQueuePills() {
+  if (!depthData) return;
+  const { queueStates = {}, byPriority = {} } = depthData;
+  const all = ['CRITICAL','HIGH','NORMAL','LOW','BACKGROUND'];
+  document.getElementById('queuePills').innerHTML = all.map(p => {
+    const paused  = queueStates[p] === 'paused';
+    const pending = byPriority[p] || 0;
+    return `<div class="queue-pill${paused ? ' paused' : ''}">
+      <div class="pill-dot${paused ? ' paused' : ''}"></div>
+      <div>
+        <div style="font-weight:600;font-size:13px">${p}</div>
+        <div style="font-size:11px;color:#666">${pending} pending${paused ? ' · PAUSED' : ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTypeTable() {
+  if (!dashData?.byType) return;
+  const total  = dashData.summary.total || 1;
+  const sorted = Object.entries(dashData.byType).sort((a, b) => b[1] - a[1]);
+  document.getElementById('typeTable').innerHTML = sorted.length
+    ? sorted.map(([type, count]) => `
+      <tr>
+        <td style="font-family:monospace">${type}</td>
+        <td>${count}</td>
+        <td>
+          <div class="progress-bar" style="width:200px">
+            <div class="progress-fill" style="width:${Math.round(count/total*100)}%"></div>
+          </div>
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="3" class="empty-state">No jobs in this period</td></tr>';
+}
+
+function renderPriorityTable() {
+  if (!depthData) return;
+  const { byPriority = {}, queueStates = {} } = depthData;
+  document.getElementById('priorityTable').innerHTML = Object.entries(byPriority)
+    .map(([label, count]) => `
+      <tr>
+        <td>${label}</td>
+        <td>${count}</td>
+        <td><span class="badge-status ${queueStates[label] === 'paused' ? 's-failed' : 's-completed'}">
+          ${queueStates[label] === 'paused' ? 'PAUSED' : 'ACTIVE'}
+        </span></td>
+      </tr>`).join('');
+}
+
+function renderFailedTable() {
+  if (!dashData?.recentFailed) return;
+  const rows = dashData.recentFailed;
+  document.getElementById('failedTable').innerHTML = rows.length
+    ? rows.map(j => `
+      <tr>
+        <td style="font-family:monospace;font-size:11px">${j.jobId}</td>
+        <td>${j.type}</td>
+        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f87171">
+          ${esc(j.error || '—')}</td>
+        <td>${j.retryCount}</td>
+        <td>${j.createdAt ? new Date(j.createdAt).toLocaleString('en-KE') : '—'}</td>
+        <td>
+          <button class="btn sm" onclick="retryJobId('${j.jobId}')">Retry</button>
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" class="empty-state">No failed jobs</td></tr>';
+}
+
+function renderDLQTable() {
+  if (!dashData?.dlqSample) return;
+  const rows = dashData.dlqSample;
+  document.getElementById('dlqTable').innerHTML = rows.length
+    ? rows.map(j => `
+      <tr>
+        <td style="font-family:monospace;font-size:11px">${j.dlqId}</td>
+        <td>${j.type}</td>
+        <td style="color:#f87171">${esc(j.reason || '—')}</td>
+        <td>${j.movedAt ? new Date(j.movedAt).toLocaleString('en-KE') : '—'}</td>
+        <td>
+          <button class="btn sm" onclick="replayDLQId('${j.dlqId}')">Replay</button>
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="empty-state">Dead Letter Queue is empty</td></tr>';
+}
+
+function renderWorkers() {
+  const rows = workerData?.workers || [];
+  document.getElementById('workerTable').innerHTML = rows.length
+    ? rows.map(w => `
+      <tr>
+        <td style="font-family:monospace;font-size:11px">${w.workerId}</td>
+        <td style="font-family:monospace;font-size:11px">${w.currentJobId || '—'}</td>
+        <td>${w.jobsProcessed}</td>
+        <td>${w.lastHeartbeat ? new Date(w.lastHeartbeat).toLocaleString('en-KE') : '—'}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="4" class="empty-state">No active workers</td></tr>';
+}
+
+// ── Admin actions ──────────────────────────────────────────────────────────
+
+async function pauseQueue() {
+  const p = document.getElementById('queueSelect').value;
+  try {
+    await call('pauseQueue', { priority: p });
+    toast(`${p} queue paused`);
+    await loadDepth();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function resumeQueue() {
+  const p = document.getElementById('queueSelect').value;
+  try {
+    await call('resumeQueue', { priority: p });
+    toast(`${p} queue resumed`);
+    await loadDepth();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function bulkCancel() {
+  const type           = document.getElementById('bulkType').value || undefined;
+  const priorityLabel  = document.getElementById('bulkPriority').value || undefined;
+  const olderThanHours = Number(document.getElementById('bulkAge').value) || 24;
+  if (!confirm(`Cancel QUEUED jobs older than ${olderThanHours}h? This cannot be undone.`)) return;
+  try {
+    const r = await call('bulkCancelJobs', { type, priorityLabel, olderThanHours });
+    toast(`Cancelled ${r.cancelled} jobs`);
+    await loadAll();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function inspectJob() {
+  const jobId = document.getElementById('inspectId').value.trim();
+  if (!jobId) return;
+  const el = document.getElementById('inspectResult');
+  try {
+    const r = await call('inspectJob', { jobId });
+    el.textContent = JSON.stringify(r, null, 2);
+    el.style.display = 'block';
+  } catch (e) {
+    el.textContent = 'Error: ' + e.message;
+    el.style.display = 'block';
+  }
+}
+
+async function retryJob() {
+  const jobId = document.getElementById('retryId').value.trim();
+  await retryJobId(jobId);
+}
+
+async function retryJobId(jobId) {
+  if (!jobId) return;
+  try {
+    await call('retryJob', { jobId });
+    toast('Job re-queued');
+    await loadAll();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function replayDLQ() {
+  const dlqId = document.getElementById('dlqId').value.trim();
+  await replayDLQId(dlqId);
+}
+
+async function replayDLQId(dlqId) {
+  if (!dlqId) return;
+  try {
+    const r = await call('replayDLQJob', { dlqId });
+    toast(`Replayed as ${r.jobId}`);
+    await loadAll();
+  } catch (e) { toast(e.message, true); }
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// Auto-refresh every 30 seconds
+setInterval(loadAll, 30000);
+</script>
+</body>
+</html>
