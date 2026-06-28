@@ -4,6 +4,7 @@
 ================================================================ */
 
 import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
 import {
   getAuth,
   onAuthStateChanged,
@@ -33,6 +34,20 @@ const firebaseConfig = {
 
 /* ── Initialize ── */
 const app       = initializeApp(firebaseConfig);
+
+/* ── App Check — must be before any Firebase service ── */
+try {
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider('6Lf93TktAAAAAIqCj8l3YM3dIoS1MIXpilsdnsxj'),
+    isTokenAutoRefreshEnabled: true,
+  });
+} catch (e) {
+  console.warn('[SOKONI AppCheck]', e.message);
+}
+
 const auth      = getAuth(app);
 const db        = getFirestore(app);
 const storage   = getStorage(app);

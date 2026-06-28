@@ -34,7 +34,7 @@ const VALID_HUB_TYPES = new Set([
 
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
-const CF_OPTIONS = { enforceAppCheck: false, region: "us-central1" };
+const CF_OPTIONS = { enforceAppCheck: true, region: "us-central1" };
 
 /* ── Pure helpers ───────────────────────────────────────────────────────── */
 

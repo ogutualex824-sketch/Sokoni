@@ -32,7 +32,7 @@ function _san(v, max) {
 }
 
 // ─── createDispute — buyer raises a dispute against an order ─────────────────
-exports.createDispute = onCall({ enforceAppCheck: false }, async request => {
+exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
   const { orderId, reason, description } = request.data;
@@ -95,7 +95,7 @@ exports.createDispute = onCall({ enforceAppCheck: false }, async request => {
 });
 
 // ─── getMyDisputes — buyer's full dispute history ────────────────────────────
-exports.getMyDisputes = onCall({ enforceAppCheck: false }, async request => {
+exports.getMyDisputes = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const snap = await db.collection('disputes').where('buyerId', '==', request.auth.uid).get();
   const items = snap.docs
@@ -105,7 +105,7 @@ exports.getMyDisputes = onCall({ enforceAppCheck: false }, async request => {
 });
 
 // ─── getDisputeDetail — buyer, seller, or admin ──────────────────────────────
-exports.getDisputeDetail = onCall({ enforceAppCheck: false }, async request => {
+exports.getDisputeDetail = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
   const { disputeId } = request.data;
@@ -124,7 +124,7 @@ exports.getDisputeDetail = onCall({ enforceAppCheck: false }, async request => {
 });
 
 // ─── addDisputeEvidence — buyer or seller adds evidence ──────────────────────
-exports.addDisputeEvidence = onCall({ enforceAppCheck: false }, async request => {
+exports.addDisputeEvidence = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
   const { disputeId, evidenceType, description, fileUrl } = request.data;
@@ -159,7 +159,7 @@ exports.addDisputeEvidence = onCall({ enforceAppCheck: false }, async request =>
 });
 
 // ─── sellerRespondToDispute — seller submits their response ──────────────────
-exports.sellerRespondToDispute = onCall({ enforceAppCheck: false }, async request => {
+exports.sellerRespondToDispute = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
   const { disputeId, response } = request.data;
@@ -184,7 +184,7 @@ exports.sellerRespondToDispute = onCall({ enforceAppCheck: false }, async reques
 });
 
 // ─── cancelDispute — buyer withdraws their dispute ───────────────────────────
-exports.cancelDispute = onCall({ enforceAppCheck: false }, async request => {
+exports.cancelDispute = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
   const { disputeId } = request.data;
@@ -210,7 +210,7 @@ exports.cancelDispute = onCall({ enforceAppCheck: false }, async request => {
 });
 
 // ─── getSellerDisputes — seller sees disputes raised against them ─────────────
-exports.getSellerDisputes = onCall({ enforceAppCheck: false }, async request => {
+exports.getSellerDisputes = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const snap = await db.collection('disputes').where('sellerId', '==', request.auth.uid).get();
   const items = snap.docs
@@ -220,7 +220,7 @@ exports.getSellerDisputes = onCall({ enforceAppCheck: false }, async request => 
 });
 
 // ─── adminGetAllDisputes — admin/superAdmin lists all disputes ────────────────
-exports.adminGetAllDisputes = onCall({ enforceAppCheck: false }, async request => {
+exports.adminGetAllDisputes = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const t = request.auth.token;
   if (!t.admin && !t.superAdmin && !t.isAdmin && !t.isSuperAdmin)
@@ -237,7 +237,7 @@ exports.adminGetAllDisputes = onCall({ enforceAppCheck: false }, async request =
 });
 
 // ─── adminResolveDispute — admin resolves or updates a dispute status ─────────
-exports.adminResolveDispute = onCall({ enforceAppCheck: false }, async request => {
+exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const t = request.auth.token;
   if (!t.admin && !t.superAdmin && !t.isAdmin && !t.isSuperAdmin)

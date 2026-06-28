@@ -184,7 +184,7 @@ async function saveReport(report) {
 
 /* ─── onCall: Admin uploads XML manually ────────────────────────────── */
 exports.processDmarcReport = onCall(
-  { secrets: EMAIL_SECRETS, enforceAppCheck: false },
+  { secrets: EMAIL_SECRETS, enforceAppCheck: true },
   async (req) => {
     const { uid, token } = req.auth || {};
     if (!uid || !(token?.isAdmin || token?.isSuperAdmin)) {
@@ -351,7 +351,7 @@ exports.dmarcReportWebhook = onRequest(
 
 /* ─── onCall: Get DMARC summary for Email Center ────────────────────── */
 exports.getDmarcSummary = onCall(
-  { enforceAppCheck: false },
+  { enforceAppCheck: true },
   async (req) => {
     const { uid, token } = req.auth || {};
     if (!uid || !(token?.isAdmin || token?.isSuperAdmin)) {

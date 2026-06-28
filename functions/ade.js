@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /**
  * SOKONI Automation & Decision Engine (ADE) v1.0
  * Powers platform-wide intelligent automation, rules-based decisions,
@@ -444,7 +444,7 @@ exports.adeOnSubscriptionChanged = onDocumentWritten('subscriptions/{subId}', as
 });
 
 // â”€â”€â”€ Callable â€” Manually trigger engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-exports.adeProcessEvent = onCall({ enforceAppCheck: false }, async request => {
+exports.adeProcessEvent = onCall({ enforceAppCheck: true }, async request => {
   _requireAdmin(request.auth);
   const { eventType, entityType, entityId, eventData } = request.data;
   if (!eventType || !entityType || !entityId)
@@ -455,7 +455,7 @@ exports.adeProcessEvent = onCall({ enforceAppCheck: false }, async request => {
 });
 
 // â”€â”€â”€ Callable â€” Exception Queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-exports.adeGetExceptionQueue = onCall({ enforceAppCheck: false }, async request => {
+exports.adeGetExceptionQueue = onCall({ enforceAppCheck: true }, async request => {
   _requireAdmin(request.auth);
   const { status = 'open', priority, eventType, limit: lim = 50 } = request.data || {};
   const snap = await db.collection(C.exceptions).where('status', '==', status).get();
@@ -472,7 +472,7 @@ exports.adeGetExceptionQueue = onCall({ enforceAppCheck: false }, async request 
 });
 
 // â”€â”€â”€ Callable â€” Resolve Exception â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-exports.adeResolveException = onCall({ enforceAppCheck: false }, async request => {
+exports.adeResolveException = onCall({ enforceAppCheck: true }, async request => {
   _requireAdmin(request.auth);
   const { exceptionId, decision, reason, applyAction } = request.data;
   if (!exceptionId || !decision)
@@ -518,7 +518,7 @@ exports.adeResolveException = onCall({ enforceAppCheck: false }, async request =
 });
 
 // â”€â”€â”€ Callable â€” Rules CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-exports.adeGetRules = onCall({ enforceAppCheck: false }, async request => {
+exports.adeGetRules = onCall({ enforceAppCheck: true }, async request => {
   _requireAdmin(request.auth);
   const { eventType } = request.data || {};
   let q = db.collection(C.rules);
@@ -530,7 +530,7 @@ exports.adeGetRules = onCall({ enforceAppCheck: false }, async request => {
   return { rules };
 });
 
-exports.adeUpsertRule = onCall({ enforceAppCheck: false }, async request => {
+exports.adeUpsertRule = onCall({ enforceAppCheck: true }, async request => {
   _requireAdmin(request.auth);
   const { id, name, description, event_type, conditions, action, action_params, confidence_threshold, priority, enabled, tags } = request.data;
   if (!name || !event_type || !action)
@@ -572,7 +572,7 @@ exports.adeUpsertRule = onCall({ enforceAppCheck: false }, async request => {
   return { id: ref.id };
 });
 
-exports.adeDeleteRule = onCall({ enforceAppCheck: false }, async request => {
+exports.adeDeleteRule = onCall({ enforceAppCheck: true }, async request => {
   if (!_isSA(request.auth)) throw new HttpsError('permission-denied', 'SuperAdmin required');
   const { id } = request.data;
   if (!id) throw new HttpsError('invalid-argument', 'id required');
@@ -584,7 +584,7 @@ exports.adeDeleteRule = onCall({ enforceAppCheck: false }, async request => {
 });
 
 // â”€â”€â”€ Callable â€” Audit Log â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-exports.adeGetAuditLog = onCall({ enforceAppCheck: false }, async request => {
+exports.adeGetAuditLog = onCall({ enforceAppCheck: true }, async request => {
   _requireAdmin(request.auth);
   const { entityId, eventType, lim = 50 } = request.data || {};
   const limit = Math.min(lim, 200);
@@ -596,7 +596,7 @@ exports.adeGetAuditLog = onCall({ enforceAppCheck: false }, async request => {
 });
 
 // â”€â”€â”€ Callable â€” Metrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-exports.adeGetMetrics = onCall({ enforceAppCheck: false }, async request => {
+exports.adeGetMetrics = onCall({ enforceAppCheck: true }, async request => {
   _requireAdmin(request.auth);
   const since = Timestamp.fromDate(new Date(Date.now() - 7 * 86400000));
 
@@ -647,7 +647,7 @@ exports.adeGetMetrics = onCall({ enforceAppCheck: false }, async request => {
 });
 
 // â”€â”€â”€ Callable â€” Seed Default Rules (SuperAdmin, one-time) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-exports.adeSeedDefaultRules = onCall({ enforceAppCheck: false }, async request => {
+exports.adeSeedDefaultRules = onCall({ enforceAppCheck: true }, async request => {
   if (!_isSA(request.auth)) throw new HttpsError('permission-denied', 'SuperAdmin required');
   const existing = await db.collection(C.rules).limit(1).get();
   if (!existing.empty) return { skipped: true, message: 'Rules already seeded' };

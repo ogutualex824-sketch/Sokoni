@@ -69,7 +69,7 @@ function _scoreRider(rider, stats, pickupLat, pickupLng, vehicleRequired) {
 /* ═══════════════════════════════════════════════════════════════════════
    1. navDispatchRider — find and assign best available rider
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navDispatchRider = onCall({ enforceAppCheck: false }, async request => {
+exports.navDispatchRider = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const { orderId, vehicleRequired, manualRiderId } = request.data;
   if (!orderId) throw new HttpsError('invalid-argument', 'orderId required');
@@ -191,7 +191,7 @@ exports.navDispatchRider = onCall({ enforceAppCheck: false }, async request => {
 /* ═══════════════════════════════════════════════════════════════════════
    2. navUpdateTripStatus — trip state machine
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navUpdateTripStatus = onCall({ enforceAppCheck: false }, async request => {
+exports.navUpdateTripStatus = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
   const { tripId, status, stopIdx } = request.data;
@@ -254,7 +254,7 @@ exports.navUpdateTripStatus = onCall({ enforceAppCheck: false }, async request =
 /* ═══════════════════════════════════════════════════════════════════════
    3. navRecordArrival — geofence arrival event
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navRecordArrival = onCall({ enforceAppCheck: false }, async request => {
+exports.navRecordArrival = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const { tripId, stopIdx, lat, lng } = request.data;
   if (!tripId || stopIdx == null) throw new HttpsError('invalid-argument', 'tripId, stopIdx required');
@@ -309,7 +309,7 @@ exports.navRecordArrival = onCall({ enforceAppCheck: false }, async request => {
 /* ═══════════════════════════════════════════════════════════════════════
    4. navSubmitPOD — proof of delivery
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navSubmitPOD = onCall({ enforceAppCheck: false }, async request => {
+exports.navSubmitPOD = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const { tripId, stopIdx, podType, value, lat, lng } = request.data;
   if (!tripId || stopIdx == null || !podType)
@@ -379,7 +379,7 @@ exports.navSubmitPOD = onCall({ enforceAppCheck: false }, async request => {
 /* ═══════════════════════════════════════════════════════════════════════
    5. navTriggerSOS — rider emergency alert
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navTriggerSOS = onCall({ enforceAppCheck: false }, async request => {
+exports.navTriggerSOS = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
   const { tripId, lat, lng } = request.data;
@@ -414,7 +414,7 @@ exports.navTriggerSOS = onCall({ enforceAppCheck: false }, async request => {
 /* ═══════════════════════════════════════════════════════════════════════
    6. navGetActiveTrip — rider's current assigned trip
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navGetActiveTrip = onCall({ enforceAppCheck: false }, async request => {
+exports.navGetActiveTrip = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
   // Single-field query: riderId + in-memory filter on status (no composite index)
@@ -429,7 +429,7 @@ exports.navGetActiveTrip = onCall({ enforceAppCheck: false }, async request => {
 /* ═══════════════════════════════════════════════════════════════════════
    7. navGetCustomerTracking — public tracking (no auth required)
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navGetCustomerTracking = onCall({ enforceAppCheck: false }, async request => {
+exports.navGetCustomerTracking = onCall({ enforceAppCheck: true }, async request => {
   const { trackingCode } = request.data || {};
   if (!trackingCode || trackingCode.length !== 8)
     throw new HttpsError('invalid-argument', 'Invalid tracking code');
@@ -489,7 +489,7 @@ exports.navGetCustomerTracking = onCall({ enforceAppCheck: false }, async reques
 /* ═══════════════════════════════════════════════════════════════════════
    8. navGetFleetStatus — admin live fleet overview
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navGetFleetStatus = onCall({ enforceAppCheck: false }, async request => {
+exports.navGetFleetStatus = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   _requireAdmin(request.auth.token);
 
@@ -522,7 +522,7 @@ exports.navGetFleetStatus = onCall({ enforceAppCheck: false }, async request => 
 /* ═══════════════════════════════════════════════════════════════════════
    9. navCompleteTrip — mark entire trip done, trigger payout
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navCompleteTrip = onCall({ enforceAppCheck: false }, async request => {
+exports.navCompleteTrip = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
   const { tripId, earnings } = request.data;
@@ -583,7 +583,7 @@ exports.navCompleteTrip = onCall({ enforceAppCheck: false }, async request => {
 /* ═══════════════════════════════════════════════════════════════════════
    10. navGetRiderHistory — past trips for a rider
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navGetRiderHistory = onCall({ enforceAppCheck: false }, async request => {
+exports.navGetRiderHistory = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid   = request.auth.uid;
   const limit = Math.min(parseInt(request.data?.limit) || 20, 50);
@@ -601,7 +601,7 @@ exports.navGetRiderHistory = onCall({ enforceAppCheck: false }, async request =>
 /* ═══════════════════════════════════════════════════════════════════════
    11. navGetMerchantTracking — merchant view (pickup ETA + status)
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navGetMerchantTracking = onCall({ enforceAppCheck: false }, async request => {
+exports.navGetMerchantTracking = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const uid = request.auth.uid;
   const { orderId } = request.data;
@@ -639,7 +639,7 @@ exports.navGetMerchantTracking = onCall({ enforceAppCheck: false }, async reques
 /* ═══════════════════════════════════════════════════════════════════════
    12. navCancelStop — remove one stop from active trip
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navCancelStop = onCall({ enforceAppCheck: false }, async request => {
+exports.navCancelStop = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const { tripId, stopIdx, reason } = request.data;
   if (!tripId || stopIdx == null) throw new HttpsError('invalid-argument', 'tripId, stopIdx required');
@@ -661,7 +661,7 @@ exports.navCancelStop = onCall({ enforceAppCheck: false }, async request => {
 /* ═══════════════════════════════════════════════════════════════════════
    13. navAssignTrip — admin manually creates a trip with custom stops
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navAssignTrip = onCall({ enforceAppCheck: false }, async request => {
+exports.navAssignTrip = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   _requireAdmin(request.auth.token);
 
@@ -711,7 +711,7 @@ exports.navAssignTrip = onCall({ enforceAppCheck: false }, async request => {
 /* ═══════════════════════════════════════════════════════════════════════
    14. navResolveFleetEvent — admin resolves a SOS / alert
 ═══════════════════════════════════════════════════════════════════════ */
-exports.navResolveFleetEvent = onCall({ enforceAppCheck: false }, async request => {
+exports.navResolveFleetEvent = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   _requireAdmin(request.auth.token);
   const { eventId, note } = request.data;
