@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-no-header="true" data-minimal="true">
+<html lang="en" data-splash="1" data-minimal="true" data-no-header="true">
 <head>
   <script src="security.js"></script>
   <meta charset="UTF-8">
@@ -17,195 +17,256 @@
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <style>
+    /* ── Splash ─────────────────────────────────────────────────────── */
+    #sk-splash{position:fixed;inset:0;z-index:99999;background:#050505;display:flex;align-items:center;justify-content:center;transition:opacity .65s ease,visibility .65s ease}
+    #sk-splash.sk-out{opacity:0;visibility:hidden;pointer-events:none}
+    .sks-inner{display:flex;flex-direction:column;align-items:center;gap:22px}
+    .sks-logo{width:84px;height:84px;object-fit:contain;animation:skPulse 1.3s ease-in-out infinite alternate}
+    .sks-ring{width:44px;height:44px;border:3px solid rgba(113,255,0,.14);border-top-color:#71ff00;border-radius:50%;animation:skSpin .75s linear infinite}
+    .sks-tag{font:500 11px/1 -apple-system,sans-serif;color:rgba(255,255,255,.32);letter-spacing:.1em;text-transform:uppercase}
+    @keyframes skPulse{from{opacity:.72;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+    @keyframes skSpin{to{transform:rotate(360deg)}}
+
+    /* ── Reset & base ───────────────────────────────────────────────── */
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--accent:#71ff00;--bg:#0a0a0a;--surface:rgba(255,255,255,.04);--border:rgba(255,255,255,.08);--text:#e0e0e0;--muted:rgba(255,255,255,.55);--red:rgba(255,80,80,.8);--red-bg:rgba(255,50,50,.06);--red-border:rgba(255,50,50,.15)}
-    html{scroll-behavior:smooth}
-    body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.6;min-height:100vh}
+    :root{
+      --g:#71ff00;--red:rgba(255,80,80,.82);--red-bg:rgba(255,50,50,.06);--red-b:rgba(255,50,50,.16);
+      --bg:#050505;--surface:rgba(255,255,255,.033);--border:rgba(255,255,255,.07);
+      --text:rgba(255,255,255,.88);--muted:rgba(255,255,255,.5);--card:#0c180c;
+    }
+    html{scroll-behavior:smooth;scroll-padding-top:80px}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.7;min-height:100vh}
 
-    /* ── Static top nav ───────────────────────────────────────────── */
-    .sk-nav{position:sticky;top:0;z-index:1000;background:rgba(10,10,10,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 24px}
-    .sk-nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:60px}
-    .sk-nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
-    .sk-nav-logo img{width:32px;height:32px;border-radius:8px;object-fit:contain}
-    .sk-nav-logo span{font-size:18px;font-weight:800;color:#fff;letter-spacing:-.3px}
-    .sk-nav-links{display:flex;align-items:center;gap:20px}
-    .sk-nav-links a{color:rgba(255,255,255,.6);text-decoration:none;font-size:14px;font-weight:500;transition:color .18s}
-    .sk-nav-links a:hover{color:#fff}
-    .sk-nav-links a.active{color:var(--accent)}
-    .sk-nav-home-btn{background:var(--accent);color:#000;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:opacity .18s}
-    .sk-nav-home-btn:hover{opacity:.85;color:#000}
-    @media(max-width:640px){.sk-nav-links{display:none}}
+    /* ── Top nav ────────────────────────────────────────────────────── */
+    .lnav{position:sticky;top:0;z-index:900;background:rgba(5,5,5,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+    .lnav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:64px;padding:0 24px}
+    .lnav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+    .lnav-brand img{width:36px;height:36px;object-fit:contain;border-radius:9px}
+    .lnav-brand span{font-size:18px;font-weight:800;color:#fff;letter-spacing:-.3px}
+    .lnav-links{display:flex;align-items:center;gap:22px}
+    .lnav-links a{font-size:13px;font-weight:500;color:var(--muted);text-decoration:none;transition:color .15s}
+    .lnav-links a:hover{color:#fff}
+    .lnav-links a.cur{color:var(--g)}
+    .lnav-cta{background:var(--g);color:#000;font-size:13px;font-weight:700;padding:8px 18px;border-radius:10px;text-decoration:none;transition:opacity .15s}
+    .lnav-cta:hover{opacity:.85;color:#000}
+    @media(max-width:640px){.lnav-links{display:none}}
 
-    /* ── Hero ─────────────────────────────────────────────────────── */
-    .hero{background:linear-gradient(135deg,#1a0000 0%,#0a0a0a 60%);padding:72px 24px 48px;text-align:center;border-bottom:1px solid rgba(255,80,80,.1)}
-    .hero-badge{display:inline-block;padding:5px 14px;background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.2);border-radius:20px;font-size:12px;font-weight:700;color:var(--red);letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px}
-    .hero h1{font-size:clamp(28px,5vw,46px);color:#fff;font-weight:800;margin-bottom:12px;line-height:1.15}
-    .hero p{color:var(--muted);font-size:14px}
+    /* ── Hero ───────────────────────────────────────────────────────── */
+    .hero{padding:64px 24px 44px;text-align:center;border-bottom:1px solid rgba(255,50,50,.1);background:radial-gradient(ellipse 70% 60% at 50% 0%,rgba(255,50,50,.04) 0%,transparent 70%)}
+    .hero-badge{display:inline-block;padding:5px 14px;background:rgba(255,50,50,.08);border:1px solid rgba(255,50,50,.2);border-radius:20px;font-size:11px;font-weight:700;color:var(--red);letter-spacing:.6px;text-transform:uppercase;margin-bottom:18px}
+    .hero h1{font-size:clamp(28px,5vw,44px);font-weight:800;color:#fff;line-height:1.12;margin-bottom:12px}
+    .hero-meta{font-size:13px;color:var(--muted)}
+    .hero-meta span{color:rgba(255,255,255,.25);margin:0 6px}
 
-    /* ── Layout ───────────────────────────────────────────────────── */
-    .page{max-width:880px;margin:0 auto;padding:48px 24px 80px}
-    .section{margin-bottom:52px}
-    .section h2{font-size:21px;color:#fff;font-weight:700;padding-left:14px;border-left:3px solid var(--red);margin-bottom:20px}
-    .section h3{font-size:16px;color:rgba(255,255,255,.85);font-weight:600;margin:24px 0 10px}
-    .section p{font-size:15px;color:var(--muted);line-height:1.75;margin-bottom:14px}
-    .section ul,.section ol{padding-left:22px;margin-bottom:14px}
-    .section li{font-size:15px;color:var(--muted);line-height:1.75;margin-bottom:5px}
-    .section a{color:var(--accent)}
-    hr.divider{border:none;border-top:1px solid var(--border);margin:52px 0}
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    .wrap{max-width:900px;margin:0 auto;padding:52px 24px 96px}
 
-    /* ── Warning box ──────────────────────────────────────────────── */
-    .warning-box{background:var(--red-bg);border:1px solid var(--red-border);border-radius:14px;padding:20px 24px;margin:24px 0}
-    .warning-box p{font-size:14px;color:rgba(255,200,200,.8);margin:0}
-    .warning-title{font-weight:700;color:rgba(255,120,120,.9);margin-bottom:6px!important}
+    /* ── TOC ────────────────────────────────────────────────────────── */
+    .toc{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;margin-bottom:52px}
+    .toc-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:14px}
+    .toc-grid{display:flex;flex-wrap:wrap;gap:8px}
+    .toc-grid a{font-size:13px;color:rgba(255,255,255,.5);text-decoration:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:5px 12px;transition:all .15s}
+    .toc-grid a:hover{color:var(--g);border-color:rgba(113,255,0,.25);background:rgba(113,255,0,.05)}
 
-    /* ── Info box ─────────────────────────────────────────────────── */
-    .info-box{background:rgba(113,255,0,.04);border:1px solid rgba(113,255,0,.1);border-radius:14px;padding:20px 24px;margin:24px 0}
-    .info-box p{font-size:14px;color:rgba(200,255,200,.7);margin:0}
-    .info-box a{color:var(--accent)}
+    /* ── Section ────────────────────────────────────────────────────── */
+    .sec{margin-bottom:52px}
+    .sec h2{font-size:20px;font-weight:700;color:#fff;padding-left:16px;border-left:3px solid var(--red);margin-bottom:20px}
+    .sec h3{font-size:15px;font-weight:600;color:rgba(255,255,255,.78);margin:22px 0 10px}
+    .sec p{font-size:15px;color:var(--muted);line-height:1.76;margin-bottom:14px}
+    .sec ul,.sec ol{padding-left:22px;margin-bottom:14px}
+    .sec li{font-size:15px;color:var(--muted);line-height:1.76;margin-bottom:6px}
+    .sec a{color:var(--g);text-decoration:none}
+    .sec a:hover{text-decoration:underline}
+    hr.div{border:none;border-top:1px solid var(--border);margin:52px 0}
 
-    /* ── Steps ────────────────────────────────────────────────────── */
+    /* ── Warning / info boxes ───────────────────────────────────────── */
+    .warn-box{background:var(--red-bg);border:1px solid var(--red-b);border-radius:14px;padding:20px 24px;margin:20px 0}
+    .warn-box p{font-size:14px;color:rgba(255,200,200,.8);margin:0;line-height:1.6}
+    .warn-box p+p{margin-top:8px}
+    .warn-title{font-weight:700;color:rgba(255,140,140,.9)}
+    .info-box{background:rgba(113,255,0,.04);border:1px solid rgba(113,255,0,.1);border-radius:14px;padding:20px 24px;margin:20px 0}
+    .info-box p{font-size:14px;color:rgba(200,255,200,.65);margin:0;line-height:1.6}
+    .info-box a{color:var(--g)}
+
+    /* ── Steps ──────────────────────────────────────────────────────── */
     .steps{counter-reset:steps;list-style:none;padding:0;margin:16px 0}
     .steps li{counter-increment:steps;display:flex;gap:16px;margin-bottom:18px;align-items:flex-start}
-    .steps li::before{content:counter(steps);min-width:32px;height:32px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--red);flex-shrink:0}
-    .steps li span{font-size:15px;color:var(--muted);line-height:1.7;padding-top:4px}
-    .steps li strong{color:rgba(255,255,255,.85)}
+    .steps li::before{content:counter(steps);min-width:32px;height:32px;background:var(--red-bg);border:1px solid var(--red-b);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--red);flex-shrink:0}
+    .steps li span{font-size:15px;color:var(--muted);line-height:1.7;padding-top:5px}
 
-    /* ── Timeline ─────────────────────────────────────────────────── */
+    /* ── Timeline ───────────────────────────────────────────────────── */
     .timeline{margin:20px 0;position:relative;padding-left:36px}
-    .timeline::before{content:'';position:absolute;left:11px;top:8px;bottom:8px;width:2px;background:var(--red-border)}
-    .tl-item{position:relative;margin-bottom:24px}
-    .tl-dot{position:absolute;left:-36px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--red-bg);border:2px solid var(--red);box-sizing:border-box}
-    .tl-day{font-size:12px;font-weight:700;color:var(--red);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px}
-    .tl-desc{font-size:14px;color:var(--muted);line-height:1.6}
+    .timeline::before{content:'';position:absolute;left:11px;top:8px;bottom:8px;width:2px;background:var(--red-b)}
+    .tl-item{position:relative;margin-bottom:26px}
+    .tl-dot{position:absolute;left:-36px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--red-bg);border:2px solid rgba(255,80,80,.65)}
+    .tl-day{font-size:12px;font-weight:700;color:rgba(255,140,140,.8);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px}
+    .tl-desc{font-size:14px;color:var(--muted);line-height:1.65}
 
-    /* ── Two-column grid ──────────────────────────────────────────── */
+    /* ── Two-column grid ────────────────────────────────────────────── */
     .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
     .col-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
-    .col-card h3{font-size:14px;font-weight:700;color:rgba(255,255,255,.8);margin-bottom:10px}
+    .col-card h3{font-size:14px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:10px;margin-top:0}
     .col-card ul{padding-left:16px;margin:0}
     .col-card li{font-size:13px;color:var(--muted);margin-bottom:4px}
     @media(max-width:580px){.two-col{grid-template-columns:1fr}}
 
-    /* ── Confirmation form ────────────────────────────────────────── */
-    .status-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px;margin-top:24px}
+    /* ── Reference code box ─────────────────────────────────────────── */
+    .ref-box{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-top:12px;overflow-x:auto}
+    .ref-code{font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:14px;font-weight:600;color:rgba(255,255,255,.75);white-space:nowrap}
+
+    /* ── Forms ──────────────────────────────────────────────────────── */
+    .form-panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;margin-top:20px}
     .form-group{margin-bottom:18px}
-    .form-group label{display:block;font-size:13px;font-weight:600;color:rgba(255,255,255,.7);margin-bottom:6px;letter-spacing:.2px}
-    .form-group input,.form-group textarea,.form-group select{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:11px 14px;font-size:14px;color:#fff;outline:none;transition:border-color .18s;font-family:inherit;resize:vertical}
-    .form-group input:focus,.form-group textarea:focus,.form-group select:focus{border-color:rgba(255,80,80,.5)}
+    .form-group label{display:block;font-size:13px;font-weight:600;color:rgba(255,255,255,.62);margin-bottom:7px;letter-spacing:.1px}
+    .form-group input,
+    .form-group textarea,
+    .form-group select{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:9px;padding:12px 14px;font-size:15px;color:#fff;outline:none;transition:border-color .18s;font-family:inherit;resize:vertical}
+    .form-group input::placeholder,
+    .form-group textarea::placeholder{color:rgba(255,255,255,.28)}
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus{border-color:rgba(255,80,80,.45)}
+    .form-group select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='rgba(255,255,255,.4)' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:calc(100% - 14px) center;padding-right:36px}
     .form-group textarea{min-height:90px}
-    .btn-delete{width:100%;padding:14px;background:rgba(255,50,50,.15);border:1px solid rgba(255,50,50,.35);border-radius:10px;color:var(--red);font-size:15px;font-weight:700;cursor:pointer;transition:all .18s;margin-top:4px}
-    .btn-delete:hover{background:rgba(255,50,50,.25)}
-    #statusMsg{margin-top:16px;padding:14px;border-radius:10px;font-size:14px;display:none}
-    #statusMsg.success{background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.2);color:#71ff00}
-    #statusMsg.error{background:rgba(255,50,50,.1);border:1px solid rgba(255,50,50,.2);color:rgba(255,180,180,.9)}
+    .btn-submit{width:100%;padding:14px;background:rgba(255,50,50,.14);border:1px solid rgba(255,50,50,.32);border-radius:10px;color:var(--red);font-size:15px;font-weight:700;cursor:pointer;transition:all .18s;margin-top:4px;font-family:inherit}
+    .btn-submit:hover:not(:disabled){background:rgba(255,50,50,.24)}
+    .btn-submit:disabled{opacity:.5;cursor:not-allowed}
+    #statusMsg{margin-top:16px;padding:14px 16px;border-radius:10px;font-size:14px;display:none;line-height:1.6}
+    #statusMsg.ok{background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.18);color:rgba(180,255,100,.85)}
+    #statusMsg.err{background:rgba(255,50,50,.08);border:1px solid rgba(255,50,50,.2);color:rgba(255,180,180,.85)}
 
-    /* ── Reference code box ───────────────────────────────────────── */
-    .ref-box{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}
-    .ref-code{font-family:monospace;font-size:18px;font-weight:700;color:#fff;letter-spacing:1px}
+    #statusResult{margin-top:14px;padding:14px 16px;border-radius:10px;font-size:14px;display:none;line-height:1.65}
+    #statusResult.ok{background:rgba(113,255,0,.07);border:1px solid rgba(113,255,0,.14);color:rgba(180,255,100,.8)}
+    #statusResult.err{background:rgba(255,50,50,.07);border:1px solid rgba(255,50,50,.14);color:rgba(255,180,180,.8)}
+    #statusResult.info{background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--muted)}
 
-    /* ── Footer ───────────────────────────────────────────────────── */
-    footer{background:rgba(255,255,255,.02);border-top:1px solid var(--border);padding:32px 24px}
-    .footer-inner{max-width:1100px;margin:0 auto}
-    .footer-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 20px;margin-bottom:16px}
-    .footer-links a{color:rgba(255,255,255,.4);text-decoration:none;font-size:13px;transition:color .18s}
-    .footer-links a:hover,.footer-links a.active{color:var(--accent)}
-    .footer-copy{text-align:center;font-size:12px;color:rgba(255,255,255,.25)}
+    /* ── Footer ─────────────────────────────────────────────────────── */
+    .lfoot{border-top:1px solid var(--border);padding:32px 24px}
+    .lfoot-inner{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:14px}
+    .lfoot-logo{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+    .lfoot-logo img{width:28px;height:28px;object-fit:contain}
+    .lfoot-logo span{font-size:16px;font-weight:800;color:#fff}
+    .lfoot-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px}
+    .lfoot-links a{font-size:13px;color:rgba(255,255,255,.35);text-decoration:none;transition:color .15s}
+    .lfoot-links a:hover,.lfoot-links a.cur{color:var(--g)}
+    .lfoot-copy{font-size:12px;color:rgba(255,255,255,.2);text-align:center}
   </style>
 </head>
 <body>
 
-<!-- Static navigation — visible without JavaScript (required for Meta App Review crawlers) -->
-<nav class="sk-nav" aria-label="SOKONI navigation">
-  <div class="sk-nav-inner">
-    <a href="/" class="sk-nav-logo" aria-label="SOKONI Home">
-      <img src="assets/logosokoni.png" alt="SOKONI">
+<!-- Splash -->
+<div id="sk-splash" role="presentation" aria-hidden="true">
+  <div class="sks-inner">
+    <img src="assets/Sokonilogo2.png" class="sks-logo" alt="SOKONI" fetchpriority="high">
+    <div class="sks-ring"></div>
+    <p class="sks-tag">Kenya's Digital Marketplace</p>
+  </div>
+</div>
+
+<!-- Nav — static, visible to crawlers (required for Meta App Review) -->
+<nav class="lnav" aria-label="SOKONI navigation">
+  <div class="lnav-inner">
+    <a href="/" class="lnav-brand" aria-label="SOKONI Home">
+      <img src="assets/Sokonilogo2.png" alt="SOKONI">
       <span>SOKONI</span>
     </a>
-    <div class="sk-nav-links">
+    <div class="lnav-links">
       <a href="/privacy">Privacy</a>
       <a href="/terms">Terms</a>
-      <a href="/data-deletion" class="active" aria-current="page">Data Deletion</a>
+      <a href="/data-deletion" class="cur" aria-current="page">Data Deletion</a>
       <a href="mailto:support@mysokoni.co.ke">Contact</a>
-      <a href="/" class="sk-nav-home-btn">Back to Marketplace</a>
+      <a href="/" class="lnav-cta">Marketplace</a>
     </div>
   </div>
 </nav>
 
-<header class="hero">
-  <div class="hero-badge">Data Rights</div>
-  <h1>Data Deletion Centre</h1>
-  <p>Delete your SOKONI account and personal data &nbsp;&bull;&nbsp; Kenya Data Protection Act 2019 &amp; Meta Platform Policy compliant</p>
-</header>
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-badge">Data Deletion Centre</div>
+  <h1>Delete Your Data</h1>
+  <p class="hero-meta">KDPA 2019 &amp; Meta Platform Policy compliant<span>·</span>Processed within 30 days<span>·</span>Sokoni Digital Limited</p>
+</div>
 
-<main class="page" id="main">
+<div class="wrap">
 
-  <!-- ══ Section 1: Self-service via app ══ -->
-  <section class="section" id="self-service">
-    <h2>Delete Your Account via the App</h2>
-    <p>The fastest way to delete your SOKONI account and data is directly from within the app. No email or form required.</p>
+  <!-- TOC -->
+  <nav class="toc" aria-label="Table of contents">
+    <div class="toc-label">Jump to section</div>
+    <div class="toc-grid">
+      <a href="#how-to-delete">1. How to Delete</a>
+      <a href="#what-deleted">2. What Gets Deleted</a>
+      <a href="#timeline">3. Timeline</a>
+      <a href="#facebook">4. Facebook Login</a>
+      <a href="#check-status">5. Check Status</a>
+      <a href="#request-form">6. Data Rights Form</a>
+      <a href="#contact">7. Contact Privacy Team</a>
+    </div>
+  </nav>
 
-    <div class="warning-box">
-      <p class="warning-title">This action is permanent and cannot be undone.</p>
-      <p>Deleting your account removes your profile, listings, saved items, and personal data from SOKONI. Financial and tax records required by Kenyan law are retained for 7 years.</p>
+  <!-- 1: How to delete -->
+  <section class="sec" id="how-to-delete">
+    <h2>1. How to Delete Your Account</h2>
+
+    <div class="warn-box">
+      <p class="warn-title">This action is permanent</p>
+      <p>Deleting your account removes your personal data from SOKONI systems. Financial and tax records required by Kenyan law are retained for 7 years. This action cannot be undone.</p>
     </div>
 
+    <h3>Self-service deletion (fastest method)</h3>
     <ol class="steps">
-      <li><span>Open <strong>SOKONI</strong> on your phone or browser and sign in to your account.</span></li>
-      <li><span>Tap the <strong>Profile</strong> icon (bottom navigation bar, person icon).</span></li>
-      <li><span>Tap <strong>Settings</strong> (gear icon at the top right of your profile page).</span></li>
-      <li><span>Scroll to the <strong>Privacy</strong> section and tap <strong>"Delete Account"</strong>.</span></li>
-      <li><span>Read the confirmation warning carefully. Type <strong>DELETE</strong> in the confirmation box when prompted.</span></li>
-      <li><span>Your account will be <strong>immediately deactivated</strong>. Personal data will be permanently purged within <strong>30 days</strong>.</span></li>
+      <li><span>Sign in to your account at <strong>mysokoni.co.ke</strong></span></li>
+      <li><span>Tap your profile photo in the top-right corner to open your profile</span></li>
+      <li><span>Go to <strong>Settings &rarr; Privacy &rarr; Delete Account</strong></span></li>
+      <li><span>Read the confirmation, type DELETE in the confirmation box, and tap <strong>Permanently Delete My Account</strong></span></li>
+      <li><span>Your account is deactivated immediately. Deletion is completed within 30 days.</span></li>
     </ol>
 
     <div class="info-box">
-      <p>If you cannot access your account (e.g. you have deleted the Facebook app and cannot sign in), use the <a href="#request-form">Data Rights Request Form</a> below or email <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a> with your registered email address or Facebook User ID.</p>
+      <p>Cannot sign in? Use the <a href="#request-form">Data Rights Request Form</a> below. We will verify your identity manually and process the deletion within 30 days.</p>
     </div>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
-  <!-- ══ Section 2: What gets deleted ══ -->
-  <section class="section" id="what-gets-deleted">
-    <h2>What Gets Deleted vs. Retained</h2>
+  <!-- 2: What gets deleted -->
+  <section class="sec" id="what-deleted">
+    <h2>2. What Gets Deleted vs Retained</h2>
+
     <div class="two-col">
       <div class="col-card">
-        <h3 style="color:var(--red)">Permanently Deleted (within 30 days)</h3>
+        <h3 style="color:rgba(255,140,140,.8)">Permanently Deleted</h3>
         <ul>
-          <li>Your name, email, phone number</li>
+          <li>Name, email, phone number</li>
           <li>Profile photo and bio</li>
-          <li>Login credentials</li>
-          <li>Social login connections (Facebook, Google)</li>
-          <li>Saved addresses and payment methods</li>
-          <li>Chat and messaging history</li>
-          <li>Wishlist and saved items</li>
-          <li>Search history and activity logs</li>
-          <li>Push notification tokens</li>
-          <li>Marketing preferences</li>
-          <li>Device identifiers</li>
-          <li>Account preferences and settings</li>
+          <li>Delivery addresses</li>
+          <li>Saved items and wishlists</li>
+          <li>Messages (after 90-day window)</li>
+          <li>Device tokens and push preferences</li>
+          <li>Browsing and search history</li>
+          <li>Reviews written (anonymised)</li>
+          <li>GPS and location history</li>
         </ul>
       </div>
       <div class="col-card">
-        <h3 style="color:rgba(255,180,100,.8)">Retained by Law</h3>
+        <h3 style="color:rgba(255,185,80,.8)">Retained (Legal Obligation)</h3>
         <ul>
-          <li>Order records (7 years — Kenya Income Tax Act)</li>
-          <li>KRA eTIMS invoices (7 years — KRA obligation)</li>
-          <li>Payment &amp; transaction records (7 years — CBK)</li>
-          <li>WHT certificates issued to you</li>
-          <li>Dispute records involving third parties</li>
-          <li>Security audit logs (2 years)</li>
+          <li>Order and payment records — 7 years</li>
+          <li>KRA eTIMS invoice records — 7 years</li>
+          <li>Withholding Tax certificates — 7 years</li>
+          <li>Security audit logs — 2 years</li>
+          <li>Dispute records (anonymised) — 2 years</li>
         </ul>
-        <p style="font-size:12px;color:rgba(255,255,255,.3);margin-top:12px;margin-bottom:0">Retained records are anonymised where possible and inaccessible to platform staff without a lawful basis.</p>
       </div>
     </div>
+
+    <p>Retained records are anonymised wherever legally permissible. Your name and contact details are removed from retained financial records as soon as the law allows.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
-  <!-- ══ Section 3: Timeline ══ -->
-  <section class="section" id="timeline">
-    <h2>Deletion Timeline</h2>
+  <!-- 3: Timeline -->
+  <section class="sec" id="timeline">
+    <h2>3. Deletion Timeline</h2>
     <div class="timeline">
       <div class="tl-item">
         <div class="tl-dot"></div>
@@ -225,70 +286,74 @@
       <div class="tl-item">
         <div class="tl-dot"></div>
         <div class="tl-day">Within 30 Days</div>
-        <div class="tl-desc">All personal data is permanently deleted from backup systems. The deletion is complete. A confirmation email is sent (if your email address is still accessible).</div>
+        <div class="tl-desc">All personal data is permanently deleted from backup systems. The deletion is complete. A confirmation email is sent if your email is still accessible.</div>
       </div>
       <div class="tl-item">
-        <div class="tl-dot" style="border-color:rgba(255,180,100,.7)"></div>
-        <div class="tl-day" style="color:rgba(255,180,100,.8)">7 Years</div>
-        <div class="tl-desc">Legally required financial and tax records are retained per the Kenya Income Tax Act Cap. 470 and KRA eTIMS regulations, then permanently deleted.</div>
+        <div class="tl-dot" style="border-color:rgba(255,185,80,.65)"></div>
+        <div class="tl-day" style="color:rgba(255,185,80,.75)">7 Years</div>
+        <div class="tl-desc">Legally required financial and tax records are permanently deleted per the Kenya Income Tax Act Cap. 470 and KRA eTIMS regulations.</div>
       </div>
     </div>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
-  <!-- ══ Section 4: Facebook / Meta specific ══ -->
-  <section class="section" id="facebook">
-    <h2>Facebook Login Data Deletion</h2>
+  <!-- 4: Facebook -->
+  <section class="sec" id="facebook">
+    <h2>4. Facebook Login Data Deletion</h2>
     <p>If you connected SOKONI using <strong>Facebook Login</strong>, Facebook may notify us when you remove SOKONI from your Facebook apps or request data deletion via Facebook's settings. We process these automated requests within <strong>30 days</strong> via our secure data deletion callback.</p>
     <h3>How to remove SOKONI from Facebook</h3>
     <ol class="steps">
-      <li><span>Visit <strong>facebook.com/settings/applications</strong> (or tap Settings &amp; Privacy → Settings → Apps and Websites on the Facebook app).</span></li>
+      <li><span>Visit <strong>facebook.com/settings/applications</strong> (or tap Settings &amp; Privacy &rarr; Settings &rarr; Apps and Websites on the Facebook app).</span></li>
       <li><span>Find <strong>SOKONI</strong> in the list of connected apps.</span></li>
-      <li><span>Tap <strong>Remove</strong> and then confirm.</span></li>
-      <li><span>Facebook will automatically send a deletion request to SOKONI. We will process it within 30 days.</span></li>
+      <li><span>Tap <strong>Remove</strong> and confirm.</span></li>
+      <li><span>Facebook will automatically send a deletion request to SOKONI. We process it within 30 days.</span></li>
     </ol>
-    <p>Alternatively, you can delete your SOKONI account directly via the self-service method above, which also disconnects your Facebook login connection.</p>
-    <p>Our automated Facebook data deletion callback endpoint is available at:</p>
+    <p>Alternatively, delete your SOKONI account directly using the self-service method above, which also disconnects your Facebook login.</p>
+    <p>Our automated Facebook data deletion callback endpoint:</p>
     <div class="ref-box">
       <span class="ref-code">POST https://mysokoni.co.ke/api/facebook/data-deletion</span>
     </div>
-    <p style="font-size:13px;color:var(--muted);margin-top:12px;">This endpoint is registered with Meta and receives deletion notifications directly from Facebook's servers. It verifies the request signature using HMAC-SHA256 before processing.</p>
+    <p style="font-size:13px;color:var(--muted);margin-top:14px">This endpoint is registered with Meta and receives deletion notifications directly from Facebook's servers. It verifies each request signature using HMAC-SHA256 before processing.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
-  <!-- ══ Section 5: Check status ══ -->
-  <section class="section" id="check-status">
-    <h2>Check Your Deletion Status</h2>
-    <p>If you received a confirmation code from SOKONI or from Facebook after requesting deletion, you can check the status of your request below.</p>
+  <!-- 5: Check status -->
+  <section class="sec" id="check-status">
+    <h2>5. Check Your Deletion Status</h2>
+    <p>If you received a confirmation code after requesting deletion, enter it below to check your request status.</p>
 
-    <div id="refQueryPanel" style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-top:16px">
+    <div class="form-panel">
       <div class="form-group">
         <label for="refCodeInput">Confirmation Code</label>
-        <input type="text" id="refCodeInput" placeholder="SOKONI-DEL-XXXXXXXXXXXXXXXX" autocomplete="off">
+        <input type="text" id="refCodeInput" placeholder="SOKONI-DEL-XXXXXXXXXXXXXXXX" autocomplete="off" spellcheck="false">
       </div>
-      <button class="btn-delete" onclick="checkDeletionStatus()">Check Status</button>
-      <div id="statusResult" style="margin-top:16px;display:none;padding:14px;border-radius:10px;font-size:14px"></div>
+      <button class="btn-submit" onclick="checkDeletionStatus()">Check Status</button>
+      <div id="statusResult"></div>
     </div>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
-  <!-- ══ Section 6: Data rights request form ══ -->
-  <section class="section" id="request-form">
-    <h2>Data Rights Request Form</h2>
-    <p>Use this form to request deletion of your data, request a copy of your data, or exercise any other rights under the Kenya Data Protection Act 2019. We respond within <strong>30 days</strong> as required by the KDPA.</p>
-    <p>This form is also available for users who connected via Facebook and cannot sign in to the app to delete their account directly.</p>
+  <!-- 6: Request form -->
+  <section class="sec" id="request-form">
+    <h2>6. Data Rights Request Form</h2>
+    <p>Use this form to request deletion of your data, request a copy of your data, or exercise any other right under the Kenya Data Protection Act 2019. We respond within <strong>30 days</strong> as required by the KDPA.</p>
+    <p>This form is also available for users who connected via Facebook and cannot sign in to the app directly.</p>
 
-    <div class="status-panel">
+    <div class="form-panel">
       <div class="form-group">
-        <label for="drEmail">Your Email Address or Phone Number *</label>
-        <input type="text" id="drEmail" placeholder="The email/phone you used to sign up" required>
+        <label for="drName">Your Full Name *</label>
+        <input type="text" id="drName" placeholder="As registered on SOKONI" required autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label for="drEmail">Email Address or Phone Number *</label>
+        <input type="text" id="drEmail" placeholder="The email or phone you used to sign up" required>
       </div>
       <div class="form-group">
         <label for="drFbId">Facebook User ID (optional — for Facebook Login users)</label>
-        <input type="text" id="drFbId" placeholder="Your Facebook User ID (from facebook.com/settings)">
+        <input type="text" id="drFbId" placeholder="Your Facebook User ID (from facebook.com/settings)" autocomplete="off">
       </div>
       <div class="form-group">
         <label for="drType">Request Type *</label>
@@ -305,17 +370,17 @@
         <label for="drDetails">Additional Details (optional)</label>
         <textarea id="drDetails" placeholder="Describe your request in more detail, e.g. specific data you want deleted or corrected."></textarea>
       </div>
-      <button class="btn-delete" id="drSubmitBtn" onclick="submitDataRequest()">Submit Data Rights Request</button>
+      <button class="btn-submit" id="drSubmitBtn" onclick="submitDataRequest()">Submit Data Rights Request</button>
       <div id="statusMsg"></div>
     </div>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
-  <!-- ══ Section 7: Contact ══ -->
-  <section class="section" id="contact">
-    <h2>Contact Our Privacy Team</h2>
-    <p>If you have questions about your personal data, or if you are unable to complete deletion through the methods above, please contact us directly:</p>
+  <!-- 7: Contact -->
+  <section class="sec" id="contact">
+    <h2>7. Contact Our Privacy Team</h2>
+    <p>If you have questions about your personal data, or if you cannot complete deletion through the methods above, contact us directly:</p>
     <ul>
       <li>Email: <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a></li>
       <li>General support: <a href="mailto:support@mysokoni.co.ke">support@mysokoni.co.ke</a></li>
@@ -324,117 +389,121 @@
     </ul>
   </section>
 
-</main>
+</div><!-- /wrap -->
 
-<footer>
-  <div class="footer-inner">
-    <div class="footer-links">
+<footer class="lfoot">
+  <div class="lfoot-inner">
+    <div class="lfoot-logo">
+      <img src="assets/Sokonilogo2.png" alt="SOKONI">
+      <span>SOKONI</span>
+    </div>
+    <nav class="lfoot-links" aria-label="Footer navigation">
       <a href="/">Marketplace</a>
       <a href="/privacy">Privacy Policy</a>
       <a href="/terms">Terms of Service</a>
-      <a href="/data-deletion" class="active">Data Deletion</a>
-      <a href="mailto:support@mysokoni.co.ke">Contact Us</a>
-    </div>
-    <p class="footer-copy">&copy; 2026 Sokoni Digital Limited. All rights reserved. Nairobi, Kenya.</p>
+      <a href="/data-deletion" class="cur">Data Deletion</a>
+      <a href="mailto:support@mysokoni.co.ke">Contact</a>
+    </nav>
+    <p class="lfoot-copy">&copy; 2026 Sokoni Digital Limited. All rights reserved. Nairobi, Kenya.</p>
   </div>
 </footer>
 
-<script type="module">
-import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+<!-- Firebase compat SDK (already initialised by firebase.js → use firebase.functions() directly) -->
+<script src="firebase.js"></script>
 
-// Lazy init — only if not already initialized by shared-header.js
-let _app;
-async function getApp() {
-  if (!_app) {
-    const apps = getApps();
-    if (apps.length) { _app = apps[0]; return _app; }
-    const { SOKONI_CONFIG } = await import('./sokoni-config.js').catch(() => ({ SOKONI_CONFIG: null }));
-    if (!SOKONI_CONFIG) { throw new Error('Config not available'); }
-    _app = initializeApp(SOKONI_CONFIG);
+<script>
+  /* ── Splash dismiss ── */
+  setTimeout(function(){
+    var s=document.getElementById('sk-splash');
+    if(s) s.classList.add('sk-out');
+  }, 1400);
+
+  /* ── Pre-fill ref code from URL (?ref=CODE — Facebook redirects here) ── */
+  (function(){
+    var ref = new URLSearchParams(window.location.search).get('ref');
+    if(ref){
+      var inp = document.getElementById('refCodeInput');
+      if(inp){ inp.value = ref; }
+      // Auto-scroll to status panel after splash
+      setTimeout(function(){
+        document.getElementById('check-status')?.scrollIntoView({behavior:'smooth',block:'start'});
+      }, 1600);
+    }
+  })();
+
+  /* ── Submit data rights request ── */
+  window.submitDataRequest = async function(){
+    var name    = (document.getElementById('drName')?.value||'').trim();
+    var email   = (document.getElementById('drEmail')?.value||'').trim();
+    var fbId    = (document.getElementById('drFbId')?.value||'').trim();
+    var type    = document.getElementById('drType')?.value||'deletion';
+    var details = (document.getElementById('drDetails')?.value||'').trim();
+    var btn     = document.getElementById('drSubmitBtn');
+    var msg     = document.getElementById('statusMsg');
+
+    msg.style.display='none';
+    msg.className='';
+
+    if(!name){
+      msg.textContent='Please enter your full name.';
+      msg.className='err';
+      msg.style.display='block';
+      return;
+    }
+    if(!email){
+      msg.textContent='Please enter your email address or phone number.';
+      msg.className='err';
+      msg.style.display='block';
+      return;
+    }
+
+    btn.disabled=true;
+    btn.textContent='Submitting…';
+
+    try{
+      var fns = firebase.functions();
+      var submitFn = fns.httpsCallable('submitDataRightsRequest');
+      await submitFn({ name, email, fbId, type, details });
+
+      msg.innerHTML='<strong>Request submitted successfully.</strong><br>Our privacy team will contact you within 30 days as required by the KDPA 2019. Please check <strong>'+escHtml(email)+'</strong> for updates.';
+      msg.className='ok';
+      msg.style.display='block';
+      btn.textContent='Request Submitted';
+    }catch(err){
+      console.error('Data request error:',err);
+      msg.innerHTML='Unable to submit automatically. Please email <a href="mailto:privacy@mysokoni.co.ke" style="color:#71ff00">privacy@mysokoni.co.ke</a> directly with your name, email, and the request type above.';
+      msg.className='err';
+      msg.style.display='block';
+      btn.disabled=false;
+      btn.textContent='Submit Data Rights Request';
+    }
+  };
+
+  /* ── Check deletion status ── */
+  window.checkDeletionStatus = function(){
+    var code   = (document.getElementById('refCodeInput')?.value||'').trim();
+    var result = document.getElementById('statusResult');
+    result.style.display='none';
+    result.className='';
+
+    if(!code){
+      result.textContent='Please enter your confirmation code.';
+      result.className='err';
+      result.style.display='block';
+      return;
+    }
+
+    /* Status lookup is admin-gated. Direct users to contact for status updates. */
+    var safeCode = escHtml(code);
+    result.innerHTML='Your deletion request with code <strong>'+safeCode+'</strong> has been received and is being processed. Deletion is completed within 30 days of the original request.<br><br>For a specific status update, email <a href="mailto:privacy@mysokoni.co.ke?subject=Deletion+Status+'+encodeURIComponent(code)+'" style="color:#71ff00">privacy@mysokoni.co.ke</a> with this code and we will reply within 72 hours.';
+    result.className='info';
+    result.style.display='block';
+  };
+
+  /* ── XSS-safe HTML escape ── */
+  function escHtml(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
-  return _app;
-}
-
-window.submitDataRequest = async function() {
-  const email    = (document.getElementById('drEmail')?.value || '').trim();
-  const fbId     = (document.getElementById('drFbId')?.value || '').trim();
-  const type     = document.getElementById('drType')?.value || 'deletion';
-  const details  = (document.getElementById('drDetails')?.value || '').trim();
-  const btn      = document.getElementById('drSubmitBtn');
-  const msg      = document.getElementById('statusMsg');
-
-  msg.style.display = 'none';
-
-  if (!email) {
-    msg.textContent = 'Please enter your email address or phone number.';
-    msg.className = 'error';
-    msg.style.display = 'block';
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = 'Submitting…';
-
-  try {
-    const app = await getApp();
-    const fns = getFunctions(app, 'us-central1');
-    const submitDataRightsRequest = httpsCallable(fns, 'submitDataRightsRequest');
-    const res = await submitDataRightsRequest({ email, fbId, type, details });
-    const { requestId, message } = res.data;
-
-    msg.innerHTML = `<strong>Request submitted successfully.</strong><br>${message}<br><br>Your reference ID: <code style="font-family:monospace;font-size:13px;background:rgba(255,255,255,.07);padding:3px 8px;border-radius:4px">${requestId || 'Pending'}</code>`;
-    msg.className = 'success';
-    msg.style.display = 'block';
-    btn.textContent = 'Request Submitted';
-  } catch (err) {
-    console.error('Data request error:', err);
-    msg.innerHTML = `Unable to submit automatically. Please email <a href="mailto:privacy@mysokoni.co.ke" style="color:#71ff00">privacy@mysokoni.co.ke</a> directly with your request.`;
-    msg.className = 'error';
-    msg.style.display = 'block';
-    btn.disabled = false;
-    btn.textContent = 'Submit Data Rights Request';
-  }
-};
-
-window.checkDeletionStatus = async function() {
-  const code   = (document.getElementById('refCodeInput')?.value || '').trim();
-  const result = document.getElementById('statusResult');
-  result.style.display = 'none';
-
-  if (!code) {
-    result.textContent = 'Please enter your confirmation code.';
-    result.style.cssText += 'display:block;background:rgba(255,50,50,.1);border:1px solid rgba(255,50,50,.2);color:rgba(255,180,180,.9)';
-    return;
-  }
-
-  result.textContent = 'Checking…';
-  result.style.cssText += 'display:block;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.6)';
-
-  try {
-    const app = await getApp();
-    const fns = getFunctions(app, 'us-central1');
-    const adminGetDataDeletionRequest = httpsCallable(fns, 'adminGetDataDeletionRequest');
-    const res = await adminGetDataDeletionRequest({ confirmationCode: code });
-    const { status, createdAt, processBy } = res.data || {};
-    const statusMap = { pending: 'Pending (queued for processing)', processing: 'In progress', completed: 'Completed — data has been permanently deleted', failed: 'Failed — please contact privacy@mysokoni.co.ke' };
-    result.innerHTML = `<strong>Status:</strong> ${statusMap[status] || status || 'Not found'}<br><strong>Requested:</strong> ${createdAt ? new Date(createdAt).toLocaleDateString() : '—'}<br><strong>Expected completion:</strong> ${processBy ? new Date(processBy).toLocaleDateString() : '30 days from request'}`;
-    result.style.cssText += 'display:block;background:rgba(113,255,0,.07);border:1px solid rgba(113,255,0,.15);color:rgba(200,255,200,.8)';
-  } catch (e) {
-    result.innerHTML = `Code not found. <a href="mailto:privacy@mysokoni.co.ke" style="color:#71ff00">Contact us</a> if you believe this is an error.`;
-    result.style.cssText += 'display:block;background:rgba(255,50,50,.07);border:1px solid rgba(255,50,50,.15);color:rgba(255,180,180,.8)';
-  }
-};
-
-// Pre-fill confirmation code from URL params (Facebook redirects here with ?ref=CODE)
-const urlRef = new URLSearchParams(window.location.search).get('ref');
-if (urlRef) {
-  const refInput = document.getElementById('refCodeInput');
-  if (refInput) {
-    refInput.value = urlRef;
-    document.getElementById('check-status')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-}
 </script>
 
 </body>

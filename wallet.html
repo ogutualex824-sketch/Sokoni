@@ -1,1305 +1,905 @@
-﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" data-require-auth="true">
-<head><script src="security.js"></script>
-<script src="auth-guard.js"></script>
-<script src="sokoni-security.js"></script>
-<script src="sokoni-guards.js"></script>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>SOKONI Wallet — Payments, Escrow & Transfers</title>
-<meta name="description" content="One wallet for everything on SOKONI — pay for products, services, escrow deliveries, send money and track spending across every hub.">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://mysokoni.co.ke/wallet.html">
-<meta property="og:title" content="SOKONI Wallet — Payments, Escrow & Transfers">
-<meta property="og:description" content="One wallet for everything on SOKONI — pay for products, services, escrow deliveries, send money and track spending.">
-<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
-<meta property="og:site_name" content="SOKONI">
-<meta property="og:locale" content="en_KE">
-<link rel="icon" type="image/png" href="assets/logosokoni.png">
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#71ff00">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="premium.css">
-<link rel="stylesheet" href="mobile.css">
-<link rel="stylesheet" href="sokoni-premium-v2.css">
-<link rel="stylesheet" href="sokoni-desktop.css">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#030d09;color:white;min-height:100vh;padding-bottom:100px;}
-:root{--green:#71ff00;--green2:#34d399;--gold:#f59e0b;--red:#f87171;--blue:#00d4ff;--bg:#030d09;--card:rgba(255,255,255,0.03);}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>My Wallet — SOKONI</title>
+  <meta name="description" content="Top up your SOKONI Wallet, view transactions and request seller payouts via M-Pesa or bank transfer.">
+  <meta property="og:title" content="My Wallet — SOKONI">
+  <meta property="og:description" content="SOKONI digital wallet — instant M-Pesa top-ups, spend everywhere, fast seller payouts.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:url" content="https://mysokoni.co.ke/wallet.html">
+  <meta property="og:site_name" content="SOKONI">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#00bcd4">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://firestore.googleapis.com">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
 
-/* NAV */
-.wl-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(3,13,9,0.97);border-bottom:1px solid rgba(113,255,0,0.1);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
-.wl-nav-logo{height:30px;}
-.wl-nav-right{display:flex;align-items:center;gap:10px;}
-.wl-sync-btn{padding:7px 14px;border-radius:20px;border:1px solid rgba(113,255,0,0.25);background:rgba(113,255,0,0.07);color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;}
-.wl-sync-btn:hover{background:rgba(113,255,0,0.14);}
+    /* ── Design tokens ── */
+    :root {
+      --bg:      #f0f2ff;
+      --surface: #ffffff;
+      --border:  #e0e4f0;
+      --accent:  #00bcd4;
+      --green:   #4caf50;
+      --red:     #f44336;
+      --text:    #1a1a2e;
+      --muted:   #6b6b8a;
+      --card:    #ffffff;
+      --radius:  16px;
+      --shadow:  0 4px 20px rgba(0,0,0,.08);
+    }
 
-/* TABS */
-.wl-tabs-wrap{background:rgba(3,13,9,0.95);border-bottom:1px solid rgba(255,255,255,0.05);padding:0 16px;position:sticky;top:55px;z-index:99;backdrop-filter:blur(10px);}
-.wl-tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding:10px 0;}
-.wl-tabs::-webkit-scrollbar{display:none;}
-.wl-tab{padding:8px 16px;border-radius:999px;border:1px solid transparent;background:transparent;color:rgba(255,255,255,0.4);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
-.wl-tab.active{background:rgba(113,255,0,0.1);color:#71ff00;border-color:rgba(113,255,0,0.25);}
-.wl-tab:hover:not(.active){color:rgba(255,255,255,0.7);background:rgba(255,255,255,0.04);}
-.wl-panel{display:none;}
-.wl-panel.active{display:block;}
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 40px;
+    }
 
-/* WALLET BALANCE CARD */
-.wl-hero{background:linear-gradient(135deg,#061a0e 0%,#071f12 50%,#030d09 100%);border:1px solid rgba(113,255,0,0.15);border-radius:28px;padding:28px 24px;position:relative;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,0.6),inset 0 1px 0 rgba(113,255,0,0.07);margin:20px 16px 0;}
-.wl-hero::before{content:'';position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:radial-gradient(circle,rgba(113,255,0,0.07),transparent 70%);pointer-events:none;}
-.wl-hero::after{content:'SOKONI';position:absolute;bottom:8px;right:18px;font-size:72px;font-weight:900;color:rgba(255,255,255,0.012);letter-spacing:-3px;user-select:none;pointer-events:none;}
-.wl-hero-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;}
-.wl-hero-title{font-size:10px;font-weight:900;color:rgba(113,255,0,0.5);letter-spacing:2.5px;text-transform:uppercase;}
-.wl-hero-user{font-size:13px;color:rgba(255,255,255,0.45);margin-top:4px;}
-.wl-hero-id{font-size:10px;color:rgba(255,255,255,0.2);font-family:monospace;letter-spacing:1px;}
-.wl-main-balance{font-size:44px;font-weight:900;color:white;line-height:1;letter-spacing:-1px;margin-bottom:4px;}
-.wl-main-balance sup{font-size:20px;font-weight:700;vertical-align:super;color:rgba(255,255,255,0.6);}
-.wl-balance-label{font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:1px;text-transform:uppercase;margin-bottom:18px;}
-.wl-balance-split{display:flex;gap:10px;margin-bottom:20px;}
-.wl-split-item{flex:1;padding:10px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;text-align:center;}
-.wl-split-num{font-size:14px;font-weight:900;margin-bottom:3px;}
-.wl-split-lbl{font-size:9px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.8px;font-weight:700;}
-.wl-hero-actions{display:flex;gap:8px;flex-wrap:wrap;}
-.wl-act-btn{flex:1;min-width:90px;padding:11px 10px;border-radius:13px;border:none;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;text-align:center;line-height:1.3;}
-.wl-act-btn:hover{transform:translateY(-1px);}
-.wl-act-add{background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:#71ff00;}
-.wl-act-withdraw{background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);color:#00d4ff;}
-.wl-act-send{background:rgba(245,158,11,0.09);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;}
-.wl-act-share{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);color:rgba(255,255,255,0.45);}
+    /* ── Top Nav ── */
+    .wal-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255,255,255,.97);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 56px;
+    }
+    .wal-nav-back {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 15px;
+      flex-shrink: 0;
+      transition: background .15s, border-color .15s;
+    }
+    .wal-nav-back:hover { background: #e0f7fa; border-color: var(--accent); color: var(--accent); }
+    .wal-nav-logo { height: 26px; object-fit: contain; }
+    .wal-nav-title { font-size: 16px; font-weight: 800; color: var(--text); flex: 1; }
 
-/* QUICK STATS */
-.wl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:16px;}
-.wl-stat{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.055);border-radius:14px;padding:14px 10px;text-align:center;}
-.wl-stat-num{font-size:17px;font-weight:900;color:#71ff00;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.wl-stat-lbl{font-size:9px;color:rgba(255,255,255,0.3);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;}
+    /* ── Page wrapper ── */
+    .wal-page {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 20px 16px 0;
+    }
 
-/* BODY */
-.wl-body{max-width:720px;margin:0 auto;padding:20px 16px 60px;}
-.wl-section-h{font-size:13px;font-weight:800;color:white;margin:22px 0 12px;display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:0.5px;}
-.wl-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.06);}
+    /* ── Balance Card ── */
+    .wal-balance-card {
+      background: linear-gradient(135deg, #00bcd4, #7c4dff);
+      border-radius: 22px;
+      padding: 28px 24px 22px;
+      color: #fff;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 32px rgba(0,188,212,.28);
+      position: relative;
+      overflow: hidden;
+    }
+    .wal-balance-card::before {
+      content: '';
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 160px; height: 160px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.08);
+      pointer-events: none;
+    }
+    .wal-balance-card::after {
+      content: '';
+      position: absolute;
+      bottom: -60px; left: -30px;
+      width: 200px; height: 200px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.05);
+      pointer-events: none;
+    }
+    .wal-balance-brand {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      opacity: .8;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .wal-balance-amount {
+      font-size: 42px;
+      font-weight: 900;
+      letter-spacing: -.02em;
+      line-height: 1.05;
+      margin-bottom: 4px;
+    }
+    .wal-balance-currency {
+      font-size: 20px;
+      font-weight: 700;
+      opacity: .85;
+      vertical-align: super;
+      margin-right: 2px;
+    }
+    .wal-balance-label {
+      font-size: 12px;
+      opacity: .72;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .wal-balance-last-topup {
+      font-size: 11px;
+      opacity: .58;
+      margin-bottom: 20px;
+    }
+    .wal-action-btns {
+      display: flex;
+      gap: 10px;
+    }
+    .wal-action-btn {
+      flex: 1;
+      padding: 12px 8px;
+      border: 1.5px solid rgba(255,255,255,.35);
+      border-radius: 12px;
+      background: rgba(255,255,255,.12);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background .15s;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .wal-action-btn:hover { background: rgba(255,255,255,.22); }
+    .wal-action-btn:active { transform: scale(.97); }
 
-/* INPUTS */
-.wl-input{width:100%;padding:13px 15px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.09);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;transition:border-color .2s;}
-.wl-input:focus{border-color:rgba(113,255,0,0.4);background:rgba(255,255,255,0.07);}
-.wl-input::placeholder{color:rgba(255,255,255,0.25);}
-.wl-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);display:block;margin-bottom:5px;letter-spacing:0.3px;}
+    /* ── Tabs ── */
+    .wal-tabs {
+      display: flex;
+      background: var(--surface);
+      border-radius: var(--radius) var(--radius) 0 0;
+      border: 1px solid var(--border);
+      border-bottom: none;
+      overflow: hidden;
+    }
+    .wal-tab {
+      flex: 1;
+      padding: 14px 6px;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s, background .15s;
+      -webkit-tap-highlight-color: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+    }
+    .wal-tab:hover { background: #f0f2ff; color: var(--accent); }
+    .wal-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: rgba(0,188,212,.04);
+    }
 
-/* PRIMARY BUTTON */
-.wl-btn-primary{width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#34d399);border:none;border-radius:13px;color:#030d09;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:0.3px;transition:all .2s;}
-.wl-btn-primary:hover{opacity:0.9;transform:translateY(-1px);}
-.wl-btn-gold{background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#0a0805;}
-.wl-btn-blue{background:linear-gradient(135deg,#00d4ff,#38bdf8);color:#030d09;}
+    /* ── Tab panels ── */
+    .wal-tab-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+    .wal-tab-panel {
+      display: none;
+      padding: 20px 16px;
+    }
+    .wal-tab-panel.active { display: block; }
 
-/* TRANSACTIONS */
-.wl-tx-list{display:flex;flex-direction:column;gap:7px;}
-.wl-tx{display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.05);border-radius:14px;transition:background .15s;}
-.wl-tx:hover{background:rgba(255,255,255,0.05);}
-.wl-tx-icon{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;background:rgba(255,255,255,0.05);}
-.wl-tx-info{flex:1;min-width:0;}
-.wl-tx-name{font-size:13px;font-weight:700;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.wl-tx-meta{font-size:11px;color:rgba(255,255,255,0.3);margin-top:1px;}
-.wl-tx-right{text-align:right;flex-shrink:0;}
-.wl-tx-amount{font-size:14px;font-weight:900;}
-.wl-tx-badge{font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;display:inline-block;margin-top:3px;text-transform:uppercase;letter-spacing:0.5px;}
+    /* ── Section label ── */
+    .wal-section-label {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
 
-/* FILTER PILLS */
-.wl-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;}
-.wl-filter-btn{padding:7px 15px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.45);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;}
-.wl-filter-btn.active{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+    /* ── Quick amounts ── */
+    .wal-quick-amounts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .wal-amount-chip {
+      padding: 8px 14px;
+      border-radius: 50px;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .wal-amount-chip:hover { border-color: var(--accent); color: var(--accent); }
+    .wal-amount-chip.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(0,188,212,.3);
+    }
 
-/* ESCROW CARD */
-.wl-escrow-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:16px;margin-bottom:10px;}
-.wl-escrow-status{font-size:9px;padding:3px 9px;border-radius:6px;font-weight:800;display:inline-block;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.8px;}
-.wl-escrow-row{display:flex;justify-content:space-between;align-items:flex-start;}
-.wl-escrow-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
-.wl-escrow-btn{padding:7px 16px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;border:1px solid;transition:all .2s;}
+    /* ── Form elements ── */
+    .wal-form-group { margin-bottom: 16px; }
+    .wal-form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 6px;
+      letter-spacing: .3px;
+    }
+    .wal-input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 16px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .wal-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,188,212,.12);
+    }
+    .wal-input::placeholder { color: #b0b8d0; }
+    select.wal-input { cursor: pointer; }
 
-/* SPENDING CHART */
-.wl-spend-item{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
-.wl-spend-label{font-size:12px;color:rgba(255,255,255,0.5);width:120px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.wl-spend-bar-wrap{flex:1;height:7px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;}
-.wl-spend-bar{height:100%;border-radius:4px;transition:width .6s cubic-bezier(.25,.46,.45,.94);}
-.wl-spend-amount{font-size:12px;font-weight:700;color:rgba(255,255,255,0.55);width:85px;text-align:right;flex-shrink:0;}
+    /* ── Buttons ── */
+    .wal-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity .15s, transform .1s;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      text-align: center;
+    }
+    .wal-btn:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
+    .wal-btn:active:not(:disabled) { transform: scale(.98); }
+    .wal-btn-primary {
+      background: linear-gradient(135deg, #00bcd4, #7c4dff);
+      color: #fff;
+      box-shadow: 0 4px 18px rgba(0,188,212,.3);
+    }
+    .wal-btn-primary:hover:not(:disabled) { opacity: .92; }
+    .wal-btn-outline {
+      background: transparent;
+      color: var(--accent);
+      border: 1.5px solid var(--accent);
+    }
+    .wal-btn-outline:hover:not(:disabled) { background: rgba(0,188,212,.06); }
 
-/* COMMISSION ROWS */
-.wl-comm-row{display:flex;align-items:center;gap:10px;padding:11px 14px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.05);border-radius:12px;margin-bottom:7px;}
-.wl-comm-info{flex:1;}
-.wl-comm-title{font-size:12px;font-weight:700;color:white;}
-.wl-comm-meta{font-size:10px;color:rgba(255,255,255,0.3);margin-top:1px;}
-.wl-comm-amount{font-size:13px;font-weight:900;color:#f59e0b;}
+    /* ── Status area ── */
+    .wal-status-area {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+      background: rgba(0,188,212,.05);
+      border: 1px solid rgba(0,188,212,.22);
+      border-radius: 12px;
+    }
+    .wal-status-area.visible { display: block; }
+    .wal-status-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2.5px solid rgba(0,188,212,.18);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: walSpin .75s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes walSpin { to { transform: rotate(360deg); } }
+    .wal-status-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .wal-elapsed {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+      margin-left: auto;
+    }
+    .wal-status-actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .wal-status-actions .wal-btn {
+      width: auto;
+      padding: 9px 16px;
+      font-size: 12px;
+    }
 
-/* REFERRAL */
-.wl-ref-card{background:linear-gradient(135deg,rgba(113,255,0,0.04),rgba(52,211,153,0.03));border:1px solid rgba(113,255,0,0.12);border-radius:18px;padding:20px;margin-bottom:14px;text-align:center;}
-.wl-ref-code{font-size:26px;font-weight:900;color:#71ff00;letter-spacing:3px;margin:10px 0;font-family:monospace;}
+    /* ── Note hint ── */
+    .wal-note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 7px;
+      line-height: 1.55;
+    }
+    .wal-note i { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 
-/* MODAL OVERLAY */
-.wl-modal-overlay{position:fixed;inset:0;background:rgba(3,13,9,0.88);backdrop-filter:blur(12px);z-index:500;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
-.wl-modal-overlay.open{opacity:1;pointer-events:all;}
-.wl-modal{background:#061a0e;border:1px solid rgba(113,255,0,0.15);border-radius:28px 28px 0 0;padding:24px 20px 40px;width:100%;max-width:500px;transform:translateY(40px);transition:transform .3s cubic-bezier(.25,.46,.45,.94);}
-.wl-modal-overlay.open .wl-modal{transform:translateY(0);}
-.wl-modal-handle{width:40px;height:4px;background:rgba(255,255,255,0.12);border-radius:2px;margin:0 auto 20px;}
-.wl-modal-title{font-size:18px;font-weight:900;color:white;margin-bottom:6px;}
-.wl-modal-sub{font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:20px;}
-.wl-modal-close{position:absolute;top:16px;right:20px;background:rgba(255,255,255,0.06);border:none;color:rgba(255,255,255,0.45);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;font-family:inherit;}
+    /* ── Filter buttons ── */
+    .wal-filter-btns {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .wal-filter-btn {
+      padding: 7px 14px;
+      border-radius: 50px;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .wal-filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .wal-filter-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
 
-/* MPESA INSTRUCTION BOX */
-.wl-mpesa-box{background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.15);border-radius:14px;padding:16px;margin:14px 0;font-size:12px;color:rgba(255,255,255,0.55);line-height:1.9;}
-.wl-mpesa-box strong{color:#71ff00;}
+    /* ── Transaction list ── */
+    .wal-tx-list { display: flex; flex-direction: column; }
+    .wal-tx-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+      animation: walFadeIn .2s ease;
+    }
+    .wal-tx-row:last-child { border-bottom: none; }
+    @keyframes walFadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; } }
+    .wal-tx-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .wal-tx-icon.credit { background: rgba(76,175,80,.1); color: var(--green); }
+    .wal-tx-icon.debit  { background: rgba(244,67,54,.1);  color: var(--red); }
+    .wal-tx-body { flex: 1; min-width: 0; }
+    .wal-tx-desc {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .wal-tx-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .wal-tx-right { text-align: right; flex-shrink: 0; }
+    .wal-tx-amount { font-size: 15px; font-weight: 800; }
+    .wal-tx-amount.credit { color: var(--green); }
+    .wal-tx-amount.debit  { color: var(--red); }
 
-/* MESSAGE */
-.wl-msg{font-size:12px;min-height:16px;margin:8px 0;}
+    /* ── Status badges ── */
+    .wal-status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 50px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .3px;
+      margin-top: 3px;
+    }
+    .wal-status-pending   { background: rgba(255,152,0,.1);  color: #e65100;       border: 1px solid rgba(255,152,0,.3); }
+    .wal-status-approved  { background: rgba(0,188,212,.1);  color: #006064;       border: 1px solid rgba(0,188,212,.3); }
+    .wal-status-rejected  { background: rgba(244,67,54,.1);  color: var(--red);    border: 1px solid rgba(244,67,54,.3); }
+    .wal-status-paid      { background: rgba(76,175,80,.1);  color: #1b5e20;       border: 1px solid rgba(76,175,80,.3); }
+    .wal-status-completed { background: rgba(76,175,80,.1);  color: #1b5e20;       border: 1px solid rgba(76,175,80,.3); }
+    .wal-status-failed    { background: rgba(244,67,54,.1);  color: var(--red);    border: 1px solid rgba(244,67,54,.3); }
+    .wal-status-cancelled { background: rgba(107,107,138,.1);color: var(--muted);  border: 1px solid rgba(107,107,138,.3); }
 
-/* PRESET BUTTONS */
-.wl-preset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px;}
-.wl-preset{padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:10px;color:rgba(255,255,255,0.6);font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .2s;text-align:center;}
-.wl-preset.sel{border-color:rgba(113,255,0,0.4);color:#71ff00;background:rgba(113,255,0,0.08);}
+    /* ── Load more ── */
+    .wal-load-more { text-align: center; margin-top: 16px; }
+    .wal-load-more .wal-btn { width: auto; padding: 11px 24px; font-size: 13px; }
 
-/* OVERVIEW GLASS CARD */
-.wl-glass{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:18px;padding:18px;}
+    /* ── Payout section ── */
+    .wal-payout-sub-tabs {
+      display: flex;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .wal-payout-sub-tab {
+      flex: 1;
+      padding: 11px 8px;
+      background: var(--bg);
+      border: none;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .wal-payout-sub-tab.active { background: var(--accent); color: #fff; }
+    .wal-payout-sub-panel { display: none; }
+    .wal-payout-sub-panel.active { display: block; }
 
-/* EMPTY STATE */
-.wl-empty{text-align:center;padding:48px 20px;color:rgba(255,255,255,0.25);font-size:13px;}
-.wl-empty-icon{font-size:40px;margin-bottom:12px;opacity:0.5;}
+    /* ── Method buttons ── */
+    .wal-method-btns {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .wal-method-btn {
+      flex: 1;
+      padding: 14px 10px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      transition: all .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .wal-method-btn i { font-size: 22px; }
+    .wal-method-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .wal-method-btn.active {
+      border-color: var(--accent);
+      background: rgba(0,188,212,.06);
+      color: var(--accent);
+      box-shadow: 0 2px 12px rgba(0,188,212,.16);
+    }
 
-/* NOTIFY TOAST */
-.wl-toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:#071a10;border:1px solid rgba(113,255,0,0.25);border-radius:12px;padding:12px 20px;font-size:13px;font-weight:700;color:white;z-index:900;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;}
-.wl-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+    .wal-bank-fields { display: none; }
+    .wal-bank-fields.visible { display: block; }
 
-@media(max-width:500px){
-  .wl-stats{grid-template-columns:1fr 1fr;}
-  .wl-main-balance{font-size:36px;}
-  .wl-hero{padding:22px 18px;}
-  .wl-balance-split{flex-direction:column;gap:7px;}
-  .wl-split-item{flex-direction:row;justify-content:space-between;text-align:left;}
-}
-@media(min-width:769px){
-  .bottom-nav{display:none;}
-  .wl-hero{margin:20px auto 0;max-width:700px;}
-  .wl-stats{max-width:700px;margin:0 auto;}
-}
-</style>
-<script src="shared-header.js" defer></script>
+    /* ── Payout list ── */
+    .wal-payout-list { display: flex; flex-direction: column; }
+    .wal-payout-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .wal-payout-row:last-child { border-bottom: none; }
+    .wal-payout-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(124,77,255,.1);
+      color: #7c4dff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .wal-payout-body { flex: 1; min-width: 0; }
+    .wal-payout-desc {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .wal-payout-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .wal-payout-right { text-align: right; flex-shrink: 0; }
+    .wal-payout-amount {
+      font-size: 15px;
+      font-weight: 800;
+      color: #7c4dff;
+    }
+
+    /* ── Payout form ── */
+    .wal-payout-form { /* scoping class */ }
+
+    /* ── Loading & empty ── */
+    .wal-loading {
+      text-align: center;
+      padding: 32px 16px;
+    }
+    .wal-loading-spinner {
+      width: 26px;
+      height: 26px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: walSpin .75s linear infinite;
+      margin: 0 auto 10px;
+    }
+    .wal-loading p { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .wal-empty {
+      text-align: center;
+      padding: 40px 16px;
+    }
+    .wal-empty-icon { font-size: 38px; margin-bottom: 10px; opacity: .3; }
+    .wal-empty p { font-size: 14px; color: var(--muted); font-weight: 600; }
+
+    /* ── Toast container ── */
+    .wal-toast-container {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+      width: min(92vw, 360px);
+    }
+    .wal-toast {
+      background: var(--text);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 50px;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 4px 20px rgba(0,0,0,.22);
+      animation: walToastIn .25s ease, walToastOut .3s ease 2.7s forwards;
+      text-align: center;
+      max-width: 100%;
+    }
+    .wal-toast.success { background: var(--green); }
+    .wal-toast.error   { background: var(--red); }
+    .wal-toast.info    { background: var(--accent); }
+    @keyframes walToastIn  { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    @keyframes walToastOut { to   { opacity: 0; transform: translateY(8px); } }
+
+    /* ── Responsive ── */
+    @media (max-width: 400px) {
+      .wal-balance-amount { font-size: 34px; }
+      .wal-tab { font-size: 11px; padding: 13px 4px; }
+      .wal-method-btn { padding: 11px 6px; font-size: 12px; }
+    }
+  </style>
 </head>
 <body>
-<script src="splash.js"></script>
 
-<!-- NAV -->
-<nav class="wl-nav">
-  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="wl-nav-logo" alt="SOKONI"></a>
-  <div class="wl-nav-right">
-    <button type="button" class="wl-sync-btn" onclick="syncFromFirestore()">&#x21BB; Sync</button>
-  </div>
-</nav>
+  <!-- ═══════════════════════════
+       NAV
+  ═══════════════════════════ -->
+  <nav class="wal-nav" role="navigation" aria-label="Wallet navigation">
+    <a href="index.html" class="wal-nav-back" aria-label="Go back">
+      <i class="fa-solid fa-arrow-left"></i>
+    </a>
+    <img src="assets/logosokoni.png" alt="SOKONI" class="wal-nav-logo" loading="lazy">
+    <span class="wal-nav-title">My Wallet</span>
+  </nav>
 
-<!-- TABS -->
-<div class="wl-tabs-wrap">
-  <div class="wl-tabs" role="tablist">
-    <button type="button" class="wl-tab active" onclick="showPanel('overview',this)" role="tab">Overview</button>
-    <button type="button" class="wl-tab" onclick="showPanel('transactions',this)" role="tab">Transactions</button>
-    <button type="button" class="wl-tab" onclick="showPanel('escrow',this)" role="tab">Escrow</button>
-    <button type="button" class="wl-tab" onclick="showPanel('commissions',this)" role="tab">Commissions</button>
-    <button type="button" class="wl-tab" onclick="showPanel('referrals',this)" role="tab">Referrals</button>
-  </div>
-</div>
+  <!-- ═══════════════════════════
+       PAGE
+  ═══════════════════════════ -->
+  <main class="wal-page">
 
-<!-- WALLET BALANCE HERO -->
-<div class="wl-hero">
-  <div class="wl-hero-top">
-    <div>
-      <div class="wl-hero-title">SOKONI WALLET</div>
-      <div class="wl-hero-user" id="wlUserName">Loading&hellip;</div>
-    </div>
-    <div class="wl-hero-id" id="wlWalletId">SKW-000000</div>
-  </div>
-  <div class="wl-main-balance"><sup>KES </sup><span id="wlMainBalance">0.00</span></div>
-  <div class="wl-balance-label">Available Balance</div>
-  <div class="wl-balance-split">
-    <div class="wl-split-item">
-      <div class="wl-split-num" style="color:#f59e0b;" id="wlEscrowBal">KES 0.00</div>
-      <div class="wl-split-lbl">In Escrow</div>
-    </div>
-    <div class="wl-split-item">
-      <div class="wl-split-num" style="color:#00d4ff;" id="wlPendingBal">KES 0.00</div>
-      <div class="wl-split-lbl">Pending</div>
-    </div>
-    <div class="wl-split-item">
-      <div class="wl-split-num" style="color:#71ff00;" id="wlMonthIn">KES 0.00</div>
-      <div class="wl-split-lbl">This Month In</div>
-    </div>
-  </div>
-  <div class="wl-hero-actions">
-    <button type="button" class="wl-act-btn wl-act-add" onclick="openModal('addMoney')">&#x1F4B3; Add Money</button>
-    <button type="button" class="wl-act-btn wl-act-withdraw" onclick="openModal('withdraw')">&#x1F4E4; Withdraw</button>
-    <button type="button" class="wl-act-btn wl-act-send" onclick="openModal('send')">&#x2197; Send</button>
-    <button type="button" class="wl-act-btn wl-act-share" onclick="shareWallet()">&#x1F517; Share</button>
-  </div>
-</div>
-
-<!-- QUICK STATS -->
-<div class="wl-stats">
-  <div class="wl-stat"><div class="wl-stat-num" id="statTotalIn">KES 0</div><div class="wl-stat-lbl">Total In</div></div>
-  <div class="wl-stat"><div class="wl-stat-num" id="statTotalOut">KES 0</div><div class="wl-stat-lbl">Total Out</div></div>
-  <div class="wl-stat"><div class="wl-stat-num" id="statCommPaid">KES 0</div><div class="wl-stat-lbl">Comm. Paid</div></div>
-  <div class="wl-stat"><div class="wl-stat-num" id="statMonthTx">0</div><div class="wl-stat-lbl">This Month</div></div>
-</div>
-
-<!-- ═══════════════════════════════════════
-     PANELS
-═══════════════════════════════════════ -->
-
-<!-- OVERVIEW TAB -->
-<div id="panel-overview" class="wl-panel active">
-  <div class="wl-body">
-    <div class="wl-section-h">Recent Transactions</div>
-    <div class="wl-tx-list" id="recentTxList"></div>
-    <div style="text-align:center;margin:14px 0 24px;">
-      <button type="button" onclick="showPanel('transactions',document.querySelectorAll('.wl-tab')[1])" style="padding:9px 22px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:10px;color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View Full History &rarr;</button>
-    </div>
-
-    <div class="wl-section-h">Spending by Hub</div>
-    <div class="wl-glass" id="spendingChart">
-      <div class="wl-empty"><div class="wl-empty-icon">&#x1F4CA;</div>Make a purchase to see your spending breakdown</div>
-    </div>
-
-    <div class="wl-section-h">M-Pesa Balance</div>
-    <div class="wl-glass" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-      <div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:4px;">Last synced via STK</div>
-        <div style="font-size:20px;font-weight:900;color:#71ff00;" id="mpesaBalDisplay">Not synced</div>
+    <!-- BALANCE CARD -->
+    <section class="wal-balance-card" aria-label="Wallet balance">
+      <div class="wal-balance-brand">
+        <i class="fa-solid fa-wallet"></i>
+        SOKONI Wallet
       </div>
-      <button type="button" onclick="openModal('addMoney')" class="wl-act-btn wl-act-add" style="min-width:130px;flex:0;">&#x1F4B3; Add via M-Pesa</button>
-    </div>
-  </div>
-</div>
+      <div class="wal-balance-amount" id="walBalance" aria-live="polite">
+        <span class="wal-balance-currency">KSh</span>0.00
+      </div>
+      <div class="wal-balance-label">Available Balance</div>
+      <div class="wal-balance-last-topup" id="walLastTopUp"></div>
+      <div class="wal-action-btns">
+        <button class="wal-action-btn" id="walBtnTopUp" type="button" aria-label="Top up wallet">
+          <i class="fa-solid fa-plus"></i> Top Up
+        </button>
+        <button class="wal-action-btn" id="walBtnPay" type="button" aria-label="View transactions">
+          <i class="fa-solid fa-list-ul"></i> History
+        </button>
+      </div>
+    </section>
 
-<!-- TRANSACTIONS TAB -->
-<div id="panel-transactions" class="wl-panel">
-  <div class="wl-body">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
-      <div style="font-size:16px;font-weight:900;color:white;">Transaction History</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.3);" id="txCountLabel">0 transactions</div>
+    <!-- TABS -->
+    <div class="wal-tabs" role="tablist" aria-label="Wallet sections">
+      <button class="wal-tab active" id="walTabTopUp" role="tab"
+        aria-selected="true" aria-controls="walPanelTopUp" data-tab="topup">
+        <i class="fa-solid fa-mobile-screen-button"></i> Top Up
+      </button>
+      <button class="wal-tab" id="walTabTx" role="tab"
+        aria-selected="false" aria-controls="walPanelTx" data-tab="transactions">
+        <i class="fa-solid fa-list-ul"></i> Transactions
+      </button>
+      <!-- Payouts tab — shown only to sellers via JS -->
+      <button class="wal-tab" id="walPayoutTab" role="tab"
+        aria-selected="false" aria-controls="walPanelPayout" data-tab="payouts"
+        style="display:none">
+        <i class="fa-solid fa-money-bill-transfer"></i> Payouts
+      </button>
     </div>
-    <div class="wl-filters">
-      <button type="button" class="wl-filter-btn active" onclick="filterTx('all',this)">All</button>
-      <button type="button" class="wl-filter-btn" onclick="filterTx('credit',this)">Credit</button>
-      <button type="button" class="wl-filter-btn" onclick="filterTx('debit',this)">Debit</button>
-      <button type="button" class="wl-filter-btn" onclick="filterTx('pending',this)">Pending</button>
-      <button type="button" class="wl-filter-btn" onclick="filterTx('escrow',this)">Escrow</button>
-      <button type="button" class="wl-filter-btn" onclick="filterTx('refund',this)">Refunds</button>
-    </div>
-    <div class="wl-tx-list" id="fullTxList"></div>
-  </div>
-</div>
 
-<!-- ESCROW TAB -->
-<div id="panel-escrow" class="wl-panel">
-  <div class="wl-body">
-    <div style="font-size:16px;font-weight:900;color:white;margin-bottom:6px;">Escrow Holdings</div>
-    <div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:20px;">Funds held safely until delivery confirmed &mdash; protects buyer and seller</div>
+    <div class="wal-tab-content">
 
-    <!-- Create Escrow -->
-    <div class="wl-glass" style="margin-bottom:20px;">
-      <div class="wl-section-h" style="margin-top:0;">Create New Escrow</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <div>
-          <label class="wl-label">Seller Phone *</label>
-          <input type="tel" id="escrSeller" class="wl-input" placeholder="07XXXXXXXX">
-          <label class="wl-label">Amount (KES) *</label>
-          <input type="number" id="escrAmount" class="wl-input" placeholder="e.g. 15000">
+      <!-- ─── TOP UP PANEL ─── -->
+      <div class="wal-tab-panel active" id="walPanelTopUp"
+        role="tabpanel" aria-labelledby="walTabTopUp">
+
+        <div class="wal-section-label">Quick Amounts</div>
+        <div class="wal-quick-amounts" id="walQuickAmounts"
+          role="group" aria-label="Quick top-up amounts">
+          <button class="wal-amount-chip" data-amount="50"   type="button">KSh 50</button>
+          <button class="wal-amount-chip" data-amount="100"  type="button">KSh 100</button>
+          <button class="wal-amount-chip" data-amount="200"  type="button">KSh 200</button>
+          <button class="wal-amount-chip" data-amount="500"  type="button">KSh 500</button>
+          <button class="wal-amount-chip" data-amount="1000" type="button">KSh 1,000</button>
         </div>
-        <div>
-          <label class="wl-label">Item / Service *</label>
-          <input type="text" id="escrItem" class="wl-input" placeholder="e.g. iPhone 14 Pro">
-          <label class="wl-label">Release Condition</label>
-          <select id="escrCondition" class="wl-input">
-            <option>On delivery &amp; inspection</option>
-            <option>On delivery only</option>
-            <option>On service completion</option>
-            <option>Manually by buyer</option>
-          </select>
+
+        <div class="wal-form-group">
+          <label for="walTopUpAmount">Amount (KSh)</label>
+          <input class="wal-input" type="number" id="walTopUpAmount"
+            inputmode="numeric" placeholder="e.g. 500"
+            min="10" max="70000" step="1">
+        </div>
+
+        <div class="wal-form-group">
+          <label for="walTopUpPhone">M-Pesa Phone Number</label>
+          <input class="wal-input" type="tel" id="walTopUpPhone"
+            inputmode="tel" placeholder="e.g. 0712 345 678"
+            maxlength="13" autocomplete="tel">
+        </div>
+
+        <button class="wal-btn wal-btn-primary" id="walTopUpBtn" type="button">
+          <i class="fa-solid fa-mobile-screen-button"></i>
+          Request M-Pesa Payment
+        </button>
+
+        <!-- Polling status area -->
+        <div class="wal-status-area" id="walTopUpStatus" role="status" aria-live="polite">
+          <div class="wal-status-text">
+            <span class="wal-status-spinner" id="walStatusSpinner" aria-hidden="true"></span>
+            <span id="walStatusMsg">Waiting for M-Pesa confirmation...</span>
+            <span class="wal-elapsed" id="walElapsed"></span>
+          </div>
+          <div class="wal-status-actions">
+            <button class="wal-btn wal-btn-outline" id="walCheckStatusBtn" type="button">
+              <i class="fa-solid fa-rotate"></i> Check Status
+            </button>
+            <button class="wal-btn" id="walCancelPollBtn" type="button"
+              style="background:rgba(244,67,54,.07);color:var(--red);border:1.5px solid rgba(244,67,54,.25);">
+              <i class="fa-solid fa-xmark"></i> Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Hidden: holds pending transaction ID between polls -->
+        <input type="hidden" id="walPendingTxId">
+
+        <p class="wal-note">
+          <i class="fa-solid fa-circle-info"></i>
+          You will receive an M-Pesa prompt on your phone. Enter your PIN within 90 seconds to complete the top-up.
+        </p>
+      </div>
+
+      <!-- ─── TRANSACTIONS PANEL ─── -->
+      <div class="wal-tab-panel" id="walPanelTx"
+        role="tabpanel" aria-labelledby="walTabTx">
+
+        <div class="wal-filter-btns" id="walTxFilter"
+          role="group" aria-label="Filter transactions">
+          <button class="wal-filter-btn active" data-filter="all"    type="button" aria-pressed="true">All</button>
+          <button class="wal-filter-btn"         data-filter="credit" type="button" aria-pressed="false">Credits</button>
+          <button class="wal-filter-btn"         data-filter="debit"  type="button" aria-pressed="false">Debits</button>
+        </div>
+
+        <div class="wal-tx-list" id="walTxList" aria-label="Transaction history">
+          <div class="wal-loading">
+            <div class="wal-loading-spinner" aria-hidden="true"></div>
+            <p>Loading transactions...</p>
+          </div>
+        </div>
+
+        <div class="wal-load-more" id="walTxLoadMore" style="display:none">
+          <button class="wal-btn wal-btn-outline" id="walLoadMoreBtn" type="button">
+            Load more
+          </button>
         </div>
       </div>
-      <label class="wl-label">Order Reference (optional)</label>
-      <input type="text" id="escrOrderRef" class="wl-input" placeholder="e.g. ORD-12345">
-      <button type="button" onclick="createEscrow()" class="wl-btn-primary wl-btn-gold" style="margin-top:4px;">&#x1F512; Lock Funds in Escrow</button>
-      <div class="wl-msg" id="escrMsg"></div>
-    </div>
 
-    <!-- Active Escrows -->
-    <div class="wl-section-h">Active Escrows</div>
-    <div id="escrowList"></div>
+      <!-- ─── PAYOUTS PANEL ─── -->
+      <div class="wal-tab-panel" id="walPanelPayout"
+        role="tabpanel" aria-labelledby="walPayoutTab">
+        <div id="walPayoutSection">
 
-    <div class="wl-glass" style="margin-top:16px;">
-      <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:8px;">How Escrow Protects You</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.3);line-height:1.9;">
-        1. Buyer locks funds &rarr; Seller sees confirmation and ships/delivers<br>
-        2. Buyer inspects item &rarr; Confirms delivery &rarr; Funds released<br>
-        3. If dispute: SOKONI reviews and mediates within 48hrs<br>
-        4. Full refund if item not delivered within agreed time
+          <!-- Sub-tabs -->
+          <div class="wal-payout-sub-tabs" role="tablist" aria-label="Payout options">
+            <button class="wal-payout-sub-tab active" data-sub="request"
+              role="tab" aria-selected="true" aria-controls="walPayoutReqPanel"
+              type="button">Request Payout</button>
+            <button class="wal-payout-sub-tab" data-sub="history"
+              role="tab" aria-selected="false" aria-controls="walPayoutHistPanel"
+              type="button">Payout History</button>
+          </div>
+
+          <!-- Sub-panel: Request -->
+          <div class="wal-payout-sub-panel active wal-payout-form" id="walPayoutReqPanel">
+
+            <div class="wal-form-group">
+              <label for="walPayoutAmount">Payout Amount (KSh)</label>
+              <input class="wal-input" type="number" id="walPayoutAmount"
+                inputmode="numeric" placeholder="Minimum KSh 500" min="500" step="1">
+            </div>
+
+            <div class="wal-form-group">
+              <label id="walMethodLabel">Payout Method</label>
+              <div class="wal-method-btns" id="walPayoutMethod"
+                role="group" aria-labelledby="walMethodLabel">
+                <button class="wal-method-btn active" data-method="mpesa"
+                  type="button" aria-pressed="true">
+                  <i class="fa-solid fa-mobile-screen-button"></i>
+                  M-Pesa
+                </button>
+                <button class="wal-method-btn" data-method="bank"
+                  type="button" aria-pressed="false">
+                  <i class="fa-solid fa-building-columns"></i>
+                  Bank Transfer
+                </button>
+              </div>
+            </div>
+
+            <div class="wal-form-group">
+              <label for="walPayoutAccount" id="walPayoutAccountLabel">M-Pesa Number</label>
+              <input class="wal-input" type="tel" id="walPayoutAccount"
+                inputmode="tel" placeholder="e.g. 0712 345 678"
+                maxlength="13" autocomplete="tel"
+                aria-labelledby="walPayoutAccountLabel">
+            </div>
+
+            <!-- Bank-specific fields (hidden by default) -->
+            <div class="wal-bank-fields" id="walPayoutBankFields">
+              <div class="wal-form-group">
+                <label for="walPayoutBankCode">Bank</label>
+                <select class="wal-input" id="walPayoutBankCode" aria-label="Select your bank">
+                  <option value="">— Select your bank —</option>
+                  <option value="KCBKENA">KCB Bank</option>
+                  <option value="EQTYKENAXXX">Equity Bank</option>
+                  <option value="BARCKENXXXX">Barclays / ABSA</option>
+                  <option value="CRBTKENA">Co-operative Bank</option>
+                  <option value="SBICKENXXXX">Standard Chartered</option>
+                  <option value="DTKEKENA">Diamond Trust Bank</option>
+                  <option value="FMBZKENA">Family Bank</option>
+                  <option value="IMBLKENA">I&amp;M Bank</option>
+                  <option value="NBKEKENAXXX">National Bank</option>
+                  <option value="PRIMKENA">Prime Bank</option>
+                </select>
+              </div>
+              <div class="wal-form-group">
+                <label for="walPayoutBankName">Account Name</label>
+                <input class="wal-input" type="text" id="walPayoutBankName"
+                  placeholder="Name as shown on your bank account"
+                  autocomplete="name" maxlength="120">
+              </div>
+            </div>
+
+            <button class="wal-btn wal-btn-primary" id="walPayoutBtn" type="button">
+              <i class="fa-solid fa-paper-plane"></i>
+              Request Payout
+            </button>
+
+            <p class="wal-note">
+              <i class="fa-solid fa-clock"></i>
+              Payouts are processed within 1–3 business days. Minimum payout is KSh 500.
+            </p>
+          </div>
+
+          <!-- Sub-panel: History -->
+          <div class="wal-payout-sub-panel" id="walPayoutHistPanel">
+            <div class="wal-payout-list" id="walPayoutHistory" aria-label="Payout history">
+              <div class="wal-loading">
+                <div class="wal-loading-spinner" aria-hidden="true"></div>
+                <p>Loading payout history...</p>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /walPayoutSection -->
       </div>
-    </div>
-  </div>
-</div>
 
-<!-- COMMISSIONS TAB -->
-<div id="panel-commissions" class="wl-panel">
-  <div class="wl-body">
-    <div style="font-size:16px;font-weight:900;color:white;margin-bottom:16px;">Commission Breakdown</div>
-
-    <!-- Summary cards -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
-      <div class="wl-glass" style="text-align:center;">
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">This Month</div>
-        <div style="font-size:22px;font-weight:900;color:#f59e0b;" id="commMonthTotal">KES 0</div>
-      </div>
-      <div class="wl-glass" style="text-align:center;">
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">All Time</div>
-        <div style="font-size:22px;font-weight:900;color:#f59e0b;" id="commAllTotal">KES 0</div>
-      </div>
-      <div class="wl-glass" style="text-align:center;">
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Boost Spend</div>
-        <div style="font-size:22px;font-weight:900;color:#a855f7;" id="commBoostTotal">KES 0</div>
-      </div>
-      <div class="wl-glass" style="text-align:center;">
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Transactions</div>
-        <div style="font-size:22px;font-weight:900;color:#71ff00;" id="commTxCount">0</div>
-      </div>
-    </div>
-
-    <div class="wl-section-h">Commission Log</div>
-    <div id="commList"><div class="wl-empty"><div class="wl-empty-icon">&#x1F4B8;</div>No commission records yet</div></div>
-
-    <div class="wl-glass" style="margin-top:16px;">
-      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:6px;">Platform Fee Structure</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.28);line-height:1.9;">
-        Products &amp; Services: <strong style="color:#71ff00;">5%</strong> per transaction<br>
-        Escrow Release: <strong style="color:#71ff00;">2%</strong> handling fee<br>
-        Delivery: <strong style="color:#71ff00;">8%</strong> of fare<br>
-        Boosts: fixed rate per tier
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- REFERRALS TAB -->
-<div id="panel-referrals" class="wl-panel">
-  <div class="wl-body">
-    <div class="wl-ref-card">
-      <div style="font-size:12px;color:rgba(255,255,255,0.4);">Your Referral Code</div>
-      <div class="wl-ref-code" id="refCode">SKN-000</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:14px;">Share and earn KES 50 per friend who joins and transacts</div>
-      <button type="button" onclick="shareReferral()" style="padding:10px 24px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:999px;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;">&#x1F517; Share Referral Link</button>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px;">
-      <div class="wl-glass" style="text-align:center;">
-        <div style="font-size:22px;font-weight:900;color:#71ff00;" id="refCount">0</div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;margin-top:4px;">Referrals</div>
-      </div>
-      <div class="wl-glass" style="text-align:center;">
-        <div style="font-size:22px;font-weight:900;color:#f59e0b;" id="refEarned">KES 0</div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;margin-top:4px;">Earned</div>
-      </div>
-      <div class="wl-glass" style="text-align:center;">
-        <div style="font-size:22px;font-weight:900;color:#00d4ff;" id="refPending">KES 0</div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;margin-top:4px;">Pending</div>
-      </div>
-    </div>
-
-    <div class="wl-section-h">Referral Bonus History</div>
-    <div id="refList"><div class="wl-empty"><div class="wl-empty-icon">&#x1F91D;</div>No referral bonuses yet &mdash; invite friends!</div></div>
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════
-     MODALS
-═══════════════════════════════════════ -->
-
-<!-- ADD MONEY MODAL -->
-<div class="wl-modal-overlay" id="modal-addMoney" onclick="closeModalOnBg(event,'addMoney')">
-  <div class="wl-modal" style="position:relative;">
-    <div class="wl-modal-handle"></div>
-    <button type="button" class="wl-modal-close" onclick="closeModal('addMoney')">&#x2715;</button>
-    <div class="wl-modal-title">&#x1F4B3; Add Money via M-Pesa</div>
-    <div class="wl-modal-sub">An STK push will be sent to your M-Pesa phone</div>
-    <div class="wl-preset-grid">
-      <button type="button" onclick="setPreset(500,this,'topupAmt')" class="wl-preset">KES 500</button>
-      <button type="button" onclick="setPreset(1000,this,'topupAmt')" class="wl-preset">KES 1,000</button>
-      <button type="button" onclick="setPreset(2000,this,'topupAmt')" class="wl-preset">KES 2,000</button>
-      <button type="button" onclick="setPreset(5000,this,'topupAmt')" class="wl-preset">KES 5,000</button>
-      <button type="button" onclick="setPreset(10000,this,'topupAmt')" class="wl-preset">KES 10,000</button>
-      <button type="button" onclick="setPreset(20000,this,'topupAmt')" class="wl-preset">KES 20,000</button>
-    </div>
-    <label class="wl-label">Amount (KES) *</label>
-    <input type="number" id="topupAmt" class="wl-input" placeholder="Or enter custom amount">
-    <label class="wl-label">M-Pesa Phone *</label>
-    <input type="tel" id="topupPhone" class="wl-input" placeholder="07XXXXXXXX">
-    <div class="wl-mpesa-box">
-      STK push via <strong>IntaSend</strong> &mdash; funds arrive in seconds.<br>
-      Or pay manually: Paybill <strong>247247</strong>, Account <strong id="mpesaAccNum">SOKONI-UID</strong><br>
-      No top-up fees charged by SOKONI.
-    </div>
-    <button type="button" onclick="topUpWallet()" class="wl-btn-primary">&#x1F4F1; Send STK Push</button>
-    <div class="wl-msg" id="topupMsg"></div>
-  </div>
-</div>
-
-<!-- WITHDRAW MODAL -->
-<div class="wl-modal-overlay" id="modal-withdraw" onclick="closeModalOnBg(event,'withdraw')">
-  <div class="wl-modal" style="position:relative;">
-    <div class="wl-modal-handle"></div>
-    <button type="button" class="wl-modal-close" onclick="closeModal('withdraw')">&#x2715;</button>
-    <div class="wl-modal-title">&#x1F4E4; Withdraw to M-Pesa</div>
-    <div class="wl-modal-sub">Minimum KES 100 &mdash; processed within 24hrs</div>
-    <div id="wdAvailDisplay" style="background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.15);border-radius:11px;padding:12px 14px;margin-bottom:14px;font-size:14px;font-weight:800;color:#71ff00;">Available: KES 0.00</div>
-    <label class="wl-label">M-Pesa Number *</label>
-    <input type="tel" id="wdPhone" class="wl-input" placeholder="07XXXXXXXX" maxlength="12">
-    <label class="wl-label">Amount (KES) *</label>
-    <input type="number" id="wdAmount" class="wl-input" placeholder="Min KES 100" min="100">
-    <label class="wl-label">Reason (optional)</label>
-    <input type="text" id="wdReason" class="wl-input" placeholder="e.g. Sales earnings">
-    <button type="button" onclick="withdrawFunds()" class="wl-btn-primary" style="background:linear-gradient(135deg,rgba(113,255,0,0.2),rgba(52,211,153,0.15));border:1px solid rgba(113,255,0,0.3);color:#71ff00;">&#x1F4B8; Request Withdrawal</button>
-    <div class="wl-msg" id="wdMsg"></div>
-    <div id="wdHistory" style="margin-top:20px;"></div>
-  </div>
-</div>
-
-<!-- SEND MONEY MODAL -->
-<div class="wl-modal-overlay" id="modal-send" onclick="closeModalOnBg(event,'send')">
-  <div class="wl-modal" style="position:relative;">
-    <div class="wl-modal-handle"></div>
-    <button type="button" class="wl-modal-close" onclick="closeModal('send')">&#x2715;</button>
-    <div class="wl-modal-title">&#x2197;&#xFE0F; Send Money</div>
-    <div class="wl-modal-sub">Send KES to another SOKONI user by username or phone</div>
-    <label class="wl-label">Recipient Phone or Wallet ID *</label>
-    <input type="text" id="sendTo" class="wl-input" placeholder="07XXXXXXXX or SKW-XXXXXX">
-    <label class="wl-label">Amount (KES) *</label>
-    <input type="number" id="sendAmount" class="wl-input" placeholder="e.g. 500">
-    <label class="wl-label">Purpose</label>
-    <select id="sendPurpose" class="wl-input">
-      <option>Product Payment</option>
-      <option>Service Payment</option>
-      <option>Escrow Release</option>
-      <option>Rent Payment</option>
-      <option>Delivery Fee</option>
-      <option>Other</option>
-    </select>
-    <label class="wl-label">Note (optional)</label>
-    <input type="text" id="sendNote" class="wl-input" placeholder="e.g. Sofa delivery payment">
-    <button type="button" onclick="sendMoney()" class="wl-btn-primary" style="background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#0a0805;">&#x2197;&#xFE0F; Send Money</button>
-    <div class="wl-msg" id="sendMsg"></div>
-    <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.28);line-height:1.7;">Sending debits your SOKONI Wallet and credits the recipient. A Firestore transaction records both sides. Admin is notified for M-Pesa payouts.</div>
-  </div>
-</div>
-
-<!-- BOTTOM NAV -->
-<nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">&#x1F3E0;</span><span>Home</span></a>
-  <a href="wallet.html" class="bnav-item active-bnav"><span class="bnav-emoji">&#x1F4B3;</span><span>Wallet</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">&#x1F6CD;</span><span>Shop</span></a>
-  <a href="trust.html" class="bnav-item"><span class="bnav-emoji">&#x1F6C2;</span><span>Passport</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">&#x1F464;</span><span>Profile</span></a>
-</nav>
-
-<!-- TOAST -->
-<div class="wl-toast" id="wlToast"></div>
-
-<script type="module">
-/* ─────────────────────────────────────────
-   SOKONI WALLET — Full Module
-   Firestore: sokoni-aeb26
-   Auth: localStorage "sokoniUser"
-───────────────────────────────────────── */
-const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-// ── Firebase imports ──
-import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import {
-  getFirestore, doc, getDoc, setDoc, addDoc, updateDoc,
-  collection, query, where, orderBy, limit, onSnapshot,
-  serverTimestamp, runTransaction, getDocs, increment
-} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-
-const FB_CFG = {
-  apiKey: "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-  authDomain: "sokoni-aeb26.firebaseapp.com",
-  projectId: "sokoni-aeb26",
-  storageBucket: "sokoni-aeb26.firebasestorage.app",
-  messagingSenderId: "24799054989",
-  appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"};
-
-const app = getApps().length ? getApps()[0] : initializeApp(FB_CFG);
-const db = getFirestore(app);
-
-// ── Current user ──
-let CU = null; // { uid, name, phone }
-function getUser() {
-  if (CU) return CU;
-  try { CU = JSON.parse(localStorage.getItem('sokoniUser')) || null; } catch(e) {}
-  return CU;
-}
-
-// ── Local wallet state (cache) ──
-function loadLocalWallet() {
-  let w = {};
-  try { w = JSON.parse(localStorage.getItem('sokoniWallet') || '{}'); } catch(e) {}
-  if (!w.id) {
-    const u = getUser();
-    w = { id: 'SKW-' + (u ? String(u.uid||'').slice(-6) : String(Date.now()).slice(-6)), balance: 0, escrow: 0, pending: 0, totalIn: 0, totalOut: 0, created: Date.now() };
-    localStorage.setItem('sokoniWallet', JSON.stringify(w));
-  }
-  return w;
-}
-function saveLocalWallet(w) { localStorage.setItem('sokoniWallet', JSON.stringify(w)); }
-
-// ── Local transactions (cache, 200 max) ──
-function getTxs() { try { return JSON.parse(localStorage.getItem('wlTransactions') || '[]'); } catch(e) { return []; } }
-function saveTxs(t) { localStorage.setItem('wlTransactions', JSON.stringify(t.slice(0, 200))); }
-function addLocalTx(tx) { const t = getTxs(); t.unshift({...tx, id: tx.id||('TX'+Date.now()), ts: tx.ts||Date.now()}); saveTxs(t); }
-
-// ── Format helpers ──
-const fmt = n => 'KES ' + Number(n||0).toLocaleString('en-KE', {minimumFractionDigits:2, maximumFractionDigits:2});
-const fmtShort = n => { const v = Number(n||0); return v >= 1000 ? 'KES '+(v/1000).toFixed(1)+'K' : fmt(v); };
-function timeAgo(ts) {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return 'just now';
-  if (s < 3600) return Math.floor(s/60) + 'm ago';
-  if (s < 86400) return Math.floor(s/3600) + 'h ago';
-  return Math.floor(s/86400) + 'd ago';
-}
-function setEl(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; }
-function setHTML(id, v) { const e = document.getElementById(id); if (e) e.innerHTML = v; }
-
-// ── Toast ──
-function toast(msg, color) {
-  const t = document.getElementById('wlToast');
-  if (!t) return;
-  t.textContent = msg;
-  t.style.color = color || '#71ff00';
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3200);
-}
-
-// ── Transaction icons & colours ──
-const TX_ICONS = {
-  purchase:'🛒', sale:'💹', withdrawal:'💸', deposit:'📲', topup:'➕',
-  refund:'↩️', commission:'💸', escrow_hold:'🔒', escrow_release:'✅',
-  referral_bonus:'🎁', send:'📤', receive:'📥', pay:'💳', escrow:'🔒'
-};
-const TX_HUBS = { Marketplace:'🛒', Mechanics:'🔧','Car Hub':'🚗', Healthcare:'🏥',
-  Banking:'🏦', Entertainment:'🎵', Sports:'⚽','Tech Hub':'📱', Property:'🏘️',
-  'Home Services':'🏠', Fitness:'💪', Legal:'⚖️','Top Up':'➕', Send:'📤', Escrow:'🔒' };
-
-function txIcon(t) { return TX_ICONS[t.type] || TX_HUBS[t.hub] || '💳'; }
-function txColor(t) {
-  if (t.dir === 'in' || t.type === 'receive' || t.type === 'refund' || t.type === 'referral_bonus' || t.type === 'escrow_release' || t.type === 'sale') return '#71ff00';
-  if (t.type === 'escrow_hold' || t.type === 'escrow') return '#f59e0b';
-  if (t.status === 'pending') return '#00d4ff';
-  return '#f87171';
-}
-function txPrefix(t) {
-  if (t.dir === 'in' || ['receive','refund','referral_bonus','escrow_release','sale'].includes(t.type)) return '+';
-  if (['escrow_hold','escrow'].includes(t.type)) return '~';
-  return '-';
-}
-function statusBadge(status) {
-  if (!status || status === 'completed') return '';
-  const cfg = {
-    pending:  { bg:'rgba(0,212,255,0.1)',  border:'rgba(0,212,255,0.25)',  color:'#00d4ff',  label:'PENDING' },
-    approved: { bg:'rgba(113,255,0,0.1)', border:'rgba(113,255,0,0.25)', color:'#71ff00',  label:'APPROVED' },
-    rejected: { bg:'rgba(248,113,113,0.1)',border:'rgba(248,113,113,0.25)',color:'#f87171', label:'REJECTED' },
-    held:     { bg:'rgba(245,158,11,0.1)', border:'rgba(245,158,11,0.25)', color:'#f59e0b', label:'HELD' },
-    released: { bg:'rgba(113,255,0,0.1)', border:'rgba(113,255,0,0.25)', color:'#71ff00',  label:'RELEASED' },
-    refunded: { bg:'rgba(168,85,247,0.1)', border:'rgba(168,85,247,0.25)',color:'#a855f7', label:'REFUNDED' }
-  };
-  const c = cfg[status] || { bg:'rgba(255,255,255,0.06)', border:'rgba(255,255,255,0.1)', color:'rgba(255,255,255,0.4)', label: status.toUpperCase() };
-  return `<span class="wl-tx-badge" style="background:${c.bg};border:1px solid ${c.border};color:${c.color};">${c.label}</span>`;
-}
-
-function txRow(t) {
-  const icon = txIcon(t);
-  const color = txColor(t);
-  const prefix = txPrefix(t);
-  const dateStr = t.ts ? new Date(t.ts).toLocaleDateString('en-KE', {day:'2-digit',month:'short'}) : '';
-  return `<div class="wl-tx">
-    <div class="wl-tx-icon">${icon}</div>
-    <div class="wl-tx-info">
-      <div class="wl-tx-name">${escHtml(t.label || t.hub || 'Transaction')}</div>
-      <div class="wl-tx-meta">${escHtml(t.meta||'')}${t.meta && dateStr ? ' · ' : ''}${dateStr} &middot; ${timeAgo(t.ts)}</div>
-    </div>
-    <div class="wl-tx-right">
-      <div class="wl-tx-amount" style="color:${color};">${prefix}${fmt(t.amount)}</div>
-      ${statusBadge(t.status)}
-    </div>
-  </div>`;
-}
-
-function escHtml(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// ── Render wallet hero ──
-function renderHero() {
-  const w = loadLocalWallet();
-  const u = getUser();
-  const txs = getTxs();
-  const now = Date.now();
-  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
-  const thisMonth = txs.filter(t => t.ts >= monthStart.getTime());
-  const monthIn = thisMonth.filter(t => t.dir==='in' || ['receive','sale','referral_bonus','refund'].includes(t.type)).reduce((s,t)=>s+Number(t.amount||0),0);
-  const monthTxCount = thisMonth.length;
-
-  setEl('wlUserName', u ? (u.name || u.phone || 'Sokoni User') : 'Guest');
-  setEl('wlWalletId', w.id);
-  setEl('wlMainBalance', Number(w.balance||0).toLocaleString('en-KE', {minimumFractionDigits:2, maximumFractionDigits:2}));
-  setEl('wlEscrowBal', fmt(w.escrow||0));
-  setEl('wlPendingBal', fmt(w.pending||0));
-  setEl('wlMonthIn', fmtShort(monthIn));
-
-  // stats row
-  setEl('statTotalIn', fmtShort(w.totalIn||0));
-  setEl('statTotalOut', fmtShort(w.totalOut||0));
-  const commTxs = txs.filter(t=>t.type==='commission');
-  const commTotal = commTxs.reduce((s,t)=>s+Number(t.amount||0),0);
-  setEl('statCommPaid', fmtShort(commTotal));
-  setEl('statMonthTx', monthTxCount);
-
-  // mpesa account number for modal
-  setEl('mpesaAccNum', 'SOKONI-' + (u ? (u.uid||'').slice(-6) : 'USER'));
-
-  // referral code
-  const refCode = 'SKN-' + (u ? (u.uid||'').toUpperCase().slice(-5) : '00000');
-  setEl('refCode', refCode);
-
-  // withdraw available
-  setEl('wdAvailDisplay', 'Available: ' + fmt(w.balance||0));
-}
-
-// ── Overview recent txs ──
-function renderRecentTxs() {
-  const txs = getTxs().slice(0, 5);
-  const el = document.getElementById('recentTxList');
-  if (!el) return;
-  el.innerHTML = txs.length ? txs.map(txRow).join('') : '<div class="wl-empty"><div class="wl-empty-icon">&#x1F4C4;</div>No transactions yet &mdash; top up to get started</div>';
-}
-
-// ── Spending chart ──
-function renderSpending() {
-  const chart = document.getElementById('spendingChart');
-  if (!chart) return;
-  const txs = getTxs().filter(t => (t.dir==='out' || ['commission','escrow_hold'].includes(t.type)) && t.hub);
-  const byHub = {};
-  txs.forEach(t => { byHub[t.hub] = (byHub[t.hub]||0) + Number(t.amount||0); });
-  const sorted = Object.entries(byHub).sort((a,b) => b[1]-a[1]);
-  const max = sorted[0] ? sorted[0][1] : 1;
-  const colors = ['#71ff00','#00d4ff','#f59e0b','#a855f7','#f97316','#34d399','#f87171','#38bdf8'];
-  if (!sorted.length) { chart.innerHTML = '<div class="wl-empty"><div class="wl-empty-icon">&#x1F4CA;</div>Make a purchase to see your spending breakdown</div>'; return; }
-  chart.innerHTML = sorted.map(([hub, amt], i) => `
-    <div class="wl-spend-item">
-      <div class="wl-spend-label">${TX_HUBS[hub]||'💳'} ${escHtml(hub)}</div>
-      <div class="wl-spend-bar-wrap"><div class="wl-spend-bar" style="width:${Math.round(amt/max*100)}%;background:${colors[i%colors.length]};"></div></div>
-      <div class="wl-spend-amount">${fmtShort(amt)}</div>
-    </div>`).join('');
-}
-
-// ── Full transaction list ──
-let _txFilter = 'all';
-window.filterTx = function(f, btn) {
-  _txFilter = f;
-  document.querySelectorAll('.wl-filter-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  renderFullHistory();
-};
-
-function renderFullHistory() {
-  const el = document.getElementById('fullTxList');
-  if (!el) return;
-  let txs = getTxs();
-  if (_txFilter === 'credit') txs = txs.filter(t => t.dir==='in' || ['receive','sale','refund','referral_bonus','escrow_release'].includes(t.type));
-  else if (_txFilter === 'debit') txs = txs.filter(t => t.dir==='out' && !['escrow_hold','escrow'].includes(t.type));
-  else if (_txFilter === 'pending') txs = txs.filter(t => t.status==='pending');
-  else if (_txFilter === 'escrow') txs = txs.filter(t => ['escrow_hold','escrow','escrow_release'].includes(t.type));
-  else if (_txFilter === 'refund') txs = txs.filter(t => t.type==='refund');
-  setEl('txCountLabel', txs.length + ' transaction' + (txs.length!==1?'s':''));
-  el.innerHTML = txs.length ? txs.map(txRow).join('') : '<div class="wl-empty"><div class="wl-empty-icon">&#x1F50D;</div>No transactions match this filter</div>';
-}
-
-// ── Escrow list ──
-function renderEscrowList() {
-  const el = document.getElementById('escrowList');
-  if (!el) return;
-  const txs = getTxs().filter(t => ['escrow_hold','escrow'].includes(t.type));
-  if (!txs.length) { el.innerHTML = '<div class="wl-empty"><div class="wl-empty-icon">&#x1F512;</div>No active escrow holdings</div>'; return; }
-  el.innerHTML = txs.map(t => {
-    const held = t.status !== 'released' && t.status !== 'refunded';
-    const statusCfg = held ? { bg:'rgba(245,158,11,0.08)', border:'rgba(245,158,11,0.2)', color:'#f59e0b', label:'HELD' } :
-      t.status === 'refunded' ? { bg:'rgba(168,85,247,0.08)', border:'rgba(168,85,247,0.2)', color:'#a855f7', label:'REFUNDED' } :
-      { bg:'rgba(113,255,0,0.08)', border:'rgba(113,255,0,0.2)', color:'#71ff00', label:'RELEASED' };
-    const holdDate = t.ts ? new Date(t.ts).toLocaleDateString('en-KE', {dateStyle:'medium'}) : '';
-    return `<div class="wl-escrow-card">
-      <span class="wl-escrow-status" style="background:${statusCfg.bg};border:1px solid ${statusCfg.border};color:${statusCfg.color};">${statusCfg.label}</span>
-      <div class="wl-escrow-row">
-        <div>
-          <div style="font-size:13px;font-weight:700;color:white;margin-bottom:2px;">${escHtml(t.label||'Escrow')}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.3);">Ref: ${escHtml(t.ref||t.id)} &middot; ${holdDate}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;">${escHtml(t.meta||'')}${t.condition ? ' &middot; Release: '+escHtml(t.condition) : ''}</div>
-        </div>
-        <div style="font-size:18px;font-weight:900;color:#f59e0b;">${fmt(t.amount)}</div>
-      </div>
-      ${held ? `<div class="wl-escrow-actions">
-        <button type="button" class="wl-escrow-btn" onclick="releaseEscrow('${t.id}')" style="background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.25);color:#71ff00;">&#x2705; Release to Seller</button>
-        <button type="button" class="wl-escrow-btn" onclick="requestRefund('${t.id}')" style="background:rgba(168,85,247,0.08);border-color:rgba(168,85,247,0.25);color:#a855f7;">&#x21A9; Request Refund</button>
-      </div>` : ''}
-    </div>`;
-  }).join('');
-}
-
-// ── Commissions ──
-function renderCommissions() {
-  const txs = getTxs().filter(t => t.type === 'commission');
-  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
-  const monthTxs = txs.filter(t => t.ts >= monthStart.getTime());
-  const monthTotal = monthTxs.reduce((s,t)=>s+Number(t.amount||0),0);
-  const allTotal = txs.reduce((s,t)=>s+Number(t.amount||0),0);
-  const allTxs = getTxs();
-  const boostTotal = allTxs.filter(t=>t.type==='boost').reduce((s,t)=>s+Number(t.amount||0),0);
-
-  setEl('commMonthTotal', fmt(monthTotal));
-  setEl('commAllTotal', fmt(allTotal));
-  setEl('commBoostTotal', fmt(boostTotal));
-  setEl('commTxCount', txs.length);
-
-  const el = document.getElementById('commList');
-  if (!el) return;
-  if (!txs.length) { el.innerHTML = '<div class="wl-empty"><div class="wl-empty-icon">&#x1F4B8;</div>No commission records yet</div>'; return; }
-  el.innerHTML = txs.map(t => `
-    <div class="wl-comm-row">
-      <div style="width:36px;height:36px;border-radius:9px;background:rgba(245,158,11,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">&#x1F4B8;</div>
-      <div class="wl-comm-info">
-        <div class="wl-comm-title">${escHtml(t.label||'Platform Fee')}</div>
-        <div class="wl-comm-meta">${escHtml(t.meta||'')} &middot; ${t.ts ? new Date(t.ts).toLocaleDateString('en-KE',{dateStyle:'medium'}) : ''}</div>
-      </div>
-      <div class="wl-comm-amount">-${fmt(t.amount)}</div>
-    </div>`).join('');
-}
-
-// ── Referrals ──
-function renderReferrals() {
-  const txs = getTxs().filter(t => t.type === 'referral_bonus');
-  const earned = txs.filter(t=>t.status!=='pending').reduce((s,t)=>s+Number(t.amount||0),0);
-  const pending = txs.filter(t=>t.status==='pending').reduce((s,t)=>s+Number(t.amount||0),0);
-  setEl('refCount', txs.length);
-  setEl('refEarned', fmt(earned));
-  setEl('refPending', fmt(pending));
-  const el = document.getElementById('refList');
-  if (!el) return;
-  if (!txs.length) { el.innerHTML = '<div class="wl-empty"><div class="wl-empty-icon">&#x1F91D;</div>No referral bonuses yet &mdash; invite friends!</div>'; return; }
-  el.innerHTML = txs.map(t => txRow(t)).join('');
-}
-
-// ── Panel switching ──
-window.showPanel = function(name, btn) {
-  document.querySelectorAll('.wl-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.wl-tab').forEach(t => t.classList.remove('active'));
-  const p = document.getElementById('panel-' + name);
-  if (p) p.classList.add('active');
-  if (btn) btn.classList.add('active');
-  renderHero();
-  if (name === 'overview') { renderRecentTxs(); renderSpending(); }
-  if (name === 'transactions') renderFullHistory();
-  if (name === 'escrow') renderEscrowList();
-  if (name === 'commissions') renderCommissions();
-  if (name === 'referrals') renderReferrals();
-};
-
-// ── Modal helpers ──
-window.openModal = function(name) {
-  renderHero(); // refresh available balance
-  const m = document.getElementById('modal-' + name);
-  if (m) m.classList.add('open');
-};
-window.closeModal = function(name) {
-  const m = document.getElementById('modal-' + name);
-  if (m) m.classList.remove('open');
-};
-window.closeModalOnBg = function(e, name) {
-  if (e.target === document.getElementById('modal-' + name)) closeModal(name);
-};
-
-// ── Preset amounts ──
-window.setPreset = function(n, btn, inputId) {
-  const el = document.getElementById(inputId);
-  if (el) el.value = n;
-  document.querySelectorAll('.wl-preset').forEach(b => b.classList.remove('sel'));
-  if (btn) btn.classList.add('sel');
-};
-
-// ── TOP UP (M-Pesa STK push via IntaSend) ──
-window.topUpWallet = function() {
-  const amount = Number(document.getElementById('topupAmt')?.value || 0);
-  const phone = (document.getElementById('topupPhone')?.value || '').trim();
-  const msgEl = document.getElementById('topupMsg');
-  const u = getUser();
-
-  if (!amount || amount < 10) { if(msgEl){msgEl.textContent='Minimum top-up is KES 10';msgEl.style.color='#f87171';} return; }
-  if (!phone) { if(msgEl){msgEl.textContent='Enter your M-Pesa phone number';msgEl.style.color='#f87171';} return; }
-
-  if(msgEl){msgEl.textContent='Sending STK push...';msgEl.style.color='#00d4ff';}
-
-  const txRef = 'TU' + Date.now().toString().slice(-8);
-
-  /* Update LOCAL cache optimistically so the UI feels instant,
-     but do NOT write balance to Firestore — the IntaSend webhook /
-     Cloud Function is the only authority that confirms and credits. */
-  const w = loadLocalWallet();
-  addLocalTx({ id: txRef, dir:'in', type:'topup', label:'M-Pesa Top Up (Pending)', hub:'Top Up', meta:'M-Pesa '+phone, amount, status:'pending' });
-
-  /* Write the pending transaction record only — no balance change */
-  if (u && u.uid) {
-    addDoc(collection(db, 'walletTxns'), {
-      uid: u.uid, id: txRef, type:'topup', dir:'in', amount, desc:'M-Pesa Top Up', ref: txRef,
-      meta:'M-Pesa '+phone, status:'pending', ts: serverTimestamp(), phone
-    }).catch(()=>{});
-  }
-
-  if(msgEl){
-    msgEl.innerHTML = `&#x2705; <strong>KES ${amount.toLocaleString()}</strong> top-up initiated! Check your phone for M-Pesa prompt.<br><span style="font-size:10px;color:rgba(255,255,255,0.35);">Or pay manually: Paybill <strong style="color:#71ff00;">247247</strong>, Acc: <strong style="color:#71ff00;">SOKONI-${_esc(u?(u.uid||'').slice(-6):'USER')}</strong></span>`;
-    msgEl.style.color='#71ff00';
-  }
-  document.getElementById('topupAmt').value = '';
-  document.getElementById('topupPhone').value = '';
-  renderHero(); renderRecentTxs();
-  toast('Top-up of KES ' + amount.toLocaleString() + ' pending M-Pesa confirmation');
-};
-
-// ── WITHDRAW ──
-window.withdrawFunds = async function() {
-  const phone = (document.getElementById('wdPhone')?.value || '').trim();
-  const amount = Number(document.getElementById('wdAmount')?.value || 0);
-  const reason = (document.getElementById('wdReason')?.value || '').trim();
-  const msgEl = document.getElementById('wdMsg');
-  const u = getUser();
-
-  if (!u || !u.uid) { if(msgEl){msgEl.textContent='You must be signed in';msgEl.style.color='#f87171';} return; }
-  if (!phone) { if(msgEl){msgEl.textContent='Enter your M-Pesa number';msgEl.style.color='#f87171';} return; }
-  if (!amount || amount < 100) { if(msgEl){msgEl.textContent='Minimum withdrawal is KES 100';msgEl.style.color='#f87171';} return; }
-  if (amount > 70000) { if(msgEl){msgEl.textContent='Single withdrawal limit is KES 70,000';msgEl.style.color='#f87171';} return; }
-
-  if(msgEl){msgEl.textContent='Verifying balance…';msgEl.style.color='#00d4ff';}
-
-  /* Always read live Firestore balance — never trust localStorage for financial ops */
-  let liveBalance = 0;
-  try {
-    const walletSnap = await getDoc(doc(db, 'wallets', u.uid));
-    if (walletSnap.exists()) liveBalance = Number(walletSnap.data().balance || 0);
-  } catch(e) {
-    if(msgEl){msgEl.textContent='Could not verify balance — try again';msgEl.style.color='#f87171';} return;
-  }
-
-  if (amount > liveBalance) {
-    if(msgEl){msgEl.textContent=`Insufficient balance. Available: ${fmt(liveBalance)}`;msgEl.style.color='#f87171';} return;
-  }
-
-  /* Rate limit stored in Firestore (not localStorage — not bypassable) */
-  const cooldownMs = 10 * 60 * 1000;
-  try {
-    const wdSnap = await getDocs(
-      query(collection(db,'withdrawals'), where('uid','==',u.uid), where('status','==','pending'), limit(1))
-    );
-    if (!wdSnap.empty) {
-      const last = wdSnap.docs[0].data();
-      const lastTs = last.createdAt?.toMillis?.() || 0;
-      if (Date.now() - lastTs < cooldownMs) {
-        const wait = Math.ceil((cooldownMs - (Date.now() - lastTs)) / 60000);
-        if(msgEl){msgEl.textContent=`You already have a pending withdrawal. Wait ${wait} min or contact support.`;msgEl.style.color='#f87171';} return;
-      }
-    }
-  } catch(_) {}
-
-  const ref = 'WD' + Date.now().toString().slice(-7);
-
-  /* Deduct balance atomically using increment() — never write absolute value */
-  try {
-    await setDoc(doc(db,'wallets',u.uid),
-      { balance: increment(-amount), totalOut: increment(amount), updatedAt: serverTimestamp() },
-      { merge: true }
-    );
-  } catch(e) {
-    if(msgEl){msgEl.textContent='Balance update failed — please retry';msgEl.style.color='#f87171';} return;
-  }
-
-  /* Update local cache from server truth */
-  const w = loadLocalWallet();
-  w.balance = Math.max(0, liveBalance - amount);
-  w.totalOut = (w.totalOut||0) + amount;
-  saveLocalWallet(w);
-  addLocalTx({ id: ref, dir:'out', type:'withdrawal', status:'pending', label:'Withdrawal Request', hub:'Withdraw', meta:'M-Pesa '+phone, amount, ref });
-
-  await Promise.allSettled([
-    setDoc(doc(db,'withdrawals',ref), {
-      ref, amount, phone, reason: reason||'', status:'pending',
-      uid: u.uid, name: u.name||u.phone||'User', createdAt: serverTimestamp()
-    }),
-    addDoc(collection(db,'walletTxns'), {
-      uid:u.uid, id:ref, type:'withdrawal', dir:'out', amount, desc:'Withdrawal to M-Pesa',
-      ref, meta:'M-Pesa '+phone, status:'pending', ts:serverTimestamp()
-    }),
-  ]);
-
-  // Notify admin
-  const wa = `💸 *SOKONI Withdrawal*\n\nRef: ${ref}\nPhone: ${phone}\nAmount: KES ${amount.toLocaleString()}${reason?'\nReason: '+reason:''}\nUser: ${u.name||u.uid}\n\nProcess within 24h.`;
-  window.open('https://wa.me/254705726803?text='+encodeURIComponent(wa),'_blank','noopener,noreferrer');
-
-  if(msgEl){msgEl.innerHTML=`✅ Request <strong>${_esc(ref)}</strong> submitted! Processing within 24hrs.`;msgEl.style.color='#71ff00';}
-  document.getElementById('wdPhone').value='';
-  document.getElementById('wdAmount').value='';
-  renderHero(); renderRecentTxs();
-  renderWithdrawHistory();
-  toast('Withdrawal of KES ' + amount.toLocaleString() + ' submitted');
-};
-
-function renderWithdrawHistory() {
-  const hist = document.getElementById('wdHistory');
-  if (!hist) return;
-  const wds = getTxs().filter(t => t.type==='withdrawal');
-  if (!wds.length) { hist.innerHTML=''; return; }
-  hist.innerHTML = '<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.3);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;">Previous Withdrawals</div>'
-    + wds.map(t => `<div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.06);border-radius:11px;padding:11px 13px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;">
-      <div><div style="font-size:12px;font-weight:700;color:white;">${escHtml(t.meta||'M-Pesa')}</div><div style="font-size:10px;color:rgba(255,255,255,0.3);">${t.ref||t.id} &middot; ${t.ts?new Date(t.ts).toLocaleDateString('en-KE',{dateStyle:'medium'}):''}</div></div>
-      <div style="text-align:right;"><div style="font-size:13px;font-weight:900;color:#f87171;">-${fmt(t.amount)}</div>${statusBadge(t.status||'pending')}</div>
-    </div>`).join('');
-}
-
-// ── SEND MONEY ──
-window.sendMoney = function() {
-  const to = (document.getElementById('sendTo')?.value||'').trim();
-  const amount = Number(document.getElementById('sendAmount')?.value||0);
-  const purpose = document.getElementById('sendPurpose')?.value||'Payment';
-  const note = (document.getElementById('sendNote')?.value||'').trim();
-  const msgEl = document.getElementById('sendMsg');
-  const u = getUser();
-  const w = loadLocalWallet();
-
-  if (!to) { if(msgEl){msgEl.textContent='Enter recipient phone or wallet ID';msgEl.style.color='#f87171';} return; }
-  if (!amount || amount < 1) { if(msgEl){msgEl.textContent='Enter a valid amount';msgEl.style.color='#f87171';} return; }
-  /* Prevent self-transfer */
-  const selfPhone = (u?.phone||'').replace(/^0/,'254').replace(/^\+/,'');
-  const toNorm = to.replace(/^0/,'254').replace(/^\+/,'');
-  if (u && (to === u.uid || toNorm === selfPhone)) {
-    if(msgEl){msgEl.textContent='Cannot send money to yourself';msgEl.style.color='#f87171';} return;
-  }
-  /* Enforce balance check against live wallet (not just local cache) */
-  if (amount > w.balance) { if(msgEl){msgEl.textContent='Insufficient balance — top up first';msgEl.style.color='#f87171';} return; }
-  if (amount > 150000) { if(msgEl){msgEl.textContent='Single transfer limit is KES 150,000';msgEl.style.color='#f87171';} return; }
-
-  const ref = 'SND' + Date.now().toString().slice(-8);
-  w.balance -= amount;
-  w.totalOut = (w.totalOut||0) + amount;
-  saveLocalWallet(w);
-
-  // Debit sender
-  addLocalTx({ id:ref, dir:'out', type:'send', label:'Sent to '+to, hub:purpose, meta:note||purpose, amount, ref, status:'completed' });
-
-  // Firestore: debit sender + credit receiver atomically
-  if (u && u.uid) {
-    // Sender wallet update
-    setDoc(doc(db,'wallets',u.uid), { balance: w.balance, totalOut: w.totalOut, updatedAt: serverTimestamp() }, { merge: true }).catch(()=>{});
-
-    // Debit txn
-    addDoc(collection(db,'walletTxns'), {
-      uid:u.uid, type:'send', dir:'out', amount, desc:'Sent to '+to,
-      ref, meta:note||purpose, status:'completed', ts:serverTimestamp(), to, purpose
-    }).catch(()=>{});
-
-    // Try to find recipient by phone and credit them
-    const recipientPhone = to.replace(/^0/,'254').replace(/^\+/,'');
-    const usersQuery = query(collection(db,'users'), where('phone','==',to), limit(1));
-    getDocs(usersQuery).then(snap => {
-      snap.forEach(userDoc => {
-        const recipientUid = userDoc.id;
-        // Credit receiver wallet
-        setDoc(doc(db,'wallets',recipientUid), { balance: increment(amount), totalIn: increment(amount), updatedAt: serverTimestamp() }, { merge: true }).catch(()=>{});
-        // Receiver txn
-        addDoc(collection(db,'walletTxns'), {
-          uid:recipientUid, type:'receive', dir:'in', amount, desc:'Received from '+(u.name||u.phone||'SOKONI User'),
-          ref, meta:note||purpose, status:'completed', ts:serverTimestamp()
-        }).catch(()=>{});
-      });
-    }).catch(()=>{});
-  }
-
-  // WhatsApp notification
-  const waMsg = `&#x1F4B3; *SOKONI Transfer*\n\nFrom: ${u?u.name||u.phone:'User'}\nTo: ${to}\nAmount: KES ${amount.toLocaleString()}\nRef: ${ref}${note?'\nNote: '+note:''}`;
-  window.open('https://wa.me/254705726803?text='+encodeURIComponent(waMsg.replace(/&#x1F4B3;/g,'💳')),'_blank','noopener,noreferrer');
-
-  if(msgEl){msgEl.innerHTML=`&#x2705; KES ${amount.toLocaleString()} sent! Ref: <strong>${_esc(ref)}</strong>`;msgEl.style.color='#71ff00';}
-  document.getElementById('sendTo').value='';
-  document.getElementById('sendAmount').value='';
-  renderHero(); renderRecentTxs();
-  toast('KES ' + amount.toLocaleString() + ' sent to ' + to);
-};
-
-// ── ESCROW ──
-window.createEscrow = function() {
-  const seller = (document.getElementById('escrSeller')?.value||'').trim();
-  const amount = Number(document.getElementById('escrAmount')?.value||0);
-  const item = (document.getElementById('escrItem')?.value||'').trim();
-  const condition = document.getElementById('escrCondition')?.value||'';
-  const orderRef = (document.getElementById('escrOrderRef')?.value||'').trim();
-  const msgEl = document.getElementById('escrMsg');
-  const u = getUser();
-  const w = loadLocalWallet();
-
-  if (!seller || !amount || !item) { if(msgEl){msgEl.textContent='Fill seller phone, amount and item';msgEl.style.color='#f87171';} return; }
-  if (amount > w.balance) { if(msgEl){msgEl.textContent='Insufficient balance — top up first';msgEl.style.color='#f87171';} return; }
-
-  const ref = 'ESC' + Date.now().toString().slice(-6);
-  w.balance -= amount;
-  w.escrow = (w.escrow||0) + amount;
-  saveLocalWallet(w);
-  addLocalTx({ id:ref, dir:'out', type:'escrow_hold', status:'held', label:'Escrow: '+item, hub:'Escrow', meta:'Seller: '+seller, amount, ref, seller, condition });
-
-  // Firestore escrow document
-  if (u && u.uid) {
-    setDoc(doc(db,'wallets',u.uid), { balance:w.balance, escrow:w.escrow, updatedAt:serverTimestamp() }, { merge:true }).catch(()=>{});
-    setDoc(doc(db,'escrows',ref), {
-      orderId: orderRef||ref, buyerUid:u.uid, buyerName:u.name||u.phone||'Buyer',
-      sellerPhone:seller, amount, item, condition, status:'held',
-      createdAt:serverTimestamp(), ref
-    }).catch(()=>{});
-    addDoc(collection(db,'walletTxns'), {
-      uid:u.uid, type:'escrow_hold', dir:'out', amount, desc:'Escrow: '+item,
-      ref, meta:'Seller: '+seller, status:'held', ts:serverTimestamp(), condition, seller
-    }).catch(()=>{});
-  }
-
-  if(msgEl){msgEl.innerHTML=`&#x2705; Escrow locked! Ref: <strong>${_esc(ref)}</strong>. Seller will be notified.`;msgEl.style.color='#f59e0b';}
-  const waMsg = `&#x1F512; *SOKONI Escrow*\n\nRef: ${ref}\nItem: ${item}\nAmount: KES ${amount.toLocaleString()}\nBuyer: ${u?u.name||u.phone:'Buyer'}\nRelease condition: ${condition}`;
-  window.open(`https://wa.me/254${seller.replace(/^0/,'')}?text=${encodeURIComponent(waMsg.replace(/&#x1F512;/g,'🔒'))}`, '_blank', 'noopener,noreferrer');
-  renderHero(); renderEscrowList();
-  toast('KES ' + amount.toLocaleString() + ' locked in escrow for ' + item);
-};
-
-window.releaseEscrow = function(txId) {
-  const txs = getTxs();
-  const tx = txs.find(t => t.id === txId);
-  if (!tx) return;
-  tx.status = 'released';
-  saveTxs(txs);
-  const w = loadLocalWallet();
-  w.escrow = Math.max(0, (w.escrow||0) - tx.amount);
-  w.totalOut = (w.totalOut||0) + tx.amount;
-  saveLocalWallet(w);
-
-  addLocalTx({ dir:'out', type:'escrow_release', label:'Escrow Released: '+(tx.label||'').replace('Escrow: ',''), hub:'Escrow', meta:'To '+tx.seller, amount:tx.amount, ref:tx.ref });
-
-  const u = getUser();
-  if (u && u.uid) {
-    setDoc(doc(db,'wallets',u.uid), { escrow:w.escrow, totalOut:w.totalOut, updatedAt:serverTimestamp() }, { merge:true }).catch(()=>{});
-    if (tx.ref) updateDoc(doc(db,'escrows',tx.ref), { status:'released', releasedAt:serverTimestamp() }).catch(()=>{});
-    addDoc(collection(db,'walletTxns'), {
-      uid:u.uid, type:'escrow_release', dir:'out', amount:tx.amount,
-      desc:'Escrow Released: '+tx.item, ref:tx.ref, status:'completed', ts:serverTimestamp()
-    }).catch(()=>{});
-    // Commission on escrow release (2%)
-    const commAmt = Math.round(tx.amount * 0.02);
-    addDoc(collection(db,'walletTxns'), {
-      uid:u.uid, type:'commission', dir:'out', amount:commAmt,
-      desc:'Escrow handling fee (2%)', ref:tx.ref, status:'completed', ts:serverTimestamp()
-    }).catch(()=>{});
-    addLocalTx({ dir:'out', type:'commission', label:'Escrow Fee (2%)', meta:'Ref: '+tx.ref, amount:commAmt });
-  }
-
-  if (tx.seller) {
-    const msg = `&#x2705; *SOKONI Escrow Released*\n\nKES ${tx.amount.toLocaleString()} released for "${(tx.label||'').replace('Escrow: ','')}". Funds on the way.`;
-    window.open(`https://wa.me/254${tx.seller.replace(/^0/,'')}?text=${encodeURIComponent(msg.replace(/&#x2705;/g,'✅'))}`, '_blank', 'noopener,noreferrer');
-  }
-  renderHero(); renderEscrowList();
-  toast('Escrow released to seller');
-};
-
-window.requestRefund = function(txId) {
-  const txs = getTxs();
-  const tx = txs.find(t => t.id === txId);
-  if (!tx) return;
-  tx.status = 'refund_requested';
-  saveTxs(txs);
-
-  const u = getUser();
-  if (u && u.uid && tx.ref) {
-    updateDoc(doc(db,'escrows',tx.ref), { status:'refund_requested', refundRequestedAt:serverTimestamp() }).catch(()=>{});
-  }
-
-  // Admin notification
-  const msg = `&#x21A9; *SOKONI Refund Request*\n\nRef: ${tx.ref||txId}\nItem: ${(tx.label||'').replace('Escrow: ','')}\nAmount: KES ${tx.amount.toLocaleString()}\nBuyer: ${u?u.name||u.phone:'User'}\n\nPlease review and process refund.`;
-  window.open('https://wa.me/254705726803?text='+encodeURIComponent(msg.replace(/&#x21A9;/g,'↩️')),'_blank','noopener,noreferrer');
-
-  renderEscrowList();
-  toast('Refund request submitted for admin review');
-};
-
-// ── FIRESTORE SYNC ──
-window.syncFromFirestore = function() {
-  const u = getUser();
-  if (!u || !u.uid) { toast('Please log in to sync wallet', '#f87171'); return; }
-  toast('Syncing from Firestore...', '#00d4ff');
-
-  getDoc(doc(db,'wallets',u.uid)).then(snap => {
-    if (snap.exists()) {
-      const data = snap.data();
-      const w = loadLocalWallet();
-      w.balance = data.balance || w.balance;
-      w.escrow = data.escrow || w.escrow;
-      w.pending = data.pending || w.pending;
-      w.totalIn = data.totalIn || w.totalIn;
-      w.totalOut = data.totalOut || w.totalOut;
-      saveLocalWallet(w);
-      renderHero(); renderRecentTxs();
-      toast('Wallet synced!');
-    } else {
-      // Init wallet doc
-      const w = loadLocalWallet();
-      setDoc(doc(db,'wallets',u.uid), { balance:w.balance||0, escrow:w.escrow||0, pending:0, totalIn:w.totalIn||0, totalOut:w.totalOut||0, uid:u.uid, createdAt:serverTimestamp() }).catch(()=>{});
-      toast('Wallet initialised on cloud');
-    }
-  }).catch(() => toast('Sync failed — check connection', '#f87171'));
-
-  // Also pull recent Firestore txns
-  const q = query(collection(db,'walletTxns'), where('uid','==',u.uid), orderBy('ts','desc'), limit(50));
-  getDocs(q).then(snap => {
-    if (snap.empty) return;
-    const fsTxns = [];
-    snap.forEach(d => {
-      const data = d.data();
-      fsTxns.push({ ...data, id:d.id, ts: data.ts?.toMillis ? data.ts.toMillis() : (data.ts||Date.now()) });
+    </div><!-- /wal-tab-content -->
+  </main>
+
+  <!-- Toast container -->
+  <div class="wal-toast-container" id="walToasts" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- Firebase auto-config -->
+  <script src="/__/firebase/init.js"></script>
+  <!-- Wallet module -->
+  <script src="sokoni-wallet.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      SokoniWallet.init();
     });
-    // Merge with local, deduplicate by id
-    const local = getTxs();
-    const ids = new Set(local.map(t=>t.id));
-    const merged = [...local];
-    fsTxns.forEach(t => { if (!ids.has(t.id)) merged.push(t); });
-    merged.sort((a,b)=>b.ts-a.ts);
-    saveTxs(merged);
-    renderFullHistory(); renderRecentTxs();
-  }).catch(()=>{});
-
-  // Sync withdrawal statuses
-  const wdQ = query(collection(db,'withdrawals'), where('uid','==',u.uid), orderBy('createdAt','desc'), limit(10));
-  getDocs(wdQ).then(snap => {
-    const txs = getTxs();
-    snap.forEach(d => {
-      const fs = d.data();
-      const idx = txs.findIndex(t => t.ref === fs.ref);
-      if (idx > -1) txs[idx].status = fs.status || 'pending';
-    });
-    saveTxs(txs);
-  }).catch(()=>{});
-};
-
-// ── SHARE ──
-window.shareWallet = function() {
-  const u = getUser();
-  const w = loadLocalWallet();
-  const msg = `&#x1F4B3; *My SOKONI Wallet*\n\n${u?u.name||'SOKONI User':'SOKONI User'}\nID: ${w.id}\n\nSend me money on SOKONI\nhttps://mysokoni.co.ke/wallet.html`;
-  const clean = msg.replace(/&#x1F4B3;/g,'💳');
-  if (navigator.share) navigator.share({ title:'My SOKONI Wallet', text:clean }).catch(()=>{});
-  else window.open('https://wa.me/?text='+encodeURIComponent(clean),'_blank','noopener,noreferrer');
-};
-
-// ── REFERRAL SHARE ──
-window.shareReferral = function() {
-  const u = getUser();
-  const code = 'SKN-' + (u ? (u.uid||'').toUpperCase().slice(-5) : '00000');
-  const msg = `Join SOKONI — Kenya's City Super-App!\n\nUse my referral code: ${code}\nhttps://mysokoni.co.ke/index.html?ref=${code}\n\nShop, services, rides, healthcare & more. Get KES 50 welcome bonus!`;
-  if (navigator.share) navigator.share({ title:'Join SOKONI', text:msg }).catch(()=>{});
-  else window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer');
-};
-
-// ── SEED DEMO DATA (first visit) ──
-function seedDemo() {
-  const txs = getTxs();
-  if (txs.length) return;
-  const now = Date.now();
-  const demos = [
-    { id:'DEMO1', dir:'in', type:'topup', label:'M-Pesa Top Up', hub:'Top Up', meta:'M-Pesa 0712345678', amount:5000, status:'completed', ts:now-86400000*5 },
-    { id:'DEMO2', dir:'out', type:'purchase', label:'Sofa Set Purchase', hub:'Marketplace', meta:'Alex Furniture Store', amount:12000, status:'completed', ts:now-86400000*4 },
-    { id:'DEMO3', dir:'out', type:'commission', label:'Platform Fee (5%)', hub:'Marketplace', meta:'Ref: DEMO2', amount:600, status:'completed', ts:now-86400000*4 },
-    { id:'DEMO4', dir:'out', type:'escrow_hold', status:'held', label:'Escrow: iPhone 14 Pro', hub:'Escrow', meta:'Seller: 0723456789', amount:120000, ref:'ESC001', seller:'0723456789', condition:'On delivery & inspection', ts:now-86400000*3 },
-    { id:'DEMO5', dir:'in', type:'sale', label:'Jacket Sold', hub:'Marketplace', meta:'Buyer: 0734567890', amount:3500, status:'completed', ts:now-86400000*2 },
-    { id:'DEMO6', dir:'out', type:'withdrawal', status:'approved', label:'Withdrawal Request', hub:'Withdraw', meta:'M-Pesa 0712345678', amount:2000, ref:'WD1234567', ts:now-86400000 },
-    { id:'DEMO7', dir:'in', type:'referral_bonus', label:'Referral Bonus', hub:'Referrals', meta:'Friend: 0745678901 joined', amount:50, status:'completed', ts:now-3600000*8 },
-    { id:'DEMO8', dir:'out', type:'purchase', label:'Mechanic — Brake Service', hub:'Mechanics', meta:"Brian's Garage", amount:4500, status:'completed', ts:now-3600000*4 },
-  ];
-  saveTxs(demos);
-  const w = loadLocalWallet();
-  if (!w.balance) { w.balance = 5000 - 12000 + 3500 - 2000 + 50 - 4500; w.balance = Math.max(0, w.balance); w.totalIn = 8550; w.totalOut = 19100; w.escrow = 120000; saveLocalWallet(w); }
-}
-
-// ── INIT ──
-function init() {
-  seedDemo();
-  renderHero();
-  renderRecentTxs();
-  renderSpending();
-
-  // Firestore withdrawal status listener
-  const u = getUser();
-  if (u && u.uid) {
-    const wdQ = query(collection(db,'withdrawals'), where('uid','==',u.uid), orderBy('createdAt','desc'), limit(20));
-    onSnapshot(wdQ, snap => {
-      const txs = getTxs();
-      snap.forEach(d => {
-        const fs = d.data();
-        const idx = txs.findIndex(t => t.ref === fs.ref);
-        if (idx > -1 && txs[idx].status !== fs.status) txs[idx].status = fs.status||'pending';
-      });
-      saveTxs(txs);
-      const p = document.getElementById('panel-transactions');
-      if (p && p.classList.contains('active')) renderFullHistory();
-    }, ()=>{});
-
-    // Real-time wallet balance from Firestore
-    onSnapshot(doc(db,'wallets',u.uid), snap => {
-      if (snap.exists()) {
-        const data = snap.data();
-        const w = loadLocalWallet();
-        w.balance = data.balance ?? w.balance;
-        w.escrow = data.escrow ?? w.escrow;
-        w.pending = data.pending ?? w.pending;
-        w.totalIn = data.totalIn ?? w.totalIn;
-        w.totalOut = data.totalOut ?? w.totalOut;
-        saveLocalWallet(w);
-        renderHero();
-      }
-    }, ()=>{});
-  }
-}
-
-// Wait for auth or run immediately
-document.addEventListener('sokoniAuthReady', e => { CU = e.detail?.user || null; init(); });
-// Fallback immediate init
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-else init();
-</script>
-
-<script type="module" src="sokoni-init.js"></script>
-<script src="sokoni-pay.js"></script>
-<script src="sokoni-audit.js" defer></script>
-<script src="nav-active.js" defer></script>
-<script src="sw-register.js" defer></script>
-<script src="sokoni-social.js" defer></script>
-<script src="sokoni-referral.js" defer></script>
-<script src="scroll-top.js" defer></script>
-<script src="analytics.js" defer></script>
-  <script defer src="kass-widget.js"></script>
-  <!-- Enterprise v2.0: payment stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
-  <script defer src="sokoni-payment-engine.js"></script>
-  <script defer src="sokoni-fraud-engine.js"></script>
-  <script defer src="sokoni-vouchers.js"></script>
-  <script defer src="sokoni-subscriptions.js"></script>
+  </script>
 </body>
 </html>

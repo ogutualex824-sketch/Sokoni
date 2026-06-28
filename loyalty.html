@@ -1,950 +1,764 @@
-﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" data-require-auth="true">
-<head><script src="security.js"></script>
-<script src="auth-guard.js"></script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Loyalty Rewards — SOKONI</title>
-  <meta name="description" content="Earn loyalty points on every SOKONI purchase and redeem them for discounts and rewards.">
-  <meta property="og:title" content="Loyalty Rewards — SOKONI">
-  <meta property="og:description" content="Earn points on every purchase and unlock exclusive rewards on SOKONI Kenya.">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- security.js must be first — blocks XSS probes before anything loads -->
+  <script src="security.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>My Rewards — SOKONI</title>
+  <meta name="description" content="Earn and redeem SOKONI loyalty points. View your tier, history and exclusive rewards.">
+  <meta property="og:title" content="My Rewards — SOKONI">
+  <meta property="og:description" content="Your SOKONI loyalty dashboard — track points, tiers and redeem rewards.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#7c4dff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
   <style>
+    /* ================================================================
+       SOKONI LOYALTY — Design System (buyer-facing, light theme)
+    ================================================================ */
+    :root {
+      --bg:      #f8f9ff;
+      --surface: #ffffff;
+      --border:  #e8eaf6;
+      --accent:  #7c4dff;
+      --gold:    #ffc107;
+      --green:   #4caf50;
+      --text:    #1a1a2e;
+      --muted:   #6b6b8a;
+      --card:    #ffffff;
+      --radius:  14px;
+      --shadow:  0 2px 12px rgba(0,0,0,.08);
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0a0a; color: white; min-height: 100vh; }
 
-    .ly-nav {
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    /* ── HEADER ── */
+    .loy-header {
+      position: sticky; top: 0; z-index: 200;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 8px rgba(0,0,0,.06);
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 24px; background: rgba(10,10,10,0.96);
-      border-bottom: 1px solid rgba(255,255,255,0.07);
-      position: sticky; top: 0; z-index: 100; backdrop-filter: blur(12px);
+      padding: 0 20px; height: 56px;
     }
-    .ly-nav-logo { height: 34px; }
-    .ly-nav-back {
-      display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,0.55);
-      text-decoration: none; font-size: 13px; font-weight: 600;
-      padding: 8px 16px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+    .loy-logo { height: 28px; }
+    .loy-back {
+      display: flex; align-items: center; gap: 6px;
+      color: var(--muted); text-decoration: none;
+      font-size: 13px; font-weight: 600;
+      padding: 7px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: all .18s;
     }
+    .loy-back:hover { color: var(--accent); border-color: var(--accent); background: rgba(124,77,255,.05); }
 
-    /* HERO */
-    .ly-hero {
-      background: linear-gradient(135deg, rgba(255,193,7,0.1), rgba(113,255,0,0.06));
-      border-bottom: 1px solid rgba(255,255,255,0.07);
-      padding: 40px 24px 36px; text-align: center;
+    /* ── HERO ── */
+    .loy-hero {
+      background: linear-gradient(135deg, #7c4dff 0%, #651fff 60%, #aa00ff 100%);
+      color: #fff;
+      padding: 36px 20px 32px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
     }
-    .ly-pts-big { font-size: 64px; font-weight: 900; color: #ffc107; line-height: 1; }
-    .ly-pts-label { font-size: 14px; color: rgba(255,255,255,0.45); margin: 6px 0 12px; }
-
-    /* STREAK BANNER */
-    .ly-streak-banner {
+    .loy-hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at 70% 30%, rgba(255,255,255,.12) 0%, transparent 60%);
+    }
+    .loy-tier-badge {
       display: inline-flex; align-items: center; gap: 8px;
-      padding: 8px 20px; background: rgba(255,100,0,0.1); border: 1px solid rgba(255,100,0,0.3);
-      border-radius: 999px; font-size: 14px; font-weight: 800; color: #ff6400;
-      margin-bottom: 14px; cursor: default;
-    }
-    .ly-streak-banner .streak-num { font-size: 18px; color: #ff9800; }
-
-    .ly-tier-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 8px 20px; border-radius: 999px; font-size: 14px; font-weight: 800;
+      padding: 6px 18px; border-radius: 999px;
+      font-size: 13px; font-weight: 800;
+      background: rgba(255,255,255,.18);
+      border: 1px solid rgba(255,255,255,.35);
       margin-bottom: 16px;
+      position: relative;
     }
-    .ly-progress-wrap {
-      max-width: 360px; margin: 0 auto 8px;
-      background: rgba(255,255,255,0.08); border-radius: 999px; height: 10px; overflow: hidden;
+    .loy-tier-badge-icon { font-size: 18px; }
+    #loyTierBadge { /* populated by JS */ }
+    .loy-balance {
+      font-size: 62px; font-weight: 900; line-height: 1;
+      letter-spacing: -2px;
+      position: relative;
     }
-    .ly-progress-bar { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#ffc107,#ff9800); transition: width .8s ease; }
-    .ly-progress-text { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 16px; }
-
-    /* REDEEM HERO BTN */
-    .ly-hero-redeem-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
-    .ly-hero-redeem-btn {
-      padding: 12px 24px; background: linear-gradient(135deg,#ffc107,#e07000);
-      color: black; font-weight: 800; font-size: 14px; border: none; border-radius: 12px;
-      cursor: pointer; font-family: inherit; transition: opacity .2s;
-    }
-    .ly-hero-redeem-btn:hover { opacity: 0.88; }
-    .ly-hero-redeem-btn:disabled { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.25); cursor: not-allowed; }
-
-    /* BODY */
-    .ly-body { max-width: 1100px; margin: 0 auto; padding: 32px 24px 100px; }
-
-    /* TABS */
-    .ly-tabs { display: flex; gap: 4px; margin-bottom: 28px; border-bottom: 1px solid rgba(255,255,255,0.07); overflow-x: auto; }
-    .ly-tab {
-      padding: 10px 22px; font-size: 13px; font-weight: 700; border: none; cursor: pointer;
-      font-family: inherit; background: transparent; color: rgba(255,255,255,0.4);
-      border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .2s; white-space: nowrap;
-    }
-    .ly-tab.active { color: #ffc107; border-bottom-color: #ffc107; }
-
-    /* EARN GRID */
-    .ly-earn-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 14px; margin-bottom: 32px;
-    }
-    .ly-earn-card {
-      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 16px; padding: 18px;
-    }
-    .ly-earn-icon { font-size: 28px; margin-bottom: 10px; }
-    .ly-earn-pts { font-size: 20px; font-weight: 900; color: #ffc107; margin-bottom: 4px; }
-    .ly-earn-label { font-size: 13px; font-weight: 700; color: white; margin-bottom: 4px; }
-    .ly-earn-desc { font-size: 11px; color: rgba(255,255,255,0.4); line-height: 1.5; }
-    .ly-earn-badge {
-      display: inline-block; margin-top: 6px; font-size: 10px; font-weight: 800;
-      padding: 2px 8px; border-radius: 999px;
-    }
-    .ly-badge-green { background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.25); color: #71ff00; }
-    .ly-badge-blue  { background: rgba(0,170,255,0.1);  border: 1px solid rgba(0,170,255,0.2);  color: #00aaff; }
-    .ly-badge-orange{ background: rgba(255,100,0,0.12); border: 1px solid rgba(255,100,0,0.25); color: #ff6400; }
-
-    /* REWARDS STORE */
-    .ly-rewards-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap: 16px;
-    }
-    .ly-reward-card {
-      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 18px; padding: 22px; position: relative; overflow: hidden;
-    }
-    .ly-reward-card.unlocked { border-color: rgba(113,255,0,0.2); }
-    .ly-reward-card.locked   { opacity: 0.55; }
-    .ly-reward-icon  { font-size: 36px; margin-bottom: 12px; }
-    .ly-reward-title { font-size: 15px; font-weight: 900; color: white; margin-bottom: 6px; }
-    .ly-reward-desc  { font-size: 12px; color: rgba(255,255,255,0.45); margin-bottom: 14px; line-height: 1.5; }
-    .ly-reward-cost  { font-size: 14px; font-weight: 800; color: #ffc107; margin-bottom: 14px; }
-    .ly-reward-kes   { font-size: 11px; color: rgba(255,255,255,0.35); margin-bottom: 14px; }
-    .ly-redeem-btn {
-      width: 100%; padding: 11px; border: none; border-radius: 10px;
-      font-weight: 800; font-size: 13px; cursor: pointer; font-family: inherit; transition: all .2s;
-    }
-    .ly-redeem-btn.can  { background: linear-gradient(135deg,#ffc107,#e07000); color: black; }
-    .ly-redeem-btn.cant { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.25); cursor: not-allowed; border: 1px solid rgba(255,255,255,0.08); }
-    .ly-locked-overlay {
-      position: absolute; top: 14px; right: 14px; font-size: 18px;
+    .loy-balance-label {
+      font-size: 13px; font-weight: 600;
+      opacity: .75; margin: 6px 0 20px;
     }
 
-    /* TIER CARDS */
-    .ly-tier-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); gap: 12px; margin-bottom: 28px; }
-    .ly-tier-card { border-radius: 14px; padding: 18px; text-align: center; }
-    .ly-tier-card .tc-icon { font-size: 30px; margin-bottom: 8px; }
-    .ly-tier-card .tc-name { font-size: 14px; font-weight: 900; margin-bottom: 4px; }
-    .ly-tier-card .tc-range { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 8px; }
-    .ly-tier-card .tc-perks { font-size: 11px; color: rgba(255,255,255,0.5); line-height: 1.6; text-align: left; }
-    .ly-tier-active-badge { display: inline-block; margin-top: 6px; font-size: 10px; font-weight: 800; padding: 2px 10px; border-radius: 999px; background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.3); color: #71ff00; }
-
-    /* HISTORY */
-    .ly-history-row {
-      display: flex; align-items: center; gap: 12px; padding: 12px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+    /* ── PROGRESS CARD ── */
+    .loy-progress-card {
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      max-width: 400px;
+      margin: 0 auto;
+      position: relative;
     }
-    .ly-history-icon {
-      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center; font-size: 16px;
+    .loy-progress-label {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px; font-weight: 700; margin-bottom: 8px; opacity: .9;
     }
-    .ly-history-info { flex: 1; }
-    .ly-history-desc { font-size: 13px; color: white; font-weight: 600; }
-    .ly-history-date { font-size: 11px; color: rgba(255,255,255,0.35); }
-    .ly-history-pts  { font-size: 15px; font-weight: 900; }
+    .loy-progress-bar {
+      background: rgba(255,255,255,.2);
+      border-radius: 999px; height: 8px; overflow: hidden;
+    }
+    .loy-progress-fill {
+      height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #ffd740, #ffc107);
+      transition: width .9s cubic-bezier(.22,1,.36,1);
+    }
+    #loyProgressText {
+      font-size: 11px; margin-top: 7px; text-align: center; opacity: .75;
+    }
 
-    /* SECTION HEADING */
-    .ly-section-h {
-      font-size: 14px; font-weight: 800; color: white; margin: 0 0 16px;
+    /* ── KPI STRIP ── */
+    .loy-kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      padding: 18px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .loy-kpi {
+      text-align: center;
+      padding: 12px 8px;
+      background: var(--bg);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    .loy-kpi-val {
+      font-size: 18px; font-weight: 900; color: var(--accent);
+      line-height: 1.1;
+    }
+    .loy-kpi-lbl {
+      font-size: 10px; font-weight: 600; color: var(--muted);
+      margin-top: 3px; text-transform: uppercase; letter-spacing: .5px;
+    }
+
+    /* ── TABS ── */
+    .loy-tabs {
+      display: flex; gap: 0;
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .loy-tabs::-webkit-scrollbar { display: none; }
+    .loy-tab {
+      flex-shrink: 0;
+      padding: 13px 22px;
+      font-size: 13px; font-weight: 700;
+      background: transparent; border: none;
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .18s;
+      white-space: nowrap;
+    }
+    .loy-tab:hover { color: var(--accent); }
+    .loy-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: rgba(124,77,255,.04);
+    }
+
+    /* ── TAB CONTENT ── */
+    .loy-tab-content { display: none; }
+    .loy-tab-content.active { display: block; }
+
+    /* ── SHARED CONTENT WRAPPER ── */
+    .loy-content {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 16px 40px;
+    }
+    .loy-section-title {
+      font-size: 15px; font-weight: 800; color: var(--text);
+      margin-bottom: 16px;
       display: flex; align-items: center; gap: 8px;
     }
-    .ly-section-h::after { content:''; flex:1; height:1px; background: rgba(255,255,255,0.07); }
-
-    .ly-empty { text-align: center; padding: 40px 0; color: rgba(255,255,255,0.25); font-size: 13px; }
-    .ly-notif { padding: 14px 18px; border-radius: 12px; font-size: 13px; font-weight: 700; margin-top: 12px; }
-    .ly-notif-success { background: rgba(113,255,0,0.08); border: 1px solid rgba(113,255,0,0.2); color: rgba(255,255,255,0.85); }
-    .ly-notif-error   { background: rgba(255,60,60,0.1);  border: 1px solid rgba(255,60,60,0.25); color: #ff6464; }
-
-    /* STREAK SECTION */
-    .ly-streak-section {
-      background: rgba(255,100,0,0.05); border: 1px solid rgba(255,100,0,0.15);
-      border-radius: 16px; padding: 20px; margin-bottom: 24px;
-      display: flex; align-items: center; gap: 16px;
+    .loy-section-title::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
     }
-    .ly-streak-flame { font-size: 40px; }
-    .ly-streak-info { flex: 1; }
-    .ly-streak-title { font-size: 15px; font-weight: 900; color: #ff9800; margin-bottom: 4px; }
-    .ly-streak-sub { font-size: 12px; color: rgba(255,255,255,0.45); line-height: 1.5; }
-    .ly-streak-days { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-    .ly-streak-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; }
-    .ly-streak-dot.done { background: rgba(255,152,0,0.2); border-color: #ff9800; color: #ff9800; }
-    .ly-streak-dot.active { background: #ff9800; border-color: #ff9800; color: black; }
 
-    input { font-size: 16px; }
-
-    @media(max-width:600px){
-      .ly-pts-big { font-size: 48px; }
-      .ly-rewards-grid { grid-template-columns: 1fr 1fr; }
-      .ly-tier-grid { grid-template-columns: 1fr 1fr; }
+    /* ── EARN GRID ── */
+    .loy-earn-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
     }
+    .loy-earn-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 16px;
+      box-shadow: var(--shadow);
+      transition: transform .18s, box-shadow .18s;
+    }
+    .loy-earn-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(124,77,255,.12);
+      border-color: rgba(124,77,255,.3);
+    }
+    .loy-earn-icon { font-size: 28px; margin-bottom: 10px; }
+    .loy-earn-pts {
+      font-size: 20px; font-weight: 900;
+      color: var(--accent); margin-bottom: 4px;
+    }
+    .loy-earn-name {
+      font-size: 14px; font-weight: 700; color: var(--text);
+      margin-bottom: 4px;
+    }
+    .loy-earn-desc {
+      font-size: 12px; color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── REDEEM CARD ── */
+    .loy-redeem-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      box-shadow: var(--shadow);
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    .loy-redeem-card h3 {
+      font-size: 17px; font-weight: 800; color: var(--text);
+      margin-bottom: 6px;
+    }
+    .loy-redeem-card p {
+      font-size: 13px; color: var(--muted);
+      margin-bottom: 24px; line-height: 1.5;
+    }
+    .loy-slider-wrap { margin-bottom: 20px; }
+    .loy-slider-label {
+      display: flex; justify-content: space-between;
+      font-size: 12px; font-weight: 700;
+      color: var(--muted); margin-bottom: 8px;
+    }
+    .loy-slider {
+      width: 100%; height: 6px;
+      -webkit-appearance: none; appearance: none;
+      background: var(--border); border-radius: 999px;
+      outline: none; cursor: pointer;
+      font-size: 16px; /* accessibility: prevents iOS zoom */
+    }
+    .loy-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--accent); cursor: pointer;
+      box-shadow: 0 2px 6px rgba(124,77,255,.4);
+    }
+    .loy-slider::-moz-range-thumb {
+      width: 20px; height: 20px; border-radius: 50%; border: none;
+      background: var(--accent); cursor: pointer;
+    }
+    .loy-slider:disabled { opacity: .4; cursor: not-allowed; }
+    .loy-preview-box {
+      background: linear-gradient(135deg, rgba(124,77,255,.07), rgba(124,77,255,.03));
+      border: 1px solid rgba(124,77,255,.2);
+      border-radius: var(--radius);
+      padding: 18px;
+      text-align: center;
+      margin: 18px 0;
+    }
+    .loy-preview-pts {
+      font-size: 28px; font-weight: 900; color: var(--accent);
+    }
+    .loy-preview-arrow { font-size: 18px; margin: 4px 0; color: var(--muted); }
+    .loy-preview-kes {
+      font-size: 20px; font-weight: 900; color: var(--green);
+    }
+    .loy-preview-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .loy-redeem-btn {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, #7c4dff, #651fff);
+      color: #fff; border: none; border-radius: var(--radius);
+      font-size: 15px; font-weight: 800;
+      cursor: pointer; font-family: inherit;
+      transition: opacity .2s, transform .1s;
+      box-shadow: 0 4px 14px rgba(124,77,255,.35);
+    }
+    .loy-redeem-btn:hover:not(:disabled) { opacity: .9; transform: translateY(-1px); }
+    .loy-redeem-btn:disabled {
+      background: var(--border); color: var(--muted);
+      cursor: not-allowed; box-shadow: none; transform: none;
+    }
+    .loy-redeem-note {
+      font-size: 11px; color: var(--muted);
+      text-align: center; margin-top: 12px; line-height: 1.6;
+    }
+
+    /* ── HISTORY LIST ── */
+    .loy-history-list {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .loy-tx-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    .loy-tx-row:last-child { border-bottom: none; }
+    .loy-tx-row:hover { background: var(--bg); }
+    .loy-tx-icon {
+      width: 38px; height: 38px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .loy-tx-icon.earn { background: rgba(76,175,80,.12); }
+    .loy-tx-icon.redeem { background: rgba(124,77,255,.1); }
+    .loy-tx-icon.adjust { background: rgba(255,193,7,.12); }
+    .loy-tx-info { flex: 1; min-width: 0; }
+    .loy-tx-desc {
+      font-size: 13px; font-weight: 600; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .loy-tx-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .loy-tx-pts {
+      font-size: 15px; font-weight: 900;
+      flex-shrink: 0; text-align: right;
+    }
+    .loy-tx-pts.earn   { color: var(--green); }
+    .loy-tx-pts.redeem { color: var(--accent); }
+    .loy-tx-pts.adjust { color: var(--gold); }
+
+    /* ── TIER GRID ── */
+    .loy-tier-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+    .loy-tier-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 18px;
+      box-shadow: var(--shadow);
+      transition: transform .18s;
+    }
+    .loy-tier-card:hover { transform: translateY(-2px); }
+    .loy-tier-card.loy-tier-current {
+      border-width: 2px;
+    }
+    .loy-tier-card-icon { font-size: 32px; margin-bottom: 10px; }
+    .loy-tier-card-name {
+      font-size: 16px; font-weight: 900;
+      margin-bottom: 4px;
+    }
+    .loy-tier-card-range {
+      font-size: 11px; color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .loy-tier-card-perks {
+      list-style: none; padding: 0;
+    }
+    .loy-tier-card-perks li {
+      font-size: 12px; color: var(--text);
+      padding: 3px 0;
+      display: flex; align-items: flex-start; gap: 6px;
+      line-height: 1.4;
+    }
+    .loy-tier-card-perks li::before {
+      content: '✓'; color: var(--green);
+      font-weight: 900; flex-shrink: 0;
+    }
+    .loy-tier-current-badge {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 11px; font-weight: 800;
+      background: rgba(76,175,80,.12);
+      color: var(--green);
+      border: 1px solid rgba(76,175,80,.3);
+    }
+    .loy-multiplier {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 3px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 800;
+      background: rgba(255,193,7,.12);
+      color: #c47e00;
+      border: 1px solid rgba(255,193,7,.35);
+    }
+
+    /* ── STATES ── */
+    .loy-loading {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 60px 20px; gap: 14px; color: var(--muted);
+    }
+    .loy-spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: loy-spin .7s linear infinite;
+    }
+    @keyframes loy-spin { to { transform: rotate(360deg); } }
+    .loy-empty {
+      text-align: center; padding: 48px 20px;
+      color: var(--muted); font-size: 13px;
+    }
+    .loy-empty-icon { font-size: 40px; margin-bottom: 10px; }
+    .loy-error-msg {
+      background: rgba(244,67,54,.08);
+      border: 1px solid rgba(244,67,54,.25);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      color: #c62828;
+      font-size: 13px; font-weight: 600;
+    }
+
+    /* ── TOAST CONTAINER ── */
+    .loy-toast-container {
+      position: fixed; top: 16px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      pointer-events: none;
+      width: 90%; max-width: 380px;
+    }
+    .loy-toast {
+      background: var(--text);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 13px; font-weight: 700;
+      box-shadow: 0 4px 16px rgba(0,0,0,.2);
+      pointer-events: auto;
+      animation: loy-toast-in .25s ease;
+      max-width: 100%;
+      text-align: center;
+    }
+    .loy-toast.success { background: var(--green); }
+    .loy-toast.error   { background: #f44336; }
+    .loy-toast.info    { background: var(--accent); }
+    @keyframes loy-toast-in {
+      from { opacity: 0; transform: translateY(-10px) scale(.95); }
+      to   { opacity: 1; transform: translateY(0)    scale(1); }
+    }
+
+    /* ── MOBILE RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .loy-balance { font-size: 48px; }
+      .loy-kpi-strip { grid-template-columns: repeat(2, 1fr); }
+      .loy-earn-grid { grid-template-columns: 1fr 1fr; }
+      .loy-tier-grid { grid-template-columns: 1fr 1fr; }
+      .loy-redeem-card { padding: 20px 16px; }
+      .loy-content { padding: 18px 12px 40px; }
+    }
+    @media (max-width: 360px) {
+      .loy-earn-grid { grid-template-columns: 1fr; }
+      .loy-tier-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── INPUTS: min 16px to prevent iOS zoom ── */
+    input, select, textarea { font-size: 16px; }
   </style>
-<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SOKONI">
-<link rel="stylesheet" href="premium.css">
-<link rel="stylesheet" href="mobile.css">
-<link rel="stylesheet" href="sokoni-premium-v2.css">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="sokoni-desktop.css">
 </head>
 <body>
-<script src="splash.js"></script>
 
-<nav class="ly-nav">
-  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="ly-nav-logo" alt="Sokoni"></a>
-  <a href="index.html" class="ly-nav-back">← Back to Store</a>
-</nav>
+<!-- ═══════════════════════════════════════════════
+     HEADER
+═══════════════════════════════════════════════ -->
+<header class="loy-header">
+  <a href="index.html">
+    <img src="assets/Sokonilogo2.png" class="loy-logo" alt="SOKONI" loading="lazy">
+  </a>
+  <a href="javascript:history.back()" class="loy-back">
+    <i class="fas fa-arrow-left"></i> Back
+  </a>
+</header>
 
-<!-- HERO -->
-<div class="ly-hero">
-  <div class="ly-pts-big" id="lyPtsBig">0</div>
-  <div class="ly-pts-label">Sokoni Loyalty Points</div>
-
-  <!-- STREAK BANNER -->
-  <div class="ly-streak-banner" id="lyStreakBanner" title="Daily login streak">
-    <span>🔥</span>
-    <span class="streak-num" id="lyStreakCount">0</span>
-    <span>-day streak</span>
+<!-- ═══════════════════════════════════════════════
+     HERO
+═══════════════════════════════════════════════ -->
+<section class="loy-hero">
+  <!-- Tier badge -->
+  <div class="loy-tier-badge" id="loyTierBadge">
+    <span class="loy-tier-badge-icon" id="loyTierIcon">🥉</span>
+    <span id="loyTier">Bronze Member</span>
   </div>
 
-  <div class="ly-tier-badge" id="lyTierBadge">🥉 Bronze Member</div>
-  <div class="ly-progress-wrap">
-    <div class="ly-progress-bar" id="lyProgressBar" style="width:0%"></div>
-  </div>
-  <div class="ly-progress-text" id="lyProgressText">Earn more to reach Silver</div>
+  <!-- Main balance -->
+  <div class="loy-balance" id="loyBalance">—</div>
+  <div class="loy-balance-label">SOKONI Loyalty Points</div>
 
-  <!-- Quick Redeem -->
-  <div class="ly-hero-redeem-row">
-    <button type="button" class="ly-hero-redeem-btn" id="lyHeroRedeemBtn" onclick="lyQuickRedeem()">💳 Redeem Points for Cash</button>
+  <!-- Progress to next tier -->
+  <div class="loy-progress-card">
+    <div class="loy-progress-label">
+      <span id="loyTier2">Bronze</span>
+      <span id="loyNextTier">Silver</span>
+    </div>
+    <div class="loy-progress-bar">
+      <div class="loy-progress-fill" id="loyProgressFill" style="width:0%"></div>
+    </div>
+    <div id="loyProgressText">Loading…</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     KPI STRIP
+═══════════════════════════════════════════════ -->
+<div class="loy-kpi-strip">
+  <div class="loy-kpi">
+    <div class="loy-kpi-val" id="loyBalance2">—</div>
+    <div class="loy-kpi-lbl">Balance</div>
+  </div>
+  <div class="loy-kpi">
+    <div class="loy-kpi-val" id="loyTierKpi">—</div>
+    <div class="loy-kpi-lbl">Tier</div>
+  </div>
+  <div class="loy-kpi">
+    <div class="loy-kpi-val" id="loyTotalEarned">—</div>
+    <div class="loy-kpi-lbl">Total Earned</div>
+  </div>
+  <div class="loy-kpi">
+    <div class="loy-kpi-val" id="loyThisMonth">—</div>
+    <div class="loy-kpi-lbl">This Month</div>
   </div>
 </div>
 
-<div class="ly-body">
-  <div class="ly-tabs">
-    <button type="button" class="ly-tab active" onclick="lyTab('rewards',this)">🎁 Rewards Store</button>
-    <button type="button" class="ly-tab" onclick="lyTab('earn',this)">💰 How to Earn</button>
-    <button type="button" class="ly-tab" onclick="lyTab('history',this)">📜 My History</button>
-    <button type="button" class="ly-tab" onclick="lyTab('streak',this)">🔥 Streak</button>
-    <button type="button" class="ly-tab" onclick="lyTab('tiers',this)">🏆 Tiers</button>
-  </div>
-
-  <!-- REWARDS STORE -->
-  <div id="ly-tab-rewards">
-    <div class="ly-section-h">Redeem Your Points</div>
-    <div class="ly-rewards-grid" id="lyRewardsGrid"></div>
-    <div id="lyRedeemMsg"></div>
-  </div>
-
-  <!-- HOW TO EARN -->
-  <div id="ly-tab-earn" style="display:none;">
-    <div class="ly-section-h">Ways to Earn Points</div>
-    <div class="ly-earn-grid">
-      <div class="ly-earn-card">
-        <div class="ly-earn-icon">🛒</div>
-        <div class="ly-earn-pts">1 pt per KES 10</div>
-        <div class="ly-earn-label">Every Purchase</div>
-        <div class="ly-earn-desc">Earn 1 point for every KES 10 you spend on any product or service.</div>
-      </div>
-      <div class="ly-earn-card">
-        <div class="ly-earn-icon">🌅</div>
-        <div class="ly-earn-pts">+5 pts</div>
-        <div class="ly-earn-label">Daily Login</div>
-        <div class="ly-earn-desc">Visit SOKONI every day and earn 5 points just for showing up!</div>
-        <span class="ly-earn-badge ly-badge-green">Auto-awarded</span>
-      </div>
-      <div class="ly-earn-card">
-        <div class="ly-earn-icon">🔥</div>
-        <div class="ly-earn-pts">+50 pts</div>
-        <div class="ly-earn-label">7-Day Streak</div>
-        <div class="ly-earn-desc">Visit 7 days in a row and earn a 50-point streak bonus!</div>
-        <span class="ly-earn-badge ly-badge-orange">Streak Bonus</span>
-      </div>
-      <div class="ly-earn-card">
-        <div class="ly-earn-icon">🏆</div>
-        <div class="ly-earn-pts">+200 pts</div>
-        <div class="ly-earn-label">30-Day Streak</div>
-        <div class="ly-earn-desc">30 consecutive days — earn a massive 200-point loyalty milestone!</div>
-        <span class="ly-earn-badge ly-badge-orange">Mega Streak</span>
-      </div>
-      <div class="ly-earn-card">
-        <div class="ly-earn-icon">⭐</div>
-        <div class="ly-earn-pts">+20 pts</div>
-        <div class="ly-earn-label">Leave a Review</div>
-        <div class="ly-earn-desc">Write a review for a seller or product after delivery.</div>
-        <span class="ly-earn-badge ly-badge-green">Easy Earn</span>
-      </div>
-      <div class="ly-earn-card">
-        <div class="ly-earn-icon">👥</div>
-        <div class="ly-earn-pts">+100 pts</div>
-        <div class="ly-earn-label">Refer a Friend</div>
-        <div class="ly-earn-desc">Get 100 points when a friend joins and makes their first purchase.</div>
-        <span class="ly-earn-badge ly-badge-green">Referral Bonus</span>
-      </div>
-      <div class="ly-earn-card">
-        <div class="ly-earn-icon">👤</div>
-        <div class="ly-earn-pts">+50 pts</div>
-        <div class="ly-earn-label">Complete Profile</div>
-        <div class="ly-earn-desc">Fill in all your profile details to earn a one-time 50-point bonus.</div>
-        <span class="ly-earn-badge ly-badge-blue">One-Time</span>
-      </div>
-      <div class="ly-earn-card">
-        <div class="ly-earn-icon">🎉</div>
-        <div class="ly-earn-pts">+100 pts</div>
-        <div class="ly-earn-label">First Purchase</div>
-        <div class="ly-earn-desc">Place your very first SOKONI order and earn a 100-point welcome bonus.</div>
-        <span class="ly-earn-badge ly-badge-blue">One-Time</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- HISTORY -->
-  <div id="ly-tab-history" style="display:none;">
-    <div class="ly-section-h">Points Activity (Last 10)</div>
-    <div id="lyHistoryList"></div>
-  </div>
-
-  <!-- STREAK TAB -->
-  <div id="ly-tab-streak" style="display:none;">
-    <div class="ly-section-h">Daily Login Streak</div>
-    <div class="ly-streak-section" id="lyStreakSection">
-      <div class="ly-streak-flame">🔥</div>
-      <div class="ly-streak-info">
-        <div class="ly-streak-title" id="lyStreakTitle">0-Day Streak</div>
-        <div class="ly-streak-sub" id="lyStreakSub">Visit every day to keep your streak alive and earn bonus points!</div>
-        <div class="ly-streak-days" id="lyStreakDots"></div>
-      </div>
-    </div>
-    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:20px;margin-bottom:20px;">
-      <div class="ly-section-h" style="margin-bottom:12px;">Streak Milestones</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div style="padding:12px;background:rgba(255,100,0,0.08);border:1px solid rgba(255,100,0,0.2);border-radius:10px;text-align:center;">
-          <div style="font-size:22px;margin-bottom:4px;">🔥</div>
-          <div style="font-size:16px;font-weight:900;color:#ff9800;">+50 pts</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);">Every 7-day streak</div>
-        </div>
-        <div style="padding:12px;background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.2);border-radius:10px;text-align:center;">
-          <div style="font-size:22px;margin-bottom:4px;">🏆</div>
-          <div style="font-size:16px;font-weight:900;color:#ffd700;">+200 pts</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);">Every 30-day streak</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- TIERS TAB -->
-  <div id="ly-tab-tiers" style="display:none;">
-    <div class="ly-section-h">Membership Tiers</div>
-    <div class="ly-tier-grid" id="lyTierGrid"></div>
-  </div>
-
-</div>
-
-<nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
-  <a href="loyalty.html" class="bnav-item active-bnav"><span class="bnav-emoji">🎁</span><span>Loyalty</span></a>
-  <a href="referral.html" class="bnav-item"><span class="bnav-emoji">🔗</span><span>Referral</span></a>
-  <a href="subscriptions.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Subscriptions</span></a>
+<!-- ═══════════════════════════════════════════════
+     TABS
+═══════════════════════════════════════════════ -->
+<nav class="loy-tabs" role="tablist" aria-label="Loyalty sections">
+  <button class="loy-tab active" data-tab="earn"    role="tab" aria-selected="true"  type="button">💰 Earn</button>
+  <button class="loy-tab"        data-tab="redeem"  role="tab" aria-selected="false" type="button">🎁 Redeem</button>
+  <button class="loy-tab"        data-tab="history" role="tab" aria-selected="false" type="button">📜 History</button>
+  <button class="loy-tab"        data-tab="tiers"   role="tab" aria-selected="false" type="button">🏆 Tiers</button>
 </nav>
 
-<script src="sokoni-pay.js" defer></script>
-<script src="shared-header.js" defer></script>
-<script src="scroll-top.js" defer></script>
-<script src="sw-register.js" defer></script>
+<!-- ═══════════════════════════════════════════════
+     TAB: EARN
+═══════════════════════════════════════════════ -->
+<div class="loy-tab-content active" id="loy-tab-earn" role="tabpanel">
+  <div class="loy-content">
+    <p class="loy-section-title">Ways to Earn Points</p>
+    <div class="loy-earn-grid">
+
+      <!-- Shopping -->
+      <div class="loy-earn-card">
+        <div class="loy-earn-icon">💳</div>
+        <div class="loy-earn-pts">1 pt / KSh 10</div>
+        <div class="loy-earn-name">Shopping</div>
+        <div class="loy-earn-desc">Earn 1 loyalty point for every KSh 10 spent on any product or service on SOKONI.</div>
+      </div>
+
+      <!-- Review -->
+      <div class="loy-earn-card">
+        <div class="loy-earn-icon">⭐</div>
+        <div class="loy-earn-pts">+5 pts</div>
+        <div class="loy-earn-name">Leave a Review</div>
+        <div class="loy-earn-desc">Write a verified review after receiving your order and earn 5 bonus points instantly.</div>
+      </div>
+
+      <!-- Referral -->
+      <div class="loy-earn-card">
+        <div class="loy-earn-icon">👥</div>
+        <div class="loy-earn-pts">+50 pts</div>
+        <div class="loy-earn-name">Refer a Friend</div>
+        <div class="loy-earn-desc">Share your referral link. When a friend joins and makes their first purchase, you earn 50 points.</div>
+      </div>
+
+      <!-- Profile -->
+      <div class="loy-earn-card">
+        <div class="loy-earn-icon">✅</div>
+        <div class="loy-earn-pts">+10 pts</div>
+        <div class="loy-earn-name">Complete Profile</div>
+        <div class="loy-earn-desc">Fill in all your profile details — name, photo, phone — and earn a one-time bonus of 10 points.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TAB: REDEEM
+═══════════════════════════════════════════════ -->
+<div class="loy-tab-content" id="loy-tab-redeem" role="tabpanel">
+  <div class="loy-content">
+    <p class="loy-section-title">Redeem Your Points</p>
+    <div class="loy-redeem-card">
+      <h3>Use your points</h3>
+      <p>Move the slider to choose how many points to redeem. Mention your order number at checkout and the discount will be applied.</p>
+
+      <!-- Slider -->
+      <div class="loy-slider-wrap">
+        <div class="loy-slider-label">
+          <span>500 pts</span>
+          <span id="loyRedeemPts">500 pts</span>
+        </div>
+        <input
+          type="range"
+          class="loy-slider"
+          id="loyRedeemSlider"
+          min="500"
+          max="500"
+          step="100"
+          value="500"
+          aria-label="Points to redeem"
+          disabled
+        >
+      </div>
+
+      <!-- Live preview -->
+      <div class="loy-preview-box">
+        <div class="loy-preview-pts" id="loyRedeemPts2">500 pts</div>
+        <div class="loy-preview-arrow">=</div>
+        <div class="loy-preview-kes" id="loyRedeemValue">KSh 50</div>
+        <div class="loy-preview-note">discount on your next order</div>
+      </div>
+
+      <!-- Redeem button -->
+      <button type="button" class="loy-redeem-btn" id="loyRedeemBtn" disabled>
+        Redeem at Checkout
+      </button>
+
+      <p class="loy-redeem-note">
+        Minimum 500 points &middot; 100 pts = KSh 10<br>
+        To redeem: quote your order ID at checkout and the discount is applied automatically.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TAB: HISTORY
+═══════════════════════════════════════════════ -->
+<div class="loy-tab-content" id="loy-tab-history" role="tabpanel">
+  <div class="loy-content">
+    <p class="loy-section-title">Points History</p>
+    <!-- populated by JS -->
+    <div id="loyHistoryList">
+      <div class="loy-loading">
+        <div class="loy-spinner"></div>
+        <span>Loading history…</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TAB: TIERS
+═══════════════════════════════════════════════ -->
+<div class="loy-tab-content" id="loy-tab-tiers" role="tabpanel">
+  <div class="loy-content">
+    <p class="loy-section-title">Membership Tiers</p>
+    <!-- populated by JS -->
+    <div class="loy-tier-grid" id="loyLeaderboard">
+      <!-- Static fallback tier cards; JS will replace with CF data + current marker -->
+      <!-- Bronze -->
+      <div class="loy-tier-card">
+        <div class="loy-tier-card-icon">🥉</div>
+        <div class="loy-tier-card-name" style="color:#cd7f32;">Bronze</div>
+        <div class="loy-tier-card-range">0 – 999 pts</div>
+        <div class="loy-multiplier">1× earn rate</div>
+        <ul class="loy-tier-card-perks">
+          <li>Basic earn rate</li>
+          <li>Access to all SOKONI features</li>
+        </ul>
+      </div>
+      <!-- Silver -->
+      <div class="loy-tier-card">
+        <div class="loy-tier-card-icon">🥈</div>
+        <div class="loy-tier-card-name" style="color:#9e9e9e;">Silver</div>
+        <div class="loy-tier-card-range">1,000 – 4,999 pts</div>
+        <div class="loy-multiplier">1.5× earn rate</div>
+        <ul class="loy-tier-card-perks">
+          <li>1.5× earn rate</li>
+          <li>Early access to sales</li>
+          <li>Priority support</li>
+        </ul>
+      </div>
+      <!-- Gold -->
+      <div class="loy-tier-card">
+        <div class="loy-tier-card-icon">🥇</div>
+        <div class="loy-tier-card-name" style="color:#ffc107;">Gold</div>
+        <div class="loy-tier-card-range">5,000 – 19,999 pts</div>
+        <div class="loy-multiplier">2× earn rate</div>
+        <ul class="loy-tier-card-perks">
+          <li>2× earn rate</li>
+          <li>Free delivery on orders</li>
+          <li>Exclusive deals</li>
+          <li>VIP badge</li>
+        </ul>
+      </div>
+      <!-- Platinum -->
+      <div class="loy-tier-card">
+        <div class="loy-tier-card-icon">💎</div>
+        <div class="loy-tier-card-name" style="color:#00bcd4;">Platinum</div>
+        <div class="loy-tier-card-range">20,000+ pts</div>
+        <div class="loy-multiplier">3× earn rate</div>
+        <ul class="loy-tier-card-perks">
+          <li>3× earn rate</li>
+          <li>Dedicated support</li>
+          <li>Double referral bonuses</li>
+          <li>Platinum badge</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TOAST CONTAINER
+═══════════════════════════════════════════════ -->
+<div class="loy-toast-container" id="loyToasts" aria-live="polite" aria-atomic="false"></div>
+
+<!-- ═══════════════════════════════════════════════
+     FIREBASE + LOYALTY JS
+     NOTE: Do NOT add defer to the Firebase init script.
+     The compat SDK sets window.firebase synchronously;
+     sokoni-loyalty.js depends on it being available
+     immediately when it executes.
+═══════════════════════════════════════════════ -->
+<script src="/__/firebase/init.js"></script>
+<script src="sokoni-loyalty.js"></script>
 <script>
-/* =====================================================
-   SOKONI LOYALTY ENGINE
-   All data in localStorage keys:
-     sokoniLoyaltyPoints  — { total, history[] }
-     sokoniStreak         — { count, lastDate }
-     sokoniStreakFlags     — { rewarded7:[], rewarded30:[] }
-     sokoniOneTime        — { profileComplete, firstPurchase }
-   ===================================================== */
-
-/* ---------- helpers ---------- */
-function escapeHTML(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-/* ---------- Firestore sync — points are authoritative server-side ---------- */
-var _SOKONI_CFG = {
-  apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-  authDomain:"sokoni-aeb26.firebaseapp.com",
-  projectId:"sokoni-aeb26",
-  storageBucket:"sokoni-aeb26.firebasestorage.app",
-  messagingSenderId:"24799054989",
-  appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"};
-
-function _currentUID() {
-  try { var u=JSON.parse(localStorage.getItem('sokoniUser')); return u&&u.uid?u.uid:null; } catch(e){ return null; }
-}
-
-async function _syncPointsFirestore(data) {
-  var uid = _currentUID(); if(!uid) return;
-  try {
-    var {initializeApp,getApps} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
-    var {getFirestore,doc,setDoc} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    var app = getApps().length?getApps()[0]:initializeApp(_SOKONI_CFG);
-    var db  = getFirestore(app);
-    await setDoc(doc(db,'users',uid,'loyalty','points'),{
-      total: data.total||0,
-      history: (data.history||[]).slice(0,50),
-      updatedAt: Date.now()
-    },{merge:true});
-  } catch(e) { /* offline / network — localStorage is fallback */ }
-}
-
-async function _loadPointsFirestore() {
-  var uid = _currentUID(); if(!uid) return null;
-  try {
-    var {initializeApp,getApps} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
-    var {getFirestore,doc,getDoc} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    var app = getApps().length?getApps()[0]:initializeApp(_SOKONI_CFG);
-    var db  = getFirestore(app);
-    var snap = await getDoc(doc(db,'users',uid,'loyalty','points'));
-    if(snap.exists()){ var d=snap.data(); return {total:d.total||0,history:d.history||[]}; }
-    return null;
-  } catch(e){ return null; }
-}
-
-/* ---------- load / save points ---------- */
-function loadPoints() {
-  try {
-    var d = JSON.parse(localStorage.getItem('sokoniLoyaltyPoints'));
-    if (d && typeof d.total === 'number') return d;
-  } catch(e) {}
-  /* fallback: also check legacy key */
-  try {
-    var leg = JSON.parse(localStorage.getItem('sokoniPoints'));
-    if (leg && typeof leg.total === 'number') return leg;
-  } catch(e) {}
-  return { total: 0, history: [] };
-}
-
-function savePoints(d) {
-  localStorage.setItem('sokoniLoyaltyPoints', JSON.stringify(d));
-  localStorage.setItem('sokoniPoints', JSON.stringify(d)); /* keep legacy in sync */
-  _syncPointsFirestore(d); /* async — Firestore becomes source of truth */
-}
-
-/* ---------- streak engine ---------- */
-function loadStreak() {
-  try {
-    var s = JSON.parse(localStorage.getItem('sokoniStreak'));
-    if (s && typeof s.count === 'number') return s;
-  } catch(e) {}
-  return { count: 0, lastDate: '' };
-}
-
-function saveStreak(s) {
-  localStorage.setItem('sokoniStreak', JSON.stringify(s));
-}
-
-function loadStreakFlags() {
-  try {
-    var f = JSON.parse(localStorage.getItem('sokoniStreakFlags'));
-    if (f) return f;
-  } catch(e) {}
-  return { rewarded7: [], rewarded30: [] };
-}
-
-function saveStreakFlags(f) {
-  localStorage.setItem('sokoniStreakFlags', JSON.stringify(f));
-}
-
-function runStreakEngine() {
-  var today = todayStr();
-  var s = loadStreak();
-  var flags = loadStreakFlags();
-
-  if (s.lastDate === today) return s; /* already counted today */
-
-  var yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  var yStr = yesterday.toISOString().slice(0, 10);
-
-  if (s.lastDate === yStr) {
-    s.count += 1; /* consecutive */
-  } else if (s.lastDate === '') {
-    s.count = 1; /* first ever */
-  } else {
-    s.count = 1; /* streak broken */
-  }
-  s.lastDate = today;
-  saveStreak(s);
-
-  /* daily login points */
-  addPointsRaw(5, 'Daily login');
-
-  /* 7-day milestone */
-  if (s.count % 7 === 0) {
-    var key7 = today + '_' + s.count;
-    if (!flags.rewarded7.includes(key7)) {
-      flags.rewarded7.push(key7);
-      saveStreakFlags(flags);
-      addPointsRaw(50, '7-day streak bonus');
-    }
-  }
-
-  /* 30-day milestone */
-  if (s.count % 30 === 0) {
-    var key30 = today + '_' + s.count;
-    if (!flags.rewarded30.includes(key30)) {
-      flags.rewarded30.push(key30);
-      saveStreakFlags(flags);
-      addPointsRaw(200, '30-day streak bonus');
-    }
-  }
-
-  return s;
-}
-
-/* ---------- core add points ---------- */
-function addPointsRaw(pts, reason) {
-  var d = loadPoints();
-  var prevTier = getTier(d.total || 0).name;
-  d.total = (d.total || 0) + pts;
-  if (!Array.isArray(d.history)) d.history = [];
-  d.history.unshift({
-    points: pts,
-    description: escapeHTML(reason),
-    date: new Date().toLocaleDateString('en-KE', { day:'numeric', month:'short', year:'numeric' }),
-    orderId: 'SYS'
+  document.addEventListener('DOMContentLoaded', function () {
+    SokoniLoyalty.init();
   });
-  if (d.history.length > 100) d.history = d.history.slice(0, 100);
-  savePoints(d);
-  /* Fire tier-up notification if tier changed */
-  var newTier = getTier(d.total).name;
-  if (newTier !== prevTier) {
-    _notifyTierUp(newTier);
-  }
-  return d;
-}
-
-function _notifyTierUp(tierName) {
-  var msg = 'Congrats! You reached ' + tierName + ' tier on SOKONI Loyalty!';
-  /* In-page toast */
-  try {
-    var t = document.createElement('div');
-    t.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#71ff00;color:#000;font-weight:900;font-size:13px;padding:12px 22px;border-radius:50px;box-shadow:0 4px 20px rgba(113,255,0,0.4);white-space:nowrap;';
-    t.textContent = '🎉 ' + msg;
-    document.body.appendChild(t);
-    setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 4000);
-  } catch(e){}
-  /* Browser push notification */
-  try {
-    if (Notification && Notification.permission === 'granted') {
-      new Notification('SOKONI Loyalty', { body: msg, icon: '/assets/logosokoni.png' });
-    } else if (Notification && Notification.permission !== 'denied') {
-      Notification.requestPermission().then(function(p){
-        if (p === 'granted') new Notification('SOKONI Loyalty', { body: msg, icon: '/assets/logosokoni.png' });
-      });
-    }
-  } catch(e){}
-}
-
-/* ---------- one-time bonuses ---------- */
-function loadOneTime() {
-  try { return JSON.parse(localStorage.getItem('sokoniOneTime')) || {}; } catch(e) { return {}; }
-}
-function saveOneTime(o) { localStorage.setItem('sokoniOneTime', JSON.stringify(o)); }
-
-/* ---------- tier config ---------- */
-var TIERS = [
-  {
-    name: 'Bronze', icon: '🥉', min: 0, max: 999, col: '#cd7f32',
-    bg: 'rgba(205,127,50,0.08)', border: 'rgba(205,127,50,0.25)',
-    cashback: '1% Cashback',
-    perks: ['Access to basic rewards', 'Daily login points', '1 pt per KES 10']
-  },
-  {
-    name: 'Silver', icon: '🥈', min: 1000, max: 4999, col: '#c0c0c0',
-    bg: 'rgba(192,192,192,0.08)', border: 'rgba(192,192,192,0.25)',
-    cashback: '2% Cashback',
-    perks: ['All Bronze perks', '2% cashback on orders', 'Priority queue on support', 'Double streak bonuses']
-  },
-  {
-    name: 'Gold', icon: '🥇', min: 5000, max: 19999, col: '#ffd700',
-    bg: 'rgba(255,215,0,0.08)', border: 'rgba(255,215,0,0.25)',
-    cashback: '3% Cashback',
-    perks: ['All Silver perks', '3% cashback on orders', 'Free delivery voucher monthly', 'VIP badge on profile']
-  },
-  {
-    name: 'Platinum', icon: '💎', min: 20000, max: Infinity, col: '#00eeff',
-    bg: 'rgba(0,238,255,0.06)', border: 'rgba(0,238,255,0.2)',
-    cashback: '5% Cashback',
-    perks: ['All Gold perks', '5% cashback — highest tier', 'Free subscription every 3 months', 'Dedicated account manager']
-  }
-];
-
-function getTier(pts) {
-  return TIERS.find(function(t){ return pts >= t.min && pts <= t.max; }) || TIERS[0];
-}
-
-/* ---------- rewards catalogue ---------- */
-var REWARDS = [
-  { id:'r-delivery',  icon:'🚚', title:'Free Delivery',           desc:'One free delivery anywhere in Kenya.',          cost:500,  kes:50,  type:'mpesa',  cashRedeem:true  },
-  { id:'r-10pct',     icon:'🎫', title:'10% Discount Voucher',    desc:'10% off any product. Valid 7 days.',            cost:800,  kes:80,  type:'coupon', value:'SAVE10'   },
-  { id:'r-boost',     icon:'📣', title:'Featured Listing Boost',  desc:'Get your listing featured for 3 days.',         cost:1000, kes:100, type:'boost',  value:'BOOST'    },
-  { id:'r-support',   icon:'🎧', title:'Priority Support',        desc:'Skip the queue — 1-hour support response.',     cost:600,  kes:60,  type:'perk',   value:'PSUP'     },
-  { id:'r-wallet',    icon:'💰', title:'SOKONI Wallet Credit',     desc:'KES 100 added to your SOKONI wallet.',          cost:1000, kes:100, type:'wallet', cashRedeem:true  },
-  { id:'r-mpesa',     icon:'📱', title:'Cash via M-Pesa',         desc:'Withdraw KES 50 straight to your M-Pesa.',      cost:500,  kes:50,  type:'mpesa',  cashRedeem:true  },
-  { id:'r-sub',       icon:'🌟', title:'Free Subscription Month', desc:'One free month of SOKONI seller subscription.',  cost:2000, kes:200, type:'sub',    value:'SUBFREE'  },
-  { id:'r-vip',       icon:'👑', title:'VIP Badge',               desc:'Exclusive VIP badge displayed on your profile.', cost:3000, kes:300, type:'badge',  value:'VIP2026'  }
-];
-
-/* ---------- state ---------- */
-var ptsData = loadPoints();
-var streak  = runStreakEngine();
-/* reload after streak engine may have added points */
-ptsData = loadPoints();
-var currentPts = ptsData.total || 0;
-var currentTier = getTier(currentPts);
-
-var redeemed = [];
-try { redeemed = JSON.parse(localStorage.getItem('sokoniRedeemed')) || []; } catch(e) {}
-
-/* ---------- render hero ---------- */
-document.getElementById('lyPtsBig').textContent = currentPts.toLocaleString();
-document.getElementById('lyStreakCount').textContent = streak.count;
-
-(function(){
-  var badge = document.getElementById('lyTierBadge');
-  badge.textContent = currentTier.icon + ' ' + currentTier.name + ' Member';
-  badge.style.background = currentTier.bg;
-  badge.style.border = '1px solid ' + currentTier.border;
-  badge.style.color = currentTier.col;
-
-  var pct = currentTier.max < Infinity
-    ? Math.min(100, Math.round(((currentPts - currentTier.min) / (currentTier.max - currentTier.min + 1)) * 100))
-    : 100;
-  document.getElementById('lyProgressBar').style.width = pct + '%';
-  document.getElementById('lyProgressText').textContent = currentTier.max < Infinity
-    ? (currentTier.max + 1 - currentPts) + ' points to reach ' + TIERS[TIERS.indexOf(currentTier) + 1].name
-    : '🏆 Maximum tier reached!';
-
-  var btn = document.getElementById('lyHeroRedeemBtn');
-  if (currentPts < 500) {
-    btn.disabled = true;
-    btn.textContent = '💳 Need 500 pts to redeem (min KES 50)';
-  }
-})();
-
-/* ---------- quick cash redeem ---------- */
-function lyQuickRedeem() {
-  ptsData = loadPoints();
-  currentPts = ptsData.total || 0;
-  if (currentPts < 500) {
-    (window._skToast||alert)('You need at least 500 points (= KES 50) to redeem for cash.');
-    return;
-  }
-  var redeemPts = Math.floor(currentPts / 500) * 500;
-  var kesAmount  = redeemPts * 0.1;
-
-  if (typeof SokoniPay === 'undefined') {
-    (window._skToast||alert)('SokoniPay is loading. Please try again in a moment.');
-    return;
-  }
-
-  SokoniPay.gateway({
-    title: 'Redeem ' + redeemPts + ' pts',
-    amount: kesAmount,
-    description: 'Loyalty points redemption — ' + redeemPts + ' pts = KES ' + kesAmount,
-    onSuccess: function() {
-      ptsData = loadPoints();
-      ptsData.total = (ptsData.total || 0) - redeemPts;
-      if (!Array.isArray(ptsData.history)) ptsData.history = [];
-      ptsData.history.unshift({
-        points: -redeemPts,
-        description: 'Cash redemption via M-Pesa (KES ' + kesAmount + ')',
-        date: new Date().toLocaleDateString('en-KE', { day:'numeric', month:'short', year:'numeric' }),
-        orderId: 'CASH-REDEEM'
-      });
-      savePoints(ptsData);
-      currentPts = ptsData.total;
-      document.getElementById('lyPtsBig').textContent = currentPts.toLocaleString();
-      showMsg('lyRedeemMsg', 'success', '✅ Redeemed ' + redeemPts + ' pts for KES ' + kesAmount + ' via M-Pesa!');
-      renderRewards();
-    }
-  });
-}
-
-/* ---------- rewards grid ---------- */
-function renderRewards() {
-  ptsData = loadPoints();
-  currentPts = ptsData.total || 0;
-  var grid = document.getElementById('lyRewardsGrid');
-  grid.innerHTML = REWARDS.map(function(r) {
-    var can    = currentPts >= r.cost;
-    var done   = redeemed.includes(r.id);
-    var locked = !can && !done;
-    return '<div class="ly-reward-card ' + (done ? 'unlocked' : locked ? 'locked' : '') + '">'
-      + '<div class="ly-locked-overlay">' + (done ? '✅' : locked ? '🔒' : '') + '</div>'
-      + '<div class="ly-reward-icon">' + r.icon + '</div>'
-      + '<div class="ly-reward-title">' + escapeHTML(r.title) + '</div>'
-      + '<div class="ly-reward-desc">' + escapeHTML(r.desc) + '</div>'
-      + '<div class="ly-reward-cost">' + r.cost + ' pts</div>'
-      + '<div class="ly-reward-kes">≈ KES ' + r.kes + ' value</div>'
-      + '<button type="button" class="ly-redeem-btn ' + (can && !done ? 'can' : 'cant') + '" '
-      + 'onclick="redeemReward(\'' + r.id + '\')" '
-      + (!can || done ? 'disabled' : '') + '>'
-      + (done ? '✅ Redeemed' : 'Redeem — ' + r.cost + ' pts')
-      + '</button>'
-      + '</div>';
-  }).join('');
-}
-
-function redeemReward(id) {
-  var r = REWARDS.find(function(x){ return x.id === id; });
-  if (!r) return;
-  ptsData = loadPoints();
-  currentPts = ptsData.total || 0;
-  if (currentPts < r.cost) { (window._skToast||alert)('Not enough points.'); return; }
-  if (redeemed.includes(r.id)) { (window._skToast||alert)('Already redeemed.'); return; }
-
-  if (r.cashRedeem) {
-    /* Gate cash/M-Pesa redemptions through SokoniPay */
-    if (typeof SokoniPay === 'undefined') {
-      (window._skToast||alert)('SokoniPay is loading. Please try again.');
-      return;
-    }
-    SokoniPay.gateway({
-      title: 'Redeem ' + r.cost + 'pts',
-      amount: r.kes,
-      description: 'Loyalty points redemption: ' + r.title,
-      onSuccess: function() {
-        doRedeem(r);
-        showMsg('lyRedeemMsg', 'success', '✅ ' + escapeHTML(r.title) + ' redeemed! Check your M-Pesa or wallet.');
-      }
-    });
-  } else {
-    doRedeem(r);
-    var msg = '';
-    if (r.type === 'coupon') msg = '🎫 Your coupon code: <strong style="color:#ffc107;font-size:18px;">' + escapeHTML(r.value || '') + '</strong> — enter at checkout.';
-    else if (r.type === 'boost') msg = '📣 Listing boost activated! Your product will be featured for 3 days.';
-    else if (r.type === 'perk')  msg = '🎧 Priority support activated for your next request!';
-    else if (r.type === 'badge') msg = '👑 VIP Badge unlocked! Visit your profile to display it.';
-    else if (r.type === 'sub')   msg = '🌟 Free subscription month activated! Your seller tools are upgraded.';
-    else msg = '✅ ' + escapeHTML(r.title) + ' redeemed successfully.';
-    showMsg('lyRedeemMsg', 'success', msg);
-  }
-}
-
-function doRedeem(r) {
-  ptsData = loadPoints();
-  ptsData.total = (ptsData.total || 0) - r.cost;
-  if (!Array.isArray(ptsData.history)) ptsData.history = [];
-  ptsData.history.unshift({
-    points: -r.cost,
-    description: 'Redeemed: ' + r.title,
-    date: new Date().toLocaleDateString('en-KE', { day:'numeric', month:'short', year:'numeric' }),
-    orderId: 'REDEEM'
-  });
-  savePoints(ptsData);
-  redeemed.push(r.id);
-  localStorage.setItem('sokoniRedeemed', JSON.stringify(redeemed));
-  currentPts = ptsData.total;
-  document.getElementById('lyPtsBig').textContent = currentPts.toLocaleString();
-  renderRewards();
-}
-
-/* ---------- history ---------- */
-function renderHistory() {
-  var el = document.getElementById('lyHistoryList');
-  ptsData = loadPoints();
-  var hist = Array.isArray(ptsData.history) ? ptsData.history : [];
-  if (!hist.length) {
-    el.innerHTML = '<div class="ly-empty">No points history yet. Start earning to see your activity!</div>';
-    return;
-  }
-  el.innerHTML = hist.slice(0, 10).map(function(h) {
-    var plus = h.points > 0;
-    var icon = plus ? '⭐' : '💸';
-    var bg   = plus ? 'rgba(255,193,7,0.1)' : 'rgba(113,255,0,0.08)';
-    return '<div class="ly-history-row">'
-      + '<div class="ly-history-icon" style="background:' + bg + ';">' + icon + '</div>'
-      + '<div class="ly-history-info">'
-      + '<div class="ly-history-desc">' + escapeHTML(h.description || 'Points earned') + '</div>'
-      + '<div class="ly-history-date">' + escapeHTML(h.date || '') + ' · ' + escapeHTML(h.orderId || '') + '</div>'
-      + '</div>'
-      + '<div class="ly-history-pts" style="color:' + (plus ? '#ffc107' : '#71ff00') + ';">'
-      + (plus ? '+' : '') + h.points + ' pts</div>'
-      + '</div>';
-  }).join('');
-}
-
-/* ---------- streak tab ---------- */
-function renderStreak() {
-  var s = loadStreak();
-  document.getElementById('lyStreakTitle').textContent = s.count + '-Day Streak';
-  document.getElementById('lyStreakSub').textContent = s.count > 0
-    ? 'Keep going! Visit tomorrow to extend your streak.'
-    : 'Start your streak today by visiting SOKONI daily!';
-  /* dots: show last 7 days */
-  var dots = document.getElementById('lyStreakDots');
-  var html = '';
-  for (var i = 1; i <= 7; i++) {
-    var done   = i < s.count % 7 + 1 || s.count >= 7;
-    var active = i === (s.count % 7 === 0 ? 7 : s.count % 7);
-    var cls = active ? 'active' : (done && s.count > 0 && i <= s.count % 7 ? 'done' : '');
-    /* simpler logic: fill up to today in the current 7-day cycle */
-    var inCycle = (s.count > 0) && (i <= (s.count % 7 === 0 ? 7 : s.count % 7));
-    html += '<div class="ly-streak-dot ' + (inCycle ? (i === (s.count % 7 === 0 ? 7 : s.count % 7) ? 'active' : 'done') : '') + '">' + i + '</div>';
-  }
-  dots.innerHTML = html;
-}
-
-/* ---------- tiers tab ---------- */
-function renderTiers() {
-  var grid = document.getElementById('lyTierGrid');
-  grid.innerHTML = TIERS.map(function(t) {
-    var isActive = currentTier.name === t.name;
-    return '<div class="ly-tier-card" style="background:' + t.bg + ';border:1px solid ' + t.border + ';">'
-      + '<div class="tc-icon">' + t.icon + '</div>'
-      + '<div class="tc-name" style="color:' + t.col + ';">' + escapeHTML(t.name) + '</div>'
-      + '<div class="tc-range">' + (t.max < Infinity ? t.min.toLocaleString() + ' – ' + t.max.toLocaleString() + ' pts' : t.min.toLocaleString() + '+ pts') + '</div>'
-      + '<div style="font-size:12px;font-weight:800;color:' + t.col + ';margin-bottom:8px;">' + escapeHTML(t.cashback) + '</div>'
-      + '<div class="tc-perks">' + t.perks.map(function(p){ return '• ' + escapeHTML(p); }).join('<br>') + '</div>'
-      + (isActive ? '<div class="ly-tier-active-badge">✓ Your Current Tier</div>' : '')
-      + '</div>';
-  }).join('');
-}
-
-/* ---------- tabs ---------- */
-function lyTab(name, btn) {
-  ['rewards','earn','history','streak','tiers'].forEach(function(n) {
-    var el = document.getElementById('ly-tab-' + n);
-    if (el) el.style.display = n === name ? 'block' : 'none';
-  });
-  document.querySelectorAll('.ly-tab').forEach(function(t){ t.classList.remove('active'); });
-  if (btn) btn.classList.add('active');
-  if (name === 'history') renderHistory();
-  if (name === 'streak')  renderStreak();
-  if (name === 'tiers')   renderTiers();
-}
-
-/* ---------- notification helper ---------- */
-function showMsg(elId, type, html) {
-  var el = document.getElementById(elId);
-  if (!el) return;
-  el.innerHTML = '<div class="ly-notif ly-notif-' + (type === 'success' ? 'success' : 'error') + '">' + html + '</div>';
-  el.scrollIntoView({ behavior: 'smooth' });
-}
-
-/* ---------- initial render ---------- */
-renderRewards();
-
-/* Reconcile with Firestore on load — Firestore wins if it shows LOWER total
-   (catches DevTools manipulation: tampered localStorage is reset to server value) */
-(async function _reconcilePoints(){
-  var fsData = await _loadPointsFirestore();
-  if(!fsData) return; /* no Firestore record yet — first use, trust localStorage */
-  var local  = loadPoints();
-  /* If localStorage claims MORE points than Firestore → reset to Firestore (cheat caught) */
-  if(local.total > fsData.total){
-    localStorage.setItem('sokoniLoyaltyPoints', JSON.stringify(fsData));
-    localStorage.setItem('sokoniPoints', JSON.stringify(fsData));
-    ptsData    = fsData;
-    currentPts = fsData.total;
-    var bigEl  = document.getElementById('lyPtsBig');
-    if(bigEl) bigEl.textContent = currentPts.toLocaleString();
-    renderRewards();
-  }
-})();
-
-/* =====================================================
-   GLOBAL INTEGRATION HOOKS
-   Called by checkout.html, product pages, etc.
-   ===================================================== */
-window.sokoniAddPoints = function(pts, reason) {
-  if (typeof pts !== 'number' || pts <= 0) return;
-  addPointsRaw(Math.round(pts), reason || 'Points earned');
-  /* refresh displayed total if on loyalty page */
-  var el = document.getElementById('lyPtsBig');
-  if (el) { ptsData = loadPoints(); el.textContent = (ptsData.total || 0).toLocaleString(); renderRewards(); }
-};
-
-window.onSokoniPurchase = function(amount) {
-  if (typeof amount !== 'number' || amount <= 0) return;
-  var pts = Math.floor(amount / 10);
-  window.sokoniAddPoints(pts, 'Purchase');
-
-  /* first purchase one-time bonus */
-  var ot = loadOneTime();
-  if (!ot.firstPurchase) {
-    ot.firstPurchase = true;
-    saveOneTime(ot);
-    window.sokoniAddPoints(100, 'First purchase bonus');
-  }
-};
-
-window.onSokoniReferral = function() {
-  window.sokoniAddPoints(100, 'Referral bonus');
-};
-
-window.onSokoniReview = function() {
-  window.sokoniAddPoints(20, 'Review submitted');
-};
-
-window.onSokoniProfileComplete = function() {
-  var ot = loadOneTime();
-  if (!ot.profileComplete) {
-    ot.profileComplete = true;
-    saveOneTime(ot);
-    window.sokoniAddPoints(50, 'Profile complete bonus');
-  }
-};
-
-/* expose helpers for other pages */
-window.lyTab   = lyTab;
-window.redeemReward = redeemReward;
-window.lyQuickRedeem = lyQuickRedeem;
 </script>
 
+<!-- Standard platform scripts (deferred — non-critical) -->
+<script src="sw-register.js" defer></script>
 <script src="seo.js" defer></script>
 <script src="nav-active.js" defer></script>
 <script src="analytics.js" defer></script>
-<script src="sokoni-ui-extras.js" defer></script>
-<script>
-(function(){
-  try{
-    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
-    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
-    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
-  }catch(e){}
-})();
-</script>
-<script type="module" src="sokoni-init.js"></script>
-<script src="sokoni-security.js"></script>
-<script src="sokoni-guards.js"></script>
-<script src="sokoni-audit.js" defer></script>
-<script src="sokoni-social.js" defer></script>
-<script src="sokoni-referral.js" defer></script>
 <script defer src="kass-widget.js"></script>
-  <!-- Enterprise v2.0: payment stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
-  <script defer src="sokoni-payment-engine.js"></script>
-  <script defer src="sokoni-fraud-engine.js"></script>
+
 </body>
 </html>
-

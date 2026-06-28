@@ -8006,3 +8006,42 @@ exports.navCancelStop             = navigation.navCancelStop;
 exports.navAssignTrip             = navigation.navAssignTrip;
 exports.navResolveFleetEvent      = navigation.navResolveFleetEvent;
 exports.navCleanupStaleLocations  = navigation.navCleanupStaleLocations;
+
+/* ── Loyalty & Rewards Engine v1.0 ──────────────────────────────────────── */
+const loyalty = require('./loyalty');
+exports.getLoyaltyAccount         = loyalty.getLoyaltyAccount;
+exports.earnLoyaltyPoints         = loyalty.earnLoyaltyPoints;
+exports.redeemLoyaltyPoints       = loyalty.redeemLoyaltyPoints;
+exports.confirmLoyaltyRedemption  = loyalty.confirmLoyaltyRedemption;
+exports.getLoyaltyHistory         = loyalty.getLoyaltyHistory;
+exports.getLoyaltyTiers           = loyalty.getLoyaltyTiers;
+exports.adminAdjustPoints         = loyalty.adminAdjustPoints;
+exports.getLoyaltyLeaderboard     = loyalty.getLoyaltyLeaderboard;
+
+/* ── Wallet & Seller Payouts v1.0 ────────────────────────────────────────── */
+const wallet = require('./wallet');
+exports.getWalletBalance       = wallet.getWalletBalance;
+exports.initiateWalletTopUp    = wallet.initiateWalletTopUp;
+exports.confirmWalletTopUp     = wallet.confirmWalletTopUp;
+exports.spendFromWallet        = wallet.spendFromWallet;
+exports.getWalletTransactions  = wallet.getWalletTransactions;
+exports.requestSellerPayout    = wallet.requestSellerPayout;
+exports.getPayoutHistory       = wallet.getPayoutHistory;
+exports.adminProcessPayout     = wallet.adminProcessPayout;
+exports.adminGetPendingPayouts = wallet.adminGetPendingPayouts;
+exports.refundToWallet         = wallet.refundToWallet;
+
+/* ── Jobs Marketplace v1.0 ───────────────────────────────────────────────── */
+const jobs = require('./jobs');
+exports.createJob               = jobs.createJob;
+exports.updateJob               = jobs.updateJob;
+exports.closeJob                = jobs.closeJob;
+exports.listJobs                = jobs.listJobs;
+exports.getJob                  = jobs.getJob;
+exports.applyForJob             = jobs.applyForJob;
+exports.getJobApplications      = jobs.getJobApplications;
+exports.updateApplicationStatus = jobs.updateApplicationStatus;
+exports.getMyApplications       = jobs.getMyApplications;
+exports.saveJobSeekerProfile    = jobs.saveJobSeekerProfile;
+exports.getJobSeekerProfile     = jobs.getJobSeekerProfile;
+exports.getFeaturedJobs         = jobs.getFeaturedJobs;

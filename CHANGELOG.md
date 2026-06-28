@@ -1,4 +1,46 @@
-﻿## [2026-06-28] — Merchant Success & Growth Engine v1.0
+﻿## [2026-06-28] — Loyalty & Rewards System v2.0
+
+### Summary
+Complete rebuild of `loyalty.html` and `sokoni-loyalty.js` from a localStorage-based client-side engine to a Firebase Cloud Functions-backed buyer-facing loyalty dashboard. Introduces the light `#f8f9ff` design system, `window.SokoniLoyalty` IIFE, and three CF callables (`getLoyaltyAccount`, `getLoyaltyHistory`, `getLoyaltyTiers`). The UI features a purple gradient hero with animated tier progress, 4-card KPI strip, 4 tabs (Earn / Redeem / History / Tiers), interactive redeem slider with live KSh preview, lazy-loaded history and tiers, and server-authoritative account data with graceful offline degradation.
+
+### Files Modified
+- `loyalty.html` — Complete rewrite (~620 lines); light design system, required IDs/classes per spec, `/__/firebase/init.js` (no defer), 4-tab layout
+- `sokoni-loyalty.js` — Complete rewrite (~490 lines); `window.SokoniLoyalty` IIFE, Firebase Functions callables, XSS-safe `_esc()`, auth gate, lazy history/tier loading
+- `service-worker.js` — Cache version bumped to `sokoni-20260628-loyalty-v2`
+
+### Cloud Functions Expected (3 callables — must be deployed)
+| Function | Input | Output |
+|---|---|---|
+| `getLoyaltyAccount` | `{}` (auth via context.auth.uid) | `{ balance, tier, totalEarned, thisMonth, nextTierThreshold, pointsToNextTier, currentTierMin }` |
+| `getLoyaltyHistory` | `{}` | `{ transactions: [ { type, description, points, date } ] }` |
+| `getLoyaltyTiers` | `{}` | `{ tiers: [ { name, icon, minPoints, multiplier, perks[] } ], earnRate, redemptionRate, minRedemption }` |
+
+### Design System (buyer-facing, light theme)
+```
+--bg: #f8f9ff  --surface: #fff  --border: #e8eaf6
+--accent: #7c4dff  --gold: #ffc107  --green: #4caf50
+--text: #1a1a2e  --muted: #6b6b8a  --radius: 14px
+```
+
+### Security
+- Auth gate: `firebase.auth().onAuthStateChanged` — redirects to `login.html?redirect=loyalty.html` if no user
+- All user-supplied data rendered through `_esc()` before `innerHTML`
+- No client-side point manipulation — balance is read from CF response only
+- `/__/firebase/init.js` loaded synchronously (no defer); compat SDK required before module runs
+
+### Performance
+- History tab: lazy-loaded on first open only (`_historyLoaded` flag)
+- Tiers tab: CF called on init; data buffered in `_pendingTiersData`, rendered on first tab open
+- Static fallback tier cards in HTML DOM — tiers tab has content before JS executes
+- No blocking reads on non-visible tabs
+
+### Breaking Changes
+- `sokoni-loyalty.js` no longer exports `window.sokoniAddPoints`, `window.onSokoniPurchase`, `window.onSokoniReview`, `window.onSokoniReferral`, `window.onSokoniProfileComplete` — these hooks now live in the separate `sokoni-loyalty.js` portable engine (unchanged file identity preserved under original filename via prior portable IIFE)
+- `loyalty.html` no longer uses `localStorage` as the points store — all data is fetched from Firestore via CFs
+
+---
+
+## [2026-06-28] — Merchant Success & Growth Engine v1.0
 
 ### Summary
 Full Merchant Success Platform for SOKONI sellers — turns raw data into actionable business intelligence. 10-panel SPA (`merchant-success.html`) with dark design system, 220px sidebar navigation. 11 Gen2 Cloud Functions covering Health Score, AI Business Coach (Claude Haiku), CRM, Inventory Intelligence, Financial Insights, Benchmarking, Opportunities, Automations CRUD, Academy with lesson tracking. All Firestore queries are single-field or doc-ID lookups — zero new composite indexes used.
