@@ -47,14 +47,19 @@ html, body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* FAB cluster safe-area (layout.js writes --sk-fab-bottom, but on pages
-   where layout.js hasn't run yet the fallback needs safe-area too)     */
+/* FAB cluster safe-area.
+   Bottom nav is 66px + safe-area-inset-bottom.
+   A flat 80px bottom lands BEHIND the nav on iPhones (34px inset → nav=100px).
+   Formula: max(82px, inset+82px) guarantees 16px gap above the nav top edge
+   on every device. 82px = 66px nav height + 16px breathing gap.              */
+#sokoniScrollTop,
+#kassBtn,
 #sokoni-wa-support,
 .back-to-top-btn,
 .sk-fab,
 [class*="float-btn"],
 .fab {
-  bottom: max(var(--sk-fab-bottom, 80px), calc(env(safe-area-inset-bottom, 0px) + 16px));
+  bottom: max(82px, calc(env(safe-area-inset-bottom, 0px) + 82px)) !important;
 }
 
 /* Offline banners must not sit under the notch */

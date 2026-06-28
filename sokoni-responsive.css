@@ -1,0 +1,718 @@
+/* ============================================================
+   SOKONI RESPONSIVE v2.0 — Platform UI/UX Overhaul
+   Injected globally on every page via shared-header.js.
+
+   1.  Design token corrections
+   2.  Safe-area / FAB positioning (iOS critical fix)
+   3.  Fluid typography
+   4.  Universal card system
+   5.  Touch targets & button system
+   6.  Input system
+   7.  Grid & layout improvements
+   8.  Navigation scroll fixes
+   9.  Modal / bottom-sheet
+  10.  Table responsiveness
+  11.  Image system
+  12.  Skeleton loading
+  13.  Accessibility (focus, reduced-motion)
+  14.  Performance (layer hints, containment)
+  15.  Page-specific fixes
+  16.  Print styles
+   ============================================================ */
+
+/* ── 1. DESIGN TOKEN CORRECTIONS ──────────────────────────────── */
+:root {
+  /* Actual top-nav is 64px — override stale 56px token */
+  --sk-header-h: 64px;
+
+  /* Safe-area values */
+  --sk-safe-top:    env(safe-area-inset-top,    0px);
+  --sk-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --sk-safe-left:   env(safe-area-inset-left,   0px);
+  --sk-safe-right:  env(safe-area-inset-right,  0px);
+
+  /*
+   * FAB clearance: bottom-nav is 66px min-height + safe-area-inset-bottom.
+   * Buttons at a flat 80px will be hidden behind the nav on iPhones
+   * with 34px home-indicator inset (nav top = 100px, button = 80px).
+   * Formula: max(82px, inset + 82px) guarantees 16px gap above nav on
+   * every device (82px = 66px nav + 16px gap).
+   */
+  --sk-fab-clear: max(82px, calc(env(safe-area-inset-bottom, 0px) + 82px));
+
+  /* Premium design tokens */
+  --sk-r-card:    18px;
+  --sk-r-btn:     12px;
+  --sk-r-input:   12px;
+  --sk-r-chip:    20px;
+  --sk-r-modal:   24px;
+
+  --sk-shadow-card: 0 2px 16px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.04) inset;
+  --sk-shadow-lift: 0 10px 36px rgba(0,0,0,0.48), 0 0 0 1px rgba(113,255,0,0.14);
+  --sk-shadow-btn:  0 4px 18px rgba(113,255,0,0.28);
+
+  --sk-ease-card: cubic-bezier(0.0, 0.0, 0.2, 1);
+  --sk-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Fluid type scale */
+  --sk-text-xl:   clamp(22px, 5vw, 40px);
+  --sk-text-lg:   clamp(18px, 4.5vw, 28px);
+  --sk-text-md:   clamp(15px, 3.8vw, 20px);
+  --sk-text-base: clamp(13px, 3.5vw, 15px);
+  --sk-text-sm:   clamp(11px, 3vw,   13px);
+  --sk-text-xs:   clamp(10px, 2.5vw, 11px);
+}
+
+/* ── 2. FLOATING ACTION BUTTONS — CRITICAL iOS FIX ────────────────
+   These selectors cover every FAB the platform injects.
+   The !important beats the hardcoded inline bottom:80px.            */
+#sokoniScrollTop,
+#kassBtn,
+#sokoni-wa-support,
+.back-to-top-btn,
+.sk-fab,
+[class*="float-btn"],
+.fab {
+  bottom: var(--sk-fab-clear) !important;
+}
+
+/* KASS modal must float above its own trigger button */
+#kassModal {
+  bottom: calc(var(--sk-fab-clear) + 76px) !important;
+}
+
+/* ── 3. BODY — BASE IMPROVEMENTS ─────────────────────────────────── */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  /* Use dynamic viewport height — adapts to mobile browser chrome */
+}
+
+/* Use dynamic viewport units where supported */
+@supports (min-height: 100dvh) {
+  .full-screen,
+  .full-height { min-height: 100dvh; }
+}
+
+/* Disable tap highlight universally (already set per-component but belt+suspenders) */
+*, *::before, *::after {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── 4. FLUID TYPOGRAPHY ──────────────────────────────────────────── */
+/* Hero and page-level headings */
+.hero-text h2,
+[class*="hero"] h1,
+[class*="banner"] h1,
+[class*="banner"] h2,
+.splash-title,
+.page-title {
+  font-size: var(--sk-text-xl);
+  line-height: 1.15;
+}
+
+/* Section titles */
+.section-title h2,
+.section-title h3,
+[class*="section-head"] h2 {
+  font-size: var(--sk-text-lg);
+}
+
+/* Card and list item titles */
+.product-card h3,
+.hub-card h3,
+[class*="-card"] h4,
+[class*="-card"] .card-title,
+.list-item-title {
+  line-height: 1.3;
+}
+
+/* Body text readability */
+.description,
+.product-desc,
+.bio-text,
+.about-text,
+[class*="-desc"] {
+  line-height: 1.65;
+}
+
+/* ── 5. CARD SYSTEM — CONSISTENCY & HOVER ─────────────────────────── */
+/* Apply consistent shadow to all cards */
+.product-card,
+.hub-card,
+.pv-card,
+.job-card,
+.course-card,
+.event-card {
+  box-shadow: var(--sk-shadow-card);
+  transition: transform 0.22s var(--sk-ease-card),
+              box-shadow 0.22s var(--sk-ease-card);
+}
+
+/* Desktop hover lift — only on true pointer devices to avoid sticky hover on mobile */
+@media (hover: hover) and (pointer: fine) {
+  .product-card:hover,
+  .hub-card:hover,
+  .pv-card:hover,
+  .job-card:hover,
+  .course-card:hover,
+  .event-card:hover {
+    transform: translateY(-5px) !important;
+    box-shadow: var(--sk-shadow-lift) !important;
+  }
+}
+
+/* Card active state on touch devices */
+.product-card:active,
+.hub-card:active,
+.pv-card:active,
+.job-card:active {
+  transform: scale(0.98);
+}
+
+/* Card images maintain correct aspect ratio */
+.product-card img,
+[class*="-card"] > img,
+.card-img {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+}
+
+/* ── 6. BUTTON SYSTEM — TOUCH TARGETS ─────────────────────────────── */
+/* Primary action buttons get adequate touch target (WCAG 2.5.5) */
+.pv-book-btn,
+.checkout-btn,
+.add-to-cart-btn,
+.buy-btn,
+[class*="cta-btn"],
+[class*="action-btn"],
+.sk-btn {
+  min-height: 44px;
+  border-radius: var(--sk-r-btn);
+  transition: transform 0.1s var(--sk-spring), opacity 0.15s ease, filter 0.15s ease;
+  cursor: pointer;
+}
+
+/* Press feedback for all buttons */
+button:active,
+.btn:active,
+.pv-book-btn:active,
+[class*="cta-btn"]:active,
+.sk-btn:active {
+  transform: scale(0.96) !important;
+  filter: brightness(0.95);
+}
+
+/* Primary green button consistency */
+.pv-book-btn,
+.checkout-btn,
+.sk-btn--primary {
+  box-shadow: var(--sk-shadow-btn);
+}
+.pv-book-btn:hover,
+.checkout-btn:hover,
+.sk-btn--primary:hover {
+  filter: brightness(1.08);
+}
+
+/* Bottom nav items need adequate tap area */
+.bnav-item,
+.bottom-nav a,
+.bottom-nav button {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+/* ── 7. INPUT SYSTEM ──────────────────────────────────────────────── */
+/* Prevent iOS auto-zoom on input focus (font-size must be ≥16px) */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="search"],
+  input[type="url"],
+  input[type="date"],
+  input[type="time"],
+  select,
+  textarea {
+    font-size: max(16px, 1rem) !important;
+  }
+}
+
+/* Consistent focus ring across all inputs */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgba(113,255,0,0.5) !important;
+  box-shadow: 0 0 0 3px rgba(113,255,0,0.12) !important;
+}
+
+/* Two-column form grids collapse on small phones */
+@media (max-width: 520px) {
+  [style*="grid-template-columns: 1fr 1fr"],
+  [style*="grid-template-columns:1fr 1fr"],
+  .two-col-form,
+  .input-row-2 {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── 8. GRID SYSTEM — RESPONSIVE IMPROVEMENTS ─────────────────────── */
+/* Products: 2-column on small phones, use available width efficiently */
+@media (max-width: 420px) {
+  .products-grid,
+  #productsContainer,
+  .new-arrivals-grid,
+  .ptrend-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}
+
+/* Reduce gap in service/provider grids on small phones */
+@media (max-width: 360px) {
+  .sv-grid,
+  #providersGrid {
+    gap: 8px !important;
+  }
+
+  /* Stats grids: 2 columns max */
+  [class*="-stats"],
+  [class*="stats-grid"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Ensure grid items never overflow their containers */
+.products-grid > *,
+.sv-grid > *,
+.cat-grid > *,
+[class*="-grid"] > * {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── 9. HORIZONTAL SCROLL CONTAINERS ─────────────────────────────── */
+/* ALL intentional horizontal-scroll sections */
+.h-scroll-wrap,
+.hscroll-track,
+.stories-row,
+.categories-row,
+.pills-row,
+[class*="h-scroll"],
+[class*="hscroll"],
+.sv-cats-inner,
+.tabs-inner {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.h-scroll-wrap::-webkit-scrollbar,
+.hscroll-track::-webkit-scrollbar,
+[class*="h-scroll"]::-webkit-scrollbar,
+[class*="hscroll"]::-webkit-scrollbar { display: none; }
+
+/* Items in these containers don't shrink */
+.h-scroll-wrap > *,
+.hscroll-track > *,
+.stories-row > *,
+[class*="hscroll"] > * {
+  flex-shrink: 0;
+  scroll-snap-align: start;
+}
+
+/* Category/filter bars */
+.sv-cats,
+.sv-cats-bar,
+.cat-nav-pills,
+[class*="-filters"],
+[class*="-tabs-row"],
+.filter-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.sv-cats::-webkit-scrollbar,
+.sv-cats-bar::-webkit-scrollbar,
+[class*="-filters"]::-webkit-scrollbar { display: none; }
+
+/* ── 10. NAVIGATION — STICKY CLEARANCE ────────────────────────────── */
+/* Sticky elements must clear the fixed top nav */
+[class*="-sticky"],
+.sticky-bar,
+.sticky-header {
+  top: calc(var(--sk-header-h) + var(--sk-safe-top));
+}
+
+/* ── 11. MODAL / BOTTOM-SHEET ─────────────────────────────────────── */
+/* Modals become bottom-sheets on narrow phones */
+@media (max-width: 480px) {
+  .modal-box,
+  .mpesa-modal-box,
+  .card-modal-box,
+  [class*="modal-box"]:not([class*="full"]) {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: 24px 24px 0 0 !important;
+    padding-bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px)) !important;
+    transform: none !important;
+    max-height: 90dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ── 12. TABLE RESPONSIVENESS ─────────────────────────────────────── */
+/* Horizontal-scroll wrapper for data tables */
+.table-responsive,
+.data-table-wrap,
+[class*="table-wrap"] {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+}
+
+/* Tables contained in wrappers are displayed normally */
+.table-responsive table,
+.data-table-wrap table {
+  display: table;
+  min-width: 600px; /* ensures table has room to breathe */
+}
+
+/* ── 13. IMAGE SYSTEM ─────────────────────────────────────────────── */
+/* Prevent ALL images from overflowing */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Cover images (banners, heroes) */
+.hero-img,
+.banner-img,
+.cover-img,
+[class*="hero-image"],
+[class*="cover-image"] {
+  width: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Avatars preserve aspect ratio */
+.avatar,
+[class*="-avatar"],
+.pv-avatar {
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+/* ── 14. SKELETON LOADING — CONSISTENT SHIMMER ─────────────────────── */
+@keyframes sk-shimmer {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+.skeleton,
+[class*="skeleton"],
+[class*="-skeleton"] {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(255,255,255,0.09) 50%,
+    rgba(255,255,255,0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.5s ease infinite;
+  border-radius: 8px;
+}
+
+/* ── 15. ACCESSIBILITY ─────────────────────────────────────────────── */
+/* High-visibility focus rings for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #71ff00 !important;
+  outline-offset: 3px !important;
+  border-radius: 4px !important;
+}
+
+/* Remove focus ring when using pointer */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Ensure sufficient color contrast for muted text */
+/* (Boost: rgba(255,255,255,0.25) is too low contrast on dark bg) */
+.muted-text,
+[class*="text-muted"],
+[class*="text-secondary"] {
+  color: rgba(255,255,255,0.55) !important;
+}
+
+/* ── 16. ANIMATION PERFORMANCE ─────────────────────────────────────── */
+/* Respect OS reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Layer GPU for elements that animate frequently */
+#sokoniScrollTop,
+#kassBtn,
+#sokoni-wa-support,
+[class*="modal"],
+[class*="drawer"],
+[class*="toast"] {
+  will-change: transform, opacity;
+}
+
+/* Promote scroll containers to compositor layers */
+.h-scroll-wrap,
+.hscroll-track,
+[class*="hscroll"],
+.chat-messages,
+[class*="messages-list"] {
+  will-change: scroll-position;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* ── 17. PAGE-SPECIFIC FIXES ─────────────────────────────────────────
+
+   ── CHECKOUT ────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .checkout-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+  .order-summary-box {
+    position: relative !important;
+    top: 0 !important;
+  }
+}
+@media (max-width: 480px) {
+  .co-input-row,
+  .card-row {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+}
+
+/* ── PROFILE ─────────────────────────────────────────────────────── */
+.up-bio {
+  /* Was max-width:420px — overflows 360px viewport. Use min() to cap safely. */
+  max-width: min(420px, calc(100% - 28px)) !important;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* ── SELLER DASHBOARD ─────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .so-branch-label {
+    max-width: calc(100% - 130px) !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* ── SERVICES ─────────────────────────────────────────────────────── */
+@media (max-width: 360px) {
+  .sv-grid {
+    gap: 8px !important;
+  }
+}
+
+/* Provider card footer — stack vertically (already in services.html but
+   global rule ensures consistency on any page using .pv-foot)          */
+.pv-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pv-book-btn {
+  width: 100%;
+}
+
+/* ── MESSAGES / CHAT ──────────────────────────────────────────────── */
+.chat-messages,
+[class*="chat-body"],
+[class*="messages-body"],
+[class*="message-list"] {
+  overflow-x: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Prevent message bubbles from exceeding viewport */
+.message-bubble,
+[class*="msg-bubble"],
+[class*="chat-bubble"] {
+  max-width: min(340px, 85%) !important;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* ── WALLET / FINOS / FINANCIAL PAGES ────────────────────────────── */
+@media (max-width: 600px) {
+  .wallet-grid,
+  .finos-grid,
+  .fin-summary-grid,
+  [class*="wallet-grid"],
+  [class*="finos-grid"],
+  [class*="finance-grid"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── ORDERS / BOOKINGS TABLES ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  .orders-table-wrap,
+  .bookings-table,
+  [class*="orders-table"] {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+}
+
+/* ── VENDOR/ADMIN SIDEBARS ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-sidebar,
+  .seller-sidebar,
+  [class*="-sidebar"]:not([class*="mini"]) {
+    width: 100% !important;
+    position: relative !important;
+    height: auto !important;
+  }
+}
+
+/* ── STAT CARDS (seller-analytics, dashboard) ─────────────────────── */
+@media (max-width: 480px) {
+  [class*="stats-row"],
+  [class*="stats-grid"],
+  .kpi-row,
+  .metrics-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+}
+@media (max-width: 360px) {
+  [class*="stats-row"],
+  [class*="stats-grid"],
+  .kpi-row {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── FIXED-WIDTH ELEMENTS THAT OVERFLOW MOBILE ────────────────────── */
+/* Any element where inline width might exceed viewport */
+[style*="width: 400px"],
+[style*="width: 450px"],
+[style*="width: 500px"],
+[style*="min-width: 400px"],
+[style*="min-width: 450px"] {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* ── 18. OFFLINE BAR SAFE-AREA ─────────────────────────────────────── */
+#sk-offline-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: max(8px, var(--sk-safe-top));
+  padding-left: max(16px, var(--sk-safe-left));
+  padding-right: max(16px, var(--sk-safe-right));
+}
+
+/* ── 19. BOTTOM NAV — SAFE-AREA IMPROVEMENTS ─────────────────────── */
+.bottom-nav {
+  padding-left:  max(0px, var(--sk-safe-left)) !important;
+  padding-right: max(0px, var(--sk-safe-right)) !important;
+}
+
+/* ── 20. GLOBAL OVERFLOW SAFETY NET ─────────────────────────────────
+   Belt-and-suspenders: catch any element with a hardcoded vw/px width
+   that would cause horizontal overflow.                               */
+html, body {
+  overflow-x: clip; /* clip is better than hidden — doesn't create scroll container */
+  max-width: 100%;
+}
+
+/* Prevent absolutely/fixed positioned elements from causing overflow */
+[style*="position: fixed"]:not([style*="width: auto"]),
+[style*="position:fixed"]:not([style*="width: auto"]) {
+  max-width: 100vw;
+  box-sizing: border-box;
+}
+
+/* ── 21. PRINT STYLES ──────────────────────────────────────────────── */
+@media print {
+  .bottom-nav,
+  #kassBtn,
+  #kassModal,
+  #sokoni-wa-support,
+  #sokoniScrollTop,
+  #sk-offline-bar,
+  .sk-fab,
+  [class*="cookie-banner"],
+  [class*="install-prompt"],
+  [class*="install-banner"],
+  sw-install-prompt {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 11pt;
+  }
+
+  a {
+    color: #000;
+    text-decoration: underline;
+  }
+
+  h1, h2, h3 {
+    page-break-after: avoid;
+    color: #000 !important;
+  }
+
+  @page {
+    margin: 18mm 14mm;
+  }
+}

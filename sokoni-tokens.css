@@ -205,7 +205,7 @@
   --sk-safe-right:  env(safe-area-inset-right,  0px);
 
   /* Component dimensions (updated by Layout Manager) */
-  --sk-header-h:     56px;
+  --sk-header-h:     64px;
   --sk-bottom-nav-h: 0px;    /* set to 60px on pages with bottom nav */
   --sk-tab-bar-h:    0px;    /* set per page */
 

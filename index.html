@@ -366,36 +366,7 @@
     <span id="networkToastText">Back online</span>
   </div>
 
-  <!-- Persistent offline banner — hidden by default, shown only on genuine connectivity loss -->
-  <div id="sk-offline-banner" role="status" aria-live="polite" aria-atomic="true">
-    <span aria-hidden="true">📵</span>
-    <span>No internet connection — browsing cached content</span>
-  </div>
-  <style>
-    #sk-offline-banner {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 10000;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 10px 16px;
-      background: linear-gradient(90deg, #1a0808, #2a1010, #1a0808);
-      border-bottom: 2px solid rgba(239,68,68,0.65);
-      color: #fff;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.01em;
-      text-align: center;
-      box-shadow: 0 2px 16px rgba(0,0,0,0.5);
-    }
-    #sk-offline-banner.sk-offline-visible {
-      display: flex;
-    }
-  </style>
+  <!-- offline banner managed by sokoni-ui.js (#sk-offline-bar) — no static element needed -->
 
   <!-- ── SOKONI Shared Navigation ────────────────────────────────────────────
        Static HTML ensures zero-flash render before shared-header.js runs.
@@ -3202,14 +3173,7 @@
   </div>
 
 
-  <!-- Scroll-to-top: static element ensures it's always in the DOM;
-       scroll-top.js (defer) reuses this element and wires the visibility logic. -->
-  <button id="sokoniScrollTop" aria-label="Back to top" title="Back to top" style="position:fixed;bottom:80px;left:14px;right:auto;z-index:9989;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(113,255,0,0.42),0 1px 4px rgba(0,0,0,0.4);opacity:0;pointer-events:none;transform:scale(0.65) translateY(8px);transition:opacity 0.25s ease,transform 0.25s cubic-bezier(0.34,1.56,0.64,1);-webkit-tap-highlight-color:transparent;touch-action:manipulation;" onclick="window.scrollTo({top:0,behavior:'smooth'})">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#000" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"></polyline></svg>
-  </button>
-  <style>
-    #sokoniScrollTop.visible { opacity:1 !important; pointer-events:all !important; transform:scale(1) translateY(0) !important; }
-  </style>
+  <!-- scroll-top.js (defer) creates #sokoniScrollTop dynamically — no static element needed -->
   <script src="scroll-memory.js" defer></script>
   <script src="scroll-top.js" defer></script>
   <script src="nav-active.js" defer></script>
@@ -3329,82 +3293,7 @@
         setTimeout(function () { toast.classList.remove("show"); }, 3500);
       }
 
-      /* -- Reliable offline detection --
-         Strategy:
-           1. Browser offline/online events are supplementary signals only.
-           2. Real connectivity is verified by a HEAD fetch to an external endpoint
-              (gstatic.com/generate_204) that the SW has no cached version of.
-              mode:'no-cors' gives an opaque response (type='opaque') on success,
-              or rejects with TypeError on genuine network failure.
-           3. Require 3 consecutive fetch failures before showing the banner.
-           4. Hide the banner immediately on the first successful check.
-           5. 5-second grace period after page load ignores early events.
-      */
-      (function () {
-        var _banner      = document.getElementById("sk-offline-banner");
-        var _pageLoadTs  = Date.now();
-        var _failCount   = 0;
-        var _isOffline   = false;
-        var _checkTimer  = null;
-        var _THRESHOLD   = 3;
-        var _INTERVAL    = 15000; /* check every 15 s */
-        var _PROBE_URL   = "https://www.gstatic.com/generate_204";
-
-        function _showBanner() {
-          if (_isOffline || !_banner) return;
-          _isOffline = true;
-          _banner.classList.add("sk-offline-visible");
-        }
-
-        function _hideBanner() {
-          _failCount = 0;
-          if (!_isOffline || !_banner) return;
-          _isOffline = false;
-          _banner.classList.remove("sk-offline-visible");
-          showNetworkToast(true);
-        }
-
-        function _check() {
-          if (Date.now() - _pageLoadTs < 5000) return; /* grace period */
-          var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-          var tId  = ctrl ? setTimeout(function () { ctrl.abort(); }, 5000) : null;
-          fetch(_PROBE_URL, {
-            method: "HEAD",
-            mode: "no-cors",
-            cache: "no-store",
-            signal: ctrl ? ctrl.signal : undefined
-          }).then(function () {
-            if (tId) clearTimeout(tId);
-            _hideBanner(); /* resolved → online */
-          }).catch(function () {
-            if (tId) clearTimeout(tId);
-            _failCount++;
-            if (_failCount >= _THRESHOLD) _showBanner();
-          });
-        }
-
-        /* Periodic polling */
-        window.addEventListener("load", function () {
-          _checkTimer = setInterval(_check, _INTERVAL);
-        });
-
-        /* Browser offline event → accelerate failure count + immediate check */
-        window.addEventListener("offline", function () {
-          if (Date.now() - _pageLoadTs < 5000) return;
-          _failCount++;
-          if (_failCount >= _THRESHOLD) {
-            _showBanner();
-          } else {
-            /* Run a probe after a short debounce to confirm */
-            setTimeout(_check, 2000);
-          }
-        });
-
-        /* Browser online event → probe immediately to confirm */
-        window.addEventListener("online", function () {
-          setTimeout(_check, 500);
-        });
-      }());
+      /* offline banner managed exclusively by sokoni-ui.js (#sk-offline-bar) */
 
       /* -- Pull-to-refresh visual -- */
       var ptr = document.getElementById("pullRefreshIndicator");

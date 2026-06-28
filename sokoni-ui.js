@@ -628,7 +628,12 @@
     _injectStyles('sk-offline-styles', _OFFLINE_CSS);
     var bar = document.createElement('div');
     bar.id = 'sk-offline-bar';
-    bar.textContent = '📡 No internet connection — some features may not work';
+    bar.innerHTML = '<span style="flex:1;">📡 No internet connection — some features may not work</span>'
+      + '<button onclick="document.getElementById(\'sk-offline-bar\').classList.remove(\'sk-offline--visible\')" '
+      + 'style="background:none;border:none;color:inherit;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;opacity:.7;flex-shrink:0;" '
+      + 'aria-label="Dismiss">×</button>';
+    bar.style.display = 'flex';
+    bar.style.alignItems = 'center';
     document.body.insertBefore(bar, document.body.firstChild);
 
     /* ── State ─────────────────────────────────────────── */
@@ -637,6 +642,7 @@
     var _probing    = false;      /* probe fetch in-flight?       */
     var _probeTimer = null;       /* handle for next scheduled probe */
     var _bootTime   = Date.now(); /* used to suppress false positives during SW install */
+    var _GRACE_MS   = 15000;     /* 15 s grace — covers slow-network SW install on mobile */
 
     /* ── Probe ─────────────────────────────────────────────────────────────
        Two-stage:
@@ -647,8 +653,12 @@
        AbortController timeout on each stage prevents hung probes.
     ─────────────────────────────────────────────────────────────────────── */
     function _doProbe() {
+      /* navigator.onLine false → skip fetch, report offline immediately */
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return Promise.resolve(false);
+      }
       var c1 = new AbortController();
-      var t1 = setTimeout(function() { c1.abort(); }, 4000);
+      var t1 = setTimeout(function() { c1.abort(); }, 6000); /* 6 s — generous for mobile */
       return fetch('https://www.gstatic.com/generate_204', {
         mode: 'no-cors', cache: 'no-store', signal: c1.signal,
       }).then(function() {
@@ -656,8 +666,10 @@
         return true;
       }).catch(function() {
         clearTimeout(t1);
+        /* navigator.onLine true = network exists; treat gstatic block as "online" */
+        if (typeof navigator !== 'undefined' && navigator.onLine === true) return true;
         var c2 = new AbortController();
-        var t2 = setTimeout(function() { c2.abort(); }, 3000);
+        var t2 = setTimeout(function() { c2.abort(); }, 4000);
         return fetch('/manifest.json?_nc=' + Date.now(), {
           method: 'HEAD', cache: 'no-store', signal: c2.signal,
         }).then(function() { clearTimeout(t2); return true;  })
@@ -690,8 +702,8 @@
     }
 
     function _setBar(visible) {
-      /* Suppress banner during first 9 s — avoids SW-install false positives */
-      if (visible && (Date.now() - _bootTime) < 9000) return;
+      /* Suppress banner during grace period — avoids SW-install false positives on mobile */
+      if (visible && (Date.now() - _bootTime) < _GRACE_MS) return;
       if (_showing === visible) return;
       _showing = visible;
       bar.classList.toggle('sk-offline--visible', visible);
@@ -712,8 +724,8 @@
     /* Delay offline-event probe by 1.5 s — browser may fire spurious offline events */
     global.addEventListener('offline', function() { setTimeout(_probe, 1500); });
 
-    /* First probe: 5 s delay so SW finishes installing before we hit the network */
-    setTimeout(_probe, 5000);
+    /* First probe: 15 s delay so SW finishes installing before we hit the network */
+    setTimeout(_probe, 15000);
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
