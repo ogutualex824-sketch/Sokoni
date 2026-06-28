@@ -7066,6 +7066,11 @@ exports.inventoryGetTransfers             = inventoryV2.inventoryGetTransfers;
 exports.inventoryScoreSupplier            = inventoryV2.inventoryScoreSupplier;
 exports.inventoryFlushSyncQueue           = inventoryV2.inventoryFlushSyncQueue;
 exports.inventoryGetAuditLog              = inventoryV2.inventoryGetAuditLog;
+exports.inventoryUpdateAVCO              = inventoryV2.inventoryUpdateAVCO;
+exports.inventoryGetAVCO                 = inventoryV2.inventoryGetAVCO;
+exports.inventoryDeductAVCO              = inventoryV2.inventoryDeductAVCO;
+exports.inventoryGetAVCOHistory          = inventoryV2.inventoryGetAVCOHistory;
+exports.inventoryGetCOGSReport           = inventoryV2.inventoryGetCOGSReport;
 
 /* ── Media Engine — AI Creative Studio ── */
 const mediaEngine = require("./media-engine");
@@ -8305,12 +8310,12 @@ exports.updateSerialStatus         = posInventoryPro.updateSerialStatus;
 exports.createWarehouse            = posInventoryPro.createWarehouse;
 exports.getWarehouses              = posInventoryPro.getWarehouses;
 exports.transferWarehouseStock     = posInventoryPro.transferWarehouseStock;
-/* Purchase Orders */
-exports.createPurchaseOrder        = posInventoryPro.createPurchaseOrder;
-exports.receivePurchaseOrder       = posInventoryPro.receivePurchaseOrder;
-exports.updatePurchaseOrderStatus  = posInventoryPro.updatePurchaseOrderStatus;
-exports.getPurchaseOrders          = posInventoryPro.getPurchaseOrders;
-/* Suppliers */
+/* Purchase Orders (POS-native, legacy — enterprise procurement is in procurement.js) */
+exports.posCreatePurchaseOrder     = posInventoryPro.createPurchaseOrder;
+exports.posReceivePurchaseOrder    = posInventoryPro.receivePurchaseOrder;
+exports.posUpdatePOStatus          = posInventoryPro.updatePurchaseOrderStatus;
+exports.posGetPurchaseOrders       = posInventoryPro.getPurchaseOrders;
+/* Suppliers (POS-native) */
 exports.upsertSupplier             = posInventoryPro.upsertSupplier;
 exports.getSuppliers               = posInventoryPro.getSuppliers;
 exports.deleteSupplier             = posInventoryPro.deleteSupplier;
@@ -8668,6 +8673,8 @@ exports.testSecretAccess             = drModule.testSecretAccess;
 exports.generateDRReport             = drModule.generateDRReport;
 exports.runRecoveryPlaybook          = drModule.runRecoveryPlaybook;
 exports.getDRHistory                 = drModule.getDRHistory;
+exports.runWeeklyChaosTest           = drModule.runWeeklyChaosTest;
+exports.getChaosTestReports          = drModule.getChaosTestReports;
 
 /* ── B2B / Wholesale Commerce v1.0 ─────────────────────────────────────── */
 const b2bWholesale = require('./b2b-wholesale');
@@ -8794,6 +8801,20 @@ exports.getProviderConsultations = legalHub.getProviderConsultations;
 exports.updateConsultationStatus = legalHub.updateConsultationStatus;
 exports.rateLegalProvider        = legalHub.rateLegalProvider;
 
+/* ── Procurement Engine v1.0 ────────────────────────────────────────────── */
+const procurement = require('./procurement');
+exports.addSupplier                      = procurement.addSupplier;
+exports.createPurchaseOrder              = procurement.createPurchaseOrder;
+exports.approvePurchaseOrder             = procurement.approvePurchaseOrder;
+exports.sendPurchaseOrder                = procurement.sendPurchaseOrder;
+exports.receiveGoods                     = procurement.receiveGoods;
+exports.createSupplierInvoice            = procurement.createSupplierInvoice;
+exports.approveAndPayInvoice             = procurement.approveAndPayInvoice;
+exports.getSupplierPerformance           = procurement.getSupplierPerformance;
+exports.getProcurementForecast           = procurement.getProcurementForecast;
+exports.getProcurementDashboard          = procurement.getProcurementDashboard;
+exports.scheduledVendorPerformanceUpdate = procurement.scheduledVendorPerformanceUpdate;
+
 /* ── Entertainment Hub v1.0 ─────────────────────────────────────────────── */
 const entertainmentHub = require('./entertainment-hub');
 exports.createEntertainmentListing  = entertainmentHub.createEntertainmentListing;
@@ -8805,3 +8826,61 @@ exports.purchaseEntertainment       = entertainmentHub.purchaseEntertainment;
 exports.getMyEntertainmentPurchases = entertainmentHub.getMyEntertainmentPurchases;
 exports.rateEntertainmentContent    = entertainmentHub.rateEntertainmentContent;
 exports.getCreatorDashboard         = entertainmentHub.getCreatorDashboard;
+
+/* ── Payment State Machine v1.0 ─────────────────────────────────────────── */
+const paymentFSM = require('./payment-state-machine');
+exports.createPaymentSession       = paymentFSM.createPaymentSession;
+exports.transitionPaymentState     = paymentFSM.transitionPaymentState;
+exports.getPaymentState            = paymentFSM.getPaymentState;
+exports.recoverPaymentSession      = paymentFSM.recoverPaymentSession;
+exports.getStuckSessions           = paymentFSM.getStuckSessions;
+exports.reconcilePaymentSessions   = paymentFSM.reconcilePaymentSessions;
+exports.sealPaymentAuditTrail      = paymentFSM.sealPaymentAuditTrail;
+
+/* ── Payment Reconciliation Engine v1.0 ─────────────────────────────────── */
+const paymentRecon = require('./payment-reconciliation');
+exports.runDailyReconciliation        = paymentRecon.runDailyReconciliation;
+exports.getReconciliationReport       = paymentRecon.getReconciliationReport;
+exports.flagUnmatchedPayment          = paymentRecon.flagUnmatchedPayment;
+exports.resolveUnmatchedPayment       = paymentRecon.resolveUnmatchedPayment;
+exports.getMpesaReconciliationSummary = paymentRecon.getMpesaReconciliationSummary;
+exports.triggerManualReconciliation   = paymentRecon.triggerManualReconciliation;
+
+/* ── Marketing & Promotions Engine v1.0 ─────────────────────────────────── */
+const mktEngine = require('./marketing-engine');
+exports.createBundleDeal                = mktEngine.createBundleDeal;
+exports.getActiveBundleDeals            = mktEngine.getActiveBundleDeals;
+exports.createFlashSale                 = mktEngine.createFlashSale;
+exports.getFlashSalePrice               = mktEngine.getFlashSalePrice;
+exports.recordFlashSalePurchase         = mktEngine.recordFlashSalePurchase;
+exports.getCrossSellRecommendations     = mktEngine.getCrossSellRecommendations;
+exports.getUpsellRecommendations        = mktEngine.getUpsellRecommendations;
+exports.createMarketingCampaign         = mktEngine.createMarketingCampaign;
+exports.runABTest                       = mktEngine.runABTest;
+exports.recordABTestImpression          = mktEngine.recordABTestImpression;
+exports.applyCouponCode                 = mktEngine.applyCouponCode;
+exports.concludeExpiredFlashSales       = mktEngine.concludeExpiredFlashSales;
+
+/* ── Business Health Score Engine v1.0 ──────────────────────────────────── */
+const bizHealth = require('./business-health-score');
+exports.getBusinessHealthScore          = bizHealth.getBusinessHealthScore;
+exports.getHealthScoreHistory           = bizHealth.getHealthScoreHistory;
+exports.getDimensionDrilldown           = bizHealth.getDimensionDrilldown;
+exports.getHealthScoreBenchmarks        = bizHealth.getHealthScoreBenchmarks;
+exports.computeAllHealthScores          = bizHealth.computeAllHealthScores;
+exports.getMultibranchHealthComparison  = bizHealth.getMultibranchHealthComparison;
+
+/* ── HR & Payroll Engine v1.0 ───────────────────────────────────────────── */
+const hrPayroll = require('./hr-payroll');
+exports.addStaffMember                  = hrPayroll.addStaffMember;
+exports.recordAttendance                = hrPayroll.recordAttendance;
+exports.getAttendanceReport             = hrPayroll.getAttendanceReport;
+exports.runPayroll                      = hrPayroll.runPayroll;
+exports.approvePayrollRun               = hrPayroll.approvePayrollRun;
+exports.getPayslip                      = hrPayroll.getPayslip;
+exports.getPayrollSummary               = hrPayroll.getPayrollSummary;
+exports.requestLeave                    = hrPayroll.requestLeave;
+exports.approveLeave                    = hrPayroll.approveLeave;
+exports.assignTraining                  = hrPayroll.assignTraining;
+exports.markTrainingComplete            = hrPayroll.markTrainingComplete;
+exports.getStaffDashboard               = hrPayroll.getStaffDashboard;

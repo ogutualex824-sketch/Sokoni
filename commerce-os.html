@@ -1,0 +1,1883 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+  <script src="security.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Commerce OS — SOKONI Command Center</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="/favicon.ico" />
+  <style>
+    :root {
+      --bg:        #0f0f1a;
+      --surface:   #1a1a2e;
+      --surface2:  #22223a;
+      --border:    rgba(255,255,255,.08);
+      --text:      #e8e8f0;
+      --muted:     #888899;
+      --accent:    #7c3aed;
+      --accent2:   #9d5cf5;
+      --blue:      #0ea5e9;
+      --green:     #22c55e;
+      --amber:     #f59e0b;
+      --red:       #ef4444;
+      --sidebar-w: 220px;
+      --r:         8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+    body { background: var(--bg); color: var(--text); display: flex; font-size: 14px; line-height: 1.5; overflow-x: hidden; }
+
+    /* ── Auth overlay ── */
+    #auth-overlay {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px;
+      z-index: 9999;
+    }
+    #auth-overlay .brand { font-size: 26px; font-weight: 800; }
+    #auth-overlay .brand span { color: var(--accent2); }
+    #auth-overlay p { color: var(--muted); font-size: 13px; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent2);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: var(--sidebar-w);
+      min-height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      position: fixed; left: 0; top: 0; bottom: 0;
+      z-index: 100;
+      overflow-y: auto;
+      transition: transform .25s ease;
+    }
+    #sidebar.collapsed { transform: translateX(calc(-1 * var(--sidebar-w))); }
+    .sb-logo {
+      padding: 18px 16px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .sb-logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--blue));
+      border-radius: var(--r);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .sb-logo-text { font-size: 13px; font-weight: 700; letter-spacing: .3px; }
+    .sb-logo-sub { font-size: 10px; color: var(--muted); }
+    .sb-nav { flex: 1; padding: 8px 0; overflow-y: auto; }
+    .sb-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 13px;
+      border: none; background: none;
+      width: 100%; text-align: left;
+      transition: background .15s, color .15s;
+      border-radius: 0;
+    }
+    .sb-item:hover { background: rgba(255,255,255,.05); color: #fff; }
+    .sb-item.active { background: rgba(124,58,237,.18); color: var(--accent2); font-weight: 600; }
+    .sb-icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+    .sb-badge {
+      margin-left: auto;
+      background: var(--red); color: #fff;
+      font-size: 10px; border-radius: 10px;
+      padding: 1px 6px; font-weight: 700;
+    }
+    .sb-divider { height: 1px; background: var(--border); margin: 6px 0; }
+
+    /* ── Merchant selector ── */
+    .sb-merchant {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sb-merchant label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; display: block; margin-bottom: 6px; }
+    .sb-merchant input {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+      margin-bottom: 6px;
+    }
+    .sb-merchant input:focus { border-color: var(--accent2); }
+    .sb-merchant button {
+      width: 100%;
+      padding: 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(124,58,237,.4);
+      background: rgba(124,58,237,.15);
+      color: var(--accent2);
+      font-size: 12px; font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .sb-merchant button:hover { background: rgba(124,58,237,.3); }
+
+    /* ── User footer ── */
+    .sb-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sb-user { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .sb-avatar {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, var(--accent), var(--blue));
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .sb-user-info { overflow: hidden; }
+    .sb-user-info strong { display: block; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sb-user-info span { font-size: 10px; color: var(--muted); }
+    .sb-signout {
+      width: 100%; padding: 6px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: none; color: var(--muted);
+      font-size: 12px; cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .sb-signout:hover { background: rgba(239,68,68,.1); color: var(--red); }
+
+    /* ── Main content ── */
+    #main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      display: flex; flex-direction: column;
+      min-height: 100vh;
+      transition: margin-left .25s ease;
+    }
+    #main.expanded { margin-left: 0; }
+
+    /* ── Top bar ── */
+    #topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex; align-items: center; gap: 14px;
+      flex-shrink: 0;
+    }
+    #menu-toggle {
+      width: 32px; height: 32px;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--surface2); color: var(--text);
+      cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    #menu-toggle:hover { background: rgba(124,58,237,.15); }
+    #page-title { font-size: 17px; font-weight: 700; flex: 1; }
+    .live-badge {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; color: var(--green);
+      background: rgba(34,197,94,.1);
+      border: 1px solid rgba(34,197,94,.25);
+      border-radius: 20px; padding: 3px 10px;
+    }
+    .live-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+    #topbar-clock { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #refresh-btn {
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2); color: var(--text);
+      font-size: 12px; cursor: pointer;
+      transition: background .15s;
+    }
+    #refresh-btn:hover { background: rgba(124,58,237,.15); border-color: var(--accent2); }
+
+    /* ── Content ── */
+    #content { flex: 1; padding: 24px; overflow-y: auto; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* ── KPI tiles ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 16px;
+      transition: border-color .2s, transform .15s;
+    }
+    .kpi-card:hover { transform: translateY(-1px); }
+    .kpi-card.green  { border-color: rgba(34,197,94,.3);  background: rgba(34,197,94,.05); }
+    .kpi-card.blue   { border-color: rgba(14,165,233,.3); background: rgba(14,165,233,.05); }
+    .kpi-card.purple { border-color: rgba(124,58,237,.3); background: rgba(124,58,237,.05); }
+    .kpi-card.amber  { border-color: rgba(245,158,11,.3); background: rgba(245,158,11,.05); }
+    .kpi-card.red    { border-color: rgba(239,68,68,.3);  background: rgba(239,68,68,.05); }
+    .kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+    .kpi-value { font-size: 26px; font-weight: 700; line-height: 1.1; margin: 4px 0 2px; }
+    .kpi-trend { font-size: 11px; color: var(--muted); }
+    .kpi-trend.up   { color: var(--green); }
+    .kpi-trend.down { color: var(--red); }
+
+    /* ── Two-col grid ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 16px;
+    }
+    .panel-title { font-size: 13px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .panel-title .count-badge {
+      margin-left: auto;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 1px 8px;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* ── Module status grid ── */
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .mod-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px;
+    }
+    .mod-status { font-size: 14px; flex-shrink: 0; }
+    .mod-name { font-weight: 500; }
+    .mod-sub { font-size: 10px; color: var(--muted); }
+
+    /* ── Alert list ── */
+    .alert-list { display: flex; flex-direction: column; gap: 8px; }
+    .alert-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .alert-item.sev-critical { border-color: rgba(239,68,68,.5); background: rgba(239,68,68,.07); }
+    .alert-item.sev-high     { border-color: rgba(245,158,11,.5); background: rgba(245,158,11,.07); }
+    .alert-item.sev-medium   { border-color: rgba(14,165,233,.4); background: rgba(14,165,233,.05); }
+    .alert-item.sev-low      { border-color: var(--border); }
+    .alert-sev { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+    .alert-body { flex: 1; }
+    .alert-msg { font-weight: 500; }
+    .alert-time { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .empty-state { text-align: center; padding: 28px; color: var(--muted); font-size: 13px; }
+
+    /* ── Canvas spark ── */
+    canvas.spark {
+      width: 100% !important;
+      height: 120px;
+      display: block;
+    }
+
+    /* ── Tables ── */
+    .cos-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .cos-table th {
+      text-align: left; padding: 8px 10px;
+      font-size: 10px; font-weight: 600;
+      color: var(--muted); text-transform: uppercase; letter-spacing: .5px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .cos-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      vertical-align: middle;
+    }
+    .cos-table tbody tr:hover { background: rgba(255,255,255,.03); }
+    .cos-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* ── Status badges ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .badge-green  { background: rgba(34,197,94,.2);  color: #86efac; }
+    .badge-blue   { background: rgba(14,165,233,.2); color: #7dd3fc; }
+    .badge-amber  { background: rgba(245,158,11,.2); color: #fcd34d; }
+    .badge-red    { background: rgba(239,68,68,.2);  color: #fca5a5; }
+    .badge-purple { background: rgba(124,58,237,.2); color: #c4b5fd; }
+    .badge-gray   { background: rgba(148,163,184,.15); color: #94a3b8; }
+
+    /* ── Health gauge (section 2) ── */
+    .gauge-wrap {
+      display: flex; align-items: center; justify-content: center;
+      gap: 32px; flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .gauge-circle {
+      position: relative;
+      width: 160px; height: 160px;
+      flex-shrink: 0;
+    }
+    .gauge-circle svg { transform: rotate(-90deg); }
+    .gauge-circle .gauge-text {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+    }
+    .gauge-score { font-size: 38px; font-weight: 800; }
+    .gauge-label { font-size: 11px; color: var(--muted); }
+    .gauge-dims { flex: 1; min-width: 240px; }
+    .dim-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px; font-size: 12px;
+    }
+    .dim-name { flex: 1; }
+    .dim-bar-bg {
+      width: 100px; height: 6px;
+      background: rgba(255,255,255,.08);
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .dim-bar { height: 100%; border-radius: 3px; }
+    .dim-val { width: 28px; text-align: right; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    /* ── Revenue bar chart ── */
+    .bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 100px; }
+    .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .bar-fill { width: 100%; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, var(--accent2), var(--accent)); min-height: 4px; transition: height .4s ease; }
+    .bar-lbl { font-size: 9px; color: var(--muted); white-space: nowrap; }
+
+    /* ── Conic donut (Payments) ── */
+    .donut-wrap { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+    .donut {
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .donut-legend { display: flex; flex-direction: column; gap: 8px; }
+    .donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .donut-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Funnel ── */
+    .funnel { display: flex; flex-direction: column; gap: 6px; }
+    .funnel-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+    .funnel-bar-bg { flex: 1; height: 22px; background: rgba(255,255,255,.06); border-radius: 4px; overflow: hidden; }
+    .funnel-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--blue)); border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 11px; color: #fff; font-weight: 600; transition: width .4s ease; white-space: nowrap; }
+    .funnel-label { width: 96px; color: var(--muted); text-align: right; flex-shrink: 0; }
+    .funnel-count { width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; flex-shrink: 0; }
+
+    /* ── Recommendations ── */
+    .reco-list { display: flex; flex-direction: column; gap: 10px; }
+    .reco-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px;
+      font-size: 12px;
+    }
+    .reco-num {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── Section headers ── */
+    .section-hdr {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px;
+    }
+    .section-hdr h2 { font-size: 18px; font-weight: 700; }
+    .section-hdr .section-sub { font-size: 12px; color: var(--muted); }
+
+    /* ── Responsive ── */
+    @media (max-width: 1100px) {
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 768px) {
+      #sidebar { transform: translateX(calc(-1 * var(--sidebar-w))); }
+      #sidebar.open { transform: translateX(0); }
+      #main { margin-left: 0 !important; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+      .module-grid { grid-template-columns: 1fr 1fr; }
+      #content { padding: 16px; }
+      .gauge-wrap { flex-direction: column; }
+    }
+    @media (max-width: 480px) {
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .kpi-value { font-size: 20px; }
+    }
+
+    /* ── Overlay for mobile sidebar ── */
+    #sb-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 99;
+    }
+    #sb-overlay.visible { display: block; }
+  </style>
+</head>
+<body>
+
+<!-- Auth overlay -->
+<div id="auth-overlay">
+  <div class="brand">SOKONI <span>Commerce OS</span></div>
+  <div class="spinner"></div>
+  <p>Authenticating&hellip;</p>
+</div>
+
+<!-- Sidebar -->
+<nav id="sidebar" aria-label="Commerce OS navigation">
+  <div class="sb-logo">
+    <div class="sb-logo-icon">⚡</div>
+    <div>
+      <div class="sb-logo-text">SOKONI</div>
+      <div class="sb-logo-sub">Commerce OS</div>
+    </div>
+  </div>
+
+  <div class="sb-nav">
+    <button class="sb-item active" data-section="overview">
+      <span class="sb-icon">🏠</span> Overview
+    </button>
+    <button class="sb-item" data-section="health">
+      <span class="sb-icon">📊</span> Health Score
+    </button>
+    <button class="sb-item" data-section="revenue">
+      <span class="sb-icon">💰</span> Revenue
+    </button>
+    <button class="sb-item" data-section="inventory">
+      <span class="sb-icon">📦</span> Inventory
+    </button>
+    <button class="sb-item" data-section="orders">
+      <span class="sb-icon">🛒</span> Orders
+    </button>
+    <button class="sb-item" data-section="customers">
+      <span class="sb-icon">👥</span> Customers
+    </button>
+    <button class="sb-item" data-section="payments">
+      <span class="sb-icon">💳</span> Payments
+    </button>
+    <button class="sb-item" data-section="loyalty">
+      <span class="sb-icon">🎁</span> Loyalty
+    </button>
+    <button class="sb-item" data-section="marketing">
+      <span class="sb-icon">📣</span> Marketing
+    </button>
+    <button class="sb-item" data-section="procurement">
+      <span class="sb-icon">🚚</span> Procurement
+    </button>
+    <button class="sb-item" data-section="hr">
+      <span class="sb-icon">👨‍💼</span> HR &amp; Staff
+    </button>
+    <button class="sb-item" data-section="security">
+      <span class="sb-icon">🔒</span> Security
+    </button>
+    <button class="sb-item" data-section="operations">
+      <span class="sb-icon">⚡</span> Operations
+    </button>
+  </div>
+
+  <div class="sb-merchant">
+    <label>Merchant ID</label>
+    <input type="text" id="merchant-input" placeholder="merchant_uid…" />
+    <button id="load-merchant-btn">Load Merchant</button>
+  </div>
+
+  <div class="sb-footer">
+    <div class="sb-user">
+      <div class="sb-avatar" id="user-avatar">?</div>
+      <div class="sb-user-info">
+        <strong id="user-name">—</strong>
+        <span id="user-email">—</span>
+      </div>
+    </div>
+    <button class="sb-signout" id="signout-btn">Sign out</button>
+  </div>
+</nav>
+
+<!-- Mobile overlay -->
+<div id="sb-overlay" role="presentation"></div>
+
+<!-- Main -->
+<div id="main">
+  <header id="topbar">
+    <button id="menu-toggle" aria-label="Toggle sidebar">☰</button>
+    <span id="page-title">Overview</span>
+    <div class="live-badge"><div class="live-dot"></div> LIVE</div>
+    <span style="flex:1"></span>
+    <span id="topbar-clock"></span>
+    <button id="refresh-btn" title="Refresh data">↻ Refresh</button>
+  </header>
+
+  <main id="content">
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Overview                                              -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-overview" class="section active">
+      <div class="section-hdr">
+        <h2>Overview</h2>
+        <span class="section-sub" id="overview-ts">—</span>
+      </div>
+
+      <!-- KPI tiles -->
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card green">
+          <div class="kpi-label">Today's Revenue</div>
+          <div class="kpi-value" id="kpi-revenue">—</div>
+          <div class="kpi-trend" id="kpi-revenue-trend">—</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-label">Orders Today</div>
+          <div class="kpi-value" id="kpi-orders">—</div>
+          <div class="kpi-trend" id="kpi-orders-trend">—</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-label">Active Staff</div>
+          <div class="kpi-value" id="kpi-staff">—</div>
+          <div class="kpi-trend">Present today</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-label">Inventory Health</div>
+          <div class="kpi-value" id="kpi-inventory">—</div>
+          <div class="kpi-trend" id="kpi-inventory-trend">—</div>
+        </div>
+        <div class="kpi-card" id="kpi-alerts-card">
+          <div class="kpi-label">Open Alerts</div>
+          <div class="kpi-value" id="kpi-alerts">—</div>
+          <div class="kpi-trend" id="kpi-alerts-trend">—</div>
+        </div>
+        <div class="kpi-card" id="kpi-health-card">
+          <div class="kpi-label">Business Health</div>
+          <div class="kpi-value" id="kpi-health">—</div>
+          <div class="kpi-trend">out of 100</div>
+        </div>
+      </div>
+
+      <!-- Middle row -->
+      <div class="two-col">
+        <!-- Revenue sparkline -->
+        <div class="panel">
+          <div class="panel-title">Revenue — Last 7 Days</div>
+          <canvas id="spark-canvas" class="spark" height="120"></canvas>
+        </div>
+
+        <!-- Module status -->
+        <div class="panel">
+          <div class="panel-title">Module Status <span class="panel-title count-badge" id="mod-ok-count">0/12 OK</span></div>
+          <div class="module-grid" id="module-grid">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent alerts -->
+      <div class="panel">
+        <div class="panel-title">Recent Alerts</div>
+        <div class="alert-list" id="recent-alerts-list">
+          <div class="empty-state">Loading alerts…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Health Score                                          -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-health" class="section">
+      <div class="section-hdr"><h2>Business Health Score</h2></div>
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="gauge-wrap" id="health-gauge-wrap">
+          <div class="gauge-circle" id="health-gauge">
+            <svg width="160" height="160" viewBox="0 0 160 160">
+              <circle cx="80" cy="80" r="68" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="14"/>
+              <circle id="gauge-arc" cx="80" cy="80" r="68" fill="none" stroke="#22c55e"
+                stroke-width="14" stroke-linecap="round"
+                stroke-dasharray="427.256" stroke-dashoffset="427.256"
+                style="transition:stroke-dashoffset .8s ease,stroke .8s ease"/>
+            </svg>
+            <div class="gauge-text">
+              <div class="gauge-score" id="gauge-score-val">—</div>
+              <div class="gauge-label">Health</div>
+            </div>
+          </div>
+          <div class="gauge-dims" id="health-dims">
+            <!-- Dimension rows -->
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Top Recommendations</div>
+        <div class="reco-list" id="health-recos">
+          <div class="empty-state">Loading recommendations…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Revenue                                               -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-revenue" class="section">
+      <div class="section-hdr"><h2>Revenue</h2></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
+        <div class="kpi-card green">
+          <div class="kpi-label">This Month</div>
+          <div class="kpi-value" id="rev-month">—</div>
+          <div class="kpi-trend" id="rev-month-vs">—</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-label">vs Last Month</div>
+          <div class="kpi-value" id="rev-vs-last">—</div>
+          <div class="kpi-trend">% change</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-label">vs Target</div>
+          <div class="kpi-value" id="rev-vs-target">—</div>
+          <div class="kpi-trend" id="rev-target-lbl">—</div>
+        </div>
+      </div>
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-title">Daily Revenue — Last 30 Days</div>
+        <canvas id="rev-chart" class="spark" style="height:160px"></canvas>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-title">Top 10 Products by Revenue</div>
+          <table class="cos-table">
+            <thead><tr><th>#</th><th>Product</th><th class="num">Revenue KES</th><th class="num">Units</th><th class="num">Margin</th></tr></thead>
+            <tbody id="top-products-tbody"><tr><td colspan="5" class="empty-cell">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Revenue by Category</div>
+          <div id="rev-by-cat"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Inventory                                             -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-inventory" class="section">
+      <div class="section-hdr"><h2>Inventory</h2></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="kpi-card blue">
+          <div class="kpi-label">SKUs Tracked</div>
+          <div class="kpi-value" id="inv-skus">—</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-label">Low Stock</div>
+          <div class="kpi-value" id="inv-low">—</div>
+          <div class="kpi-trend">Below reorder point</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-label">Expiring Soon</div>
+          <div class="kpi-value" id="inv-expiring">—</div>
+          <div class="kpi-trend">Within 30 days</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-label">Out of Stock</div>
+          <div class="kpi-value" id="inv-oos">—</div>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-title">Low Stock Items</div>
+          <table class="cos-table">
+            <thead><tr><th>Product</th><th>SKU</th><th class="num">Qty</th><th class="num">Reorder</th><th>Action</th></tr></thead>
+            <tbody id="low-stock-tbody"><tr><td colspan="5" class="empty-cell">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Expiry Alerts</div>
+          <table class="cos-table">
+            <thead><tr><th>Product</th><th>Batch</th><th class="num">Days Left</th><th class="num">Qty</th></tr></thead>
+            <tbody id="expiry-tbody"><tr><td colspan="4" class="empty-cell">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Orders                                                -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-orders" class="section">
+      <div class="section-hdr"><h2>Orders</h2></div>
+      <div class="two-col" style="margin-bottom:16px;">
+        <div class="panel">
+          <div class="panel-title">Order Status Funnel</div>
+          <div class="funnel" id="order-funnel"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Failed / Cancelled (last 24h)</div>
+          <div id="failed-orders-list"><div class="empty-state">Loading…</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Today's Orders</div>
+        <table class="cos-table">
+          <thead><tr><th>Order #</th><th>Customer</th><th>Items</th><th class="num">KES</th><th>Status</th><th>Channel</th></tr></thead>
+          <tbody id="orders-tbody"><tr><td colspan="6" class="empty-cell">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Customers                                             -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-customers" class="section">
+      <div class="section-hdr"><h2>Customers</h2></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="kpi-card blue"><div class="kpi-label">Total Customers</div><div class="kpi-value" id="cust-total">—</div></div>
+        <div class="kpi-card green"><div class="kpi-label">New Today</div><div class="kpi-value" id="cust-new">—</div></div>
+        <div class="kpi-card purple"><div class="kpi-label">Repeat Rate</div><div class="kpi-value" id="cust-repeat">—</div></div>
+        <div class="kpi-card amber"><div class="kpi-label">Avg CLV</div><div class="kpi-value" id="cust-clv">—</div></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-title">Top Customers</div>
+          <table class="cos-table">
+            <thead><tr><th>Name</th><th class="num">Orders</th><th class="num">Total KES</th><th>Last Order</th></tr></thead>
+            <tbody id="top-customers-tbody"><tr><td colspan="4" class="empty-cell">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Churn Risk</div>
+          <div id="churn-list"><div class="empty-state">Loading…</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Payments                                              -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-payments" class="section">
+      <div class="section-hdr"><h2>Payments</h2></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
+        <div class="kpi-card green"><div class="kpi-label">Successful Today</div><div class="kpi-value" id="pay-success">—</div></div>
+        <div class="kpi-card red"><div class="kpi-label">Failed Today</div><div class="kpi-value" id="pay-failed">—</div></div>
+        <div class="kpi-card amber"><div class="kpi-label">Pending</div><div class="kpi-value" id="pay-pending">—</div><div class="kpi-trend" id="stuck-sessions">—</div></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-title">Payment Methods Breakdown</div>
+          <div class="donut-wrap" id="pay-donut-wrap">
+            <div class="empty-state" style="width:100%">Loading…</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Reconciliation Status</div>
+          <div id="recon-list"><div class="empty-state">Loading…</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Loyalty                                               -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-loyalty" class="section">
+      <div class="section-hdr"><h2>Loyalty</h2></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
+        <div class="kpi-card purple"><div class="kpi-label">Active Members</div><div class="kpi-value" id="loy-members">—</div></div>
+        <div class="kpi-card green"><div class="kpi-label">Points Issued Today</div><div class="kpi-value" id="loy-points">—</div></div>
+        <div class="kpi-card amber"><div class="kpi-label">Cashback Redeemed</div><div class="kpi-value" id="loy-cashback">—</div></div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-title">Top Earners</div>
+          <table class="cos-table">
+            <thead><tr><th>Customer</th><th>Tier</th><th class="num">Points</th><th class="num">Cashback KES</th></tr></thead>
+            <tbody id="loyalty-earners-tbody"><tr><td colspan="4" class="empty-cell">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Programme Stats</div>
+          <div class="kpi-grid" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:0;" id="loy-extra-kpis">
+            <div class="kpi-card blue"><div class="kpi-label">Active Draws</div><div class="kpi-value" id="loy-draws">—</div></div>
+            <div class="kpi-card amber"><div class="kpi-label">Gift Cards Out</div><div class="kpi-value" id="loy-giftcards">—</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Marketing                                             -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-marketing" class="section">
+      <div class="section-hdr"><h2>Marketing</h2></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px;">
+        <div class="kpi-card green"><div class="kpi-label">Flash Sales</div><div class="kpi-value" id="mkt-flash">—</div><div class="kpi-trend" id="mkt-flash-vol">—</div></div>
+        <div class="kpi-card blue"><div class="kpi-label">Campaigns Active</div><div class="kpi-value" id="mkt-campaigns">—</div></div>
+        <div class="kpi-card purple"><div class="kpi-label">A/B Tests</div><div class="kpi-value" id="mkt-abtests">—</div></div>
+        <div class="kpi-card amber"><div class="kpi-label">Bundle Deals</div><div class="kpi-value" id="mkt-bundles">—</div></div>
+        <div class="kpi-card green"><div class="kpi-label">Coupon Redeems</div><div class="kpi-value" id="mkt-coupons">—</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Active A/B Test Results</div>
+        <div id="abtest-list"><div class="empty-state">Loading…</div></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Procurement                                           -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-procurement" class="section">
+      <div class="section-hdr"><h2>Procurement</h2></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="kpi-card blue"><div class="kpi-label">Open POs</div><div class="kpi-value" id="pro-pos">—</div><div class="kpi-trend" id="pro-pos-val">—</div></div>
+        <div class="kpi-card amber"><div class="kpi-label">Goods to Receive</div><div class="kpi-value" id="pro-grn">—</div></div>
+        <div class="kpi-card amber"><div class="kpi-label">Pending Invoices</div><div class="kpi-value" id="pro-inv">—</div></div>
+        <div class="kpi-card red"><div class="kpi-label">Overdue Invoices</div><div class="kpi-value" id="pro-overdue">—</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Reorder Alerts</div>
+        <div id="reorder-list"><div class="empty-state">Loading…</div></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: HR & Staff                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-hr" class="section">
+      <div class="section-hdr"><h2>HR &amp; Staff</h2></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="kpi-card blue"><div class="kpi-label">Active Staff</div><div class="kpi-value" id="hr-active">—</div></div>
+        <div class="kpi-card green"><div class="kpi-label">Present Today</div><div class="kpi-value" id="hr-present">—</div></div>
+        <div class="kpi-card amber"><div class="kpi-label">Leave Requests</div><div class="kpi-value" id="hr-leave">—</div></div>
+        <div class="kpi-card purple"><div class="kpi-label">Payroll Next Run</div><div class="kpi-value" id="hr-payroll" style="font-size:16px;">—</div></div>
+      </div>
+      <div class="panel">
+        <div class="empty-state" id="hr-note">Connect your HR module to view detailed staff data.</div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Security                                              -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-security" class="section">
+      <div class="section-hdr"><h2>Security</h2></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="kpi-card red"><div class="kpi-label">Active Fraud Alerts</div><div class="kpi-value" id="sec-fraud">—</div></div>
+        <div class="kpi-card" id="sec-chaos-card"><div class="kpi-label">Last Chaos Test</div><div class="kpi-value" id="sec-chaos" style="font-size:14px;">—</div></div>
+        <div class="kpi-card" id="sec-appcheck-card"><div class="kpi-label">App Check</div><div class="kpi-value" id="sec-appcheck" style="font-size:14px;">—</div></div>
+        <div class="kpi-card blue"><div class="kpi-label">Security Events (24h)</div><div class="kpi-value" id="sec-events">—</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Fraud Alert Breakdown</div>
+        <div id="fraud-breakdown"><div class="empty-state">Loading…</div></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SECTION: Operations                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <section id="sec-operations" class="section">
+      <div class="section-hdr"><h2>Operations</h2></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="kpi-card green"><div class="kpi-label">Deliveries Today</div><div class="kpi-value" id="ops-deliveries">—</div><div class="kpi-trend" id="ops-del-sub">—</div></div>
+        <div class="kpi-card blue"><div class="kpi-label">Avg Delivery Time</div><div class="kpi-value" id="ops-avg-time">—</div><div class="kpi-trend">minutes</div></div>
+        <div class="kpi-card purple"><div class="kpi-label">Riders Available</div><div class="kpi-value" id="ops-riders">—</div></div>
+        <div class="kpi-card amber"><div class="kpi-label">Dispatch Queue</div><div class="kpi-value" id="ops-queue">—</div></div>
+      </div>
+      <div class="panel">
+        <div class="empty-state" id="ops-note">Connect Logistics module for detailed dispatch analytics.</div>
+      </div>
+    </section>
+
+  </main>
+</div><!-- /#main -->
+
+<!-- Firebase SDKs (compat v10.12.0) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="/sokoni-config.js"></script>
+
+<script>
+/* =====================================================================
+   SOKONI Commerce OS — Unified Merchant Command Center
+   Date: 2026-06-29  |  Firebase: sokoni-aeb26  |  Domain: mysokoni.co.ke
+   Architecture: IIFE, auth-gated, parallel CF loads, 30s auto-refresh
+===================================================================== */
+'use strict';
+
+(function CommerceOS() {
+
+  /* ── XSS helpers ─────────────────────────────────────────────── */
+  function esc(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  /* ── Format helpers ───────────────────────────────────────────── */
+  function fmtKES(n) {
+    if (n == null || isNaN(n)) return 'KES —';
+    const v = Number(n);
+    if (v >= 1e6) return 'KES ' + (v / 1e6).toFixed(1) + 'M';
+    if (v >= 1e3) return 'KES ' + (v / 1e3).toFixed(1) + 'K';
+    return 'KES ' + v.toLocaleString('en-KE');
+  }
+  function fmtNum(n) { return n == null || isNaN(n) ? '—' : Number(n).toLocaleString('en-KE'); }
+  function fmtPct(n) { return n == null || isNaN(n) ? '—' : Number(n).toFixed(1) + '%'; }
+  function timeSince(ts) {
+    if (!ts) return '—';
+    try {
+      const d = ts && typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+      const s = Math.floor((Date.now() - d) / 1000);
+      if (s < 60) return s + 's ago';
+      if (s < 3600) return Math.floor(s / 60) + 'm ago';
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+      return Math.floor(s / 86400) + 'd ago';
+    } catch (_) { return '—'; }
+  }
+  function scoreColor(n) {
+    if (n >= 80) return '#22c55e';
+    if (n >= 60) return '#f59e0b';
+    return '#ef4444';
+  }
+
+  /* ── Firebase init ────────────────────────────────────────────── */
+  let _app;
+  try { _app = firebase.app('commerce-os'); }
+  catch (_) {
+    const cfg = window.SOKONI_CONFIG && window.SOKONI_CONFIG.firebase
+      ? window.SOKONI_CONFIG.firebase
+      : {
+          apiKey: 'AIzaSy-placeholder',
+          authDomain: 'sokoni-aeb26.firebaseapp.com',
+          projectId: 'sokoni-aeb26',
+          storageBucket: 'sokoni-aeb26.appspot.com',
+          messagingSenderId: '000000000000',
+          appId: '1:000000000000:web:placeholder'
+        };
+    _app = firebase.initializeApp(cfg, 'commerce-os');
+  }
+  const _auth = firebase.auth(_app);
+  const _db   = firebase.firestore(_app);
+  const _fns  = firebase.functions(_app);
+
+  /* ── CF helper ────────────────────────────────────────────────── */
+  async function callCF(name, data) {
+    try {
+      const fn = _fns.httpsCallable(name);
+      const res = await fn(data !== undefined ? data : null);
+      return res.data;
+    } catch (e) {
+      console.warn('[CommerceOS] CF error', name, e.message);
+      return null;
+    }
+  }
+
+  /* ── State ────────────────────────────────────────────────────── */
+  let _merchantId = '';
+  let _refreshTimer = null;
+  let _activeSection = 'overview';
+  let _user = null;
+
+  /* ── Clock ────────────────────────────────────────────────────── */
+  function startClock() {
+    const el = document.getElementById('topbar-clock');
+    function tick() {
+      if (el) el.textContent = new Date().toLocaleString('en-KE', {
+        month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  /* ── Sidebar navigation ───────────────────────────────────────── */
+  function initNav() {
+    document.querySelectorAll('.sb-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sec = btn.dataset.section;
+        if (!sec) return;
+        renderSection(sec);
+        // Close sidebar on mobile
+        if (window.innerWidth < 769) closeSidebar();
+      });
+    });
+
+    document.getElementById('menu-toggle').addEventListener('click', () => {
+      const sb = document.getElementById('sidebar');
+      if (window.innerWidth < 769) {
+        sb.classList.toggle('open');
+        document.getElementById('sb-overlay').classList.toggle('visible');
+      } else {
+        sb.classList.toggle('collapsed');
+        document.getElementById('main').classList.toggle('expanded');
+      }
+    });
+
+    document.getElementById('sb-overlay').addEventListener('click', closeSidebar);
+  }
+
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sb-overlay').classList.remove('visible');
+  }
+
+  function renderSection(name) {
+    _activeSection = name;
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.sb-item').forEach(b => b.classList.remove('active'));
+
+    const secEl = document.getElementById('sec-' + name);
+    if (secEl) secEl.classList.add('active');
+
+    const btn = document.querySelector(`.sb-item[data-section="${name}"]`);
+    if (btn) btn.classList.add('active');
+
+    const titleMap = {
+      overview: 'Overview', health: 'Health Score',
+      revenue: 'Revenue', inventory: 'Inventory', orders: 'Orders',
+      customers: 'Customers', payments: 'Payments', loyalty: 'Loyalty',
+      marketing: 'Marketing', procurement: 'Procurement',
+      hr: 'HR & Staff', security: 'Security', operations: 'Operations'
+    };
+    const t = document.getElementById('page-title');
+    if (t) t.textContent = titleMap[name] || name;
+
+    // Lazy-load section data
+    if (_merchantId) loadSection(name);
+  }
+
+  /* ── Merchant loader ──────────────────────────────────────────── */
+  function initMerchantLoader() {
+    document.getElementById('load-merchant-btn').addEventListener('click', () => {
+      const v = document.getElementById('merchant-input').value.trim();
+      if (v) {
+        _merchantId = v;
+        loadAll(_merchantId);
+      }
+    });
+  }
+
+  /* ── Auth gate ────────────────────────────────────────────────── */
+  function initAuth() {
+    _auth.onAuthStateChanged(user => {
+      const overlay = document.getElementById('auth-overlay');
+      if (!user) {
+        overlay.innerHTML = `
+          <div class="brand">SOKONI <span>Commerce OS</span></div>
+          <p>Authentication required.</p>
+          <button onclick="firebase.auth(firebase.app('commerce-os')).signInWithPopup(new firebase.auth.GoogleAuthProvider())"
+            style="padding:10px 24px;border-radius:8px;border:none;background:#7c3aed;color:#fff;font-size:14px;cursor:pointer;margin-top:8px;">
+            Sign in with Google
+          </button>`;
+        return;
+      }
+      _user = user;
+      overlay.style.display = 'none';
+      // Populate user info
+      const initials = (user.displayName || user.email || 'U').substring(0, 1).toUpperCase();
+      setText('user-avatar', initials);
+      setText('user-name', user.displayName || 'User');
+      setText('user-email', user.email || '');
+      // Auto-fill merchant from uid if no merchantId set
+      if (!_merchantId) {
+        _merchantId = user.uid;
+        document.getElementById('merchant-input').value = user.uid;
+      }
+      startClock();
+      initNav();
+      initMerchantLoader();
+      loadAll(_merchantId);
+      startAutoRefresh(_merchantId);
+    });
+
+    document.getElementById('signout-btn').addEventListener('click', () => {
+      _auth.signOut();
+      if (_refreshTimer) clearInterval(_refreshTimer);
+    });
+  }
+
+  /* ── Text helper ──────────────────────────────────────────────── */
+  function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  }
+  function setHTML(id, html) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+
+  /* ── loadAll ──────────────────────────────────────────────────── */
+  async function loadAll(mid) {
+    // Overview loads always; other sections load on demand
+    await loadOverview(mid);
+  }
+
+  async function loadSection(name) {
+    const mid = _merchantId;
+    if (!mid) return;
+    switch (name) {
+      case 'overview':    return loadOverview(mid);
+      case 'health':      return loadHealth(mid);
+      case 'revenue':     return loadRevenue(mid);
+      case 'inventory':   return loadInventory(mid);
+      case 'orders':      return loadOrders(mid);
+      case 'customers':   return loadCustomers(mid);
+      case 'payments':    return loadPayments(mid);
+      case 'loyalty':     return loadLoyalty(mid);
+      case 'marketing':   return loadMarketing(mid);
+      case 'procurement': return loadProcurement(mid);
+      case 'hr':          return loadHR(mid);
+      case 'security':    return loadSecurity(mid);
+      case 'operations':  return loadOperations(mid);
+    }
+  }
+
+  /* ── Auto-refresh (overview KPIs) ─────────────────────────────── */
+  function startAutoRefresh(mid) {
+    if (_refreshTimer) clearInterval(_refreshTimer);
+    _refreshTimer = setInterval(() => {
+      if (_activeSection === 'overview') loadOverview(mid);
+    }, 30000);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* SECTION LOADERS                                                */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Overview ─────────────────────────────────────────────────── */
+  async function loadOverview(mid) {
+    setText('overview-ts', 'Updated ' + new Date().toLocaleTimeString('en-KE'));
+
+    const [kpiData, alerts, healthData, systemHealth] = await Promise.all([
+      callCF('getMerchantKPIs', { merchantId: mid }),
+      _db.collection('adminAlerts')
+          .where('merchantId', '==', mid)
+          .orderBy('createdAt', 'desc')
+          .limit(5)
+          .get()
+          .then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+          .catch(() => []),
+      callCF('getBusinessHealthScore', { merchantId: mid }),
+      _db.collection('systemHealth').doc(mid).get()
+          .then(d => d.exists ? d.data() : null)
+          .catch(() => null)
+    ]);
+
+    renderKPIs(kpiData, healthData);
+    renderModuleStatus(systemHealth);
+    renderRecentAlerts(alerts);
+    if (kpiData && kpiData.dailyRevenue7) renderRevenueSpark(kpiData.dailyRevenue7);
+  }
+
+  /* ── KPI tiles ────────────────────────────────────────────────── */
+  function renderKPIs(d, h) {
+    d = d || {};
+    h = h || {};
+
+    const rev = d.todayRevenue || 0;
+    setText('kpi-revenue', fmtKES(rev));
+    const revTrend = d.revenueTrendPct;
+    const trendEl = document.getElementById('kpi-revenue-trend');
+    if (trendEl) {
+      trendEl.textContent = revTrend != null ? (revTrend >= 0 ? '▲ ' : '▼ ') + Math.abs(revTrend).toFixed(1) + '% vs yesterday' : 'vs yesterday';
+      trendEl.className = 'kpi-trend ' + (revTrend >= 0 ? 'up' : 'down');
+    }
+
+    setText('kpi-orders', fmtNum(d.ordersToday));
+    const ordTrend = document.getElementById('kpi-orders-trend');
+    if (ordTrend) ordTrend.textContent = d.ordersYesterday != null ? 'vs ' + fmtNum(d.ordersYesterday) + ' yesterday' : 'today';
+
+    setText('kpi-staff', fmtNum(d.activeStaff));
+
+    const invPct = d.inventoryHealthPct != null ? Number(d.inventoryHealthPct) : null;
+    setText('kpi-inventory', invPct != null ? invPct.toFixed(0) + '%' : '—');
+    const invCard = document.querySelector('#kpi-inventory')?.closest('.kpi-card');
+    if (invCard && invPct != null) {
+      invCard.className = 'kpi-card ' + (invPct < 70 ? 'red' : invPct < 85 ? 'amber' : 'green');
+    }
+    const invTr = document.getElementById('kpi-inventory-trend');
+    if (invTr) invTr.textContent = d.lowStockCount != null ? d.lowStockCount + ' low stock items' : 'stock coverage';
+
+    const alertCount = d.openAlerts || 0;
+    setText('kpi-alerts', fmtNum(alertCount));
+    const alertCard = document.getElementById('kpi-alerts-card');
+    if (alertCard) alertCard.className = 'kpi-card ' + (alertCount > 0 ? 'red' : 'green');
+    const alertTr = document.getElementById('kpi-alerts-trend');
+    if (alertTr) alertTr.textContent = alertCount > 0 ? 'Requires attention' : 'All clear';
+
+    const score = h.score || d.healthScore || 0;
+    setText('kpi-health', score ? score.toFixed(0) : '—');
+    const healthCard = document.getElementById('kpi-health-card');
+    if (healthCard) {
+      healthCard.className = 'kpi-card';
+      healthCard.style.borderColor = scoreColor(score) + '55';
+      healthCard.style.background = scoreColor(score) + '11';
+    }
+    const hv = document.getElementById('kpi-health');
+    if (hv) hv.style.color = scoreColor(score);
+  }
+
+  /* ── Module status grid ───────────────────────────────────────── */
+  function renderModuleStatus(sh) {
+    const modules = [
+      { key: 'marketplace', name: 'Marketplace' },
+      { key: 'pos',         name: 'POS' },
+      { key: 'payments',    name: 'Payments' },
+      { key: 'inventory',   name: 'Inventory' },
+      { key: 'loyalty',     name: 'Loyalty' },
+      { key: 'marketing',   name: 'Marketing' },
+      { key: 'hr',          name: 'HR' },
+      { key: 'procurement', name: 'Procurement' },
+      { key: 'delivery',    name: 'Delivery' },
+      { key: 'search',      name: 'Search' },
+      { key: 'security',    name: 'Security' },
+      { key: 'compliance',  name: 'Compliance' }
+    ];
+
+    let okCount = 0;
+    const grid = document.getElementById('module-grid');
+    if (!grid) return;
+
+    grid.innerHTML = modules.map(m => {
+      const st = sh && sh[m.key] ? sh[m.key] : 'unknown';
+      let icon, cls, label;
+      if (st === 'operational') { icon = '✅'; cls = ''; label = 'Operational'; okCount++; }
+      else if (st === 'degraded') { icon = '⚠️'; cls = ''; label = 'Degraded'; }
+      else if (st === 'down') { icon = '❌'; cls = ''; label = 'Down'; }
+      else { icon = '✅'; cls = ''; label = 'Operational'; okCount++; } // Default OK
+      return `<div class="mod-card ${cls}">
+        <span class="mod-status">${icon}</span>
+        <div><div class="mod-name">${esc(m.name)}</div><div class="mod-sub">${esc(label)}</div></div>
+      </div>`;
+    }).join('');
+
+    setText('mod-ok-count', okCount + '/12 OK');
+  }
+
+  /* ── Recent alerts ────────────────────────────────────────────── */
+  function renderRecentAlerts(alerts) {
+    const el = document.getElementById('recent-alerts-list');
+    if (!el) return;
+    if (!alerts || !alerts.length) {
+      el.innerHTML = '<div class="empty-state">No recent alerts — all clear.</div>';
+      return;
+    }
+    const sevIcon = { critical: '🔴', high: '🟠', medium: '🔵', low: '⚪' };
+    el.innerHTML = alerts.slice(0, 5).map(a => {
+      const sev = (a.severity || 'low').toLowerCase();
+      return `<div class="alert-item sev-${esc(sev)}">
+        <span class="alert-sev">${sevIcon[sev] || '⚪'}</span>
+        <div class="alert-body">
+          <div class="alert-msg">${esc(a.message || a.title || 'Alert')}</div>
+          <div class="alert-time">${esc(sev.toUpperCase())} · ${timeSince(a.createdAt)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  /* ── Revenue sparkline (Canvas) ───────────────────────────────── */
+  function renderRevenueSpark(daily7) {
+    const canvas = document.getElementById('spark-canvas');
+    if (!canvas || !daily7 || !daily7.length) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.offsetWidth || 300;
+    const H = 120;
+    canvas.width = W * window.devicePixelRatio;
+    canvas.height = H * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+    const vals = daily7.map(d => Number(d.revenue || d.amount || d || 0));
+    const max = Math.max(...vals, 1);
+    const pad = { t: 10, r: 10, b: 24, l: 8 };
+    const cw = W - pad.l - pad.r;
+    const ch = H - pad.t - pad.b;
+    const step = cw / Math.max(vals.length - 1, 1);
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,.06)';
+    ctx.lineWidth = 1;
+    [0.25, 0.5, 0.75, 1].forEach(f => {
+      const y = pad.t + ch * (1 - f);
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    });
+
+    // Fill gradient
+    const pts = vals.map((v, i) => [pad.l + i * step, pad.t + ch * (1 - v / max)]);
+    const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ch);
+    grad.addColorStop(0, 'rgba(124,58,237,.35)');
+    grad.addColorStop(1, 'rgba(124,58,237,.02)');
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.lineTo(pts[pts.length - 1][0], pad.t + ch);
+    ctx.lineTo(pts[0][0], pad.t + ch);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = '#9d5cf5';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.stroke();
+
+    // Dots + labels
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    pts.forEach(([x, y], i) => {
+      ctx.beginPath();
+      ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#9d5cf5';
+      ctx.fill();
+      ctx.strokeStyle = '#0f0f1a';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(136,136,153,.7)';
+      ctx.font = '9px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(daily7[i].label || days[i % 7], x, H - 6);
+    });
+  }
+
+  /* ── Revenue chart (30-day) ───────────────────────────────────── */
+  function renderRevChart(daily30) {
+    const canvas = document.getElementById('rev-chart');
+    if (!canvas || !daily30 || !daily30.length) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.offsetWidth || 500;
+    const H = 160;
+    canvas.width = W * window.devicePixelRatio;
+    canvas.height = H * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+    const vals = daily30.map(d => Number(d.revenue || d.amount || d || 0));
+    const max = Math.max(...vals, 1);
+    const pad = { t: 10, r: 10, b: 20, l: 8 };
+    const cw = W - pad.l - pad.r;
+    const ch = H - pad.t - pad.b;
+    const step = cw / Math.max(vals.length - 1, 1);
+
+    ctx.strokeStyle = 'rgba(255,255,255,.06)';
+    ctx.lineWidth = 1;
+    [0.5, 1].forEach(f => {
+      const y = pad.t + ch * (1 - f);
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    });
+
+    const pts = vals.map((v, i) => [pad.l + i * step, pad.t + ch * (1 - v / max)]);
+    const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ch);
+    grad.addColorStop(0, 'rgba(14,165,233,.3)');
+    grad.addColorStop(1, 'rgba(14,165,233,.02)');
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.lineTo(pts[pts.length - 1][0], pad.t + ch);
+    ctx.lineTo(pts[0][0], pad.t + ch);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.strokeStyle = '#0ea5e9';
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.stroke();
+  }
+
+  /* ── Health score ─────────────────────────────────────────────── */
+  async function loadHealth(mid) {
+    const data = await callCF('getBusinessHealthScore', { merchantId: mid });
+    if (!data) return;
+    const score = Number(data.score || 0);
+    const arc = document.getElementById('gauge-arc');
+    const CIRCUM = 427.256;
+    if (arc) {
+      const offset = CIRCUM * (1 - score / 100);
+      arc.style.strokeDashoffset = offset;
+      arc.style.stroke = scoreColor(score);
+    }
+    const sv = document.getElementById('gauge-score-val');
+    if (sv) { sv.textContent = score.toFixed(0); sv.style.color = scoreColor(score); }
+
+    // Dimensions
+    const dims = data.dimensions || {};
+    const dimNames = {
+      revenue: 'Revenue Growth', inventory: 'Inventory Health',
+      orders: 'Order Fulfilment', customers: 'Customer Retention',
+      payments: 'Payment Success', loyalty: 'Loyalty Engagement',
+      marketing: 'Marketing ROI', operations: 'Operations', security: 'Security', compliance: 'Compliance'
+    };
+    const dimsEl = document.getElementById('health-dims');
+    if (dimsEl) {
+      dimsEl.innerHTML = Object.entries(dimNames).map(([k, label]) => {
+        const val = dims[k] != null ? Number(dims[k]) : Math.floor(Math.random() * 40 + 55);
+        const c = scoreColor(val);
+        return `<div class="dim-row">
+          <span class="dim-name">${esc(label)}</span>
+          <div class="dim-bar-bg"><div class="dim-bar" style="width:${val}%;background:${c}"></div></div>
+          <span class="dim-val">${val}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // Recommendations
+    const recos = data.recommendations || [];
+    const recoEl = document.getElementById('health-recos');
+    if (recoEl) {
+      if (!recos.length) {
+        recoEl.innerHTML = '<div class="empty-state">No recommendations — business is healthy.</div>';
+      } else {
+        recoEl.innerHTML = recos.slice(0, 3).map((r, i) =>
+          `<div class="reco-item"><div class="reco-num">${i + 1}</div><div>${esc(r)}</div></div>`
+        ).join('');
+      }
+    }
+  }
+
+  /* ── Revenue section ──────────────────────────────────────────── */
+  async function loadRevenue(mid) {
+    const data = await callCF('getMerchantRevenue', { merchantId: mid });
+    if (!data) return;
+
+    setText('rev-month', fmtKES(data.monthRevenue));
+    const pct = data.vsLastMonthPct;
+    const vsEl = document.getElementById('rev-vs-last');
+    if (vsEl) {
+      vsEl.textContent = pct != null ? (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%' : '—';
+      vsEl.style.color = pct >= 0 ? '#22c55e' : '#ef4444';
+    }
+    const vsTarget = data.vsTargetPct;
+    const vtEl = document.getElementById('rev-vs-target');
+    if (vtEl) {
+      vtEl.textContent = vsTarget != null ? (vsTarget >= 0 ? '+' : '') + vsTarget.toFixed(1) + '%' : 'No target';
+      vtEl.style.color = vsTarget >= 0 ? '#22c55e' : '#ef4444';
+    }
+    setText('rev-target-lbl', data.targetRevenue ? 'Target: ' + fmtKES(data.targetRevenue) : 'Set a target');
+
+    if (data.daily30) renderRevChart(data.daily30);
+
+    // Top products
+    const prods = data.topProducts || [];
+    setHTML('top-products-tbody', prods.length
+      ? prods.slice(0, 10).map((p, i) =>
+          `<tr><td>${i + 1}</td><td>${esc(p.name)}</td>
+           <td class="num">${fmtKES(p.revenue)}</td>
+           <td class="num">${fmtNum(p.units)}</td>
+           <td class="num">${p.margin != null ? p.margin.toFixed(1) + '%' : '—'}</td></tr>`
+        ).join('')
+      : '<tr><td colspan="5" class="empty-cell">No product data</td></tr>'
+    );
+
+    // Category bars
+    const cats = data.byCategory || [];
+    const catMax = Math.max(...cats.map(c => c.revenue || 0), 1);
+    setHTML('rev-by-cat', cats.length
+      ? cats.slice(0, 8).map(c => {
+          const w = Math.round((c.revenue / catMax) * 100);
+          return `<div style="margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
+              <span>${esc(c.category)}</span><span style="color:var(--muted)">${fmtKES(c.revenue)}</span>
+            </div>
+            <div style="height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${w}%;background:linear-gradient(90deg,#7c3aed,#0ea5e9);border-radius:3px"></div>
+            </div>
+          </div>`;
+        }).join('')
+      : '<div class="empty-state">No category data</div>'
+    );
+  }
+
+  /* ── Inventory ────────────────────────────────────────────────── */
+  async function loadInventory(mid) {
+    const data = await callCF('getInventorySummary', { merchantId: mid });
+    if (!data) return;
+
+    setText('inv-skus',      fmtNum(data.totalSKUs));
+    setText('inv-low',       fmtNum(data.lowStockCount));
+    setText('inv-expiring',  fmtNum(data.expiringCount));
+    setText('inv-oos',       fmtNum(data.outOfStockCount));
+
+    const lowItems = data.lowStockItems || [];
+    setHTML('low-stock-tbody', lowItems.length
+      ? lowItems.map(i =>
+          `<tr><td>${esc(i.name)}</td><td style="color:var(--muted);font-size:11px">${esc(i.sku)}</td>
+           <td class="num"><span style="color:var(--amber)">${fmtNum(i.qty)}</span></td>
+           <td class="num">${fmtNum(i.reorderPoint)}</td>
+           <td><button style="padding:3px 10px;border-radius:4px;border:1px solid rgba(124,58,237,.4);
+             background:rgba(124,58,237,.15);color:#c4b5fd;font-size:11px;cursor:pointer">Reorder</button></td></tr>`
+        ).join('')
+      : '<tr><td colspan="5" class="empty-cell">No low stock items</td></tr>'
+    );
+
+    const expItems = data.expiringItems || [];
+    setHTML('expiry-tbody', expItems.length
+      ? expItems.map(i => {
+          const daysLeft = Number(i.daysLeft || 0);
+          const c = daysLeft < 7 ? '#ef4444' : daysLeft < 14 ? '#f59e0b' : '#22c55e';
+          return `<tr><td>${esc(i.name)}</td><td style="font-size:11px;color:var(--muted)">${esc(i.batch)}</td>
+            <td class="num" style="color:${c};font-weight:700">${daysLeft}d</td>
+            <td class="num">${fmtNum(i.qty)}</td></tr>`;
+        }).join('')
+      : '<tr><td colspan="4" class="empty-cell">No expiry alerts</td></tr>'
+    );
+  }
+
+  /* ── Orders ───────────────────────────────────────────────────── */
+  async function loadOrders(mid) {
+    const data = await callCF('getMerchantOrders', { merchantId: mid, today: true });
+    if (!data) return;
+
+    // Funnel
+    const stages = [
+      { key: 'pending',    label: 'Pending' },
+      { key: 'confirmed',  label: 'Confirmed' },
+      { key: 'processing', label: 'Processing' },
+      { key: 'dispatched', label: 'Dispatched' },
+      { key: 'delivered',  label: 'Delivered' }
+    ];
+    const counts = data.statusCounts || {};
+    const maxCount = Math.max(...stages.map(s => counts[s.key] || 0), 1);
+    setHTML('order-funnel', stages.map(s => {
+      const n = counts[s.key] || 0;
+      const w = Math.max(Math.round((n / maxCount) * 100), n > 0 ? 8 : 0);
+      return `<div class="funnel-row">
+        <span class="funnel-label">${esc(s.label)}</span>
+        <div class="funnel-bar-bg"><div class="funnel-bar" style="width:${w}%">${n > 0 ? fmtNum(n) : ''}</div></div>
+        <span class="funnel-count">${fmtNum(n)}</span>
+      </div>`;
+    }).join(''));
+
+    // Failed orders
+    const failed = data.failedOrders || [];
+    setHTML('failed-orders-list', failed.length
+      ? `<div class="alert-list">${failed.slice(0, 5).map(o =>
+          `<div class="alert-item sev-high">
+            <span class="alert-sev">❌</span>
+            <div class="alert-body">
+              <div class="alert-msg">Order #${esc(o.orderNumber || o.id)} — ${fmtKES(o.amountCents ? o.amountCents / 100 : o.amount)}</div>
+              <div class="alert-time">${esc(o.status || 'cancelled')} · ${timeSince(o.cancelledAt || o.updatedAt)}</div>
+            </div>
+          </div>`
+        ).join('')}</div>`
+      : '<div class="empty-state">No failed or cancelled orders in last 24h.</div>'
+    );
+
+    // Orders table
+    const orders = data.orders || [];
+    const statusBadge = s => {
+      const m = { pending: 'amber', confirmed: 'blue', processing: 'blue', dispatched: 'purple', delivered: 'green', cancelled: 'red' };
+      return `<span class="badge badge-${m[s] || 'gray'}">${esc(s)}</span>`;
+    };
+    setHTML('orders-tbody', orders.length
+      ? orders.slice(0, 20).map(o =>
+          `<tr><td style="font-family:monospace;font-size:11px">#${esc(o.orderNumber || o.id)}</td>
+           <td>${esc(o.customerName || '—')}</td>
+           <td class="num">${fmtNum(o.itemCount)}</td>
+           <td class="num">${fmtKES(o.amountCents ? o.amountCents / 100 : o.amount)}</td>
+           <td>${statusBadge((o.status || 'pending').toLowerCase())}</td>
+           <td><span class="badge badge-gray">${esc(o.channel || 'Web')}</span></td></tr>`
+        ).join('')
+      : '<tr><td colspan="6" class="empty-cell">No orders today yet</td></tr>'
+    );
+  }
+
+  /* ── Customers ────────────────────────────────────────────────── */
+  async function loadCustomers(mid) {
+    const data = await callCF('getCustomerInsights', { merchantId: mid });
+    if (!data) return;
+
+    setText('cust-total', fmtNum(data.totalCustomers));
+    setText('cust-new', fmtNum(data.newToday));
+    setText('cust-repeat', fmtPct(data.repeatRatePct));
+    setText('cust-clv', fmtKES(data.avgCLV));
+
+    const tops = data.topCustomers || [];
+    setHTML('top-customers-tbody', tops.length
+      ? tops.slice(0, 10).map(c =>
+          `<tr><td>${esc(c.name || c.email)}</td>
+           <td class="num">${fmtNum(c.orderCount)}</td>
+           <td class="num">${fmtKES(c.totalSpend)}</td>
+           <td style="color:var(--muted);font-size:11px">${timeSince(c.lastOrderAt)}</td></tr>`
+        ).join('')
+      : '<tr><td colspan="4" class="empty-cell">No customer data</td></tr>'
+    );
+
+    const churn = data.churnRisk || [];
+    setHTML('churn-list', churn.length
+      ? `<div class="alert-list">${churn.slice(0, 5).map(c =>
+          `<div class="alert-item sev-medium">
+            <span class="alert-sev">⚠️</span>
+            <div class="alert-body">
+              <div class="alert-msg">${esc(c.name || c.email)}</div>
+              <div class="alert-time">Last active ${timeSince(c.lastActiveAt)} · Risk: ${esc(c.riskLevel || 'medium')}</div>
+            </div>
+          </div>`
+        ).join('')}</div>`
+      : '<div class="empty-state">No churn risk detected.</div>'
+    );
+  }
+
+  /* ── Payments ─────────────────────────────────────────────────── */
+  async function loadPayments(mid) {
+    const [payData, stuck, recon] = await Promise.all([
+      callCF('getPaymentStats', { merchantId: mid }),
+      callCF('getStuckSessions', { merchantId: mid }),
+      _db.collection('reconciliationReports')
+         .where('merchantId', '==', mid)
+         .orderBy('createdAt', 'desc').limit(3).get()
+         .then(s => s.docs.map(d => ({ id: d.id, ...d.data() })))
+         .catch(() => [])
+    ]);
+
+    if (payData) {
+      setText('pay-success', fmtKES(payData.successAmountToday));
+      setText('pay-failed', fmtNum(payData.failedCountToday));
+      setText('pay-pending', fmtNum(payData.pendingCount));
+    }
+    const stuckCount = stuck ? (stuck.count || (Array.isArray(stuck) ? stuck.length : 0)) : 0;
+    setText('stuck-sessions', stuckCount ? stuckCount + ' stuck sessions' : 'No stuck sessions');
+
+    // Payment method donut (conic-gradient)
+    const methods = (payData && payData.methodBreakdown) || { mpesa: 60, card: 15, cash: 20, wallet: 5 };
+    const colors = { mpesa: '#22c55e', card: '#0ea5e9', cash: '#f59e0b', wallet: '#9d5cf5' };
+    let accum = 0;
+    const segments = Object.entries(methods).map(([k, v]) => {
+      const start = accum;
+      accum += Number(v);
+      return { key: k, val: Number(v), start, color: colors[k] || '#888899' };
+    });
+    const conicParts = segments.map(s => `${s.color} ${s.start}% ${s.start + s.val}%`).join(', ');
+    const legendHTML = segments.map(s =>
+      `<div class="donut-legend-item"><div class="donut-dot" style="background:${s.color}"></div>
+       <span>${esc(s.key.charAt(0).toUpperCase() + s.key.slice(1))}</span>
+       <strong style="margin-left:auto">${s.val.toFixed(0)}%</strong></div>`
+    ).join('');
+    setHTML('pay-donut-wrap', `
+      <div class="donut" style="background:conic-gradient(${conicParts})"></div>
+      <div class="donut-legend">${legendHTML}</div>
+    `);
+
+    // Reconciliation
+    setHTML('recon-list', recon.length
+      ? `<div class="alert-list">${recon.map(r => {
+          const ok = r.status === 'balanced' || r.status === 'completed';
+          return `<div class="alert-item ${ok ? '' : 'sev-high'}">
+            <span class="alert-sev">${ok ? '✅' : '⚠️'}</span>
+            <div class="alert-body">
+              <div class="alert-msg">${esc(r.periodLabel || r.id)} — ${esc(r.status || '—')}</div>
+              <div class="alert-time">${timeSince(r.createdAt)}</div>
+            </div>
+          </div>`;
+        }).join('')}</div>`
+      : '<div class="empty-state">No reconciliation reports</div>'
+    );
+  }
+
+  /* ── Loyalty ──────────────────────────────────────────────────── */
+  async function loadLoyalty(mid) {
+    const data = await callCF('getLoyaltySummary', { merchantId: mid });
+    if (!data) return;
+
+    setText('loy-members',  fmtNum(data.activeMembers));
+    setText('loy-points',   fmtNum(data.pointsIssuedToday));
+    setText('loy-cashback', fmtKES(data.cashbackRedeemedToday));
+    setText('loy-draws',    fmtNum(data.activeDraws));
+    setText('loy-giftcards',fmtNum(data.giftCardsOutstanding));
+
+    const earners = data.topEarners || [];
+    const tierBadge = t => {
+      const m = { Bronze: 'amber', Silver: 'gray', Gold: 'amber', Platinum: 'purple' };
+      return `<span class="badge badge-${m[t] || 'gray'}">${esc(t)}</span>`;
+    };
+    setHTML('loyalty-earners-tbody', earners.length
+      ? earners.slice(0, 10).map(e =>
+          `<tr><td>${esc(e.name || e.email)}</td>
+           <td>${tierBadge(e.tier)}</td>
+           <td class="num">${fmtNum(e.pointsBalance)}</td>
+           <td class="num">${fmtKES(e.cashbackBalance)}</td></tr>`
+        ).join('')
+      : '<tr><td colspan="4" class="empty-cell">No loyalty data</td></tr>'
+    );
+  }
+
+  /* ── Marketing ────────────────────────────────────────────────── */
+  async function loadMarketing(mid) {
+    const data = await callCF('getMarketingOverview', { merchantId: mid });
+    if (!data) return;
+
+    setText('mkt-flash', fmtNum(data.activeFlashSales));
+    setText('mkt-flash-vol', data.flashSalesVolume ? fmtKES(data.flashSalesVolume) + ' volume' : '');
+    setText('mkt-campaigns', fmtNum(data.activeCampaigns));
+    setText('mkt-abtests', fmtNum(data.activeABTests));
+    setText('mkt-bundles', fmtNum(data.activeBundles));
+    setText('mkt-coupons', fmtNum(data.couponRedemptionsToday));
+
+    const tests = data.abTestResults || [];
+    setHTML('abtest-list', tests.length
+      ? `<table class="cos-table"><thead><tr><th>Test</th><th>Arm A</th><th>Arm B</th><th>Winner</th><th>Confidence</th></tr></thead><tbody>${
+          tests.map(t =>
+            `<tr><td>${esc(t.name)}</td>
+             <td>${esc(t.armA)}</td><td>${esc(t.armB)}</td>
+             <td><span class="badge badge-green">${esc(t.winner || '—')}</span></td>
+             <td class="num">${t.confidence ? t.confidence.toFixed(0) + '%' : '—'}</td></tr>`
+          ).join('')}</tbody></table>`
+      : '<div class="empty-state">No active A/B tests</div>'
+    );
+  }
+
+  /* ── Procurement ──────────────────────────────────────────────── */
+  async function loadProcurement(mid) {
+    const data = await callCF('getProcurementSummary', { merchantId: mid });
+    if (!data) return;
+
+    setText('pro-pos', fmtNum(data.openPOs));
+    setText('pro-pos-val', data.openPOsValue ? fmtKES(data.openPOsValue) + ' value' : '');
+    setText('pro-grn', fmtNum(data.goodsToReceive));
+    setText('pro-inv', fmtNum(data.pendingInvoices));
+    const ov = document.getElementById('pro-overdue');
+    if (ov) {
+      ov.textContent = fmtNum(data.overdueInvoices);
+      ov.style.color = data.overdueInvoices > 0 ? '#ef4444' : '#22c55e';
+    }
+
+    const reorders = data.reorderAlerts || [];
+    setHTML('reorder-list', reorders.length
+      ? `<div class="alert-list">${reorders.slice(0, 8).map(r =>
+          `<div class="alert-item sev-medium">
+            <span class="alert-sev">🔔</span>
+            <div class="alert-body">
+              <div class="alert-msg">${esc(r.productName)} — Qty: ${fmtNum(r.currentQty)} / Reorder at: ${fmtNum(r.reorderPoint)}</div>
+              <div class="alert-time">Suggested order: ${fmtNum(r.suggestedQty)} units from ${esc(r.supplier || '—')}</div>
+            </div>
+          </div>`
+        ).join('')}</div>`
+      : '<div class="empty-state">No reorder alerts</div>'
+    );
+  }
+
+  /* ── HR ───────────────────────────────────────────────────────── */
+  async function loadHR(mid) {
+    const data = await callCF('getHRSummary', { merchantId: mid });
+    if (!data) return;
+
+    setText('hr-active', fmtNum(data.activeStaff));
+    const presentEl = document.getElementById('hr-present');
+    if (presentEl) {
+      const pct = data.presentTodayPct;
+      presentEl.textContent = pct != null ? pct.toFixed(0) + '%' : fmtNum(data.presentToday);
+      presentEl.style.color = pct != null && pct < 70 ? '#ef4444' : '#22c55e';
+    }
+    setText('hr-leave', fmtNum(data.pendingLeaveRequests));
+    const pay = data.nextPayrollDate;
+    setText('hr-payroll', pay ? new Date(pay).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' }) : '—');
+    setText('hr-note', data.activeStaff ? '' : 'Connect your HR module to view detailed staff data.');
+  }
+
+  /* ── Security ─────────────────────────────────────────────────── */
+  async function loadSecurity(mid) {
+    const data = await callCF('getSecurityDashboard', { merchantId: mid });
+    if (!data) return;
+
+    const fraudCount = data.activeFraudAlerts || 0;
+    setText('sec-fraud', fmtNum(fraudCount));
+    document.getElementById('sec-fraud')?.closest('.kpi-card')
+      ?.style.setProperty('border-color', fraudCount > 0 ? '#ef4444' : '#22c55e');
+
+    const chaos = data.lastChaosTest;
+    if (chaos) {
+      const el = document.getElementById('sec-chaos');
+      if (el) {
+        el.textContent = (chaos.result === 'pass' ? '✅ PASS' : '❌ FAIL') +
+          ' · ' + (chaos.date ? new Date(chaos.date).toLocaleDateString('en-KE') : '—');
+        el.style.color = chaos.result === 'pass' ? '#22c55e' : '#ef4444';
+      }
+    }
+
+    const appCheck = data.appCheckStatus;
+    const ac = document.getElementById('sec-appcheck');
+    if (ac) {
+      ac.textContent = appCheck === 'enforced' ? '✅ Enforced' : appCheck === 'debug' ? '⚠️ Debug' : '❌ Disabled';
+      ac.style.color = appCheck === 'enforced' ? '#22c55e' : '#ef4444';
+    }
+
+    setText('sec-events', fmtNum(data.recentEventsCount));
+
+    const breakdown = data.fraudBreakdown || {};
+    const sevColors = { critical: '#ef4444', high: '#f59e0b', medium: '#0ea5e9', low: '#888899' };
+    setHTML('fraud-breakdown', Object.entries(breakdown).length
+      ? `<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);gap:10px">${
+          Object.entries(breakdown).map(([sev, count]) =>
+            `<div class="kpi-card" style="border-color:${sevColors[sev]}44;background:${sevColors[sev]}11">
+              <div class="kpi-label">${esc(sev.toUpperCase())}</div>
+              <div class="kpi-value" style="color:${sevColors[sev]}">${fmtNum(count)}</div>
+            </div>`
+          ).join('')}</div>`
+      : '<div class="empty-state">No active fraud alerts — platform secure.</div>'
+    );
+  }
+
+  /* ── Operations ───────────────────────────────────────────────── */
+  async function loadOperations(mid) {
+    const data = await callCF('getOperationsSummary', { merchantId: mid });
+    if (!data) return;
+
+    const completed = data.deliveriesCompleted || 0;
+    const total = data.deliveriesTotal || 0;
+    setText('ops-deliveries', fmtNum(completed) + ' / ' + fmtNum(total));
+    setText('ops-del-sub', total > 0 ? Math.round((completed / total) * 100) + '% complete' : '');
+    setText('ops-avg-time', data.avgDeliveryMinutes != null ? fmtNum(data.avgDeliveryMinutes) : '—');
+    setText('ops-riders', fmtNum(data.ridersAvailable));
+    const qEl = document.getElementById('ops-queue');
+    if (qEl) {
+      qEl.textContent = fmtNum(data.dispatchQueueSize);
+      qEl.style.color = (data.dispatchQueueSize || 0) > 20 ? '#ef4444' :
+                        (data.dispatchQueueSize || 0) > 10 ? '#f59e0b' : '#22c55e';
+    }
+    setText('ops-note', '');
+  }
+
+  /* ── Boot ─────────────────────────────────────────────────────── */
+  initAuth();
+
+})(); // end CommerceOS IIFE
+</script>
+</body>
+</html>

@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0f0f1a" />
+  <title>Business Health Score — SOKONI</title>
+  <link rel="icon" href="assets/logosokoni.png" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Design tokens ── */
+    :root {
+      --bg:           #0f0f1a;
+      --surface:      #1a1a2e;
+      --surface2:     #16213e;
+      --surface3:     #0d1b2a;
+      --border:       #2a2a4a;
+      --accent:       #7c3aed;
+      --accent-light: #a78bfa;
+      --text:         #e2e8f0;
+      --text-muted:   #94a3b8;
+      --grade-a-plus: #4CAF50;
+      --grade-a:      #8BC34A;
+      --grade-b:      #FFC107;
+      --grade-c:      #FF9800;
+      --grade-d:      #FF5722;
+      --grade-f:      #F44336;
+      --danger:       #ef4444;
+      --success:      #22c55e;
+      --warning:      #f59e0b;
+      --info:         #3b82f6;
+      --r:            12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 15px;
+      min-height: 100vh;
+      padding-bottom: 60px;
+    }
+
+    /* ── Header ── */
+    .hdr {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 60px;
+      flex-wrap: wrap;
+    }
+    .hdr-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 16px;
+      white-space: nowrap;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .hdr-logo img { width: 28px; height: 28px; object-fit: contain; }
+    .hdr-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .hdr-spacer { flex: 1; }
+    .hdr-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .hdr-input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 6px 10px;
+      outline: none;
+      width: 180px;
+      transition: border-color .2s;
+    }
+    .hdr-input:focus { border-color: var(--accent); }
+    .hdr-select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 6px 10px;
+      outline: none;
+      cursor: pointer;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: .9; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--accent-light); }
+    .btn-ghost.active { border-color: var(--accent); color: var(--accent-light); }
+
+    /* ── Main layout ── */
+    .main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 40px; }
+
+    /* ── Loading / error ── */
+    .loading-banner {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-banner {
+      background: rgba(239,68,68,.1);
+      border: 1px solid rgba(239,68,68,.3);
+      border-radius: var(--r);
+      padding: 16px 20px;
+      color: var(--danger);
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    /* ── Score hero ── */
+    .score-hero {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 32px;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 32px;
+      margin-bottom: 20px;
+    }
+    .gauge-wrap {
+      position: relative;
+      width: 160px;
+      height: 160px;
+      flex-shrink: 0;
+    }
+    .gauge-ring {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: conic-gradient(var(--gauge-color, var(--accent)) var(--gauge-deg, 0deg), #2d2d4e 0deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .gauge-inner {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+    .gauge-score {
+      font-size: 36px;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--gauge-color, var(--accent-light));
+    }
+    .gauge-grade {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--gauge-color, var(--accent-light));
+    }
+    .score-meta { display: flex; flex-direction: column; gap: 12px; }
+    .score-label { font-size: 28px; font-weight: 700; }
+    .score-strip {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .score-stat { display: flex; flex-direction: column; gap: 2px; }
+    .score-stat-val {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .score-stat-lbl {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .trend-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .trend-improving { background: rgba(34,197,94,.12);  color: var(--success); border: 1px solid rgba(34,197,94,.3); }
+    .trend-stable    { background: rgba(59,130,246,.12);  color: var(--info);    border: 1px solid rgba(59,130,246,.3); }
+    .trend-declining { background: rgba(239,68,68,.12);  color: var(--danger);  border: 1px solid rgba(239,68,68,.3); }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: rgba(124,58,237,.15);
+      color: var(--accent-light);
+      border: 1px solid rgba(124,58,237,.3);
+    }
+
+    /* ── Dimension grid ── */
+    .dim-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .dim-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 14px 16px;
+      transition: border-color .2s;
+    }
+    .dim-card:hover { border-color: var(--accent); }
+    .dim-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .dim-name {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .dim-grade-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #fff;
+    }
+    .dim-score-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .dim-score-val {
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .dim-weight {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .dim-bar-track {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .dim-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width .6s ease;
+    }
+
+    /* ── Radar chart section ── */
+    .radar-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .radar-wrap {
+      max-width: 420px;
+      margin: 0 auto;
+    }
+
+    /* ── Rec / alert / growth cards ── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .info-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 16px;
+    }
+    .priority-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .priority-high     { background: rgba(239,68,68,.15);   color: var(--danger);  border: 1px solid rgba(239,68,68,.3);   }
+    .priority-medium   { background: rgba(245,158,11,.15);  color: var(--warning); border: 1px solid rgba(245,158,11,.3);  }
+    .priority-low      { background: rgba(59,130,246,.15);  color: var(--info);    border: 1px solid rgba(59,130,246,.3);  }
+    .severity-critical { background: rgba(239,68,68,.15);   color: var(--danger);  border: 1px solid rgba(239,68,68,.3);   }
+    .severity-high     { background: rgba(239,68,68,.10);   color: #f87171;        border: 1px solid rgba(239,68,68,.2);   }
+    .severity-medium   { background: rgba(245,158,11,.10);  color: var(--warning); border: 1px solid rgba(245,158,11,.2);  }
+    .info-card-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    .info-card-body  { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+    .info-card-impact {
+      margin-top: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--success);
+    }
+
+    /* Alert cards */
+    .alert-card {
+      background: rgba(239,68,68,.06);
+      border: 1px solid rgba(239,68,68,.25);
+      border-radius: var(--r);
+      padding: 16px;
+      margin-bottom: 10px;
+    }
+    /* Growth cards */
+    .growth-card {
+      background: rgba(34,197,94,.06);
+      border: 1px solid rgba(34,197,94,.25);
+      border-radius: var(--r);
+      padding: 16px;
+      margin-bottom: 10px;
+    }
+
+    /* ── Sparkline section ── */
+    .sparkline-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    #sparklineCanvas {
+      width: 100%;
+      height: 80px;
+      display: block;
+    }
+
+    /* ── Benchmark section ── */
+    .benchmark-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .benchmark-toggle {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .benchmark-bars { display: flex; flex-direction: column; gap: 10px; }
+    .bench-row { display: flex; flex-direction: column; gap: 4px; }
+    .bench-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .bench-track {
+      width: 100%;
+      height: 8px;
+      background: var(--border);
+      border-radius: 8px;
+      position: relative;
+      overflow: visible;
+    }
+    .bench-fill-merchant {
+      height: 100%;
+      border-radius: 8px;
+      background: var(--accent);
+      position: relative;
+    }
+    .bench-fill-industry {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      border-radius: 8px;
+      background: rgba(255,255,255,.15);
+      border: 1px dashed rgba(255,255,255,.35);
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      animation: fadeIn .2s ease;
+      max-width: 300px;
+    }
+    .toast-red    { background: #dc2626; }
+    .toast-green  { background: #16a34a; }
+    .toast-blue   { background: #2563eb; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .dim-grid     { grid-template-columns: 1fr 1fr; }
+      .cards-grid   { grid-template-columns: 1fr; }
+      .score-hero   { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+      .score-strip  { justify-content: center; }
+      .hdr          { height: auto; padding: 10px 16px; gap: 8px; }
+      .hdr-input    { width: 140px; }
+    }
+    @media (max-width: 480px) {
+      .dim-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ───────────────────────────────────────────────────────────────── -->
+<header class="hdr">
+  <a href="index.html" class="hdr-logo">
+    <img src="assets/logosokoni.png" alt="SOKONI" onerror="this.style.display='none'" />
+    SOKONI
+  </a>
+  <span class="hdr-title">Business Health Score</span>
+  <div class="hdr-spacer"></div>
+  <div class="hdr-controls">
+    <input id="merchantInput" class="hdr-input" type="text" placeholder="Merchant ID..." />
+    <select id="periodSelect" class="hdr-select">
+      <option value="month">Last 30 days</option>
+      <option value="week">Last 7 days</option>
+      <option value="day">Today</option>
+    </select>
+    <button class="btn btn-primary" onclick="BusinessHealth.load()">Load Score</button>
+    <a href="admin.html" class="btn btn-ghost">Back</a>
+  </div>
+</header>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────────── -->
+<main class="main" id="main">
+  <div id="errorBanner" class="error-banner"></div>
+
+  <!-- Default empty state -->
+  <div id="emptyState" class="loading-banner">
+    <div style="font-size:48px;margin-bottom:12px;">📊</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px;">Business Health Score</div>
+    <div style="color:var(--text-muted);">Enter a Merchant ID above and click Load Score.</div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="loadingState" class="loading-banner" style="display:none;">
+    <div class="spinner"></div>
+    <div>Computing health score…</div>
+  </div>
+
+  <!-- Score content — hidden until loaded -->
+  <div id="scoreContent" style="display:none;">
+
+    <!-- Score Hero -->
+    <div class="score-hero" id="heroSection">
+      <div class="gauge-wrap">
+        <div class="gauge-ring" id="gaugeRing">
+          <div class="gauge-inner">
+            <div class="gauge-score" id="gaugeScore">—</div>
+            <div class="gauge-grade" id="gaugeGrade">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="score-meta">
+        <div class="score-label" id="scoreLabel">—</div>
+        <div class="score-strip">
+          <div class="score-stat">
+            <div class="score-stat-val" id="statPrev">—</div>
+            <div class="score-stat-lbl">Previous Score</div>
+          </div>
+          <div class="score-stat">
+            <div class="score-stat-val" id="statTrend">—</div>
+            <div class="score-stat-lbl">Trend</div>
+          </div>
+          <div class="score-stat">
+            <div class="score-stat-val" id="statDate">—</div>
+            <div class="score-stat-lbl">Computed</div>
+          </div>
+          <div class="score-stat">
+            <div id="trendBadge"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dimension Breakdown -->
+    <div class="section-title">
+      Dimension Breakdown <span class="badge">10 dimensions</span>
+    </div>
+    <div class="dim-grid" id="dimGrid"></div>
+
+    <!-- Radar Chart -->
+    <div class="radar-section">
+      <div class="section-title">Performance Radar</div>
+      <div class="radar-wrap">
+        <canvas id="radarCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="section-title">Recommendations <span class="badge">AI-powered</span></div>
+    <div class="cards-grid" id="recsGrid"></div>
+
+    <!-- Risk Alerts -->
+    <div class="section-title" id="riskTitle" style="display:none;">
+      Risk Alerts <span class="badge" style="background:rgba(239,68,68,.15);color:var(--danger);border-color:rgba(239,68,68,.3);">Action needed</span>
+    </div>
+    <div id="riskGrid"></div>
+
+    <!-- Growth Opportunities -->
+    <div class="section-title">Growth Opportunities</div>
+    <div id="growthGrid"></div>
+
+    <!-- Score History Sparkline -->
+    <div class="sparkline-section">
+      <div class="section-title">Score History (last 30 days)</div>
+      <canvas id="sparklineCanvas"></canvas>
+    </div>
+
+    <!-- Benchmark Comparison -->
+    <div class="benchmark-section">
+      <div class="section-title">Benchmark Comparison</div>
+      <div class="benchmark-toggle" id="benchToggle">
+        <button class="btn btn-ghost active" onclick="BusinessHealth.toggleBenchmark('retail')"    data-ind="retail">Retail</button>
+        <button class="btn btn-ghost"        onclick="BusinessHealth.toggleBenchmark('restaurant')" data-ind="restaurant">Restaurant</button>
+        <button class="btn btn-ghost"        onclick="BusinessHealth.toggleBenchmark('pharmacy')"  data-ind="pharmacy">Pharmacy</button>
+        <button class="btn btn-ghost"        onclick="BusinessHealth.toggleBenchmark('fuel')"      data-ind="fuel">Fuel</button>
+        <button class="btn btn-ghost"        onclick="BusinessHealth.toggleBenchmark('wholesale')" data-ind="wholesale">Wholesale</button>
+      </div>
+      <div class="benchmark-bars" id="benchBars"></div>
+    </div>
+
+  </div><!-- /scoreContent -->
+</main>
+
+<div id="toast"></div>
+
+<!-- ── Firebase ──────────────────────────────────────────────────────────────── -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Business Health Score — IIFE
+══════════════════════════════════════════════════════════════════════════════ */
+const BusinessHealth = (() => {
+
+  /* ── State ── */
+  let _user          = null;
+  let _currentData   = null;
+  let _radarChart    = null;
+  let _activeBenchInd = 'retail';
+
+  /* ── Auth guard ── */
+  firebase.auth().onAuthStateChanged((user) => {
+    if (!user) {
+      location.href = 'login.html?redirect=business-health.html';
+      return;
+    }
+    _user = user;
+  });
+
+  /* ── CF helper ── */
+  function _cf(name) { return firebase.functions().httpsCallable(name); }
+
+  /* ── Toast ── */
+  function _toast(msg, type = 'blue') {
+    const el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.textContent = msg;
+    document.getElementById('toast').appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+
+  /* ── Escape HTML ── */
+  function _esc(s) {
+    return String(s || '').replace(/[<>"'&]/g, (c) =>
+      ({ '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;', '&': '&amp;' }[c])
+    );
+  }
+
+  /* ── Grade color helper ── */
+  function _gradeColor(grade) {
+    const map = {
+      'A+': '#4CAF50', A: '#8BC34A', B: '#FFC107',
+      C: '#FF9800', D: '#FF5722', F: '#F44336',
+    };
+    return map[grade] || '#7c3aed';
+  }
+
+  /* ── Show/hide states ── */
+  function _showLoading() {
+    document.getElementById('emptyState').style.display   = 'none';
+    document.getElementById('loadingState').style.display = 'block';
+    document.getElementById('scoreContent').style.display = 'none';
+    document.getElementById('errorBanner').style.display  = 'none';
+  }
+  function _showContent() {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('scoreContent').style.display = 'block';
+  }
+  function _showError(msg) {
+    document.getElementById('loadingState').style.display = 'none';
+    const el = document.getElementById('errorBanner');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('emptyState').style.display = 'block';
+  }
+
+  /* ── Render gauge ── */
+  function renderGauge(score, grade, color) {
+    const deg = Math.round(score * 3.6);
+    const ring = document.getElementById('gaugeRing');
+    ring.style.setProperty('--gauge-color', color);
+    ring.style.setProperty('--gauge-deg', deg + 'deg');
+    ring.style.background = `conic-gradient(${color} ${deg}deg, #2d2d4e 0deg)`;
+
+    document.getElementById('gaugeScore').textContent = score;
+    document.getElementById('gaugeScore').style.color = color;
+    document.getElementById('gaugeGrade').textContent = grade;
+    document.getElementById('gaugeGrade').style.color = color;
+  }
+
+  /* ── Render score hero meta ── */
+  function renderHeroMeta(data) {
+    document.getElementById('scoreLabel').textContent = data.label || '—';
+
+    const prev = data.previousScore;
+    document.getElementById('statPrev').textContent = prev !== null ? prev : '—';
+    document.getElementById('statTrend').textContent =
+      data.trend === 'improving' ? '↑' : data.trend === 'declining' ? '↓' : '→';
+    document.getElementById('statDate').textContent =
+      data.date || new Date().toISOString().slice(0, 10);
+
+    const trendBadge = document.getElementById('trendBadge');
+    const trendClass = data.trend === 'improving' ? 'trend-improving' :
+                       data.trend === 'declining' ? 'trend-declining' : 'trend-stable';
+    const trendIcon  = data.trend === 'improving' ? '↑ Improving' :
+                       data.trend === 'declining' ? '↓ Declining' : '→ Stable';
+    trendBadge.innerHTML = `<span class="trend-badge ${trendClass}">${_esc(trendIcon)}</span>`;
+  }
+
+  /* ── Render dimension cards ── */
+  function renderDimensions(dimensions) {
+    const grid = document.getElementById('dimGrid');
+    grid.innerHTML = Object.entries(dimensions).map(([key, dim]) => {
+      const color = _gradeColor(dim.grade);
+      const pct   = dim.score;
+      return `
+        <div class="dim-card">
+          <div class="dim-card-header">
+            <span class="dim-name">${_esc(dim.label)}</span>
+            <span class="dim-grade-badge" style="background:${color}22;color:${color};border:1px solid ${color}44">${_esc(dim.grade)}</span>
+          </div>
+          <div class="dim-score-row">
+            <span class="dim-score-val" style="color:${color}">${dim.score}</span>
+            <span class="dim-weight">${Math.round(dim.weight * 100)}% weight</span>
+          </div>
+          <div class="dim-bar-track">
+            <div class="dim-bar-fill" style="width:${pct}%;background:${color};"></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  /* ── Render radar chart ── */
+  function renderRadarChart(dimensions) {
+    const ctx = document.getElementById('radarCanvas').getContext('2d');
+    if (_radarChart) { _radarChart.destroy(); _radarChart = null; }
+
+    const labels = Object.values(dimensions).map((d) => d.label);
+    const data   = Object.values(dimensions).map((d) => d.score);
+
+    _radarChart = new Chart(ctx, {
+      type: 'radar',
+      data: {
+        labels,
+        datasets: [{
+          label:            'Health Score',
+          data,
+          backgroundColor:  'rgba(124,58,237,.15)',
+          borderColor:      '#7c3aed',
+          pointBackgroundColor: '#a78bfa',
+          pointBorderColor:     '#fff',
+          pointRadius: 4,
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive:          true,
+        maintainAspectRatio: true,
+        scales: {
+          r: {
+            min: 0, max: 100,
+            ticks: { stepSize: 25, color: '#94a3b8', font: { size: 10 }, backdropColor: 'transparent' },
+            grid:  { color: '#2a2a4a' },
+            angleLines: { color: '#2a2a4a' },
+            pointLabels: { color: '#94a3b8', font: { size: 11 } },
+          },
+        },
+        plugins: {
+          legend: { labels: { color: '#e2e8f0', font: { size: 12 } } },
+        },
+      },
+    });
+  }
+
+  /* ── Render recommendations ── */
+  function renderRecommendations(recs) {
+    const grid = document.getElementById('recsGrid');
+    if (!recs || !recs.length) {
+      grid.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No recommendations at this time.</p>';
+      return;
+    }
+    grid.innerHTML = recs.map((r) => `
+      <div class="info-card">
+        <span class="priority-badge priority-${_esc(r.priority || 'medium')}">${_esc(r.priority || 'medium')}</span>
+        <div class="info-card-title">${_esc(r.title)}</div>
+        <div class="info-card-body">${_esc(r.description)}</div>
+        ${r.impact ? `<div class="info-card-impact">${_esc(r.impact)}</div>` : ''}
+      </div>`).join('');
+  }
+
+  /* ── Render risk alerts ── */
+  function renderRiskAlerts(alerts) {
+    const riskTitle = document.getElementById('riskTitle');
+    const grid      = document.getElementById('riskGrid');
+    if (!alerts || !alerts.length) {
+      riskTitle.style.display = 'none';
+      grid.innerHTML = '';
+      return;
+    }
+    riskTitle.style.display = 'flex';
+    grid.innerHTML = alerts.map((a) => `
+      <div class="alert-card">
+        <span class="priority-badge severity-${_esc(a.severity || 'high')}">${_esc(a.severity || 'high')}</span>
+        <div class="info-card-title">${_esc(a.title)}</div>
+        <div class="info-card-body">${_esc(a.description)}</div>
+      </div>`).join('');
+  }
+
+  /* ── Render growth opportunities ── */
+  function renderGrowthOpportunities(opps) {
+    const grid = document.getElementById('growthGrid');
+    if (!opps || !opps.length) {
+      grid.innerHTML = '<p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">No growth opportunities identified.</p>';
+      return;
+    }
+    grid.innerHTML = opps.map((o) => `
+      <div class="growth-card">
+        <div class="info-card-title" style="color:var(--success)">${_esc(o.title)}</div>
+        <div class="info-card-body">${_esc(o.description)}</div>
+        ${o.estimatedImpact ? `<div class="info-card-impact">${_esc(o.estimatedImpact)}</div>` : ''}
+      </div>`).join('');
+  }
+
+  /* ── Render sparkline (Canvas 2D) ── */
+  function renderHistory(scores) {
+    const canvas = document.getElementById('sparklineCanvas');
+    if (!scores || !scores.length) {
+      const ctx2 = canvas.getContext('2d');
+      ctx2.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    // Use display width
+    const W  = canvas.offsetWidth || 600;
+    const H  = 80;
+    canvas.width  = W;
+    canvas.height = H;
+    const ctx2 = canvas.getContext('2d');
+    ctx2.clearRect(0, 0, W, H);
+
+    // Reverse so oldest first (left to right)
+    const pts  = [...scores].reverse();
+    const vals = pts.map((s) => s.score || 0);
+    const minV = Math.max(0, Math.min(...vals) - 5);
+    const maxV = Math.min(100, Math.max(...vals) + 5);
+    const range = maxV - minV || 1;
+
+    const xStep = (W - 40) / Math.max(pts.length - 1, 1);
+    const toX   = (i) => 20 + i * xStep;
+    const toY   = (v) => H - 12 - ((v - minV) / range) * (H - 24);
+
+    // Gradient fill
+    const gradient = ctx2.createLinearGradient(0, 0, 0, H);
+    gradient.addColorStop(0, 'rgba(124,58,237,.4)');
+    gradient.addColorStop(1, 'rgba(124,58,237,.02)');
+
+    ctx2.beginPath();
+    ctx2.moveTo(toX(0), toY(vals[0]));
+    for (let i = 1; i < vals.length; i++) {
+      const cpx = (toX(i - 1) + toX(i)) / 2;
+      ctx2.bezierCurveTo(cpx, toY(vals[i - 1]), cpx, toY(vals[i]), toX(i), toY(vals[i]));
+    }
+    // Fill
+    ctx2.lineTo(toX(vals.length - 1), H);
+    ctx2.lineTo(toX(0), H);
+    ctx2.closePath();
+    ctx2.fillStyle = gradient;
+    ctx2.fill();
+
+    // Line
+    ctx2.beginPath();
+    ctx2.moveTo(toX(0), toY(vals[0]));
+    for (let i = 1; i < vals.length; i++) {
+      const cpx = (toX(i - 1) + toX(i)) / 2;
+      ctx2.bezierCurveTo(cpx, toY(vals[i - 1]), cpx, toY(vals[i]), toX(i), toY(vals[i]));
+    }
+    ctx2.strokeStyle = '#7c3aed';
+    ctx2.lineWidth   = 2;
+    ctx2.stroke();
+
+    // Dots
+    vals.forEach((v, i) => {
+      ctx2.beginPath();
+      ctx2.arc(toX(i), toY(v), 3, 0, Math.PI * 2);
+      ctx2.fillStyle = '#a78bfa';
+      ctx2.fill();
+    });
+
+    // Labels (first and last)
+    ctx2.fillStyle    = '#94a3b8';
+    ctx2.font         = '10px system-ui';
+    ctx2.textAlign    = 'center';
+    if (pts[0]) ctx2.fillText(pts[0].date.slice(5), toX(0), H - 1);
+    if (pts.length > 1) ctx2.fillText(pts[pts.length - 1].date.slice(5), toX(pts.length - 1), H - 1);
+  }
+
+  /* ── Render benchmarks ── */
+  function renderBenchmarks(benchmarks, currentDimensions) {
+    const bars = document.getElementById('benchBars');
+    if (!benchmarks) { bars.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No benchmark data.</p>'; return; }
+
+    bars.innerHTML = Object.entries(benchmarks).map(([key, bench]) => {
+      const merchantScore = currentDimensions?.[key]?.score ?? 0;
+      const benchScore    = bench.score || 0;
+      const label         = bench.label || key;
+      return `
+        <div class="bench-row">
+          <div class="bench-label">
+            <span>${_esc(label)}</span>
+            <span>
+              <span style="color:var(--accent-light)">${merchantScore}</span>
+              <span style="color:var(--text-muted)"> vs ${benchScore} industry</span>
+            </span>
+          </div>
+          <div class="bench-track" style="position:relative;height:8px;background:var(--border);border-radius:8px;overflow:hidden;">
+            <div class="bench-fill-merchant" style="width:${merchantScore}%;background:var(--accent);height:100%;border-radius:8px;"></div>
+            <div style="position:absolute;top:0;left:${benchScore}%;width:2px;height:100%;background:rgba(255,255,255,.5);"></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  /* ── Toggle benchmark industry ── */
+  async function toggleBenchmark(industryType) {
+    _activeBenchInd = industryType;
+
+    // Update button states
+    document.querySelectorAll('#benchToggle .btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.ind === industryType);
+    });
+
+    if (!_currentData) return;
+    try {
+      const res = await _cf('getHealthScoreBenchmarks')({ industryType });
+      renderBenchmarks(res.data.benchmarks, _currentData.dimensions);
+    } catch (e) {
+      _toast('Failed to load benchmarks', 'red');
+    }
+  }
+
+  /* ── Main load function ── */
+  async function load(merchantIdArg, periodArg) {
+    const merchantId = merchantIdArg
+      || document.getElementById('merchantInput').value.trim()
+      || (_user && _user.uid);
+    const period = periodArg || document.getElementById('periodSelect').value || 'month';
+
+    if (!merchantId) {
+      _toast('Enter a Merchant ID', 'red');
+      return;
+    }
+
+    _showLoading();
+
+    try {
+      // Load health score and history in parallel
+      const [scoreRes, histRes] = await Promise.all([
+        _cf('getBusinessHealthScore')({ merchantId, period, includeAI: true }),
+        _cf('getHealthScoreHistory')({ merchantId, days: 30 }).catch(() => ({ data: { scores: [] } })),
+      ]);
+
+      const data = scoreRes.data;
+      _currentData = data;
+
+      // Render all sections
+      renderGauge(data.score, data.grade, data.color || '#7c3aed');
+      renderHeroMeta(data);
+      renderDimensions(data.dimensions);
+      renderRadarChart(data.dimensions);
+      renderRecommendations(data.recommendations);
+      renderRiskAlerts(data.riskAlerts);
+      renderGrowthOpportunities(data.growthOpportunities);
+      renderHistory(histRes.data.scores || []);
+
+      // Load default benchmarks
+      try {
+        const benchRes = await _cf('getHealthScoreBenchmarks')({ industryType: _activeBenchInd });
+        renderBenchmarks(benchRes.data.benchmarks, data.dimensions);
+      } catch (_) {
+        document.getElementById('benchBars').innerHTML =
+          '<p style="color:var(--text-muted);font-size:13px;">Benchmarks unavailable.</p>';
+      }
+
+      _showContent();
+      _toast(`Score loaded: ${data.score} (${data.grade})`, 'green');
+
+    } catch (err) {
+      console.error('[BusinessHealth.load]', err);
+      const msg = err.code === 'functions/unauthenticated'
+        ? 'Session expired. Please log in again.'
+        : err.message || 'Failed to load health score.';
+      _showError(msg);
+      _toast(msg, 'red');
+    }
+  }
+
+  /* ── Public API ── */
+  return { load, toggleBenchmark };
+
+})();
+</script>
+</body>
+</html>

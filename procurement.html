@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOKONI Procurement</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f0f1a;color:#e2e8f0;min-height:100vh}
+header{background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid #2d2d4e}
+.logo{font-size:1.3rem;font-weight:800;color:#7c3aed;letter-spacing:1px}
+.logo span{color:#22c55e;font-size:.8rem;margin-left:6px;font-weight:500}
+.mid-row{display:flex;align-items:center;gap:8px;margin-left:auto}
+.mid-row input{background:#0f0f1a;border:1px solid #2d2d4e;color:#e2e8f0;padding:7px 12px;border-radius:6px;font-size:.85rem;width:180px}
+.mid-row input:focus{outline:none;border-color:#7c3aed}
+.btn{padding:7px 16px;border:none;border-radius:6px;cursor:pointer;font-size:.83rem;font-weight:600;transition:.15s}
+.btn-primary{background:#7c3aed;color:#fff}.btn-primary:hover{background:#6d28d9}
+.btn-success{background:#22c55e;color:#0f0f1a}.btn-success:hover{background:#16a34a}
+.btn-sm{padding:4px 10px;font-size:.75rem}
+.btn-outline{background:transparent;border:1px solid #2d2d4e;color:#94a3b8}.btn-outline:hover{border-color:#7c3aed;color:#7c3aed}
+.btn-danger{background:#ef4444;color:#fff}
+.tabs{display:flex;gap:6px;padding:14px 20px;overflow-x:auto;background:#1a1a2e;border-bottom:1px solid #2d2d4e;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:7px 16px;border-radius:20px;cursor:pointer;white-space:nowrap;font-size:.83rem;font-weight:600;border:1px solid transparent;color:#94a3b8;transition:.15s}
+.tab.active{background:#7c3aed;color:#fff;border-color:#7c3aed}
+.tab:hover:not(.active){border-color:#2d2d4e;color:#e2e8f0}
+main{padding:20px;max-width:1200px;margin:0 auto}
+.panel{display:none}.panel.active{display:block}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:20px}
+.kpi{background:#1a1a2e;border-radius:10px;padding:16px;border:1px solid #2d2d4e}
+.kpi .label{font-size:.73rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.kpi .value{font-size:1.7rem;font-weight:700}
+.kpi .value.orange{color:#f59e0b}.kpi .value.blue{color:#3b82f6}.kpi .value.green{color:#22c55e}
+.section{background:#1a1a2e;border-radius:10px;border:1px solid #2d2d4e;margin-bottom:16px;overflow:hidden}
+.section-header{padding:12px 16px;font-weight:700;font-size:.88rem;border-bottom:1px solid #2d2d4e;display:flex;align-items:center;justify-content:space-between}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+th{padding:10px 14px;text-align:left;color:#94a3b8;font-weight:600;font-size:.73rem;text-transform:uppercase;border-bottom:1px solid #2d2d4e;white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid #13132a;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1f1f35}
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:.72rem;font-weight:700;letter-spacing:.3px}
+.badge-gray{background:#374151;color:#9ca3af}
+.badge-orange{background:#78350f;color:#f59e0b}
+.badge-green{background:#14532d;color:#22c55e}
+.badge-blue{background:#1e3a5f;color:#60a5fa}
+.badge-teal{background:#134e4a;color:#2dd4bf}
+.badge-red{background:#7f1d1d;color:#ef4444}
+.top-bar{display:flex;align-items:center;gap:10px;padding:12px 16px;flex-wrap:wrap}
+.filter-select{background:#0f0f1a;border:1px solid #2d2d4e;color:#e2e8f0;padding:6px 12px;border-radius:6px;font-size:.82rem}
+.stars{color:#f59e0b;font-size:.85rem}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal{background:#1a1a2e;border:1px solid #2d2d4e;border-radius:12px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
+.modal-head{padding:16px 20px;border-bottom:1px solid #2d2d4e;display:flex;align-items:center;justify-content:space-between;font-weight:700}
+.modal-body{padding:20px}
+.modal-foot{padding:14px 20px;border-top:1px solid #2d2d4e;display:flex;gap:10px;justify-content:flex-end}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:.78rem;color:#94a3b8;margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.field input,.field select,.field textarea{width:100%;background:#0f0f1a;border:1px solid #2d2d4e;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:.85rem}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#7c3aed}
+.field textarea{resize:vertical;min-height:70px}
+.items-table{width:100%;font-size:.8rem;margin-top:8px}
+.items-table th{background:#0f0f1a;padding:6px 8px;text-align:left;color:#94a3b8;font-size:.72rem}
+.items-table td{padding:5px 4px}
+.items-table input{background:#0f0f1a;border:1px solid #2d2d4e;color:#e2e8f0;padding:5px 7px;border-radius:4px;width:100%;font-size:.8rem}
+.add-row-btn{background:transparent;border:1px dashed #2d2d4e;color:#94a3b8;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:.78rem;margin-top:8px;width:100%}
+.add-row-btn:hover{border-color:#7c3aed;color:#7c3aed}
+.close-btn{background:transparent;border:none;color:#94a3b8;font-size:1.2rem;cursor:pointer;line-height:1}
+.close-btn:hover{color:#ef4444}
+.empty{text-align:center;color:#4b5563;padding:30px;font-size:.85rem}
+.action-btns{display:flex;gap:5px;flex-wrap:wrap}
+@media(max-width:600px){.kpi .value{font-size:1.3rem}.modal{max-height:95vh}.logo span{display:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SOKONI<span>Procurement</span></div>
+  <div class="mid-row">
+    <input type="text" id="midInput" placeholder="Merchant ID" autocomplete="off">
+    <button class="btn btn-primary" onclick="ProcurementPortal.load()">Load</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="ProcurementPortal.tab(0)">Dashboard</div>
+  <div class="tab" onclick="ProcurementPortal.tab(1)">Purchase Orders</div>
+  <div class="tab" onclick="ProcurementPortal.tab(2)">Suppliers</div>
+  <div class="tab" onclick="ProcurementPortal.tab(3)">GRN</div>
+  <div class="tab" onclick="ProcurementPortal.tab(4)">Invoices</div>
+  <div class="tab" onclick="ProcurementPortal.tab(5)">Forecast</div>
+</div>
+
+<main>
+  <!-- Tab 0: Dashboard -->
+  <div class="panel active" id="panel-0">
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label">Open POs</div><div class="value" id="kpi-open">—</div></div>
+      <div class="kpi"><div class="label">Pending Approval</div><div class="value orange" id="kpi-approval">—</div></div>
+      <div class="kpi"><div class="label">Goods to Receive</div><div class="value blue" id="kpi-grn">—</div></div>
+      <div class="kpi"><div class="label">Pending Invoices (KES)</div><div class="value" id="kpi-invoices">—</div></div>
+    </div>
+    <div class="section">
+      <div class="section-header">Reorder Alerts</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Product</th><th>SKU</th><th>Current Stock</th><th>Reorder Point</th><th>Suggested Qty</th><th>Action</th></tr></thead>
+        <tbody id="reorder-tbody"><tr><td colspan="6" class="empty">Load a merchant to view alerts</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="section">
+      <div class="section-header">Top 5 Suppliers by Spend</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Supplier</th><th>Total Spend (KES)</th><th>Orders</th><th>Rating</th></tr></thead>
+        <tbody id="top-suppliers-tbody"><tr><td colspan="4" class="empty">—</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- Tab 1: Purchase Orders -->
+  <div class="panel" id="panel-1">
+    <div class="section">
+      <div class="top-bar">
+        <button class="btn btn-primary btn-sm" onclick="ProcurementPortal.openNewPO()">+ New PO</button>
+        <select class="filter-select" id="po-filter" onchange="ProcurementPortal.loadPOs(ProcurementPortal.mid,this.value)">
+          <option value="All">All</option>
+          <option value="draft">Draft</option>
+          <option value="pending_approval">Pending Approval</option>
+          <option value="approved">Approved</option>
+          <option value="sent">Sent</option>
+          <option value="received">Received</option>
+          <option value="paid">Paid</option>
+        </select>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>PO#</th><th>Supplier</th><th>Date</th><th>Items</th><th>Total (KES)</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="po-tbody"><tr><td colspan="7" class="empty">No purchase orders</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- Tab 2: Suppliers -->
+  <div class="panel" id="panel-2">
+    <div class="section">
+      <div class="top-bar">
+        <button class="btn btn-primary btn-sm" onclick="ProcurementPortal.openAddSupplier()">+ Add Supplier</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Name</th><th>Contact</th><th>Phone</th><th>Credit Limit (KES)</th><th>Terms (days)</th><th>Rating</th><th>Status</th></tr></thead>
+        <tbody id="supplier-tbody"><tr><td colspan="7" class="empty">No suppliers</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- Tab 3: GRN -->
+  <div class="panel" id="panel-3">
+    <div class="section">
+      <div class="section-header">Goods Received Notes</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>GRN#</th><th>PO#</th><th>Supplier</th><th>Date</th><th>Total Received</th><th>Discrepancies</th><th>Action</th></tr></thead>
+        <tbody id="grn-tbody"><tr><td colspan="7" class="empty">No GRNs</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- Tab 4: Invoices -->
+  <div class="panel" id="panel-4">
+    <div class="section">
+      <div class="section-header">Supplier Invoices</div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Invoice#</th><th>Supplier</th><th>PO#</th><th>Amount (KES)</th><th>Due Date</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="invoice-tbody"><tr><td colspan="7" class="empty">No invoices</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- Tab 5: Forecast -->
+  <div class="panel" id="panel-5">
+    <div class="section">
+      <div class="section-header">
+        Reorder Forecast
+        <button class="btn btn-primary btn-sm" onclick="ProcurementPortal.createPOFromForecast()">Create PO from Forecast</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Product</th><th>Branch</th><th>Current Qty</th><th>Avg Daily Usage</th><th>Lead Days</th><th>Suggested Order Qty</th><th>Preferred Supplier</th></tr></thead>
+        <tbody id="forecast-tbody"><tr><td colspan="7" class="empty">No forecast data</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+</main>
+
+<!-- Modal: New PO -->
+<div class="modal-bg" id="modal-po">
+  <div class="modal">
+    <div class="modal-head">New Purchase Order <button class="close-btn" onclick="ProcurementPortal.closeModal('modal-po')">&#x2715;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Supplier *</label><select id="po-supplier"></select></div>
+      <div class="field"><label>Expected Delivery *</label><input type="date" id="po-delivery"></div>
+      <div class="field"><label>Notes</label><textarea id="po-notes" rows="2"></textarea></div>
+      <div class="field"><label>Items</label>
+        <table class="items-table">
+          <thead><tr><th>Product Name</th><th>SKU</th><th>Qty</th><th>Unit Cost (KES)</th></tr></thead>
+          <tbody id="po-items-body"></tbody>
+        </table>
+        <button class="add-row-btn" onclick="ProcurementPortal.addItemRow()">+ Add Item</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="ProcurementPortal.closeModal('modal-po')">Cancel</button>
+      <button class="btn btn-primary" onclick="ProcurementPortal.submitPO()">Create PO</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Supplier -->
+<div class="modal-bg" id="modal-supplier">
+  <div class="modal">
+    <div class="modal-head">Add Supplier <button class="close-btn" onclick="ProcurementPortal.closeModal('modal-supplier')">&#x2715;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Name *</label><input type="text" id="sup-name"></div>
+      <div class="field"><label>Contact Name *</label><input type="text" id="sup-contact"></div>
+      <div class="field"><label>Phone *</label><input type="tel" id="sup-phone"></div>
+      <div class="field"><label>Email</label><input type="email" id="sup-email"></div>
+      <div class="field"><label>KRA PIN</label><input type="text" id="sup-kra" maxlength="11"></div>
+      <div class="field"><label>Payment Terms (days)</label><input type="number" id="sup-terms" value="30" min="0"></div>
+      <div class="field"><label>Credit Limit (KES)</label><input type="number" id="sup-credit" value="0" min="0"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="ProcurementPortal.closeModal('modal-supplier')">Cancel</button>
+      <button class="btn btn-success" onclick="ProcurementPortal.submitSupplier()">Save Supplier</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Receive Goods -->
+<div class="modal-bg" id="modal-grn">
+  <div class="modal">
+    <div class="modal-head">Receive Goods <button class="close-btn" onclick="ProcurementPortal.closeModal('modal-grn')">&#x2715;</button></div>
+    <div class="modal-body" id="grn-modal-body"></div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="ProcurementPortal.closeModal('modal-grn')">Cancel</button>
+      <button class="btn btn-success" onclick="ProcurementPortal.submitGRN()">Confirm Receipt</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+const ProcurementPortal = (() => {
+  'use strict';
+
+  let mid = null, db, fn, currentPOId = null, forecastItems = [];
+
+  /* ── Utilities ── */
+  const _esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const _fmt = n => 'KES ' + Number(n || 0).toLocaleString('en-KE',
+    {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const _stars = r => '&#9733;'.repeat(Math.round(r || 0)) + '&#9734;'.repeat(5 - Math.round(r || 0));
+  const _badge = s => {
+    const map = {
+      draft:'gray', pending_approval:'orange', approved:'green', sent:'blue',
+      partially_received:'teal', received:'green', paid:'blue', cancelled:'red',
+      pending:'gray', overdue:'red'
+    };
+    return '<span class="badge badge-' + (map[s] || 'gray') + '">' + _esc((s || '').replace(/_/g, ' ')) + '</span>';
+  };
+  const _call = name => fn.httpsCallable(name);
+  const _q    = id   => document.getElementById(id);
+  const _toast = msg => {
+    const d = document.createElement('div');
+    Object.assign(d.style, {
+      position:'fixed', bottom:'20px', right:'20px', background:'#7c3aed', color:'#fff',
+      padding:'10px 18px', borderRadius:'8px', fontSize:'.83rem', zIndex:'9999', fontWeight:'600',
+      boxShadow:'0 4px 14px rgba(0,0,0,.5)'
+    });
+    d.textContent = msg;
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 3000);
+  };
+
+  /* ── Auth + Init ── */
+  const init = () => {
+    db = firebase.firestore();
+    fn = firebase.functions();
+    firebase.auth().onAuthStateChanged(user => {
+      if (!user) { window.location.href = 'login.html'; }
+    });
+    document.querySelectorAll('.modal-bg').forEach(bg => {
+      bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('open'); });
+    });
+  };
+
+  /* ── Tab switching ── */
+  const tab = idx => {
+    document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+    document.querySelectorAll('.panel').forEach((p, i) => p.classList.toggle('active', i === idx));
+    if (!mid) return;
+    const handlers = [
+      () => loadDashboard(mid),
+      () => loadPOs(mid, _q('po-filter')?.value || 'All'),
+      () => loadSuppliers(mid),
+      () => loadGRN(mid),
+      () => loadInvoices(mid),
+      () => loadForecast(mid)
+    ];
+    if (handlers[idx]) handlers[idx]();
+  };
+
+  /* ── Load merchant ── */
+  const load = () => {
+    const v = (_q('midInput').value || '').trim();
+    if (!v) { _toast('Enter a Merchant ID'); return; }
+    mid = v;
+    tab(0);
+  };
+
+  /* ── Dashboard ── */
+  const loadDashboard = async m => {
+    try {
+      const res = await _call('getProcurementDashboard')({merchantId: m});
+      const d = res.data;
+      _q('kpi-open').textContent     = d.openPOs ?? 0;
+      _q('kpi-approval').textContent = d.pendingApproval ?? 0;
+      _q('kpi-grn').textContent      = d.goodsToReceive ?? 0;
+      _q('kpi-invoices').textContent = _fmt(d.pendingInvoicesTotal ?? 0);
+
+      const alerts = Array.isArray(d.reorderAlerts) ? d.reorderAlerts : [];
+      _q('reorder-tbody').innerHTML = alerts.length
+        ? alerts.map(r => '<tr>' +
+            '<td>' + _esc(r.product) + '</td>' +
+            '<td>' + _esc(r.sku) + '</td>' +
+            '<td>' + (r.currentStock ?? 0) + '</td>' +
+            '<td>' + (r.reorderPoint ?? 0) + '</td>' +
+            '<td>' + (r.suggestedQty ?? 0) + '</td>' +
+            '<td><button class="btn btn-primary btn-sm" onclick="ProcurementPortal.openNewPOFor(' +
+              JSON.stringify(_esc(r.product)) + ',' +
+              JSON.stringify(_esc(r.sku || '')) + ',' +
+              Number(r.suggestedQty || 0) + ')">Create PO</button></td>' +
+          '</tr>').join('')
+        : '<tr><td colspan="6" class="empty">No reorder alerts</td></tr>';
+
+      const suppliers = Array.isArray(d.topSuppliers) ? d.topSuppliers : [];
+      _q('top-suppliers-tbody').innerHTML = suppliers.length
+        ? suppliers.map(s => '<tr>' +
+            '<td>' + _esc(s.name) + '</td>' +
+            '<td>' + _fmt(s.totalSpend) + '</td>' +
+            '<td>' + (s.orders ?? 0) + '</td>' +
+            '<td class="stars">' + _stars(s.rating) + '</td>' +
+          '</tr>').join('')
+        : '<tr><td colspan="4" class="empty">No supplier data</td></tr>';
+    } catch (e) { _toast('Dashboard error: ' + e.message); }
+  };
+
+  /* ── Purchase Orders ── */
+  const loadPOs = async (m, filter) => {
+    if (!m) return;
+    filter = filter || 'All';
+    try {
+      const res = await _call('getProcurementDashboard')({merchantId: m, listPOs: true, statusFilter: filter});
+      const rows = Array.isArray(res.data.purchaseOrders) ? res.data.purchaseOrders : [];
+      _q('po-tbody').innerHTML = rows.length
+        ? rows.map(po => '<tr>' +
+            '<td><strong>' + _esc(po.poNumber) + '</strong></td>' +
+            '<td>' + _esc(po.supplierName) + '</td>' +
+            '<td>' + (po.date || '').substring(0, 10) + '</td>' +
+            '<td>' + (po.itemCount ?? 0) + '</td>' +
+            '<td>' + _fmt(po.total) + '</td>' +
+            '<td>' + _badge(po.status) + '</td>' +
+            '<td><div class="action-btns">' +
+              (po.status === 'pending_approval'
+                ? '<button class="btn btn-success btn-sm" onclick="ProcurementPortal.approvePO(\'' + _esc(po.id) + '\',true)">Approve</button>'
+                : '') +
+              (po.status === 'sent'
+                ? '<button class="btn btn-outline btn-sm" onclick="ProcurementPortal.openGRN(\'' + _esc(po.id) + '\')">Receive</button>'
+                : '') +
+            '</div></td>' +
+          '</tr>').join('')
+        : '<tr><td colspan="7" class="empty">No purchase orders</td></tr>';
+    } catch (e) { _toast('PO load error: ' + e.message); }
+  };
+
+  const openNewPO = async () => {
+    currentPOId = null;
+    _q('po-items-body').innerHTML = '';
+    _q('po-notes').value = '';
+    _q('po-delivery').value = '';
+    addItemRow();
+    await _loadSupplierDropdown();
+    _q('modal-po').classList.add('open');
+  };
+
+  const openNewPOFor = async (product, sku, qty) => {
+    await openNewPO();
+    _q('po-items-body').innerHTML = '';
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="text" value="' + _esc(product) + '"></td>' +
+      '<td><input type="text" value="' + _esc(sku) + '"></td>' +
+      '<td><input type="number" value="' + Number(qty) + '" min="1" style="width:60px"></td>' +
+      '<td><input type="number" value="0" min="0" step="0.01" style="width:90px"></td>';
+    _q('po-items-body').appendChild(tr);
+  };
+
+  const _loadSupplierDropdown = async () => {
+    const sel = _q('po-supplier');
+    sel.innerHTML = '<option value="">Select supplier...</option>';
+    if (!mid) return;
+    try {
+      const snap = await db.collection('merchants').doc(mid)
+        .collection('procSuppliers').where('status', '==', 'active').get();
+      snap.forEach(d => {
+        const s = d.data();
+        sel.innerHTML += '<option value="' + d.id + '">' + _esc(s.name) + '</option>';
+      });
+    } catch (e) { /* silent — supplier list unavailable */ }
+  };
+
+  const addItemRow = () => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input type="text" placeholder="Product name"></td>' +
+      '<td><input type="text" placeholder="SKU"></td>' +
+      '<td><input type="number" placeholder="1" min="1" style="width:60px"></td>' +
+      '<td><input type="number" placeholder="0.00" min="0" step="0.01" style="width:90px"></td>';
+    _q('po-items-body').appendChild(tr);
+  };
+
+  const submitPO = async () => {
+    const supplierId = _q('po-supplier').value;
+    if (!supplierId) { _toast('Select a supplier'); return; }
+    const items = [];
+    _q('po-items-body').querySelectorAll('tr').forEach(tr => {
+      const ins = tr.querySelectorAll('input');
+      const name = ins[0].value.trim();
+      if (name) items.push({
+        productName: name,
+        sku:         ins[1].value.trim(),
+        qty:         +ins[2].value || 1,
+        unitCost:    +ins[3].value || 0
+      });
+    });
+    if (!items.length) { _toast('Add at least one item'); return; }
+    try {
+      await _call('createPurchaseOrder')({
+        merchantId:       mid,
+        supplierId,
+        items,
+        notes:            _q('po-notes').value.trim(),
+        expectedDelivery: _q('po-delivery').value
+      });
+      _toast('Purchase order created');
+      closeModal('modal-po');
+      loadPOs(mid, _q('po-filter')?.value || 'All');
+    } catch (e) { _toast('Error: ' + e.message); }
+  };
+
+  const approvePO = async (poId, approved) => {
+    try {
+      await _call('approvePurchaseOrder')({merchantId: mid, poId, approved});
+      _toast(approved ? 'PO approved' : 'PO rejected');
+      loadPOs(mid, _q('po-filter')?.value || 'All');
+    } catch (e) { _toast('Error: ' + e.message); }
+  };
+
+  /* ── Suppliers ── */
+  const loadSuppliers = async m => {
+    if (!m) return;
+    try {
+      const snap = await db.collection('merchants').doc(m)
+        .collection('procSuppliers').orderBy('name').get();
+      _q('supplier-tbody').innerHTML = snap.empty
+        ? '<tr><td colspan="7" class="empty">No suppliers yet</td></tr>'
+        : snap.docs.map(d => {
+            const s = d.data();
+            return '<tr>' +
+              '<td><strong>' + _esc(s.name) + '</strong></td>' +
+              '<td>' + _esc(s.contactName) + '</td>' +
+              '<td>' + _esc(s.phone) + '</td>' +
+              '<td>' + _fmt(s.creditLimit) + '</td>' +
+              '<td>' + (s.paymentTerms ?? 30) + '</td>' +
+              '<td class="stars">' + _stars(s.rating) + '</td>' +
+              '<td>' + _badge(s.status || 'active') + '</td>' +
+            '</tr>';
+          }).join('');
+    } catch (e) { _toast('Suppliers error: ' + e.message); }
+  };
+
+  const openAddSupplier = () => {
+    ['sup-name','sup-contact','sup-phone','sup-email','sup-kra'].forEach(id => { _q(id).value = ''; });
+    _q('sup-terms').value = '30';
+    _q('sup-credit').value = '0';
+    _q('modal-supplier').classList.add('open');
+  };
+
+  const submitSupplier = async () => {
+    const name    = _q('sup-name').value.trim();
+    const contact = _q('sup-contact').value.trim();
+    const phone   = _q('sup-phone').value.trim();
+    if (!name || !contact || !phone) { _toast('Name, Contact and Phone are required'); return; }
+    try {
+      await db.collection('merchants').doc(mid).collection('procSuppliers').add({
+        name,
+        contactName:  contact,
+        phone,
+        email:        _q('sup-email').value.trim(),
+        kraPin:       _q('sup-kra').value.trim().toUpperCase(),
+        paymentTerms: +_q('sup-terms').value || 30,
+        creditLimit:  +_q('sup-credit').value || 0,
+        status:       'active',
+        rating:       0,
+        createdAt:    firebase.firestore.FieldValue.serverTimestamp()
+      });
+      _toast('Supplier added');
+      closeModal('modal-supplier');
+      loadSuppliers(mid);
+    } catch (e) { _toast('Error: ' + e.message); }
+  };
+
+  /* ── GRN ── */
+  const loadGRN = async m => {
+    if (!m) return;
+    try {
+      const snap = await db.collection('merchants').doc(m)
+        .collection('goodsReceivedNotes').orderBy('createdAt', 'desc').limit(50).get();
+      _q('grn-tbody').innerHTML = snap.empty
+        ? '<tr><td colspan="7" class="empty">No GRNs recorded</td></tr>'
+        : snap.docs.map(d => {
+            const g = d.data();
+            const date = g.createdAt?.toDate?.()?.toISOString?.().substring(0, 10) || '—';
+            return '<tr>' +
+              '<td>' + _esc(g.grnNumber || d.id.substring(0,8).toUpperCase()) + '</td>' +
+              '<td>' + _esc(g.poNumber) + '</td>' +
+              '<td>' + _esc(g.supplierName) + '</td>' +
+              '<td>' + date + '</td>' +
+              '<td>' + (g.totalReceived ?? 0) + ' units</td>' +
+              '<td>' + (g.discrepancies ?? 0) + '</td>' +
+              '<td>—</td>' +
+            '</tr>';
+          }).join('');
+    } catch (e) { _toast('GRN error: ' + e.message); }
+  };
+
+  const openGRN = poId => {
+    currentPOId = poId;
+    _q('grn-modal-body').innerHTML =
+      '<p style="color:#94a3b8;font-size:.83rem;margin-bottom:12px">PO ID: <strong>' + _esc(poId) + '</strong></p>' +
+      '<div class="field"><label>Items Received</label>' +
+      '<p style="color:#6b7280;font-size:.75rem;margin-bottom:6px">JSON array of {productName, receivedQty, condition}</p>' +
+      '<textarea id="grn-items-input" rows="6" placeholder=\'[{"productName":"Item A","receivedQty":10,"condition":"Good"}]\'></textarea></div>';
+    _q('modal-grn').classList.add('open');
+  };
+
+  const submitGRN = async () => {
+    let items;
+    try { items = JSON.parse(_q('grn-items-input')?.value || '[]'); }
+    catch { _toast('Invalid JSON — check the items array'); return; }
+    try {
+      await _call('receiveGoods')({merchantId: mid, poId: currentPOId, items});
+      _toast('Goods received successfully');
+      closeModal('modal-grn');
+      loadGRN(mid);
+    } catch (e) { _toast('Error: ' + e.message); }
+  };
+
+  /* ── Invoices ── */
+  const loadInvoices = async m => {
+    if (!m) return;
+    const today = new Date().toISOString().substring(0, 10);
+    try {
+      const snap = await db.collection('merchants').doc(m)
+        .collection('procInvoices').orderBy('createdAt', 'desc').limit(50).get();
+      _q('invoice-tbody').innerHTML = snap.empty
+        ? '<tr><td colspan="7" class="empty">No invoices</td></tr>'
+        : snap.docs.map(d => {
+            const inv = d.data();
+            const due = inv.dueDate || '';
+            const overdue = inv.status === 'pending' && due && due < today;
+            const statusKey = overdue ? 'overdue' : (inv.status || 'pending');
+            return '<tr>' +
+              '<td>' + _esc(inv.invoiceNumber || d.id.substring(0,8).toUpperCase()) + '</td>' +
+              '<td>' + _esc(inv.supplierName) + '</td>' +
+              '<td>' + _esc(inv.poNumber) + '</td>' +
+              '<td>' + _fmt(inv.amount) + '</td>' +
+              '<td>' + (due || '—') + '</td>' +
+              '<td>' + _badge(statusKey) + '</td>' +
+              '<td>' + (inv.status === 'pending' || overdue
+                ? '<button class="btn btn-success btn-sm" onclick="ProcurementPortal.approveInvoice(\'' + d.id + '\')">Approve &amp; Pay</button>'
+                : '—') + '</td>' +
+            '</tr>';
+          }).join('');
+    } catch (e) { _toast('Invoices error: ' + e.message); }
+  };
+
+  const approveInvoice = async invoiceId => {
+    try {
+      await _call('approveAndPayInvoice')({merchantId: mid, invoiceId});
+      _toast('Invoice approved for payment');
+      loadInvoices(mid);
+    } catch (e) { _toast('Error: ' + e.message); }
+  };
+
+  /* ── Forecast ── */
+  const loadForecast = async m => {
+    if (!m) return;
+    try {
+      const res = await _call('getProcurementForecast')({merchantId: m});
+      forecastItems = Array.isArray(res.data.forecast) ? res.data.forecast : [];
+      _q('forecast-tbody').innerHTML = forecastItems.length
+        ? forecastItems.map(f => '<tr>' +
+            '<td>' + _esc(f.product) + '</td>' +
+            '<td>' + _esc(f.branch) + '</td>' +
+            '<td>' + (f.currentQty ?? 0) + '</td>' +
+            '<td>' + (f.avgDailyUsage ?? 0) + '</td>' +
+            '<td>' + (f.leadDays ?? 0) + '</td>' +
+            '<td><strong>' + (f.suggestedOrderQty ?? 0) + '</strong></td>' +
+            '<td>' + _esc(f.preferredSupplier) + '</td>' +
+          '</tr>').join('')
+        : '<tr><td colspan="7" class="empty">No forecast data available</td></tr>';
+    } catch (e) { _toast('Forecast error: ' + e.message); }
+  };
+
+  const createPOFromForecast = async () => {
+    if (!forecastItems.length) { _toast('Load forecast first'); return; }
+    await openNewPO();
+    _q('po-items-body').innerHTML = '';
+    forecastItems.forEach(f => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><input type="text" value="' + _esc(f.product) + '"></td>' +
+        '<td><input type="text" value="' + _esc(f.sku || '') + '"></td>' +
+        '<td><input type="number" value="' + Number(f.suggestedOrderQty || 0) + '" min="1" style="width:60px"></td>' +
+        '<td><input type="number" value="0" min="0" step="0.01" style="width:90px"></td>';
+      _q('po-items-body').appendChild(tr);
+    });
+  };
+
+  /* ── Modal helpers ── */
+  const closeModal = id => _q(id).classList.remove('open');
+
+  /* ── Bootstrap ── */
+  document.addEventListener('DOMContentLoaded', init);
+
+  return {
+    get mid() { return mid; },
+    load, tab,
+    loadDashboard, loadPOs, loadSuppliers, loadGRN, loadInvoices, loadForecast,
+    openNewPO, openNewPOFor, addItemRow, submitPO, approvePO,
+    openAddSupplier, submitSupplier,
+    openGRN, submitGRN,
+    approveInvoice, createPOFromForecast,
+    closeModal
+  };
+})();
+</script>
+</body>
+</html>

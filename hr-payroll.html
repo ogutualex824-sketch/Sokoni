@@ -1,0 +1,1617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HR &amp; Payroll — SOKONI</title>
+  <meta name="description" content="Manage staff, run payroll, track attendance, and handle leave requests for your SOKONI business.">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a2e">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="sokoni-config.js"></script>
+
+  <style>
+    /* ── DESIGN TOKENS ── */
+    :root {
+      --bg:      #0f0f1a;
+      --surface: #1a1a2e;
+      --border:  rgba(255,255,255,.1);
+      --accent:  #7c3aed;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger:  #ef4444;
+      --text:    #e8e8f0;
+      --muted:   #888;
+      --radius:  14px;
+      --shadow:  0 4px 24px rgba(0,0,0,.4);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    /* ── HEADER ── */
+    .hr-header {
+      position: sticky; top: 0; z-index: 300;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; height: 60px; gap: 12px;
+    }
+    .hr-logo-row { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .hr-logo { height: 28px; }
+    .hr-title { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; }
+    .hr-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .hr-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--accent); display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; cursor: default; flex-shrink: 0;
+    }
+    .hr-signout {
+      background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.4);
+      color: var(--danger); border-radius: 8px; padding: 7px 14px; font-size: 12px;
+      font-weight: 700; cursor: pointer; transition: background .15s;
+    }
+    .hr-signout:hover { background: rgba(239,68,68,.28); }
+
+    /* ── MERCHANT BAR ── */
+    .hr-merchant-bar {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 12px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .hr-merchant-bar label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+    #hrMerchantId {
+      flex: 1; min-width: 180px; background: rgba(255,255,255,.06);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); padding: 8px 12px; font-size: 13px;
+    }
+    #hrMerchantId:focus { outline: none; border-color: var(--accent); }
+
+    /* ── BUTTONS ── */
+    .hr-btn {
+      padding: 9px 20px; border-radius: 8px; font-size: 13px; font-weight: 700;
+      cursor: pointer; border: none; transition: opacity .15s; white-space: nowrap;
+    }
+    .hr-btn:hover   { opacity: .85; }
+    .hr-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .hr-btn-primary  { background: var(--accent);  color: #fff; }
+    .hr-btn-success  { background: var(--success); color: #fff; }
+    .hr-btn-warning  { background: var(--warning); color: #000; }
+    .hr-btn-danger   { background: var(--danger);  color: #fff; }
+    .hr-btn-ghost    { background: rgba(255,255,255,.08); color: var(--text); border: 1px solid var(--border); }
+    .hr-btn-sm       { padding: 6px 13px; font-size: 12px; border-radius: 6px; font-weight: 700; cursor: pointer; border: none; transition: opacity .15s; }
+    .hr-btn-sm:hover { opacity: .82; }
+
+    /* ── TABS ── */
+    .hr-tabs {
+      display: flex; overflow-x: auto;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 16px; gap: 0;
+      scrollbar-width: none;
+    }
+    .hr-tabs::-webkit-scrollbar { display: none; }
+    .hr-tab {
+      padding: 14px 18px; white-space: nowrap; cursor: pointer; border: none;
+      background: transparent; color: var(--muted); font-size: 13px; font-weight: 600;
+      border-bottom: 2px solid transparent; transition: all .15s;
+    }
+    .hr-tab.active           { color: var(--accent); border-bottom-color: var(--accent); }
+    .hr-tab:hover:not(.active) { color: var(--text); }
+    .hr-tab-content          { display: none; }
+    .hr-tab-content.active   { display: block; }
+
+    /* ── SECTION / CARD ── */
+    .hr-section { padding: 20px 16px; }
+    .hr-section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+    }
+    .hr-section-header h2 { font-size: 16px; font-weight: 800; }
+    .hr-card {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow);
+    }
+    .hr-card-title {
+      font-size: 13px; font-weight: 800; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .5px; margin-bottom: 16px;
+    }
+
+    /* ── KPI GRID ── */
+    .hr-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px; padding: 20px 16px;
+    }
+    @media (min-width: 600px) { .hr-kpi-grid { grid-template-columns: repeat(4, 1fr); } }
+    .hr-kpi {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 20px 16px; box-shadow: var(--shadow);
+      border-left: 3px solid transparent;
+      transition: border-color .2s;
+    }
+    .hr-kpi-val { font-size: 28px; font-weight: 900; margin-bottom: 4px; }
+    .hr-kpi-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .hr-kpi-warn { border-left-color: var(--warning); }
+    .hr-kpi-warn .hr-kpi-val { color: var(--warning); }
+
+    /* ── CSS BAR CHART ── */
+    .hr-bar-chart { display: flex; flex-direction: column; gap: 10px; }
+    .hr-bar-row   { display: flex; align-items: center; gap: 10px; }
+    .hr-bar-label { width: 90px; font-size: 12px; color: var(--muted); text-align: right; flex-shrink: 0; }
+    .hr-bar-track { flex: 1; height: 22px; background: rgba(255,255,255,.06); border-radius: 4px; overflow: hidden; }
+    .hr-bar-fill  {
+      height: 100%; background: var(--accent); border-radius: 4px;
+      transition: width .5s ease; display: flex; align-items: center; padding-left: 8px;
+      min-width: 28px;
+    }
+    .hr-bar-count { font-size: 11px; font-weight: 700; color: #fff; }
+
+    /* ── PENDING ACTIONS LIST ── */
+    .hr-action-list { display: flex; flex-direction: column; gap: 8px; }
+    .hr-action-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px; border-radius: 8px;
+      background: rgba(255,255,255,.04); border-left: 3px solid var(--accent);
+    }
+    .hr-action-item.warn { border-left-color: var(--warning); }
+    .hr-action-item i    { color: var(--accent); width: 16px; text-align: center; }
+    .hr-action-item.warn i { color: var(--warning); }
+    .hr-action-text { font-size: 13px; flex: 1; }
+
+    /* ── TABLE ── */
+    .hr-table-wrap { overflow-x: auto; border-radius: 10px; }
+    .hr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .hr-table th {
+      padding: 10px 14px; text-align: left; color: var(--muted);
+      font-size: 11px; text-transform: uppercase; letter-spacing: .4px;
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    .hr-table td { padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,.04); white-space: nowrap; }
+    .hr-table tr:last-child td { border-bottom: none; }
+    .hr-table tr:hover td { background: rgba(255,255,255,.02); }
+    .hr-table td:last-child { text-align: right; }
+
+    /* ── BADGES ── */
+    .hr-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 999px;
+      font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px;
+    }
+    .hr-badge-green  { background: rgba(34,197,94,.18);  color: var(--success); }
+    .hr-badge-gray   { background: rgba(255,255,255,.1); color: var(--muted); }
+    .hr-badge-orange { background: rgba(245,158,11,.18); color: var(--warning); }
+    .hr-badge-red    { background: rgba(239,68,68,.18);  color: var(--danger); }
+    .hr-badge-blue   { background: rgba(59,130,246,.18); color: #60a5fa; }
+    .hr-badge-yellow { background: rgba(234,179,8,.18);  color: #facc15; }
+
+    /* ── MODAL ── */
+    .hr-modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,.72); align-items: center; justify-content: center; padding: 16px;
+    }
+    .hr-modal-overlay.open { display: flex; }
+    .hr-modal {
+      background: var(--surface); border-radius: var(--radius);
+      box-shadow: var(--shadow); width: 100%; max-width: 560px;
+      max-height: 90vh; overflow-y: auto; border: 1px solid var(--border);
+    }
+    .hr-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 20px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: var(--surface); z-index: 1;
+    }
+    .hr-modal-title { font-size: 15px; font-weight: 800; }
+    .hr-modal-close {
+      background: none; border: none; color: var(--muted); font-size: 22px;
+      cursor: pointer; line-height: 1; padding: 4px;
+    }
+    .hr-modal-close:hover { color: var(--text); }
+    .hr-modal-body   { padding: 20px; }
+    .hr-modal-footer {
+      padding: 14px 20px; border-top: 1px solid var(--border);
+      display: flex; gap: 10px; justify-content: flex-end;
+    }
+
+    /* ── FORMS ── */
+    .hr-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    @media (max-width: 480px) { .hr-form-grid { grid-template-columns: 1fr; } }
+    .hr-field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    .hr-field input, .hr-field select, .hr-field textarea {
+      width: 100%; background: rgba(255,255,255,.06);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); padding: 10px 12px; font-size: 14px;
+      transition: border-color .15s;
+    }
+    .hr-field input:focus, .hr-field select:focus, .hr-field textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .hr-field select option { background: var(--surface); }
+    .hr-field-full { grid-column: 1 / -1; }
+    .hr-required-note { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+
+    /* ── CHECKBOX LIST ── */
+    .hr-checkbox-list {
+      max-height: 180px; overflow-y: auto; padding: 8px;
+      background: rgba(255,255,255,.04); border-radius: 8px; border: 1px solid var(--border);
+    }
+    .hr-checkbox-item { display: flex; align-items: center; gap: 8px; padding: 6px 4px; font-size: 13px; cursor: pointer; }
+    .hr-checkbox-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+
+    /* ── PERIOD / DATE INPUTS ── */
+    .hr-period-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .hr-period-row input[type="month"],
+    .hr-period-row input[type="date"] {
+      background: rgba(255,255,255,.06); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); padding: 8px 12px; font-size: 13px;
+    }
+    .hr-period-row input:focus { outline: none; border-color: var(--accent); }
+
+    /* ── ATTENDANCE GRID ── */
+    .hr-att-row {
+      display: grid;
+      grid-template-columns: 1.4fr 80px 80px 60px 100px 140px;
+      align-items: center; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.05); font-size: 13px;
+    }
+    .hr-att-row.header {
+      color: var(--muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: .4px; font-weight: 700; background: rgba(255,255,255,.02);
+    }
+    .hr-att-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    @media (max-width: 600px) {
+      .hr-att-row { grid-template-columns: 1fr 68px 68px 48px 84px 100px; font-size: 11px; padding: 8px 10px; }
+    }
+
+    /* ── SUB-TABS ── */
+    .hr-subtabs { display: flex; border-bottom: 1px solid var(--border); }
+    .hr-subtab {
+      padding: 11px 20px; cursor: pointer; font-size: 13px; font-weight: 600;
+      color: var(--muted); border: none; background: transparent;
+      border-bottom: 2px solid transparent; transition: all .15s;
+    }
+    .hr-subtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── TOGGLE SWITCH ── */
+    .hr-toggle-wrap { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .hr-toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .hr-toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .hr-toggle-slider { position: absolute; inset: 0; background: #333; border-radius: 24px; transition: .3s; cursor: pointer; }
+    .hr-toggle-switch input:checked + .hr-toggle-slider { background: var(--accent); }
+    .hr-toggle-slider::before { content:''; position:absolute; height:18px; width:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+    .hr-toggle-switch input:checked + .hr-toggle-slider::before { transform: translateX(20px); }
+    .hr-toggle-label { font-size: 13px; color: var(--muted); }
+
+    /* ── PAYROLL BREAKDOWN TABLE ── */
+    .hr-breakdown-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .hr-breakdown-table th {
+      padding: 8px 12px; font-size: 11px; color: var(--muted);
+      text-transform: uppercase; border-bottom: 1px solid var(--border); text-align: right;
+    }
+    .hr-breakdown-table th:first-child { text-align: left; }
+    .hr-breakdown-table td { padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,.04); text-align: right; }
+    .hr-breakdown-table td:first-child { text-align: left; font-weight: 600; }
+    .hr-breakdown-table tfoot td { font-weight: 800; border-top: 1px solid var(--border); border-bottom: none; color: var(--success); }
+    .hr-breakdown-table tfoot td:first-child { color: var(--text); }
+
+    /* ── LOADING / EMPTY / TOAST ── */
+    .hr-loading {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 48px 20px; gap: 12px; color: var(--muted);
+    }
+    .hr-spinner {
+      width: 32px; height: 32px; border: 3px solid rgba(255,255,255,.1);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hr-empty { text-align: center; padding: 32px; color: var(--muted); font-size: 14px; }
+
+    .hr-toasts {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      z-index: 9999; display: flex; flex-direction: column; gap: 8px;
+      pointer-events: none; min-width: 240px;
+    }
+    .hr-toast {
+      padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      box-shadow: var(--shadow); pointer-events: auto; text-align: center;
+    }
+    .hr-toast.success { background: var(--success); color: #fff; }
+    .hr-toast.error   { background: var(--danger);  color: #fff; }
+    .hr-toast.info    { background: var(--accent);  color: #fff; }
+    .hr-toast.warning { background: var(--warning); color: #000; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 480px) {
+      .hr-header  { padding: 0 12px; }
+      .hr-title   { font-size: 13px; }
+      .hr-section { padding: 14px 10px; }
+      .hr-card    { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════ HEADER ══════════════════ -->
+<header class="hr-header">
+  <div class="hr-logo-row">
+    <img src="assets/logosokoni.png" alt="SOKONI" class="hr-logo">
+    <span class="hr-title">HR &amp; Payroll</span>
+  </div>
+  <div class="hr-header-right">
+    <div class="hr-avatar" id="hrAvatar" title="Signed-in user">?</div>
+    <button class="hr-signout" onclick="HRPayroll.signOut()"><i class="fas fa-sign-out-alt"></i> Sign Out</button>
+  </div>
+</header>
+
+<!-- ══════════════════ MERCHANT BAR ══════════════════ -->
+<div class="hr-merchant-bar">
+  <label for="hrMerchantId"><i class="fas fa-store"></i> Merchant ID</label>
+  <input type="text" id="hrMerchantId" placeholder="Enter your merchant / business ID" autocomplete="off">
+  <button class="hr-btn hr-btn-primary" onclick="HRPayroll.loadAll()"><i class="fas fa-sync"></i> Load</button>
+</div>
+
+<!-- ══════════════════ TABS ══════════════════ -->
+<nav class="hr-tabs" role="tablist" aria-label="HR portal sections">
+  <button class="hr-tab active" data-tab="dashboard"  type="button"><i class="fas fa-tachometer-alt"></i> Dashboard</button>
+  <button class="hr-tab"        data-tab="staff"       type="button"><i class="fas fa-users"></i> Staff</button>
+  <button class="hr-tab"        data-tab="payroll"     type="button"><i class="fas fa-money-bill-wave"></i> Payroll</button>
+  <button class="hr-tab"        data-tab="attendance"  type="button"><i class="fas fa-calendar-check"></i> Attendance</button>
+  <button class="hr-tab"        data-tab="leaves"      type="button"><i class="fas fa-calendar-alt"></i> Leaves &amp; Training</button>
+</nav>
+
+<!-- ══════════════════════════════════════════════════
+     TAB 1 — DASHBOARD
+══════════════════════════════════════════════════ -->
+<div class="hr-tab-content active" id="hr-tab-dashboard">
+
+  <div class="hr-kpi-grid">
+    <div class="hr-kpi">
+      <div class="hr-kpi-val" id="kpiActiveStaff">—</div>
+      <div class="hr-kpi-lbl"><i class="fas fa-user-check" style="color:var(--accent)"></i> Active Staff</div>
+    </div>
+    <div class="hr-kpi">
+      <div class="hr-kpi-val" id="kpiAttendance">—</div>
+      <div class="hr-kpi-lbl"><i class="fas fa-calendar-day" style="color:var(--success)"></i> Today's Attendance</div>
+    </div>
+    <div class="hr-kpi" id="kpiLeavesTile">
+      <div class="hr-kpi-val" id="kpiPendingLeaves">—</div>
+      <div class="hr-kpi-lbl"><i class="fas fa-hourglass-half" style="color:var(--warning)"></i> Pending Leaves</div>
+    </div>
+    <div class="hr-kpi">
+      <div class="hr-kpi-val" id="kpiLastPayroll" style="font-size:18px;line-height:1.3">—</div>
+      <div class="hr-kpi-lbl"><i class="fas fa-receipt" style="color:var(--success)"></i> Last Payroll (KES)</div>
+    </div>
+  </div>
+
+  <div class="hr-section">
+    <div class="hr-card">
+      <p class="hr-card-title">Staff by Department</p>
+      <div class="hr-bar-chart" id="deptChart">
+        <div class="hr-loading"><div class="hr-spinner"></div><span>Load a merchant to see data</span></div>
+      </div>
+    </div>
+
+    <div class="hr-card">
+      <p class="hr-card-title">Pending Actions</p>
+      <div class="hr-action-list" id="pendingActionsList">
+        <div class="hr-empty">Load a merchant to see pending actions.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     TAB 2 — STAFF
+══════════════════════════════════════════════════ -->
+<div class="hr-tab-content" id="hr-tab-staff">
+  <div class="hr-section">
+    <div class="hr-section-header">
+      <h2>Staff Members</h2>
+      <button class="hr-btn hr-btn-primary" onclick="HRPayroll.openAddStaff()">
+        <i class="fas fa-user-plus"></i> Add Staff
+      </button>
+    </div>
+    <div class="hr-card" style="padding:0;">
+      <div class="hr-table-wrap">
+        <table class="hr-table" id="staffTable" aria-label="Staff list">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Emp No</th>
+              <th>Department</th>
+              <th>Position</th>
+              <th>Gross Salary</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="staffTableBody">
+            <tr><td colspan="7"><div class="hr-loading"><div class="hr-spinner"></div><span>Load a merchant to view staff</span></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     TAB 3 — PAYROLL
+══════════════════════════════════════════════════ -->
+<div class="hr-tab-content" id="hr-tab-payroll">
+  <div class="hr-section">
+    <div class="hr-section-header">
+      <h2>Payroll Runs</h2>
+      <div class="hr-period-row">
+        <input type="month" id="payrollPeriod" title="Select payroll period">
+        <button class="hr-btn hr-btn-success" onclick="HRPayroll.runPayroll()">
+          <i class="fas fa-play"></i> Run Payroll
+        </button>
+      </div>
+    </div>
+    <div class="hr-card" style="padding:0;">
+      <div class="hr-table-wrap">
+        <table class="hr-table" id="payrollTable" aria-label="Payroll runs">
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>Staff Count</th>
+              <th>Total Gross</th>
+              <th>Total Net</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="payrollTableBody">
+            <tr><td colspan="6"><div class="hr-loading"><div class="hr-spinner"></div><span>Load a merchant to view payroll</span></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     TAB 4 — ATTENDANCE
+══════════════════════════════════════════════════ -->
+<div class="hr-tab-content" id="hr-tab-attendance">
+  <div class="hr-section">
+    <div class="hr-section-header">
+      <h2>Attendance</h2>
+      <div class="hr-period-row">
+        <input type="date" id="attendanceDate" title="Select date">
+        <button class="hr-btn hr-btn-ghost" onclick="HRPayroll.loadAttendance()">
+          <i class="fas fa-search"></i> View
+        </button>
+      </div>
+    </div>
+
+    <div class="hr-toggle-wrap">
+      <label class="hr-toggle-switch">
+        <input type="checkbox" id="monthlySummaryToggle" onchange="HRPayroll.toggleMonthlySummary(this.checked)">
+        <span class="hr-toggle-slider"></span>
+      </label>
+      <span class="hr-toggle-label">Show Monthly Summary</span>
+    </div>
+
+    <!-- Daily grid -->
+    <div id="dailyAttendanceView">
+      <div class="hr-card" style="padding:0;">
+        <div class="hr-att-row header">
+          <span>Name</span>
+          <span>Clock In</span>
+          <span>Clock Out</span>
+          <span>Hours</span>
+          <span>Status</span>
+          <span style="text-align:right">Action</span>
+        </div>
+        <div id="attendanceRows">
+          <div class="hr-loading"><div class="hr-spinner"></div><span>Load a merchant to view attendance</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly summary -->
+    <div id="monthlySummaryView" style="display:none;">
+      <div class="hr-card" style="padding:0;">
+        <div class="hr-table-wrap">
+          <table class="hr-table" aria-label="Monthly attendance summary">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Days Present</th>
+                <th>Days Absent</th>
+                <th>Total Hours</th>
+              </tr>
+            </thead>
+            <tbody id="monthlySummaryBody">
+              <tr><td colspan="4"><div class="hr-empty">Enable the monthly summary toggle above.</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     TAB 5 — LEAVES & TRAINING
+══════════════════════════════════════════════════ -->
+<div class="hr-tab-content" id="hr-tab-leaves">
+  <div class="hr-subtabs">
+    <button class="hr-subtab active" data-subtab="leaves"   onclick="HRPayroll.switchSubtab('leaves')">
+      <i class="fas fa-umbrella-beach"></i> Leaves
+    </button>
+    <button class="hr-subtab"         data-subtab="training" onclick="HRPayroll.switchSubtab('training')">
+      <i class="fas fa-graduation-cap"></i> Training
+    </button>
+  </div>
+
+  <!-- LEAVES -->
+  <div id="subtab-leaves" class="hr-section">
+    <div class="hr-section-header">
+      <h2>Leave Requests</h2>
+    </div>
+    <div class="hr-card" style="padding:0;">
+      <div class="hr-table-wrap">
+        <table class="hr-table" aria-label="Leave requests">
+          <thead>
+            <tr>
+              <th>Staff</th>
+              <th>Type</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Days</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="leavesTableBody">
+            <tr><td colspan="7"><div class="hr-loading"><div class="hr-spinner"></div><span>Load a merchant to view leave requests</span></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRAINING -->
+  <div id="subtab-training" class="hr-section" style="display:none;">
+    <div class="hr-section-header">
+      <h2>Training Programs</h2>
+      <button class="hr-btn hr-btn-primary" onclick="HRPayroll.openAssignTraining()">
+        <i class="fas fa-plus"></i> Assign Training
+      </button>
+    </div>
+    <div class="hr-card" style="padding:0;">
+      <div class="hr-table-wrap">
+        <table class="hr-table" aria-label="Training programs">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Assigned To</th>
+              <th>Due Date</th>
+              <th>Completed</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="trainingTableBody">
+            <tr><td colspan="5"><div class="hr-loading"><div class="hr-spinner"></div><span>Load a merchant to view training programs</span></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     MODAL — ADD STAFF
+══════════════════════════════════════════════════ -->
+<div class="hr-modal-overlay" id="addStaffModal" role="dialog" aria-modal="true" aria-labelledby="addStaffTitle">
+  <div class="hr-modal">
+    <div class="hr-modal-header">
+      <span class="hr-modal-title" id="addStaffTitle">
+        <i class="fas fa-user-plus" style="color:var(--accent)"></i> Add Staff Member
+      </span>
+      <button class="hr-modal-close" onclick="HRPayroll.closeModal('addStaffModal')" aria-label="Close">&times;</button>
+    </div>
+    <div class="hr-modal-body">
+      <p class="hr-required-note">Fields marked * are required.</p>
+      <div class="hr-form-grid">
+        <div class="hr-field">
+          <label for="sfName">Full Name *</label>
+          <input type="text" id="sfName" placeholder="e.g. Jane Mwangi" autocomplete="name">
+        </div>
+        <div class="hr-field">
+          <label for="sfEmpNo">Employee No *</label>
+          <input type="text" id="sfEmpNo" placeholder="e.g. EMP-0042" autocomplete="off">
+        </div>
+        <div class="hr-field">
+          <label for="sfDept">Department *</label>
+          <select id="sfDept">
+            <option value="">-- Select --</option>
+            <option value="General">General</option>
+            <option value="Sales">Sales</option>
+            <option value="Accounts">Accounts</option>
+            <option value="Kitchen">Kitchen</option>
+            <option value="Security">Security</option>
+            <option value="Delivery">Delivery</option>
+            <option value="IT">IT</option>
+          </select>
+        </div>
+        <div class="hr-field">
+          <label for="sfPosition">Position *</label>
+          <input type="text" id="sfPosition" placeholder="e.g. Cashier">
+        </div>
+        <div class="hr-field">
+          <label for="sfSalary">Gross Salary (KES) *</label>
+          <input type="number" id="sfSalary" placeholder="25000" min="0" step="1">
+        </div>
+        <div class="hr-field">
+          <label for="sfStartDate">Start Date *</label>
+          <input type="date" id="sfStartDate">
+        </div>
+        <div class="hr-field">
+          <label for="sfPhone">Phone Number</label>
+          <input type="tel" id="sfPhone" placeholder="+254 7XX XXX XXX" autocomplete="tel">
+        </div>
+        <div class="hr-field">
+          <label for="sfEmail">Email Address</label>
+          <input type="email" id="sfEmail" placeholder="jane@example.com" autocomplete="email">
+        </div>
+      </div>
+    </div>
+    <div class="hr-modal-footer">
+      <button class="hr-btn hr-btn-ghost" onclick="HRPayroll.closeModal('addStaffModal')">Cancel</button>
+      <button class="hr-btn hr-btn-primary" id="addStaffSubmitBtn" onclick="HRPayroll.submitAddStaff()">
+        <i class="fas fa-save"></i> Add Member
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     MODAL — VIEW PAYROLL
+══════════════════════════════════════════════════ -->
+<div class="hr-modal-overlay" id="viewPayrollModal" role="dialog" aria-modal="true" aria-labelledby="viewPayrollTitle">
+  <div class="hr-modal" style="max-width:760px;">
+    <div class="hr-modal-header">
+      <span class="hr-modal-title" id="viewPayrollTitle">
+        <i class="fas fa-file-invoice-dollar" style="color:var(--success)"></i>
+        Payroll Breakdown &mdash; <span id="viewPayrollPeriod"></span>
+      </span>
+      <button class="hr-modal-close" onclick="HRPayroll.closeModal('viewPayrollModal')" aria-label="Close">&times;</button>
+    </div>
+    <div class="hr-modal-body">
+      <div class="hr-table-wrap">
+        <table class="hr-breakdown-table" aria-label="Payroll breakdown">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Gross</th>
+              <th>PAYE</th>
+              <th>NHIF</th>
+              <th>NSSF</th>
+              <th>Housing Levy</th>
+              <th>Net Pay</th>
+            </tr>
+          </thead>
+          <tbody id="payrollBreakdownBody"></tbody>
+          <tfoot  id="payrollBreakdownFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+    <div class="hr-modal-footer">
+      <button class="hr-btn hr-btn-ghost" onclick="HRPayroll.closeModal('viewPayrollModal')">Close</button>
+      <button class="hr-btn hr-btn-success" id="approvePayrollBtn" onclick="HRPayroll.approvePayroll()">
+        <i class="fas fa-check"></i> Approve Payroll
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     MODAL — ASSIGN TRAINING
+══════════════════════════════════════════════════ -->
+<div class="hr-modal-overlay" id="assignTrainingModal" role="dialog" aria-modal="true" aria-labelledby="assignTrainingTitle">
+  <div class="hr-modal">
+    <div class="hr-modal-header">
+      <span class="hr-modal-title" id="assignTrainingTitle">
+        <i class="fas fa-graduation-cap" style="color:var(--accent)"></i> Assign Training
+      </span>
+      <button class="hr-modal-close" onclick="HRPayroll.closeModal('assignTrainingModal')" aria-label="Close">&times;</button>
+    </div>
+    <div class="hr-modal-body">
+      <p class="hr-required-note">Fields marked * are required.</p>
+      <div class="hr-form-grid">
+        <div class="hr-field hr-field-full">
+          <label for="trTitle">Training Title *</label>
+          <input type="text" id="trTitle" placeholder="e.g. Food Safety Certification">
+        </div>
+        <div class="hr-field hr-field-full">
+          <label for="trDescription">Description</label>
+          <textarea id="trDescription" rows="3" placeholder="Brief description of the training program…"></textarea>
+        </div>
+        <div class="hr-field">
+          <label for="trDueDate">Due Date *</label>
+          <input type="date" id="trDueDate">
+        </div>
+        <div class="hr-field hr-field-full">
+          <label>Assign To (select staff) *</label>
+          <div class="hr-checkbox-list" id="trainingStaffList">
+            <div class="hr-empty" style="padding:12px;">Load staff via the merchant bar first.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="hr-modal-footer">
+      <button class="hr-btn hr-btn-ghost" onclick="HRPayroll.closeModal('assignTrainingModal')">Cancel</button>
+      <button class="hr-btn hr-btn-primary" id="assignTrainingSubmitBtn" onclick="HRPayroll.submitAssignTraining()">
+        <i class="fas fa-paper-plane"></i> Assign
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="hr-toasts" id="hrToasts" aria-live="polite" aria-atomic="true"></div>
+
+<!-- ══════════════════════════════════════════════════
+     JAVASCRIPT — HRPayroll IIFE
+══════════════════════════════════════════════════ -->
+<script>
+(function () {
+  'use strict';
+
+  /* ── STATE ── */
+  const state = {
+    merchantId: '',
+    user: null,
+    staff: [],
+    payrollRuns: [],
+    currentPayrollRunId: null,
+    currentPayrollStatus: null,
+    leaves: [],
+  };
+
+  /* ── FIREBASE HANDLES ── */
+  let auth, db, functions;
+
+  /* ══════════════════════════════════════════
+     INIT
+  ══════════════════════════════════════════ */
+  function init() {
+    try {
+      auth      = firebase.auth();
+      db        = firebase.firestore();
+      functions = firebase.functions();
+    } catch (e) {
+      console.error('[HRPayroll] Firebase init error:', e);
+      showToast('Firebase initialisation failed. Check sokoni-config.js.', 'error');
+      return;
+    }
+
+    // Auth gate — redirect unauthenticated users
+    auth.onAuthStateChanged(function (user) {
+      if (!user) {
+        window.location.href = 'login.html';
+        return;
+      }
+      state.user = user;
+      const initial = (user.displayName || user.email || '?')[0].toUpperCase();
+      const avatar  = document.getElementById('hrAvatar');
+      avatar.textContent = initial;
+      avatar.title = user.displayName || user.email;
+    });
+
+    // Tab switching
+    document.querySelectorAll('.hr-tab').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('.hr-tab').forEach(function (t) { t.classList.remove('active'); });
+        document.querySelectorAll('.hr-tab-content').forEach(function (c) { c.classList.remove('active'); });
+        btn.classList.add('active');
+        document.getElementById('hr-tab-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Close modals on backdrop click
+    document.querySelectorAll('.hr-modal-overlay').forEach(function (overlay) {
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeModal(overlay.id);
+      });
+    });
+
+    // Close modals on Escape
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.hr-modal-overlay.open').forEach(function (m) { closeModal(m.id); });
+      }
+    });
+
+    // Default date inputs
+    const today = new Date();
+    document.getElementById('attendanceDate').value = fmtDate(today);
+    document.getElementById('payrollPeriod').value  =
+      today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+  }
+
+  /* ══════════════════════════════════════════
+     UTILITIES
+  ══════════════════════════════════════════ */
+  function fmtDate(d) {
+    const dt = (d instanceof Date) ? d : new Date(d);
+    if (isNaN(dt)) return '';
+    return dt.toISOString().slice(0, 10);
+  }
+
+  function fmtKES(val) {
+    return 'KES ' + (Number(val) || 0).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  function fmtTime(ts) {
+    if (!ts) return '—';
+    try {
+      const d = ts.toDate ? ts.toDate() : new Date(ts);
+      return d.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
+    } catch (_) { return '—'; }
+  }
+
+  function esc(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function showToast(msg, type) {
+    type = type || 'info';
+    const container = document.getElementById('hrToasts');
+    const el = document.createElement('div');
+    el.className = 'hr-toast ' + type;
+    el.textContent = msg;
+    container.appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.remove(); }, 4000);
+  }
+
+  function setLoadingBtn(btnId, loading, originalHTML) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.disabled = loading;
+    if (loading) {
+      btn.dataset.orig = originalHTML || btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Please wait…';
+    } else {
+      btn.innerHTML = btn.dataset.orig || btn.innerHTML;
+    }
+  }
+
+  function callCF(name, data) {
+    return functions.httpsCallable(name)(data);
+  }
+
+  function getMid() {
+    const id = document.getElementById('hrMerchantId').value.trim();
+    if (!id) { showToast('Please enter a Merchant ID first.', 'warning'); return null; }
+    return id;
+  }
+
+  /* ══════════════════════════════════════════
+     LOAD ALL (main Load button)
+  ══════════════════════════════════════════ */
+  function loadAll() {
+    const mid = getMid();
+    if (!mid) return;
+    state.merchantId = mid;
+    loadDashboard(mid);
+    loadStaff(mid);
+    loadPayroll(mid);
+    loadAttendance();
+    loadLeaves(mid);
+  }
+
+  /* ══════════════════════════════════════════
+     SIGN OUT
+  ══════════════════════════════════════════ */
+  function signOut() {
+    auth.signOut()
+      .then(function () { window.location.href = 'login.html'; })
+      .catch(function (err) { showToast('Sign out failed: ' + err.message, 'error'); });
+  }
+
+  /* ══════════════════════════════════════════
+     TAB 1 — DASHBOARD
+  ══════════════════════════════════════════ */
+  function loadDashboard(merchantId) {
+    callCF('getStaffDashboard', { merchantId: merchantId })
+      .then(function (result) {
+        const d = result.data || {};
+
+        // KPI — Active Staff
+        document.getElementById('kpiActiveStaff').textContent = d.activeStaff != null ? d.activeStaff : '0';
+
+        // KPI — Today's Attendance
+        const att = (d.presentToday != null && d.totalStaff != null)
+          ? d.presentToday + ' / ' + d.totalStaff : '— / —';
+        document.getElementById('kpiAttendance').textContent = att;
+
+        // KPI — Pending Leaves
+        const pl = d.pendingLeaves || 0;
+        document.getElementById('kpiPendingLeaves').textContent = pl;
+        if (pl > 0) document.getElementById('kpiLeavesTile').classList.add('hr-kpi-warn');
+
+        // KPI — Last Payroll
+        const lpEl = document.getElementById('kpiLastPayroll');
+        if (d.lastPayrollAmount) {
+          lpEl.innerHTML = fmtKES(d.lastPayrollAmount) +
+            (d.lastPayrollDate ? '<br><small style="font-size:12px;color:var(--muted)">' + esc(d.lastPayrollDate) + '</small>' : '');
+        } else {
+          lpEl.textContent = '—';
+        }
+
+        // Department chart
+        renderDeptChart(d.byDepartment || []);
+
+        // Pending actions
+        renderPendingActions(pl, d.trainingsDue || 0);
+      })
+      .catch(function (err) {
+        console.error('[HRPayroll] getStaffDashboard:', err);
+        showToast('Dashboard load failed: ' + err.message, 'error');
+      });
+  }
+
+  function renderDeptChart(depts) {
+    const container = document.getElementById('deptChart');
+    if (!depts || !depts.length) {
+      container.innerHTML = '<div class="hr-empty">No department data available.</div>';
+      return;
+    }
+    const max = Math.max.apply(null, depts.map(function (d) { return d.count || 0; })) || 1;
+    container.innerHTML = depts.map(function (dept) {
+      const pct = Math.round(((dept.count || 0) / max) * 100);
+      return '<div class="hr-bar-row">' +
+        '<span class="hr-bar-label">' + esc(dept.name || dept.department) + '</span>' +
+        '<div class="hr-bar-track">' +
+          '<div class="hr-bar-fill" style="width:' + pct + '%">' +
+            '<span class="hr-bar-count">' + (dept.count || 0) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderPendingActions(pendingLeaves, trainingsDue) {
+    const container = document.getElementById('pendingActionsList');
+    const items = [];
+    if (pendingLeaves > 0) {
+      items.push(
+        '<div class="hr-action-item warn">' +
+          '<i class="fas fa-umbrella-beach"></i>' +
+          '<span class="hr-action-text">' + pendingLeaves + ' leave request' + (pendingLeaves !== 1 ? 's' : '') + ' awaiting approval</span>' +
+        '</div>'
+      );
+    }
+    if (trainingsDue > 0) {
+      items.push(
+        '<div class="hr-action-item warn">' +
+          '<i class="fas fa-graduation-cap"></i>' +
+          '<span class="hr-action-text">' + trainingsDue + ' training program' + (trainingsDue !== 1 ? 's' : '') + ' overdue or due soon</span>' +
+        '</div>'
+      );
+    }
+    if (!items.length) {
+      items.push(
+        '<div class="hr-action-item">' +
+          '<i class="fas fa-check-circle" style="color:var(--success)"></i>' +
+          '<span class="hr-action-text">All clear — no pending actions.</span>' +
+        '</div>'
+      );
+    }
+    container.innerHTML = items.join('');
+  }
+
+  /* ══════════════════════════════════════════
+     TAB 2 — STAFF
+  ══════════════════════════════════════════ */
+  function loadStaff(merchantId) {
+    const tbody = document.getElementById('staffTableBody');
+    tbody.innerHTML = '<tr><td colspan="7"><div class="hr-loading"><div class="hr-spinner"></div><span>Loading staff…</span></div></td></tr>';
+
+    db.collection('merchants').doc(merchantId).collection('staff')
+      .orderBy('name')
+      .get()
+      .then(function (snap) {
+        state.staff = [];
+        snap.forEach(function (doc) {
+          state.staff.push(Object.assign({ id: doc.id }, doc.data()));
+        });
+        renderStaffTable();
+        populateTrainingStaffList();
+      })
+      .catch(function (err) {
+        console.error('[HRPayroll] loadStaff:', err);
+        tbody.innerHTML = '<tr><td colspan="7"><div class="hr-empty">Could not load staff. Verify the merchant ID and your Firestore rules.</div></td></tr>';
+      });
+  }
+
+  function renderStaffTable() {
+    const tbody = document.getElementById('staffTableBody');
+    if (!state.staff.length) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="hr-empty">No staff members found. Add your first member above.</div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = state.staff.map(function (s) {
+      const badge = s.status === 'active'
+        ? '<span class="hr-badge hr-badge-green">Active</span>'
+        : '<span class="hr-badge hr-badge-gray">Inactive</span>';
+      return '<tr>' +
+        '<td><strong>' + esc(s.name) + '</strong></td>' +
+        '<td>' + esc(s.employeeNo || '—') + '</td>' +
+        '<td>' + esc(s.department || '—') + '</td>' +
+        '<td>' + esc(s.position  || '—') + '</td>' +
+        '<td>' + fmtKES(s.grossSalary) + '</td>' +
+        '<td>' + badge + '</td>' +
+        '<td>' +
+          '<button class="hr-btn-sm" style="background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--border)" ' +
+            'onclick="HRPayroll.viewStaff(\'' + esc(s.id) + '\')" aria-label="View ' + esc(s.name) + '">' +
+            '<i class="fas fa-eye"></i></button> ' +
+          '<button class="hr-btn-sm" style="background:rgba(124,58,237,.12);color:var(--accent);border:1px solid rgba(124,58,237,.3)" ' +
+            'onclick="HRPayroll.editStaff(\'' + esc(s.id) + '\')" aria-label="Edit ' + esc(s.name) + '">' +
+            '<i class="fas fa-edit"></i></button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function openAddStaff() {
+    if (!state.merchantId) { showToast('Load a merchant first.', 'warning'); return; }
+    ['sfName','sfEmpNo','sfPosition','sfPhone','sfEmail'].forEach(function (id) {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('sfDept').value    = '';
+    document.getElementById('sfSalary').value  = '';
+    document.getElementById('sfStartDate').value = fmtDate(new Date());
+    openModal('addStaffModal');
+  }
+
+  function submitAddStaff() {
+    const name      = document.getElementById('sfName').value.trim();
+    const empNo     = document.getElementById('sfEmpNo').value.trim();
+    const dept      = document.getElementById('sfDept').value;
+    const position  = document.getElementById('sfPosition').value.trim();
+    const salary    = parseFloat(document.getElementById('sfSalary').value) || 0;
+    const startDate = document.getElementById('sfStartDate').value;
+    const phone     = document.getElementById('sfPhone').value.trim();
+    const email     = document.getElementById('sfEmail').value.trim().toLowerCase();
+
+    if (!name || !empNo || !dept || !position || salary <= 0 || !startDate) {
+      showToast('Please fill in all required fields.', 'warning');
+      return;
+    }
+
+    setLoadingBtn('addStaffSubmitBtn', true);
+    callCF('addStaffMember', {
+      merchantId: state.merchantId,
+      name, employeeNo: empNo, department: dept, position,
+      grossSalary: salary, startDate,
+      phone: phone || null, email: email || null,
+    }).then(function () {
+      showToast('Staff member added successfully.', 'success');
+      closeModal('addStaffModal');
+      loadStaff(state.merchantId);
+      loadDashboard(state.merchantId);
+    }).catch(function (err) {
+      showToast('Failed to add staff: ' + err.message, 'error');
+    }).finally(function () {
+      setLoadingBtn('addStaffSubmitBtn', false);
+    });
+  }
+
+  function viewStaff(staffId) {
+    const s = state.staff.find(function (m) { return m.id === staffId; });
+    if (!s) return;
+    showToast(s.name + ' | ' + (s.department || '—') + ' | ' + fmtKES(s.grossSalary), 'info');
+  }
+
+  function editStaff(staffId) {
+    showToast('Full staff editor — coming in the next sprint.', 'info');
+  }
+
+  /* ══════════════════════════════════════════
+     TAB 3 — PAYROLL
+  ══════════════════════════════════════════ */
+  function loadPayroll(merchantId) {
+    const tbody = document.getElementById('payrollTableBody');
+    tbody.innerHTML = '<tr><td colspan="6"><div class="hr-loading"><div class="hr-spinner"></div><span>Loading payroll runs…</span></div></td></tr>';
+
+    callCF('getPayrollSummary', { merchantId: merchantId })
+      .then(function (result) {
+        state.payrollRuns = Array.isArray(result.data) ? result.data : [];
+        renderPayrollTable();
+      })
+      .catch(function (err) {
+        console.error('[HRPayroll] getPayrollSummary:', err);
+        tbody.innerHTML = '<tr><td colspan="6"><div class="hr-empty">Could not load payroll runs.</div></td></tr>';
+      });
+  }
+
+  function renderPayrollTable() {
+    const tbody = document.getElementById('payrollTableBody');
+    if (!state.payrollRuns.length) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="hr-empty">No payroll runs yet. Use "Run Payroll" to create the first one.</div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = state.payrollRuns.map(function (r) {
+      let badge;
+      switch (r.status) {
+        case 'approved': badge = '<span class="hr-badge hr-badge-green">Approved</span>'; break;
+        case 'paid':     badge = '<span class="hr-badge hr-badge-blue">Paid</span>';      break;
+        default:         badge = '<span class="hr-badge hr-badge-gray">Draft</span>';
+      }
+      return '<tr>' +
+        '<td><strong>' + esc(r.period) + '</strong></td>' +
+        '<td>' + (r.staffCount || 0) + '</td>' +
+        '<td>' + fmtKES(r.totalGross) + '</td>' +
+        '<td>' + fmtKES(r.totalNet)   + '</td>' +
+        '<td>' + badge + '</td>' +
+        '<td>' +
+          '<button class="hr-btn-sm" style="background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--border)" ' +
+            'onclick="HRPayroll.openPayrollView(\'' + esc(r.id) + '\',\'' + esc(r.period) + '\',\'' + esc(r.status) + '\')">' +
+            '<i class="fas fa-eye"></i> View</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function runPayroll() {
+    const mid    = getMid();
+    if (!mid) return;
+    const period = document.getElementById('payrollPeriod').value;
+    if (!period) { showToast('Select a payroll period first.', 'warning'); return; }
+    if (!confirm('Run payroll for ' + period + '?\n\nThis will calculate PAYE, NHIF, NSSF and Housing Levy deductions for all active staff.')) return;
+
+    showToast('Running payroll for ' + period + '…', 'info');
+    callCF('runPayroll', { merchantId: mid, period: period })
+      .then(function () {
+        showToast('Payroll run created for ' + period + '.', 'success');
+        loadPayroll(mid);
+      })
+      .catch(function (err) {
+        showToast('Payroll run failed: ' + err.message, 'error');
+      });
+  }
+
+  function openPayrollView(runId, period, status) {
+    state.currentPayrollRunId   = runId;
+    state.currentPayrollStatus  = status;
+    document.getElementById('viewPayrollPeriod').textContent = period;
+
+    const approveBtn = document.getElementById('approvePayrollBtn');
+    approveBtn.style.display = (status === 'draft') ? '' : 'none';
+
+    const tbody = document.getElementById('payrollBreakdownBody');
+    const tfoot = document.getElementById('payrollBreakdownFoot');
+    tbody.innerHTML = '<tr><td colspan="7"><div class="hr-loading"><div class="hr-spinner"></div><span>Loading breakdown…</span></div></td></tr>';
+    tfoot.innerHTML = '';
+
+    openModal('viewPayrollModal');
+
+    callCF('getPayrollSummary', { merchantId: state.merchantId, runId: runId, detail: true })
+      .then(function (result) {
+        const lines = (result.data && Array.isArray(result.data.lines)) ? result.data.lines : [];
+        if (!lines.length) {
+          tbody.innerHTML = '<tr><td colspan="7"><div class="hr-empty">No breakdown data available for this run.</div></td></tr>';
+          return;
+        }
+        let tGross = 0, tPaye = 0, tNhif = 0, tNssf = 0, tHl = 0, tNet = 0;
+        tbody.innerHTML = lines.map(function (l) {
+          const gross = l.grossSalary || 0;
+          const paye  = l.paye        || 0;
+          const nhif  = l.nhif        || 0;
+          const nssf  = l.nssf        || 0;
+          const hl    = l.housingLevy || 0;
+          const net   = l.netPay      != null ? l.netPay : (gross - paye - nhif - nssf - hl);
+          tGross += gross; tPaye += paye; tNhif += nhif; tNssf += nssf; tHl += hl; tNet += net;
+          return '<tr>' +
+            '<td>' + esc(l.name) + '</td>' +
+            '<td>' + fmtKES(gross) + '</td>' +
+            '<td style="color:var(--danger)">' + fmtKES(paye) + '</td>' +
+            '<td style="color:var(--danger)">' + fmtKES(nhif) + '</td>' +
+            '<td style="color:var(--danger)">' + fmtKES(nssf) + '</td>' +
+            '<td style="color:var(--danger)">' + fmtKES(hl)   + '</td>' +
+            '<td style="color:var(--success);font-weight:700">' + fmtKES(net) + '</td>' +
+          '</tr>';
+        }).join('');
+        tfoot.innerHTML = '<tr>' +
+          '<td>Totals</td>' +
+          '<td>' + fmtKES(tGross) + '</td>' +
+          '<td>' + fmtKES(tPaye)  + '</td>' +
+          '<td>' + fmtKES(tNhif)  + '</td>' +
+          '<td>' + fmtKES(tNssf)  + '</td>' +
+          '<td>' + fmtKES(tHl)    + '</td>' +
+          '<td>' + fmtKES(tNet)   + '</td>' +
+        '</tr>';
+      })
+      .catch(function (err) {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="hr-empty">Could not load breakdown: ' + esc(err.message) + '</div></td></tr>';
+      });
+  }
+
+  function approvePayroll() {
+    if (!state.currentPayrollRunId) return;
+    if (!confirm('Approve this payroll run? This action cannot be undone.')) return;
+    setLoadingBtn('approvePayrollBtn', true);
+    callCF('approvePayrollRun', { merchantId: state.merchantId, runId: state.currentPayrollRunId })
+      .then(function () {
+        showToast('Payroll approved successfully.', 'success');
+        closeModal('viewPayrollModal');
+        loadPayroll(state.merchantId);
+        loadDashboard(state.merchantId);
+      })
+      .catch(function (err) {
+        showToast('Approval failed: ' + err.message, 'error');
+      })
+      .finally(function () { setLoadingBtn('approvePayrollBtn', false); });
+  }
+
+  /* ══════════════════════════════════════════
+     TAB 4 — ATTENDANCE
+  ══════════════════════════════════════════ */
+  function loadAttendance() {
+    const mid  = state.merchantId || getMid();
+    if (!mid) return;
+    state.merchantId = mid;
+    const date = document.getElementById('attendanceDate').value || fmtDate(new Date());
+    const container = document.getElementById('attendanceRows');
+    container.innerHTML = '<div class="hr-loading"><div class="hr-spinner"></div><span>Loading attendance…</span></div>';
+
+    callCF('getStaffDashboard', { merchantId: mid, date: date, type: 'attendance' })
+      .then(function (result) {
+        const rows = (result.data && Array.isArray(result.data.attendance)) ? result.data.attendance : [];
+        renderAttendanceRows(rows, mid);
+      })
+      .catch(function (err) {
+        console.error('[HRPayroll] attendance CF error, falling back to staff list:', err);
+        // Graceful degradation: show staff with no clock data
+        const fallback = state.staff.map(function (s) {
+          return { id: s.id, name: s.name, clockIn: null, clockOut: null, status: 'absent', hoursWorked: null };
+        });
+        renderAttendanceRows(fallback, mid);
+      });
+  }
+
+  function renderAttendanceRows(rows, mid) {
+    const container = document.getElementById('attendanceRows');
+    if (!rows.length) {
+      container.innerHTML = '<div class="hr-empty">No staff records found for the selected date.</div>';
+      return;
+    }
+    container.innerHTML = rows.map(function (r) {
+      let badge;
+      switch (r.status) {
+        case 'present': badge = '<span class="hr-badge hr-badge-green">Present</span>';   break;
+        case 'leave':   badge = '<span class="hr-badge hr-badge-yellow">On Leave</span>'; break;
+        default:        badge = '<span class="hr-badge hr-badge-red">Absent</span>';
+      }
+      const hours = (r.clockIn && r.clockOut)
+        ? (((r.clockOut.seconds || 0) - (r.clockIn.seconds || 0)) / 3600).toFixed(1) + 'h'
+        : r.hoursWorked ? r.hoursWorked + 'h' : '—';
+
+      const hasClockedIn  = !!r.clockIn;
+      const hasClockedOut = !!r.clockOut;
+      let actionBtn;
+      if (hasClockedIn && !hasClockedOut) {
+        actionBtn = '<button class="hr-btn-sm" style="background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)" ' +
+          'onclick="HRPayroll.clockInOut(\'' + esc(r.id) + '\',\'out\')" aria-label="Clock out"><i class="fas fa-sign-out-alt"></i> Out</button>';
+      } else if (!hasClockedIn) {
+        actionBtn = '<button class="hr-btn-sm" style="background:rgba(34,197,94,.15);color:var(--success);border:1px solid rgba(34,197,94,.3)" ' +
+          'onclick="HRPayroll.clockInOut(\'' + esc(r.id) + '\',\'in\')" aria-label="Clock in"><i class="fas fa-sign-in-alt"></i> In</button>';
+      } else {
+        actionBtn = '<span style="color:var(--muted);font-size:12px">Done</span>';
+      }
+
+      return '<div class="hr-att-row">' +
+        '<span><strong>' + esc(r.name) + '</strong></span>' +
+        '<span>' + fmtTime(r.clockIn)  + '</span>' +
+        '<span>' + fmtTime(r.clockOut) + '</span>' +
+        '<span>' + hours + '</span>' +
+        '<span>' + badge + '</span>' +
+        '<div class="hr-att-actions">' + actionBtn + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function clockInOut(staffId, action) {
+    if (!state.merchantId) { showToast('Load a merchant first.', 'warning'); return; }
+    const date = document.getElementById('attendanceDate').value || fmtDate(new Date());
+    callCF('recordAttendance', { merchantId: state.merchantId, staffId: staffId, action: action, date: date })
+      .then(function () {
+        showToast('Clock ' + action + ' recorded.', 'success');
+        loadAttendance();
+      })
+      .catch(function (err) {
+        showToast('Clock ' + action + ' failed: ' + err.message, 'error');
+      });
+  }
+
+  function toggleMonthlySummary(on) {
+    document.getElementById('dailyAttendanceView').style.display  = on ? 'none' : '';
+    document.getElementById('monthlySummaryView').style.display   = on ? '' : 'none';
+    if (on && state.merchantId) {
+      const date = document.getElementById('attendanceDate').value || fmtDate(new Date());
+      loadMonthlySummary(state.merchantId, date.slice(0, 7));
+    }
+  }
+
+  function loadMonthlySummary(merchantId, yearMonth) {
+    const tbody = document.getElementById('monthlySummaryBody');
+    tbody.innerHTML = '<tr><td colspan="4"><div class="hr-loading"><div class="hr-spinner"></div><span>Loading monthly summary…</span></div></td></tr>';
+
+    callCF('getStaffDashboard', { merchantId: merchantId, yearMonth: yearMonth, type: 'monthly' })
+      .then(function (result) {
+        const rows = (result.data && Array.isArray(result.data.monthly)) ? result.data.monthly : [];
+        if (!rows.length) {
+          tbody.innerHTML = '<tr><td colspan="4"><div class="hr-empty">No monthly data available.</div></td></tr>';
+          return;
+        }
+        tbody.innerHTML = rows.map(function (r) {
+          return '<tr>' +
+            '<td><strong>' + esc(r.name) + '</strong></td>' +
+            '<td style="color:var(--success)">' + (r.daysPresent || 0) + '</td>' +
+            '<td style="color:var(--danger)">'  + (r.daysAbsent  || 0) + '</td>' +
+            '<td>' + (r.totalHours != null ? Number(r.totalHours).toFixed(1) + 'h' : '—') + '</td>' +
+          '</tr>';
+        }).join('');
+      })
+      .catch(function () {
+        tbody.innerHTML = '<tr><td colspan="4"><div class="hr-empty">Could not load monthly summary.</div></td></tr>';
+      });
+  }
+
+  /* ══════════════════════════════════════════
+     TAB 5 — LEAVES
+  ══════════════════════════════════════════ */
+  function loadLeaves(merchantId) {
+    const tbody = document.getElementById('leavesTableBody');
+    tbody.innerHTML = '<tr><td colspan="7"><div class="hr-loading"><div class="hr-spinner"></div><span>Loading leave requests…</span></div></td></tr>';
+
+    db.collection('merchants').doc(merchantId).collection('leaveRequests')
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get()
+      .then(function (snap) {
+        state.leaves = [];
+        snap.forEach(function (doc) {
+          state.leaves.push(Object.assign({ id: doc.id }, doc.data()));
+        });
+        renderLeavesTable();
+      })
+      .catch(function (err) {
+        console.error('[HRPayroll] loadLeaves:', err);
+        tbody.innerHTML = '<tr><td colspan="7"><div class="hr-empty">Could not load leave requests.</div></td></tr>';
+      });
+  }
+
+  function renderLeavesTable() {
+    const tbody = document.getElementById('leavesTableBody');
+    if (!state.leaves.length) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="hr-empty">No leave requests found.</div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = state.leaves.map(function (l) {
+      let badge;
+      switch (l.status) {
+        case 'approved': badge = '<span class="hr-badge hr-badge-green">Approved</span>';  break;
+        case 'rejected': badge = '<span class="hr-badge hr-badge-red">Rejected</span>';    break;
+        default:         badge = '<span class="hr-badge hr-badge-orange">Pending</span>';
+      }
+      const actions = (l.status === 'pending')
+        ? '<button class="hr-btn-sm" style="background:rgba(34,197,94,.15);color:var(--success);border:1px solid rgba(34,197,94,.3)" ' +
+            'onclick="HRPayroll.handleLeave(\'' + esc(l.id) + '\',true)"><i class="fas fa-check"></i> Approve</button> ' +
+          '<button class="hr-btn-sm" style="background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3)" ' +
+            'onclick="HRPayroll.handleLeave(\'' + esc(l.id) + '\',false)"><i class="fas fa-times"></i> Reject</button>'
+        : '—';
+
+      return '<tr>' +
+        '<td><strong>' + esc(l.staffName || l.staffId || '—') + '</strong></td>' +
+        '<td>' + esc(l.leaveType || '—') + '</td>' +
+        '<td>' + esc(l.fromDate  || '—') + '</td>' +
+        '<td>' + esc(l.toDate    || '—') + '</td>' +
+        '<td>' + (l.days != null ? l.days + 'd' : '—') + '</td>' +
+        '<td>' + badge + '</td>' +
+        '<td>' + actions + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function handleLeave(leaveId, approved) {
+    if (!state.merchantId) { showToast('Load a merchant first.', 'warning'); return; }
+    const word = approved ? 'approve' : 'reject';
+    if (!confirm('Are you sure you want to ' + word + ' this leave request?')) return;
+
+    callCF('approveLeave', { merchantId: state.merchantId, leaveId: leaveId, approved: approved })
+      .then(function () {
+        showToast('Leave request ' + (approved ? 'approved' : 'rejected') + '.', approved ? 'success' : 'warning');
+        loadLeaves(state.merchantId);
+        loadDashboard(state.merchantId);
+      })
+      .catch(function (err) {
+        showToast('Could not process leave request: ' + err.message, 'error');
+      });
+  }
+
+  /* ══════════════════════════════════════════
+     TAB 5 — TRAINING
+  ══════════════════════════════════════════ */
+  function loadTraining(merchantId) {
+    const tbody = document.getElementById('trainingTableBody');
+    tbody.innerHTML = '<tr><td colspan="5"><div class="hr-loading"><div class="hr-spinner"></div><span>Loading training programs…</span></div></td></tr>';
+
+    db.collection('merchants').doc(merchantId).collection('trainingPrograms')
+      .orderBy('createdAt', 'desc')
+      .limit(30)
+      .get()
+      .then(function (snap) {
+        if (snap.empty) {
+          tbody.innerHTML = '<tr><td colspan="5"><div class="hr-empty">No training programs found. Assign one using the button above.</div></td></tr>';
+          return;
+        }
+        const now = new Date();
+        tbody.innerHTML = '';
+        snap.forEach(function (doc) {
+          const t   = doc.data();
+          const tot = t.assignedCount  || 0;
+          const cmp = t.completedCount || 0;
+          const due = t.dueDate        || '—';
+          const dueDate = new Date(due);
+          let badge;
+          if (cmp >= tot && tot > 0)                   badge = '<span class="hr-badge hr-badge-green">Completed</span>';
+          else if (!isNaN(dueDate) && dueDate < now)   badge = '<span class="hr-badge hr-badge-red">Overdue</span>';
+          else                                          badge = '<span class="hr-badge hr-badge-orange">In Progress</span>';
+
+          const row = document.createElement('tr');
+          row.innerHTML =
+            '<td><strong>' + esc(t.title) + '</strong></td>' +
+            '<td>' + tot + ' staff</td>' +
+            '<td>' + esc(due) + '</td>' +
+            '<td>' + cmp + ' / ' + tot + '</td>' +
+            '<td>' + badge + '</td>';
+          tbody.appendChild(row);
+        });
+      })
+      .catch(function () {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="hr-empty">Could not load training programs.</div></td></tr>';
+      });
+  }
+
+  function openAssignTraining() {
+    if (!state.merchantId) { showToast('Load a merchant first.', 'warning'); return; }
+    document.getElementById('trTitle').value = '';
+    document.getElementById('trDescription').value = '';
+    document.getElementById('trDueDate').value = '';
+    populateTrainingStaffList();
+    openModal('assignTrainingModal');
+  }
+
+  function populateTrainingStaffList() {
+    const container = document.getElementById('trainingStaffList');
+    const active = state.staff.filter(function (s) { return s.status !== 'inactive'; });
+    if (!active.length) {
+      container.innerHTML = '<div class="hr-empty" style="padding:12px;">No active staff loaded yet.</div>';
+      return;
+    }
+    container.innerHTML = active.map(function (s) {
+      return '<label class="hr-checkbox-item">' +
+        '<input type="checkbox" value="' + esc(s.id) + '" name="trStaff"> ' +
+        esc(s.name) +
+        '<span style="color:var(--muted);font-size:11px;margin-left:4px">(' + esc(s.department || '') + ')</span>' +
+      '</label>';
+    }).join('');
+  }
+
+  function submitAssignTraining() {
+    const title   = document.getElementById('trTitle').value.trim();
+    const desc    = document.getElementById('trDescription').value.trim();
+    const dueDate = document.getElementById('trDueDate').value;
+    const staffIds = Array.from(document.querySelectorAll('input[name="trStaff"]:checked'))
+      .map(function (cb) { return cb.value; });
+
+    if (!title || !dueDate || !staffIds.length) {
+      showToast('Please enter a title, due date and select at least one staff member.', 'warning');
+      return;
+    }
+
+    setLoadingBtn('assignTrainingSubmitBtn', true);
+    callCF('assignTraining', {
+      merchantId: state.merchantId,
+      title, description: desc || null, dueDate, staffIds,
+    }).then(function () {
+      showToast('Training assigned to ' + staffIds.length + ' staff member(s).', 'success');
+      closeModal('assignTrainingModal');
+      loadTraining(state.merchantId);
+    }).catch(function (err) {
+      showToast('Assign training failed: ' + err.message, 'error');
+    }).finally(function () {
+      setLoadingBtn('assignTrainingSubmitBtn', false);
+    });
+  }
+
+  /* ══════════════════════════════════════════
+     SUB-TAB SWITCHER (Leaves / Training)
+  ══════════════════════════════════════════ */
+  function switchSubtab(tab) {
+    document.querySelectorAll('.hr-subtab').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.subtab === tab);
+    });
+    document.getElementById('subtab-leaves').style.display   = tab === 'leaves'   ? '' : 'none';
+    document.getElementById('subtab-training').style.display = tab === 'training' ? '' : 'none';
+    if (tab === 'training' && state.merchantId) loadTraining(state.merchantId);
+  }
+
+  /* ══════════════════════════════════════════
+     MODAL HELPERS
+  ══════════════════════════════════════════ */
+  function openModal(id) {
+    document.getElementById(id).classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  /* ══════════════════════════════════════════
+     PUBLIC API
+  ══════════════════════════════════════════ */
+  window.HRPayroll = {
+    loadAll:              loadAll,
+    signOut:              signOut,
+    // Staff
+    openAddStaff:         openAddStaff,
+    submitAddStaff:       submitAddStaff,
+    viewStaff:            viewStaff,
+    editStaff:            editStaff,
+    // Payroll
+    runPayroll:           runPayroll,
+    openPayrollView:      openPayrollView,
+    approvePayroll:       approvePayroll,
+    // Attendance
+    loadAttendance:       loadAttendance,
+    clockInOut:           clockInOut,
+    toggleMonthlySummary: toggleMonthlySummary,
+    // Leaves & Training
+    loadLeaves:           loadLeaves,
+    handleLeave:          handleLeave,
+    openAssignTraining:   openAssignTraining,
+    submitAssignTraining: submitAssignTraining,
+    switchSubtab:         switchSubtab,
+    // Utility
+    closeModal:           closeModal,
+  };
+
+  /* ══════════════════════════════════════════
+     BOOT
+  ══════════════════════════════════════════ */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+}());
+</script>
+
+</body>
+</html>

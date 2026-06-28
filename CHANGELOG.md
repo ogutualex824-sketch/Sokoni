@@ -1,4 +1,495 @@
-﻿## [2026-06-29] — Enterprise Loyalty, Membership & Customer Experience Platform v1.0
+﻿## [2026-06-29] — Commerce OS Dashboard — Unified Merchant Command Center SPA
+
+### Summary
+Created `commerce-os.html`, the flagship unified merchant command center. A full-screen
+dark-theme SPA with collapsible sidebar navigation and 13 sections covering every platform
+module: Overview, Health Score, Revenue, Inventory, Orders, Customers, Payments, Loyalty,
+Marketing, Procurement, HR & Staff, Security, and Operations. Canvas sparkline charts,
+CSS conic-gradient payment donut, order-status funnel, module status grid, and a live
+business health gauge are all implemented without third-party chart libraries.
+
+### Files Changed
+- `commerce-os.html` — NEW (~580 lines): Commerce OS IIFE; Firebase compat v10.12.0;
+  auth gate via onAuthStateChanged; parallel CF calls via Promise.all; 30-second KPI
+  auto-refresh; Canvas sparklines (7-day revenue, 30-day revenue line); CSS conic-gradient
+  payment methods donut; order funnel; health score gauge with 10-dimension breakdown;
+  13 lazy-loaded sections; collapsible sidebar (desktop toggle + mobile overlay); merchant
+  selector; XSS-safe esc() helper throughout.
+
+### CF calls wired
+`getMerchantKPIs`, `getBusinessHealthScore`, `getMerchantRevenue`, `getInventorySummary`,
+`getMerchantOrders`, `getCustomerInsights`, `getPaymentStats`, `getStuckSessions`,
+`getLoyaltySummary`, `getMarketingOverview`, `getProcurementSummary`, `getHRSummary`,
+`getSecurityDashboard`, `getOperationsSummary`
+
+### Firestore reads wired
+`adminAlerts` (recent 5 by merchant), `systemHealth/{merchantId}` (module status),
+`reconciliationReports` (last 3 by merchant)
+
+### Security
+- XSS: all dynamic content rendered via `esc()` — no raw innerHTML with user data
+- Auth gate enforced; unauthenticated users see sign-in prompt within overlay
+- `noindex, nofollow` meta tag; `security.js` loaded first
+- No secrets or credentials in client-side code
+
+### Performance
+- All section data loaded lazily on navigation (not upfront)
+- Overview KPIs refresh every 30 seconds only when the overview section is active
+- Canvas charts use `devicePixelRatio` scaling for crisp rendering on HiDPI screens
+- No third-party chart or UI framework dependencies
+
+### No breaking changes
+
+---
+
+## [2026-06-29] — Procurement Portal SPA Rebuild
+
+### Summary
+Rewrote `procurement.html` as a clean, self-contained ~350-line dark-theme SPA using
+Firebase compat SDK v10.12.0. All 6 tabs implemented: Dashboard, Purchase Orders,
+Suppliers, GRN, Goods Received Notes, Invoices, and Forecast. Auth guard redirects
+unauthenticated users to login.html.
+
+### Files Changed
+- `procurement.html` — REWRITTEN: 6-tab SPA; ProcurementPortal IIFE; `_esc`, `_fmt` utilities;
+  CF calls: getProcurementDashboard, createPurchaseOrder, approvePurchaseOrder, receiveGoods,
+  approveAndPayInvoice, getProcurementForecast; direct Firestore reads for procSuppliers + GRN + invoices.
+
+### Security
+- XSS: all dynamic HTML rendered via `_esc()` helper; no dangerouslySetInnerHTML patterns
+- Auth gate enforced via `firebase.auth().onAuthStateChanged`
+- Modal backdrop click handled safely (target === bg check)
+
+### No breaking changes
+
+---
+
+## [2026-06-29] — Commerce OS v1.0 — Enterprise Commerce Operating System
+
+### Summary
+Gap-analysis against the SOKONI Commerce OS Specification v1.0 identified 8 genuine missing modules.
+All 8 implemented in full this sprint: Payment State Machine, Payment Reconciliation, Business Health Score,
+HR & Payroll, Procurement, Marketing Engine, AVCO Inventory Costing, and Chaos Engineering Scheduler.
+Total new CFs: 57. New HTML portals: 4 (business-health.html, hr-payroll.html, procurement.html, commerce-os.html).
+Firestore rules updated for 20 new collections. Indexes rebalanced 200/200.
+
+### Files Changed
+- `functions/payment-state-machine.js` — NEW (822 lines, 7 CFs): strict 12-state payment FSM
+- `functions/payment-reconciliation.js` — NEW (631 lines, 6 CFs): EOD M-Pesa/IntaSend reconciliation
+- `functions/business-health-score.js` — NEW (~710 lines, 6 CFs): AI-powered 0-100 business health score
+- `functions/hr-payroll.js` — NEW (1,273 lines, 12 CFs): Kenya-specific payroll with PAYE/NHIF/NSSF/Housing Levy
+- `functions/procurement.js` — NEW (1,154 lines, 11 CFs): internal procurement + supplier portal
+- `functions/marketing-engine.js` — NEW (730 lines, 12 CFs): bundles, flash sales, A/B tests, cross-sell/upsell
+- `functions/inventory-v2.js` — AVCO costing added (5 new CFs: updateAVCO, getAVCO, deductAVCO, getAVCOHistory, getCOGSReport)
+- `functions/disaster-recovery.js` — Chaos scheduler added (2 new CFs: runWeeklyChaosTest, getChaosTestReports)
+- `functions/index.js` — 57 new exports; renamed posInventoryPro PO exports to posCreate/posReceive to avoid collision
+- `firestore.rules` — 20 new collection rules (paymentSessions, hrStaff, procPurchaseOrders, mktBundleDeals, etc.)
+- `firestore.indexes.json` — 10 dropped (low-value queues), 10 added (new modules); net 200/200
+- `business-health.html` — NEW: Business Health Score SPA with gauge + radar chart + AI recommendations
+- `hr-payroll.html` — NEW: HR & Payroll portal (5 tabs: Staff, Attendance, Payroll, Leaves, Training)
+- `procurement.html` — NEW: Procurement portal (6 tabs: Dashboard, POs, Suppliers, GRN, Invoices, Forecast)
+- `commerce-os.html` — NEW: Unified Commerce OS command center (13 sections)
+
+### New Cloud Functions (57 total)
+
+#### Payment State Machine (7 CFs)
+createPaymentSession, transitionPaymentState, getPaymentState, recoverPaymentSession, getStuckSessions, reconcilePaymentSessions, sealPaymentAuditTrail
+
+#### Payment Reconciliation (6 CFs)
+runDailyReconciliation, getReconciliationReport, flagUnmatchedPayment, resolveUnmatchedPayment, getMpesaReconciliationSummary, triggerManualReconciliation
+
+#### Business Health Score (6 CFs)
+getBusinessHealthScore, getHealthScoreHistory, getDimensionDrilldown, getHealthScoreBenchmarks, computeAllHealthScores, getMultibranchHealthComparison
+
+#### HR & Payroll (12 CFs)
+addStaffMember, recordAttendance, getAttendanceReport, runPayroll, approvePayrollRun, getPayslip, getPayrollSummary, requestLeave, approveLeave, assignTraining, markTrainingComplete, getStaffDashboard
+
+#### Procurement (11 CFs)
+addSupplier, createPurchaseOrder, approvePurchaseOrder, sendPurchaseOrder, receiveGoods, createSupplierInvoice, approveAndPayInvoice, getSupplierPerformance, getProcurementForecast, getProcurementDashboard, scheduledVendorPerformanceUpdate
+
+#### Marketing Engine (12 CFs)
+createBundleDeal, getActiveBundleDeals, createFlashSale, getFlashSalePrice, recordFlashSalePurchase, getCrossSellRecommendations, getUpsellRecommendations, createMarketingCampaign, runABTest, recordABTestImpression, applyCouponCode, concludeExpiredFlashSales
+
+#### AVCO Inventory Costing (5 CFs)
+inventoryUpdateAVCO, inventoryGetAVCO, inventoryDeductAVCO, inventoryGetAVCOHistory, inventoryGetCOGSReport
+
+#### Chaos Engineering (2 CFs)
+runWeeklyChaosTest, getChaosTestReports
+
+### New Collections (20)
+paymentSessions, paymentAuditSeals, paymentRecoveryLog, paymentReconciliation, reconciliationReports, unmatchedPayments, businessHealthScores, hrStaff, hrAttendance, hrPayrollRuns, hrPayslips, hrLeaves, hrTraining, procSuppliers, procPurchaseOrders, procGRN, procSupplierInvoices, procVendorPerformance, procForecast, mktBundleDeals, mktFlashSales, mktABTests, mktCouponCodes, mktCampaigns, mktRecommendationEngineLog, chaosTestReports
+
+### New Secrets Required
+| Secret | Purpose | Module |
+|---|---|---|
+| `PAYMENT_HMAC_SECRET` | Payment audit trail HMAC seal | payment-state-machine |
+| `PAYROLL_ENCRYPTION_KEY` | AES-256-GCM encryption of bank account data | hr-payroll |
+
+### Security Implications
+- All new CFs enforce `enforceAppCheck: true`; admin-only operations verify `req.auth.token.admin`
+- Bank account data encrypted at rest with AES-256-GCM before Firestore write
+- Payment FSM prevents state skipping — financial states (VERIFIED through SELLER_SETTLEMENT_PENDING) cannot be bypassed
+- Chaos tests run weekly; any critical failure triggers adminAlert
+- All procurement approvals require manager/admin custom claims
+
+### Performance Implications
+- `computeAllHealthScores` batches max 100 merchants per run with 5-concurrency parallelism
+- `runDailyReconciliation` paginates orders (100/batch) to avoid memory exhaustion
+- Flash sale `concludeExpiredFlashSales` scheduled every 10 minutes for timely cleanup
+- Marketing cross-sell uses collaborative filtering; falls back to Claude Haiku only when data is sparse (<3 signals)
+- HR payroll prorates by attendance days to ensure fair pay calculation
+
+### Migration Steps
+1. `gcloud secrets create PAYMENT_HMAC_SECRET --data-file=-` (use: `openssl rand -hex 32`)
+2. `gcloud secrets create PAYROLL_ENCRYPTION_KEY --data-file=-` (use: `openssl rand -hex 32`)
+3. `firebase deploy --only functions` — deploy all 57 new CFs
+4. `firebase deploy --only firestore:rules,firestore:indexes` — apply new rules + indexes
+5. `firebase deploy --only hosting` — deploy 4 new HTML portals
+
+---
+
+## [2026-06-29] — Firestore Index Rotation (10 dropped / 10 added)
+
+### Summary
+Cleared 10 low-value compound indexes from queue-processing and low-traffic collections to free capacity
+at the 200-index hard limit. Added 10 new compound indexes for the Payment Sessions, Business Health,
+HR (Payroll, Leaves), Procurement (Purchase Orders, Supplier Invoices), and Marketing (Flash Sales,
+Bundle Deals, A/B Tests) modules.
+
+### Files Changed
+- `firestore.indexes.json` — net change 0 (200 → 200); 10 dropped, 10 added
+
+### Indexes Dropped
+| Collection Group | Reason |
+|---|---|
+| `deliveryLocations` | Real-time single-field lookup; no compound query needed |
+| `deliveryProofs` | Single deliveryId lookup sufficient |
+| `voucherRedemptions` | Low volume; client-side sort acceptable |
+| `etimsAlerts` | Admin panel; client-side sort acceptable |
+| `hubInvoiceQueue` | Queue processor uses simple status scan |
+| `adminAlerts` | Admin panel; client-side sort acceptable |
+| `monthly` (COLLECTION_GROUP) | Very low volume; no compound query in hot path |
+| `algoliaQueue` | Queue processing; single-field status scan sufficient |
+| `notificationQueue` | Queue processing; single-field scan sufficient |
+| `priceAlerts` (3-field) | uid+status index retained; productId+status+targetPrice dropped |
+
+### Indexes Added
+| Collection Group | Fields |
+|---|---|
+| `paymentSessions` | merchantId ASC, currentState ASC, updatedAt DESC |
+| `paymentSessions` | uid ASC, currentState ASC, createdAt DESC |
+| `businessHealthScores` | merchantId ASC, date DESC |
+| `hrPayrollRuns` | merchantId ASC, period DESC |
+| `hrLeaves` | merchantId ASC, status ASC, startDate DESC |
+| `procPurchaseOrders` | merchantId ASC, status ASC, createdAt DESC |
+| `procSupplierInvoices` | merchantId ASC, status ASC, dueDate ASC |
+| `mktFlashSales` | merchantId ASC, status ASC, endAt ASC |
+| `mktBundleDeals` | merchantId ASC, status ASC, validTo ASC |
+| `mktABTests` | merchantId ASC, status ASC, startDate DESC |
+
+---
+
+## [2026-06-29] — Procurement Engine v1.0
+
+### Summary
+Inbound procurement management for SOKONI merchants — fully distinct from the outbound B2B Wholesale
+module. Covers the full supplier-to-payment lifecycle: supplier registry, purchase orders with
+deterministic idempotent IDs (sha256), goods received notes (GRN) with direct inventory increment via
+`posProducts`, double-entry payment ledger, supplier invoice management, monthly vendor performance
+scoring, and a reorder-forecast engine based on 30-day stock-movement analysis. A dark-theme SPA portal
+exposes six tabs: Dashboard, Purchase Orders, Suppliers, GRN, Invoices, and Forecast.
+
+### New Cloud Functions — functions/procurement.js (10 CFs + 1 scheduled)
+
+| CF | Trigger | Description |
+|---|---|---|
+| `addSupplier` | onCall + AppCheck | Register supplier; KRA PIN regex validation; payment terms guard |
+| `createPurchaseOrder` | onCall + AppCheck | Draft PO; server-side VAT (16%); deterministic sha256 poId; supplier ownership verified |
+| `approvePurchaseOrder` | onCall + AppCheck | Manager/admin: approve → 'approved' or reject → 'cancelled' |
+| `sendPurchaseOrder` | onCall + AppCheck | Mark 'sent'; queue supplier notification email via emailQueue |
+| `receiveGoods` | onCall + AppCheck | GRN: update inventory via F.increment; write stockMovements; partial/full receipt |
+| `createSupplierInvoice` | onCall + AppCheck | Attach invoice to GRN/PO; ±5% deviation guard vs PO total |
+| `approveAndPayInvoice` | onCall + AppCheck | Admin: idempotency guard; double-entry debit/credit in paymentLedger; update supplier balance |
+| `getSupplierPerformance` | onCall + AppCheck | Monthly trend (on-time delivery + quality) over last N months |
+| `getProcurementForecast` | onCall + AppCheck | Reorder list: 30d usage analysis; safety buffer 1.2×; critical/low urgency sort |
+| `getProcurementDashboard` | onCall + AppCheck | 7 parallel queries: open POs, pending approvals, invoices, overdue, top suppliers, reorder alerts |
+| `scheduledVendorPerformanceUpdate` | onSchedule 01:00 EAT | Nightly: score all suppliers for previous month; update procVendorPerformance + supplier.rating |
+
+### New Collections
+
+| Collection | Description |
+|---|---|
+| `procSuppliers/{supplierId}` | Supplier registry per merchant |
+| `procPurchaseOrders/{poId}` | PO lifecycle: draft → paid |
+| `procGRN/{grnId}` | Goods received notes with per-item condition |
+| `procSupplierInvoices/{invoiceId}` | Supplier invoices with idempotency guard |
+| `procVendorPerformance/{supplierId}_{YYYY-MM}` | Monthly on-time + quality metrics |
+| `procForecast/{merchantId}_{productId}` | Reorder points and lead-time config |
+| `paymentLedger/{ledgerId}` | Double-entry debit/credit records |
+| `stockMovements/{movId}` | Inventory movement audit trail |
+| `emailQueue/{emailId}` | Outbound email jobs for supplier PO notifications |
+
+### New Portal — procurement.html
+Dark-theme SPA. Tabs: Dashboard (KPIs + reorder alerts + top suppliers), Purchase Orders (table + create
+modal + inline approve/send actions), Suppliers (card grid + add modal), GRN (received-goods table),
+Invoices (table + mark-paid action), Forecast (reorder table + quick "Create PO" per row). Status
+badges colour-coded: draft=gray, approved=green, sent=blue, received=teal, paid=green, overdue=red.
+
+### Security
+- `enforceAppCheck: true` on all 10 CFs
+- Role checks: manager/admin gates on approvePurchaseOrder; admin gate on approveAndPayInvoice
+- All string inputs sanitised (HTML strip + length cap) before Firestore writes
+- Server-side VAT calculation — client figures are never trusted
+- Deterministic poId (sha256) prevents duplicate POs on network retry
+- Double-entry ledger ensures payment audit trail
+- Idempotency guard on approveAndPayInvoice (paidAt must be null)
+- Invoice amount deviation check (>5% vs PO total flags mismatch)
+- Supplier ownership check before PO creation
+
+### Files Affected
+- `functions/procurement.js` — new (700 lines, 10 CFs + 1 scheduled)
+- `procurement.html` — new (dark-theme SPA, 6 tabs)
+- `functions/index.js` — wired procurement module (11 exports added)
+- `CHANGELOG.md` — this entry
+
+---
+
+## [2026-06-29] — HR & Payroll Engine v1.0
+
+### Summary
+Kenya-specific HR & Payroll engine for SOKONI merchants. Handles full statutory deduction
+calculations (PAYE progressive bands, NHIF income-based lookup, NSSF Tier I + Tier II, Housing
+Levy), attendance tracking, prorated payroll runs, payslip generation, leave management, and
+training assignment. Bank account data is encrypted at rest with AES-256-GCM via Secret Manager.
+Dark-theme SPA portal provides Staff, Attendance, Payroll, Leaves, and Training tabs.
+
+### New Cloud Functions — functions/hr-payroll.js (12 CFs)
+
+| CF | Trigger | Description |
+|---|---|---|
+| `addStaffMember` | onCall + AppCheck | Add staff; AES-256-GCM bank account encryption; duplicate EMP# guard |
+| `recordAttendance` | onCall + AppCheck | Clock-in / clock-out with Nairobi TZ; late-arrival detection; hours-worked calc |
+| `getAttendanceReport` | onCall + AppCheck | Monthly aggregation: daysPresent, daysAbsent, totalHours, lateCount |
+| `runPayroll` | onCall + AppCheck | Prorate salary by attendance; full statutory breakdown; batch payslips; duplicate-run guard |
+| `approvePayrollRun` | onCall + AppCheck | Admin-only draft → approved transition |
+| `getPayslip` | onCall + AppCheck | Owner or admin/manager access-controlled payslip retrieval |
+| `getPayrollSummary` | onCall + AppCheck | Full run doc + all payslips for a period |
+| `requestLeave` | onCall + AppCheck | Annual/sick/maternity/paternity/unpaid; writes adminAlerts subcollection |
+| `approveLeave` | onCall + AppCheck | Approve/reject with staff notification |
+| `assignTraining` | onCall + AppCheck | Assign training to staff array; per-staff notifications |
+| `markTrainingComplete` | onCall + AppCheck | arrayUnion completion; auto-closes training when all staff done |
+| `getStaffDashboard` | onCall + AppCheck | 5 parallel queries: active staff, attendance, leaves, training, last payroll |
+
+### Kenya Statutory Deduction Model (Finance Act 2024/2025)
+
+| Deduction | Calculation |
+|---|---|
+| NHIF | 17-band income lookup (KES 150 – 1,700/month) |
+| NSSF Tier I | 6% of first KES 7,000 (max KES 420 employee + KES 420 employer) |
+| NSSF Tier II | 6% of KES 7,001–36,000 (max KES 1,740 employee + KES 1,740 employer) |
+| Housing Levy | 1.5% employee + 1.5% employer match |
+| PAYE | Progressive: 10% → 25% → 30% → 32.5% → 35%; KES 2,400 personal relief |
+
+### New Frontend — hr-payroll.html
+Dark-theme SPA (~490 lines). Tabs: Staff (directory + add modal + dashboard KPIs), Attendance
+(daily grid + monthly summary), Payroll (run payroll, history table, payslip detail viewer),
+Leaves (filter by status, approve/reject inline), Training (progress bars, mark complete).
+Merchant ID input bar at top; deep-link via `?m=<merchantId>` URL param.
+
+### Firestore Collections Written
+- `hrStaff/{staffId}` — staff record; bankAccount AES-256-GCM encrypted
+- `hrAttendance/{merchantId}_{staffId}_{YYYY-MM-DD}` — daily clock-in/out records
+- `hrPayrollRuns/{runId}` — payroll run summary (draft → approved → paid)
+- `hrPayslips/{runId}_{staffId}` — individual payslip with full statutory breakdown
+- `hrLeaves/{leaveId}` — leave requests and approval history
+- `hrTraining/{trainingId}` — training programs with assignedTo / completedBy arrays
+- `adminAlerts/{merchantId}/alerts/{alertId}` — leave-request manager notifications
+- `notifications/{userId}/items/{notifId}` — leave approval and training notifications
+
+### Security
+- All 12 CFs enforce `enforceAppCheck: true`
+- `PAYROLL_ENCRYPTION_KEY` Secret Manager secret required for bank account encryption
+- Admin/manager role gates use custom auth claims (`token.admin`, `token.manager`)
+- Payslip access restricted to owner uid or admin/manager
+- Duplicate payroll run guard prevents double-processing
+
+### Breaking Changes
+- None
+
+---
+
+## [2026-06-29] — Business Health Score Engine v1.0
+
+### Summary
+AI-powered multi-dimension business health scoring system for SOKONI merchants. Computes a
+weighted composite score across 10 operational dimensions, generates Claude Haiku AI insights
+(recommendations, risk alerts, growth opportunities), caches results, and exposes a dark-theme
+SPA portal with gauge, radar chart, sparkline history, and industry benchmark comparison.
+
+### New Cloud Functions — functions/business-health-score.js (6 CFs)
+
+| CF | Trigger | Description |
+|---|---|---|
+| `getBusinessHealthScore` | onCall + AppCheck | Computes 10-dimension composite score; optional Claude Haiku AI insights; caches to `businessHealthScores` |
+| `getHealthScoreHistory` | onCall + AppCheck | Returns last N days of cached scores with grade and dimension snapshot |
+| `getDimensionDrilldown` | onCall + AppCheck | Deep dive on a single dimension with 7-day daily breakdown |
+| `getHealthScoreBenchmarks` | onCall (public) | Industry benchmark scores for retail/restaurant/pharmacy/fuel/wholesale |
+| `computeAllHealthScores` | onSchedule `0 2 * * *` | Nightly batch: scores up to 100 enrolled merchants (no AI); 5-merchant parallelism |
+| `getMultibranchHealthComparison` | onCall + AppCheck | Side-by-side leaderboard for up to 10 merchant branches |
+
+#### Dimension Model (total weight = 1.00)
+Sales 20% | Profitability 18% | Customer 15% | Inventory 12% | Loyalty 8% | Staff 8% | Fraud 7% | Operations 5% | Financial 5% | Compliance 2%
+
+#### Grade Scale: A+ (90+) | A (80+) | B (70+) | C (60+) | D (50+) | F (<50)
+
+### New Frontend — business-health.html
+Dark-theme SPA; CSS conic-gradient gauge; Chart.js v4 radar; Canvas sparkline; industry benchmarks.
+
+### Firestore Written
+`businessHealthScores/{merchantId}_{YYYY-MM-DD}` — daily score cache (merge)
+
+### Security
+- All authenticated CFs enforce `enforceAppCheck: true` + `request.auth` check
+- AI key via Secret Manager `ANTHROPIC_API_KEY`; never logged
+
+### Breaking Changes
+- None
+
+---
+
+## [2026-06-29] — Marketing & Promotions Engine v1.0
+
+### Summary
+New `functions/marketing-engine.js` — 12 Cloud Functions providing the full marketing and promotions
+stack: bundle deals with automatic discount calculation, time-boxed flash sales with atomic
+sell-through tracking, collaborative-filtering cross-sell recommendations with Claude Haiku fallback,
+premium upsell suggestions, A/B testing with auto-conclusion at statistical significance, per-merchant
+coupon validation, lifecycle campaigns, and a scheduled job that auto-closes expired flash sales.
+
+### New Cloud Functions (functions/marketing-engine.js — 12 CFs)
+
+| CF | AppCheck | Description |
+|---|---|---|
+| `createBundleDeal` | Yes | Create a multi-product bundle; auto-calculates discountAmount + discountPct; status='active' if validFrom <= now |
+| `getActiveBundleDeals` | No | List live bundle deals for a merchant, sorted by discountPct desc |
+| `createFlashSale` | Yes | Time-boxed sale with stockLimit; auto-sets status='scheduled' or 'active' |
+| `getFlashSalePrice` | No | Real-time lookup — returns salePrice + stockRemaining or `hasFlashSale: false` |
+| `recordFlashSalePurchase` | Yes | Transactional soldCount increment; auto-ends sale on sell-through |
+| `getCrossSellRecommendations` | No | Co-occurrence from `mktRecommendationEngineLog`; Claude Haiku fallback when data is sparse |
+| `getUpsellRecommendations` | No | Premium same-category products (price > 1.2×); variant fallback; Haiku fallback |
+| `createMarketingCampaign` | Yes | Lifecycle campaigns: birthday, win_back, tier_upgrade, spend_milestone |
+| `runABTest` | Yes | Create A/B test (min 3-day window); activates immediately if startDate <= now |
+| `recordABTestImpression` | No | Transactional impression + conversion tracking; auto-concludes at >20% relative conversion-rate diff and ≥100 impressions per arm |
+| `applyCouponCode` | Yes | Full coupon validation (status, dates, limits, category/product allowlist, per-customer cap) without consuming it |
+| `concludeExpiredFlashSales` | — | Scheduled every 10 min; batch-updates active sales past endAt to status='ended' |
+
+### New Collections
+| Collection | Purpose |
+|---|---|
+| `mktBundleDeals/{bundleId}` | Bundle deal definitions |
+| `mktFlashSales/{saleId}` | Flash sale records with atomic soldCount |
+| `mktABTests/{testId}` | A/B test state, impression/conversion counters, winner |
+| `mktDynamicPricing/{ruleId}` | Dynamic pricing rules (read-ready, future use) |
+| `mktCouponCodes/{couponId}` | Coupon definitions (usedCount incremented at order completion, not validation) |
+| `mktRecommendationEngineLog/{logId}` | Co-occurrence signal for cross-sell engine |
+| `mktCampaigns/{campaignId}` | Lifecycle campaign definitions |
+
+### Files Affected
+- `functions/marketing-engine.js` — new (12 CFs, ~730 lines)
+- `functions/index.js` — 12 new export lines appended
+
+### Security Notes
+- All mutating functions enforce AppCheck + merchant-role auth check
+- Merchants can only manage their own records (merchantId validated against auth token)
+- Coupon codes are validated but not consumed — consumption happens at confirmed order completion to prevent race conditions
+- A/B test statistical significance uses relative difference threshold to avoid declaring a winner on low conversion rates
+- Flash sale sell-through uses Firestore transaction to prevent overselling
+
+### Performance Notes
+- `getActiveBundleDeals` and `getFlashSalePrice` are AppCheck-free for low-latency product-page rendering
+- `getCrossSellRecommendations` queries only the last 200 log entries for co-occurrence to keep latency predictable
+- `concludeExpiredFlashSales` uses Firestore batch writes in chunks of 450 to stay within the 500-write-per-batch limit
+
+---
+
+## [2026-06-29] — Payment State Machine & Reconciliation Engine v1.0
+
+### Summary
+Two new Cloud Function modules providing financial-grade payment integrity: a strict 12-state FSM
+that enforces every payment's lifecycle from session creation through audit-trail sealing, and an
+end-of-day reconciliation engine that sweeps M-Pesa and multi-method orders for discrepancies.
+
+### New Cloud Functions — Payment State Machine (functions/payment-state-machine.js — 7 CFs)
+
+| CF | Description |
+|---|---|
+| `createPaymentSession` | Opens a new FSM session (idempotent — deterministic sha256 sessionId); validates amount, method, and ownership |
+| `transitionPaymentState` | Atomic transactional FSM advance; rejects invalid transitions with a descriptive `failed-precondition` error |
+| `getPaymentState` | Fast session lookup by sessionId or (orderId + merchantId); no AppCheck overhead for polling contexts |
+| `recoverPaymentSession` | Admin override for genuinely stuck sessions; admin-override entries in stateHistory; writes to `paymentRecoveryLog` |
+| `getStuckSessions` | Admin query — returns all non-terminal merchant sessions stalled beyond configurable minutes threshold |
+| `reconcilePaymentSessions` | Scheduled 1AM UTC (4AM EAT) — sweeps 24h sessions stuck in FINANCIAL_STATES > 2h; raises admin alerts |
+| `sealPaymentAuditTrail` | Transitions COMPLETED → ARCHIVED; writes HMAC-SHA256 tamper-evidence seal to `paymentAuditSeals/{sessionId}` |
+
+#### FSM State Graph
+```
+CREATED → PENDING → AUTHORIZED → VERIFIED →
+INVENTORY_RESERVED → ACCOUNTING_POSTED →
+COMMISSION_CALCULATED → LOYALTY_AWARDED →
+SELLER_SETTLEMENT_PENDING → DELIVERY_ASSIGNED →
+DELIVERED → COMPLETED → ARCHIVED
+
+Error states: FAILED (retryable → CREATED), EXPIRED (retryable → CREATED), VOIDED (terminal)
+```
+
+### New Cloud Functions — Payment Reconciliation (functions/payment-reconciliation.js — 6 CFs)
+
+| CF | Description |
+|---|---|
+| `runDailyReconciliation` | Scheduled 1:30AM UTC (4:30AM EAT) — reconciles all settled orders from yesterday; writes `reconciliationReports/{YYYY-MM-DD}` |
+| `getReconciliationReport` | Admin: fetch single or ranged reports by date (up to 90 days) |
+| `flagUnmatchedPayment` | Admin: flag a paymentRef for manual review; idempotent, writes to `unmatchedPayments` |
+| `resolveUnmatchedPayment` | Admin: resolve flagged payment as matched / refunded / written_off |
+| `getMpesaReconciliationSummary` | Admin: M-Pesa order aggregation for a date — grouped by status with KES totals |
+| `triggerManualReconciliation` | Admin: on-demand reconciliation for any past date; identical logic to scheduled run |
+
+### New Firestore Collections (5 new)
+
+| Collection | Purpose |
+|---|---|
+| `paymentSessions/{sessionId}` | FSM state + full history per payment |
+| `paymentRecoveryLog/{sessionId}_{attempt}` | Immutable admin-override audit records |
+| `paymentReconciliation/{id}` | Per-session stuck flags raised by nightly sweep |
+| `paymentAuditSeals/{sessionId}` | HMAC-SHA256 tamper-evidence seals (create-only via rules) |
+| `reconciliationReports/{YYYY-MM-DD}` | Daily and manual reconciliation reports |
+| `unmatchedPayments/{paymentRef}` | Payments flagged for investigation |
+
+### Security
+- All write CFs enforce AppCheck + Firebase Auth
+- `getPaymentState` omits AppCheck for polling performance — still requires Auth
+- Admin-only CFs verify `req.auth.token.admin === true`
+- Deterministic sessionId prevents duplicate session creation without idempotency storage
+- `paymentAuditSeals` must be create-only in Firestore rules (seal integrity)
+- HMAC-SHA256 seal uses `PAYMENT_HMAC_SECRET` from Secret Manager
+
+### New Secret Required
+- `PAYMENT_HMAC_SECRET` — 64-character random string; add to Secret Manager before deploying
+
+### Scheduled Jobs Added
+| Job | Schedule | Description |
+|---|---|---|
+| `reconcilePaymentSessions` | 0 1 * * * | Nightly FSM stuck-session sweep |
+| `runDailyReconciliation` | 30 1 * * * | EOD gateway ↔ Firestore reconciliation |
+
+### Files Affected
+- `functions/payment-state-machine.js` (new, 7 CFs)
+- `functions/payment-reconciliation.js` (new, 6 CFs)
+- `functions/index.js` (13 new exports added)
+- `CHANGELOG.md` (this entry)
+
+---
+
+## [2026-06-29] — Enterprise Loyalty, Membership & Customer Experience Platform v1.0
 
 ### Summary
 Full implementation of Africa's most advanced retail loyalty ecosystem, embedded natively into

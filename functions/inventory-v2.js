@@ -911,3 +911,186 @@ exports.inventoryGetAuditLog = onCall({ timeoutSeconds: 20 }, async (req) => {
     hasMore: snap.docs.length === (d.limit || 100),
   };
 });
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AVCO — AVERAGE COST VALUATION METHOD
+   Maintains a running weighted-average cost per product per warehouse.
+   Formula on receipt: newAVCO = (currentQty*currentAVCO + newQty*newUnitCost)
+                                 / (currentQty + newQty)
+   Collection: tenants/{t}/inventory_avco/{productId}_{warehouseId}
+══════════════════════════════════════════════════════════════════════ */
+
+exports.inventoryUpdateAVCO = onCall({ timeoutSeconds: 20 }, async (req) => {
+  assertAuth(req);
+  const tenantId = assertTenant(req.data);
+  const d        = req.data;
+  need(d, ['productId', 'warehouseId', 'receivedQty', 'unitCost']);
+
+  const receivedQty = Number(d.receivedQty);
+  const unitCost    = Number(d.unitCost);
+  if (receivedQty <= 0) throw new HttpsError('invalid-argument', 'receivedQty must be positive');
+  if (unitCost < 0)     throw new HttpsError('invalid-argument', 'unitCost must be non-negative');
+
+  const avcoId  = `${d.productId}_${d.warehouseId}`;
+  const avcoRef = col(tenantId, 'inventory_avco').doc(avcoId);
+
+  const result = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(avcoRef);
+    let currentQty  = 0;
+    let currentAVCO = 0;
+
+    if (snap.exists) {
+      currentQty  = Number(snap.data().totalQty  || 0);
+      currentAVCO = Number(snap.data().avgCost    || 0);
+    }
+
+    const newTotalQty = currentQty + receivedQty;
+    const newAVCO     = newTotalQty > 0
+      ? ((currentQty * currentAVCO) + (receivedQty * unitCost)) / newTotalQty
+      : unitCost;
+    const roundedAVCO = Math.round(newAVCO * 100) / 100;
+
+    const historyEntry = {
+      type:       'receipt',
+      qty:        receivedQty,
+      unitCost,
+      avgCostBefore: currentAVCO,
+      avgCostAfter:  roundedAVCO,
+      totalQty:   newTotalQty,
+      date:       nowISO(),
+      userId:     req.auth.uid,
+    };
+
+    tx.set(avcoRef, {
+      productId:   d.productId,
+      warehouseId: d.warehouseId,
+      avgCost:     roundedAVCO,
+      totalQty:    newTotalQty,
+      lastUpdated: nowISO(),
+    }, { merge: true });
+
+    // Append to sub-collection for history
+    const histRef = col(tenantId, 'inventory_avco').doc(avcoId)
+      .collection('history').doc();
+    tx.set(histRef, historyEntry);
+
+    return { previousAVCO: currentAVCO, newAVCO: roundedAVCO, totalQty: newTotalQty };
+  });
+
+  await audit(tenantId, {
+    type:        'avco_updated',
+    productId:   d.productId,
+    warehouseId: d.warehouseId,
+    receivedQty,
+    unitCost,
+    ...result,
+    userId:      req.auth.uid,
+  });
+
+  return { success: true, ...result };
+});
+
+exports.inventoryGetAVCO = onCall({ timeoutSeconds: 10 }, async (req) => {
+  assertAuth(req);
+  const tenantId = assertTenant(req.data);
+  const d        = req.data;
+  need(d, ['productId', 'warehouseId']);
+
+  const avcoId  = `${d.productId}_${d.warehouseId}`;
+  const snap    = await col(tenantId, 'inventory_avco').doc(avcoId).get();
+  if (!snap.exists) {
+    return { productId: d.productId, warehouseId: d.warehouseId, avgCost: 0, totalQty: 0, exists: false };
+  }
+  return { ...snap.data(), exists: true };
+});
+
+exports.inventoryDeductAVCO = onCall({ timeoutSeconds: 20 }, async (req) => {
+  // Called when stock is sold/consumed — reduces totalQty but AVCO stays same (AVCO method)
+  assertAuth(req);
+  const tenantId = assertTenant(req.data);
+  const d        = req.data;
+  need(d, ['productId', 'warehouseId', 'deductQty']);
+
+  const deductQty = Number(d.deductQty);
+  if (deductQty <= 0) throw new HttpsError('invalid-argument', 'deductQty must be positive');
+
+  const avcoId  = `${d.productId}_${d.warehouseId}`;
+  const avcoRef = col(tenantId, 'inventory_avco').doc(avcoId);
+
+  const result = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(avcoRef);
+    if (!snap.exists) throw new HttpsError('not-found', 'No AVCO record for this product/warehouse');
+    const currentQty  = Number(snap.data().totalQty || 0);
+    const currentAVCO = Number(snap.data().avgCost  || 0);
+    if (currentQty < deductQty) {
+      throw new HttpsError('failed-precondition', `Insufficient AVCO qty: ${currentQty} available, ${deductQty} requested`);
+    }
+    const newQty    = currentQty - deductQty;
+    const cogsValue = Math.round(deductQty * currentAVCO * 100) / 100;
+
+    tx.update(avcoRef, { totalQty: newQty, lastUpdated: nowISO() });
+
+    const histRef = col(tenantId, 'inventory_avco').doc(avcoId).collection('history').doc();
+    tx.set(histRef, {
+      type:       'deduction',
+      qty:        deductQty,
+      avgCost:    currentAVCO,
+      cogsValue,
+      totalQty:   newQty,
+      date:       nowISO(),
+      userId:     req.auth.uid,
+      reference:  d.reference || null,
+    });
+
+    return { cogsValue, avgCost: currentAVCO, remainingQty: newQty };
+  });
+
+  return { success: true, ...result };
+});
+
+exports.inventoryGetAVCOHistory = onCall({ timeoutSeconds: 15 }, async (req) => {
+  assertAuth(req);
+  const tenantId = assertTenant(req.data);
+  const d        = req.data;
+  need(d, ['productId', 'warehouseId']);
+
+  const avcoId = `${d.productId}_${d.warehouseId}`;
+  const snap   = await col(tenantId, 'inventory_avco').doc(avcoId)
+    .collection('history')
+    .orderBy('date', 'desc')
+    .limit(d.limit || 50)
+    .get();
+
+  return { history: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+});
+
+exports.inventoryGetCOGSReport = onCall({ timeoutSeconds: 20 }, async (req) => {
+  // Returns COGS for a period using AVCO method (sum of deductions in history)
+  assertAuth(req);
+  const tenantId = assertTenant(req.data);
+  const d        = req.data;
+  need(d, ['productId', 'warehouseId', 'since', 'until']);
+
+  const avcoId = `${d.productId}_${d.warehouseId}`;
+  const snap   = await col(tenantId, 'inventory_avco').doc(avcoId)
+    .collection('history')
+    .where('type', '==', 'deduction')
+    .where('date', '>=', d.since)
+    .where('date', '<=', d.until)
+    .orderBy('date', 'asc')
+    .get();
+
+  const entries   = snap.docs.map(doc => doc.data());
+  const totalCOGS = entries.reduce((sum, e) => sum + Number(e.cogsValue || 0), 0);
+  const totalUnits = entries.reduce((sum, e) => sum + Number(e.qty || 0), 0);
+
+  return {
+    productId:   d.productId,
+    warehouseId: d.warehouseId,
+    period:      { since: d.since, until: d.until },
+    totalCOGS:   Math.round(totalCOGS * 100) / 100,
+    totalUnits,
+    avgCostPerUnit: totalUnits > 0 ? Math.round((totalCOGS / totalUnits) * 100) / 100 : 0,
+    entries,
+  };
+});

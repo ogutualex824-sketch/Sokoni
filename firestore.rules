@@ -3852,5 +3852,173 @@ service cloud.firestore {
       allow write: if false; // CF-only — getPersonalizedOffers
     }
 
+    // ── Payment State Machine ──────────────────────────────────────────────
+    match /paymentSessions/{sessionId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write: if false; // CF-only — createPaymentSession, transitionPaymentState
+    }
+
+    match /paymentAuditSeals/{sessionId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only — sealPaymentAuditTrail (immutable)
+    }
+
+    match /paymentRecoveryLog/{entryId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only — recoverPaymentSession
+    }
+
+    match /paymentReconciliation/{reportId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only — reconcilePaymentSessions
+    }
+
+    // ── Payment Reconciliation ────────────────────────────────────────────
+    match /reconciliationReports/{reportId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only — runDailyReconciliation
+    }
+
+    match /unmatchedPayments/{paymentRef} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only — flagUnmatchedPayment, resolveUnmatchedPayment
+    }
+
+    // ── Business Health Score ─────────────────────────────────────────────
+    match /businessHealthScores/{scoreId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — getBusinessHealthScore, computeAllHealthScores
+    }
+
+    // ── HR & Payroll ──────────────────────────────────────────────────────
+    match /hrStaff/{staffId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — addStaffMember
+    }
+
+    match /hrAttendance/{attendanceId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write: if false; // CF-only — recordAttendance
+    }
+
+    match /hrPayrollRuns/{runId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — runPayroll, approvePayrollRun
+    }
+
+    match /hrPayslips/{payslipId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.staffUid == request.auth.uid);
+      allow write: if false; // CF-only — runPayroll
+    }
+
+    match /hrLeaves/{leaveId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write: if false; // CF-only — requestLeave, approveLeave
+    }
+
+    match /hrTraining/{trainingId} {
+      allow read:  if isAuthed();
+      allow write: if false; // CF-only — assignTraining, markTrainingComplete
+    }
+
+    // ── Procurement ───────────────────────────────────────────────────────
+    match /procSuppliers/{supplierId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — addSupplier
+    }
+
+    match /procPurchaseOrders/{poId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — createPurchaseOrder, approvePurchaseOrder
+    }
+
+    match /procGRN/{grnId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — receiveGoods
+    }
+
+    match /procSupplierInvoices/{invoiceId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — createSupplierInvoice, approveAndPayInvoice
+    }
+
+    match /procVendorPerformance/{perfId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — scheduledVendorPerformanceUpdate
+    }
+
+    match /procForecast/{forecastId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — getProcurementForecast
+    }
+
+    // ── Marketing Engine ──────────────────────────────────────────────────
+    match /mktBundleDeals/{bundleId} {
+      allow read:  if isAuthed();
+      allow write: if false; // CF-only — createBundleDeal
+    }
+
+    match /mktFlashSales/{saleId} {
+      allow read:  if isAuthed();
+      allow write: if false; // CF-only — createFlashSale, recordFlashSalePurchase
+    }
+
+    match /mktABTests/{testId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — runABTest, recordABTestImpression
+    }
+
+    match /mktDynamicPricing/{ruleId} {
+      allow read:  if isAuthed();
+      allow write: if false; // CF-only — createDynamicPricingRule
+    }
+
+    match /mktCouponCodes/{couponId} {
+      allow read:  if isAuthed();
+      allow write: if false; // CF-only — applyCouponCode
+    }
+
+    match /mktCampaigns/{campaignId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — createMarketingCampaign
+    }
+
+    match /mktRecommendationEngineLog/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only — getCrossSellRecommendations
+    }
+
+    // ── Chaos Engineering ─────────────────────────────────────────────────
+    match /chaosTestReports/{reportId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only — runWeeklyChaosTest
+    }
+
+    match /_chaosCanary/{docId} {
+      allow read, write: if false; // CF-only — transient test documents
+    }
+
+    // ── AVCO Inventory Costing ────────────────────────────────────────────
+    match /inventory_avco/{avcoId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.tenantId == request.auth.uid);
+      allow write: if false; // CF-only — inventoryUpdateAVCO, inventoryDeductAVCO
+    }
+
   }
 }
