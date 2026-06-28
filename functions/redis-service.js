@@ -144,6 +144,59 @@ function isFallback() {
   return _fallback || !REDIS_URL.value() || !_getClient();
 }
 
+// ─── Security Hardening Layer (Security 6.0) ─────────────────────────────────
+
+const DENIED_KEY_PATTERNS = [
+  /password/i, /secret/i, /apikey/i, /token.*plain/i, /private_key/i,
+];
+const MAX_KEY_LENGTH = 256;
+const MAX_VALUE_BYTES = 2 * 1024 * 1024; // 2 MB — prevent Redis memory abuse
+
+function _assertSafeKey(key) {
+  if (!key || typeof key !== 'string') throw new Error('[Redis Security] Key must be a non-empty string');
+  if (key.length > MAX_KEY_LENGTH) throw new Error(`[Redis Security] Key exceeds max length: ${key.length}`);
+  if (!key.startsWith(NS)) throw new Error(`[Redis Security] Key must start with namespace "${NS}": ${key}`);
+  if (DENIED_KEY_PATTERNS.some(p => p.test(key))) {
+    // Log and block — do not store plaintext secrets
+    console.error(JSON.stringify({ severity: 'WARNING', message: '[Redis Security] Blocked suspicious key pattern', key }));
+    throw new Error('[Redis Security] Key pattern matches sensitive data blocklist');
+  }
+}
+
+function _assertSafeValue(value) {
+  const bytes = Buffer.byteLength(typeof value === 'string' ? value : JSON.stringify(value), 'utf8');
+  if (bytes > MAX_VALUE_BYTES) throw new Error(`[Redis Security] Value too large: ${bytes} bytes (max 2MB)`);
+}
+
+/**
+ * Security-hardened set that validates key namespace, key length,
+ * denies sensitive patterns, and enforces TTL (no unlimited keys).
+ */
+async function secureSet(key, value, ttlSeconds) {
+  _assertSafeKey(key);
+  if (!ttlSeconds || ttlSeconds <= 0) throw new Error('[Redis Security] TTL is required — no unlimited cache entries');
+  if (ttlSeconds > 2_592_000) throw new Error('[Redis Security] TTL exceeds max: 30 days'); // prevent stale data
+  _assertSafeValue(value);
+  const r = _getClient();
+  if (!r) return false;
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+  await r.set(key, serialized, 'EX', ttlSeconds);
+  return true;
+}
+
+/**
+ * Redacts PII-like patterns from a string before caching.
+ * Use for AI responses that may reflect user input.
+ */
+function redactForCache(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/\b[A-Z]\d{9}\b/g, '[KRA-PIN]')       // KRA PIN
+    .replace(/\b(\+254|0)[17]\d{8}\b/g, '[PHONE]')  // KE phone
+    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '[EMAIL]')
+    .replace(/\b\d{13,19}\b/g, '[CARD]');            // payment card
+}
+
 // ─── Scan helper (non-blocking alternative to KEYS) ──────────────────────────
 
 async function _scanCount(pattern) {
@@ -708,4 +761,6 @@ module.exports = {
   inventoryLock, inventoryRelease, inventoryGetLock,
   eventPublish, eventRead, eventGetLength,
   queuePush, queuePop, queueDepth, queueDepthAll,
+  // Security 6.0: hardened helpers
+  secureSet, redactForCache,
 };
