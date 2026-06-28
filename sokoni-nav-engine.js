@@ -83,6 +83,8 @@
     'platform-health.html':     'admin',
     'launch-readiness.html':    'admin',
     'moderation.html':          'admin',
+    'business-kpi.html':        'admin',
+    'ops-dashboard.html':       'admin',
     /* Super Admin workspace pages */
     'super-admin.html':         'superAdmin',
     'finos.html':               'superAdmin',
