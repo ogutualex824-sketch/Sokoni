@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0a0a0a">
   <link rel="icon" href="favicon.ico">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
   <style>
     :root{--bg:#0a0a0a;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);--border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ff9800;--danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.5);--rad:14px}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -229,7 +229,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"
+  onerror="document.getElementById('loadScreen').innerHTML='<div style=\'text-align:center;padding:32px\'><p style=\'font-size:28px;margin-bottom:10px\'>🗺</p><p style=\'font-size:16px;font-weight:700;margin-bottom:6px\'>Map failed to load</p><p style=\'color:rgba(255,255,255,.5);font-size:13px;margin-bottom:20px\'>Check your connection and retry.</p><button onclick=\'location.reload()\' style=\'padding:13px 28px;background:#71ff00;color:#000;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;width:200px\'>Retry</button></div>'">
+</script>
 <script src="sokoni-config.js"></script>
 <script src="sokoni-navigation.js"></script>
 <script>
@@ -288,7 +290,11 @@ function _initNav(uid, trip) {
   });
 
   // Init map first — show it immediately, don't wait for route
-  nav.initMap('map');
+  var mapReady = nav.initMap('map');
+  if (!mapReady) {
+    document.getElementById('loadScreen').innerHTML = '<div style="text-align:center;padding:32px"><p style="font-size:28px;margin-bottom:10px">🗺</p><p style="font-size:16px;font-weight:700;margin-bottom:6px">Map failed to load</p><p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:20px">Check your connection and retry.</p><button onclick="location.reload()" style="padding:13px 28px;background:#71ff00;color:#000;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;width:200px">Retry</button></div>';
+    return;
+  }
   document.getElementById('loadScreen').style.display = 'none';
   _renderStopList();
   _updateTopBar();
