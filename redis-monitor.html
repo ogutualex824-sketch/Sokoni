@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redis Monitor — SOKONI Super Admin</title>
+<script src="/sokoni-config.js"></script>
+<script src="/firebase.js"></script>
+<script src="/shared-header.js"></script>
+<script src="/sw-register.js"></script>
+<style>
+:root {
+  --bg: #0d1117;
+  --card: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --green: #3fb950;
+  --red: #f85149;
+  --yellow: #d29922;
+  --blue: #58a6ff;
+  --purple: #bc8cff;
+  --radius: 8px;
+  --gap: 16px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+header { background: var(--card); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+header h1 { font-size: 18px; font-weight: 600; }
+.badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.badge.live { background: #1f4a2e; color: var(--green); }
+.badge.down { background: #4a1f1f; color: var(--red); }
+.badge.loading { background: #2a2a1f; color: var(--yellow); }
+main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+.refresh-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.refresh-bar button { background: #238636; color: #fff; border: none; border-radius: var(--radius); padding: 8px 16px; cursor: pointer; font-size: 13px; }
+.refresh-bar button:hover { background: #2ea043; }
+.auto-label { color: var(--muted); font-size: 12px; }
+.grid { display: grid; gap: var(--gap); }
+.grid-3 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.grid-2 { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.card h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 16px; }
+.stat { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.stat:last-child { border-bottom: none; }
+.stat-label { color: var(--muted); }
+.stat-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat-val.green { color: var(--green); }
+.stat-val.red { color: var(--red); }
+.stat-val.yellow { color: var(--yellow); }
+.stat-val.blue { color: var(--blue); }
+.stat-val.purple { color: var(--purple); }
+.big-stat { text-align: center; padding: 12px 0; }
+.big-stat .num { font-size: 36px; font-weight: 700; }
+.big-stat .lbl { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.progress { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+.progress-bar { height: 100%; border-radius: 4px; transition: width .5s ease; }
+.progress-bar.green { background: var(--green); }
+.progress-bar.yellow { background: var(--yellow); }
+.progress-bar.red { background: var(--red); }
+.error-box { background: #4a1f1f; border: 1px solid var(--red); border-radius: var(--radius); padding: 20px; text-align: center; }
+.error-box p { color: var(--red); font-weight: 600; margin-bottom: 8px; }
+.error-box small { color: var(--muted); }
+.section-title { font-size: 16px; font-weight: 600; margin: 32px 0 16px; }
+.presence-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.presence-pill { background: var(--border); border-radius: 6px; padding: 10px; text-align: center; }
+.presence-pill .count { font-size: 24px; font-weight: 700; color: var(--blue); }
+.presence-pill .role { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: capitalize; }
+.queue-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.queue-row:last-child { border-bottom: none; }
+.queue-name { min-width: 100px; color: var(--text); font-weight: 500; }
+.queue-bar-wrap { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.queue-bar { height: 100%; background: var(--purple); border-radius: 4px; transition: width .5s; }
+.queue-count { min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.fallback-warn { background: #2a2a1f; border: 1px solid var(--yellow); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 24px; color: var(--yellow); font-size: 13px; }
+.last-updated { color: var(--muted); font-size: 12px; }
+#authGate { display: flex; align-items: center; justify-content: center; height: 60vh; flex-direction: column; gap: 16px; }
+#authGate p { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Redis Monitor</h1>
+  <span id="statusBadge" class="badge loading">Connecting...</span>
+  <span id="lastUpdated" class="last-updated" style="margin-left:auto"></span>
+</header>
+
+<main>
+  <div id="authGate" style="display:none">
+    <p>Super Admin access required</p>
+    <button onclick="location.href='/login.html'">Sign In</button>
+  </div>
+
+  <div id="monitorContent" style="display:none">
+    <div class="refresh-bar">
+      <button onclick="loadMetrics()">&#8635; Refresh</button>
+      <span class="auto-label">Auto-refreshes every 15s</span>
+    </div>
+
+    <div id="fallbackWarn" class="fallback-warn" style="display:none">
+      ⚠ Redis is unavailable — platform is running in Firestore fallback mode. Check REDIS_URL secret and Memorystore connectivity.
+    </div>
+
+    <!-- Server Info -->
+    <div class="grid grid-3" id="serverCards">
+      <div class="card">
+        <h2>Memory</h2>
+        <div class="big-stat">
+          <div class="num blue" id="memUsed">—</div>
+          <div class="lbl">Used / <span id="memPeak">—</span> Peak</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Performance</h2>
+        <div class="stat"><span class="stat-label">Ops / sec</span><span class="stat-val green" id="opsPerSec">—</span></div>
+        <div class="stat"><span class="stat-label">Uptime</span><span class="stat-val" id="uptime">—</span></div>
+        <div class="stat"><span class="stat-label">Redis Version</span><span class="stat-val blue" id="version">—</span></div>
+        <div class="stat"><span class="stat-label">Connected Clients</span><span class="stat-val" id="clients">—</span></div>
+      </div>
+      <div class="card">
+        <h2>Cache Hit Rate</h2>
+        <div class="big-stat">
+          <div class="num" id="hitRateNum">—</div>
+          <div class="lbl"><span id="cacheHits">—</span> hits / <span id="cacheMisses">—</span> misses</div>
+        </div>
+        <div class="progress"><div class="progress-bar green" id="hitRateBar" style="width:0%"></div></div>
+      </div>
+      <div class="card">
+        <h2>Keyspace</h2>
+        <div class="big-stat">
+          <div class="num purple" id="totalKeys">—</div>
+          <div class="lbl">Total Keys</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Presence -->
+    <div class="section-title">Live Presence</div>
+    <div class="card">
+      <div class="presence-grid" id="presenceGrid">
+        <div class="presence-pill"><div class="count">—</div><div class="role">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- Queues -->
+    <div class="section-title">Job Queues</div>
+    <div class="card">
+      <div id="queueList"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+let _metricsTimer = null;
+
+function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function _formatUptime(sec) {
+  if (!sec) return '—';
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function _hitRateColor(pct) {
+  if (pct >= 80) return 'green';
+  if (pct >= 50) return 'yellow';
+  return 'red';
+}
+
+async function loadMetrics() {
+  if (!window.firebaseFunctions || !window.httpsCallable) return;
+  try {
+    const fn = window.httpsCallable(window.firebaseFunctions, 'redisAdminMetrics');
+    const { data } = await fn({});
+
+    document.getElementById('fallbackWarn').style.display = data.fallback ? 'block' : 'none';
+    const badge = document.getElementById('statusBadge');
+
+    if (data.status === 'unavailable' || data.fallback) {
+      badge.className = 'badge down';
+      badge.textContent = 'Unavailable';
+      document.getElementById('lastUpdated').textContent = 'Last update: ' + new Date().toLocaleTimeString();
+      return;
+    }
+
+    badge.className = 'badge live';
+    badge.textContent = 'Live';
+
+    // Server info
+    document.getElementById('memUsed').textContent = data.memoryUsedHuman || '—';
+    document.getElementById('memPeak').textContent = data.memoryPeakHuman || '—';
+    document.getElementById('opsPerSec').textContent = (data.opsPerSec ?? '—').toLocaleString();
+    document.getElementById('uptime').textContent = _formatUptime(data.uptimeSeconds);
+    document.getElementById('version').textContent = data.version || '—';
+    document.getElementById('clients').textContent = data.connectedClients ?? '—';
+    document.getElementById('totalKeys').textContent = (data.totalKeys ?? '—').toLocaleString();
+
+    // Hit rate
+    const hr = data.hitRate || 0;
+    document.getElementById('hitRateNum').textContent = hr + '%';
+    document.getElementById('hitRateNum').className = 'num ' + _hitRateColor(hr);
+    document.getElementById('hitRateBar').style.width = hr + '%';
+    document.getElementById('hitRateBar').className = 'progress-bar ' + _hitRateColor(hr);
+    document.getElementById('cacheHits').textContent = (data.keyspaceHits ?? '—').toLocaleString();
+    document.getElementById('cacheMisses').textContent = (data.keyspaceMisses ?? '—').toLocaleString();
+
+    // Presence
+    const p = data.presence || {};
+    const roles = ['buyer', 'seller', 'cashier', 'manager', 'rider', 'driver', 'admin', 'superAdmin', 'pos', 'printer', 'scanner'];
+    document.getElementById('presenceGrid').innerHTML = roles.map(role => `
+      <div class="presence-pill">
+        <div class="count">${(p[role] || 0).toLocaleString()}</div>
+        <div class="role">${_esc(role)}</div>
+      </div>`).join('');
+
+    // Queues
+    const q = data.queueDepths || {};
+    const queues = Object.entries(q);
+    const maxDepth = Math.max(...queues.map(([, v]) => v), 1);
+    document.getElementById('queueList').innerHTML = queues.length === 0
+      ? '<p style="color:var(--muted)">No queues active</p>'
+      : queues.map(([name, depth]) => `
+        <div class="queue-row">
+          <span class="queue-name">${_esc(name)}</span>
+          <div class="queue-bar-wrap">
+            <div class="queue-bar" style="width:${Math.round((depth / maxDepth) * 100)}%"></div>
+          </div>
+          <span class="queue-count">${depth.toLocaleString()}</span>
+        </div>`).join('');
+
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (err) {
+    document.getElementById('statusBadge').className = 'badge down';
+    document.getElementById('statusBadge').textContent = 'Error';
+    console.error('[Redis Monitor]', err);
+  }
+}
+
+function _watchAuth() {
+  if (!window.firebaseAuth) { setTimeout(_watchAuth, 500); return; }
+  window.onAuthStateChanged(window.firebaseAuth, async (user) => {
+    if (!user) {
+      document.getElementById('authGate').style.display = 'flex';
+      document.getElementById('monitorContent').style.display = 'none';
+      return;
+    }
+    const token = await user.getIdTokenResult();
+    if (!token.claims.admin && !token.claims.superAdmin) {
+      document.getElementById('authGate').style.display = 'flex';
+      document.getElementById('authGate').innerHTML = '<p style="color:var(--red)">Super Admin access required.</p>';
+      return;
+    }
+    document.getElementById('authGate').style.display = 'none';
+    document.getElementById('monitorContent').style.display = 'block';
+    loadMetrics();
+    if (_metricsTimer) clearInterval(_metricsTimer);
+    _metricsTimer = setInterval(loadMetrics, 15000);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', _watchAuth);
+</script>
+</body>
+</html>

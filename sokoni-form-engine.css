@@ -1,0 +1,374 @@
+/* ============================================================
+   SOKONI Universal Form Engine — sokoni-form-engine.css
+   Resolves mobile scrollability, keyboard avoidance, safe areas,
+   and sticky navigation across ALL registration forms, wizards,
+   drawers, and modals platform-wide.
+
+   Injected globally via shared-header.js.
+   Targets all common container patterns — no per-page changes needed.
+============================================================ */
+
+/* ── 1. SCROLLABLE CONTAINER BASELINE ──────────────────────── */
+
+/* Every modal overlay, drawer, wizard slide, and panel must be
+   independently scrollable. Position: fixed containers must have
+   overflow-y: auto + height bounded by the viewport. */
+
+/* Generic modal overlays */
+.modal,
+.modal-overlay,
+.sk-modal,
+.popup-overlay,
+.dialog-overlay,
+[role="dialog"],
+.overlay-modal,
+.full-screen-modal {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Inner modal content (the white/dark card) */
+.modal-content,
+.modal-body,
+.sk-modal-content,
+.popup-content,
+.dialog-content,
+.modal-inner {
+  max-height: calc(100dvh - 48px);
+  max-height: calc(100vh - 48px);   /* fallback */
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* ── 2. DRAWER SCROLLABILITY ─────────────────────────────── */
+
+/* .sk-drawer (SokoniDrawer component) */
+.sk-drawer {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Drawer body / content area inside a drawer with sticky header */
+.sk-drawer-body,
+.sk-drawer-content,
+.drawer-body,
+.drawer-content {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  /* Leave room for sticky header + footer inside drawer */
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── 3. WIZARD / STEP SCROLLABILITY ─────────────────────── */
+
+/* Registration wizards, onboarding steps */
+.wizard,
+.wizard-step,
+.registration-wizard,
+.registration-step,
+.setup-wizard,
+.setup-step,
+.onboarding-slide,
+.onboarding-step,
+.form-slide,
+.form-step,
+[data-step],
+[data-wizard-step],
+/* POS setup wizard */
+.pos-setup-step,
+.pos-setup-slide,
+.pos-reg-step,
+.commissioning-step {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Ensure wizard containers don't clip */
+.wizard-container,
+.registration-container,
+.setup-container,
+.onboarding-container,
+.form-wizard-container {
+  height: 100dvh;
+  height: 100vh; /* fallback */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The scrollable body of each step */
+.wizard-step-body,
+.step-body,
+.slide-body,
+.step-content,
+.slide-content,
+.form-step-body {
+  flex: 1;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── 4. POS SETUP WIZARD SPECIFIC ───────────────────────── */
+
+/* POS setup/commissioning modal */
+#pos-setup-modal,
+#pos-commissioning-modal,
+#setup-wizard,
+.pos-setup-panel,
+.commissioning-panel {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  height: 100vh;
+}
+
+#pos-setup-modal .pos-setup-content,
+#pos-commissioning-modal .modal-content,
+.pos-setup-panel .step-scroll-area,
+.commissioning-panel .step-scroll-area {
+  flex: 1;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* ── 5. FORM CONTAINERS ──────────────────────────────────── */
+
+/* Standalone forms — always scroll the form area, not the body */
+form.sk-form,
+form.sokoni-form,
+.form-container,
+.form-panel,
+.form-card,
+.registration-card,
+.onboarding-card,
+.auth-form,
+.signup-form,
+.login-form {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Long form sections — prevent overflow clipping */
+.form-section,
+.form-group,
+.input-group,
+.field-group {
+  overflow: visible;
+}
+
+/* ── 6. INPUTS MINIMUM SIZE (prevents iOS zoom) ──────────── */
+
+/* iOS auto-zooms when input font-size < 16px — always prevent this */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+input[type="date"],
+select,
+textarea {
+  font-size: max(16px, 1rem) !important;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ── 7. SAFE AREA INSETS ─────────────────────────────────── */
+
+/* Sticky bottom action bars must clear the home indicator */
+.form-actions,
+.wizard-actions,
+.step-actions,
+.modal-footer,
+.drawer-footer,
+.sticky-bottom-bar,
+.form-footer,
+.btn-bar,
+.action-bar,
+.registration-footer {
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  padding-left:   max(16px, env(safe-area-inset-left, 16px));
+  padding-right:  max(16px, env(safe-area-inset-right, 16px));
+}
+
+/* Fix: sticky bottom bars must be above virtual keyboard */
+.form-actions.sticky,
+.wizard-actions.sticky,
+.step-actions.sticky,
+.sticky-bottom-bar {
+  position: sticky;
+  bottom: 0;
+  background: inherit;
+  z-index: 10;
+}
+
+/* ── 8. STICKY TOP HEADERS (don't scroll away) ───────────── */
+
+.modal-header,
+.drawer-header,
+.sk-drawer-header,
+.wizard-header,
+.step-header,
+.form-header,
+.registration-header,
+.setup-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  flex-shrink: 0;
+  background: inherit;
+}
+
+/* ── 9. HEIGHT FIXES — NEVER USE FIXED px HEIGHTS ON FORMS ─ */
+
+/* Any element that was accidentally given a fixed height that clips
+   its children on small phones — override to min-height */
+.registration-form,
+.wizard-form,
+.onboarding-form,
+.setup-form {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+/* ── 10. BOTTOM SHEET / SLIDE-UP FORMS ──────────────────── */
+
+/* Common bottom-sheet pattern */
+.bottom-sheet,
+.slide-up-panel,
+.slide-up-modal,
+.sheet-container {
+  max-height: calc(92dvh - env(safe-area-inset-top, 0px));
+  max-height: calc(92vh - env(safe-area-inset-top, 0px)); /* fallback */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px 24px 0 0;
+}
+
+.bottom-sheet-body,
+.slide-up-body,
+.sheet-body {
+  flex: 1;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── 11. CHECKOUT FORM ───────────────────────────────────── */
+
+/* checkout.html — payment form scrollability */
+.checkout-container,
+.checkout-form,
+.checkout-panel,
+.payment-form {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mpesa modal, PayPal modal, card modal */
+#mpesaModal,
+#mobilemoneyModal,
+#cardModal,
+.mpesa-modal,
+.payment-modal {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 12. PRODUCT UPLOAD FORM ─────────────────────────────── */
+
+.product-upload-form,
+.add-product-form,
+.product-editor,
+.product-form {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: calc(100dvh - 120px);
+  max-height: calc(100vh - 120px);
+}
+
+/* ── 13. PROFILE & SETTINGS ──────────────────────────────── */
+
+.profile-form,
+.settings-form,
+.account-form,
+.edit-profile-form {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 14. SCROLL PADDING FOR FOCUSED INPUTS ───────────────── */
+
+/* Push the scrollable area down when a keyboard appears,
+   ensuring the focused input is always visible */
+:focus-within {
+  scroll-padding-bottom: 120px;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  scroll-margin-bottom: 120px;
+}
+
+/* ── 15. RESPONSIVE: FULL-HEIGHT SECTIONS ON SMALL SCREENS ─ */
+
+@media (max-width: 480px) {
+  /* On very small screens, every modal takes full screen */
+  .modal-content,
+  .sk-modal-content,
+  .popup-content {
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    border-radius: 0;
+    margin: 0;
+  }
+
+  /* Drawers take full width on small screens */
+  .sk-drawer {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 24px 24px 0 0;
+  }
+}
+
+/* ── 16. HORIZONTAL SCROLL PREVENTION ───────────────────── */
+
+/* Prevent accidental horizontal scroll on any container */
+.modal,
+.modal-content,
+.sk-drawer,
+.wizard,
+.wizard-step,
+.form-container,
+.registration-card,
+.bottom-sheet,
+.slide-up-panel {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Images and tables inside forms must not cause horizontal overflow */
+form img,
+.form-container img,
+.wizard-step img,
+.modal-content img {
+  max-width: 100%;
+  height: auto;
+}

@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260628-impact-v1";
+const CACHE_VERSION = "sokoni-20260628-redis-v1";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -22,6 +22,7 @@ const PRECACHE_PAGES = [
   "/", "/?source=pwa", "/offline",
   "/login", "/signup", "/category", "/services",
   "/product", "/cart", "/profile",
+  "/pay",
   "/notifications", "/unboxing", "/reviews",
   "/seller", "/checkout", "/messages",
   "/wishlist", "/wallet", "/track",
@@ -193,6 +194,10 @@ const PRECACHE_STATIC = [
   /* ── Mobile Drawer UX + Role-Based Navigation Engine ── */
   "/sokoni-drawers.css", "/sokoni-drawer.js",
   "/sokoni-nav-engine.css", "/sokoni-nav-engine.js",
+  "/sokoni-form-engine.css", "/sokoni-form-engine.js",
+  /* ── Redis Infrastructure Layer v1.0 ── */
+  "/sokoni-redis.js",
+  "/redis-monitor.html",
 ];
 
 const CDN_ORIGINS = [

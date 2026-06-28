@@ -246,67 +246,67 @@
     <div id="sdm-qa-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:20px;">
 
       <button type="button" onclick="sdSwitchTab('products')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">➕</span>
+        <span style="font-size:24px;" aria-hidden="true">➕</span>
         <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);">Add Product</span>
       </button>
 
       <button type="button" onclick="sdSwitchTab('orders')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(0,170,255,0.06);border:1px solid rgba(0,170,255,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">📦</span>
+        <span style="font-size:24px;" aria-hidden="true">📦</span>
         <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);">Orders</span>
       </button>
 
       <button type="button" onclick="sdSwitchTab('analyse')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">📊</span>
+        <span style="font-size:24px;" aria-hidden="true">📊</span>
         <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);">Analytics</span>
       </button>
 
       <button type="button" onclick="sdSwitchTab('kra')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">🏛️</span>
+        <span style="font-size:24px;" aria-hidden="true">🏛️</span>
         <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);">KRA Tax</span>
       </button>
 
       <button type="button" onclick="sdSwitchTab('market')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(255,77,120,0.06);border:1px solid rgba(255,77,120,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">📢</span>
+        <span style="font-size:24px;" aria-hidden="true">📢</span>
         <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);">Marketing</span>
       </button>
 
       <button type="button" onclick="sdSwitchTab('flash')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">⚡</span>
+        <span style="font-size:24px;" aria-hidden="true">⚡</span>
         <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);">Flash Sale</span>
       </button>
 
       <button type="button" onclick="sdSwitchTab('inbox')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(37,211,102,0.06);border:1px solid rgba(37,211,102,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">💬</span>
+        <span style="font-size:24px;" aria-hidden="true">💬</span>
         <span id="sdmInboxBadge" style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);">Messages</span>
       </button>
 
       <button type="button" onclick="showDashPage('disputes',null)" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">⚖️</span>
+        <span style="font-size:24px;" aria-hidden="true">⚖️</span>
         <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);">Disputes</span>
       </button>
 
       <button type="button" onclick="goToMyStore()" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.18);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">🏪</span>
+        <span style="font-size:24px;" aria-hidden="true">🏪</span>
         <span style="font-size:10px;font-weight:700;color:#71ff00;">Visit Store</span>
       </button>
 
       <button type="button" onclick="showDashPage('pos',document.querySelector('#sidebarNav .nav-item:last-child'))" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">🏷️</span>
+        <span style="font-size:24px;" aria-hidden="true">🏷️</span>
         <span style="font-size:10px;font-weight:800;color:#71ff00;">POS / Cashier</span>
       </button>
 
       <button type="button" onclick="window.location.href='payments.html'" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(0,170,255,0.07);border:1px solid rgba(0,170,255,0.22);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">💳</span>
+        <span style="font-size:24px;" aria-hidden="true">💳</span>
         <span style="font-size:10px;font-weight:800;color:#00aaff;">Payments</span>
       </button>
 
       <button type="button" onclick="window.location.href='seller-revenue.html'" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'">
-        <span style="font-size:24px;">📈</span>
+        <span style="font-size:24px;" aria-hidden="true">📈</span>
         <span style="font-size:10px;font-weight:800;color:#71ff00;">Revenue</span>
       </button>
 
       <button type="button" onclick="window.location.href='availability-manager.html'" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 6px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.22);border-radius:16px;cursor:pointer;font-family:inherit;transition:all .2s;" onmousedown="this.style.transform='scale(0.94)'" onmouseup="this.style.transform='scale(1)'" title="Manage your availability schedule, appointment slots, and live status">
-        <span style="font-size:24px;">🕐</span>
+        <span style="font-size:24px;" aria-hidden="true">🕐</span>
         <span style="font-size:10px;font-weight:800;color:#10b981;">Availability</span>
       </button>
 
@@ -3075,8 +3075,8 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
       </div>
 
       <!-- Withdraw Modal -->
-      <div id="withdrawModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:none;align-items:center;justify-content:center;padding:16px;">
-        <div style="background:#111;border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:28px;width:100%;max-width:400px;">
+      <div id="withdrawModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;padding:16px;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+        <div style="background:#111;border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:28px;width:100%;max-width:400px;max-height:calc(90dvh - 32px);max-height:calc(90vh - 32px);overflow-y:auto;-webkit-overflow-scrolling:touch;">
           <h3 style="margin:0 0 6px;color:white;font-size:18px;">📲 Withdraw to M-Pesa</h3>
           <p style="font-size:13px;color:rgba(255,255,255,0.45);margin:0 0 20px;">Funds sent within 5 minutes</p>
           <label style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);display:block;margin-bottom:6px;">M-Pesa Number</label>

@@ -8121,3 +8121,58 @@ exports.impactScheduledDailyReconciliation = impact.impactScheduledDailyReconcil
 exports.impactGetEnvironmental             = impact.impactGetEnvironmental;
 exports.impactAdminUpdateEnvironmental     = impact.impactAdminUpdateEnvironmental;
 exports.impactAdminCreateEnvProject        = impact.impactAdminCreateEnvProject;
+
+/* ── Smart POS QR Payments ─────────────────────────────────── */
+const posQr = require('./pos-qr');
+exports.generatePOSPaymentQR    = posQr.generatePOSPaymentQR;
+exports.getPOSPaymentDetails    = posQr.getPOSPaymentDetails;
+exports.initiatePOSQRPayment    = posQr.initiatePOSQRPayment;
+exports.completePOSQRPayment    = posQr.completePOSQRPayment;
+exports.cancelPOSPaymentQR      = posQr.cancelPOSPaymentQR;
+exports.refundPOSPayment        = posQr.refundPOSPayment;
+exports.getPOSPaymentHistory    = posQr.getPOSPaymentHistory;
+
+/* ── Redis Infrastructure Layer v1.0 ───────────────────────────── */
+const redisLayer = require('./redis-layer');
+/* Session */
+exports.redisSessionCreate        = redisLayer.redisSessionCreate;
+exports.redisSessionGet           = redisLayer.redisSessionGet;
+exports.redisSessionRevoke        = redisLayer.redisSessionRevoke;
+exports.redisSessionRevokeAll     = redisLayer.redisSessionRevokeAll;
+exports.redisSessionList          = redisLayer.redisSessionList;
+/* Presence */
+exports.redisPresenceHeartbeat    = redisLayer.redisPresenceHeartbeat;
+exports.redisPresenceGet          = redisLayer.redisPresenceGet;
+exports.redisPresenceRemove       = redisLayer.redisPresenceRemove;
+/* SmartPOS Sync */
+exports.redisPosSetState          = redisLayer.redisPosSetState;
+exports.redisPosGetState          = redisLayer.redisPosGetState;
+exports.redisPosPublish           = redisLayer.redisPosPublish;
+/* Inventory */
+exports.redisInventoryLock        = redisLayer.redisInventoryLock;
+exports.redisInventoryRelease     = redisLayer.redisInventoryRelease;
+/* Dashboard */
+exports.redisDashboardGet         = redisLayer.redisDashboardGet;
+exports.redisDashboardSet         = redisLayer.redisDashboardSet;
+exports.redisDashboardIncr        = redisLayer.redisDashboardIncr;
+/* Cache */
+exports.redisCacheGet             = redisLayer.redisCacheGet;
+exports.redisCacheSet             = redisLayer.redisCacheSet;
+/* Payment Coordination */
+exports.redisPaymentLock          = redisLayer.redisPaymentLock;
+exports.redisPaymentUnlock        = redisLayer.redisPaymentUnlock;
+exports.redisPaymentSetState      = redisLayer.redisPaymentSetState;
+exports.redisPaymentGetState      = redisLayer.redisPaymentGetState;
+/* Event Bus */
+exports.redisEventPublish         = redisLayer.redisEventPublish;
+exports.redisEventRead            = redisLayer.redisEventRead;
+/* Queue */
+exports.redisQueuePush            = redisLayer.redisQueuePush;
+exports.redisQueueDepth           = redisLayer.redisQueueDepth;
+/* Rate Limiting */
+exports.redisRateCheck            = redisLayer.redisRateCheck;
+/* Admin / Observability */
+exports.redisAdminMetrics         = redisLayer.redisAdminMetrics;
+/* Scheduled */
+exports.redisScheduledPresenceCleanup = redisLayer.redisScheduledPresenceCleanup;
+exports.redisScheduledQueueWorker     = redisLayer.redisScheduledQueueWorker;

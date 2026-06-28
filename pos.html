@@ -11,7 +11,32 @@
   <link rel="stylesheet" href="pos.css">
   <link rel="stylesheet" href="pos-bos.css">
   <link rel="stylesheet" href="pos-mobile.css">
+  <link rel="stylesheet" href="sokoni-form-engine.css">
   <script src="sokoni-branch.js"></script>
+  <!-- Keyboard avoidance for POS wizard — inline for immediate availability -->
+  <script>
+  (function(){
+    /* iOS visual viewport keyboard avoidance for #pos-wizard */
+    function _adjustForKeyboard() {
+      var wizard = document.getElementById('pos-wizard');
+      if (!wizard || wizard.style.display === 'none') return;
+      if (!window.visualViewport) return;
+      var vv = window.visualViewport;
+      var keyboardH = window.innerHeight - vv.height - vv.offsetTop;
+      if (keyboardH > 50) {
+        /* Keyboard is open — add extra bottom padding */
+        wizard.style.paddingBottom = Math.max(keyboardH + 40, 140) + 'px';
+      } else {
+        /* Keyboard closed — restore computed padding */
+        wizard.style.paddingBottom = '';
+      }
+    }
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', _adjustForKeyboard);
+      window.visualViewport.addEventListener('scroll', _adjustForKeyboard);
+    }
+  }());
+  </script>
 </head>
 <body>
 <script src="splash.js"></script>
@@ -302,6 +327,7 @@
             <button class="pay-method-btn mpesa" data-method="mpesa" onclick="SPos.payment.setMethod('mpesa')"><span class="method-icon">📱</span>M-PESA</button>
             <button class="pay-method-btn" data-method="card" onclick="SPos.payment.setMethod('card')"><span class="method-icon">💳</span>Card</button>
             <button class="pay-method-btn" data-method="split" onclick="SPos.payment.setMethod('split')"><span class="method-icon">✂️</span>Split</button>
+            <button class="pay-method-btn" id="qr-pay-method-btn" data-method="qr" onclick="SPos.payment.setMethod('qr'); SPosQR.open()" aria-label="QR Code payment"><span class="method-icon" aria-hidden="true">⬛</span>QR Pay</button>
           </div>
           <!-- Terminal status indicator — populated by PosTerminals -->
           <div id="terminal-status-bar" style="display:none;gap:6px;flex-wrap:wrap;margin-top:8px;padding:2px 0"></div>
@@ -1080,6 +1106,7 @@
 <script src="pos-scanner.js"></script>
 <script src="pos-mobile.js"></script>
 <script src="pos.js"></script>
+<script defer src="sokoni-form-engine.js"></script>
 <!-- ══ Scale + observability stack ══ -->
 <script defer src="sokoni-scale.js"></script>
 <script defer src="sokoni-queue.js"></script>
@@ -1559,5 +1586,251 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 </script>
+
+<!-- ════ Smart POS QR Payment Modal ════ -->
+<div id="posQrModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);backdrop-filter:blur(6px);align-items:center;justify-content:center;" role="dialog" aria-modal="true" aria-label="QR Payment" aria-live="polite">
+  <div style="background:#141414;border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:28px 24px;max-width:400px;width:calc(100% - 32px);text-align:center;position:relative;max-height:90dvh;overflow-y:auto;">
+    <button onclick="SPosQR.close()" style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,.1);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;" aria-label="Close QR payment dialog">✕</button>
+
+    <!-- Generating state -->
+    <div id="qrStateGen" style="display:flex;flex-direction:column;align-items:center;gap:14px;">
+      <div style="width:44px;height:44px;border:3px solid rgba(255,255,255,.1);border-top-color:#71ff00;border-radius:50%;animation:posQrSpin .8s linear infinite;" aria-hidden="true"></div>
+      <p style="color:rgba(255,255,255,.6);font-size:14px;">Generating payment QR…</p>
+    </div>
+
+    <!-- QR ready state -->
+    <div id="qrStateReady" style="display:none;flex-direction:column;align-items:center;gap:16px;">
+      <div style="font-size:15px;font-weight:700;color:#e8e8e8;">Scan to Pay</div>
+      <div style="background:#fff;border-radius:12px;padding:12px;display:inline-block;">
+        <img id="posQrImg" src="" alt="Payment QR code" style="display:block;width:220px;height:220px;">
+      </div>
+      <div style="background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);border-radius:10px;padding:10px 16px;font-size:14px;font-weight:700;color:#71ff00;" id="posQrTotal"></div>
+      <div id="posQrTimer" style="font-size:13px;color:rgba(255,255,255,.45);display:flex;align-items:center;gap:5px;">
+        <span aria-hidden="true">⏱</span> Expires in <strong id="posQrTimerVal" style="color:#e8e8e8;font-variant-numeric:tabular-nums;">--:--</strong>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,.35);">Customer scans with their phone camera</div>
+      <div style="display:flex;gap:10px;width:100%;">
+        <button onclick="SPosQR.refresh()" style="flex:1;padding:11px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:#e8e8e8;border-radius:10px;cursor:pointer;font-size:13px;" aria-label="Generate new QR code">🔄 New QR</button>
+        <button onclick="SPosQR.cancel()" style="flex:1;padding:11px;background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.2);color:#ff8080;border-radius:10px;cursor:pointer;font-size:13px;" aria-label="Cancel payment">✕ Cancel</button>
+      </div>
+    </div>
+
+    <!-- Waiting for payment -->
+    <div id="qrStateWaiting" style="display:none;flex-direction:column;align-items:center;gap:14px;">
+      <div style="width:44px;height:44px;border:3px solid rgba(0,160,63,.2);border-top-color:#00a03f;border-radius:50%;animation:posQrSpin .8s linear infinite;" aria-hidden="true"></div>
+      <div style="font-size:15px;font-weight:700;">Waiting for Payment</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.5);">M-Pesa push sent — waiting for customer to confirm.</div>
+    </div>
+
+    <!-- Success state -->
+    <div id="qrStateSuccess" style="display:none;flex-direction:column;align-items:center;gap:14px;">
+      <div style="width:72px;height:72px;background:rgba(113,255,0,.12);border:2px solid #71ff00;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;" aria-hidden="true">✓</div>
+      <div style="font-size:18px;font-weight:700;color:#71ff00;">Payment Received!</div>
+      <div style="font-size:14px;color:rgba(255,255,255,.6);" id="qrSuccessDetail"></div>
+      <button onclick="SPosQR.complete()" style="width:100%;padding:14px;background:#71ff00;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;color:#000;" aria-label="Complete sale and print receipt">Complete Sale</button>
+    </div>
+
+    <!-- Error state -->
+    <div id="qrStateError" style="display:none;flex-direction:column;align-items:center;gap:14px;">
+      <div style="font-size:44px;" aria-hidden="true">⚠️</div>
+      <div style="font-size:16px;font-weight:700;">QR Generation Failed</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.5);" id="qrErrorMsg">Please try again.</div>
+      <button onclick="SPosQR.refresh()" style="padding:12px 24px;background:#71ff00;border:none;border-radius:10px;font-weight:700;cursor:pointer;color:#000;">Try Again</button>
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes posQrSpin { to { transform: rotate(360deg); } }
+</style>
+
+<script>
+/* ── SPosQR — Smart POS QR Payment Manager ── */
+window.SPosQR = (function() {
+  'use strict';
+
+  var _txnId    = null;
+  var _total    = 0;
+  var _timerInt = null;
+  var _pollInt  = null;
+  var _fn       = null;
+
+  function _callCF(name, data) {
+    /* Use Firebase callable — prefer SPos.fn() if available, else direct */
+    if (window.firebase && window.firebase.functions) {
+      return window.firebase.functions().httpsCallable(name)(data);
+    }
+    /* Fallback: SPos built-in CF caller if available */
+    if (window.SPos && window.SPos._cf) {
+      return window.SPos._cf(name)(data);
+    }
+    return Promise.reject(new Error('Firebase not available'));
+  }
+
+  function _setState(id) {
+    ['qrStateGen','qrStateReady','qrStateWaiting','qrStateSuccess','qrStateError'].forEach(function(s) {
+      var el = document.getElementById(s);
+      if (el) el.style.display = s === id ? 'flex' : 'none';
+    });
+  }
+
+  function _startTimer(expiresAt) {
+    clearInterval(_timerInt);
+    var el = document.getElementById('posQrTimerVal');
+    var wrap = document.getElementById('posQrTimer');
+    if (!el || !wrap) return;
+    function tick() {
+      var rem = expiresAt - Date.now();
+      if (rem <= 0) { clearInterval(_timerInt); el.textContent = '0:00'; return; }
+      var m = Math.floor(rem / 60000);
+      var s = Math.floor((rem % 60000) / 1000);
+      el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      wrap.style.color = rem < 60000 ? '#ff6b6b' : 'rgba(255,255,255,.45)';
+    }
+    tick();
+    _timerInt = setInterval(tick, 1000);
+  }
+
+  function _startPolling() {
+    clearInterval(_pollInt);
+    var failures = 0;
+    _pollInt = setInterval(function() {
+      _callCF('getPOSPaymentDetails', { transactionId: _txnId }).then(function(res) {
+        var d = res.data;
+        failures = 0;
+        if (d.status === 'paid') {
+          clearInterval(_pollInt);
+          clearInterval(_timerInt);
+          var detail = 'KES ' + Number(d.total || _total).toLocaleString('en-KE', { minimumFractionDigits: 2 }) + ' via ' + (d.paymentMethod || 'QR');
+          var detailEl = document.getElementById('qrSuccessDetail');
+          if (detailEl) detailEl.textContent = detail;
+          _setState('qrStateSuccess');
+        } else if (d.status === 'expired') {
+          clearInterval(_pollInt);
+          refresh();
+        }
+      }).catch(function(err) {
+        failures++;
+        if (failures > 10) clearInterval(_pollInt);
+      });
+    }, 3000);
+  }
+
+  function open() {
+    var modal = document.getElementById('posQrModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    _setState('qrStateGen');
+    refresh();
+  }
+
+  function close() {
+    clearInterval(_timerInt);
+    clearInterval(_pollInt);
+    _txnId = null;
+    var modal = document.getElementById('posQrModal');
+    if (modal) modal.style.display = 'none';
+    document.body.style.overflow = '';
+    /* Reset POS payment method back to cash if payment wasn't completed */
+    if (window.SPos && window.SPos.payment && window.SPos.payment.setMethod) {
+      SPos.payment.setMethod('cash');
+    }
+  }
+
+  function cancel() {
+    if (_txnId) {
+      _callCF('cancelPOSPaymentQR', { transactionId: _txnId }).catch(function(){});
+    }
+    close();
+  }
+
+  function refresh() {
+    clearInterval(_timerInt);
+    clearInterval(_pollInt);
+    _txnId = null;
+    _setState('qrStateGen');
+
+    /* Build items from POS cart */
+    var items = [];
+    var total = 0;
+    if (window.SPos && window.SPos.state && window.SPos.state.cart) {
+      SPos.state.cart.forEach(function(item) {
+        var price = parseFloat(item.price || 0);
+        var qty   = parseInt(item.qty || 1, 10);
+        items.push({ name: item.name || item.productName || 'Item', price: price, quantity: qty, sku: item.id || '' });
+        total += price * qty;
+      });
+    }
+
+    if (!items.length) {
+      document.getElementById('qrErrorMsg').textContent = 'Cart is empty. Add items before generating a QR payment.';
+      _setState('qrStateError');
+      return;
+    }
+
+    _total = total;
+
+    _callCF('generatePOSPaymentQR', {
+      items:         items,
+      taxRate:       0,
+      discountAmount: 0,
+      expiryMinutes: 10,
+    }).then(function(res) {
+      var d = res.data;
+      _txnId = d.transactionId;
+
+      /* Render QR using Google Charts (same as sokoni-qr.js) */
+      var qrUrl = d.qrUrl;
+      var chartUrl = 'https://chart.googleapis.com/chart?cht=qr&chs=440x440&chl=' + encodeURIComponent(qrUrl) + '&choe=UTF-8&chld=M';
+      var img = document.getElementById('posQrImg');
+      if (img) img.src = chartUrl;
+
+      var totalEl = document.getElementById('posQrTotal');
+      if (totalEl) totalEl.textContent = 'KES ' + Number(d.total).toLocaleString('en-KE', { minimumFractionDigits: 2 });
+
+      if (d.expiresAt) _startTimer(d.expiresAt);
+
+      _setState('qrStateReady');
+      _startPolling();
+    }).catch(function(err) {
+      document.getElementById('qrErrorMsg').textContent = err.message || 'Failed to generate QR. Please try again.';
+      _setState('qrStateError');
+    });
+  }
+
+  function complete() {
+    /* Trigger POS completion flow */
+    close();
+    if (window.SPos && window.SPos.payment && window.SPos.payment.completeQR) {
+      SPos.payment.completeQR(_txnId);
+    } else if (window.SPos && window.SPos.payment && window.SPos.payment.process) {
+      /* Fallback: mark as complete in POS state then process */
+      SPos.payment.process();
+    }
+  }
+
+  /* Close on backdrop click */
+  document.addEventListener('DOMContentLoaded', function() {
+    var modal = document.getElementById('posQrModal');
+    if (modal) {
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) cancel();
+      });
+    }
+  });
+
+  /* Close on ESC */
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      var modal = document.getElementById('posQrModal');
+      if (modal && modal.style.display === 'flex') cancel();
+    }
+  });
+
+  return { open: open, close: close, cancel: cancel, refresh: refresh, complete: complete };
+}());
+</script>
+
 </body>
 </html>

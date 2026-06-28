@@ -682,7 +682,13 @@ else{
                         }
                         if(sd.logoUrl || sd.logo){
                             var avEl = document.getElementById('prdSellerAvatar');
-                            if(avEl) avEl.innerHTML = '<img src="'+(sd.logoUrl||sd.logo)+'" alt="">';
+                            if(avEl){
+                                var logoImg = document.createElement('img');
+                                logoImg.src = sd.logoUrl || sd.logo;
+                                logoImg.alt = '';
+                                avEl.textContent = '';
+                                avEl.appendChild(logoImg);
+                            }
                         }
                         var rt = sd.responseTime || sd.avgResponseTime || '';
                         if(!rt){
@@ -1539,8 +1545,15 @@ function openAskQuestion() {
             if (list) {
                 var item = document.createElement('div');
                 item.className = 'prd-qa-item';
-                item.innerHTML = '<div class="prd-qa-q">Q: ' + q.trim().replace(/</g,'&lt;') + '</div>' +
-                    '<div class="prd-qa-a" style="color:rgba(255,255,255,0.3);font-style:italic;">Awaiting seller reply…</div>';
+                var qDiv = document.createElement('div');
+                qDiv.className = 'prd-qa-q';
+                qDiv.textContent = 'Q: ' + q.trim();
+                var aDiv = document.createElement('div');
+                aDiv.className = 'prd-qa-a';
+                aDiv.style.cssText = 'color:rgba(255,255,255,0.3);font-style:italic;';
+                aDiv.textContent = 'Awaiting seller reply…';
+                item.appendChild(qDiv);
+                item.appendChild(aDiv);
                 list.insertBefore(item, list.firstChild);
             }
         } catch(_) { alert('Could not send your question. Please try again.'); }

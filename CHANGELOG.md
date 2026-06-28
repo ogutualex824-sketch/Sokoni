@@ -1,4 +1,56 @@
-﻿## [2026-06-28] — Impact Platform v1.0 + Pending Fixes Sprint
+﻿## [2026-06-28] — Redis Infrastructure Layer v1.0
+
+### Summary
+Introduced Redis as a high-performance infrastructure layer alongside Firestore. Redis handles caching, sessions, distributed locks, presence tracking, rate limiting, SmartPOS synchronisation, payment coordination, event bus, and background job queues. Firestore remains the source of truth. All operations fall back gracefully to Firestore/defaults if Redis is unavailable. SW bumped to `sokoni-20260628-redis-v1`.
+
+### Files Added
+- `functions/redis-service.js` — Core Redis client abstraction (ioredis, lazy-connect, TLS-aware, auto-fallback). All domains: cache, sessions, locks, presence, rate limiting, dashboard, payment, POS sync, inventory, event streams, job queues, AI cache, search cache, admin info.
+- `functions/redis-layer.js` — 30 Cloud Functions: 5 session, 3 presence, 3 POS sync, 2 inventory, 3 dashboard, 2 cache, 4 payment, 2 event bus, 2 queue, 1 rate check, 1 admin metrics, 2 scheduled (presence cleanup + queue worker).
+- `sokoni-redis.js` — Client-side SDK: `SokoniRedis.session`, `.presence`, `.pos`, `.inventory`, `.dashboard`, `.payment`, `.cache`, `.events`, `.queue`, `.admin`. Auto-heartbeat for presence, POS polling at 500ms, payment state polling until terminal state.
+- `redis-monitor.html` — Super Admin Redis observability dashboard: connection status, memory, ops/sec, cache hit rate, presence counts by role, job queue depths. Auto-refreshes every 15s.
+
+### Files Modified
+- `functions/package.json` — Added `ioredis@^5.11.1`
+- `functions/index.js` — 30 new exports for Redis layer CFs
+- `service-worker.js` — Bumped CACHE_VERSION; added `sokoni-redis.js` + `redis-monitor.html` to PRECACHE_STATIC
+
+### New Cloud Functions (30)
+`redisSessionCreate` · `redisSessionGet` · `redisSessionRevoke` · `redisSessionRevokeAll` · `redisSessionList` · `redisPresenceHeartbeat` · `redisPresenceGet` · `redisPresenceRemove` · `redisPosSetState` · `redisPosGetState` · `redisPosPublish` · `redisInventoryLock` · `redisInventoryRelease` · `redisDashboardGet` · `redisDashboardSet` · `redisDashboardIncr` · `redisCacheGet` · `redisCacheSet` · `redisPaymentLock` · `redisPaymentUnlock` · `redisPaymentSetState` · `redisPaymentGetState` · `redisEventPublish` · `redisEventRead` · `redisQueuePush` · `redisQueueDepth` · `redisRateCheck` · `redisAdminMetrics` · `redisScheduledPresenceCleanup` · `redisScheduledQueueWorker`
+
+### New Secret Required
+`REDIS_URL` — Full Redis connection URL (e.g. `rediss://default:{password}@{host}:6380` for Google Cloud Memorystore). Set via: `firebase functions:secrets:set REDIS_URL`
+
+### Architecture
+```
+Clients → Cloud Functions → Redis (cache/sessions/locks/presence/rate-limit/POS/queues)
+                                 ↓ (on success or in parallel)
+                            Firestore (source of truth)
+```
+
+### Security
+- All 30 CFs: `enforceAppCheck: true`
+- `REDIS_URL` declared as Firebase Secret (never in code)
+- Lua scripts for atomic lock release (only lock owner can release)
+- Admin/SuperAdmin claims required for privileged operations
+- Payment state access limited to owner + admin
+- Inventory lock validated by lockId before release
+- All user inputs sanitised before use as Redis keys
+
+### Fallback Behaviour
+- `isFallback()` returns true when Redis is unreachable
+- Every method returns a safe default (null, [], false, 0) — never throws
+- CFs include `fallback: true` in response so clients can adapt
+- Platform continues processing orders, payments, and sessions via Firestore
+
+### Deployment Note
+Provision a Redis instance first:
+- **Google Cloud Memorystore**: `gcloud redis instances create sokoni-redis --size=1 --region=us-central1 --redis-version=redis_7_0 --tier=standard`
+- **Redis Cloud**: Create a free/paid database at app.redislabs.com
+Then set `REDIS_URL` secret and deploy: `firebase deploy --only functions`
+
+---
+
+## [2026-06-28] — Impact Platform v1.0 + Pending Fixes Sprint
 
 ### Summary
 Social Impact Platform (25 CFs): Foundation ledger, campaigns, grants, scholarships, corporate giving, round-up donations, 3-tier disbursement approval, daily reconciliation. SW version bumped to `sokoni-20260628-navengine-v2`. `seller-delivery.html` fixed (missing `shared-header.js`, replaced inline nav). New SW static assets: `sokoni-drawers.css`, `sokoni-drawer.js`, `sokoni-nav-engine.css`, `sokoni-nav-engine.js`.

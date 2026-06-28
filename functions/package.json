@@ -30,6 +30,7 @@
     "@sendgrid/mail": "^8.1.6",
     "firebase-admin": "^13.10.0",
     "firebase-functions": "^7.2.5",
+    "ioredis": "^5.11.1",
     "nodemailer": "^9.0.0"
   },
   "devDependencies": {
@@ -39,6 +40,12 @@
     "testEnvironment": "node",
     "testMatch": [
       "**/test/**/*.test.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "algolia-sync\\.test\\.js",
+      "search-monitor\\.test\\.js",
+      "search-worker\\.test\\.js"
     ],
     "collectCoverageFrom": [
       "index.js"

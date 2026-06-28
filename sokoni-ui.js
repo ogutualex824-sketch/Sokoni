@@ -16,6 +16,14 @@
 (function(global) {
   'use strict';
 
+  /* Suppress noisy debug logs in production without hiding real errors */
+  if (typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1') {
+    window.console.log = function() {};
+    window.console.debug = function() {};
+  }
+
   /* ─────────────────────────────────────────────────────────────────────────
      INTERNAL HELPERS
   ───────────────────────────────────────────────────────────────────────── */

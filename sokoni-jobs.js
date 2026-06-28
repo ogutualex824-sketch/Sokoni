@@ -1147,21 +1147,24 @@ window.SokoniJobs = (() => {
 
         <div class="app-cover">
           <div class="app-cover-label">Cover Letter</div>
-          <div class="app-cover-text" id="cover-${id}">${coverShort}</div>
+          <div class="app-cover-text" id="cover-${id}">${_esc(coverShort)}</div>
           ${hasCoverMore ? `
-          <button class="app-read-more" onclick="
-            var el=document.getElementById('cover-${id}');
-            var btn=this;
-            if(btn.dataset.expanded==='1'){
-              el.innerHTML='${coverShort.replace(/'/g,'&#39;')}';
-              btn.textContent='Read more';
-              btn.dataset.expanded='';
-            }else{
-              el.innerHTML='${coverFull.replace(/'/g,'&#39;')}';
-              btn.textContent='Show less';
-              btn.dataset.expanded='1';
-            }
-          ">Read more</button>` : ''}
+          <button class="app-read-more"
+            data-short="${_esc(coverShort)}"
+            data-full="${_esc(coverFull)}"
+            onclick="
+              var el=document.getElementById('cover-${id}');
+              var btn=this;
+              if(btn.dataset.expanded==='1'){
+                el.textContent=btn.dataset.short;
+                btn.textContent='Read more';
+                btn.dataset.expanded='';
+              }else{
+                el.textContent=btn.dataset.full;
+                btn.textContent='Show less';
+                btn.dataset.expanded='1';
+              }
+            ">Read more</button>` : ''}
         </div>
 
         ${cvUrl ? `

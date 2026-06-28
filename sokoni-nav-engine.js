@@ -171,23 +171,24 @@
 
   /* ── Seller sub-nav items (17) ──────────────────────────── */
   var _SUBNAV = [
-    { i:'📊',  l:'Dashboard',    h:'seller.html' },
-    { i:'🏪',  l:'MiniShop',     h:'minishop-admin.html' },
-    { i:'📦',  l:'Products',     h:'seller.html#products' },
-    { i:'🛒',  l:'Orders',       h:'seller.html#orders' },
-    { i:'📈',  l:'Analytics',    h:'seller-analytics.html' },
-    { i:'💰',  l:'Revenue',      h:'seller-revenue.html' },
-    { i:'📣',  l:'Marketing',    h:'seller.html#marketing' },
-    { i:'⚡',  l:'Flash Sales',  h:'flash-sales.html' },
-    { i:'💳',  l:'Payments',     h:'seller.html#payments' },
-    { i:'🖥️', l:'POS',          h:'pos.html' },
-    { i:'⬛',  l:'QR',           h:'qr-center.html' },
-    { i:'💬',  l:'Messages',     h:'messages.html' },
-    { i:'⚖️', l:'Disputes',     h:'seller.html#disputes' },
-    { i:'🗓️', l:'Availability', h:'seller.html#availability' },
-    { i:'🔴',  l:'Live',         h:'seller.html#live' },
-    { i:'📊',  l:'Insights',     h:'merchant-success.html' },
-    { i:'⚙️', l:'Settings',     h:'seller.html#settings' }
+    { i:'📊',  l:'Dashboard',      h:'seller.html' },
+    { i:'📦',  l:'Products',       h:'seller.html#products' },
+    { i:'🏪',  l:'MiniShop',       h:'minishop-admin.html' },
+    { i:'📋',  l:'Inventory',      h:'seller.html#inventory' },
+    { i:'🛒',  l:'Orders',         h:'seller.html#orders' },
+    { i:'📈',  l:'Analytics',      h:'seller-analytics.html' },
+    { i:'📣',  l:'Marketing',      h:'seller.html#marketing' },
+    { i:'⚡',  l:'Flash Sales',    h:'flash-sales.html' },
+    { i:'🖥️', l:'POS',            h:'pos.html' },
+    { i:'💳',  l:'Payments',       h:'seller.html#payments' },
+    { i:'💰',  l:'Revenue',        h:'seller-revenue.html' },
+    { i:'👥',  l:'Customers',      h:'seller.html#customers' },
+    { i:'💬',  l:'Messages',       h:'messages.html' },
+    { i:'⚖️', l:'Disputes',       h:'seller.html#disputes' },
+    { i:'⬛',  l:'QR Payments',    h:'qr-center.html' },
+    { i:'🗓️', l:'Availability',   h:'seller.html#availability' },
+    { i:'🔴',  l:'Live Dashboard', h:'seller.html#live' },
+    { i:'⚙️', l:'Settings',       h:'seller.html#settings' }
   ];
 
   /* ── Back destination per workspace ─────────────────────── */

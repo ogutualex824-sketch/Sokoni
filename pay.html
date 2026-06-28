@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Secure Payment — SOKONI</title>
+  <link rel="icon" type="image/png" href="/assets/Sokonilogo2.png">
+
+  <!-- Minimal inline CSS for fast FCP — no external CSS blocking render -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --sk-green:  #71ff00;
+      --sk-dark:   #0a0a0a;
+      --sk-card:   #141414;
+      --sk-border: rgba(255,255,255,0.08);
+      --sk-text:   #e8e8e8;
+      --sk-muted:  rgba(255,255,255,0.45);
+      --sk-radius: 16px;
+      --sk-safe-b: env(safe-area-inset-bottom, 0px);
+    }
+
+    body {
+      background: var(--sk-dark);
+      color: var(--sk-text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout ── */
+    .pay-wrap {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px 16px calc(24px + var(--sk-safe-b));
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Top bar ── */
+    .pay-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+    .pay-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+    .pay-logo img { height: 28px; }
+    .pay-logo-label {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--sk-green);
+      letter-spacing: .04em;
+    }
+    .pay-secure-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--sk-muted);
+      background: rgba(113,255,0,.07);
+      border: 1px solid rgba(113,255,0,.15);
+      border-radius: 20px;
+      padding: 4px 10px;
+    }
+    .pay-secure-badge svg { flex-shrink: 0; }
+
+    /* ── State screens ── */
+    .pay-state {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 16px;
+      padding: 40px 0;
+      flex: 1;
+    }
+    .pay-state.active { display: flex; }
+    .pay-state-icon { font-size: 56px; line-height: 1; }
+    .pay-state h2 { font-size: 22px; font-weight: 700; }
+    .pay-state p  { font-size: 15px; color: var(--sk-muted); line-height: 1.5; }
+
+    /* Spinner */
+    .sk-spinner {
+      width: 44px; height: 44px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--sk-green);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Merchant card ── */
+    .pay-merchant {
+      background: var(--sk-card);
+      border: 1px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .pay-merchant-avatar {
+      width: 60px; height: 60px;
+      border-radius: 12px;
+      background: rgba(113,255,0,.1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .pay-merchant-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .pay-merchant-name {
+      font-size: 17px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pay-verified {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px;
+      background: var(--sk-green);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .pay-verified svg { width: 10px; height: 10px; }
+    .pay-merchant-tag {
+      font-size: 12px;
+      color: var(--sk-muted);
+      margin-top: 2px;
+    }
+
+    /* ── Items ── */
+    .pay-section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      color: var(--sk-muted);
+      text-transform: uppercase;
+    }
+    .pay-items {
+      background: var(--sk-card);
+      border: 1px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      overflow: hidden;
+    }
+    .pay-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      gap: 12px;
+      border-bottom: 1px solid var(--sk-border);
+    }
+    .pay-item:last-child { border-bottom: none; }
+    .pay-item-name {
+      font-size: 14px;
+      color: var(--sk-text);
+      flex: 1;
+    }
+    .pay-item-qty {
+      font-size: 12px;
+      color: var(--sk-muted);
+      white-space: nowrap;
+    }
+    .pay-item-price {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* ── Totals ── */
+    .pay-totals {
+      background: var(--sk-card);
+      border: 1px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      padding: 16px;
+    }
+    .pay-total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      font-size: 14px;
+      color: var(--sk-muted);
+    }
+    .pay-total-row.grand {
+      border-top: 1px solid var(--sk-border);
+      margin-top: 8px;
+      padding-top: 14px;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--sk-text);
+    }
+    .pay-total-row.grand .amount { color: var(--sk-green); }
+    .pay-discount-amount { color: #ff6b6b; }
+
+    /* ── Payment methods ── */
+    .pay-methods {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .pay-method-tab {
+      background: var(--sk-card);
+      border: 1px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+    }
+    .pay-method-tab.selected {
+      border-color: var(--sk-green);
+      background: rgba(113,255,0,.04);
+    }
+    .pay-method-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .pay-method-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .pay-method-icon.mpesa { background: rgba(0,160,63,.15); }
+    .pay-method-icon.card  { background: rgba(113,255,0,.1); }
+    .pay-method-name {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .pay-method-desc {
+      font-size: 12px;
+      color: var(--sk-muted);
+    }
+    .pay-method-selector {
+      margin-left: auto;
+      width: 20px; height: 20px;
+      border: 2px solid var(--sk-border);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color .2s;
+      flex-shrink: 0;
+    }
+    .pay-method-tab.selected .pay-method-selector {
+      border-color: var(--sk-green);
+      background: var(--sk-green);
+    }
+    .pay-method-tab.selected .pay-method-selector::after {
+      content: '';
+      width: 8px; height: 8px;
+      background: #000;
+      border-radius: 50%;
+    }
+    .pay-method-body {
+      display: none;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--sk-border);
+    }
+    .pay-method-tab.selected .pay-method-body { display: block; }
+
+    /* ── Inputs ── */
+    .pay-field { margin-bottom: 12px; }
+    .pay-label {
+      display: block;
+      font-size: 12px;
+      color: var(--sk-muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .pay-input {
+      width: 100%;
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--sk-border);
+      border-radius: 10px;
+      padding: 13px 14px;
+      font-size: 16px;
+      color: var(--sk-text);
+      outline: none;
+      transition: border-color .2s;
+      -webkit-appearance: none;
+    }
+    .pay-input:focus { border-color: var(--sk-green); }
+    .pay-input.error { border-color: #ff6b6b; }
+    .pay-field-error {
+      font-size: 12px;
+      color: #ff6b6b;
+      margin-top: 4px;
+      display: none;
+    }
+    .pay-field-error.show { display: block; }
+
+    /* Phone prefix */
+    .pay-phone-wrap {
+      display: flex;
+      align-items: center;
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--sk-border);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color .2s;
+    }
+    .pay-phone-wrap:focus-within { border-color: var(--sk-green); }
+    .pay-phone-prefix {
+      padding: 13px 12px 13px 14px;
+      font-size: 15px;
+      color: var(--sk-muted);
+      white-space: nowrap;
+      border-right: 1px solid var(--sk-border);
+      user-select: none;
+    }
+    .pay-phone-input {
+      flex: 1;
+      background: none;
+      border: none;
+      padding: 13px 14px;
+      font-size: 16px;
+      color: var(--sk-text);
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    /* ── Pay button ── */
+    .pay-btn {
+      width: 100%;
+      padding: 16px;
+      font-size: 17px;
+      font-weight: 700;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s;
+      letter-spacing: .02em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .pay-btn:active { transform: scale(.98); }
+    .pay-btn:disabled { opacity: .5; cursor: default; }
+    .pay-btn-mpesa {
+      background: #00a03f;
+      color: #fff;
+    }
+    .pay-btn-card {
+      background: var(--sk-green);
+      color: #000;
+    }
+    .pay-btn-spinner {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    .pay-btn.loading .pay-btn-spinner { display: block; }
+    .pay-btn.loading .pay-btn-text { opacity: 0; }
+
+    /* ── Timer ── */
+    .pay-timer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--sk-muted);
+    }
+    .pay-timer-value { color: var(--sk-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .pay-timer.urgent .pay-timer-value { color: #ff6b6b; }
+
+    /* ── STK pending ── */
+    .pay-stk-pending {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 14px;
+      padding: 28px 20px;
+      background: rgba(0,160,63,.08);
+      border: 1px solid rgba(0,160,63,.2);
+      border-radius: var(--sk-radius);
+    }
+    .pay-stk-pending.show { display: flex; }
+    .pay-stk-icon { font-size: 42px; }
+    .pay-stk-phone {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+    .pay-stk-hint { font-size: 13px; color: var(--sk-muted); line-height: 1.5; }
+    .pay-stk-pin-hint {
+      font-size: 12px;
+      background: rgba(0,160,63,.15);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: #00c84f;
+    }
+
+    /* ── Success ── */
+    .pay-success-ring {
+      width: 80px; height: 80px;
+      background: rgba(113,255,0,.12);
+      border: 2px solid var(--sk-green);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 38px;
+    }
+    .pay-receipt {
+      background: var(--sk-card);
+      border: 1px solid var(--sk-border);
+      border-radius: var(--sk-radius);
+      padding: 20px;
+      width: 100%;
+      text-align: left;
+    }
+    .pay-receipt-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      font-size: 14px;
+      border-bottom: 1px solid var(--sk-border);
+    }
+    .pay-receipt-row:last-child { border-bottom: none; }
+    .pay-receipt-row label { color: var(--sk-muted); }
+    .pay-receipt-row .val { font-weight: 600; }
+    .pay-receipt-total .val { color: var(--sk-green); font-size: 20px; font-weight: 800; }
+
+    /* ── Trust ── */
+    .pay-trust {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 8px 0;
+      opacity: .6;
+    }
+    .pay-trust-item {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 11px; color: var(--sk-muted);
+    }
+
+    /* ── Responsive ── */
+    @media (min-width: 640px) {
+      .pay-wrap { padding-top: 40px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="pay-wrap" role="main">
+
+  <!-- Top bar -->
+  <div class="pay-topbar">
+    <a href="/" class="pay-logo" aria-label="SOKONI Home">
+      <img src="/assets/Sokonilogo2.png" alt="SOKONI">
+      <span class="pay-logo-label">SOKONI</span>
+    </a>
+    <div class="pay-secure-badge" aria-label="Secure payment">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <path d="M6 1L1.5 2.5V6c0 2.5 1.9 4.4 4.5 5 2.6-.6 4.5-2.5 4.5-5V2.5L6 1z" stroke="#71ff00" stroke-width="1.2" fill="none"/>
+        <path d="M4 6l1.5 1.5L8 4.5" stroke="#71ff00" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      Secure Payment
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div class="pay-state active" id="stateLoading" aria-live="polite" aria-label="Loading payment">
+    <div class="sk-spinner" role="status" aria-label="Loading"></div>
+    <p style="color:var(--sk-muted);font-size:14px;">Loading payment details…</p>
+  </div>
+
+  <!-- Error state -->
+  <div class="pay-state" id="stateError" aria-live="assertive">
+    <div class="pay-state-icon" aria-hidden="true">⚠️</div>
+    <h2 id="errTitle">Payment Not Found</h2>
+    <p id="errMsg">This payment link is invalid or has expired.</p>
+    <a href="/" style="color:var(--sk-green);font-size:14px;text-decoration:none;margin-top:8px;">← Back to SOKONI</a>
+  </div>
+
+  <!-- Expired state -->
+  <div class="pay-state" id="stateExpired">
+    <div class="pay-state-icon" aria-hidden="true">⏰</div>
+    <h2>QR Code Expired</h2>
+    <p>This payment QR has expired. Please ask the cashier to generate a new one.</p>
+    <a href="/" style="color:var(--sk-green);font-size:14px;text-decoration:none;margin-top:8px;">← Back to SOKONI</a>
+  </div>
+
+  <!-- Already paid state -->
+  <div class="pay-state" id="stateAlreadyPaid">
+    <div class="pay-success-ring" aria-hidden="true">✓</div>
+    <h2>Already Paid</h2>
+    <p>This transaction has already been completed.</p>
+  </div>
+
+  <!-- Success state -->
+  <div class="pay-state" id="stateSuccess">
+    <div class="pay-success-ring" aria-hidden="true">✓</div>
+    <h2>Payment Successful!</h2>
+    <p style="color:var(--sk-muted);">Your payment has been confirmed.</p>
+    <div class="pay-receipt" id="successReceipt" aria-label="Payment receipt"></div>
+    <a href="/" style="color:var(--sk-green);font-size:14px;text-decoration:none;">← Continue Shopping</a>
+  </div>
+
+  <!-- Main payment UI -->
+  <div id="stateMain" style="display:none;flex-direction:column;gap:16px;">
+
+    <!-- Merchant card -->
+    <div class="pay-merchant" aria-label="Merchant information">
+      <div class="pay-merchant-avatar" id="merchantAvatar" aria-hidden="true">🏪</div>
+      <div>
+        <div class="pay-merchant-name">
+          <span id="merchantName">Loading…</span>
+          <span class="pay-verified" id="merchantVerifiedBadge" style="display:none;" aria-label="Verified merchant" title="Verified SOKONI merchant">
+            <svg viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M2 5l2 2 4-4" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </span>
+        </div>
+        <div class="pay-merchant-tag">Verified SOKONI Merchant</div>
+      </div>
+    </div>
+
+    <!-- Timer -->
+    <div class="pay-timer" id="payTimer" role="timer" aria-live="polite">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.2"/>
+        <path d="M7 4v3l2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      Expires in <span class="pay-timer-value" id="timerValue">--:--</span>
+    </div>
+
+    <!-- Items -->
+    <div>
+      <div class="pay-section-label" style="margin-bottom:8px;">Items</div>
+      <div class="pay-items" id="itemsList" aria-label="Order items"></div>
+    </div>
+
+    <!-- Totals -->
+    <div class="pay-totals" aria-label="Payment summary">
+      <div class="pay-total-row">
+        <span>Subtotal</span>
+        <span id="subtotalVal">KES 0</span>
+      </div>
+      <div class="pay-total-row" id="taxRow" style="display:none;">
+        <span>VAT (16%)</span>
+        <span id="taxVal">KES 0</span>
+      </div>
+      <div class="pay-total-row" id="discountRow" style="display:none;">
+        <span>Discount</span>
+        <span class="pay-discount-amount" id="discountVal">-KES 0</span>
+      </div>
+      <div class="pay-total-row grand">
+        <span>Total</span>
+        <span class="amount" id="totalVal">KES 0</span>
+      </div>
+    </div>
+
+    <!-- Note -->
+    <div id="noteWrap" style="display:none;font-size:13px;color:var(--sk-muted);padding:12px 14px;background:var(--sk-card);border:1px solid var(--sk-border);border-radius:12px;">
+      <strong style="color:var(--sk-text);">Note:</strong> <span id="noteText"></span>
+    </div>
+
+    <!-- Payment methods -->
+    <div>
+      <div class="pay-section-label" style="margin-bottom:12px;">Pay With</div>
+      <div class="pay-methods" role="radiogroup" aria-label="Payment method">
+
+        <!-- M-Pesa -->
+        <div class="pay-method-tab selected" id="tabMpesa" onclick="selectMethod('mpesa')" role="radio" aria-checked="true" tabindex="0" aria-label="Pay with M-Pesa">
+          <div class="pay-method-header">
+            <div class="pay-method-icon mpesa" aria-hidden="true">📱</div>
+            <div>
+              <div class="pay-method-name">M-Pesa</div>
+              <div class="pay-method-desc">STK Push to your phone</div>
+            </div>
+            <div class="pay-method-selector"></div>
+          </div>
+          <div class="pay-method-body">
+            <div class="pay-field">
+              <label class="pay-label" for="mpesaPhone">M-Pesa Phone Number</label>
+              <div class="pay-phone-wrap">
+                <span class="pay-phone-prefix">+254</span>
+                <input
+                  type="tel"
+                  id="mpesaPhone"
+                  class="pay-phone-input"
+                  placeholder="7XX XXX XXX"
+                  maxlength="9"
+                  autocomplete="tel-local"
+                  inputmode="tel"
+                  aria-describedby="mpesaPhoneError">
+              </div>
+              <div class="pay-field-error" id="mpesaPhoneError" role="alert"></div>
+            </div>
+
+            <!-- STK Pending UI -->
+            <div class="pay-stk-pending" id="stkPending" aria-live="polite" aria-label="M-Pesa payment pending">
+              <div class="pay-stk-icon" aria-hidden="true">📲</div>
+              <div>Check your phone</div>
+              <div class="pay-stk-phone" id="stkPhone"></div>
+              <div class="pay-stk-hint">You'll receive an M-Pesa pop-up prompt. Enter your M-Pesa PIN to complete payment.</div>
+              <div class="pay-stk-pin-hint">🔒 Enter your PIN only on the official M-Pesa screen</div>
+            </div>
+
+            <button class="pay-btn pay-btn-mpesa" id="btnPayMpesa" onclick="payMpesa()" aria-label="Pay with M-Pesa">
+              <span class="pay-btn-spinner" aria-hidden="true"></span>
+              <span class="pay-btn-text">Pay with M-Pesa</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Card -->
+        <div class="pay-method-tab" id="tabCard" onclick="selectMethod('card')" role="radio" aria-checked="false" tabindex="0" aria-label="Pay with card">
+          <div class="pay-method-header">
+            <div class="pay-method-icon card" aria-hidden="true">💳</div>
+            <div>
+              <div class="pay-method-name">Card</div>
+              <div class="pay-method-desc">Visa · Mastercard</div>
+            </div>
+            <div class="pay-method-selector"></div>
+          </div>
+          <div class="pay-method-body">
+            <p style="font-size:13px;color:var(--sk-muted);margin-bottom:14px;">You'll be redirected to a secure IntaSend payment page to complete your card payment.</p>
+            <button class="pay-btn pay-btn-card" id="btnPayCard" onclick="payCard()" aria-label="Pay with card">
+              <span class="pay-btn-spinner" aria-hidden="true"></span>
+              <span class="pay-btn-text">Pay with Card</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Trust -->
+    <div class="pay-trust" aria-label="Security certifications">
+      <div class="pay-trust-item"><span aria-hidden="true">🔒</span> SSL Encrypted</div>
+      <div class="pay-trust-item"><span aria-hidden="true">🛡️</span> PCI DSS</div>
+      <div class="pay-trust-item"><span aria-hidden="true">✓</span> Buyer Protected</div>
+    </div>
+
+  </div>
+
+</div><!-- .pay-wrap -->
+
+<!-- Firebase SDK — loaded async, non-blocking -->
+<script type="module">
+'use strict';
+/* ── Firebase ── */
+import { initializeApp }               from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-functions.js';
+
+/* ── Config (public keys only — private keys in Secret Manager) ── */
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyDfNnaCH1sHlsMnCFoNFW5sMeSFJTYYDok",
+  authDomain:        "sokoni-aeb26.firebaseapp.com",
+  projectId:         "sokoni-aeb26",
+  storageBucket:     "sokoni-aeb26.appspot.com",
+  messagingSenderId: "246984929044",
+  appId:             "1:246984929044:web:4d7ac8e8a0d16b2db0eb50"
+};
+
+const app = initializeApp(FIREBASE_CONFIG);
+const fn  = getFunctions(app, 'us-central1');
+
+/* ── State ── */
+let _txnId    = null;
+let _details  = null;
+let _timerInt = null;
+let _pollInt  = null;  // polling interval for payment confirmation
+
+/* ── Helpers ── */
+const $  = (id) => document.getElementById(id);
+const fc = (name) => httpsCallable(fn, name);
+const fmt = (amt) => 'KES ' + Number(amt || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/* ── Show/hide states ── */
+function showState(id) {
+  ['stateLoading','stateError','stateExpired','stateAlreadyPaid','stateSuccess'].forEach(s => {
+    const el = $(s);
+    el.classList.remove('active');
+    el.style.display = '';
+  });
+  const main = $('stateMain');
+  main.style.display = 'none';
+
+  if (id === 'main') {
+    main.style.display = 'flex';
+  } else {
+    const el = $(id);
+    el.classList.add('active');
+  }
+}
+
+/* ── Parse transaction ID from URL ── */
+function _getTxnId() {
+  // Support /pay/{id} path or ?ref={id} query
+  const path  = window.location.pathname.replace('/pay/', '').replace('/pay', '');
+  const query = new URLSearchParams(window.location.search).get('ref');
+  return (path && path.length === 32 ? path : null) || (query && query.length === 32 ? query : null);
+}
+
+/* ── Countdown timer ── */
+function startTimer(expiresAt) {
+  clearInterval(_timerInt);
+  const el    = $('timerValue');
+  const timer = $('payTimer');
+  function tick() {
+    const remaining = expiresAt - Date.now();
+    if (remaining <= 0) {
+      clearInterval(_timerInt);
+      showState('stateExpired');
+      return;
+    }
+    const m = Math.floor(remaining / 60000);
+    const s = Math.floor((remaining % 60000) / 1000);
+    el.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+    timer.classList.toggle('urgent', remaining < 60000);
+  }
+  tick();
+  _timerInt = setInterval(tick, 1000);
+}
+
+/* ── Render payment UI ── */
+function renderPayment(d) {
+  _details = d;
+
+  /* Merchant */
+  $('merchantName').textContent = d.sellerName || 'SOKONI Merchant';
+  if (d.sellerVerified) $('merchantVerifiedBadge').style.display = 'inline-flex';
+  const avatarEl = $('merchantAvatar');
+  if (d.sellerLogo) {
+    const img = document.createElement('img');
+    img.src = d.sellerLogo;
+    img.alt = '';
+    img.onerror = () => { img.remove(); };
+    avatarEl.textContent = '';
+    avatarEl.appendChild(img);
+  }
+
+  /* Timer */
+  if (d.expiresAt) startTimer(d.expiresAt);
+
+  /* Items */
+  const list = $('itemsList');
+  list.innerHTML = '';
+  (d.items || []).forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'pay-item';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'pay-item-name';
+    nameEl.textContent = item.name;
+    const qtyEl = document.createElement('span');
+    qtyEl.className = 'pay-item-qty';
+    qtyEl.textContent = `×${item.qty}`;
+    const priceEl = document.createElement('span');
+    priceEl.className = 'pay-item-price';
+    priceEl.textContent = fmt(item.price * item.qty);
+    row.appendChild(nameEl);
+    row.appendChild(qtyEl);
+    row.appendChild(priceEl);
+    list.appendChild(row);
+  });
+
+  /* Totals */
+  $('subtotalVal').textContent = fmt(d.subtotal);
+  if (d.tax > 0) {
+    $('taxVal').textContent = fmt(d.tax);
+    $('taxRow').style.display = 'flex';
+  }
+  if (d.discount > 0) {
+    $('discountVal').textContent = '-' + fmt(d.discount);
+    $('discountRow').style.display = 'flex';
+  }
+  $('totalVal').textContent = fmt(d.total);
+
+  /* Note */
+  if (d.note) {
+    $('noteText').textContent = d.note;
+    $('noteWrap').style.display = 'block';
+  }
+
+  /* Update pay button labels */
+  $('btnPayMpesa').querySelector('.pay-btn-text').textContent = `Pay ${fmt(d.total)}`;
+  $('btnPayCard').querySelector('.pay-btn-text').textContent  = `Pay ${fmt(d.total)}`;
+
+  showState('main');
+}
+
+/* ── Show already-paid UI ── */
+function showAlreadyPaid(d) {
+  showState('stateAlreadyPaid');
+}
+
+/* ── Show success UI ── */
+function showSuccess(data) {
+  clearInterval(_timerInt);
+  clearInterval(_pollInt);
+  _pollInt = null;
+
+  const receipt = $('successReceipt');
+  receipt.innerHTML = '';
+
+  function addRow(label, value, bold) {
+    const row = document.createElement('div');
+    row.className = 'pay-receipt-row' + (bold ? ' pay-receipt-total' : '');
+    const lbl = document.createElement('label');
+    lbl.textContent = label;
+    const val = document.createElement('span');
+    val.className = 'val';
+    val.textContent = value;
+    row.appendChild(lbl);
+    row.appendChild(val);
+    receipt.appendChild(row);
+  }
+
+  const merchant = (_details && _details.sellerName) || data.sellerName || 'Merchant';
+  const total    = (_details && _details.total)      || data.total      || 0;
+  const method   = data.paymentMethod || 'M-Pesa';
+  const receiptId = data.receiptId || '—';
+  const now = new Date().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' });
+
+  addRow('Merchant',    merchant);
+  addRow('Date',        now);
+  addRow('Method',      method.charAt(0).toUpperCase() + method.slice(1));
+  addRow('Receipt',     receiptId);
+  addRow('Total',       fmt(total), true);
+
+  showState('stateSuccess');
+}
+
+/* ── Poll for payment status (works for unauthenticated guests) ── */
+function startPolling(txnId) {
+  clearInterval(_pollInt);
+  let failCount = 0;
+  _pollInt = setInterval(async () => {
+    try {
+      const res = await fc('getPOSPaymentDetails')({ transactionId: txnId });
+      const d   = res.data;
+      if (d.status === 'paid') {
+        showSuccess(d);
+      } else if (d.status === 'expired') {
+        clearInterval(_pollInt);
+        showState('stateExpired');
+      } else if (d.status === 'cancelled') {
+        clearInterval(_pollInt);
+        $('errTitle').textContent = 'Payment Cancelled';
+        $('errMsg').textContent   = 'This payment was cancelled by the merchant.';
+        showState('stateError');
+      }
+      failCount = 0;
+    } catch (err) {
+      failCount++;
+      if (failCount >= 5) {
+        clearInterval(_pollInt);
+        /* Don't show error — customer just won't auto-redirect; they can refresh */
+      }
+    }
+  }, 3000); /* Poll every 3 seconds */
+}
+
+/* ── Method selection ── */
+window.selectMethod = function(method) {
+  ['mpesa','card'].forEach(m => {
+    const tab = $(m === 'mpesa' ? 'tabMpesa' : 'tabCard');
+    tab.classList.toggle('selected', m === method);
+    tab.setAttribute('aria-checked', String(m === method));
+  });
+};
+
+/* Handle keyboard activation of method tabs */
+document.querySelectorAll('.pay-method-tab').forEach(tab => {
+  tab.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      tab.click();
+    }
+  });
+});
+
+/* ── Pay with M-Pesa ── */
+window.payMpesa = async function() {
+  const phoneInput = $('mpesaPhone');
+  const errEl      = $('mpesaPhoneError');
+  const btn        = $('btnPayMpesa');
+  const phone      = phoneInput.value.replace(/\D/g, '');
+
+  errEl.textContent = '';
+  errEl.classList.remove('show');
+  phoneInput.classList.remove('error');
+
+  if (!phone || phone.length < 9 || !/^[17]\d{8}$/.test(phone.slice(-9))) {
+    errEl.textContent = 'Enter a valid Kenyan mobile number (e.g. 0712 345 678)';
+    errEl.classList.add('show');
+    phoneInput.classList.add('error');
+    phoneInput.focus();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.classList.add('loading');
+  $('stkPending').classList.remove('show');
+
+  try {
+    const fullPhone = '254' + phone.slice(-9);
+    const result = await fc('initiatePOSQRPayment')({
+      transactionId: _txnId,
+      method:        'mpesa',
+      phone:         fullPhone,
+    });
+    const d = result.data;
+
+    if (d.status === 'stk_initiated') {
+      /* Show STK pending UI */
+      const disp = fullPhone.replace(/(\d{3})(\d{3})(\d{3})(\d{3})/, '+$1 $2 $3 $4');
+      $('stkPhone').textContent = disp;
+      $('stkPending').classList.add('show');
+      btn.querySelector('.pay-btn-text').textContent = 'Waiting for confirmation…';
+      /* Start polling for payment confirmation */
+      startPolling(_txnId);
+    } else if (d.status === 'already_paid') {
+      showAlreadyPaid(d);
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.querySelector('.pay-btn-text').textContent = 'Pay with M-Pesa';
+
+    errEl.textContent = err.message || 'Payment initiation failed. Please try again.';
+    errEl.classList.add('show');
+  }
+};
+
+/* ── Pay with Card ── */
+window.payCard = async function() {
+  const btn = $('btnPayCard');
+  btn.disabled = true;
+  btn.classList.add('loading');
+
+  try {
+    const result = await fc('initiatePOSQRPayment')({
+      transactionId: _txnId,
+      method:        'card',
+    });
+    const d = result.data;
+
+    if (d.status === 'card_redirect' && d.checkoutUrl) {
+      window.location.href = d.checkoutUrl;
+    } else if (d.status === 'already_paid') {
+      showAlreadyPaid(d);
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.querySelector('.pay-btn-text').textContent = `Pay ${_details ? fmt(_details.total) : ''}`;
+    /* Show error inline */
+    const errEl = document.createElement('p');
+    errEl.style.cssText = 'color:#ff6b6b;font-size:13px;margin-top:8px;text-align:center;';
+    errEl.textContent = err.message || 'Payment failed. Please try again.';
+    btn.parentNode.appendChild(errEl);
+    setTimeout(() => errEl.remove(), 5000);
+  }
+};
+
+/* ── Bootstrap ── */
+async function init() {
+  _txnId = _getTxnId();
+
+  if (!_txnId) {
+    $('errTitle').textContent = 'Invalid Link';
+    $('errMsg').textContent   = 'This payment link is missing a transaction reference.';
+    showState('stateError');
+    return;
+  }
+
+  try {
+    const result = await fc('getPOSPaymentDetails')({ transactionId: _txnId });
+    const d = result.data;
+
+    if (d.status === 'paid') {
+      showAlreadyPaid(d);
+      return;
+    }
+
+    renderPayment(d);
+
+  } catch (err) {
+    clearInterval(_timerInt);
+    const code = err.code || '';
+    if (code.includes('deadline-exceeded') || code.includes('DEADLINE_EXCEEDED')) {
+      showState('stateExpired');
+    } else if (code.includes('not-found') || code.includes('NOT_FOUND')) {
+      $('errTitle').textContent = 'Payment Not Found';
+      $('errMsg').textContent   = 'This payment link is invalid or has expired.';
+      showState('stateError');
+    } else if (code.includes('cancelled') || code.includes('CANCELLED')) {
+      $('errTitle').textContent = 'Payment Cancelled';
+      $('errMsg').textContent   = 'This payment was cancelled.';
+      showState('stateError');
+    } else {
+      $('errTitle').textContent = 'Something Went Wrong';
+      $('errMsg').textContent   = 'Unable to load payment details. Please try again.';
+      showState('stateError');
+    }
+  }
+}
+
+init();
+</script>
+
+</body>
+</html>

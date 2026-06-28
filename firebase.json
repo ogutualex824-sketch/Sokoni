@@ -56,7 +56,8 @@
       { "source": "/api/facebook/data-deletion",   "function": "facebookDataDeletion", "region": "us-central1" },
       { "source": "/shop/**",                      "destination": "/minishop.html" },
       { "source": "/@**",                          "destination": "/minishop.html" },
-      { "source": "/card/**",                      "destination": "/minishop-status.html" }
+      { "source": "/card/**",                      "destination": "/minishop-status.html" },
+      { "source": "/pay/**",                       "destination": "/pay.html" }
     ],
     "cleanUrls": true,
     "trailingSlash": false,

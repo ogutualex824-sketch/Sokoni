@@ -84,9 +84,14 @@ html, body {
   background: #050508;
   display: flex; align-items: flex-start; justify-content: center;
   z-index: 9999;
-  padding: 20px 16px 40px;
+  padding: 20px 16px;
+  /* Generous bottom padding accounts for virtual keyboard + home indicator */
+  padding-bottom: max(140px, calc(env(safe-area-inset-bottom, 0px) + 140px));
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scroll-padding-bottom: 120px;
 }
 
 /* Animated orb layer behind the card */
@@ -346,15 +351,24 @@ html, body {
 
 /* ── Mobile responsive wizard ── */
 @media (max-width: 520px) {
-  .wizard-box { padding: 32px 22px; border-radius: 22px; }
+  .wizard-box { padding: 28px 20px; border-radius: 22px; }
   .wizard-logo h1 { font-size: 22px; }
   .wiz-row { grid-template-columns: 1fr; gap: 0; }
-  .wiz-input, .wiz-select { font-size: 16px; } /* prevent iOS zoom */
+  .wiz-input, .wiz-select { font-size: 16px !important; } /* prevent iOS zoom */
+}
+@media (max-width: 430px) {
+  .wizard-box { padding: 24px 16px; border-radius: 18px; }
+  .wizard-logo h1 { font-size: 20px; }
 }
 @media (max-width: 380px) {
-  .wizard-box { padding: 24px 16px; border-radius: 18px; }
+  .wizard-box { padding: 20px 14px; border-radius: 16px; }
   .wizard-logo img { height: 38px; }
-  .wizard-logo h1 { font-size: 20px; }
+  .wizard-logo h1 { font-size: 18px; }
+}
+@media (max-width: 320px) {
+  .wizard-box { padding: 16px 12px; border-radius: 14px; }
+  .wizard-logo h1 { font-size: 16px; }
+  .wiz-input, .wiz-select { padding: 11px 12px; }
 }
 
 /* ═══════════════════════════════════════════════════════════

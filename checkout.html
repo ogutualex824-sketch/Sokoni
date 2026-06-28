@@ -822,7 +822,7 @@
 <!-- CHECKOUT PAGE -->
 <section class="checkout-page">
 
-  <h1 class="checkout-heading"><i class="fas fa-lock" style="color:#71ff00;font-size:22px;"></i> Secure <span>Checkout</span></h1>
+  <h1 class="checkout-heading"><i class="fas fa-lock" style="color:#71ff00;font-size:22px;" aria-hidden="true"></i> Secure <span>Checkout</span></h1>
 
   <!-- Trust badges strip -->
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px;">
@@ -1213,7 +1213,7 @@
 <!-- M-PESA MODAL -->
 <div class="mpesa-overlay" id="mpesaOverlay">
   <div class="mpesa-modal-box">
-    <button type="button" class="mpesa-close-btn" onclick="closeModal('mpesa')">✕</button>
+    <button type="button" class="mpesa-close-btn" onclick="closeModal('mpesa')" aria-label="Close M-Pesa payment dialog">✕</button>
 
     <div class="mpesa-logo-row">
       <div class="mpesa-logo-icon">📱</div>
@@ -1283,7 +1283,7 @@
 <!-- MOBILE MONEY MODAL (Airtel / T-Kash / Equity / MTN / EcoCash / Chipper) -->
 <div class="paypal-overlay" id="mobilemoneyOverlay">
   <div class="paypal-modal-box" style="background:#0d1117;border:1px solid rgba(113,255,0,0.22);">
-    <button type="button" class="paypal-close-btn" onclick="closeModal('mobilemoney')">✕</button>
+    <button type="button" class="paypal-close-btn" onclick="closeModal('mobilemoney')" aria-label="Close mobile money payment dialog">✕</button>
     <div style="font-size:42px;margin-bottom:10px;" id="mmIcon">📱</div>
     <h3 style="color:white;font-size:18px;font-weight:900;margin-bottom:8px;" id="mmTitle">Mobile Money</h3>
     <p style="color:rgba(255,255,255,0.5);font-size:13px;margin-bottom:20px;line-height:1.5;" id="mmDesc">Enter your number to receive a payment prompt</p>

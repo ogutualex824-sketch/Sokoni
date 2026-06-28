@@ -116,6 +116,22 @@
     (document.head || document.documentElement).appendChild(navJs);
   }
 
+  /* Universal Form Engine — mobile scrollability, keyboard avoidance, safe areas */
+  if (!document.getElementById('sk-form-engine-link')) {
+    const feLink = document.createElement('link');
+    feLink.rel = 'stylesheet';
+    feLink.id = 'sk-form-engine-link';
+    feLink.href = 'sokoni-form-engine.css';
+    (document.head || document.documentElement).appendChild(feLink);
+  }
+  if (!document.getElementById('sk-form-engine-script')) {
+    const feJs = document.createElement('script');
+    feJs.id = 'sk-form-engine-script';
+    feJs.src = 'sokoni-form-engine.js';
+    feJs.defer = true;
+    (document.head || document.documentElement).appendChild(feJs);
+  }
+
   /* ── PHASE 2: Nav injection — excluded pages stop here ──────────── */
   const EXCLUDED = [
     'pos.html', 'seller.html', 'login.html', 'signup.html',

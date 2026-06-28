@@ -1185,9 +1185,14 @@ service cloud.firestore {
 
     match /posPayments/{checkoutId} {
       allow read:  if isAdmin()
-                   || (isAuthed() && resource.data.sellerUid == request.auth.uid)
-                   || (isAuthed() && resource.data.callerUid == request.auth.uid);
-      allow write: if isAdmin();
+                   || (isAuthed() && (resource.data.sellerUid == request.auth.uid || resource.data.sellerId == request.auth.uid))
+                   || (isAuthed() && (resource.data.callerUid == request.auth.uid || resource.data.buyerId == request.auth.uid));
+      allow write: if false;
+    }
+
+    match /posQrLog/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false;
     }
 
     match /sellerPayments/{paymentId} {
@@ -2474,20 +2479,25 @@ service cloud.firestore {
 
     match /checkoutSessions/{sessionId} {
       allow read:   if isAuthed() && resource.data.uid == request.auth.uid;
+      allow create: if false;
+      allow update: if false;
       allow delete: if isAdmin();
     }
 
     match /rateLimits/{key} {
       allow read:  if isAdmin();
+      allow write: if false;
     }
 
     match /paymentVerifications/{ref} {
       allow read:  if isAuthed() &&
                       (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if false;
     }
 
     match /_systemConfig/{docId} {
       allow read:  if isAdmin();
+      allow write: if false;
     }
 
     match /commissions/{commissionId} {
@@ -2497,6 +2507,7 @@ service cloud.firestore {
 
     match /securityEvents/{eventId} {
       allow read:  if isAdmin();
+      allow write: if false;
     }
 
     match /sysConfig/{doc} {
