@@ -263,9 +263,35 @@
     }
   };
 
+  /* GPS spoofing / teleportation guard constants */
+  var MAX_SPEED_KMH      = 250;  // no road vehicle exceeds this
+  var MAX_JUMP_METRES    = 2000; // max plausible distance between consecutive pings
+  var MIN_ACCURACY_METRES = 100; // discard readings with very poor accuracy
+
   SokoniNavigation.prototype._onPos = function (raw) {
     var c = raw.coords;
     var lat = c.latitude, lng = c.longitude;
+
+    // Reject implausibly inaccurate fixes
+    if (c.accuracy && c.accuracy > MIN_ACCURACY_METRES * 10) return;
+
+    // Compute reported speed in km/h
+    var speedKmh = Math.round((c.speed || 0) * 3.6);
+
+    // Velocity guard: reject fixes where reported speed exceeds max road speed
+    if (speedKmh > MAX_SPEED_KMH) {
+      console.warn('[Nav] Speed spoofing rejected: ' + speedKmh + ' km/h');
+      return;
+    }
+
+    // Distance jump guard: reject teleportation between consecutive points
+    if (this._pos) {
+      var distM = _hav(this._pos.lat, this._pos.lng, lat, lng);
+      if (distM > MAX_JUMP_METRES) {
+        console.warn('[Nav] Location jump rejected: ' + Math.round(distM) + 'm between pings');
+        return;
+      }
+    }
 
     // Smooth bearing
     var rawBrg = c.heading != null && !isNaN(c.heading)
@@ -277,8 +303,8 @@
 
     this._pos = {
       lat: lat, lng: lng,
-      bearing: Math.round(this._smoothBrg),
-      speed:   Math.round((c.speed || 0) * 3.6), // m/s → km/h
+      bearing:  Math.round(this._smoothBrg),
+      speed:    speedKmh,
       accuracy: Math.round(c.accuracy || 0),
     };
 

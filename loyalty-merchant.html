@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Loyalty Manager — SOKONI Merchant</title>
+  <meta name="description" content="Configure and analyse your SOKONI loyalty program. Set earn rates, create campaigns, and track customer retention.">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a2e">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <style>
+    :root {
+      --bg:      #0f0f1a;
+      --surface: #1a1a2e;
+      --border:  rgba(255,255,255,.1);
+      --accent:  #7c4dff;
+      --gold:    #ffc107;
+      --green:   #4caf50;
+      --red:     #ef5350;
+      --text:    #e8e8f0;
+      --muted:   #888;
+      --radius:  14px;
+      --shadow:  0 4px 24px rgba(0,0,0,.4);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 80px; }
+
+    /* ── HEADER ── */
+    .lm-header {
+      position: sticky; top: 0; z-index: 200;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; height: 60px;
+    }
+    .lm-logo-row { display: flex; align-items: center; gap: 12px; }
+    .lm-logo { height: 28px; }
+    .lm-title { font-size: 15px; font-weight: 700; color: var(--text); }
+    .lm-back {
+      color: var(--muted); text-decoration: none; font-size: 13px;
+      padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px;
+      transition: all .15s;
+    }
+    .lm-back:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ── MERCHANT SELECTOR ── */
+    .lm-merchant-bar {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+    }
+    .lm-merchant-bar label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+    .lm-merchant-bar select, .lm-merchant-bar input {
+      flex: 1; background: rgba(255,255,255,.06); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); padding: 8px 12px; font-size: 13px;
+    }
+    .lm-btn {
+      padding: 9px 20px; border-radius: 8px; font-size: 13px; font-weight: 700;
+      cursor: pointer; border: none; transition: opacity .15s;
+    }
+    .lm-btn:hover { opacity: .85; }
+    .lm-btn-primary { background: var(--accent); color: #fff; }
+    .lm-btn-secondary { background: rgba(255,255,255,.1); color: var(--text); border: 1px solid var(--border); }
+    .lm-btn-danger { background: var(--red); color: #fff; }
+
+    /* ── TABS ── */
+    .lm-tabs {
+      display: flex; overflow-x: auto;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      gap: 0; padding: 0 16px;
+    }
+    .lm-tab {
+      padding: 14px 18px; white-space: nowrap; cursor: pointer; border: none;
+      background: transparent; color: var(--muted); font-size: 13px; font-weight: 600;
+      border-bottom: 2px solid transparent; transition: all .15s;
+    }
+    .lm-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .lm-tab-content { display: none; }
+    .lm-tab-content.active { display: block; }
+
+    /* ── KPI GRID ── */
+    .lm-kpi-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 14px; padding: 20px 16px;
+    }
+    .lm-kpi {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 18px 16px; box-shadow: var(--shadow);
+    }
+    .lm-kpi-val { font-size: 26px; font-weight: 900; margin-bottom: 4px; }
+    .lm-kpi-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+
+    /* ── FORM SECTION ── */
+    .lm-form-section {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 24px; margin: 0 16px 16px; box-shadow: var(--shadow);
+    }
+    .lm-section-title { font-size: 14px; font-weight: 800; color: var(--text); margin-bottom: 18px; text-transform: uppercase; letter-spacing: .5px; }
+    .lm-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    @media (max-width: 600px) { .lm-form-row { grid-template-columns: 1fr; } }
+    .lm-label { font-size: 12px; color: var(--muted); margin-bottom: 5px; display: block; }
+    .lm-input {
+      width: 100%; background: rgba(255,255,255,.06); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); padding: 10px 12px; font-size: 14px;
+      transition: border-color .15s;
+    }
+    .lm-input:focus { outline: none; border-color: var(--accent); }
+    .lm-input option { background: var(--surface); }
+    .lm-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ── CAMPAIGN CARD ── */
+    .lm-campaign-list { display: flex; flex-direction: column; gap: 12px; }
+    .lm-campaign-card {
+      background: rgba(255,255,255,.04); border-radius: 10px;
+      padding: 14px 16px; border: 1px solid var(--border);
+      display: flex; align-items: center; gap: 14px;
+    }
+    .lm-campaign-icon { font-size: 28px; }
+    .lm-campaign-info { flex: 1; }
+    .lm-campaign-name { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+    .lm-campaign-meta { font-size: 11px; color: var(--muted); }
+    .lm-badge-active { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; background: rgba(76,175,80,.2); color: var(--green); }
+
+    /* ── TOP CUSTOMERS TABLE ── */
+    .lm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .lm-table th { padding: 8px 12px; text-align: left; color: var(--muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    .lm-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.04); }
+    .lm-table tr:last-child td { border-bottom: none; }
+
+    /* ── CHART STUB ── */
+    .lm-chart-placeholder { height: 140px; background: rgba(255,255,255,.03); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; margin-top: 14px; }
+
+    /* ── INSIGHT CARD ── */
+    .lm-insight-card {
+      background: rgba(124,77,255,.1); border: 1px solid rgba(124,77,255,.3);
+      border-radius: 10px; padding: 16px; margin-bottom: 12px;
+    }
+    .lm-insight-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+    .lm-insight-body  { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 8px; }
+    .lm-insight-action { font-size: 12px; color: var(--accent); font-weight: 700; }
+    .lm-priority-high   { border-left: 3px solid var(--red); }
+    .lm-priority-medium { border-left: 3px solid var(--gold); }
+    .lm-priority-low    { border-left: 3px solid var(--green); }
+
+    /* ── LOOKUP ── */
+    .lm-lookup-card { background: var(--surface); border-radius: var(--radius); padding: 24px; margin: 0 16px; box-shadow: var(--shadow); }
+    .lm-lookup-result { background: rgba(255,255,255,.05); border-radius: 10px; padding: 18px; margin-top: 16px; display: none; }
+    .lm-lookup-result.show { display: block; }
+    .lm-member-name { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+    .lm-member-meta { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+    .lm-member-pts  { font-size: 32px; font-weight: 900; color: var(--accent); }
+
+    /* ── TOGGLE SWITCH ── */
+    .lm-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #222; }
+    .lm-toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .lm-toggle input { opacity: 0; width: 0; height: 0; }
+    .lm-toggle-slider { position: absolute; inset: 0; background: #333; border-radius: 24px; transition: .3s; cursor: pointer; }
+    .lm-toggle input:checked + .lm-toggle-slider { background: #7c3aed; }
+    .lm-toggle-slider::before { content:''; position:absolute; height:18px; width:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+    .lm-toggle input:checked + .lm-toggle-slider::before { transform: translateX(20px); }
+
+    /* ── ALERT / FRAUD ITEMS ── */
+    .lm-alert-item { padding: 10px 14px; border-radius: 8px; background: #1a0a0a; border-left: 3px solid #f44336; margin: 6px 0; }
+    .lm-alert-warn { background: #1a1200; border-left-color: #f59e0b; }
+    .lm-kpi-warn .lm-kpi-val { color: #f44336; }
+    .lm-sub { color: #888; font-size: 0.9rem; margin-bottom: 16px; }
+
+    /* ── GENERIC CARD / SECTION ── */
+    .lm-section { padding: 20px 16px; }
+    .lm-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .lm-section-header h2 { font-size: 16px; font-weight: 800; }
+    .lm-card { background: var(--surface); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+    .lm-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+    .lm-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    @media (max-width: 600px) { .lm-form-grid { grid-template-columns: 1fr; } }
+    .lm-field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    .lm-field input, .lm-field select { width: 100%; background: rgba(255,255,255,.06); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 10px 12px; font-size: 14px; }
+    .lm-field input:focus, .lm-field select:focus { outline: none; border-color: var(--accent); }
+    .lm-table-wrap { overflow-x: auto; margin-top: 12px; }
+    .lm-btn-sm { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,.08); color: var(--text); }
+    .lm-kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .lm-error { color: var(--red); padding: 12px; }
+
+    /* ── LOADING / EMPTY ── */
+    .lm-loading { display: flex; flex-direction: column; align-items: center; padding: 48px 20px; gap: 12px; color: var(--muted); }
+    .lm-spinner { width: 32px; height: 32px; border: 3px solid rgba(255,255,255,.1); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── TOAST ── */
+    .lm-toasts { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    .lm-toast { padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; box-shadow: var(--shadow); pointer-events: auto; white-space: nowrap; }
+    .lm-toast.success { background: var(--green); color: #fff; }
+    .lm-toast.error   { background: var(--red);   color: #fff; }
+    .lm-toast.info    { background: var(--accent); color: #fff; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="lm-header">
+  <div class="lm-logo-row">
+    <img src="assets/logosokoni.png" alt="SOKONI" class="lm-logo">
+    <span class="lm-title">Loyalty Manager</span>
+  </div>
+  <a href="javascript:history.back()" class="lm-back"><i class="fas fa-arrow-left"></i> Back</a>
+</header>
+
+<!-- MERCHANT ID BAR -->
+<div class="lm-merchant-bar">
+  <label for="lmMerchantId">Merchant ID</label>
+  <input type="text" id="lmMerchantId" class="lm-input" placeholder="Your merchant / shop ID" style="flex:1">
+  <button class="lm-btn lm-btn-primary" onclick="LoyaltyMerchant.loadAll()"><i class="fas fa-sync"></i> Load</button>
+</div>
+
+<!-- TABS -->
+<nav class="lm-tabs" role="tablist">
+  <button class="lm-tab active" data-tab="overview" type="button">📊 Overview</button>
+  <button class="lm-tab" data-tab="configure" type="button">⚙️ Configure</button>
+  <button class="lm-tab" data-tab="campaigns" type="button">🎯 Campaigns</button>
+  <button class="lm-tab" data-tab="rewards" type="button">🎁 Rewards</button>
+  <button class="lm-tab" data-tab="lookup" type="button">🔍 Lookup</button>
+  <button class="lm-tab" data-tab="insights" type="button">🤖 AI Insights</button>
+  <button class="lm-tab" data-tab="giftcards" type="button">🎟️ Gift Cards</button>
+  <button class="lm-tab" data-tab="fraud" type="button">🛡️ Fraud Monitor</button>
+  <button class="lm-tab" data-tab="network" type="button">🌐 Network</button>
+</nav>
+
+<!-- ═══════════════ OVERVIEW ═══════════════ -->
+<div class="lm-tab-content active" id="lm-tab-overview">
+  <div class="lm-kpi-grid" id="lmKpiGrid">
+    <div class="lm-kpi"><div class="lm-kpi-val" id="lmMembers">—</div><div class="lm-kpi-lbl">Total Members</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-val" id="lmNewMembers">—</div><div class="lm-kpi-lbl">New (30d)</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-val" id="lmPtsIssued">—</div><div class="lm-kpi-lbl">Points Issued</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-val" id="lmPtsRedeemed">—</div><div class="lm-kpi-lbl">Pts Redeemed</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-val" id="lmRedemptionRate" style="color:#ffc107;">—</div><div class="lm-kpi-lbl">Redemption Rate</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-val" id="lmRevenue" style="color:#4caf50;">—</div><div class="lm-kpi-lbl">Revenue from Members</div></div>
+    <div class="lm-kpi"><div class="lm-kpi-val" id="lmCashback" style="color:#ef5350;">—</div><div class="lm-kpi-lbl">Cashback Given</div></div>
+  </div>
+
+  <!-- Top customers -->
+  <div class="lm-form-section">
+    <p class="lm-section-title">Top Customers (30 days)</p>
+    <div id="lmTopCustomers"><div class="lm-loading"><div class="lm-spinner"></div><span>Load a merchant to see data</span></div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ CONFIGURE ═══════════════ -->
+<div class="lm-tab-content" id="lm-tab-configure">
+  <div class="lm-form-section">
+    <p class="lm-section-title">Program Settings</p>
+
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="cfgProgramName">Program Name</label>
+        <input type="text" id="cfgProgramName" class="lm-input" placeholder="e.g. Mama Lucy Rewards">
+      </div>
+      <div>
+        <label class="lm-label" for="cfgScope">Reward Scope</label>
+        <select id="cfgScope" class="lm-input">
+          <option value="merchant">Merchant Only (default)</option>
+          <option value="hub">Hub-wide</option>
+          <option value="platform">Platform-wide (SOKONI Universal)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="cfgPointsPerKES">Points per KES</label>
+        <input type="number" id="cfgPointsPerKES" class="lm-input" placeholder="0.1" step="0.01" min="0" max="100">
+        <div class="lm-hint">0.1 = 1 pt per KES 10 (default)</div>
+      </div>
+      <div>
+        <label class="lm-label" for="cfgRedemptionRate">Redemption Rate (pts → KES)</label>
+        <input type="number" id="cfgRedemptionRate" class="lm-input" placeholder="100" step="1" min="1">
+        <div class="lm-hint">100 = 100 pts = KES 1 (default)</div>
+      </div>
+    </div>
+
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="cfgMinPurchase">Min Purchase (KES)</label>
+        <input type="number" id="cfgMinPurchase" class="lm-input" placeholder="0" min="0">
+      </div>
+      <div>
+        <label class="lm-label" for="cfgMaxRedemptionPct">Max Redemption % of Bill</label>
+        <input type="number" id="cfgMaxRedemptionPct" class="lm-input" placeholder="50" min="0" max="100">
+        <div class="lm-hint">50 = customer can pay max 50% with points</div>
+      </div>
+    </div>
+
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="cfgWelcomePoints">Welcome Points</label>
+        <input type="number" id="cfgWelcomePoints" class="lm-input" placeholder="125">
+      </div>
+      <div>
+        <label class="lm-label" for="cfgBirthdayBonus">Birthday Bonus Points</label>
+        <input type="number" id="cfgBirthdayBonus" class="lm-input" placeholder="500">
+      </div>
+    </div>
+
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="cfgReferralPoints">Referral Bonus Points</label>
+        <input type="number" id="cfgReferralPoints" class="lm-input" placeholder="200">
+      </div>
+      <div>
+        <label class="lm-label" for="cfgWeekendBonus">Weekend Bonus %</label>
+        <input type="number" id="cfgWeekendBonus" class="lm-input" placeholder="0" min="0" max="500">
+        <div class="lm-hint">0 = disabled; 50 = +50% points on weekends</div>
+      </div>
+    </div>
+
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="cfgPointsExpiry">Points Expiry (months)</label>
+        <input type="number" id="cfgPointsExpiry" class="lm-input" placeholder="12" min="1" max="120">
+        <div class="lm-hint">12 = points expire 12 months after earning</div>
+      </div>
+    </div>
+
+    <p class="lm-section-title" style="margin-top:24px;">Tier Multipliers</p>
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label">🥉 Bronze</label>
+        <input type="number" id="mulBronze" class="lm-input" value="1" step="0.1" min="1">
+      </div>
+      <div>
+        <label class="lm-label">🥈 Silver</label>
+        <input type="number" id="mulSilver" class="lm-input" value="1.5" step="0.1" min="1">
+      </div>
+    </div>
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label">🥇 Gold</label>
+        <input type="number" id="mulGold" class="lm-input" value="2" step="0.1" min="1">
+      </div>
+      <div>
+        <label class="lm-label">💎 Platinum</label>
+        <input type="number" id="mulPlatinum" class="lm-input" value="3" step="0.1" min="1">
+      </div>
+    </div>
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label">💠 Diamond</label>
+        <input type="number" id="mulDiamond" class="lm-input" value="5" step="0.1" min="1">
+      </div>
+    </div>
+
+    <div style="margin-top:20px;">
+      <button class="lm-btn lm-btn-primary" onclick="LoyaltyMerchant.saveConfig()">
+        <i class="fas fa-save"></i> Save Configuration
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ CAMPAIGNS ═══════════════ -->
+<div class="lm-tab-content" id="lm-tab-campaigns">
+  <div class="lm-form-section">
+    <p class="lm-section-title">Create Campaign</p>
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="campName">Campaign Name</label>
+        <input type="text" id="campName" class="lm-input" placeholder="e.g. Payday Double Points">
+      </div>
+      <div>
+        <label class="lm-label" for="campBonusType">Bonus Type</label>
+        <select id="campBonusType" class="lm-input">
+          <option value="multiplier">Multiplier (e.g. 2× points)</option>
+          <option value="percent">Percent of spend (e.g. +10 pts/KES 100)</option>
+          <option value="fixed">Fixed bonus points</option>
+        </select>
+      </div>
+    </div>
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="campBonusValue">Bonus Value</label>
+        <input type="number" id="campBonusValue" class="lm-input" placeholder="2 (multiplier) or 50 (fixed pts)">
+        <div class="lm-hint">Multiplier: 2 = 2× points. Fixed: points per transaction. Percent: pts per KES 100.</div>
+      </div>
+      <div>
+        <label class="lm-label" for="campDescription">Description</label>
+        <input type="text" id="campDescription" class="lm-input" placeholder="Shown to cashier at POS">
+      </div>
+    </div>
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="campStartsAt">Starts At</label>
+        <input type="datetime-local" id="campStartsAt" class="lm-input">
+      </div>
+      <div>
+        <label class="lm-label" for="campEndsAt">Ends At (leave blank = no end)</label>
+        <input type="datetime-local" id="campEndsAt" class="lm-input">
+      </div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <label class="lm-label">Active Days of Week (none = all days)</label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;"><input type="checkbox" id="cdSun" value="0"> Sun</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;"><input type="checkbox" id="cdMon" value="1"> Mon</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;"><input type="checkbox" id="cdTue" value="2"> Tue</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;"><input type="checkbox" id="cdWed" value="3"> Wed</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;"><input type="checkbox" id="cdThu" value="4"> Thu</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;"><input type="checkbox" id="cdFri" value="5"> Fri</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;"><input type="checkbox" id="cdSat" value="6"> Sat</label>
+      </div>
+    </div>
+    <button class="lm-btn lm-btn-primary" onclick="LoyaltyMerchant.createCampaign()">
+      <i class="fas fa-bullhorn"></i> Launch Campaign
+    </button>
+  </div>
+
+  <div class="lm-form-section" style="margin-top:0;">
+    <p class="lm-section-title">Active Campaigns</p>
+    <div class="lm-campaign-list" id="lmCampaignList">
+      <div class="lm-loading"><div class="lm-spinner"></div><span>Load a merchant to see campaigns</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ REWARDS ═══════════════ -->
+<div class="lm-tab-content" id="lm-tab-rewards">
+  <div class="lm-form-section">
+    <p class="lm-section-title">Add Reward to Catalog</p>
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="rwdName">Reward Name</label>
+        <input type="text" id="rwdName" class="lm-input" placeholder="e.g. Free Coffee">
+      </div>
+      <div>
+        <label class="lm-label" for="rwdType">Reward Type</label>
+        <select id="rwdType" class="lm-input">
+          <option value="discount">Discount</option>
+          <option value="cashback">Cashback</option>
+          <option value="free_item">Free Item</option>
+          <option value="gift_card">Gift Card</option>
+          <option value="voucher">Voucher</option>
+          <option value="free_delivery">Free Delivery</option>
+          <option value="vip_upgrade">VIP Upgrade</option>
+          <option value="scratch_card">Scratch Card</option>
+          <option value="lucky_draw">Lucky Draw Entry</option>
+        </select>
+      </div>
+    </div>
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="rwdPointsCost">Points Cost</label>
+        <input type="number" id="rwdPointsCost" class="lm-input" placeholder="500" min="1">
+      </div>
+      <div>
+        <label class="lm-label" for="rwdValue">Value (KES)</label>
+        <input type="number" id="rwdValue" class="lm-input" placeholder="50">
+      </div>
+    </div>
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="rwdStock">Stock (blank = unlimited)</label>
+        <input type="number" id="rwdStock" class="lm-input" placeholder="100" min="1">
+      </div>
+      <div>
+        <label class="lm-label" for="rwdDescription">Description</label>
+        <input type="text" id="rwdDescription" class="lm-input" placeholder="Short description">
+      </div>
+    </div>
+    <button class="lm-btn lm-btn-primary" onclick="LoyaltyMerchant.addReward()">
+      <i class="fas fa-plus"></i> Add to Catalog
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════ LOOKUP ═══════════════ -->
+<div class="lm-tab-content" id="lm-tab-lookup">
+  <div class="lm-lookup-card">
+    <p class="lm-section-title">Look Up Customer</p>
+    <div class="lm-form-row">
+      <div>
+        <label class="lm-label" for="lookupBy">Search By</label>
+        <select id="lookupBy" class="lm-input">
+          <option value="phone">Phone Number</option>
+          <option value="loyaltyId">Loyalty ID (SKN-XXXX)</option>
+          <option value="qr">QR Code payload</option>
+          <option value="email">Email</option>
+        </select>
+      </div>
+      <div>
+        <label class="lm-label" for="lookupValue">Value</label>
+        <input type="text" id="lookupValue" class="lm-input" placeholder="e.g. 0712345678">
+      </div>
+    </div>
+    <button class="lm-btn lm-btn-primary" onclick="LoyaltyMerchant.lookupCustomer()">
+      <i class="fas fa-search"></i> Search
+    </button>
+
+    <div class="lm-lookup-result" id="lmLookupResult">
+      <div class="lm-member-name" id="lrName">—</div>
+      <div class="lm-member-meta" id="lrMeta">—</div>
+      <div class="lm-member-pts" id="lrPoints">—</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;">current points balance</div>
+      <div id="lrTier" style="margin-top:12px;font-size:14px;"></div>
+      <div id="lrCampaigns" style="margin-top:10px;font-size:12px;color:var(--accent);"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ AI INSIGHTS ═══════════════ -->
+<div class="lm-tab-content" id="lm-tab-insights">
+  <div class="lm-form-section">
+    <p class="lm-section-title">AI-Powered Loyalty Insights</p>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;">
+      <label class="lm-label" for="insightsDays" style="margin:0;white-space:nowrap;">Analysis period:</label>
+      <select id="insightsDays" class="lm-input" style="width:auto;flex:0;">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+      <button class="lm-btn lm-btn-primary" onclick="LoyaltyMerchant.loadInsights()">
+        <i class="fas fa-robot"></i> Generate Insights
+      </button>
+    </div>
+    <div id="lmInsightsList">
+      <div style="text-align:center;padding:40px;color:var(--muted);font-size:14px;">
+        Click "Generate Insights" to get AI recommendations for your loyalty program.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ GIFT CARDS ═══════════════ -->
+<div class="lm-tab-content" id="lm-tab-giftcards">
+  <div class="lm-section">
+    <div class="lm-section-header">
+      <h2>Gift Cards</h2>
+      <button class="lm-btn lm-btn-primary" onclick="LoyaltyMerchant.showIssueGiftCard()">+ Issue Gift Card</button>
+    </div>
+
+    <!-- Issue Gift Card inline form -->
+    <div id="lmIssueGCForm" style="display:none;" class="lm-card">
+      <h3>Issue New Gift Card</h3>
+      <div class="lm-form-grid">
+        <div class="lm-field"><label>Recipient UID</label><input id="lmGCUid" type="text" placeholder="Customer UID"></div>
+        <div class="lm-field"><label>Value Type</label>
+          <select id="lmGCValueType"><option value="fixed">Fixed Amount (KES)</option><option value="percent">Percentage (%)</option></select>
+        </div>
+        <div class="lm-field"><label>Value</label><input id="lmGCValue" type="number" min="1" placeholder="500"></div>
+        <div class="lm-field"><label>Min Order Value (KES)</label><input id="lmGCMinOrder" type="number" min="0" placeholder="0"></div>
+        <div class="lm-field"><label>Valid for (days)</label><input id="lmGCValidDays" type="number" min="1" value="90"></div>
+      </div>
+      <button class="lm-btn lm-btn-primary" onclick="LoyaltyMerchant.issueGiftCard()">Issue Card</button>
+    </div>
+
+    <h3 style="margin-bottom:10px;">Issued Gift Cards</h3>
+    <div id="lmGiftCardList" class="lm-table-wrap">
+      <table class="lm-table">
+        <thead><tr><th>Code</th><th>Value</th><th>Issued To</th><th>Status</th><th>Expires</th></tr></thead>
+        <tbody id="lmGiftCardRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ FRAUD DASHBOARD ═══════════════ -->
+<div class="lm-tab-content" id="lm-tab-fraud">
+  <div class="lm-section">
+    <div class="lm-section-header">
+      <h2>Fraud Dashboard</h2>
+      <button class="lm-btn lm-btn-sm" onclick="LoyaltyMerchant.loadFraud()">Refresh</button>
+    </div>
+
+    <div class="lm-kpi-row" id="lmFraudKPIs"></div>
+
+    <h3 style="margin-bottom:8px;">Flagged Accounts</h3>
+    <div id="lmFlaggedAccounts" style="margin-bottom:20px;"></div>
+
+    <h3 style="margin-bottom:8px;">Suspicious Patterns</h3>
+    <div id="lmSuspiciousPatterns"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ NETWORK ═══════════════ -->
+<div class="lm-tab-content" id="lm-tab-network">
+  <div class="lm-section">
+    <h2 style="margin-bottom:8px;">SOKONI Universal Rewards Network</h2>
+    <p class="lm-sub">Join the cross-merchant rewards network to let customers earn and redeem points across participating businesses.</p>
+
+    <div id="lmNetworkStatus" class="lm-card">
+      <div id="lmNetworkStatusMsg">Loading network status...</div>
+    </div>
+
+    <div class="lm-card">
+      <h3>Network Settings</h3>
+      <div class="lm-toggle-row">
+        <span>Share points universally</span>
+        <label class="lm-toggle"><input type="checkbox" id="lmNetSharePoints"><span class="lm-toggle-slider"></span></label>
+      </div>
+      <div class="lm-field" style="margin-top:14px;">
+        <label>Earn multiplier for cross-merchant points</label>
+        <input id="lmNetMultiplier" type="number" min="0.5" max="5" step="0.1" value="1.0">
+      </div>
+      <button class="lm-btn lm-btn-primary" style="margin-top:14px;" onclick="LoyaltyMerchant.joinNetwork()">Save Network Settings</button>
+    </div>
+
+    <div class="lm-card">
+      <h3>Network Participants</h3>
+      <div id="lmNetworkMembers"><span style="color:var(--muted);font-size:13px;">Load a merchant to see network participants.</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- TOASTS -->
+<div class="lm-toasts" id="lmToasts" aria-live="polite"></div>
+
+<script src="/__/firebase/init.js"></script>
+<script>
+'use strict';
+window.LoyaltyMerchant = (function () {
+
+  var _uid = null;
+  var _mid = null;
+  var _fns = null;
+
+  function _getFns() {
+    if (_fns) return _fns;
+    try { _fns = firebase.functions(); return _fns; } catch (e) { return null; }
+  }
+
+  function _call(name, data) {
+    var fns = _getFns();
+    if (!fns) return Promise.reject(new Error('Firebase Functions unavailable'));
+    return fns.httpsCallable(name)(data || {}).then(function (r) { return r.data; });
+  }
+
+  function _esc(s) {
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function _getMid() {
+    var v = (document.getElementById('lmMerchantId') || {}).value || '';
+    var id = v.trim();
+    if (!id) { toast('Please enter your Merchant ID first.', 'error'); return null; }
+    _mid = id;
+    return id;
+  }
+
+  function toast(msg, type) {
+    var c = document.getElementById('lmToasts');
+    if (!c) return;
+    var el = document.createElement('div');
+    el.className = 'lm-toast ' + (type || 'info');
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(function () { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 300); }, 4000);
+  }
+
+  /* ── Tab management ── */
+  function initTabs() {
+    var tabs     = document.querySelectorAll('.lm-tab');
+    var contents = document.querySelectorAll('.lm-tab-content');
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        var name = tab.getAttribute('data-tab');
+        tabs.forEach(function (t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+        contents.forEach(function (c) {
+          c.classList.toggle('active', c.id === 'lm-tab-' + name);
+        });
+      });
+    });
+  }
+
+  /* ── Load overview dashboard ── */
+  function loadDashboard(mid) {
+    var kpis = { lmMembers:'—', lmNewMembers:'—', lmPtsIssued:'—', lmPtsRedeemed:'—', lmRedemptionRate:'—', lmRevenue:'—', lmCashback:'—' };
+    Object.keys(kpis).forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = '…'; });
+
+    return _call('getMerchantLoyaltyDashboard', { merchantId: mid, days: 30 })
+      .then(function (d) {
+        var fmt = function (n) { return (Number(n) || 0).toLocaleString('en-KE'); };
+        var set = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+        set('lmMembers',        fmt(d.totalMembers));
+        set('lmNewMembers',     '+' + fmt(d.newMembers));
+        set('lmPtsIssued',      fmt(d.pointsIssued));
+        set('lmPtsRedeemed',    fmt(d.pointsRedeemed));
+        set('lmRedemptionRate', (d.redemptionRate || 0) + '%');
+        set('lmRevenue',        'KES ' + fmt(d.revenueFromMembers));
+        set('lmCashback',       'KES ' + fmt(d.cashbackKES));
+
+        var tc = document.getElementById('lmTopCustomers');
+        if (tc) {
+          if (!d.topCustomers || !d.topCustomers.length) {
+            tc.innerHTML = '<p style="color:var(--muted);font-size:13px;">No transactions in the last 30 days.</p>';
+          } else {
+            tc.innerHTML = '<table class="lm-table"><thead><tr><th>#</th><th>Customer</th><th>Points Earned</th></tr></thead><tbody>'
+              + d.topCustomers.map(function (c, i) {
+                  return '<tr><td>' + (i + 1) + '</td><td style="font-family:monospace;font-size:12px;">' + _esc(c.uid.slice(0, 8) + '…') + '</td><td>' + (c.pointsEarned || 0).toLocaleString('en-KE') + ' pts</td></tr>';
+                }).join('')
+              + '</tbody></table>';
+          }
+        }
+      })
+      .catch(function (err) {
+        console.error('[LoyaltyMerchant] dashboard:', err);
+        toast('Could not load dashboard: ' + err.message, 'error');
+      });
+  }
+
+  /* ── Load campaigns ── */
+  function loadCampaigns(mid) {
+    var list = document.getElementById('lmCampaignList');
+    if (list) list.innerHTML = '<div class="lm-loading"><div class="lm-spinner"></div></div>';
+
+    return _call('getActiveCampaigns', { merchantId: mid })
+      .then(function (d) {
+        var camps = d.campaigns || [];
+        if (!list) return;
+        if (!camps.length) {
+          list.innerHTML = '<p style="color:var(--muted);font-size:13px;">No active campaigns. Create one above!</p>';
+          return;
+        }
+        var ICONS = { multiplier: '✕', fixed: '+', percent: '%' };
+        list.innerHTML = camps.map(function (c) {
+          return '<div class="lm-campaign-card">'
+               + '<div class="lm-campaign-icon">' + (ICONS[c.bonusType] || '🎯') + '</div>'
+               + '<div class="lm-campaign-info">'
+               + '  <div class="lm-campaign-name">' + _esc(c.name) + '</div>'
+               + '  <div class="lm-campaign-meta">' + _esc(c.description || '') + '</div>'
+               + '</div>'
+               + '<span class="lm-badge-active">LIVE</span>'
+               + '</div>';
+        }).join('');
+      })
+      .catch(function (err) {
+        if (list) list.innerHTML = '<p style="color:var(--muted);font-size:13px;">Could not load campaigns.</p>';
+      });
+  }
+
+  /* ── Load config into form ── */
+  function loadConfig(mid) {
+    return _call('getMerchantLoyaltyConfig', { merchantId: mid })
+      .then(function (cfg) {
+        var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v != null ? v : ''; };
+        set('cfgProgramName',     cfg.programName     || '');
+        set('cfgScope',           cfg.scope           || 'merchant');
+        set('cfgPointsPerKES',    cfg.pointsPerKES    != null ? cfg.pointsPerKES : 0.1);
+        set('cfgRedemptionRate',  cfg.redemptionRate  || 100);
+        set('cfgMinPurchase',     cfg.minPurchaseKES  || 0);
+        set('cfgMaxRedemptionPct',cfg.maxRedemptionPct|| 50);
+        set('cfgWelcomePoints',   cfg.welcomePoints   || 125);
+        set('cfgBirthdayBonus',   cfg.birthdayBonus   || 500);
+        set('cfgReferralPoints',  cfg.referralPoints  || 200);
+        set('cfgWeekendBonus',    cfg.weekendBonus    || 0);
+        set('cfgPointsExpiry',    cfg.pointsExpiryMonths || 12);
+        var mul = cfg.tierMultipliers || {};
+        set('mulBronze',   mul.bronze   != null ? mul.bronze   : 1);
+        set('mulSilver',   mul.silver   != null ? mul.silver   : 1.5);
+        set('mulGold',     mul.gold     != null ? mul.gold     : 2);
+        set('mulPlatinum', mul.platinum != null ? mul.platinum : 3);
+        set('mulDiamond',  mul.diamond  != null ? mul.diamond  : 5);
+      })
+      .catch(function (e) { console.warn('[LoyaltyMerchant] loadConfig:', e); });
+  }
+
+  /* ── Save config ── */
+  function saveConfig() {
+    var mid = _getMid(); if (!mid) return;
+    var get = function (id) { return (document.getElementById(id) || {}).value || ''; };
+    var payload = {
+      merchantId: mid,
+      programName:        get('cfgProgramName'),
+      scope:              get('cfgScope'),
+      pointsPerKES:       Number(get('cfgPointsPerKES')) || 0.1,
+      redemptionRate:     Number(get('cfgRedemptionRate')) || 100,
+      minPurchaseKES:     Number(get('cfgMinPurchase')) || 0,
+      maxRedemptionPct:   Number(get('cfgMaxRedemptionPct')) || 50,
+      welcomePoints:      Number(get('cfgWelcomePoints')) || 125,
+      birthdayBonus:      Number(get('cfgBirthdayBonus')) || 500,
+      referralPoints:     Number(get('cfgReferralPoints')) || 200,
+      weekendBonus:       Number(get('cfgWeekendBonus')) || 0,
+      pointsExpiryMonths: Number(get('cfgPointsExpiry')) || 12,
+      tierMultipliers: {
+        bronze:   Number(get('mulBronze'))   || 1,
+        silver:   Number(get('mulSilver'))   || 1.5,
+        gold:     Number(get('mulGold'))     || 2,
+        platinum: Number(get('mulPlatinum')) || 3,
+        diamond:  Number(get('mulDiamond'))  || 5,
+      },
+    };
+    _call('configureLoyaltyProgram', payload)
+      .then(function () { toast('✅ Configuration saved!', 'success'); })
+      .catch(function (e) { toast('Save failed: ' + e.message, 'error'); });
+  }
+
+  /* ── Create campaign ── */
+  function createCampaign() {
+    var mid = _getMid(); if (!mid) return;
+    var get = function (id) { return (document.getElementById(id) || {}).value || ''; };
+    var name = get('campName');
+    if (!name) { toast('Campaign name required.', 'error'); return; }
+
+    var daysOfWeek = [0,1,2,3,4,5,6].filter(function (d) {
+      var el = document.getElementById(['cdSun','cdMon','cdTue','cdWed','cdThu','cdFri','cdSat'][d]);
+      return el && el.checked;
+    });
+
+    var startsAt = get('campStartsAt') ? new Date(get('campStartsAt')).getTime() : Date.now();
+    var endsAt   = get('campEndsAt')   ? new Date(get('campEndsAt')).getTime()   : null;
+
+    _call('createLoyaltyCampaign', {
+      merchantId: mid, name: name, description: get('campDescription'),
+      bonusType: get('campBonusType'), bonusValue: Number(get('campBonusValue')) || 0,
+      startsAt: startsAt, endsAt: endsAt, daysOfWeek: daysOfWeek,
+    })
+      .then(function () { toast('✅ Campaign launched!', 'success'); loadCampaigns(mid); })
+      .catch(function (e) { toast('Error: ' + e.message, 'error'); });
+  }
+
+  /* ── Add reward ── */
+  function addReward() {
+    var mid = _getMid(); if (!mid) return;
+    var get = function (id) { return (document.getElementById(id) || {}).value || ''; };
+    var name = get('rwdName');
+    if (!name) { toast('Reward name required.', 'error'); return; }
+    var pts  = Number(get('rwdPointsCost'));
+    if (!pts || pts < 1) { toast('Points cost must be ≥ 1.', 'error'); return; }
+
+    var stock = get('rwdStock') ? Number(get('rwdStock')) : null;
+    _call('createLoyaltyReward', {
+      merchantId: mid, name: name, description: get('rwdDescription'),
+      rewardType: get('rwdType'), pointsCost: pts, value: Number(get('rwdValue')) || 0,
+      stock: stock,
+    })
+      .then(function () { toast('✅ Reward added to catalog!', 'success'); })
+      .catch(function (e) { toast('Error: ' + e.message, 'error'); });
+  }
+
+  /* ── Lookup customer ── */
+  function lookupCustomer() {
+    var mid = _getMid(); if (!mid) return;
+    var by  = (document.getElementById('lookupBy')    || {}).value || 'phone';
+    var val = ((document.getElementById('lookupValue') || {}).value || '').trim();
+    if (!val) { toast('Enter a search value.', 'error'); return; }
+
+    _call('lookupLoyaltyCustomer', { by: by, value: val, merchantId: mid })
+      .then(function (d) {
+        var res = document.getElementById('lmLookupResult');
+        if (!res) return;
+        res.classList.add('show');
+        var set = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+        set('lrName',   d.name  || 'Anonymous Member');
+        set('lrMeta',   (d.phone || '') + '  ·  ID: ' + (d.loyaltyId || '—'));
+        set('lrPoints', (d.balance || 0).toLocaleString('en-KE') + ' pts');
+        set('lrTier',   (d.tierIcon || '') + ' ' + (d.tierName || 'Bronze') + ' Member  ·  ' + (d.lifetimePoints || 0).toLocaleString('en-KE') + ' lifetime pts');
+        var camps = d.activeCampaigns || [];
+        var cl = document.getElementById('lrCampaigns');
+        if (cl) cl.textContent = camps.length ? '🎯 Active bonuses: ' + camps.map(function (c) { return c.name; }).join(', ') : '';
+        toast('Customer found', 'success');
+      })
+      .catch(function (e) {
+        toast(e.code === 'not-found' ? 'No loyalty account found.' : e.message, 'error');
+        var res = document.getElementById('lmLookupResult');
+        if (res) res.classList.remove('show');
+      });
+  }
+
+  /* ── AI Insights ── */
+  function loadInsights() {
+    var mid = _getMid(); if (!mid) return;
+    var days = Number((document.getElementById('insightsDays') || {}).value) || 30;
+    var list = document.getElementById('lmInsightsList');
+    if (list) list.innerHTML = '<div class="lm-loading"><div class="lm-spinner"></div><span>Generating AI insights…</span></div>';
+
+    _call('getLoyaltyInsights', { merchantId: mid, days: days })
+      .then(function (d) {
+        if (!list) return;
+        var insights = d.insights || [];
+        if (!insights.length) {
+          list.innerHTML = '<p style="color:var(--muted);font-size:13px;">No insights available yet. Ensure you have transaction data.</p>';
+          return;
+        }
+        list.innerHTML = insights.map(function (ins) {
+          var pCls = 'lm-priority-' + (ins.priority || 'medium');
+          return '<div class="lm-insight-card ' + pCls + '">'
+               + '<div class="lm-insight-title">' + _esc(ins.title) + '</div>'
+               + '<div class="lm-insight-body">'  + _esc(ins.body)  + '</div>'
+               + (ins.action ? '<div class="lm-insight-action">→ ' + _esc(ins.action) + '</div>' : '')
+               + '</div>';
+        }).join('');
+      })
+      .catch(function (e) {
+        if (list) list.innerHTML = '<p style="color:var(--muted);">Could not generate insights: ' + _esc(e.message) + '</p>';
+      });
+  }
+
+  /* ── Gift Cards ── */
+  function showIssueGiftCard() {
+    var f = document.getElementById('lmIssueGCForm');
+    if (f) f.style.display = f.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function issueGiftCard() {
+    var mid = _getMid(); if (!mid) return;
+    var uid          = (document.getElementById('lmGCUid')       || {}).value || '';
+    var valueType    = (document.getElementById('lmGCValueType') || {}).value || 'fixed';
+    var value        = parseFloat((document.getElementById('lmGCValue')    || {}).value) || 0;
+    var minOrderValue= parseFloat((document.getElementById('lmGCMinOrder') || {}).value) || 0;
+    var validDays    = parseInt  ((document.getElementById('lmGCValidDays')|| {}).value) || 90;
+    uid = uid.trim();
+    if (!uid || !value) { toast('UID and value are required.', 'error'); return; }
+
+    _call('issueGiftCard', { merchantId: mid, issuedTo: uid, valueType: valueType, value: value, minOrderValue: minOrderValue, validDays: validDays })
+      .then(function (d) {
+        toast('Gift card issued! Code: ' + (d.code || '—'), 'success');
+        var f = document.getElementById('lmIssueGCForm');
+        if (f) f.style.display = 'none';
+        loadGiftCards(mid);
+      })
+      .catch(function (e) { toast('Error: ' + e.message, 'error'); });
+  }
+
+  function loadGiftCards(mid) {
+    var el = document.getElementById('lmGiftCardRows');
+    if (!el) return;
+    el.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Gift cards will appear here after issuance</td></tr>';
+    if (!mid) return;
+    _call('listGiftCards', { merchantId: mid })
+      .then(function (d) {
+        var cards = d.giftCards || [];
+        if (!cards.length) return; // keep placeholder
+        el.innerHTML = cards.map(function (c) {
+          var exp = c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('en-KE') : '—';
+          return '<tr>'
+            + '<td style="font-family:monospace;">' + _esc(c.code || '—') + '</td>'
+            + '<td>' + _esc(c.valueType === 'percent' ? c.value + '%' : 'KES ' + (c.value || 0)) + '</td>'
+            + '<td style="font-family:monospace;font-size:12px;">' + _esc((c.issuedTo || '—').slice(0, 10) + '…') + '</td>'
+            + '<td>' + _esc(c.status || 'active') + '</td>'
+            + '<td>' + _esc(exp) + '</td>'
+            + '</tr>';
+        }).join('');
+      })
+      .catch(function () { /* non-critical — placeholder stays */ });
+  }
+
+  /* ── Fraud Dashboard ── */
+  function loadFraud() {
+    var mid = _getMid(); if (!mid) return;
+    var el = document.getElementById('lmFlaggedAccounts');
+    if (el) el.innerHTML = '<div class="lm-loading"><div class="lm-spinner"></div><span>Analysing transactions…</span></div>';
+
+    _call('getLoyaltyFraudDashboard', { merchantId: mid, days: 7 })
+      .then(function (result) {
+        var flaggedAccounts    = result.flaggedAccounts    || [];
+        var suspiciousPatterns = result.suspiciousPatterns || [];
+        var stats              = result.stats              || {};
+
+        var kpiEl = document.getElementById('lmFraudKPIs');
+        if (kpiEl) {
+          kpiEl.innerHTML =
+            '<div class="lm-kpi"><div class="lm-kpi-val">' + _esc(stats.totalTransactions || 0) + '</div><div class="lm-kpi-lbl">Transactions (7d)</div></div>'
+          + '<div class="lm-kpi"><div class="lm-kpi-val">' + _esc(stats.totalPointsIssued || 0) + '</div><div class="lm-kpi-lbl">Points Issued</div></div>'
+          + '<div class="lm-kpi"><div class="lm-kpi-val">' + _esc(stats.redemptionRate || '0%') + '</div><div class="lm-kpi-lbl">Redemption Rate</div></div>'
+          + '<div class="lm-kpi lm-kpi-warn"><div class="lm-kpi-val">' + flaggedAccounts.length + '</div><div class="lm-kpi-lbl">Flagged Accounts</div></div>';
+        }
+
+        if (el) {
+          el.innerHTML = flaggedAccounts.length === 0
+            ? '<div style="color:#4CAF50;padding:16px;">No flagged accounts in the last 7 days.</div>'
+            : flaggedAccounts.map(function (a) {
+                return '<div class="lm-alert-item"><strong>' + _esc(a.uid || a.phone || '—') + '</strong> — ' + _esc(a.reason || '') + ' (' + _esc(a.count || 0) + ' incidents)</div>';
+              }).join('');
+        }
+
+        var patternsEl = document.getElementById('lmSuspiciousPatterns');
+        if (patternsEl) {
+          patternsEl.innerHTML = suspiciousPatterns.length === 0
+            ? '<div style="color:#888;padding:16px;">No suspicious patterns detected.</div>'
+            : suspiciousPatterns.map(function (p) {
+                return '<div class="lm-alert-item lm-alert-warn">' + _esc(p.description || '') + '</div>';
+              }).join('');
+        }
+      })
+      .catch(function (e) {
+        var el2 = document.getElementById('lmFlaggedAccounts');
+        if (el2) el2.innerHTML = '<div class="lm-error">Error: ' + _esc(e.message) + '</div>';
+      });
+  }
+
+  /* ── Network ── */
+  function joinNetwork() {
+    var mid = _getMid(); if (!mid) return;
+    var sharePoints   = !!(document.getElementById('lmNetSharePoints') || {}).checked;
+    var earnMultiplier= parseFloat((document.getElementById('lmNetMultiplier') || {}).value) || 1.0;
+
+    _call('joinLoyaltyNetwork', { merchantId: mid, networkId: 'sokoni_universal', sharePoints: sharePoints, earnMultiplier: earnMultiplier })
+      .then(function () { toast('Network settings saved successfully!', 'success'); })
+      .catch(function (e) { toast('Error: ' + e.message, 'error'); });
+  }
+
+  function loadNetworkStatus(mid) {
+    var msgEl = document.getElementById('lmNetworkStatusMsg');
+    if (!msgEl) return;
+    msgEl.textContent = 'Loading network status…';
+
+    _call('getLoyaltyNetworkStatus', { merchantId: mid })
+      .then(function (d) {
+        var joined = d.joined || false;
+        msgEl.innerHTML = joined
+          ? '<span style="color:#4CAF50;font-weight:700;">Connected to SOKONI Universal Network</span><br><span style="color:#888;font-size:13px;">Your customers can earn and redeem points across ' + _esc(d.participantCount || '—') + ' businesses.</span>'
+          : '<span style="color:#ffc107;font-weight:700;">Not yet joined the network</span><br><span style="color:#888;font-size:13px;">Configure settings below and save to join.</span>';
+
+        if (d.joined) {
+          var shareEl = document.getElementById('lmNetSharePoints');
+          if (shareEl) shareEl.checked = !!d.sharePoints;
+          var mulEl = document.getElementById('lmNetMultiplier');
+          if (mulEl && d.earnMultiplier != null) mulEl.value = d.earnMultiplier;
+        }
+
+        var membersEl = document.getElementById('lmNetworkMembers');
+        if (membersEl) {
+          var members = d.networkMembers || [];
+          membersEl.innerHTML = members.length
+            ? '<ul style="list-style:none;padding:0;">' + members.map(function (m) {
+                return '<li style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;">' + _esc(m.name || m.merchantId) + '</li>';
+              }).join('') + '</ul>'
+            : '<span style="color:var(--muted);font-size:13px;">No other participants visible yet.</span>';
+        }
+      })
+      .catch(function () {
+        if (msgEl) msgEl.innerHTML = '<span style="color:#888;font-size:13px;">Network status unavailable.</span>';
+      });
+  }
+
+  /* ── Load all (called by Load button or on tab switch) ── */
+  function loadAll() {
+    var mid = _getMid(); if (!mid) return;
+    loadDashboard(mid);
+    loadCampaigns(mid);
+    loadConfig(mid);
+    loadGiftCards(mid);
+    loadNetworkStatus(mid);
+  }
+
+  /* ── Auth gate + init ── */
+  function init() {
+    try {
+      firebase.auth().onAuthStateChanged(function (user) {
+        if (!user) { window.location.href = 'login.html?redirect=loyalty-merchant.html'; return; }
+        _uid = user.uid;
+        initTabs();
+
+        /* Pre-fill merchant ID if stored */
+        var stored = sessionStorage.getItem('sokoni_merchant_id');
+        if (stored) {
+          var el = document.getElementById('lmMerchantId');
+          if (el) { el.value = stored; loadAll(); }
+        }
+      });
+    } catch (e) { console.error('[LoyaltyMerchant] init:', e); }
+  }
+
+  return {
+    init: init, loadAll: loadAll,
+    saveConfig: saveConfig, createCampaign: createCampaign,
+    addReward: addReward, lookupCustomer: lookupCustomer, loadInsights: loadInsights,
+    showIssueGiftCard: showIssueGiftCard, issueGiftCard: issueGiftCard, loadGiftCards: loadGiftCards,
+    loadFraud: loadFraud,
+    joinNetwork: joinNetwork,
+  };
+})();
+
+document.addEventListener('DOMContentLoaded', function () { LoyaltyMerchant.init(); });
+</script>
+
+<script src="sw-register.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="analytics.js" defer></script>
+
+</body>
+</html>

@@ -175,15 +175,23 @@ exports.recordPayment = onCall(
     /* Commit all ledger entries atomically */
     await ledgerBatch.commit();
 
-    /* Wallet credits */
-    await db.runTransaction(async (txn) => {
-      U.creditWalletTxn(txn, db, sellerId, 'seller', comm.sellerNetCents, { description: `Order ${orderId}`, orderId, type: 'order_earning' });
-      if (riderId && (riderEarnings + tipCts) > 0) {
-        U.creditWalletTxn(txn, db, riderId, 'rider', riderEarnings + tipCts, { description: `Delivery+tip ${orderId}`, orderId, type: 'delivery_earning' });
-      }
-      /* Platform accumulation in master wallet */
-      U.creditWalletTxn(txn, db, 'platform_master', 'platform', comm.commissionCents + platformDeliv, { description: `Commission+platform delivery ${orderId}`, orderId, type: 'commission' });
-    });
+    /* Wallet credits — idempotency guard prevents double-credit if CF crashes
+       between ledgerBatch.commit() and here, then retries before markIdempotency */
+    const walletIdemKey = `wallet_credit:${orderId}`;
+    const walletIdemRef = db.collection('finosWalletIdempotency').doc(walletIdemKey);
+    const walletIdemSnap = await walletIdemRef.get();
+    if (!walletIdemSnap.exists) {
+      await db.runTransaction(async (txn) => {
+        const sentinel = await txn.get(walletIdemRef);
+        if (sentinel.exists) return; // another concurrent invocation already completed
+        U.creditWalletTxn(txn, db, sellerId, 'seller', comm.sellerNetCents, { description: `Order ${orderId}`, orderId, type: 'order_earning' });
+        if (riderId && (riderEarnings + tipCts) > 0) {
+          U.creditWalletTxn(txn, db, riderId, 'rider', riderEarnings + tipCts, { description: `Delivery+tip ${orderId}`, orderId, type: 'delivery_earning' });
+        }
+        U.creditWalletTxn(txn, db, 'platform_master', 'platform', comm.commissionCents + platformDeliv, { description: `Commission+platform delivery ${orderId}`, orderId, type: 'commission' });
+        txn.set(walletIdemRef, { orderId, creditedAt: admin.firestore.FieldValue.serverTimestamp() });
+      });
+    }
 
     /* Update order with financial fingerprint */
     await db.collection('packageRequests').doc(orderId).update({
@@ -685,6 +693,17 @@ exports.detectFinancialFraud = onSchedule(
     const now = Date.now();
     const hour = 3600000;
 
+    /* Deterministic ID helper — prevents duplicate alerts across hourly scan runs */
+    const hourBucket = Math.floor(now / 3600000);  // changes every hour
+    const dayBucket  = Math.floor(now / 86400000); // changes every day
+    const _upsertAlert = async (id, data) => {
+      const ref = db.collection('fraudAlerts').doc(id);
+      const snap = await ref.get().catch(() => null);
+      if (snap && snap.exists && snap.data().status === 'resolved') return; // already handled
+      await ref.set({ ...data, updatedAt: _now(), createdAt: snap?.exists ? snap.data().createdAt : _now() },
+        { merge: true }).catch(() => {});
+    };
+
     /* Pattern 1: Multiple large refunds in < 1h (possible fraud) */
     const refundCutoff = admin.firestore.Timestamp.fromMillis(now - hour);
     const refundSnap = await db.collection('ledger')
@@ -694,12 +713,12 @@ exports.detectFinancialFraud = onSchedule(
     if (refundSnap) {
       const recentRefunds = refundSnap.docs;
       if (recentRefunds.length >= 10) {
-        await db.collection('fraudAlerts').add({
+        await _upsertAlert(`refund_spike_${hourBucket}`, {
           type: 'financial', subType: 'refund_spike',
           count: recentRefunds.length, windowH: 1,
-          severity: 'high', status: 'open', createdAt: _now(),
+          severity: 'high', status: 'open',
           detail: `${recentRefunds.length} refunds in 1h`,
-        }).catch(() => {});
+        });
       }
     }
 
@@ -718,11 +737,12 @@ exports.detectFinancialFraud = onSchedule(
       });
       for (const [phone, entities] of Object.entries(phoneCounts)) {
         if (entities.size >= 3) {
-          await db.collection('fraudAlerts').add({
+          const safePhone = phone.replace(/[^0-9+]/g, '').slice(0, 20);
+          await _upsertAlert(`phone_abuse_${safePhone}_${dayBucket}`, {
             type: 'financial', subType: 'multiple_entities_same_phone',
-            phone, entityCount: entities.size, severity: 'high', status: 'open', createdAt: _now(),
+            phone, entityCount: entities.size, severity: 'high', status: 'open',
             detail: `${entities.size} different accounts paying to same phone ${phone}`,
-          }).catch(() => {});
+          });
         }
       }
     }
@@ -740,12 +760,12 @@ exports.detectFinancialFraud = onSchedule(
       });
       for (const [uid, count] of Object.entries(userCodes)) {
         if (count >= 5) {
-          await db.collection('fraudAlerts').add({
+          await _upsertAlert(`promo_abuse_${uid}_${dayBucket}`, {
             type: 'financial', subType: 'promo_abuse',
             entityId: uid, entityType: 'buyer', count,
-            severity: 'medium', status: 'open', createdAt: _now(),
+            severity: 'medium', status: 'open',
             detail: `${count} promos used in 24h by ${uid}`,
-          }).catch(() => {});
+          });
         }
       }
     }

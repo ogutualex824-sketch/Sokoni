@@ -32,24 +32,34 @@ window.SokoniLoyalty = (function () {
   var _redeemRate   = 10;   /* 100 pts = KSh 10 → 1 pt = KSh 0.10 */
   var _fns          = null; /* firebase.functions() reference */
 
-  /* ── Tier reference data (fallback / used before CF responds) ── */
+  /* ── Tier reference data (v2.0 — 5 tiers) ── */
   var TIER_COLORS = {
-    Bronze:   '#cd7f32',
-    Silver:   '#9e9e9e',
-    Gold:     '#ffc107',
-    Platinum: '#00bcd4'
+    bronze: '#CD7F32', Bronze: '#CD7F32',
+    silver: '#C0C0C0', Silver: '#C0C0C0',
+    gold:   '#FFD700', Gold:   '#FFD700',
+    platinum: '#E5E4E2', Platinum: '#E5E4E2',
+    diamond:  '#B9F2FF', Diamond:  '#B9F2FF'
   };
   var TIER_ICONS = {
-    Bronze:   '🥉',
-    Silver:   '🥈',
-    Gold:     '🥇',
-    Platinum: '💎'
+    bronze: '🥉', Bronze: '🥉',
+    silver: '🥈', Silver: '🥈',
+    gold:   '🥇', Gold:   '🥇',
+    platinum: '💎', Platinum: '💎',
+    diamond:  '💠', Diamond:  '💠'
   };
-  /* Static tier thresholds — used for progress bar before CF responds */
+  var TIER_NAMES = {
+    bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum', diamond: 'Diamond'
+  };
+  /* v2.0 thresholds — based on lifetimePoints */
   var TIER_MIN = {
-    Bronze: 0, Silver: 1000, Gold: 5000, Platinum: 20000
+    bronze: 0, Bronze: 0,
+    silver: 5000, Silver: 5000,
+    gold: 20000, Gold: 20000,
+    platinum: 50000, Platinum: 50000,
+    diamond: 100000, Diamond: 100000
   };
-  var TIER_ORDER = ['Bronze', 'Silver', 'Gold', 'Platinum'];
+  var TIER_ORDER = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
+  var TIER_ORDER_NAMES = ['Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond'];
 
   /* ── XSS escaping ── */
   function _esc(s) {
@@ -131,72 +141,223 @@ window.SokoniLoyalty = (function () {
      RENDER: ACCOUNT (hero + KPIs + progress bar)
   ================================================================ */
   function renderAccount(data) {
-    var bal            = Number(data.balance)            || 0;
-    var tier           = String(data.tier                || 'Bronze');
-    var totalEarned    = Number(data.totalEarned)        || 0;
-    var thisMonth      = Number(data.thisMonth)          || 0;
-    var nextThreshold  = Number(data.nextTierThreshold)  || 0;
-    var ptsToNext      = Number(data.pointsToNextTier)   || 0;
-    var currentMin     = Number(data.currentTierMin)
-                         !== undefined ? Number(data.currentTierMin)
-                         : (TIER_MIN[tier] || 0);
+    var bal           = Number(data.balance)       || 0;
+    var tierKey       = String(data.tier           || 'bronze').toLowerCase();
+    var lifetimePts   = Number(data.lifetimePoints || bal);
+    var totalEarned   = Number(data.totalEarned)   || 0;
+    var thisMonth     = Number(data.thisMonth)     || 0;
 
     _balance = bal;
+
+    var tierName  = TIER_NAMES[tierKey] || TIER_NAMES[tierKey.charAt(0).toUpperCase() + tierKey.slice(1)] || 'Bronze';
+    var icon      = TIER_ICONS[tierKey]  || '🥉';
+    var color     = TIER_COLORS[tierKey] || '#CD7F32';
 
     /* ── Hero balance ── */
     _setText('loyBalance', _fmtNum(bal));
     _setText('loyBalance2', _fmtNum(bal));
 
     /* ── Tier badge ── */
-    var icon  = TIER_ICONS[tier]  || '🥉';
-    var color = TIER_COLORS[tier] || '#cd7f32';
     _setText('loyTierIcon', icon);
-    _setText('loyTier',     tier + ' Member');
-
-    var badge = document.getElementById('loyTierBadge');
-    if (badge) {
-      badge.style.background   = 'rgba(255,255,255,.18)';
-      badge.style.borderColor  = 'rgba(255,255,255,.4)';
-    }
+    _setText('loyTier',     tierName + ' Member');
 
     /* ── KPI strip ── */
-    _setText('loyTierKpi',     tier);
-    _setText('loyTotalEarned', _fmtNum(totalEarned));
+    _setText('loyTierKpi',     tierName);
+    _setText('loyTotalEarned', _fmtNum(totalEarned || lifetimePts));
     _setText('loyThisMonth',   _fmtNum(thisMonth));
 
-    /* ── Progress bar ── */
-    var tierIdx  = TIER_ORDER.indexOf(tier);
-    var isPlatinum = tier === 'Platinum' || tierIdx === TIER_ORDER.length - 1;
-    var pct;
+    /* ── Progress bar — uses lifetimePoints for tier calculation ── */
+    var tierIdx   = TIER_ORDER.indexOf(tierKey);
+    var isDiamond = tierIdx === TIER_ORDER.length - 1;
+    var currentMin = TIER_MIN[tierKey] || 0;
 
-    if (isPlatinum) {
-      pct = 100;
-      var fill = document.getElementById('loyProgressFill');
-      if (fill) {
-        fill.style.width = '100%';
-        fill.style.background = 'linear-gradient(90deg, #00bcd4, #00e5ff)';
-      }
-      _setText('loyTier2',      tier);
-      _setText('loyNextTier',   '');
-      _setText('loyProgressText', 'Maximum tier achieved 🎉');
+    if (isDiamond) {
+      var fillD = document.getElementById('loyProgressFill');
+      if (fillD) { fillD.style.width = '100%'; fillD.style.background = 'linear-gradient(90deg,#B9F2FF,#00e5ff)'; }
+      _setText('loyTier2',       tierName);
+      _setText('loyNextTier',    '');
+      _setText('loyProgressText', 'Maximum tier achieved — Diamond 💠');
     } else {
-      var nextTierName = TIER_ORDER[tierIdx + 1] || 'Silver';
-      var nextMin = nextThreshold || TIER_MIN[nextTierName] || (currentMin + 1000);
-      var range = nextMin - currentMin;
-      var progress = bal - currentMin;
-      pct = range > 0 ? Math.min(100, Math.max(0, Math.round((progress / range) * 100))) : 0;
-
-      var fillEl = document.getElementById('loyProgressFill');
+      var nextKey  = TIER_ORDER[tierIdx + 1] || 'silver';
+      var nextName = TIER_NAMES[nextKey] || 'Silver';
+      var nextMin  = TIER_MIN[nextKey]   || 5000;
+      var range    = nextMin - currentMin;
+      var progress = lifetimePts - currentMin;
+      var pct      = range > 0 ? Math.min(100, Math.max(0, Math.round(progress / range * 100))) : 0;
+      var fillEl   = document.getElementById('loyProgressFill');
       if (fillEl) fillEl.style.width = pct + '%';
+      _setText('loyTier2',       tierName);
+      _setText('loyNextTier',    nextName);
+      _setText('loyProgressText', _fmtNum(Math.max(0, nextMin - lifetimePts)) + ' pts to ' + _esc(nextName));
+    }
 
-      _setText('loyTier2',      tier);
-      _setText('loyNextTier',   nextTierName);
-      _setText('loyProgressText',
-        _fmtNum(ptsToNext || (nextMin - bal)) + ' pts to ' + _esc(nextTierName));
+    /* ── Hero stat row: points + cashback ── */
+    var cashbackKes = Number(data.cashbackBalance) || 0;
+    _setText('loyHeroPoints',  _fmtNum(bal) + ' pts');
+    _setText('loyHeroCashback', _fmtKes(cashbackKes));
+
+    /* ── Card tab: cashback summary ── */
+    _setText('loyCardCashbackBalance', _fmtKes(cashbackKes));
+
+    /* ── Cashback tab: balance display ── */
+    _setText('loyCashbackBalance', _fmtKes(cashbackKes));
+    var pendingEl = document.getElementById('loyCashbackPending');
+    if (pendingEl) {
+      var pendingKes = Number(data.cashbackPending) || 0;
+      pendingEl.textContent = pendingKes > 0
+        ? _fmtKes(pendingKes) + ' pending (clears after order delivery)'
+        : '';
     }
 
     /* ── Sync redeem slider max to current balance ── */
     _syncRedeemSlider();
+  }
+
+  /* ── Private state additions ── */
+  var _loyaltyId     = null;
+  var _qrPayload     = null;
+  var _cardLoaded    = false;
+  var _rewardsLoaded = false;
+
+  /* ================================================================
+     RENDER: DIGITAL CARD
+  ================================================================ */
+  function renderCard(data) {
+    if (!data) {
+      var prompt = document.getElementById('loyCreateAccountPrompt');
+      if (prompt) prompt.style.display = 'block';
+      return;
+    }
+    var tierKey  = String(data.tier || 'bronze').toLowerCase();
+    var tierName = TIER_NAMES[tierKey] || 'Bronze';
+    var icon     = TIER_ICONS[tierKey]  || '🥉';
+    var color    = TIER_COLORS[tierKey] || '#CD7F32';
+    var bal      = Number(data.balance) || 0;
+    var cardNum  = String(data.cardNumber || '').replace(/(\d{4})/g, '$1 ').trim();
+    var name     = String(data.name || '').toUpperCase() || 'SOKONI MEMBER';
+    _loyaltyId   = data.loyaltyId || null;
+    _qrPayload   = data.qrPayload || null;
+
+    _setText('loyCardNumber', cardNum || '•••• •••• ••••');
+    _setText('loyCardName', name);
+    _setText('loyCardPts', bal.toLocaleString('en-KE'));
+    var tb = document.getElementById('loyCardTierBadge');
+    if (tb) { tb.textContent = icon + ' ' + tierName; tb.style.color = color; }
+
+    var qrContainer = document.getElementById('loyQRCanvas');
+    if (qrContainer && _qrPayload) {
+      qrContainer.innerHTML = '';
+      try {
+        if (typeof QRCode !== 'undefined') {
+          new QRCode(qrContainer, { text: _qrPayload, width: 160, height: 160,
+            colorDark: '#1a1a2e', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+        } else {
+          qrContainer.innerHTML = '<p style="font-size:12px;color:var(--muted);">Show ID: <strong>' + _esc(_loyaltyId || '') + '</strong></p>';
+        }
+      } catch (e) {
+        qrContainer.innerHTML = '<p style="font-size:12px;color:var(--muted);">Show ID: <strong>' + _esc(_loyaltyId || '') + '</strong></p>';
+      }
+    }
+    _setText('loyLoyaltyId', _loyaltyId || '—');
+    var cards = Array.isArray(data.linkedCards) ? data.linkedCards : [];
+    if (cards.length) {
+      var section = document.getElementById('loyLinkedCardsSection');
+      var list    = document.getElementById('loyLinkedCardsList');
+      if (section) section.style.display = 'block';
+      if (list)    list.textContent = cards.join('  ·  ');
+    }
+  }
+
+  /* ================================================================
+     LOAD: CARD
+  ================================================================ */
+  function loadCard() {
+    if (_cardLoaded) return;
+    _cardLoaded = true;
+    return _call('getLoyaltyCard', {})
+      .then(function (data) { renderCard(data); })
+      .catch(function (err) {
+        if ((err.code || '').indexOf('not-found') !== -1 || (err.message || '').indexOf('not found') !== -1) {
+          var prompt = document.getElementById('loyCreateAccountPrompt');
+          if (prompt) prompt.style.display = 'block';
+        } else {
+          console.warn('[SokoniLoyalty] getLoyaltyCard:', err);
+        }
+      });
+  }
+
+  /* ================================================================
+     CREATE ACCOUNT
+  ================================================================ */
+  function createAccount() {
+    var phone = (prompt('Enter your phone number (e.g. 0712345678):') || '').trim().replace(/\s+/g, '');
+    if (!phone) return;
+    if (!/^(0\d{9}|\+254\d{9})$/.test(phone)) {
+      toast('Please enter a valid Kenyan phone number.', 'error'); return;
+    }
+    _call('createLoyaltyAccount', { phone: phone })
+      .then(function (data) {
+        toast('🎉 Account created! You earned ' + (data.welcomePoints || 125) + ' welcome points.', 'success');
+        _cardLoaded = false; loadCard(); loadAccount();
+      })
+      .catch(function (err) {
+        toast(err.code === 'already-exists' ? 'A loyalty account already exists for this phone number.' : (err.message || 'Please try again.'), 'error');
+      });
+  }
+
+  /* ================================================================
+     RENDER + LOAD: REWARDS
+  ================================================================ */
+  function renderRewards(rewards, balance) {
+    var container = document.getElementById('loyRewardGrid');
+    if (!container) return;
+    _setText('loyRewardBalance', (balance || 0).toLocaleString('en-KE') + ' pts');
+    if (!rewards || !rewards.length) {
+      container.innerHTML = '<div class="loy-empty"><div class="loy-empty-icon">🎁</div><p>No rewards available yet.<br>Check back soon!</p></div>';
+      return;
+    }
+    var TYPE_ICONS = { discount:'🏷️', cashback:'💰', free_item:'🆓', gift_card:'🎁', voucher:'🎟️', free_delivery:'🚚', vip_upgrade:'👑', scratch_card:'🎰', lucky_draw:'🍀' };
+    container.innerHTML = rewards.map(function (r) {
+      var icon   = TYPE_ICONS[r.rewardType] || '🎁';
+      var canBuy = r.canAfford !== false;
+      var pts    = Number(r.pointsCost) || 0;
+      var val    = Number(r.value)      || 0;
+      var stock  = r.stock != null ? ' · ' + r.stock + ' left' : '';
+      return '<div class="loy-reward-card' + (canBuy ? '' : ' unaffordable') + '">'
+           + '<div class="loy-reward-icon">' + icon + '</div>'
+           + '<div class="loy-reward-name">' + _esc(r.name) + '</div>'
+           + '<div class="loy-reward-pts">' + pts.toLocaleString('en-KE') + ' pts</div>'
+           + (val ? '<div class="loy-reward-value">Value: KES ' + val.toLocaleString('en-KE') + _esc(stock) + '</div>' : '')
+           + '<button class="loy-reward-cta"' + (canBuy ? ' onclick="SokoniLoyalty.redeemReward(\'' + _esc(r.id) + '\')"' : ' disabled') + '>'
+           + (canBuy ? 'Redeem' : 'Need ' + pts.toLocaleString('en-KE') + ' pts') + '</button>'
+           + '</div>';
+    }).join('');
+  }
+
+  function loadRewards() {
+    if (_rewardsLoaded) return;
+    _rewardsLoaded = true;
+    var c = document.getElementById('loyRewardGrid');
+    if (c) c.innerHTML = _spinner('Loading rewards…');
+    _call('getAvailableRewards', {})
+      .then(function (data) { renderRewards(data.rewards || [], data.pointsBalance); })
+      .catch(function (err) {
+        console.error('[SokoniLoyalty] getAvailableRewards:', err);
+        var c2 = document.getElementById('loyRewardGrid');
+        if (c2) c2.innerHTML = '<div class="loy-error-msg">Could not load rewards. Please try again.</div>';
+      });
+  }
+
+  function redeemReward(rewardId) {
+    if (!rewardId) return;
+    if (!confirm('Redeem this reward now? Points will be deducted immediately.')) return;
+    _call('redeemLoyaltyReward', { rewardId: rewardId })
+      .then(function (data) {
+        alert('🎉 Redeemed! Voucher code: ' + (data.voucherCode || '(see app)'));
+        _rewardsLoaded = false; loadRewards();
+        _cardLoaded = false; loadCard(); loadAccount();
+      })
+      .catch(function (err) { toast(err.message || 'Redemption failed. Please try again.', 'error'); });
   }
 
   /* ================================================================
@@ -504,13 +665,14 @@ window.SokoniLoyalty = (function () {
         });
 
         /* Lazy-load data tabs */
-        if (name === 'history') {
-          loadHistory();
-        }
+        if (name === 'card')      loadCard();
+        if (name === 'rewards')   loadRewards();
+        if (name === 'history')   loadHistory();
+        if (name === 'cashback')  loadAccount();   /* refreshes cashback balance */
+        if (name === 'giftcards') _initGiftCardInput();
 
         if (name === 'tiers') {
           if (!_tiersLoaded) {
-            /* Tiers CF hasn't resolved yet — show spinner */
             var lg = document.getElementById('loyLeaderboard');
             if (lg) lg.innerHTML = _spinner('Loading tiers…');
           } else if (_pendingTiersData) {
@@ -537,17 +699,12 @@ window.SokoniLoyalty = (function () {
 
         _uid = user.uid;
 
-        /* Boot sequence */
+        /* Boot sequence — card is the landing tab (loads in parallel with account) */
+        loadCard();
         loadAccount();
         loadTiers();
         initTabs();
         initRedeemSlider();
-
-        /* Wire redeem button */
-        var btn = document.getElementById('loyRedeemBtn');
-        if (btn) {
-          btn.addEventListener('click', redeemPoints);
-        }
       });
     } catch (e) {
       console.error('[SokoniLoyalty] Auth init error:', e);
@@ -556,23 +713,238 @@ window.SokoniLoyalty = (function () {
   }
 
   /* ================================================================
+     GIFT CARD INPUT — auto-format XXXX-XXXX-XXXX-XXXX
+  ================================================================ */
+  var _gcInputWired = false;
+  function _initGiftCardInput() {
+    if (_gcInputWired) return;
+    var el = document.getElementById('loyGiftCardInput');
+    if (!el) return;
+    el.addEventListener('input', function () {
+      var digits = el.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 16);
+      var formatted = digits.match(/.{1,4}/g);
+      var pos = el.selectionStart;
+      el.value = formatted ? formatted.join('-') : digits;
+      /* restore caret approximately */
+      try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+    });
+    _gcInputWired = true;
+  }
+
+  /* ================================================================
+     SWITCH TAB (programmatic — used by cashback summary link)
+  ================================================================ */
+  function switchTab(name) {
+    var tabs     = document.querySelectorAll('.loy-tab');
+    var contents = document.querySelectorAll('.loy-tab-content');
+    var matched  = false;
+
+    tabs.forEach(function (tab) {
+      if (tab.getAttribute('data-tab') === name) {
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+        tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        matched = true;
+      } else {
+        tab.classList.remove('active');
+        tab.setAttribute('aria-selected', 'false');
+      }
+    });
+
+    contents.forEach(function (c) {
+      if (c.getAttribute('id') === 'loy-tab-' + name) {
+        c.classList.add('active');
+      } else {
+        c.classList.remove('active');
+      }
+    });
+
+    if (!matched) {
+      console.warn('[SokoniLoyalty] switchTab: unknown tab "' + name + '"');
+    }
+  }
+
+  /* ================================================================
+     CASHBACK — REDEEM
+  ================================================================ */
+  function redeemCashback() {
+    if (!_uid) {
+      toast('Please log in to redeem cashback.', 'error');
+      return;
+    }
+    var balEl = document.getElementById('loyCashbackBalance');
+    var balStr = balEl ? balEl.textContent.replace(/[^0-9.]/g, '') : '0';
+    var bal = parseFloat(balStr) || 0;
+
+    if (bal < 10) {
+      toast('Minimum cashback redemption is KES 10.', 'error');
+      return;
+    }
+
+    toast('Cashback redemption will be applied at your next checkout. Minimum KES 10.', 'info');
+  }
+
+  /* ================================================================
+     GIFT CARDS — CHECK / REDEEM
+  ================================================================ */
+  function checkGiftCard() {
+    var inputEl  = document.getElementById('loyGiftCardInput');
+    var resultEl = document.getElementById('loyGiftCardResult');
+    if (!inputEl || !resultEl) return;
+
+    var code = inputEl.value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+    if (!code || code.length < 16) {
+      resultEl.className     = 'loy-gift-card-result invalid';
+      resultEl.style.display = 'block';
+      resultEl.textContent   = 'Please enter a valid 16-character gift card code.';
+      return;
+    }
+
+    /* Format input visually: XXXX-XXXX-XXXX-XXXX */
+    var digits = code.replace(/-/g, '');
+    if (digits.length >= 16) {
+      inputEl.value = digits.slice(0, 4) + '-' + digits.slice(4, 8) + '-'
+                    + digits.slice(8, 12) + '-' + digits.slice(12, 16);
+    }
+
+    if (!_uid) {
+      toast('Please log in to redeem a gift card.', 'error');
+      return;
+    }
+
+    resultEl.className     = 'loy-gift-card-result';
+    resultEl.style.display = 'block';
+    resultEl.textContent   = 'Checking gift card…';
+
+    /* Call the Cloud Function to validate + redeem */
+    firebase.functions().httpsCallable('redeemGiftCard')({ code: code, uid: _uid, merchantId: null, orderTotal: 999999 })
+      .then(function (res) {
+        var d = res.data || {};
+        if (d.valid) {
+          resultEl.className   = 'loy-gift-card-result valid';
+          resultEl.textContent = 'Gift card valid! ' + _fmtKes(d.value || 0) + ' will be credited to your account.';
+          toast('Gift card redeemed: ' + _fmtKes(d.value || 0) + ' added!', 'success');
+          loadAccount(); /* refresh balance */
+        } else {
+          resultEl.className   = 'loy-gift-card-result invalid';
+          resultEl.textContent = d.message || 'Gift card not found or already used.';
+        }
+      })
+      .catch(function (err) {
+        console.error('[SokoniLoyalty] checkGiftCard error:', err);
+        /* Graceful fallback — CF may not exist yet */
+        resultEl.className   = 'loy-gift-card-result invalid';
+        resultEl.textContent = 'Gift card check is currently unavailable. Please try again later.';
+      });
+  }
+
+  /* ================================================================
+     ENTERPRISE v1.0 — LUCKY DRAWS
+  ================================================================ */
+  function loadDraws() {
+    var el = document.getElementById('loyDrawsList');
+    var entriesEl = document.getElementById('loyMyEntries');
+    if (!el) return;
+    el.innerHTML = '<div style="color:#888;text-align:center;padding:16px">Loading draws…</div>';
+    var db = firebase.firestore();
+    var now = firebase.firestore.Timestamp.now();
+    db.collection('loyaltyDraws')
+      .where('status', '==', 'active')
+      .where('endsAt', '>', now)
+      .limit(10)
+      .get()
+      .then(function(snap) {
+        if (snap.empty) {
+          el.innerHTML = '<div style="color:#888;padding:16px;text-align:center">No active draws. Shop to earn entries when draws go live!</div>';
+          return;
+        }
+        el.innerHTML = snap.docs.map(function(doc) {
+          var d = doc.data();
+          var ends = d.endsAt && d.endsAt.toDate ? d.endsAt.toDate() : null;
+          return '<div class="loy-draw-card">' +
+            '<h4>' + _esc(d.name || 'Lucky Draw') + '</h4>' +
+            '<div class="loy-draw-prize">🎁 Prize: ' + _esc((d.prize && (d.prize.description || d.prize.type)) || 'Mystery Prize') + '</div>' +
+            '<div class="loy-draw-entries">Entry: Shop KES ' + _fmt(d.entryThreshold || 0) + '+</div>' +
+            (ends ? '<div class="loy-draw-expires">Ends: ' + ends.toLocaleDateString('en-KE', {day:'numeric',month:'short',year:'numeric'}) + '</div>' : '') +
+            '</div>';
+        }).join('');
+        if (entriesEl && _uid) {
+          Promise.all(snap.docs.map(function(doc) {
+            return db.collection('loyaltyDrawEntries').doc(_uid + '_' + doc.id).get()
+              .then(function(e) { return e.exists ? { name: doc.data().name, entries: e.data().entries } : null; });
+          })).then(function(results) {
+            var valid = results.filter(Boolean);
+            entriesEl.innerHTML = valid.length
+              ? valid.map(function(e) { return '<div style="padding:8px 0;border-bottom:1px solid #222">' + _esc(e.name) + ' — <strong>' + e.entries + '</strong> ' + (e.entries === 1 ? 'entry' : 'entries') + '</div>'; }).join('')
+              : '<div style="color:#888;font-size:0.9rem">Shop to earn draw entries!</div>';
+          });
+        }
+      })
+      .catch(function(e) { el.innerHTML = '<div style="color:#888">Could not load draws.</div>'; });
+  }
+
+  /* ================================================================
+     ENTERPRISE v1.0 — PREFLIGHT CHECK (for POS integration)
+  ================================================================ */
+  function preflightCheck(opts) {
+    if (!_uid || !opts.merchantId || !opts.total) return Promise.resolve(null);
+    return _call('loyaltyPreflightCheck', {
+      uid: _uid, merchantId: opts.merchantId, total: opts.total,
+      items: opts.items || [], redeemPoints: opts.redeemPoints || 0
+    }).then(function(res) { return res.data; })
+      .catch(function(e) { console.warn('[SokoniLoyalty] preflight:', e); return null; });
+  }
+
+  /* ================================================================
+     ENTERPRISE v1.0 — MEMBERSHIP BENEFITS
+  ================================================================ */
+  function loadMembershipBenefits() {
+    if (!_uid) return;
+    var el = document.getElementById('loyMembershipBenefits');
+    if (!el) return;
+    _call('getMembershipBenefits', { uid: _uid })
+      .then(function(res) {
+        var d = res.data || {};
+        var benefits = d.benefits || {};
+        var items = Object.keys(benefits).filter(function(k) { return benefits[k] === true; })
+          .map(function(k) { return '<li>✓ ' + _esc(k.replace(/([A-Z])/g, ' $1').trim()) + '</li>'; }).join('');
+        el.innerHTML = '<div style="font-weight:600;text-transform:capitalize;margin-bottom:8px">' + _esc(d.tier || '') + ' Benefits</div>' +
+          '<ul style="list-style:none;padding:0;margin:0 0 12px;color:#ccc">' + (items || '<li>Basic benefits</li>') + '</ul>' +
+          (d.nextTier ? '<div style="color:#888;font-size:0.85rem">' + _fmt(d.pointsToNextTier) + ' pts to ' + _esc(d.nextTier) + '</div>'
+                      : '<div style="color:#B9F2FF;font-size:0.85rem">Maximum tier achieved! 💠</div>');
+      })
+      .catch(function(e) { console.warn('[SokoniLoyalty] benefits:', e.message); });
+  }
+
+  /* ================================================================
      PUBLIC API
   ================================================================ */
   return {
-    init:         init,
-    loadAccount:  loadAccount,
-    loadHistory:  loadHistory,
-    loadTiers:    loadTiers,
-    initTabs:     initTabs,
-    initRedeemSlider: initRedeemSlider,
-    redeemPoints: redeemPoints,
-    renderAccount: renderAccount,
-    renderHistory: renderHistory,
-    renderTiers:  renderTiers,
-    toast:        toast,
-    /* Expose formatters for external use */
-    fmt:  _fmt,
-    esc:  _esc
+    init:               init,
+    loadAccount:        loadAccount,
+    loadCard:           loadCard,
+    loadRewards:        loadRewards,
+    loadHistory:        loadHistory,
+    loadTiers:          loadTiers,
+    loadDraws:          loadDraws,
+    initTabs:           initTabs,
+    initRedeemSlider:   initRedeemSlider,
+    createAccount:      createAccount,
+    redeemPoints:       redeemPoints,
+    redeemReward:       redeemReward,
+    redeemCashback:     redeemCashback,
+    checkGiftCard:      checkGiftCard,
+    switchTab:          switchTab,
+    preflightCheck:     preflightCheck,
+    loadMembershipBenefits: loadMembershipBenefits,
+    renderAccount:  renderAccount,
+    renderCard:     renderCard,
+    renderRewards:  renderRewards,
+    renderHistory:  renderHistory,
+    renderTiers:    renderTiers,
+    toast:          toast,
+    fmt:            _fmt,
+    esc:            _esc
   };
 
 })();

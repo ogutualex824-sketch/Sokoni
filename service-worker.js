@@ -235,21 +235,34 @@ const SKIP_CACHE_PATTERNS = [
   "maps.gstatic.com",
 ];
 
+
+/* -- Global uncaught error handler: prevents silent SW death -- */
+self.onerror = (msg, src, line, col, err) => {
+  console.error("[SW] Uncaught error:", msg, { src, line, col, err });
+};
+self.addEventListener("unhandledrejection", event => {
+  console.error("[SW] Unhandled promise rejection:", event.reason);
+});
 /* â”€â”€ INSTALL â”€â”€ */
 self.addEventListener("install", event => {
   /* Precache silently — do NOT skipWaiting() here.
      Active checkouts, chats and POS sessions must not be interrupted.
      The page receives SW_UPDATE_READY and decides when it is safe to upgrade. */
   event.waitUntil((async () => {
-    const [sc, pc] = await Promise.all([
-      caches.open(STATIC_CACHE),
-      caches.open(PAGES_CACHE),
-    ]);
-    await Promise.allSettled(PRECACHE_STATIC.map(u => sc.add(u).catch(() => {})));
-    await Promise.allSettled(PRECACHE_PAGES.map(u  => pc.add(u).catch(() => {})));
-    /* Notify controlled clients that an update is waiting */
-    const clients = await self.clients.matchAll({ type: "window" });
-    clients.forEach(c => c.postMessage({ type: "SW_UPDATE_READY", version: CACHE_VERSION }));
+    try {
+      const [sc, pc] = await Promise.all([
+        caches.open(STATIC_CACHE),
+        caches.open(PAGES_CACHE),
+      ]);
+      await Promise.allSettled(PRECACHE_STATIC.map(u => sc.add(u).catch(() => {})));
+      await Promise.allSettled(PRECACHE_PAGES.map(u  => pc.add(u).catch(() => {})));
+      /* Notify controlled clients that an update is waiting */
+      const clients = await self.clients.matchAll({ type: "window" });
+      clients.forEach(c => c.postMessage({ type: "SW_UPDATE_READY", version: CACHE_VERSION }));
+    } catch (err) {
+      /* Install failure is non-fatal -- log and continue so the SW activates */
+      console.error("[SW] Install failed:", err);
+    }
   })());
 });
 
@@ -595,4 +608,3 @@ self.addEventListener("notificationclick", event => {
 
 /* Keep the old notificationclick above, remove duplicate definition issue
    by having one clean handler above */
-

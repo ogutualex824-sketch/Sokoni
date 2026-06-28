@@ -18,16 +18,17 @@
   function _fns() { return window._firebaseFns  || null; }
 
   /* ── Firestore SDK helpers ────────────────────────────────── */
-  let _fsDoc, _fsSetDoc, _fsUpdateDoc, _fsServerTs, _fsGetDoc;
+  let _fsDoc, _fsSetDoc, _fsUpdateDoc, _fsServerTs, _fsGetDoc, _fsIncrement;
   async function _ensureFS() {
     if (_fsSetDoc) return true;
     try {
       const fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      _fsDoc      = fs.doc;
-      _fsSetDoc   = fs.setDoc;
-      _fsUpdateDoc= fs.updateDoc;
-      _fsServerTs = fs.serverTimestamp;
-      _fsGetDoc   = fs.getDoc;
+      _fsDoc       = fs.doc;
+      _fsSetDoc    = fs.setDoc;
+      _fsUpdateDoc = fs.updateDoc;
+      _fsServerTs  = fs.serverTimestamp;
+      _fsGetDoc    = fs.getDoc;
+      _fsIncrement = fs.increment;
       return true;
     } catch (_) { return false; }
   }
@@ -172,9 +173,39 @@
 
     const docRef = _fsDoc(db, route.collection, docId);
 
-    const write = () => route.merge
-      ? _fsSetDoc(docRef, enriched, { merge: true })
-      : _fsSetDoc(docRef, enriched);
+    /* stock_movement: log movement record AND update inventory via FieldValue.increment
+       so concurrent offline syncs don't clobber each other with stale absolute values */
+    const writeStockMovement = async () => {
+      await _fsSetDoc(docRef, enriched);
+      const delta = Number(data.qty) || 0;
+      if (delta !== 0 && data.productId && data.branchId) {
+        const invId  = `${data.branchId}__${data.productId}`;
+        const invRef = _fsDoc(db, 'inventory', invId);
+        /* FieldValue.increment is safe under concurrent writes — no last-write-wins race */
+        await _fsUpdateDoc(invRef, {
+          qty:       _fsIncrement(delta),
+          updatedAt: new Date().toISOString(),
+        }).catch(() => {}); // non-fatal: inventory doc may not exist for new products
+      }
+    };
+
+    /* product_update: if client sends qtyDelta (preferred), use increment; else fall back to merge */
+    const writeProductUpdate = () => {
+      if (data.qtyDelta != null && !isNaN(Number(data.qtyDelta))) {
+        const { qtyDelta, qty: _ignored, ...rest } = data;  // strip absolute qty
+        const safe = { ...rest, _syncedAt: enriched._syncedAt, _queueId: enriched._queueId,
+          _deviceId: enriched._deviceId, sellerId: enriched.sellerId,
+          qty: _fsIncrement(Number(qtyDelta)) };
+        return _fsSetDoc(_fsDoc(db, route.collection, docId), safe, { merge: true });
+      }
+      return _fsSetDoc(docRef, enriched, { merge: true });
+    };
+
+    const write = () => {
+      if (item.type === 'stock_movement') return writeStockMovement();
+      if (item.type === 'product_update') return writeProductUpdate();
+      return route.merge ? _fsSetDoc(docRef, enriched, { merge: true }) : _fsSetDoc(docRef, enriched);
+    };
 
     if (window.PosResilience) {
       await PosResilience.withCircuit(circuitName, () =>

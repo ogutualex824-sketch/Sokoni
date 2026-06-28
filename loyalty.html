@@ -19,6 +19,7 @@
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
   <style>
     /* ================================================================
@@ -413,6 +414,79 @@
       border: 1px solid rgba(255,193,7,.35);
     }
 
+    /* ── DIGITAL CARD ── */
+    .loy-digital-card {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      border-radius: 18px;
+      padding: 24px 22px 20px;
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,.35);
+      margin-bottom: 20px;
+    }
+    .loy-card-chip {
+      width: 36px; height: 28px;
+      background: linear-gradient(135deg, #ffd700, #ffaa00);
+      border-radius: 5px;
+      margin-bottom: 18px;
+    }
+    .loy-card-network {
+      position: absolute; top: 22px; right: 22px;
+      font-size: 28px; opacity: .7;
+    }
+    .loy-card-number { font-size: 14px; letter-spacing: 3px; opacity: .75; margin-bottom: 16px; font-family: monospace; }
+    .loy-card-holder { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: .65; margin-bottom: 4px; }
+    .loy-card-name   { font-size: 17px; font-weight: 700; letter-spacing: .5px; }
+    .loy-card-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 18px; }
+    .loy-card-tier-badge {
+      padding: 5px 14px; border-radius: 999px; font-size: 12px; font-weight: 800;
+      letter-spacing: .5px;
+    }
+    .loy-card-pts    { font-size: 22px; font-weight: 900; }
+    .loy-card-pts-lbl{ font-size: 10px; opacity: .6; letter-spacing: 1px; text-transform: uppercase; }
+    .loy-card-shine  {
+      position: absolute; top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,.06) 50%, transparent 60%);
+      pointer-events: none;
+    }
+
+    /* QR + Barcode section */
+    .loy-qr-section {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 24px; text-align: center;
+      box-shadow: var(--shadow); margin-bottom: 16px;
+    }
+    #loyQRCanvas { display: inline-block; margin: 0 auto 8px; }
+    .loy-qr-id { font-size: 12px; letter-spacing: 2px; color: var(--muted); font-family: monospace; margin-top: 4px; }
+    .loy-qr-hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+    /* Rewards catalog */
+    .loy-reward-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px;
+    }
+    .loy-reward-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 18px 14px;
+      box-shadow: var(--shadow);
+      text-align: center;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+      border: 2px solid transparent;
+    }
+    .loy-reward-card:hover    { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,.12); }
+    .loy-reward-card.unaffordable { opacity: .5; cursor: not-allowed; }
+    .loy-reward-icon   { font-size: 32px; margin-bottom: 10px; }
+    .loy-reward-name   { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+    .loy-reward-pts    { font-size: 13px; font-weight: 800; color: var(--accent); }
+    .loy-reward-value  { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .loy-reward-cta    { margin-top: 10px; padding: 7px 0; background: var(--accent); color: #fff; border-radius: 8px; font-size: 12px; font-weight: 700; width: 100%; border: none; cursor: pointer; }
+    .loy-reward-cta:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
     /* ── STATES ── */
     .loy-loading {
       display: flex; flex-direction: column;
@@ -486,6 +560,82 @@
 
     /* ── INPUTS: min 16px to prevent iOS zoom ── */
     input, select, textarea { font-size: 16px; }
+
+    /* ── CASHBACK TAB ── */
+    .loy-cashback-balance { font-size: 2.4rem; font-weight: 700; color: #4CAF50; margin: 16px 0; }
+    .loy-cashback-pending { color: #888; font-size: 0.9rem; margin-bottom: 12px; }
+    .loy-input-row { display: flex; gap: 8px; align-items: center; }
+    .loy-input {
+      flex: 1; padding: 12px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg);
+      color: var(--text); font-size: 1rem;
+    }
+    .loy-gift-card-result { margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--bg); display: none; font-size: 13px; }
+    .loy-gift-card-result.valid   { border: 1px solid #4CAF50; color: #2e7d32; }
+    .loy-gift-card-result.invalid { border: 1px solid #f44336; color: #c62828; }
+
+    /* ── LUCKY DRAWS TAB ── */
+    .loy-draws-list { display: flex; flex-direction: column; gap: 12px; }
+    .loy-draw-card {
+      background: linear-gradient(135deg, #f5f0ff, #ede7fd);
+      border: 1px solid rgba(124,77,255,.3);
+      border-radius: 12px; padding: 16px;
+    }
+    .loy-draw-card h4 { margin: 0 0 8px; color: #6200ea; font-size: 14px; font-weight: 800; }
+    .loy-draw-prize  { font-size: 1.1rem; font-weight: 600; color: var(--text); margin: 8px 0; }
+    .loy-draw-entries{ font-size: 0.85rem; color: var(--muted); }
+    .loy-draw-expires{ font-size: 0.8rem; color: #f59e0b; margin-top: 8px; font-weight: 600; }
+
+    /* ── SECTION BLOCK (used inside new tab panels) ── */
+    .loy-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      margin-bottom: 16px;
+    }
+    .loy-section h3 {
+      font-size: 15px; font-weight: 800; color: var(--text);
+      margin-bottom: 14px;
+    }
+    .loy-sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
+
+    /* ── GENERIC BUTTON (used by new panels) ── */
+    .loy-btn {
+      padding: 12px 22px;
+      background: linear-gradient(135deg, #7c4dff, #651fff);
+      color: #fff; border: none; border-radius: var(--radius);
+      font-size: 14px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+      transition: opacity .2s, transform .1s;
+      box-shadow: 0 3px 10px rgba(124,77,255,.3);
+      white-space: nowrap;
+    }
+    .loy-btn:hover { opacity: .9; transform: translateY(-1px); }
+
+    /* ── CASHBACK SUMMARY CARD (shown on Card tab) ── */
+    .loy-cashback-summary {
+      background: linear-gradient(135deg, rgba(76,175,80,.07), rgba(76,175,80,.03));
+      border: 1px solid rgba(76,175,80,.25);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .loy-cashback-summary-label { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .loy-cashback-summary-value { font-size: 20px; font-weight: 900; color: var(--green); }
+    .loy-cashback-summary-link  { font-size: 11px; color: var(--accent); cursor: pointer; font-weight: 700; margin-top: 2px; }
+
+    /* ── HERO STAT ROW ── */
+    .loy-hero-stats {
+      display: flex; justify-content: center; gap: 24px;
+      margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .loy-hero-stat { text-align: center; }
+    .loy-hero-stat-val { font-size: 16px; font-weight: 900; }
+    .loy-hero-stat-lbl { font-size: 10px; opacity: .7; text-transform: uppercase; letter-spacing: .5px; margin-top: 2px; }
+    .loy-hero-stat-val.green { color: #a5d6a7; }
   </style>
 </head>
 <body>
@@ -515,6 +665,18 @@
   <!-- Main balance -->
   <div class="loy-balance" id="loyBalance">—</div>
   <div class="loy-balance-label">SOKONI Loyalty Points</div>
+
+  <!-- Points + Cashback summary row -->
+  <div class="loy-hero-stats">
+    <div class="loy-hero-stat">
+      <div class="loy-hero-stat-val" id="loyHeroPoints">— pts</div>
+      <div class="loy-hero-stat-lbl">Points Balance</div>
+    </div>
+    <div class="loy-hero-stat">
+      <div class="loy-hero-stat-val green" id="loyHeroCashback">KES 0.00</div>
+      <div class="loy-hero-stat-lbl">Cashback Balance</div>
+    </div>
+  </div>
 
   <!-- Progress to next tier -->
   <div class="loy-progress-card">
@@ -555,16 +717,95 @@
      TABS
 ═══════════════════════════════════════════════ -->
 <nav class="loy-tabs" role="tablist" aria-label="Loyalty sections">
-  <button class="loy-tab active" data-tab="earn"    role="tab" aria-selected="true"  type="button">💰 Earn</button>
-  <button class="loy-tab"        data-tab="redeem"  role="tab" aria-selected="false" type="button">🎁 Redeem</button>
-  <button class="loy-tab"        data-tab="history" role="tab" aria-selected="false" type="button">📜 History</button>
-  <button class="loy-tab"        data-tab="tiers"   role="tab" aria-selected="false" type="button">🏆 Tiers</button>
+  <button class="loy-tab active" data-tab="card"      role="tab" aria-selected="true"  type="button">💳 Card</button>
+  <button class="loy-tab"        data-tab="rewards"   role="tab" aria-selected="false" type="button">🎁 Rewards</button>
+  <button class="loy-tab"        data-tab="earn"      role="tab" aria-selected="false" type="button">💰 Earn</button>
+  <button class="loy-tab"        data-tab="history"   role="tab" aria-selected="false" type="button">📜 History</button>
+  <button class="loy-tab"        data-tab="tiers"     role="tab" aria-selected="false" type="button">🏆 Tiers</button>
+  <button class="loy-tab"        data-tab="cashback"  role="tab" aria-selected="false" type="button">💵 Cashback</button>
+  <button class="loy-tab"        data-tab="giftcards" role="tab" aria-selected="false" type="button">🎫 Gift Cards</button>
+  <button class="loy-tab"        data-tab="draws"     role="tab" aria-selected="false" type="button">🍀 Lucky Draws</button>
 </nav>
+
+<!-- ═══════════════════════════════════════════════
+     TAB: CARD
+═══════════════════════════════════════════════ -->
+<div class="loy-tab-content active" id="loy-tab-card" role="tabpanel">
+  <div class="loy-content">
+    <!-- Digital membership card -->
+    <div class="loy-digital-card" id="loyDigitalCard">
+      <div class="loy-card-shine"></div>
+      <div class="loy-card-chip"></div>
+      <div class="loy-card-network">✦</div>
+      <div class="loy-card-number" id="loyCardNumber">•••• •••• •••• ••••</div>
+      <div class="loy-card-holder">Card Holder</div>
+      <div class="loy-card-name" id="loyCardName">Loading…</div>
+      <div class="loy-card-footer">
+        <div>
+          <div class="loy-card-tier-badge" id="loyCardTierBadge" style="background:rgba(205,127,50,.25);color:#ffd700;">🥉 Bronze</div>
+        </div>
+        <div style="text-align:right">
+          <div class="loy-card-pts" id="loyCardPts">—</div>
+          <div class="loy-card-pts-lbl">Points</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR Code -->
+    <div class="loy-qr-section">
+      <p style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:16px;">Scan at checkout to earn & redeem points</p>
+      <div id="loyQRCanvas"></div>
+      <div class="loy-qr-id" id="loyLoyaltyId">—</div>
+      <div class="loy-qr-hint">Show this QR to the cashier or tap NFC at the POS terminal</div>
+    </div>
+
+    <!-- Cashback summary (below QR) -->
+    <div class="loy-cashback-summary">
+      <div>
+        <div class="loy-cashback-summary-label">Cashback Balance</div>
+        <div class="loy-cashback-summary-value" id="loyCardCashbackBalance">KES 0.00</div>
+        <div class="loy-cashback-summary-link" onclick="SokoniLoyalty.switchTab('cashback')">View Cashback &rarr;</div>
+      </div>
+      <div style="font-size:32px;">💵</div>
+    </div>
+
+    <!-- Linked cards info -->
+    <div class="loy-qr-section" id="loyLinkedCardsSection" style="display:none;">
+      <p style="font-size:13px;font-weight:700;margin-bottom:8px;">Linked Physical Cards</p>
+      <div id="loyLinkedCardsList" style="font-size:12px;color:var(--muted);font-family:monospace;"></div>
+    </div>
+
+    <!-- Create account prompt (shown if no loyalty account) -->
+    <div id="loyCreateAccountPrompt" style="display:none;text-align:center;padding:20px;">
+      <div style="font-size:48px;margin-bottom:16px;">🎁</div>
+      <h3 style="margin-bottom:8px;">You don't have a loyalty account yet</h3>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:20px;">Create one to start earning points and unlocking rewards!</p>
+      <button onclick="SokoniLoyalty.createAccount()" class="sk-btn-primary" style="padding:12px 32px;border-radius:10px;font-size:14px;font-weight:700;background:var(--accent);color:#fff;border:none;cursor:pointer;">
+        Create My Loyalty Account
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TAB: REWARDS
+═══════════════════════════════════════════════ -->
+<div class="loy-tab-content" id="loy-tab-rewards" role="tabpanel">
+  <div class="loy-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <p class="loy-section-title" style="margin:0;">Available Rewards</p>
+      <span style="font-size:13px;color:var(--muted);">Balance: <strong id="loyRewardBalance" style="color:var(--accent);">— pts</strong></span>
+    </div>
+    <div class="loy-reward-grid" id="loyRewardGrid">
+      <div class="loy-loading"><div class="loy-spinner"></div><span>Loading rewards…</span></div>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════════════════════
      TAB: EARN
 ═══════════════════════════════════════════════ -->
-<div class="loy-tab-content active" id="loy-tab-earn" role="tabpanel">
+<div class="loy-tab-content" id="loy-tab-earn" role="tabpanel">
   <div class="loy-content">
     <p class="loy-section-title">Ways to Earn Points</p>
     <div class="loy-earn-grid">
@@ -683,11 +924,12 @@
       <!-- Bronze -->
       <div class="loy-tier-card">
         <div class="loy-tier-card-icon">🥉</div>
-        <div class="loy-tier-card-name" style="color:#cd7f32;">Bronze</div>
-        <div class="loy-tier-card-range">0 – 999 pts</div>
+        <div class="loy-tier-card-name" style="color:#CD7F32;">Bronze</div>
+        <div class="loy-tier-card-range">0 – 4,999 lifetime pts</div>
         <div class="loy-multiplier">1× earn rate</div>
         <ul class="loy-tier-card-perks">
-          <li>Basic earn rate</li>
+          <li>1 pt per KES 10 spent</li>
+          <li>Digital membership card</li>
           <li>Access to all SOKONI features</li>
         </ul>
       </div>
@@ -695,39 +937,130 @@
       <div class="loy-tier-card">
         <div class="loy-tier-card-icon">🥈</div>
         <div class="loy-tier-card-name" style="color:#9e9e9e;">Silver</div>
-        <div class="loy-tier-card-range">1,000 – 4,999 pts</div>
+        <div class="loy-tier-card-range">5,000 – 19,999 lifetime pts</div>
         <div class="loy-multiplier">1.5× earn rate</div>
         <ul class="loy-tier-card-perks">
-          <li>1.5× earn rate</li>
+          <li>1.5× points multiplier</li>
+          <li>Priority customer support</li>
           <li>Early access to sales</li>
-          <li>Priority support</li>
         </ul>
       </div>
       <!-- Gold -->
       <div class="loy-tier-card">
         <div class="loy-tier-card-icon">🥇</div>
-        <div class="loy-tier-card-name" style="color:#ffc107;">Gold</div>
-        <div class="loy-tier-card-range">5,000 – 19,999 pts</div>
+        <div class="loy-tier-card-name" style="color:#FFD700;">Gold</div>
+        <div class="loy-tier-card-range">20,000 – 49,999 lifetime pts</div>
         <div class="loy-multiplier">2× earn rate</div>
         <ul class="loy-tier-card-perks">
-          <li>2× earn rate</li>
-          <li>Free delivery on orders</li>
-          <li>Exclusive deals</li>
-          <li>VIP badge</li>
+          <li>2× points multiplier</li>
+          <li>Birthday bonus: 500 pts</li>
+          <li>Free delivery on orders &gt; KES 500</li>
+          <li>Exclusive Gold deals</li>
         </ul>
       </div>
       <!-- Platinum -->
       <div class="loy-tier-card">
         <div class="loy-tier-card-icon">💎</div>
         <div class="loy-tier-card-name" style="color:#00bcd4;">Platinum</div>
-        <div class="loy-tier-card-range">20,000+ pts</div>
+        <div class="loy-tier-card-range">50,000 – 99,999 lifetime pts</div>
         <div class="loy-multiplier">3× earn rate</div>
         <ul class="loy-tier-card-perks">
-          <li>3× earn rate</li>
-          <li>Dedicated support</li>
+          <li>3× points multiplier</li>
+          <li>Dedicated account manager</li>
+          <li>VIP events access</li>
           <li>Double referral bonuses</li>
-          <li>Platinum badge</li>
         </ul>
+      </div>
+      <!-- Diamond -->
+      <div class="loy-tier-card" style="border:2px solid rgba(185,242,255,.6);background:linear-gradient(135deg,#0d0d1a,#0f3460);">
+        <div class="loy-tier-card-icon">💠</div>
+        <div class="loy-tier-card-name" style="color:#B9F2FF;">Diamond</div>
+        <div class="loy-tier-card-range" style="color:#8ab;font-size:11px;">100,000+ lifetime pts</div>
+        <div class="loy-multiplier" style="background:rgba(185,242,255,.15);color:#B9F2FF;border-color:rgba(185,242,255,.3);">5× earn rate</div>
+        <ul class="loy-tier-card-perks" style="color:#cde;">
+          <li>5× points multiplier</li>
+          <li>Premium concierge support</li>
+          <li>First access to new products</li>
+          <li>Exclusive Diamond experiences</li>
+          <li>Maximum cashback rate</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TAB: CASHBACK
+═══════════════════════════════════════════════ -->
+<div class="loy-tab-content" id="loy-tab-cashback" role="tabpanel">
+  <div class="loy-content">
+    <div class="loy-section">
+      <h3>Cashback Balance</h3>
+      <div class="loy-cashback-balance" id="loyCashbackBalance">KES 0.00</div>
+      <div class="loy-cashback-pending" id="loyCashbackPending"></div>
+    </div>
+    <div class="loy-section">
+      <h3>Cashback History</h3>
+      <div id="loyCashbackHistory" class="loy-history-list">
+        <div class="loy-empty">
+          <div class="loy-empty-icon">💵</div>
+          <p>No cashback transactions yet.<br>Cashback is earned on eligible purchases.</p>
+        </div>
+      </div>
+    </div>
+    <div class="loy-section">
+      <button class="loy-btn" onclick="SokoniLoyalty.redeemCashback()">Redeem Cashback</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TAB: GIFT CARDS
+═══════════════════════════════════════════════ -->
+<div class="loy-tab-content" id="loy-tab-giftcards" role="tabpanel">
+  <div class="loy-content">
+    <div class="loy-section">
+      <h3>My Gift Cards</h3>
+      <div id="loyGiftCardList" class="loy-reward-grid">
+        <div class="loy-empty">
+          <div class="loy-empty-icon">🎫</div>
+          <p>You have no gift cards yet.<br>Gift cards can be purchased or received as rewards.</p>
+        </div>
+      </div>
+    </div>
+    <div class="loy-section">
+      <h3>Redeem a Gift Card</h3>
+      <div class="loy-input-row">
+        <input type="text" id="loyGiftCardInput" placeholder="XXXX-XXXX-XXXX-XXXX" class="loy-input" maxlength="19" autocomplete="off" spellcheck="false">
+        <button class="loy-btn" onclick="SokoniLoyalty.checkGiftCard()">Check</button>
+      </div>
+      <div id="loyGiftCardResult" class="loy-gift-card-result"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TAB: LUCKY DRAWS
+═══════════════════════════════════════════════ -->
+<div class="loy-tab-content" id="loy-tab-draws" role="tabpanel">
+  <div class="loy-content">
+    <div class="loy-section">
+      <h3>Active Draws</h3>
+      <p class="loy-sub">You are automatically entered into draws when you shop!</p>
+      <div id="loyDrawsList" class="loy-draws-list">
+        <div class="loy-empty">
+          <div class="loy-empty-icon">🍀</div>
+          <p>No active draws right now.<br>Check back soon — new draws are added regularly!</p>
+        </div>
+      </div>
+    </div>
+    <div class="loy-section">
+      <h3>My Draw Entries</h3>
+      <div id="loyMyEntries">
+        <div class="loy-empty">
+          <div class="loy-empty-icon">🎟️</div>
+          <p>No entries yet.<br>Shop to automatically earn draw tickets.</p>
+        </div>
       </div>
     </div>
   </div>

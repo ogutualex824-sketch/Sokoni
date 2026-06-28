@@ -300,23 +300,23 @@ exports.posMarketplaceOrderSync = functions.firestore.onDocumentUpdated(
     if (!activatedNow || after.posProcessed === true) return null;
 
     const { items = [], branchId = 'default' } = after;
-    const batch = db.batch();
-    const movements = [];
-
     const orderId = event.params.orderId;
+
     for (const item of items) {
       const { productId, qty } = item;
       if (!productId || !qty) continue;
 
-      const invId  = `${branchId}__${productId}`;
-      const invRef = db.collection('inventory').doc(invId);
-      const mvRef  = db.collection('stockMovements').doc();
+      const invId      = `${branchId}__${productId}`;
+      const invRef     = db.collection('inventory').doc(invId);
+      const mvRef      = db.collection('stockMovements').doc(`${orderId}_${productId}`);
+      /* Per-item idempotency key written INSIDE the transaction.
+         If the trigger fires again (e.g. batch.commit below failed), this
+         guards each item independently — no double-deductions. */
+      const itemIdemRef = db.collection('posSyncIdempotency').doc(`${orderId}_${productId}`);
 
-      /* Atomic transaction: read current stock, deduct, write movement.
-         Prevents TOCTOU race where two concurrent marketplace orders both
-         claim the same last unit. */
       await db.runTransaction(async t => {
-        const invSnap = await t.get(invRef);
+        const [invSnap, idemSnap] = await Promise.all([t.get(invRef), t.get(itemIdemRef)]);
+        if (idemSnap.exists) return; // already deducted on a prior attempt
         if (!invSnap.exists) return;
 
         const current = invSnap.data().qty || 0;
@@ -324,15 +324,16 @@ exports.posMarketplaceOrderSync = functions.firestore.onDocumentUpdated(
         if (current < qty) {
           console.warn(`[posMarketplaceOrderSync] Stockout: product=${productId} current=${current} requested=${qty} orderId=${orderId}`);
         }
-        t.update(invRef, { qty: newQty, updatedAt: Date.now() });
-        t.set(mvRef, { productId, qty: -qty, type: 'marketplace_sale', reference: orderId, timestamp: Date.now(), branchId });
+        t.update(invRef, { qty: newQty, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        t.set(mvRef, { productId, qty: -qty, type: 'marketplace_sale', reference: orderId,
+          branchId, processedAt: admin.firestore.FieldValue.serverTimestamp() });
+        t.set(itemIdemRef, { orderId, productId, deductedAt: admin.firestore.FieldValue.serverTimestamp() });
       });
     }
 
-    /* Mark order as posProcessed to prevent re-trigger */
-    const batch = db.batch();
-    batch.update(event.data.after.ref, { posProcessed: true, posProcessedAt: Date.now() });
-    await batch.commit();
+    /* Mark order-level posProcessed flag — convenience only; real protection is per-item idempotency above */
+    await event.data.after.ref.update({ posProcessed: true, posProcessedAt: admin.firestore.FieldValue.serverTimestamp() })
+      .catch(e => console.error('[posMarketplaceOrderSync] posProcessed update failed (non-fatal):', e));
     return null;
   }
 );

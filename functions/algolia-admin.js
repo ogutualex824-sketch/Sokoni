@@ -84,11 +84,12 @@ const _INDEX_OVERRIDES = {
     /* 50-char description snippet reduces payload ~80% vs sending full description */
     attributesToSnippet:              ['description:50'],
     /* Scoring signals must never reach the browser — restrict at index level */
-    unretrievableAttributes:          ['_popularityScore', '_salesScore', '_clickScore', '_conversionScore', 'keywords', 'nameLower'],
+    unretrievableAttributes:          ['_popularityScore', '_salesScore', '_clickScore', '_conversionScore', 'keywords', 'nameLower',
+                                       'sellerEmail', 'sellerPhone', 'bankAccount', 'sellerIdNumber', 'kraPin'],
   },
   sokoni_shops: {
     attributesToSnippet:              ['description:40'],
-    unretrievableAttributes:          ['_popularityScore'],
+    unretrievableAttributes:          ['_popularityScore', 'ownerEmail', 'ownerPhone', 'bankAccount', 'kraPin', 'businessRegNo'],
   },
   sokoni_services: {
     attributesToSnippet:              ['description:50'],
@@ -387,7 +388,15 @@ const INDEX_SETTINGS = {
     customRanking: ['desc(verified)', 'desc(_popularityScore)', 'desc(rating)'],
     typoTolerance: true,
     hitsPerPage:   20,
-    unretrievableAttributes: ['_popularityScore'],
+    unretrievableAttributes: [
+      '_popularityScore',
+      'email', 'phone', 'phoneNumber', 'mobile',
+      'bankAccount', 'bankCode', 'accountNumber',
+      'idNumber', 'nationalId', 'kraPin', 'passportNumber',
+      'dateOfBirth', 'birthDate',
+      'fcmToken', 'pushToken', 'deviceTokens',
+      'passwordHash', 'salt',
+    ],
   },
 
   sokoni_categories: {
