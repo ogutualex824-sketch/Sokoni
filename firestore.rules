@@ -1,11 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     /* ══════════════════════════════════════════════════════════════
        HELPER FUNCTIONS
     ══════════════════════════════════════════════════════════════ */
-
     /*
      * isSuperAdmin()
      * Firebase ID token carries superAdmin == true custom claim.
@@ -14,7 +12,6 @@ service cloud.firestore {
     function isSuperAdmin() {
       return request.auth != null && request.auth.token.superAdmin == true;
     }
-
     /*
      * isAdmin()
      * Returns true when the Firebase ID token carries the custom
@@ -26,7 +23,6 @@ service cloud.firestore {
       return request.auth != null &&
              (request.auth.token.admin == true || request.auth.token.superAdmin == true);
     }
-
     /*
      * isModerator()
      * Moderators can read and act on flagged content, disputes, and
@@ -39,7 +35,6 @@ service cloud.firestore {
               request.auth.token.admin == true ||
               request.auth.token.superAdmin == true);
     }
-
     /*
      * isAuthed()
      * Any request that carries a valid Firebase Auth token.
@@ -48,7 +43,6 @@ service cloud.firestore {
     function isAuthed() {
       return request.auth != null;
     }
-
     /*
      * isOwner()
      * The authenticated user's UID matches the 'uid' field already
@@ -58,7 +52,6 @@ service cloud.firestore {
     function isOwner() {
       return isAuthed() && resource.data.uid == request.auth.uid;
     }
-
     /*
      * claimsOwner()
      * The authenticated user's UID matches the 'uid' field in the
@@ -69,7 +62,6 @@ service cloud.firestore {
     function claimsOwner() {
       return isAuthed() && request.resource.data.uid == request.auth.uid;
     }
-
     /*
      * uidUnchanged()
      * Returns true when an update does NOT touch the 'uid' field.
@@ -82,7 +74,6 @@ service cloud.firestore {
                .affectedKeys()
                .hasAny(['uid']);
     }
-
     /*
      * _validGPS(lat, lng)
      * Validates GPS coordinates fall within Kenya's bounding box.
@@ -95,7 +86,6 @@ service cloud.firestore {
           && lat >= -5.0  && lat <= 5.0
           && lng >= 33.9  && lng <= 42.0;
     }
-
     /*
      * noAdminFields()
      * Rejects writes that try to set admin-only privilege fields.
@@ -108,7 +98,6 @@ service cloud.firestore {
                         'featured','verified','flagged','adminNote',
                         'role','approved','approvedAt','approvedBy']);
     }
-
     /*
      * noPrivilegeEscalation()
      * When a write includes 'registeredAs', ensure the user is not
@@ -120,7 +109,6 @@ service cloud.firestore {
              || !request.resource.data.registeredAs.keys()
                   .hasAny(['admin','superAdmin','moderator','isAdmin']);
     }
-
     /*
      * noProviderForgery()
      * When a client writes 'provider' or 'providers', the value must
@@ -144,7 +132,6 @@ service cloud.firestore {
              || (data.provider == 'password'  && tokenProvider == 'password')
              || (data.provider == 'oauth'     && tokenProvider != 'password');
     }
-
     /*
      * validPrice(field)
      * Ensures a numeric price/amount field is a positive number.
@@ -153,7 +140,6 @@ service cloud.firestore {
       return request.resource.data[field] is number
              && request.resource.data[field] > 0;
     }
-
     /*
      * validOrderStatus()
      * Status transitions must use one of the defined lifecycle values.
@@ -170,7 +156,6 @@ service cloud.firestore {
                   'rider_assigned','rider_en_route','picked_up','in_transit'
                 ];
     }
-
     /* ══════════════════════════════════════════════════════════════
        USERS
        Each document is keyed by the Firebase Auth UID.
@@ -193,7 +178,6 @@ service cloud.firestore {
                         && noProviderForgery());
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        APPLICATIONS  (provider / driver onboarding)
        • create:  claimsOwner() — the uid in the payload must match
@@ -210,12 +194,10 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        PROVIDERS
        Public listing is intentional — hub pages (healthcare.html,
        services.html etc.) discover providers without requiring login.
-
        • create:  the uid field in the new document must match the
                   authenticated user's uid.  Previously this was only
                   isAuthed(), meaning any logged-in user could register
@@ -237,7 +219,6 @@ service cloud.firestore {
                              .hasAny(['status', 'verified', 'suspended', 'approved']));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        BOOKINGS
        • create:  claimsOwner() — uid in payload must match auth uid.
@@ -270,8 +251,6 @@ service cloud.firestore {
                              .hasOnly(['status','providerNote','updatedAt','confirmedAt','completedAt']));
       allow delete: if isAdmin();
     }
-
-    /* ── Venue & Resource Booking Engine ─────────────────────────── */
     match /venues/{venueId} {
       /* Anyone can browse active venues; only the owner (via CF) may write */
       allow read:   if resource.data.status == 'active' || isAdmin()
@@ -285,7 +264,6 @@ service cloud.firestore {
                         && request.resource.data.ownerId == request.auth.uid);
       allow delete: if isAdmin();
     }
-
     match /venueBlockouts/{blockId} {
       allow read:   if isAuthed();
       allow create: if isAuthed();
@@ -294,14 +272,12 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.createdBy == request.auth.uid);
     }
-
     match /bookingHolds/{holdId} {
       /* Slot holds: auth users can create; CF cleanup deletes expired; owner can delete their own */
       allow read:   if isAuthed();
       allow create: if isAuthed() && request.resource.data.userId == request.auth.uid;
       allow delete: if isAuthed() && resource.data.userId == request.auth.uid || isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        RIDES
        • create:  claimsOwner().
@@ -329,16 +305,13 @@ service cloud.firestore {
                                        'arrivedAt','startedAt','completedAt','driverLocation']));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        DRIVER LOCATIONS  (real-time GPS)
        Public read is intentional — passengers track drivers live.
-
        Previously the single `allow write` rule checked the INCOMING
        uid but not the EXISTING document's uid.  A user could therefore
        overwrite another driver's location document by simply setting
        their own uid in the new payload.
-
        The rules are now split into three verbs:
        • create:  incoming uid must match auth uid.
        • update:  BOTH the existing doc's uid AND the incoming uid must
@@ -354,7 +327,6 @@ service cloud.firestore {
                     && request.resource.data.uid  == request.auth.uid;
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        PACKAGES / DELIVERIES
        Same ownership pattern as rides.
@@ -373,7 +345,6 @@ service cloud.firestore {
                         && uidUnchanged());
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ORDERS  (marketplace checkout + SokoniOrders state machine)
        • Readable by buyer (uid / userId / buyerId / buyerUid),
@@ -383,7 +354,6 @@ service cloud.firestore {
                   assigned driver (status transitions), admin (any).
                   uid field is always frozen on non-admin updates.
        • delete:  admin only.
-
        orderEvents subcollection — immutable event log:
        • create:  any authenticated party to the order.
        • read:    buyer, seller, assigned driver, or admin.
@@ -417,7 +387,6 @@ service cloud.firestore {
                         && request.resource.data.diff(resource.data).affectedKeys()
                              .hasOnly(['status','driverNote','updatedAt','pickedUpAt','deliveredAt','etaMin']));
       allow delete: if isAdmin();
-
       match /events/{eventId} {
         /* Append-only audit trail — only parties to the parent order may write */
         allow create: if isAdmin()
@@ -441,13 +410,11 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
-
     /* ══════════════════════════════════════════════════════════════
        FCM TOKENS  (push notification registration)
        Previously `allow write: if isAuthed()` let any authenticated
        user overwrite any other user's push token, silently disabling
        their notifications.
-
        Now the write is gated on the token document's email field
        matching the authenticated user's email claim from the Firebase
        JWT.  The document ID is derived from the email in firebase.js,
@@ -459,7 +426,6 @@ service cloud.firestore {
                    && request.resource.data.email == request.auth.token.email;
       allow read:  if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        AUDIT LOGS
        Append-only — authenticated clients (security.js) can add
@@ -473,7 +439,6 @@ service cloud.firestore {
       allow read:           if isModerator();
       allow update, delete: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        NOTIFICATIONS
        Created server-side by admin (or Cloud Functions which bypass
@@ -512,20 +477,17 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.targetUid == request.auth.uid);
     }
-
     /* Notification preferences — per-user DND, quiet hours, category toggles.
        Only the owning user may read or write their own preference document. */
     match /userNotifPrefs/{userId} {
       allow read, write: if isAuthed() && request.auth.uid == userId;
     }
-
     /* /escrow/{orderId} — DEPRECATED. Canonical escrow collection is /escrows/{escrowId} below.
        Keeping read-only access so old records remain visible to admin. No new writes. */
     match /escrow/{orderId} {
       allow read:   if isAdmin();
       allow create, update, delete: if false;
     }
-
     match /referrals/{refId} {
       allow create: if isAuthed() && claimsOwner();
       allow read:   if isAdmin()
@@ -533,7 +495,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        REVIEWS  (platform / seller / product / provider)
        Publicly readable — seller-public.html and product.html show
@@ -549,7 +510,6 @@ service cloud.firestore {
       allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        eTIMS SUBMISSIONS  (KRA invoice records)
        Sellers can create their own submissions (etims.js).
@@ -560,7 +520,6 @@ service cloud.firestore {
       allow create:               if claimsOwner();
       allow read, update, delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        LAWYERS  (legal-hub.html directory)
        Public listing — anyone can browse.  Only the registering
@@ -572,7 +531,6 @@ service cloud.firestore {
       allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        LEGAL APPOINTMENTS  (legal-hub.html booking system)
        • create:  any authenticated user; uid in payload must match.
@@ -601,7 +559,6 @@ service cloud.firestore {
                         && request.resource.data.status in ['confirmed','declined','completed']);
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        LEGAL SERVICE REQUESTS  (property / vehicle / business)
        • create:  any authenticated user.
@@ -625,7 +582,6 @@ service cloud.firestore {
                         && request.resource.data.status == 'cancelled');
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        LEGAL REVIEWS  (lawyer / appointment ratings)
        Publicly readable — trust signals for the directory.
@@ -649,7 +605,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        FOOD ORDERS  (food-menu.html checkout → food-dashboard.html restaurant)
        • read:   buyer (buyerUid), restaurant (restaurantId via isAuthed), admin
@@ -673,7 +628,6 @@ service cloud.firestore {
                              .hasOnly(['status','riderName','riderPhone','riderRating','updatedAt','statusHistory']));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        FOOD MENUS  (food-dashboard.html → food-menu.html)
        • read:   public (anyone can browse a restaurant's menu)
@@ -683,7 +637,6 @@ service cloud.firestore {
       allow read:   if true;
       allow write:  if isAdmin() || (isAuthed() && request.auth.uid == restaurantId);
     }
-
     /* ══════════════════════════════════════════════════════════════
        LEGAL BOOKINGS  (legal-hub.html → lawyer consultation bookings)
        • read:   client (clientUid match), lawyer (lawyerId match via sellerUid), admin
@@ -705,7 +658,6 @@ service cloud.firestore {
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        MECHANICS  (mechanics.html directory)
        Same public-listing, owner-write pattern as lawyers.
@@ -716,12 +668,10 @@ service cloud.firestore {
       allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        eTIMS CONFIG  (KRA merchant credentials)
        Previously `allow read, write: if isAuthed()` let any
        authenticated user overwrite KRA tax settings.
-
        Config reads still require authentication (etims.js reads the
        counter on every invoice).  Writes are restricted to admin so
        that merchant credentials (TIN, device serial) cannot be
@@ -731,7 +681,6 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow write: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        USER SESSIONS  (multi-device session tracking)
        • create:  the userEmail field in the new session document must
@@ -751,7 +700,6 @@ service cloud.firestore {
        Structure:
          userSync/{uid}/kv/{key}        — simple key-value pairs
          userSync/{uid}/products/{pid}  — seller products (one doc each)
-
        • Only the document owner can read or write their own sync
          documents.  No cross-user reads.  Admin can read all.
        • uid field in written documents must match auth uid to prevent
@@ -762,7 +710,6 @@ service cloud.firestore {
       allow write:  if isAuthed() && request.auth.uid == uid;
       allow delete: if isAuthed() && request.auth.uid == uid;
     }
-
     /* ══════════════════════════════════════════════════════════════
        PRODUCTS  (public marketplace catalogue)
        Written by seller-wiring.js when a seller uploads a product.
@@ -788,7 +735,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.sellerUid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        LISTINGS  (universal hub provider listings)
        Written by hub-wiring.js when a provider saves a listing.
@@ -812,7 +758,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.ownerId == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        CONVERSATIONS  (cross-device real-time messaging)
        convId = [uid1,uid2].sort().join('_')  — deterministic per pair.
@@ -821,7 +766,6 @@ service cloud.firestore {
        • read / update: only participants can access — enforced by
                   array-contains check on the stored participants field.
        • delete:  admin-only (soft-delete: remove self from participants).
-
        Messages subcollection:
        • create:  sender must be a participant AND senderId must match uid.
        • read:    participants only.
@@ -841,7 +785,6 @@ service cloud.firestore {
                     && request.auth.uid in request.resource.data.participants
                     && request.resource.data.participants.size() <= 2;
       allow delete: if isAdmin();
-
       match /messages/{msgId} {
         function inConvo() {
           return isAuthed()
@@ -856,7 +799,6 @@ service cloud.firestore {
         allow update, delete: if isAdmin();
       }
     }
-
     /* ══════════════════════════════════════════════════════════════
        TEAMS  (sports-hub.html team registrations)
        • Public read — anyone can browse registered teams.
@@ -875,7 +817,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.ownerId == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        TOURNAMENTS  (sports-hub.html tournament creation)
        • Public read — anyone can view and join tournaments.
@@ -889,7 +830,6 @@ service cloud.firestore {
       allow update: if isAdmin() || (isOwner() && uidUnchanged());
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SPORTS HUB — PLAYER PROFILES  (sportsPlayers collection)
        • Public read — anyone can browse the player directory.
@@ -904,7 +844,6 @@ service cloud.firestore {
                     || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SPORTS HUB — COACH PROFILES  (sportsCoaches collection)
        • Public read — coach directory visible to all.
@@ -919,7 +858,6 @@ service cloud.firestore {
                     || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SPORTS HUB — VENUE PROFILES  (sportsVenues collection)
        • Public read — venue directory searchable by all.
@@ -934,7 +872,6 @@ service cloud.firestore {
                     || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SPORTS VENUE BOOKINGS  (sportsVenueBookings collection)
        • create: authenticated user; uid in payload must match auth uid;
@@ -951,7 +888,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SPORTS COACH BOOKINGS  (sportsCoachBookings collection)
        • create: authenticated user; uid in payload must match auth uid;
@@ -968,7 +904,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SPORTS TOURNAMENT REGISTRATIONS  (sportsTournamentRegs collection)
        • Public read — organizers see all team registrations.
@@ -986,7 +921,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        SPORTS REVIEWS  (sportsReviews collection)
        • Public read — all reviews visible to everyone.
@@ -1006,7 +940,6 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SPORTS COMMUNITY POSTS  (sportsPosts collection)
        • Public read — community feed visible to all.
@@ -1026,7 +959,6 @@ service cloud.firestore {
                              .affectedKeys().hasOnly(['content','likes','comments','updatedAt']));
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SPORTS MARKETPLACE ORDERS  (sportsOrders collection)
        • create: authenticated; uid in payload must match auth uid;
@@ -1044,7 +976,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        FITNESS HUB — BOOKINGS  (fitness-hub.html)
        • read: owner or admin only (financial/personal data)
@@ -1059,7 +990,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        FITNESS HUB — PROGRESS  (workout log, weight log, goals, badges)
        • read/write: owner only (personal health data); admin read
@@ -1071,7 +1001,6 @@ service cloud.firestore {
       allow update: if isAuthed() && request.auth.uid == userId;
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        FITNESS HUB — GYM PROFILES  (gym owner dashboard)
        • read: public (gyms are public listings)
@@ -1084,7 +1013,6 @@ service cloud.firestore {
       allow update: if isAuthed() && request.auth.uid == gymId && uidUnchanged() && noAdminFields();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        FITNESS HUB — CLASSES  (instructor-posted fitness classes)
        • read: public
@@ -1104,7 +1032,6 @@ service cloud.firestore {
                         && uidUnchanged());
       allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        FITNESS HUB — CLUBS  (community fitness clubs)
        • read: public
@@ -1124,7 +1051,6 @@ service cloud.firestore {
                         && uidUnchanged());
       allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        FITNESS HUB — COMMUNITY POSTS  (workout achievement posts)
        • read: public
@@ -1145,7 +1071,6 @@ service cloud.firestore {
                         && uidUnchanged());
       allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        FITNESS HUB — EQUIPMENT LISTINGS
        • read: public (marketplace-style listings)
@@ -1165,7 +1090,6 @@ service cloud.firestore {
                         && uidUnchanged());
       allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        FITNESS HUB — REQUESTS  (Ask Hub — help requests to providers)
        • read: public (providers browse requests)
@@ -1186,7 +1110,6 @@ service cloud.firestore {
                         && uidUnchanged());
       allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        FITNESS HUB — CHALLENGES  (challenge participation records)
        • read: public (for leaderboards)
@@ -1199,7 +1122,6 @@ service cloud.firestore {
       allow update: if isAuthed() && resource.data.uid == request.auth.uid && uidUnchanged();
       allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        FITNESS HUB — CHECK-INS  (gym member check-in log)
        • read: gym owner (gymUid == auth.uid) or admin
@@ -1214,7 +1136,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        DIGITAL ESOKO — PRODUCTS  (digital-esoko-seller.html → digital-esoko.html)
        • read:   public (anyone can browse)
@@ -1234,7 +1155,6 @@ service cloud.firestore {
                              .hasOnly(['title','description','price','category','tags','coverURL','fileURL','fileName','fileSize','active','featured','downloads','rating','updatedAt']));
       allow delete: if isAdmin() || (isAuthed() && resource.data.sellerUid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        DIGITAL ESOKO — PURCHASES  (buyer → confirmed payment only)
        • read:   buyer (buyerUid match), seller (sellerUid match), or admin
@@ -1254,7 +1174,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        BNB LISTINGS  (bnb-manage.html host → bnb.html / bnb-hub.html guest)
        • read:   public (anyone can browse listings)
@@ -1273,7 +1192,6 @@ service cloud.firestore {
                              .hasOnly(['name','type','location','price','pricePerNight','desc','description','amenities','phone','image','images','video','available','maxGuests','bedrooms','bathrooms','updatedAt']));
       allow delete: if isAdmin() || (isAuthed() && resource.data.hostUid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        BNB BOOKINGS  (bnb.html / bnb-hub.html guest confirm)
        • read:   the guest (uid match), the host (hostUid match), or admin
@@ -1294,7 +1212,6 @@ service cloud.firestore {
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt']));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        DISPUTES  (dispute.html — buyer/seller dispute resolution)
        • create: any authenticated user may submit a dispute.
@@ -1320,7 +1237,6 @@ service cloud.firestore {
                              'refundAmount','refundReason','refundRequestedAt'])
                         && uidUnchanged());
       allow delete: if isAdmin();
-
       /* Dispute messages subcollection — parties + moderators */
       match /messages/{msgId} {
         allow create: if isAuthed()
@@ -1342,7 +1258,6 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
-
     /* ══════════════════════════════════════════════════════════════
        FRAUD ALERTS  (submitted by SokoniFraud.flag())
        Authenticated users flag suspicious activity; only moderators/admin read.
@@ -1355,7 +1270,6 @@ service cloud.firestore {
       allow update: if isModerator();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ONBOARDING COMPLETED  (written by SokoniOnboarding.complete())
        One doc per role completion per user.
@@ -1367,7 +1281,6 @@ service cloud.firestore {
       allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
       allow update, delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        OFFERS  (admin-managed product promotions)
        Public read; only admins can write.
@@ -1381,7 +1294,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     match /withdrawals/{withdrawalId} {
       allow create: if isAuthed()
                     && request.resource.data.uid    == request.auth.uid
@@ -1392,7 +1304,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        COMMUNITY POSTS  (community.html real-time feed)
        • Public read — anyone can browse the community feed.
@@ -1438,7 +1349,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.authorUid == request.auth.uid);
     }
-
     match /communityGroups/{groupId} {
       allow read:   if true;
       allow create: if isAuthed()
@@ -1446,11 +1356,9 @@ service cloud.firestore {
       allow update: if isAdmin() || (isAuthed() && resource.data.createdBy == request.auth.uid);
       allow delete: if isAdmin() || (isAuthed() && resource.data.createdBy == request.auth.uid);
     }
-
     match /userProgress/{uid}/{subcol}/{docId} {
       allow read, write: if isAdmin() || (isAuthed() && request.auth.uid == uid);
     }
-
     match /userSessions/{sessionId} {
       allow create: if isAuthed()
                     && request.auth.token.email != null
@@ -1468,7 +1376,6 @@ service cloud.firestore {
                         && request.auth.token.email != null
                         && resource.data.userEmail == request.auth.token.email);
     }
-
     /* ══════════════════════════════════════════════════════════════
        BOOKING FEES  (SokoniPay — all channel revenue records)
        Written by sokoni-pay.js on every payment event.
@@ -1485,11 +1392,9 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* commissionLedger — authoritative rule is in the Revenue Engine block below (~line 1375).
        Written exclusively by Cloud Functions (intasendWebhook, generateInvoice).
        Seller reads own entries; admin reads all. No client writes. */
-
     /* ══════════════════════════════════════════════════════════════
        BROADCAST NOTIFICATIONS  (admin → all users push targets)
        Written server-side by Cloud Functions (KASS/admin tools).
@@ -1503,7 +1408,6 @@ service cloud.firestore {
                     || resource.data.targetUid == 'broadcast'
                   ));
     }
-
     /* ══════════════════════════════════════════════════════════════
        DELETED PRODUCTS  (soft-delete audit trail)
        Written server-side by Cloud Functions when admin deletes a
@@ -1513,7 +1417,6 @@ service cloud.firestore {
       allow create, update: if isAdmin();
       allow read, delete:   if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        UNBOXING REVIEWS  (unboxing.html video reviews)
        Public read — anyone can browse unboxing content.
@@ -1527,7 +1430,6 @@ service cloud.firestore {
       allow update: if (isAdmin() || isOwner()) && uidUnchanged();
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SHOP EMPLOYEES  (created by seller.js addEmployee())
        • Employee reads their own record (by UID).
@@ -1545,7 +1447,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        SELLERS
        Store profiles created by the seller wizard.
@@ -1560,7 +1461,6 @@ service cloud.firestore {
                     || (isAuthed() && request.auth.uid == uid && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SELLER BROADCASTS
        Push notifications sent by sellers to their followers.
@@ -1578,7 +1478,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.sellerUid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        LANDLORD DATA
        Stores the landlord's property/unit list.
@@ -1588,7 +1487,6 @@ service cloud.firestore {
       allow read, write: if isAuthed() && request.auth.uid == uid;
       allow read: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        FOLLOWS
        Records buyer → seller follows.
@@ -1600,7 +1498,6 @@ service cloud.firestore {
       allow create: if isAuthed() && followId.matches(request.auth.uid + '--.*');
       allow delete: if isAdmin() || (isAuthed() && followId.matches(request.auth.uid + '--.*'));
     }
-
     /* ══════════════════════════════════════════════════════════════
        DRIVER RATINGS  (left by passengers after trips/deliveries)
        • create: authenticated passenger (claimsOwner); one per ref.
@@ -1613,7 +1510,6 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.driverId == request.auth.uid);
       allow update, delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        RIDE DRIVERS  (online/offline driver registry + live GPS)
        Public read — passengers and the matching algorithm need
@@ -1638,7 +1534,6 @@ service cloud.firestore {
                             || _validGPS(request.resource.data.lat, request.resource.data.lng)));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        RIDE REQUESTS  (passenger → driver ride bookings)
        • create:  claimsOwner() — uid in payload must match auth uid.
@@ -1666,7 +1561,6 @@ service cloud.firestore {
                                                       'startedAt','completedAt','driverLocation']));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        PACKAGE REQUESTS  (delivery orders — regular + marketplace)
        • create:  claimsOwner() — uid in payload must match auth uid.
@@ -1716,7 +1610,6 @@ service cloud.firestore {
                             || _validGPS(request.resource.data.driverLat, request.resource.data.driverLng)));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ENTERTAINMENT HUB — ARTISTS / CREATORS
        Public read (buyers browse). Write/update: owner or admin.
@@ -1727,7 +1620,6 @@ service cloud.firestore {
       allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ENTERTAINMENT HUB — EVENTS
        Public read for published events. Organizer creates/updates.
@@ -1740,7 +1632,6 @@ service cloud.firestore {
                     || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ENTERTAINMENT HUB — TICKETS
        Buyer reads their own tickets; event organizer reads attendees;
@@ -1757,7 +1648,6 @@ service cloud.firestore {
                         && uidUnchanged());
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ENTERTAINMENT HUB — VENUES
        Public read. Venue owner creates/updates. Admin full access.
@@ -1768,7 +1658,6 @@ service cloud.firestore {
       allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ENTERTAINMENT HUB — VENUE BOOKINGS
        Booker and venue owner read their own. Admin reads all.
@@ -1783,7 +1672,6 @@ service cloud.firestore {
                         && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ENTERTAINMENT HUB — ARTIST BOOKINGS
        Booker and artist read their own booking. Admin reads all.
@@ -1798,7 +1686,6 @@ service cloud.firestore {
                         && uidUnchanged());
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ENTERTAINMENT HUB — REVIEWS
        Public read for approved reviews. Author creates; admin approves.
@@ -1809,7 +1696,6 @@ service cloud.firestore {
       allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ENTERTAINMENT HUB — DIGITAL CONTENT
        Published content is publicly readable. Creator manages own.
@@ -1821,7 +1707,6 @@ service cloud.firestore {
       allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin() || isOwner();
     }
-
     /* ══════════════════════════════════════════════════════════════
        DELIVERY HUB — DELIVERIES
        Sender owns their delivery; assigned rider can update status
@@ -1844,7 +1729,6 @@ service cloud.firestore {
                                       'deliveredAt','etaMin']));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        DELIVERY HUB — DELIVERY RIDERS
        Rider owns their profile (uid == riderId); public read for
@@ -1861,7 +1745,6 @@ service cloud.firestore {
                              .hasAny(['approved','verified','suspended','banned']));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        DELIVERY HUB — RIDER LOCATIONS
        Rider writes their own location; public read for tracking.
@@ -1871,7 +1754,6 @@ service cloud.firestore {
       allow write:  if isAdmin()
                     || (isAuthed() && request.auth.uid == riderId);
     }
-
     /* ══════════════════════════════════════════════════════════════
        DELIVERY HUB — DELIVERY PROOFS
        Rider (assignedRiderId) creates the proof; sender + rider +
@@ -1886,7 +1768,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SHOP SETTINGS — Daraja / Paybill credentials per seller
        Only the seller (owner) can read/write their own settings.
@@ -1896,7 +1777,6 @@ service cloud.firestore {
       allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
       allow write: if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        POS PAYMENTS — Daraja STK push results
        Seller OR the buyer who initiated (callerUid) can read.
@@ -1908,7 +1788,6 @@ service cloud.firestore {
                    || (isAuthed() && resource.data.callerUid == request.auth.uid);
       allow write: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SELLER PAYMENTS — Confirmed M-Pesa receipts per seller
        Written by Cloud Functions on successful Daraja callback.
@@ -1920,11 +1799,9 @@ service cloud.firestore {
                    || (isAuthed() && resource.data.callerUid  == request.auth.uid);
       allow write: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        REVENUE ENGINE COLLECTIONS
     ══════════════════════════════════════════════════════════════ */
-
     /* revenueConfig — admin writes, authed users read (needed to show rates in UI) */
     match /revenueConfig/{configId} {
       allow read:  if isAdmin()
@@ -1933,26 +1810,22 @@ service cloud.firestore {
                    || (isAuthed() && configId.matches("hub_.*"));
       allow write: if isAdmin();
     }
-
     /* subscriptionPlans — public read (pricing page), admin write */
     match /subscriptionPlans/{planId} {
       allow read:  if true;
       allow write: if isAdmin();
     }
-
     /* sellerSubscriptions — seller reads own, admin reads all, Cloud Functions write */
     match /sellerSubscriptions/{sellerUid} {
       allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
       allow write: if isAdmin();
     }
-
     /* commissionLedger — seller reads own entries, admin reads all, Cloud Functions write */
     match /commissionLedger/{entryId} {
       allow read:  if isAdmin()
                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
       allow write: if isAdmin();
     }
-
     /* featuredListings — seller reads own, admin reads all */
     match /featuredListings/{featureId} {
       allow read:  if isAdmin()
@@ -1962,7 +1835,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* sokoAds — seller reads own campaigns, admin reads all */
     match /sokoAds/{adId} {
       allow read:  if isAdmin()
@@ -1971,33 +1843,27 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* adImpressions — admin reads, Cloud Functions write */
     match /adImpressions/{impId} {
       allow read:  if isAdmin();
       allow write: if isAdmin();
     }
-
     /* invoices — seller reads own, admin reads all, Cloud Functions write */
     match /invoices/{invoiceId} {
       allow read:  if isAdmin()
                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
       allow write: if isAdmin();
     }
-
     /* sellerBilling — seller reads own monthly summaries, admin reads all */
     match /sellerBilling/{sellerUid}/monthly/{period} {
       allow read:  if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
       allow write: if isAdmin();
     }
-
     /* deliveryFees — admin reads, Cloud Functions write */
     match /deliveryFees/{feeId} {
       allow read:  if isAdmin();
       allow write: if isAdmin();
     }
-
-    /* ── Community Hub collections — second block removed (duplicate; authoritative rule is above) ── */
     match /communityEvents/{eventId} {
       allow read: if true;
       allow create: if isAuthed() && request.resource.data.organizerUid == request.auth.uid;
@@ -2030,7 +1896,6 @@ service cloud.firestore {
       allow read, update: if isModerator();
       allow delete: if isAdmin();
     }
-
     /* leadFees — seller reads own, admin reads all; seller can only create records for themselves */
     match /leadFees/{leadId} {
       allow read:   if isAdmin()
@@ -2039,7 +1904,6 @@ service cloud.firestore {
                     && request.resource.data.sellerUid == request.auth.uid;
       allow update, delete: if isAdmin();
     }
-
     /* b2bFees — seller reads own, admin reads all; seller can only create records for themselves */
     match /b2bFees/{feeId} {
       allow read:   if isAdmin()
@@ -2048,7 +1912,6 @@ service cloud.firestore {
                     && request.resource.data.sellerUid == request.auth.uid;
       allow update, delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        LOYALTY POINTS  (users/{uid}/loyalty/points subcollection)
        Points are synced from loyalty.html after each award/redemption.
@@ -2069,7 +1932,6 @@ service cloud.firestore {
                        && resource != null
                        && request.resource.data.total <= resource.data.total);
     }
-
     /* ══════════════════════════════════════════════════════════════
        VERIFICATIONS  (seller identity verification decisions)
        Written by admin only (verification team approves/rejects).
@@ -2088,8 +1950,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
-    /* ── Home Services Hub collections ── */
     /* Bookings — authenticated users only; phone must match JWT claim or be provided as guest data */
     match /homeServiceBookings/{bookingId} {
       /* SECURITY: uid required on create and bound to caller; read uses uid not phone
@@ -2130,8 +1990,6 @@ service cloud.firestore {
                     && request.resource.data.uid == request.auth.uid;
       allow update, delete: if isAdmin();
     }
-
-    /* ── TECH HUB ── */
     match /techITRequests/{docId} {
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid);
@@ -2159,7 +2017,6 @@ service cloud.firestore {
                     && request.resource.data.keys().hasAll(['name','phone']);
       allow update, delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SOKONI WALLET  (wallets/{uid} — one doc per user)
        • read/write: owner only (uid == auth.uid).
@@ -2183,7 +2040,6 @@ service cloud.firestore {
                         && request.resource.data.balance <= resource.data.balance);
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        NOTIFICATION PREFERENCES  (notificationPrefs/{uid})
        • One doc per user, keyed by uid.
@@ -2198,7 +2054,6 @@ service cloud.firestore {
                     && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid']);
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        WALLET TRANSACTIONS  (walletTxns/{txId})
        • create: authenticated users, uid in payload must match.
@@ -2212,7 +2067,6 @@ service cloud.firestore {
       allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
       allow update, delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ESCROWS  (escrows/{escrowId})
        • create: authenticated buyer (buyerUid must match).
@@ -2232,7 +2086,6 @@ service cloud.firestore {
                            .affectedKeys().hasOnly(['status','updatedAt']));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        BUSINESSES  (businesses/{bizId})
        • read: public.
@@ -2246,7 +2099,6 @@ service cloud.firestore {
       allow update: if isAdmin()
                     || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin();
-
       /* POS transaction sync — SmartPOS writes per-sale records here */
       match /pos_transactions/{txId} {
         allow read:   if isAdmin()
@@ -2257,14 +2109,12 @@ service cloud.firestore {
                       && request.resource.data.sellerUid == request.auth.uid;
         allow update, delete: if isAdmin();
       }
-
       /* Terminal device registry — SmartPOS device pairing & management */
       match /terminals/{terminalId} {
         allow read:            if isAdmin() || (isAuthed() && request.auth.uid == bizId);
         allow create, update:  if isAuthed() && request.auth.uid == bizId;
         allow delete:          if isAdmin() || (isAuthed() && request.auth.uid == bizId);
       }
-
       /* Terminal payment recovery queue — offline transaction sync */
       match /terminal_queue/{queueId} {
         allow read:   if isAdmin() || (isAuthed() && request.auth.uid == bizId);
@@ -2272,7 +2122,6 @@ service cloud.firestore {
         allow update, delete: if isAdmin();
       }
     }
-
     /* ══════════════════════════════════════════════════════════════
        BUSINESS VIEW COUNTS  (bizViews/{bizId})
        Increment-only view counter; no sensitive data.
@@ -2291,7 +2140,6 @@ service cloud.firestore {
                        .affectedKeys().hasOnly(['viewCount','lastViewAt']);
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        BUSINESS TEAM  (businessTeam/{memberId})
        • read: public.
@@ -2307,7 +2155,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.ownerUid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        VERIFICATION REQUESTS  (verificationRequests/{reqId})
        Users submit their own applications; admin reviews them.
@@ -2325,7 +2172,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ADMIN LOG  (adminLog/{logId})
        Append-only audit trail — only admins may read or create.
@@ -2337,7 +2183,6 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if isSuperAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        PLATFORM METRICS  (platformMetrics/{metricId})
        Cloud Functions and admin writes aggregate counters here.
@@ -2349,7 +2194,6 @@ service cloud.firestore {
       allow read:  if isModerator();
       allow write: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        ROLE GRANTS LOG  (roleGrants/{grantId})
        Immutable log of every role grant / revoke action.
@@ -2360,7 +2204,6 @@ service cloud.firestore {
       allow create:         if isAdmin();
       allow update, delete: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        MODERATION FLAGS  (flags/{flagId})
        Authenticated users can report content; moderators manage queue.
@@ -2372,8 +2215,6 @@ service cloud.firestore {
       allow update: if isModerator();
       allow delete: if isAdmin();
     }
-
-    /* ── Property Inquiries (WhatsApp contact tracking) ── */
     match /propertyInquiries/{docId} {
       /* uid field required and bound to caller — prevents forged inquiries with arbitrary phone numbers */
       allow create: if isAuthed()
@@ -2382,8 +2223,6 @@ service cloud.firestore {
       allow read:   if isAdmin();
       allow update, delete: if isAdmin();
     }
-
-    /* ── Property Viewings (schedule viewing requests) ── */
     match /propertyViewings/{docId} {
       /* uid field required and bound to caller — prevents forged viewing requests */
       allow create: if isAuthed()
@@ -2394,11 +2233,9 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        EMPLOYEE INVITE SYSTEM
     ══════════════════════════════════════════════════════════════ */
-
     /* Platform invites — token IS the secret; all writes via Admin SDK.
        get  = read one doc by known token (fine — token is the secret)
        list = enumerate the collection (admin only — prevents email harvesting) */
@@ -2407,13 +2244,11 @@ service cloud.firestore {
       allow list:   if isAdmin();
       allow write:  if false;
     }
-
     /* Platform employees — admin sees all; employee sees own record */
     match /platformEmployees/{uid} {
       allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
       allow write:  if false;
     }
-
     /* Shop invites — token IS the secret; all writes via Admin SDK.
        get  = read one doc by known token (join.html flow)
        list = seller may list their own pending invites; admin sees all */
@@ -2423,7 +2258,6 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
       allow write:  if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        PAYMENTS  (IntaSend STK Push payment records)
        Written by initiateSTKPush Cloud Function.
@@ -2445,7 +2279,6 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SUBSCRIPTIONS  (provider plan entitlements)
        Written exclusively by activateSubscription Cloud Function
@@ -2457,7 +2290,6 @@ service cloud.firestore {
       /* Client may NOT write subscriptions — must go through Cloud Function */
       allow write:  if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        VOUCHERS  (admin-created discount codes)
        Voucher redemption is handled atomically by redeemVoucher CF.
@@ -2469,14 +2301,12 @@ service cloud.firestore {
       /* Only admins / Cloud Functions may create or modify vouchers */
       allow create, update, delete: if isAdmin();
     }
-
     /* Voucher redemption history — Cloud Function writes, owner reads */
     match /voucherRedemptions/{redemptionId} {
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid);
       allow write:  if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        HYPER-SCALE PHASE 11: Client metrics — write from SokoniMonitor CF,
        read only by admins. Clients never write directly to this collection.
@@ -2485,69 +2315,56 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow write: if false; // recordMetric CF only
     }
-
     /* Trending products — Cloud Function writes, anyone can read */
     match /trending/{hub} {
       allow read:  if true;
       allow write: if false; // generateTrending CF only
     }
-
     /* platformMetrics rule is defined above — no duplicate needed here. */
-
     /* Mail queue — sendInvoiceEmail CF writes audit entries here.
        Authenticated users cannot read others' mail logs. */
     match /mailQueue/{docId} {
       allow read:  if isAdmin();
       allow write: if false; // sendInvoiceEmail CF only
     }
-
     /* ══════════════════════════════════════════════════════════════
        ENTERPRISE EMAIL SYSTEM
        All email collections are written exclusively by Cloud Functions.
        Clients use onCall functions (sendBroadcastEmail, resendEmail,
        updateEmailPreferences) — never direct Firestore writes.
     ══════════════════════════════════════════════════════════════ */
-
     /* Bounce suppression list — admin read/delete only */
     match /emailBounces/{email} {
       allow read:   if isAdmin();
       allow delete: if isAdmin();
       allow write:  if false; // emailWebhook CF only
     }
-
     /* Email analytics aggregates — admin read only */
     match /emailAnalytics/{docId} {
       allow read:  if isAdmin();
       allow write: if false; // processEmailQueue CF only
     }
-
     /* Email event log (opens, clicks) — admin read only */
     match /emailEvents/{eventId} {
       allow read:  if isAdmin();
       allow write: if false; // emailWebhook CF only
     }
-
     /* Notification history — user reads own records; admin reads all */
     match /notificationHistory/{docId} {
       allow read:  if isAdmin()
                    || (request.auth != null && resource.data.uid == request.auth.uid);
       allow write: if false; // server-side only
     }
-
-    /* ── DMARC Reports — admin-only ───────────────────────────────── */
-
     /* Aggregate DMARC reports parsed from XML */
     match /dmarcReports/{reportId} {
       allow read:  if isAdmin();
       allow write: if false; // processDmarcReport CF only
     }
-
     /* Sub-collection: individual IP records within each report */
     match /dmarcReports/{reportId}/records/{ipId} {
       allow read:  if isAdmin();
       allow write: if false; // processDmarcReport CF only
     }
-
     /* DMARC policy failure alerts */
     match /dmarcAlerts/{alertId} {
       allow read:  if isAdmin();
@@ -2556,11 +2373,9 @@ service cloud.firestore {
                            .hasOnly(["resolved", "resolvedAt", "resolvedBy"]);
       allow write: if false; // processDmarcReport CF only (create)
     }
-
     /* ══════════════════════════════════════════════════════════════
        JOBS MARKETPLACE
     ══════════════════════════════════════════════════════════════ */
-
     /* Job listings — anyone can read active jobs; authenticated users post */
     match /jobs/{jobId} {
       allow read:  if resource.data.active == true || isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
@@ -2583,7 +2398,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid);
     }
-
     /* Job applications — applicant writes own; employer and admin read */
     match /jobApplications/{appId} {
       allow read:  if isAdmin()
@@ -2599,7 +2413,6 @@ service cloud.firestore {
       allow update: if isAdmin(); // status changes (shortlist/reject) by employer via CF
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        EDUCATION HUB
        • read:   public if active==true; owner or admin otherwise.
@@ -2630,7 +2443,6 @@ service cloud.firestore {
                         && !('active'   in request.resource.data));
       allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        SMARTPOS — ENTERPRISE RETAIL COLLECTIONS
        All POS data is seller-scoped via the `sellerId` field.
@@ -2638,25 +2450,20 @@ service cloud.firestore {
        Cashiers authenticate locally via PIN — they do NOT have
        their own Firebase Auth UID. All Firestore writes happen
        under the seller's Firebase Auth session (via pos-sync.js).
-
        Security model:
          • create: authenticated seller who owns the sellerId field
          • read:   seller who owns the data, or admin
          • update: admin only (prevents client-side tampering)
          • delete: admin only (audit trail must never be destroyed)
-
        POS transactions are immutable after creation.
        Refunds and voids are NEW documents, not transaction updates.
     ══════════════════════════════════════════════════════════════ */
-
     function isPosOwner() {
       return isAuthed() && resource.data.sellerId == request.auth.uid;
     }
-
     function claimsPosOwner() {
       return isAuthed() && request.resource.data.sellerId == request.auth.uid;
     }
-
     /* Transactions — immutable after creation (refunds = new posRefunds doc) */
     match /posTransactions/{txnId} {
       allow create: if claimsPosOwner()
@@ -2668,7 +2475,6 @@ service cloud.firestore {
       allow update: if isAdmin(); /* admin-only: corrections, reconciliation */
       allow delete: if false;    /* never — audit trail is permanent */
     }
-
     /* Products — seller can manage their own product catalogue */
     match /posProducts/{productId} {
       allow create: if claimsPosOwner()
@@ -2680,7 +2486,6 @@ service cloud.firestore {
       allow update: if isPosOwner() || isAdmin();
       allow delete: if isPosOwner() || isAdmin();
     }
-
     /* Stock Movements — append-only audit log of every inventory change */
     match /posStockMovements/{moveId} {
       allow create: if claimsPosOwner()
@@ -2690,7 +2495,6 @@ service cloud.firestore {
       allow update: if false;  /* immutable — stock history cannot be edited */
       allow delete: if false;
     }
-
     /* Shifts — seller-scoped session records */
     match /posShifts/{shiftId} {
       allow create: if claimsPosOwner();
@@ -2698,7 +2502,6 @@ service cloud.firestore {
       allow update: if isPosOwner() || isAdmin(); /* closing shift updates status */
       allow delete: if isAdmin();
     }
-
     /* Customers — seller's customer CRM (scoped to their POS) */
     match /posCustomers/{customerId} {
       allow create: if claimsPosOwner();
@@ -2706,7 +2509,6 @@ service cloud.firestore {
       allow update: if isPosOwner() || isAdmin();
       allow delete: if isAdmin();
     }
-
     /* Refunds — new document per refund, immutable after creation */
     match /posRefunds/{refundId} {
       allow create: if claimsPosOwner()
@@ -2717,7 +2519,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if false;
     }
-
     /* Voids — immutable void records */
     match /posVoids/{voidId} {
       allow create: if claimsPosOwner()
@@ -2726,7 +2527,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if false;
     }
-
     /* Cash floats — shift opening/closing cash counts */
     match /posCashFloats/{floatId} {
       allow create: if claimsPosOwner()
@@ -2735,7 +2535,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* Device registry — POS terminals registered per seller */
     match /posDevices/{deviceId} {
       allow create: if claimsPosOwner();
@@ -2743,13 +2542,11 @@ service cloud.firestore {
       allow update: if isPosOwner() || isAdmin();
       allow delete: if isAdmin();
     }
-
     /* Platform-level SmartPOS config — admin-only */
     match /posConfig/{configId} {
       allow read:   if isAuthed();
       allow write:  if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        POS BRANCHES  (PosBoss.branch.init() — multi-branch management)
        Each branch document carries a `businessId` == seller's Firebase UID.
@@ -2768,7 +2565,6 @@ service cloud.firestore {
                         && request.resource.data.businessId == resource.data.businessId);
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        INVENTORY MODULE
        Tenant-scoped under tenants/{tenantId}/inventory_*
@@ -2783,8 +2579,6 @@ service cloud.firestore {
       function isTenantAdmin() {
         return isAdmin() || request.auth.token.get('tenantAdmin', false) == true;
       }
-
-      /* ── Products: sellers write, everyone reads ── */
       match /inventory_products/{productId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -2798,20 +2592,14 @@ service cloud.firestore {
                       && request.resource.data.tenantId == tenantId;
         allow delete: if isTenantAdmin();
       }
-
-      /* ── Stock Levels: Cloud Functions write, members read ── */
       match /inventory_levels/{levelId} {
         allow read:   if isTenantMember();
         allow write:  if false; // Mutations only via Cloud Functions
       }
-
-      /* ── Movements: Cloud Functions write, members read ── */
       match /inventory_movements/{mvId} {
         allow read:   if isTenantMember();
         allow write:  if false; // Audit-safe: only Cloud Functions write
       }
-
-      /* ── Purchase Orders: tenant members manage ── */
       match /inventory_purchaseOrders/{poId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -2824,8 +2612,6 @@ service cloud.firestore {
                          .affectedKeys().hasAny(['createdBy', 'tenantId']);
         allow delete: if isTenantAdmin();
       }
-
-      /* ── Suppliers: members create, admins delete ── */
       match /inventory_suppliers/{supplierId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -2835,14 +2621,10 @@ service cloud.firestore {
                       && resource.data.tenantId == tenantId;
         allow delete: if isTenantAdmin();
       }
-
-      /* ── Warehouses: admins only ── */
       match /inventory_warehouses/{warehouseId} {
         allow read:   if isTenantMember();
         allow write:  if isTenantAdmin();
       }
-
-      /* ── Stock Audits: members create/read, CFs complete ── */
       match /inventory_audits/{auditId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -2855,26 +2637,18 @@ service cloud.firestore {
                          .affectedKeys().hasAny(['completedAt', 'results']);
         allow delete: if isTenantAdmin();
       }
-
-      /* ── Alerts: Cloud Functions write, members read ── */
       match /inventory_alerts/{alertId} {
         allow read:   if isTenantMember();
         allow write:  if false; // Only Cloud Functions manage alerts
       }
-
-      /* ── Reservations: Cloud Functions only ── */
       match /inventory_reservations/{resId} {
         allow read:   if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── Batches: members create, all read ── */
       match /inventory_batches/{batchId} {
         allow read:   if isTenantMember();
         allow write:  if isTenantMember() && request.resource.data.tenantId == tenantId;
       }
-
-      /* ── Serial index: members read, CFs write ── */
       match /inventory_serials/{serialId} {
         allow read:   if isTenantMember();
         allow write:  if false;
@@ -2883,8 +2657,6 @@ service cloud.firestore {
         allow read:   if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── Analytics + Forecasts: members read only ── */
       match /inventory_analytics/{docId} {
         allow read:   if isTenantMember();
         allow write:  if false;
@@ -2893,22 +2665,14 @@ service cloud.firestore {
         allow read:   if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── AI Logs: members read own, admins read all ── */
       match /inventory_ai_logs/{logId} {
         allow read:   if isTenantAdmin();
         allow write:  if false;
       }
-
-      /* ── Audit Trail: immutable, admins read ── */
       match /inventory_audit/{logId} {
         allow read:   if isTenantAdmin();
         allow write:  if false;
       }
-
-      /* ═══════════════ INVENTORY V2 COLLECTIONS ═══════════════ */
-
-      /* ── Health scores: CFs write, members read ── */
       match /inventory_health/{docId} {
         allow read:   if isTenantMember();
         allow write:  if false;
@@ -2917,34 +2681,24 @@ service cloud.firestore {
         allow read:   if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── Fraud events: CFs write, admins read ── */
       match /inventory_fraud_events/{eventId} {
         allow read:   if isTenantAdmin();
         allow write:  if false;
       }
-
-      /* ── Simulations: members read, CFs write ── */
       match /inventory_simulations/{simId} {
         allow read:   if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── Recalls: admins create, members read ── */
       match /inventory_recalls/{recallId} {
         allow read:   if isTenantMember();
         allow create: if isTenantAdmin();
         allow update: if isTenantAdmin();
         allow delete: if false;
       }
-
-      /* ── Import jobs: members read own, CFs write ── */
       match /inventory_import_jobs/{jobId} {
         allow read:   if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── Webhooks: members create, owner delete ── */
       match /inventory_webhooks/{webhookId} {
         allow read:   if isTenantAdmin();
         allow create: if isTenantMember();
@@ -2955,8 +2709,6 @@ service cloud.firestore {
           allow write: if false;
         }
       }
-
-      /* ── Workflows: members create, members manage own ── */
       match /inventory_workflows/{workflowId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember() && request.resource.data.tenantId == tenantId;
@@ -2967,8 +2719,6 @@ service cloud.firestore {
         allow read:   if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── Pricing rules: admins manage, members read recommendations ── */
       match /inventory_pricing_rules/{productId} {
         allow read:   if isTenantMember();
         allow write:  if isTenantAdmin();
@@ -2977,43 +2727,30 @@ service cloud.firestore {
         allow read:   if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── Digital twin: admins write, members read ── */
       match /inventory_digital_twin/{warehouseId} {
         allow read:   if isTenantMember();
         allow write:  if isTenantAdmin();
       }
-
-      /* ── Sustainability: CFs write, members read ── */
       match /inventory_sustainability/{docId} {
         allow read:   if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── Commerce graph: CFs only ── */
       match /inventory_commerce_graph/{docId} {
         allow read:   if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── AI task queue: members create, CFs read ── */
       match /inventory_ai_tasks/{taskId} {
         allow read:   if isTenantAdmin();
         allow create: if isTenantMember();
         allow write:  if false;
       }
-
-      /* ── Supplier catalog: members read (platform-wide) ── */
       match /inventory_supplier_catalog/{supplierId} {
         allow read:   if isAuthed();
         allow write:  if false;
       }
-
       /* ══════════════════════════════════════════════════════════════
          INVENTORY V2 — ADVANCED PROCUREMENT & OPERATIONS COLLECTIONS
       ══════════════════════════════════════════════════════════════ */
-
-      /* ── Product Variants (V2): size / colour / batch variants ── */
       match /inventory_variants/{variantId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -3027,8 +2764,6 @@ service cloud.firestore {
                          .affectedKeys().hasAny(['tenantId', 'productId']);
         allow delete: if isTenantAdmin();
       }
-
-      /* ── Bill of Materials (V2): recipe / assembly definitions ── */
       match /inventory_bom/{bomId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -3039,8 +2774,6 @@ service cloud.firestore {
                       && resource.data.tenantId == tenantId;
         allow delete: if isTenantAdmin();
       }
-
-      /* ── Work Orders (V2): manufacturing / assembly jobs ── */
       match /inventory_work_orders/{woId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -3058,8 +2791,6 @@ service cloud.firestore {
                              .affectedKeys().hasAny(['tenantId', 'bomId', 'completedAt', 'cancelledAt']));
         allow delete: if isTenantAdmin();
       }
-
-      /* ── Inter-Warehouse Transfers (V2): stock movement between locations ── */
       match /inventory_transfers/{transferId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -3078,8 +2809,6 @@ service cloud.firestore {
                                                       'receivedQty', 'note', 'updatedAt']));
         allow delete: if isTenantAdmin();
       }
-
-      /* ── Goods Received Notes (V2): GRN / partial delivery receipts ── */
       match /inventory_grn/{grnId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -3098,8 +2827,6 @@ service cloud.firestore {
         allow delete: if isTenantAdmin()
                       && resource.data.status == 'draft';
       }
-
-      /* ── Stock Count Sessions (V2): physical inventory cycle counts ── */
       match /inventory_stockcounts/{countId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -3116,7 +2843,6 @@ service cloud.firestore {
                              .affectedKeys().hasOnly(['note', 'updatedAt']));
         allow delete: if isTenantAdmin()
                       && resource.data.status == 'open';
-
         /* Count lines sub-collection — scan entries during the count */
         match /lines/{lineId} {
           allow read:   if isTenantMember();
@@ -3134,8 +2860,6 @@ service cloud.firestore {
           allow delete: if isTenantAdmin();
         }
       }
-
-      /* ── Purchase Requisitions (V2): internal request → PO approval chain ── */
       match /inventory_requisitions/{reqId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -3155,8 +2879,6 @@ service cloud.firestore {
                           && request.resource.data.status == 'cancelled');
         allow delete: if isTenantAdmin();
       }
-
-      /* ── Supplier Contracts (V2): contract terms, price lists, SLAs ── */
       match /inventory_supplier_contracts/{contractId} {
         allow read:   if isTenantMember();
         allow create: if isTenantAdmin()
@@ -3166,8 +2888,6 @@ service cloud.firestore {
                       && resource.data.tenantId == tenantId;
         allow delete: if isTenantAdmin();
       }
-
-      /* ── Shelf Count AI Jobs (V2): AI-assisted shelf scanning sessions ── */
       match /inventory_shelf_scans/{scanId} {
         allow read:   if isTenantMember();
         allow create: if isTenantMember()
@@ -3183,10 +2903,8 @@ service cloud.firestore {
         allow delete: if isTenantAdmin();
       }
     }
-
     /* ══════════════════════════════════════════════════════════
        GEO INTELLIGENCE PLATFORM (GIP)  — Security Rules
-
        Security model:
          gipLocations  — asset devices write own doc; any authed user reads
          gipAssets     — asset owner writes own; any authed reads
@@ -3197,7 +2915,6 @@ service cloud.firestore {
          gipHeatData   — Cloud Functions write; any authed reads
          gipAnalytics  — Cloud Functions write; admin or own driver reads
     ══════════════════════════════════════════════════════════ */
-
     /* Asset live location — each asset writes its own single document */
     match /gipLocations/{assetId} {
       allow read:   if isAuthed();
@@ -3215,7 +2932,6 @@ service cloud.firestore {
                     && request.resource.data.lng  >= -180  && request.resource.data.lng  <= 180;
       allow delete: if isAdmin();
     }
-
     /* Dispatch jobs */
     match /gipDispatch/{jobId} {
       allow read:   if isAuthed();
@@ -3224,7 +2940,6 @@ service cloud.firestore {
                     && (isAdmin() || resource.data.assignedAssetId == request.auth.uid);
       allow delete: if isAdmin();
     }
-
     /* Fleet alerts — Cloud Functions write; admin or asset owner reads */
     match /gipAlerts/{alertId} {
       allow read:   if isAuthed()
@@ -3234,32 +2949,27 @@ service cloud.firestore {
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved','resolvedAt']);
       allow delete: if isAdmin();
     }
-
     /* Geofence zones */
     match /gipGeofences/{zoneId} {
       allow read:   if isAuthed();
       allow write:  if isAdmin();
     }
-
     /* Geofence trigger audit log — Cloud Functions write only */
     match /gipGeofenceEvents/{eventId} {
       allow read:   if isAdmin();
       allow write:  if false;
     }
-
     /* Demand heat data — Cloud Functions write; authenticated reads */
     match /gipHeatData/{region}/{date}/{hour} {
       allow read:   if isAuthed();
       allow write:  if false;
     }
-
     /* Driver/fleet analytics — Cloud Functions write; admin or own driver reads */
     match /gipAnalytics/{date}/{subcollection}/{docId} {
       allow read:   if isAuthed()
                     && (isAdmin() || docId == request.auth.uid);
       allow write:  if false;
     }
-
     /* gipAssets — vehicle/device registry
        Owner writes their own asset; admins write all; any authed reads */
     match /gipAssets/{assetId} {
@@ -3269,7 +2979,6 @@ service cloud.firestore {
       allow update: if isAuthed()
                     && (resource.data.uid == request.auth.uid || isAdmin());
       allow delete: if isAdmin();
-
       /* Service history sub-collection — owner or admin writes */
       match /serviceHistory/{serviceId} {
         allow read:   if isAuthed()
@@ -3279,7 +2988,6 @@ service cloud.firestore {
         allow update, delete: if isAdmin();
       }
     }
-
     /* gipRoutes — optimized route records
        Any authed user writes their own routes; admins read all */
     match /gipRoutes/{routeId} {
@@ -3289,7 +2997,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SASOS — Universal AI Subscription Operating System
        Collections: sasosSubscriptions, sasosBillingLedger,
@@ -3300,7 +3007,6 @@ service cloud.firestore {
          sasosCreditLedger, sasosStorageUsage, entitlements,
          sasosOrgs, sasosSeats, sasosSeatInvites, sasosLicenses
     ══════════════════════════════════════════════════════════════ */
-
     /* sasosSubscriptions — master subscription state, one doc per uid
        User reads their own doc (server refreshed on every feature gate).
        All writes are server-only via Cloud Functions. */
@@ -3308,7 +3014,6 @@ service cloud.firestore {
       allow read:   if isAuthed() && request.auth.uid == uid;
       allow write:  if false;  /* CF only */
     }
-
     /* sasosBillingLedger — immutable billing records
        User reads their own; admin reads all. No client writes. */
     match /sasosBillingLedger/{entryId} {
@@ -3316,105 +3021,86 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.uid == request.auth.uid);
       allow write:  if false;  /* CF only */
     }
-
     /* sasosInvoices — user can read their own invoices; admin reads all */
     match /sasosInvoices/{invoiceId} {
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid);
       allow write:  if false;
     }
-
     /* sasosUsage — user reads their own usage counters */
     match /sasosUsage/{docId} {
       allow read:   if isAdmin()
                     || (isAuthed() && docId.matches(request.auth.uid + '_.*'));
       allow write:  if false;
     }
-
     /* sasosDunning — admin only; user reads their own grace-period record */
     match /sasosDunning/{uid} {
       allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
       allow write:  if false;
     }
-
     /* sasosRiskProfiles — admin reads all; users read their own (limited) */
     match /sasosRiskProfiles/{uid} {
       allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
       allow write:  if false;
     }
-
     /* sasosRiskEvents — admin only */
     match /sasosRiskEvents/{eventId} {
       allow read, write: if isAdmin();
     }
-
     /* sasosManualReview — admin only */
     match /sasosManualReview/{uid} {
       allow read, write: if isAdmin();
     }
-
     /* sasosInsights — user reads their own; admin reads all */
     match /sasosInsights/{uid} {
       allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
       allow write:  if false;
     }
-
     /* sasosAuditLog — admin reads; no client writes */
     match /sasosAuditLog/{logId} {
       allow read:   if isAdmin();
       allow write:  if false;
     }
-
     /* sasosPlans — public read (pricing page); admin writes */
     match /sasosPlans/{planId} {
       allow read:   if true;
       allow write:  if isAdmin();
     }
-
     /* sasosRenewalQueue — admin only */
     match /sasosRenewalQueue/{docId} {
       allow read, write: if isAdmin();
     }
-
     /* sasosRevenueAggregates — admin only */
     match /sasosRevenueAggregates/{dateId} {
       allow read:   if isAdmin();
       allow write:  if false;
     }
-
     /* sasosPaymentRefs — idempotency keys; no client reads or writes */
     match /sasosPaymentRefs/{refId} {
       allow read, write: if false;
     }
-
     /* aiCredits — user reads their own balance; CF writes */
     match /aiCredits/{uid} {
       allow read:   if isAuthed() && request.auth.uid == uid;
       allow write:  if false;
     }
-
     /* sasosCreditLedger — user reads their own; admin reads all */
     match /sasosCreditLedger/{entryId} {
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid);
       allow write:  if false;
     }
-
     /* sasosStorageUsage — user reads their own; CF writes */
     match /sasosStorageUsage/{docId} {
       allow read:   if isAdmin()
                     || (isAuthed() && docId.matches(request.auth.uid + '_.*'));
       allow write:  if false;
     }
-
     /* entitlements — user reads their own; CF writes; admin reads all */
     match /entitlements/{uid} {
       allow read:   if isAdmin() || (isAuthed() && request.auth.uid == uid);
       allow write:  if false;
     }
-
-    /* ── SASOS Enterprise ── */
-
     /* sasosOrgs — org member reads; owner writes limited fields; CF manages */
     match /sasosOrgs/{orgId} {
       allow read:  if isAdmin()
@@ -3422,21 +3108,18 @@ service cloud.firestore {
                        && exists(/databases/$(database)/documents/sasosSeats/$(orgId + '_' + request.auth.uid)));
       allow write: if false;
     }
-
     /* sasosSeats — member reads their own seat; owner reads all seats in org */
     match /sasosSeats/{seatId} {
       allow read:  if isAdmin()
                    || (isAuthed() && seatId.matches('.*_' + request.auth.uid));
       allow write: if false;
     }
-
     /* sasosSeatInvites — invitee reads their invite (by inviteId); admin reads all */
     match /sasosSeatInvites/{inviteId} {
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.invitee == request.auth.uid);
       allow write:  if false;
     }
-
     /* sasosLicenses — org member reads; admin writes */
     match /sasosLicenses/{licenseId} {
       allow read:   if isAdmin()
@@ -3444,50 +3127,42 @@ service cloud.firestore {
                         && exists(/databases/$(database)/documents/sasosSeats/$(resource.data.orgId + '_' + request.auth.uid)));
       allow write:  if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        PLATFORM REGISTRY + EVENT BUS  (platform-registry.js / platform-events.js)
        All writes are CF-only (allow write: if false on every doc collection).
        Reads are role-gated: services are semi-public; events are owner/admin.
     ══════════════════════════════════════════════════════════════ */
-
     /* platformServices — any authed user can browse the service catalog */
     match /platformServices/{serviceId} {
       allow read:  if isAuthed();
       allow write: if false;
     }
-
     /* platformHealth — any authed user can see health status */
     match /platformHealth/{serviceId} {
       allow read:  if isAuthed();
       allow write: if false;
     }
-
     /* platformDependencies — any authed user can see the dependency graph */
     match /platformDependencies/{edgeId} {
       allow read:  if isAuthed();
       allow write: if false;
     }
-
     /* platformEvents — publishers read their own events; admins see all */
     match /platformEvents/{eventId} {
       allow read:  if isAdmin()
                    || (isAuthed() && resource.data.publisherUid == request.auth.uid);
       allow write: if false;
     }
-
     /* platformSubscriptions — any authed service can read subscriptions */
     match /platformSubscriptions/{subId} {
       allow read:  if isAuthed();
       allow write: if false;
     }
-
     /* platformFanOut — admin only; CF-written delivery tasks */
     match /platformFanOut/{taskId} {
       allow read:  if isAdmin();
       allow write: if false;
     }
-
     /* managerAuditLog — immutable: create-only from backend, read by admin */
     match /managerAuditLog/{entryId} {
       allow read:   if isAdmin();
@@ -3495,7 +3170,6 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
-
     /* managerAuthRequests — POS creates, manager responds (approve/deny), CF reads */
     match /managerAuthRequests/{reqId} {
       allow read:   if isAdmin()
@@ -3508,13 +3182,11 @@ service cloud.firestore {
                     && request.resource.data.status in ['approved','denied'];
       allow delete: if false;
     }
-
     /* managerFCMTokens — manager registers their own push token */
     match /managerFCMTokens/{managerId} {
       allow read:   if isAdmin();
       allow write:  if isAuthed();
     }
-
     /* ══════════════════════════════════════════════════════════════
        CONTACT REQUESTS  (buyer→seller contact leads)
        Written by product.js _submitContactRequest() when a buyer
@@ -3537,7 +3209,6 @@ service cloud.firestore {
                              .affectedKeys().hasOnly(['status','respondedAt','sellerNote']));
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        PRODUCT Q&A  (buyer questions on product pages)
        Written by product.js openAskQuestion() to productQA collection.
@@ -3561,7 +3232,6 @@ service cloud.firestore {
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.buyerUid == request.auth.uid);
     }
-
     /* ══════════════════════════════════════════════════════════════
        POS PRINT JOBS  (audit log for network printer proxy)
        Written by the posPrint Cloud Function (admin SDK) after
@@ -3574,7 +3244,6 @@ service cloud.firestore {
                               || (isAuthed() && resource.data.uid == request.auth.uid);
       allow create, update, delete: if false;  /* CF admin SDK only */
     }
-
     /* ══════════════════════════════════════════════════════════════
        SELLER STATS  (real-time counters: pendingOrders, etc.)
        Incremented by onNewOrderCreated Cloud Function via admin SDK.
@@ -3586,7 +3255,6 @@ service cloud.firestore {
                               || (isAuthed() && request.auth.uid == sellerUid);
       allow create, update, delete: if false;  /* CF admin SDK only */
     }
-
     /* ══════════════════════════════════════════════════════════════
        PRODUCT STATS  — aggregated view/sales/price/trending counters
        Written exclusively by Cloud Functions (admin SDK).
@@ -3596,7 +3264,6 @@ service cloud.firestore {
       allow read:   if true;           /* public — product metrics are public */
       allow write:  if false;          /* CF admin SDK only */
     }
-
     /* ══════════════════════════════════════════════════════════════
        PRODUCT PRICE HISTORY  — one document per price change event
        Written by onProductPriceChanged trigger (admin SDK).
@@ -3606,7 +3273,6 @@ service cloud.firestore {
       allow read:   if true;           /* public — transparency for buyers */
       allow write:  if false;          /* CF admin SDK only */
     }
-
     /* ══════════════════════════════════════════════════════════════
        PRODUCT VIEW DEDUP  — session deduplication keys (short-lived)
        Written by recordProductView CF (admin SDK).
@@ -3615,7 +3281,6 @@ service cloud.firestore {
     match /productViewDedup/{dedupKey} {
       allow read, write: if false;     /* CF admin SDK only — no client access */
     }
-
     /* ══════════════════════════════════════════════════════════════
        SELLER PERFORMANCE  — aggregated seller metrics
        Written by aggregateSellerPerformance CF (admin SDK).
@@ -3625,7 +3290,6 @@ service cloud.firestore {
       allow read:   if true;           /* public — seller metrics are public */
       allow write:  if false;          /* CF admin SDK only */
     }
-
     /* ══════════════════════════════════════════════════════════════
        OPS BACKUPS  — Firestore export audit log
        Written by scheduledFirestoreBackup CF (admin SDK).
@@ -3635,7 +3299,6 @@ service cloud.firestore {
       allow read:   if isAdmin();
       allow write:  if false;          /* CF admin SDK only */
     }
-
     /* ══════════════════════════════════════════════════════════════
        CSP VIOLATIONS  — collected by cspReportCollect CF
        Written publicly by browsers (no auth). Admin read only.
@@ -3644,7 +3307,6 @@ service cloud.firestore {
       allow read:   if isAdmin();
       allow write:  if false;          /* CF only — browsers hit CF endpoint */
     }
-
     /* ══════════════════════════════════════════════════════════════
        HEALTH CHECK PROBE  — written by systemHealthCheck CF
     ══════════════════════════════════════════════════════════════ */
@@ -3652,7 +3314,6 @@ service cloud.firestore {
       allow read:   if isAdmin();
       allow write:  if false;          /* CF admin SDK only */
     }
-
     /* ══════════════════════════════════════════════════════════════
        EMAIL LOGS  — delivery log for every sent email
        Read: owner (matching uid) or admin.
@@ -3663,7 +3324,6 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.uid == request.auth.uid);
       allow write:  if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        EMAIL QUEUE  — pending/processing/failed email jobs
        Admin read. CF write.
@@ -3672,7 +3332,6 @@ service cloud.firestore {
       allow read:   if isAdmin();
       allow write:  if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        EMAIL PREFERENCES  — per-user opt-out preferences
        User reads and writes their own prefs.
@@ -3683,7 +3342,6 @@ service cloud.firestore {
                     && request.resource.data.keys().hasOnly(
                         ["orders","payments","marketing","account","security"]);
     }
-
     /* ══════════════════════════════════════════════════════════════
        USER FEEDBACK  — bug reports, feature requests, page ratings
        Submit: any authenticated user or anonymous (via CF).
@@ -3694,7 +3352,6 @@ service cloud.firestore {
       allow read:   if isAdmin();
       allow write:  if false;            /* submitFeedback CF writes */
     }
-
     /* ══════════════════════════════════════════════════════════════
        OPS REPORTS  — daily + weekly reports written by scheduled CFs
        Admin read. CF write.
@@ -3703,7 +3360,6 @@ service cloud.firestore {
       allow read:   if isAdmin();
       allow write:  if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        HEALTH SNAPSHOTS  — hourly snapshots from recordHealthSnapshot
        Admin read. CF write.
@@ -3712,7 +3368,6 @@ service cloud.firestore {
       allow read:   if isAdmin();
       allow write:  if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        FUNNEL STATS  — daily aggregate counters for conversion tracking
        Admin read. CF write.
@@ -3721,21 +3376,18 @@ service cloud.firestore {
       allow read:   if isAdmin();
       allow write:  if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        RETENTION: recently viewed (per-user subcollection)
     ══════════════════════════════════════════════════════════════ */
     match /recentlyViewed/{uid}/items/{productId} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
-
     /* ══════════════════════════════════════════════════════════════
        RETENTION: saved searches (per-user subcollection)
     ══════════════════════════════════════════════════════════════ */
     match /savedSearches/{uid}/searches/{searchId} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
-
     /* ══════════════════════════════════════════════════════════════
        KASS: per-user behavioural signals for AI personalisation
        Owner reads their own data. CF writes via Admin SDK (bypasses rules).
@@ -3744,7 +3396,6 @@ service cloud.firestore {
       allow read:  if request.auth != null && request.auth.uid == uid;
       allow write: if false; // CF admin SDK only
     }
-
     /* ══════════════════════════════════════════════════════════════
        AVAILABILITY ENGINE: provider config (read/write by owner & admin)
        Bookings subcollection written by CF Admin SDK (not via client rules).
@@ -3772,7 +3423,6 @@ service cloud.firestore {
                       isAdmin());
       allow write: if false; // CF Admin SDK only (reserveSlot / releaseSlot)
     }
-
     /* ══════════════════════════════════════════════════════════════
        AVAILABILITY ENGINE: lightweight live status — public read
        Only CF Admin SDK writes (setProviderAvailability, setLiveStatus).
@@ -3781,7 +3431,6 @@ service cloud.firestore {
       allow read:  if true;   // public: needed for search results & widgets
       allow write: if false;  // CF Admin SDK only
     }
-
     /* ══════════════════════════════════════════════════════════════
        RETENTION: price alerts
        Users own their alerts. CF handles scheduler writes.
@@ -3795,7 +3444,6 @@ service cloud.firestore {
       allow delete: if request.auth != null &&
                        (resource.data.uid == request.auth.uid || isAdmin());
     }
-
     /* ══════════════════════════════════════════════════════════════
        SEARCH: query log (CF write, admin read)
     ══════════════════════════════════════════════════════════════ */
@@ -3803,7 +3451,6 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow write: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        CHECKOUT SESSIONS  — server-side cart lock before payment
        Created by createCheckoutSession CF (onCall).
@@ -3816,7 +3463,6 @@ service cloud.firestore {
       allow update: if false;   /* verifyIntasendPayment CF only */
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        RATE LIMITS  — Firestore-backed cross-instance rate counters
        Managed exclusively by checkRateLimitDurable() inside CFs.
@@ -3826,7 +3472,6 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow write: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        PAYMENT VERIFICATIONS  — idempotency guard
        Set once by verifyIntasendPayment on first success.
@@ -3837,7 +3482,6 @@ service cloud.firestore {
                       (resource.data.uid == request.auth.uid || isAdmin());
       allow write: if false;    /* verifyIntasendPayment CF only */
     }
-
     /* ══════════════════════════════════════════════════════════════
        SYSTEM CONFIG  — platform-level persistent flags (bootstrap lock)
        Written by bootstrapAdminClaim CF once. Immutable to clients.
@@ -3846,7 +3490,6 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow write: if false;    /* bootstrapAdminClaim CF only */
     }
-
     /* ══════════════════════════════════════════════════════════════
        COMMISSIONS  — WAP commission records written by Cloud Functions.
        Sellers read their own entries; admins read all.
@@ -3858,7 +3501,6 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        SECURITY EVENTS  — injection attempts, fraud signals, rate limit
        abuse logged by Cloud Functions. Admins read; no client writes.
@@ -3867,7 +3509,6 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow write: if false;    /* CF only — Admin SDK bypasses rules */
     }
-
     /* ══════════════════════════════════════════════════════════════
        SYSTEM CONFIG — fuel prices, platform settings (read-only for
        authenticated users; writes only via Admin SDK / Cloud Functions)
@@ -3876,7 +3517,6 @@ service cloud.firestore {
       allow read:  if isAuthed();
       allow write: if false;    /* CF only — fetchEPRAFuelPrices / triggerEPRAFuelFetch */
     }
-
     /* ══════════════════════════════════════════════════════════════
        CAR HUB — VEHICLE TRACKING (sokoni-tracking.js)
        Owner: read/write own vehicle.
@@ -3900,7 +3540,6 @@ service cloud.firestore {
       allow delete: if (isAuthed() && resource.data.ownerUid == request.auth.uid)
                     || isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        CAR HUB — LIVE VEHICLE LOCATIONS
        Keyed by vehicleId. Owner and authorised parties read live GPS.
@@ -3923,7 +3562,6 @@ service cloud.firestore {
                      isAdmin()
                    );
     }
-
     /* ══════════════════════════════════════════════════════════════
        CAR HUB — ROUTE HISTORY
        Owner reads/creates their own routes; no direct client deletes.
@@ -3934,7 +3572,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        CAR HUB — VEHICLE ALERTS
        Owner reads their own alerts; admins see all.
@@ -3946,7 +3583,6 @@ service cloud.firestore {
       allow update: if isAuthed() && resource.data.ownerUid == request.auth.uid;
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        CAR HUB — GEOFENCE ZONES
        Owner manages their own geofences.
@@ -3957,7 +3593,6 @@ service cloud.firestore {
       allow update: if isAuthed() && resource.data.ownerUid == request.auth.uid;
       allow delete: if isAuthed() && resource.data.ownerUid == request.auth.uid || isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        CAR HUB — GPS HARDWARE DEVICES
        Owner manages their own registered trackers.
@@ -3968,7 +3603,6 @@ service cloud.firestore {
       allow update: if isAuthed() && resource.data.ownerUid == request.auth.uid || isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        CAR HUB — TEMPORARY SHARE TOKENS
        Anyone authenticated can validate a token (for share-link tracking
@@ -3980,7 +3614,6 @@ service cloud.firestore {
       allow delete: if isAuthed() && resource.data.createdBy == request.auth.uid || isAdmin();
       allow update: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        CAR HUB — TRACKING SUBSCRIPTIONS
        Document ID == uid. User owns their own subscription record.
@@ -3991,7 +3624,6 @@ service cloud.firestore {
                     && !request.resource.data.keys().hasAny(['adminOverride','freeTrial']);
       allow write:  if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        CAR HUB — VEHICLE SERVICE HISTORY
        Owner reads/creates service records for their vehicles.
@@ -4002,7 +3634,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        CAR HUB — DRIVER SESSIONS (monitoring/fleet analytics)
        Driver writes their own session; owner of the vehicle reads.
@@ -4016,7 +3647,6 @@ service cloud.firestore {
       allow update: if isAuthed() && resource.data.driverUid == request.auth.uid || isAdmin();
       allow delete: if isAdmin();
     }
-
     /* ══════════════════════════════════════════════════════════════
        KRA eTIMS — SELLER PROFILES
        Seller reads their own profile. All writes via CF (admin SDK).
@@ -4025,7 +3655,6 @@ service cloud.firestore {
       allow read:   if isAuthed() && (request.auth.uid == uid || isAdmin());
       allow write:  if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        KRA eTIMS — CREDENTIALS (AES-256-GCM encrypted, CF-only)
        Never accessible to any client — admin SDK only.
@@ -4033,7 +3662,6 @@ service cloud.firestore {
     match /etimsCredentials/{uid}     { allow read, write: if false; }
     match /etimsSequences/{uid}       { allow read, write: if false; }
     match /etimsReconciliations/{docId}{ allow read, write: if false; }
-
     /* ══════════════════════════════════════════════════════════════
        KRA eTIMS — INVOICES
        Seller or buyer read their own invoices. Immutable to clients.
@@ -4048,7 +3676,6 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        KRA eTIMS — QUEUE, BULK JOBS, ALERTS (CF-managed)
     ══════════════════════════════════════════════════════════════ */
@@ -4064,7 +3691,6 @@ service cloud.firestore {
       allow read:  if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin());
       allow write: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        SOKONI HUBS — REGISTRY
        Any authenticated user can read hub metadata.
@@ -4080,11 +3706,9 @@ service cloud.firestore {
                     ));
       allow delete: if isAdmin();
     }
-
     /* Hub eTIMS credentials + counters — admin SDK only, never client */
     match /hubCredentials/{hubId} { allow read, write: if false; }
     match /hubSequences/{hubId}   { allow read, write: if false; }
-
     /* ══════════════════════════════════════════════════════════════
        HUB OPERATIONAL DOCUMENTS
        Hub managers, linked sellers, and linked buyers can read.
@@ -4100,7 +3724,6 @@ service cloud.firestore {
                   );
       allow write: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        HUB TAX INVOICES (selling / hybrid hubs only)
        Hub managers, linked sellers, and linked buyers can read.
@@ -4118,17 +3741,14 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
-
     /* Hub invoice retry queue — admin reads, CF writes */
     match /hubInvoiceQueue/{queueId} {
       allow read:  if isAdmin();
       allow write: if false;
     }
-
     /* ══════════════════════════════════════════════════════
        DISPATCH SYSTEM  v1.0
     ══════════════════════════════════════════════════════ */
-
     /* dispatchQueue — cascade state per delivery */
     match /dispatchQueue/{deliveryRef} {
       /* Rider can read their own offer; seller + admin can read all */
@@ -4141,7 +3761,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if false;
     }
-
     /* deliveryProofs — proof of delivery records */
     match /deliveryProofs/{deliveryRef} {
       /* Rider, seller, and admin can read proof */
@@ -4154,13 +3773,11 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
-
     /* deliveryAttempts — failed delivery attempt log */
     match /deliveryAttempts/{attemptId} {
       allow read:  if isAdmin();
       allow write: if false;
     }
-
     /* deliveryBatches — multi-order batch state (rider-owned) */
     match /deliveryBatches/{batchId} {
       allow read: if isAuthed() && (
@@ -4169,7 +3786,6 @@ service cloud.firestore {
       );
       allow write: if false;
     }
-
     /* riderMetrics — aggregated daily rider performance */
     match /riderMetrics/{docId} {
       /* Riders can read their own metrics; admin reads all */
@@ -4179,7 +3795,6 @@ service cloud.firestore {
       );
       allow write: if false;
     }
-
     /* deliveryHubs — hub registry */
     match /deliveryHubs/{hubId} {
       allow read:   if isAuthed();
@@ -4187,7 +3802,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if false;
     }
-
     /* fraudAlerts — GPS fraud and collusion flags */
     match /fraudAlerts/{alertId} {
       allow read:   if isAdmin();
@@ -4195,19 +3809,16 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if false;
     }
-
     /* analyticsRollup — pre-aggregated delivery stats */
     match /analyticsRollup/{docId} {
       allow read:  if isAdmin();
       allow write: if false;
     }
-
     /* smsQueue — internal SMS dispatch queue */
     match /smsQueue/{docId} {
       allow read:  if isAdmin();
       allow write: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        CSAT RATINGS  — buyer delivery satisfaction ratings
        Buyer writes their own. Rider reads their own. Admin reads all.
@@ -4222,7 +3833,6 @@ service cloud.firestore {
                     && request.resource.data.rating   <= 5;
       allow update, delete: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        WHATSAPP QUEUE  — deep-link delivery notification queue
        Admin read. CF write only.
@@ -4231,7 +3841,6 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow write: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        DELIVERY SIGNATURES  — signed URLs of canvas signature pads
        Rider and buyer read. CF write only.
@@ -4243,13 +3852,11 @@ service cloud.firestore {
                        || resource.data.buyerUid == request.auth.uid));
       allow write: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        FINOS — Financial Operating System  v1.0
        All financial data is CF-only for writes. Reads follow RBAC:
        entity reads own; admin reads all.
     ══════════════════════════════════════════════════════════════ */
-
     /* Global double-entry ledger — immutable. CF writes only. */
     match /ledger/{txId} {
       allow read:   if isAdmin();
@@ -4257,7 +3864,6 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
-
     /* Per-entity wallet balances */
     match /wallets/{entityId} {
       allow read:   if isAdmin()
@@ -4265,7 +3871,6 @@ service cloud.firestore {
       allow create: if false;
       allow update: if false;
       allow delete: if false;
-
       /* Wallet transaction subcollection */
       match /transactions/{txId} {
         allow read:   if isAdmin()
@@ -4273,7 +3878,6 @@ service cloud.firestore {
         allow write:  if false;
       }
     }
-
     /* Commission rules — admin CRUD; signed-in users read for preview */
     match /commissionRules/{ruleId} {
       allow read:   if isAuthed();
@@ -4281,7 +3885,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if false;
     }
-
     /* Payouts — entity reads own, admin reads all, CF writes */
     match /payouts/{payoutId} {
       allow read:   if isAdmin()
@@ -4290,7 +3893,6 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
-
     /* Promotions — admin creates; signed-in users read active promos */
     match /promotions/{promoId} {
       allow read:   if isAuthed();
@@ -4298,7 +3900,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if false;
     }
-
     /* Promotion usage records — buyer reads own, admin reads all, CF writes */
     match /promotionUsage/{usageId} {
       allow read:   if isAdmin()
@@ -4307,25 +3908,21 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
-
     /* Tax records — admin read only */
     match /taxRecords/{taxId} {
       allow read:   if isAdmin();
       allow write:  if false;
     }
-
     /* Daily financial snapshots — admin read only */
     match /finosSnapshots/{snapId} {
       allow read:   if isAdmin();
       allow write:  if false;
     }
-
     /* Idempotency keys — CF-only; 7-day TTL enforced in CF */
     match /finosIdempotency/{key} {
       allow read:   if false;
       allow write:  if false;
     }
-
     /* Immutable audit log — admin read only; write via CF only */
     match /finosAuditLog/{logId} {
       allow read:   if isAdmin();
@@ -4333,23 +3930,19 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        BUSINESS COMMUNICATION SYSTEM
     ══════════════════════════════════════════════════════════════ */
-
     /* Conversations — participant-scoped read; CF-only write */
     match /conversations/{conversationId} {
       allow read:   if request.auth != null
                     && request.auth.uid in resource.data.participants;
       allow write:  if false;  /* createConversation / archiveCompletedConversations CFs only */
-
       /* Messages — participants read; participants create (with validation); own-message update only */
       match /messages/{messageId} {
         allow read: if request.auth != null
                     && request.auth.uid in
                        get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
-
         allow create: if request.auth != null
                       && request.auth.uid in
                          get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
@@ -4359,51 +3952,42 @@ service cloud.firestore {
                       && request.resource.data.type in ['text','image','pdf','voice']
                       && (request.resource.data.type != 'text'
                           || (request.resource.data.text is string && request.resource.data.text.size() <= 4000));
-
         /* Sender may soft-delete own message or mark edited */
         allow update: if request.auth != null
                       && resource.data.senderId == request.auth.uid
                       && request.resource.data.senderId == resource.data.senderId
                       && request.resource.data.diff(resource.data).affectedKeys()
                              .hasOnly(['deleted','deletedAt','text','edited','editedAt','storageRef']);
-
         allow delete: if false;
       }
     }
-
     /* User conversation index — own entries only */
     match /userConversations/{uid} {
       allow read:  if request.auth != null && request.auth.uid == uid;
       allow write: if false;  /* CF only */
-
       match /items/{conversationId} {
         allow read:  if request.auth != null && request.auth.uid == uid;
         allow write: if false;
       }
     }
-
     /* Typing indicators — own uid only; public read within authenticated users */
     match /typingIndicators/{conversationId} {
       allow read: if request.auth != null;
-
       match /users/{uid} {
         allow read:  if request.auth != null;
         allow write: if request.auth != null && request.auth.uid == uid;
       }
     }
-
     /* Chat policies — admin read/write via CF; reject direct client writes */
     match /chatPolicies/{docId} {
       allow read:  if isAdmin();
       allow write: if false;
     }
-
     /* Moderation queue — admin read via CF; no direct client access */
     match /moderationQueue/{reportId} {
       allow read:  if false;
       allow write: if false;
     }
-
     /* ══════════════════════════════════════════════════════════════
        REVIEWS & RATINGS ENGINE v1.0
        reviews/{id}                 — CF admin SDK writes; authenticated reads
@@ -4427,8 +4011,6 @@ service cloud.firestore {
       allow read:  if true;   // public: needed for product cards and search results
       allow write: if false;  // CF Admin SDK only
     }
-
-    /* ── Data Deletion & Rights Requests ──────────────────────────────── */
     match /dataDeletionRequests/{reqId} {
       allow read:   if isAdmin();
       allow create: if false; // CF Admin SDK only (facebookDataDeletion CF)
@@ -4447,8 +4029,6 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if false;
     }
-
-    /* ── MiniShop & Social Commerce v1.0 ──────────────────────────────── */
     match /shopHandles/{handle} {
       allow read:  if true;   // public — URL resolution for any visitor
       allow write: if false;  // CF Admin SDK only (claimMinishopHandle)
@@ -4475,8 +4055,6 @@ service cloud.firestore {
       allow read:  if false;
       allow write: if false;  // CF Admin SDK only (AI generation rate limits)
     }
-
-    /* ── MiniShop Campaigns v1.0 ───────────────────────────────────────── */
     match /minishopCampaigns/{campaignId} {
       // Sellers can read their own campaigns; public can read active campaign metadata
       allow read:  if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
@@ -4486,8 +4064,6 @@ service cloud.firestore {
       allow read:  if false;
       allow write: if false;  // CF Admin SDK only (rate limit counters for trackCampaignClick)
     }
-
-    /* ── Merchant Success & Growth Engine v1.0 ──────────────────────────── */
     match /merchantHealthScores/{shopId} {
       // Seller can read their own cached health score; admins can read any
       allow read:  if isAuthed() && (request.auth.uid == resource.data.sellerUid || isAdmin());
@@ -4507,50 +4083,22 @@ service cloud.firestore {
       allow read:  if false;
       allow write: if false;  // CF Admin SDK only (AI coach rate limit counters)
     }
-
-    /* ══════════════════════════════════════════════════════
-       NAVIGATION & DISPATCH SYSTEM  v1.0
-    ══════════════════════════════════════════════════════ */
-
-    /* trips — active delivery trips */
+    /* Navigation & Dispatch v1.0 */
     match /trips/{tripId} {
-      // Rider reads own trips; customer reads via trackingCode (CF only); admin reads all
-      allow read: if isAdmin()
-        || (isAuthed() && resource.data.riderId == request.auth.uid);
-      // Only Cloud Functions (Admin SDK) create/update trips
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow read:  if isAdmin() || (isAuthed() && resource.data.riderId == request.auth.uid);
+      allow write: if false;
     }
-
-    /* riderLocations — live GPS positions, written directly by authenticated riders */
     match /riderLocations/{riderId} {
-      // Rider writes own location; admin reads all active locations
-      allow read:  if isAdmin()
-        || (isAuthed() && riderId == request.auth.uid);
-      allow write: if isAuthed()
-        && riderId == request.auth.uid
-        && request.resource.data.keys().hasAll(['lat','lng','status','updatedAt'])
-        && request.resource.data.lat is number
-        && request.resource.data.lng is number
-        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
-        && request.resource.data.lng >= -180 && request.resource.data.lng <= 180;
+      allow read:  if isAdmin() || (isAuthed() && riderId == request.auth.uid);
+      allow write: if isAuthed() && riderId == request.auth.uid;
     }
-
-    /* fleetEvents — SOS and deviation alerts */
     match /fleetEvents/{eventId} {
       allow read:  if isAdmin();
-      allow create: if false; // CF Admin SDK only
-      allow update: if false; // CF Admin SDK only (resolve)
-      allow delete: if false;
+      allow write: if false;
     }
-
-    /* driverEarningQueue — triggers FinOS payout */
     match /driverEarningQueue/{docId} {
       allow read:  if isAdmin();
-      allow write: if false; // CF Admin SDK only
+      allow write: if false;
     }
-
   }
-}
-
+}
