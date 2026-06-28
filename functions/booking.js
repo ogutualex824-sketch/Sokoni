@@ -2,8 +2,9 @@
    SOKONI Universal Venue & Resource Booking — Cloud Functions v1.0
    14 functions — server-authoritative, Firestore-transactional
 ================================================================ */
-const functions = require('firebase-functions/v2');
-const admin     = require('firebase-admin');
+const functions  = require('firebase-functions/v2');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const admin      = require('firebase-admin');
 if (!admin.apps.length) admin.initializeApp();
 
 const db   = admin.firestore();
@@ -20,7 +21,7 @@ function _minsToTime(m){ return _pad2(Math.floor(m/60))+':'+_pad2(m%60); }
 function _dayOfWeek(dateStr){ return ['sun','mon','tue','wed','thu','fri','sat'][new Date(dateStr).getDay()]; }
 
 function _authRequired(req) {
-  if (!req.auth) throw new functions.https.HttpsError('unauthenticated','Sign in required');
+  if (!req.auth) throw new HttpsError('unauthenticated','Sign in required');
   return req.auth.uid;
 }
 
@@ -102,8 +103,8 @@ async function _hasOverlap(venueId, startTs, endTs, excludeBookingId=null) {
 /* ═══════════════════════════════════════════════════════════
    1. SEARCH VENUES
 ═══════════════════════════════════════════════════════════ */
-exports.bookingSearchVenues = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 80 },
+exports.bookingSearchVenues = onCall(
+  { region: 'us-central1', maxInstances: 80, cors: true, enforceAppCheck: true },
   async (req) => {
     const { type, city, area, date, minCapacity, maxPrice, amenities, indoor, limit = 24, offset = 0 } = req.data || {};
 
@@ -144,13 +145,13 @@ function _getLiveStatus(venue, dateStr) {
 /* ═══════════════════════════════════════════════════════════
    2. GET VENUE DETAIL
 ═══════════════════════════════════════════════════════════ */
-exports.bookingGetVenue = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 50 },
+exports.bookingGetVenue = onCall(
+  { region: 'us-central1', maxInstances: 50, cors: true, enforceAppCheck: true },
   async (req) => {
     const { venueId } = req.data || {};
-    if (!venueId) throw new functions.https.HttpsError('invalid-argument','venueId required');
+    if (!venueId) throw new HttpsError('invalid-argument','venueId required');
     const snap = await db.collection('venues').doc(venueId).get();
-    if (!snap.exists) throw new functions.https.HttpsError('not-found','Venue not found');
+    if (!snap.exists) throw new HttpsError('not-found','Venue not found');
     return { id: snap.id, ...snap.data() };
   }
 );
@@ -158,14 +159,14 @@ exports.bookingGetVenue = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    3. GET AVAILABILITY (slots for a specific date)
 ═══════════════════════════════════════════════════════════ */
-exports.bookingGetAvailability = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 100 },
+exports.bookingGetAvailability = onCall(
+  { region: 'us-central1', maxInstances: 100, cors: true, enforceAppCheck: true },
   async (req) => {
     const { venueId, date } = req.data || {};
-    if (!venueId || !date) throw new functions.https.HttpsError('invalid-argument','venueId and date required');
+    if (!venueId || !date) throw new HttpsError('invalid-argument','venueId and date required');
 
     const venueSnap = await db.collection('venues').doc(venueId).get();
-    if (!venueSnap.exists) throw new functions.https.HttpsError('not-found','Venue not found');
+    if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
     const venue = venueSnap.data();
 
     const dow   = _dayOfWeek(date);
@@ -255,13 +256,13 @@ exports.bookingGetAvailability = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    4. HOLD SLOT (2-minute atomic lock)
 ═══════════════════════════════════════════════════════════ */
-exports.bookingHoldSlot = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 100 },
+exports.bookingHoldSlot = onCall(
+  { region: 'us-central1', maxInstances: 100, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { venueId, startTs, endTs, holdId } = req.data || {};
-    if (!venueId || !startTs || !endTs) throw new functions.https.HttpsError('invalid-argument','venueId, startTs, endTs required');
-    if (endTs <= startTs) throw new functions.https.HttpsError('invalid-argument','endTs must be after startTs');
+    if (!venueId || !startTs || !endTs) throw new HttpsError('invalid-argument','venueId, startTs, endTs required');
+    if (endTs <= startTs) throw new HttpsError('invalid-argument','endTs must be after startTs');
 
     /* Atomic: check + write in transaction */
     const held = await db.runTransaction(async txn => {
@@ -303,7 +304,7 @@ exports.bookingHoldSlot = functions.https.onCall(
       return id;
     });
 
-    if (!held) throw new functions.https.HttpsError('already-exists','Slot is no longer available');
+    if (!held) throw new HttpsError('already-exists','Slot is no longer available');
     return { held: true, holdId: held, expiresAt: Date.now() + 2*60*1000 };
   }
 );
@@ -311,12 +312,12 @@ exports.bookingHoldSlot = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    5. RELEASE HOLD
 ═══════════════════════════════════════════════════════════ */
-exports.bookingReleaseHold = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 50 },
+exports.bookingReleaseHold = onCall(
+  { region: 'us-central1', maxInstances: 50, cors: true, enforceAppCheck: true },
   async (req) => {
     _authRequired(req);
     const { holdId } = req.data || {};
-    if (!holdId) throw new functions.https.HttpsError('invalid-argument','holdId required');
+    if (!holdId) throw new HttpsError('invalid-argument','holdId required');
     await db.collection('bookingHolds').doc(holdId).delete();
     return { released: true };
   }
@@ -325,13 +326,13 @@ exports.bookingReleaseHold = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    6. CREATE BOOKING (server-authoritative, idempotent)
 ═══════════════════════════════════════════════════════════ */
-exports.bookingCreate = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 50 },
+exports.bookingCreate = onCall(
+  { region: 'us-central1', maxInstances: 50, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { venueId, holdId, date, startTime, endTime, addOns = [], notes, paymentId, idempotencyKey } = req.data || {};
     if (!venueId || !date || !startTime || !endTime) {
-      throw new functions.https.HttpsError('invalid-argument','venueId, date, startTime, endTime required');
+      throw new HttpsError('invalid-argument','venueId, date, startTime, endTime required');
     }
 
     /* Idempotency: check if already created */
@@ -340,7 +341,7 @@ exports.bookingCreate = functions.https.onCall(
 
     /* Fetch venue */
     const venueSnap = await db.collection('venues').doc(venueId).get();
-    if (!venueSnap.exists) throw new functions.https.HttpsError('not-found','Venue not found');
+    if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
     const venue = venueSnap.data();
 
     /* Calculate timestamps */
@@ -351,7 +352,7 @@ exports.bookingCreate = functions.https.onCall(
     const endTs     = dayStart + endMins   * 60000;
     const duration  = endMins - startMins;
 
-    if (duration <= 0) throw new functions.https.HttpsError('invalid-argument','endTime must be after startTime');
+    if (duration <= 0) throw new HttpsError('invalid-argument','endTime must be after startTime');
 
     /* Server-side pricing calculation */
     const pricingBreakdown = _calculatePrice(venue, startMins, endMins, date, { addOns });
@@ -365,7 +366,7 @@ exports.bookingCreate = functions.https.onCall(
         .where('status','in',['confirmed','active'])
         .get()).size;
       if (dayBookings >= concurrent) {
-        throw new functions.https.HttpsError('resource-exhausted','Venue is fully booked for this time');
+        throw new HttpsError('resource-exhausted','Venue is fully booked for this time');
       }
     }
 
@@ -437,7 +438,7 @@ exports.bookingCreate = functions.https.onCall(
       return bookingId;
     });
 
-    if (!committed) throw new functions.https.HttpsError('already-exists','Slot is no longer available');
+    if (!committed) throw new HttpsError('already-exists','Slot is no longer available');
 
     /* Send confirmation notification */
     await db.collection('notifications').add({
@@ -474,26 +475,26 @@ exports.bookingCreate = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    7. CANCEL BOOKING
 ═══════════════════════════════════════════════════════════ */
-exports.bookingCancel = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 30 },
+exports.bookingCancel = onCall(
+  { region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { bookingId, reason } = req.data || {};
-    if (!bookingId) throw new functions.https.HttpsError('invalid-argument','bookingId required');
+    if (!bookingId) throw new HttpsError('invalid-argument','bookingId required');
 
     const bookingRef = db.collection('bookings').doc(bookingId);
     const snap = await bookingRef.get();
-    if (!snap.exists) throw new functions.https.HttpsError('not-found','Booking not found');
+    if (!snap.exists) throw new HttpsError('not-found','Booking not found');
     const booking = snap.data();
 
     /* Only customer or venue owner can cancel */
     const isOwner    = booking.ownerId === uid;
     const isCustomer = booking.customerId === uid;
     if (!isOwner && !isCustomer) {
-      throw new functions.https.HttpsError('permission-denied','Cannot cancel this booking');
+      throw new HttpsError('permission-denied','Cannot cancel this booking');
     }
     if (['cancelled','completed'].includes(booking.status)) {
-      throw new functions.https.HttpsError('failed-precondition',`Booking is already ${booking.status}`);
+      throw new HttpsError('failed-precondition',`Booking is already ${booking.status}`);
     }
 
     /* Calculate cancellation fee */
@@ -529,25 +530,25 @@ exports.bookingCancel = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    8. RESCHEDULE BOOKING
 ═══════════════════════════════════════════════════════════ */
-exports.bookingReschedule = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 20 },
+exports.bookingReschedule = onCall(
+  { region: 'us-central1', maxInstances: 20, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { bookingId, newDate, newStartTime, newEndTime } = req.data || {};
     if (!bookingId || !newDate || !newStartTime || !newEndTime) {
-      throw new functions.https.HttpsError('invalid-argument','bookingId, newDate, newStartTime, newEndTime required');
+      throw new HttpsError('invalid-argument','bookingId, newDate, newStartTime, newEndTime required');
     }
 
     const bookingRef = db.collection('bookings').doc(bookingId);
     const snap = await bookingRef.get();
-    if (!snap.exists) throw new functions.https.HttpsError('not-found','Booking not found');
+    if (!snap.exists) throw new HttpsError('not-found','Booking not found');
     const booking = snap.data();
 
     if (booking.customerId !== uid && booking.ownerId !== uid) {
-      throw new functions.https.HttpsError('permission-denied','Cannot reschedule this booking');
+      throw new HttpsError('permission-denied','Cannot reschedule this booking');
     }
     if (!['pending','confirmed'].includes(booking.status)) {
-      throw new functions.https.HttpsError('failed-precondition','Booking cannot be rescheduled');
+      throw new HttpsError('failed-precondition','Booking cannot be rescheduled');
     }
 
     const dayStart   = new Date(newDate+'T00:00:00').getTime();
@@ -556,7 +557,7 @@ exports.bookingReschedule = functions.https.onCall(
 
     /* Check availability at new time (excluding this booking) */
     const overlap = await _hasOverlap(booking.venueId, newStartTs, newEndTs, bookingId);
-    if (overlap) throw new functions.https.HttpsError('already-exists','New time slot is not available');
+    if (overlap) throw new HttpsError('already-exists','New time slot is not available');
 
     await bookingRef.update({
       date: newDate, startTime: newStartTime, endTime: newEndTime,
@@ -572,17 +573,17 @@ exports.bookingReschedule = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    9. CHECK IN
 ═══════════════════════════════════════════════════════════ */
-exports.bookingCheckIn = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 30 },
+exports.bookingCheckIn = onCall(
+  { region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { bookingId, method, time } = req.data || {};
     const bookingRef = db.collection('bookings').doc(bookingId);
     const snap = await bookingRef.get();
-    if (!snap.exists) throw new functions.https.HttpsError('not-found','Booking not found');
+    if (!snap.exists) throw new HttpsError('not-found','Booking not found');
     const booking = snap.data();
     if (booking.customerId !== uid && booking.ownerId !== uid) {
-      throw new functions.https.HttpsError('permission-denied','Not authorised');
+      throw new HttpsError('permission-denied','Not authorised');
     }
     await bookingRef.update({
       status:    'active',
@@ -596,17 +597,17 @@ exports.bookingCheckIn = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    10. CHECK OUT
 ═══════════════════════════════════════════════════════════ */
-exports.bookingCheckOut = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 30 },
+exports.bookingCheckOut = onCall(
+  { region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { bookingId, time } = req.data || {};
     const bookingRef = db.collection('bookings').doc(bookingId);
     const snap = await bookingRef.get();
-    if (!snap.exists) throw new functions.https.HttpsError('not-found','Booking not found');
+    if (!snap.exists) throw new HttpsError('not-found','Booking not found');
     const booking = snap.data();
     if (booking.customerId !== uid && booking.ownerId !== uid) {
-      throw new functions.https.HttpsError('permission-denied','Not authorised');
+      throw new HttpsError('permission-denied','Not authorised');
     }
     await bookingRef.update({
       status:    'completed',
@@ -620,8 +621,8 @@ exports.bookingCheckOut = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    11. GET MY BOOKINGS
 ═══════════════════════════════════════════════════════════ */
-exports.bookingGetMyBookings = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 50 },
+exports.bookingGetMyBookings = onCall(
+  { region: 'us-central1', maxInstances: 50, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { status } = req.data || {};
@@ -635,17 +636,17 @@ exports.bookingGetMyBookings = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    12. GET VENUE CALENDAR (owner view)
 ═══════════════════════════════════════════════════════════ */
-exports.bookingGetCalendar = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 30 },
+exports.bookingGetCalendar = onCall(
+  { region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { venueId, from, until } = req.data || {};
-    if (!venueId || !from || !until) throw new functions.https.HttpsError('invalid-argument','venueId, from, until required');
+    if (!venueId || !from || !until) throw new HttpsError('invalid-argument','venueId, from, until required');
 
     const venueSnap = await db.collection('venues').doc(venueId).get();
-    if (!venueSnap.exists) throw new functions.https.HttpsError('not-found','Venue not found');
+    if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
     const venue = venueSnap.data();
-    if (venue.ownerId !== uid) throw new functions.https.HttpsError('permission-denied','Not the venue owner');
+    if (venue.ownerId !== uid) throw new HttpsError('permission-denied','Not the venue owner');
 
     const snap = await db.collection('bookings')
       .where('venueId', '==', venueId)
@@ -670,16 +671,16 @@ exports.bookingGetCalendar = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    13. BLOCK VENUE SLOTS (maintenance / closure)
 ═══════════════════════════════════════════════════════════ */
-exports.bookingBlockSlots = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 10 },
+exports.bookingBlockSlots = onCall(
+  { region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { venueId, startTs, endTs, reason, note } = req.data || {};
-    if (!venueId || !startTs || !endTs) throw new functions.https.HttpsError('invalid-argument','venueId, startTs, endTs required');
+    if (!venueId || !startTs || !endTs) throw new HttpsError('invalid-argument','venueId, startTs, endTs required');
 
     const venueSnap = await db.collection('venues').doc(venueId).get();
-    if (!venueSnap.exists) throw new functions.https.HttpsError('not-found','Venue not found');
-    if (venueSnap.data().ownerId !== uid) throw new functions.https.HttpsError('permission-denied','Not the venue owner');
+    if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
+    if (venueSnap.data().ownerId !== uid) throw new HttpsError('permission-denied','Not the venue owner');
 
     const docRef = await db.collection('venueBlockouts').add({
       venueId, startTs, endTs,
@@ -695,8 +696,8 @@ exports.bookingBlockSlots = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    14. SAVE VENUE (create or update)
 ═══════════════════════════════════════════════════════════ */
-exports.bookingSaveVenue = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 10 },
+exports.bookingSaveVenue = onCall(
+  { region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { id, ...data } = req.data || {};
@@ -721,13 +722,13 @@ exports.bookingSaveVenue = functions.https.onCall(
       updatedAt:    Date.now(),
     };
 
-    if (!venueData.name) throw new functions.https.HttpsError('invalid-argument','Venue name required');
+    if (!venueData.name) throw new HttpsError('invalid-argument','Venue name required');
 
     if (id) {
       /* Update — verify ownership */
       const snap = await db.collection('venues').doc(id).get();
-      if (!snap.exists) throw new functions.https.HttpsError('not-found','Venue not found');
-      if (snap.data().ownerId !== uid) throw new functions.https.HttpsError('permission-denied','Not the venue owner');
+      if (!snap.exists) throw new HttpsError('not-found','Venue not found');
+      if (snap.data().ownerId !== uid) throw new HttpsError('permission-denied','Not the venue owner');
       await db.collection('venues').doc(id).update(venueData);
       return { venueId: id, created: false };
     } else {
@@ -744,15 +745,15 @@ exports.bookingSaveVenue = functions.https.onCall(
 /* ═══════════════════════════════════════════════════════════
    15. APPROVE / REJECT (for approval-required venues)
 ═══════════════════════════════════════════════════════════ */
-exports.bookingApprove = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 10 },
+exports.bookingApprove = onCall(
+  { region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { bookingId } = req.data || {};
     const snap = await db.collection('bookings').doc(bookingId).get();
-    if (!snap.exists) throw new functions.https.HttpsError('not-found','Booking not found');
+    if (!snap.exists) throw new HttpsError('not-found','Booking not found');
     const booking = snap.data();
-    if (booking.ownerId !== uid) throw new functions.https.HttpsError('permission-denied','Not the venue owner');
+    if (booking.ownerId !== uid) throw new HttpsError('permission-denied','Not the venue owner');
     await db.collection('bookings').doc(bookingId).update({ status:'confirmed', approvedAt: Date.now(), updatedAt: Date.now() });
     await db.collection('notifications').add({
       userId: booking.customerId, type: 'booking_approved',
@@ -764,15 +765,15 @@ exports.bookingApprove = functions.https.onCall(
   }
 );
 
-exports.bookingReject = functions.https.onCall(
-  { region: 'us-central1', maxInstances: 10 },
+exports.bookingReject = onCall(
+  { region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
   async (req) => {
     const uid = _authRequired(req);
     const { bookingId, reason } = req.data || {};
     const snap = await db.collection('bookings').doc(bookingId).get();
-    if (!snap.exists) throw new functions.https.HttpsError('not-found','Booking not found');
+    if (!snap.exists) throw new HttpsError('not-found','Booking not found');
     const booking = snap.data();
-    if (booking.ownerId !== uid) throw new functions.https.HttpsError('permission-denied','Not the venue owner');
+    if (booking.ownerId !== uid) throw new HttpsError('permission-denied','Not the venue owner');
     await db.collection('bookings').doc(bookingId).update({ status:'cancelled', rejectedAt: Date.now(), rejectionReason: _sanitize(reason||''), updatedAt: Date.now() });
     await db.collection('notifications').add({
       userId: booking.customerId, type: 'booking_rejected',
