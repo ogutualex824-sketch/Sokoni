@@ -12,6 +12,13 @@ const admin = require("firebase-admin");
 const Anthropic = require("@anthropic-ai/sdk");
 
 admin.initializeApp();
+
+/* Lazy Anthropic client — created once per instance after secrets are available */
+let _anthropicInstance = null;
+function _getAnthropicClient() {
+  if (!_anthropicInstance) _anthropicInstance = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+  return _anthropicInstance;
+}
 const db = admin.firestore();
 
 const ANTHROPIC_API_KEY    = defineSecret("ANTHROPIC_API_KEY");
@@ -1357,7 +1364,7 @@ async function _execChatTool(name, input, ctx) {
 }
 
 exports.sokoniChat = onRequest(
-  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 60, invoker: "public" },
+  { secrets: [ANTHROPIC_API_KEY], cors: ['https://mysokoni.co.ke', 'https://sokoni-aeb26.web.app'], timeoutSeconds: 120, memory: '512MiB', invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).json({ error: "Method not allowed" });
@@ -1670,7 +1677,7 @@ For car hire → get_page_url to car-rental.html.`;
     };
 
     try {
-      const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+      const anthropic = _getAnthropicClient();
       let currentMessages = [...history];
       let finalResponse = "";
       const MAX_ITER = 5;

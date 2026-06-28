@@ -294,34 +294,35 @@ exports.posMarketplaceOrderSync = functions.firestore.onDocumentUpdated(
     const batch = db.batch();
     const movements = [];
 
+    const orderId = event.params.orderId;
     for (const item of items) {
       const { productId, qty } = item;
       if (!productId || !qty) continue;
 
-      /* Deduct from inventory */
       const invId  = `${branchId}__${productId}`;
       const invRef = db.collection('inventory').doc(invId);
-      const invSnap = await invRef.get();
+      const mvRef  = db.collection('stockMovements').doc();
 
-      if (invSnap.exists) {
+      /* Atomic transaction: read current stock, deduct, write movement.
+         Prevents TOCTOU race where two concurrent marketplace orders both
+         claim the same last unit. */
+      await db.runTransaction(async t => {
+        const invSnap = await t.get(invRef);
+        if (!invSnap.exists) return;
+
         const current = invSnap.data().qty || 0;
-        batch.update(invRef, {
-          qty:       Math.max(0, current - qty),
-          updatedAt: Date.now(),
-        });
-      }
-
-      movements.push({ productId, qty: -qty, type: 'marketplace_sale', reference: event.params.orderId, timestamp: Date.now(), branchId });
+        const newQty  = Math.max(0, current - qty);
+        if (current < qty) {
+          console.warn(`[posMarketplaceOrderSync] Stockout: product=${productId} current=${current} requested=${qty} orderId=${orderId}`);
+        }
+        t.update(invRef, { qty: newQty, updatedAt: Date.now() });
+        t.set(mvRef, { productId, qty: -qty, type: 'marketplace_sale', reference: orderId, timestamp: Date.now(), branchId });
+      });
     }
 
     /* Mark order as posProcessed to prevent re-trigger */
+    const batch = db.batch();
     batch.update(event.data.after.ref, { posProcessed: true, posProcessedAt: Date.now() });
-
-    /* Record movements */
-    for (const mv of movements) {
-      batch.set(db.collection('stockMovements').doc(), mv);
-    }
-
     await batch.commit();
     return null;
   }

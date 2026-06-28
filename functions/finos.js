@@ -348,7 +348,7 @@ exports.processPendingPayouts = onSchedule(
   async () => {
     const db      = _db();
     const privKey = INTASEND_PRIV.value();
-    const snap    = await db.collection('payouts').where('status', '==', 'pending').get();
+    const snap    = await db.collection('payouts').where('status', '==', 'pending').limit(100).get();
     if (snap.empty) return;
 
     let processed = 0, failed = 0;
@@ -627,12 +627,13 @@ exports.detectFinancialFraud = onSchedule(
     const hour = 3600000;
 
     /* Pattern 1: Multiple large refunds in < 1h (possible fraud) */
-    const refundSnap = await db.collection('ledger').where('type', '==', 'refund').get().catch(() => null);
+    const refundCutoff = admin.firestore.Timestamp.fromMillis(now - hour);
+    const refundSnap = await db.collection('ledger')
+      .where('type', '==', 'refund')
+      .where('createdAt', '>=', refundCutoff)
+      .get().catch(() => null);
     if (refundSnap) {
-      const recentRefunds = refundSnap.docs.filter(d => {
-        const ts = d.data().createdAt?.toMillis?.() || 0;
-        return (now - ts) < hour;
-      });
+      const recentRefunds = refundSnap.docs;
       if (recentRefunds.length >= 10) {
         await db.collection('fraudAlerts').add({
           type: 'financial', subType: 'refund_spike',
@@ -644,16 +645,17 @@ exports.detectFinancialFraud = onSchedule(
     }
 
     /* Pattern 2: Payouts to same phone from multiple accounts */
-    const payoutSnap = await db.collection('payouts').where('status', '==', 'completed').get().catch(() => null);
+    const payoutCutoff = admin.firestore.Timestamp.fromMillis(now - 86400000);
+    const payoutSnap = await db.collection('payouts')
+      .where('status', '==', 'completed')
+      .where('completedAt', '>=', payoutCutoff)
+      .get().catch(() => null);
     if (payoutSnap) {
       const phoneCounts = {};
       payoutSnap.docs.forEach(d => {
-        const ts = d.data().completedAt?.toMillis?.() || 0;
-        if ((now - ts) < 86400000) { /* last 24h */
-          const phone = d.data().phone;
-          phoneCounts[phone] = (phoneCounts[phone] || new Set());
-          phoneCounts[phone].add(d.data().entityId);
-        }
+        const phone = d.data().phone;
+        phoneCounts[phone] = (phoneCounts[phone] || new Set());
+        phoneCounts[phone].add(d.data().entityId);
       });
       for (const [phone, entities] of Object.entries(phoneCounts)) {
         if (entities.size >= 3) {
@@ -667,15 +669,15 @@ exports.detectFinancialFraud = onSchedule(
     }
 
     /* Pattern 3: Promo abuse — same user applying multiple codes in 24h */
-    const usageSnap = await db.collection('promotionUsage').get().catch(() => null);
+    const promoCutoff = admin.firestore.Timestamp.fromMillis(now - 86400000);
+    const usageSnap = await db.collection('promotionUsage')
+      .where('usedAt', '>=', promoCutoff)
+      .get().catch(() => null);
     if (usageSnap) {
       const userCodes = {};
       usageSnap.docs.forEach(d => {
         const data = d.data();
-        const ts   = data.usedAt?.toMillis?.() || 0;
-        if ((now - ts) < 86400000) {
-          userCodes[data.buyerUid] = (userCodes[data.buyerUid] || 0) + 1;
-        }
+        userCodes[data.buyerUid] = (userCodes[data.buyerUid] || 0) + 1;
       });
       for (const [uid, count] of Object.entries(userCodes)) {
         if (count >= 5) {

@@ -13,18 +13,18 @@
  * Index policy: ONLY single-field where() clauses — NO composite indexes.
  */
 
-const { onCall } = require('firebase-functions/v2/https');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function _requireAuth(ctx) {
-  if (!ctx.auth) throw new Error('UNAUTHENTICATED: Login required');
+  if (!ctx.auth) throw new HttpsError('unauthenticated', 'Login required');
 }
 
 function _requireAdmin(ctx) {
   if (!ctx.auth?.token?.admin && !ctx.auth?.token?.superAdmin) {
-    throw new Error('FORBIDDEN: Admin access required');
+    throw new HttpsError('permission-denied', 'Admin access required');
   }
 }
 
@@ -93,20 +93,20 @@ exports.createJob = onCall({ cors: true }, async (req) => {
   // ── Validation ──
   const cleanTitle = _san(title, 100);
   if (!cleanTitle || cleanTitle.length < 3) {
-    throw new Error('INVALID_ARGUMENT: title must be 3-100 characters');
+    throw new HttpsError('invalid-argument', 'title must be 3-100 characters');
   }
 
   const cleanDescription = _san(description, 5000);
   if (!cleanDescription || cleanDescription.length < 20) {
-    throw new Error('INVALID_ARGUMENT: description must be 20-5000 characters');
+    throw new HttpsError('invalid-argument', 'description must be 20-5000 characters');
   }
 
   if (!VALID_TYPES.includes(type)) {
-    throw new Error(`INVALID_ARGUMENT: type must be one of ${VALID_TYPES.join(', ')}`);
+    throw new HttpsError('invalid-argument', );
   }
 
   if (!VALID_CATEGORIES.includes(category)) {
-    throw new Error(`INVALID_ARGUMENT: category must be one of ${VALID_CATEGORIES.join(', ')}`);
+    throw new HttpsError('invalid-argument', );
   }
 
   const cleanLocation     = _san(location, 200);
@@ -155,12 +155,12 @@ exports.updateJob = onCall({ cors: true }, async (req) => {
   const db  = getFirestore();
 
   const { jobId, ...raw } = req.data || {};
-  if (!jobId) throw new Error('INVALID_ARGUMENT: jobId required');
+  if (!jobId) throw new HttpsError('invalid-argument', 'jobId required');
 
   const jobRef  = db.collection('jobs').doc(jobId);
   const jobSnap = await jobRef.get();
-  if (!jobSnap.exists) throw new Error('NOT_FOUND: Job not found');
-  if (jobSnap.data().employerUid !== uid) throw new Error('FORBIDDEN: Not your job');
+  if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
+  if (jobSnap.data().employerUid !== uid) throw new HttpsError('permission-denied', 'Not your job');
 
   const ALLOWED = ['title', 'description', 'requirements', 'category', 'type', 'location', 'salaryMin', 'salaryMax', 'expiresAt'];
   const update  = {};
@@ -170,22 +170,22 @@ exports.updateJob = onCall({ cors: true }, async (req) => {
 
     if (key === 'title') {
       const v = _san(raw.title, 100);
-      if (!v || v.length < 3) throw new Error('INVALID_ARGUMENT: title must be 3-100 characters');
+      if (!v || v.length < 3) throw new HttpsError('invalid-argument', 'title must be 3-100 characters');
       update.title = v;
     } else if (key === 'description') {
       const v = _san(raw.description, 5000);
-      if (!v || v.length < 20) throw new Error('INVALID_ARGUMENT: description must be 20-5000 characters');
+      if (!v || v.length < 20) throw new HttpsError('invalid-argument', 'description must be 20-5000 characters');
       update.description = v;
     } else if (key === 'requirements') {
       update.requirements = _san(raw.requirements, 3000);
     } else if (key === 'category') {
       if (!VALID_CATEGORIES.includes(raw.category)) {
-        throw new Error(`INVALID_ARGUMENT: invalid category`);
+        throw new HttpsError('invalid-argument', );
       }
       update.category = raw.category;
     } else if (key === 'type') {
       if (!VALID_TYPES.includes(raw.type)) {
-        throw new Error(`INVALID_ARGUMENT: invalid type`);
+        throw new HttpsError('invalid-argument', );
       }
       update.type = raw.type;
     } else if (key === 'location') {
@@ -199,7 +199,7 @@ exports.updateJob = onCall({ cors: true }, async (req) => {
     }
   }
 
-  if (Object.keys(update).length === 0) throw new Error('INVALID_ARGUMENT: No valid fields to update');
+  if (Object.keys(update).length === 0) throw new HttpsError('invalid-argument', 'No valid fields to update');
 
   await jobRef.update(update);
   return { success: true };
@@ -213,12 +213,12 @@ exports.closeJob = onCall({ cors: true }, async (req) => {
   const db  = getFirestore();
 
   const { jobId } = req.data || {};
-  if (!jobId) throw new Error('INVALID_ARGUMENT: jobId required');
+  if (!jobId) throw new HttpsError('invalid-argument', 'jobId required');
 
   const jobRef  = db.collection('jobs').doc(jobId);
   const jobSnap = await jobRef.get();
-  if (!jobSnap.exists) throw new Error('NOT_FOUND: Job not found');
-  if (jobSnap.data().employerUid !== uid) throw new Error('FORBIDDEN: Not your job');
+  if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
+  if (jobSnap.data().employerUid !== uid) throw new HttpsError('permission-denied', 'Not your job');
 
   await jobRef.update({ status: 'closed' });
   return { success: true };
@@ -281,11 +281,11 @@ exports.getJob = onCall({ cors: true }, async (req) => {
   const uid    = req.auth?.uid || null;
   const { jobId } = req.data || {};
 
-  if (!jobId) throw new Error('INVALID_ARGUMENT: jobId required');
+  if (!jobId) throw new HttpsError('invalid-argument', 'jobId required');
 
   const jobRef  = db.collection('jobs').doc(jobId);
   const jobSnap = await jobRef.get();
-  if (!jobSnap.exists) throw new Error('NOT_FOUND: Job not found');
+  if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
 
   // Increment viewCount atomically (fire-and-forget is fine)
   jobRef.update({ viewCount: FieldValue.increment(1) }).catch(() => {});
@@ -318,11 +318,11 @@ exports.applyForJob = onCall({ cors: true }, async (req) => {
   const db  = getFirestore();
 
   const { jobId, coverLetter, cvUrl } = req.data || {};
-  if (!jobId) throw new Error('INVALID_ARGUMENT: jobId required');
+  if (!jobId) throw new HttpsError('invalid-argument', 'jobId required');
 
   const cleanCover = _san(coverLetter, 2000);
   if (!cleanCover || cleanCover.length < 20) {
-    throw new Error('INVALID_ARGUMENT: coverLetter must be 20-2000 characters');
+    throw new HttpsError('invalid-argument', 'coverLetter must be 20-2000 characters');
   }
 
   // Idempotency via deterministic doc ID
@@ -335,10 +335,10 @@ exports.applyForJob = onCall({ cors: true }, async (req) => {
   // Fetch job to validate it is still active
   const jobRef  = db.collection('jobs').doc(jobId);
   const jobSnap = await jobRef.get();
-  if (!jobSnap.exists) throw new Error('NOT_FOUND: Job not found');
+  if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
 
   const jobData = jobSnap.data();
-  if (!_isActive(jobData)) throw new Error('FAILED_PRECONDITION: This job is no longer accepting applications');
+  if (!_isActive(jobData)) throw new HttpsError('failed-precondition', 'This job is no longer accepting applications');
 
   const now = Timestamp.now();
   const application = {
@@ -369,12 +369,12 @@ exports.getJobApplications = onCall({ cors: true }, async (req) => {
   const db  = getFirestore();
 
   const { jobId } = req.data || {};
-  if (!jobId) throw new Error('INVALID_ARGUMENT: jobId required');
+  if (!jobId) throw new HttpsError('invalid-argument', 'jobId required');
 
   // Employer ownership check
   const jobSnap = await db.collection('jobs').doc(jobId).get();
-  if (!jobSnap.exists) throw new Error('NOT_FOUND: Job not found');
-  if (jobSnap.data().employerUid !== uid) throw new Error('FORBIDDEN: Not your job');
+  if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
+  if (jobSnap.data().employerUid !== uid) throw new HttpsError('permission-denied', 'Not your job');
 
   // Single-field query
   const appsSnap = await db.collection('jobApplications')
@@ -431,17 +431,17 @@ exports.updateApplicationStatus = onCall({ cors: true }, async (req) => {
   const db  = getFirestore();
 
   const { applicationId, status } = req.data || {};
-  if (!applicationId) throw new Error('INVALID_ARGUMENT: applicationId required');
+  if (!applicationId) throw new HttpsError('invalid-argument', 'applicationId required');
   if (!VALID_APP_STATUSES.includes(status)) {
-    throw new Error(`INVALID_ARGUMENT: status must be one of ${VALID_APP_STATUSES.join(', ')}`);
+    throw new HttpsError('invalid-argument', );
   }
 
   const appRef  = db.collection('jobApplications').doc(applicationId);
   const appSnap = await appRef.get();
-  if (!appSnap.exists) throw new Error('NOT_FOUND: Application not found');
+  if (!appSnap.exists) throw new HttpsError('not-found', 'Application not found');
 
   const appData = appSnap.data();
-  if (appData.employerUid !== uid) throw new Error('FORBIDDEN: Not your job application');
+  if (appData.employerUid !== uid) throw new HttpsError('permission-denied', 'Not your job application');
 
   await appRef.update({ status, updatedAt: Timestamp.now() });
   return { success: true };
@@ -522,12 +522,12 @@ exports.saveJobSeekerProfile = onCall({ cors: true }, async (req) => {
   // ── Validation ──
   const cleanName = _san(name, 100);
   if (!cleanName || cleanName.length < 2) {
-    throw new Error('INVALID_ARGUMENT: name must be 2-100 characters');
+    throw new HttpsError('invalid-argument', 'name must be 2-100 characters');
   }
 
   let cleanSkills = [];
   if (Array.isArray(skills)) {
-    if (skills.length > 20) throw new Error('INVALID_ARGUMENT: skills array must not exceed 20 items');
+    if (skills.length > 20) throw new HttpsError('invalid-argument', 'skills array must not exceed 20 items');
     cleanSkills = skills.map(s => _san(s, 100)).filter(Boolean);
   }
 

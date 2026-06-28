@@ -111,6 +111,20 @@ function _san(v, max) {
   return v.replace(/[<>"']/g, '').slice(0, max);
 }
 
+/* ── SSRF guard: only allow HTTPS URLs to public hosts ── */
+function _validateCallbackUrl(raw) {
+  if (!raw) return null;
+  let parsed;
+  try { parsed = new URL(raw); } catch { throw new HttpsError('invalid-argument', 'callbackUrl must be a valid URL'); }
+  if (parsed.protocol !== 'https:') throw new HttpsError('invalid-argument', 'callbackUrl must use HTTPS');
+  const h = parsed.hostname;
+  /* Block private/link-local/loopback ranges */
+  if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|::1|0\.0\.0\.0|169\.254\.)/.test(h)) {
+    throw new HttpsError('invalid-argument', 'callbackUrl must point to a public host');
+  }
+  return parsed.toString().slice(0, 512);
+}
+
 /* ═══════════════════════════════════════════════════════════
    CF 1: publishEvent — any module calls this to emit an event
 ═══════════════════════════════════════════════════════════ */
@@ -317,7 +331,7 @@ exports.registerEventSubscriber = onCall({ enforceAppCheck: true }, async (reque
     name:         _san(name || subscriberId, 128),
     description:  _san(description || '', 500),
     eventTypes:   eventTypes.map(t => _san(t, 120)).slice(0, 50),
-    callbackUrl:  callbackUrl ? _san(callbackUrl, 512) : null,
+    callbackUrl:  callbackUrl ? _validateCallbackUrl(callbackUrl) : null,
     active:       true,
     createdAt:    now(),
     updatedAt:    now(),

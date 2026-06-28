@@ -252,7 +252,36 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, async (request) => {
     logo:    sellerSnap.data().logoUrl || null,
   } : { name: 'SOKONI Store', address: '', phone: '', email: '', vatNo: '', logo: null };
 
-  /* Write sale + receipt in a batch */
+  /* Atomically check and reserve stock for all tracked items BEFORE committing the sale.
+     Each product is validated and decremented inside a single runTransaction so that
+     concurrent sales cannot both claim the last unit (TOCTOU-safe). */
+  const stockItems = validatedItems.filter(i => i.productId);
+  if (stockItems.length > 0) {
+    await fdb.runTransaction(async t => {
+      const refs  = stockItems.map(i => fdb.collection('products').doc(i.productId));
+      const snaps = await Promise.all(refs.map(r => t.get(r)));
+
+      for (let i = 0; i < snaps.length; i++) {
+        if (!snaps[i].exists) continue;
+        const currentStock = snaps[i].data().stock;
+        if (typeof currentStock === 'number' && currentStock < stockItems[i].qty) {
+          throw new HttpsError('failed-precondition',
+            `Insufficient stock for "${stockItems[i].name}": ${currentStock} unit(s) available, ${stockItems[i].qty} requested`);
+        }
+      }
+
+      for (let i = 0; i < snaps.length; i++) {
+        if (!snaps[i].exists) continue;
+        t.update(refs[i], {
+          stock:      admin.firestore.FieldValue.increment(-stockItems[i].qty),
+          soldCount:  admin.firestore.FieldValue.increment(stockItems[i].qty),
+          lastSoldAt: now(),
+        });
+      }
+    });
+  }
+
+  /* Write sale + receipt in a batch (stock already secured above) */
   const batch = fdb.batch();
 
   /* Sale record */
@@ -319,18 +348,6 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, async (request) => {
       savedReceipts: arrU(receiptId),
     }).catch(() => {});
   }
-
-  /* Deduct inventory stock */
-  const stockUpdates = validatedItems
-    .filter(i => i.productId)
-    .map(i =>
-      fdb.collection('products').doc(i.productId).update({
-        stock: incr(-i.qty),
-        soldCount: incr(i.qty),
-        lastSoldAt: now(),
-      }).catch(() => {})
-    );
-  await Promise.all(stockUpdates);
 
   /* Emit platform event */
   await _emitEvent('pos.checkout.completed', {

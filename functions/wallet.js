@@ -10,7 +10,7 @@
  *   payoutRequests/{reqId}
  */
 
-const { onCall } = require('firebase-functions/v2/https');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { defineSecret } = require('firebase-functions/params');
 
@@ -19,12 +19,12 @@ const INTASEND_KEY = defineSecret('INTASEND_PRIVATE_KEY');
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function _requireAuth(ctx) {
-  if (!ctx.auth) throw new Error('UNAUTHENTICATED: Login required');
+  if (!ctx.auth) throw new HttpsError('unauthenticated', 'Login required');
 }
 
 function _requireAdmin(ctx) {
   if (!ctx.auth?.token?.admin && !ctx.auth?.token?.superAdmin) {
-    throw new Error('FORBIDDEN: Admin access required');
+    throw new HttpsError('permission-denied', 'Admin access required');
   }
 }
 
@@ -110,13 +110,13 @@ exports.initiateWalletTopUp = onCall(
     // Validate amount
     const amt = Number(amount);
     if (!Number.isInteger(amt) || amt < 10 || amt > 70000) {
-      throw new Error('INVALID_ARGUMENT: Amount must be a whole number between KSh 10 and KSh 70,000');
+      throw new HttpsError('invalid-argument', 'Amount must be a whole number between KSh 10 and KSh 70,000');
     }
 
     // Validate & normalize phone
     const normalizedPhone = _normalizePhone(phone);
     if (!normalizedPhone) {
-      throw new Error('INVALID_ARGUMENT: Phone must be a valid Kenyan number (07XX or 01XX, with or without country code)');
+      throw new HttpsError('invalid-argument', 'Phone must be a valid Kenyan number (07XX or 01XX, with or without country code)');
     }
 
     // Create pending transaction
@@ -176,7 +176,7 @@ exports.initiateWalletTopUp = onCall(
       await txRef.update({ status: 'failed' });
       await walletRef.update({ pendingTopUp: null });
       console.error('[wallet] IntaSend STK push error:', err.message);
-      throw new Error('PAYMENT_FAILED: Unable to initiate M-Pesa prompt. Please try again or contact support.');
+      throw new HttpsError('unavailable', 'Unable to initiate M-Pesa prompt. Please try again or contact support.');
     }
 
     return {
@@ -198,15 +198,15 @@ exports.confirmWalletTopUp = onCall(
     const uid = request.auth.uid;
     const { txId } = request.data || {};
 
-    if (!txId) throw new Error('INVALID_ARGUMENT: txId is required');
+    if (!txId) throw new HttpsError('invalid-argument', 'txId is required');
 
     const txRef = db.collection('walletTransactions').doc(_san(txId, 128));
     const txSnap = await txRef.get();
 
-    if (!txSnap.exists) throw new Error('NOT_FOUND: Transaction not found');
+    if (!txSnap.exists) throw new HttpsError('not-found', 'Transaction not found');
 
     const tx = txSnap.data();
-    if (tx.uid !== uid) throw new Error('FORBIDDEN: This transaction does not belong to you');
+    if (tx.uid !== uid) throw new HttpsError('permission-denied', 'This transaction does not belong to you');
     if (tx.status === 'completed') {
       return { status: 'completed', amount: tx.amount };
     }
@@ -230,7 +230,7 @@ exports.confirmWalletTopUp = onCall(
       invoiceStatus = result?.invoice?.state ?? result?.state ?? null;
     } catch (err) {
       console.error('[wallet] IntaSend status check error:', err.message);
-      throw new Error('PAYMENT_CHECK_FAILED: Unable to verify payment status. Please try again shortly.');
+      throw new HttpsError('unavailable', 'Unable to verify payment status. Please try again shortly.');
     }
 
     // Normalise IntaSend states
@@ -290,9 +290,9 @@ exports.spendFromWallet = onCall({ cors: true, enforceAppCheck: true }, async (r
 
   const amt = Number(amount);
   if (!Number.isInteger(amt) || amt <= 0) {
-    throw new Error('INVALID_ARGUMENT: Amount must be a positive whole number');
+    throw new HttpsError('invalid-argument', 'Amount must be a positive whole number');
   }
-  if (!orderId) throw new Error('INVALID_ARGUMENT: orderId is required');
+  if (!orderId) throw new HttpsError('invalid-argument', 'orderId is required');
 
   const sanitizedOrderId = _san(orderId, 128);
   const desc = _san(description, 300) || `Payment for order ${sanitizedOrderId}`;
@@ -313,11 +313,11 @@ exports.spendFromWallet = onCall({ cors: true, enforceAppCheck: true }, async (r
       return;
     }
 
-    if (!walletSnap.exists) throw new Error('WALLET_NOT_FOUND: Wallet does not exist');
+    if (!walletSnap.exists) throw new HttpsError('not-found', 'Wallet does not exist');
 
     const current = walletSnap.data().balance ?? 0;
     if (current < amt) {
-      throw new Error(`INSUFFICIENT_FUNDS: Wallet balance (KSh ${current}) is less than required KSh ${amt}`);
+      throw new HttpsError('failed-precondition', );
     }
 
     newBalance = current - amt;
@@ -394,28 +394,28 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
 
   const amt = Number(amount);
   if (!Number.isInteger(amt) || amt < 500) {
-    throw new Error('INVALID_ARGUMENT: Minimum payout amount is KSh 500');
+    throw new HttpsError('invalid-argument', 'Minimum payout amount is KSh 500');
   }
 
   const validMethods = ['mpesa', 'bank'];
   if (!validMethods.includes(method)) {
-    throw new Error('INVALID_ARGUMENT: method must be "mpesa" or "bank"');
+    throw new HttpsError('invalid-argument', 'method must be "mpesa" or "bank"');
   }
 
   const sanitizedAccount = _san(accountNumber, 30);
   if (!sanitizedAccount) {
-    throw new Error('INVALID_ARGUMENT: accountNumber is required');
+    throw new HttpsError('invalid-argument', 'accountNumber is required');
   }
 
   if (method === 'mpesa') {
     const normalizedPhone = _normalizePhone(sanitizedAccount);
     if (!normalizedPhone) {
-      throw new Error('INVALID_ARGUMENT: M-Pesa account must be a valid Kenyan phone number');
+      throw new HttpsError('invalid-argument', 'M-Pesa account must be a valid Kenyan phone number');
     }
   }
 
   if (method === 'bank' && !bankCode) {
-    throw new Error('INVALID_ARGUMENT: bankCode is required for bank payouts');
+    throw new HttpsError('invalid-argument', 'bankCode is required for bank payouts');
   }
 
   /* Atomically check balance and reserve the payout amount to prevent concurrent overdraw */
@@ -427,7 +427,7 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
     const walletSnap = await t.get(walletRef);
     const balance = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
     if (balance < amt) {
-      throw new Error(`INSUFFICIENT_FUNDS: Available balance (KSh ${balance}) is less than requested KSh ${amt}`);
+      throw new HttpsError('failed-precondition', );
     }
     t.update(walletRef, { balance: balance - amt, pendingPayout: admin.firestore.FieldValue.increment(amt) });
     t.set(reqRef, {
@@ -497,17 +497,17 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true }, async
   const db = getFirestore();
   const { requestId, status, note } = request.data || {};
 
-  if (!requestId) throw new Error('INVALID_ARGUMENT: requestId is required');
+  if (!requestId) throw new HttpsError('invalid-argument', 'requestId is required');
 
   const validStatuses = ['approved', 'rejected', 'paid'];
   if (!validStatuses.includes(status)) {
-    throw new Error('INVALID_ARGUMENT: status must be "approved", "rejected", or "paid"');
+    throw new HttpsError('invalid-argument', 'status must be "approved", "rejected", or "paid"');
   }
 
   const reqRef = db.collection('payoutRequests').doc(_san(requestId, 128));
   const reqSnap = await reqRef.get();
 
-  if (!reqSnap.exists) throw new Error('NOT_FOUND: Payout request not found');
+  if (!reqSnap.exists) throw new HttpsError('not-found', 'Payout request not found');
 
   const update = {
     status,
@@ -529,7 +529,7 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true }, async
       if (!txSnap.exists) {
         const current = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
         if (current < payout.amount) {
-          throw new Error(`INSUFFICIENT_FUNDS: Wallet balance (KSh ${current}) insufficient for payout of KSh ${payout.amount}`);
+          throw new HttpsError('failed-precondition', );
         }
         const newBalance = current - payout.amount;
 
@@ -624,9 +624,9 @@ exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true }, async (re
 
   const amt = Number(amount);
   if (!Number.isInteger(amt) || amt <= 0) {
-    throw new Error('INVALID_ARGUMENT: Refund amount must be a positive whole number');
+    throw new HttpsError('invalid-argument', 'Refund amount must be a positive whole number');
   }
-  if (!orderId) throw new Error('INVALID_ARGUMENT: orderId is required');
+  if (!orderId) throw new HttpsError('invalid-argument', 'orderId is required');
 
   const sanitizedOrderId = _san(orderId, 128);
   const desc = _san(reason, 300) || `Refund for order ${sanitizedOrderId}`;

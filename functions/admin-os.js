@@ -17,30 +17,32 @@ function _requireSuperAdmin(req) {
 exports.adminGetPlatformOverview = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
+  const { Timestamp } = require('firebase-admin/firestore');
 
-  const [users, sellers, activeOrders, openTickets, pendingReports, bannedUsers] = await Promise.all([
-    db.collection('users').limit(10000).get(),
-    db.collection('users').where('role', '==', 'seller').limit(5000).get(),
-    db.collection('orders').where('status', '==', 'pending').limit(1000).get(),
-    db.collection('supportTickets').where('status', '==', 'open').limit(500).get(),
-    db.collection('reports').where('status', '==', 'pending').limit(500).get(),
-    db.collection('users').where('status', '==', 'banned').limit(500).get(),
-  ]);
-
-  // New users today (in-memory)
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const todayTs = todayStart.getTime() / 1000;
-  const newToday = users.docs.filter(d => (d.data().createdAt?.seconds || 0) >= todayTs).length;
+  const todayTs = Timestamp.fromDate(todayStart);
+
+  /* Use Firestore count() aggregation — no documents fetched, O(1) reads */
+  const [totalUsersSnap, totalSellersSnap, newTodaySnap, activeOrdersSnap,
+         openTicketsSnap, pendingReportsSnap, bannedUsersSnap] = await Promise.all([
+    db.collection('users').count().get(),
+    db.collection('users').where('role', '==', 'seller').count().get(),
+    db.collection('users').where('createdAt', '>=', todayTs).count().get(),
+    db.collection('orders').where('status', '==', 'pending').count().get(),
+    db.collection('supportTickets').where('status', '==', 'open').count().get(),
+    db.collection('reports').where('status', '==', 'pending').count().get(),
+    db.collection('users').where('status', '==', 'banned').count().get(),
+  ]);
 
   return {
-    totalUsers:     users.size,
-    totalSellers:   sellers.size,
-    newUsersToday:  newToday,
-    activeOrders:   activeOrders.size,
-    openTickets:    openTickets.size,
-    pendingReports: pendingReports.size,
-    bannedUsers:    bannedUsers.size,
+    totalUsers:     totalUsersSnap.data().count,
+    totalSellers:   totalSellersSnap.data().count,
+    newUsersToday:  newTodaySnap.data().count,
+    activeOrders:   activeOrdersSnap.data().count,
+    openTickets:    openTicketsSnap.data().count,
+    pendingReports: pendingReportsSnap.data().count,
+    bannedUsers:    bannedUsersSnap.data().count,
   };
 });
 
@@ -416,31 +418,35 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const [users, ordersToday, activeOrders, txToday, openTickets, openDisputes, activeSubs, pendingPayouts, activeDeliveries] = await Promise.all([
-    db.collection('users').limit(10000).get(),
-    db.collection('orders').where('createdAt', '>=', Timestamp.fromDate(todayStart)).get().catch(() => ({ size: 0, docs: [] })),
-    db.collection('orders').where('status', 'in', ['pending', 'processing', 'confirmed']).get().catch(() => ({ size: 0 })),
-    db.collection('transactions').where('createdAt', '>=', Timestamp.fromDate(todayStart)).where('status', '==', 'completed').get().catch(() => ({ docs: [] })),
-    db.collection('supportTickets').where('status', '==', 'open').get().catch(() => ({ size: 0 })),
-    db.collection('disputes').where('status', '==', 'open').get().catch(() => ({ size: 0 })),
-    db.collection('subscriptions').where('status', 'in', ['active', 'trialing']).get().catch(() => ({ size: 0 })),
-    db.collection('payouts').where('status', '==', 'pending').get().catch(() => ({ size: 0 })),
-    db.collection('orders').where('deliveryStatus', 'in', ['in_transit', 'picking_up']).limit(200).get().catch(() => ({ size: 0 })),
+  const todayTs = Timestamp.fromDate(todayStart);
+
+  /* count()-based aggregations — zero document fetches for counts.
+     Only txToday fetches docs because revenue summation requires the amount field. */
+  const [totalUsersCount, newUsersCount, ordersTodayCount, activeOrdersCount,
+         txToday, openTicketsCount, openDisputesCount, activeSubsCount,
+         pendingPayoutsCount, activeDeliveriesCount] = await Promise.all([
+    db.collection('users').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('users').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('orders').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('orders').where('status', 'in', ['pending', 'processing', 'confirmed']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('transactions').where('createdAt', '>=', todayTs).where('status', '==', 'completed').get().catch(() => ({ docs: [] })),
+    db.collection('supportTickets').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('disputes').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('subscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('payouts').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('orders').where('deliveryStatus', 'in', ['in_transit', 'picking_up']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
   ]);
 
-  const revenueToday = (txToday.docs || []).reduce((s, d) => s + (d.data().amount || 0), 0);
+  const revenueToday    = (txToday.docs || []).reduce((s, d) => s + (d.data().amount || 0), 0);
   const commissionToday = (txToday.docs || []).reduce((s, d) => s + (d.data().platformFee || d.data().commission || 0), 0);
-  const todayTs = todayStart.getTime() / 1000;
-  const newUsersToday = users.docs.filter(d => (d.data().createdAt?.seconds || 0) >= todayTs).length;
-  const roleBreakdown = { buyer: 0, seller: 0, provider: 0, driver: 0, admin: 0 };
-  users.docs.forEach(d => { const r = d.data().role || 'buyer'; if (roleBreakdown[r] !== undefined) roleBreakdown[r]++; });
 
   return {
-    totalUsers: users.size, newUsersToday, ordersToday: ordersToday.size,
-    activeOrders: activeOrders.size, revenueToday, commissionToday,
-    openTickets: openTickets.size, openDisputes: openDisputes.size,
-    activeSubscriptions: activeSubs.size, pendingPayouts: pendingPayouts.size,
-    activeDeliveries: activeDeliveries.size, roleBreakdown,
+    totalUsers: totalUsersCount.data().count, newUsersToday: newUsersCount.data().count,
+    ordersToday: ordersTodayCount.data().count, activeOrders: activeOrdersCount.data().count,
+    revenueToday, commissionToday,
+    openTickets: openTicketsCount.data().count, openDisputes: openDisputesCount.data().count,
+    activeSubscriptions: activeSubsCount.data().count, pendingPayouts: pendingPayoutsCount.data().count,
+    activeDeliveries: activeDeliveriesCount.data().count,
   };
 });
 

@@ -197,14 +197,22 @@ exports.inventoryDeductBatch = onCall({ timeoutSeconds: 30 }, async (req) => {
   // Sort by rotation method
   if (rotation === 'FEFO') {
     batches.sort((a, b) => {
-      if (!a.expiryDate) return 1;
-      if (!b.expiryDate) return -1;
-      return a.expiryDate.localeCompare(b.expiryDate);
+      const aMs = a.expiryDate?.toMillis?.() ?? Infinity;
+      const bMs = b.expiryDate?.toMillis?.() ?? Infinity;
+      return aMs - bMs;
     });
   } else if (rotation === 'FIFO') {
-    batches.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    batches.sort((a, b) => {
+      const aMs = a.createdAt?.toMillis?.() ?? 0;
+      const bMs = b.createdAt?.toMillis?.() ?? 0;
+      return aMs - bMs;
+    });
   } else if (rotation === 'LIFO') {
-    batches.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    batches.sort((a, b) => {
+      const aMs = a.createdAt?.toMillis?.() ?? 0;
+      const bMs = b.createdAt?.toMillis?.() ?? 0;
+      return bMs - aMs;
+    });
   }
 
   let remaining  = qty;

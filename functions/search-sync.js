@@ -438,7 +438,7 @@ const COLLECTION_REGISTRY = {
     algoliaIndex:        'sokoni_products',
     typesenseCollection: 'sokoni_products',
     priority:            PRIORITY.HIGH,
-    adminOnly:           false,
+    adminOnly:           true,
     firestoreCollection: 'inventory_products',
     searchableFields:    ['name', 'brand', 'category', 'description', 'sku', 'barcode'],
     facetFields:         ['category', 'brand', 'inStock', 'condition'],

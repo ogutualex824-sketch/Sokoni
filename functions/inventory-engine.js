@@ -573,7 +573,7 @@ exports.inventoryCleanupOldMovements = onSchedule(
   { schedule: 'every monday 02:00', timeZone: 'Africa/Nairobi', memory: '256MiB', timeoutSeconds: 300 },
   async () => {
     const cutoff = new Date();
-    cutoff.setFullYear(cutoff.getFullYear() - 2); // Keep 2 years
+    cutoff.setFullYear(cutoff.getFullYear() - 7); // KRA Tax Procedures Act: 7-year retention
     const cutoffISO = cutoff.toISOString();
 
     const tenantsSnap = await db.collection('tenants').get();

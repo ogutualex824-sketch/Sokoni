@@ -400,23 +400,28 @@ const SokoniSearchPro = (function () {
 
     let hits = [];
     try {
+      /* Always filter by active/published status in Firestore fallback to match
+         Algolia secured-key filter (status:active OR status:published) */
+      const activeStatuses = ['active', 'published', 'approved'];
       const constraints = [
         where('searchableTerms', 'array-contains', q),
+        where('status', 'in', activeStatuses),
         fsLimit(lim),
       ];
       if (opts.category) constraints.push(where('category', '==', opts.category));
-      if (opts.status)   constraints.push(where('status',   '==', opts.status));
 
       const snap = await getDocs(fsQuery(collection(window.firebaseDB, colName), ...constraints));
       hits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch (_e) {
       /* Fall back to nameLower prefix scan */
       try {
+        const activeStatuses = ['active', 'published', 'approved'];
         const end  = q.replace(/.$/, c => String.fromCharCode(c.charCodeAt(0) + 1));
         const snap = await getDocs(fsQuery(
           collection(window.firebaseDB, colName),
           where('nameLower', '>=', q),
           where('nameLower', '<',  end),
+          where('status', 'in', activeStatuses),
           fsLimit(lim)
         ));
         hits = snap.docs.map(d => ({ id: d.id, ...d.data() }));
