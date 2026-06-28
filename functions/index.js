@@ -7974,3 +7974,35 @@ exports.addDisputeEvidence      = disputes.addDisputeEvidence;
 exports.sellerRespondToDispute  = disputes.sellerRespondToDispute;
 exports.cancelDispute           = disputes.cancelDispute;
 exports.getSellerDisputes       = disputes.getSellerDisputes;
+
+/* ── Merchant Success & Growth Engine v1.0 ──────────────────────────────── */
+const merchantSuccess = require('./merchant-success');
+exports.getMerchantHealthScore    = merchantSuccess.getMerchantHealthScore;
+exports.getAICoachInsights        = merchantSuccess.getAICoachInsights;
+exports.getMerchantCRM            = merchantSuccess.getMerchantCRM;
+exports.getInventoryInsights      = merchantSuccess.getInventoryInsights;
+exports.getMerchantFinancials     = merchantSuccess.getMerchantFinancials;
+exports.getMerchantBenchmarks     = merchantSuccess.getMerchantBenchmarks;
+exports.getMerchantOpportunities  = merchantSuccess.getMerchantOpportunities;
+exports.createMerchantAutomation  = merchantSuccess.createMerchantAutomation;
+exports.getMerchantAutomations    = merchantSuccess.getMerchantAutomations;
+exports.getMerchantAcademy        = merchantSuccess.getMerchantAcademy;
+exports.completeMerchantLesson    = merchantSuccess.completeMerchantLesson;
+
+/* ── Navigation & Intelligent Dispatch v1.0 ────────────────────────────── */
+const navigation = require('./navigation');
+exports.navDispatchRider          = navigation.navDispatchRider;
+exports.navUpdateTripStatus       = navigation.navUpdateTripStatus;
+exports.navRecordArrival          = navigation.navRecordArrival;
+exports.navSubmitPOD              = navigation.navSubmitPOD;
+exports.navTriggerSOS             = navigation.navTriggerSOS;
+exports.navGetActiveTrip          = navigation.navGetActiveTrip;
+exports.navGetCustomerTracking    = navigation.navGetCustomerTracking;
+exports.navGetFleetStatus         = navigation.navGetFleetStatus;
+exports.navCompleteTrip           = navigation.navCompleteTrip;
+exports.navGetRiderHistory        = navigation.navGetRiderHistory;
+exports.navGetMerchantTracking    = navigation.navGetMerchantTracking;
+exports.navCancelStop             = navigation.navCancelStop;
+exports.navAssignTrip             = navigation.navAssignTrip;
+exports.navResolveFleetEvent      = navigation.navResolveFleetEvent;
+exports.navCleanupStaleLocations  = navigation.navCleanupStaleLocations;

@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+  <script src="security.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Merchant Success — SOKONI</title>
+  <style>
+    /* ─── Design Tokens ─────────────────────────────────────────────── */
+    :root {
+      --bg:      #0f1117;
+      --surface: #1a1d2e;
+      --border:  #2a2d3e;
+      --accent:  #00bcd4;
+      --accent2: #7c4dff;
+      --green:   #4caf50;
+      --orange:  #ff9800;
+      --red:     #f44336;
+      --gold:    #ffc107;
+      --text:    #e8eaf6;
+      --muted:   #8888aa;
+      --card:    #1e2132;
+      --radius:  12px;
+      --shadow:  0 4px 20px rgba(0,0,0,.3);
+      --font:    system-ui,-apple-system,'Segoe UI',sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Topbar ─────────────────────────────────────────────────────── */
+    .mgs-topbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 56px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px 0 236px;
+      z-index: 100;
+      box-shadow: var(--shadow);
+    }
+    .mgs-topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .mgs-topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .mgs-brand {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .mgs-shop-name {
+      font-size: 13px;
+      color: var(--muted);
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .mgs-sidebar-toggle {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .mgs-sidebar-toggle:hover { background: var(--border); }
+
+    /* ─── Sidebar ────────────────────────────────────────────────────── */
+    .mgs-sidebar {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: 220px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 200;
+      overflow-y: auto;
+      transition: transform .25s ease;
+    }
+    .mgs-sidebar-logo {
+      padding: 18px 16px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .mgs-nav {
+      display: flex;
+      flex-direction: column;
+      padding: 10px 8px;
+      gap: 2px;
+      flex: 1;
+    }
+    .mgs-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 40px;
+      padding: 0 16px 0 10px;
+      border-radius: 8px;
+      border: none;
+      background: none;
+      color: var(--muted);
+      font-size: 14px;
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+      transition: background .15s, color .15s;
+      border-left: 3px solid transparent;
+    }
+    .mgs-nav-item:hover {
+      background: rgba(255,255,255,.05);
+      color: var(--text);
+    }
+    .mgs-nav-item.active {
+      background: rgba(0,188,212,.15);
+      color: var(--accent);
+      border-left: 3px solid var(--accent);
+    }
+    .mgs-nav-icon {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .mgs-nav-back {
+      margin-top: auto;
+      padding: 12px 8px;
+      border-top: 1px solid var(--border);
+    }
+    .mgs-nav-back a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 38px;
+      padding: 0 12px;
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: background .15s, color .15s;
+    }
+    .mgs-nav-back a:hover { background: rgba(255,255,255,.05); color: var(--text); }
+
+    /* Sidebar overlay (mobile) */
+    .mgs-sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 199;
+    }
+    .mgs-sidebar-overlay.visible { display: block; }
+
+    /* ─── Main content ────────────────────────────────────────────────── */
+    .mgs-main {
+      margin-left: 220px;
+      padding: 80px 24px 40px;
+      min-height: 100vh;
+      background: var(--bg);
+    }
+
+    /* ─── Panels ─────────────────────────────────────────────────────── */
+    .mgs-panel { display: none; }
+    .mgs-panel.active { display: block; }
+    .mgs-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .mgs-panel-header h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* ─── Cards ──────────────────────────────────────────────────────── */
+    .mgs-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .mgs-card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 16px;
+    }
+
+    /* ─── Dashboard Top ──────────────────────────────────────────────── */
+    .mgs-dashboard-top {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .mgs-health-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      text-align: center;
+    }
+    .mgs-health-ring-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .mgs-health-ring {
+      display: block;
+    }
+    .mgs-ring-track {
+      stroke: var(--border);
+    }
+    .mgs-ring-fill {
+      stroke: var(--accent);
+      transition: stroke-dashoffset 1s ease, stroke .4s;
+    }
+    .mgs-health-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .mgs-health-score-text {
+      font-size: 36px;
+      font-weight: 900;
+      color: var(--text);
+      line-height: 1;
+    }
+    .mgs-health-grade {
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .mgs-kpi-section { flex: 1; }
+
+    /* ─── KPI Grid ───────────────────────────────────────────────────── */
+    .mgs-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .mgs-kpi-card {
+      background: var(--surface);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 16px 14px;
+      text-align: center;
+    }
+    .mgs-kpi-value {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--text);
+      line-height: 1.1;
+    }
+    .mgs-kpi-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+    .mgs-kpi-delta {
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .mgs-kpi-delta.up   { color: var(--green); }
+    .mgs-kpi-delta.down { color: var(--red); }
+
+    /* ─── Health Dimensions ──────────────────────────────────────────── */
+    .mgs-health-dims { display: flex; flex-direction: column; gap: 12px; }
+    .mgs-dim-row {
+      display: grid;
+      grid-template-columns: 160px 1fr 40px;
+      align-items: center;
+      gap: 12px;
+    }
+    .mgs-dim-label { font-size: 13px; color: var(--text); }
+    .mgs-dim-bar-wrap {
+      background: var(--border);
+      border-radius: 4px;
+      height: 8px;
+      overflow: hidden;
+    }
+    .mgs-dim-bar {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--accent);
+      transition: width .8s ease;
+    }
+    .mgs-dim-score { font-size: 12px; font-weight: 700; color: var(--muted); text-align: right; }
+
+    /* ─── Recommendations ────────────────────────────────────────────── */
+    .mgs-rec-list { display: flex; flex-direction: column; gap: 10px; }
+    .mgs-rec-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--surface);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .mgs-rec-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+    .mgs-rec-content { flex: 1; }
+    .mgs-rec-title { font-size: 14px; font-weight: 600; color: var(--text); }
+    .mgs-rec-desc  { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+    /* ─── AI Coach / Insight cards ───────────────────────────────────── */
+    .mgs-insights-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+    .mgs-insight-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .mgs-insight-priority {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 10px;
+    }
+    .mgs-insight-priority.high   { background: rgba(244,67,54,.15);  color: var(--red); }
+    .mgs-insight-priority.medium { background: rgba(255,152,0,.15);  color: var(--orange); }
+    .mgs-insight-priority.low    { background: rgba(76,175,80,.15);  color: var(--green); }
+    .mgs-insight-title  { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+    .mgs-insight-body   { font-size: 13px; color: var(--muted); line-height: 1.55; }
+    .mgs-insight-action { margin-top: 12px; }
+
+    /* ─── Opportunity cards ──────────────────────────────────────────── */
+    .mgs-opps-list { display: flex; flex-direction: column; gap: 14px; }
+    .mgs-opportunity-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .mgs-opp-urgent { border-color: var(--orange); background: rgba(255,152,0,.04); }
+    .mgs-opp-icon   { font-size: 28px; flex-shrink: 0; }
+    .mgs-opp-body   { flex: 1; }
+    .mgs-opp-title  { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .mgs-opp-desc   { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+    .mgs-opp-value  { font-size: 12px; font-weight: 600; color: var(--green); }
+
+    /* ─── Customer CRM ───────────────────────────────────────────────── */
+    .mgs-customer-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+    .mgs-customer-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .mgs-customer-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--accent2);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px;
+      flex-shrink: 0;
+    }
+    .mgs-customer-info { flex: 1; min-width: 0; }
+    .mgs-customer-name  { font-size: 14px; font-weight: 600; }
+    .mgs-customer-meta  { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .mgs-customer-spend { font-size: 13px; font-weight: 700; color: var(--green); white-space: nowrap; }
+    .mgs-segment-badge {
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      white-space: nowrap;
+    }
+    .mgs-segment-loyal    { background: rgba(0,188,212,.15); color: var(--accent); }
+    .mgs-segment-regular  { background: rgba(76,175,80,.15); color: var(--green); }
+    .mgs-segment-new      { background: rgba(124,77,255,.15); color: var(--accent2); }
+    .mgs-segment-at_risk  { background: rgba(255,152,0,.15); color: var(--orange); }
+    .mgs-segment-inactive { background: rgba(244,67,54,.15); color: var(--red); }
+
+    /* ─── Inventory ──────────────────────────────────────────────────── */
+    .mgs-inv-summary { margin-bottom: 16px; }
+    .mgs-inv-alert-list { display: flex; flex-direction: column; gap: 8px; }
+    .mgs-inv-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border-left: 4px solid transparent;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .mgs-alert-high   { border-left: 4px solid var(--red);    background: rgba(244,67,54,.05); }
+    .mgs-alert-medium { border-left: 4px solid var(--orange); background: rgba(255,152,0,.05); }
+    .mgs-alert-low    { border-left: 4px solid var(--accent); background: rgba(0,188,212,.05); }
+    .mgs-inv-alert-icon  { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .mgs-inv-alert-body  { flex: 1; }
+    .mgs-inv-alert-title { font-size: 13px; font-weight: 600; }
+    .mgs-inv-alert-desc  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .mgs-inv-product-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+    .mgs-inv-product-row {
+      display: grid;
+      grid-template-columns: 1fr 80px 80px 80px;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px;
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .mgs-inv-product-name { font-weight: 600; }
+    .mgs-inv-product-cell { text-align: center; color: var(--muted); }
+
+    /* ─── Marketing / Campaigns ──────────────────────────────────────── */
+    .mgs-campaign-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+    .mgs-campaign-card {
+      background: var(--surface);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .mgs-campaign-icon { font-size: 22px; flex-shrink: 0; }
+    .mgs-campaign-info { flex: 1; min-width: 0; }
+    .mgs-campaign-name  { font-size: 14px; font-weight: 600; }
+    .mgs-campaign-dates { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .mgs-campaign-form { display: flex; flex-direction: column; gap: 16px; }
+
+    /* ─── Subtabs ────────────────────────────────────────────────────── */
+    .mgs-subtabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    .mgs-subtab {
+      padding: 8px 18px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-size: 14px;
+      cursor: pointer;
+      font-family: var(--font);
+      transition: color .15s, border-color .15s;
+    }
+    .mgs-subtab:hover { color: var(--text); }
+    .mgs-subtab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      font-weight: 600;
+    }
+    .mgs-subtab-content        { display: none; }
+    .mgs-subtab-content.active { display: block; }
+
+    /* ─── Analytics ──────────────────────────────────────────────────── */
+    .mgs-period-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .mgs-analytics-charts { margin-top: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .mgs-bar-chart { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .mgs-bar-row {
+      display: grid;
+      grid-template-columns: 90px 1fr 70px;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+    .mgs-bar-label { color: var(--muted); }
+    .mgs-bar-track {
+      background: var(--border);
+      border-radius: 4px;
+      height: 22px;
+      overflow: hidden;
+    }
+    .mgs-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--accent);
+      transition: width .8s ease;
+      display: flex;
+      align-items: center;
+      padding-left: 8px;
+      font-size: 11px;
+      color: #000;
+      font-weight: 600;
+      min-width: 2px;
+    }
+    .mgs-bar-value { font-size: 13px; font-weight: 600; text-align: right; }
+
+    /* ─── Automations ────────────────────────────────────────────────── */
+    .mgs-automation-list { display: flex; flex-direction: column; gap: 10px; }
+    .mgs-automation-card {
+      background: var(--surface);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .mgs-auto-icon  { font-size: 22px; flex-shrink: 0; }
+    .mgs-auto-body  { flex: 1; min-width: 0; }
+    .mgs-auto-title { font-size: 14px; font-weight: 600; }
+    .mgs-auto-desc  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .mgs-toggle-switch {
+      position: relative;
+      width: 42px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .mgs-toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .mgs-toggle-switch .mgs-toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .mgs-toggle-switch .mgs-toggle-thumb {
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 18px; height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform .2s;
+      pointer-events: none;
+    }
+    .mgs-toggle-switch input:checked ~ .mgs-toggle-track { background: var(--accent); }
+    .mgs-toggle-switch input:checked ~ .mgs-toggle-thumb { transform: translateX(18px); }
+    .mgs-auto-config { display: flex; flex-direction: column; gap: 12px; }
+
+    /* ─── Academy ────────────────────────────────────────────────────── */
+    .mgs-academy-modules {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .mgs-module-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .mgs-module-icon  { font-size: 28px; margin-bottom: 10px; }
+    .mgs-module-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .mgs-module-meta  { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+    .mgs-lesson-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+    .mgs-lesson-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background .1s;
+    }
+    .mgs-lesson-row:hover { background: var(--border); }
+    .mgs-lesson-done .mgs-lesson-check { color: var(--green); }
+    .mgs-lesson-check { font-size: 14px; }
+    .mgs-lesson-title { flex: 1; }
+
+    /* ─── Progress bar ───────────────────────────────────────────────── */
+    .mgs-progress-bar {
+      background: var(--border);
+      border-radius: 20px;
+      height: 8px;
+      overflow: hidden;
+    }
+    .mgs-progress-fill {
+      height: 100%;
+      border-radius: 20px;
+      background: var(--accent);
+      transition: width .8s ease;
+    }
+
+    /* ─── Benchmarks ─────────────────────────────────────────────────── */
+    .mgs-benchmark-list { display: flex; flex-direction: column; gap: 16px; }
+    .mgs-benchmark-row {
+      display: grid;
+      grid-template-columns: 180px 1fr 80px 80px;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .mgs-benchmark-label { font-weight: 600; }
+    .mgs-percentile-bar-wrap { background: var(--border); border-radius: 4px; height: 12px; overflow: hidden; position: relative; }
+    .mgs-percentile-bar {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--accent2);
+      transition: width .8s ease;
+    }
+    .mgs-benchmark-you  { font-weight: 700; text-align: center; }
+    .mgs-benchmark-avg  { color: var(--muted); text-align: center; }
+
+    /* ─── Misc UI ────────────────────────────────────────────────────── */
+    .mgs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .mgs-table th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .mgs-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .mgs-table tr:last-child td { border-bottom: none; }
+    .mgs-table tr:hover td { background: rgba(255,255,255,.02); }
+
+    .mgs-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+    .mgs-badge-success { background: rgba(76,175,80,.15);  color: var(--green); }
+    .mgs-badge-warn    { background: rgba(255,152,0,.15);  color: var(--orange); }
+    .mgs-badge-danger  { background: rgba(244,67,54,.15);  color: var(--red); }
+    .mgs-badge-info    { background: rgba(0,188,212,.15);  color: var(--accent); }
+
+    .mgs-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font);
+      transition: opacity .15s, background .15s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mgs-btn:hover { opacity: .85; }
+    .mgs-btn-primary { background: var(--accent); color: #000; }
+    .mgs-btn-sm      { padding: 6px 12px; font-size: 12px; }
+    .mgs-btn-outline {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .mgs-btn-danger { background: var(--red); color: #fff; }
+
+    .mgs-loading {
+      padding: 32px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .mgs-loading::before {
+      content: '';
+      display: block;
+      width: 28px; height: 28px;
+      margin: 0 auto 12px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: mgs-spin .8s linear infinite;
+    }
+    .mgs-empty {
+      padding: 40px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .mgs-empty::before {
+      content: attr(data-icon);
+      display: block;
+      font-size: 36px;
+      margin-bottom: 10px;
+    }
+    .mgs-error {
+      padding: 20px;
+      text-align: center;
+      color: var(--red);
+      font-size: 13px;
+      background: rgba(244,67,54,.07);
+      border-radius: 8px;
+    }
+
+    /* ─── Search ─────────────────────────────────────────────────────── */
+    .mgs-search {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      color: var(--text);
+      font-family: var(--font);
+      outline: none;
+      font-size: 16px;
+    }
+    .mgs-search:focus { border-color: var(--accent); }
+
+    /* ─── Forms ──────────────────────────────────────────────────────── */
+    .mgs-form-group { display: flex; flex-direction: column; gap: 6px; }
+    .mgs-form-group label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+    .mgs-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    input[type="text"], input[type="email"], input[type="number"],
+    input[type="datetime-local"], select, textarea {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 16px;
+      outline: none;
+      width: 100%;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 72px; }
+
+    /* ─── Toast ──────────────────────────────────────────────────────── */
+    .mgs-toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9999;
+    }
+    .mgs-toast {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 14px;
+      min-width: 240px;
+      max-width: 340px;
+      box-shadow: var(--shadow);
+      animation: mgs-slide-in .25s ease;
+    }
+    .mgs-toast.success { border-left: 4px solid var(--green); }
+    .mgs-toast.error   { border-left: 4px solid var(--red); }
+    .mgs-toast.info    { border-left: 4px solid var(--accent); }
+
+    /* ─── Mobile nav ─────────────────────────────────────────────────── */
+    .mgs-mobile-nav {
+      display: none;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      z-index: 300;
+      padding: 8px 0 env(safe-area-inset-bottom, 0);
+    }
+    .mgs-mobile-nav { flex-direction: row; }
+    .mgs-mobile-nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 6px 4px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 10px;
+      cursor: pointer;
+      font-family: var(--font);
+      transition: color .15s;
+    }
+    .mgs-mobile-nav-btn span { font-size: 10px; }
+    .mgs-mobile-nav-btn:first-child { font-size: 18px; }
+    .mgs-mobile-nav-btn > :first-child { font-size: 20px; }
+    .mgs-mobile-nav-btn.active { color: var(--accent); }
+
+    /* ─── Animations ─────────────────────────────────────────────────── */
+    @keyframes mgs-spin     { to { transform: rotate(360deg); } }
+    @keyframes mgs-slide-in { from { transform: translateX(30px); opacity: 0; } }
+
+    /* ─── Responsive ─────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .mgs-dashboard-top { grid-template-columns: 1fr; }
+      .mgs-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .mgs-benchmark-row { grid-template-columns: 140px 1fr 60px; }
+      .mgs-benchmark-avg { display: none; }
+    }
+    @media (max-width: 768px) {
+      .mgs-topbar { padding-left: 16px; }
+      .mgs-sidebar {
+        transform: translateX(-100%);
+        z-index: 201;
+      }
+      .mgs-sidebar.open { transform: translateX(0); }
+      .mgs-sidebar-toggle { display: block; }
+      .mgs-main {
+        margin-left: 0;
+        padding: 72px 16px 90px;
+      }
+      .mgs-mobile-nav { display: flex; }
+      .mgs-toast-container { right: 12px; bottom: 80px; }
+      .mgs-inv-product-row { grid-template-columns: 1fr 60px 60px; }
+      .mgs-inv-product-row .mgs-inv-product-cell:last-child { display: none; }
+      .mgs-form-row { grid-template-columns: 1fr; }
+      .mgs-dim-row { grid-template-columns: 120px 1fr 36px; }
+    }
+    @media (max-width: 480px) {
+      .mgs-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .mgs-insights-grid { grid-template-columns: 1fr; }
+      .mgs-academy-modules { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="mgs-body">
+
+<!-- ── Topbar ──────────────────────────────────────────────────────── -->
+<div class="mgs-topbar">
+  <div class="mgs-topbar-left">
+    <button class="mgs-sidebar-toggle" id="mgsSidebarToggle" aria-label="Menu">☰</button>
+    <span class="mgs-brand">📊 Merchant Success</span>
+  </div>
+  <div class="mgs-topbar-right">
+    <span id="mgsShopName" class="mgs-shop-name"></span>
+    <a href="seller.html" class="mgs-btn mgs-btn-sm mgs-btn-outline">← Seller Hub</a>
+  </div>
+</div>
+
+<!-- ── Sidebar overlay (mobile) ───────────────────────────────────── -->
+<div class="mgs-sidebar-overlay" id="mgsSidebarOverlay"></div>
+
+<!-- ── Sidebar ────────────────────────────────────────────────────── -->
+<nav class="mgs-sidebar" id="mgsSidebar">
+  <div class="mgs-sidebar-logo">Merchant Success</div>
+  <nav class="mgs-nav">
+    <button class="mgs-nav-item active" data-section="dashboard"><span class="mgs-nav-icon">📊</span> Dashboard</button>
+    <button class="mgs-nav-item" data-section="coach"><span class="mgs-nav-icon">🤖</span> AI Coach</button>
+    <button class="mgs-nav-item" data-section="opportunities"><span class="mgs-nav-icon">💡</span> Opportunities</button>
+    <button class="mgs-nav-item" data-section="customers"><span class="mgs-nav-icon">👥</span> Customers</button>
+    <button class="mgs-nav-item" data-section="inventory"><span class="mgs-nav-icon">📦</span> Inventory</button>
+    <button class="mgs-nav-item" data-section="marketing"><span class="mgs-nav-icon">📣</span> Marketing</button>
+    <button class="mgs-nav-item" data-section="analytics"><span class="mgs-nav-icon">📈</span> Analytics</button>
+    <button class="mgs-nav-item" data-section="automations"><span class="mgs-nav-icon">⚙</span> Automations</button>
+    <button class="mgs-nav-item" data-section="academy"><span class="mgs-nav-icon">🎓</span> Academy</button>
+    <button class="mgs-nav-item" data-section="benchmarks"><span class="mgs-nav-icon">🏆</span> Benchmarks</button>
+  </nav>
+  <div class="mgs-nav-back">
+    <a href="seller.html">← Back to Seller Hub</a>
+  </div>
+</nav>
+
+<!-- ── Main content ───────────────────────────────────────────────── -->
+<main class="mgs-main">
+
+  <!-- ════════════ DASHBOARD ════════════ -->
+  <div class="mgs-panel active" id="panel-dashboard">
+    <div class="mgs-panel-header">
+      <h2>Business Dashboard</h2>
+      <button class="mgs-btn mgs-btn-sm" onclick="SokoniMerchantSuccess.refreshHealth()">↻ Refresh Score</button>
+    </div>
+
+    <div class="mgs-dashboard-top">
+      <!-- Health ring -->
+      <div class="mgs-card mgs-health-card">
+        <div class="mgs-card-title">Health Score</div>
+        <div class="mgs-health-ring-wrap">
+          <svg class="mgs-health-ring" width="160" height="160" viewBox="0 0 160 160" aria-hidden="true">
+            <circle class="mgs-ring-track" cx="80" cy="80" r="70" fill="none" stroke-width="12"/>
+            <circle class="mgs-ring-fill" id="mgsHealthRing" cx="80" cy="80" r="70" fill="none"
+              stroke-width="12" stroke-dasharray="439.8" stroke-dashoffset="439.8"
+              stroke-linecap="round" transform="rotate(-90 80 80)"/>
+          </svg>
+          <div class="mgs-health-center">
+            <div class="mgs-health-score-text" id="mgsHealthScore">—</div>
+            <div class="mgs-health-grade" id="mgsHealthGrade"></div>
+          </div>
+        </div>
+        <button class="mgs-btn mgs-btn-sm mgs-btn-primary" onclick="SokoniMerchantSuccess.refreshHealth(true)">Recalculate</button>
+      </div>
+
+      <!-- KPI grid -->
+      <div class="mgs-card mgs-kpi-section">
+        <div class="mgs-card-title">Key Metrics</div>
+        <div class="mgs-kpi-grid" id="mgsKpiGrid">
+          <div class="mgs-kpi-card">
+            <div class="mgs-kpi-value" id="kpiRevenue30">—</div>
+            <div class="mgs-kpi-label">Revenue (30d)</div>
+          </div>
+          <div class="mgs-kpi-card">
+            <div class="mgs-kpi-value" id="kpiOrders30">—</div>
+            <div class="mgs-kpi-label">Orders (30d)</div>
+          </div>
+          <div class="mgs-kpi-card">
+            <div class="mgs-kpi-value" id="kpiAOV">—</div>
+            <div class="mgs-kpi-label">Avg Order Value</div>
+          </div>
+          <div class="mgs-kpi-card">
+            <div class="mgs-kpi-value" id="kpiCustomers">—</div>
+            <div class="mgs-kpi-label">Total Customers</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Health dimensions breakdown -->
+    <div class="mgs-card" style="margin-top:16px">
+      <div class="mgs-card-title">Score Breakdown</div>
+      <div id="mgsHealthDims" class="mgs-health-dims">
+        <div class="mgs-loading">Loading health score...</div>
+      </div>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="mgs-card" style="margin-top:16px">
+      <div class="mgs-card-title">🎯 Top Recommendations</div>
+      <div id="mgsHealthRecs" class="mgs-rec-list">
+        <div class="mgs-loading">Loading recommendations...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════ AI COACH ════════════ -->
+  <div class="mgs-panel" id="panel-coach" hidden>
+    <div class="mgs-panel-header">
+      <h2>🤖 AI Business Coach</h2>
+      <button class="mgs-btn mgs-btn-primary" id="mgsCoachRefreshBtn" onclick="SokoniMerchantSuccess.loadCoach(true)">✨ Get New Insights</button>
+    </div>
+    <div class="mgs-card" style="margin-bottom:16px;background:linear-gradient(135deg,rgba(0,188,212,.08),rgba(124,77,255,.08));border-color:rgba(0,188,212,.3)">
+      <p style="color:var(--muted);font-size:13px">Your AI coach analyses your business data and generates personalised recommendations. Refreshes up to 5× per day.</p>
+    </div>
+    <div id="mgsCoachInsights" class="mgs-insights-grid">
+      <div class="mgs-loading">Loading AI insights...</div>
+    </div>
+  </div>
+
+  <!-- ════════════ OPPORTUNITIES ════════════ -->
+  <div class="mgs-panel" id="panel-opportunities" hidden>
+    <div class="mgs-panel-header">
+      <h2>💡 Sales Opportunities</h2>
+      <button class="mgs-btn mgs-btn-sm" onclick="SokoniMerchantSuccess.loadOpportunities()">↻ Refresh</button>
+    </div>
+    <div id="mgsOppsList" class="mgs-opps-list">
+      <div class="mgs-loading">Scanning for opportunities...</div>
+    </div>
+  </div>
+
+  <!-- ════════════ CUSTOMERS (CRM) ════════════ -->
+  <div class="mgs-panel" id="panel-customers" hidden>
+    <div class="mgs-panel-header">
+      <h2>👥 Customer Relationships</h2>
+    </div>
+    <div class="mgs-card" style="margin-bottom:16px">
+      <div class="mgs-kpi-grid" id="mgsCrmStats">
+        <div class="mgs-kpi-card">
+          <div class="mgs-kpi-value" id="crmTotal">—</div>
+          <div class="mgs-kpi-label">Total Customers</div>
+        </div>
+        <div class="mgs-kpi-card">
+          <div class="mgs-kpi-value" id="crmLoyal">—</div>
+          <div class="mgs-kpi-label">Loyal</div>
+        </div>
+        <div class="mgs-kpi-card">
+          <div class="mgs-kpi-value" id="crmAtRisk">—</div>
+          <div class="mgs-kpi-label">At Risk</div>
+        </div>
+        <div class="mgs-kpi-card">
+          <div class="mgs-kpi-value" id="crmCLV">—</div>
+          <div class="mgs-kpi-label">Avg Lifetime Value</div>
+        </div>
+      </div>
+    </div>
+    <div class="mgs-card">
+      <div class="mgs-card-title">All Customers</div>
+      <input type="text" class="mgs-search" id="mgsCrmSearch"
+        placeholder="Search customers..." oninput="SokoniMerchantSuccess.filterCrm(this.value)">
+      <div id="mgsCrmList" class="mgs-customer-list">
+        <div class="mgs-loading">Loading customers...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════ INVENTORY ════════════ -->
+  <div class="mgs-panel" id="panel-inventory" hidden>
+    <div class="mgs-panel-header">
+      <h2>📦 Inventory Intelligence</h2>
+      <button class="mgs-btn mgs-btn-sm" onclick="SokoniMerchantSuccess.loadInventory()">↻ Refresh</button>
+    </div>
+    <div class="mgs-kpi-grid mgs-inv-summary" id="mgsInvSummary"></div>
+    <div class="mgs-card">
+      <div class="mgs-card-title">⚠ Alerts &amp; Actions</div>
+      <div id="mgsInvAlerts" class="mgs-inv-alert-list">
+        <div class="mgs-loading">Analysing inventory...</div>
+      </div>
+    </div>
+    <div class="mgs-card" style="margin-top:16px">
+      <div class="mgs-card-title">All Products</div>
+      <div class="mgs-inv-product-row" style="font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;padding:6px 12px">
+        <span>Product</span><span class="mgs-inv-product-cell">Stock</span>
+        <span class="mgs-inv-product-cell">Sold (30d)</span>
+        <span class="mgs-inv-product-cell">Status</span>
+      </div>
+      <div id="mgsInvList" class="mgs-inv-product-list"></div>
+    </div>
+  </div>
+
+  <!-- ════════════ MARKETING ════════════ -->
+  <div class="mgs-panel" id="panel-marketing" hidden>
+    <div class="mgs-panel-header">
+      <h2>📣 Smart Marketing</h2>
+    </div>
+    <div class="mgs-subtabs" id="mgsMarketingSubtabs">
+      <button class="mgs-subtab active" data-subtab="campaigns">Campaigns</button>
+      <button class="mgs-subtab" data-subtab="create">Create Campaign</button>
+    </div>
+    <div id="mgs-subtab-campaigns" class="mgs-subtab-content active">
+      <div id="mgsCampaignList" class="mgs-campaign-list">
+        <div class="mgs-loading">Loading campaigns...</div>
+      </div>
+    </div>
+    <div id="mgs-subtab-create" class="mgs-subtab-content" hidden>
+      <div class="mgs-card">
+        <div class="mgs-card-title">New Campaign</div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="mgs-form-group">
+            <label>Campaign Name</label>
+            <input type="text" id="mgsCampaignName" placeholder="e.g. Weekend Sale">
+          </div>
+          <div class="mgs-form-group">
+            <label>Type</label>
+            <select id="mgsCampaignType">
+              <option value="flash-sale">Flash Sale</option>
+              <option value="weekend-sale">Weekend Sale</option>
+              <option value="holiday">Holiday Promotion</option>
+              <option value="new-arrivals">New Arrivals</option>
+              <option value="referral">Referral Campaign</option>
+              <option value="back-to-school">Back to School</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="mgs-form-group">
+            <label>Description</label>
+            <textarea id="mgsCampaignDesc" rows="3" placeholder="Describe your campaign offer..."></textarea>
+          </div>
+          <div class="mgs-form-row">
+            <div class="mgs-form-group">
+              <label>Start Date</label>
+              <input type="datetime-local" id="mgsCampaignStart">
+            </div>
+            <div class="mgs-form-group">
+              <label>End Date</label>
+              <input type="datetime-local" id="mgsCampaignEnd">
+            </div>
+          </div>
+          <button class="mgs-btn mgs-btn-primary" onclick="SokoniMerchantSuccess.createCampaign()">Create &amp; Generate Link</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════ ANALYTICS ════════════ -->
+  <div class="mgs-panel" id="panel-analytics" hidden>
+    <div class="mgs-panel-header">
+      <h2>📈 Financial Analytics</h2>
+      <div class="mgs-period-btns" id="mgsPeriodBtns">
+        <button class="mgs-btn mgs-btn-sm active" data-period="30d"
+          onclick="SokoniMerchantSuccess.loadAnalytics('30d',this)">30 Days</button>
+        <button class="mgs-btn mgs-btn-sm" data-period="7d"
+          onclick="SokoniMerchantSuccess.loadAnalytics('7d',this)">7 Days</button>
+        <button class="mgs-btn mgs-btn-sm" data-period="90d"
+          onclick="SokoniMerchantSuccess.loadAnalytics('90d',this)">90 Days</button>
+        <button class="mgs-btn mgs-btn-sm" data-period="365d"
+          onclick="SokoniMerchantSuccess.loadAnalytics('365d',this)">Year</button>
+      </div>
+    </div>
+    <div id="mgsAnalyticsBody">
+      <div class="mgs-loading">Loading analytics...</div>
+    </div>
+  </div>
+
+  <!-- ════════════ AUTOMATIONS ════════════ -->
+  <div class="mgs-panel" id="panel-automations" hidden>
+    <div class="mgs-panel-header">
+      <h2>⚙ Automations</h2>
+    </div>
+    <div class="mgs-card" style="margin-bottom:16px;border-color:rgba(0,188,212,.3);background:rgba(0,188,212,.05)">
+      <p style="color:var(--muted);font-size:13px">Automations run in the background and handle routine tasks for you. Enable only what fits your business.</p>
+    </div>
+    <div id="mgsAutoList" class="mgs-automation-list">
+      <div class="mgs-loading">Loading automations...</div>
+    </div>
+    <button class="mgs-btn mgs-btn-primary" style="margin-top:16px"
+      onclick="SokoniMerchantSuccess.showNewAutomation()">+ Add Automation</button>
+
+    <!-- New automation form -->
+    <div id="mgsAutoForm" class="mgs-card" style="margin-top:16px" hidden>
+      <div class="mgs-card-title">New Automation</div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="mgs-form-group">
+          <label>Type</label>
+          <select id="mgsAutoType" onchange="SokoniMerchantSuccess.updateAutoForm(this.value)">
+            <option value="low_stock_alert">Low Stock Alert</option>
+            <option value="review_request">Review Request</option>
+            <option value="win_back">Win-Back Campaign</option>
+            <option value="reorder_reminder">Reorder Reminder</option>
+            <option value="flash_sale">Flash Sale</option>
+          </select>
+        </div>
+        <div id="mgsAutoConfigFields" class="mgs-auto-config"></div>
+        <div class="mgs-form-group">
+          <label>Custom Message (optional)</label>
+          <textarea id="mgsAutoMessage" rows="2" placeholder="Personalise the message sent to customers..."></textarea>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="mgs-btn mgs-btn-primary" onclick="SokoniMerchantSuccess.saveAutomation()">Save Automation</button>
+          <button class="mgs-btn mgs-btn-outline" onclick="document.getElementById('mgsAutoForm').hidden=true">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════ ACADEMY ════════════ -->
+  <div class="mgs-panel" id="panel-academy" hidden>
+    <div class="mgs-panel-header">
+      <h2>🎓 Merchant Academy</h2>
+    </div>
+    <div class="mgs-card" id="mgsAcademyProgress" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div class="mgs-card-title" style="margin-bottom:4px">Your Progress</div>
+          <div id="mgsAcademyProgressText" style="color:var(--muted);font-size:13px">Loading...</div>
+        </div>
+        <div id="mgsAcademyPct" style="font-size:28px;font-weight:900;color:var(--accent)">0%</div>
+      </div>
+      <div class="mgs-progress-bar" style="margin-top:12px">
+        <div class="mgs-progress-fill" id="mgsAcademyBar" style="width:0%"></div>
+      </div>
+    </div>
+    <div id="mgsAcademyModules" class="mgs-academy-modules">
+      <div class="mgs-loading">Loading academy...</div>
+    </div>
+  </div>
+
+  <!-- ════════════ BENCHMARKS ════════════ -->
+  <div class="mgs-panel" id="panel-benchmarks" hidden>
+    <div class="mgs-panel-header">
+      <h2>🏆 Industry Benchmarks</h2>
+    </div>
+    <div class="mgs-card" style="margin-bottom:16px;border-color:rgba(124,77,255,.3)">
+      <p style="color:var(--muted);font-size:13px">Anonymous comparison with similar businesses on SOKONI. No competitor data is exposed.</p>
+    </div>
+    <div id="mgsBenchmarkBody">
+      <div class="mgs-loading">Loading benchmarks...</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Toast container ─────────────────────────────────────────────── -->
+<div class="mgs-toast-container" id="mgsToasts"></div>
+
+<!-- ── Mobile bottom nav ───────────────────────────────────────────── -->
+<nav class="mgs-mobile-nav">
+  <button class="mgs-mobile-nav-btn active" data-section="dashboard">📊<span>Dashboard</span></button>
+  <button class="mgs-mobile-nav-btn" data-section="customers">👥<span>Customers</span></button>
+  <button class="mgs-mobile-nav-btn" data-section="inventory">📦<span>Stock</span></button>
+  <button class="mgs-mobile-nav-btn" data-section="marketing">📣<span>Marketing</span></button>
+  <button class="mgs-mobile-nav-btn" data-section="academy">🎓<span>Learn</span></button>
+</nav>
+
+<script src="/__/firebase/init.js"></script>
+<script src="sokoni-merchant-success.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ── Navigation ──────────────────────────────────────────────── */
+  function navigate(section) {
+    // Deactivate all panels
+    document.querySelectorAll('.mgs-panel').forEach(function (p) {
+      p.classList.remove('active');
+      p.hidden = true;
+    });
+    // Activate target
+    var panel = document.getElementById('panel-' + section);
+    if (panel) { panel.classList.add('active'); panel.hidden = false; }
+
+    // Update sidebar nav items
+    document.querySelectorAll('.mgs-nav-item').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.section === section);
+    });
+
+    // Update mobile nav
+    document.querySelectorAll('.mgs-mobile-nav-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.dataset.section === section);
+    });
+
+    // Notify JS module
+    if (typeof SokoniMerchantSuccess !== 'undefined' && SokoniMerchantSuccess.onNavigate) {
+      SokoniMerchantSuccess.onNavigate(section);
+    }
+
+    closeSidebar();
+  }
+
+  /* ── Sidebar toggle (mobile) ─────────────────────────────────── */
+  function openSidebar() {
+    document.getElementById('mgsSidebar').classList.add('open');
+    document.getElementById('mgsSidebarOverlay').classList.add('visible');
+  }
+  function closeSidebar() {
+    document.getElementById('mgsSidebar').classList.remove('open');
+    document.getElementById('mgsSidebarOverlay').classList.remove('visible');
+  }
+
+  /* ── Sidebar nav click ───────────────────────────────────────── */
+  document.querySelectorAll('.mgs-nav-item').forEach(function (btn) {
+    btn.addEventListener('click', function () { navigate(btn.dataset.section); });
+  });
+
+  /* ── Mobile nav click ────────────────────────────────────────── */
+  document.querySelectorAll('.mgs-mobile-nav-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { navigate(btn.dataset.section); });
+  });
+
+  /* ── Sidebar toggle button ───────────────────────────────────── */
+  document.getElementById('mgsSidebarToggle').addEventListener('click', function () {
+    var sidebar = document.getElementById('mgsSidebar');
+    if (sidebar.classList.contains('open')) { closeSidebar(); } else { openSidebar(); }
+  });
+
+  /* ── Sidebar overlay click ───────────────────────────────────── */
+  document.getElementById('mgsSidebarOverlay').addEventListener('click', closeSidebar);
+
+  /* ── Marketing subtabs ───────────────────────────────────────── */
+  document.querySelectorAll('#mgsMarketingSubtabs .mgs-subtab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var key = tab.dataset.subtab;
+      // Toggle tab buttons
+      document.querySelectorAll('#mgsMarketingSubtabs .mgs-subtab').forEach(function (t) {
+        t.classList.toggle('active', t.dataset.subtab === key);
+      });
+      // Toggle content panes
+      ['campaigns', 'create'].forEach(function (k) {
+        var el = document.getElementById('mgs-subtab-' + k);
+        if (el) {
+          el.classList.toggle('active', k === key);
+          el.hidden = k !== key;
+        }
+      });
+      // Lazy-load campaigns when switching to that tab
+      if (key === 'campaigns' && typeof SokoniMerchantSuccess !== 'undefined') {
+        SokoniMerchantSuccess.loadCampaigns && SokoniMerchantSuccess.loadCampaigns();
+      }
+    });
+  });
+
+  /* ── Analytics period button highlight ──────────────────────── */
+  document.querySelectorAll('#mgsPeriodBtns .mgs-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#mgsPeriodBtns .mgs-btn').forEach(function (b) {
+        b.classList.remove('active');
+        b.style.background = '';
+        b.style.color = '';
+      });
+      btn.classList.add('active');
+      btn.style.background = 'var(--accent)';
+      btn.style.color = '#000';
+    });
+  });
+  // Highlight default active period button on load
+  var defaultPeriodBtn = document.querySelector('#mgsPeriodBtns .mgs-btn.active');
+  if (defaultPeriodBtn) {
+    defaultPeriodBtn.style.background = 'var(--accent)';
+    defaultPeriodBtn.style.color = '#000';
+  }
+
+  /* ── Expose closeSidebar so inline onclick can call it ─────── */
+  if (typeof window.SokoniMerchantSuccess === 'undefined') {
+    window.SokoniMerchantSuccess = {};
+  }
+  window.SokoniMerchantSuccess.closeSidebar = closeSidebar;
+
+  /* ── DOMContentLoaded bootstrap ─────────────────────────────── */
+  document.addEventListener('DOMContentLoaded', function () {
+    if (typeof SokoniMerchantSuccess !== 'undefined' && SokoniMerchantSuccess.init) {
+      SokoniMerchantSuccess.init();
+    }
+    // Ensure all panels start hidden except dashboard
+    document.querySelectorAll('.mgs-panel').forEach(function (p) {
+      if (!p.classList.contains('active')) { p.hidden = true; }
+    });
+  });
+})();
+</script>
+</body>
+</html>

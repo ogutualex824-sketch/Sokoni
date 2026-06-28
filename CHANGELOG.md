@@ -1,4 +1,61 @@
-﻿## [2026-06-28] — MiniShop 2.0 — Social Commerce & Business Growth Platform
+﻿## [2026-06-28] — Merchant Success & Growth Engine v1.0
+
+### Summary
+Full Merchant Success Platform for SOKONI sellers — turns raw data into actionable business intelligence. 10-panel SPA (`merchant-success.html`) with dark design system, 220px sidebar navigation. 11 Gen2 Cloud Functions covering Health Score, AI Business Coach (Claude Haiku), CRM, Inventory Intelligence, Financial Insights, Benchmarking, Opportunities, Automations CRUD, Academy with lesson tracking. All Firestore queries are single-field or doc-ID lookups — zero new composite indexes used.
+
+### Files Added
+- `merchant-success.html` — 10-section seller SPA (54 KB); Dashboard/AI Coach/Opportunities/CRM/Inventory/Marketing/Analytics/Automations/Academy/Benchmarks
+- `sokoni-merchant-success.js` — Client engine IIFE (38 KB); lazy section loading, XSS-safe `_esc()`, 22 exported API methods
+- `functions/merchant-success.js` — 11 Gen2 CFs (55 KB)
+
+### Files Modified
+- `functions/index.js` — 11 CF exports appended
+- `firestore.rules` — 4 new collection rules: `merchantHealthScores`, `merchantAutomations`, `merchantAcademyProgress`, `aiCoachRL`
+- `seller.html` — "📊 Grow" button added to topbar linking to merchant-success.html
+
+### Cloud Functions (11)
+| Function | Purpose |
+|---|---|
+| `getMerchantHealthScore` | 9-dimension health score (100 pts), 1-hour Firestore cache |
+| `getAICoachInsights` | 5 personalised insights via Claude Haiku; 5-calls/day rate limit |
+| `getMerchantCRM` | Customers segmented (loyal/regular/new/at_risk/inactive), LTV, purchase history |
+| `getInventoryInsights` | 7-status product analysis (out_of_stock/low/overstock/fast_seller/slow_mover/dead_stock/healthy) |
+| `getMerchantFinancials` | Revenue, AOV, CLV, peak hours, daily trends for 7d/30d/90d/365d |
+| `getMerchantBenchmarks` | Anonymous category benchmarking; percentile rank |
+| `getMerchantOpportunities` | 5 opportunity types: low stock, returning buyers, win-back, pricing gaps, restock |
+| `createMerchantAutomation` | 7 automation types with per-type config validation |
+| `getMerchantAutomations` | List seller automations (single-field query) |
+| `getMerchantAcademy` | 6 modules × 4 lessons static curriculum + progress tracking |
+| `completeMerchantLesson` | Idempotent lesson completion via `FieldValue.arrayUnion` |
+
+### New Firestore Collections (0 new composite indexes)
+| Collection | Key | Access |
+|---|---|---|
+| `merchantHealthScores/{shopId}` | Doc-ID | Owner or admin read; CF write only |
+| `merchantAutomations/{shopId_type}` | Single-field `shopId` | Owner read; CF write only |
+| `merchantAcademyProgress/{shopId}` | Doc-ID | Owner or admin read; CF write only |
+| `aiCoachRL/{uid_YYYYMMDD}` | Doc-ID | No direct access; CF Admin SDK only |
+
+### Security
+- All CFs: `_requireAuth()` → ownership verification against `shops.sellerUid`
+- AI Coach: 5 calls/day rate limit per UID via Firestore transaction
+- Benchmarks: returns only anonymous aggregates — zero individual competitor data exposed
+- `_san()` sanitizes all user input in CF layer; `_esc()` protects all innerHTML in client
+- No secrets hardcoded — `ANTHROPIC_API_KEY` via `defineSecret()`
+
+### Performance
+- Health score cached 1 hour in Firestore (avoids 9 collection reads per page load)
+- Section data lazy-loaded (only fetched when tab is first opened)
+- CF results cached client-side — no re-fetch on tab revisit within session
+
+### Deployment
+- Deploy CFs one at a time (GCP CPU quota): `firebase deploy --only functions:getMerchantHealthScore` etc.
+- No index changes required — zero composite indexes added
+- Deploy hosting: `firebase deploy --only hosting`
+
+---
+
+## [2026-06-28] — MiniShop 2.0 — Social Commerce & Business Growth Platform
 
 ### Summary
 Full v2.0 overhaul of the MiniShop system. Public storefront redesigned to premium business-website quality. Added WhatsApp Status Mode (fullscreen product showcase), Digital Business Card with vCard download, Campaign Link Engine (trackable marketing campaigns with ROI), and 5 new Cloud Functions. Every seller now has a complete social-commerce identity: storefront, business card, share tools, analytics, and AI marketing — all from SOKONI.

@@ -1,136 +1,172 @@
 <!DOCTYPE html>
-<html lang="en" data-no-header="true" data-minimal="true">
+<html lang="en" data-splash="1" data-minimal="true" data-no-header="true">
 <head>
   <script src="security.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy — SOKONI | Kenya's Digital Marketplace</title>
-  <meta name="description" content="SOKONI Privacy Policy — how we collect, use, and protect your personal data on Kenya's leading digital marketplace platform.">
+  <title>Privacy Policy — SOKONI | Kenya Data Protection Act 2019</title>
+  <meta name="description" content="SOKONI Privacy Policy — how we collect, use, and protect your personal data in compliance with the Kenya Data Protection Act 2019.">
   <meta name="robots" content="index, follow">
   <meta property="og:title" content="Privacy Policy — SOKONI">
-  <meta property="og:description" content="Learn how SOKONI collects, uses, and protects your personal information. Kenya Data Protection Act 2019 compliant.">
+  <meta property="og:description" content="Kenya Data Protection Act 2019 compliant privacy policy for SOKONI, Kenya's digital marketplace.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
   <meta property="og:url" content="https://mysokoni.co.ke/privacy">
   <meta property="og:type" content="website">
-  <meta name="twitter:card" content="summary">
   <link rel="canonical" href="https://mysokoni.co.ke/privacy">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <style>
+    /* ── Splash ─────────────────────────────────────────────────────── */
+    #sk-splash{position:fixed;inset:0;z-index:99999;background:#050505;display:flex;align-items:center;justify-content:center;transition:opacity .65s ease,visibility .65s ease}
+    #sk-splash.sk-out{opacity:0;visibility:hidden;pointer-events:none}
+    .sks-inner{display:flex;flex-direction:column;align-items:center;gap:22px}
+    .sks-logo{width:84px;height:84px;object-fit:contain;animation:skPulse 1.3s ease-in-out infinite alternate}
+    .sks-ring{width:44px;height:44px;border:3px solid rgba(113,255,0,.14);border-top-color:#71ff00;border-radius:50%;animation:skSpin .75s linear infinite}
+    .sks-tag{font:500 11px/1 -apple-system,sans-serif;color:rgba(255,255,255,.32);letter-spacing:.1em;text-transform:uppercase}
+    @keyframes skPulse{from{opacity:.72;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+    @keyframes skSpin{to{transform:rotate(360deg)}}
+
+    /* ── Reset & base ───────────────────────────────────────────────── */
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--accent:#71ff00;--bg:#0a0a0a;--surface:rgba(255,255,255,.04);--border:rgba(255,255,255,.08);--text:#e0e0e0;--muted:rgba(255,255,255,.55)}
-    html{scroll-behavior:smooth}
-    body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.6;min-height:100vh}
+    :root{
+      --g:#71ff00;--bg:#050505;--bg2:#080d08;
+      --surface:rgba(255,255,255,.033);--border:rgba(255,255,255,.07);
+      --text:rgba(255,255,255,.88);--muted:rgba(255,255,255,.5);
+      --card:#0c180c;
+    }
+    html{scroll-behavior:smooth;scroll-padding-top:80px}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.7;min-height:100vh}
 
-    /* ── Static top nav ───────────────────────────────────────────── */
-    .sk-nav{position:sticky;top:0;z-index:1000;background:rgba(10,10,10,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 24px}
-    .sk-nav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:60px}
-    .sk-nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
-    .sk-nav-logo img{width:32px;height:32px;border-radius:8px;object-fit:contain}
-    .sk-nav-logo span{font-size:18px;font-weight:800;color:#fff;letter-spacing:-.3px}
-    .sk-nav-links{display:flex;align-items:center;gap:20px}
-    .sk-nav-links a{color:rgba(255,255,255,.6);text-decoration:none;font-size:14px;font-weight:500;transition:color .18s}
-    .sk-nav-links a:hover{color:#fff}
-    .sk-nav-links a.active{color:var(--accent)}
-    .sk-nav-home-btn{background:var(--accent);color:#000;padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:opacity .18s}
-    .sk-nav-home-btn:hover{opacity:.85;color:#000}
-    @media(max-width:640px){.sk-nav-links{display:none}}
+    /* ── Top nav ────────────────────────────────────────────────────── */
+    .lnav{position:sticky;top:0;z-index:900;background:rgba(5,5,5,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+    .lnav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:64px;padding:0 24px}
+    .lnav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+    .lnav-brand img{width:36px;height:36px;object-fit:contain;border-radius:9px}
+    .lnav-brand span{font-size:18px;font-weight:800;color:#fff;letter-spacing:-.3px}
+    .lnav-links{display:flex;align-items:center;gap:22px}
+    .lnav-links a{font-size:13px;font-weight:500;color:var(--muted);text-decoration:none;transition:color .15s}
+    .lnav-links a:hover{color:#fff}
+    .lnav-links a.cur{color:var(--g)}
+    .lnav-cta{background:var(--g);color:#000;font-size:13px;font-weight:700;padding:8px 18px;border-radius:10px;text-decoration:none;transition:opacity .15s}
+    .lnav-cta:hover{opacity:.85;color:#000}
+    @media(max-width:640px){.lnav-links{display:none}}
 
-    /* ── Hero ─────────────────────────────────────────────────────── */
-    .hero{background:linear-gradient(135deg,#0d1a00 0%,#0a0a0a 60%);padding:72px 24px 48px;text-align:center;border-bottom:1px solid rgba(113,255,0,.1)}
-    .hero-badge{display:inline-block;padding:5px 14px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.2);border-radius:20px;font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;margin-bottom:16px}
-    .hero h1{font-size:clamp(28px,5vw,46px);color:#fff;font-weight:800;margin-bottom:12px;line-height:1.15}
-    .hero p{color:var(--muted);font-size:14px}
+    /* ── Hero ───────────────────────────────────────────────────────── */
+    .hero{padding:64px 24px 44px;text-align:center;border-bottom:1px solid var(--border);background:radial-gradient(ellipse 70% 60% at 50% 0%,rgba(113,255,0,.05) 0%,transparent 70%)}
+    .hero-badge{display:inline-block;padding:5px 14px;background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);border-radius:20px;font-size:11px;font-weight:700;color:var(--g);letter-spacing:.6px;text-transform:uppercase;margin-bottom:18px}
+    .hero h1{font-size:clamp(28px,5vw,44px);font-weight:800;color:#fff;line-height:1.12;margin-bottom:12px}
+    .hero-meta{font-size:13px;color:var(--muted)}
+    .hero-meta span{color:rgba(255,255,255,.35);margin:0 6px}
 
-    /* ── Layout ───────────────────────────────────────────────────── */
-    .page{max-width:880px;margin:0 auto;padding:48px 24px 80px}
-    .toc{background:rgba(113,255,0,.04);border:1px solid rgba(113,255,0,.1);border-radius:14px;padding:24px 28px;margin-bottom:40px}
-    .toc-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:700;margin-bottom:14px}
-    .toc ol{padding-left:18px;columns:2;gap:16px}
-    .toc li{margin-bottom:6px;break-inside:avoid}
-    .toc a{color:rgba(255,255,255,.65);text-decoration:none;font-size:14px;transition:color .18s}
-    .toc a:hover{color:var(--accent)}
-    .section{margin-bottom:52px}
-    .section h2{font-size:21px;color:#fff;font-weight:700;padding-left:14px;border-left:3px solid var(--accent);margin-bottom:20px}
-    .section h3{font-size:16px;color:rgba(255,255,255,.85);font-weight:600;margin:24px 0 10px}
-    .section p{font-size:15px;color:var(--muted);line-height:1.75;margin-bottom:14px}
-    .section ul{padding-left:22px;margin-bottom:14px}
-    .section li{font-size:15px;color:var(--muted);line-height:1.75;margin-bottom:5px}
-    .section a{color:var(--accent)}
-    hr.divider{border:none;border-top:1px solid var(--border);margin:52px 0}
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    .wrap{max-width:900px;margin:0 auto;padding:52px 24px 96px}
 
-    /* ── Table ─────────────────────────────────────────────────────── */
-    .sk-table{width:100%;border-collapse:collapse;border-radius:12px;overflow:hidden;margin:16px 0}
-    .sk-table th{background:rgba(113,255,0,.08);color:var(--accent);text-align:left;padding:12px 16px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
-    .sk-table td{padding:12px 16px;font-size:14px;color:var(--muted);border-top:1px solid var(--border);vertical-align:top}
-    .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
-    .badge-g{background:rgba(113,255,0,.12);color:#71ff00}
-    .badge-b{background:rgba(0,180,255,.12);color:#00b4ff}
-    .badge-o{background:rgba(255,160,0,.12);color:#ffa000}
+    /* ── TOC ────────────────────────────────────────────────────────── */
+    .toc{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;margin-bottom:52px}
+    .toc-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:14px}
+    .toc-grid{display:flex;flex-wrap:wrap;gap:8px}
+    .toc-grid a{font-size:13px;color:rgba(255,255,255,.5);text-decoration:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:5px 12px;transition:all .15s}
+    .toc-grid a:hover{color:var(--g);border-color:rgba(113,255,0,.25);background:rgba(113,255,0,.05)}
 
-    /* ── Contact card ──────────────────────────────────────────────── */
-    .contact-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-top:12px}
-    .contact-card p{font-size:15px;color:var(--muted);margin-bottom:8px}
+    /* ── Section ────────────────────────────────────────────────────── */
+    .sec{margin-bottom:52px}
+    .sec h2{font-size:20px;font-weight:700;color:#fff;padding-left:16px;border-left:3px solid var(--g);margin-bottom:20px}
+    .sec h3{font-size:15px;font-weight:600;color:rgba(255,255,255,.78);margin:22px 0 10px}
+    .sec p{font-size:15px;color:var(--muted);line-height:1.76;margin-bottom:14px}
+    .sec ul,.sec ol{padding-left:22px;margin-bottom:14px}
+    .sec li{font-size:15px;color:var(--muted);line-height:1.76;margin-bottom:6px}
+    .sec a{color:var(--g);text-decoration:none}
+    .sec a:hover{text-decoration:underline}
+    hr.div{border:none;border-top:1px solid var(--border);margin:52px 0}
 
-    /* ── Footer ───────────────────────────────────────────────────── */
-    footer{background:rgba(255,255,255,.02);border-top:1px solid var(--border);padding:32px 24px}
-    .footer-inner{max-width:1100px;margin:0 auto}
-    .footer-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 20px;margin-bottom:16px}
-    .footer-links a{color:rgba(255,255,255,.4);text-decoration:none;font-size:13px;transition:color .18s}
-    .footer-links a:hover,.footer-links a.active{color:var(--accent)}
-    .footer-copy{text-align:center;font-size:12px;color:rgba(255,255,255,.25)}
-    @media(max-width:640px){.toc ol{columns:1}}
+    /* ── Table ──────────────────────────────────────────────────────── */
+    .sk-table{width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+    .sk-table thead tr{background:rgba(113,255,0,.06)}
+    .sk-table th{padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:rgba(255,255,255,.45);letter-spacing:.5px;text-transform:uppercase}
+    .sk-table td{padding:12px 14px;color:var(--muted);border-top:1px solid var(--border);vertical-align:top}
+    .badge{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11px;font-weight:700}
+    .badge-b{background:rgba(80,160,255,.1);color:rgba(130,185,255,.8)}
+    .badge-g{background:rgba(113,255,0,.1);color:rgba(160,255,80,.8)}
+    .badge-o{background:rgba(255,160,50,.1);color:rgba(255,185,90,.8)}
+
+    /* ── Contact card ───────────────────────────────────────────────── */
+    .contact-card{background:var(--card);border:1px solid rgba(113,255,0,.13);border-radius:14px;padding:24px 28px}
+    .contact-card p{font-size:14px;color:var(--muted);margin-bottom:9px}
+    .contact-card p:last-child{margin-bottom:0}
+    .contact-card a{color:var(--g)}
+
+    /* ── Footer ─────────────────────────────────────────────────────── */
+    .lfoot{border-top:1px solid var(--border);padding:32px 24px}
+    .lfoot-inner{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:14px}
+    .lfoot-logo{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+    .lfoot-logo img{width:28px;height:28px;object-fit:contain}
+    .lfoot-logo span{font-size:16px;font-weight:800;color:#fff}
+    .lfoot-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px}
+    .lfoot-links a{font-size:13px;color:rgba(255,255,255,.35);text-decoration:none;transition:color .15s}
+    .lfoot-links a:hover,.lfoot-links a.cur{color:var(--g)}
+    .lfoot-copy{font-size:12px;color:rgba(255,255,255,.2);text-align:center}
   </style>
 </head>
 <body>
 
-<!-- Static navigation — visible without JavaScript -->
-<nav class="sk-nav" aria-label="SOKONI navigation">
-  <div class="sk-nav-inner">
-    <a href="/" class="sk-nav-logo" aria-label="SOKONI Home">
-      <img src="assets/logosokoni.png" alt="SOKONI">
+<!-- Splash -->
+<div id="sk-splash" role="presentation" aria-hidden="true">
+  <div class="sks-inner">
+    <img src="assets/Sokonilogo2.png" class="sks-logo" alt="SOKONI" fetchpriority="high">
+    <div class="sks-ring"></div>
+    <p class="sks-tag">Kenya's Digital Marketplace</p>
+  </div>
+</div>
+
+<!-- Nav -->
+<nav class="lnav" aria-label="SOKONI navigation">
+  <div class="lnav-inner">
+    <a href="/" class="lnav-brand" aria-label="SOKONI Home">
+      <img src="assets/Sokonilogo2.png" alt="SOKONI">
       <span>SOKONI</span>
     </a>
-    <div class="sk-nav-links">
-      <a href="/privacy" class="active" aria-current="page">Privacy</a>
+    <div class="lnav-links">
+      <a href="/privacy" class="cur" aria-current="page">Privacy</a>
       <a href="/terms">Terms</a>
       <a href="/data-deletion">Data Deletion</a>
       <a href="mailto:support@mysokoni.co.ke">Contact</a>
-      <a href="/" class="sk-nav-home-btn">Back to Marketplace</a>
+      <a href="/" class="lnav-cta">Marketplace</a>
     </div>
   </div>
 </nav>
 
-<header class="hero">
-  <div class="hero-badge">Legal</div>
-  <h1>Privacy Policy</h1>
-  <p>Last updated: 28 June 2026 &nbsp;&bull;&nbsp; Effective: 28 June 2026</p>
-</header>
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-badge">Privacy Policy</div>
+  <h1>Your Privacy Matters</h1>
+  <p class="hero-meta">Last updated: June 2026<span>·</span>Kenya Data Protection Act 2019<span>·</span>Sokoni Digital Limited</p>
+</div>
 
-<main class="page">
+<div class="wrap">
 
+  <!-- TOC -->
   <nav class="toc" aria-label="Table of contents">
-    <div class="toc-label">Contents</div>
-    <ol>
-      <li><a href="#who-we-are">Who We Are</a></li>
-      <li><a href="#data-collected">Data We Collect</a></li>
-      <li><a href="#auth-providers">Authentication Providers</a></li>
-      <li><a href="#how-we-use">How We Use Your Data</a></li>
-      <li><a href="#cookies">Cookies &amp; Storage</a></li>
-      <li><a href="#payments">Payments</a></li>
-      <li><a href="#analytics">Analytics</a></li>
-      <li><a href="#sharing">Data Sharing</a></li>
-      <li><a href="#retention">Data Retention</a></li>
-      <li><a href="#your-rights">Your Rights</a></li>
-      <li><a href="#security">Security</a></li>
-      <li><a href="#children">Children</a></li>
-      <li><a href="#changes">Policy Changes</a></li>
-      <li><a href="#contact">Contact &amp; DPO</a></li>
-    </ol>
+    <div class="toc-label">Jump to section</div>
+    <div class="toc-grid">
+      <a href="#who-we-are">1. Who We Are</a>
+      <a href="#data-collected">2. Data We Collect</a>
+      <a href="#auth-providers">3. Auth Providers</a>
+      <a href="#how-we-use">4. How We Use Data</a>
+      <a href="#cookies">5. Cookies</a>
+      <a href="#payments">6. Payments</a>
+      <a href="#analytics">7. Analytics</a>
+      <a href="#sharing">8. Data Sharing</a>
+      <a href="#retention">9. Retention</a>
+      <a href="#your-rights">10. Your Rights</a>
+      <a href="#security">11. Security</a>
+      <a href="#children">12. Children</a>
+      <a href="#changes">13. Changes</a>
+      <a href="#contact">14. Contact</a>
+    </div>
   </nav>
 
   <!-- 1 -->
-  <section class="section" id="who-we-are">
+  <section class="sec" id="who-we-are">
     <h2>1. Who We Are</h2>
     <p>SOKONI is a digital marketplace platform operated by <strong>Sokoni Digital Limited</strong>, a company registered in Kenya. Our platform connects buyers, sellers, service providers, vendors, drivers, and businesses across Kenya through one unified digital ecosystem available at <a href="https://mysokoni.co.ke">mysokoni.co.ke</a>.</p>
     <p>This Privacy Policy describes how we collect, use, store, and protect personal data in accordance with the <strong>Kenya Data Protection Act, 2019 (No. 24 of 2019)</strong> and all applicable regulations. By using SOKONI, you agree to this policy.</p>
@@ -138,10 +174,10 @@
     <strong>DPO:</strong> <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a></p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 2 -->
-  <section class="section" id="data-collected">
+  <section class="sec" id="data-collected">
     <h2>2. Data We Collect</h2>
     <h3>Account &amp; Identity</h3>
     <table class="sk-table">
@@ -184,10 +220,10 @@
     </ul>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 3 -->
-  <section class="section" id="auth-providers">
+  <section class="sec" id="auth-providers">
     <h2>3. Authentication Providers</h2>
     <p>SOKONI uses <strong>Firebase Authentication</strong> (provided by Google LLC) to manage user sign-in securely. When you choose a social sign-in method, that provider's privacy policy also applies to data they share with us.</p>
     <table class="sk-table">
@@ -215,13 +251,13 @@
         </tr>
       </tbody>
     </table>
-    <p>We do <strong>not</strong> store your social provider passwords. We support <strong>account linking</strong> — you can connect multiple sign-in methods to one SOKONI account from Profile → Settings.</p>
+    <p>We do <strong>not</strong> store your social provider passwords. We support <strong>account linking</strong> — you can connect multiple sign-in methods to one SOKONI account from Profile &rarr; Settings.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 4 -->
-  <section class="section" id="how-we-use">
+  <section class="sec" id="how-we-use">
     <h2>4. How We Use Your Data</h2>
     <ul>
       <li><strong>Service delivery:</strong> Process orders, facilitate payments, match buyers and sellers, route deliveries.</li>
@@ -234,10 +270,10 @@
     </ul>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 5 -->
-  <section class="section" id="cookies">
+  <section class="sec" id="cookies">
     <h2>5. Cookies &amp; Local Storage</h2>
     <p>SOKONI is a Progressive Web App (PWA). We use the following storage mechanisms:</p>
     <table class="sk-table">
@@ -253,10 +289,10 @@
     <p>We do <strong>not</strong> use third-party advertising cookies. You may clear all browser storage at any time via your browser settings or by logging out of SOKONI.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 6 -->
-  <section class="section" id="payments">
+  <section class="sec" id="payments">
     <h2>6. Payments &amp; Financial Data</h2>
     <p>Payment processing is handled by <strong>IntaSend</strong>, licensed by the Central Bank of Kenya. SOKONI does not store raw card numbers or M-Pesa PINs.</p>
     <ul>
@@ -268,19 +304,19 @@
     <p>IntaSend Privacy Policy: <a href="https://intasend.com/privacy-policy/" target="_blank" rel="noopener noreferrer">intasend.com/privacy-policy</a></p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 7 -->
-  <section class="section" id="analytics">
+  <section class="sec" id="analytics">
     <h2>7. Analytics</h2>
     <p>We use <strong>Google Analytics 4 (GA4)</strong> to understand how users interact with the platform. All data is aggregated and anonymised before informing product decisions. We do not build individual advertising profiles or sell analytics data to third parties.</p>
     <p>We also maintain internal platform analytics (search trends, funnel metrics, seller performance scores) stored in Firebase Firestore, accessible only to authorised admin and operations staff.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 8 -->
-  <section class="section" id="sharing">
+  <section class="sec" id="sharing">
     <h2>8. Data Sharing</h2>
     <p>We share your personal data only when necessary:</p>
     <ul>
@@ -294,10 +330,10 @@
     <p>We do <strong>not</strong> sell, rent, or trade your personal data to any third party for marketing or advertising purposes.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 9 -->
-  <section class="section" id="retention">
+  <section class="sec" id="retention">
     <h2>9. Data Retention</h2>
     <table class="sk-table">
       <thead><tr><th>Data Category</th><th>Retention Period</th><th>Reason</th></tr></thead>
@@ -313,10 +349,10 @@
     <p>After the applicable retention period expires, data is permanently deleted or irreversibly anonymised.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 10 -->
-  <section class="section" id="your-rights">
+  <section class="sec" id="your-rights">
     <h2>10. Your Rights</h2>
     <p>Under the Kenya Data Protection Act 2019, you have the following rights:</p>
     <ul>
@@ -332,10 +368,10 @@
     <p>You may also complain to the <strong>Office of the Data Protection Commissioner (ODPC)</strong> at <a href="https://www.odpc.go.ke" target="_blank" rel="noopener noreferrer">odpc.go.ke</a>.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 11 -->
-  <section class="section" id="security">
+  <section class="sec" id="security">
     <h2>11. Security</h2>
     <ul>
       <li>All data in transit is encrypted with TLS 1.2+.</li>
@@ -349,26 +385,26 @@
     <p>To report a security vulnerability responsibly, email <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a>.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 12 -->
-  <section class="section" id="children">
+  <section class="sec" id="children">
     <h2>12. Children</h2>
     <p>SOKONI is not directed at children under 18 years of age. We do not knowingly collect personal data from anyone under 18. If you believe a child has provided us with personal data, contact <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a> immediately and we will delete it.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 13 -->
-  <section class="section" id="changes">
+  <section class="sec" id="changes">
     <h2>13. Changes to This Policy</h2>
     <p>We may update this Privacy Policy periodically. Material changes will be communicated via email or an in-app notification at least 14 days before taking effect. The "Last updated" date at the top of this page always reflects the most recent revision. Continued use of SOKONI after a change takes effect constitutes acceptance of the updated policy.</p>
   </section>
 
-  <hr class="divider">
+  <hr class="div">
 
   <!-- 14 -->
-  <section class="section" id="contact">
+  <section class="sec" id="contact">
     <h2>14. Contact &amp; Data Protection Officer</h2>
     <div class="contact-card">
       <p><strong>Sokoni Digital Limited</strong> &nbsp;&bull;&nbsp; Nairobi, Kenya</p>
@@ -376,25 +412,35 @@
       <p>Security disclosures: <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a></p>
       <p>Legal / compliance: <a href="mailto:legal@mysokoni.co.ke">legal@mysokoni.co.ke</a></p>
       <p>Platform: <a href="https://mysokoni.co.ke">mysokoni.co.ke</a></p>
-      <p style="margin-top:10px;font-size:13px;color:rgba(255,255,255,.35);">Response time: within 72 hours for general privacy enquiries; within 30 days for formal data subject access requests as required by the KDPA 2019.</p>
+      <p style="margin-top:10px;font-size:13px;color:rgba(255,255,255,.28)">Response time: within 72 hours for general privacy enquiries; within 30 days for formal data subject access requests as required by the KDPA 2019.</p>
     </div>
-    <p style="margin-top:18px;">To request data deletion or data export, use our <a href="/data-deletion">self-service Data Deletion Centre</a>.</p>
+    <p style="margin-top:20px">To request data deletion or data export, use our <a href="/data-deletion">self-service Data Deletion Centre</a>.</p>
   </section>
 
-</main>
+</div><!-- /wrap -->
 
-<footer>
-  <div class="footer-inner">
-    <div class="footer-links">
+<footer class="lfoot">
+  <div class="lfoot-inner">
+    <div class="lfoot-logo">
+      <img src="assets/Sokonilogo2.png" alt="SOKONI">
+      <span>SOKONI</span>
+    </div>
+    <nav class="lfoot-links" aria-label="Footer navigation">
       <a href="/">Marketplace</a>
-      <a href="/privacy" class="active">Privacy Policy</a>
+      <a href="/privacy" class="cur">Privacy Policy</a>
       <a href="/terms">Terms of Service</a>
       <a href="/data-deletion">Data Deletion</a>
-      <a href="mailto:support@mysokoni.co.ke">Contact Us</a>
-    </div>
-    <p class="footer-copy">&copy; 2026 Sokoni Digital Limited. All rights reserved. Nairobi, Kenya.</p>
+      <a href="mailto:support@mysokoni.co.ke">Contact</a>
+    </nav>
+    <p class="lfoot-copy">&copy; 2026 Sokoni Digital Limited. All rights reserved. Nairobi, Kenya.</p>
   </div>
 </footer>
 
+<script>
+  setTimeout(function(){
+    var s=document.getElementById('sk-splash');
+    if(s) s.classList.add('sk-out');
+  },1400);
+</script>
 </body>
 </html>

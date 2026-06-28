@@ -1,1599 +1,208 @@
-﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" data-require-auth="true">
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <script src="security.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>SOKONI — Track Order</title>
-  <meta name="description" content="Track your SOKONI order in real time — see live status, delivery location and ETA.">
-  <meta property="og:title" content="SOKONI — Track Order">
-  <meta property="og:description" content="Track your SOKONI order live — see delivery status, driver location and ETA.">
-  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
-  <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="assets/logosokoni.png">
-  <meta name="color-scheme" content="dark">
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-  <link rel="preconnect" href="https://unpkg.com" crossorigin>
-  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
-  <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <title>Track your order — SOKONI</title>
+  <meta name="description" content="Track your SOKONI delivery in real time. See live rider location and estimated arrival.">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="icon" href="favicon.ico">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
-    :root{--sok:#71ff00;--sok-a:rgba(113,255,0,0.15);--card:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.08);}
-
-    /* ── Order boxes ── */
-    .order-summary-card{background:#000!important;border:1px solid rgba(255,255,255,0.12)!important;}
-    .order-detail-panel{background:#000!important;border:1px solid rgba(255,255,255,0.12)!important;}
-    .track-my-orders,.track-page{background:transparent!important;}
-
-    /* ── Map container ── */
-    #deliveryMap{height:340px;width:100%;background:#0c151f;border-radius:20px;}
-    .map-wrap{position:relative;}
-
-    /* ── Top glassmorphism status card ── */
-    .track-status-card{
-      display:flex;align-items:center;justify-content:space-between;
-      background:rgba(10,10,10,0.88);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-      border:1px solid rgba(113,255,0,0.22);border-radius:18px;padding:14px 18px;
-      margin-bottom:12px;gap:12px;
-      box-shadow:0 8px 32px rgba(0,0,0,0.45),inset 0 0 0 1px rgba(113,255,0,0.05);
-    }
-    .tsc-order{font-size:10px;color:rgba(255,255,255,0.38);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:4px;}
-    .tsc-status{font-size:15px;font-weight:900;color:white;}
-    .tsc-right{display:flex;gap:18px;flex-shrink:0;}
-    .tsc-metric{text-align:center;}
-    .tsc-val{display:block;font-size:18px;font-weight:900;color:#71ff00;line-height:1.1;}
-    .tsc-label{font-size:9px;color:rgba(255,255,255,0.28);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
-
-    /* ── Floating map controls ── */
-    .follow-driver-btn{
-      display:none;position:absolute;bottom:56px;right:10px;z-index:500;
-      align-items:center;gap:6px;padding:9px 16px;
-      background:rgba(0,0,0,0.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-      border:1.5px solid rgba(113,255,0,0.6);border-radius:26px;
-      color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;
-      box-shadow:0 4px 18px rgba(0,0,0,0.6);transition:transform .15s;
-    }
-    .follow-driver-btn:active{transform:scale(0.93);}
-    .market-layer-btn{
-      position:absolute;top:10px;right:10px;z-index:500;
-      padding:7px 12px;background:rgba(0,0,0,0.75);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-      border:1.5px solid rgba(255,255,255,0.14);border-radius:20px;
-      color:rgba(255,255,255,0.82);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;
-    }
-    .market-layer-btn.active{border-color:#71ff00;color:#71ff00;background:rgba(113,255,0,0.12);}
-    .gps-confidence{
-      position:absolute;top:10px;left:10px;z-index:500;padding:5px 10px;
-      background:rgba(0,0,0,0.75);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-      border:1px solid rgba(255,255,255,0.1);border-radius:16px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.82);
-    }
-
-    /* ── Live stats bar ── */
-    .live-stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0;}
-    .lsb-item{
-      display:flex;flex-direction:column;align-items:center;
-      background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
-      border-radius:14px;padding:10px 6px;gap:2px;
-    }
-    .lsb-icon{font-size:15px;margin-bottom:2px;}
-    .lsb-val{font-size:12px;font-weight:900;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center;}
-    .lsb-label{font-size:9px;color:rgba(255,255,255,0.28);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;}
-
-    /* ── Delivery Confidence Meter ── */
-    .confidence-bar{
-      display:flex;align-items:center;justify-content:space-between;
-      background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
-      border-radius:14px;padding:12px 16px;margin-top:10px;gap:12px;
-    }
-    .conf-left{display:flex;align-items:center;gap:10px;}
-    .conf-label{font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;}
-    .conf-val{font-size:13px;font-weight:900;color:white;margin-top:2px;}
-    .conf-bar-wrap{flex:1;height:5px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;}
-    .conf-bar-fill{height:100%;border-radius:3px;transition:width 0.8s ease,background 0.5s;}
-
-    /* ── Rider Communication Hub ── */
-    .rider-comm-hub{display:flex;gap:8px;margin-top:10px;}
-    .rch-btn{
-      flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
-      padding:10px 6px;border-radius:14px;border:1px solid rgba(255,255,255,0.09);
-      background:rgba(255,255,255,0.03);cursor:pointer;font-family:inherit;transition:all .2s;
-    }
-    .rch-btn:hover,.rch-btn:active{background:rgba(255,255,255,0.07);}
-    .rch-icon{font-size:20px;}
-    .rch-label{font-size:9px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.4px;}
-
-    /* ── Share tracking link ── */
-    .share-track-bar{
-      display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.025);
-      border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:10px 14px;margin-top:8px;
-    }
-    .stb-link{flex:1;font-size:11px;color:rgba(255,255,255,0.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .stb-copy{padding:6px 12px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:8px;color:#71ff00;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;}
-
-    /* ── Offline banner ── */
-    .offline-banner{
-      display:none;align-items:center;gap:10px;
-      background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.25);
-      border-radius:12px;padding:10px 14px;margin-bottom:10px;
-    }
-    .offline-banner.show{display:flex;}
-    .ob-icon{font-size:18px;}
-    .ob-text{flex:1;font-size:12px;color:rgba(255,255,255,0.7);}
-    .ob-retry{padding:5px 12px;background:rgba(255,80,80,0.15);border:1px solid rgba(255,80,80,0.3);border-radius:8px;color:#ff6b6b;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;}
-
-    /* ── Delivery completion ── */
-    .delivery-complete{
-      display:none;flex-direction:column;align-items:center;text-align:center;
-      background:rgba(10,10,10,0.92);border:1px solid rgba(113,255,0,0.25);
-      border-radius:20px;padding:28px 22px;margin-top:12px;
-    }
-    .delivery-complete.show{display:flex;}
-    .dc-emoji{font-size:56px;margin-bottom:12px;animation:dcPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;}
-    @keyframes dcPop{0%{transform:scale(0.3);opacity:0;}100%{transform:scale(1);opacity:1;}}
-    @keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1;}100%{transform:translateY(200px) rotate(540deg);opacity:0;}}
-    .dc-title{font-size:20px;font-weight:900;color:#71ff00;margin-bottom:6px;}
-    .dc-sub{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:20px;}
-    .dc-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-    .dc-btn{padding:10px 18px;border-radius:12px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;}
-    .dc-btn-rate{background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border:none;}
-    .dc-btn-reorder{background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;}
-    .dc-btn-contact{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.65);}
-
-    /* ── Delivery story timeline ── */
-    .delivery-timeline{
-      background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);
-      border-radius:18px;padding:18px 16px;margin-top:8px;
-    }
-    .tl-step{display:flex;align-items:flex-start;gap:12px;position:relative;min-height:50px;}
-    .tl-step:not(:last-child)::after{
-      content:'';position:absolute;left:13px;top:30px;width:2px;bottom:0;
-      background:rgba(255,255,255,0.07);
-    }
-    .tl-step.tl-done:not(:last-child)::after{background:rgba(113,255,0,0.3);}
-    .tl-dot{
-      width:28px;height:28px;min-width:28px;border-radius:50%;
-      background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.1);
-      display:flex;align-items:center;justify-content:center;
-      font-size:11px;font-weight:900;color:rgba(255,255,255,0.22);
-      position:relative;z-index:1;margin-top:1px;
-    }
-    .tl-step.tl-done .tl-dot{background:rgba(113,255,0,0.1);border-color:#71ff00;color:#71ff00;}
-    .tl-step.tl-current .tl-dot{background:rgba(113,255,0,0.18);border-color:#71ff00;color:#71ff00;box-shadow:0 0 14px rgba(113,255,0,0.5);}
-    .tl-info{padding-top:5px;flex:1;}
-    .tl-label{font-size:13px;font-weight:700;color:rgba(255,255,255,0.28);}
-    .tl-step.tl-done .tl-label{color:white;}
-    .tl-step.tl-current .tl-label{color:#71ff00;font-weight:900;}
-    .tl-time{font-size:11px;color:rgba(255,255,255,0.26);margin-top:2px;}
-    .tl-step.tl-current .tl-time{color:rgba(113,255,0,0.5);}
-
-    /* ── Driver marker (Leaflet divIcon) ── */
-    .driver-icon-root{position:relative;width:52px;height:52px;display:flex;align-items:center;justify-content:center;}
-    .driver-vehicle{font-size:28px;line-height:1;position:relative;z-index:2;display:block;text-align:center;}
-    .driver-pulse,.driver-pulse-2{
-      position:absolute;inset:4px;border-radius:50%;
-      border:2px solid rgba(113,255,0,0.7);pointer-events:none;
-      animation:driverPulse 2.2s ease-out infinite;
-    }
-    .driver-pulse-2{inset:8px;border-color:rgba(113,255,0,0.35);animation-delay:0.85s;}
-    @keyframes driverPulse{0%{transform:scale(0.7);opacity:0.9;}100%{transform:scale(2.1);opacity:0;}}
-
-    /* ── Destination marker ── */
-    .dest-marker-wrap{position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center;}
-    .dest-marker-pin{font-size:26px;position:relative;z-index:2;}
-    .dest-pulse{
-      position:absolute;inset:2px;border-radius:50%;
-      border:2px solid rgba(113,255,0,0.5);pointer-events:none;
-      animation:destPulse 3s ease-out infinite;
-    }
-    @keyframes destPulse{0%{transform:scale(0.85);opacity:0.7;}100%{transform:scale(2.1);opacity:0;}}
-    @keyframes fadeToast{0%{opacity:1;transform:translateX(-50%) translateY(0);}80%{opacity:1;}100%{opacity:0;transform:translateX(-50%) translateY(-8px);}}
-
-    /* ── Marketplace layer point ── */
-    .market-point{
-      width:32px;height:32px;background:rgba(0,0,0,0.8);
-      border:2px solid #71ff00;border-radius:8px;
-      display:flex;align-items:center;justify-content:center;font-size:15px;
-      box-shadow:0 2px 10px rgba(0,0,0,0.5);
-    }
-
-    /* ── Phase 5: Horizontal step progress bar ── */
-    .tk-steps-bar{display:flex;align-items:flex-start;padding:2px 4px 14px;margin-bottom:4px;}
-    .tk-step{display:flex;flex-direction:column;align-items:center;flex:1;gap:5px;position:relative;}
-    .tk-step:not(:last-child)::after{
-      content:'';position:absolute;top:13px;left:55%;right:-55%;
-      height:2px;background:rgba(255,255,255,0.07);z-index:0;transition:background .4s;
-    }
-    .tk-step.ts-done:not(:last-child)::after{background:rgba(113,255,0,0.4);}
-    .tk-step.ts-active:not(:last-child)::after{background:linear-gradient(90deg,rgba(113,255,0,0.4),rgba(255,255,255,0.07));}
-    .tk-dot{
-      width:28px;height:28px;border-radius:50%;
-      border:2px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);
-      display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;
-      position:relative;z-index:1;transition:all .4s;color:rgba(255,255,255,0.2);
-    }
-    .tk-step.ts-done .tk-dot{border-color:#71ff00;background:rgba(113,255,0,0.1);color:#71ff00;}
-    .tk-step.ts-active .tk-dot{border-color:#71ff00;background:rgba(113,255,0,0.2);color:#71ff00;box-shadow:0 0 14px rgba(113,255,0,0.45);}
-    .tk-step-lbl{font-size:8.5px;font-weight:700;color:rgba(255,255,255,0.2);text-transform:uppercase;letter-spacing:.04em;text-align:center;line-height:1.25;transition:color .4s;}
-    .tk-step.ts-done .tk-step-lbl{color:rgba(255,255,255,0.48);}
-    .tk-step.ts-active .tk-step-lbl{color:#71ff00;}
-
-    /* ── Module timeline (UIManager.renderTimeline) ── */
-    .dt-step{display:flex;align-items:flex-start;gap:10px;min-height:44px;padding:4px 0;}
-    .dt-check{font-size:12px;font-weight:900;color:#71ff00;min-width:24px;text-align:center;}
-    .dt-current{font-size:14px;min-width:24px;text-align:center;}
-    .dt-pending{font-size:12px;color:rgba(255,255,255,0.25);min-width:24px;text-align:center;}
-    .dt-step.done span:last-child{color:white;font-weight:700;}
-    .dt-step span:last-child{font-size:13px;color:rgba(255,255,255,0.35);padding-top:2px;}
-
-    /* ── Responsive ── */
-    @media(max-width:500px){
-      .live-stats-bar{grid-template-columns:repeat(2,1fr);}
-      #deliveryMap{height:270px;}
-      .track-status-card{flex-direction:column;align-items:flex-start;}
-      .tsc-right{gap:14px;}
-    }
+    :root{--bg:#0a0a0a;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.09);--border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ff9800;--danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.5)}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--txt)}
+    #map{position:fixed;inset:0;z-index:0}
+    /* ── Header ── */
+    #hdr{position:fixed;top:0;left:0;right:0;z-index:100;background:linear-gradient(180deg,rgba(0,0,0,.95) 0%,rgba(0,0,0,.7) 80%,transparent 100%);padding:max(14px,env(safe-area-inset-top)) 16px 24px;display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:20px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    #hdrInfo{flex:1;min-width:0}
+    #hdrStatus{font-size:14px;font-weight:800}
+    #hdrOrder{font-size:11px;color:var(--muted);font-family:monospace}
+    #shareBtn{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--txt);font-size:12px;cursor:pointer;flex-shrink:0}
+    /* ── Panel ── */
+    #panel{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(10,10,10,.97);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:14px 16px max(20px,env(safe-area-inset-bottom))}
+    #panelHandle{width:40px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 14px}
+    /* ── ETA ── */
+    #etaRow{display:flex;gap:10px;margin-bottom:14px}
+    .eta-card{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
+    .eta-val{font-size:22px;font-weight:900;margin-bottom:2px}
+    .eta-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    #etaArrival .eta-val{color:var(--accent)}
+    #etaDist .eta-val{color:var(--info)}
+    /* ── Rider card ── */
+    #riderCard{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px}
+    #riderAvatar{width:46px;height:46px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden}
+    #riderAvatar img{width:100%;height:100%;object-fit:cover}
+    #riderName{font-size:15px;font-weight:800}
+    #riderRating{font-size:12px;color:var(--warn)}
+    #riderVehicle{font-size:11px;color:var(--muted);margin-top:2px}
+    /* ── Timeline ── */
+    #timeline{display:flex;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+    #timeline::-webkit-scrollbar{display:none}
+    .tl-step{display:flex;flex-direction:column;align-items:center;min-width:70px;flex:1;position:relative}
+    .tl-step:not(:last-child)::after{content:'';position:absolute;top:13px;left:50%;width:100%;height:2px;background:var(--border);z-index:0}
+    .tl-step.done::after{background:var(--accent)}
+    .tl-dot{width:28px;height:28px;border-radius:50%;border:2px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:12px;z-index:1;position:relative}
+    .tl-step.done .tl-dot{background:var(--accent);border-color:var(--accent);color:#000}
+    .tl-step.active .tl-dot{border-color:var(--accent);animation:pls 1.4s ease infinite}
+    @keyframes pls{0%,100%{box-shadow:0 0 0 0 rgba(113,255,0,.4)}50%{box-shadow:0 0 0 6px rgba(113,255,0,0)}}
+    .tl-lbl{font-size:9px;color:var(--muted);text-align:center;margin-top:5px;line-height:1.3;max-width:62px}
+    .tl-step.done .tl-lbl,.tl-step.active .tl-lbl{color:var(--accent)}
+    /* ── Loading ── */
+    #loadScreen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+    .spin{width:40px;height:40px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    #loadScreen p{color:var(--muted);font-size:14px}
+    /* ── Delivered overlay ── */
+    #doneOverlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.9);align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:24px}
+    #doneOverlay.show{display:flex}
   </style>
-<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#71ff00">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SOKONI">
-<link rel="stylesheet" href="premium.css">
-<link rel="stylesheet" href="mobile.css">
-  <link rel="stylesheet" href="sokoni-premium-v2.css">
-<script src="shared-header.js" defer></script>
-  <link rel="stylesheet" href="sokoni-desktop.css">
 </head>
 <body>
-<script src="splash.js"></script>
 
+<div id="loadScreen"><div class="spin"></div><p>Loading tracking…</p></div>
+<div id="map"></div>
 
-<nav class="navbar">
-  <div class="logo-section"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI"></div>
-  <div class="nav-actions">
-    <a href="index.html" class="wishlist-nav-btn">🏠 Home</a>
+<div id="doneOverlay">
+  <div style="font-size:72px">🎉</div>
+  <h2 style="font-size:24px;font-weight:900">Delivered!</h2>
+  <p style="color:var(--muted);font-size:14px;max-width:280px;line-height:1.6">Your order has been delivered successfully. Thank you for choosing SOKONI!</p>
+  <a href="index.html" style="background:var(--accent);color:#000;padding:14px 28px;border-radius:12px;font-weight:800;font-size:15px;text-decoration:none;margin-top:8px">Back to Home</a>
+</div>
+
+<div id="hdr">
+  <div id="hdrLogo">SOKONI</div>
+  <div id="hdrInfo">
+    <div id="hdrStatus">Loading…</div>
+    <div id="hdrOrder"></div>
   </div>
-</nav>
-<!-- Inline track message (below navbar) -->
-<div id="trackMsg" style="display:none;text-align:center;padding:10px 20px;font-size:13px;font-weight:700;border-radius:0 0 12px 12px;position:sticky;top:56px;z-index:90;backdrop-filter:blur(10px);"></div>
+  <button id="shareBtn" onclick="_share()">📤 Share</button>
+</div>
 
-<section class="track-page">
-
-  <div class="track-hero">
-    <h1>📦 Order Tracking</h1>
-    <p>Enter your order ID or view your recent orders below</p>
-    <div style="display:flex;gap:10px;margin-top:18px;max-width:480px;width:100%;">
-      <input type="text" id="trackInput" placeholder="Enter Order ID (e.g. SKN123456)"
-        onkeydown="if(event.key==='Enter')searchOrder()"
-        style="flex:1;padding:13px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:12px;color:white;font-size:14px;font-family:inherit;outline:none;min-width:0;">
-      <button type="button" id="trackBtn" onclick="searchOrder()"
-        style="padding:13px 22px;background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.35);color:#71ff00;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">
-        <span id="trackBtnText">Track →</span>
-        <span id="trackBtnSpinner" style="display:none;">⏳</span>
-      </button>
-    </div>
-    <button type="button" onclick="tryDemoTrack()" style="margin-top:10px;padding:8px 16px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">🔍 Try Demo Track</button>
+<div id="panel">
+  <div id="panelHandle"></div>
+  <div id="etaRow">
+    <div class="eta-card" id="etaArrival"><div class="eta-val" id="etaArrVal">—</div><div class="eta-lbl">Arrives at</div></div>
+    <div class="eta-card" id="etaDist"><div class="eta-val" id="etaDistVal">—</div><div class="eta-lbl">Distance away</div></div>
   </div>
-
-  <!-- MY ORDERS -->
-  <div class="track-my-orders">
-    <h2>📦 My Recent Orders</h2>
-    <div id="myOrdersList"></div>
+  <div id="riderCard">
+    <div id="riderAvatar">🏍</div>
+    <div>
+      <div id="riderName">Finding your rider…</div>
+      <div id="riderRating"></div>
+      <div id="riderVehicle"></div>
+    </div>
   </div>
-
-  <!-- Quick links -->
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
-    <a href="invoice.html" style="padding:10px 16px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);color:#71ff00;border-radius:12px;font-size:13px;font-weight:700;text-decoration:none;">🧾 Generate Invoice</a>
-    <a href="dispute.html" style="padding:10px 16px;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.2);color:#ff9800;border-radius:12px;font-size:13px;font-weight:700;text-decoration:none;">⚠️ Report Dispute</a>
-    <a href="driver.html" style="padding:10px 16px;background:rgba(0,170,255,0.08);border:1px solid rgba(0,170,255,0.2);color:#00aaff;border-radius:12px;font-size:13px;font-weight:700;text-decoration:none;">🛵 Driver Portal</a>
-    <button type="button" onclick="document.getElementById('returnSection').style.display=document.getElementById('returnSection').style.display==='none'?'block':'none'" style="padding:10px 16px;background:rgba(160,128,255,0.08);border:1px solid rgba(160,128,255,0.2);color:#a080ff;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">↩️ Return Request</button>
-    <a href="referral.html" style="padding:10px 16px;background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.2);color:#ffc107;border-radius:12px;font-size:13px;font-weight:700;text-decoration:none;">👥 Refer & Earn</a>
+  <div id="timeline">
+    <div class="tl-step done" data-s="confirmed"><div class="tl-dot">✓</div><div class="tl-lbl">Confirmed</div></div>
+    <div class="tl-step"      data-s="assigned"> <div class="tl-dot">🏍</div><div class="tl-lbl">Rider assigned</div></div>
+    <div class="tl-step"      data-s="en_route"> <div class="tl-dot">🚦</div><div class="tl-lbl">On the way</div></div>
+    <div class="tl-step"      data-s="nearby">   <div class="tl-dot">📍</div><div class="tl-lbl">Nearby</div></div>
+    <div class="tl-step"      data-s="delivered"><div class="tl-dot">📦</div><div class="tl-lbl">Delivered</div></div>
   </div>
+</div>
 
-  <!-- RETURN REQUEST PANEL -->
-  <div id="returnSection" style="display:none;background:rgba(160,128,255,0.06);border:1px solid rgba(160,128,255,0.18);border-radius:18px;padding:22px;margin-bottom:20px;">
-    <div style="font-size:15px;font-weight:800;color:white;margin-bottom:14px;">↩️ Request a Return</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-      <div>
-        <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:5px;">Order ID</label>
-        <input type="text" id="returnOrderId" placeholder="e.g. SKN123456" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
-      </div>
-      <div>
-        <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:5px;">Reason</label>
-        <select id="returnReason" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;cursor:pointer;">
-          <option value="">Select reason...</option>
-          <option value="wrong-item">Wrong item received</option>
-          <option value="damaged">Item arrived damaged</option>
-          <option value="not-as-described">Not as described</option>
-          <option value="changed-mind">Changed my mind</option>
-          <option value="quality">Poor quality</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-    </div>
-    <textarea id="returnDetails" rows="2" placeholder="Describe the issue in more detail..." style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;resize:none;font-family:inherit;margin-bottom:10px;"></textarea>
-    <button type="button" onclick="submitReturnRequest()" style="padding:11px 24px;background:linear-gradient(135deg,#a080ff,#6040cc);color:white;font-weight:800;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">📤 Submit Return Request</button>
-    <div id="returnMsg" style="margin-top:8px;font-size:12px;"></div>
-  </div>
-
-  <!-- MY RETURN REQUESTS -->
-  <div id="myReturnsSection" style="margin-bottom:20px;"></div>
-
-  <!-- ORDER DETAIL -->
-  <div id="orderDetail" class="order-detail-panel" style="display:none;"></div>
-
-  <!-- SOKONI PREMIUM LIVE TRACKING MAP -->
-  <div id="mapContainer" class="map-container">
-
-    <!-- Phase 5: Horizontal Step Progress Bar -->
-    <div class="tk-steps-bar" id="tkStepsBar">
-      <div class="tk-step ts-done" data-step="0">
-        <div class="tk-dot">✓</div>
-        <div class="tk-step-lbl">Order<br>Placed</div>
-      </div>
-      <div class="tk-step ts-done" data-step="1">
-        <div class="tk-dot">✓</div>
-        <div class="tk-step-lbl">Being<br>Packed</div>
-      </div>
-      <div class="tk-step ts-active" data-step="2">
-        <div class="tk-dot">🚚</div>
-        <div class="tk-step-lbl">In<br>Transit</div>
-      </div>
-      <div class="tk-step" data-step="3">
-        <div class="tk-dot">🏠</div>
-        <div class="tk-step-lbl">Delivered</div>
-      </div>
-    </div>
-
-    <!-- Glassmorphism Top Status Card -->
-    <div class="track-status-card">
-      <div class="tsc-left">
-        <div class="tsc-order" id="tscOrderId">Live Tracking</div>
-        <div class="tsc-status" id="tscStatus">📦 Waiting for order...</div>
-      </div>
-      <div class="tsc-right">
-        <div class="tsc-metric">
-          <span class="tsc-val" id="tscEta">—</span>
-          <span class="tsc-label">ETA</span>
-        </div>
-        <div class="tsc-metric">
-          <span class="tsc-val" id="tscDist">—</span>
-          <span class="tsc-label">km left</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Map with floating controls -->
-    <div class="map-wrap">
-      <div id="deliveryMap"></div>
-      <div id="gpsConfidence" class="gps-confidence">🟢 GPS</div>
-      <button id="marketLayerBtn" class="market-layer-btn" onclick="toggleMarketLayer()">🏪 Layer</button>
-      <button id="followDriverBtn" class="follow-driver-btn" onclick="enableFollowMode()">🎯 Follow Driver</button>
-    </div>
-
-    <!-- Live Stats Bar -->
-    <div class="live-stats-bar">
-      <div class="lsb-item"><span class="lsb-icon">📍</span><span class="lsb-val" id="riderDistance">— km</span><span class="lsb-label">Distance</span></div>
-      <div class="lsb-item"><span class="lsb-icon">⏱️</span><span class="lsb-val" id="riderEta">—</span><span class="lsb-label">ETA</span></div>
-      <div class="lsb-item"><span class="lsb-icon">💨</span><span class="lsb-val" id="statSpeed">— km/h</span><span class="lsb-label">Speed</span></div>
-      <div class="lsb-item"><span class="lsb-icon">🕐</span><span class="lsb-val" id="statUpdate">—</span><span class="lsb-label">Updated</span></div>
-    </div>
-    <!-- Status row below stats -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-      <span id="riderStatus" style="font-size:13px;font-weight:800;color:white;flex:1;">🟢 On the way</span>
-    </div>
-
-    <!-- Delivery Confidence Meter -->
-    <div class="confidence-bar">
-      <div class="conf-left">
-        <span id="confIcon" style="font-size:20px;">🟢</span>
-        <div>
-          <div class="conf-label">Arrival Confidence</div>
-          <div class="conf-val" id="confVal">High (95%)</div>
-        </div>
-      </div>
-      <div class="conf-bar-wrap">
-        <div class="conf-bar-fill" id="confFill" style="width:95%;background:#71ff00;"></div>
-      </div>
-    </div>
-
-    <!-- Offline banner -->
-    <div class="offline-banner" id="offlineBanner">
-      <span class="ob-icon">📶</span>
-      <span class="ob-text">No internet — showing last known position. Reconnecting...</span>
-      <button class="ob-retry" onclick="location.reload()">Retry</button>
-    </div>
-
-    <!-- Delivery Story Timeline -->
-    <div class="delivery-timeline" id="deliveryTimeline">
-      <div class="tl-step tl-done"><div class="tl-dot">✓</div><div class="tl-info"><div class="tl-label">Order Confirmed</div></div></div>
-      <div class="tl-step tl-done"><div class="tl-dot">✓</div><div class="tl-info"><div class="tl-label">Seller Packed</div></div></div>
-      <div class="tl-step tl-current"><div class="tl-dot">🚚</div><div class="tl-info"><div class="tl-label">In Transit</div></div></div>
-      <div class="tl-step"><div class="tl-dot">○</div><div class="tl-info"><div class="tl-label">Delivered</div></div></div>
-    </div>
-
-    <!-- Rider Communication Hub -->
-    <div class="rider-comm-hub">
-      <button class="rch-btn" onclick="riderCall()"><span class="rch-icon">📞</span><span class="rch-label">Call</span></button>
-      <button class="rch-btn" onclick="riderMessage()"><span class="rch-icon">💬</span><span class="rch-label">Message</span></button>
-      <button class="rch-btn" onclick="shareTracking()"><span class="rch-icon">📍</span><span class="rch-label">Share</span></button>
-    </div>
-
-    <!-- Share Tracking Link -->
-    <div class="share-track-bar" id="shareTrackBar" style="display:none;">
-      <span class="stb-link" id="shareTrackLink">mysokoni.co.ke/track/—</span>
-      <button class="stb-copy" onclick="copyTrackLink()">📋 Copy</button>
-    </div>
-
-    <!-- Delivery Completion Experience -->
-    <div class="delivery-complete" id="deliveryComplete">
-      <div class="dc-emoji">🎉</div>
-      <div class="dc-title">Delivered!</div>
-      <div class="dc-sub" id="dcSub">Your order has arrived. Hope you love it!</div>
-      <div class="dc-btns">
-        <button class="dc-btn dc-btn-rate" onclick="rateRider()">⭐ Rate Rider</button>
-        <button class="dc-btn dc-btn-reorder" onclick="reorder()">🔄 Reorder</button>
-        <button class="dc-btn dc-btn-contact" onclick="contactSeller()">💬 Seller</button>
-      </div>
-    </div>
-
-    <p id="mapAddress" class="map-address" style="display:none;"></p>
-  </div>
-
-</section>
-
-<nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Categories</span></a>
-  <a href="flashsale.html" class="bnav-item bnav-flash"><span class="bnav-emoji">⚡</span><span>Deals</span></a>
-  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
-  <a href="profile.html" class="bnav-item active-bnav"><span class="bnav-emoji">👤</span><span>Profile</span></a>
-</nav>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';document.head.appendChild(s);"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="sokoni-config.js"></script>
 <script>
-  let map = null;
+'use strict';
 
-  /* ═══════════════════════════════════════════════════════════
-     SOKONI PREMIUM MAP STATE
-  ═══════════════════════════════════════════════════════════ */
-  const _driver = { lat:null, lng:null, bearing:0, speed:0, animFrame:null, marker:null, followMode:true };
-  const _dest   = { lat:null, lng:null };
-  let _routeCompleted = null, _routeRemaining = null, _destMarker = null;
-  let _marketLayer = null, _marketVisible = false, _simInterval = null;
+var _map=null,_riderM=null,_destM=null,_polling=null,_code=null;
+var HAV=function(a,b,c,d){var R=6371,dL=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180,x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));};
 
-  /* Expose smooth-move API for Firestore GPS listener */
-  window._moveLiveDriver = function(lat,lng){
-    if(!map||!lat||!lng) return;
-    animateDriverTo(lat,lng,2500);
-    updateLiveStats(lat,lng);
-    if(typeof _postUpdate==='function') _postUpdate(lat,lng);
-    updateGPSTimestamp();
-    const gpsEl=document.getElementById('gpsConfidence');
-    if(gpsEl) gpsEl.textContent='🟢 GPS';
-  };
+function _cf(n){return firebase.functions().httpsCallable(n);}
 
-  /* ── Preview map (page load before any order) ── */
-  function initPreviewMap(){
-    const mc=document.getElementById("mapContainer");
-    if(!mc) return;
-    mc.style.display="block";
-    setTimeout(()=>{
-      if(map) return;
-      try{
-        /* Nairobi CBD — preview centre */
-        const CBD = [-1.2864, 36.8172];
-        map=L.map("deliveryMap",{fadeAnimation:false,zoomAnimation:false,zoomControl:false})
-              .setView(CBD, 14);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:19}).addTo(map);
-        L.control.zoom({position:'bottomright'}).addTo(map);
+/* ── Map ── */
+_map=L.map('map',{zoomControl:false,attributionControl:false});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(_map);
+L.control.zoom({position:'bottomright'}).addTo(_map);
+_map.setView([1.2921,36.8219],13);
 
-        /* Destination pin */
-        const destIc=L.divIcon({className:"",
-          html:`<div style="font-size:28px;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.6));">📦</div>`,
-          iconSize:[32,32],iconAnchor:[16,28]});
-        const destMark=L.marker(CBD,{icon:destIc}).addTo(map);
-        destMark.bindPopup('<b>📦 Your Delivery Destination</b><br><small style="color:#888">Enter an order ID to track live</small>').openPopup();
+function _riderMarker(){
+  if(_riderM) return _riderM;
+  _riderM=L.marker([1.2921,36.8219],{
+    icon:L.divIcon({className:'',html:'<div style="width:44px;height:44px;background:#71ff00;border:3px solid #000;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 3px 10px rgba(0,0,0,.4)">🏍</div>',iconSize:[44,44],iconAnchor:[22,22]}),
+    zIndexOffset:1000
+  }).addTo(_map);
+  return _riderM;
+}
 
-        /* Animated rider using setInterval smooth movement along a route */
-        const ic=L.divIcon({className:"",
-          html:`<div class="driver-icon-root"><div class="driver-vehicle">🛵</div><div class="driver-pulse"></div><div class="driver-pulse-2"></div></div>`,
-          iconSize:[52,52],iconAnchor:[26,26]});
+/* ── Poll ── */
+function _poll(){
+  _cf('navGetCustomerTracking')({trackingCode:_code}).then(function(r){
+    _render(r.data);
+    document.getElementById('loadScreen').style.display='none';
+  }).catch(function(e){
+    document.getElementById('loadScreen').innerHTML='<div style="text-align:center;padding:24px"><p style="font-size:18px;margin-bottom:8px">⚠ '+e.message+'</p><a href="profile.html" style="color:var(--accent);font-size:13px">My Orders</a></div>';
+  });
+}
 
-        /* Demo route: a loop around Nairobi CBD */
-        const routePts = [
-          [-1.2720, 36.8100], [-1.2741, 36.8145], [-1.2760, 36.8172],
-          [-1.2780, 36.8190], [-1.2810, 36.8210], [-1.2835, 36.8195],
-          [-1.2850, 36.8175], [-1.2860, 36.8160], [-1.2868, 36.8170],
-          [-1.2864, 36.8172],
-        ];
+var STATUS_LABELS={pending:'🕐 Finding a rider',assigned:'🏍 Rider assigned',en_route_pickup:'🏍 Heading to pickup',arrived_pickup:'📦 Collecting your order',en_route_delivery:'🏍 On the way to you!',arrived_delivery:'📍 Rider at your door',completed:'✅ Delivered!',cancelled:'❌ Cancelled'};
+var TL_MAP={pending:'confirmed',assigned:'assigned',en_route_pickup:'en_route',arrived_pickup:'en_route',en_route_delivery:'nearby',arrived_delivery:'nearby',completed:'delivered',cancelled:'confirmed'};
 
-        let ptIdx = 0;
-        const previewMarker = L.marker(routePts[0], {icon:ic}).addTo(map);
-        previewMarker.bindPopup('🛵 Live demo — track your real order above');
+function _render(d){
+  var status=d.status||'assigned';
+  document.getElementById('hdrStatus').textContent=STATUS_LABELS[status]||status;
+  document.getElementById('hdrOrder').textContent='Code: '+_code;
 
-        if(_simInterval) clearInterval(_simInterval);
-        _simInterval = setInterval(()=>{
-          if(!map) { clearInterval(_simInterval); return; }
-          ptIdx = (ptIdx + 1) % routePts.length;
-          const [lat, lng] = routePts[ptIdx];
-          previewMarker.setLatLng([lat, lng]);
-          if(ptIdx === 0) map.panTo(routePts[0], {animate:true,duration:0.8});
-        }, 1200);
-
-        /* Add a dashed line showing the demo route */
-        L.polyline(routePts, {
-          color:'rgba(113,255,0,0.45)', weight:3, dashArray:'8 6', lineCap:'round'
-        }).addTo(map);
-
-        [100,300,700,1400].forEach(ms=>setTimeout(()=>map&&map.invalidateSize(true),ms));
-        window.addEventListener("resize",()=>{ map&&map.invalidateSize(true); });
-        screen.orientation&&screen.orientation.addEventListener("change",()=>{ setTimeout(()=>{ map&&map.invalidateSize(true); },300); });
-        window.addEventListener("orientationchange",()=>{ setTimeout(()=>{ map&&map.invalidateSize(true); },500); });
-
-      }catch(e){ console.warn("Preview map:",e); }
-    },200);
+  var rider=d.riderInfo;
+  if(rider){
+    document.getElementById('riderName').textContent=(rider.firstName||'Rider')+' (your rider)';
+    document.getElementById('riderRating').textContent=rider.rating?'★ '+parseFloat(rider.rating).toFixed(1):'';
+    document.getElementById('riderVehicle').textContent=rider.vehicle||'';
+    if(rider.photo) document.getElementById('riderAvatar').innerHTML='<img src="'+rider.photo+'" alt="Rider">';
   }
 
-  const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
-
-  function loadOrders() {
-    const list = document.getElementById("myOrdersList");
-    if(!list) return;
-
-    const loggedIn = localStorage.getItem("loggedIn") === "true";
-    if (!loggedIn) {
-      list.innerHTML = `<div class="track-empty">
-        <div style="font-size:48px;margin-bottom:12px;">🔒</div>
-        <h3>Sign in to view your orders</h3>
-        <p>Your order history is private and requires an account.</p>
-        <a href="login.html?next=track.html" class="cart-shop-now-btn" style="margin-top:16px;display:inline-block;">Sign In</a>
-      </div>`;
-      return;
-    }
-
-    let orders = [];
-    try { orders = JSON.parse(localStorage.getItem("sokoniOrders")) || []; } catch(e) {}
-
-    if(orders.length === 0) {
-      list.innerHTML = `<div class="track-empty">
-        <div style="font-size:48px;margin-bottom:12px;">📦</div>
-        <h3>📦 No orders yet</h3>
-        <p>Your orders will appear here after checkout</p>
-        <a href="index.html" class="cart-shop-now-btn" style="margin-top:16px;display:inline-block;">Start Shopping</a>
-      </div>`;
-      return;
-    }
-
-    list.innerHTML = orders.map(o => `
-      <div class="order-summary-card" onclick="showOrderDetail('${_esc(o.id)}')">
-        <div class="osc-left">
-          <div class="osc-id">${_esc(o.id)}</div>
-          <div class="osc-date">${_esc(o.date)}</div>
-          <div class="osc-items">${o.items ? o.items.length : 0} item(s)</div>
-        </div>
-        <div class="osc-right">
-          <div class="osc-total">KES ${Number(o.total||0).toLocaleString()}</div>
-          <div class="osc-status status-${_esc(o.status)}">${formatStatus(o.status)}</div>
-          <span class="osc-view-btn">View Details →</span>
-        </div>
-      </div>
-    `).join("");
-  }
-
-  function formatStatus(s) {
-    const map = { placed:"✅ Placed", processing:"⚙️ Processing", shipped:"🚚 Shipped", out_for_delivery:"🛵 Out for Delivery", delivered:"📦 Delivered" };
-    return map[s] || s;
-  }
-
-  function showTrackMsg(msg, type) {
-    const el = document.getElementById("trackMsg");
-    if (!el) return;
-    const colors = { error: 'rgba(255,60,60,0.12)', success: 'rgba(113,255,0,0.1)', info: 'rgba(0,170,255,0.1)' };
-    const borders = { error: 'rgba(255,60,60,0.25)', success: 'rgba(113,255,0,0.25)', info: 'rgba(0,170,255,0.25)' };
-    const textCol = { error: '#ff6b6b', success: '#71ff00', info: '#00aaff' };
-    el.style.display = 'block';
-    el.style.background = colors[type] || colors.info;
-    el.style.border = '1px solid ' + (borders[type] || borders.info);
-    el.style.color = textCol[type] || textCol.info;
-    el.textContent = msg;
-    clearTimeout(el._hideTimer);
-    el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, 4000);
-  }
-
-  function setTrackBtnLoading(loading) {
-    const btn = document.getElementById("trackBtn");
-    const txt = document.getElementById("trackBtnText");
-    const spin = document.getElementById("trackBtnSpinner");
-    if (!btn) return;
-    btn.disabled = loading;
-    if (txt) txt.style.display = loading ? 'none' : '';
-    if (spin) spin.style.display = loading ? '' : 'none';
-  }
-
-  function seedDemoOrder() {
-    const demo = {
-      id: "SKN-DEMO01",
-      date: new Date().toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }),
-      items: [
-        { name: "Samsung Galaxy A54 5G", price: 42000, image: "assets/default-product.png" },
-        { name: "Phone Case (Clear)", price: 350, image: "assets/default-product.png" }
-      ],
-      total: 42350,
-      status: "out_for_delivery",
-      address: "Westlands, Nairobi",
-      steps: [
-        { label: "Order Placed",       done: true,  time: "Today, 08:30 AM" },
-        { label: "Processing",         done: true,  time: "Today, 09:15 AM" },
-        { label: "Shipped",            done: true,  time: "Today, 10:45 AM" },
-        { label: "Out for Delivery",   done: true,  time: "Today, 12:20 PM" },
-        { label: "Delivered",          done: false, time: "" }
-      ],
-      location: { lat: -1.2641, lng: 36.8028, address: "Westlands, Nairobi" }
-    };
-    let orders = [];
-    try { orders = JSON.parse(localStorage.getItem("sokoniOrders")) || []; } catch(e) {}
-    if (!orders.find(o => o.id === demo.id)) {
-      orders.unshift(demo);
-      localStorage.setItem("sokoniOrders", JSON.stringify(orders));
-    }
-    return demo.id;
-  }
-
-  function tryDemoTrack() {
-    const demoId = seedDemoOrder();
-    const input = document.getElementById("trackInput");
-    if (input) input.value = demoId;
-    showTrackMsg("📦 Demo order loaded — scroll down to see live tracking!", "success");
-    searchOrder();
-  }
-
-  function searchOrder() {
-    const input = document.getElementById("trackInput");
-    const id = (input?.value || "").trim().toUpperCase();
-
-    if (!id) {
-      // Shake the input for feedback
-      if (input) {
-        input.style.transition = "transform 0.1s";
-        input.style.transform = "translateX(6px)";
-        setTimeout(() => { input.style.transform = "translateX(-6px)"; }, 100);
-        setTimeout(() => { input.style.transform = ""; }, 200);
-      }
-      showTrackMsg("⚠️ Please enter your Order ID first!", "error");
-      return;
-    }
-
-    setTrackBtnLoading(true);
-    setTimeout(() => {
-      let orders = [];
-      try { orders = JSON.parse(localStorage.getItem("sokoniOrders")) || []; } catch(e) {}
-      const order = orders.find(o => o.id.toUpperCase() === id);
-      setTrackBtnLoading(false);
-      if (order) {
-        showTrackMsg("✅ Order found! See details below.", "success");
-        showOrderDetail(order.id);
-      } else {
-        showTrackMsg("🔍 Order not found for ID: " + id + " — check and try again, or click Try Demo Track.", "error");
-        // Highlight input
-        if (input) {
-          input.style.borderColor = "#ff6b6b";
-          setTimeout(() => { input.style.borderColor = ""; }, 2000);
-        }
-      }
-    }, 400);
-  }
-
-  function showOrderDetail(orderId) {
-    let orders = [];
-    try { orders = JSON.parse(localStorage.getItem("sokoniOrders")) || []; } catch(e) {}
-    const o = orders.find(o => o.id === orderId);
-    if(!o) return;
-
-    const panel = document.getElementById("orderDetail");
-    panel.style.display = "block";
-    panel.scrollIntoView({ behavior:"smooth" });
-
-    const steps = o.steps || [
-      { label:"Order Placed", done:true, time:"" },
-      { label:"Processing", done:false, time:"" },
-      { label:"Shipped", done:false, time:"" },
-      { label:"Out for Delivery", done:false, time:"" },
-      { label:"Delivered", done:false, time:"" }
-    ];
-
-    const stepsHTML = steps.map((s, i) => `
-      <div class="track-step ${s.done ? "step-done" : "step-pending"}">
-        <div class="step-dot">${s.done ? "✓" : i+1}</div>
-        <div class="step-info">
-          <div class="step-label">${s.label}</div>
-          ${s.time ? `<div class="step-time">${s.time}</div>` : ""}
-        </div>
-      </div>
-    `).join("");
-
-    const itemsHTML = (o.items || []).map(p => `
-      <div class="track-item-card">
-        <img loading="lazy" src="${p.image || 'assets/default-product.png'}" alt="${p.name}">
-        <div>
-          <div class="tic-name">${p.name}</div>
-          <div class="tic-price">KES ${Number(p.price).toLocaleString()}</div>
-        </div>
-      </div>
-    `).join("");
-
-    panel.innerHTML = `
-      <div class="detail-header">
-        <div>
-          <h2>Order ${o.id}</h2>
-          <p class="detail-date">${o.date} · ${(o.items||[]).length} item(s)</p>
-        </div>
-        <div class="detail-total">KES ${Number(o.total).toLocaleString()}</div>
-      </div>
-
-      <div class="track-steps">${stepsHTML}</div>
-
-      <h3 style="color:white;margin:24px 0 12px;">🛍️ Items in this order</h3>
-      <div class="track-items">${itemsHTML}</div>
-
-      <div class="detail-actions">
-        <button type="button" class="detail-msg-btn" onclick="window.location.href='messages.html'">
-          💬 Message Seller
-        </button>
-        <button type="button" class="detail-msg-btn" style="background:rgba(255,152,0,0.12);border-color:rgba(255,152,0,0.3);color:#ff9800;" onclick="window.location.href='dispute.html?order=${o.id}'">
-          ⚠️ Report Issue
-        </button>
-        <button type="button" class="detail-close-btn" onclick="document.getElementById('orderDetail').style.display='none'">
-          Close
-        </button>
-      </div>
-    `;
-
-    /* Show premium map if location exists */
-    if(o.location && o.location.lat) {
-      showMap(o.location, o.id, o.steps);
+  var loc=d.riderLocation;
+  if(loc&&loc.lat&&loc.lng){
+    var ll=[loc.lat,loc.lng];
+    _riderMarker().setLatLng(ll);
+    if(!_destM) _map.panTo(ll,{animate:true});
+    if(_destM){
+      var dl=_destM.getLatLng();
+      var km=HAV(loc.lat,loc.lng,dl.lat,dl.lng);
+      var mins=Math.max(1,Math.round(km/0.45)); // ~27 km/h city average
+      var arr=new Date(Date.now()+mins*60000);
+      document.getElementById('etaArrVal').textContent=arr.toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('etaDistVal').textContent=km.toFixed(1)+' km';
     }
   }
 
-  /* ═══════════════════════════════════════════════════════════
-     showMap — delegates to TrackingManager module;
-     falls back to legacy inline implementation if module
-     import fails (e.g. very old browser, file:// protocol)
-  ═══════════════════════════════════════════════════════════ */
-  async function showMap(location, orderId, steps) {
-    const mc = document.getElementById("mapContainer");
-    mc.style.display = "block";
-
-    _dest.lat = location.lat;
-    _dest.lng = location.lng;
-
-    /* Destroy any previous tracking session */
-    if (window.SokoniTracking) {
-      window.SokoniTracking.destroy();
-      window.SokoniTracking = null;
-    }
-
-    /* Remove the preview map (initPreviewMap sets the local `map` variable).
-       Must clear it before TrackingManager inits or Leaflet throws
-       "Map container is already initialized". */
-    if (map) { try { map.remove(); } catch(e) {} map = null; }
-    if (window.map) { try { window.map.remove(); } catch(e) {} window.map = null; }
-
-    /* Let browser paint the now-visible container before Leaflet measures it */
-    await new Promise(r => setTimeout(r, 80));
-    mc.scrollIntoView({ behavior: "smooth" });
-
-    try {
-      const { TrackingManager } = await import('./sokoni-tracking-manager.js');
-      window.SokoniTracking = new TrackingManager();
-      await window.SokoniTracking.startTracking(
-        {
-          driverLat: location.lat + 0.014,
-          driverLng: location.lng - 0.010,
-          destLat:   location.lat,
-          destLng:   location.lng,
-        },
-        orderId,
-        steps || null
-      );
-    } catch (e) {
-      console.warn('TrackingManager unavailable, using legacy map:', e);
-      _showMapLegacy(location, orderId, steps);
-    }
-  }
-
-  /* ── Legacy fallback (kept intact for compatibility) ── */
-  function _showMapLegacy(location, orderId, steps) {
-    const mc = document.getElementById("mapContainer");
-    mc.style.display = "block";
-    mc.scrollIntoView({ behavior:"smooth" });
-
-    _dest.lat = location.lat;
-    _dest.lng = location.lng;
-
-    updateStatusCard(orderId, steps);
-    buildTimeline(steps || [
-      { label:"Order Confirmed", done:true,  time:"" },
-      { label:"Seller Packed",   done:true,  time:"" },
-      { label:"In Transit",      done:true,  time:"" },
-      { label:"Delivered",       done:false, time:"" }
-    ]);
-
-    setTimeout(()=>{
-      /* Clean up previous map */
-      if(map){ map.remove(); map=null; }
-      if(_simInterval){ clearInterval(_simInterval); _simInterval=null; }
-      if(_driver.animFrame){ cancelAnimationFrame(_driver.animFrame); _driver.animFrame=null; }
-      _driver.marker=null; _routeCompleted=null; _routeRemaining=null; _destMarker=null;
-
-      map = L.map("deliveryMap",{
-        fadeAnimation:false,zoomAnimation:false,zoomControl:false,
-        center:[_dest.lat+0.007,_dest.lng-0.005],zoom:13
-      });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
-        attribution:"© OpenStreetMap contributors",maxZoom:19,detectRetina:false
-      }).addTo(map);
-      L.control.zoom({position:'bottomright'}).addTo(map);
-
-      /* Multi-shot invalidateSize: iOS Safari blank tile fix */
-      [100,300,700,1400,2500].forEach(ms=>setTimeout(()=>map&&map.invalidateSize(true),ms));
-      window.addEventListener('resize',()=>{ map&&map.invalidateSize(true); });
-      screen.orientation&&screen.orientation.addEventListener('change',()=>{ setTimeout(()=>{ map&&map.invalidateSize(true); },300); });
-      window.addEventListener('orientationchange',()=>{ setTimeout(()=>{ map&&map.invalidateSize(true); },500); });
-
-      /* Destination marker with pulse */
-      const destIcon=L.divIcon({className:'',
-        html:'<div class="dest-marker-wrap"><span class="dest-marker-pin">📦</span><div class="dest-pulse"></div></div>',
-        iconSize:[44,44],iconAnchor:[22,22]});
-      _destMarker=L.marker([_dest.lat,_dest.lng],{icon:destIcon}).addTo(map);
-      _destMarker.bindPopup('<b style="font-size:13px">📦 Your Delivery Location</b>');
-
-      /* Driver starting position — ~1.8 km north-west of destination (Bezier start point) */
-      _driver.lat   = _dest.lat + 0.014;
-      _driver.lng   = _dest.lng - 0.010;
-      _driver.bearing = calcBearing(_driver.lat,_driver.lng,_dest.lat,_dest.lng);
-      _driver.speed = 28;
-      _driver.followMode = true;
-
-      /* Hide "Follow Driver" button — already following */
-      const fb=document.getElementById('followDriverBtn');
-      if(fb) fb.style.display='none';
-
-      /* Driver marker with pulse rings */
-      _driver.marker=L.marker([_driver.lat,_driver.lng],{icon:createDriverIcon(_driver.bearing),zIndexOffset:1000}).addTo(map);
-      _driver.marker.bindPopup('<b style="font-size:13px">🛵 Your Rider</b>');
-
-      /* Route: completed (solid faded) grows from start; remaining (dashed bright) shrinks to destination */
-      _routeCompleted=L.polyline([[_driver.lat,_driver.lng]],{color:'#71ff00',weight:5,opacity:0.28}).addTo(map);
-      _routeRemaining=L.polyline([[_driver.lat,_driver.lng],[_dest.lat,_dest.lng]],{
-        color:'#71ff00',weight:4,dashArray:'12,8',opacity:0.82
-      }).addTo(map);
-
-      /* Build marketplace layer (hidden until toggled) */
-      buildMarketLayer();
-
-      /* Customer-friendly auto-zoom: fit both driver + destination */
-      fitToBounds();
-
-      /* Disable follow mode on user drag */
-      map.on('dragstart',()=>{
-        if(_driver.followMode){
-          _driver.followMode=false;
-          const btn=document.getElementById('followDriverBtn');
-          if(btn) btn.style.display='flex';
-        }
-      });
-
-      /* Start simulated driver movement */
-      startDriverSimulation();
-      updateLiveStats(_driver.lat,_driver.lng);
-    },300);
-  }
-
-  /* ── Driver icon: direction-aware rotation + dual pulse rings ── */
-  function createDriverIcon(bearing){
-    return L.divIcon({className:'',
-      html:`<div class="driver-icon-root"><div class="driver-vehicle" style="transform:rotate(${Math.round(bearing)}deg)">🛵</div><div class="driver-pulse"></div><div class="driver-pulse-2"></div></div>`,
-      iconSize:[52,52],iconAnchor:[26,26]});
-  }
-
-  /* ── Smooth marker animation via requestAnimationFrame (ease-in-out quad) ── */
-  function animateDriverTo(toLat,toLng,durationMs){
-    if(!_driver.marker) return;
-    const fromLat=_driver.lat, fromLng=_driver.lng;
-    const t0=performance.now();
-
-    /* Update bearing + speed from position delta */
-    if(Math.abs(fromLat-toLat)>1e-7||Math.abs(fromLng-toLng)>1e-7){
-      _driver.bearing=calcBearing(fromLat,fromLng,toLat,toLng);
-      const dM=Math.sqrt(Math.pow((toLat-fromLat)*111000,2)+Math.pow((toLng-fromLng)*111000*Math.cos(fromLat*Math.PI/180),2));
-      _driver.speed=Math.min(80,Math.round(dM/(durationMs/1000)*3.6));
-    }
-
-    if(_driver.animFrame) cancelAnimationFrame(_driver.animFrame);
-
-    function step(now){
-      const t=Math.min(1,(now-t0)/durationMs);
-      const e=t<.5?2*t*t:-1+(4-2*t)*t; /* ease-in-out quad */
-      const lat=fromLat+(toLat-fromLat)*e;
-      const lng=fromLng+(toLng-fromLng)*e;
-
-      _driver.marker.setLatLng([lat,lng]);
-      _driver.marker.setIcon(createDriverIcon(_driver.bearing));
-
-      /* Remaining route shrinks toward destination */
-      if(_routeRemaining) _routeRemaining.setLatLngs([[lat,lng],[_dest.lat,_dest.lng]]);
-
-      /* Follow driver mode — smooth pan */
-      if(_driver.followMode&&map) map.panTo([lat,lng],{animate:true,duration:0.4,easeLinearity:0.5});
-
-      if(t<1){ _driver.animFrame=requestAnimationFrame(step); }
-      else { _driver.lat=toLat; _driver.lng=toLng; }
-    }
-    _driver.animFrame=requestAnimationFrame(step);
-  }
-
-  /* ── Bearing (degrees 0–360) from two lat/lng points ── */
-  function calcBearing(lat1,lng1,lat2,lng2){
-    const φ1=lat1*Math.PI/180, φ2=lat2*Math.PI/180;
-    const Δλ=(lng2-lng1)*Math.PI/180;
-    return(Math.atan2(Math.sin(Δλ)*Math.cos(φ2),Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ))*180/Math.PI+360)%360;
-  }
-
-  /* ── Simulated driver movement along a curved Bezier path ── */
-  function startDriverSimulation(){
-    const TOTAL=35, startLat=_driver.lat, startLng=_driver.lng;
-    let step=0;
-    /* Bezier control point — slight curve makes movement feel natural */
-    const cpLat=startLat+(_dest.lat-startLat)*0.5-0.004;
-    const cpLng=startLng+(_dest.lng-startLng)*0.5+0.006;
-    /* Track the breadcrumb path for the completed-route ribbon */
-    const completedPath=[[startLat,startLng]];
-
-    _simInterval=setInterval(()=>{
-      if(step>=TOTAL||!map){ clearInterval(_simInterval); return; }
-      step++;
-      const t=step/TOTAL;
-      /* Quadratic Bezier: P = (1-t)²·P0 + 2(1-t)t·CP + t²·P1 */
-      const newLat=(1-t)*(1-t)*startLat+2*(1-t)*t*cpLat+t*t*_dest.lat;
-      const newLng=(1-t)*(1-t)*startLng+2*(1-t)*t*cpLng+t*t*_dest.lng;
-
-      /* Grow the completed (faded solid) route segment */
-      completedPath.push([newLat,newLng]);
-      if(_routeCompleted) _routeCompleted.setLatLngs(completedPath);
-
-      animateDriverTo(newLat,newLng,2600);
-      updateLiveStats(newLat,newLng);
-      _postUpdate(newLat,newLng);
-      updateGPSTimestamp();
-
-      /* GPS confidence — occasional yellow flash simulates signal variation */
-      const gpsEl=document.getElementById('gpsConfidence');
-      if(gpsEl) gpsEl.textContent=(step%9===0)?'🟡 GPS':'🟢 GPS';
-
-      /* Delivery complete when arrived */
-      if(t>=1){
-        const s=document.getElementById('riderStatus'); if(s) s.textContent='✅ Arrived';
-        const c=document.getElementById('tscStatus');   if(c) c.textContent='✅ Delivered!';
-        if(window._setStepBar) window._setStepBar(3);
-      }
-    },2800);
-  }
-
-  /* ── Live stats updater ── */
-  function updateLiveStats(dLat,dLng){
-    if(!_dest.lat) return;
-    const lat=dLat!=null?dLat:_driver.lat, lng=dLng!=null?dLng:_driver.lng;
-    if(!lat) return;
-    const straightKm=Math.sqrt(Math.pow(_dest.lat-lat,2)+Math.pow(_dest.lng-lng,2))*111;
-    const km=(straightKm*1.3).toFixed(1); /* road-distance factor: roads are ~1.3× straight-line */
-    const speedKmh=Math.max(_driver.speed||18,8); /* use live speed or 18 km/h urban default */
-    const etaMins=Math.max(0,Math.round(parseFloat(km)/(speedKmh/60)));
-    const s=id=>document.getElementById(id);
-    const set=(id,v)=>{ const e=s(id); if(e) e.textContent=v; };
-    set('riderStatus', parseFloat(km)<0.12?'✅ Arrived':'🟢 On the way');
-    set('riderDistance', km+' km');
-    set('riderEta', etaMins>0?etaMins+' min':'Arriving!');
-    set('statSpeed', (_driver.speed||0)+' km/h');
-    set('tscEta', etaMins>0?etaMins+' min':'Now!');
-    set('tscDist', km+' km');
-  }
-
-  let _lastUpdateMs = 0;
-  function updateGPSTimestamp(){
-    _lastUpdateMs = Date.now();
-    const el = document.getElementById('statUpdate');
-    if(el) el.textContent = 'just now';
-  }
-
-  /* Live "X sec ago" counter — updates every second */
-  setInterval(()=>{
-    if(!_lastUpdateMs) return;
-    const el = document.getElementById('statUpdate');
-    if(!el) return;
-    const secs = Math.round((Date.now()-_lastUpdateMs)/1000);
-    el.textContent = secs < 5 ? 'just now' : secs + 's ago';
-    /* Turn yellow if stale >15s (GPS quality degraded) */
-    el.style.color = secs > 15 ? '#ffc107' : 'white';
-    const gps = document.getElementById('gpsConfidence');
-    if(gps && secs > 20) gps.textContent = '🟡 GPS';
-    else if(gps && secs <= 20 && !_isOffline) gps.textContent = '🟢 GPS';
-  }, 1000);
-
-  /* ── Follow Driver mode ── */
-  function enableFollowMode(){
-    if(window.SokoniTracking){ window.SokoniTracking.enableFollowMode(); return; }
-    _driver.followMode=true;
-    const btn=document.getElementById('followDriverBtn');
-    if(btn) btn.style.display='none';
-    if(map&&_driver.lat) map.setView([_driver.lat,_driver.lng],15,{animate:true});
-  }
-
-  /* ── Customer-friendly auto-zoom: show driver + destination ── */
-  function fitToBounds(){
-    if(!map||!_driver.lat||!_dest.lat) return;
-    map.fitBounds(L.latLngBounds([[_driver.lat,_driver.lng],[_dest.lat,_dest.lng]]),{padding:[60,60],animate:true,duration:0.5});
-  }
-
-  /* ── Sokoni Marketplace Layer ── */
-  function buildMarketLayer(){
-    if(!_dest.lat) return;
-    const pts=[
-      {lat:_dest.lat+0.009,lng:_dest.lng-0.006,name:'Sokoni Hub — CBD',       type:'hub',   r:900},
-      {lat:_dest.lat-0.006,lng:_dest.lng+0.008,name:'Sokoni Pickup Point',    type:'pickup',r:400},
-      {lat:_dest.lat+0.004,lng:_dest.lng+0.010,name:'Verified Seller 🏅',    type:'seller', r:250},
-      {lat:_dest.lat-0.010,lng:_dest.lng-0.003,name:'Delivery Hub Westlands', type:'hub',   r:1100},
-    ];
-    const clr={hub:'#71ff00',pickup:'#00aaff',seller:'#ff9800'};
-    _marketLayer=L.layerGroup();
-
-    /* Soft delivery zone polygons for each point */
-    pts.forEach(p=>{
-      const c=clr[p.type]||'#71ff00';
-      L.circle([p.lat,p.lng],{
-        radius:p.r, color:c, weight:1.5,
-        fillColor:c, fillOpacity:0.05, dashArray:'6,5'
-      }).addTo(_marketLayer);
-    });
-
-    /* Broader service boundary covering the whole area */
-    const cx=_dest.lat+0.001, cy=_dest.lng+0.003;
-    L.circle([cx,cy],{
-      radius:2200, color:'#71ff00', weight:1, opacity:0.3,
-      fillColor:'#71ff00', fillOpacity:0.02, dashArray:'8,8'
-    }).addTo(_marketLayer).bindPopup('<b style="font-size:12px">📦 Sokoni Delivery Zone</b>');
-
-    /* Marker icons on top */
-    pts.forEach(p=>{
-      const ic=L.divIcon({className:'',
-        html:`<div class="market-point" style="border-color:${clr[p.type]||'#71ff00'}">${p.type==='hub'?'🏪':p.type==='pickup'?'📦':'✅'}</div>`,
-        iconSize:[32,32],iconAnchor:[16,16]});
-      L.marker([p.lat,p.lng],{icon:ic}).addTo(_marketLayer).bindPopup(`<b style="font-size:13px">${p.name}</b>`);
-    });
-  }
-
-  function toggleMarketLayer(){
-    if(window.SokoniTracking){ window.SokoniTracking.toggleMarketLayer(); return; }
-    if(!map||!_marketLayer) return;
-    _marketVisible=!_marketVisible;
-    const btn=document.getElementById('marketLayerBtn');
-    if(_marketVisible){ _marketLayer.addTo(map); btn&&btn.classList.add('active'); }
-    else { map.removeLayer(_marketLayer); btn&&btn.classList.remove('active'); }
-  }
-
-  /* ── Status card updater ── */
-  function updateStatusCard(orderId,steps){
-    const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
-    if(orderId) set('tscOrderId','Order #'+orderId);
-    if(steps&&steps.length){
-      let curIdx=-1;
-      for(let i=0;i<steps.length-1;i++){ if(steps[i].done&&!steps[i+1].done){ curIdx=i; break; } }
-      if(curIdx>=0) set('tscStatus','🚚 '+steps[curIdx].label);
-      else if(steps[steps.length-1]?.done) set('tscStatus','✅ Delivered');
-      else set('tscStatus','📦 Processing');
-    }
-  }
-
-  /* ── Delivery story timeline builder ── */
-  function buildTimeline(steps){
-    const el=document.getElementById('deliveryTimeline');
-    if(!el||!steps) return;
-    el.innerHTML=steps.map((s,i)=>{
-      const isCurrent=s.done&&i+1<steps.length&&!steps[i+1].done;
-      const dot=s.done?(isCurrent?'🚚':'✓'):'○';
-      return `<div class="tl-step ${s.done?'tl-done':''} ${isCurrent?'tl-current':''}">
-        <div class="tl-dot">${dot}</div>
-        <div class="tl-info">
-          <div class="tl-label">${s.label}</div>
-          ${s.time?`<div class="tl-time">${s.time}</div>`:''}
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  window.enableFollowMode=enableFollowMode;
-  window.toggleMarketLayer=toggleMarketLayer;
-
-  /* ═══════════════════════════════════════════════════════════
-     DELIVERY CONFIDENCE METER
-     Based on GPS freshness + driver movement + distance
-  ═══════════════════════════════════════════════════════════ */
-  let _lastMoveTime = Date.now();
-  function updateConfidence(km){
-    const msSinceMove = Date.now() - _lastMoveTime;
-    let score = 95;
-    if(msSinceMove > 20000) score -= 20;
-    else if(msSinceMove > 10000) score -= 10;
-    if(parseFloat(km) > 3) score -= 5;
-    score = Math.max(30, Math.min(99, score));
-
-    const icon = score >= 80 ? '🟢' : score >= 55 ? '🟡' : '🔴';
-    const label = score >= 80 ? 'High' : score >= 55 ? 'Medium' : 'Low';
-    const color = score >= 80 ? '#71ff00' : score >= 55 ? '#ffc107' : '#ff4444';
-
-    const ci=document.getElementById('confIcon'), cv=document.getElementById('confVal'), cf=document.getElementById('confFill');
-    if(ci) ci.textContent=icon;
-    if(cv) cv.textContent=label+' ('+score+'%)';
-    if(cf){ cf.style.width=score+'%'; cf.style.background=color; }
-  }
-
-  /* ═══════════════════════════════════════════════════════════
-     SMART STATUS MESSAGES — human-readable, location-aware
-  ═══════════════════════════════════════════════════════════ */
-  const NAIROBI_ZONES=[
-    {lat:-1.2921,lng:36.8219,name:'Nairobi CBD'},
-    {lat:-1.2673,lng:36.8062,name:'Westlands'},
-    {lat:-1.2995,lng:36.7928,name:'Kikuyu Road'},
-    {lat:-1.3140,lng:36.8172,name:'Langata'},
-    {lat:-1.2415,lng:36.8866,name:'Kasarani'},
-    {lat:-1.3172,lng:36.8800,name:'South B'},
-    {lat:-1.2600,lng:36.8000,name:'Parklands'},
-  ];
-  function getNearestZone(lat,lng){
-    let best=NAIROBI_ZONES[0],bestD=Infinity;
-    NAIROBI_ZONES.forEach(z=>{
-      const d=Math.sqrt(Math.pow(z.lat-lat,2)+Math.pow(z.lng-lng,2));
-      if(d<bestD){bestD=d;best=z;}
-    });
-    return best.name;
-  }
-  const RIDER_NAMES=['James','Amina','Peter','Faith','Brian','Grace','Samuel'];
-  let _riderName = null;
-  function getSmartStatus(lat,lng,km,etaMins){
-    if(!_riderName) _riderName=RIDER_NAMES[Math.floor(Math.random()*RIDER_NAMES.length)];
-    if(parseFloat(km)<0.12) return '✅ '+_riderName+' has arrived!';
-    if(etaMins<=2) return '📍 '+_riderName+' is just around the corner!';
-    const zone=getNearestZone(lat,lng);
-    return '🚚 '+_riderName+' is near '+zone+'. Expected in '+etaMins+' min.';
-  }
-
-  /* Called after each GPS/simulation update — smart message + confidence */
-  function _postUpdate(lat,lng){
-    if(!_dest.lat||!lat) return;
-    const straightKm2=Math.sqrt(Math.pow(_dest.lat-lat,2)+Math.pow(_dest.lng-lng,2))*111;
-    const km=(straightKm2*1.3).toFixed(1);
-    const speedKmh2=Math.max(_driver.speed||18,8);
-    const etaMins=Math.max(0,Math.round(parseFloat(km)/(speedKmh2/60)));
-
-    /* Smart status message */
-    const smart=getSmartStatus(lat,lng,km,etaMins);
-    const tscStatus=document.getElementById('tscStatus');
-    if(tscStatus&&parseFloat(km)>0) tscStatus.textContent=smart;
-
-    /* Confidence meter */
-    updateConfidence(km);
-    _lastMoveTime=Date.now();
-
-    /* Delivery complete */
-    if(parseFloat(km)<0.12) showDeliveryComplete();
-  }
-
-  /* ═══════════════════════════════════════════════════════════
-     OFFLINE RESILIENCE — detect + restore + reconnect
-  ═══════════════════════════════════════════════════════════ */
-  let _isOffline = false;
-  function setOffline(offline){
-    if(_isOffline===offline) return;
-    _isOffline=offline;
-    const banner=document.getElementById('offlineBanner');
-    if(banner) banner.classList.toggle('show',offline);
-    const gpsEl=document.getElementById('gpsConfidence');
-    if(gpsEl) gpsEl.textContent=offline?'📵 Offline':'🟢 GPS';
-  }
-  window.addEventListener('online',()=>{ setOffline(false); if(map) map.invalidateSize(true); });
-  window.addEventListener('offline',()=>{ setOffline(true); });
-
-  /* ═══════════════════════════════════════════════════════════
-     VISIBILITY + TAB SWITCH — force invalidateSize on resume
-     Prevents gray/blank tiles after tab switch, PWA resume,
-     modal close, screen unlock on iOS/Android
-  ═══════════════════════════════════════════════════════════ */
-  document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='visible'&&map){
-      /* Multi-shot invalidateSize handles both immediate and delayed renders */
-      map.invalidateSize(true);
-      setTimeout(()=>{ map&&map.invalidateSize(true); },100);
-      setTimeout(()=>{ map&&map.invalidateSize(true); },400);
-      setTimeout(()=>{ map&&map.invalidateSize(true); },900);
-    }
+  // Timeline
+  var curr=TL_MAP[status]||'confirmed';
+  var order=['confirmed','assigned','en_route','nearby','delivered'];
+  var reached=false;
+  document.querySelectorAll('.tl-step').forEach(function(el){
+    el.classList.remove('done','active');
+    if(el.dataset.s===curr){el.classList.add('active');reached=true;}
+    else if(!reached) el.classList.add('done');
   });
 
-  /* Also re-center when page becomes visible if follow mode is on */
-  document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='visible'&&_driver.followMode&&_driver.lat&&map){
-      setTimeout(()=>{ map&&map.setView([_driver.lat,_driver.lng],map.getZoom(),{animate:false}); },300);
-    }
-  });
+  if(status==='completed'){clearInterval(_polling);document.getElementById('doneOverlay').classList.add('show');}
+}
 
-  /* Observe mapContainer visibility via IntersectionObserver (handles accordion/tab reveals) */
-  if(typeof IntersectionObserver!=='undefined'){
-    const obs=new IntersectionObserver(entries=>{
-      entries.forEach(e=>{ if(e.isIntersecting&&map){ map.invalidateSize(true); setTimeout(()=>{ map&&map.invalidateSize(true); },200); } });
-    },{threshold:0.1});
-    const mc=document.getElementById('mapContainer');
-    if(mc) obs.observe(mc);
-  }
+function _share(){
+  var url=location.href;
+  if(navigator.share) navigator.share({title:'Track my SOKONI delivery',url:url}).catch(function(){});
+  else if(navigator.clipboard) navigator.clipboard.writeText(url).then(function(){alert('Link copied!');});
+  else prompt('Copy tracking link:',url);
+}
 
-  /* ═══════════════════════════════════════════════════════════
-     RIDER COMMUNICATION HUB
-  ═══════════════════════════════════════════════════════════ */
-  function riderCall(){ window.location.href='tel:+254712345678'; }
-  function riderMessage(){ window.location.href='messages.html'; }
-  function shareTracking(){
-    const bar=document.getElementById('shareTrackBar');
-    if(!bar) return;
-    const orderId=(document.getElementById('tscOrderId')?.textContent||'').replace('Order #','').trim()||'unknown';
-    const url='mysokoni.co.ke/track/'+orderId;
-    document.getElementById('shareTrackLink').textContent=url;
-    bar.style.display=bar.style.display==='flex'?'none':'flex';
-    /* Try native share API */
-    if(navigator.share){
-      navigator.share({title:'Track my SOKONI order',text:'Follow my delivery: ',url:'https://'+url}).catch(()=>{});
-    }
-  }
-  function copyTrackLink(){
-    const link=document.getElementById('shareTrackLink')?.textContent||'';
-    if(navigator.clipboard){ navigator.clipboard.writeText('https://'+link).catch(()=>{}); }
-    const btn=document.querySelector('.stb-copy');
-    if(btn){ btn.textContent='✅ Copied!'; setTimeout(()=>{ btn.textContent='📋 Copy'; },2000); }
-  }
-  window.riderCall=riderCall;
-  window.riderMessage=riderMessage;
-  window.shareTracking=shareTracking;
-  window.copyTrackLink=copyTrackLink;
-
-  /* ═══════════════════════════════════════════════════════════
-     DELIVERY COMPLETION EXPERIENCE
-  ═══════════════════════════════════════════════════════════ */
-  let _deliveryCompleteShown = false;
-  function showDeliveryComplete(){
-    if(_deliveryCompleteShown) return;
-    _deliveryCompleteShown=true;
-    const el=document.getElementById('deliveryComplete');
-    if(!el) return;
-    const name=_riderName||'your rider';
-    const dcSub=document.getElementById('dcSub');
-    /* Phase 5: Show loyalty points earned */
-    let ptsEarned = 0;
-    try {
-      const urlId = new URLSearchParams(location.search).get('id') || '';
-      const orders = JSON.parse(localStorage.getItem('sokoniOrders') || '[]');
-      const order  = orders.find(function(o) { return o.id === urlId; });
-      if (order && order.total) ptsEarned = Math.max(1, Math.floor(Number(order.total) / 100));
-    } catch(e) {}
-    const ptsMsg = ptsEarned > 0 ? ' You earned <strong style="color:#71ff00;">+' + ptsEarned + ' pts</strong>!' : '';
-    if(dcSub) dcSub.innerHTML = 'Delivered by ' + name + '. Hope you love your order!' + ptsMsg;
-    el.classList.add('show');
-    /* Stop simulation */
-    if(_simInterval){ clearInterval(_simInterval); _simInterval=null; }
-    /* Confetti-style DOM animation — lightweight */
-    const particles=['🎉','✨','🎊','⭐','🟢'];
-    for(let i=0;i<8;i++){
-      const p=document.createElement('div');
-      p.textContent=particles[i%particles.length];
-      p.style.cssText='position:fixed;font-size:22px;pointer-events:none;z-index:9999;'
-        +'top:'+Math.random()*60+'%;left:'+Math.random()*100+'%;'
-        +'animation:confettiFall 2s ease-out forwards;opacity:1;';
-      document.body.appendChild(p);
-      setTimeout(()=>p.remove(),2200);
-    }
-  }
-  function rateRider(){
-    showTrackMsg('⭐ Thanks for rating '+(_riderName||'your rider')+'!','success');
-    const el=document.getElementById('deliveryComplete');
-    if(el) el.classList.remove('show');
-  }
-  /* Phase 5: Smart reorder — restores items to cart before navigating */
-  function reorder() {
-    const urlId = new URLSearchParams(location.search).get('id') ||
-                  new URLSearchParams(location.search).get('order') ||
-                  new URLSearchParams(location.search).get('orderId');
-    try {
-      const orders = JSON.parse(localStorage.getItem('sokoniOrders') || '[]');
-      const order  = orders.find(function(o) { return o.id === urlId || o.orderId === urlId; });
-      if (order && order.items && order.items.length) {
-        let cart = [];
-        try { cart = JSON.parse(localStorage.getItem('sokoniCart') || '[]'); } catch(e) {}
-        order.items.forEach(function(item) {
-          const idx = cart.findIndex(function(c) { return c.id === item.id; });
-          if (idx >= 0) cart[idx].qty = (cart[idx].qty || 1) + (item.qty || 1);
-          else cart.push(Object.assign({}, item, { qty: item.qty || 1 }));
-        });
-        localStorage.setItem('sokoniCart', JSON.stringify(cart));
-      }
-    } catch(e) {}
-    window.location.href = 'cart.html';
-  }
-
-  /* Phase 5: Update step bar when delivery status changes */
-  function _setStepBar(activeIdx) {
-    const steps = document.querySelectorAll('#tkStepsBar .tk-step');
-    steps.forEach(function(el, i) {
-      el.classList.remove('ts-done', 'ts-active');
-      if (i < activeIdx) el.classList.add('ts-done');
-      else if (i === activeIdx) el.classList.add('ts-active');
-      /* Update dot text for completed steps */
-      const dot = el.querySelector('.tk-dot');
-      if (dot) {
-        if (i < activeIdx) dot.textContent = '✓';
-        else if (i === activeIdx && activeIdx === 3) dot.textContent = '🎉';
-      }
-    });
-  }
-  window._setStepBar = _setStepBar;
-
-  function contactSeller(){ window.location.href='messages.html'; }
-  window.rateRider=rateRider;
-  window.reorder=reorder;
-  window.contactSeller=contactSeller;
-
-  loadOrders();
-
-  // Check URL param
-  const urlParams = new URLSearchParams(window.location.search);
-  const paramId = urlParams.get("id");
-  if(paramId) {
-    document.getElementById("trackInput").value = paramId;
-    showOrderDetail(paramId);
-  }
-
-  /* ── Return Requests ── */
-  function submitReturnRequest(){
-    const orderId  = document.getElementById("returnOrderId")?.value.trim();
-    const reason   = document.getElementById("returnReason")?.value;
-    const details  = document.getElementById("returnDetails")?.value.trim();
-    const msgEl    = document.getElementById("returnMsg");
-    if(!orderId||!reason){ if(msgEl){ msgEl.textContent="Fill in Order ID and Reason."; msgEl.style.color="#ff6b6b"; } return; }
-    const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
-    const req = {
-      id: "RET"+Date.now(), orderId, reason, details,
-      buyerName: user?.name||"Anonymous",
-      date: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
-      timestamp: Date.now(), status:"pending"
-    };
-    let returns=[];
-    try{returns=JSON.parse(localStorage.getItem("sokoniReturns"))||[];}catch(e){}
-    returns.unshift(req);
-    localStorage.setItem("sokoniReturns", JSON.stringify(returns));
-    if(msgEl){ msgEl.innerHTML="✅ Return request submitted! The seller will review within 24 hours."; msgEl.style.color="#71ff00"; }
-    loadMyReturns();
-  }
-
-  function loadMyReturns(){
-    const el = document.getElementById("myReturnsSection");
-    if(!el) return;
-    let returns=[];
-    try{returns=JSON.parse(localStorage.getItem("sokoniReturns"))||[];}catch(e){}
-    if(!returns.length){ el.innerHTML=""; return; }
-    const statusCol = { pending:"#ff9800", approved:"#71ff00", rejected:"#ff4444", resolved:"#00aaff" };
-    el.innerHTML = `
-      <div style="font-size:14px;font-weight:800;color:white;margin-bottom:12px;">↩️ My Return Requests</div>
-      ${returns.slice(0,5).map(r=>`
-        <div style="background:rgba(160,128,255,0.05);border:1px solid rgba(160,128,255,0.12);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-          <div style="flex:1;">
-            <div style="font-weight:700;color:white;font-size:13px;">Order ${_esc(r.orderId)}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.4);">${_esc(r.reason).replace(/-/g," ")} · ${_esc(r.date)}</div>
-            ${r.details?`<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:3px;">${_esc(r.details)}</div>`:""}
-          </div>
-          <span style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;background:${statusCol[r.status]||"#ff9800"}18;color:${statusCol[r.status]||"#ff9800"};">${r.status.toUpperCase()}</span>
-        </div>
-      `).join("")}`;
-  }
-
-  loadMyReturns();
-  window.submitReturnRequest = submitReturnRequest;
-</script>
-<script src="scroll-top.js" defer></script>
-<script src="seo.js" defer></script>
-<script src="nav-active.js" defer></script>
-<script src="analytics.js" defer></script>
-<script src="sokoni-ui-extras.js" defer></script>
-  <script src="sw-register.js" defer></script>
-<script>
-/* Nav state init */
+/* ── Bootstrap ── */
 (function(){
-  try{
-    var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
-    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
-    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
-  }catch(e){}
+  var p=new URLSearchParams(location.search);
+  _code=(p.get('code')||p.get('t')||'').toUpperCase().trim();
+  if(!_code||_code.length!==8){
+    document.getElementById('loadScreen').innerHTML='<div style="text-align:center;padding:24px"><p style="font-size:18px;margin-bottom:8px">⚠ Invalid tracking link</p><p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:14px">Check the link in your confirmation message.</p><a href="profile.html" style="display:inline-block;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">My Orders</a></div>';
+    return;
+  }
+  _poll();
+  _polling=setInterval(_poll,5000);
 })();
 </script>
-
-<!-- ═══ FIRESTORE REAL-TIME WIRING ═══ -->
-<script type="module">
-import SokoniDB from './sokoni-db.js';
-
-let _rideUnsub    = null;
-let _gpsUnsub     = null;
-let _orderUnsub   = null;
-let _currentRideMarker = null;
-
-/* ── Enhanced searchOrder that also queries Firestore ── */
-const _origSearchOrder = window.searchOrder;
-window.searchOrder = async function() {
-  if (_origSearchOrder) _origSearchOrder();
-  /* Also search Firestore rides collection by ref */
-  const input = document.getElementById('trackInput');
-  const id = (input?.value || '').trim().toUpperCase();
-  if (!id) return;
-
-  /* If it looks like a RIDE ref, also listen to Firestore ride */
-  if (id.startsWith('PKG-')) {
-    attachRideListener(id);
-  } else {
-    /* It's an order ID — attach order listener */
-    attachOrderListener(id);
-  }
-};
-
-/* ── Firestore ride listener ── */
-function attachRideListener(ref) {
-  if (_rideUnsub) _rideUnsub();
-  _rideUnsub = SokoniDB.listenRide(ref, ride => {
-    /* Merge live status into localStorage so showOrderDetail sees it */
-    let rides = [];
-    try { rides = JSON.parse(localStorage.getItem('sokoniPackages') || '[]'); } catch(e) {}
-    const idx = rides.findIndex(r => r.ref === ref);
-    if (idx !== -1) { rides[idx] = { ...rides[idx], ...ride }; }
-    else             { rides.unshift(ride); }
-    localStorage.setItem('sokoniPackages', JSON.stringify(rides));
-
-    /* Update status badge in track UI if visible */
-    const statusMap = {
-      confirmed:      '🟢 Driver assigned',
-      in_progress:    '🚗 En route',
-      arriving:       '📍 Arriving soon',
-      completed:      '✅ Completed',
-      cancelled:      '❌ Cancelled',
-    };
-    const statusEl = document.getElementById('riderStatus');
-    if (statusEl && ride.status) statusEl.textContent = statusMap[ride.status] || ride.status;
-
-    /* If ride has a driverId, attach GPS listener */
-    if (ride.driverId) attachGPSListener(ride.driverId);
-  });
-}
-
-/* ── Firestore order listener ── */
-function attachOrderListener(orderId) {
-  if (_orderUnsub) _orderUnsub();
-  _orderUnsub = SokoniDB.listenOrder(orderId, order => {
-    /* Merge into localStorage */
-    let orders = [];
-    try { orders = JSON.parse(localStorage.getItem('sokoniOrders') || '[]'); } catch(e) {}
-    const idx = orders.findIndex(o => o.id === orderId);
-    if (idx !== -1) { orders[idx] = { ...orders[idx], ...order }; }
-    else             { orders.unshift(order); }
-    localStorage.setItem('sokoniOrders', JSON.stringify(orders));
-
-    /* Re-render if panel is open */
-    const panel = document.getElementById('orderDetail');
-    if (panel && panel.style.display !== 'none') {
-      if (typeof showOrderDetail === 'function') showOrderDetail(orderId);
-    }
-
-    /* If order has a rideRef, attach ride listener */
-    if (order.rideRef) attachRideListener(order.rideRef);
-  });
-}
-
-/* ── Live GPS listener → smooth-animate map marker ── */
-function attachGPSListener(driverId) {
-  if (_gpsUnsub) _gpsUnsub();
-  _gpsUnsub = SokoniDB.listenDriverLocation(driverId, loc => {
-    const { lat, lng } = loc;
-    if (!lat || !lng) return;
-
-    /* Show map container if hidden */
-    const mc = document.getElementById('mapContainer');
-    if (mc && mc.style.display === 'none') mc.style.display = 'block';
-
-    /* Route through TrackingManager if available, else legacy smooth animation */
-    if (window.SokoniTracking) {
-      window.SokoniTracking.onLiveGPS(lat, lng);
-    } else if (window._moveLiveDriver) {
-      window._moveLiveDriver(lat, lng);
-    } else {
-      /* Fallback: raw move if premium map not yet loaded */
-      const trackMap = map || window.map;
-      if (trackMap) {
-        if (_currentRideMarker) {
-          _currentRideMarker.setLatLng([lat, lng]);
-        } else {
-          const ic = L.divIcon({className:'',
-            html:'<div class="driver-icon-root"><div class="driver-vehicle">🛵</div><div class="driver-pulse"></div></div>',
-            iconSize:[52,52],iconAnchor:[26,26]});
-          _currentRideMarker = L.marker([lat,lng],{icon:ic}).addTo(trackMap);
-          _currentRideMarker.bindPopup('🛵 Your Rider — Live GPS').openPopup();
-        }
-        trackMap.panTo([lat,lng],{animate:true});
-      }
-    }
-
-    /* GPS confidence indicator */
-    const gpsEl = document.getElementById('gpsConfidence');
-    if (gpsEl) gpsEl.textContent = '🟢 GPS';
-  });
-}
-
-/* ── Cleanup on page hide ── */
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    if (_rideUnsub)  _rideUnsub();
-    if (_gpsUnsub)   _gpsUnsub();
-    if (_orderUnsub) _orderUnsub();
-  }
-});
-
-/* ── Hooks for realtime.js ── */
-window.updateOrderStatus = function(order) {
-  if (!order) return;
-  updateStatusCard(order.id, order.steps || []);
-  buildTimeline(order.steps || []);
-  const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
-  if (order.eta)      set('tscEta',  order.eta);
-  if (order.distance) set('tscDist', order.distance);
-};
-window.updateDriverMarker = function(lat, lng) {
-  if (window.SokoniTracking && window.SokoniTracking.onLiveGPS) {
-    window.SokoniTracking.onLiveGPS(lat, lng);
-  } else if (window._moveLiveDriver) {
-    window._moveLiveDriver(lat, lng);
-  }
-};
-
-/* ── Auto-attach if URL has an ID ── */
-document.addEventListener('DOMContentLoaded', () => {
-  const urlParams = new URLSearchParams(window.location.search);
-  const paramId   = (urlParams.get('id') || '').toUpperCase();
-  if (paramId) {
-    if (paramId.startsWith('RIDE-')) attachRideListener(paramId);
-    else                             attachOrderListener(paramId);
-  } else {
-    /* No order ID — show the preview map so the page isn't blank */
-    initPreviewMap();
-  }
-});
-</script>
-<script src="sokoni-security.js"></script>
-<script src="sokoni-guards.js"></script>
-<script src="sokoni-audit.js" defer></script>
-<script src="sokoni-social.js" defer></script>
-<script src="sokoni-referral.js" defer></script>
-  <script defer src="kass-widget.js"></script>
-  <!-- Enterprise v2.0: core stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
-  <!-- Tracking & Orders -->
-  <script defer src="sokoni-tracking.js"></script>
-  <script defer src="sokoni-orders.js"></script>
 </body>
 </html>
-
-
-
-
-

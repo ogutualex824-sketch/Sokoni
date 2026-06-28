@@ -4487,6 +4487,70 @@ service cloud.firestore {
       allow write: if false;  // CF Admin SDK only (rate limit counters for trackCampaignClick)
     }
 
+    /* ── Merchant Success & Growth Engine v1.0 ──────────────────────────── */
+    match /merchantHealthScores/{shopId} {
+      // Seller can read their own cached health score; admins can read any
+      allow read:  if isAuthed() && (request.auth.uid == resource.data.sellerUid || isAdmin());
+      allow write: if false;  // CF Admin SDK only (getMerchantHealthScore writes cache)
+    }
+    match /merchantAutomations/{docId} {
+      // Seller can read their own automations; write goes through CF for validation
+      allow read:  if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
+      allow write: if false;  // CF Admin SDK only (createMerchantAutomation)
+    }
+    match /merchantAcademyProgress/{shopId} {
+      // Seller can read their own progress; admins can read any
+      allow read:  if isAuthed() && (request.auth.uid == resource.data.uid || isAdmin());
+      allow write: if false;  // CF Admin SDK only (completeMerchantLesson)
+    }
+    match /aiCoachRL/{docId} {
+      allow read:  if false;
+      allow write: if false;  // CF Admin SDK only (AI coach rate limit counters)
+    }
+
+    /* ══════════════════════════════════════════════════════
+       NAVIGATION & DISPATCH SYSTEM  v1.0
+    ══════════════════════════════════════════════════════ */
+
+    /* trips — active delivery trips */
+    match /trips/{tripId} {
+      // Rider reads own trips; customer reads via trackingCode (CF only); admin reads all
+      allow read: if isAdmin()
+        || (isAuthed() && resource.data.riderId == request.auth.uid);
+      // Only Cloud Functions (Admin SDK) create/update trips
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /* riderLocations — live GPS positions, written directly by authenticated riders */
+    match /riderLocations/{riderId} {
+      // Rider writes own location; admin reads all active locations
+      allow read:  if isAdmin()
+        || (isAuthed() && riderId == request.auth.uid);
+      allow write: if isAuthed()
+        && riderId == request.auth.uid
+        && request.resource.data.keys().hasAll(['lat','lng','status','updatedAt'])
+        && request.resource.data.lat is number
+        && request.resource.data.lng is number
+        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+        && request.resource.data.lng >= -180 && request.resource.data.lng <= 180;
+    }
+
+    /* fleetEvents — SOS and deviation alerts */
+    match /fleetEvents/{eventId} {
+      allow read:  if isAdmin();
+      allow create: if false; // CF Admin SDK only
+      allow update: if false; // CF Admin SDK only (resolve)
+      allow delete: if false;
+    }
+
+    /* driverEarningQueue — triggers FinOS payout */
+    match /driverEarningQueue/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF Admin SDK only
+    }
+
   }
 }
 

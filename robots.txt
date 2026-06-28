@@ -11,6 +11,8 @@ Disallow: /trust-safety.html
 Disallow: /payment-receipt.html
 Disallow: /automation-engine.html
 Disallow: /dispute-portal.html
+Disallow: /rider-nav.html
+Disallow: /fleet-monitor.html
 Disallow: /verification-admin.html
 Disallow: /profile.html
 Disallow: /checkout.html

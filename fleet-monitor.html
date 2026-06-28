@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en" data-require-auth="true" data-require-role="admin">
+<head>
+  <script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Fleet Monitor — SOKONI Admin</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root{--bg:#0f1117;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.07);--border:rgba(255,255,255,.08);--accent:#71ff00;--info:#00bcd4;--warn:#ff9800;--danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45)}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--txt)}
+
+    /* ── Layout ── */
+    #layout{display:flex;height:100vh}
+    #sidebar{width:320px;flex-shrink:0;background:rgba(0,0,0,.95);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;z-index:200}
+    #mapWrap{flex:1;position:relative}
+    #map{position:absolute;inset:0}
+
+    /* ── Sidebar header ── */
+    #sHdr{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+    #sHdrLogo{font-size:15px;font-weight:900;color:var(--accent)}
+    #sHdrTitle{font-size:13px;font-weight:700;flex:1}
+    #refreshBtn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--txt);font-size:12px;cursor:pointer}
+    #refreshBtn:hover{background:rgba(255,255,255,.1)}
+
+    /* ── KPI strip ── */
+    #kpiRow{display:flex;gap:1px;background:var(--border);flex-shrink:0}
+    .kpi{flex:1;background:var(--bg);padding:10px 8px;text-align:center}
+    .kpi-val{font-size:18px;font-weight:900}
+    .kpi-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+    #kpiActive .kpi-val{color:var(--accent)}
+    #kpiAlerts .kpi-val{color:var(--danger)}
+    #kpiIdle .kpi-val{color:var(--warn)}
+
+    /* ── Tabs ── */
+    #tabs{display:flex;background:var(--surface);flex-shrink:0}
+    .tab{flex:1;padding:10px;background:none;border:none;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent;transition:.15s}
+    .tab.active{color:var(--accent);border-color:var(--accent)}
+
+    /* ── Panels ── */
+    .panel{flex:1;overflow-y:auto;display:none}
+    .panel.active{display:block}
+
+    /* ── Alert banner ── */
+    #alertBanner{background:rgba(244,67,54,.12);border-bottom:1px solid rgba(244,67,54,.3);padding:8px 14px;display:none;font-size:12px;color:var(--danger);font-weight:700;flex-shrink:0;cursor:pointer}
+    #alertBanner.show{display:flex;align-items:center;gap:8px}
+
+    /* ── Rider list items ── */
+    .rider-row{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;display:flex;align-items:center;gap:10px}
+    .rider-row:hover,.rider-row.selected{background:var(--surface2)}
+    .rider-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+    .rider-dot.active{background:#71ff00;box-shadow:0 0 6px rgba(113,255,0,.6)}
+    .rider-dot.idle{background:#ff9800}
+    .rider-dot.offline{background:rgba(255,255,255,.2)}
+    .rider-info{flex:1;min-width:0}
+    .rider-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .rider-status{font-size:10px;color:var(--muted);margin-top:2px}
+    .rider-badge{font-size:10px;padding:2px 7px;border-radius:10px;font-weight:700;flex-shrink:0}
+    .rider-badge.delivering{background:rgba(113,255,0,.12);color:var(--accent)}
+    .rider-badge.idle{background:rgba(255,152,0,.12);color:var(--warn)}
+    .rider-badge.sos{background:rgba(244,67,54,.2);color:var(--danger);animation:sPulse .8s infinite}
+    @keyframes sPulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+    /* ── Alert rows ── */
+    .alert-row{padding:12px 14px;border-bottom:1px solid var(--border)}
+    .alert-row .ar-type{font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;margin-bottom:4px}
+    .alert-row .ar-body{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:8px}
+    .alert-row .ar-time{font-size:10px;color:rgba(255,255,255,.25)}
+    .ar-resolve{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 12px;font-size:11px;font-weight:700;color:var(--txt);cursor:pointer}
+    .ar-resolve:hover{background:rgba(255,255,255,.1)}
+    .sev-critical{color:var(--danger)}
+    .sev-high{color:var(--warn)}
+    .sev-medium{color:var(--info)}
+
+    /* ── Rider detail drawer (on map) ── */
+    #riderDetail{position:absolute;top:14px;right:14px;z-index:300;background:rgba(15,17,23,.95);border:1px solid var(--border);border-radius:14px;width:260px;padding:16px;display:none}
+    #riderDetail.show{display:block}
+    #rdClose{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;line-height:1}
+    #rdName{font-size:15px;font-weight:900;margin-bottom:4px}
+    #rdStatus{font-size:12px;color:var(--muted);margin-bottom:10px}
+    .rd-stat{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid var(--border)}
+    .rd-stat:last-child{border:none}
+    .rd-stat .rl{color:var(--muted)}
+    .rd-stat .rv{font-weight:700}
+    .rd-btn{display:block;width:100%;margin-top:10px;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;color:var(--txt);font-size:12px;font-weight:700;cursor:pointer;text-align:center}
+    .rd-btn:hover{background:rgba(255,255,255,.1)}
+    .rd-btn.danger{border-color:rgba(244,67,54,.3);color:var(--danger)}
+
+    /* ── Leaflet rider markers ── */
+    .map-rider{width:36px;height:36px;border-radius:50%;border:3px solid #71ff00;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+    .map-rider.sos{border-color:#f44336;animation:sPulse .8s infinite}
+    .map-rider.idle{border-color:#ff9800}
+
+    /* ── Spinner ── */
+    .spin{width:30px;height:30px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:30px auto}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .empty-state{padding:30px;text-align:center;color:var(--muted);font-size:13px}
+
+    /* ── Mobile responsive ── */
+    @media(max-width:768px){
+      #layout{flex-direction:column-reverse}
+      #sidebar{width:100%;height:240px;border-right:none;border-top:1px solid var(--border)}
+      #mapWrap{flex:1}
+      #riderDetail{right:8px;top:8px;width:200px}
+    }
+  </style>
+</head>
+<body>
+
+<div id="layout">
+
+  <!-- ── Sidebar ── -->
+  <div id="sidebar">
+    <div id="sHdr">
+      <div id="sHdrLogo">SOKONI</div>
+      <div id="sHdrTitle">Fleet Monitor</div>
+      <button id="refreshBtn" onclick="_refresh()">↻ Refresh</button>
+    </div>
+
+    <div id="alertBanner" onclick="_tab('alerts')">
+      <span id="alertBannerIcon">🆘</span>
+      <span id="alertBannerText">Loading alerts…</span>
+    </div>
+
+    <div id="kpiRow">
+      <div class="kpi" id="kpiActive"> <div class="kpi-val" id="kv-active">—</div> <div class="kpi-lbl">Active</div></div>
+      <div class="kpi" id="kpiIdle">   <div class="kpi-val" id="kv-idle">—</div>   <div class="kpi-lbl">Idle</div></div>
+      <div class="kpi">                <div class="kpi-val" id="kv-trips">—</div>   <div class="kpi-lbl">Trips</div></div>
+      <div class="kpi" id="kpiAlerts"> <div class="kpi-val" id="kv-alerts">—</div> <div class="kpi-lbl">Alerts</div></div>
+    </div>
+
+    <div id="tabs">
+      <button class="tab active" onclick="_tab('riders')">🏍 Riders</button>
+      <button class="tab"        onclick="_tab('alerts')">🔔 Alerts</button>
+      <button class="tab"        onclick="_tab('trips')">📦 Trips</button>
+    </div>
+
+    <div class="panel active" id="panel-riders"><div class="spin"></div></div>
+    <div class="panel"        id="panel-alerts"><div class="spin"></div></div>
+    <div class="panel"        id="panel-trips"> <div class="spin"></div></div>
+  </div>
+
+  <!-- ── Map ── -->
+  <div id="mapWrap">
+    <div id="map"></div>
+    <!-- Rider detail -->
+    <div id="riderDetail">
+      <button id="rdClose" onclick="_closeDetail()">✕</button>
+      <div id="rdName">—</div>
+      <div id="rdStatus">—</div>
+      <div id="rdStats"></div>
+      <button class="rd-btn" id="rdNavBtn" onclick="_navToRider()">📍 Center on map</button>
+      <button class="rd-btn danger" id="rdSosBtn">🆘 Mark resolved</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Firebase & Leaflet ── -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+
+var _map = null, _markers = {}, _selectedRider = null;
+var _fleetData = { riders: [], events: [], trips: [], stats: {} };
+var _pollingTimer = null;
+
+function _cf(n){ return firebase.functions().httpsCallable(n); }
+function _esc(s){ return String(s||'').replace(/[<>"'&]/g, c=>({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','&':'&amp;'}[c])); }
+function _ago(ts){
+  if(!ts) return '—';
+  var s=ts.seconds||Math.floor((ts instanceof Date?ts:new Date(ts))/1000);
+  var d=Math.floor(Date.now()/1000-s);
+  if(d<60) return d+'s ago'; if(d<3600) return Math.floor(d/60)+'m ago';
+  return Math.floor(d/3600)+'h ago';
+}
+
+/* ── Auth ── */
+firebase.auth().onAuthStateChanged(function(user){
+  if(!user){ location.href='login.html'; return; }
+  user.getIdTokenResult().then(function(r){
+    if(!r.claims.admin && !r.claims.superAdmin){ location.href='index.html'; return; }
+    _initMap();
+    _refresh();
+    _pollingTimer = setInterval(_refresh, 15000);
+  });
+});
+
+/* ── Map ── */
+function _initMap(){
+  _map = L.map('map', { zoomControl: false, attributionControl: false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_map);
+  L.control.zoom({ position: 'bottomleft' }).addTo(_map);
+  L.control.attribution({ prefix: '© OpenStreetMap', position: 'bottomright' }).addTo(_map);
+  _map.setView([1.2921, 36.8219], 11);
+}
+
+/* ── Load fleet ── */
+function _refresh(){
+  document.getElementById('refreshBtn').textContent = '↻ Loading…';
+  _cf('navGetFleetStatus')({}).then(function(r){
+    _fleetData = r.data;
+    _renderAll();
+    document.getElementById('refreshBtn').textContent = '↻ Refresh';
+  }).catch(function(e){
+    document.getElementById('refreshBtn').textContent = '↻ Refresh';
+    console.error('[Fleet]', e);
+  });
+}
+
+function _renderAll(){
+  var d = _fleetData;
+  // KPIs
+  document.getElementById('kv-active').textContent = d.stats.activeRiders || 0;
+  document.getElementById('kv-idle').textContent   = d.stats.idleRiders    || 0;
+  document.getElementById('kv-trips').textContent  = d.stats.activeDeliveries || 0;
+  document.getElementById('kv-alerts').textContent = d.stats.alerts        || 0;
+
+  // Alert banner
+  var banner = document.getElementById('alertBanner');
+  if(d.stats.sos > 0){
+    banner.className = 'show';
+    document.getElementById('alertBannerIcon').textContent = '🆘';
+    document.getElementById('alertBannerText').textContent = d.stats.sos + ' SOS alert' + (d.stats.sos > 1 ? 's' : '') + ' — click to review';
+  } else if(d.stats.alerts > 0){
+    banner.className = 'show';
+    document.getElementById('alertBannerIcon').textContent = '⚠';
+    document.getElementById('alertBannerText').textContent = d.stats.alerts + ' unresolved alert' + (d.stats.alerts > 1 ? 's' : '');
+  } else {
+    banner.className = '';
+  }
+
+  _renderRiders();
+  _renderAlerts();
+  _renderTrips();
+  _renderMapMarkers();
+}
+
+/* ── Rider list ── */
+function _renderRiders(){
+  var el = document.getElementById('panel-riders');
+  var riders = _fleetData.riders || [];
+  if(!riders.length){ el.innerHTML = '<div class="empty-state">No active riders</div>'; return; }
+
+  // Find which riders have active trips
+  var tripMap = {};
+  (_fleetData.trips || []).forEach(function(t){ if(t.riderId) tripMap[t.riderId] = t; });
+
+  el.innerHTML = riders.map(function(r){
+    var trip = tripMap[r.riderId];
+    var hasTrip = !!trip;
+    var hasSOS  = (_fleetData.events || []).some(function(e){ return e.riderId === r.riderId && !e.resolved; });
+    var badgeTxt = hasSOS ? '🆘 SOS' : (hasTrip ? '📦 Delivering' : 'Idle');
+    var badgeCls = hasSOS ? 'sos' : (hasTrip ? 'delivering' : 'idle');
+    var dotCls   = hasSOS ? 'active' : (hasTrip ? 'active' : 'idle');
+    return '<div class="rider-row" onclick="_selectRider(\'' + r.riderId + '\')">'
+      + '<div class="rider-dot '+dotCls+'"></div>'
+      + '<div class="rider-info">'
+        + '<div class="rider-name">' + _esc(r.name || r.riderId.slice(0,8)) + '</div>'
+        + '<div class="rider-status">' + _esc(r.vehicle || '') + (hasTrip ? ' · Order: ' + _esc(trip.orderId || '').slice(0,10) : ' · No active delivery') + '</div>'
+      + '</div>'
+      + '<div class="rider-badge '+badgeCls+'">'+_esc(badgeTxt)+'</div>'
+      + '</div>';
+  }).join('');
+}
+
+/* ── Alert list ── */
+function _renderAlerts(){
+  var el = document.getElementById('panel-alerts');
+  var evts = _fleetData.events || [];
+  if(!evts.length){ el.innerHTML = '<div class="empty-state">✅ No active alerts</div>'; return; }
+
+  var sevIcons = { critical: '🆘', high: '⚠', medium: '⚡', low: 'ℹ' };
+  el.innerHTML = evts.map(function(e){
+    var clr = 'sev-' + (e.severity || 'medium');
+    return '<div class="alert-row">'
+      + '<div class="ar-type ' + clr + '">' + (sevIcons[e.severity] || '⚠') + ' ' + _esc((e.type||'event').replace(/_/g,' ').toUpperCase()) + '</div>'
+      + '<div class="ar-body">Rider: <strong>' + _esc(e.riderId || '—') + '</strong>'
+        + (e.lat ? ' · <a href="https://www.google.com/maps?q='+e.lat+','+e.lng+'" target="_blank" style="color:var(--info)">View location</a>' : '')
+      + '</div>'
+      + '<div style="display:flex;align-items:center;justify-content:space-between">'
+        + '<div class="ar-time">' + _ago(e.createdAt) + '</div>'
+        + '<button class="ar-resolve" onclick="_resolveAlert(\''+e.id+'\',this)">✓ Resolve</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+/* ── Trips list ── */
+function _renderTrips(){
+  var el = document.getElementById('panel-trips');
+  var trips = _fleetData.trips || [];
+  if(!trips.length){ el.innerHTML = '<div class="empty-state">No active trips</div>'; return; }
+
+  var statusLabels = {
+    assigned:'Assigned',en_route_pickup:'→ Pickup',arrived_pickup:'At Pickup',
+    en_route_delivery:'→ Delivery',arrived_delivery:'At Door',
+  };
+  el.innerHTML = trips.map(function(t){
+    return '<div class="rider-row">'
+      + '<div style="font-size:20px">' + (t.stops && t.stops[0] && t.stops[0].type === 'pickup' ? '📦' : '📍') + '</div>'
+      + '<div class="rider-info">'
+        + '<div class="rider-name">Order: ' + _esc(t.orderId || t.id || '').slice(0,12) + '</div>'
+        + '<div class="rider-status">' + _esc(statusLabels[t.status] || t.status) + ' · ' + (t.stops ? t.stops.length : 0) + ' stops</div>'
+      + '</div>'
+      + '<div style="font-size:10px;color:var(--muted)">' + _ago(t.createdAt) + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+/* ── Map markers ── */
+function _renderMapMarkers(){
+  var riders = _fleetData.riders || [];
+  var seen   = new Set();
+
+  riders.forEach(function(r){
+    if(!r.lat || !r.lng) return;
+    seen.add(r.riderId);
+    var hasSOS = (_fleetData.events || []).some(function(e){ return e.riderId === r.riderId && !e.resolved; });
+    var hasTrip = (_fleetData.trips || []).some(function(t){ return t.riderId === r.riderId; });
+    var cls = hasSOS ? 'map-rider sos' : (hasTrip ? 'map-rider' : 'map-rider idle');
+    var html = '<div class="' + cls + '">' + (hasSOS ? '🆘' : '🏍') + '</div>';
+    if(_markers[r.riderId]){
+      _markers[r.riderId].setLatLng([r.lat, r.lng]);
+    } else {
+      _markers[r.riderId] = L.marker([r.lat, r.lng], {
+        icon: L.divIcon({ className: '', html: html, iconSize: [36, 36], iconAnchor: [18, 18] }),
+        zIndexOffset: 500,
+      }).addTo(_map).on('click', function(){ _selectRider(r.riderId); });
+    }
+  });
+
+  // Remove stale markers
+  Object.keys(_markers).forEach(function(id){
+    if(!seen.has(id)){ _markers[id].remove(); delete _markers[id]; }
+  });
+}
+
+/* ── Select rider → show detail ── */
+function _selectRider(riderId){
+  _selectedRider = riderId;
+  var rider = (_fleetData.riders || []).find(function(r){ return r.riderId === riderId; });
+  var trip  = (_fleetData.trips  || []).find(function(t){ return t.riderId === riderId; });
+  var event = (_fleetData.events || []).find(function(e){ return e.riderId === riderId && !e.resolved; });
+  if(!rider) return;
+
+  document.getElementById('rdName').textContent   = rider.name || riderId.slice(0,12);
+  document.getElementById('rdStatus').textContent = event ? '🆘 SOS Active' : (trip ? 'On delivery · ' + (trip.status || '') : 'Idle');
+  document.getElementById('rdStats').innerHTML =
+    '<div class="rd-stat"><span class="rl">Vehicle</span><span class="rv">' + _esc(rider.vehicle || '—') + '</span></div>'
+    + '<div class="rd-stat"><span class="rl">Speed</span><span class="rv">' + (rider.speed || 0) + ' km/h</span></div>'
+    + '<div class="rd-stat"><span class="rl">Current stop</span><span class="rv">' + (rider.currentStop != null ? rider.currentStop + 1 : '—') + '/' + (rider.totalStops || '—') + '</span></div>'
+    + '<div class="rd-stat"><span class="rl">Updated</span><span class="rv">' + _ago(rider.updatedAt) + '</span></div>';
+
+  document.getElementById('rdSosBtn').style.display = event ? 'block' : 'none';
+  document.getElementById('rdSosBtn').onclick = function(){ _resolveAlert(event && event.id, this); };
+  document.getElementById('riderDetail').classList.add('show');
+
+  // Pan map to rider
+  if(rider.lat && rider.lng) _map.panTo([rider.lat, rider.lng], { animate: true });
+
+  // Highlight row
+  document.querySelectorAll('.rider-row').forEach(function(el){ el.classList.remove('selected'); });
+}
+
+function _closeDetail(){
+  document.getElementById('riderDetail').classList.remove('show');
+  _selectedRider = null;
+}
+
+function _navToRider(){
+  var rider = (_fleetData.riders || []).find(function(r){ return r.riderId === _selectedRider; });
+  if(rider && rider.lat && rider.lng) _map.flyTo([rider.lat, rider.lng], 16, { animate: true, duration: 1 });
+}
+
+/* ── Resolve alert ── */
+function _resolveAlert(eventId, btn){
+  if(!eventId) return;
+  var note = prompt('Resolution note (optional):') || '';
+  if(btn) btn.disabled = true;
+  _cf('navResolveFleetEvent')({ eventId: eventId, note: note }).then(function(){
+    _refresh();
+    _closeDetail();
+  }).catch(function(e){ alert('Error: '+e.message); if(btn) btn.disabled = false; });
+}
+
+/* ── Tab switch ── */
+function _tab(name){
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+  var tabs = document.querySelectorAll('.tab');
+  var names = ['riders','alerts','trips'];
+  tabs[names.indexOf(name)] && tabs[names.indexOf(name)].classList.add('active');
+  var panel = document.getElementById('panel-'+name);
+  if(panel) panel.classList.add('active');
+}
+</script>
+</body>
+</html>
