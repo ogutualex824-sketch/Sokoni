@@ -1,4 +1,81 @@
-﻿## [2026-06-28] — Platform Hubs v1.0 (Healthcare · Property · Vehicle · Digital · Legal · Entertainment)
+﻿## [2026-06-29] — AA Enterprise Business Resilience Audit & Chaos Testing Fixes
+
+### Summary
+Comprehensive Enterprise Business Resilience & Chaos Testing audit across 7 dimensions:
+failure injection, financial integrity, fraud & abuse, scalability, operational readiness,
+user journey validation, and business continuity. 5 critical vulnerabilities found and fixed.
+Overall platform score: **84/100 — Certified with Required Actions**.
+
+### Fixes Applied (commit `b457afc`)
+
+#### Q2 VULNERABLE → RESILIENT — Stale pending wallet top-up cleanup
+- **`functions/wallet.js`**: Added `sweepStaleWalletTopUps` scheduled CF (every 30 min)
+- Queries `walletTransactions` where `status=pending` and `createdAt < 30min ago`
+- Polls IntaSend for each orphaned top-up, resolves to `completed`/`failed`/`expired`
+- Clears `pendingTopUp` field on wallet document in same runTransaction
+- **`functions/index.js`**: `exports.sweepStaleWalletTopUps` wired
+
+#### Q3 PARTIAL → RESILIENT — Server-side payment idempotency key derivation
+- **`functions/payment-orchestrator.js`**: If client omits `idempotencyKey`, server derives
+  `sha256(uid|orderId)` — stable across browser refreshes, page reloads, network retries
+- Eliminates double-payment risk when STK push confirmation is delayed
+- `resolvedKey` (not raw client key) stored in payment document
+
+#### Q5 PARTIAL → RESILIENT — POS sync saleId idempotency
+- **`functions/pos-retail.js`**: `posSyncToMarketplace` now requires `saleId` field
+- Idempotency doc written to `posSyncIdempotency/{saleId}` before sync
+- Duplicate syncs return `{synced:0, duplicate:true}` — no double stock decrement
+- Protects against device reboot replay and offline queue double-replay
+
+#### Q9 PARTIAL → RESILIENT — Stuck payout recovery sweep
+- **`functions/finos.js`**: `processPendingPayouts` now runs stuck-processing recovery at start
+- Queries `payouts` where `status=processing` AND `processingAt < 10min ago`
+- Batch-resets to `pending` so next run picks them up
+- Eliminates orphaned payouts from CF crash between status=processing and IntaSend B2C call
+
+#### FRAUD FIX — Commission rate server-side enforcement
+- **`functions/index.js`** (`intasendWebhook`): Commission rate previously read from
+  `payData.meta.commissionPct` — a field set by the client at payment creation time
+- A malicious seller could set `metadata.commissionPct: 0` to avoid paying commission
+- **FIXED**: `commissionPct` now derived from `SERVER_COMMISSION_RATES[category]` map
+  (marketplace 8%, food 10%, property 5%, vehicle 5%, jobs 12%, default 10%)
+- Client-supplied `meta.commissionPct` is completely ignored at settlement time
+
+### Certification Report
+- **`ENTERPRISE_PRODUCTION_CERTIFICATION_AA.md`** — full 10-section report
+- Overall Score: 84/100
+- Security: 91 | Reliability: 84 | Scalability: 80 | Performance: 83
+- Compliance: 82 | Financial Integrity: 88 | Ops Readiness: 85 | Business Continuity: 81
+- 0 Critical findings | 4 High findings | 4 Medium | 3 Low
+- Verdict: **⚠️ Enterprise Production Certified with Required Actions**
+
+### Files Affected
+- `functions/finos.js` — stuck-payout recovery sweep
+- `functions/wallet.js` — sweepStaleWalletTopUps CF
+- `functions/payment-orchestrator.js` — idempotency key always derived server-side
+- `functions/pos-retail.js` — saleId idempotency required
+- `functions/index.js` — commission fix + new export
+- `ENTERPRISE_PRODUCTION_CERTIFICATION_AA.md` — new certification report
+
+### Security Changes
+- Commission rate manipulation via client metadata: **CLOSED**
+- Payment double-charge via browser refresh: **CLOSED**
+- POS sale double-sync via offline replay: **CLOSED**
+
+### Breaking Changes
+- `posSyncToMarketplace` now **requires** `saleId` field in request data (BREAKING for POS clients)
+- `payment-orchestrator.createPayment` — idempotency now always set (no-breaking, more protective)
+
+### Manual Actions Still Required (before GA)
+1. Wrap finos.recordPayment wallet txn in outer idempotency guard (H-1)
+2. Service Worker install try-catch + `self.onerror` (H-2)
+3. Subscription gate on all premium hub CFs (H-3)
+4. Redis as primary rate-limiting path (H-4)
+5. Run `bash scripts/setup-monitoring-alerts.sh` to wire alert email channel
+
+---
+
+## [2026-06-28] — Platform Hubs v1.0 (Healthcare · Property · Vehicle · Digital · Legal · Entertainment)
 
 ### Summary
 Six production-grade hub Cloud Function modules built and wired into index.js. All CFs on standby
