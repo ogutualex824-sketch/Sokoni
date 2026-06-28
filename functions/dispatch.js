@@ -82,7 +82,7 @@ async function _sendNotification(stage, delivery, deliveryRef) {
    Called by seller / system when order becomes ready_for_pickup.
 ──────────────────────────────────────────────────────────────*/
 exports.dispatchDelivery = onCall(
-  { region: REGION, timeoutSeconds: 60, memory: '256MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAuth(request);
     const { deliveryRef } = request.data;
@@ -165,7 +165,7 @@ exports.dispatchDelivery = onCall(
    2. respondToDispatch (callable) — rider accepts / declines
 ──────────────────────────────────────────────────────────────*/
 exports.respondToDispatch = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAuth(request);
     const riderId = _uid(request);
@@ -282,7 +282,7 @@ exports.processCascadeTimeouts = onSchedule(
    4. captureProofOfDelivery (callable) — OTP + photo + GPS
 ──────────────────────────────────────────────────────────────*/
 exports.captureProofOfDelivery = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAuth(request);
     const riderId = _uid(request);
@@ -350,7 +350,7 @@ exports.captureProofOfDelivery = onCall(
    5. handleFailedDelivery (callable) — retry / return / refund
 ──────────────────────────────────────────────────────────────*/
 exports.handleFailedDelivery = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAuth(request);
     const { deliveryRef, reason, note } = request.data;
@@ -467,7 +467,7 @@ exports.detectGPSFraud = onDocumentUpdated(
    7. optimizeBatchRoute (callable) — TSP stop ordering
 ──────────────────────────────────────────────────────────────*/
 exports.optimizeBatchRoute = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private' },
+  { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private', enforceAppCheck: true },
   async (request) => {
     _assertAuth(request);
     const { riderLat, riderLng, deliveryRefs } = request.data;

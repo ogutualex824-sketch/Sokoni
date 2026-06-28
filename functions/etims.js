@@ -641,7 +641,7 @@ async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform =
 ════════════════════════════════════════════════════════════════════ */
 
 /* 1 ─ Register seller eTIMS profile */
-const etimsRegisterSeller = onCall({ secrets: _ALL_SECRETS }, async req => {
+const etimsRegisterSeller = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: true }, async req => {
   if (!req.auth) throw new HttpsError("unauthenticated","Sign in required");
   const uid = req.auth.uid;
   const { kraPin, businessName, branchId, deviceSerial, taxpayerSecret,
@@ -696,7 +696,7 @@ const etimsRegisterSeller = onCall({ secrets: _ALL_SECRETS }, async req => {
 });
 
 /* 2 ─ Get own eTIMS profile */
-const etimsGetProfile = onCall(async req => {
+const etimsGetProfile = onCall({ enforceAppCheck: true }, async req => {
   if (!req.auth) throw new HttpsError("unauthenticated","Sign in required");
   const snap = await db.collection("etimsProfiles").doc(req.auth.uid).get();
   if (!snap.exists) return { profile: null };
@@ -704,7 +704,7 @@ const etimsGetProfile = onCall(async req => {
 });
 
 /* 3 ─ Update eTIMS profile (non-credential fields) */
-const etimsUpdateProfile = onCall({ secrets: [ETIMS_MASTER_KEY] }, async req => {
+const etimsUpdateProfile = onCall({ secrets: [ETIMS_MASTER_KEY], enforceAppCheck: true }, async req => {
   if (!req.auth) throw new HttpsError("unauthenticated","Sign in required");
   const uid  = req.auth.uid;
   const snap = await db.collection("etimsProfiles").doc(uid).get();
@@ -720,14 +720,14 @@ const etimsUpdateProfile = onCall({ secrets: [ETIMS_MASTER_KEY] }, async req => 
 });
 
 /* 4 ─ Validate KRA PIN format (deep validation happens at register) */
-const etimsValidatePin = onCall(req => {
+const etimsValidatePin = onCall({ enforceAppCheck: true }, req => {
   const pin = (req.data?.kraPin||"").toUpperCase().trim();
   const valid = KRA_PIN_RE.test(pin);
   return { valid, message: valid ? "Format valid" : "Expected format: P051234567T (letter + 9 digits + letter)" };
 });
 
 /* 5 ─ Manually generate invoice for a specific order */
-const etimsGenerateInvoice = onCall({ secrets: _ALL_SECRETS }, async req => {
+const etimsGenerateInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: true }, async req => {
   if (!req.auth) throw new HttpsError("unauthenticated","Sign in required");
   const { orderId } = req.data;
   if (!orderId) throw new HttpsError("invalid-argument","orderId required");
@@ -787,7 +787,7 @@ const etimsOnOrderCompleted = onDocumentWritten(
 );
 
 /* 7 ─ Resubmit failed invoice */
-const etimsResubmitInvoice = onCall({ secrets: _ALL_SECRETS }, async req => {
+const etimsResubmitInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: true }, async req => {
   if (!req.auth) throw new HttpsError("unauthenticated","Sign in required");
   const { invoiceId } = req.data;
   if (!invoiceId) throw new HttpsError("invalid-argument","invoiceId required");
@@ -867,7 +867,7 @@ const etimsProcessQueue = onSchedule(
 );
 
 /* 9 ─ Bulk / periodic invoice generation */
-const etimsBulkGenerate = onCall({ secrets: _ALL_SECRETS, timeoutSeconds:300 }, async req => {
+const etimsBulkGenerate = onCall({ secrets: _ALL_SECRETS, timeoutSeconds:300, enforceAppCheck: true }, async req => {
   if (!req.auth) throw new HttpsError("unauthenticated","Sign in required");
   const sellerUid = req.auth.uid;
   const { periodStart, periodEnd, billingPeriod } = req.data;
@@ -937,7 +937,7 @@ const etimsBulkGenerate = onCall({ secrets: _ALL_SECRETS, timeoutSeconds:300 }, 
 });
 
 /* 10 ─ SOKONI platform invoice (commissions, subscriptions, etc.) */
-const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS }, async req => {
+const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: true }, async req => {
   if (!req.auth?.token?.isAdmin) throw new HttpsError("permission-denied","Admins only");
   const { sellerUid, feeType, amount, reference, description } = req.data;
 
@@ -1009,7 +1009,7 @@ const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS }, async req => {
 });
 
 /* 11 ─ Get buyer receipts */
-const etimsGetBuyerReceipts = onCall(async req => {
+const etimsGetBuyerReceipts = onCall({ enforceAppCheck: true }, async req => {
   if (!req.auth) throw new HttpsError("unauthenticated","Sign in required");
   const uid = req.auth.uid;
   const lim = Math.min(req.data?.limit||20, 50);
@@ -1097,7 +1097,7 @@ const etimsDownloadReceipt = onRequest({ secrets: _ALL_SECRETS }, async (req, re
 });
 
 /* 13 ─ Seller eTIMS stats */
-const etimsGetSellerStats = onCall(async req => {
+const etimsGetSellerStats = onCall({ enforceAppCheck: true }, async req => {
   if (!req.auth) throw new HttpsError("unauthenticated","Sign in required");
   const uid = req.auth.uid;
 
@@ -1136,7 +1136,7 @@ const etimsGetSellerStats = onCall(async req => {
 });
 
 /* 14 ─ Admin eTIMS stats */
-const etimsGetAdminStats = onCall(async req => {
+const etimsGetAdminStats = onCall({ enforceAppCheck: true }, async req => {
   if (!req.auth?.token?.isAdmin) throw new HttpsError("permission-denied","Admins only");
 
   const [acceptedSnap, failedSnap, queueSnap, profilesSnap, platSnap] = await Promise.all([
