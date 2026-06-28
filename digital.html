@@ -1,1706 +1,271 @@
-﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
-<head><script src="security.js"></script>
-  <script>/* Digital Hub merged into Tech Hub */window.location.replace('tech-hub.html#freelancers');</script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Freelancer Marketplace — SOKONI</title>
-  <meta name="description" content="Hire top Kenyan freelancers or sell your digital services. Software, design, marketing, writing, AI & more on SOKONI.">
-  <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="assets/logosokoni.png">
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#71ff00">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="SOKONI">
-  <script src="sokoni-pay.js" defer></script>
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh}
-    a{text-decoration:none}
-    /* NAV */
-    .fl-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:rgba(10,10,10,.96);border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:200;backdrop-filter:blur(12px)}
-    .fl-nav-logo{height:32px}
-    .fl-nav-right{display:flex;gap:8px;align-items:center}
-    .fl-nb{padding:9px 15px;border-radius:10px;font-size:13px;font-weight:700;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);background:transparent;cursor:pointer;font-family:inherit;transition:all .2s}
-    .fl-nb:hover{color:#fff;border-color:rgba(255,255,255,.25)}
-    .fl-nb.primary{background:rgba(0,170,255,.1);border-color:rgba(0,170,255,.25);color:#00aaff}
-    .fl-nb.green{background:rgba(113,255,0,.1);border-color:rgba(113,255,0,.25);color:#71ff00}
-    /* HERO */
-    .fl-hero{background:linear-gradient(135deg,rgba(0,170,255,.08),rgba(80,0,255,.06));border-bottom:1px solid rgba(255,255,255,.07);padding:44px 20px 32px;text-align:center}
-    .fl-hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(0,170,255,.1);border:1px solid rgba(0,170,255,.25);color:#00aaff;font-size:11px;font-weight:800;margin-bottom:14px;letter-spacing:.5px}
-    .fl-hero h1{font-size:clamp(24px,5vw,42px);font-weight:900;margin-bottom:10px}
-    .fl-hero p{color:rgba(255,255,255,.5);font-size:14px;max-width:520px;margin:0 auto 22px;line-height:1.6}
-    .fl-hero-stats{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:22px}
-    .fl-stat{font-size:12px;color:rgba(255,255,255,.45);display:flex;align-items:center;gap:5px}
-    .fl-stat strong{color:#00aaff;font-weight:800}
-    /* SEARCH */
-    .fl-search{max-width:540px;margin:0 auto;display:flex;gap:8px}
-    .fl-search input{flex:1;padding:13px 16px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:#fff;font-size:14px;outline:none;font-family:inherit}
-    .fl-search input::placeholder{color:rgba(255,255,255,.3)}
-    .fl-search-btn{padding:13px 20px;background:linear-gradient(135deg,#00aaff,#0066cc);border:none;border-radius:12px;color:#fff;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit}
-    /* TABS */
-    .fl-tabs{display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(10,10,10,.9);position:sticky;top:61px;z-index:100;overflow-x:auto;scrollbar-width:none}
-    .fl-tabs::-webkit-scrollbar{display:none}
-    .fl-tab{padding:14px 20px;font-size:13px;font-weight:700;color:rgba(255,255,255,.45);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .2s;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
-    .fl-tab.active{color:#00aaff;border-bottom-color:#00aaff}
-    .fl-tab:hover{color:rgba(255,255,255,.7)}
-    /* BODY */
-    .fl-body{max-width:1200px;margin:0 auto;padding:24px 16px 100px}
-    /* CATEGORY CHIPS */
-    .fl-cats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
-    .fl-cat{padding:7px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);background:transparent;cursor:pointer;transition:all .2s;font-family:inherit}
-    .fl-cat.active,.fl-cat:hover{background:rgba(0,170,255,.1);border-color:rgba(0,170,255,.3);color:#00aaff}
-    /* GIG GRID */
-    .fl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
-    .fl-gig-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .2s,border-color .2s}
-    .fl-gig-card:hover{transform:translateY(-3px);border-color:rgba(0,170,255,.3)}
-    .fl-gig-thumb{width:100%;height:140px;object-fit:cover;display:flex;align-items:center;justify-content:center;font-size:48px;background:linear-gradient(135deg,rgba(0,170,255,.08),rgba(80,0,255,.06))}
-    .fl-gig-body{padding:13px 14px}
-    .fl-gig-cat{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:rgba(0,170,255,.1);border:1px solid rgba(0,170,255,.2);color:#00aaff;margin-bottom:7px}
-    .fl-gig-title{font-size:14px;font-weight:800;line-height:1.35;margin-bottom:6px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-    .fl-gig-seller{display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px}
-    .fl-gig-avatar{width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#00aaff,#0066cc);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0}
-    .fl-gig-stars{color:#ffc107;font-size:11px}
-    .fl-gig-price{font-size:15px;font-weight:900;color:#71ff00}
-    .fl-gig-price span{font-size:10px;color:rgba(255,255,255,.35);font-weight:400}
-    .fl-gig-delivery{font-size:10px;color:rgba(255,255,255,.35);margin-top:2px}
-    /* TALENT CARDS */
-    .fl-talent-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
-    .fl-talent-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:20px;cursor:pointer;transition:transform .2s,border-color .2s;text-align:center}
-    .fl-talent-card:hover{transform:translateY(-3px);border-color:rgba(113,255,0,.3)}
-    .fl-talent-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#00aaff,#0066cc);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;margin:0 auto 12px;border:2px solid rgba(0,170,255,.3)}
-    .fl-talent-name{font-size:15px;font-weight:800;margin-bottom:4px}
-    .fl-talent-title{font-size:12px;color:rgba(255,255,255,.45);margin-bottom:8px}
-    .fl-talent-badges{display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
-    .fl-badge{font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5)}
-    .fl-talent-rate{font-size:14px;font-weight:900;color:#71ff00;margin-bottom:3px}
-    .fl-talent-stats{font-size:11px;color:rgba(255,255,255,.35)}
-    /* POST JOB FORM */
-    .fl-form{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:28px;max-width:680px;margin:0 auto}
-    .fl-form h3{font-size:18px;font-weight:800;margin-bottom:20px}
-    .fl-field{margin-bottom:16px}
-    .fl-label{font-size:12px;font-weight:700;color:rgba(255,255,255,.6);margin-bottom:6px;display:block}
-    .fl-input,.fl-textarea,.fl-select{width:100%;padding:12px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:14px;outline:none;font-family:inherit;transition:border-color .2s}
-    .fl-input:focus,.fl-textarea:focus,.fl-select:focus{border-color:rgba(0,170,255,.4)}
-    .fl-textarea{resize:vertical;min-height:100px}
-    .fl-select option{background:#1a1a1a;color:#fff}
-    .fl-input::placeholder,.fl-textarea::placeholder{color:rgba(255,255,255,.25)}
-    .fl-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .fl-btn{padding:13px 24px;border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;border:none;transition:filter .2s}
-    .fl-btn.blue{background:linear-gradient(135deg,#00aaff,#0066cc);color:#fff}
-    .fl-btn.green{background:linear-gradient(135deg,#71ff00,#44bb00);color:#000}
-    .fl-btn.outline{background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7)}
-    .fl-btn:hover{filter:brightness(1.1)}
-    .fl-btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
-    /* DASHBOARD */
-    .fl-dash-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
-    .fl-dtab{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.45);background:transparent;cursor:pointer;font-family:inherit;transition:all .2s}
-    .fl-dtab.active{background:rgba(0,170,255,.1);border-color:rgba(0,170,255,.3);color:#00aaff}
-    /* CONTRACT CARD */
-    .fl-contract-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:18px;margin-bottom:12px}
-    .fl-contract-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:10px}
-    .fl-contract-title{font-size:14px;font-weight:800;line-height:1.35}
-    .fl-status{font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;flex-shrink:0}
-    .fl-status.active{background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.2);color:#71ff00}
-    .fl-status.pending{background:rgba(255,193,7,.1);border:1px solid rgba(255,193,7,.2);color:#ffc107}
-    .fl-status.complete{background:rgba(0,170,255,.1);border:1px solid rgba(0,170,255,.2);color:#00aaff}
-    .fl-milestone-bar{display:flex;gap:4px;margin:10px 0}
-    .fl-ms{height:6px;border-radius:3px;flex:1;background:rgba(255,255,255,.08)}
-    .fl-ms.done{background:#71ff00}
-    .fl-ms.active{background:#00aaff}
-    .fl-contract-meta{font-size:11px;color:rgba(255,255,255,.35);display:flex;gap:14px;flex-wrap:wrap}
-    /* MESSAGES */
-    .fl-msg-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;padding:4px 0}
-    .fl-msg-bubble{max-width:75%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.5}
-    .fl-msg-bubble.mine{background:rgba(0,170,255,.15);border:1px solid rgba(0,170,255,.2);margin-left:auto;border-bottom-right-radius:4px}
-    .fl-msg-bubble.theirs{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-bottom-left-radius:4px}
-    .fl-msg-meta{font-size:10px;color:rgba(255,255,255,.3);margin-top:4px}
-    /* MODAL OVERLAY */
-    .fl-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center;padding:16px}
-    .fl-modal.open{display:flex}
-    .fl-modal-box{background:#111;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;padding:28px}
-    .fl-modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-    .fl-modal-head h3{font-size:17px;font-weight:900}
-    .fl-close{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;font-family:inherit}
-    /* PROPOSAL CARD */
-    .fl-prop-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;margin-bottom:10px}
-    .fl-prop-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-    .fl-prop-name{font-size:13px;font-weight:800}
-    .fl-prop-price{font-size:14px;font-weight:900;color:#71ff00}
-    /* REVIEW */
-    .fl-stars-row{display:flex;gap:6px;margin:10px 0}
-    .fl-star{font-size:28px;cursor:pointer;opacity:.35;transition:opacity .15s}
-    .fl-star.on{opacity:1}
-    /* NOTIF BADGE */
-    .fl-notif-dot{width:8px;height:8px;background:#ff4444;border-radius:50%;display:inline-block;margin-left:4px;vertical-align:middle}
-    /* EMPTY */
-    .fl-empty{text-align:center;padding:50px 0;color:rgba(255,255,255,.25)}
-    .fl-empty-icon{font-size:48px;margin-bottom:12px}
-    /* WALLET */
-    .fl-wallet-card{background:linear-gradient(135deg,rgba(0,170,255,.1),rgba(80,0,255,.07));border:1px solid rgba(0,170,255,.2);border-radius:16px;padding:22px;margin-bottom:20px}
-    .fl-wallet-bal{font-size:28px;font-weight:900;color:#71ff00;margin:4px 0}
-    .fl-wallet-label{font-size:12px;color:rgba(255,255,255,.4)}
-    .fl-wallet-row{display:flex;gap:10px;margin-top:14px}
-    /* SECTION HEADING */
-    .fl-sh{font-size:15px;font-weight:800;margin:0 0 14px;display:flex;align-items:center;gap:8px}
-    .fl-sh::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.07)}
-    /* SORT ROW */
-    .fl-sort-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px}
-    .fl-sort-row .fl-select{width:auto;padding:8px 12px;font-size:12px}
-    .fl-count{font-size:13px;color:rgba(255,255,255,.4)}
-    @media(max-width:600px){
-      .fl-grid{grid-template-columns:repeat(2,1fr)}
-      .fl-talent-grid{grid-template-columns:repeat(2,1fr)}
-      .fl-row{grid-template-columns:1fr}
-      .fl-modal-box{padding:20px}
-    }
-    @media(max-width:380px){
-      .fl-grid{grid-template-columns:1fr}
-      .fl-talent-grid{grid-template-columns:1fr}
-    }
-  </style>
-  <link rel="stylesheet" href="premium.css">
-  <link rel="stylesheet" href="mobile.css">
-  <link rel="stylesheet" href="sokoni-premium-v2.css">
-  <script src="shared-header.js" defer></script>
-  <link rel="stylesheet" href="sokoni-desktop.css">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Digital Hub — SOKONI</title>
+<link rel="icon" href="/assets/logosokoni.png">
+<script src="/__/firebase/10.12.0/firebase-app-compat.js"></script>
+<script src="/__/firebase/10.12.0/firebase-auth-compat.js"></script>
+<script src="/__/firebase/10.12.0/firebase-functions-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
+.hdr{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+.logo{font-weight:700;font-size:18px;color:#bc8cff}
+.hero{background:linear-gradient(135deg,#0d1117,#13091a);padding:40px 16px 28px;text-align:center}
+.hero h1{font-size:clamp(22px,5vw,36px);font-weight:700;margin-bottom:8px}
+.hero p{color:#8b949e;font-size:14px;max-width:480px;margin:0 auto 20px}
+.srow{display:flex;gap:8px;max-width:540px;margin:0 auto}
+.srow input{flex:1;padding:11px 16px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#e6edf3;font-size:14px}
+.srow input:focus{outline:none;border-color:#bc8cff}
+.tabs{display:flex;border-bottom:1px solid #30363d;padding:0 16px;background:#161b22}
+.tab{padding:11px 14px;cursor:pointer;font-size:14px;border-bottom:2px solid transparent;color:#8b949e;white-space:nowrap}
+.tab.active{color:#e6edf3;border-color:#bc8cff}
+.catbar{background:#161b22;border-bottom:1px solid #30363d;padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap}
+.cat{padding:5px 12px;border-radius:16px;font-size:12px;cursor:pointer;border:1px solid #30363d;background:transparent;color:#8b949e;transition:.2s;white-space:nowrap}
+.cat.active,.cat:hover{background:#6e40c9;border-color:#6e40c9;color:#fff}
+.container{max-width:1200px;margin:0 auto;padding:20px 16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:12px;overflow:hidden;cursor:pointer;transition:.2s}
+.card:hover{border-color:#bc8cff;transform:translateY(-2px)}
+.cthumb{height:135px;background:#21262d;display:flex;align-items:center;justify-content:center;font-size:48px;position:relative;overflow:hidden}
+.cthumb img{width:100%;height:100%;object-fit:cover}
+.free-badge{position:absolute;top:8px;right:8px;padding:3px 8px;background:#238636;color:#fff;border-radius:4px;font-size:11px;font-weight:700}
+.cbody{padding:12px}
+.ctitle{font-size:13px;font-weight:600;margin-bottom:3px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cmeta{font-size:11px;color:#8b949e;margin-bottom:6px}
+.crow{display:flex;justify-content:space-between;align-items:center}
+.cprice{font-size:15px;font-weight:700;color:#bc8cff}
+.cdown{font-size:11px;color:#8b949e}
+.spinner{display:inline-block;width:24px;height:24px;border:2px solid #30363d;border-top-color:#bc8cff;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.btn{padding:10px 18px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:.2s}
+.btn-p{background:#6e40c9;color:#fff}.btn-p:hover{background:#8957e5}
+.btn-out{background:transparent;border:1px solid #30363d;color:#e6edf3}.btn-out:hover{border-color:#8b949e}
+.btn-dl{background:#238636;color:#fff}.btn-dl:hover{background:#2ea043}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto}
+.overlay.open{display:flex}
+.modal{background:#161b22;border:1px solid #30363d;border-radius:16px;width:100%;max-width:560px;margin:auto}
+.mhdr{padding:18px 22px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center}
+.mhdr h2{font-size:16px;font-weight:600}.xbtn{background:none;border:none;color:#8b949e;font-size:22px;cursor:pointer}
+.mbody{padding:20px}
+.preview{height:180px;background:#21262d;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:64px;margin-bottom:14px;overflow:hidden}
+.preview img{width:100%;height:100%;object-fit:cover}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.mi label{font-size:11px;color:#8b949e;display:block;margin-bottom:2px}.mi span{font-size:13px;font-weight:600}
+.mdesc{font-size:14px;color:#8b949e;line-height:1.6;margin-bottom:14px}
+.inc{list-style:none;margin-bottom:14px}
+.inc li{padding:3px 0;font-size:13px;color:#8b949e}.inc li::before{content:'✓ ';color:#3fb950}
+.buybox{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px;margin-bottom:10px;text-align:center}
+.buyprice{font-size:26px;font-weight:700;color:#bc8cff;margin-bottom:4px}
+.buynote{font-size:12px;color:#8b949e;margin-bottom:12px}
+.lib-item{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;margin-bottom:10px;display:flex;gap:12px;align-items:center}
+.lib-icon{width:44px;height:44px;border-radius:8px;background:#21262d;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.lib-key{font-size:11px;font-family:monospace;background:#161b22;padding:2px 8px;border-radius:4px;color:#bc8cff;margin-top:3px;display:inline-block}
+.empty{text-align:center;padding:60px;color:#8b949e}
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:14px;z-index:999;animation:fi .3s;max-width:300px}
+.tok{background:#238636;color:#fff}.terr{background:#da3633;color:#fff}
+@keyframes fi{from{opacity:0;transform:translateY(8px)}}
+@media(max-width:600px){.grid{grid-template-columns:1fr 1fr}.mgrid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-<script src="splash.js"></script>
-
-<nav class="fl-nav">
-  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="fl-nav-logo" alt="Sokoni"></a>
-  <div class="fl-nav-right">
-    <button class="fl-nb" onclick="toggleNotifDrawer()" style="position:relative">🔔<span id="flNotifBadge" style="display:none;position:absolute;top:5px;right:5px;background:#ff4444;border-radius:50%;width:8px;height:8px"></span></button>
-    <button class="fl-nb" onclick="flShowTab('messages')">💬 <span id="flMsgCount"></span></button>
-    <button class="fl-nb primary" onclick="flShowTab('postjob')">📋 Post Job</button>
-    <button class="fl-nb green" onclick="openPostGigModal()">🚀 Sell Service</button>
-  </div>
-</nav>
-
-<!-- HERO -->
-<div class="fl-hero">
-  <div class="fl-hero-badge">🌍 KENYA'S FREELANCER MARKETPLACE</div>
-  <h1>💻 Find & Hire Top Talent</h1>
-  <p>Browse services, post jobs, manage projects — all in one place. Secure payments, milestone tracking, and real-time messaging.</p>
-  <div class="fl-hero-stats">
-    <div class="fl-stat"><strong id="flStatGigs">—</strong> Active Gigs</div>
-    <div class="fl-stat"><strong id="flStatFreelancers">—</strong> Freelancers</div>
-    <div class="fl-stat"><strong id="flStatJobs">—</strong> Open Jobs</div>
-  </div>
-  <div class="fl-search">
-    <input type="text" id="flSearchInput" placeholder="Search services, skills, or freelancers…" oninput="flSearch()">
-    <button type="button" class="fl-search-btn" onclick="flSearch()">🔍</button>
+<div class="hdr">
+  <span style="color:#8b949e;font-size:14px;cursor:pointer" onclick="history.back()">← Back</span>
+  <div class="logo">💾 Digital Hub</div>
+  <div style="margin-left:auto;display:flex;gap:8px">
+    <button class="btn btn-out" style="padding:7px 14px;font-size:13px" onclick="setTab('library',document.querySelectorAll('.tab')[1])">My Library</button>
+    <a href="/digital-esoko" style="background:#6e40c9;color:#fff;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">Sell →</a>
   </div>
 </div>
-
-<!-- TABS -->
-<div class="fl-tabs">
-  <button class="fl-tab active" id="tab-browse" onclick="flShowTab('browse')">🛍️ Browse Services</button>
-  <button class="fl-tab" id="tab-talent" onclick="flShowTab('talent')">👥 Find Talent</button>
-  <button class="fl-tab" id="tab-postjob" onclick="flShowTab('postjob')">📋 Post a Job</button>
-  <button class="fl-tab" id="tab-jobs" onclick="flShowTab('jobs')">📌 Open Jobs</button>
-  <button class="fl-tab" id="tab-dashboard" onclick="flShowTab('dashboard')">📊 Dashboard</button>
-  <button class="fl-tab" id="tab-messages" onclick="flShowTab('messages')">💬 Messages</button>
+<div class="hero">
+  <h1>Digital Products Marketplace</h1>
+  <p>eBooks, software, courses, templates, music and more — download instantly after purchase.</p>
+  <div class="srow">
+    <input id="sq" type="text" placeholder="Search digital products…" onkeydown="if(event.key==='Enter')doSearch()">
+    <button class="btn btn-p" onclick="doSearch()">Search</button>
+  </div>
+</div>
+<div class="tabs">
+  <div class="tab active" onclick="setTab('browse',this)">Browse</div>
+  <div class="tab" onclick="setTab('library',this)">My Library</div>
+</div>
+<div class="catbar" id="catBar"></div>
+<div class="container">
+  <div id="tBrowse"><div class="empty"><div class="spinner"></div></div></div>
+  <div id="tLibrary" style="display:none"><div id="libArea" class="empty"><div class="spinner"></div></div></div>
+  <div style="text-align:center;margin-top:16px;display:none" id="moreBtn"><button class="btn btn-out" onclick="loadMore()">Load More</button></div>
 </div>
 
-<div class="fl-body">
-
-  <!-- BROWSE VIEW -->
-  <div id="view-browse">
-    <div class="fl-cats" id="flCatChips"></div>
-    <div class="fl-sort-row">
-      <div class="fl-count" id="flGigCount"></div>
-      <select class="fl-select" id="flSortSel" onchange="flRenderGigs()">
-        <option value="newest">Newest</option>
-        <option value="price_asc">Price: Low–High</option>
-        <option value="price_desc">Price: High–Low</option>
-        <option value="rating">Top Rated</option>
-      </select>
-    </div>
-    <div class="fl-grid" id="flGigGrid"></div>
-    <div class="fl-empty" id="flGigEmpty" style="display:none">
-      <div class="fl-empty-icon">💻</div>
-      <p>No services yet in this category.<br>Be the first to list one!</p>
-    </div>
-  </div>
-
-  <!-- TALENT VIEW -->
-  <div id="view-talent" style="display:none">
-    <div class="fl-sort-row">
-      <div class="fl-count" id="flTalentCount"></div>
-      <select class="fl-select" id="flTalentCat" onchange="flRenderTalent()">
-        <option value="">All Categories</option>
-      </select>
-    </div>
-    <div class="fl-talent-grid" id="flTalentGrid"></div>
-    <div class="fl-empty" id="flTalentEmpty" style="display:none">
-      <div class="fl-empty-icon">👥</div>
-      <p>No freelancers yet. Create a gig to join!</p>
-    </div>
-  </div>
-
-  <!-- POST JOB VIEW -->
-  <div id="view-postjob" style="display:none">
-    <div class="fl-form">
-      <h3>📋 Post a Job</h3>
-      <div class="fl-field">
-        <label class="fl-label">Job Title *</label>
-        <input type="text" class="fl-input" id="jobTitle" placeholder="e.g. Build a React Native app for my startup">
+<div class="overlay" id="prodModal">
+  <div class="modal">
+    <div class="mhdr"><h2 id="mTitle"></h2><button class="xbtn" onclick="close('prodModal')">×</button></div>
+    <div class="mbody">
+      <div class="preview" id="mThumb"></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+        <div style="font-size:20px;font-weight:700;color:#bc8cff" id="mPrice"></div>
+        <span id="mCat" style="font-size:12px;color:#8b949e;text-transform:capitalize"></span>
       </div>
-      <div class="fl-field">
-        <label class="fl-label">Category *</label>
-        <select class="fl-select" id="jobCat"></select>
+      <div class="mgrid" id="mMeta"></div>
+      <p class="mdesc" id="mDesc"></p>
+      <ul class="inc" id="mInc"></ul>
+      <div class="buybox">
+        <div class="buyprice" id="buyPr"></div>
+        <div class="buynote" id="buyNt"></div>
+        <button class="btn btn-p" style="width:100%" id="buyBtn" onclick="purchase()">Buy Now</button>
       </div>
-      <div class="fl-field">
-        <label class="fl-label">Job Description *</label>
-        <textarea class="fl-textarea" id="jobDesc" placeholder="Describe exactly what you need, deliverables, and any requirements…" style="min-height:130px"></textarea>
+      <div style="font-size:12px;color:#8b949e;text-align:center">🔒 Secure · ⬇ Instant download · 📄 License included</div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="dlModal">
+  <div class="modal" style="max-width:420px">
+    <div class="mhdr"><h2>Download Ready</h2><button class="xbtn" onclick="close('dlModal')">×</button></div>
+    <div class="mbody" style="text-align:center">
+      <div style="font-size:48px;margin-bottom:12px">⬇️</div>
+      <h3 id="dlTitle" style="margin-bottom:8px"></h3>
+      <p style="color:#8b949e;font-size:13px;margin-bottom:14px">Link expires in 15 minutes.</p>
+      <div id="dlKeyBox" style="background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px;margin-bottom:14px;display:none">
+        <div style="font-size:11px;color:#8b949e;margin-bottom:4px">License Key</div>
+        <div id="dlKey" style="font-size:13px;font-family:monospace;color:#bc8cff;word-break:break-all"></div>
       </div>
-      <div class="fl-row">
-        <div class="fl-field">
-          <label class="fl-label">Budget (KES)</label>
-          <input type="number" class="fl-input" id="jobBudget" placeholder="e.g. 15000">
-        </div>
-        <div class="fl-field">
-          <label class="fl-label">Duration</label>
-          <select class="fl-select" id="jobDuration">
-            <option>Under 1 week</option>
-            <option>1–2 weeks</option>
-            <option>1 month</option>
-            <option>1–3 months</option>
-            <option>Ongoing</option>
-          </select>
-        </div>
-      </div>
-      <div class="fl-field">
-        <label class="fl-label">Required Skills</label>
-        <input type="text" class="fl-input" id="jobSkills" placeholder="e.g. React, Node.js, Firebase (comma-separated)">
-      </div>
-      <div class="fl-field">
-        <label class="fl-label">Attachment / Brief URL (optional)</label>
-        <input type="text" class="fl-input" id="jobAttachment" placeholder="Google Drive, Figma, or Docs link">
-      </div>
-      <div style="display:flex;gap:10px;margin-top:8px">
-        <button type="button" class="fl-btn blue" style="flex:1" onclick="submitJob()">📋 Post Job</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- OPEN JOBS VIEW -->
-  <div id="view-jobs" style="display:none">
-    <div class="fl-sort-row">
-      <div class="fl-count" id="flJobCount"></div>
-      <select class="fl-select" id="flJobCatFilter" onchange="flRenderJobs()">
-        <option value="">All Categories</option>
-      </select>
-    </div>
-    <div id="flJobList"></div>
-    <div class="fl-empty" id="flJobEmpty" style="display:none">
-      <div class="fl-empty-icon">📌</div>
-      <p>No open jobs yet.<br><button class="fl-btn blue" style="margin-top:10px" onclick="flShowTab('postjob')">Post First Job →</button></p>
-    </div>
-  </div>
-
-  <!-- DASHBOARD VIEW -->
-  <div id="view-dashboard" style="display:none">
-    <div class="fl-dash-tabs">
-      <button class="fl-dtab active" onclick="flDash('active',this)">🔥 Active Projects</button>
-      <button class="fl-dtab" onclick="flDash('mygigs',this)">🛍️ My Gigs</button>
-      <button class="fl-dtab" onclick="flDash('myjobs',this)">📋 My Jobs</button>
-      <button class="fl-dtab" onclick="flDash('proposals',this)">📨 Proposals</button>
-      <button class="fl-dtab" onclick="flDash('wallet',this)">💰 Wallet</button>
-      <button class="fl-dtab" onclick="flDash('reviews',this)">⭐ Reviews</button>
-      <button class="fl-dtab" onclick="flDash('profile',this)">👤 My Profile</button>
-    </div>
-    <div id="flDashContent"></div>
-  </div>
-
-  <!-- MESSAGES VIEW -->
-  <div id="view-messages" style="display:none">
-    <div class="fl-sh">💬 Messages</div>
-    <div id="flConvoList"></div>
-    <div class="fl-empty" id="flMsgEmpty" style="display:none">
-      <div class="fl-empty-icon">💬</div>
-      <p>No conversations yet.</p>
-    </div>
-  </div>
-
-</div><!-- end fl-body -->
-
-<!-- ── MODALS ── -->
-
-<!-- GIG DETAIL MODAL -->
-<div class="fl-modal" id="gigDetailModal">
-  <div class="fl-modal-box" style="max-width:640px">
-    <div class="fl-modal-head">
-      <h3 id="gdTitle">Gig Details</h3>
-      <button class="fl-close" onclick="closeModal('gigDetailModal')">✕</button>
-    </div>
-    <div id="gdBody"></div>
-  </div>
-</div>
-
-<!-- FREELANCER PROFILE MODAL -->
-<div class="fl-modal" id="freelancerModal">
-  <div class="fl-modal-box">
-    <div class="fl-modal-head">
-      <h3 id="fpTitle">Freelancer Profile</h3>
-      <button class="fl-close" onclick="closeModal('freelancerModal')">✕</button>
-    </div>
-    <div id="fpBody"></div>
-  </div>
-</div>
-
-<!-- POST GIG MODAL -->
-<div class="fl-modal" id="postGigModal">
-  <div class="fl-modal-box">
-    <div class="fl-modal-head">
-      <h3>🚀 Post a Service</h3>
-      <button class="fl-close" onclick="closeModal('postGigModal')">✕</button>
-    </div>
-    <div class="fl-field">
-      <label class="fl-label">Service Title *</label>
-      <input type="text" class="fl-input" id="pgTitle" placeholder="e.g. I will build a React landing page">
-    </div>
-    <div class="fl-field">
-      <label class="fl-label">Category *</label>
-      <select class="fl-select" id="pgCat"></select>
-    </div>
-    <div class="fl-field">
-      <label class="fl-label">Description *</label>
-      <textarea class="fl-textarea" id="pgDesc" placeholder="Describe your service, what's included, your process…"></textarea>
-    </div>
-    <div class="fl-row">
-      <div class="fl-field">
-        <label class="fl-label">Starting Price (KES) *</label>
-        <input type="number" class="fl-input" id="pgPrice" placeholder="e.g. 2500">
-      </div>
-      <div class="fl-field">
-        <label class="fl-label">Delivery Time</label>
-        <select class="fl-select" id="pgDelivery">
-          <option>1 day</option>
-          <option>2–3 days</option>
-          <option>1 week</option>
-          <option>2 weeks</option>
-          <option>1 month</option>
-        </select>
-      </div>
-    </div>
-    <div class="fl-field">
-      <label class="fl-label">Your Skills / Tags</label>
-      <input type="text" class="fl-input" id="pgSkills" placeholder="e.g. React, Node.js, Firebase">
-    </div>
-    <div class="fl-field">
-      <label class="fl-label">Portfolio Link (optional)</label>
-      <input type="text" class="fl-input" id="pgPortfolio" placeholder="Behance, GitHub, Dribbble…">
-    </div>
-    <div class="fl-field">
-      <label class="fl-label">Your Display Name *</label>
-      <input type="text" class="fl-input" id="pgName" placeholder="Your name or brand">
-    </div>
-    <div style="display:flex;gap:10px;margin-top:8px">
-      <button type="button" class="fl-btn green" style="flex:1" onclick="submitGig()">🚀 Publish Gig</button>
+      <a id="dlLink" href="#" class="btn btn-dl" style="display:block;width:100%;margin-bottom:8px;text-align:center;text-decoration:none">Download File</a>
+      <p style="font-size:12px;color:#8b949e" id="dlRem"></p>
     </div>
   </div>
 </div>
 
-<!-- PROPOSAL MODAL -->
-<div class="fl-modal" id="proposalModal">
-  <div class="fl-modal-box">
-    <div class="fl-modal-head">
-      <h3 id="propModalTitle">📨 Send Proposal</h3>
-      <button class="fl-close" onclick="closeModal('proposalModal')">✕</button>
-    </div>
-    <div id="propJobSummary" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px;margin-bottom:16px;font-size:13px;color:rgba(255,255,255,.6)"></div>
-    <div class="fl-field">
-      <label class="fl-label">Your Bid (KES) *</label>
-      <input type="number" class="fl-input" id="propBid" placeholder="Your price">
-    </div>
-    <div class="fl-field">
-      <label class="fl-label">Delivery Time *</label>
-      <select class="fl-select" id="propDelivery">
-        <option>1–3 days</option>
-        <option>1 week</option>
-        <option>2 weeks</option>
-        <option>1 month</option>
-      </select>
-    </div>
-    <div class="fl-field">
-      <label class="fl-label">Cover Letter *</label>
-      <textarea class="fl-textarea" id="propLetter" placeholder="Explain your approach, relevant experience, and why you're the best fit…"></textarea>
-    </div>
-    <div class="fl-field">
-      <label class="fl-label">Your Name *</label>
-      <input type="text" class="fl-input" id="propName" placeholder="Your name">
-    </div>
-    <div style="display:flex;gap:10px;margin-top:8px">
-      <button type="button" class="fl-btn blue" style="flex:1" onclick="submitProposal()">📨 Submit Proposal</button>
-    </div>
-  </div>
-</div>
-
-<!-- MESSAGES MODAL -->
-<div class="fl-modal" id="chatModal">
-  <div class="fl-modal-box" style="max-width:520px">
-    <div class="fl-modal-head">
-      <h3 id="chatTitle">💬 Chat</h3>
-      <button class="fl-close" onclick="closeModal('chatModal')">✕</button>
-    </div>
-    <div class="fl-msg-list" id="chatMessages"></div>
-    <div style="display:flex;gap:8px;margin-top:14px">
-      <input type="text" class="fl-input" id="chatInput" placeholder="Type a message…" onkeydown="if(event.key==='Enter')sendChatMsg()">
-      <button type="button" class="fl-btn blue" onclick="sendChatMsg()" style="white-space:nowrap">Send</button>
-    </div>
-  </div>
-</div>
-
-<!-- MILESTONE MODAL -->
-<div class="fl-modal" id="milestoneModal">
-  <div class="fl-modal-box">
-    <div class="fl-modal-head">
-      <h3>🎯 Manage Milestones</h3>
-      <button class="fl-close" onclick="closeModal('milestoneModal')">✕</button>
-    </div>
-    <div id="milestoneBody"></div>
-    <div class="fl-field" style="margin-top:16px">
-      <label class="fl-label">Add Milestone</label>
-      <input type="text" class="fl-input" id="msTitle" placeholder="Milestone description">
-    </div>
-    <div class="fl-row">
-      <div class="fl-field">
-        <label class="fl-label">Amount (KES)</label>
-        <input type="number" class="fl-input" id="msAmount" placeholder="Payment amount">
-      </div>
-      <div class="fl-field">
-        <label class="fl-label">Due Date</label>
-        <input type="date" class="fl-input" id="msDue">
-      </div>
-    </div>
-    <button type="button" class="fl-btn blue" onclick="addMilestone()" style="width:100%;margin-top:8px">+ Add Milestone</button>
-  </div>
-</div>
-
-<!-- REVIEW MODAL -->
-<div class="fl-modal" id="reviewModal">
-  <div class="fl-modal-box">
-    <div class="fl-modal-head">
-      <h3>⭐ Leave a Review</h3>
-      <button class="fl-close" onclick="closeModal('reviewModal')">✕</button>
-    </div>
-    <p style="font-size:13px;color:rgba(255,255,255,.5);margin-bottom:12px" id="reviewTarget"></p>
-    <div class="fl-stars-row" id="reviewStars">
-      <span class="fl-star" onclick="setFlStar(1)" data-v="1">★</span>
-      <span class="fl-star" onclick="setFlStar(2)" data-v="2">★</span>
-      <span class="fl-star" onclick="setFlStar(3)" data-v="3">★</span>
-      <span class="fl-star" onclick="setFlStar(4)" data-v="4">★</span>
-      <span class="fl-star" onclick="setFlStar(5)" data-v="5">★</span>
-    </div>
-    <div class="fl-field">
-      <label class="fl-label">Review</label>
-      <textarea class="fl-textarea" id="reviewText" placeholder="Share your experience…"></textarea>
-    </div>
-    <button type="button" class="fl-btn blue" style="width:100%;margin-top:8px" onclick="submitFlReview()">Submit Review</button>
-  </div>
-</div>
-
-<!-- CONTRACT MODAL -->
-<div class="fl-modal" id="contractModal">
-  <div class="fl-modal-box" style="max-width:620px">
-    <div class="fl-modal-head">
-      <h3>📄 Contract</h3>
-      <button class="fl-close" onclick="closeModal('contractModal')">✕</button>
-    </div>
-    <div id="contractBody"></div>
-  </div>
-</div>
-
-<!-- NOTIFICATION DRAWER -->
-<div class="fl-modal" id="notifDrawer">
-  <div class="fl-modal-box" style="max-width:420px;margin-left:auto;margin-right:0;margin-top:0;border-radius:0 0 0 16px;max-height:80vh">
-    <div class="fl-modal-head">
-      <h3>🔔 Notifications</h3>
-      <button class="fl-close" onclick="closeModal('notifDrawer')">✕</button>
-    </div>
-    <div id="notifList"></div>
-    <div class="fl-empty" id="notifEmpty" style="display:none;padding:20px 0"><p>No notifications yet.</p></div>
-    <button class="fl-btn outline" style="width:100%;margin-top:12px;font-size:12px" onclick="clearNotifs()">Clear All</button>
-  </div>
-</div>
-
-<!-- EDIT GIG MODAL -->
-<div class="fl-modal" id="editGigModal">
-  <div class="fl-modal-box">
-    <div class="fl-modal-head">
-      <h3>✏️ Edit Service</h3>
-      <button class="fl-close" onclick="closeModal('editGigModal')">✕</button>
-    </div>
-    <div class="fl-field"><label class="fl-label">Title *</label><input type="text" class="fl-input" id="egTitle"></div>
-    <div class="fl-field"><label class="fl-label">Category *</label><select class="fl-select" id="egCat"></select></div>
-    <div class="fl-field"><label class="fl-label">Description *</label><textarea class="fl-textarea" id="egDesc"></textarea></div>
-    <div class="fl-row">
-      <div class="fl-field"><label class="fl-label">Price (KES)</label><input type="number" class="fl-input" id="egPrice"></div>
-      <div class="fl-field"><label class="fl-label">Delivery</label><select class="fl-select" id="egDelivery"><option>1 day</option><option>2–3 days</option><option>1 week</option><option>2 weeks</option><option>1 month</option></select></div>
-    </div>
-    <div class="fl-field"><label class="fl-label">Skills / Tags</label><input type="text" class="fl-input" id="egSkills"></div>
-    <div class="fl-field"><label class="fl-label">Portfolio Link</label><input type="text" class="fl-input" id="egPortfolio"></div>
-    <input type="hidden" id="egGigId">
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="fl-btn blue" style="flex:1" onclick="saveEditGig()">💾 Save Changes</button>
-      <button class="fl-btn outline" style="border-color:rgba(255,0,0,.2);color:#ff6666;padding:13px 16px" onclick="confirmDeleteGig()">🗑</button>
-    </div>
-  </div>
-</div>
-
-<!-- FREELANCER PROFILE EDIT MODAL -->
-<div class="fl-modal" id="profileEditModal">
-  <div class="fl-modal-box">
-    <div class="fl-modal-head">
-      <h3>👤 Edit My Profile</h3>
-      <button class="fl-close" onclick="closeModal('profileEditModal')">✕</button>
-    </div>
-    <div class="fl-field"><label class="fl-label">Display Name *</label><input type="text" class="fl-input" id="peDisplayName"></div>
-    <div class="fl-field"><label class="fl-label">Professional Title</label><input type="text" class="fl-input" id="peTitle" placeholder="e.g. Full-Stack Developer, UI/UX Designer"></div>
-    <div class="fl-field"><label class="fl-label">Bio</label><textarea class="fl-textarea" id="peBio" placeholder="Tell clients about yourself, your experience and what makes you stand out…" style="min-height:90px"></textarea></div>
-    <div class="fl-row">
-      <div class="fl-field"><label class="fl-label">Primary Category</label><select class="fl-select" id="peCat"></select></div>
-      <div class="fl-field"><label class="fl-label">Hourly Rate (KES)</label><input type="number" class="fl-input" id="peRate" placeholder="e.g. 1500"></div>
-    </div>
-    <div class="fl-field"><label class="fl-label">Skills (comma-separated)</label><input type="text" class="fl-input" id="peSkills" placeholder="React, Node.js, Figma, Python…"></div>
-    <div class="fl-row">
-      <div class="fl-field"><label class="fl-label">Location</label><input type="text" class="fl-input" id="peLocation" placeholder="e.g. Nairobi, Kenya"></div>
-      <div class="fl-field"><label class="fl-label">Languages</label><input type="text" class="fl-input" id="peLanguages" placeholder="English, Swahili"></div>
-    </div>
-    <div class="fl-field"><label class="fl-label">Portfolio / GitHub / Behance URL</label><input type="text" class="fl-input" id="pePortfolio"></div>
-    <div class="fl-field"><label class="fl-label">Portfolio Items (one URL per line)</label><textarea class="fl-textarea" id="pePortfolioItems" placeholder="https://project1.com&#10;https://project2.com" style="min-height:70px"></textarea></div>
-    <button class="fl-btn green" style="width:100%;margin-top:8px" onclick="saveFreelancerProfile()">💾 Save Profile</button>
-  </div>
-</div>
-
-<!-- WALLET WITHDRAW MODAL -->
-<div class="fl-modal" id="withdrawModal">
-  <div class="fl-modal-box" style="max-width:420px">
-    <div class="fl-modal-head">
-      <h3>💳 Withdraw Earnings</h3>
-      <button class="fl-close" onclick="closeModal('withdrawModal')">✕</button>
-    </div>
-    <div class="fl-field"><label class="fl-label">M-Pesa Number *</label><input type="tel" class="fl-input" id="wdPhone" placeholder="07xxxxxxxx" maxlength="12"></div>
-    <div class="fl-field"><label class="fl-label">Amount (KES) *</label><input type="number" class="fl-input" id="wdAmount" placeholder="Min: 100" min="100"></div>
-    <p style="font-size:12px;color:rgba(255,255,255,.35);margin:0 0 16px">Withdrawals are processed within 1 business day. A 1% platform fee applies.</p>
-    <button class="fl-btn blue" style="width:100%" onclick="submitWithdrawal()">Request Withdrawal</button>
-  </div>
-</div>
-
-<!-- WALLET HISTORY MODAL -->
-<div class="fl-modal" id="walletHistoryModal">
-  <div class="fl-modal-box" style="max-width:520px">
-    <div class="fl-modal-head">
-      <h3>📋 Transaction History</h3>
-      <button class="fl-close" onclick="closeModal('walletHistoryModal')">✕</button>
-    </div>
-    <div id="walletHistoryBody" style="min-height:80px"></div>
-  </div>
-</div>
-
-<!-- BOTTOM NAV -->
-<nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
-  <a href="services.html" class="bnav-item active-bnav"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="community.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Community</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
-</nav>
-
-<script src="scroll-top.js" defer></script>
-<script src="seo.js" defer></script>
-<script src="nav-active.js" defer></script>
-<script src="analytics.js" defer></script>
-<script src="sokoni-config.js" defer></script>
-<script src="sokoni-invoice.js"></script>
-<script src="sokoni-share.js" defer></script>
-<script src="sokoni-ui-extras.js" defer></script>
-<script src="sw-register.js" defer></script>
+<script src="/sokoni-config.js"></script>
 <script>
-(function(){
-  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
-    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
-    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
-  }catch(e){}
-})();
+let app,fns,auth,cu=null,all=[],sel=null,cursor=null,catF='';
+const CATS=['ebook','software','course','template','music','video','photo','font','plugin','game','other'];
+const CEMO={ebook:'📚',software:'💿',course:'🎓',template:'📋',music:'🎵',video:'🎬',photo:'📷',font:'🔤',plugin:'🔌',game:'🎮',other:'💾'};
+function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML}
+function toast(m,ok=true){const t=document.createElement('div');t.className='toast '+(ok?'tok':'terr');t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3500);}
+function open(id){document.getElementById(id).classList.add('open');}
+function close(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
+try{app=firebase.initializeApp(firebaseConfig,'dig');fns=app.functions('us-central1');auth=app.auth();auth.onAuthStateChanged(u=>{cu=u;});}catch(e){}
+async function call(n,d){try{const r=await fns.httpsCallable(n)(d);return{ok:true,data:r.data};}catch(e){return{ok:false,err:e.message};}}
+
+function buildCats(){
+  const b=document.getElementById('catBar');
+  b.innerHTML=`<div class="cat active" onclick="setCat('',this)">All</div>`+CATS.map(c=>`<div class="cat" onclick="setCat('${c}',this)">${CEMO[c]||'💾'} ${c}</div>`).join('');
+}
+function setCat(c,el){catF=c;document.querySelectorAll('.cat').forEach(x=>x.classList.remove('active'));el.classList.add('active');loadProducts();}
+
+async function loadProducts(){
+  cursor=null;document.getElementById('tBrowse').innerHTML='<div class="empty"><div class="spinner"></div></div>';
+  const r=await call('listDigitalProducts',{category:catF||undefined,limit:24});
+  if(!r.ok){document.getElementById('tBrowse').innerHTML='<div class="empty">Could not load products.</div>';return;}
+  all=r.data.products||[];cursor=r.data.nextCursor;
+  document.getElementById('moreBtn').style.display=cursor?'block':'none';
+  render(all);
+}
+async function loadMore(){
+  if(!cursor)return;
+  const r=await call('listDigitalProducts',{category:catF||undefined,limit:24,cursor});
+  if(!r.ok)return;
+  all=[...all,...(r.data.products||[])];cursor=r.data.nextCursor;
+  document.getElementById('moreBtn').style.display=cursor?'block':'none';
+  render(all);
+}
+function render(list){
+  if(!list.length){document.getElementById('tBrowse').innerHTML='<div class="empty">No products found.</div>';return;}
+  document.getElementById('tBrowse').innerHTML='<div class="grid">'+list.map(p=>`
+    <div class="card" onclick="openProd('${esc(p.productId)}')">
+      <div class="cthumb">${p.thumbnailUrl?`<img src="${esc(p.thumbnailUrl)}" loading="lazy">`:CEMO[p.category]||'💾'}${p.price===0?'<span class="free-badge">FREE</span>':''}</div>
+      <div class="cbody">
+        <div class="ctitle">${esc(p.title)}</div>
+        <div class="cmeta">${esc(p.sellerName||'')} · ${p.category||''}</div>
+        <div class="crow"><span class="cprice">${p.price===0?'Free':`KES ${(p.price||0).toLocaleString()}`}</span><span class="cdown">⬇ ${p.downloadCount||0}</span></div>
+      </div>
+    </div>`).join('')+'</div>';
+}
+
+async function openProd(id){
+  const cached=all.find(p=>p.productId===id);
+  if(cached&&!cached.description){const r=await call('getDigitalProduct',{productId:id});sel=r.ok?r.data:cached;}
+  else sel=cached||{};
+  const p=sel;
+  document.getElementById('mTitle').textContent=p.title||'';
+  const isFree=p.price===0;
+  document.getElementById('mPrice').textContent=isFree?'Free':`KES ${(p.price||0).toLocaleString()}`;
+  document.getElementById('mCat').textContent=(p.category||'').replace(/_/g,' ');
+  const th=document.getElementById('mThumb');
+  th.innerHTML=p.thumbnailUrl?`<img src="${esc(p.thumbnailUrl)}">`:(CEMO[p.category]||'💾');
+  document.getElementById('mMeta').innerHTML=[['Type',p.fileType||'—'],['Size',p.fileSizeMb?p.fileSizeMb+'MB':'—'],['License',(p.licenseType||'').replace(/_/g,' ')||'—'],['Downloads',p.downloadCount||0],['Rating',p.rating?`★ ${p.rating}`:'-'],['Version',p.version||'—']].map(([k,v])=>`<div class="mi"><label>${k}</label><span>${esc(String(v))}</span></div>`).join('');
+  document.getElementById('mDesc').textContent=p.description||'';
+  document.getElementById('mInc').innerHTML=(p.includes||[]).map(i=>`<li>${esc(i)}</li>`).join('');
+  document.getElementById('buyPr').textContent=isFree?'Free':`KES ${(p.price||0).toLocaleString()}`;
+  document.getElementById('buyNt').textContent=isFree?'Download for free':'One-time purchase · Instant download · License key included';
+  document.getElementById('buyBtn').textContent=isFree?'Download Free':'Buy Now';
+  open('prodModal');
+}
+
+async function purchase(){
+  if(!cu){toast('Sign in to purchase or download',false);return;}
+  if(!sel)return;
+  const key=`dp_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  const btn=document.getElementById('buyBtn');btn.textContent='Processing…';btn.disabled=true;
+  const r=await call('purchaseDigitalProduct',{productId:sel.productId,idempotencyKey:key});
+  btn.textContent=sel.price===0?'Download Free':'Buy Now';btn.disabled=false;
+  if(!r.ok){toast(r.err||'Purchase failed',false);return;}
+  if(r.data.status==='pending_payment'){toast('Redirecting to payment…');close('prodModal');return;}
+  close('prodModal');await download(sel.productId,sel.title);
+}
+
+async function download(productId,title){
+  const r=await call('downloadDigitalProduct',{productId});
+  if(!r.ok){toast(r.err||'Download failed',false);return;}
+  document.getElementById('dlTitle').textContent=title||'';
+  document.getElementById('dlLink').href=r.data.downloadUrl||'#';
+  document.getElementById('dlLink').setAttribute('download',title||'download');
+  const kb=document.getElementById('dlKeyBox');
+  if(r.data.licenseKey){kb.style.display='';document.getElementById('dlKey').textContent=r.data.licenseKey;}
+  else kb.style.display='none';
+  document.getElementById('dlRem').textContent=`${r.data.downloadsRemaining||0} downloads remaining`;
+  open('dlModal');
+}
+
+async function loadLibrary(){
+  const a=document.getElementById('libArea');
+  if(!cu){a.innerHTML='<div class="empty">Sign in to see your purchases.</div>';return;}
+  a.innerHTML='<div class="empty"><div class="spinner"></div></div>';
+  const r=await call('getMyDigitalPurchases',{});
+  if(!r.ok){a.innerHTML='<div class="empty">Could not load library.</div>';return;}
+  const list=r.data.purchases||[];
+  if(!list.length){a.innerHTML='<div class="empty">No purchases yet.</div>';return;}
+  a.innerHTML=list.map(p=>`
+    <div class="lib-item">
+      <div class="lib-icon">${CEMO[p.category]||'💾'}</div>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:14px">${esc(p.title||p.productId)}</div>
+        <div style="font-size:12px;color:#8b949e">${p.category||''} · KES ${(p.purchasePrice||0).toLocaleString()}</div>
+        ${p.licenseKey?`<div class="lib-key">${esc(p.licenseKey)}</div>`:''}
+        <div style="font-size:11px;color:#8b949e;margin-top:3px">⬇ ${p.downloadsUsed||0}/${p.allowedDownloads||0} used</div>
+      </div>
+      <button class="btn btn-dl" style="padding:7px 12px;font-size:12px;flex-shrink:0" onclick="download('${esc(p.productId)}','${esc(p.title||'')}')">Download</button>
+    </div>`).join('');
+}
+
+async function doSearch(){
+  const q=document.getElementById('sq').value.trim();if(!q)return;
+  const r=await call('searchDigitalProducts',{query:q,limit:40});
+  if(!r.ok){toast('Search failed',false);return;}
+  all=r.data.results||[];render(all);
+}
+
+function setTab(t,el){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));el.classList.add('active');
+  document.getElementById('tBrowse').style.display=t==='browse'?'':'none';
+  document.getElementById('tLibrary').style.display=t==='library'?'':'none';
+  document.getElementById('moreBtn').style.display='none';
+  document.getElementById('catBar').style.display=t==='browse'?'flex':'none';
+  if(t==='library')loadLibrary();
+}
+buildCats();loadProducts();
 </script>
-<script type="module" src="sokoni-init.js"></script>
-<script src="sokoni-audit.js" defer></script>
-<script src="sokoni-mpesa.js" defer></script>
-<script src="sokoni-social.js" defer></script>
-<script src="sokoni-referral.js" defer></script>
-
-<script>
-/* ── CONSTANTS ── */
-var FL_CATS = [
-  {id:'software',   label:'Software Dev',     emoji:'💻'},
-  {id:'mobile',     label:'Mobile Apps',       emoji:'📱'},
-  {id:'web',        label:'Web Development',   emoji:'🌐'},
-  {id:'design',     label:'Graphic Design',    emoji:'🎨'},
-  {id:'video',      label:'Video Editing',     emoji:'🎬'},
-  {id:'animation',  label:'Animation',         emoji:'✨'},
-  {id:'marketing',  label:'Digital Marketing', emoji:'📣'},
-  {id:'seo',        label:'SEO',               emoji:'🔍'},
-  {id:'writing',    label:'Writing',           emoji:'✍️'},
-  {id:'va',         label:'Virtual Assistant', emoji:'🤝'},
-  {id:'ai',         label:'AI Services',       emoji:'🤖'},
-];
-
-var _flDb = null;
-var _flUser = null;
-var _flGigs = [];
-
-function _flToast(msg, type){
-  var t = document.getElementById('_flToastEl');
-  if(!t){
-    t = document.createElement('div');
-    t.id = '_flToastEl';
-    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:#111;border:1px solid rgba(113,255,0,.3);color:#71ff00;font-size:13px;font-weight:700;padding:11px 22px;border-radius:50px;z-index:9999;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center';
-    document.body.appendChild(t);
-  }
-  t.style.borderColor = type==='error' ? 'rgba(255,80,80,.4)' : 'rgba(113,255,0,.3)';
-  t.style.color       = type==='error' ? '#ff8080' : '#71ff00';
-  t.textContent = msg;
-  t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)';
-  clearTimeout(t._tm);
-  t._tm = setTimeout(function(){ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(10px)'; }, 3200);
-}
-var _flJobs = [];
-var _flFreelancers = [];
-var _flContracts = [];
-var _flProposals = [];
-var _flReviews = [];
-var _flMessages = {};
-var _activeCat = '';
-var _activeTab = 'browse';
-var _activeDashSub = 'active';
-var _flNotifs = [];
-var _currentJobId = null;
-var _currentContractId = null;
-var _currentChatId = null;
-var _flStarRating = 0;
-var _reviewRefId = null;
-
-/* ── FIRESTORE INIT ── */
-async function _getDb(){
-  if(_flDb) return _flDb;
-  try{
-    var fb = window._sokoniFirebase || (await new Promise(r=>{
-      if(window._sokoniFirebase){r(window._sokoniFirebase);return;}
-      var t=0; var iv=setInterval(()=>{
-        if(window._sokoniFirebase){clearInterval(iv);r(window._sokoniFirebase);}
-        if(++t>20){clearInterval(iv);r(null);}
-      },150);
-    }));
-    if(!fb) return null;
-    var m = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-    _flDb = m.getFirestore(fb);
-    return _flDb;
-  }catch(e){return null;}
-}
-
-function _getUser(){
-  try{return JSON.parse(localStorage.getItem('sokoniUser')||'null');}catch(e){return null;}
-}
-
-function _uid(){
-  var u=_getUser(); return (u&&u.uid)||localStorage.getItem('sokoniGuestId')||(()=>{
-    var id='g'+Date.now().toString(36); localStorage.setItem('sokoniGuestId',id); return id;
-  })();
-}
-
-function _userName(){
-  var u=_getUser(); return (u&&(u.displayName||u.name))||'Anonymous';
-}
-
-function _lsGet(k,def){try{return JSON.parse(localStorage.getItem(k))||def;}catch(e){return def;}}
-function _lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
-
-/* ── LOAD DATA ── */
-async function flLoadAll(){
-  _flGigs = _lsGet('flGigs',[]);
-  _flJobs = _lsGet('flJobs',[]);
-  _flFreelancers = _lsGet('flFreelancers',[]);
-  _flContracts = _lsGet('flContracts',[]);
-  _flProposals = _lsGet('flProposals',[]);
-  _flReviews = _lsGet('flReviews',[]);
-  _flNotifs = _lsGet('flNotifs',[]);
-  flBuildFreelancerList();
-  flUpdateStats();
-  flRenderCatChips();
-  flRenderGigs();
-  flPopulateCatSelects();
-  flRefreshNotifBadge();
-
-  var db = await _getDb();
-  if(!db) return;
-  try{
-    var mod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-    var {collection, query, orderBy, limit, onSnapshot} = mod;
-
-    onSnapshot(query(collection(db,'digitalGigs'), orderBy('createdAt','desc'), limit(100)), snap=>{
-      _flGigs = snap.docs.map(d=>({id:d.id,...d.data()}));
-      _lsSet('flGigs',_flGigs);
-      flBuildFreelancerList();
-      flUpdateStats();
-      flRenderGigs();
-      if(_activeTab==='talent') flRenderTalent();
-    });
-    onSnapshot(query(collection(db,'digitalJobs'), orderBy('createdAt','desc'), limit(100)), snap=>{
-      _flJobs = snap.docs.map(d=>({id:d.id,...d.data()}));
-      _lsSet('flJobs',_flJobs);
-      flUpdateStats();
-      if(_activeTab==='jobs') flRenderJobs();
-    });
-    onSnapshot(query(collection(db,'digitalProposals'), orderBy('createdAt','desc'), limit(200)), snap=>{
-      var prev = _flProposals.map(p=>p.id);
-      _flProposals = snap.docs.map(d=>({id:d.id,...d.data()}));
-      _lsSet('flProposals',_flProposals);
-      /* notify client when new proposal arrives on their job */
-      var myJobIds = _flJobs.filter(j=>j.posterUid===_uid()).map(j=>j.id);
-      _flProposals.filter(p=>!prev.includes(p.id)&&myJobIds.includes(p.jobId)).forEach(p=>{
-        flPushNotif('📨 New proposal from '+p.freelancerName+' — KES '+Number(p.bid).toLocaleString(),'proposal');
-      });
-    });
-    onSnapshot(query(collection(db,'digitalContracts'), orderBy('createdAt','desc'), limit(50)), snap=>{
-      var prev = _flContracts.map(c=>c.id);
-      _flContracts = snap.docs.map(d=>({id:d.id,...d.data()}));
-      _lsSet('flContracts',_flContracts);
-      /* notify freelancer when contract is awarded */
-      _flContracts.filter(c=>!prev.includes(c.id)&&c.freelancerUid===_uid()).forEach(c=>{
-        flPushNotif('🎉 Contract awarded: '+c.title+' — KES '+Number(c.amount).toLocaleString(),'contract');
-      });
-      if(_activeTab==='dashboard') flDash(_activeDashSub);
-    });
-    onSnapshot(query(collection(db,'digitalReviews'), orderBy('createdAt','desc'), limit(200)), snap=>{
-      var prev = _flReviews.map(r=>r.id);
-      _flReviews = snap.docs.map(d=>({id:d.id,...d.data()}));
-      _lsSet('flReviews',_flReviews);
-      _flReviews.filter(r=>!prev.includes(r.id)&&r.sellerUid===_uid()).forEach(r=>{
-        flPushNotif('⭐ New '+(r.rating)+'-star review from '+r.reviewerName,'review');
-      });
-    });
-    /* messages listener — load all chats involving current user */
-    onSnapshot(query(collection(db,'digitalMessages'), orderBy('ts','asc'), limit(500)), snap=>{
-      var uid=_uid();
-      var byChat={};
-      snap.docs.forEach(d=>{var m={id:d.id,...d.data()};if(!byChat[m.chatId])byChat[m.chatId]=[];byChat[m.chatId].push(m);});
-      /* notify on incoming messages */
-      Object.values(byChat).forEach(msgs=>{
-        var latest=msgs[msgs.length-1];
-        var prev=(_flMessages[latest.chatId]||[]);
-        if(latest&&latest.senderUid!==uid&&(!prev.length||prev[prev.length-1].id!==latest.id)){
-          flPushNotif('💬 '+latest.senderName+': '+latest.text.slice(0,60),'message');
-        }
-      });
-      _flMessages=byChat;
-      var unread=Object.values(byChat).filter(msgs=>msgs.some(m=>m.senderUid!==uid)).length;
-      var mc=document.getElementById('flMsgCount'); if(mc) mc.textContent=unread||'';
-      if(_activeTab==='messages') flRenderConvos();
-      if(document.getElementById('chatModal').classList.contains('open')&&_currentChatId) _renderMsgs(_flMessages[_currentChatId]||[]);
-    });
-  }catch(e){}
-}
-
-function flBuildFreelancerList(){
-  var seen={};
-  _flFreelancers=[];
-  _flGigs.forEach(g=>{
-    if(g.sellerUid&&!seen[g.sellerUid]){
-      seen[g.sellerUid]=true;
-      var rev=_flReviews.filter(r=>r.sellerUid===g.sellerUid);
-      var avg=rev.length?Math.round(rev.reduce((a,r)=>a+r.rating,0)/rev.length*10)/10:null;
-      _flFreelancers.push({uid:g.sellerUid,name:g.sellerName||'Freelancer',title:g.category,skills:g.skills||[],rate:g.price,rating:avg,reviews:rev.length,gigs:_flGigs.filter(x=>x.sellerUid===g.sellerUid).length});
-    }
-  });
-}
-
-function flUpdateStats(){
-  var eg=document.getElementById('flStatGigs'); if(eg) eg.textContent=_flGigs.length;
-  var ef=document.getElementById('flStatFreelancers'); if(ef) ef.textContent=_flFreelancers.length||new Set(_flGigs.map(g=>g.sellerUid).filter(Boolean)).size;
-  var ej=document.getElementById('flStatJobs'); if(ej) ej.textContent=_flJobs.filter(j=>j.status==='open').length;
-}
-
-/* ── CATEGORIES ── */
-function flRenderCatChips(){
-  var el=document.getElementById('flCatChips'); if(!el) return;
-  el.innerHTML='<button class="fl-cat active" onclick="flSetCat(\'\',this)">🌍 All</button>'+
-    FL_CATS.map(c=>'<button class="fl-cat" onclick="flSetCat(\''+c.id+'\',this)">'+c.emoji+' '+c.label+'</button>').join('');
-}
-
-function flSetCat(cat,el){
-  _activeCat=cat;
-  document.querySelectorAll('.fl-cat').forEach(b=>b.classList.remove('active'));
-  if(el) el.classList.add('active');
-  flRenderGigs();
-}
-
-function flPopulateCatSelects(){
-  var opts='<option value="">Select category</option>'+FL_CATS.map(c=>'<option value="'+c.id+'">'+c.emoji+' '+c.label+'</option>').join('');
-  ['jobCat','pgCat','flTalentCat','flJobCatFilter','egCat'].forEach(id=>{
-    var el=document.getElementById(id); if(el) el.innerHTML=opts;
-  });
-}
-
-/* ── GIG RENDERING ── */
-function flRenderGigs(){
-  var q=(document.getElementById('flSearchInput')||{}).value||'';
-  var sort=(document.getElementById('flSortSel')||{}).value||'newest';
-  var list=_flGigs.filter(g=>!g.deleted);
-  if(_activeCat) list=list.filter(g=>g.category===_activeCat);
-  if(q){var ql=q.toLowerCase(); list=list.filter(g=>(g.title||'').toLowerCase().includes(ql)||(g.description||'').toLowerCase().includes(ql)||(g.sellerName||'').toLowerCase().includes(ql)||(g.skills||[]).join(' ').toLowerCase().includes(ql));}
-  if(sort==='price_asc') list=[...list].sort((a,b)=>Number(a.price)-Number(b.price));
-  else if(sort==='price_desc') list=[...list].sort((a,b)=>Number(b.price)-Number(a.price));
-  else if(sort==='rating') list=[...list].sort((a,b)=>(b.avgRating||0)-(a.avgRating||0));
-  else list=[...list].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-
-  var gc=document.getElementById('flGigCount'); if(gc) gc.textContent=list.length+' service'+(list.length!==1?'s':'');
-  var grid=document.getElementById('flGigGrid');
-  var empty=document.getElementById('flGigEmpty');
-  if(!list.length){if(grid)grid.innerHTML='';if(empty)empty.style.display='block';return;}
-  if(empty)empty.style.display='none';
-  if(grid) grid.innerHTML=list.map(g=>_gigCard(g)).join('');
-}
-
-function _catInfo(id){return FL_CATS.find(c=>c.id===id)||{emoji:'💻',label:id||'Service'};}
-
-function _gigCard(g){
-  var ci=_catInfo(g.category);
-  var stars=_flReviews.filter(r=>r.gigId===g.id);
-  var avg=stars.length?Math.round(stars.reduce((a,r)=>a+r.rating,0)/stars.length*10)/10:null;
-  var initials=(g.sellerName||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-  return '<div class="fl-gig-card" onclick="openGigDetail(\''+g.id+'\')">'
-    +'<div class="fl-gig-thumb">'+ci.emoji+'</div>'
-    +'<div class="fl-gig-body">'
-    +'<span class="fl-gig-cat">'+ci.emoji+' '+ci.label+'</span>'
-    +'<div class="fl-gig-title">'+escHtml(g.title||'')+'</div>'
-    +'<div class="fl-gig-seller"><div class="fl-gig-avatar">'+initials+'</div>'+escHtml(g.sellerName||'Freelancer')+(avg?'<span class="fl-gig-stars" style="margin-left:auto">★ '+avg+'</span>':'')+'</div>'
-    +'<div class="fl-gig-price">KES '+Number(g.price||0).toLocaleString()+'<span> /project</span></div>'
-    +'<div class="fl-gig-delivery">⏱ '+escHtml(g.delivery||'1 week')+'</div>'
-    +'</div></div>';
-}
-
-/* ── TALENT RENDERING ── */
-function flRenderTalent(){
-  var cat=(document.getElementById('flTalentCat')||{}).value||'';
-  var q=_searchVal().toLowerCase();
-  var list=_flFreelancers;
-  if(cat) list=list.filter(f=>f.title===cat);
-  if(q) list=list.filter(f=>(f.name||'').toLowerCase().includes(q)||(f.title||'').toLowerCase().includes(q)||(f.skills||[]).join(' ').toLowerCase().includes(q));
-  var tc=document.getElementById('flTalentCount'); if(tc) tc.textContent=list.length+' freelancer'+(list.length!==1?'s':'');
-  var grid=document.getElementById('flTalentGrid');
-  var empty=document.getElementById('flTalentEmpty');
-  if(!list.length){if(grid)grid.innerHTML='';if(empty)empty.style.display='block';return;}
-  if(empty)empty.style.display='none';
-  if(grid) grid.innerHTML=list.map(f=>_talentCard(f)).join('');
-}
-
-function _talentCard(f){
-  var initials=(f.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-  var ci=_catInfo(f.title);
-  var skills=(f.skills||[]).slice(0,3);
-  return '<div class="fl-talent-card" onclick="openFreelancerModal(\''+escHtml(f.uid)+'\')">'
-    +'<div class="fl-talent-avatar">'+initials+'</div>'
-    +'<div class="fl-talent-name">'+escHtml(f.name)+'</div>'
-    +'<div class="fl-talent-title">'+ci.emoji+' '+ci.label+'</div>'
-    +'<div class="fl-talent-badges">'+skills.map(s=>'<span class="fl-badge">'+escHtml(s)+'</span>').join('')+'</div>'
-    +'<div class="fl-talent-rate">KES '+Number(f.rate||0).toLocaleString()+' <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,.35)">starting</span></div>'
-    +'<div class="fl-talent-stats">'+(f.rating?'★ '+f.rating+' · ':'')+f.gigs+' gig'+(f.gigs!==1?'s':'')+(f.reviews?' · '+f.reviews+' review'+(f.reviews!==1?'s':''):'')+'</div>'
-    +'</div>';
-}
-
-/* ── JOBS RENDERING ── */
-function flRenderJobs(){
-  var cat=(document.getElementById('flJobCatFilter')||{}).value||'';
-  var q=_searchVal().toLowerCase();
-  var list=_flJobs.filter(j=>j.status!=='closed');
-  if(cat) list=list.filter(j=>j.category===cat);
-  if(q) list=list.filter(j=>(j.title||'').toLowerCase().includes(q)||(j.description||'').toLowerCase().includes(q)||(j.skills||'').toLowerCase().includes(q));
-  list.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  var jc=document.getElementById('flJobCount'); if(jc) jc.textContent=list.length+' job'+(list.length!==1?'s':'');
-  var el=document.getElementById('flJobList');
-  var empty=document.getElementById('flJobEmpty');
-  if(!list.length){if(el)el.innerHTML='';if(empty)empty.style.display='block';return;}
-  if(empty)empty.style.display='none';
-  if(el) el.innerHTML=list.map(j=>_jobCard(j)).join('');
-}
-
-function _jobCard(j){
-  var ci=_catInfo(j.category);
-  var props=_flProposals.filter(p=>p.jobId===j.id).length;
-  var mine=j.posterUid===_uid();
-  return '<div class="fl-contract-card">'
-    +'<div class="fl-contract-header"><div>'
-    +'<div class="fl-contract-title">'+ci.emoji+' '+escHtml(j.title||'')+'</div>'
-    +'<div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:3px">by '+escHtml(j.posterName||'Client')+' · '+ci.label+'</div>'
-    +'</div><span class="fl-status '+(j.status||'open')+'">'+((j.status||'open').toUpperCase())+'</span></div>'
-    +'<div style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:10px;line-height:1.5">'+escHtml((j.description||'').slice(0,160))+(j.description&&j.description.length>160?'…':'')+'</div>'
-    +'<div class="fl-contract-meta">'
-    +(j.budget?'<span>💰 KES '+Number(j.budget).toLocaleString()+'</span>':'<span>💰 Budget: Open</span>')
-    +'<span>⏱ '+escHtml(j.duration||'Flexible')+'</span>'
-    +(j.skills?'<span>🏷️ '+escHtml(j.skills)+'</span>':'')
-    +'<span>📨 '+props+' proposal'+(props!==1?'s':'')+'</span>'
-    +'</div>'
-    +'<div style="display:flex;gap:8px;margin-top:12px">'
-    +(!mine?'<button class="fl-btn blue" style="flex:1;padding:9px" onclick="event.stopPropagation();openProposalModal(\''+j.id+'\')">📨 Send Proposal</button>':'')
-    +(mine?'<button class="fl-btn outline" style="flex:1;padding:9px" onclick="event.stopPropagation();viewProposals(\''+j.id+'\')">📨 View Proposals ('+props+')</button>':'')
-    +'<button class="fl-btn outline" style="padding:9px 14px" onclick="event.stopPropagation();openChatForJob(\''+j.id+'\',\''+escHtml(j.title||'')+'\')">💬</button>'
-    +'</div>'
-    +'</div>';
-}
-
-/* ── TABS ── */
-function flShowTab(tab){
-  _activeTab=tab;
-  document.querySelectorAll('[id^="view-"]').forEach(v=>v.style.display='none');
-  document.querySelectorAll('.fl-tab').forEach(t=>t.classList.remove('active'));
-  var el=document.getElementById('view-'+tab); if(el) el.style.display='';
-  var tb=document.getElementById('tab-'+tab); if(tb) tb.classList.add('active');
-  if(tab==='talent'){flBuildFreelancerList();flRenderTalent();}
-  if(tab==='jobs') flRenderJobs();
-  if(tab==='dashboard') flDash('active');
-  if(tab==='messages') flRenderConvos();
-}
-
-/* ── SEARCH ── */
-function flSearch(){
-  if(_activeTab==='browse') flRenderGigs();
-  else if(_activeTab==='talent') flRenderTalent();
-  else if(_activeTab==='jobs') flRenderJobs();
-}
-function _searchVal(){ return (document.getElementById('flSearchInput')||{}).value||''; }
-
-/* ── DASHBOARD ── */
-function flDash(sub, btn){
-  _activeDashSub = sub;
-  document.querySelectorAll('.fl-dtab').forEach(t=>t.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  else { var first=document.querySelector('.fl-dtab'); if(first) first.classList.add('active'); }
-  var uid=_uid();
-  var el=document.getElementById('flDashContent'); if(!el) return;
-
-  if(sub==='active'){
-    var active=_flContracts.filter(c=>c.status==='active'&&(c.clientUid===uid||c.freelancerUid===uid));
-    if(!active.length){el.innerHTML='<div class="fl-empty"><div class="fl-empty-icon">🔥</div><p>No active contracts.<br>Browse gigs or post a job to get started.</p></div>';return;}
-    el.innerHTML=active.map(c=>_contractCard(c)).join('');
-  }
-  else if(sub==='mygigs'){
-    var mine=_flGigs.filter(g=>g.sellerUid===uid);
-    if(!mine.length){el.innerHTML='<div class="fl-empty"><div class="fl-empty-icon">🛍️</div><p>No gigs yet.<br><button class="fl-btn green" style="margin-top:10px" onclick="openPostGigModal()">🚀 Post a Service →</button></p></div>';return;}
-    el.innerHTML='<div class="fl-sh">My Services ('+mine.length+') <button class="fl-btn green" style="padding:5px 12px;font-size:11px" onclick="openPostGigModal()">+ Add New</button></div>'
-      +'<div class="fl-grid">'+mine.map(g=>_myGigCard(g)).join('')+'</div>';
-  }
-  else if(sub==='profile'){
-    var prof=_lsGet('flProfile_'+uid,{});
-    el.innerHTML='<div class="fl-wallet-card">'
-      +'<div style="font-size:32px;font-weight:900;text-align:center;margin-bottom:8px">'+(_userName()[0]||'?').toUpperCase()+'</div>'
-      +'<div style="text-align:center;font-weight:800;font-size:16px">'+escHtml(prof.displayName||_userName())+'</div>'
-      +'<div style="text-align:center;font-size:12px;color:rgba(255,255,255,.45);margin:4px 0">'+escHtml(prof.title||'Freelancer')+'</div>'
-      +(prof.location?'<div style="text-align:center;font-size:11px;color:rgba(255,255,255,.3)">📍 '+escHtml(prof.location)+'</div>':'')
-      +(prof.bio?'<p style="font-size:13px;color:rgba(255,255,255,.5);margin:12px 0;line-height:1.6">'+escHtml(prof.bio)+'</p>':'')
-      +(prof.skills?'<div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin:8px 0">'+prof.skills.split(',').map(s=>'<span class="fl-badge">'+escHtml(s.trim())+'</span>').join('')+'</div>':'')
-      +(prof.hourlyRate?'<div style="text-align:center;margin-top:8px;font-size:13px;color:#71ff00;font-weight:800">KES '+Number(prof.hourlyRate).toLocaleString()+' /hr</div>':'')
-      +(prof.portfolioItems&&prof.portfolioItems.length?'<div class="fl-sh" style="margin-top:16px">Portfolio</div>'
-        +'<div style="display:flex;flex-direction:column;gap:6px">'+prof.portfolioItems.map(u=>'<a href="'+escHtml(u)+'" target="_blank" rel="noopener" style="font-size:12px;color:#00aaff;word-break:break-all">'+escHtml(u)+'</a>').join('')+'</div>':'')
-      +'<button class="fl-btn blue" style="width:100%;margin-top:16px" onclick="openProfileEditModal()">✏️ Edit Profile</button>'
-      +'</div>';
-  }
-  else if(sub==='myjobs'){
-    var mine=_flJobs.filter(j=>j.posterUid===uid);
-    if(!mine.length){el.innerHTML='<div class="fl-empty"><div class="fl-empty-icon">📋</div><p>No jobs posted.<br><button class="fl-btn blue" style="margin-top:10px" onclick="flShowTab(\'postjob\')">📋 Post a Job →</button></p></div>';return;}
-    el.innerHTML='<div class="fl-sh">My Jobs ('+mine.length+')</div>'+mine.map(j=>_jobCard(j)).join('');
-  }
-  else if(sub==='proposals'){
-    var myJobs=_flJobs.filter(j=>j.posterUid===uid).map(j=>j.id);
-    var received=_flProposals.filter(p=>myJobs.includes(p.jobId));
-    var sent=_flProposals.filter(p=>p.freelancerUid===uid);
-    var html='<div class="fl-sh">Received Proposals ('+received.length+')</div>';
-    html+=received.length?received.map(p=>_propCard(p,true)).join(''):'<div class="fl-empty" style="padding:20px 0"><p>No proposals yet on your jobs.</p></div>';
-    html+='<div class="fl-sh" style="margin-top:20px">Sent Proposals ('+sent.length+')</div>';
-    html+=sent.length?sent.map(p=>_propCard(p,false)).join(''):'<div class="fl-empty" style="padding:20px 0"><p>You haven\'t sent any proposals yet.</p></div>';
-    el.innerHTML=html;
-  }
-  else if(sub==='wallet'){
-    var earned=_flContracts.filter(c=>c.freelancerUid===uid&&c.status==='complete').reduce((a,c)=>a+Number(c.amount||0),0);
-    var spent=_flContracts.filter(c=>c.clientUid===uid).reduce((a,c)=>a+Number(c.amount||0),0);
-    var escrow=_flContracts.filter(c=>c.freelancerUid===uid&&c.status==='active').reduce((a,c)=>a+Number(c.amount||0),0);
-    el.innerHTML='<div class="fl-wallet-card"><div class="fl-wallet-label">Total Earned</div><div class="fl-wallet-bal">KES '+earned.toLocaleString()+'</div><div class="fl-wallet-label" style="margin-top:8px">In Escrow: KES '+escrow.toLocaleString()+' · Total Spent: KES '+spent.toLocaleString()+'</div><div class="fl-wallet-row"><button class="fl-btn blue" onclick="openFlWithdraw('+earned+')">💳 Withdraw</button><button class="fl-btn outline" onclick="openFlHistory()">📋 History</button></div></div>';
-  }
-  else if(sub==='reviews'){
-    var mine=_flReviews.filter(r=>r.sellerUid===uid);
-    var avg=mine.length?Math.round(mine.reduce((a,r)=>a+r.rating,0)/mine.length*10)/10:null;
-    var html='<div class="fl-wallet-card"><div class="fl-wallet-label">Your Rating</div><div class="fl-wallet-bal" style="color:#ffc107">'+(avg?'★ '+avg:' No reviews yet')+'</div><div class="fl-wallet-label">'+mine.length+' review'+(mine.length!==1?'s':'')+'</div></div>';
-    html+=mine.map(r=>'<div class="fl-prop-card"><div class="fl-prop-head"><span class="fl-prop-name">'+escHtml(r.reviewerName||'Anonymous')+'</span><span style="color:#ffc107">★ '+r.rating+'</span></div><p style="font-size:13px;color:rgba(255,255,255,.5)">'+escHtml(r.text||'')+'</p><p style="font-size:10px;color:rgba(255,255,255,.25);margin-top:6px">'+new Date(r.createdAt||Date.now()).toLocaleDateString()+'</p></div>').join('') || '<div class="fl-empty" style="padding:20px 0"><p>No reviews yet.</p></div>';
-    el.innerHTML=html;
-  }
-}
-
-function _contractCard(c){
-  var ci=_catInfo(c.category);
-  var ms=c.milestones||[];
-  var done=ms.filter(m=>m.status==='done').length;
-  return '<div class="fl-contract-card">'
-    +'<div class="fl-contract-header"><div><div class="fl-contract-title">'+ci.emoji+' '+escHtml(c.title||'')+'</div></div><span class="fl-status active">ACTIVE</span></div>'
-    +(ms.length?'<div class="fl-milestone-bar">'+ms.map((m,i)=>'<div class="fl-ms '+(m.status==='done'?'done':i===done?'active':'')+'"></div>').join('')+'</div><div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px">'+done+'/'+ms.length+' milestones complete</div>':'')
-    +'<div class="fl-contract-meta"><span>💰 KES '+Number(c.amount||0).toLocaleString()+'</span><span>👤 '+escHtml(c.clientName||'Client')+' → '+escHtml(c.freelancerName||'Freelancer')+'</span></div>'
-    +'<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'
-    +'<button class="fl-btn blue" style="flex:1;padding:9px;min-width:100px" onclick="openMilestoneModal(\''+c.id+'\')">🎯 Milestones</button>'
-    +'<button class="fl-btn outline" style="padding:9px 10px" onclick="openChatForContract(\''+c.id+'\',\''+escHtml(c.title||'')+'\')">💬</button>'
-    +'<button class="fl-btn outline" style="padding:9px 10px" onclick="openContractModal(\''+c.id+'\')">📄</button>'
-    +'<button class="fl-btn outline" style="padding:9px 10px" onclick="generateContractInvoice(\''+c.id+'\')">🧾</button>'
-    +'<button class="fl-btn outline" style="padding:9px 10px" onclick="openReviewModal(\''+c.id+'\',\''+escHtml(c.title||'')+'\')">⭐</button>'
-    +'</div></div>';
-}
-
-function _propCard(p,isReceived){
-  var job=_flJobs.find(j=>j.id===p.jobId)||{};
-  return '<div class="fl-prop-card">'
-    +'<div class="fl-prop-head"><span class="fl-prop-name">'+(isReceived?escHtml(p.freelancerName||'Freelancer'):escHtml(job.title||'Job'))+'</span><span class="fl-prop-price">KES '+Number(p.bid||0).toLocaleString()+'</span></div>'
-    +'<p style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:8px">'+escHtml((p.letter||'').slice(0,120))+'…</p>'
-    +'<div style="font-size:11px;color:rgba(255,255,255,.3)">⏱ '+escHtml(p.delivery||'')+'</div>'
-    +(isReceived?'<div style="display:flex;gap:8px;margin-top:10px"><button class="fl-btn green" style="flex:1;padding:8px;font-size:12px" onclick="acceptProposal(\''+p.id+'\')">✅ Accept</button><button class="fl-btn outline" style="padding:8px 12px;font-size:12px" onclick="openChatForJob(\''+p.jobId+'\',\''+escHtml(job.title||'')+'\')">💬 Chat</button></div>':'')
-    +'</div>';
-}
-
-/* ── GIG DETAIL MODAL ── */
-function openGigDetail(id){
-  var g=_flGigs.find(x=>x.id===id); if(!g) return;
-  var ci=_catInfo(g.category);
-  var revs=_flReviews.filter(r=>r.gigId===id);
-  var avg=revs.length?Math.round(revs.reduce((a,r)=>a+r.rating,0)/revs.length*10)/10:null;
-  document.getElementById('gdTitle').textContent=ci.emoji+' '+g.title;
-  document.getElementById('gdBody').innerHTML=
-    '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:16px">'+ci.emoji+' '+ci.label+' · by '+escHtml(g.sellerName||'Freelancer')+(avg?' · ★ '+avg+' ('+revs.length+')':'')+'</div>'
-    +'<p style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.6;margin-bottom:16px">'+escHtml(g.description||'')+'</p>'
-    +(g.skills&&g.skills.length?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">'+g.skills.map(s=>'<span class="fl-badge">'+escHtml(s)+'</span>').join('')+'</div>':'')
-    +(g.portfolio?'<div style="margin-bottom:16px;font-size:13px"><span style="color:rgba(255,255,255,.4)">Portfolio: </span><span style="color:#00aaff">'+escHtml(g.portfolio)+'</span></div>':'')
-    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-top:1px solid rgba(255,255,255,.07);margin-bottom:14px">'
-    +'<div><div style="font-size:20px;font-weight:900;color:#71ff00">KES '+Number(g.price||0).toLocaleString()+'</div><div style="font-size:11px;color:rgba(255,255,255,.35)">⏱ '+escHtml(g.delivery||'1 week')+'</div></div>'
-    +'</div>'
-    +(revs.length?'<div class="fl-sh">Reviews ('+revs.length+')</div>'+revs.slice(0,3).map(r=>'<div class="fl-prop-card"><div class="fl-prop-head"><span class="fl-prop-name">'+escHtml(r.reviewerName||'Anonymous')+'</span><span style="color:#ffc107">★ '+r.rating+'</span></div><p style="font-size:12px;color:rgba(255,255,255,.45)">'+escHtml(r.text||'')+'</p></div>').join(''):'')
-    +'<div style="display:flex;gap:8px;margin-top:16px">'
-    +'<button class="fl-btn blue" style="flex:1" onclick="orderGig(\''+id+'\')">🛒 Order Now — KES '+Number(g.price||0).toLocaleString()+'</button>'
-    +'<button class="fl-btn outline" style="padding:13px 14px" onclick="openChatForGig(\''+id+'\',\''+escHtml(g.title||'')+'\')">💬</button>'
-    +'</div>';
-  openModal('gigDetailModal');
-}
-
-/* ── FREELANCER PROFILE MODAL ── */
-function openFreelancerModal(uid){
-  var f=_flFreelancers.find(x=>x.uid===uid)||{uid,name:'Freelancer',gigs:0};
-  var gigs=_flGigs.filter(g=>g.sellerUid===uid);
-  var revs=_flReviews.filter(r=>r.sellerUid===uid);
-  var avg=revs.length?Math.round(revs.reduce((a,r)=>a+r.rating,0)/revs.length*10)/10:null;
-  var initials=(f.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-  document.getElementById('fpTitle').textContent='👤 '+f.name;
-  document.getElementById('fpBody').innerHTML=
-    '<div style="text-align:center;margin-bottom:20px">'
-    +'<div class="fl-talent-avatar" style="width:72px;height:72px;font-size:28px;margin:0 auto 10px">'+initials+'</div>'
-    +'<div style="font-weight:800;font-size:16px">'+escHtml(f.name)+'</div>'
-    +(avg?'<div style="color:#ffc107;margin:4px 0">★ '+avg+' · '+revs.length+' review'+(revs.length!==1?'s':'')+'</div>':'')
-    +'<div style="font-size:12px;color:rgba(255,255,255,.4)">'+gigs.length+' active service'+(gigs.length!==1?'s':'')+'</div>'
-    +'</div>'
-    +(gigs.length?'<div class="fl-sh">Services</div><div class="fl-grid" style="margin-bottom:16px">'+gigs.slice(0,4).map(g=>_gigCard(g)).join('')+'</div>':'')
-    +'<div style="display:flex;gap:8px">'
-    +'<button class="fl-btn blue" style="flex:1" onclick="openChatForFreelancer(\''+uid+'\',\''+escHtml(f.name)+'\')">💬 Message</button>'
-    +'</div>';
-  openModal('freelancerModal');
-}
-
-/* ── POST GIG ── */
-function openPostGigModal(){
-  document.getElementById('pgTitle').value='';
-  document.getElementById('pgDesc').value='';
-  document.getElementById('pgPrice').value='';
-  document.getElementById('pgSkills').value='';
-  document.getElementById('pgPortfolio').value='';
-  document.getElementById('pgName').value=_userName()!=='Anonymous'?_userName():'';
-  openModal('postGigModal');
-}
-
-async function submitGig(){
-  var title=document.getElementById('pgTitle').value.trim();
-  var cat=document.getElementById('pgCat').value;
-  var desc=document.getElementById('pgDesc').value.trim();
-  var price=document.getElementById('pgPrice').value.trim();
-  var delivery=document.getElementById('pgDelivery').value;
-  var skills=document.getElementById('pgSkills').value.split(',').map(s=>s.trim()).filter(Boolean);
-  var portfolio=document.getElementById('pgPortfolio').value.trim();
-  var name=document.getElementById('pgName').value.trim()||_userName();
-  if(!title||!cat||!desc||!price){_flToast('Please fill in all required fields.','error');return;}
-  var gig={id:'GIG'+Date.now().toString(36).toUpperCase(),title,category:cat,description:desc,price:Number(price),delivery,skills,portfolio,sellerUid:_uid(),sellerName:name,status:'active',createdAt:Date.now()};
-  _flGigs.unshift(gig); _lsSet('flGigs',_flGigs);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');await m.addDoc(m.collection(db,'digitalGigs'),gig);}catch(e){}}
-  closeModal('postGigModal');
-  flBuildFreelancerList(); flUpdateStats(); flRenderGigs();
-  _flToast('🚀 Your service is live!');
-}
-
-/* ── POST JOB ── */
-async function submitJob(){
-  var title=document.getElementById('jobTitle').value.trim();
-  var cat=document.getElementById('jobCat').value;
-  var desc=document.getElementById('jobDesc').value.trim();
-  var budget=document.getElementById('jobBudget').value.trim();
-  var duration=document.getElementById('jobDuration').value;
-  var skills=document.getElementById('jobSkills').value.trim();
-  var attachment=document.getElementById('jobAttachment').value.trim();
-  if(!title||!cat||!desc){_flToast('Please fill in the required fields.','error');return;}
-  var job={id:'JOB'+Date.now().toString(36).toUpperCase(),title,category:cat,description:desc,budget:budget?Number(budget):null,duration,skills,attachment,posterUid:_uid(),posterName:_userName(),status:'open',createdAt:Date.now()};
-  _flJobs.unshift(job); _lsSet('flJobs',_flJobs);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');await m.addDoc(m.collection(db,'digitalJobs'),job);}catch(e){}}
-  ['jobTitle','jobDesc','jobBudget','jobSkills','jobAttachment'].forEach(id=>{var el=document.getElementById(id);if(el)el.value='';});
-  flUpdateStats();
-  _flToast('📋 Job posted! Freelancers can now send proposals.');
-  flShowTab('jobs');
-}
-
-/* ── PROPOSALS ── */
-function openProposalModal(jobId){
-  _currentJobId=jobId;
-  var job=_flJobs.find(j=>j.id===jobId)||{};
-  document.getElementById('propModalTitle').textContent='📨 Propose for: '+escHtml(job.title||'Job');
-  document.getElementById('propJobSummary').textContent=(job.description||'').slice(0,200)+(job.description&&job.description.length>200?'…':'');
-  document.getElementById('propBid').value=job.budget||'';
-  document.getElementById('propLetter').value='';
-  document.getElementById('propName').value=_userName()!=='Anonymous'?_userName():'';
-  openModal('proposalModal');
-}
-
-async function submitProposal(){
-  var bid=document.getElementById('propBid').value.trim();
-  var delivery=document.getElementById('propDelivery').value;
-  var letter=document.getElementById('propLetter').value.trim();
-  var name=document.getElementById('propName').value.trim()||_userName();
-  if(!bid||!letter){_flToast('Please enter your bid and cover letter.','error');return;}
-  var prop={id:'PROP'+Date.now().toString(36).toUpperCase(),jobId:_currentJobId,bid:Number(bid),delivery,letter,freelancerUid:_uid(),freelancerName:name,status:'pending',createdAt:Date.now()};
-  _flProposals.unshift(prop); _lsSet('flProposals',_flProposals);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');await m.addDoc(m.collection(db,'digitalProposals'),prop);}catch(e){}}
-  closeModal('proposalModal');
-  _flToast('📨 Proposal sent! The client will review it shortly.');
-}
-
-function viewProposals(jobId){
-  var props=_flProposals.filter(p=>p.jobId===jobId);
-  var job=_flJobs.find(j=>j.id===jobId)||{};
-  document.getElementById('gdTitle').textContent='📨 Proposals — '+escHtml(job.title||'');
-  document.getElementById('gdBody').innerHTML=props.length
-    ?props.map(p=>_propCard(p,true)).join('')
-    :'<div class="fl-empty"><p>No proposals yet on this job.</p></div>';
-  openModal('gigDetailModal');
-}
-
-async function acceptProposal(propId,_c){
-  var p=_flProposals.find(x=>x.id===propId); if(!p) return;
-  var job=_flJobs.find(j=>j.id===p.jobId); if(!job) return;
-  if(!_c){_skConfirm('Accept proposal from '+p.freelancerName+' for KES '+Number(p.bid).toLocaleString()+'? This will create an escrow contract and prompt M-Pesa payment.',()=>acceptProposal(propId,true));return;}
-  var orderId='FL'+Date.now().toString(36).toUpperCase();
-  var _doCreate = async (mpesaCode)=>{
-    var contract={id:'CON'+orderId,title:job.title,category:job.category,amount:p.bid,clientUid:job.posterUid,clientName:job.posterName,freelancerUid:p.freelancerUid,freelancerName:p.freelancerName,status:'active',milestones:[],jobId:p.jobId,proposalId:propId,orderId,mpesaCode:mpesaCode||null,escrow:true,createdAt:Date.now()};
-    _flContracts.unshift(contract); _lsSet('flContracts',_flContracts);
-    p.status='accepted'; _lsSet('flProposals',_flProposals);
-    job.status='in_progress'; _lsSet('flJobs',_flJobs);
-    var db=await _getDb();
-    if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');await m.addDoc(m.collection(db,'digitalContracts'),contract);}catch(e){}}
-    flPushNotif('✅ Proposal accepted from '+p.freelancerName+' — KES '+Number(p.bid).toLocaleString()+(mpesaCode?' ('+mpesaCode+')':''+' — funds in escrow'),'contract');
-    closeModal('gigDetailModal'); closeModal('proposalModal');
-    _flToast('✅ Contract created with escrow! Work can now begin.');
-    flShowTab('dashboard');
-  };
-  if(window.SokoniMpesa && Number(p.bid||0)>0){
-    SokoniMpesa.pay({sellerUid:p.freelancerUid,amount:Number(p.bid),orderId,hub:'digital',sellerName:p.freelancerName,description:job.title,onSuccess:r=>_doCreate(r&&r.mpesaCode),onFailure:()=>{}});
-  } else { await _doCreate(null); }
-}
-
-/* ── ORDER GIG (instant contract) ── */
-async function orderGig(gigId,_c){
-  var g=_flGigs.find(x=>x.id===gigId); if(!g) return;
-  if(!_c){_skConfirm('Order "'+g.title+'" at KES '+Number(g.price).toLocaleString()+'? You will be prompted for M-Pesa payment.',()=>orderGig(gigId,true));return;}
-  var orderId='FL'+Date.now().toString(36).toUpperCase();
-  if(window.SokoniMpesa && Number(g.price||0)>0){
-    SokoniMpesa.pay({
-      sellerUid: g.sellerUid,
-      amount: Number(g.price),
-      orderId,
-      hub: 'digital',
-      sellerName: g.sellerName||'Freelancer',
-      description: g.title,
-      onSuccess: r=>{ _createContractFromGig(g, orderId, r&&r.mpesaCode); closeModal('gigDetailModal'); },
-      onFailure: ()=>{}
-    });
-  } else {
-    await _createContractFromGig(g, orderId, null);
-    closeModal('gigDetailModal');
-    _flToast('✅ Contract created! Check your Dashboard.');
-    flShowTab('dashboard');
-  }
-}
-
-async function _createContractFromGig(g, orderId, mpesaCode){
-  var contract={id:'CON'+orderId,title:g.title,category:g.category,amount:g.price,clientUid:_uid(),clientName:_userName(),freelancerUid:g.sellerUid,freelancerName:g.sellerName,status:'active',milestones:[],gigId:g.id,orderId,mpesaCode:mpesaCode||null,createdAt:Date.now()};
-  _flContracts.unshift(contract); _lsSet('flContracts',_flContracts);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');await m.addDoc(m.collection(db,'digitalContracts'),contract);}catch(e){}}
-  flPushNotif('🛒 Order placed: '+g.title+' — KES '+Number(g.price).toLocaleString()+(mpesaCode?' ('+mpesaCode+')':''),'order');
-  flShowTab('dashboard');
-}
-
-/* ── MILESTONES ── */
-function openMilestoneModal(contractId){
-  _currentContractId=contractId;
-  var c=_flContracts.find(x=>x.id===contractId)||{milestones:[]};
-  var ms=c.milestones||[];
-  document.getElementById('milestoneBody').innerHTML=ms.length
-    ?ms.map((m,i)=>'<div class="fl-contract-card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:13px;font-weight:800">'+escHtml(m.title||'')+'</div><div style="font-size:11px;color:rgba(255,255,255,.35)">KES '+Number(m.amount||0).toLocaleString()+(m.due?' · Due: '+m.due:'')+'</div></div><div style="display:flex;gap:6px"><span class="fl-status '+(m.status||'pending')+'">'+((m.status||'PENDING').toUpperCase())+'</span>'+(m.status!=='done'?'<button class="fl-btn green" style="padding:4px 10px;font-size:11px" onclick="markMsDone('+i+')">✅</button>':'')+'</div></div></div>').join('')
-    :'<div class="fl-empty" style="padding:16px 0"><p>No milestones yet. Add one below.</p></div>';
-  openModal('milestoneModal');
-}
-
-async function addMilestone(){
-  var title=document.getElementById('msTitle').value.trim();
-  var amount=document.getElementById('msAmount').value.trim();
-  var due=document.getElementById('msDue').value;
-  if(!title){_flToast('Enter a milestone description.','error');return;}
-  var c=_flContracts.find(x=>x.id===_currentContractId); if(!c) return;
-  if(!c.milestones) c.milestones=[];
-  c.milestones.push({title,amount:Number(amount)||0,due,status:'pending',createdAt:Date.now()});
-  _lsSet('flContracts',_flContracts);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');await m.doc(db,'digitalContracts',_currentContractId);/* update not patch for simplicity */}catch(e){}}
-  document.getElementById('msTitle').value=''; document.getElementById('msAmount').value=''; document.getElementById('msDue').value='';
-  openMilestoneModal(_currentContractId);
-}
-
-async function markMsDone(idx){
-  var c=_flContracts.find(x=>x.id===_currentContractId); if(!c) return;
-  c.milestones[idx].status='done'; c.milestones[idx].completedAt=Date.now();
-  var allDone=c.milestones.every(m=>m.status==='done');
-  if(allDone) c.status='complete';
-  _lsSet('flContracts',_flContracts);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');var {doc,updateDoc}=m;await updateDoc(doc(db,'digitalContracts',_currentContractId),{milestones:c.milestones,status:c.status});}catch(e){}}
-  openMilestoneModal(_currentContractId);
-}
-
-/* ── CONTRACT MODAL ── */
-function openContractModal(contractId){
-  var c=_flContracts.find(x=>x.id===contractId)||{};
-  var ci=_catInfo(c.category);
-  document.getElementById('contractBody').innerHTML=
-    '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:20px;margin-bottom:16px">'
-    +'<div style="font-size:11px;font-weight:800;letter-spacing:1px;color:rgba(255,255,255,.3);margin-bottom:12px">SOKONI FREELANCER CONTRACT</div>'
-    +'<div style="font-size:17px;font-weight:900;margin-bottom:6px">'+ci.emoji+' '+escHtml(c.title||'')+'</div>'
-    +'<div class="fl-contract-meta" style="margin-bottom:12px"><span>📋 '+c.id+'</span><span>'+new Date(c.createdAt||Date.now()).toLocaleDateString()+'</span><span class="fl-status '+(c.status||'active')+'">'+((c.status||'active').toUpperCase())+'</span></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">'
-    +'<div><div style="color:rgba(255,255,255,.4);font-size:11px;margin-bottom:3px">CLIENT</div><div style="font-weight:700">'+escHtml(c.clientName||'—')+'</div></div>'
-    +'<div><div style="color:rgba(255,255,255,.4);font-size:11px;margin-bottom:3px">FREELANCER</div><div style="font-weight:700">'+escHtml(c.freelancerName||'—')+'</div></div>'
-    +'<div><div style="color:rgba(255,255,255,.4);font-size:11px;margin-bottom:3px">CONTRACT VALUE</div><div style="font-weight:900;color:#71ff00">KES '+Number(c.amount||0).toLocaleString()+'</div></div>'
-    +'<div><div style="color:rgba(255,255,255,.4);font-size:11px;margin-bottom:3px">MILESTONES</div><div style="font-weight:700">'+(c.milestones||[]).length+'</div></div>'
-    +'</div></div>'
-    +'<div style="display:flex;gap:8px">'
-    +'<button class="fl-btn blue" style="flex:1" onclick="openMilestoneModal(\''+contractId+'\')">🎯 Milestones</button>'
-    +'<button class="fl-btn outline" style="padding:13px 14px" onclick="openChatForContract(\''+contractId+'\',\''+escHtml(c.title||'')+'\')">💬</button>'
-    +'</div>';
-  openModal('contractModal');
-}
-
-/* ── MESSAGES ── */
-function _chatKey(a,b,ctx){return [a,b,ctx].filter(Boolean).sort().join('_');}
-
-function openChatForGig(gigId,title){
-  var g=_flGigs.find(x=>x.id===gigId); if(!g) return;
-  _openChat(_uid(),g.sellerUid||'seller','gig_'+gigId,title||g.title,'💬 '+escHtml(g.sellerName||'Freelancer'));
-}
-function openChatForJob(jobId,title){
-  var j=_flJobs.find(x=>x.id===jobId); if(!j) return;
-  _openChat(_uid(),j.posterUid||'client','job_'+jobId,title||j.title,'💬 Chat about: '+escHtml(j.title||'Job'));
-}
-function openChatForContract(contractId,title){
-  var c=_flContracts.find(x=>x.id===contractId); if(!c) return;
-  var other=c.clientUid===_uid()?c.freelancerUid:c.clientUid;
-  _openChat(_uid(),other,'con_'+contractId,title,'💬 Contract Chat');
-}
-function openChatForFreelancer(uid,name){_openChat(_uid(),uid,'dm','Direct Message','💬 '+escHtml(name));}
-
-async function _openChat(uidA,uidB,ctx,subject,titleLabel){
-  _currentChatId=_chatKey(uidA,uidB,ctx);
-  document.getElementById('chatTitle').textContent=titleLabel||'💬 Chat';
-  document.getElementById('chatInput').value='';
-  var msgs=_flMessages[_currentChatId]||[];
-  _renderMsgs(msgs);
-  openModal('chatModal');
-  var db=await _getDb();
-  if(db){try{
-    var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-    var {collection,query,orderBy,limit,onSnapshot}=m;
-    onSnapshot(query(collection(db,'digitalMessages'),orderBy('ts','asc'),limit(200)), snap=>{
-      var all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.chatId===_currentChatId);
-      _flMessages[_currentChatId]=all;
-      if(document.getElementById('chatModal').classList.contains('open')) _renderMsgs(all);
-    });
-  }catch(e){}}
-}
-
-function _renderMsgs(msgs){
-  var uid=_uid();
-  var el=document.getElementById('chatMessages');
-  if(!el) return;
-  el.innerHTML=msgs.map(m=>'<div><div class="fl-msg-bubble '+(m.senderUid===uid?'mine':'theirs')+'">'+escHtml(m.text||'')+'</div><div class="fl-msg-meta" style="text-align:'+(m.senderUid===uid?'right':'left')+'">'+escHtml(m.senderName||'')+'</div></div>').join('');
-  el.scrollTop=el.scrollHeight;
-}
-
-async function sendChatMsg(){
-  var inp=document.getElementById('chatInput');
-  var text=(inp.value||'').trim(); if(!text) return;
-  inp.value='';
-  var msg={chatId:_currentChatId,text,senderUid:_uid(),senderName:_userName(),ts:Date.now()};
-  if(!_flMessages[_currentChatId]) _flMessages[_currentChatId]=[];
-  _flMessages[_currentChatId].push(msg);
-  _renderMsgs(_flMessages[_currentChatId]);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');await m.addDoc(m.collection(db,'digitalMessages'),msg);}catch(e){}}
-}
-
-function flRenderConvos(){
-  var el=document.getElementById('flConvoList');
-  var empty=document.getElementById('flMsgEmpty');
-  var keys=Object.keys(_flMessages);
-  if(!keys.length){if(el)el.innerHTML='';if(empty)empty.style.display='block';return;}
-  if(empty)empty.style.display='none';
-  if(el) el.innerHTML=keys.map(k=>{
-    var msgs=_flMessages[k]||[];
-    var last=msgs[msgs.length-1]||{};
-    return '<div class="fl-prop-card" onclick="_openChat(\''+_uid()+'\',\'\',\''+k+'\',\'\',\'💬 Chat\')" style="cursor:pointer">'
-      +'<div class="fl-prop-head"><span class="fl-prop-name">'+escHtml(last.senderName||'Conversation')+'</span><span style="font-size:10px;color:rgba(255,255,255,.3)">'+new Date(last.ts||Date.now()).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span></div>'
-      +'<p style="font-size:12px;color:rgba(255,255,255,.4)">'+escHtml((last.text||'').slice(0,80))+'</p>'
-      +'</div>';
-  }).join('');
-}
-
-/* ── REVIEW ── */
-function openReviewModal(refId,label){
-  _reviewRefId=refId; _flStarRating=0;
-  document.getElementById('reviewTarget').textContent='Reviewing: '+label;
-  document.getElementById('reviewText').value='';
-  document.querySelectorAll('.fl-star').forEach(s=>s.classList.remove('on'));
-  openModal('reviewModal');
-}
-
-function setFlStar(n){
-  _flStarRating=n;
-  document.querySelectorAll('.fl-star').forEach(s=>s.classList.toggle('on',parseInt(s.dataset.v)<=n));
-}
-
-async function submitFlReview(){
-  if(!_flStarRating){_flToast('Please select a star rating.','error');return;}
-  var text=document.getElementById('reviewText').value.trim();
-  var contract=_flContracts.find(x=>x.id===_reviewRefId)||{};
-  var review={id:'REV'+Date.now().toString(36).toUpperCase(),contractId:_reviewRefId,gigId:contract.gigId||null,sellerUid:contract.freelancerUid||null,rating:_flStarRating,text,reviewerName:_userName(),reviewerUid:_uid(),createdAt:Date.now()};
-  _flReviews.unshift(review); _lsSet('flReviews',_flReviews);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');await m.addDoc(m.collection(db,'digitalReviews'),review);}catch(e){}}
-  closeModal('reviewModal');
-  _flToast('⭐ Thank you for your review!');
-}
-
-/* ── INVOICE ── */
-function generateContractInvoice(contractId){
-  var c=_flContracts.find(x=>x.id===contractId); if(!c){_flToast('Contract not found.','error');return;}
-  if(typeof SokoniInvoice!=='undefined'&&SokoniInvoice.generate){
-    SokoniInvoice.generate({
-      ref: c.id,
-      clientName: c.clientName||'Client',
-      providerName: c.freelancerName||'Freelancer',
-      serviceDesc: c.title||'Freelance Service',
-      amount: Number(c.amount||0),
-      category: 'digital',
-      status: c.status==='complete'?'paid':'pending',
-      hub: 'digital',
-      createdAt: c.createdAt||Date.now(),
-      mpesaCode: c.mpesaCode||null
-    });
-  } else {
-    var inv='SOKONI INVOICE\n'+('─'.repeat(32))+'\nRef: '+c.id+'\nService: '+c.title+'\nClient: '+c.clientName+'\nFreelancer: '+c.freelancerName+'\nAmount: KES '+Number(c.amount||0).toLocaleString()+'\nStatus: '+(c.status==='complete'?'PAID':'PENDING')+'\nDate: '+new Date(c.createdAt||Date.now()).toLocaleDateString()+(c.mpesaCode?'\nM-Pesa: '+c.mpesaCode:'');
-    _flToast('Invoice copied to clipboard');
-    navigator.clipboard?.writeText(inv).catch(()=>{});
-  }
-}
-
-/* ── NOTIFICATIONS ── */
-function flPushNotif(msg, type){
-  _flNotifs = _lsGet('flNotifs',[]);
-  _flNotifs.unshift({id:'N'+Date.now(),msg,type,ts:Date.now(),read:false});
-  _lsSet('flNotifs',_flNotifs.slice(0,50));
-  flRefreshNotifBadge();
-}
-
-function flRefreshNotifBadge(){
-  _flNotifs = _lsGet('flNotifs',[]);
-  var badge=document.getElementById('flNotifBadge');
-  if(!badge) return;
-  var unread=_flNotifs.filter(n=>!n.read).length;
-  badge.style.display=unread?'block':'none';
-}
-
-function toggleNotifDrawer(){
-  var m=document.getElementById('notifDrawer');
-  if(!m) return;
-  if(m.classList.contains('open')){closeModal('notifDrawer');return;}
-  _flNotifs=_lsGet('flNotifs',[]);
-  var list=document.getElementById('notifList');
-  var empty=document.getElementById('notifEmpty');
-  if(!_flNotifs.length){if(list)list.innerHTML='';if(empty)empty.style.display='block';}
-  else{
-    if(empty)empty.style.display='none';
-    if(list)list.innerHTML=_flNotifs.map(n=>'<div class="fl-prop-card" style="'+(n.read?'opacity:.55':'')+'"><div style="font-size:13px">'+escHtml(n.msg)+'</div><div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:4px">'+new Date(n.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' · '+new Date(n.ts).toLocaleDateString()+'</div></div>').join('');
-  }
-  _flNotifs.forEach(n=>n.read=true); _lsSet('flNotifs',_flNotifs);
-  flRefreshNotifBadge();
-  openModal('notifDrawer');
-}
-
-function clearNotifs(){_lsSet('flNotifs',[]);_flNotifs=[];flRefreshNotifBadge();closeModal('notifDrawer');}
-
-/* ── GIG EDIT / DELETE ── */
-function _myGigCard(g){
-  var ci=_catInfo(g.category);
-  var initials=(g.sellerName||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-  return '<div class="fl-gig-card">'
-    +'<div class="fl-gig-thumb" onclick="openGigDetail(\''+g.id+'\')" style="cursor:pointer">'+ci.emoji+'</div>'
-    +'<div class="fl-gig-body">'
-    +'<span class="fl-gig-cat">'+ci.emoji+' '+ci.label+'</span>'
-    +'<div class="fl-gig-title">'+escHtml(g.title||'')+'</div>'
-    +'<div class="fl-gig-price">KES '+Number(g.price||0).toLocaleString()+'</div>'
-    +'<div class="fl-gig-delivery">⏱ '+escHtml(g.delivery||'')+'</div>'
-    +'</div>'
-    +'<div style="display:flex;gap:6px;padding:0 12px 12px">'
-    +'<button class="fl-btn outline" style="flex:1;padding:7px;font-size:11px" onclick="openEditGig(\''+g.id+'\')">✏️ Edit</button>'
-    +'<button class="fl-btn outline" style="padding:7px 10px;font-size:11px;border-color:rgba(255,0,0,.2);color:#ff6666" onclick="deleteGig(\''+g.id+'\')">🗑</button>'
-    +'</div></div>';
-}
-
-function openEditGig(gigId){
-  var g=_flGigs.find(x=>x.id===gigId); if(!g) return;
-  document.getElementById('egGigId').value=gigId;
-  document.getElementById('egTitle').value=g.title||'';
-  document.getElementById('egDesc').value=g.description||'';
-  document.getElementById('egPrice').value=g.price||'';
-  document.getElementById('egSkills').value=(g.skills||[]).join(', ');
-  document.getElementById('egPortfolio').value=g.portfolio||'';
-  var sel=document.getElementById('egCat');
-  if(!sel.options.length){var opts=FL_CATS.map(c=>'<option value="'+c.id+'">'+c.emoji+' '+c.label+'</option>').join('');sel.innerHTML=opts;}
-  sel.value=g.category||'';
-  var del=document.getElementById('egDelivery'); if(del) del.value=g.delivery||'1 week';
-  openModal('editGigModal');
-}
-
-async function saveEditGig(){
-  var id=document.getElementById('egGigId').value;
-  var g=_flGigs.find(x=>x.id===id); if(!g){_flToast('Gig not found.','error');return;}
-  var title=document.getElementById('egTitle').value.trim();
-  var cat=document.getElementById('egCat').value;
-  var desc=document.getElementById('egDesc').value.trim();
-  var price=document.getElementById('egPrice').value.trim();
-  if(!title||!cat||!desc){_flToast('Title, category and description are required.','error');return;}
-  g.title=title; g.category=cat; g.description=desc; g.price=Number(price)||g.price;
-  g.delivery=document.getElementById('egDelivery').value;
-  g.skills=document.getElementById('egSkills').value.split(',').map(s=>s.trim()).filter(Boolean);
-  g.portfolio=document.getElementById('egPortfolio').value.trim();
-  g.updatedAt=Date.now();
-  _lsSet('flGigs',_flGigs);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');var {doc,updateDoc}=m;await updateDoc(doc(db,'digitalGigs',id),{title:g.title,category:g.category,description:g.description,price:g.price,delivery:g.delivery,skills:g.skills,portfolio:g.portfolio,updatedAt:g.updatedAt});}catch(e){}}
-  closeModal('editGigModal');
-  flRenderGigs();
-  flDash('mygigs', null);
-  _flToast('✅ Gig updated!');
-}
-
-async function deleteGig(gigId,_c){
-  if(!_c){_skConfirm('Delete this gig permanently?',()=>deleteGig(gigId,true));return;}
-  var idx=_flGigs.findIndex(x=>x.id===gigId); if(idx===-1) return;
-  _flGigs.splice(idx,1); _lsSet('flGigs',_flGigs);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');var {doc,deleteDoc}=m;await deleteDoc(doc(db,'digitalGigs',gigId));}catch(e){}}
-  flRenderGigs(); flBuildFreelancerList(); flUpdateStats();
-  flDash('mygigs', null);
-}
-
-function confirmDeleteGig(){
-  var id=document.getElementById('egGigId').value;
-  closeModal('editGigModal');
-  deleteGig(id);
-}
-
-/* ── FREELANCER PROFILE EDIT ── */
-function openProfileEditModal(){
-  var uid=_uid();
-  var prof=_lsGet('flProfile_'+uid,{});
-  document.getElementById('peDisplayName').value=prof.displayName||_userName();
-  document.getElementById('peTitle').value=prof.title||'';
-  document.getElementById('peBio').value=prof.bio||'';
-  document.getElementById('peRate').value=prof.hourlyRate||'';
-  document.getElementById('peSkills').value=prof.skills||'';
-  document.getElementById('peLocation').value=prof.location||'';
-  document.getElementById('peLanguages').value=prof.languages||'English, Swahili';
-  document.getElementById('pePortfolio').value=prof.portfolio||'';
-  document.getElementById('pePortfolioItems').value=(prof.portfolioItems||[]).join('\n');
-  var sel=document.getElementById('peCat');
-  if(!sel.options.length){sel.innerHTML='<option value="">Select primary category</option>'+FL_CATS.map(c=>'<option value="'+c.id+'">'+c.emoji+' '+c.label+'</option>').join('');}
-  sel.value=prof.category||'';
-  openModal('profileEditModal');
-}
-
-async function saveFreelancerProfile(){
-  var uid=_uid();
-  var prof={
-    displayName: document.getElementById('peDisplayName').value.trim()||_userName(),
-    title: document.getElementById('peTitle').value.trim(),
-    bio: document.getElementById('peBio').value.trim(),
-    category: document.getElementById('peCat').value,
-    hourlyRate: Number(document.getElementById('peRate').value)||0,
-    skills: document.getElementById('peSkills').value.trim(),
-    location: document.getElementById('peLocation').value.trim(),
-    languages: document.getElementById('peLanguages').value.trim(),
-    portfolio: document.getElementById('pePortfolio').value.trim(),
-    portfolioItems: document.getElementById('pePortfolioItems').value.split('\n').map(s=>s.trim()).filter(Boolean),
-    uid, updatedAt: Date.now()
-  };
-  _lsSet('flProfile_'+uid, prof);
-  var db=await _getDb();
-  if(db){try{var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');var {doc,setDoc}=m;await setDoc(doc(db,'digitalFreelancers',uid),prof,{merge:true});}catch(e){}}
-  closeModal('profileEditModal');
-  flDash('profile', null);
-  _flToast('✅ Profile saved!');
-}
-
-/* ── UTILS ── */
-function escHtml(str){return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-
-function openModal(id){var m=document.getElementById(id);if(m){m.style.display='flex';m.classList.add('open');}}
-function closeModal(id){var m=document.getElementById(id);if(m){m.style.display='none';m.classList.remove('open');}}
-
-window.addEventListener('click',function(e){
-  if(e.target.classList.contains('fl-modal')){e.target.style.display='none';e.target.classList.remove('open');}
-});
-
-/* ── EXPOSE GLOBALS ── */
-window.flShowTab=flShowTab;
-window.flSearch=flSearch;
-window.flSetCat=flSetCat;
-window.flRenderGigs=flRenderGigs;
-window.flRenderTalent=flRenderTalent;
-window.flRenderJobs=flRenderJobs;
-window.flDash=flDash;
-window.openGigDetail=openGigDetail;
-window.openFreelancerModal=openFreelancerModal;
-window.openPostGigModal=openPostGigModal;
-window.openProposalModal=openProposalModal;
-window.openMilestoneModal=openMilestoneModal;
-window.openReviewModal=openReviewModal;
-window.openContractModal=openContractModal;
-window.setFlStar=setFlStar;
-window.submitGig=submitGig;
-window.submitJob=submitJob;
-window.submitProposal=submitProposal;
-window.acceptProposal=acceptProposal;
-window.orderGig=orderGig;
-window.addMilestone=addMilestone;
-window.markMsDone=markMsDone;
-window.sendChatMsg=sendChatMsg;
-window.submitFlReview=submitFlReview;
-window.viewProposals=viewProposals;
-window.closeModal=closeModal;
-window.openChatForGig=openChatForGig;
-window.openChatForJob=openChatForJob;
-window.openChatForContract=openChatForContract;
-window.openChatForFreelancer=openChatForFreelancer;
-window.generateContractInvoice=generateContractInvoice;
-window.flPushNotif=flPushNotif;
-window.toggleNotifDrawer=toggleNotifDrawer;
-window.clearNotifs=clearNotifs;
-window.openEditGig=openEditGig;
-window.saveEditGig=saveEditGig;
-window.deleteGig=deleteGig;
-window.confirmDeleteGig=confirmDeleteGig;
-window.openProfileEditModal=openProfileEditModal;
-window.saveFreelancerProfile=saveFreelancerProfile;
-window._myGigCard=_myGigCard;
-window.flDash=flDash;
-
-function openFlWithdraw(maxAmount){
-  var input = document.getElementById('wdAmount');
-  if(input && maxAmount > 0) input.setAttribute('max', maxAmount);
-  document.getElementById('withdrawModal').classList.add('open');
-}
-
-function submitWithdrawal(){
-  var phone  = (document.getElementById('wdPhone')?.value  || '').trim();
-  var amount = Number(document.getElementById('wdAmount')?.value || 0);
-  if(!phone || phone.length < 9){ _flToast('Enter a valid M-Pesa number'); return; }
-  if(!amount || amount < 100)   { _flToast('Minimum withdrawal is KES 100'); return; }
-  closeModal('withdrawModal');
-  var uid = _flCurrentUser?.uid;
-  if(uid){
-    (async()=>{try{
-      const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-      const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-      const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-      const _a=getApps().find(a=>a.name==="dh-wd")||initializeApp(_cfg,"dh-wd");
-      await addDoc(collection(getFirestore(_a),'withdrawals'),{uid,phone,amount,platform:'digital_hub',status:'pending',requestedAt:serverTimestamp()});
-    }catch(e){}})();
-  }
-  _flToast('✅ Withdrawal request submitted — processed within 1 business day');
-}
-
-function openFlHistory(){
-  var uid = _flCurrentUser?.uid;
-  var body = document.getElementById('walletHistoryBody');
-  if(!body) return;
-  if(!uid){ body.innerHTML='<p style="color:rgba(255,255,255,.4);text-align:center;padding:20px">Sign in to view history</p>'; }
-  else{
-    var txns = _flContracts.filter(c=>c.freelancerUid===uid||c.clientUid===uid).map(c=>{
-      var dir = c.freelancerUid===uid ? '+' : '-';
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)">'
-        +'<div><div style="font-weight:700;font-size:14px">'+escHtml(c.title||'Contract')+'</div>'
-        +'<div style="font-size:11px;color:rgba(255,255,255,.35)">'+escHtml(c.status||'')+'</div></div>'
-        +'<div style="font-weight:900;color:'+(dir==='+'?'#71ff00':'#ff6666')+'">'+dir+'KES '+(c.amount||0).toLocaleString()+'</div></div>';
-    }).join('') || '<p style="color:rgba(255,255,255,.4);text-align:center;padding:20px">No transactions yet</p>';
-    body.innerHTML = txns;
-  }
-  document.getElementById('walletHistoryModal').classList.add('open');
-}
-
-window.openFlWithdraw = openFlWithdraw;
-window.submitWithdrawal = submitWithdrawal;
-window.openFlHistory = openFlHistory;
-
-/* ── BOOT ── */
-flLoadAll();
-</script>
-  <!-- REGISTER CTA — auto-injected by hub-register system -->
-  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:22px 20px;text-align:center;margin-top:0;">
-    <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">Are you a </div>
-    <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">List your business on SOKONI — reach thousands of customers across Kenya. Free to get started.</div>
-    <button onclick="HubRegister.open({hub:'tech', category:'software'})" style="padding:12px 28px;background:#22d3ee;border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register / List My Business</button>
-  </div>
-  <script defer src="hub-register.js"></script>
-  <script defer src="kass-widget.js"></script>
-  <!-- Enterprise v2.0: core stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
 </body>
 </html>
-
-
-

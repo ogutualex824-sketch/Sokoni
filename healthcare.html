@@ -1,1586 +1,295 @@
-﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>SOKONI Healthcare — Hospitals, Clinics, Pharmacy & More</title>
-  <meta name="description" content="Find hospitals, clinics, pharmacies and healthcare providers near you in Kenya on SOKONI.">
-  <meta property="og:title" content="SOKONI Healthcare — Hospitals, Clinics, Pharmacy & More">
-  <meta property="og:description" content="Book doctors, find pharmacies and access healthcare services across Kenya on SOKONI.">
-  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
-  <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="assets/logosokoni.png">
-  <script src="security.js"></script><link rel="stylesheet" href="style.css">
-  <script src="sokoni-permissions.js"></script>
-
-  <script src="seo.js" defer></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:white;min-height:100vh;padding-bottom:80px;}
-
-    /*  Nav  */
-    .hc-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:rgba(10,10,10,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
-    .hc-nav-logo{height:34px;}
-    .hc-nav-right{display:flex;gap:10px;align-items:center;}
-    .hc-nav-link{color:rgba(255,255,255,0.6);text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;}
-    .hc-nav-link:hover{color:white;border-color:rgba(255,255,255,0.25);}
-    .hc-nav-emg{background:rgba(255,60,60,0.1);border-color:rgba(255,60,60,0.3);color:#ff6b6b;}
-
-    /*  Hero  */
-    .hc-hero{background:linear-gradient(135deg,rgba(0,200,120,0.1),rgba(0,100,255,0.07));border-bottom:1px solid rgba(255,255,255,0.07);padding:48px 24px 40px;text-align:center;}
-    .hc-hero h1{font-size:clamp(24px,5vw,38px);font-weight:900;margin-bottom:10px;}
-    .hc-hero h1 span{color:#00c878;}
-    .hc-hero p{color:rgba(255,255,255,0.5);font-size:15px;margin-bottom:24px;}
-    .hc-search-bar{display:flex;max-width:540px;margin:0 auto;gap:8px;}
-    .hc-search-bar input{flex:1;padding:14px 18px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
-    .hc-search-bar input::placeholder{color:rgba(255,255,255,0.35);}
-    .hc-search-btn{padding:14px 22px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:12px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;}
-
-    /*  Emergency banner  */
-    .emg-banner{background:linear-gradient(135deg,rgba(255,30,30,0.12),rgba(255,80,0,0.08));border:1px solid rgba(255,60,60,0.25);border-radius:18px;padding:18px 22px;margin:24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
-    .emg-icon{font-size:36px;flex-shrink:0;}
-    .emg-info{flex:1;}
-    .emg-info h3{font-size:16px;font-weight:900;color:#ff6b6b;margin-bottom:4px;}
-    .emg-info p{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;}
-    .emg-numbers{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
-    .emg-num-btn{padding:8px 16px;border-radius:10px;font-size:13px;font-weight:800;border:none;cursor:pointer;text-decoration:none;display:inline-block;}
-    .emg-red{background:rgba(255,60,60,0.2);color:#ff6b6b;border:1px solid rgba(255,60,60,0.3);}
-    .emg-blue{background:rgba(0,120,255,0.15);color:#60aaff;border:1px solid rgba(0,120,255,0.25);}
-    .emg-green{background:rgba(0,200,120,0.12);color:#00c878;border:1px solid rgba(0,200,120,0.25);}
-
-    /*  Body  */
-    .hc-body{max-width:1200px;margin:0 auto;padding:0 24px 60px;}
-
-    /*  Category tiles  */
-    .hc-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin:24px 0;}
-    .hc-cat-tile{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px 12px;text-align:center;cursor:pointer;transition:all .2s;text-decoration:none;display:block;}
-    .hc-cat-tile:hover,.hc-cat-tile.active{border-color:rgba(0,200,120,0.35);background:rgba(0,200,120,0.08);}
-    .hc-cat-tile .ct-icon{font-size:28px;margin-bottom:8px;}
-    .hc-cat-tile .ct-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);}
-    .hc-cat-tile.active .ct-label{color:#00c878;}
-
-    /*  Section heading  */
-    .hc-section-h{font-size:15px;font-weight:800;color:white;margin:28px 0 16px;display:flex;align-items:center;gap:8px;}
-    .hc-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
-
-    /*  Provider cards  */
-    .hc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
-    .hc-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:20px;overflow:hidden;transition:transform .2s,border-color .2s;}
-    .hc-card:hover{transform:translateY(-3px);border-color:rgba(0,200,120,0.25);}
-    .hc-card-head{padding:18px 18px 0;display:flex;align-items:flex-start;gap:14px;}
-    .hc-card-emoji{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;}
-    .bg-hospital{background:rgba(255,60,60,0.1);border:1px solid rgba(255,60,60,0.2);}
-    .bg-clinic{background:rgba(0,180,255,0.1);border:1px solid rgba(0,180,255,0.2);}
-    .bg-pharmacy{background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.2);}
-    .bg-lab{background:rgba(180,100,255,0.1);border:1px solid rgba(180,100,255,0.2);}
-    .bg-dispensary{background:rgba(255,180,0,0.1);border:1px solid rgba(255,180,0,0.2);}
-    .bg-ambulance{background:rgba(255,80,0,0.1);border:1px solid rgba(255,80,0,0.2);}
-    .hc-card-meta{flex:1;}
-    .hc-card-name{font-size:15px;font-weight:800;color:white;margin-bottom:4px;}
-    .hc-card-type{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;display:inline-block;margin-bottom:6px;}
-    .type-hospital{background:rgba(255,60,60,0.15);color:#ff6b6b;}
-    .type-clinic{background:rgba(0,180,255,0.15);color:#60aaff;}
-    .type-pharmacy{background:rgba(0,200,120,0.15);color:#00c878;}
-    .type-lab{background:rgba(180,100,255,0.15);color:#c084fc;}
-    .type-dispensary{background:rgba(255,180,0,0.15);color:#fbbf24;}
-    .type-ambulance{background:rgba(255,80,0,0.15);color:#ff6b35;}
-    .hc-card-location{font-size:12px;color:rgba(255,255,255,0.4);}
-    .hc-card-body{padding:12px 18px 18px;}
-    .hc-card-desc{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6;margin-bottom:12px;}
-    .hc-card-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
-    .hc-card-rating{display:flex;align-items:center;gap:4px;font-size:12px;color:rgba(255,255,255,0.5);}
-    .hc-card-rating .star{color:#fbbf24;}
-    .hc-card-hours{font-size:11px;color:rgba(255,255,255,0.35);}
-    .hc-book-btn{padding:9px 18px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:10px;color:white;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:filter .2s;}
-    .hc-book-btn:hover{filter:brightness(1.1);}
-    .hc-open-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;}
-    .open-now{background:rgba(0,200,120,0.15);color:#00c878;border:1px solid rgba(0,200,120,0.2);}
-    .closed{background:rgba(255,60,60,0.1);color:#ff6b6b;border:1px solid rgba(255,60,60,0.15);}
-
-    /*  Medicine delivery CTA  */
-    .med-delivery-cta{background:linear-gradient(135deg,rgba(0,200,120,0.08),rgba(0,100,200,0.06));border:1px solid rgba(0,200,120,0.2);border-radius:20px;padding:28px 32px;margin:28px 0;display:flex;align-items:center;gap:24px;flex-wrap:wrap;}
-    .med-cta-icon{font-size:44px;flex-shrink:0;}
-    .med-cta-info h3{font-size:18px;font-weight:900;color:white;margin-bottom:5px;}
-    .med-cta-info p{font-size:13px;color:rgba(255,255,255,0.5);line-height:1.5;}
-    .med-cta-btn{padding:13px 26px;background:linear-gradient(135deg,#00c878,#009858);color:white;font-weight:800;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;}
-
-    /*  Appointment modal  */
-    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
-    .modal-box{background:#141414;border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:28px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;}
-    .modal-box h2{font-size:18px;font-weight:900;color:white;margin-bottom:6px;}
-    .modal-box p{color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:20px;}
-    .modal-input{width:100%;padding:13px 15px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:12px;}
-    .modal-input::placeholder{color:rgba(255,255,255,0.3);}
-    .modal-input:focus{border-color:rgba(0,200,120,0.4);}
-    .modal-btn{width:100%;padding:13px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:12px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;margin-top:4px;}
-    .modal-close{float:right;background:none;border:none;color:rgba(255,255,255,0.4);font-size:18px;cursor:pointer;padding:0 4px;}
-
-    /*  Health tips  */
-    .tips-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:24px 0;}
-    .tip-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;display:flex;gap:12px;align-items:flex-start;}
-    .tip-card .tip-icon{font-size:22px;flex-shrink:0;}
-    .tip-card h4{font-size:13px;font-weight:700;color:white;margin-bottom:3px;}
-    .tip-card p{font-size:11px;color:rgba(255,255,255,0.45);line-height:1.5;}
-
-    @media(max-width:600px){
-      .emg-banner{margin:16px;padding:14px;}
-      .hc-cats{grid-template-columns:repeat(3,1fr);}
-      .hc-grid{grid-template-columns:1fr;}
-      .med-delivery-cta{flex-direction:column;text-align:center;}
-    }
-    /* ── Tab system ── */
-    .hc-tab-nav{display:flex;gap:4px;padding:10px 24px;overflow-x:auto;scrollbar-width:none;background:rgba(0,0,0,0.5);border-bottom:1px solid rgba(0,200,120,0.1);position:sticky;top:62px;z-index:100;backdrop-filter:blur(14px);}
-    .hc-tab-nav::-webkit-scrollbar{display:none;}
-    .hc-tab-btn{flex-shrink:0;padding:7px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
-    .hc-tab-btn.active{background:rgba(0,200,120,0.12);border-color:rgba(0,200,120,0.3);color:#00c878;}
-    .hc-tab-panel{display:none;}
-    .hc-tab-panel.active{display:block;}
-    /* ── Specialist cards ── */
-    .spec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
-    .spec-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:18px;overflow:hidden;transition:all .2s;}
-    .spec-card:hover{transform:translateY(-3px);border-color:rgba(0,200,120,0.28);}
-    .spec-avatar{width:52px;height:52px;border-radius:13px;background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.2);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;}
-    .spec-name{font-size:14px;font-weight:900;color:white;margin-bottom:2px;}
-    .spec-title{font-size:11px;color:#00c878;font-weight:700;}
-    .spec-loc{font-size:11px;color:rgba(255,255,255,0.38);}
-    .spec-tags{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0;}
-    .spec-tag{font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(0,200,120,0.06);border:1px solid rgba(0,200,120,0.15);color:rgba(0,200,120,0.8);}
-    .spec-btn{flex:1;padding:9px;border:none;border-radius:9px;font-weight:800;font-size:11px;cursor:pointer;font-family:inherit;}
-    .spec-btn-book{background:linear-gradient(135deg,#00c878,#009858);color:white;}
-    .spec-btn-call{background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.25);color:#00c878;}
-    /* ── Lab cards ── */
-    .lab-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px 18px;transition:all .2s;}
-    .lab-card:hover{border-color:rgba(0,200,120,0.25);transform:translateY(-2px);}
-    /* ── Dashboard stats ── */
-    .hc-dash-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
-    .hc-dash-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;text-align:center;}
-    .hc-dash-val{font-size:22px;font-weight:900;color:#00c878;margin-bottom:4px;}
-    .hc-dash-lbl{font-size:9px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.04em;}
-    .hc-record-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:13px;padding:13px 15px;margin-bottom:8px;}
-    @media(max-width:600px){.spec-grid{grid-template-columns:1fr;}.hc-dash-stats{grid-template-columns:repeat(2,1fr);}}
-    /* ── Bottom nav base (style.css not linked on this page) ── */
-    .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:9996;display:flex;align-items:center;background:rgba(8,8,8,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,0.1);height:66px;}
-    .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:rgba(255,255,255,0.85);text-decoration:none;font-size:10px;font-weight:700;transition:0.2s ease;height:100%;border:none;background:none;cursor:pointer;padding:10px 0;}
-    .bnav-item i{font-size:21px;color:white;}
-    .bnav-item span{color:rgba(255,255,255,0.85);}
-    .bnav-item:hover,.active-bnav{color:#71ff00;}
-    .bnav-item:hover i,.active-bnav i{color:#71ff00;}
-    .bnav-item:hover span,.active-bnav span{color:#71ff00;}
-    body{padding-bottom:70px;}
-  </style>
-<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#00c878">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SOKONI">
-<link rel="stylesheet" href="premium.css">
-<link rel="stylesheet" href="compact-grid.css">
-<link rel="stylesheet" href="mobile.css">
-  <link rel="stylesheet" href="sokoni-premium-v2.css">
-<script src="market-actions.js" defer></script>
-<script src="inventory-manager.js" defer></script>
-<script src="sokoni-pay.js" defer></script>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"MedicalOrganization","name":"SOKONI Healthcare Hub","description":"Find hospitals, clinics, dentists, pharmacies and labs in Nairobi, Mombasa and across Kenya. Book doctor appointments online, order medicine delivered.","url":"https://mysokoni.co.ke/healthcare.html","logo":"https://mysokoni.co.ke/assets/Sokonilogo2.png","telephone":"+254705726803","areaServed":{"@type":"Country","name":"Kenya"},"medicalSpecialty":["GeneralPractice","EmergencyMedicine","Pharmacy","Dentistry"],"availableService":[{"@type":"MedicalProcedure","name":"Book Doctor Appointment"},{"@type":"MedicalProcedure","name":"Order Medicine Delivery"},{"@type":"MedicalProcedure","name":"Home Lab Tests"},{"@type":"MedicalProcedure","name":"Emergency Services"}]}</script>
-<script src="shared-header.js" defer></script>
-  <link rel="stylesheet" href="sokoni-desktop.css">
-  <script type="module" src="firebase.js"></script>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Healthcare — SOKONI</title>
+<link rel="icon" href="/assets/logosokoni.png">
+<script src="/__/firebase/10.12.0/firebase-app-compat.js"></script>
+<script src="/__/firebase/10.12.0/firebase-auth-compat.js"></script>
+<script src="/__/firebase/10.12.0/firebase-functions-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
+.hdr{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+.logo{font-weight:700;font-size:18px;color:#3fb950}.hdr-back{color:#8b949e;font-size:14px;cursor:pointer}
+.hero{background:linear-gradient(135deg,#0d1117 0%,#0a1a10 100%);padding:44px 16px 32px;text-align:center}
+.hero h1{font-size:clamp(24px,5vw,38px);font-weight:700;margin-bottom:8px}
+.hero p{color:#8b949e;font-size:14px;max-width:480px;margin:0 auto 24px}
+.search-row{display:flex;gap:8px;max-width:580px;margin:0 auto}
+.search-row input{flex:1;padding:12px 16px;border-radius:8px;border:1px solid #30363d;background:#161b22;color:#e6edf3;font-size:14px}
+.search-row input:focus{outline:none;border-color:#3fb950}
+.tabs{display:flex;border-bottom:1px solid #30363d;padding:0 16px;background:#161b22}
+.tab{padding:12px 16px;cursor:pointer;font-size:14px;border-bottom:2px solid transparent;color:#8b949e}
+.tab.active{color:#e6edf3;border-color:#3fb950}
+.container{max-width:1200px;margin:0 auto;padding:20px 16px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;align-items:center}
+.chip{padding:6px 13px;border-radius:20px;font-size:13px;cursor:pointer;border:1px solid #30363d;background:#161b22;color:#8b949e;transition:.2s;white-space:nowrap}
+.chip.active,.chip:hover{background:#238636;border-color:#238636;color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px;cursor:pointer;transition:.2s}
+.card:hover{border-color:#3fb950;transform:translateY(-2px)}
+.card-top{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.avatar{width:48px;height:48px;border-radius:50%;background:#1a3a2a;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.card-name{font-weight:600;font-size:15px}.card-spec{font-size:12px;color:#3fb950;text-transform:capitalize;margin-top:2px}
+.card-sub{font-size:13px;color:#8b949e;margin-top:3px}
+.card-row{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid #30363d}
+.rating{font-size:13px;color:#f0883e}.fee{font-size:14px;font-weight:600;color:#58a6ff}
+.badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.b-green{background:#1a3a2a;color:#3fb950}.b-blue{background:#1a2a3a;color:#58a6ff}
+.empty{text-align:center;padding:60px;color:#8b949e}.spinner{display:inline-block;width:24px;height:24px;border:2px solid #30363d;border-top-color:#3fb950;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn{padding:11px 20px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:.2s}
+.btn-green{background:#238636;color:#fff}.btn-green:hover{background:#2ea043}
+.btn-outline{background:transparent;border:1px solid #30363d;color:#e6edf3}.btn-outline:hover{border-color:#8b949e}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;padding:16px}
+.overlay.open{display:flex}
+.modal{background:#161b22;border:1px solid #30363d;border-radius:16px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto}
+.mhdr{padding:18px 22px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center}
+.mhdr h2{font-size:16px;font-weight:600}.xbtn{background:none;border:none;color:#8b949e;font-size:22px;cursor:pointer}
+.mbody{padding:22px}
+.detail-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:14px;color:#8b949e}
+.detail-row strong{color:#e6edf3}
+.divider{border:none;border-top:1px solid #30363d;margin:14px 0}
+.fg{margin-bottom:14px}
+.fg label{display:block;font-size:13px;color:#8b949e;margin-bottom:5px}
+.fg input,.fg select,.fg textarea{width:100%;padding:10px 14px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:14px}
+.fg textarea{resize:vertical;min-height:80px}
+.tog-row{display:flex;gap:8px;margin-bottom:14px}
+.tog{flex:1;padding:9px;border:1px solid #30363d;border-radius:8px;text-align:center;cursor:pointer;font-size:13px;transition:.2s}
+.tog.sel{border-color:#3fb950;background:#1a3a2a;color:#3fb950}
+.appt-card{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px;margin-bottom:10px}
+.s{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;margin-bottom:6px}
+.s-pending{background:#2d2a1a;color:#e3b341}.s-confirmed{background:#1a3a2a;color:#3fb950}
+.s-completed{background:#1a2a3a;color:#58a6ff}.s-cancelled{background:#2d1a1a;color:#f85149}
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:14px;z-index:999;animation:fi .3s;max-width:300px}
+.tok{background:#238636;color:#fff}.terr{background:#da3633;color:#fff}
+@keyframes fi{from{opacity:0;transform:translateY(8px)}}
+@media(max-width:600px){.grid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-<script src="splash.js"></script>
-
-
-<!--  Navbar  -->
-<div role="navigation" class="hc-nav sk-sub-nav">
-  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="hc-nav-logo" alt="Sokoni"></a>
-  <div class="hc-nav-right">
-    <a href="javascript:history.back()" class="hc-nav-link">← Back</a>
-    <a href="index.html" class="hc-nav-link">🏠 Home</a>
-    <a href="services.html" class="hc-nav-link" style="background:rgba(0,200,120,0.08);border-color:rgba(0,200,120,0.22);color:#00c878;">🛠️ Services</a>
-    <button type="button" onclick="openReg()" class="hc-nav-link" style="cursor:pointer;background:rgba(0,200,120,0.1);border-color:rgba(0,200,120,0.25);color:#00c878;font-family:inherit;">+ Register</button>
-    <button type="button" id="managePharmacyBtn" onclick="openPharmacyManager()" class="hc-nav-link" style="display:none;cursor:pointer;background:rgba(0,180,255,0.1);border-color:rgba(0,180,255,0.3);color:#60aaff;font-family:inherit;">💊 My Pharmacy</button>
-    <a href="tel:999" class="hc-nav-link hc-nav-emg"><i class="fas fa-ambulance"></i> Emergency</a>
-    <a href="notifications.html" class="hc-nav-link" style="position:relative;" title="Notifications">🔔<span id="hcNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
+<div class="hdr">
+  <span class="hdr-back" onclick="history.back()">← Back</span>
+  <div class="logo">🏥 Healthcare</div>
+</div>
+<div class="hero">
+  <h1>Find Healthcare Providers</h1>
+  <p>Book appointments with doctors, dentists, specialists and other health professionals across Kenya.</p>
+  <div class="search-row">
+    <input id="sq" type="text" placeholder="Search by name, specialization or city…" oninput="debounce()">
+    <button class="btn btn-green" onclick="doSearch()">Search</button>
   </div>
 </div>
-<script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('hcNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
-
-<!--  Hero  -->
-<div class="hc-hero">
-  <h1>🏥 SOKONI <span>Healthcare</span></h1>
-  <p>Find hospitals, clinics, dispensaries, pharmacies & labs near you — book appointments, order medicine delivered to your door</p>
-  <div class="hc-search-bar">
-    <input type="text" id="hcSearch" placeholder="Search e.g. 'pharmacy Westlands', 'paediatric clinic'..." oninput="filterProviders()">
-    <button type="button" class="hc-search-btn" onclick="filterProviders()">🔍 Search</button>
-    <button type="button" id="hcOpenNowBtn" onclick="toggleHcOpenNow(this)" style="padding:10px 14px;border-radius:10px;border:1px solid rgba(16,185,129,.4);background:transparent;color:#10b981;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;">🟢 Open Now</button>
-  </div>
+<div class="tabs">
+  <div class="tab active" onclick="setTab('browse',this)">Browse Providers</div>
+  <div class="tab" onclick="setTab('appointments',this)">My Appointments</div>
 </div>
-
-<!--  Register CTA Banner  -->
-<div style="background:linear-gradient(135deg,rgba(0,200,120,0.1),rgba(0,100,200,0.07));border-bottom:1px solid rgba(0,200,120,0.15);padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-  <div style="display:flex;align-items:center;gap:14px;">
-    <div style="font-size:32px;">🏥</div>
-    <div>
-      <div style="font-size:15px;font-weight:900;color:white;margin-bottom:3px;">Are you a Healthcare Provider?</div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.5);">Hospitals, clinics, pharmacies, labs & home doctors — list your facility free and reach patients near you</div>
+<div class="container">
+  <div id="pBrowse">
+    <div class="filters" id="specChips"></div>
+    <div class="filters">
+      <input id="cityF" type="text" placeholder="City…" style="padding:6px 12px;border-radius:20px;border:1px solid #30363d;background:#161b22;color:#e6edf3;font-size:13px;width:130px" oninput="filter()">
+      <div class="chip" id="onlineChip" onclick="toggleOnline()">Online Only</div>
     </div>
+    <div id="provArea" style="text-align:center;padding:40px"><div class="spinner"></div></div>
   </div>
-  <button type="button" onclick="openReg()" style="flex-shrink:0;padding:12px 24px;background:linear-gradient(135deg,#00c878,#009858);color:white;font-weight:900;font-size:13px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Register Your Facility</button>
+  <div id="pAppts" style="display:none">
+    <div id="apptArea" style="text-align:center;padding:40px"><div class="spinner"></div></div>
+  </div>
 </div>
 
-<!--  Emergency Banner  -->
-<div class="emg-banner" id="hcEmgBanner">
-  <div class="emg-icon">🚨</div>
-  <div class="emg-info">
-    <h3>🚨 Emergency? Call Now</h3>
-    <p>Available 24/7  Free ambulance referral in Nairobi, Mombasa, Kisumu</p>
-    <div class="emg-numbers">
-      <a href="tel:999" class="emg-num-btn emg-red">📞 999  Police/Ambulance</a>
-      <a href="tel:112" class="emg-num-btn emg-blue">📞 112  Emergency Line</a>
-      <a href="tel:0800723253" class="emg-num-btn emg-green">📞 NHIF Helpline</a>
+<div class="overlay" id="provModal">
+  <div class="modal">
+    <div class="mhdr"><h2 id="mName"></h2><button class="xbtn" onclick="close('provModal')">×</button></div>
+    <div class="mbody">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <span id="mSpec" class="badge b-green"></span><span id="mOnline" class="badge"></span>
+      </div>
+      <div class="detail-row">🏥 <strong id="mClinic"></strong></div>
+      <div class="detail-row">📍 <span id="mLoc"></span></div>
+      <div class="detail-row">💰 <strong id="mFee"></strong></div>
+      <div class="detail-row">⭐ <span id="mRating"></span></div>
+      <div class="detail-row">🌐 <span id="mLangs"></span></div>
+      <div class="detail-row" id="mInsRow">🛡️ <span id="mIns"></span></div>
+      <hr class="divider">
+      <p id="mBio" style="font-size:14px;color:#8b949e;line-height:1.6;margin-bottom:16px"></p>
+      <button class="btn btn-green" style="width:100%" onclick="openBook()">Book Appointment</button>
     </div>
   </div>
 </div>
 
-<!-- ── Tab Nav ── -->
-<div class="hc-tab-nav" id="hcTabNav">
-  <button type="button" class="hc-tab-btn active" onclick="hcShowTab('findcare',this)">🏥 Find Care</button>
-  <button type="button" class="hc-tab-btn" onclick="hcShowTab('specialists',this)">🩺 Specialists</button>
-  <button type="button" class="hc-tab-btn" onclick="hcShowTab('teleconsult',this)">📱 Teleconsult</button>
-  <button type="button" class="hc-tab-btn" onclick="hcShowTab('labs',this)">🔬 Labs & Tests</button>
-  <button type="button" class="hc-tab-btn" onclick="hcShowTab('myhealth',this)">💚 My Health</button>
-  <button type="button" class="hc-tab-btn" onclick="hcShowTab('providers',this)">🏥 For Providers</button>
-</div>
-
-<!-- ── Find Care Tab Panel (existing content) ── -->
-<div id="hctabpanel-findcare" class="hc-tab-panel active">
-<div class="hc-body">
-
-  <!--  Stats Strip  -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:20px 0;background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:16px;padding:16px 18px;">
-    <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#00c878;">28</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Verified Providers</div></div>
-    <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#60aaff;">3 Cities</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Nairobi, Mombasa, Kisumu</div></div>
-    <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#fbbf24;">4.7 ⭐</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Avg. Rating</div></div>
-    <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#a78bfa;">NHIF</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Accredited Options</div></div>
-    <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#ff6b35;">2 hrs</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Med Delivery ETA</div></div>
-  </div>
-
-  <!--  Category tiles  -->
-  <div class="hc-cats" id="hcCatTiles">
-    <a class="hc-cat-tile active" onclick="return setCat('',this)" href="javascript:void(0)">
-      <div class="ct-icon">🏥</div><div class="ct-label">All</div>
-    </a>
-    <a class="hc-cat-tile" onclick="return setCat('hospital',this)" href="javascript:void(0)">
-      <div class="ct-icon">🏥</div><div class="ct-label">Hospitals</div>
-    </a>
-    <a class="hc-cat-tile" onclick="return setCat('clinic',this)" href="javascript:void(0)">
-      <div class="ct-icon">🩺</div><div class="ct-label">Clinics</div>
-    </a>
-    <a class="hc-cat-tile" onclick="return setCat('dispensary',this)" href="javascript:void(0)">
-      <div class="ct-icon">💉</div><div class="ct-label">Dispensaries</div>
-    </a>
-    <a class="hc-cat-tile" onclick="return setCat('pharmacy',this)" href="javascript:void(0)">
-      <div class="ct-icon">💊</div><div class="ct-label">Pharmacies</div>
-    </a>
-    <a class="hc-cat-tile" onclick="return setCat('lab',this)" href="javascript:void(0)">
-      <div class="ct-icon">🔬</div><div class="ct-label">Labs &amp; Tests</div>
-    </a>
-    <a class="hc-cat-tile" onclick="return setCat('ambulance',this)" href="javascript:void(0)">
-      <div class="ct-icon">🚑</div><div class="ct-label">Ambulance</div>
-    </a>
-    <a class="hc-cat-tile" onclick="return setCat('doctor',this)" href="javascript:void(0)">
-      <div class="ct-icon">👨‍⚕️</div><div class="ct-label">Home Doctor</div>
-    </a>
-  </div>
-
-  <!--  Medicine delivery CTA  -->
-  <div class="med-delivery-cta">
-    <div class="med-cta-icon">💊</div>
-    <div class="med-cta-info">
-      <h3>💊 Medicine Delivered to Your Door</h3>
-      <p>Order prescription &amp; OTC medicine from verified pharmacies. Delivered within 2 hours across Nairobi, Mombasa &amp; Kisumu. Pay via M-PESA.</p>
+<div class="overlay" id="bookModal">
+  <div class="modal">
+    <div class="mhdr"><h2>Book Appointment</h2><button class="xbtn" onclick="close('bookModal')">×</button></div>
+    <div class="mbody">
+      <div class="tog-row">
+        <div class="tog sel" id="tIn" onclick="selConsult('in')">🏥 In-Person</div>
+        <div class="tog" id="tOnl" onclick="selConsult('online')">🌐 Online</div>
+      </div>
+      <div class="fg"><label>Appointment Date & Time</label><input type="datetime-local" id="apptDT" min=""></div>
+      <div class="fg"><label>Reason for visit</label><textarea id="apptR" placeholder="Describe your concern…"></textarea></div>
+      <button class="btn btn-green" style="width:100%;margin-top:4px" onclick="book()">Confirm Booking</button>
     </div>
-    <button type="button" class="med-cta-btn" onclick="openMedDelivery()">💊 Order Medicine →</button>
-  </div>
-
-  <!-- SPOTLIGHT CTA for healthcare providers -->
-  <div class="hub-spotlight-cta">
-    <div class="hsc-icon">👑</div>
-    <div class="hsc-body">
-      <h3>Spotlight Your Clinic or Pharmacy</h3>
-      <p>Patients search Sokoni for trusted healthcare daily. A spotlight listing puts your facility at the top — building trust before they even call.</p>
-      <div class="hsc-perks">
-        <span class="hsc-perk">🌟 Top search placement</span>
-        <span class="hsc-perk">🔵 Verified badge</span>
-        <span class="hsc-perk">📈 More appointments</span>
-        <span class="hsc-perk">🛡️ Trusted brand</span>
-      </div>
-      <a href="provider.html?cat=healthcare" class="hsc-btn">⚡ Get Spotlighted</a>
-      <div class="hsc-price">From KES 500 / week · Cancel anytime</div>
-    </div>
-  </div>
-
-  <!--  Health Tips Strip  -->
-  <div class="hc-section-h">💡 Quick Health Info</div>
-  <div class="tips-strip">
-    <div class="tip-card"><div class="tip-icon">🏥</div><div><h4>🏥 NHIF Coverage</h4><p>Check if your provider is NHIF-registered and save on consultation fees.</p></div></div>
-    <div class="tip-card"><div class="tip-icon">💊</div><div><h4>💊 Generic Medicines</h4><p>Ask your pharmacist for the generic — same ingredient, much cheaper.</p></div></div>
-    <div class="tip-card"><div class="tip-icon">🔬</div><div><h4>🔬 Home Lab Tests</h4><p>Blood tests, malaria, COVID &amp; sugar levels done at your home. Book below.</p></div></div>
-    <div class="tip-card"><div class="tip-icon">📅</div><div><h4>📅 Book in Advance</h4><p>Use Sokoni to book specialist appointments and skip the long queue.</p></div></div>
-  </div>
-
-  <!--  Providers grid  -->
-  <div class="hc-section-h" id="hcResultLabel">All Healthcare Providers</div>
-  <div class="hc-grid" id="hcGrid"></div>
-  <div id="hcEmpty" style="display:none;text-align:center;padding:60px 0;color:rgba(255,255,255,0.25);font-size:14px;">
-    <div style="font-size:48px;margin-bottom:12px;">🔍</div>
-    <p>No providers found in this category yet.<br>List your clinic or pharmacy on Sokoni!</p>
-    <a href="provider.html?cat=healthcare" style="display:inline-block;margin-top:16px;padding:10px 22px;background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.25);color:#00c878;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">+ Register Your Facility →</a>
-  </div>
-
-</div><!-- end hc-body -->
-</div><!-- end hctabpanel-findcare -->
-
-<!-- ══════════════════════════════════════════════════════════
-     SPECIALISTS TAB
-══════════════════════════════════════════════════════════ -->
-<div id="hctabpanel-specialists" class="hc-tab-panel">
-  <div class="hc-body">
-    <div class="hc-section-h" style="margin-top:8px;">🩺 Find Specialists</div>
-
-    <!-- Specialty filter -->
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;" id="specTypeFilter">
-      <button type="button" class="hc-tab-btn active" onclick="filterSpecialists('all',this)">All</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('cardiologist',this)">❤️ Cardiology</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('dermatologist',this)">🌿 Dermatology</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('orthopaedic',this)">🦴 Orthopaedics</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('ent',this)">👂 ENT</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('gynaecologist',this)">🌺 Gynaecology</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('paediatrician',this)">👶 Paediatrics</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('dentist',this)">🦷 Dentistry</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('physiotherapist',this)">💪 Physiotherapy</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('nutritionist',this)">🥗 Nutrition</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('mental',this)">🧠 Mental Wellness</button>
-      <button type="button" class="hc-tab-btn" onclick="filterSpecialists('ophthalmologist',this)">👁️ Eye Care</button>
-    </div>
-
-    <div class="spec-grid" id="specGrid"></div>
-  </div>
-</div><!-- end specialists -->
-
-<!-- ══════════════════════════════════════════════════════════
-     TELECONSULT TAB
-══════════════════════════════════════════════════════════ -->
-<div id="hctabpanel-teleconsult" class="hc-tab-panel">
-  <div class="hc-body">
-    <div class="hc-section-h" style="margin-top:8px;">📱 Teleconsultation</div>
-    <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Consult a qualified doctor from your phone — video or voice call. Available morning to night. Results and prescriptions sent digitally.</p>
-
-    <!-- How it works -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px;">
-      <div style="background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:16px;padding:18px;text-align:center;">
-        <div style="font-size:30px;margin-bottom:8px;">1️⃣</div>
-        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Book a Slot</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Choose your doctor and available time slot</div>
-      </div>
-      <div style="background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:16px;padding:18px;text-align:center;">
-        <div style="font-size:30px;margin-bottom:8px;">2️⃣</div>
-        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Pay via M-Pesa</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">From KES 500 — secure payment</div>
-      </div>
-      <div style="background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:16px;padding:18px;text-align:center;">
-        <div style="font-size:30px;margin-bottom:8px;">3️⃣</div>
-        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Video/Voice Consult</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Doctor calls you at the booked time</div>
-      </div>
-      <div style="background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:16px;padding:18px;text-align:center;">
-        <div style="font-size:30px;margin-bottom:8px;">4️⃣</div>
-        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Get Prescription</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Digital prescription + referral letter if needed</div>
-      </div>
-    </div>
-
-    <!-- Booking form -->
-    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:24px;">
-      <div style="font-size:16px;font-weight:900;color:#00c878;margin-bottom:16px;">📅 Book Teleconsultation</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Your Name *</label>
-          <input type="text" id="tcName" class="modal-input" placeholder="Full name" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Phone *</label>
-          <input type="tel" id="tcPhone" class="modal-input" placeholder="07XXXXXXXX" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Consultation Type *</label>
-          <select id="tcType" class="modal-input" style="margin:0;cursor:pointer;">
-            <option value="">Select type</option>
-            <option value="gp">General Consultation (KES 500)</option>
-            <option value="specialist">Specialist Consult (KES 1,500)</option>
-            <option value="mental">Mental Wellness (KES 800)</option>
-            <option value="nutrition">Nutrition & Diet (KES 700)</option>
-            <option value="second-opinion">Second Opinion (KES 1,000)</option>
-          </select>
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Preferred Date *</label>
-          <input type="date" id="tcDate" class="modal-input" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Preferred Time</label>
-          <input type="time" id="tcTime" class="modal-input" value="09:00" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Call Mode</label>
-          <select id="tcMode" class="modal-input" style="margin:0;cursor:pointer;">
-            <option value="video">Video Call</option>
-            <option value="voice">Voice Call Only</option>
-          </select>
-        </div>
-      </div>
-      <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Symptoms / Reason for Consult</label>
-      <textarea id="tcSymptoms" class="modal-input" style="min-height:80px;resize:vertical;margin-bottom:14px;" placeholder="Briefly describe your symptoms or what you'd like to discuss with the doctor..."></textarea>
-      <button type="button" class="modal-btn" onclick="bookTeleconsult()">📱 Book Teleconsult &amp; Pay via M-Pesa</button>
-      <div id="tcMsg" style="font-size:12px;margin-top:10px;min-height:16px;"></div>
-    </div>
-
-    <!-- Available doctors for teleconsult -->
-    <div class="hc-section-h" style="margin-top:28px;">👨‍⚕️ Available for Teleconsult Today</div>
-    <div class="spec-grid" id="tcDoctorGrid"></div>
-  </div>
-</div><!-- end teleconsult -->
-
-<!-- ══════════════════════════════════════════════════════════
-     LABS & TESTS TAB
-══════════════════════════════════════════════════════════ -->
-<div id="hctabpanel-labs" class="hc-tab-panel">
-  <div class="hc-body">
-    <div class="hc-section-h" style="margin-top:8px;">🔬 Labs &amp; Diagnostic Tests</div>
-    <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:18px;">Book blood tests, full panels, malaria, HIV, PCR and more at accredited labs. Home sample collection available.</p>
-
-    <!-- Test categories -->
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;" id="labCatFilter">
-      <button type="button" class="hc-tab-btn active" onclick="filterLabTests('all',this)">All Tests</button>
-      <button type="button" class="hc-tab-btn" onclick="filterLabTests('blood',this)">🩸 Blood Tests</button>
-      <button type="button" class="hc-tab-btn" onclick="filterLabTests('malaria',this)">🦟 Malaria</button>
-      <button type="button" class="hc-tab-btn" onclick="filterLabTests('hiv',this)">🔴 HIV/STI</button>
-      <button type="button" class="hc-tab-btn" onclick="filterLabTests('sugar',this)">🍬 Diabetes</button>
-      <button type="button" class="hc-tab-btn" onclick="filterLabTests('liver',this)">🫁 Liver/Renal</button>
-      <button type="button" class="hc-tab-btn" onclick="filterLabTests('imaging',this)">📸 Imaging</button>
-      <button type="button" class="hc-tab-btn" onclick="filterLabTests('covid',this)">😷 COVID</button>
-    </div>
-
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;" id="labTestGrid"></div>
-
-    <!-- Lab booking form -->
-    <div class="hc-section-h" style="margin-top:28px;">📋 Book a Lab Test</div>
-    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:22px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Your Name *</label>
-          <input type="text" id="labName" class="modal-input" placeholder="Full name" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Phone *</label>
-          <input type="tel" id="labPhone" class="modal-input" placeholder="07XXXXXXXX" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Test(s) Needed *</label>
-          <input type="text" id="labTests" class="modal-input" placeholder="e.g. Full Blood Count, Malaria RDT" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Collection Method</label>
-          <select id="labCollection" class="modal-input" style="margin:0;cursor:pointer;">
-            <option value="visit">I'll visit the lab</option>
-            <option value="home">Home sample collection (+KES 300)</option>
-          </select>
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Preferred Date</label>
-          <input type="date" id="labDate" class="modal-input" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Preferred Lab</label>
-          <select id="labPreferred" class="modal-input" style="margin:0;cursor:pointer;">
-            <option value="">Any accredited lab</option>
-            <option>Nairobi Diagnostics Lab</option>
-            <option>Lancet Kenya</option>
-            <option>BioMedics Lab — Kisumu</option>
-          </select>
-        </div>
-      </div>
-      <button type="button" class="modal-btn" onclick="bookLabTest()">🔬 Book Lab Test</button>
-      <div id="labMsg" style="font-size:12px;margin-top:10px;min-height:16px;"></div>
-    </div>
-  </div>
-</div><!-- end labs -->
-
-<!-- ══════════════════════════════════════════════════════════
-     MY HEALTH DASHBOARD TAB
-══════════════════════════════════════════════════════════ -->
-<div id="hctabpanel-myhealth" class="hc-tab-panel">
-  <div class="hc-body">
-    <div class="hc-section-h" style="margin-top:8px;">💚 My Health Dashboard</div>
-
-    <div class="hc-dash-stats">
-      <div class="hc-dash-stat"><div class="hc-dash-val" id="hd-appts">0</div><div class="hc-dash-lbl">Appointments</div></div>
-      <div class="hc-dash-stat"><div class="hc-dash-val" id="hd-meds">0</div><div class="hc-dash-lbl">Med Orders</div></div>
-      <div class="hc-dash-stat"><div class="hc-dash-val" id="hd-labs">0</div><div class="hc-dash-lbl">Lab Bookings</div></div>
-      <div class="hc-dash-stat"><div class="hc-dash-val" id="hd-tc">0</div><div class="hc-dash-lbl">Teleconsults</div></div>
-    </div>
-
-    <!-- Appointments list -->
-    <div class="hc-section-h">📅 My Appointments</div>
-    <div id="hdApptList">
-      <div style="text-align:center;padding:40px 0;color:rgba(255,255,255,0.22);">
-        <div style="font-size:36px;margin-bottom:8px;">📅</div>
-        <p style="font-size:12px;">No appointments yet. <a href="javascript:void(0)" onclick="hcShowTab('findcare')" style="color:#00c878;">Find a provider</a> and book your first appointment.</p>
-      </div>
-    </div>
-
-    <!-- Medicine orders -->
-    <div class="hc-section-h" style="margin-top:20px;">💊 Medicine Orders</div>
-    <div id="hdMedList">
-      <div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.22);">
-        <div style="font-size:36px;margin-bottom:8px;">💊</div>
-        <p style="font-size:12px;">No medicine orders yet. <a href="javascript:void(0)" onclick="openMedDelivery()" style="color:#00c878;">Order medicine</a> delivered to you.</p>
-      </div>
-    </div>
-
-    <!-- Health tips personalised -->
-    <div class="hc-section-h" style="margin-top:20px;">💡 Your Health Reminders</div>
-    <div style="display:grid;gap:10px;">
-      <div class="hc-record-card">
-        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">🩺 Annual Health Check-Up</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Book a comprehensive check-up once a year. Includes blood pressure, blood sugar, cholesterol and general physical.</div>
-        <button type="button" onclick="hcShowTab('labs')" style="margin-top:8px;padding:7px 16px;background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.2);color:#00c878;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Book Lab Test →</button>
-      </div>
-      <div class="hc-record-card">
-        <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">💊 Medication Refill</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">Don't run out of chronic medication. Set up a monthly delivery from your trusted pharmacy.</div>
-        <button type="button" onclick="openMedDelivery()" style="margin-top:8px;padding:7px 16px;background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.2);color:#00c878;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Order Medicine →</button>
-      </div>
-    </div>
-  </div>
-</div><!-- end myhealth -->
-
-<!-- ══════════════════════════════════════════════════════════
-     FOR PROVIDERS TAB
-══════════════════════════════════════════════════════════ -->
-<div id="hctabpanel-providers" class="hc-tab-panel">
-  <div class="hc-body">
-    <div class="hc-section-h" style="margin-top:8px;">🏥 For Healthcare Providers</div>
-    <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:20px;">Register your facility, manage bookings, track appointments and grow your patient base on Sokoni.</p>
-
-    <!-- Provider registration -->
-    <div style="background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.14);border-radius:20px;padding:24px;margin-bottom:24px;">
-      <div style="font-size:16px;font-weight:900;color:#00c878;margin-bottom:4px;">➕ Register Your Facility</div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Free listing · Verified badge · More patients</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Facility Name *</label>
-          <input type="text" id="pvFacName" class="modal-input" placeholder="Hospital / Clinic / Pharmacy name" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Facility Type *</label>
-          <select id="pvFacType" class="modal-input" style="margin:0;cursor:pointer;">
-            <option value="">Select type</option>
-            <option value="hospital">Hospital</option>
-            <option value="clinic">Clinic / Health Centre</option>
-            <option value="dispensary">Dispensary</option>
-            <option value="pharmacy">Pharmacy</option>
-            <option value="lab">Lab / Diagnostics</option>
-            <option value="ambulance">Ambulance Service</option>
-            <option value="specialist">Specialist Practice</option>
-            <option value="dentist">Dental Clinic</option>
-            <option value="physio">Physiotherapy</option>
-            <option value="mental">Mental Health Practice</option>
-          </select>
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Location *</label>
-          <input type="text" id="pvFacLoc" class="modal-input" placeholder="e.g. Westlands, Nairobi" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Phone *</label>
-          <input type="tel" id="pvFacPhone" class="modal-input" placeholder="07XXXXXXXX" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Opening Hours</label>
-          <input type="text" id="pvFacHours" class="modal-input" placeholder="e.g. Mon-Sat 8am-8pm" style="margin:0;">
-        </div>
-        <div>
-          <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Email</label>
-          <input type="email" id="pvFacEmail" class="modal-input" placeholder="your@email.com" style="margin:0;">
-        </div>
-      </div>
-      <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Services Offered</label>
-      <textarea id="pvFacServices" class="modal-input" style="min-height:70px;resize:vertical;margin-bottom:8px;" placeholder="Describe your specialties and services..."></textarea>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:12px;color:rgba(255,255,255,0.45);">
-        <input type="checkbox" id="pvFacNhif" style="accent-color:#00c878;width:16px;height:16px;">
-        <label for="pvFacNhif">NHIF Accredited</label>
-        <input type="checkbox" id="pvFacTelemed" style="accent-color:#00c878;width:16px;height:16px;margin-left:12px;">
-        <label for="pvFacTelemed">Offers Teleconsultation</label>
-      </div>
-      <button type="button" class="modal-btn" onclick="submitProviderReg()">✅ Register Facility</button>
-      <div id="pvRegMsg" style="font-size:12px;margin-top:10px;min-height:16px;"></div>
-    </div>
-
-    <!-- Provider dashboard (if registered) -->
-    <div id="pvDashboard" style="display:none;">
-      <div class="hc-section-h">📊 My Practice Dashboard</div>
-      <div class="hc-dash-stats">
-        <div class="hc-dash-stat"><div class="hc-dash-val" id="pvTotalAppts">0</div><div class="hc-dash-lbl">Total Bookings</div></div>
-        <div class="hc-dash-stat"><div class="hc-dash-val" id="pvTodayAppts">0</div><div class="hc-dash-lbl">Today</div></div>
-        <div class="hc-dash-stat"><div class="hc-dash-val" id="pvRating">—</div><div class="hc-dash-lbl">Rating</div></div>
-        <div class="hc-dash-stat"><div class="hc-dash-val" id="pvViews">0</div><div class="hc-dash-lbl">Profile Views</div></div>
-      </div>
-      <div class="hc-section-h">📋 Recent Bookings</div>
-      <div id="pvBookingList">
-        <div style="text-align:center;padding:32px 0;color:rgba(255,255,255,0.22);font-size:12px;">No bookings yet. Share your Sokoni profile to start receiving patients.</div>
-      </div>
-    </div>
-
-    <!-- Benefits -->
-    <div class="hc-section-h" style="margin-top:24px;">⚡ Why Join Sokoni Healthcare?</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
-      <div class="hc-record-card"><div style="font-size:24px;margin-bottom:8px;">🌟</div><div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Free Listing</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">List your facility at no cost. Upgrade to Spotlight for premium placement.</div></div>
-      <div class="hc-record-card"><div style="font-size:24px;margin-bottom:8px;">📅</div><div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Online Bookings</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">Patients can book appointments 24/7 directly from your profile.</div></div>
-      <div class="hc-record-card"><div style="font-size:24px;margin-bottom:8px;">💳</div><div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">M-Pesa Payments</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">Collect consultation fees directly to your M-Pesa via Sokoni Pay.</div></div>
-      <div class="hc-record-card"><div style="font-size:24px;margin-bottom:8px;">📈</div><div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">More Patients</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">Reach thousands of patients searching for healthcare near them.</div></div>
-    </div>
-  </div>
-</div><!-- end providers -->
-
-<!--  Appointment Modal  -->
-<div id="apptModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeAppt()">
-  <div class="modal-box">
-    <button type="button" class="modal-close" onclick="closeAppt()">✕</button>
-    <h2>📅 Book Appointment</h2>
-    <p id="apptProvider">Booking at provider</p>
-    <input class="modal-input" type="text" id="apptName" placeholder="Your Full Name">
-    <input class="modal-input" type="tel" id="apptPhone" placeholder="Phone: 07XXXXXXXX">
-    <select class="modal-input" id="apptService" style="cursor:pointer;">
-      <option value="">Select Service</option>
-      <option value="general">General Consultation</option>
-      <option value="dental">Dental</option>
-      <option value="paeds">Paediatrics</option>
-      <option value="maternity">Maternity / ANC</option>
-      <option value="surgery">Minor Surgery</option>
-      <option value="lab">Lab Tests</option>
-      <option value="vaccine">Vaccination</option>
-      <option value="homevisit">Home Doctor Visit</option>
-    </select>
-    <input class="modal-input" type="date" id="apptDate" min="">
-    <input class="modal-input" type="time" id="apptTime" value="09:00">
-    <textarea class="modal-input" id="apptNotes" placeholder="Any notes for the provider (optional)" style="resize:vertical;height:80px;"></textarea>
-    <button type="button" class="modal-btn" onclick="submitAppt()">📅 Confirm Booking</button>
   </div>
 </div>
 
-<!--  Register Facility Modal  -->
-<div id="regModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeReg()">
-  <div class="modal-box">
-    <button type="button" class="modal-close" onclick="closeReg()">✕</button>
-    <h2>🏥 Register Your Facility</h2>
-    <p>List your hospital, clinic, pharmacy or lab on SOKONI Healthcare — reach patients searching near you</p>
-    <input class="modal-input" type="text" id="regFacName" placeholder="Facility Name *">
-    <select class="modal-input" id="regFacType" style="cursor:pointer;">
-      <option value="hospital">🏥 Hospital</option>
-      <option value="clinic">🩺 Clinic</option>
-      <option value="dispensary">💊 Dispensary</option>
-      <option value="pharmacy">💊 Pharmacy</option>
-      <option value="lab">🔬 Lab / Diagnostics</option>
-      <option value="ambulance">🚑 Ambulance Service</option>
-      <option value="doctor">🩺 Home Doctor</option>
-    </select>
-    <input class="modal-input" type="text" id="regFacLocation" placeholder="Location (e.g. Westlands, Nairobi) *">
-    <input class="modal-input" type="tel" id="regFacPhone" placeholder="Contact Phone *">
-    <input class="modal-input" type="text" id="regFacHours" placeholder="Opening Hours (e.g. MonSat 8am8pm)">
-    <textarea class="modal-input" id="regFacDesc" placeholder="Brief description of services offered..." style="resize:vertical;height:80px;"></textarea>
-    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:12px;font-size:12px;color:rgba(255,255,255,0.4);">
-      <input type="checkbox" id="regFacNhif" style="accent-color:#00c878;margin-top:3px;flex-shrink:0;">
-      <label for="regFacNhif">This facility accepts NHIF</label>
-    </div>
-    <button type="button" class="modal-btn" onclick="submitRegFac()">🏥 Submit for Listing</button>
-    <div id="regFacMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
-  </div>
-</div>
-
-<!--  Medicine Delivery Modal  -->
-<div id="medModal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeMed()">
-  <div class="modal-box">
-    <button type="button" class="modal-close" onclick="closeMed()">✕</button>
-    <h2>💊 Order Medicine</h2>
-    <p>Delivered within 2 hours — Pay on delivery via M-PESA</p>
-    <input class="modal-input" type="text" id="medName" placeholder="Medicine name(s) or description">
-    <input class="modal-input" type="text" id="medRx" placeholder="Prescription reference (if any)">
-    <input class="modal-input" type="text" id="medAddress" placeholder="Delivery address">
-    <input class="modal-input" type="tel" id="medPhone" placeholder="Phone: 07XXXXXXXX">
-    <select class="modal-input" id="medUrgency" style="cursor:pointer;">
-      <option value="normal">Standard (2–3 hrs) — Free delivery</option>
-      <option value="express">Express (under 1 hr) — KES 150 delivery</option>
-    </select>
-    <button type="button" class="modal-btn" onclick="submitMed()">✅ Place Medicine Order</button>
-  </div>
-</div>
-
+<script src="/sokoni-config.js"></script>
 <script>
-/*  Sample providers data  */
-const PROVIDERS = [
-  { id:"hc1", name:"Nairobi West Hospital", type:"hospital", location:"Nairobi West", area:"nairobi", desc:"Full-service hospital with A&E, maternity, surgery, paediatrics and ICU. NHIF accredited.", rating:4.7, reviews:312, hours:"24/7", open:true, emoji:"🏥" },
-  { id:"hc2", name:"Aga Khan Hospital", type:"hospital", location:"Parklands, Nairobi", area:"nairobi", desc:"Tertiary referral centre. Specialised oncology, cardiology, orthopaedics and neurology.", rating:4.9, reviews:880, hours:"24/7", open:true, emoji:"🏥" },
-  { id:"hc3", name:"Coast General Teaching Hospital", type:"hospital", location:"Mombasa", area:"mombasa", desc:"Largest public hospital in the Coast region. Specialist clinics, lab & pharmacy on site.", rating:4.2, reviews:210, hours:"24/7", open:true, emoji:"🏥" },
-  { id:"hc4", name:"Gertrude's Children's Hospital", type:"hospital", location:"Muthaiga, Nairobi", area:"nairobi", desc:"Leading paediatric hospital in East Africa. Neonatology, paediatric surgery, dentistry.", rating:4.8, reviews:540, hours:"24/7", open:true, emoji:"🏥" },
+let app,fns,auth,cu=null,allP=[],selP=null,onlineOnly=false,isOnline=false,dt;
 
-  { id:"hc5", name:"Karen Clinic", type:"clinic", location:"Karen, Nairobi", area:"nairobi", desc:"General outpatient clinic offering GP, dental, immunisation and minor procedures. Walk-in welcome.", rating:4.5, reviews:97, hours:"MonSat 7am8pm", open:true, emoji:"🩺" },
-  { id:"hc6", name:"CBD Medical Centre", type:"clinic", location:"Nairobi CBD", area:"nairobi", desc:"Affordable GP consultations, STI testing, family planning and lab. Open 7 days a week.", rating:4.3, reviews:155, hours:"7am9pm daily", open:true, emoji:"🩺" },
-  { id:"hc7", name:"Kisumu Medical Hub", type:"clinic", location:"Kisumu CBD", area:"kisumu", desc:"Multi-specialty clinic: GP, gynaecology, eye clinic, nutrition and physiotherapy.", rating:4.4, reviews:88, hours:"MonSat 8am6pm", open:true, emoji:"🩺" },
+const SPECS=['general_practice','pediatrics','obstetrics','cardiology','dermatology',
+  'dentistry','ophthalmology','orthopedics','psychiatry','physiotherapy',
+  'nutrition','pharmacy','laboratory','radiology','other'];
+const EMO={general_practice:'👨‍⚕️',pediatrics:'👶',obstetrics:'🤰',cardiology:'❤️',
+  dermatology:'🧴',dentistry:'🦷',ophthalmology:'👁️',orthopedics:'🦴',psychiatry:'🧠',
+  physiotherapy:'💪',nutrition:'🥗',pharmacy:'💊',laboratory:'🔬',radiology:'📡',other:'🏥'};
 
-  { id:"hc8", name:"Eastlands Community Dispensary", type:"dispensary", location:"Eastlands, Nairobi", area:"nairobi", desc:"Government-linked dispensary offering free OPD, ANC, child immunisation, malaria treatment.", rating:4.1, reviews:63, hours:"MonFri 8am5pm", open:false, emoji:"💊" },
-  { id:"hc9", name:"Kibera Health Post", type:"dispensary", location:"Kibera, Nairobi", area:"nairobi", desc:"NGO-supported dispensary. Family planning, nutrition, malaria, wound care, TB screening.", rating:4.3, reviews:47, hours:"MonFri 7:30am5pm", open:true, emoji:"💊" },
-  { id:"hc10", name:"Westlands Dispensary", type:"dispensary", location:"Westlands, Nairobi", area:"nairobi", desc:"County dispensary serving Westlands area. Basic OPD and essential medicine supply.", rating:3.9, reviews:34, hours:"MonFri 8am4pm", open:false, emoji:"💊" },
+function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML}
+function toast(m,ok=true){const t=document.createElement('div');t.className='toast '+(ok?'tok':'terr');t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3500);}
+function open(id){document.getElementById(id).classList.add('open');}
+function close(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
 
-  { id:"hc11", name:"HealthMart Pharmacy", type:"pharmacy", location:"Westlands, Nairobi", area:"nairobi", desc:"Well-stocked pharmacy with prescription & OTC medicine. Licensed pharmacist on duty. Delivery available.", rating:4.6, reviews:220, hours:"8am10pm daily", open:true, emoji:"💊", delivery:true },
-  { id:"hc12", name:"Goodlife Pharmacy", type:"pharmacy", location:"Nairobi CBD", area:"nairobi", desc:"Trusted chain pharmacy. Branded & generic drugs, cosmetics, baby products and supplements.", rating:4.7, reviews:510, hours:"7am10pm daily", open:true, emoji:"💊", delivery:true },
-  { id:"hc13", name:"Mombasa Road Pharmacy", type:"pharmacy", location:"Mombasa Road, Nairobi", area:"nairobi", desc:"24-hour pharmacy. Night-time prescription dispensing, emergency medicine and first-aid supplies.", rating:4.5, reviews:188, hours:"24/7", open:true, emoji:"💊", delivery:true },
-  { id:"hc14", name:"Coast Pharma", type:"pharmacy", location:"Mombasa", area:"mombasa", desc:"Mombasa's largest retail pharmacy. Wide range of medicine, medical devices and homecare products.", rating:4.4, reviews:130, hours:"8am9pm daily", open:true, emoji:"💊", delivery:true },
+try{
+  app=firebase.initializeApp(firebaseConfig,'hc');
+  fns=app.functions('us-central1');auth=app.auth();
+  auth.onAuthStateChanged(u=>{cu=u;});
+}catch(e){}
 
-  { id:"hc15", name:"Nairobi Diagnostics Lab", type:"lab", location:"Upper Hill, Nairobi", area:"nairobi", desc:"Full blood panel, malaria, HIV, hepatic function, kidney function, urinalysis, PCR and imaging.", rating:4.8, reviews:340, hours:"MonSat 6am7pm", open:true, emoji:"🔬" },
-  { id:"hc16", name:"Lancet Kenya", type:"lab", location:"Multiple branches", area:"nairobi", desc:"ISO-certified pathology labs. Home sample collection available. Results via email in 2448hrs.", rating:4.9, reviews:700, hours:"MonSat 6:30am8pm", open:true, emoji:"🔬", delivery:true },
-  { id:"hc17", name:"BioMedics Lab", type:"lab", location:"Kisumu", area:"kisumu", desc:"Malaria RDT, blood sugar, HIV, hepatitis, renal & liver profile. Affordable pricing.", rating:4.4, reviews:91, hours:"MonFri 7am6pm", open:true, emoji:"🔬" },
+async function call(n,d){try{const r=await fns.httpsCallable(n)(d);return{ok:true,data:r.data};}catch(e){return{ok:false,err:e.message};}}
 
-  { id:"hc18", name:"AAR Rescue Ambulance", type:"ambulance", location:"Nairobi (all zones)", area:"nairobi", desc:"Private ambulance with paramedics. Response time 1525 min in Nairobi. Advanced life support.", rating:4.7, reviews:88, hours:"24/7", open:true, emoji:"🚑" },
-  { id:"hc19", name:"St John Ambulance Kenya", type:"ambulance", location:"Kenya-wide", area:"nairobi", desc:"Non-profit ambulance service. Basic and advanced life support, patient transfer.", rating:4.5, reviews:145, hours:"24/7", open:true, emoji:"🚑" },
+let specF='',dbt;
+function debounce(){clearTimeout(dbt);dbt=setTimeout(doSearch,400);}
 
-    { id:"hc20", name:"DoctorOnCall Kenya", type:"doctor", location:"Nairobi, Mombasa", area:"nairobi", desc:"Qualified GP visits your home within 90 minutes. Blood pressure, prescriptions, wound care, sick notes.", rating:4.6, reviews:200, hours:"8am-10pm daily", open:true, emoji:"🩺" },
-  { id:"hc21", name:"HomeDoc Kisumu", type:"doctor", location:"Kisumu", area:"kisumu", desc:"Home doctor visits for the whole family. General consultations, malaria testing, chronic disease check-up.", rating:4.5, reviews:67, hours:"Mon-Sat 8am-7pm", open:true, emoji:"🩺" },
-  { id:"hc22", name:"Dr. Wanjiku Muthoni — Home GP", type:"doctor", location:"Westlands / Parklands, Nairobi", area:"nairobi", desc:"MBChB UoN, 10 yrs GP. Home visits for adults & children. Chronic disease management, ANC, immunisation.", rating:4.9, reviews:312, hours:"7am-9pm daily", open:true, emoji:"🩺" },
-  { id:"hc23", name:"Dr. Brian Omondi — Paediatrician", type:"doctor", location:"Kilimani, Nairobi", area:"nairobi", desc:"Paediatric specialist, 8 yrs. Home visits for sick children, growth monitoring, vaccinations and fever management.", rating:4.8, reviews:245, hours:"8am-8pm daily", open:true, emoji:"🩺" },
-  { id:"hc24", name:"Dr. Fatuma Said — Maternity", type:"doctor", location:"Mombasa", area:"mombasa", desc:"OB/GYN, 12 yrs. Antenatal care, postnatal home visits, family planning. Mombasa Island and Mainland.", rating:4.9, reviews:188, hours:"8am-6pm Mon-Sat", open:true, emoji:"🩺" },
-  { id:"hc25", name:"Dr. Collins Mwangi — GP", type:"doctor", location:"Thika Road, Nairobi", area:"nairobi", desc:"General practitioner, 7 yrs. Outpatient consultations, diabetes & hypertension monitoring. Quick response.", rating:4.7, reviews:143, hours:"7am-10pm daily", open:true, emoji:"🩺" },
-  { id:"hc26", name:"Dr. Achieng Ouma — Dermatology", type:"doctor", location:"Kisumu", area:"kisumu", desc:"Dermatologist, 9 yrs. Skin conditions, acne, eczema, rashes, wound assessment. Home & clinic visits.", rating:4.8, reviews:110, hours:"Mon-Fri 8am-5pm", open:false, emoji:"🩺" },
-  { id:"hc27", name:"Nurse Priscilla Kamau — ICU/Home Care", type:"doctor", location:"Nairobi South", area:"nairobi", desc:"Registered nurse, 6 yrs. Post-surgery care, IV drips, catheter, wound dressing, elderly care at home.", rating:4.9, reviews:167, hours:"24/7 on request", open:true, emoji:"🩺" },
-  { id:"hc28", name:"Dr. Samuel Kipchoge — Internal Medicine", type:"doctor", location:"Eldoret", area:"eldoret", desc:"Internal medicine specialist, 11 yrs. Home visits for complex chronic conditions. Moi Teaching Hospital affiliate.", rating:4.8, reviews:92, hours:"8am-6pm Mon-Sat", open:true, emoji:"🩺" },
-];
-
-let activeCat = '';
-let apptTarget = null;
-
-/* healthcare.html manages its own provider access via the page UI */
-
-const TYPE_LABEL = { hospital:"Hospital", clinic:"Clinic", dispensary:"Dispensary", pharmacy:"Pharmacy", lab:"Lab / Diagnostics", ambulance:"Ambulance", doctor:"Home Doctor" };
-const CARD_BG    = { hospital:"bg-hospital", clinic:"bg-clinic", dispensary:"bg-dispensary", pharmacy:"bg-pharmacy", lab:"bg-lab", ambulance:"bg-ambulance", doctor:"bg-clinic" };
-const TYPE_CSS   = { hospital:"type-hospital", clinic:"type-clinic", dispensary:"type-dispensary", pharmacy:"type-pharmacy", lab:"type-lab", ambulance:"type-ambulance", doctor:"type-clinic" };
-
-function setCat(cat, btn){
-  activeCat = cat;
-  document.querySelectorAll(".hc-cat-tile").forEach(t=>t.classList.remove("active"));
-  if(btn) btn.classList.add("active");
-  renderProviders();
-  setTimeout(function(){var g=document.getElementById('hcGrid');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});},100);
-  return false;
+function buildChips(){
+  const c=document.getElementById('specChips');
+  c.innerHTML=`<div class="chip ${specF===''?'active':''}" onclick="setSpec('',this)">All</div>`+
+  SPECS.map(s=>`<div class="chip ${specF===s?'active':''}" onclick="setSpec('${s}',this)">${EMO[s]||'🏥'} ${s.replace(/_/g,' ')}</div>`).join('');
 }
 
-function filterProviders(){ renderProviders(); }
+function setSpec(s,el){
+  specF=s;
+  document.querySelectorAll('#specChips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');filter();
+}
+function toggleOnline(){onlineOnly=!onlineOnly;document.getElementById('onlineChip').classList.toggle('active',onlineOnly);filter();}
 
-function renderProviders(){
-  const q = (document.getElementById("hcSearch").value||"").toLowerCase();
-  let list = PROVIDERS;
-  if(activeCat) list = list.filter(p=>p.type===activeCat);
-  if(q) list = list.filter(p=>
-    p.name.toLowerCase().includes(q)||
-    p.location.toLowerCase().includes(q)||
-    p.desc.toLowerCase().includes(q)||
-    (TYPE_LABEL[p.type]||"").toLowerCase().includes(q)
-  );
+function filter(){
+  const city=document.getElementById('cityF').value.toLowerCase();
+  let list=[...allP];
+  if(specF) list=list.filter(p=>p.specialization===specF);
+  if(onlineOnly) list=list.filter(p=>p.isOnline);
+  if(city) list=list.filter(p=>(p.city||'').toLowerCase().includes(city));
+  render(list);
+}
 
-  const label = activeCat ? (TYPE_LABEL[activeCat]||activeCat)+"s" : "All Healthcare Providers";
-  document.getElementById("hcResultLabel").textContent = `${label} (${list.length})`;
+async function doSearch(){
+  const q=document.getElementById('sq').value.trim();
+  if(q.length>1){const r=await call('searchHealthProviders',{query:q,limit:40});if(r.ok)render(r.data.results);}
+  else filter();
+}
 
-  const grid = document.getElementById("hcGrid");
-  const empty = document.getElementById("hcEmpty");
-  if(!list.length){ grid.innerHTML=""; empty.style.display="block"; return; }
-  empty.style.display="none";
+async function load(){
+  const r=await call('getHealthProviders',{limit:48});
+  if(!r.ok){document.getElementById('provArea').innerHTML=`<div class="empty">Could not load providers.<br><small>${esc(r.err)}</small></div>`;return;}
+  allP=r.data.providers||[];render(allP);
+}
 
-  grid.innerHTML = list.map(p=>`
-    <div class="hc-card" data-provider-id="hc_${p.id}">
-      <div class="hc-card-head">
-        <div class="hc-card-emoji ${CARD_BG[p.type]||''}">${p.emoji}</div>
-        <div class="hc-card-meta">
-          <div class="hc-card-name">${p.name}</div>
-          <span class="hc-card-type ${TYPE_CSS[p.type]||''}">${TYPE_LABEL[p.type]||p.type}</span>
-          <div class="hc-card-location"><i class="fas fa-map-marker-alt" style="color:#00c878;margin-right:4px;"></i>${p.location}</div>
+function render(list){
+  const a=document.getElementById('provArea');
+  if(!list.length){a.innerHTML='<div class="empty">No providers found.</div>';return;}
+  a.innerHTML='<div class="grid">'+list.map(p=>`
+    <div class="card" onclick="openP('${esc(p.providerId)}')">
+      <div class="card-top">
+        <div class="avatar">${EMO[p.specialization]||'🏥'}</div>
+        <div>
+          <div class="card-name">${esc(p.name)}</div>
+          <div class="card-spec">${(p.specialization||'').replace(/_/g,' ')}</div>
+          <div class="card-sub">${esc(p.clinic||p.city||'')}</div>
         </div>
       </div>
-      <div class="hc-card-body">
-        <div class="hc-card-desc">${p.desc}${p.delivery?'<br><span style="color:#00c878;font-size:11px;font-weight:700;">✓ Delivery available</span>':""}</div>
-        <div class="hc-card-footer">
-          <div>
-            <div class="hc-card-rating"><span class="star">⭐</span> ${p.rating} <span>(${p.reviews} reviews)</span></div>
-            <div class="hc-card-hours"><i class="fas fa-clock" style="margin-right:4px;"></i>${p.hours}</div>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-            <div data-avail-provider="hc_${p.id}"></div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              ${p.phone?`<a href="tel:${p.phone}" class="hc-book-btn" style="background:rgba(0,200,120,0.15);border:1px solid rgba(0,200,120,0.25);text-decoration:none;">📞 Call</a>`:""}
-              <button type="button" class="hc-book-btn" onclick="openAppt('${p.id}','${p.name.replace(/'/g,"\\'")}')">📅 Book</button>
-              <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'hc_${p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'Healthcare: ${p.name.replace(/'/g,"\\'")}'}):window.location.href='messages.html'">💬 Message</button>
-              <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'hc_'+p.id,name:p.name,category:p.type,tagline:p.desc,rating:p.rating,type:'service'})">📣 Share</button>
-              <button type="button" class="hc-book-btn" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.55);" id="_fhc${p.id}" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('hc_${p.id}','${p.name.replace(/'/g,"\\'")}',this,'hospital')">❤ Follow</button>
-              ${typeof SokoniMarket!=="undefined"?SokoniMarket.btnHTML({id:p.id,name:p.name,price:0,image:'assets/logosokoni.png',category:p.type,source:'healthcare',sellerName:p.name}):""}
-            </div>
-          </div>
-        </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        ${p.isOnline?'<span class="badge b-green">Online</span>':''}
+        ${p.isAvailable?'<span class="badge b-blue">Available</span>':''}
       </div>
-    </div>
-  `).join("");
-}
-
-/*  Appointment modal  */
-function openAppt(id, name){
-  const prov = PROVIDERS.find(p=>p.id===id);
-  if(typeof SokoniPay!=='undefined'){
-    try{
-      SokoniPay.bookNow({
-        providerName: name,
-        category: 'healthcare',
-        serviceDesc: 'Medical Appointment — '+(prov?.type||'Healthcare'),
-        providerPhone: prov?.phone||''
-      }, function(ref){
-        _showApptForm(id, name);
-      });
-      return;
-    }catch(e){}
-  }
-  _showApptForm(id, name);
-}
-function _showApptForm(id, name){
-  const prov = PROVIDERS.find(p=>p.id===id);
-  apptTarget = { id, name, sellerUid: prov?.sellerUid||null, consultationFee: Number(prov?.consultationFee||prov?.fee||0) };
-  document.getElementById("apptProvider").textContent = "Booking at: "+name;
-  const today = new Date().toISOString().split("T")[0];
-  document.getElementById("apptDate").min = today;
-  document.getElementById("apptDate").value = today;
-  document.getElementById("apptModal").style.display="flex";
-}
-function closeAppt(){ document.getElementById("apptModal").style.display="none"; }
-
-function submitAppt(){
-  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('hc_appt', 10, 300000)){
-    (window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.'); return;
-  }
-  const name  = document.getElementById("apptName").value.trim();
-  const phone = document.getElementById("apptPhone").value.trim();
-  const svc   = document.getElementById("apptService").value;
-  const date  = document.getElementById("apptDate").value;
-  const time  = document.getElementById("apptTime").value;
-  if(!name||!phone||!svc||!date){ (window._skToast||alert)("Please fill all required fields."); return; }
-
-  const apptId = "APT"+Date.now();
-  const appt = { id:apptId, providerId:apptTarget?.id, providerName:apptTarget?.name, patientName:name, phone, service:svc, date, time, notes:document.getElementById("apptNotes").value, status:"confirmed", createdAt:new Date().toLocaleDateString() };
-
-  function _finalise(method){
-    let appts = [];
-    try { appts = JSON.parse(localStorage.getItem("sokoniAppointments"))||[]; } catch(e){}
-    appts.push(appt);
-    localStorage.setItem("sokoniAppointments", JSON.stringify(appts));
-    if(window.SokoniHealth) SokoniHealth.saveAppointment(appt).catch(e=>console.warn('[HC] appt:',e.message));
-    closeAppt();
-    if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:svc,category:'Healthcare',qty:1,price:apptTarget?.consultationFee||0}],subtotal:apptTarget?.consultationFee||0,total:apptTarget?.consultationFee||0,paymentMethod:method||'Pay at Facility',paymentRef:apptId,sellerName:apptTarget?.name||'SOKONI Healthcare',date:new Date().toISOString(),notes:date+' at '+time});},500);
-    else (window._skToast||alert)(`✅ Appointment confirmed!\n\n🏥 ${apptTarget?.name}\n📅 ${date} at ${time}\n🩺 ${svc}\n\nReference: ${apptId}\nYou'll receive a confirmation SMS to ${phone} shortly.`);
-  }
-
-  /* If provider has Daraja configured, collect consultation fee now */
-  if(apptTarget?.sellerUid && apptTarget?.consultationFee > 0 && window.SokoniMpesa){
-    SokoniMpesa.pay({
-      sellerUid: apptTarget.sellerUid,
-      amount: apptTarget.consultationFee,
-      phone,
-      orderId: apptId,
-      hub: 'healthcare',
-      sellerName: apptTarget.name,
-      description: svc + ' Consultation',
-      onSuccess: r => _finalise('M-Pesa · '+(r.mpesaCode||'')),
-      onFailure: reason => { if(reason !== 'cancelled' && reason !== 'timeout') _finalise('Pending Payment'); }
-    });
-    return;
-  }
-  _finalise('Pay at Facility');
-}
-
-/*  Medicine delivery modal  */
-function openMedDelivery(){ document.getElementById("medModal").style.display="flex"; }
-function closeMed(){ document.getElementById("medModal").style.display="none"; }
-
-function submitMed(){
-  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('hc_med', 10, 300000)){
-    (window._skToast||alert)('Too many requests. Please wait 5 minutes.'); return;
-  }
-  const med     = document.getElementById("medName").value.trim();
-  const address = document.getElementById("medAddress").value.trim();
-  const phone   = document.getElementById("medPhone").value.trim();
-  if(!med||!address||!phone){ (window._skToast||alert)("Please fill all required fields."); return; }
-
-  const urgency = document.getElementById("medUrgency").value;
-  const order = { id:"MED"+Date.now(), medicine:med, rx:document.getElementById("medRx").value, address, phone, urgency, status:"placed", createdAt:new Date().toLocaleDateString() };
-  let medOrders = [];
-  try { medOrders = JSON.parse(localStorage.getItem("sokoniMedOrders"))||[]; } catch(e){}
-  medOrders.push(order);
-  localStorage.setItem("sokoniMedOrders", JSON.stringify(medOrders));
-  if(window.SokoniHealth) SokoniHealth.saveMedOrder(order).catch(e=>console.warn('[HC] med:',e.message));
-
-  closeMed();
-  if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'order',buyerName:'Customer',buyerPhone:phone,items:[{name:med,category:'Pharmacy',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'M-Pesa on Delivery',paymentRef:order.id,sellerName:'SOKONI Pharmacy',date:new Date().toISOString(),notes:address+' · '+(urgency==='express'?'Express <1hr':'Standard 2-3hrs')});},500);
-  else (window._skToast||alert)(`✅ Medicine order placed!\n\n💊 ${med}\n📍 ${address}\n⏱ ${urgency==="express"?"Express — under 1 hour":"Standard — 2–3 hours"}\n\nA pharmacist will confirm and dispatch. Pay via M-PESA on delivery.\nOrder ID: ${order.id}`);
-}
-
-/*  Register Facility  */
-function openReg(){ document.getElementById("regModal").style.display="flex"; }
-function closeReg(){ document.getElementById("regModal").style.display="none"; }
-
-function submitRegFac(){
-  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('hc_reg_fac', 3, 3600000)){
-    (window._skToast||alert)('Too many registration attempts. Please wait 1 hour.'); return;
-  }
-  const name  = document.getElementById("regFacName").value.trim();
-  const loc   = document.getElementById("regFacLocation").value.trim();
-  const phone = document.getElementById("regFacPhone").value.trim();
-  const type  = document.getElementById("regFacType").value;
-  const msgEl = document.getElementById("regFacMsg");
-  if(!name||!loc||!phone){ if(msgEl){msgEl.textContent="⚠️ Fill Name, Location and Phone"; msgEl.style.color="#ff9800";} return; }
-  const fac = {
-    id:"FAC"+Date.now(), name, type,
-    location:loc, phone, hours:document.getElementById("regFacHours").value,
-    desc:document.getElementById("regFacDesc").value, nhif:document.getElementById("regFacNhif").checked,
-    status:"pending", submittedAt: new Date().toLocaleDateString("en-KE"),
-    hub:"healthcare", category:"Healthcare Facility"
-  };
-  let pending=[]; try{pending=JSON.parse(localStorage.getItem("sokoniHcFacPending"))||[];}catch(e){}
-  pending.unshift(fac); localStorage.setItem("sokoniHcFacPending",JSON.stringify(pending));
-  let apps=[]; try{apps=JSON.parse(localStorage.getItem("sokoniPendingApplications"))||[];}catch(e){}
-  apps.unshift(fac); localStorage.setItem("sokoniPendingApplications",JSON.stringify(apps));
-  /* Save to Firestore via v9 dynamic import (reliable cross-device save) */
-  if(window.firebaseDB){
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
-      const uid=(window.firebaseAuth&&window.firebaseAuth.currentUser)?window.firebaseAuth.currentUser.uid:'';
-      return Promise.all([
-        fs.addDoc(fs.collection(window.firebaseDB,'applications'), Object.assign({},fac,{uid,createdAt:Date.now()})),
-        fs.addDoc(fs.collection(window.firebaseDB,'providers'), Object.assign({},fac,{uid,verified:false,createdAt:Date.now()}))
-      ]);
-    }).catch(function(e){console.warn('[SOKONI] hc save:',e.message);});
-  } else if(window.SokoniDB) {
-    window.SokoniDB.saveApplication(fac).catch(function(){});
-  }
-  /* If pharmacy/dispensary — save as owner profile and open inventory manager */
-  if(type==="pharmacy"||type==="dispensary"){
-    localStorage.setItem("sokoniMyPharmacy", JSON.stringify(fac));
-    if(msgEl){ msgEl.innerHTML="✅ Registered! Opening your pharmacy dashboard…"; msgEl.style.color="#00c878"; }
-    setTimeout(()=>{ closeReg(); openPharmacyManager(); }, 1200);
-  } else {
-    if(msgEl){ msgEl.innerHTML="✅ Submitted! Our team will verify and list your facility within 48 hours."; msgEl.style.color="#00c878"; }
-    setTimeout(closeReg, 2500);
-  }
-}
-
-/* ═══════════════════════════════════════════
-   PHARMACY INVENTORY MANAGER
-═══════════════════════════════════════════ */
-let _phInv = [];
-function _loadPhInv(){ try{ _phInv=JSON.parse(localStorage.getItem("sokoniPharmacyInventory")||"[]"); }catch(e){ _phInv=[]; } }
-function _savePhInv(){ localStorage.setItem("sokoniPharmacyInventory", JSON.stringify(_phInv)); }
-
-function openPharmacyManager(){
-  const ph = _getMyPharmacy(); if(!ph) return;
-  const preset = (ph.type==='dispensary') ? 'dispensary' : 'pharmacy';
-  SokoniInventory.open({ preset, ownerKey:'sokoniMyPharmacy' });
-}
-function closePharmacyManager(){ SokoniInventory.close(); }
-
-function _getMyPharmacy(){
-  try{ return JSON.parse(localStorage.getItem("sokoniMyPharmacy")||"null"); }catch(e){ return null; }
-}
-
-function _renderPhInv(){
-  const q = (document.getElementById("pmSearch").value||"").toLowerCase();
-  const filter = document.getElementById("pmFilter").value;
-  let list = _phInv;
-  if(q) list = list.filter(m=>m.name.toLowerCase().includes(q)||m.category.toLowerCase().includes(q));
-  if(filter==="instock") list = list.filter(m=>m.available&&m.stock>0);
-  if(filter==="outofstock") list = list.filter(m=>!m.available||m.stock===0);
-  if(filter==="rx") list = list.filter(m=>m.requiresRx);
-  if(filter==="otc") list = list.filter(m=>!m.requiresRx);
-
-  const el = document.getElementById("pmInventoryList");
-  if(!list.length){
-    el.innerHTML=`<div style="text-align:center;padding:40px 0;color:rgba(255,255,255,0.25);font-size:13px;">
-      ${_phInv.length?"No medicines match that filter.":"No medicines yet — add your first item below. ↓"}
-    </div>`; return;
-  }
-  el.innerHTML = list.map(m=>`
-    <div style="display:flex;align-items:center;gap:12px;padding:13px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,${m.available&&m.stock>0?"0.08":"0.04"});border-radius:13px;margin-bottom:8px;">
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px;">
-          <span style="font-size:13px;font-weight:800;color:white;">${m.name}</span>
-          <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;${m.requiresRx?"background:rgba(255,80,80,0.15);color:#ff6b6b;":"background:rgba(0,200,120,0.12);color:#00c878;"}">${m.requiresRx?"Rx":"OTC"}</span>
-          <span style="font-size:10px;color:rgba(255,255,255,0.35);">${m.category}</span>
-        </div>
-        <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:rgba(255,255,255,0.5);">
-          <span>KES ${Number(m.price).toLocaleString()} / ${m.unit}</span>
-          <span style="color:${m.stock>10?"#00c878":m.stock>0?"#fbbf24":"#ff6b6b"};">Stock: ${m.stock} ${m.unit}s</span>
-          <span style="color:${m.available&&m.stock>0?"#00c878":"#ff6b6b"};">${m.available&&m.stock>0?"● In Stock":"● Out of Stock"}</span>
-        </div>
+      <div class="card-row">
+        <span class="rating">★ ${p.rating||'—'} (${p.ratingCount||0})</span>
+        <span class="fee">KES ${(p.consultationFee||0).toLocaleString()}</span>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0;">
-        <button type="button" onclick="togglePhItem('${m.id}')" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.6);font-size:11px;cursor:pointer;font-family:inherit;">${m.available&&m.stock>0?"Pause":"Activate"}</button>
-        <button type="button" onclick="editPhItem('${m.id}')" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(0,180,255,0.2);background:rgba(0,180,255,0.06);color:#60aaff;font-size:11px;cursor:pointer;font-family:inherit;">Edit</button>
-        <button type="button" onclick="deletePhItem('${m.id}')" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(255,60,60,0.2);background:rgba(255,60,60,0.06);color:#ff6b6b;font-size:11px;cursor:pointer;font-family:inherit;">✕</button>
-      </div>
-    </div>`).join("");
+    </div>`).join('')+'</div>';
 }
 
-function togglePhItem(id){
-  const m = _phInv.find(x=>x.id===id); if(!m) return;
-  m.available = !m.available;
-  _savePhInv(); _renderPhInv();
+async function openP(id){
+  selP=allP.find(p=>p.providerId===id);
+  if(!selP){const r=await call('getHealthProvider',{providerId:id});if(!r.ok){toast('Could not load provider',false);return;}selP=r.data;}
+  const p=selP;
+  document.getElementById('mName').textContent=p.name||'';
+  document.getElementById('mSpec').textContent=(p.specialization||'').replace(/_/g,' ');
+  document.getElementById('mOnline').textContent=p.isOnline?'Online':'In-Person';
+  document.getElementById('mOnline').className='badge '+(p.isOnline?'b-green':'b-blue');
+  document.getElementById('mClinic').textContent=p.clinic||'';
+  document.getElementById('mLoc').textContent=[p.city,p.county].filter(Boolean).join(', ')||'Kenya';
+  document.getElementById('mFee').textContent=`KES ${(p.consultationFee||0).toLocaleString()} / consultation`;
+  document.getElementById('mRating').textContent=`${p.rating||0}/5 (${p.ratingCount||0} reviews)`;
+  document.getElementById('mLangs').textContent=(p.languages||[]).join(', ');
+  const ins=p.insuranceAccepted||[];
+  document.getElementById('mInsRow').style.display=ins.length?'':'none';
+  document.getElementById('mIns').textContent=ins.join(', ');
+  document.getElementById('mBio').textContent=p.bio||'';
+  open('provModal');
 }
 
-function deletePhItem(id){
-  if(!_c){_skConfirm('Remove this medicine from your inventory?',()=>_doRmMed(_c_id,true));return;}
-  _phInv = _phInv.filter(x=>x.id!==id);
-  _savePhInv(); _renderPhInv(); _updatePhStats();
+function openBook(){
+  if(!cu){toast('Sign in to book appointments',false);return;}
+  const m=new Date();m.setHours(m.getHours()+1);
+  document.getElementById('apptDT').min=m.toISOString().slice(0,16);
+  close('provModal');open('bookModal');
+}
+function selConsult(t){
+  isOnline=t==='online';
+  document.getElementById('tIn').classList.toggle('sel',!isOnline);
+  document.getElementById('tOnl').classList.toggle('sel',isOnline);
+}
+async function book(){
+  const dt=document.getElementById('apptDT').value;
+  const reason=document.getElementById('apptR').value.trim();
+  if(!dt){toast('Select date and time',false);return;}
+  if(!reason){toast('Describe your reason for visit',false);return;}
+  const key=`appt_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  const b=document.querySelector('#bookModal .btn-green');b.textContent='Booking…';b.disabled=true;
+  const r=await call('bookAppointment',{providerId:selP.providerId,dateTime:new Date(dt).toISOString(),reason,isOnline,idempotencyKey:key});
+  b.textContent='Confirm Booking';b.disabled=false;
+  if(r.ok){toast('Appointment booked! Awaiting confirmation.');close('bookModal');document.getElementById('apptDT').value='';document.getElementById('apptR').value='';}
+  else toast(r.err||'Booking failed',false);
 }
 
-function editPhItem(id){
-  const m = _phInv.find(x=>x.id===id); if(!m) return;
-  document.getElementById("pmMedName").value = m.name;
-  document.getElementById("pmMedCategory").value = m.category;
-  document.getElementById("pmMedPrice").value = m.price;
-  document.getElementById("pmMedStock").value = m.stock;
-  document.getElementById("pmMedUnit").value = m.unit;
-  document.getElementById("pmMedRx").checked = m.requiresRx;
-  document.getElementById("pmAddForm").dataset.editId = id;
-  document.getElementById("pmAddForm").scrollIntoView({behavior:"smooth"});
-}
-
-function savePhMed(){
-  const name = document.getElementById("pmMedName").value.trim();
-  const cat  = document.getElementById("pmMedCategory").value.trim();
-  const price= parseFloat(document.getElementById("pmMedPrice").value);
-  const stock= parseInt(document.getElementById("pmMedStock").value,10);
-  const unit = document.getElementById("pmMedUnit").value;
-  const rx   = document.getElementById("pmMedRx").checked;
-  if(!name||isNaN(price)||isNaN(stock)){ (window._skToast||alert)("⚠️ Fill in medicine name, price and stock."); return; }
-
-  const editId = document.getElementById("pmAddForm").dataset.editId;
-  if(editId){
-    const m = _phInv.find(x=>x.id===editId);
-    if(m){ Object.assign(m,{name,category:cat||"General",price,stock,unit,requiresRx:rx,available:stock>0}); }
-    delete document.getElementById("pmAddForm").dataset.editId;
-  } else {
-    _phInv.unshift({id:"PHMED"+Date.now(),name,category:cat||"General",price,stock,unit,requiresRx:rx,available:stock>0,createdAt:Date.now()});
-  }
-  _savePhInv();
-  /* clear form */
-  ["pmMedName","pmMedCategory","pmMedPrice","pmMedStock"].forEach(id=>document.getElementById(id).value="");
-  document.getElementById("pmMedUnit").value="tablet";
-  document.getElementById("pmMedRx").checked=false;
-  _renderPhInv(); _updatePhStats();
-}
-
-function _updatePhStats(){
-  const total=_phInv.length, instock=_phInv.filter(m=>m.available&&m.stock>0).length, rx=_phInv.filter(m=>m.requiresRx).length;
-  const el=document.getElementById("pmStats");
-  if(el) el.innerHTML=`<span style="color:#00c878;font-weight:800;">${instock}</span> in stock &nbsp;·&nbsp; <span style="color:rgba(255,255,255,0.5);">${total-instock}</span> out &nbsp;·&nbsp; <span style="color:#ff6b6b;">${rx}</span> Rx &nbsp;·&nbsp; <span style="color:rgba(255,255,255,0.5);">${total}</span> total`;
-}
-
-function deleteMyPharmacy(){
-  if(!_c){_skConfirm('Delete your pharmacy profile and all inventory? This cannot be undone.',()=>_doDelPharmacy(true));return;}
-  localStorage.removeItem("sokoniMyPharmacy");
-  localStorage.removeItem("sokoniPharmacyInventory");
-  closePharmacyManager();
-  document.getElementById("managePharmacyBtn").style.display="none";
-}
-
-window.openPharmacyManager=openPharmacyManager;
-window.closePharmacyManager=closePharmacyManager;
-window.savePhMed=savePhMed;
-window.togglePhItem=togglePhItem;
-window.editPhItem=editPhItem;
-window.deletePhItem=deletePhItem;
-window.deleteMyPharmacy=deleteMyPharmacy;
-window._renderPhInv=_renderPhInv;
-window._updatePhStats=_updatePhStats;
-
-window.setCat = setCat;
-window.filterProviders = filterProviders;
-window.openAppt = openAppt;
-window.closeAppt = closeAppt;
-window.submitAppt = submitAppt;
-window.openMedDelivery = openMedDelivery;
-window.closeMed = closeMed;
-window.submitMed = submitMed;
-window.openReg  = openReg;
-window.closeReg = closeReg;
-window.submitRegFac = submitRegFac;
-
-renderProviders();
-/* Re-render once deferred market-actions.js has loaded to show cart/wishlist buttons */
-document.addEventListener('DOMContentLoaded', function(){ if(typeof SokoniMarket!=="undefined") renderProviders(); });
-
-/* Show "My Pharmacy" nav button if already registered */
-(function(){ if(_getMyPharmacy()){ const b=document.getElementById("managePharmacyBtn"); if(b) b.style.display=""; } })();
-</script>
-
-<!-- PHARMACY MANAGER MODAL -->
-<div id="pharmManagerModal" class="modal-overlay" style="display:none;align-items:flex-start;padding:0;" onclick="if(event.target===this)closePharmacyManager()">
-  <div style="background:#0f0f0f;border:1px solid rgba(0,180,255,0.2);border-radius:0 0 24px 24px;width:100%;max-width:700px;max-height:100vh;overflow-y:auto;padding:0 0 40px;">
-    <!-- Header -->
-    <div style="position:sticky;top:0;background:#0f0f0f;border-bottom:1px solid rgba(255,255,255,0.07);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;z-index:10;">
-      <div>
-        <div id="pmTitle" style="font-size:17px;font-weight:900;color:white;"></div>
-        <div id="pmSubtitle" style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;"></div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <div id="pmStats" style="font-size:11px;color:rgba(255,255,255,0.4);"></div>
-        <button type="button" onclick="closePharmacyManager()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);border-radius:8px;padding:6px 12px;cursor:pointer;font-family:inherit;font-size:13px;">✕ Close</button>
-      </div>
-    </div>
-
-    <div style="padding:20px 22px 0;">
-      <!-- Search + filter bar -->
-      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <input type="text" id="pmSearch" placeholder="🔍 Search medicines…" oninput="_renderPhInv()" style="flex:1;min-width:180px;padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
-        <select id="pmFilter" onchange="_renderPhInv()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;cursor:pointer;">
-          <option value="">All Medicines</option>
-          <option value="instock">In Stock</option>
-          <option value="outofstock">Out of Stock</option>
-          <option value="rx">Prescription (Rx)</option>
-          <option value="otc">Over-the-Counter (OTC)</option>
-        </select>
-      </div>
-
-      <!-- Inventory list -->
-      <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">Inventory</div>
-      <div id="pmInventoryList"></div>
-
-      <!-- Add / Edit Medicine form -->
-      <div id="pmAddForm" style="background:rgba(0,180,255,0.04);border:1px solid rgba(0,180,255,0.15);border-radius:16px;padding:20px;margin-top:20px;">
-        <div style="font-size:14px;font-weight:800;color:#60aaff;margin-bottom:14px;">➕ Add / Edit Medicine</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-          <input type="text" id="pmMedName" placeholder="Medicine name *" style="padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
-          <input type="text" id="pmMedCategory" placeholder="Category (e.g. Antibiotics, Antimalaria)" style="padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
-          <div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:4px;font-weight:700;">Price (KES) *</div>
-            <input type="number" id="pmMedPrice" placeholder="e.g. 50" min="0" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
-          </div>
-          <div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:4px;font-weight:700;">Stock Qty *</div>
-            <input type="number" id="pmMedStock" placeholder="e.g. 200" min="0" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;">
-          </div>
-          <div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:4px;font-weight:700;">Unit</div>
-            <select id="pmMedUnit" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;cursor:pointer;">
-              <option value="tablet">Tablet</option>
-              <option value="capsule">Capsule</option>
-              <option value="bottle">Bottle</option>
-              <option value="sachet">Sachet</option>
-              <option value="ampoule">Ampoule</option>
-              <option value="vial">Vial</option>
-              <option value="tube">Tube</option>
-              <option value="pack">Pack</option>
-            </select>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:13px;color:rgba(255,255,255,0.6);">
-          <input type="checkbox" id="pmMedRx" style="accent-color:#ff6b6b;width:16px;height:16px;">
-          <label for="pmMedRx">Requires Prescription (Rx)</label>
-        </div>
-        <button type="button" onclick="savePhMed()" style="padding:12px 28px;background:linear-gradient(135deg,#00c878,#009858);color:white;font-weight:900;font-size:13px;border:none;border-radius:11px;cursor:pointer;font-family:inherit;">💾 Save Medicine</button>
-      </div>
-
-      <!-- Danger zone -->
-      <div style="margin-top:24px;padding:16px 18px;background:rgba(220,38,38,0.04);border:1px solid rgba(220,38,38,0.15);border-radius:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-        <div style="font-size:12px;color:rgba(255,255,255,0.35);">Remove your pharmacy profile and all inventory from this device.</div>
-        <button type="button" onclick="deleteMyPharmacy()" style="padding:8px 16px;background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.25);color:#ef4444;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🗑️ Delete Profile</button>
-      </div>
-    </div>
-  </div>
-</div>
-<script>
-/* ════════════════════════════════════════════════════════════
-   HEALTHCARE HUB — TAB SYSTEM
-════════════════════════════════════════════════════════════ */
-function hcShowTab(tab, btn){
-  document.querySelectorAll('.hc-tab-panel').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.hc-tab-btn').forEach(b=>b.classList.remove('active'));
-  const panel = document.getElementById('hctabpanel-'+tab);
-  if(panel) panel.classList.add('active');
-  if(btn) btn.classList.add('active');
-  else{
-    document.querySelectorAll('.hc-tab-btn').forEach(b=>{
-      if(b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'"+tab+"'")) b.classList.add('active');
-    });
-  }
-  if(tab==='specialists') renderSpecialists();
-  if(tab==='teleconsult') renderTCDoctors();
-  if(tab==='labs') renderLabTests();
-  if(tab==='myhealth') loadMyHealthDash();
-  if(tab==='providers') checkProviderDash();
-}
-
-/* ════════════════════════════════════════════════════════════
-   SPECIALISTS DATA
-════════════════════════════════════════════════════════════ */
-const SPECIALISTS = [
-  {id:'sp01',name:'Dr. James Mwangi',title:'Cardiologist',type:'cardiologist',icon:'❤️',city:'Nairobi',hospital:'Aga Khan Hospital',rating:5.0,reviews:145,exp:'18 yrs',fee:3500,tags:['Heart Disease','ECG','Echocardiography','Hypertension'],phone:'0722301001',available:true},
-  {id:'sp02',name:'Dr. Amina Hassan',title:'Cardiologist',type:'cardiologist',icon:'❤️',city:'Mombasa',hospital:'Coast General Hospital',rating:4.8,reviews:87,exp:'14 yrs',fee:3000,tags:['Arrhythmia','Heart Failure','Angioplasty'],phone:'0733302001',available:true},
-  {id:'sp03',name:'Dr. Grace Kamau',title:'Dermatologist',type:'dermatologist',icon:'🌿',city:'Nairobi',hospital:'Karen Clinic',rating:4.9,reviews:210,exp:'11 yrs',fee:2500,tags:['Acne','Eczema','Psoriasis','Skin Cancer Screening','Rashes'],phone:'0744303001',available:true},
-  {id:'sp04',name:'Dr. Moses Otieno',title:'Dermatologist',type:'dermatologist',icon:'🌿',city:'Kisumu',hospital:'Kisumu Medical Hub',rating:4.7,reviews:96,exp:'8 yrs',fee:2000,tags:['Vitiligo','Allergies','Wound Assessment'],phone:'0755304001',available:true},
-  {id:'sp05',name:'Dr. Peter Njoroge',title:'Orthopaedic Surgeon',type:'orthopaedic',icon:'🦴',city:'Nairobi',hospital:'Nairobi West Hospital',rating:4.9,reviews:178,exp:'16 yrs',fee:4000,tags:['Fractures','Joint Replacement','Sports Injuries','Spine'],phone:'0766305001',available:true},
-  {id:'sp06',name:'Dr. Elizabeth Cheptoo',title:'ENT Specialist',type:'ent',icon:'👂',city:'Nairobi',hospital:'CBD Medical Centre',rating:4.8,reviews:132,exp:'10 yrs',fee:2800,tags:['Ear Problems','Sinusitis','Throat','Tonsils'],phone:'0711306001',available:true},
-  {id:'sp07',name:'Dr. Wanjiru Ndegwa',title:'Gynaecologist',type:'gynaecologist',icon:'🌺',city:'Nairobi',hospital:'Gertrude\'s Hospital',rating:4.9,reviews:320,exp:'15 yrs',fee:3500,tags:['ANC','Family Planning','PCOS','Fibroids','Colposcopy'],phone:'0722307001',available:true},
-  {id:'sp08',name:'Dr. Fatuma Said',title:'Obstetrician',type:'gynaecologist',icon:'🌺',city:'Mombasa',hospital:'Coast Maternity',rating:4.9,reviews:188,exp:'12 yrs',fee:3000,tags:['Maternity','High-Risk Pregnancy','Postnatal Care'],phone:'0733308001',available:true},
-  {id:'sp09',name:'Dr. Brian Omondi',title:'Paediatrician',type:'paediatrician',icon:'👶',city:'Nairobi',hospital:'Gertrude\'s Hospital',rating:4.8,reviews:245,exp:'8 yrs',fee:2500,tags:['Child Health','Vaccination','Fever','Growth Monitoring'],phone:'0744309001',available:true},
-  {id:'sp10',name:'Dr. Samuel Kipchoge',title:'Dentist & Oral Surgeon',type:'dentist',icon:'🦷',city:'Eldoret',hospital:'Moi Teaching Hospital',rating:4.8,reviews:92,exp:'11 yrs',fee:2000,tags:['Extraction','Root Canal','Braces','Teeth Whitening','Scaling'],phone:'0755310001',available:true},
-  {id:'sp11',name:'Dr. Achieng Ouma',title:'Dermatologist & Aesthetics',type:'dermatologist',icon:'🌿',city:'Kisumu',hospital:'Private Practice',rating:4.8,reviews:110,exp:'9 yrs',fee:2200,tags:['Skin Conditions','Chemical Peel','Laser','Botox'],phone:'0766311001',available:true},
-  {id:'sp12',name:'Ruth Wambua',title:'Physiotherapist',type:'physiotherapist',icon:'💪',city:'Nairobi',hospital:'Nairobi West Physio',rating:4.9,reviews:167,exp:'7 yrs',fee:1800,tags:['Sports Physio','Post-Surgery Rehab','Back Pain','Stroke Rehab'],phone:'0711312001',available:true},
-  {id:'sp13',name:'Sarah Mutua',title:'Physiotherapist',type:'physiotherapist',icon:'💪',city:'Mombasa',hospital:'Coast Rehab Centre',rating:4.7,reviews:78,exp:'5 yrs',fee:1500,tags:['Neck & Back','Knee Rehab','Manual Therapy'],phone:'0722313001',available:true},
-  {id:'sp14',name:'Joan Kariuki',title:'Nutritionist & Dietitian',type:'nutritionist',icon:'🥗',city:'Nairobi',hospital:'Aga Khan Hospital',rating:4.9,reviews:134,exp:'9 yrs',fee:2000,tags:['Weight Management','Diabetes Diet','Sports Nutrition','Child Nutrition'],phone:'0733314001',available:true},
-  {id:'sp15',name:'Dr. Kevin Ochieng',title:'Mental Health Counsellor',type:'mental',icon:'🧠',city:'Nairobi',hospital:'InnerPeace Wellness',rating:5.0,reviews:89,exp:'12 yrs',fee:2500,tags:['Depression','Anxiety','Trauma','CBT','Couples Therapy'],phone:'0744315001',available:true},
-  {id:'sp16',name:'Dr. Miriam Waweru',title:'Psychiatrist',type:'mental',icon:'🧠',city:'Nairobi',hospital:'Mathare Hospital',rating:4.8,reviews:67,exp:'14 yrs',fee:3500,tags:['Schizophrenia','Bipolar','ADHD','Medication Management'],phone:'0755316001',available:true},
-  {id:'sp17',name:'Dr. Joseph Maina',title:'Ophthalmologist',type:'ophthalmologist',icon:'👁️',city:'Nairobi',hospital:'Aga Khan Eye Unit',rating:4.9,reviews:145,exp:'13 yrs',fee:3000,tags:['LASIK','Cataracts','Glaucoma','Retina','Eye Exams'],phone:'0766317001',available:true},
-];
-
-let _activeSpecType = 'all';
-function filterSpecialists(type, btn){
-  _activeSpecType = type;
-  document.querySelectorAll('#specTypeFilter .hc-tab-btn').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  renderSpecialists();
-}
-
-function renderSpecialists(){
-  const grid = document.getElementById('specGrid');
-  if(!grid) return;
-  const list = _activeSpecType==='all' ? SPECIALISTS : SPECIALISTS.filter(s=>s.type===_activeSpecType);
-  if(!list.length){ grid.innerHTML='<p style="color:rgba(255,255,255,0.3);padding:36px 0;text-align:center;">No specialists found for this category.</p>'; return; }
-  grid.innerHTML = list.map(s=>`
-    <div class="spec-card">
-      <div style="display:flex;gap:12px;align-items:flex-start;padding:16px 16px 0;">
-        <div class="spec-avatar">${s.icon}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="spec-name">${s.name}</div>
-          <div class="spec-title">${s.icon} ${s.title}</div>
-          <div class="spec-loc">🏥 ${s.hospital} · ${s.city} · ${s.exp}</div>
-          <div class="spec-loc">⭐ ${s.rating} (${s.reviews}) · KES ${s.fee.toLocaleString()}/consult</div>
-        </div>
-      </div>
-      <div style="padding:0 16px;">
-        <div class="spec-tags">${s.tags.map(t=>`<span class="spec-tag">${t}</span>`).join('')}</div>
-      </div>
-      <div style="display:flex;gap:6px;padding:0 16px 16px;">
-        <button class="spec-btn spec-btn-book" onclick="bookSpecialist('${s.id}','${s.name.replace(/'/g,"\\'")}')">📅 Book</button>
-        <button class="spec-btn spec-btn-call" onclick="callSpecialist('${s.phone}','${s.name.replace(/'/g,"\\'")}')">📞 Call</button>
-        <button class="spec-btn" style="background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.2);color:#25d366;" onclick="waSpecialist('${s.phone}','${s.name.replace(/'/g,"\\'")}')">💬 WA</button>
-      </div>
+async function loadAppts(){
+  const a=document.getElementById('apptArea');
+  if(!cu){a.innerHTML='<div class="empty">Sign in to view appointments.</div>';return;}
+  a.innerHTML='<div style="text-align:center;padding:40px"><div class="spinner"></div></div>';
+  const r=await call('getMyAppointments',{limit:30});
+  if(!r.ok){a.innerHTML='<div class="empty">Could not load appointments.</div>';return;}
+  const list=r.data.appointments||[];
+  if(!list.length){a.innerHTML='<div class="empty">No appointments yet.</div>';return;}
+  a.innerHTML=list.map(a=>`
+    <div class="appt-card">
+      <div class="s s-${a.status}">${(a.status||'').replace(/_/g,' ')}</div>
+      <div style="font-weight:600">${esc(a.providerName||'')}</div>
+      <div style="font-size:13px;color:#8b949e">${(a.specialization||'').replace(/_/g,' ')}</div>
+      <div style="font-size:13px;margin:4px 0">📅 ${new Date(a.dateTime).toLocaleString()}</div>
+      <div style="font-size:13px;color:#8b949e">${esc(a.reason||'')}</div>
+      <div style="font-size:13px;margin-top:6px">${a.isOnline?'🌐 Online':'🏥 In-person'} · KES ${(a.consultationFee||0).toLocaleString()}</div>
     </div>`).join('');
 }
 
-function bookSpecialist(id, name){
-  document.getElementById('apptProvider').textContent = 'Booking with: '+name;
-  document.getElementById('apptModal').style.display='flex';
-}
-function callSpecialist(phone){ window.location.href='tel:'+phone; }
-function waSpecialist(phone, name){
-  const msg = encodeURIComponent('Hi Dr. '+name+', I found you on Sokoni Healthcare and would like to book a consultation.');
-  window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+msg,'_blank');
+function setTab(t,el){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));el.classList.add('active');
+  document.getElementById('pBrowse').style.display=t==='browse'?'':'none';
+  document.getElementById('pAppts').style.display=t==='appointments'?'':'none';
+  if(t==='appointments')loadAppts();
 }
 
-/* ════════════════════════════════════════════════════════════
-   TELECONSULT
-════════════════════════════════════════════════════════════ */
-const TC_DOCTORS = [
-  {id:'tc01',name:'Dr. Collins Mwangi',title:'GP',icon:'🩺',type:'gp',city:'Nairobi',fee:500,rating:4.7,reviews:143,phone:'0725001001',available:true},
-  {id:'tc02',name:'Dr. Wanjiku Muthoni',title:'GP',icon:'🩺',type:'gp',city:'Nairobi',fee:500,rating:4.9,reviews:312,phone:'0722007001',available:true},
-  {id:'tc03',name:'Dr. Kevin Ochieng',title:'Mental Wellness',icon:'🧠',type:'mental',city:'Nairobi',fee:800,rating:5.0,reviews:89,phone:'0744315001',available:true},
-  {id:'tc04',name:'Joan Kariuki',title:'Nutritionist',icon:'🥗',type:'nutrition',city:'Nairobi',fee:700,rating:4.9,reviews:134,phone:'0733314001',available:true},
-  {id:'tc05',name:'Dr. Grace Kamau',title:'Dermatologist',icon:'🌿',type:'specialist',city:'Nairobi',fee:1500,rating:4.9,reviews:210,phone:'0744303001',available:true},
-];
-
-function renderTCDoctors(){
-  const grid = document.getElementById('tcDoctorGrid');
-  if(!grid) return;
-  grid.innerHTML = TC_DOCTORS.map(d=>`
-    <div class="spec-card">
-      <div style="display:flex;gap:12px;align-items:flex-start;padding:14px 14px 0;">
-        <div class="spec-avatar">${d.icon}</div>
-        <div>
-          <div class="spec-name">${d.name}</div>
-          <div class="spec-title">${d.title} · ${d.city}</div>
-          <div class="spec-loc">⭐ ${d.rating} · KES ${d.fee}/session</div>
-        </div>
-      </div>
-      <div style="padding:8px 14px 14px;">
-        <button class="spec-btn spec-btn-book" style="width:100%;" onclick="startTCWith('${d.name.replace(/'/g,"\\'")}','${d.fee}')">📱 Start Teleconsult</button>
-      </div>
-    </div>`).join('');
-}
-
-function startTCWith(name, fee){
-  document.getElementById('tcName') && (document.getElementById('tcName').focus());
-  if(window.SokoniPay) SokoniPay.bookNow({service:'Teleconsultation with '+name,provider:name,amount:Number(fee)||500});
-  else (window._skToast||alert)('To book teleconsult with '+name+': fill the booking form above.');
-}
-
-function bookTeleconsult(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('hc_tc',5,300000)){(window._skToast||alert)('Too many attempts.');return;}
-  const name=document.getElementById('tcName')?.value.trim();
-  const phone=document.getElementById('tcPhone')?.value.trim();
-  const type=document.getElementById('tcType')?.value;
-  const date=document.getElementById('tcDate')?.value;
-  const msgEl=document.getElementById('tcMsg');
-  if(!name||!phone||!type||!date){if(msgEl){msgEl.textContent='⚠️ Fill all required fields';msgEl.style.color='#ff9800';}return;}
-  const ref='TC'+Date.now();
-  const tc={ref,id:ref,patientName:name,phone,type,date,time:document.getElementById('tcTime')?.value,mode:document.getElementById('tcMode')?.value,symptoms:document.getElementById('tcSymptoms')?.value.trim(),createdAt:Date.now()};
-  let tcs=[]; try{tcs=JSON.parse(localStorage.getItem('sokoniTeleconsults'))||[];}catch(e){}
-  tcs.unshift(tc); localStorage.setItem('sokoniTeleconsults',JSON.stringify(tcs));
-  if(window.SokoniHealth) SokoniHealth.saveAppointment({...tc,providerName:'Sokoni Teleconsult'}).catch(e=>console.warn('[HC] tc:',e.message));
-  if(msgEl){msgEl.innerHTML=`✅ Booked! Ref: <strong style="color:#00c878;">${ref}</strong><br>A doctor will call ${phone} at your chosen time.`;msgEl.style.color='#00c878';}
-}
-
-/* ════════════════════════════════════════════════════════════
-   LABS & TESTS
-════════════════════════════════════════════════════════════ */
-const LAB_TESTS = [
-  {id:'lt01',name:'Full Blood Count (FBC)',cat:'blood',icon:'🩸',price:650,turnaround:'24 hrs',homeCollection:true,desc:'WBC, RBC, haemoglobin, platelets, differential.'},
-  {id:'lt02',name:'Malaria RDT + Microscopy',cat:'malaria',icon:'🦟',price:350,turnaround:'1 hr',homeCollection:true,desc:'Rapid diagnostic test plus blood smear microscopy.'},
-  {id:'lt03',name:'HIV 1 & 2 Test',cat:'hiv',icon:'🔴',price:400,turnaround:'30 min',homeCollection:true,desc:'Confidential HIV rapid test with counselling.'},
-  {id:'lt04',name:'Blood Glucose (Fasting)',cat:'sugar',icon:'🍬',price:250,turnaround:'30 min',homeCollection:true,desc:'Fasting blood sugar. Essential for diabetes screening.'},
-  {id:'lt05',name:'HbA1c (3-Month Sugar)',cat:'sugar',icon:'🍬',price:900,turnaround:'24 hrs',homeCollection:false,desc:'3-month average blood glucose. For diabetes management.'},
-  {id:'lt06',name:'Liver Function Test (LFT)',cat:'liver',icon:'🫁',price:1200,turnaround:'24 hrs',homeCollection:true,desc:'ALT, AST, bilirubin, albumin, alkaline phosphatase.'},
-  {id:'lt07',name:'Kidney Function Test (KFT)',cat:'liver',icon:'🫁',price:1100,turnaround:'24 hrs',homeCollection:true,desc:'Creatinine, urea, electrolytes — kidney health panel.'},
-  {id:'lt08',name:'Lipid Profile',cat:'blood',icon:'🩸',price:1500,turnaround:'24 hrs',homeCollection:true,desc:'Total cholesterol, LDL, HDL, triglycerides.'},
-  {id:'lt09',name:'Thyroid Panel (TSH, T3, T4)',cat:'blood',icon:'🩸',price:2200,turnaround:'48 hrs',homeCollection:false,desc:'Full thyroid function assessment.'},
-  {id:'lt10',name:'COVID-19 Antigen Test',cat:'covid',icon:'😷',price:500,turnaround:'30 min',homeCollection:true,desc:'Rapid antigen test. Result in 15–30 minutes.'},
-  {id:'lt11',name:'COVID-19 PCR Test',cat:'covid',icon:'😷',price:2500,turnaround:'24 hrs',homeCollection:true,desc:'PCR swab test. Certificate issued for travel.'},
-  {id:'lt12',name:'Stool Test (O&P)',cat:'blood',icon:'🔬',price:450,turnaround:'24 hrs',homeCollection:false,desc:'Ova and parasites. For diarrhoea and stomach issues.'},
-  {id:'lt13',name:'Urinalysis + Culture',cat:'hiv',icon:'🔴',price:750,turnaround:'48 hrs',homeCollection:false,desc:'Full urine analysis + culture for UTI confirmation.'},
-  {id:'lt14',name:'Abdominal Ultrasound',cat:'imaging',icon:'📸',price:2800,turnaround:'Same day',homeCollection:false,desc:'Liver, kidney, gallbladder, pancreas, spleen imaging.'},
-  {id:'lt15',name:'Chest X-Ray',cat:'imaging',icon:'📸',price:1500,turnaround:'Same day',homeCollection:false,desc:'Lungs, heart size, rib cage — digital image & report.'},
-];
-
-let _activeLabCat='all';
-function filterLabTests(cat, btn){
-  _activeLabCat=cat;
-  document.querySelectorAll('#labCatFilter .hc-tab-btn').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  renderLabTests();
-}
-
-function renderLabTests(){
-  const grid=document.getElementById('labTestGrid'); if(!grid) return;
-  const list=_activeLabCat==='all'?LAB_TESTS:LAB_TESTS.filter(t=>t.cat===_activeLabCat);
-  grid.innerHTML=list.map(t=>`
-    <div class="lab-card">
-      <div style="font-size:24px;margin-bottom:6px;">${t.icon}</div>
-      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${t.name}</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:6px;">${t.desc}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-        <span style="font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(0,200,120,0.07);border:1px solid rgba(0,200,120,0.15);color:#00c878;">⏱ ${t.turnaround}</span>
-        ${t.homeCollection?'<span style="font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(100,200,255,0.07);border:1px solid rgba(100,200,255,0.15);color:#60aaff;">🏠 Home Collection</span>':''}
-      </div>
-      <div style="font-size:16px;font-weight:900;color:#00c878;margin-bottom:8px;">KES ${t.price.toLocaleString()}</div>
-      <button class="hc-book-btn" style="width:100%;padding:9px;" onclick="bookLabQuick('${t.id}','${t.name.replace(/'/g,"\\'")}')">🔬 Book This Test</button>
-    </div>`).join('');
-}
-
-function bookLabQuick(id, name){
-  const el=document.getElementById('labTests');
-  if(el) el.value=name;
-  document.getElementById('labName')?.focus();
-  document.querySelector('#hctabpanel-labs .hc-body')?.querySelector('[onclick="bookLabTest()"]')?.scrollIntoView({behavior:'smooth'});
-}
-
-function bookLabTest(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('hc_lab',5,300000)){(window._skToast||alert)('Too many attempts.');return;}
-  const name=document.getElementById('labName')?.value.trim();
-  const phone=document.getElementById('labPhone')?.value.trim();
-  const tests=document.getElementById('labTests')?.value.trim();
-  const msgEl=document.getElementById('labMsg');
-  if(!name||!phone||!tests){if(msgEl){msgEl.textContent='⚠️ Fill name, phone and test(s)';msgEl.style.color='#ff9800';}return;}
-  const ref='LAB'+Date.now();
-  const booking={ref,id:ref,patientName:name,phone,tests,collection:document.getElementById('labCollection')?.value,date:document.getElementById('labDate')?.value,lab:document.getElementById('labPreferred')?.value,createdAt:Date.now()};
-  let labs=[]; try{labs=JSON.parse(localStorage.getItem('sokoniLabBookings'))||[];}catch(e){}
-  labs.unshift(booking); localStorage.setItem('sokoniLabBookings',JSON.stringify(labs));
-  if(window.SokoniHealth) SokoniHealth.saveAppointment({...booking,providerName:booking.lab||'Sokoni Lab',service:'Lab Test'}).catch(e=>console.warn('[HC] lab:',e.message));
-  if(window.SokoniInvoice) setTimeout(()=>SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:tests,category:'Lab Tests',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'Pay at Lab',paymentRef:ref,sellerName:booking.lab||'Sokoni Labs',date:new Date().toISOString()}),500);
-  if(msgEl){msgEl.innerHTML=`✅ Lab booking confirmed! Ref: <strong style="color:#00c878;">${ref}</strong><br>The lab will contact ${phone} to confirm the date and home collection if selected.`;msgEl.style.color='#00c878';}
-}
-
-/* ════════════════════════════════════════════════════════════
-   MY HEALTH DASHBOARD
-════════════════════════════════════════════════════════════ */
-function loadMyHealthDash(){
-  let appts=[]; try{appts=JSON.parse(localStorage.getItem('sokoniAppointments'))||[];}catch(e){}
-  let meds=[]; try{meds=JSON.parse(localStorage.getItem('sokoniMedOrders'))||[];}catch(e){}
-  let labs=[]; try{labs=JSON.parse(localStorage.getItem('sokoniLabBookings'))||[];}catch(e){}
-  let tcs=[]; try{tcs=JSON.parse(localStorage.getItem('sokoniTeleconsults'))||[];}catch(e){}
-
-  const setVal=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  setVal('hd-appts',appts.length);
-  setVal('hd-meds',meds.length);
-  setVal('hd-labs',labs.length);
-  setVal('hd-tc',tcs.length);
-
-  const apptEl=document.getElementById('hdApptList');
-  if(apptEl){
-    const _e=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-    if(!appts.length) apptEl.innerHTML='<div style="text-align:center;padding:40px 0;color:rgba(255,255,255,0.22);"><div style="font-size:36px;margin-bottom:8px;">📅</div><p style="font-size:12px;">No appointments yet.</p></div>';
-    else apptEl.innerHTML=appts.slice(0,4).map(a=>`<div class="hc-record-card"><div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${_e(a.providerName||'Provider')} — ${_e(a.service||'')}</div><div style="font-size:11px;color:rgba(255,255,255,0.38);">${_e(a.date||'')} ${_e(a.time||'')} · Ref: ${_e(a.id||'')}</div></div>`).join('');
-  }
-
-  const medEl=document.getElementById('hdMedList');
-  if(medEl){
-    if(!meds.length) medEl.innerHTML='<div style="text-align:center;padding:36px 0;color:rgba(255,255,255,0.22);"><div style="font-size:36px;margin-bottom:8px;">💊</div><p style="font-size:12px;">No medicine orders.</p></div>';
-    else medEl.innerHTML=meds.slice(0,3).map(m=>`<div class="hc-record-card"><div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${_e(m.medicine||'Medicine')}</div><div style="font-size:11px;color:rgba(255,255,255,0.38);">📍 ${_e(m.address||'')} · Ref: ${_e(m.id||'')}</div></div>`).join('');
-  }
-}
-
-/* ════════════════════════════════════════════════════════════
-   PROVIDER DASHBOARD
-════════════════════════════════════════════════════════════ */
-function checkProviderDash(){
-  const ph = localStorage.getItem('sokoniMyPharmacy');
-  const fac = ph?JSON.parse(ph):null;
-  if(fac){
-    const dash=document.getElementById('pvDashboard');
-    if(dash) dash.style.display='block';
-  }
-}
-
-function submitProviderReg(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('hc_pv_reg',3,3600000)){(window._skToast||alert)('Too many registration attempts. Try again in 1 hour.');return;}
-  const name=document.getElementById('pvFacName')?.value.trim();
-  const type=document.getElementById('pvFacType')?.value;
-  const loc=document.getElementById('pvFacLoc')?.value.trim();
-  const phone=document.getElementById('pvFacPhone')?.value.trim();
-  const msgEl=document.getElementById('pvRegMsg');
-  if(!name||!type||!loc||!phone){if(msgEl){msgEl.textContent='⚠️ Fill Name, Type, Location and Phone';msgEl.style.color='#ff9800';}return;}
-  const fac={id:'FAC'+Date.now(),name,type,location:loc,phone,hours:document.getElementById('pvFacHours')?.value.trim(),email:document.getElementById('pvFacEmail')?.value.trim(),services:document.getElementById('pvFacServices')?.value.trim(),nhif:document.getElementById('pvFacNhif')?.checked,telemedOffered:document.getElementById('pvFacTelemed')?.checked,status:'pending',hub:'healthcare',submittedAt:new Date().toISOString()};
-  let pending=[]; try{pending=JSON.parse(localStorage.getItem('sokoniHcFacPending'))||[];}catch(e){}
-  pending.unshift(fac); localStorage.setItem('sokoniHcFacPending',JSON.stringify(pending));
-  if(type==='pharmacy'||type==='dispensary') localStorage.setItem('sokoniMyPharmacy',JSON.stringify(fac));
-  if(window.firebaseDB){
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(fs){
-      const uid=(window.firebaseAuth&&window.firebaseAuth.currentUser)?window.firebaseAuth.currentUser.uid:'';
-      const base=Object.assign({},fac,{uid,category:'Healthcare Facility',createdAt:Date.now()});
-      return Promise.all([
-        fs.addDoc(fs.collection(window.firebaseDB,'applications'),base),
-        fs.addDoc(fs.collection(window.firebaseDB,'providers'),Object.assign({},base,{verified:false}))
-      ]);
-    }).catch(function(e){console.warn('[HC] Firestore save:',e.message);});
-  } else {
-    if(window.SokoniHealth) SokoniHealth.saveProvider({...fac,verified:false}).catch(function(){});
-    if(window.SokoniDB) SokoniDB.saveApplication({...fac,category:'Healthcare Facility'}).catch(function(){});
-  }
-  if(msgEl){msgEl.innerHTML=`✅ Registration submitted! Our team will verify and activate your profile within 48 hours.<br><span style="color:#f59e0b;font-size:11px;">Ref: ${fac.id}</span>`;msgEl.style.color='#00c878';}
-  checkProviderDash();
-}
-
-/* ════════════════════════════════════════════════════════════
-   URL PARAM TAB HANDLING
-════════════════════════════════════════════════════════════ */
-(function(){
-  const urlTab = new URLSearchParams(window.location.search).get('tab')||'';
-  if(urlTab) hcShowTab(urlTab);
-})();
-
-/* expose globals */
-window.hcShowTab=hcShowTab;
-window.filterSpecialists=filterSpecialists; window.filterLabTests=filterLabTests;
-window.bookSpecialist=bookSpecialist; window.callSpecialist=callSpecialist; window.waSpecialist=waSpecialist;
-window.startTCWith=startTCWith; window.bookTeleconsult=bookTeleconsult;
-window.bookLabQuick=bookLabQuick; window.bookLabTest=bookLabTest;
-window.loadMyHealthDash=loadMyHealthDash; window.submitProviderReg=submitProviderReg;
+buildChips();load();
 </script>
-<script src="scroll-memory.js" defer></script>
-<script src="sokoni-audit.js" defer></script>
-<script src="scroll-top.js" defer></script>
-<nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
-  <a href="healthcare.html" class="bnav-item active-bnav"><span class="bnav-emoji">❤️</span><span>Health</span></a>
-  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
-</nav>
-<script src="nav-active.js" defer></script>
-<script src="analytics.js" defer></script>
-<script src="sokoni-config.js" defer></script>
-<script src="sokoni-invoice.js"></script><script src="sokoni-ui-extras.js" defer></script>
-  <script src="sw-register.js" defer></script>
-<script src="sokoni-availability.js" defer></script>
-<script>
-let _hcOpenNow = false;
-async function toggleHcOpenNow(btn) {
-  _hcOpenNow = !_hcOpenNow;
-  btn.style.background = _hcOpenNow ? "rgba(16,185,129,.15)" : "transparent";
-  const grid = document.getElementById("hcGrid");
-  if (!grid) return;
-  const cards = [...grid.querySelectorAll(".hc-card[data-provider-id]")];
-  if (!_hcOpenNow) { cards.forEach(c => c.style.display = ""); return; }
-  const ids = cards.map(c => c.dataset.providerId).filter(Boolean);
-  if (!ids.length || !window.db) return;
-  const snaps = await Promise.all(ids.map(id => db.collection("availabilityStatus").doc(id).get().catch(() => null)));
-  cards.forEach((card, i) => {
-    const snap = snaps[i];
-    const isOpen = snap && snap.exists ? snap.data().isOpen : false;
-    card.style.display = isOpen ? "" : "none";
-  });
-}
-</script>
-<script type="module">import SokoniDB from './sokoni-db.js'; window.SokoniDB = SokoniDB;</script>
-<script type="module">import SokoniHealth from './sokoni-health.js'; window.SokoniHealth = SokoniHealth;</script>
-<script>
-/* Nav state init */
-(function(){
-  try{var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
-    var pl=document.querySelector('.bnav-item[href="profile.html"] span:not(.bnav-emoji)');
-    if(pl&&u&&u.name) pl.textContent=u.name.split(' ')[0];
-  }catch(e){}
-})();
-</script><script src="sokoni-mpesa.js" defer></script>
-<script src="sokoni-social.js" defer></script>
-<script src="sokoni-referral.js" defer></script>
-<script src="sokoni-inbox.js" defer></script>
-<script src="sokoni-verifications.js" defer></script>
-  <!-- REGISTER CTA — universal fallback for other business types -->
-  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
-    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
-    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
-    <button onclick="HubRegister.open({hub:'healthcare', category:'hospital'})" style="padding:10px 24px;background:#4ade80;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
-  </div>
-  <script defer src="hub-register.js"></script>
-  <script defer src="kass-widget.js"></script>
-  <!-- Enterprise v2.0: core stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-

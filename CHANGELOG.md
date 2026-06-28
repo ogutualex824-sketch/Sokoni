@@ -1,4 +1,90 @@
-﻿## [2026-06-29] — AA Enterprise Business Resilience Audit & Chaos Testing Fixes
+﻿## [2026-06-29] — Hub HTML Pages v1.0 — 10 Full CF-Integrated SPAs
+
+### Summary
+Rebuilt all 6 hub stub pages and 4 secondary property/vehicle/digital pages from empty shells
+into complete, CF-backed SPAs. Each page: dark theme, XSS-safe `esc()` helper, named Firebase
+app instance, auth-gated mutations, Firestore pagination via cursor, toast notifications, modal
+overlays with backdrop dismiss, and mobile-responsive grid layouts.
+
+### Pages Written
+
+#### 6 Main Hub Pages
+- **`healthcare.html`** — Browse providers (16 specializations, city filter, online toggle);
+  provider detail modal; book appointment (in-person/online, datetime, reason); My Appointments tab.
+  CFs: `getHealthProviders`, `searchHealthProviders`, `getHealthProvider`, `bookAppointment`, `getMyAppointments`. App: `'hc'`.
+
+- **`property-hub.html`** — For Sale / For Rent / Short Let / Agent Portal tabs; type filter pills
+  (apartment, house, villa, land, commercial…); beds/price/city filters; property cards with listing-type
+  badges; property detail modal with enquiry + schedule viewing tabs; agent stats + listings table.
+  CFs: `listProperties`, `getProperty`, `submitPropertyEnquiry`, `scheduleViewing`, `getPropertyAnalytics`. App: `'prop'`.
+
+- **`car-hub.html`** — For Sale / For Rent / Sell tabs; vehicle type pills + fuel/make/year/price/county
+  filters; compare toggle (up to 4 vehicles); side-by-side compare modal; vehicle detail modal with
+  send-enquiry form + offer price field; inline draft creation form in Sell tab.
+  CFs: `listVehicles`, `getVehicle`, `compareVehicles`, `submitVehicleEnquiry`, `searchVehicles`, `createVehicleListing`. App: `'veh'`.
+
+- **`digital.html`** — 11 category chips; product cards with FREE badge overlay; product detail modal
+  with buy box; download modal with 15-min signed URL + license key; My Library tab with per-item
+  download buttons. `fileStoragePath` never exposed to client.
+  CFs: `listDigitalProducts`, `getDigitalProduct`, `purchaseDigitalProduct`, `downloadDigitalProduct`, `searchDigitalProducts`, `getMyDigitalPurchases`. App: `'dig'`.
+
+- **`legal-hub.html`** — 15 specialization chips; county filter + online-only toggle; lawyer cards
+  with firm, years exp, rating, hourly rate; lawyer detail modal with LSK number; book consultation
+  modal (in-person/online/phone 3-way toggle); My Consultations tab.
+  CFs: `getLegalProviders`, `searchLegalProviders`, `getLegalProvider`, `bookLegalConsultation`, `getMyLegalConsultations`. App: `'legal'`.
+
+- **`entertainment.html`** — 11 category chips + Free/PPV pills; content cards with hover play
+  overlay and badge; trailer play inline; streaming URL gated behind purchase check (omitted from CF
+  response unless owned); My Library tab; Creator Dashboard with stats + table.
+  CFs: `listEntertainmentContent`, `getEntertainmentListing`, `purchaseEntertainment`, `searchEntertainment`, `getMyEntertainmentPurchases`, `getCreatorDashboard`. App: `'ent'`.
+
+#### 4 Secondary Pages
+- **`car-rental.html`** — Dedicated rental browse page; vehicle type pills + fuel/price/county
+  filters; rental enquiry modal with dates field. Calls `listVehicles` with `listingType:'for_rent'`. App: `'rental'`.
+
+- **`digital-esoko.html`** — Seller dashboard with Dashboard / New Product / Sales tabs; product
+  publish/unpublish controls; includes-tag builder; GCS path field; `createDigitalProduct` +
+  `publishDigitalProduct` + `unpublishDigitalProduct` + `getDigitalProductSales`. App: `'desoko'`.
+
+- **`property-listing.html`** — Full listing creation form: basic details, location (county/city/hood),
+  specs (beds/baths/parking/size/yearBuilt/furnished), 15-item amenity grid, photos via URL, agent
+  contact. Calls `createPropertyListing` + `publishPropertyListing`. App: `'proplist'`.
+
+- **`property-agent-dashboard.html`** — Agent analytics dashboard: Overview / My Listings / Enquiries /
+  Viewings tabs; stats grid (total/active/views/enquiries/viewings/conversion); publish and deactivate
+  listing controls; enquiry cards with call/email links; viewing cards with status badges.
+  Calls `getPropertyAnalytics`, `publishPropertyListing`, `deactivatePropertyListing`, `getPropertyEnquiries`, `getPropertyViewings`. App: `'pagent'`.
+
+### Hub Accent Colors
+- Healthcare: #3fb950 (green) · Property: #f0883e (orange) · Vehicle: #58a6ff (blue)
+- Digital: #bc8cff (purple) · Legal: #e3b341 (gold) · Entertainment: #f85149 (red)
+
+### Security
+- All dynamic DOM content written via `esc()` (textContent-based XSS prevention)
+- `fileStoragePath` never returned from `downloadDigitalProduct` CF to client
+- `streamingUrl` omitted from entertainment CF response unless content is free or caller owns a `completed` purchase
+- Auth-gated mutations: booking, purchase, enquiry, listing creation all check `cu` before CF call
+- Idempotency keys used before purchase CF calls
+
+### Performance
+- Firestore pagination: cursor-based (`startAfter`) with "Load More" button on all listing pages
+- Client-side filtering (price, beds, county, fuel) after CF returns page — avoids composite indexes
+- `loading="lazy"` on all thumbnail images
+
+### Files Affected (HTML only — no CF deploy)
+- `healthcare.html`, `property-hub.html`, `car-hub.html`, `digital.html`, `legal-hub.html`,
+  `entertainment.html` — rebuilt from stubs to full SPAs
+- `car-rental.html`, `digital-esoko.html`, `property-listing.html`, `property-agent-dashboard.html`
+  — rebuilt from stubs
+
+### No Breaking Changes
+- No Cloud Functions deployed (Cloud Run quota constraint — CFs pending)
+- No Firestore indexes added (at 200/200 limit; single-field queries only)
+- No schema changes
+
+---
+
+## [2026-06-29] — AA Enterprise Business Resilience Audit & Chaos Testing Fixes
 
 ### Summary
 Comprehensive Enterprise Business Resilience & Chaos Testing audit across 7 dimensions:

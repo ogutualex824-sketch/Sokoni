@@ -1,506 +1,226 @@
 <!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html lang="en">
 <head>
-<script src="security.js"></script>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Digital Esoko — Buy & Download Digital Products | SOKONI</title>
-<meta name="description" content="Buy and download eBooks, templates, music, courses, software and design assets from Kenyan creators. Instant delivery after M-Pesa payment.">
-<meta property="og:title" content="Digital Esoko — Kenya's Digital Products Marketplace">
-<meta property="og:description" content="eBooks, Templates, Music, Courses, Software & more from Kenyan creators. Pay with M-Pesa. Instant download.">
-<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
-<link rel="icon" type="image/png" href="assets/logosokoni.png">
-<link rel="apple-touch-icon" href="assets/logosokoni.png">
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#71ff00">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="SOKONI">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="premium.css">
-<link rel="stylesheet" href="mobile.css">
-<link rel="stylesheet" href="sokoni-premium-v2.css">
-<link rel="stylesheet" href="sokoni-desktop.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-<script src="shared-header.js" defer></script>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Digital eSoko — Seller Dashboard</title>
+<link rel="icon" href="/assets/logosokoni.png">
+<script src="/__/firebase/10.12.0/firebase-app-compat.js"></script>
+<script src="/__/firebase/10.12.0/firebase-auth-compat.js"></script>
+<script src="/__/firebase/10.12.0/firebase-functions-compat.js"></script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh}
-a{text-decoration:none;color:inherit}
-
-.de-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(10,10,10,.96);border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:200;backdrop-filter:blur(12px)}
-.de-nav-logo{height:30px}
-.de-nav-right{display:flex;gap:8px;align-items:center}
-.de-nb{padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);background:transparent;cursor:pointer;font-family:inherit;transition:all .2s}
-.de-nb:hover{border-color:rgba(255,255,255,.25);color:#fff}
-.de-nb.green{background:rgba(113,255,0,.1);border-color:rgba(113,255,0,.3);color:#71ff00}
-.de-nb.blue{background:rgba(0,170,255,.1);border-color:rgba(0,170,255,.3);color:#00aaff}
-
-.de-hero{background:linear-gradient(135deg,rgba(113,255,0,.06),rgba(0,170,255,.04));border-bottom:1px solid rgba(255,255,255,.07);padding:44px 20px 32px;text-align:center}
-.de-hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.25);color:#71ff00;font-size:11px;font-weight:800;margin-bottom:14px;letter-spacing:.5px}
-.de-hero h1{font-size:clamp(24px,5vw,40px);font-weight:900;margin-bottom:10px}
-.de-hero p{color:rgba(255,255,255,.5);font-size:14px;max-width:500px;margin:0 auto 22px;line-height:1.6}
-.de-hero-stats{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:22px}
-.de-stat{font-size:12px;color:rgba(255,255,255,.4);display:flex;align-items:center;gap:5px}
-.de-stat strong{color:#71ff00;font-weight:800}
-.de-search{max-width:520px;margin:0 auto;display:flex;gap:8px}
-.de-search input{flex:1;padding:12px 16px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:#fff;font-size:14px;outline:none;font-family:inherit}
-.de-search input::placeholder{color:rgba(255,255,255,.3)}
-.de-search input:focus{border-color:rgba(113,255,0,.35)}
-.de-search-btn{padding:12px 20px;background:linear-gradient(135deg,#71ff00,#44bb00);border:none;border-radius:12px;color:#000;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit}
-
-.de-filter-bar{display:flex;gap:8px;padding:14px 20px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid rgba(255,255,255,.05)}
-.de-filter-bar::-webkit-scrollbar{display:none}
-.de-pill{padding:7px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);background:transparent;cursor:pointer;white-space:nowrap;transition:all .2s;font-family:inherit;flex-shrink:0}
-.de-pill:hover,.de-pill.active-pill{background:rgba(113,255,0,.1);border-color:rgba(113,255,0,.3);color:#71ff00}
-
-.de-body{max-width:1280px;margin:0 auto;padding:20px 20px 100px}
-.de-sort-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px}
-.de-count{font-size:13px;color:rgba(255,255,255,.4)}
-.de-sort-sel{padding:8px 12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:12px;font-weight:600;outline:none;font-family:inherit;cursor:pointer}
-.de-sort-sel option{background:#1a1a1a}
-.de-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
-
-.de-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .2s,border-color .2s}
-.de-card:hover{transform:translateY(-3px);border-color:rgba(113,255,0,.3)}
-.de-card-cover{position:relative;width:100%;padding-top:63%;overflow:hidden;background:linear-gradient(135deg,rgba(113,255,0,.04),rgba(0,170,255,.03))}
-.de-card-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.de-cover-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:44px}
-.de-cat-badge{position:absolute;top:8px;left:8px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:6px;background:rgba(0,0,0,.65);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.9)}
-.de-feat-badge{position:absolute;top:8px;right:8px;font-size:9px;font-weight:800;padding:3px 8px;border-radius:5px}
-.de-card-body{padding:13px 14px}
-.de-card-title{font-size:14px;font-weight:800;line-height:1.35;margin-bottom:5px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-.de-card-seller{font-size:11px;color:rgba(255,255,255,.4);margin-bottom:7px}
-.de-card-meta{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,.35);margin-bottom:8px}
-.de-card-price{font-size:16px;font-weight:900;color:#71ff00}
-.de-card-price.free{color:#00aaff}
-
-.de-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:1000;align-items:center;justify-content:center;padding:16px}
-.de-modal.open{display:flex}
-.de-modal-box{background:#111;border:1px solid rgba(255,255,255,.1);border-radius:20px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto}
-.de-modal-close-row{display:flex;justify-content:flex-end;padding:14px 16px 0;position:sticky;top:0;background:#111;z-index:5;border-radius:20px 20px 0 0}
-.de-close-btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;font-family:inherit}
-.de-modal-inner{padding:4px 24px 28px}
-
-.de-modal-input{width:100%;padding:11px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:14px;outline:none;font-family:inherit;margin-bottom:10px}
-.de-modal-input:focus{border-color:rgba(113,255,0,.35)}
-.de-modal-input::placeholder{color:rgba(255,255,255,.3)}
-.de-btn-buy{width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#44bb00);border:none;border-radius:12px;color:#000;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit;margin-top:12px;transition:filter .2s}
-.de-btn-buy:hover{filter:brightness(1.1)}
-.de-btn-download{width:100%;padding:14px;background:linear-gradient(135deg,#00aaff,#0066cc);border:none;border-radius:12px;color:#fff;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit;margin-top:12px;text-align:center;display:block;text-decoration:none}
-
-.de-empty{text-align:center;padding:80px 20px;color:rgba(255,255,255,.25)}
-.de-empty-icon{font-size:56px;margin-bottom:16px}
-.de-empty h3{font-size:18px;font-weight:800;color:rgba(255,255,255,.5);margin-bottom:10px}
-.de-empty p{font-size:13px;line-height:1.6;margin-bottom:24px}
-
-.de-sell-cta{background:linear-gradient(135deg,rgba(113,255,0,.06),rgba(0,170,255,.04));border:1px solid rgba(113,255,0,.15);border-radius:20px;padding:36px 28px;text-align:center;margin-top:48px}
-.de-sell-cta h2{font-size:22px;font-weight:900;margin-bottom:10px}
-.de-sell-cta p{font-size:14px;color:rgba(255,255,255,.5);margin-bottom:22px;line-height:1.6;max-width:460px;margin-left:auto;margin-right:auto}
-.de-cta-btn{display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#71ff00,#44bb00);border-radius:14px;color:#000;font-weight:900;font-size:15px;text-decoration:none;cursor:pointer;border:none;font-family:inherit}
-
-#deNotifContainer{position:fixed;bottom:80px;right:16px;z-index:9000;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:280px}
-.de-notif{padding:12px 18px;border-radius:12px;font-size:13px;font-weight:700;pointer-events:auto;backdrop-filter:blur(8px);border:1px solid;animation:deIn .3s ease}
-.de-notif.success{background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.3);color:#71ff00}
-.de-notif.error{background:rgba(255,80,80,.12);border-color:rgba(255,80,80,.3);color:#ff8080}
-.de-notif.info{background:rgba(0,170,255,.12);border-color:rgba(0,170,255,.3);color:#00aaff}
-@keyframes deIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
-
-@media(max-width:600px){.de-grid{grid-template-columns:repeat(2,1fr);gap:12px}}
-@media(max-width:360px){.de-grid{grid-template-columns:1fr}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
+.hdr{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+.logo{font-weight:700;font-size:18px;color:#bc8cff}
+.tabs{display:flex;border-bottom:1px solid #30363d;padding:0 16px;background:#161b22}
+.tab{padding:11px 14px;cursor:pointer;font-size:14px;border-bottom:2px solid transparent;color:#8b949e;white-space:nowrap}
+.tab.active{color:#e6edf3;border-color:#bc8cff}
+.container{max-width:1000px;margin:0 auto;padding:24px 16px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+.stat{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
+.stat label{font-size:11px;color:#8b949e;display:block;margin-bottom:4px}
+.stat .val{font-size:22px;font-weight:700;color:#bc8cff}
+.prod-list{display:flex;flex-direction:column;gap:10px}
+.pitem{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;display:flex;gap:14px;align-items:center}
+.pthumb{width:52px;height:52px;background:#21262d;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;overflow:hidden}
+.pthumb img{width:100%;height:100%;object-fit:cover}
+.pbody{flex:1}
+.ptitle{font-weight:600;font-size:14px;margin-bottom:3px}
+.pmeta{font-size:12px;color:#8b949e;margin-bottom:4px}
+.status{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.sa{background:#1a3a2a;color:#3fb950}.sd{background:#2d2a1a;color:#e3b341}.si{background:#2d1a1a;color:#f85149}
+.pactions{display:flex;gap:6px;flex-shrink:0}
+.btn{padding:7px 14px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:.2s}
+.btn-p{background:#6e40c9;color:#fff}.btn-p:hover{background:#8957e5}
+.btn-g{background:#238636;color:#fff}.btn-g:hover{background:#2ea043}
+.btn-out{background:transparent;border:1px solid #30363d;color:#e6edf3}.btn-out:hover{border-color:#8b949e}
+.section-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.section-hdr h2{font-size:17px;font-weight:600}
+.form-card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px}
+.fg{margin-bottom:14px}
+.fg label{display:block;font-size:13px;color:#8b949e;margin-bottom:5px}
+.fg input,.fg select,.fg textarea{width:100%;padding:10px 14px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:14px}
+.fg textarea{resize:vertical;min-height:90px}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:#bc8cff}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.inc-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.inc-tag{padding:4px 10px;background:#21262d;border-radius:20px;font-size:12px;color:#8b949e;display:flex;align-items:center;gap:6px}
+.inc-tag span{cursor:pointer;color:#f85149}
+.sales-row{display:flex;gap:12px;align-items:center;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 14px;margin-bottom:8px}
+.empty{text-align:center;padding:60px;color:#8b949e}
+.spinner{display:inline-block;width:24px;height:24px;border:2px solid #30363d;border-top-color:#bc8cff;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:14px;z-index:999;animation:fi .3s;max-width:300px}
+.tok{background:#238636;color:#fff}.terr{background:#da3633;color:#fff}
+@keyframes fi{from{opacity:0;transform:translateY(8px)}}
+@media(max-width:600px){.row2{grid-template-columns:1fr}.row3{grid-template-columns:1fr 1fr}.pitem{flex-wrap:wrap}.pactions{width:100%}}
 </style>
 </head>
 <body>
-<script src="splash.js"></script>
-
-<nav class="de-nav">
-  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="de-nav-logo" alt="SOKONI"></a>
-  <div class="de-nav-right">
-    <button type="button" class="de-nb blue" onclick="showMyPurchases()">📥 My Downloads</button>
-    <a href="digital-esoko-seller.html" class="de-nb green">🚀 Sell Here</a>
-  </div>
-</nav>
-
-<section class="de-hero">
-  <div class="de-hero-badge">🛒 KENYA'S DIGITAL MARKETPLACE</div>
-  <h1>📦 Digital Esoko</h1>
-  <p>Buy and download eBooks, templates, music, courses, software and design assets from Kenyan creators. Pay with M-Pesa, download instantly.</p>
-  <div class="de-hero-stats">
-    <div class="de-stat"><strong id="deStatProducts">—</strong> Products</div>
-    <div class="de-stat"><strong id="deStatSellers">—</strong> Creators</div>
-    <div class="de-stat"><strong id="deStatDownloads">—</strong> Downloads</div>
-  </div>
-  <div class="de-search">
-    <input type="text" id="deSearch" placeholder="Search eBooks, templates, music…" oninput="searchProducts()">
-    <button type="button" class="de-search-btn" onclick="searchProducts()">🔍</button>
-  </div>
-</section>
-
-<div class="de-filter-bar" id="deFilterBar"></div>
-
-<div class="de-body">
-  <div class="de-sort-row">
-    <div class="de-count" id="deCount">Loading…</div>
-    <select class="de-sort-sel" id="deSort" onchange="renderProducts(filterAndSort())">
-      <option value="newest">Newest First</option>
-      <option value="price_asc">Price: Low → High</option>
-      <option value="price_desc">Price: High → Low</option>
-      <option value="downloads">Most Downloaded</option>
-    </select>
-  </div>
-  <div class="de-grid" id="deGrid"></div>
-  <div class="de-empty" id="deEmpty" style="display:none">
-    <div class="de-empty-icon">📦</div>
-    <h3>No products yet</h3>
-    <p>Be the first to list your digital product on Sokoni Esoko.</p>
-    <a href="digital-esoko-seller.html" class="de-cta-btn">🚀 Start Selling</a>
-  </div>
-
-  <div class="de-sell-cta">
-    <h2>💡 Sell Your Digital Products</h2>
-    <p>Turn your knowledge and creativity into income. List eBooks, templates, beats, courses, software and more. Keep up to 95% of every sale.</p>
-    <a href="digital-esoko-seller.html" class="de-cta-btn">🚀 Start Selling Today</a>
-  </div>
+<div class="hdr">
+  <span style="color:#8b949e;font-size:14px;cursor:pointer" onclick="history.back()">← Back</span>
+  <div class="logo">💾 eSoko Seller</div>
+  <div style="margin-left:auto"><a href="/digital" style="color:#8b949e;font-size:13px">Marketplace →</a></div>
+</div>
+<div class="tabs">
+  <div class="tab active" onclick="setTab('dash',this)">Dashboard</div>
+  <div class="tab" onclick="setTab('create',this)">+ New Product</div>
+  <div class="tab" onclick="setTab('sales',this)">Sales</div>
+</div>
+<div class="container" id="mainContent">
+  <div class="empty"><div class="spinner"></div></div>
 </div>
 
-<!-- PRODUCT DETAIL MODAL -->
-<div class="de-modal" id="deProductModal">
-  <div class="de-modal-box">
-    <div class="de-modal-close-row">
-      <button type="button" class="de-close-btn" onclick="closeProductModal()">✕</button>
-    </div>
-    <div class="de-modal-inner" id="deProductBody"></div>
-  </div>
-</div>
-
-<!-- BOTTOM NAV -->
-<nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
-  <a href="digital-esoko.html" class="bnav-item active-bnav"><span class="bnav-emoji">📦</span><span>Digital</span></a>
-  <a href="digital-esoko-seller.html" class="bnav-item"><span class="bnav-emoji">🚀</span><span>Sell</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
-</nav>
-
-<div id="deNotifContainer"></div>
-
-<script src="scroll-top.js" defer></script>
-<script src="seo.js" defer></script>
-<script src="nav-active.js" defer></script>
-<script src="analytics.js" defer></script>
-<script src="sokoni-config.js" defer></script>
-<script src="sokoni-invoice.js"></script>
-<script src="sokoni-pay.js"></script>
-<script src="sokoni-ui-extras.js" defer></script>
-<script src="sw-register.js" defer></script>
-<script type="module" src="sokoni-init.js"></script>
-<script src="sokoni-audit.js" defer></script>
-<script src="sokoni-social.js" defer></script>
-<script src="sokoni-referral.js" defer></script>
-<script defer src="kass-widget.js"></script>
-<script defer src="sokoni-event-bus.js"></script>
-<script defer src="sokoni-observability.js"></script>
-<script defer src="sokoni-gateway.js"></script>
-
+<script src="/sokoni-config.js"></script>
 <script>
-const DE_CATS = [
-  {id:'all',       label:'All',           emoji:'🌍'},
-  {id:'ebook',     label:'eBooks',        emoji:'📚'},
-  {id:'template',  label:'Templates',     emoji:'🎨'},
-  {id:'music',     label:'Music & Audio', emoji:'🎵'},
-  {id:'photo',     label:'Photography',   emoji:'📷'},
-  {id:'course',    label:'Courses',       emoji:'🎓'},
-  {id:'software',  label:'Software',      emoji:'💻'},
-  {id:'tool',      label:'Business Tools',emoji:'🔧'},
-  {id:'marketing', label:'Marketing Kits',emoji:'📣'},
-  {id:'design',    label:'Design Assets', emoji:'✏️'},
-  {id:'data',      label:'Spreadsheets',  emoji:'📊'},
-];
+let app,fns,auth,cu=null,myProds=[],includes=[];
+const CATS=['ebook','software','course','template','music','video','photo','font','plugin','game','other'];
+const CEMO={ebook:'📚',software:'💿',course:'🎓',template:'📋',music:'🎵',video:'🎬',photo:'📷',font:'🔤',plugin:'🔌',game:'🎮',other:'💾'};
+function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML}
+function toast(m,ok=true){const t=document.createElement('div');t.className='toast '+(ok?'tok':'terr');t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3500);}
+try{app=firebase.initializeApp(firebaseConfig,'desoko');fns=app.functions('us-central1');auth=app.auth();auth.onAuthStateChanged(u=>{cu=u;if(u)loadDash();else showSignIn();});}catch(e){}
+async function call(n,d){try{const r=await fns.httpsCallable(n)(d);return{ok:true,data:r.data};}catch(e){return{ok:false,err:e.message};}}
 
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function showSignIn(){document.getElementById('mainContent').innerHTML='<div class="empty">Sign in to access the seller dashboard.</div>';}
 
-let allProducts = [];
-let activeCat = 'all';
-
-function _catInfo(id){ return DE_CATS.find(c=>c.id===id) || {emoji:'📦',label:id||'Digital'}; }
-
-function _lsGet(k,def){ try{ return JSON.parse(localStorage.getItem(k))||def; }catch(e){ return def; } }
-function _lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
-
-function _user(){ try{ return JSON.parse(localStorage.getItem('sokoniUser')||'null'); }catch(e){ return null; } }
-
-function getMyPurchases(){ return _lsGet('dePurchases',[]); }
-function hasPurchased(id){ return getMyPurchases().some(p=>p.productId===id); }
-
-function loadProducts(){
-  allProducts = _lsGet('deProducts',[]);
-  renderProducts(filterAndSort());
-  updateStats();
-}
-
-function filterAndSort(){
-  let list = allProducts.filter(p=>p.active!==false);
-  if(activeCat!=='all') list = list.filter(p=>p.category===activeCat);
-  const q = (document.getElementById('deSearch')?.value||'').toLowerCase();
-  if(q) list = list.filter(p=>(p.title||'').toLowerCase().includes(q)||(p.description||'').toLowerCase().includes(q)||(p.tags||[]).join(' ').toLowerCase().includes(q)||(p.sellerName||'').toLowerCase().includes(q));
-  const sort = document.getElementById('deSort')?.value||'newest';
-  if(sort==='price_asc')   list.sort((a,b)=>Number(a.price)-Number(b.price));
-  else if(sort==='price_desc') list.sort((a,b)=>Number(b.price)-Number(a.price));
-  else if(sort==='downloads')  list.sort((a,b)=>(b.downloads||0)-(a.downloads||0));
-  else list.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  return list;
-}
-
-function renderProducts(list){
-  const grid  = document.getElementById('deGrid');
-  const empty = document.getElementById('deEmpty');
-  const count = document.getElementById('deCount');
-  if(count) count.textContent = list.length+' product'+(list.length!==1?'s':'');
-  if(!list.length){
-    if(grid)  grid.innerHTML = '';
-    if(empty) empty.style.display = 'block';
-    return;
-  }
-  if(empty) empty.style.display = 'none';
-  if(grid)  grid.innerHTML = list.map(p=>_productCard(p)).join('');
-}
-
-function _productCard(p){
-  const ci = _catInfo(p.category);
-  const bought = hasPurchased(p.id);
-  const free = !p.price||p.price===0;
-  return `
-    <div class="de-card" onclick="openProductModal('${esc(p.id)}')">
-      <div class="de-card-cover">
-        ${p.coverURL?`<img loading="lazy" src="${esc(p.coverURL)}" alt="${esc(p.title)}">`:`<div class="de-cover-ph">${ci.emoji}</div>`}
-        <div class="de-cat-badge">${ci.emoji} ${esc(ci.label)}</div>
-        ${p.featured?`<div class="de-feat-badge" style="background:rgba(113,255,0,.9);color:#000">⭐ Featured</div>`:''}
-        ${bought?`<div class="de-feat-badge" style="background:rgba(0,170,255,.9);color:#fff;right:8px;top:${p.featured?'32':'8'}px">✓ Owned</div>`:''}
-      </div>
-      <div class="de-card-body">
-        <h3 class="de-card-title">${esc(p.title)}</h3>
-        <p class="de-card-seller">by ${esc(p.sellerName||'Creator')}</p>
-        <div class="de-card-meta">
-          <span>📥 ${Number(p.downloads||0).toLocaleString()}</span>
-          <span>${p.rating?'⭐ '+p.rating:'New'}</span>
-        </div>
-        <div class="de-card-price${free?' free':''}">${free?'FREE':'KES '+Number(p.price||0).toLocaleString()}</div>
-      </div>
-    </div>`;
-}
-
-function filterProducts(cat, btn){
-  activeCat = cat;
-  document.querySelectorAll('.de-pill').forEach(b=>b.classList.remove('active-pill'));
-  if(btn) btn.classList.add('active-pill');
-  renderProducts(filterAndSort());
-}
-
-function searchProducts(){ renderProducts(filterAndSort()); }
-
-function openProductModal(id){
-  const p = allProducts.find(x=>x.id===id);
-  if(!p) return;
-  const ci = _catInfo(p.category);
-  const bought = hasPurchased(p.id);
-  const free = !p.price||p.price===0;
-  const canAccess = bought||free;
-  const body = document.getElementById('deProductBody');
-  body.innerHTML = `
-    <div style="width:100%;padding-top:58%;position:relative;background:linear-gradient(135deg,rgba(113,255,0,.05),rgba(0,170,255,.04));overflow:hidden;border-radius:14px;margin-bottom:16px;">
-      ${p.coverURL?`<img loading="lazy" src="${esc(p.coverURL)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:14px;">`:`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:60px">${ci.emoji}</div>`}
+async function loadDash(){
+  document.getElementById('mainContent').innerHTML='<div class="empty"><div class="spinner"></div></div>';
+  const r=await call('getMyDigitalProducts',{limit:100});
+  if(!r.ok){document.getElementById('mainContent').innerHTML=`<div class="empty">Could not load dashboard.<br><small>${esc(r.err)}</small><br><button class="btn btn-p" style="margin-top:16px" onclick="setTab('create',document.querySelectorAll('.tab')[1])">Create Your First Product</button></div>`;return;}
+  myProds=r.data.products||[];
+  const totalRev=myProds.reduce((s,p)=>s+(p.price||0)*(p.downloadCount||0),0);
+  const totalDl=myProds.reduce((s,p)=>s+(p.downloadCount||0),0);
+  const active=myProds.filter(p=>p.status==='active').length;
+  document.getElementById('mainContent').innerHTML=`
+    <div class="stats-grid">
+      <div class="stat"><label>Products</label><div class="val">${myProds.length}</div></div>
+      <div class="stat"><label>Active</label><div class="val">${active}</div></div>
+      <div class="stat"><label>Downloads</label><div class="val">${totalDl}</div></div>
+      <div class="stat"><label>Est. Revenue</label><div class="val" style="font-size:16px">KES ${totalRev.toLocaleString()}</div></div>
     </div>
-    <div style="margin-bottom:10px"><span style="font-size:11px;font-weight:800;padding:3px 10px;border-radius:6px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.2);color:#71ff00">${ci.emoji} ${esc(ci.label)}</span></div>
-    <h2 style="font-size:19px;font-weight:900;margin-bottom:8px;line-height:1.3">${esc(p.title)}</h2>
-    <p style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:12px">by ${esc(p.sellerName||'Creator')} · 📥 ${Number(p.downloads||0).toLocaleString()} downloads${p.rating?' · ⭐ '+p.rating:''}</p>
-    <p style="font-size:13px;color:rgba(255,255,255,.65);line-height:1.65;margin-bottom:14px">${esc(p.description||'')}</p>
-    ${p.tags&&p.tags.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${p.tags.map(t=>`<span style="font-size:11px;padding:3px 9px;border-radius:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.45)">${esc(t)}</span>`).join('')}</div>`:''}
-    ${p.fileName||p.fileSize?`<div style="font-size:12px;color:rgba(255,255,255,.35);margin-bottom:12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">${p.fileName?`<span>📁 ${esc(p.fileName)}</span>`:''}${p.fileSize?`<span>💾 ${esc(p.fileSize)}</span>`:''}</div>`:''}
-    <div style="font-size:26px;font-weight:900;color:${free?'#00aaff':'#71ff00'};margin-bottom:4px">${free?'FREE':'KES '+Number(p.price||0).toLocaleString()}</div>
-    ${!free?`<p style="font-size:11px;color:rgba(255,255,255,.3);margin-bottom:12px">One-time payment · Unlimited downloads</p>`:''}
-    ${canAccess
-      ? `<a href="${esc(p.fileURL||'#')}" download="${esc(p.fileName||'download')}" target="_blank" class="de-btn-download" onclick="trackDownload('${esc(p.id)}')">📥 Download Now</a>
-         <p style="font-size:11px;color:rgba(255,255,255,.3);text-align:center;margin-top:8px">Your file will download automatically</p>`
-      : `<button type="button" class="de-btn-buy" onclick="purchaseProduct('${esc(p.id)}')">💳 Buy Now — KES ${Number(p.price||0).toLocaleString()}</button>
-         <p style="font-size:11px;color:rgba(255,255,255,.3);text-align:center;margin-top:8px">📱 M-Pesa · Instant download after payment</p>`
-    }`;
-  document.getElementById('deProductModal').classList.add('open');
+    <div class="section-hdr">
+      <h2>Your Products</h2>
+      <button class="btn btn-p" onclick="setTab('create',document.querySelectorAll('.tab')[1])">+ New Product</button>
+    </div>
+    ${myProds.length?'<div class="prod-list">'+myProds.map(p=>`
+      <div class="pitem">
+        <div class="pthumb">${p.thumbnailUrl?`<img src="${esc(p.thumbnailUrl)}">`:CEMO[p.category]||'💾'}</div>
+        <div class="pbody">
+          <div class="ptitle">${esc(p.title)}</div>
+          <div class="pmeta">${p.category||''} · ${p.price===0?'Free':`KES ${(p.price||0).toLocaleString()}`} · ⬇ ${p.downloadCount||0}</div>
+          <span class="status ${p.status==='active'?'sa':p.status==='draft'?'sd':'si'}">${p.status}</span>
+        </div>
+        <div class="pactions">
+          ${p.status==='draft'?`<button class="btn btn-g" onclick="publish('${esc(p.productId)}')">Publish</button>`:''}
+          ${p.status==='active'?`<button class="btn btn-out" onclick="unpublish('${esc(p.productId)}')">Unpublish</button>`:''}
+        </div>
+      </div>`).join('')+'</div>':'<div class="empty">No products yet. Create your first one!</div>'}`;
 }
 
-function closeProductModal(){
-  document.getElementById('deProductModal').classList.remove('open');
+async function publish(id){
+  const r=await call('publishDigitalProduct',{productId:id});
+  if(r.ok){toast('Product published!');loadDash();}else toast(r.err||'Failed',false);
+}
+async function unpublish(id){
+  const r=await call('unpublishDigitalProduct',{productId:id});
+  if(r.ok){toast('Product unpublished.');loadDash();}else toast(r.err||'Failed',false);
 }
 
-function purchaseProduct(id){
-  const p = allProducts.find(x=>x.id===id);
-  if(!p||hasPurchased(id)) return;
-  if(!window.SokoniPay?.platformBook){ deNotif('Payment module loading…','info'); return; }
-  const user = _user();
-  if(!user){ deNotif('Sign in to purchase','error'); window.location.href='auth.html'; return; }
-  closeProductModal();
-  SokoniPay.platformBook({
-    providerName: p.sellerName||'Digital Seller',
-    category: 'digital',
-    serviceDesc: p.title,
-    totalAmount: p.price,
-    providerPhone: p.sellerPhone||'',
-    onSuccess: function(ref){
-      const purchase = {
-        id: 'pur_'+Date.now(),
-        productId: p.id,
-        productTitle: p.title,
-        sellerUid: p.sellerUid||'',
-        sellerName: p.sellerName||'',
-        buyerUid: user.uid||'',
-        buyerName: user.name||user.displayName||'Buyer',
-        buyerPhone: user.phone||'',
-        amount: p.price,
-        ref,
-        fileURL: p.fileURL||'',
-        fileName: p.fileName||'download',
-        status: 'completed',
-        downloadCount: 0,
-        createdAt: Date.now()
-      };
-      /* Save locally */
-      const purchases = getMyPurchases();
-      purchases.unshift(purchase);
-      _lsSet('dePurchases', purchases.slice(0,500));
-      /* Firestore */
-      if(window._saveDEPurchaseFS) window._saveDEPurchaseFS(purchase);
-      if(window._incrementDEDownloadFS) window._incrementDEDownloadFS(p.id);
-      /* Commission */
-      if(window.SokoniPay?.saveCommission && p.price>0){
-        const cPct = (window.SokoniPay.COMMISSION_RATES?.completion?.['digital'])||5;
-        window.SokoniPay.saveCommission({ref,providerName:p.sellerName||'Digital Seller',category:'digital',commissionPct:cPct,sokoniCut:Math.round(p.price*cPct/100),providerNet:p.price-Math.round(p.price*cPct/100),serviceTotal:p.price,status:'auto_collected',note:'Digital product: '+p.title,createdAt:Date.now()});
-      }
-      /* Invoice */
-      if(window.SokoniInvoice){
-        SokoniInvoice.generate({type:'digital',buyerName:user.name||'Buyer',buyerPhone:user.phone||'',items:[{name:p.title,category:_catInfo(p.category).label,qty:1,price:p.price}],subtotal:p.price,total:p.price,paymentMethod:'M-Pesa · '+ref,paymentRef:ref,sellerName:p.sellerName||'Creator'});
-      }
-      deNotif('✅ Payment confirmed! Downloading…','success');
-      /* Trigger download */
-      if(p.fileURL){
-        const a = document.createElement('a');
-        a.href = p.fileURL;
-        a.download = p.fileName||'download';
-        a.target = '_blank';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      }
-      renderProducts(filterAndSort());
-    }
+function createForm(){
+  includes=[];
+  return`<div class="form-card">
+    <h2 style="margin-bottom:20px">Create Digital Product</h2>
+    <div class="fg"><label>Title *</label><input id="ptitle" placeholder="e.g. Complete Kenya Business Templates Pack"></div>
+    <div class="row2">
+      <div class="fg"><label>Category *</label><select id="pcat">${CATS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
+      <div class="fg"><label>License Type</label><select id="plicense"><option value="personal">Personal</option><option value="commercial">Commercial</option><option value="extended">Extended</option></select></div>
+    </div>
+    <div class="row2">
+      <div class="fg"><label>Price (KES) — 0 for free</label><input type="number" id="pprice" value="0" min="0"></div>
+      <div class="fg"><label>Max Downloads per buyer</label><input type="number" id="pdl" value="5" min="1" max="100"></div>
+    </div>
+    <div class="fg"><label>Description *</label><textarea id="pdesc" placeholder="What does this product include? Who is it for?"></textarea></div>
+    <div class="fg">
+      <label>What's Included (press Enter to add)</label>
+      <input id="pincInput" placeholder="e.g. 50+ Excel templates" onkeydown="if(event.key==='Enter'){event.preventDefault();addInc()}">
+      <div class="inc-tags" id="incTags"></div>
+    </div>
+    <div class="fg"><label>File Type</label><input id="pfileType" placeholder="e.g. PDF, ZIP, MP3, PNG"></div>
+    <div class="fg"><label>File Size (MB)</label><input type="number" id="psize" min="0" step="0.1"></div>
+    <div class="fg"><label>Version</label><input id="pver" placeholder="1.0"></div>
+    <div class="fg"><label>Thumbnail URL (optional)</label><input id="pthumb" placeholder="https://…"></div>
+    <div class="fg" style="background:#21262d;border:1px dashed #30363d;border-radius:8px;padding:16px;text-align:center">
+      <label style="color:#8b949e;font-size:14px">File Storage Path (GCS path where your file is uploaded)</label>
+      <input id="pfile" placeholder="products/uid/filename.zip" style="margin-top:8px">
+      <p style="font-size:12px;color:#8b949e;margin-top:6px">Upload your file to Firebase Storage and paste the path here. Files are never exposed publicly.</p>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:4px">
+      <button class="btn btn-p" style="flex:1" onclick="submitProduct(false)">Save as Draft</button>
+      <button class="btn btn-g" style="flex:1" onclick="submitProduct(true)">Publish Now</button>
+    </div>
+  </div>`;
+}
+
+function addInc(){
+  const inp=document.getElementById('pincInput');
+  const val=inp.value.trim();if(!val)return;
+  includes.push(val);inp.value='';
+  document.getElementById('incTags').innerHTML=includes.map((i,idx)=>`<div class="inc-tag">${esc(i)}<span onclick="rmInc(${idx})">×</span></div>`).join('');
+}
+function rmInc(idx){includes.splice(idx,1);document.getElementById('incTags').innerHTML=includes.map((i,id)=>`<div class="inc-tag">${esc(i)}<span onclick="rmInc(${id})">×</span></div>`).join('');}
+
+async function submitProduct(publish){
+  if(!cu){toast('Sign in to create products',false);return;}
+  const title=document.getElementById('ptitle').value.trim();
+  const desc=document.getElementById('pdesc').value.trim();
+  const filePath=document.getElementById('pfile').value.trim();
+  if(!title||!desc){toast('Title and description are required',false);return;}
+  const r=await call('createDigitalProduct',{
+    title,description:desc,
+    category:document.getElementById('pcat').value,
+    licenseType:document.getElementById('plicense').value,
+    price:parseFloat(document.getElementById('pprice').value)||0,
+    allowedDownloads:parseInt(document.getElementById('pdl').value)||5,
+    includes,fileType:document.getElementById('pfileType').value.trim(),
+    fileSizeMb:parseFloat(document.getElementById('psize').value)||undefined,
+    version:document.getElementById('pver').value.trim(),
+    thumbnailUrl:document.getElementById('pthumb').value.trim(),
+    fileStoragePath:filePath,
   });
-}
-
-function trackDownload(productId){
-  const purchases = getMyPurchases();
-  const pur = purchases.find(x=>x.productId===productId);
-  if(pur){ pur.downloadCount=(pur.downloadCount||0)+1; _lsSet('dePurchases',purchases); }
-  if(window._incrementDEDownloadFS) window._incrementDEDownloadFS(productId);
-}
-
-function showMyPurchases(){
-  activeCat='all';
-  document.querySelectorAll('.de-pill').forEach(b=>b.classList.remove('active-pill'));
-  const purchases = getMyPurchases();
-  if(!purchases.length){ deNotif('No purchases yet — buy a product first!','info'); return; }
-  const productIds = new Set(purchases.map(p=>p.productId));
-  const list = allProducts.filter(p=>productIds.has(p.id));
-  /* Include purchases whose product wasn't loaded yet */
-  purchases.forEach(pur=>{
-    if(!list.some(p=>p.id===pur.productId)){
-      list.push({id:pur.productId,title:pur.productTitle,price:pur.amount,sellerName:pur.sellerName,fileURL:pur.fileURL,fileName:pur.fileName,active:true,downloads:0,category:'',createdAt:pur.createdAt});
-    }
-  });
-  renderProducts(list);
-  const cnt = document.getElementById('deCount');
-  if(cnt) cnt.textContent = list.length+' download'+(list.length!==1?'s':'');
-}
-
-function updateStats(){
-  const el1 = document.getElementById('deStatProducts'); if(el1) el1.textContent = allProducts.length;
-  const sellers = new Set(allProducts.map(p=>p.sellerUid).filter(Boolean));
-  const el2 = document.getElementById('deStatSellers'); if(el2) el2.textContent = sellers.size;
-  const total = allProducts.reduce((s,p)=>s+(p.downloads||0),0);
-  const el3 = document.getElementById('deStatDownloads'); if(el3) el3.textContent = total.toLocaleString();
-}
-
-function deNotif(msg, type){
-  const c = document.getElementById('deNotifContainer'); if(!c) return;
-  const n = document.createElement('div');
-  n.className='de-notif '+(type||'info');
-  n.textContent=msg;
-  c.appendChild(n);
-  setTimeout(()=>n.remove(),4200);
-}
-
-/* ── Build filter bar ── */
-(function buildFilterBar(){
-  const bar = document.getElementById('deFilterBar'); if(!bar) return;
-  bar.innerHTML = DE_CATS.map((c,i)=>
-    `<button type="button" class="de-pill${i===0?' active-pill':''}" onclick="filterProducts('${c.id}',this)">${c.emoji} ${c.label}</button>`
-  ).join('');
-})();
-
-/* ── Merge Firestore live data ── */
-window._mergeDEProducts = function(live){
-  const existing = new Map(allProducts.map(p=>[p.id,p]));
-  live.forEach(p=>existing.set(p.id,p));
-  allProducts = [...existing.values()];
-  _lsSet('deProducts', allProducts.slice(0,1000));
-  renderProducts(filterAndSort());
-  updateStats();
-};
-
-loadProducts();
-</script>
-
-<script type="module">
-import { db, auth } from './firebase.js';
-import {
-  collection, doc, addDoc, updateDoc, onSnapshot,
-  query, where, orderBy, limit, increment, serverTimestamp, getDocs
-} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-
-let _uid = null;
-
-onAuthStateChanged(auth, async u => {
-  _uid = u ? u.uid : null;
-  if(_uid){
-    try {
-      const snap = await getDocs(query(collection(db,'digitalPurchases'), where('buyerUid','==',_uid), orderBy('createdAt','desc'), limit(200)));
-      if(!snap.empty){
-        const live = snap.docs.map(d=>({...d.data(),id:d.id}));
-        const existing = new Map((JSON.parse(localStorage.getItem('dePurchases')||'[]')).map(p=>[p.id,p]));
-        live.forEach(p=>existing.set(p.id,p));
-        localStorage.setItem('dePurchases', JSON.stringify([...existing.values()].slice(0,500)));
-        if(typeof renderProducts==='function') renderProducts(filterAndSort());
-      }
-    } catch(e) {}
+  if(!r.ok){toast(r.err||'Failed to create product',false);return;}
+  if(publish&&r.data.productId){
+    const pr=await call('publishDigitalProduct',{productId:r.data.productId});
+    if(pr.ok){toast('Product published!');setTab('dash',document.querySelectorAll('.tab')[0]);}
+    else toast('Created as draft. Publish from the dashboard.',false);
+  } else {
+    toast('Product saved as draft!');setTab('dash',document.querySelectorAll('.tab')[0]);
   }
-});
+}
 
-/* ── Real-time product feed ── */
-try {
-  onSnapshot(
-    query(collection(db,'digitalProducts'), orderBy('createdAt','desc'), limit(200)),
-    snap => {
-      const live = snap.docs.map(d=>({...d.data(),id:d.id}));
-      if(live.length && typeof window._mergeDEProducts==='function') window._mergeDEProducts(live);
-    }
-  );
-} catch(e) {}
+async function loadSales(){
+  document.getElementById('mainContent').innerHTML='<div class="empty"><div class="spinner"></div></div>';
+  const r=await call('getDigitalProductSales',{limit:50});
+  if(!r.ok){document.getElementById('mainContent').innerHTML='<div class="empty">No sales yet.</div>';return;}
+  const list=r.data.sales||[];
+  if(!list.length){document.getElementById('mainContent').innerHTML='<div class="empty">No sales yet.</div>';return;}
+  document.getElementById('mainContent').innerHTML=`<div class="section-hdr"><h2>Sales (${list.length})</h2></div>`+
+  list.map(s=>`<div class="sales-row">
+    <div style="font-size:18px">${CEMO[s.category]||'💾'}</div>
+    <div style="flex:1">
+      <div style="font-weight:600;font-size:14px">${esc(s.productTitle||s.productId)}</div>
+      <div style="font-size:12px;color:#8b949e">${new Date(s.createdAt?.seconds?s.createdAt.seconds*1000:s.createdAt).toLocaleDateString()} · ${s.status}</div>
+    </div>
+    <div style="font-weight:700;color:#bc8cff">KES ${(s.sellerAmount||s.purchasePrice||0).toLocaleString()}</div>
+  </div>`).join('');
+}
 
-/* ── Save purchase after payment ── */
-window._saveDEPurchaseFS = async function(purchase){
-  try { await addDoc(collection(db,'digitalPurchases'), {...purchase, createdAt:serverTimestamp()}); } catch(e){}
-};
-
-/* ── Increment download counter ── */
-window._incrementDEDownloadFS = async function(productId){
-  try { await updateDoc(doc(db,'digitalProducts',productId), {downloads:increment(1)}); } catch(e){}
-};
+function setTab(t,el){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));el?.classList.add('active');
+  if(t==='dash'){if(cu)loadDash();else showSignIn();}
+  else if(t==='create'){document.getElementById('mainContent').innerHTML=cu?createForm():'<div class="empty">Sign in to create products.</div>';}
+  else if(t==='sales'){if(cu)loadSales();else showSignIn();}
+}
 </script>
 </body>
 </html>
