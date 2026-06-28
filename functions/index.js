@@ -8047,3 +8047,28 @@ exports.getMyApplications       = jobs.getMyApplications;
 exports.saveJobSeekerProfile    = jobs.saveJobSeekerProfile;
 exports.getJobSeekerProfile     = jobs.getJobSeekerProfile;
 exports.getFeaturedJobs         = jobs.getFeaturedJobs;
+
+/* ── Education Hub ─────────────────────────────────────────────── */
+const education = require('./education');
+exports.listCourses           = education.listCourses;
+exports.getCourse             = education.getCourse;
+exports.enrollCourse          = education.enrollCourse;
+exports.getCourseProgress     = education.getCourseProgress;
+exports.updateCourseProgress  = education.updateCourseProgress;
+exports.reviewCourse          = education.reviewCourse;
+exports.createCourse          = education.createCourse;
+exports.getMyEnrollments      = education.getMyEnrollments;
+exports.publishCourse         = education.publishCourse;
+
+/* ── QR Code System v1.0 ───────────────────────────────────────── */
+const qr = require('./qr');
+exports.generateSecureQR  = qr.generateSecureQR;
+exports.verifyQRCode      = qr.verifyQRCode;
+exports.getMyQRAssets     = qr.getMyQRAssets;
+
+
+/* ── Super Admin CFs v1.0 ──────────────────────────────────────── */
+const superAdmin = require('./super-admin');
+exports.setUserRole            = superAdmin.setUserRole;
+exports.suspendUser            = superAdmin.suspendUser;
+exports.sendPlatformBroadcast  = superAdmin.sendPlatformBroadcast;

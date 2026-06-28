@@ -1,184 +1,265 @@
-/* ============================================================
-   SOKONI QR  —  QR code generation, download, and modal
-   Covers: product, order, pickup, seller, table, venue, profile
-   Lazy-loads qrcode library on first use (no initial cost).
-============================================================ */
-(function (global) {
+/**
+ * sokoni-qr.js — SOKONI Unified QR Code Engine v1.0
+ * Client-side QR generation, rendering, download, print, and scan.
+ * Uses Google Charts API for QR image generation (no external library needed).
+ */
+window.SokoniQR = (() => {
   'use strict';
 
-  const BASE      = 'https://mysokoni.co.ke/scan';
-  const QR_CDN    = 'https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js';
-  const DARK      = '#0a0a12';
-
-  let _ready      = false;
-  let _readyP     = null;
-
-  function _load() {
-    if (_ready)  return Promise.resolve();
-    if (_readyP) return _readyP;
-    _readyP = new Promise((res, rej) => {
-      const s    = document.createElement('script');
-      s.src      = QR_CDN;
-      s.onload   = () => { _ready = true; res(); };
-      s.onerror  = () => rej(new Error('[SokoniQR] failed to load qrcode library'));
-      document.head.appendChild(s);
-    });
-    return _readyP;
-  }
-
-  function _url(type, id, extra) {
-    const p = new URLSearchParams({ t: type, id: String(id) });
-    if (extra) Object.entries(extra).forEach(([k, v]) => p.set(k, String(v)));
-    return `${BASE}?${p}`;
-  }
-
-  function _esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  function _toast(msg) {
-    const t = document.createElement('div');
-    t.textContent = msg;
-    Object.assign(t.style, {
-      position:'fixed', bottom:'80px', left:'50%', transform:'translateX(-50%)',
-      background:'#1a1a2e', border:'1px solid rgba(124,58,237,.35)',
-      borderRadius:'12px', padding:'11px 20px', fontSize:'13px',
-      fontWeight:'700', color:'white', zIndex:'99999', whiteSpace:'nowrap',
-      fontFamily:'inherit', pointerEvents:'none',
-    });
-    document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2600);
-  }
-
-  const SokoniQR = {
-
-    /* ─── URL builders ─── */
-    url: {
-      product  : (id)               => _url('product',  id),
-      order    : (id)               => _url('order',    id),
-      seller   : (id)               => _url('seller',   id),
-      venue    : (id)               => _url('venue',    id),
-      profile  : (id)               => _url('profile',  id),
-      table    : (restaurantId, n)  => _url('table',    restaurantId, { n }),
-      pickup   : (orderId, token)   => _url('pickup',   orderId, { v: token }),
-    },
-
-    /* ─── Core: render into an existing <canvas> ─── */
-    async renderCanvas(canvas, text, opts = {}) {
-      await _load();
-      await window.QRCode.toCanvas(canvas, text, {
-        width: opts.size || 240,
-        margin: opts.margin ?? 2,
-        color: { dark: opts.dark || DARK, light: opts.light || '#ffffff' },
-        errorCorrectionLevel: opts.ec || 'M',
-      });
-    },
-
-    /* ─── Core: return data URL ─── */
-    async toDataURL(text, opts = {}) {
-      await _load();
-      return window.QRCode.toDataURL(text, {
-        width: opts.size || 400,
-        margin: opts.margin ?? 2,
-        color: { dark: opts.dark || '#000000', light: opts.light || '#ffffff' },
-        errorCorrectionLevel: opts.ec || 'M',
-      });
-    },
-
-    /* ─── Show full-screen modal with QR ─── */
-    async showModal(type, id, label, extra) {
-      await _load();
-      const qrUrl = extra ? _url(type, id, extra) : _url(type, id);
-
-      document.getElementById('_sqr_modal')?.remove();
-
-      const overlay = document.createElement('div');
-      overlay.id    = '_sqr_modal';
-      overlay.setAttribute('role', 'dialog');
-      overlay.setAttribute('aria-label', 'QR Code');
-      overlay.style.cssText = [
-        'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999',
-        'display:flex;align-items:center;justify-content:center;padding:16px',
-      ].join(';');
-
-      overlay.innerHTML = `
-        <div style="background:#13131f;border:1px solid rgba(255,255,255,.1);border-radius:24px;
-                    padding:28px 24px 24px;text-align:center;max-width:320px;width:100%;position:relative;">
-          <button id="_sqr_close"
-            style="position:absolute;top:14px;right:14px;background:rgba(255,255,255,.07);
-                   border:none;color:rgba(255,255,255,.55);width:32px;height:32px;
-                   border-radius:50%;font-size:18px;cursor:pointer;display:flex;
-                   align-items:center;justify-content:center;">×</button>
-          <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,.4);
-                      text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;">
-            Scan with any camera
-          </div>
-          <div style="background:#fff;border-radius:14px;padding:10px;display:inline-block;margin-bottom:14px;">
-            <canvas id="_sqr_canvas"></canvas>
-          </div>
-          <div style="font-size:15px;font-weight:900;color:white;margin-bottom:4px;">${_esc(label || '')}</div>
-          <div style="font-size:10px;color:rgba(255,255,255,.3);word-break:break-all;margin-bottom:18px;
-                      max-height:36px;overflow:hidden;">${_esc(qrUrl)}</div>
-          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-            <button id="_sqr_dl"
-              style="padding:10px 18px;background:rgba(124,58,237,.18);border:1px solid rgba(124,58,237,.4);
-                     border-radius:10px;color:#a78bfa;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
-              Download PNG
-            </button>
-            <button id="_sqr_copy"
-              style="padding:10px 18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);
-                     border-radius:10px;color:rgba(255,255,255,.55);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
-              Copy Link
-            </button>
-          </div>
-        </div>`;
-
-      document.body.appendChild(overlay);
-
-      // Events
-      document.getElementById('_sqr_close').onclick = () => overlay.remove();
-      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-
-      document.getElementById('_sqr_dl').onclick = async () => {
-        const url = await this.toDataURL(qrUrl, { size: 600 });
-        const a   = document.createElement('a');
-        a.href     = url;
-        a.download = `sokoni-qr-${type}-${id}.png`;
-        a.click();
-      };
-
-      document.getElementById('_sqr_copy').onclick = () => {
-        navigator.clipboard.writeText(qrUrl).then(() => _toast('Link copied!')).catch(() => {
-          prompt('Copy this link:', qrUrl);
-        });
-      };
-
-      // Render QR
-      const canvas = document.getElementById('_sqr_canvas');
-      await this.renderCanvas(canvas, qrUrl, { size: 200, dark: '#000000', light: '#ffffff' });
-    },
-
-    /* ─── Inline: render QR into any element by id ─── */
-    async renderInto(elementId, type, id, extra, opts = {}) {
-      const el = document.getElementById(elementId);
-      if (!el) return;
-      const qrUrl = extra ? _url(type, id, extra) : _url(type, id);
-      await _load();
-      el.innerHTML = '';
-      const canvas = document.createElement('canvas');
-      el.appendChild(canvas);
-      await this.renderCanvas(canvas, qrUrl, opts);
-    },
-
-    /* ─── Batch: render array of {elementId, type, id, extra?, opts?} ─── */
-    async renderBatch(items) {
-      await _load();
-      await Promise.all(items.map(it => this.renderInto(it.elementId, it.type, it.id, it.extra, it.opts)));
-    },
-
-    /* ─── Expose _toast for use by other modules ─── */
-    toast: _toast,
+  // ─── QR Type Registry ────────────────────────────────────────────────────
+  const QR_TYPES = {
+    SHOP:          'shop',
+    PRODUCT:       'product',
+    ORDER:         'order',
+    EVENT:         'event',
+    VENUE:         'venue',
+    JOB:           'job',
+    LOYALTY:       'loyalty',
+    PAYMENT:       'payment',
+    BUSINESS_CARD: 'card',
+    CUSTOM:        'custom',
   };
 
-  global.SokoniQR = SokoniQR;
-})(window);
+  const BASE_URL = 'https://mysokoni.co.ke';
+
+  // ─── URL Builder ─────────────────────────────────────────────────────────
+  function _buildUrl(type, id, base) {
+    base = base || BASE_URL;
+    const routes = {
+      shop:    `/shop/${id}`,
+      product: `/product?id=${id}`,
+      order:   `/track/${id}`,
+      event:   `/event?id=${id}`,
+      venue:   `/venue-booking?id=${id}`,
+      job:     `/jobs?job=${id}`,
+      loyalty: `/loyalty?ref=${id}`,
+      payment: `/checkout?ref=${id}`,
+      card:    `/card/${id}`,
+      custom:  id, // id IS the full URL for custom type
+    };
+    const path = routes[type];
+    if (path === undefined) return `${base}/${id}`;
+    // For custom type, id is already the full URL
+    if (type === 'custom') return id;
+    return `${base}${path}`;
+  }
+
+  // ─── Generate QR Image URL (Google Charts) ───────────────────────────────
+  /**
+   * Returns a Google Charts QR code image URL.
+   * @param {string} type - QR_TYPES value
+   * @param {string} id   - Entity ID or URL (for custom)
+   * @param {object} options - { size, color, bg, ecl, baseUrl, label }
+   * @returns {string} Image URL
+   */
+  function generate(type, id, options) {
+    options = options || {};
+    const size  = options.size  || 300;
+    const color = options.color || '000000';
+    const bg    = options.bg    || 'FFFFFF';
+    const ecl   = options.ecl   || 'M';
+    const base  = options.baseUrl || BASE_URL;
+    const url   = _buildUrl(type, id, base);
+    return `https://chart.googleapis.com/chart?chs=${size}x${size}&cht=qr&chl=${encodeURIComponent(url)}&choe=UTF-8&chld=${ecl}|0&chco=${color}|${bg}`;
+  }
+
+  // ─── Render QR into DOM Element ──────────────────────────────────────────
+  /**
+   * Renders a QR code image into the provided DOM element.
+   * @param {HTMLElement} el
+   * @param {string} type
+   * @param {string} id
+   * @param {object} options
+   * @returns {string} The generated image src URL
+   */
+  function renderTo(el, type, id, options) {
+    options = options || {};
+    const src   = generate(type, id, options);
+    const label = options.label || type;
+    const size  = options.size  || 300;
+    el.innerHTML = `<img src="${src}" alt="QR Code for ${label}" width="${size}" height="${size}" style="border-radius:8px;display:block;max-width:100%">`;
+    return src;
+  }
+
+  // ─── Download QR as PNG ──────────────────────────────────────────────────
+  /**
+   * Downloads the QR image as a PNG file.
+   * @param {string} imgSrc - The Google Charts image URL
+   * @param {string} filename - Download filename
+   */
+  function download(imgSrc, filename) {
+    filename = filename || 'sokoni-qr.png';
+    fetch(imgSrc)
+      .then(function(r) { return r.blob(); })
+      .then(function(blob) {
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+      })
+      .catch(function(err) {
+        console.error('[SokoniQR] Download failed:', err);
+        // Fallback: open image in new tab
+        window.open(imgSrc, '_blank');
+      });
+  }
+
+  // ─── Print QR Sheet ──────────────────────────────────────────────────────
+  /**
+   * Opens a print-ready window with a grid of QR codes on an A4 sheet.
+   * @param {Array<{type, id, label, size}>} codes
+   */
+  function printSheet(codes) {
+    if (!codes || codes.length === 0) {
+      alert('No QR codes to print.');
+      return;
+    }
+    const items = codes.map(function(c) {
+      const src  = generate(c.type, c.id, { size: c.size || 200 });
+      const lbl  = _escapeHtml(c.label || c.type);
+      return `<div class="qr-item">
+        <img src="${src}" width="200" height="200" alt="${lbl}">
+        <div class="qr-label">${lbl}</div>
+      </div>`;
+    }).join('');
+
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('Please allow popups to print QR codes.');
+      return;
+    }
+    win.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>QR Codes — SOKONI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 20px; }
+    h1 { font-size: 18px; margin-bottom: 16px; color: #00bcd4; }
+    .no-print { margin-bottom: 20px; display: flex; gap: 12px; }
+    .no-print button {
+      padding: 8px 20px; border: none; border-radius: 6px;
+      cursor: pointer; font-size: 14px; font-weight: 600;
+    }
+    .btn-print { background: #00bcd4; color: #fff; }
+    .btn-close { background: #eee; color: #333; }
+    .qr-grid {
+      display: flex; flex-wrap: wrap; gap: 24px;
+      justify-content: flex-start;
+    }
+    .qr-item {
+      text-align: center; border: 1px solid #ddd;
+      padding: 16px; border-radius: 8px; background: #fff;
+      break-inside: avoid; page-break-inside: avoid;
+    }
+    .qr-item img { display: block; }
+    .qr-label { font-size: 12px; margin-top: 8px; font-weight: 600; color: #333; }
+    @media print {
+      .no-print { display: none !important; }
+      body { padding: 10px; }
+      .qr-grid { gap: 16px; }
+    }
+    @page { size: A4; margin: 15mm; }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <button class="btn-print" onclick="window.print()">Print</button>
+    <button class="btn-close" onclick="window.close()">Close</button>
+  </div>
+  <div class="qr-grid">${items}</div>
+</body>
+</html>`);
+    win.document.close();
+  }
+
+  // ─── QR Scanner (BarcodeDetector API) ───────────────────────────────────
+  /**
+   * Activates the device camera to scan QR codes.
+   * Uses BarcodeDetector API where available.
+   * @param {HTMLVideoElement} videoEl - Video element for camera feed
+   * @param {function} onDetect - Callback(rawValue: string)
+   * @returns {Promise<{supported: boolean, stop?: function, message?: string}>}
+   */
+  async function scan(videoEl, onDetect) {
+    if (!('BarcodeDetector' in window)) {
+      return {
+        supported: false,
+        message: 'QR scanning not supported in this browser. Use Chrome on Android or desktop.',
+      };
+    }
+    let intervalId = null;
+    let stream     = null;
+    try {
+      const detector = new BarcodeDetector({ formats: ['qr_code'] });
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+      });
+      videoEl.srcObject = stream;
+      await videoEl.play();
+
+      intervalId = setInterval(async () => {
+        try {
+          const codes = await detector.detect(videoEl);
+          if (codes.length > 0) {
+            _stopScan(intervalId, stream);
+            onDetect(codes[0].rawValue);
+          }
+        } catch (e) {
+          // Detection frame error — continue
+        }
+      }, 300);
+
+      return {
+        supported: true,
+        stop: function() { _stopScan(intervalId, stream); },
+      };
+    } catch (err) {
+      if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
+      throw err;
+    }
+  }
+
+  function _stopScan(intervalId, stream) {
+    if (intervalId) clearInterval(intervalId);
+    if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
+  }
+
+  // ─── Utilities ───────────────────────────────────────────────────────────
+  function _escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  /**
+   * Builds a destination URL string (without generating the QR image).
+   * Useful for display / copy-to-clipboard.
+   * @param {string} type
+   * @param {string} id
+   * @param {string} [base]
+   * @returns {string}
+   */
+  function buildUrl(type, id, base) {
+    return _buildUrl(type, id, base || BASE_URL);
+  }
+
+  // ─── Public API ──────────────────────────────────────────────────────────
+  return {
+    QR_TYPES,
+    generate,
+    renderTo,
+    download,
+    printSheet,
+    scan,
+    buildUrl,
+  };
+})();

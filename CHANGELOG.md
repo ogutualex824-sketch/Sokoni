@@ -1,4 +1,38 @@
-﻿## [2026-06-28] — Jobs Marketplace v1.0
+﻿## [v1.2.0] — 2026-06-28
+
+### v1.2 Platform Expansion Sprint
+
+#### Added
+- **Super Admin Portal** (`super-admin.html`): 8-section superAdmin-only SPA with platform health, user management, financial oversight, emergency controls, audit log, broadcast, and secrets checklist. Accent: #e040fb (purple, distinct from admin cyan).
+- **QR Code System** (`sokoni-qr.js`, `qr-center.html`, `functions/qr.js`): Unified QR engine — Google Charts generation, BarcodeDetector scanning, secure signed tokens (HMAC-SHA256), print sheets, 10 QR types. 3 new CFs: generateSecureQR, verifyQRCode, getMyQRAssets.
+- **Education Hub** (`education.html`, `sokoni-education.js`, `functions/education.js`): Full courses marketplace — catalog, enrollment, progress tracking, reviews, instructor creation. 8 new CFs. Free + paid courses (wallet-integrated). Zero new composite indexes.
+
+#### Fixed
+- **Firestore Rules File Size**: Compressed from 265KB to 122KB (was over 256KB Firebase limit). Removed block/inline comments and redundant `allow X: if false` rules. 6 empty match blocks removed.
+
+#### New Firestore Collections
+- `qrTokens/{tokenId}` — CF-only; secure QR token store
+- `courses/{courseId}` — single-field status query
+- `courseEnrollments/{uid_courseId}` — composite doc-ID
+- `courseProgress/{uid_courseId}` — composite doc-ID
+- `courseReviews/{reviewId}` — single-field courseId query
+- `platformConfig/{docId}` — admin-read, superAdmin-write
+- `platformBroadcasts/{docId}` — admin-read, CF-write
+
+#### New Cloud Functions (11)
+generateSecureQR, verifyQRCode, getMyQRAssets, listCourses, getCourse, enrollCourse, getCourseProgress, updateCourseProgress, reviewCourse, createCourse, getMyEnrollments
+
+#### Deployment
+- Hosting: ✅ deployed (1,213 files)
+- Firestore rules: ✅ deployed (373 match blocks, 122KB)
+- CFs: pending (use deploy-new-functions.ps1)
+
+#### Secrets Required
+- `QR_SIGNING_SECRET` — for generateSecureQR: `firebase functions:secrets:set QR_SIGNING_SECRET`
+
+---
+
+## [2026-06-28] — Jobs Marketplace v1.0
 
 ### Summary
 Full Jobs Marketplace for SOKONI — employer posting + seeker apply flow + profile + applications management. Two public pages (`jobs.html`, `job-post.html`) and one shared client engine (`sokoni-jobs.js`). 12 Gen2 Cloud Functions. Zero new composite Firestore indexes.

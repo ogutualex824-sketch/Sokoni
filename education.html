@@ -1,452 +1,962 @@
 <!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>SOKONI Education — Schools, Tutors, Courses & Exam Prep in Kenya</title>
-  <meta name="description" content="Find schools, tutors, online courses, KCSE prep and professional certifications across Kenya on SOKONI Education Hub.">
-  <meta property="og:title" content="SOKONI Education — Learn & Grow in Kenya">
-  <meta property="og:description" content="Schools, universities, tutors, online courses, KCSE/KCPE prep, and professional certifications.">
+  <title>Education Hub — SOKONI</title>
+  <meta name="description" content="Learn new skills in Kenya. Browse courses in technology, business, design, health and more on SOKONI Education.">
+  <meta property="og:title" content="Education Hub — SOKONI">
+  <meta property="og:description" content="Kenya's courses and learning marketplace. Browse, enrol and grow.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
   <meta property="og:url" content="https://mysokoni.co.ke/education.html">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#0ea5e9">
-  <script src="security.js"></script>
-<script src="shared-header.js"></script>
-  <script src="sokoni-permissions.js"></script>
+  <meta name="theme-color" content="#3f51b5">
+  <script src="shared-header.js"></script>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="mobile.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <script src="seo.js" defer></script>
+
   <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:#040c18;color:white;min-height:100vh;padding-bottom:90px;}
+    /* ── Design tokens ─────────────────────────────────────── */
+    :root {
+      --bg:      #f5f8ff;
+      --surface: #ffffff;
+      --border:  #e4eaf5;
+      --accent:  #3f51b5;
+      --accent2: #283593;
+      --green:   #4caf50;
+      --gold:    #ffc107;
+      --red:     #f44336;
+      --orange:  #ff9800;
+      --text:    #1a1a2e;
+      --muted:   #6b7280;
+      --radius:  14px;
+      --shadow:  0 2px 16px rgba(0,0,0,.06);
+    }
 
-    /* ── Nav ── */
-    .ed-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;
-            background:rgba(4,12,24,.97);border-bottom:1px solid rgba(14,165,233,.18);
-            position:sticky;top:0;z-index:100;backdrop-filter:blur(14px);}
-    .ed-nav-logo{height:32px;}
-    .ed-nav-links{display:flex;gap:8px;}
-    .ed-nav-btn{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:700;
-                cursor:pointer;font-family:inherit;border:none;text-decoration:none;
-                display:inline-block;transition:all .2s;}
-    .ed-btn-outline{background:transparent;border:1px solid rgba(14,165,233,.35);color:rgba(255,255,255,.65);}
-    .ed-btn-outline:hover{border-color:#0ea5e9;color:white;}
-    .ed-btn-primary{background:linear-gradient(135deg,#0ea5e9,#0284c7);color:white;}
+    /* ── Reset ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+    input, select, textarea, button { font-family: inherit; font-size: 16px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .visually-hidden {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
 
-    /* ── Hero ── */
-    .ed-hero{background:linear-gradient(135deg,rgba(14,165,233,.1),rgba(99,102,241,.06));
-             border-bottom:1px solid rgba(14,165,233,.12);padding:52px 24px 44px;text-align:center;}
-    .ed-hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(14,165,233,.12);
-                   border:1px solid rgba(14,165,233,.3);border-radius:20px;padding:5px 14px;
-                   font-size:12px;font-weight:700;color:#38bdf8;margin-bottom:18px;letter-spacing:.04em;}
-    .ed-hero h1{font-size:clamp(26px,5.5vw,44px);font-weight:900;line-height:1.15;margin-bottom:12px;}
-    .ed-hero h1 span{background:linear-gradient(135deg,#0ea5e9,#38bdf8);-webkit-background-clip:text;
-                     -webkit-text-fill-color:transparent;background-clip:text;}
-    .ed-hero p{color:rgba(255,255,255,.5);font-size:15px;margin-bottom:28px;max-width:500px;margin-left:auto;margin-right:auto;}
-    .ed-search-wrap{max-width:560px;margin:0 auto;display:flex;gap:10px;}
-    .ed-search-field{flex:1;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);
-                     border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:0 16px;}
-    .ed-search-field i{color:rgba(255,255,255,.35);font-size:14px;}
-    .ed-search-field input{flex:1;background:none;border:none;outline:none;color:white;font-size:16px;
-                           font-family:inherit;padding:14px 0;}
-    .ed-search-field input::placeholder{color:rgba(255,255,255,.3);}
-    .ed-search-go{padding:14px 24px;background:linear-gradient(135deg,#0ea5e9,#0284c7);border:none;
-                  border-radius:14px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;}
-    .ed-hero-stats{display:flex;gap:32px;justify-content:center;margin-top:28px;flex-wrap:wrap;}
-    .ed-stat{text-align:center;}
-    .ed-stat strong{display:block;font-size:22px;font-weight:900;color:#38bdf8;}
-    .ed-stat span{font-size:12px;color:rgba(255,255,255,.4);font-weight:600;}
+    /* ── Toast keyframe ────────────────────────────────────── */
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
 
-    /* ── Category pills ── */
-    .ed-body{max-width:1200px;margin:0 auto;padding:28px 20px 60px;}
-    .ed-cats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px;}
-    .ed-cat{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;
-            border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.55);
-            background:transparent;transition:all .2s;font-family:inherit;}
-    .ed-cat:hover,.ed-cat.active{background:rgba(14,165,233,.15);border-color:rgba(14,165,233,.4);color:#38bdf8;}
+    /* ── Header ────────────────────────────────────────────── */
+    .site-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 200;
+      height: 60px;
+      display: flex; align-items: center;
+      padding: 0 20px; gap: 12px;
+      box-shadow: var(--shadow);
+    }
+    .header-brand {
+      display: flex; align-items: center; gap: 2px;
+      font-size: 20px; font-weight: 900; color: var(--text);
+      text-decoration: none;
+    }
+    .header-brand .brand-accent { color: var(--accent); }
+    .header-edu-label {
+      font-size: 13px; font-weight: 600; color: var(--muted);
+      border-left: 1px solid var(--border); padding-left: 12px;
+    }
+    .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
-    /* ── Section headings ── */
-    .ed-section-h{font-size:15px;font-weight:800;color:white;margin:32px 0 16px;
-                  display:flex;align-items:center;gap:8px;}
-    .ed-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.07);}
+    /* ── Buttons ───────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 18px; border-radius: 9px; border: none;
+      cursor: pointer; font-size: 14px; font-weight: 600;
+      transition: background .15s, transform .1s, opacity .15s;
+      white-space: nowrap; text-decoration: none;
+    }
+    .btn:active  { transform: scale(.97); }
+    .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent2); text-decoration: none; color: #fff; }
+    .btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+    .btn-ghost  { background: none; border: none; color: var(--muted); }
+    .btn-ghost:hover { color: var(--text); text-decoration: none; }
+    .btn-sm { padding: 7px 14px; font-size: 13px; }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-green:hover { background: #388e3c; color: #fff; text-decoration: none; }
 
-    /* ── Provider / course cards ── */
-    .ed-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
-    .ed-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:20px;
-             overflow:hidden;transition:all .2s;cursor:pointer;}
-    .ed-card:hover{border-color:rgba(14,165,233,.3);transform:translateY(-3px);}
-    .ed-card-head{padding:18px 18px 0;display:flex;align-items:flex-start;gap:14px;}
-    .ed-card-icon{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;
-                  justify-content:center;font-size:26px;flex-shrink:0;}
-    .ed-card-meta{flex:1;}
-    .ed-card-name{font-size:15px;font-weight:800;color:white;margin-bottom:3px;}
-    .ed-card-sub{font-size:12px;color:rgba(255,255,255,.45);margin-bottom:8px;}
-    .ed-card-tags{display:flex;gap:6px;flex-wrap:wrap;}
-    .ed-tag{font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;}
-    .ed-tag-cat{background:rgba(14,165,233,.1);color:#38bdf8;border:1px solid rgba(14,165,233,.2);}
-    .ed-tag-mode{background:rgba(74,222,128,.08);color:#4ade80;border:1px solid rgba(74,222,128,.18);}
-    .ed-tag-price{background:rgba(251,191,36,.08);color:#fbbf24;border:1px solid rgba(251,191,36,.18);}
-    .ed-card-body{padding:14px 18px 18px;}
-    .ed-card-desc{font-size:13px;color:rgba(255,255,255,.45);line-height:1.5;
-                  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:14px;}
-    .ed-card-footer{display:flex;align-items:center;justify-content:space-between;}
-    .ed-card-price{font-size:16px;font-weight:900;color:#38bdf8;}
-    .ed-card-price small{font-size:11px;font-weight:600;color:rgba(255,255,255,.35);}
-    .ed-book-btn{padding:9px 18px;background:linear-gradient(135deg,#0ea5e9,#0284c7);border:none;
-                 border-radius:10px;color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;}
+    /* ── Hero ──────────────────────────────────────────────── */
+    .edu-hero {
+      background: linear-gradient(135deg, #1a237e 0%, #3f51b5 60%, #7986cb 100%);
+      color: #fff;
+      padding: 52px 20px 44px;
+      text-align: center;
+    }
+    .edu-hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(255,255,255,.15);
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 20px; padding: 5px 14px;
+      font-size: 12px; font-weight: 700; letter-spacing: .04em;
+      margin-bottom: 16px;
+    }
+    .edu-hero-title {
+      font-size: clamp(26px, 5vw, 44px);
+      font-weight: 900; line-height: 1.15; margin-bottom: 10px;
+    }
+    .edu-hero-sub {
+      font-size: 16px; opacity: .85; margin-bottom: 28px;
+      max-width: 480px; margin-left: auto; margin-right: auto;
+    }
+    .edu-search-bar {
+      display: flex; gap: 8px; max-width: 640px; margin: 0 auto;
+      background: #fff; border-radius: 14px;
+      padding: 8px 8px 8px 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.18);
+      align-items: center;
+    }
+    .edu-search-bar input {
+      flex: 1; border: none; outline: none;
+      font-size: 15px; color: var(--text);
+      background: transparent; min-width: 0; padding: 4px 0;
+    }
+    @media (max-width: 520px) {
+      .edu-search-bar { flex-direction: column; border-radius: 12px; padding: 10px; gap: 6px; }
+    }
 
-    /* ── Exam prep banner ── */
-    .ed-exam-banner{background:linear-gradient(135deg,rgba(14,165,233,.12),rgba(99,102,241,.08));
-                    border:1px solid rgba(14,165,233,.25);border-radius:20px;padding:24px;
-                    margin:28px 0;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
-    .ed-exam-icon{font-size:48px;flex-shrink:0;}
-    .ed-exam-text h3{font-size:18px;font-weight:900;margin-bottom:6px;}
-    .ed-exam-text p{font-size:13px;color:rgba(255,255,255,.5);line-height:1.5;}
-    .ed-exam-btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
-    .ed-exam-btn{padding:9px 18px;border-radius:10px;font-size:12px;font-weight:800;
-                 cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;}
-    .ed-exam-blue{background:rgba(14,165,233,.2);border:1px solid rgba(14,165,233,.35);color:#38bdf8;}
-    .ed-exam-green{background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.28);color:#4ade80;}
+    /* ── Section wrapper ───────────────────────────────────── */
+    .section { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
 
-    /* ── Register CTA ── */
-    .ed-register-cta{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.07);
-                     border-radius:16px;padding:24px;text-align:center;margin-top:32px;}
-    .ed-register-cta h3{font-size:17px;font-weight:900;margin-bottom:8px;}
-    .ed-register-cta p{font-size:13px;color:rgba(255,255,255,.45);margin-bottom:18px;}
+    /* ── Section title ─────────────────────────────────────── */
+    .section-title {
+      font-size: 12px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .6px; margin-bottom: 12px;
+    }
 
-    /* ── Spinner ── */
-    .ed-spinner{display:flex;justify-content:center;padding:40px;}
-    .ed-spinner div{width:36px;height:36px;border-radius:50%;border:3px solid rgba(14,165,233,.2);
-                    border-top-color:#0ea5e9;animation:edspin .7s linear infinite;}
-    @keyframes edspin{to{transform:rotate(360deg)}}
+    /* ── Featured strip ────────────────────────────────────── */
+    .edu-featured-strip {
+      margin: 28px auto 0;
+      max-width: 1200px; padding: 0 20px;
+    }
+    .edu-featured-strip.hidden { display: none; }
+    #eduFeaturedList {
+      display: flex; gap: 14px;
+      overflow-x: auto; scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 6px; scrollbar-width: thin;
+    }
+    #eduFeaturedList::-webkit-scrollbar { height: 4px; }
+    #eduFeaturedList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
-    /* ── Modal ── */
-    .ed-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;
-                      display:flex;align-items:flex-end;justify-content:center;
-                      opacity:0;pointer-events:none;transition:opacity .25s;}
-    .ed-modal-overlay.open{opacity:1;pointer-events:all;}
-    @media(min-width:600px){.ed-modal-overlay{align-items:center;}}
-    .ed-modal{background:#0d1a28;border:1px solid rgba(14,165,233,.15);border-radius:24px 24px 0 0;
-              width:100%;max-width:560px;max-height:90vh;overflow-y:auto;
-              transform:translateY(40px);transition:transform .28s cubic-bezier(.25,.8,.25,1);}
-    @media(min-width:600px){.ed-modal{border-radius:24px;transform:scale(.95);}}
-    .ed-modal-overlay.open .ed-modal{transform:none;}
-    .ed-modal-head{padding:20px 24px 16px;border-bottom:1px solid rgba(255,255,255,.07);
-                   display:flex;align-items:center;justify-content:space-between;
-                   position:sticky;top:0;background:#0d1a28;z-index:2;}
-    .ed-modal-title{font-size:17px;font-weight:900;}
-    .ed-modal-close{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.07);
-                    border:none;color:rgba(255,255,255,.55);font-size:18px;cursor:pointer;}
-    .ed-modal-body{padding:20px 24px 28px;}
-    .ed-detail-row{display:flex;align-items:flex-start;gap:10px;padding:10px 0;
-                   border-bottom:1px solid rgba(255,255,255,.05);}
-    .ed-detail-row:last-child{border-bottom:none;}
-    .ed-detail-label{font-size:12px;color:rgba(255,255,255,.4);font-weight:700;min-width:90px;padding-top:1px;}
-    .ed-detail-val{font-size:13px;color:rgba(255,255,255,.75);flex:1;line-height:1.5;}
-    .ed-enrol-btn{width:100%;padding:15px;background:linear-gradient(135deg,#0ea5e9,#0284c7);
-                  border:none;border-radius:14px;color:white;font-weight:900;font-size:15px;
-                  cursor:pointer;font-family:inherit;margin-top:20px;}
+    .edu-featured-card {
+      flex-shrink: 0; width: 260px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      scroll-snap-align: start; cursor: pointer;
+      transition: transform .15s, border-color .15s, box-shadow .15s;
+    }
+    .edu-featured-card:hover {
+      transform: translateY(-2px); border-color: var(--accent);
+      box-shadow: 0 6px 20px rgba(63,81,181,.14);
+    }
+    .edu-featured-thumb { width: 100%; height: 140px; overflow: hidden; }
+    .edu-featured-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .edu-featured-body { padding: 12px; }
+    .edu-featured-title {
+      font-size: 13px; font-weight: 700; line-height: 1.35;
+      margin: 4px 0; display: -webkit-box;
+      -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .edu-featured-meta { display: flex; align-items: center; margin: 4px 0; }
+    .edu-featured-price { font-size: 13px; font-weight: 700; color: var(--accent); margin-top: 6px; }
 
-    .ed-empty{text-align:center;padding:50px 20px;color:rgba(255,255,255,.3);}
-    .ed-empty-icon{font-size:44px;margin-bottom:12px;}
+    /* ── Category chips ────────────────────────────────────── */
+    .edu-cats-bar {
+      position: sticky; top: 60px; z-index: 100;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      padding: 10px 0;
+    }
+    .edu-cats-section { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+    .edu-cat-chips {
+      display: flex; gap: 6px;
+      overflow-x: auto; scrollbar-width: none; padding-bottom: 2px;
+    }
+    .edu-cat-chips::-webkit-scrollbar { display: none; }
+    .edu-cat-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 7px 15px; border-radius: 20px; font-size: 13px; font-weight: 500;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); cursor: pointer; white-space: nowrap;
+      flex-shrink: 0; transition: all .15s;
+    }
+    .edu-cat-chip:hover { border-color: var(--accent); color: var(--accent); }
+    .edu-cat-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ── Filters row ───────────────────────────────────────── */
+    .edu-filters-row {
+      display: flex; gap: 8px; align-items: center;
+      flex-wrap: wrap; margin-top: 8px;
+    }
+    .edu-filter-select {
+      padding: 7px 12px; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--surface);
+      font-size: 13px; color: var(--text);
+      cursor: pointer; outline: none;
+    }
+    .edu-filter-select:focus { border-color: var(--accent); }
+
+    /* ── Results bar ───────────────────────────────────────── */
+    .results-bar {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 20px 0 12px; gap: 12px;
+    }
+    #eduResultsCount { font-size: 14px; font-weight: 600; color: var(--muted); }
+
+    /* ── Course grid ───────────────────────────────────────── */
+    .edu-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px; padding-bottom: 28px;
+    }
+    @media (max-width: 900px) { .edu-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 560px) { .edu-grid { grid-template-columns: 1fr; } }
+
+    /* ── Course card ───────────────────────────────────────── */
+    .edu-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      cursor: pointer; display: flex; flex-direction: column;
+      transition: transform .15s, border-color .15s, box-shadow .15s;
+    }
+    .edu-card:hover {
+      transform: translateY(-3px); border-color: var(--accent);
+      box-shadow: 0 8px 24px rgba(63,81,181,.12);
+    }
+    .edu-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .edu-card-thumb {
+      position: relative; width: 100%; height: 170px; overflow: hidden;
+      background: linear-gradient(135deg, #e8eaf6, #c5cae9);
+    }
+    .edu-card-thumb img {
+      width: 100%; height: 100%; object-fit: cover;
+      transition: transform .3s;
+    }
+    .edu-card:hover .edu-card-thumb img { transform: scale(1.04); }
+
+    .edu-featured-badge {
+      position: absolute; top: 10px; right: 10px;
+      background: var(--gold); color: #1a1a2e;
+      font-size: 11px; font-weight: 800;
+      padding: 3px 9px; border-radius: 20px;
+    }
+
+    .edu-card-body { padding: 14px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+
+    .edu-card-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .edu-cat-badge {
+      display: inline-flex; align-items: center;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 700; letter-spacing: .02em;
+      background: #e8eaf6; color: var(--accent);
+      text-transform: capitalize;
+    }
+
+    .edu-level-badge {
+      display: inline-flex; align-items: center;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 700;
+    }
+
+    .edu-card-title {
+      font-size: 14px; font-weight: 700; line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+
+    .edu-card-meta {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--muted); flex-wrap: wrap;
+    }
+
+    .edu-rating { display: flex; align-items: center; gap: 4px; }
+    .edu-stars { display: inline-flex; gap: 1px; }
+    .edu-star { font-size: 13px; color: #ccc; }
+    .edu-star.filled { color: var(--gold); }
+
+    .edu-card-footer {
+      margin-top: auto; padding-top: 10px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid var(--border);
+    }
+
+    .edu-card-price { font-size: 15px; font-weight: 800; color: var(--text); }
+
+    .edu-free-badge {
+      display: inline-flex; padding: 2px 10px; border-radius: 6px;
+      background: #e8f5e9; color: var(--green);
+      font-size: 12px; font-weight: 800;
+    }
+
+    .edu-enroll-btn {
+      padding: 6px 14px; border-radius: 8px; border: none;
+      background: var(--accent); color: #fff;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      transition: background .15s, transform .1s;
+    }
+    .edu-enroll-btn:hover { background: var(--accent2); }
+    .edu-enroll-btn:active { transform: scale(.95); }
+
+    .edu-enrolled-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; border-radius: 8px;
+      background: #e8f5e9; color: var(--green);
+      font-size: 12px; font-weight: 700;
+    }
+
+    /* ── Load more ─────────────────────────────────────────── */
+    #eduLoadMore { display: none; margin: 8px auto 40px; }
+
+    /* ── Empty / loading ───────────────────────────────────── */
+    .edu-empty, .edu-loading {
+      grid-column: 1 / -1; text-align: center;
+      padding: 60px 20px; color: var(--muted); font-size: 15px;
+    }
+
+    /* ── Detail modal ──────────────────────────────────────── */
+    .edu-detail-modal {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.6); z-index: 500;
+      align-items: flex-end; justify-content: center;
+    }
+    @media (min-width: 640px) {
+      .edu-detail-modal { align-items: center; padding: 20px; }
+    }
+    .edu-detail-overlay {
+      background: var(--surface);
+      width: 100%; max-width: 760px; max-height: 92vh;
+      overflow-y: auto; border-radius: var(--radius) var(--radius) 0 0;
+      display: flex; flex-direction: column;
+    }
+    @media (min-width: 640px) { .edu-detail-overlay { border-radius: var(--radius); } }
+
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: var(--surface); z-index: 10;
+    }
+    .modal-header-title { font-size: 15px; font-weight: 700; }
+    .modal-close-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 22px; color: var(--muted);
+      width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; transition: background .15s;
+    }
+    .modal-close-btn:hover { background: var(--bg); }
+
+    .modal-footer {
+      display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+      padding: 14px 20px; border-top: 1px solid var(--border);
+      position: sticky; bottom: 0; background: var(--surface);
+    }
+
+    /* ── Detail content ────────────────────────────────────── */
+    .edu-detail-thumb {
+      width: 100%; max-height: 280px; object-fit: cover;
+      display: block;
+    }
+    .edu-video-wrap {
+      position: relative; padding-top: 56.25%;
+      background: #000;
+    }
+    .edu-video-wrap iframe {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+    }
+    .edu-detail-header {
+      padding: 20px 20px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .edu-detail-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .edu-detail-title { font-size: 20px; font-weight: 800; line-height: 1.3; margin-bottom: 10px; }
+    .edu-detail-meta {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      font-size: 13px; color: var(--muted);
+    }
+    .edu-detail-body { padding: 20px; display: flex; flex-direction: column; gap: 24px; }
+
+    /* ── Lesson list ───────────────────────────────────────── */
+    .edu-lesson-list { display: flex; flex-direction: column; gap: 2px; }
+    .edu-lesson-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-radius: 8px;
+      background: var(--bg); border: 1px solid var(--border);
+      font-size: 14px; transition: background .12s;
+    }
+    .edu-lesson-row:hover { background: #e8eaf6; }
+    .edu-lesson-locked { opacity: .55; cursor: not-allowed; }
+    .edu-lesson-num {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      font-size: 11px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .edu-lesson-title { flex: 1; font-weight: 500; }
+    .edu-lock-icon { font-size: 14px; color: var(--muted); }
+
+    /* ── Reviews ───────────────────────────────────────────── */
+    .edu-reviews-section { display: flex; flex-direction: column; gap: 10px; }
+    .edu-review-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px;
+    }
+    .edu-review-header { display: flex; align-items: center; margin-bottom: 6px; }
+    .edu-review-stars { font-size: 14px; }
+    .edu-review-comment { font-size: 13px; line-height: 1.6; color: var(--muted); }
+
+    /* ── My Learning panel ─────────────────────────────────── */
+    .edu-my-panel {
+      position: fixed; right: 0; top: 0; height: 100%;
+      width: min(420px, 100%);
+      background: var(--surface); border-left: 1px solid var(--border);
+      z-index: 400;
+      transform: translateX(100%);
+      transition: transform .3s cubic-bezier(.4,0,.2,1);
+      display: flex; flex-direction: column;
+      box-shadow: -4px 0 24px rgba(0,0,0,.1);
+    }
+    .panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+    }
+    .panel-title { font-size: 16px; font-weight: 700; }
+    .panel-body  { flex: 1; overflow-y: auto; padding: 16px; }
+
+    /* ── Enrollment cards in panel ─────────────────────────── */
+    .edu-enrollment-card {
+      display: flex; gap: 12px; align-items: center;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px;
+      margin-bottom: 10px; cursor: pointer;
+      transition: border-color .15s;
+    }
+    .edu-enrollment-card:hover { border-color: var(--accent); }
+    .edu-enroll-thumb {
+      width: 64px; height: 48px; flex-shrink: 0;
+      border-radius: 8px; overflow: hidden; position: relative;
+    }
+    .edu-enroll-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .edu-complete-badge {
+      position: absolute; inset: 0;
+      background: rgba(76,175,80,.8); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 18px; border-radius: 8px;
+    }
+    .edu-enroll-info { flex: 1; min-width: 0; }
+    .edu-enroll-title {
+      font-size: 13px; font-weight: 700; line-height: 1.3;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 2px;
+    }
+    .edu-enroll-cat { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .edu-progress-bar {
+      height: 5px; border-radius: 3px;
+      background: var(--border); overflow: hidden;
+    }
+    .edu-progress-fill {
+      height: 100%; border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent), #7986cb);
+      transition: width .4s ease;
+    }
+
+    /* ── Create course form ────────────────────────────────── */
+    .edu-create-form {
+      max-width: 760px; margin: 32px auto 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 32px 28px;
+      box-shadow: var(--shadow);
+    }
+    .edu-create-form.hidden { display: none; }
+    .edu-create-title-h2 { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+    .edu-create-sub { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
+    .form-label {
+      font-size: 12px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    .form-input {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 9px; padding: 11px 13px;
+      color: var(--text); font-size: 15px;
+      outline: none; width: 100%;
+      transition: border-color .15s;
+    }
+    .form-input:focus { border-color: var(--accent); background: #fff; }
+    textarea.form-input { resize: vertical; min-height: 110px; }
+    .char-hint { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 520px) { .form-row { grid-template-columns: 1fr; } }
+
+    /* ── Login prompt ──────────────────────────────────────── */
+    #eduLoginPrompt {
+      text-align: center; padding: 48px 20px;
+      color: var(--muted); border-top: 1px solid var(--border);
+      margin-top: 8px;
+    }
+    #eduLoginPrompt p { font-size: 15px; margin-bottom: 14px; }
+    #eduLoginPrompt.hidden { display: none; }
+
+    /* ── Toast container ───────────────────────────────────── */
+    #eduToasts {
+      position: fixed; bottom: 20px;
+      left: 50%; transform: translateX(-50%);
+      z-index: 1000;
+      display: flex; flex-direction: column;
+      gap: 8px; align-items: center;
+      pointer-events: none;
+      width: max-content; max-width: calc(100vw - 32px);
+    }
+    .edu-toast { pointer-events: auto; }
+
+    /* ── Bottom nav ────────────────────────────────────────── */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--surface); border-top: 1px solid var(--border);
+      z-index: 300; height: 58px;
+      display: flex; align-items: center; justify-content: space-around;
+    }
+    @media (min-width: 769px) { .bottom-nav { display: none !important; } }
+    .bnav-item {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 2px; color: var(--muted); font-size: 10px; font-weight: 600;
+      text-decoration: none; padding: 6px 8px; border-radius: 8px;
+      transition: color .15s;
+    }
+    .bnav-item:hover, .bnav-item.active { color: var(--accent); }
+    .bnav-emoji { font-size: 20px; }
+
+    /* ── Utilities ─────────────────────────────────────────── */
+    .hidden { display: none !important; }
+    .section-gap { margin-top: 28px; }
+    .center { text-align: center; }
   </style>
 </head>
 <body>
 
-<!-- Nav -->
-<nav class="ed-nav">
-  <a href="index.html"><img src="assets/logosokoni.png" alt="SOKONI" class="ed-nav-logo"></a>
-  <div class="ed-nav-links">
-    <a href="jobs.html" class="ed-nav-btn ed-btn-outline">Jobs</a>
-    <button class="ed-nav-btn ed-btn-primary" onclick="EDApp.openRegister()">List Your Institution</button>
-  </div>
-</nav>
+<!-- ════════════════════════════════════════
+     HEADER
+════════════════════════════════════════ -->
+<header class="site-header">
+  <a class="header-brand" href="index.html">
+    <span class="brand-accent">S</span>OKONI
+  </a>
+  <span class="header-edu-label">Education</span>
 
-<!-- Hero -->
-<section class="ed-hero">
-  <div class="ed-hero-badge">📚 Kenya Education Hub</div>
-  <h1>Learn, Grow &amp; <span>Excel</span></h1>
-  <p>Schools, tutors, online courses, KCSE/KCPE prep and professional certifications — all in one place.</p>
-  <div class="ed-search-wrap">
-    <div class="ed-search-field">
-      <i class="fas fa-search"></i>
-      <input id="edSearch" type="text" placeholder="Search courses, schools, tutors…" autocomplete="off">
-    </div>
-    <button class="ed-search-go" onclick="EDApp.search()">Search</button>
+  <div class="header-actions">
+    <button
+      id="eduMyLearningBtn"
+      class="btn btn-outline btn-sm hidden"
+      onclick="SokoniEducation.openMyLearning()"
+      aria-label="View my enrolled courses"
+    >
+      📖 My Learning
+    </button>
+
+    <button
+      id="eduTeachBtn"
+      class="btn btn-green btn-sm hidden"
+      onclick="SokoniEducation.showCreateForm()"
+      aria-label="Create a new course"
+    >
+      ✏️ Teach on SOKONI
+    </button>
+
+    <a id="eduAuthAction" href="login.html?return=education.html" class="btn btn-ghost btn-sm">Sign In</a>
   </div>
-  <div class="ed-hero-stats">
-    <div class="ed-stat"><strong id="edStatProviders">—</strong><span>Providers</span></div>
-    <div class="ed-stat"><strong id="edStatCourses">—</strong><span>Courses</span></div>
-    <div class="ed-stat"><strong>8</strong><span>Categories</span></div>
+</header>
+
+
+<!-- ════════════════════════════════════════
+     HERO
+════════════════════════════════════════ -->
+<section class="edu-hero" aria-label="Course search">
+  <div class="edu-hero-eyebrow">🎓 Kenya's Learning Marketplace</div>
+  <h1 class="edu-hero-title">Learn New Skills in Kenya</h1>
+  <p class="edu-hero-sub">Browse thousands of courses in technology, business, design, health, and more.</p>
+
+  <div class="edu-search-bar" role="search">
+    <label for="eduSearch" class="visually-hidden">Search courses</label>
+    <input
+      id="eduSearch"
+      type="search"
+      placeholder="Search courses, topics, instructors…"
+      aria-label="Search courses"
+      autocomplete="off"
+    >
+    <button class="btn btn-primary" onclick="SokoniEducation.searchCourses()">Search</button>
   </div>
 </section>
 
-<!-- Body -->
-<div class="ed-body">
 
-  <!-- Category pills -->
-  <div class="ed-cats" id="edCats">
-    <button class="ed-cat active" data-cat="All" onclick="EDApp.setCategory(this)">All</button>
-    <button class="ed-cat" data-cat="School" onclick="EDApp.setCategory(this)">🏫 Schools</button>
-    <button class="ed-cat" data-cat="University" onclick="EDApp.setCategory(this)">🎓 Universities</button>
-    <button class="ed-cat" data-cat="Tutor" onclick="EDApp.setCategory(this)">👨‍🏫 Tutors</button>
-    <button class="ed-cat" data-cat="Online Course" onclick="EDApp.setCategory(this)">💻 Online Courses</button>
-    <button class="ed-cat" data-cat="Exam Prep" onclick="EDApp.setCategory(this)">📝 Exam Prep</button>
-    <button class="ed-cat" data-cat="Professional" onclick="EDApp.setCategory(this)">🏅 Professional Certs</button>
-    <button class="ed-cat" data-cat="Vocational" onclick="EDApp.setCategory(this)">🔧 Vocational</button>
-    <button class="ed-cat" data-cat="Language" onclick="EDApp.setCategory(this)">🌍 Language</button>
+<!-- ════════════════════════════════════════
+     FEATURED COURSES STRIP
+════════════════════════════════════════ -->
+<div id="eduFeaturedStrip" class="edu-featured-strip hidden" aria-label="Featured courses">
+  <div class="section-title">★ Featured Courses</div>
+  <div id="eduFeaturedList" role="list" aria-label="Featured course list"></div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     CATEGORY CHIPS + LEVEL FILTER
+════════════════════════════════════════ -->
+<div class="edu-cats-bar" aria-label="Course filters">
+  <div class="edu-cats-section">
+    <div
+      id="eduCategoryChips"
+      class="edu-cat-chips"
+      role="group"
+      aria-label="Filter by category"
+    ></div>
+
+    <div class="edu-filters-row">
+      <label for="eduLevelFilter" class="visually-hidden">Filter by level</label>
+      <select
+        id="eduLevelFilter"
+        class="edu-filter-select"
+        aria-label="Filter by level"
+        onchange="SokoniEducation.searchCourses()"
+      >
+        <option value="all">All Levels</option>
+        <option value="beginner">Beginner</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+     COURSE RESULTS
+════════════════════════════════════════ -->
+<main class="section section-gap" aria-label="Course listings">
+  <div class="results-bar">
+    <span id="eduResultsCount" aria-live="polite">Loading courses…</span>
   </div>
 
-  <!-- Exam prep spotlight -->
-  <div class="ed-exam-banner">
-    <div class="ed-exam-icon">📝</div>
-    <div class="ed-exam-text">
-      <h3>KCSE &amp; KCPE Exam Prep</h3>
-      <p>Connect with experienced tutors and access past papers, revision notes, and mock exams.
-         Prepare with confidence across all subjects.</p>
-      <div class="ed-exam-btns">
-        <button class="ed-exam-btn ed-exam-blue" onclick="EDApp.setCategory(document.querySelector('[data-cat=\'Exam Prep\']'))">
-          Find Exam Prep
-        </button>
-        <button class="ed-exam-btn ed-exam-green" onclick="EDApp.setCategory(document.querySelector('[data-cat=\'Tutor\']'))">
-          Find a Tutor
-        </button>
+  <div id="eduResultsList" class="edu-grid" role="list" aria-label="Course search results">
+    <div class="edu-loading">Loading courses…</div>
+  </div>
+
+  <div class="center">
+    <button
+      id="eduLoadMore"
+      class="btn btn-outline"
+      onclick="SokoniEducation.loadMore()"
+      aria-label="Load more courses"
+    >
+      Load More Courses
+    </button>
+  </div>
+</main>
+
+
+<!-- ════════════════════════════════════════
+     CREATE COURSE FORM (Instructor)
+════════════════════════════════════════ -->
+<section class="section section-gap">
+  <div id="eduCreateForm" class="edu-create-form hidden" aria-label="Create a new course">
+    <h2 class="edu-create-title-h2">✏️ Create a New Course</h2>
+    <p class="edu-create-sub">
+      Fill in the details below. Your course will be reviewed before going live.
+    </p>
+
+    <form novalidate onsubmit="event.preventDefault(); SokoniEducation.submitCourse()">
+
+      <div class="form-group">
+        <label class="form-label" for="eduCreateTitle">
+          Course Title <span aria-hidden="true">*</span>
+        </label>
+        <input
+          id="eduCreateTitle"
+          class="form-input"
+          type="text"
+          placeholder="e.g. Introduction to Python for Beginners"
+          maxlength="100"
+          required
+          aria-required="true"
+          aria-describedby="titleHint"
+        >
+        <span id="titleHint" class="char-hint">5 – 100 characters</span>
       </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="eduCreateCategory">
+            Category <span aria-hidden="true">*</span>
+          </label>
+          <select id="eduCreateCategory" class="form-input" required aria-required="true">
+            <option value="">Select category…</option>
+            <option value="technology">Technology</option>
+            <option value="business">Business</option>
+            <option value="design">Design</option>
+            <option value="marketing">Marketing</option>
+            <option value="personal-development">Personal Development</option>
+            <option value="language">Language</option>
+            <option value="arts">Arts</option>
+            <option value="health">Health</option>
+            <option value="cooking">Cooking</option>
+            <option value="music">Music</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="eduCreateLevel">
+            Level <span aria-hidden="true">*</span>
+          </label>
+          <select id="eduCreateLevel" class="form-input" required aria-required="true">
+            <option value="">Select level…</option>
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="eduCreatePrice">Price (KES)</label>
+          <input
+            id="eduCreatePrice"
+            class="form-input"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="0 = Free"
+            value="0"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="eduCreateLessons">Number of Lessons</label>
+          <input
+            id="eduCreateLessons"
+            class="form-input"
+            type="number"
+            min="1"
+            step="1"
+            placeholder="e.g. 12"
+            value="1"
+          >
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="eduCreateMins">Duration (minutes)</label>
+          <input
+            id="eduCreateMins"
+            class="form-input"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="e.g. 180"
+            value="0"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="eduCreateTags">Tags (comma-separated)</label>
+          <input
+            id="eduCreateTags"
+            class="form-input"
+            type="text"
+            placeholder="python, coding, beginners"
+            maxlength="400"
+            aria-describedby="tagsHint"
+          >
+          <span id="tagsHint" class="char-hint">Up to 10 tags</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="eduCreateDesc">
+          Description <span aria-hidden="true">*</span>
+        </label>
+        <textarea
+          id="eduCreateDesc"
+          class="form-input"
+          placeholder="Describe what students will learn, prerequisites, and course structure… (minimum 20 characters)"
+          rows="6"
+          maxlength="3000"
+          required
+          aria-required="true"
+          aria-describedby="descHint"
+        ></textarea>
+        <span id="descHint" class="char-hint">20 – 3000 characters</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="eduCreateVideo">Video URL (optional)</label>
+        <input
+          id="eduCreateVideo"
+          class="form-input"
+          type="url"
+          placeholder="https://www.youtube.com/watch?v=… or https://vimeo.com/…"
+          maxlength="500"
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="eduCreateThumb">Thumbnail URL (optional)</label>
+        <input
+          id="eduCreateThumb"
+          class="form-input"
+          type="url"
+          placeholder="https://example.com/course-thumbnail.jpg"
+          maxlength="500"
+        >
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+        <button type="button" class="btn btn-outline" onclick="SokoniEducation.hideCreateForm()">Cancel</button>
+        <button type="submit" id="eduCreateSubmit" class="btn btn-primary">Submit for Review</button>
+      </div>
+
+    </form>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════
+     COURSE DETAIL MODAL
+════════════════════════════════════════ -->
+<div
+  id="eduDetailModal"
+  class="edu-detail-modal"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="eduDetailModalTitle"
+>
+  <div class="edu-detail-overlay">
+    <div class="modal-header">
+      <span id="eduDetailModalTitle" class="modal-header-title">Course Details</span>
+      <button
+        class="modal-close-btn"
+        onclick="SokoniEducation.closeModal()"
+        aria-label="Close course details"
+      >&#x2715;</button>
+    </div>
+
+    <!-- Dynamic content injected by renderCourseDetail() -->
+    <div id="eduDetailContent"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="SokoniEducation.closeModal()">Close</button>
+      <button
+        id="eduEnrollBtn"
+        class="btn btn-primary"
+        aria-label="Enrol in this course"
+      >Enrol Now</button>
     </div>
   </div>
-
-  <!-- Results -->
-  <div class="ed-section-h" id="edSectionLabel">All Providers &amp; Courses</div>
-  <div id="edGrid" class="ed-grid">
-    <div class="ed-spinner"><div></div></div>
-  </div>
-
-  <!-- Register CTA -->
-  <div class="ed-register-cta">
-    <h3>Are you an educator or institution?</h3>
-    <p>List your school, courses, or tutoring services and reach thousands of learners across Kenya.</p>
-    <button class="ed-book-btn" onclick="EDApp.openRegister()">List Your Institution</button>
-  </div>
-
 </div>
 
-<!-- Detail modal -->
-<div class="ed-modal-overlay" id="edDetailModal">
-  <div class="ed-modal">
-    <div class="ed-modal-head">
-      <span class="ed-modal-title" id="edDetailTitle">Details</span>
-      <button class="ed-modal-close" onclick="EDApp.closeModal('edDetailModal')">×</button>
-    </div>
-    <div class="ed-modal-body" id="edDetailBody"></div>
+
+<!-- ════════════════════════════════════════
+     MY LEARNING PANEL (slide-in from right)
+════════════════════════════════════════ -->
+<aside
+  id="eduMyLearningPanel"
+  class="edu-my-panel"
+  role="complementary"
+  aria-label="My learning panel"
+  aria-hidden="true"
+>
+  <div class="panel-header">
+    <span class="panel-title">📖 My Learning</span>
+    <button
+      class="modal-close-btn"
+      onclick="SokoniEducation.closeMyLearning()"
+      aria-label="Close My Learning panel"
+    >&#x2715;</button>
   </div>
+  <div class="panel-body">
+    <div id="eduMyEnrollmentsList" role="list" aria-label="My enrolled courses"></div>
+  </div>
+</aside>
+
+
+<!-- ════════════════════════════════════════
+     LOGIN PROMPT (for guests)
+════════════════════════════════════════ -->
+<div id="eduLoginPrompt" class="hidden" aria-live="polite">
+  <p>Sign in to enrol in courses, track your progress, and teach on SOKONI.</p>
+  <a href="login.html?return=education.html" class="btn btn-primary">Sign In / Register</a>
 </div>
 
-<!-- Bottom nav -->
-<nav class="bottom-nav" id="bottomNav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="search.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Search</span></a>
-  <a href="cart.html" class="bnav-item"><span class="bnav-emoji">🛒</span><span>Cart</span></a>
-  <a href="education.html" class="bnav-item active"><span class="bnav-emoji">📚</span><span>Learn</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+
+<!-- ════════════════════════════════════════
+     BOTTOM NAV (mobile)
+════════════════════════════════════════ -->
+<nav class="bottom-nav" id="bottomNav" aria-label="Main navigation">
+  <a href="index.html"     class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="search.html"    class="bnav-item"><span class="bnav-emoji">🔍</span><span>Search</span></a>
+  <a href="cart.html"      class="bnav-item"><span class="bnav-emoji">🛒</span><span>Cart</span></a>
+  <a href="education.html" class="bnav-item active"><span class="bnav-emoji">🎓</span><span>Learn</span></a>
+  <a href="profile.html"   class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
-<script type="module">
-import { db, auth } from './firebase.js';
-import {
-  collection, query, where, orderBy, limit, getDocs,
-  getCountFromServer, serverTimestamp, addDoc
-} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-const PAGE = 40;
-const _DEMO_ED = [
-  {_id:'DEMO_ED1',name:'Brighter Minds Academy',category:'School',location:'Nairobi',mode:'In-Person',price:15000,priceUnit:'term',description:'Nursery to Class 8. CBC curriculum. Strong performance in KCPE. Meals included.',contact:'info@brightminds.co.ke',active:true,featured:true},
-  {_id:'DEMO_ED2',name:'KCA University',category:'University',location:'Ruaraka, Nairobi',mode:'In-Person',price:45000,priceUnit:'semester',description:'Accredited degrees in Business, IT and Accounting. Evening classes available. CPA and ACCA preparation.',contact:'admissions@kca.ac.ke',active:true,featured:true},
-  {_id:'DEMO_ED3',name:'James Waweru — Maths & Physics Tutor',category:'Tutor',location:'Westlands, Nairobi',mode:'In-Person',price:1500,priceUnit:'session',description:'10 years experience. Form 1–4 Maths and Physics. KCSE exam prep. Home visits available.',whatsapp:'254712345678',active:true,featured:false},
-  {_id:'DEMO_ED4',name:'Coding for Kids Kenya',category:'Online Course',location:'Online',mode:'Online',price:3500,priceUnit:'course',description:'Scratch, Python and web basics for ages 8–16. Weekend live sessions. Certificate on completion.',whatsapp:'254723456789',active:true,featured:false},
-  {_id:'DEMO_ED5',name:'KCSE Exam Bootcamp',category:'Exam Prep',location:'CBD, Nairobi',mode:'In-Person',price:5000,priceUnit:'month',description:'Intensive KCSE prep for all eight subjects. Past papers, mock exams and targeted revision.',contact:'bootcamp@sokoni.co.ke',active:true,featured:false},
-  {_id:'DEMO_ED6',name:'ACCA & CPA Professional Classes',category:'Professional',location:'Upper Hill, Nairobi',mode:'In-Person',price:12000,priceUnit:'level',description:'Certified ACCA & CPA(K) tuition centre. Flexible weekend schedules. 85% pass rate.',contact:'finance@sokoni.co.ke',active:true,featured:false},
-  {_id:'DEMO_ED7',name:'Electrical Wiring — TVET Course',category:'Vocational',location:'Industrial Area, Nairobi',mode:'In-Person',price:8000,priceUnit:'course',description:'NITA-accredited 3-month electrical installation course. Certificate + job placement assistance.',whatsapp:'254734567890',active:true,featured:false},
-  {_id:'DEMO_ED8',name:'French & Mandarin Language Centre',category:'Language',location:'Westlands, Nairobi',mode:'In-Person',price:4000,priceUnit:'month',description:'Beginner to advanced classes. Native speakers. Small groups. Evening and weekend slots.',whatsapp:'254745678901',active:true,featured:false},
-];
-const CAT_ICONS = {
-  'School':'🏫','University':'🎓','Tutor':'👨‍🏫','Online Course':'💻',
-  'Exam Prep':'📝','Professional':'🏅','Vocational':'🔧','Language':'🌍',
-};
-const CAT_COLORS = {
-  'School':'rgba(14,165,233,.1)','University':'rgba(124,58,237,.1)',
-  'Tutor':'rgba(74,222,128,.1)','Online Course':'rgba(251,191,36,.1)',
-  'Exam Prep':'rgba(239,68,68,.1)','Professional':'rgba(14,165,233,.1)',
-  'Vocational':'rgba(251,191,36,.1)','Language':'rgba(74,222,128,.1)',
-};
+<!-- ════════════════════════════════════════
+     TOAST CONTAINER
+════════════════════════════════════════ -->
+<div id="eduToasts" aria-live="polite" aria-atomic="false"></div>
 
-let _cat = 'All';
-let _kw  = '';
-const _cache = {};
 
-function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function _fmt(n){ return n > 0 ? `KES ${Number(n).toLocaleString('en-KE')}` : 'Free'; }
-
-function _renderCard(p) {
-  const icon  = CAT_ICONS[p.category] || '📚';
-  const color = CAT_COLORS[p.category] || 'rgba(14,165,233,.1)';
-  const mode  = p.mode || (p.category === 'Online Course' ? 'Online' : 'In-Person');
-  return `
-  <div class="ed-card" data-provider-id="ed_${_esc(p._id)}" onclick="EDApp.openDetail('${_esc(p._id)}')">
-    <div class="ed-card-head">
-      <div class="ed-card-icon" style="background:${color};">${icon}</div>
-      <div class="ed-card-meta">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
-          <div class="ed-card-name" style="margin-bottom:0;">${_esc(p.name)}</div>
-          <div data-avail-provider="ed_${_esc(p._id)}" style="flex-shrink:0;"></div>
-        </div>
-        <div class="ed-card-sub">${_esc(p.location || 'Kenya')}</div>
-        <div class="ed-card-tags">
-          <span class="ed-tag ed-tag-cat">${_esc(p.category)}</span>
-          <span class="ed-tag ed-tag-mode">${_esc(mode)}</span>
-          ${p.price > 0 ? `<span class="ed-tag ed-tag-price">${_fmt(p.price)}</span>` : ''}
-        </div>
-      </div>
-    </div>
-    <div class="ed-card-body">
-      <div class="ed-card-desc">${_esc(p.description)}</div>
-      <div class="ed-card-footer">
-        <div class="ed-card-price">${_fmt(p.price)}<small>${p.price > 0 ? ' / '+_esc(p.priceUnit||'course') : ''}</small></div>
-        <button class="ed-book-btn" onclick="event.stopPropagation();EDApp.openDetail('${_esc(p._id)}')">
-          ${p.category === 'Tutor' ? 'Book Tutor' : p.category === 'School' ? 'Enquire' : 'Enrol'}
-        </button>
-      </div>
-    </div>
-  </div>`;
-}
-
-async function _load() {
-  const grid = document.getElementById('edGrid');
-  grid.innerHTML = '<div class="ed-spinner"><div></div></div>';
-
-  try {
-    /* Single-field query — avoids composite index requirement */
-    const q = query(collection(db, 'education'), where('active','==',true), orderBy('createdAt','desc'), limit(PAGE));
-
-    const snap  = await getDocs(q);
-    let providers = snap.docs.map(d => ({ _id:d.id, ...d.data() }));
-    providers.forEach(p => { _cache[p._id] = p; });
-
-    /* client-side filters */
-    if (_cat !== 'All') providers = providers.filter(p => p.category === _cat);
-    if (_kw) {
-      const kw = _kw.toLowerCase();
-      providers = providers.filter(p =>
-        (p.name||'').toLowerCase().includes(kw) ||
-        (p.description||'').toLowerCase().includes(kw) ||
-        (p.category||'').toLowerCase().includes(kw)
-      );
-    }
-    providers.sort((a,b) => (b.featured?1:0) - (a.featured?1:0));
-
-    /* demo fallback when collection is empty */
-    if (!providers.length && _cat === 'All' && !_kw) {
-      _DEMO_ED.forEach(p => { _cache[p._id] = p; });
-      providers = _DEMO_ED;
-    }
-
-    grid.innerHTML = providers.length
-      ? providers.map(_renderCard).join('')
-      : `<div class="ed-empty"><div class="ed-empty-icon">🔍</div><h3>No results found</h3><p>Try a different category or search term.</p></div>`;
-
-    // Update stats
-    try {
-      const total = await getCountFromServer(query(collection(db,'education'),where('active','==',true)));
-      document.getElementById('edStatProviders').textContent = total.data().count + '+';
-      document.getElementById('edStatCourses').textContent = total.data().count + '+';
-    } catch(_){}
-  } catch(err) {
-    console.error('[EDApp]', err);
-    grid.innerHTML = '<div class="ed-empty"><div class="ed-empty-icon">⚠️</div><h3>Failed to load</h3><p>Check your connection.</p></div>';
-  }
-}
-
-window.EDApp = {
-  search() { _kw = document.getElementById('edSearch').value.trim(); _load(); },
-  setCategory(el) {
-    if (!el) return;
-    document.querySelectorAll('.ed-cat').forEach(e => e.classList.remove('active'));
-    el.classList.add('active');
-    _cat = el.dataset.cat;
-    document.getElementById('edSectionLabel').textContent =
-      _cat === 'All' ? 'All Providers & Courses' : _cat + 's';
-    _load();
-  },
-  openModal(id) { document.getElementById(id).classList.add('open'); },
-  closeModal(id) { document.getElementById(id).classList.remove('open'); },
-  openDetail(pid) {
-    const p = _cache[pid];
-    if (!p) return;
-    document.getElementById('edDetailTitle').textContent = p.name;
-    const icon = CAT_ICONS[p.category] || '📚';
-    const actionLabel = p.category==='Tutor' ? 'Book Tutor Session' : p.category==='School' ? 'Send Enquiry' : 'Enrol Now';
-    document.getElementById('edDetailBody').innerHTML = `
-      <div style="font-size:42px;text-align:center;margin-bottom:14px;">${icon}</div>
-      <div class="ed-detail-row"><span class="ed-detail-label">Category</span><span class="ed-detail-val">${_esc(p.category)}</span></div>
-      <div class="ed-detail-row"><span class="ed-detail-label">Location</span><span class="ed-detail-val">${_esc(p.location||'Kenya')}</span></div>
-      <div class="ed-detail-row"><span class="ed-detail-label">Mode</span><span class="ed-detail-val">${_esc(p.mode||'In-Person')}</span></div>
-      <div class="ed-detail-row"><span class="ed-detail-label">Price</span><span class="ed-detail-val" style="color:#38bdf8;font-weight:800;">${_fmt(p.price)} ${p.price>0 ? '/ '+(p.priceUnit||'course') : ''}</span></div>
-      ${p.duration ? `<div class="ed-detail-row"><span class="ed-detail-label">Duration</span><span class="ed-detail-val">${_esc(p.duration)}</span></div>` : ''}
-      ${p.schedule ? `<div class="ed-detail-row"><span class="ed-detail-label">Schedule</span><span class="ed-detail-val">${_esc(p.schedule)}</span></div>` : ''}
-      ${p.qualification ? `<div class="ed-detail-row"><span class="ed-detail-label">Qualification</span><span class="ed-detail-val">${_esc(p.qualification)}</span></div>` : ''}
-      <div class="ed-detail-row"><span class="ed-detail-label">About</span><span class="ed-detail-val">${_esc(p.description)}</span></div>
-      ${p.contact ? `<div class="ed-detail-row"><span class="ed-detail-label">Contact</span><span class="ed-detail-val">${_esc(p.contact)}</span></div>` : ''}
-      <button class="ed-enrol-btn" onclick="EDApp.enrol('${_esc(pid)}')">
-        ${actionLabel}
-      </button>`;
-    this.openModal('edDetailModal');
-  },
-  async enrol(pid) {
-    const p = _cache[pid];
-    if (!p) return;
-    /* record enquiry in Firestore fire-and-forget */
-    const user = auth.currentUser;
-    addDoc(collection(db, 'educationEnquiries'), {
-      providerId: pid, providerName: p.name, category: p.category,
-      uid: user?.uid || null, userEmail: user?.email || null,
-      status: 'new', createdAt: serverTimestamp(),
-    }).catch(() => {});
-    if (p.whatsapp) {
-      window.open(`https://wa.me/${p.whatsapp.replace(/\D/g,'')}?text=Hi, I found you on SOKONI Education. I'd like to enquire about ${encodeURIComponent(p.name)}.`, '_blank');
-      return;
-    }
-    if (p.website) { window.open(p.website, '_blank'); return; }
-    window.location.href = `mailto:${p.contact||'support@mysokoni.co.ke'}?subject=Enquiry: ${encodeURIComponent(p.name)}&body=Hi, I found your institution on SOKONI and would like more information.`;
-  },
-  openRegister() {
-    if (typeof HubRegister !== 'undefined') {
-      HubRegister.open({ hub:'education', category:'school' });
-    } else {
-      window.location.href = 'onboarding-professional.html?hub=education';
-    }
-  },
-};
-
-document.getElementById('edSearch').addEventListener('keydown', e => { if(e.key==='Enter') EDApp.search(); });
-document.querySelectorAll('.ed-modal-overlay').forEach(o => {
-  o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); });
-});
-
-_load();
+<!-- ════════════════════════════════════════
+     SCRIPTS
+════════════════════════════════════════ -->
+<script src="/__/firebase/init.js"></script>
+<script src="sokoni-education.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    SokoniEducation.init();
+  });
 </script>
-<script src="sokoni-audit.js" defer></script>
-<script defer src="hub-register.js"></script>
-<script defer src="kass-widget.js"></script>
-  <!-- Scale + Resilience stack -->
-  <script defer src="sokoni-scale.js"></script>
-  <script defer src="sokoni-cache.js"></script>
-  <!-- Enterprise v2.0: core stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
-  <script src="sokoni-availability.js" defer></script>
+
+<!-- Supporting platform modules -->
+<script src="sokoni-audit.js"           defer></script>
+<script src="hub-register.js"           defer></script>
+<script src="kass-widget.js"            defer></script>
+<script src="sokoni-scale.js"           defer></script>
+<script src="sokoni-cache.js"           defer></script>
+<script src="sokoni-event-bus.js"       defer></script>
+<script src="sokoni-observability.js"   defer></script>
+
 </body>
 </html>

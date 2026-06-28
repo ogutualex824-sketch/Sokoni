@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+  <script src="security.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Super Admin — SOKONI</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{
+      --bg:#0a0c14;--surface:#12151f;--card:#1a1d2e;
+      --border:#252838;--accent:#e040fb;--accent2:#7c4dff;
+      --green:#4caf50;--red:#f44336;--gold:#ffc107;--orange:#ff9800;
+      --text:#e8eaf6;--muted:#8888aa;--radius:12px;
+      --shadow:0 4px 24px rgba(0,0,0,.4);
+      --font:system-ui,-apple-system,'Segoe UI',sans-serif;
+      --sidebar-w:220px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;font-family:var(--font)}
+    body{background:var(--bg);color:var(--text);display:flex;font-size:14px;line-height:1.5}
+
+    /* ── Auth Gate ── */
+    #authGate{position:fixed;inset:0;background:var(--bg);z-index:9000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+    #authGate .gate-spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    #authGate p{color:var(--muted);font-size:13px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── Sidebar ── */
+    .sa-sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto;transition:transform .25s}
+    .sa-logo{padding:20px 16px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+    .logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .logo-text{font-size:13px;font-weight:700;letter-spacing:.5px}
+    .logo-sub{font-size:10px;color:var(--accent);font-weight:600;letter-spacing:.5px}
+    .nav-group{padding:8px 0}
+    .nav-group-label{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;padding:8px 16px 4px}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;color:var(--text);transition:background .15s,color .15s;font-size:13px;border:none;background:none;width:100%;text-align:left;text-decoration:none}
+    .nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+    .nav-item.active{background:rgba(224,64,251,.15);color:var(--accent);font-weight:600}
+    .nav-icon{font-size:15px;width:18px;text-align:center;flex-shrink:0}
+    .nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;border-radius:10px;padding:1px 6px;font-weight:700}
+    .sa-sidebar-footer{margin-top:auto;padding:16px;border-top:1px solid var(--border)}
+    .sa-user-chip{display:flex;align-items:center;gap:10px;padding:8px 0}
+    .sa-user-avatar{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+    .sa-user-info-text{font-size:12px;overflow:hidden}
+    .sa-user-info-text strong{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sa-user-info-text span{color:var(--muted);font-size:10px}
+    .signout-btn{width:100%;margin-top:8px;padding:7px;border-radius:var(--radius);border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-size:12px;transition:background .15s,color .15s}
+    .signout-btn:hover{background:rgba(244,67,54,.1);color:var(--red)}
+
+    /* ── Main Layout ── */
+    .sa-main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
+    .sa-topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;gap:16px}
+    .mobile-menu-btn{display:none;width:36px;height:36px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);align-items:center;justify-content:center;cursor:pointer;font-size:18px;color:var(--text)}
+    .sa-topbar-title{flex:1;font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .sa-topbar-email{font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .sa-topbar-signout{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--muted);cursor:pointer;font-size:12px;transition:all .15s}
+    .sa-topbar-signout:hover{border-color:var(--red);color:var(--red)}
+    .sa-content{flex:1;padding:24px;overflow-y:auto}
+
+    /* ── Panels ── */
+    .sa-panel{display:block}
+    .sa-panel[hidden]{display:none!important}
+    .panel-header{margin-bottom:24px}
+    .panel-header h2{font-size:20px;font-weight:700}
+    .panel-header p{color:var(--muted);font-size:13px;margin-top:4px}
+
+    /* ── KPI Grid ── */
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+    .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:border-color .2s}
+    .kpi-card:hover{border-color:var(--accent)}
+    .kpi-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .kpi-value{font-size:28px;font-weight:700;margin:4px 0 2px;line-height:1}
+    .kpi-sub{font-size:11px;color:var(--muted)}
+    .kpi-card.accent{border-color:rgba(224,64,251,.3);background:rgba(224,64,251,.05)}
+    .kpi-card.success{border-color:rgba(76,175,80,.3);background:rgba(76,175,80,.05)}
+    .kpi-card.warn{border-color:rgba(255,152,0,.3);background:rgba(255,152,0,.05)}
+    .kpi-card.danger{border-color:rgba(244,67,54,.3);background:rgba(244,67,54,.05)}
+
+    /* ── Health Dimensions ── */
+    .health-grid{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px}
+    .health-chip{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;min-width:140px;flex:1}
+    .health-chip span{font-size:11px;color:var(--muted);display:block;margin-bottom:2px}
+    .health-chip strong{font-size:22px;font-weight:700;display:block;margin-bottom:6px}
+    .health-bar{height:4px;background:rgba(255,255,255,.1);border-radius:2px}
+    .health-bar div{height:100%;border-radius:2px;transition:width .4s}
+    .health-bar.good div{background:var(--green)}
+    .health-bar.warn div{background:var(--gold)}
+    .health-bar.bad div{background:var(--red)}
+
+    /* ── System Status ── */
+    .status-grid{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+    .status-pill{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:13px}
+    .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .status-dot.green{background:var(--green);box-shadow:0 0 6px var(--green)}
+    .status-dot.yellow{background:var(--gold);box-shadow:0 0 6px var(--gold)}
+    .status-dot.red{background:var(--red);box-shadow:0 0 6px var(--red)}
+
+    /* ── Tables ── */
+    .table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)}
+    .sa-table{width:100%;border-collapse:collapse;font-size:13px}
+    .sa-table th{text-align:left;padding:10px 14px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap;background:var(--card)}
+    .sa-table td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
+    .sa-table tbody tr:hover{background:rgba(255,255,255,.03)}
+    .sa-table tbody tr:last-child td{border-bottom:none}
+    .empty-cell{text-align:center;padding:40px;color:var(--muted)}
+
+    /* ── Badges ── */
+    .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+    .badge-admin{background:rgba(124,77,255,.2);color:#b39ddb}
+    .badge-seller{background:rgba(224,64,251,.2);color:#f48fb1}
+    .badge-buyer{background:rgba(33,150,243,.2);color:#90caf9}
+    .badge-driver{background:rgba(255,152,0,.2);color:#ffcc80}
+    .badge-superadmin{background:rgba(224,64,251,.3);color:var(--accent);border:1px solid rgba(224,64,251,.4)}
+    .badge-active{background:rgba(76,175,80,.2);color:#a5d6a7}
+    .badge-suspended{background:rgba(244,67,54,.2);color:#ef9a9a}
+    .badge-pending{background:rgba(255,152,0,.2);color:#ffcc80}
+    .sev-critical{color:#ef9a9a;font-weight:700}
+    .sev-high{color:#ffcc80;font-weight:600}
+    .sev-medium{color:#fff176}
+    .sev-low{color:#a5d6a7}
+
+    /* ── Buttons ── */
+    .sa-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;text-decoration:none}
+    .sa-btn:hover{border-color:var(--accent);background:rgba(224,64,251,.1)}
+    .sa-btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;color:#fff}
+    .sa-btn.primary:hover{opacity:.9}
+    .sa-btn.success{border-color:rgba(76,175,80,.4);background:rgba(76,175,80,.1);color:#a5d6a7}
+    .sa-btn.success:hover{background:rgba(76,175,80,.2)}
+    .sa-btn.danger{border-color:rgba(244,67,54,.4);background:rgba(244,67,54,.1);color:#ef9a9a}
+    .sa-btn.danger:hover{background:rgba(244,67,54,.2)}
+    .sa-btn-sm{display:inline-flex;align-items:center;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:11px;font-weight:500;transition:all .15s}
+    .sa-btn-sm:hover{background:rgba(255,255,255,.1)}
+    .sa-btn-sm.danger{border-color:rgba(244,67,54,.4);color:#ef9a9a}
+    .sa-btn-sm.danger:hover{background:rgba(244,67,54,.15)}
+    .sa-btn-sm.success{border-color:rgba(76,175,80,.4);color:#a5d6a7}
+    .sa-btn-sm.success:hover{background:rgba(76,175,80,.15)}
+    .sa-btn-sm.warn{border-color:rgba(255,152,0,.4);color:#ffcc80}
+    .sa-btn-sm.warn:hover{background:rgba(255,152,0,.15)}
+
+    /* ── Panel Toolbar ── */
+    .panel-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+    .panel-toolbar h2{flex:1;font-size:16px;font-weight:600}
+    .sa-input{padding:7px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;outline:none;font-family:var(--font)}
+    .sa-input:focus{border-color:var(--accent)}
+    .sa-select{padding:7px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;outline:none;cursor:pointer;font-family:var(--font)}
+    .sa-select:focus{border-color:var(--accent)}
+
+    /* ── Cards ── */
+    .sa-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px}
+    .sa-card h3{font-size:14px;font-weight:600;margin-bottom:16px;color:var(--text)}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+
+    /* ── Financial KPIs ── */
+    .fin-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+    .fin-kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+    .fin-kpi span{font-size:11px;color:var(--muted);display:block;text-transform:uppercase;letter-spacing:.5px}
+    .fin-kpi strong{font-size:24px;font-weight:700;display:block;margin-top:4px}
+    .fin-kpi.accent{border-color:rgba(224,64,251,.3)}
+    .fin-kpi.success{border-color:rgba(76,175,80,.3)}
+    .fin-kpi.warn{border-color:rgba(255,152,0,.3)}
+
+    /* ── Revenue Chart ── */
+    .chart-section{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:24px}
+    .chart-section h3{font-size:14px;font-weight:600;margin-bottom:16px}
+    .bar-chart{display:flex;align-items:flex-end;gap:6px;height:120px;padding-bottom:24px;position:relative;border-bottom:1px solid var(--border)}
+    .bar-chart-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end}
+    .bar-chart-bar{width:100%;border-radius:4px 4px 0 0;background:linear-gradient(to top,var(--accent2),var(--accent));min-height:4px;transition:height .4s}
+    .bar-chart-label{font-size:9px;color:var(--muted);position:absolute;bottom:4px;text-align:center;width:100%}
+    .bar-chart-col-label{font-size:9px;color:var(--muted);margin-top:2px}
+
+    /* ── Toggle Switches ── */
+    .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+    .toggle-row:last-child{border-bottom:none}
+    .toggle-row-info{flex:1}
+    .toggle-row-info strong{display:block;font-size:13px}
+    .toggle-row-info span{font-size:11px;color:var(--muted)}
+    .toggle-sw{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0}
+    .toggle-sw input{opacity:0;width:0;height:0}
+    .toggle-sw label{position:absolute;inset:0;background:rgba(255,255,255,.1);border-radius:22px;cursor:pointer;transition:background .2s}
+    .toggle-sw label::before{content:"";position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s}
+    .toggle-sw input:checked+label{background:var(--accent)}
+    .toggle-sw input:checked+label::before{transform:translateX(18px)}
+
+    /* ── Emergency Zone ── */
+    .danger-zone{background:rgba(244,67,54,.05);border:1px solid rgba(244,67,54,.3);border-radius:var(--radius);padding:20px;margin-bottom:20px}
+    .danger-zone h3{color:var(--red);font-size:14px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+    .danger-zone p{color:var(--muted);font-size:12px;margin-bottom:16px}
+    .danger-actions{display:flex;flex-wrap:wrap;gap:10px}
+    .confirm-gate{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;padding:12px;background:rgba(0,0,0,.2);border-radius:8px}
+    .confirm-gate label{font-size:12px;color:var(--muted)}
+    .confirm-gate .sa-input{width:160px}
+    .confirm-gate .sa-btn.danger:disabled{opacity:.4;cursor:not-allowed}
+
+    /* ── Secrets Checklist ── */
+    .secrets-list{display:flex;flex-direction:column;gap:10px}
+    .secret-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:var(--radius);border:1px solid var(--border);background:var(--card)}
+    .secret-status{font-size:18px;flex-shrink:0}
+    .secret-info{flex:1}
+    .secret-info strong{font-size:13px;display:block}
+    .secret-info span{font-size:11px;color:var(--muted)}
+    .secret-row.ok{border-color:rgba(76,175,80,.25)}
+    .secret-row.warn{border-color:rgba(255,193,7,.25)}
+    .secret-row.check{border-color:rgba(255,152,0,.25)}
+
+    /* ── Audit Log ── */
+    .audit-action{background:rgba(124,77,255,.15);color:#b39ddb;padding:2px 7px;border-radius:4px;font-size:11px;font-family:monospace}
+    .filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+
+    /* ── Broadcast ── */
+    .broadcast-form{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px}
+    .broadcast-form label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;margin-top:12px}
+    .broadcast-form label:first-child{margin-top:0}
+    .broadcast-form .sa-input,.broadcast-form .sa-select,.broadcast-form textarea{width:100%}
+    .broadcast-form textarea{min-height:100px;resize:vertical;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;padding:9px 12px;outline:none;font-family:var(--font)}
+    .broadcast-form textarea:focus{border-color:var(--accent)}
+    .preview-panel{background:rgba(224,64,251,.05);border:1px solid rgba(224,64,251,.2);border-radius:var(--radius);padding:14px;margin-top:12px}
+    .preview-panel strong{font-size:13px;display:block;margin-bottom:4px}
+    .preview-panel p{font-size:13px;color:var(--muted)}
+    .broadcast-history{display:flex;flex-direction:column;gap:10px}
+    .bc-item{border-left:3px solid var(--accent);padding:10px 14px;border-radius:0 var(--radius) var(--radius) 0;background:var(--card)}
+    .bc-item.bc-critical{border-left-color:var(--red)}
+    .bc-item.bc-warning{border-left-color:var(--gold)}
+    .bc-item.bc-info{border-left-color:#29b6f6}
+    .bc-meta{display:flex;align-items:center;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--muted)}
+
+    /* ── Spinner ── */
+    .sa-spinner{display:flex;align-items:center;justify-content:center;padding:40px}
+    .sa-spinner div{width:32px;height:32px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+
+    /* ── Toast ── */
+    .toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+    .toast{padding:12px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;max-width:340px;opacity:0;transform:translateY(10px);transition:opacity .25s,transform .25s;background:var(--card);border:1px solid var(--border)}
+    .toast.visible{opacity:1;transform:translateY(0)}
+    .toast.t-success{border-color:rgba(76,175,80,.5);background:rgba(76,175,80,.12);color:#a5d6a7}
+    .toast.t-error{border-color:rgba(244,67,54,.5);background:rgba(244,67,54,.12);color:#ef9a9a}
+    .toast.t-info{border-color:rgba(224,64,251,.5);background:rgba(224,64,251,.12);color:#f48fb1}
+    .toast.t-warn{border-color:rgba(255,193,7,.5);background:rgba(255,193,7,.12);color:#ffe082}
+
+    /* ── Confirm Modal ── */
+    .sa-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center;padding:20px}
+    .sa-modal.open{display:flex}
+    .modal-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:480px;padding:28px}
+    .modal-box h3{font-size:16px;font-weight:700;margin-bottom:8px}
+    .modal-box p{color:var(--muted);font-size:13px;margin-bottom:20px}
+    .modal-actions{display:flex;gap:10px;justify-content:flex-end}
+
+    /* ── Responsive ── */
+    @media(max-width:900px){.two-col{grid-template-columns:1fr}}
+    @media(max-width:768px){
+      .sa-sidebar{transform:translateX(-100%)}
+      .sa-sidebar.open{transform:translateX(0)}
+      .sa-main{margin-left:0}
+      .mobile-menu-btn{display:flex!important}
+      .kpi-grid{grid-template-columns:repeat(2,1fr)}
+      .fin-kpi-grid{grid-template-columns:repeat(2,1fr)}
+    }
+    @media(max-width:480px){
+      .kpi-grid,.fin-kpi-grid{grid-template-columns:1fr}
+      .sa-content{padding:16px}
+    }
+  </style>
+</head>
+<body>
+
+<!-- Auth Gate Overlay -->
+<div id="authGate">
+  <div class="gate-spinner"></div>
+  <p>Verifying super admin access&hellip;</p>
+</div>
+
+<!-- Sidebar -->
+<aside class="sa-sidebar" id="saSidebar">
+  <div class="sa-logo">
+    <div class="logo-icon">&#x1F6E1;&#xFE0F;</div>
+    <div>
+      <div class="logo-text" id="saShopName">SOKONI</div>
+      <div class="logo-sub">SUPER ADMIN</div>
+    </div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Overview</div>
+    <button class="nav-item active" data-section="overview" onclick="SA.nav('overview');_closeSidebar()">
+      <span class="nav-icon">&#x1F4CA;</span>Platform Overview
+    </button>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">People</div>
+    <button class="nav-item" data-section="users" onclick="SA.nav('users');_closeSidebar()">
+      <span class="nav-icon">&#x1F465;</span>User Management
+    </button>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Finance</div>
+    <button class="nav-item" data-section="financial" onclick="SA.nav('financial');_closeSidebar()">
+      <span class="nav-icon">&#x1F4B0;</span>Financial Oversight
+    </button>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Configuration</div>
+    <button class="nav-item" data-section="config" onclick="SA.nav('config');_closeSidebar()">
+      <span class="nav-icon">&#x2699;&#xFE0F;</span>Platform Config
+    </button>
+    <button class="nav-item" data-section="emergency" onclick="SA.nav('emergency');_closeSidebar()">
+      <span class="nav-icon">&#x26A1;</span>Emergency Controls
+      <span class="nav-badge">!</span>
+    </button>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Operations</div>
+    <button class="nav-item" data-section="audit" onclick="SA.nav('audit');_closeSidebar()">
+      <span class="nav-icon">&#x1F4CB;</span>Audit Log
+    </button>
+    <button class="nav-item" data-section="broadcast" onclick="SA.nav('broadcast');_closeSidebar()">
+      <span class="nav-icon">&#x1F4E2;</span>Platform Broadcast
+    </button>
+    <button class="nav-item" data-section="secrets" onclick="SA.nav('secrets');_closeSidebar()">
+      <span class="nav-icon">&#x1F511;</span>Secrets Checklist
+    </button>
+  </div>
+
+  <div class="sa-sidebar-footer">
+    <div class="sa-user-chip">
+      <div class="sa-user-avatar" id="saAvatarInitials">SA</div>
+      <div class="sa-user-info-text">
+        <strong id="saUserDisplayName">Super Admin</strong>
+        <span id="saUserEmail">Loading&hellip;</span>
+      </div>
+    </div>
+    <button class="signout-btn" onclick="SA.signOut()">Sign Out</button>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="sa-main">
+  <!-- Topbar -->
+  <header class="sa-topbar">
+    <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="_toggleSidebar()" aria-label="Menu">&#9776;</button>
+    <div class="sa-topbar-title">SOKONI Super Admin</div>
+    <span class="sa-topbar-email" id="saTopbarEmail"></span>
+    <button class="sa-topbar-signout" onclick="SA.signOut()">Sign Out</button>
+  </header>
+
+  <div class="sa-content">
+
+    <!-- ══ SECTION 1: Platform Overview ══ -->
+    <section class="sa-panel" id="panel-overview">
+      <div class="panel-header">
+        <h2>&#x1F4CA; Platform Overview</h2>
+        <p>Live KPIs and system health across all platform dimensions.</p>
+      </div>
+
+      <div class="kpi-grid" id="saOverviewKpis">
+        <div class="sa-spinner"><div></div></div>
+      </div>
+
+      <div class="health-grid" id="saHealthDims">
+        <!-- Populated by JS -->
+      </div>
+
+      <div class="sa-card">
+        <h3>Firebase Service Status</h3>
+        <div class="status-grid" id="saServiceStatus">
+          <div class="status-pill"><div class="status-dot green"></div>Firestore</div>
+          <div class="status-pill"><div class="status-dot green"></div>Auth</div>
+          <div class="status-pill"><div class="status-dot green"></div>Functions</div>
+          <div class="status-pill"><div class="status-dot green"></div>Hosting</div>
+          <div class="status-pill"><div class="status-dot green"></div>Storage</div>
+        </div>
+      </div>
+
+      <div class="sa-card">
+        <h3>Top Business Priorities</h3>
+        <div id="saBusinessPriorities">
+          <div class="sa-spinner"><div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ SECTION 2: User Management ══ -->
+    <section class="sa-panel" id="panel-users" hidden>
+      <div class="panel-header">
+        <h2>&#x1F465; User Management</h2>
+        <p>View, search, and manage all platform users.</p>
+      </div>
+
+      <div class="panel-toolbar">
+        <h2>All Users</h2>
+        <input class="sa-input" id="saUsersSearch" placeholder="&#x1F50D; Search by email or name&hellip;" oninput="SA.filterUsers(this.value)" style="width:240px">
+        <button class="sa-btn" onclick="SA.loadUsers()">&#x21BB; Refresh</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="sa-table" id="saUsersTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>UID</th>
+              <th>Role</th>
+              <th>Created</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="saUsersBody">
+            <tr><td colspan="7" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══ SECTION 3: Financial Oversight ══ -->
+    <section class="sa-panel" id="panel-financial" hidden>
+      <div class="panel-header">
+        <h2>&#x1F4B0; Financial Oversight</h2>
+        <p>Platform-wide revenue, commissions, payouts, and wallet balances.</p>
+      </div>
+
+      <div class="fin-kpi-grid" id="saFinancialKpis">
+        <div class="sa-spinner"><div></div></div>
+      </div>
+
+      <div class="chart-section">
+        <h3>Daily Revenue — Last 14 Days</h3>
+        <div id="saRevenueChart" style="overflow-x:auto;padding-bottom:4px">
+          <div class="bar-chart" id="saRevenueChartBars">
+            <!-- Bars inserted by JS -->
+          </div>
+        </div>
+      </div>
+
+      <div class="sa-card">
+        <h3>Pending Payout Requests</h3>
+        <div id="saPayoutsList">
+          <div class="sa-spinner"><div></div></div>
+        </div>
+      </div>
+
+      <div class="sa-card">
+        <h3>Commission Rates by Category</h3>
+        <div class="table-wrap">
+          <table class="sa-table">
+            <thead>
+              <tr><th>Category</th><th>Rate</th><th>Type</th></tr>
+            </thead>
+            <tbody id="saCommissionRates">
+              <tr><td colspan="3" class="empty-cell">Loading&hellip;</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ SECTION 4: Platform Configuration ══ -->
+    <section class="sa-panel" id="panel-config" hidden>
+      <div class="panel-header">
+        <h2>&#x2699;&#xFE0F; Platform Configuration</h2>
+        <p>Manage feature flags, rate limits, and commission rates. All writes require confirmation.</p>
+      </div>
+
+      <div class="two-col">
+        <div class="sa-card" id="saFlagsPanel">
+          <h3>Feature Flags</h3>
+          <div class="flag-list" id="saFlagsList">
+            <!-- Populated by JS -->
+          </div>
+          <div style="margin-top:16px">
+            <button class="sa-btn primary" onclick="SA.saveFlags()">Save Feature Flags</button>
+          </div>
+        </div>
+
+        <div class="sa-card">
+          <h3>Earn Rate Display</h3>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Current loyalty earn rates (read from loyaltyRules/default).</p>
+          <div id="saEarnRates">
+            <div class="sa-spinner"><div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sa-card">
+        <h3>Commission Rate Editor</h3>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Edit category commission rates. Changes write to platformConfig/commissions.</p>
+        <div id="saCommissionEditor">
+          <div class="sa-spinner"><div></div></div>
+        </div>
+        <div style="margin-top:16px">
+          <button class="sa-btn primary" onclick="SA.saveCommissions()">Save Commission Rates</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ SECTION 5: Emergency Controls ══ -->
+    <section class="sa-panel" id="panel-emergency" hidden>
+      <div class="panel-header">
+        <h2>&#x26A1; Emergency Controls</h2>
+        <p>High-impact controls. Each action requires typing CONFIRM before activation.</p>
+      </div>
+
+      <div id="saEmergencyPanel">
+
+        <!-- Maintenance Mode -->
+        <div class="danger-zone">
+          <h3>&#x1F6A7; Maintenance Mode</h3>
+          <p>Puts the platform in maintenance mode. Users will see a maintenance notice.</p>
+          <div id="saMaintenanceStatus" style="margin-bottom:12px;font-size:13px;color:var(--muted)">Status: Checking&hellip;</div>
+          <div class="danger-actions">
+            <button class="sa-btn danger" onclick="SA.armControl('maintenance-on')">Enable Maintenance</button>
+            <button class="sa-btn success" onclick="SA.armControl('maintenance-off')">Disable Maintenance</button>
+          </div>
+          <div class="confirm-gate" id="cg-maintenance" style="display:none">
+            <label>Type CONFIRM to proceed:</label>
+            <input class="sa-input saConfirmInput" id="saConfirmInput" placeholder="CONFIRM" autocomplete="off">
+            <button class="sa-btn danger" id="cg-maintenance-btn" onclick="SA.executeControl('maintenance')" disabled>Execute</button>
+          </div>
+        </div>
+
+        <!-- Kill Switches -->
+        <div class="danger-zone">
+          <h3>&#x1F534; Feature Kill Switches</h3>
+          <p>Instantly disable specific feature areas platform-wide.</p>
+          <div class="danger-actions" id="saKillSwitches">
+            <button class="sa-btn danger" onclick="SA.armKill('jobs')">Kill Jobs Hub</button>
+            <button class="sa-btn danger" onclick="SA.armKill('wallet')">Kill Wallet</button>
+            <button class="sa-btn danger" onclick="SA.armKill('minishop')">Kill MiniShop</button>
+            <button class="sa-btn danger" onclick="SA.armKill('loyalty')">Kill Loyalty</button>
+          </div>
+          <div class="confirm-gate" id="cg-kill" style="display:none">
+            <label>Killing: <strong id="cg-kill-feature" style="color:var(--red)"></strong> — type CONFIRM:</label>
+            <input class="sa-input saConfirmInput" id="saConfirmInputKill" placeholder="CONFIRM" autocomplete="off">
+            <button class="sa-btn danger" id="cg-kill-btn" onclick="SA.executeKill()" disabled>Kill Feature</button>
+            <button class="sa-btn" onclick="SA.cancelControl('kill')">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Force Cache Clear -->
+        <div class="danger-zone">
+          <h3>&#x1F504; Force Cache Clear</h3>
+          <p>Posts a message to the service worker to skip waiting and take control immediately. All active sessions will receive the update on next navigation.</p>
+          <button class="sa-btn danger" onclick="SA.armControl('cache')">Initiate Cache Clear</button>
+          <div class="confirm-gate" id="cg-cache" style="display:none">
+            <label>Type CONFIRM to proceed:</label>
+            <input class="sa-input saConfirmInput" id="saConfirmInputCache" placeholder="CONFIRM" autocomplete="off">
+            <button class="sa-btn danger" id="cg-cache-btn" onclick="SA.executeCacheClear()" disabled>Clear Cache</button>
+            <button class="sa-btn" onclick="SA.cancelControl('cache')">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Emergency Broadcast -->
+        <div class="danger-zone">
+          <h3>&#x1F6A8; Emergency Broadcast</h3>
+          <p>Send an immediate platform-wide notification to all users.</p>
+          <input class="sa-input" id="saEmergencyMsg" placeholder="Emergency message&hellip;" style="width:100%;margin-bottom:10px">
+          <button class="sa-btn danger" onclick="SA.armControl('broadcast-emergency')">Send Emergency Broadcast</button>
+          <div class="confirm-gate" id="cg-broadcast-emergency" style="display:none">
+            <label>Type CONFIRM to broadcast:</label>
+            <input class="sa-input saConfirmInput" id="saConfirmInputBroadcast" placeholder="CONFIRM" autocomplete="off">
+            <button class="sa-btn danger" id="cg-broadcast-emergency-btn" onclick="SA.executeEmergencyBroadcast()" disabled>Broadcast Now</button>
+            <button class="sa-btn" onclick="SA.cancelControl('broadcast-emergency')">Cancel</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══ SECTION 6: Audit Log ══ -->
+    <section class="sa-panel" id="panel-audit" hidden>
+      <div class="panel-header">
+        <h2>&#x1F4CB; Audit Log</h2>
+        <p>High and critical severity platform events. Admin-only access.</p>
+      </div>
+
+      <div class="filter-bar">
+        <select class="sa-select" id="saAuditSevFilter" onchange="SA.filterAudit()">
+          <option value="">All Severities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+        </select>
+        <input class="sa-input" id="saAuditActorFilter" placeholder="Filter by actor UID&hellip;" oninput="SA.filterAudit()" style="width:220px">
+        <input class="sa-input" type="date" id="saAuditDateFilter" oninput="SA.filterAudit()">
+        <button class="sa-btn" onclick="SA.exportAuditCSV()">&#x1F4E5; Export CSV</button>
+        <button class="sa-btn" onclick="SA.loadAudit()">&#x21BB; Refresh</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="sa-table" id="saAuditTable">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Actor UID</th>
+              <th>Action</th>
+              <th>Resource</th>
+              <th>Severity</th>
+            </tr>
+          </thead>
+          <tbody id="saAuditBody">
+            <tr><td colspan="5" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══ SECTION 7: Platform Broadcast ══ -->
+    <section class="sa-panel" id="panel-broadcast" hidden>
+      <div class="panel-header">
+        <h2>&#x1F4E2; Platform Broadcast</h2>
+        <p>Compose and send platform-wide announcements to users.</p>
+      </div>
+
+      <form class="broadcast-form" id="saBroadcastForm" onsubmit="SA.sendBroadcast(event)">
+        <label>Title *</label>
+        <input class="sa-input" id="bcTitle" placeholder="Announcement title&hellip;" required>
+
+        <label>Message *</label>
+        <textarea id="bcMessage" placeholder="Write your announcement message here&hellip;" required></textarea>
+
+        <label>Priority</label>
+        <select class="sa-select" id="bcPriority">
+          <option value="info">Info</option>
+          <option value="warning">Warning</option>
+          <option value="critical">Critical</option>
+        </select>
+
+        <label>Target Audience</label>
+        <select class="sa-select" id="bcAudience">
+          <option value="all">All Users</option>
+          <option value="buyers">Buyers Only</option>
+          <option value="sellers">Sellers Only</option>
+          <option value="drivers">Drivers Only</option>
+        </select>
+
+        <div class="preview-panel" id="bcPreview" style="display:none">
+          <strong id="bcPreviewTitle"></strong>
+          <p id="bcPreviewMessage"></p>
+          <div style="margin-top:6px;font-size:11px;color:var(--muted)">
+            Audience: <span id="bcPreviewAudience"></span> &bull;
+            Priority: <span id="bcPreviewPriority"></span>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button type="button" class="sa-btn" onclick="SA.previewBroadcast()">Preview</button>
+          <button type="submit" class="sa-btn primary">&#x1F4E4; Send Broadcast</button>
+        </div>
+      </form>
+
+      <div class="sa-card">
+        <h3>Broadcast History</h3>
+        <div class="broadcast-history" id="saBroadcastHistory">
+          <div class="sa-spinner"><div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ SECTION 8: Secrets Checklist ══ -->
+    <section class="sa-panel" id="panel-secrets" hidden>
+      <div class="panel-header">
+        <h2>&#x1F511; Secrets Checklist</h2>
+        <p>Expected platform secrets and their configuration status. Verify actual values in GCP Console.</p>
+      </div>
+
+      <div class="sa-card" style="border-color:rgba(255,193,7,.2)">
+        <p style="font-size:13px;color:var(--gold);margin-bottom:0">
+          &#x26A0;&#xFE0F; This page shows <strong>expected</strong> secrets and their last-known status. Always verify actual secret values in the
+          <a href="https://console.cloud.google.com/security/secret-manager" target="_blank" rel="noopener" style="color:var(--accent)">GCP Secret Manager Console</a>.
+        </p>
+      </div>
+
+      <div class="secrets-list">
+        <div class="secret-row ok">
+          <div class="secret-status">&#x2705;</div>
+          <div class="secret-info">
+            <strong>INTASEND_PUBLISHABLE_KEY</strong>
+            <span>Live M-Pesa / IntaSend integration. Configured via sokoni-config.js.</span>
+          </div>
+        </div>
+        <div class="secret-row ok">
+          <div class="secret-status">&#x2705;</div>
+          <div class="secret-info">
+            <strong>INTASEND_PRIVATE_KEY</strong>
+            <span>Server-side IntaSend private key stored in Firebase Secret Manager.</span>
+          </div>
+        </div>
+        <div class="secret-row warn">
+          <div class="secret-status">&#x26A0;&#xFE0F;</div>
+          <div class="secret-info">
+            <strong>SENDGRID_API_KEY</strong>
+            <span>Placeholder value — needs real SendGrid API key for production email delivery.</span>
+          </div>
+        </div>
+        <div class="secret-row warn">
+          <div class="secret-status">&#x26A0;&#xFE0F;</div>
+          <div class="secret-info">
+            <strong>ANTHROPIC_API_KEY</strong>
+            <span>KASS AI Concierge. Check Secret Manager — may be placeholder.</span>
+          </div>
+        </div>
+        <div class="secret-row check">
+          <div class="secret-status">&#x1F7F0;</div>
+          <div class="secret-info">
+            <strong>VAPID_PRIVATE_KEY</strong>
+            <span>Web push notifications. Verify VAPID key pair is deployed in Secret Manager.</span>
+          </div>
+        </div>
+        <div class="secret-row ok">
+          <div class="secret-status">&#x2705;</div>
+          <div class="secret-info">
+            <strong>FIREBASE_PROJECT_ID</strong>
+            <span>Auto-configured via Firebase SDK init. No manual action needed.</span>
+          </div>
+        </div>
+        <div class="secret-row warn">
+          <div class="secret-status">&#x26A0;&#xFE0F;</div>
+          <div class="secret-info">
+            <strong>GMAIL_APP_PASSWORD</strong>
+            <span>Fallback email transport. Placeholder in Secret Manager — set real value.</span>
+          </div>
+        </div>
+        <div class="secret-row check">
+          <div class="secret-status">&#x1F7F0;</div>
+          <div class="secret-info">
+            <strong>SUB_OS_SIGNING_SECRET</strong>
+            <span>Subscription OS webhook signing. Verify this is set before enabling billing webhooks.</span>
+          </div>
+        </div>
+        <div class="secret-row ok">
+          <div class="secret-status">&#x2705;</div>
+          <div class="secret-info">
+            <strong>FIREBASE_APP_CHECK_SECRET</strong>
+            <span>App Check enforcement enabled. Configured during full platform deployment.</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px">
+        <a href="https://console.cloud.google.com/security/secret-manager" target="_blank" rel="noopener" class="sa-btn primary">
+          &#x1F517; Open GCP Secret Manager
+        </a>
+        <a href="https://console.firebase.google.com" target="_blank" rel="noopener" class="sa-btn" style="margin-left:8px">
+          Open Firebase Console
+        </a>
+      </div>
+    </section>
+
+  </div><!-- /sa-content -->
+</div><!-- /sa-main -->
+
+<!-- Toast Container -->
+<div class="toast-container" id="saToasts"></div>
+
+<!-- Confirm Modal (for role/suspend actions) -->
+<div class="sa-modal" id="saModal">
+  <div class="modal-box">
+    <h3 id="saModalTitle">Confirm Action</h3>
+    <p id="saModalBody">Are you sure you want to proceed?</p>
+    <div class="modal-actions">
+      <button class="sa-btn" onclick="SA.closeModal()">Cancel</button>
+      <button class="sa-btn danger" id="saModalConfirmBtn" onclick="SA.confirmModal()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="/__/firebase/init.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════
+   SOKONI Super Admin Portal — Inline JS
+   Auth: superAdmin custom claim gate only
+   ═══════════════════════════════════════════════════════════ */
+
+'use strict';
+
+// ── XSS-safe escaping ──────────────────────────────────────
+function _esc(s){
+  if(s==null)return '';
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#x27;');
+}
+
+function _fmtDate(ts){
+  if(!ts)return '—';
+  const d=ts.toDate?ts.toDate():new Date(ts);
+  return d.toLocaleDateString('en-KE',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+function _fmtMoney(n){
+  if(n==null)return '—';
+  return 'KES '+Number(n).toLocaleString('en-KE',{maximumFractionDigits:0});
+}
+
+// ── Mobile sidebar ─────────────────────────────────────────
+function _toggleSidebar(){document.getElementById('saSidebar').classList.toggle('open')}
+function _closeSidebar(){if(window.innerWidth<=768)document.getElementById('saSidebar').classList.remove('open')}
+
+// ── Toast ──────────────────────────────────────────────────
+function _toast(msg,type='info',dur=3500){
+  const c=document.getElementById('saToasts');
+  const el=document.createElement('div');
+  el.className='toast t-'+type;
+  el.textContent=msg;
+  c.appendChild(el);
+  requestAnimationFrame(()=>{el.classList.add('visible')});
+  setTimeout(()=>{
+    el.classList.remove('visible');
+    setTimeout(()=>el.remove(),300);
+  },dur);
+}
+
+// ── Confirm modal (for role/suspend actions) ───────────────
+let _modalCb=null;
+function _confirm(title,body,cb,btnLabel='Confirm',isDanger=true){
+  document.getElementById('saModalTitle').textContent=title;
+  document.getElementById('saModalBody').textContent=body;
+  document.getElementById('saModalConfirmBtn').textContent=btnLabel;
+  document.getElementById('saModalConfirmBtn').className='sa-btn '+(isDanger?'danger':'primary');
+  _modalCb=cb;
+  document.getElementById('saModal').classList.add('open');
+}
+
+// ── Double-confirm gate helpers ────────────────────────────
+let _armedControl=null;
+let _armedKill=null;
+
+function _wireConfirmGate(inputId,btnId){
+  const inp=document.getElementById(inputId);
+  const btn=document.getElementById(btnId);
+  if(!inp||!btn)return;
+  inp.addEventListener('input',()=>{btn.disabled=inp.value.trim()!=='CONFIRM'});
+  inp.value='';
+  btn.disabled=true;
+}
+
+// ── SA namespace ────────────────────────────────────────────
+const SA={
+  _db:null,
+  _fns:null,
+  _users:[],
+  _auditAll:[],
+
+  // Init after auth ─────────────────────────────────────────
+  init(user){
+    this._db=firebase.firestore();
+    this._fns=firebase.functions();
+    document.getElementById('saUserEmail').textContent=_esc(user.email);
+    document.getElementById('saTopbarEmail').textContent=_esc(user.email);
+    const displayName=user.displayName||user.email||'Super Admin';
+    document.getElementById('saUserDisplayName').textContent=_esc(displayName);
+    document.getElementById('saAvatarInitials').textContent=(displayName[0]||'S').toUpperCase();
+
+    // Wire all confirm gate inputs
+    _wireConfirmGate('saConfirmInput','cg-maintenance-btn');
+    _wireConfirmGate('saConfirmInputKill','cg-kill-btn');
+    _wireConfirmGate('saConfirmInputCache','cg-cache-btn');
+    _wireConfirmGate('saConfirmInputBroadcast','cg-broadcast-emergency-btn');
+
+    // Load initial section
+    this.nav('overview');
+  },
+
+  // Navigation ──────────────────────────────────────────────
+  nav(section){
+    document.querySelectorAll('.sa-panel').forEach(p=>p.hidden=true);
+    document.querySelectorAll('.nav-item').forEach(n=>{
+      n.classList.toggle('active',n.dataset.section===section);
+    });
+    const panel=document.getElementById('panel-'+section);
+    if(panel)panel.hidden=false;
+
+    // Lazy-load each section
+    if(section==='overview')this.loadOverview();
+    else if(section==='users')this.loadUsers();
+    else if(section==='financial')this.loadFinancial();
+    else if(section==='config')this.loadConfig();
+    else if(section==='emergency')this.loadEmergency();
+    else if(section==='audit')this.loadAudit();
+    else if(section==='broadcast')this.loadBroadcastHistory();
+  },
+
+  // Sign Out ────────────────────────────────────────────────
+  signOut(){
+    firebase.auth().signOut().then(()=>location.href='login.html');
+  },
+
+  // Modal close ─────────────────────────────────────────────
+  closeModal(){document.getElementById('saModal').classList.remove('open');_modalCb=null},
+  confirmModal(){if(_modalCb){_modalCb();_modalCb=null;}this.closeModal()},
+
+  // ══ SECTION 1: Platform Overview ════════════════════════
+  async loadOverview(){
+    // Load health scores
+    try{
+      const fn=this._fns.httpsCallable('getPlatformHealthScores');
+      const res=await fn({});
+      const data=res.data||{};
+      this._renderHealthDims(data.dimensions||{});
+      this._renderOverviewKpis(data);
+    }catch(e){
+      document.getElementById('saOverviewKpis').innerHTML='<p style="color:var(--muted);font-size:13px">Could not load health scores: '+_esc(e.message)+'</p>';
+      this._renderHealthDims({});
+    }
+
+    // Load business priorities
+    try{
+      const fn=this._fns.httpsCallable('getTopBusinessPriorities');
+      const res=await fn({});
+      const items=(res.data&&res.data.priorities)||[];
+      const el=document.getElementById('saBusinessPriorities');
+      if(!items.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No priorities data available.</p>';return;}
+      el.innerHTML=items.map((p,i)=>`
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${i+1}</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">${_esc(p.title||p.name||JSON.stringify(p))}</div>
+            ${p.description?`<div style="font-size:11px;color:var(--muted)">${_esc(p.description)}</div>`:''}
+          </div>
+          ${p.priority?`<span class="badge badge-${p.priority==='critical'?'admin':'buyer'}">${_esc(p.priority)}</span>`:''}
+        </div>
+      `).join('');
+    }catch(e){
+      document.getElementById('saBusinessPriorities').innerHTML='<p style="color:var(--muted);font-size:13px">Could not load priorities.</p>';
+    }
+
+    // Live Firestore KPIs (users total, listings total, orders today)
+    this._loadFirestoreKpis();
+  },
+
+  _renderOverviewKpis(data){
+    const overall=data.overall||{};
+    const el=document.getElementById('saOverviewKpis');
+    el.innerHTML=`
+      <div class="kpi-card accent">
+        <div class="kpi-label">Health Score</div>
+        <div class="kpi-value" style="color:var(--accent)">${overall.score!=null?Math.round(overall.score):'—'}</div>
+        <div class="kpi-sub">/ 100 overall</div>
+      </div>
+      <div class="kpi-card" id="saKpiUsers"><div class="kpi-label">Total Users</div><div class="kpi-value">—</div><div class="kpi-sub">registered</div></div>
+      <div class="kpi-card success" id="saKpiListings"><div class="kpi-label">Active Listings</div><div class="kpi-value">—</div><div class="kpi-sub">marketplace</div></div>
+      <div class="kpi-card" id="saKpiOrders"><div class="kpi-label">Orders Today</div><div class="kpi-value">—</div><div class="kpi-sub">since midnight EAT</div></div>
+      <div class="kpi-card warn" id="saKpiRevenue"><div class="kpi-label">All-Time Revenue</div><div class="kpi-value">—</div><div class="kpi-sub">platform total</div></div>
+    `;
+  },
+
+  async _loadFirestoreKpis(){
+    const db=this._db;
+    // Users count
+    try{
+      const snap=await db.collection('users').limit(1).get();
+      // Firestore doesn't expose count directly without aggregation CF; show loaded count
+      const cnt=snap.size;
+      const kpiU=document.getElementById('saKpiUsers');
+      if(kpiU)kpiU.querySelector('.kpi-value').textContent=cnt+'+'
+    }catch(_){}
+
+    // Orders today
+    try{
+      const today=new Date();today.setHours(0,0,0,0);
+      const snap=await db.collection('orders')
+        .where('createdAt','>=',firebase.firestore.Timestamp.fromDate(today))
+        .limit(500).get();
+      const kpiO=document.getElementById('saKpiOrders');
+      if(kpiO)kpiO.querySelector('.kpi-value').textContent=snap.size;
+    }catch(_){}
+
+    // Listings
+    try{
+      const snap=await db.collection('products').where('status','==','active').limit(500).get();
+      const kpiL=document.getElementById('saKpiListings');
+      if(kpiL)kpiL.querySelector('.kpi-value').textContent=snap.size+'+';
+    }catch(_){}
+
+    // Revenue — from platformConfig if available
+    try{
+      const doc=await db.collection('platformConfig').doc('analytics').get();
+      if(doc.exists){
+        const d=doc.data();
+        const kpiR=document.getElementById('saKpiRevenue');
+        if(kpiR)kpiR.querySelector('.kpi-value').textContent=_fmtMoney(d.totalRevenue||d.allTimeRevenue);
+      }
+    }catch(_){}
+  },
+
+  _renderHealthDims(dims){
+    const el=document.getElementById('saHealthDims');
+    const labels={users:'Users',revenue:'Revenue',performance:'Performance',security:'Security',reliability:'Reliability'};
+    const keys=Object.keys(labels);
+    if(!keys.some(k=>dims[k]!=null)){
+      el.innerHTML='<p style="color:var(--muted);font-size:13px;width:100%">Health dimension data unavailable.</p>';
+      return;
+    }
+    el.innerHTML=keys.map(k=>{
+      const v=dims[k]!=null?Math.round(dims[k]):null;
+      const pct=v!=null?v:0;
+      const cls=pct>=75?'good':pct>=50?'warn':'bad';
+      const color=pct>=75?'var(--green)':pct>=50?'var(--gold)':'var(--red)';
+      return `
+        <div class="health-chip">
+          <span>${_esc(labels[k])}</span>
+          <strong style="color:${color}">${v!=null?v+'%':'—'}</strong>
+          <div class="health-bar ${cls}"><div style="width:${pct}%"></div></div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  // ══ SECTION 2: User Management ══════════════════════════
+  async loadUsers(){
+    document.getElementById('saUsersBody').innerHTML=`<tr><td colspan="7" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>`;
+    try{
+      const snap=await this._db.collection('users').orderBy('createdAt','desc').limit(50).get();
+      this._users=snap.docs.map(d=>({id:d.id,...d.data()}));
+      this._renderUsers(this._users);
+    }catch(e){
+      document.getElementById('saUsersBody').innerHTML=`<tr><td colspan="7" class="empty-cell">Error: ${_esc(e.message)}</td></tr>`;
+    }
+  },
+
+  _renderUsers(list){
+    const tb=document.getElementById('saUsersBody');
+    if(!list.length){
+      tb.innerHTML='<tr><td colspan="7" class="empty-cell">No users found.</td></tr>';
+      return;
+    }
+    tb.innerHTML=list.map(u=>{
+      const role=u.role||'buyer';
+      const status=u.suspended?'suspended':(u.status||'active');
+      return `
+        <tr>
+          <td>${_esc(u.displayName||u.name||'—')}</td>
+          <td>${_esc(u.email||'—')}</td>
+          <td><span style="font-family:monospace;font-size:11px;color:var(--muted)">${_esc((u.id||'').substring(0,12)+'…')}</span></td>
+          <td><span class="badge badge-${_esc(role)}">${_esc(role)}</span></td>
+          <td style="font-size:11px;color:var(--muted)">${_esc(_fmtDate(u.createdAt))}</td>
+          <td><span class="badge badge-${_esc(status)}">${_esc(status)}</span></td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="sa-btn-sm" onclick="SA.changeRole('${_esc(u.id)}','${_esc(u.displayName||u.email||u.id)}')">Role</button>
+              ${u.suspended
+                ? `<button class="sa-btn-sm success" onclick="SA.toggleSuspend('${_esc(u.id)}',false,'${_esc(u.displayName||u.email||u.id)}')">Restore</button>`
+                : `<button class="sa-btn-sm danger" onclick="SA.toggleSuspend('${_esc(u.id)}',true,'${_esc(u.displayName||u.email||u.id)}')">Suspend</button>`
+              }
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  },
+
+  filterUsers(q){
+    const lq=q.toLowerCase();
+    const filtered=this._users.filter(u=>
+      (u.email||'').toLowerCase().includes(lq)||
+      (u.displayName||'').toLowerCase().includes(lq)||
+      (u.name||'').toLowerCase().includes(lq)
+    );
+    this._renderUsers(filtered);
+  },
+
+  changeRole(uid,name){
+    const sel=document.createElement('select');
+    sel.className='sa-select';
+    ['buyer','seller','driver','admin','provider'].forEach(r=>{
+      const o=document.createElement('option');
+      o.value=r;o.textContent=r;
+      sel.appendChild(o);
+    });
+    _confirm(
+      'Change Role: '+name,
+      'Select a new role for this user. This calls setUserRole cloud function.',
+      ()=>{
+        const role=sel.value;
+        const fn=this._fns.httpsCallable('setUserRole');
+        fn({uid,role})
+          .then(()=>{_toast('Role updated to '+role,'success');this.loadUsers();})
+          .catch(e=>_toast('Error: '+e.message,'error'));
+      },
+      'Set Role',true
+    );
+    // Inject selector into modal body
+    setTimeout(()=>{
+      const b=document.getElementById('saModalBody');
+      if(b){b.textContent='New role: ';b.appendChild(sel);}
+    },10);
+  },
+
+  toggleSuspend(uid,suspend,name){
+    _confirm(
+      (suspend?'Suspend':'Restore')+': '+name,
+      suspend
+        ? 'This user will be prevented from accessing SOKONI. You can restore them later.'
+        : 'This user will regain access to SOKONI.',
+      ()=>{
+        const fn=this._fns.httpsCallable('suspendUser');
+        fn({uid,suspend})
+          .then(()=>{_toast('User '+(suspend?'suspended':'restored'),'success');this.loadUsers();})
+          .catch(e=>_toast('Error: '+e.message,'error'));
+      },
+      suspend?'Suspend User':'Restore User',
+      suspend
+    );
+  },
+
+  // ══ SECTION 3: Financial Oversight ══════════════════════
+  async loadFinancial(){
+    // KPIs via CF or Firestore fallback
+    const kpiEl=document.getElementById('saFinancialKpis');
+    kpiEl.innerHTML='<div class="sa-spinner"><div></div></div>';
+
+    let financials={};
+    try{
+      const fn=this._fns.httpsCallable('getMerchantFinancials');
+      const res=await fn({context:'admin'});
+      financials=res.data||{};
+    }catch(_){
+      try{
+        const doc=await this._db.collection('platformConfig').doc('analytics').get();
+        if(doc.exists)financials=doc.data();
+      }catch(__){financials={};}
+    }
+
+    kpiEl.innerHTML=`
+      <div class="fin-kpi accent"><span>Platform Revenue</span><strong>${_esc(_fmtMoney(financials.totalRevenue||financials.platformRevenue))}</strong></div>
+      <div class="fin-kpi success"><span>Commissions Earned</span><strong>${_esc(_fmtMoney(financials.commissionsEarned||financials.commissions))}</strong></div>
+      <div class="fin-kpi warn"><span>Payouts Pending</span><strong>${_esc(_fmtMoney(financials.pendingPayouts||financials.payoutsPending))}</strong></div>
+      <div class="fin-kpi"><span>Wallet Balances Total</span><strong>${_esc(_fmtMoney(financials.totalWalletBalance||financials.walletTotal))}</strong></div>
+    `;
+
+    // Revenue chart — dummy 14-day data (replace with real data from Firestore if available)
+    this._renderRevenueChart(financials.dailyRevenue||null);
+
+    // Pending payouts
+    this.loadPayouts();
+
+    // Commission rates from Firestore
+    this._loadCommissionDisplay();
+  },
+
+  _renderRevenueChart(data){
+    const barsEl=document.getElementById('saRevenueChartBars');
+    const days=14;
+    let values;
+    if(Array.isArray(data)&&data.length>=days){
+      values=data.slice(-days);
+    }else{
+      // Deterministic placeholder pattern
+      values=[12,18,22,15,28,35,30,42,38,50,45,60,55,70].map(v=>v*1000);
+    }
+    const maxV=Math.max(...values,1);
+    const labels=[];
+    for(let i=days-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);labels.push(d.toLocaleDateString('en-KE',{day:'2-digit',month:'short'}));}
+    barsEl.innerHTML=values.map((v,i)=>`
+      <div class="bar-chart-col">
+        <div class="bar-chart-bar" style="height:${Math.max(4,(v/maxV)*100)}%" title="${_esc(_fmtMoney(v))}"></div>
+        <div class="bar-chart-col-label">${_esc(labels[i]||'')}</div>
+      </div>
+    `).join('');
+  },
+
+  async loadPayouts(){
+    const el=document.getElementById('saPayoutsList');
+    el.innerHTML='<div class="sa-spinner"><div></div></div>';
+    try{
+      const fn=this._fns.httpsCallable('adminGetPendingPayouts');
+      const res=await fn({});
+      const payouts=(res.data&&res.data.payouts)||[];
+      if(!payouts.length){el.innerHTML='<p style="color:var(--muted);font-size:13px">No pending payouts.</p>';return;}
+      el.innerHTML=`
+        <div class="table-wrap">
+          <table class="sa-table">
+            <thead><tr><th>Seller</th><th>Amount</th><th>Method</th><th>Requested</th><th>Actions</th></tr></thead>
+            <tbody>
+              ${payouts.map(p=>`
+                <tr>
+                  <td>${_esc(p.sellerName||p.sellerId||'—')}</td>
+                  <td>${_esc(_fmtMoney(p.amount))}</td>
+                  <td>${_esc(p.method||'—')}</td>
+                  <td style="font-size:11px;color:var(--muted)">${_esc(_fmtDate(p.createdAt))}</td>
+                  <td>
+                    <button class="sa-btn-sm success" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','approve')">Approve</button>
+                    <button class="sa-btn-sm danger" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','reject')">Reject</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }catch(e){
+      el.innerHTML='<p style="color:var(--muted);font-size:13px">Could not load payouts: '+_esc(e.message)+'</p>';
+    }
+  },
+
+  processPayout(id,action){
+    _confirm(
+      (action==='approve'?'Approve':'Reject')+' Payout',
+      'Payout ID: '+id+'. This action is irreversible.',
+      ()=>{
+        const fn=this._fns.httpsCallable('adminProcessPayout');
+        fn({payoutId:id,action})
+          .then(()=>{_toast('Payout '+action+'d','success');this.loadPayouts();})
+          .catch(e=>_toast('Error: '+e.message,'error'));
+      },
+      action==='approve'?'Approve':'Reject',
+      action==='reject'
+    );
+  },
+
+  async _loadCommissionDisplay(){
+    const tb=document.getElementById('saCommissionRates');
+    try{
+      const doc=await this._db.collection('platformConfig').doc('commissions').get();
+      const data=doc.exists?doc.data():{};
+      const entries=Object.entries(data);
+      if(!entries.length){
+        tb.innerHTML='<tr><td colspan="3" class="empty-cell">No commission data found.</td></tr>';
+        return;
+      }
+      tb.innerHTML=entries.map(([cat,val])=>{
+        const isObj=typeof val==='object'&&val!==null;
+        const rate=isObj?(val.rate||val.percentage||'—'):val;
+        const type=isObj?(val.type||'percentage'):'percentage';
+        return `<tr><td>${_esc(cat)}</td><td><strong>${_esc(String(rate))}%</strong></td><td style="color:var(--muted);font-size:12px">${_esc(type)}</td></tr>`;
+      }).join('');
+    }catch(e){
+      tb.innerHTML='<tr><td colspan="3" class="empty-cell" style="color:var(--muted)">'+_esc(e.message)+'</td></tr>';
+    }
+  },
+
+  // ══ SECTION 4: Platform Configuration ═══════════════════
+  async loadConfig(){
+    this._loadFlags();
+    this._loadEarnRates();
+    this._loadCommissionEditor();
+  },
+
+  _flags:{
+    maintenanceMode:{label:'Maintenance Mode',desc:'Take the platform offline for maintenance'},
+    newRegistrations:{label:'New Registrations',desc:'Allow new user sign-ups'},
+    guestCheckout:{label:'Guest Checkout',desc:'Allow checkout without an account'},
+    driverApps:{label:'Driver Apps',desc:'Enable the driver mobile application flow'},
+    jobsHub:{label:'Jobs Hub',desc:'Enable the Jobs Hub section'},
+    educationHub:{label:'Education Hub',desc:'Enable the Education Hub section'},
+  },
+
+  async _loadFlags(){
+    const el=document.getElementById('saFlagsList');
+    let flags={};
+    try{
+      const doc=await this._db.collection('platformConfig').doc('flags').get();
+      if(doc.exists)flags=doc.data();
+    }catch(_){}
+    el.innerHTML=Object.entries(this._flags).map(([key,info])=>`
+      <div class="toggle-row">
+        <div class="toggle-row-info">
+          <strong>${_esc(info.label)}</strong>
+          <span>${_esc(info.desc)}</span>
+        </div>
+        <label class="toggle-sw">
+          <input type="checkbox" id="flag-${_esc(key)}" ${flags[key]?'checked':''}>
+          <label for="flag-${_esc(key)}"></label>
+        </label>
+      </div>
+    `).join('');
+  },
+
+  async saveFlags(){
+    const data={};
+    Object.keys(this._flags).forEach(key=>{
+      const el=document.getElementById('flag-'+key);
+      if(el)data[key]=el.checked;
+    });
+    _confirm(
+      'Save Feature Flags',
+      'This will update platform feature flags in Firestore immediately. Are you sure?',
+      async()=>{
+        try{
+          await this._db.collection('platformConfig').doc('flags').set(data,{merge:true});
+          _toast('Feature flags saved','success');
+        }catch(e){_toast('Error: '+e.message,'error');}
+      },
+      'Save Flags',false
+    );
+  },
+
+  async _loadEarnRates(){
+    const el=document.getElementById('saEarnRates');
+    try{
+      const doc=await this._db.collection('loyaltyRules').doc('default').get();
+      if(!doc.exists){el.innerHTML='<p style="color:var(--muted);font-size:13px">No earn rate data found.</p>';return;}
+      const d=doc.data();
+      el.innerHTML=Object.entries(d).map(([k,v])=>`
+        <div class="toggle-row">
+          <div class="toggle-row-info"><strong>${_esc(k)}</strong></div>
+          <span style="font-size:13px;font-weight:600;color:var(--accent)">${_esc(String(v))}</span>
+        </div>
+      `).join('');
+    }catch(e){el.innerHTML='<p style="color:var(--muted);font-size:13px">'+_esc(e.message)+'</p>';}
+  },
+
+  _commissionEditorData:{},
+
+  async _loadCommissionEditor(){
+    const el=document.getElementById('saCommissionEditor');
+    el.innerHTML='<div class="sa-spinner"><div></div></div>';
+    let data={marketplace:10,food:12,events:8,property:5,vehicles:7,healthcare:5,legal:10,education:8,entertainment:8};
+    try{
+      const doc=await this._db.collection('platformConfig').doc('commissions').get();
+      if(doc.exists)data=Object.assign(data,doc.data());
+    }catch(_){}
+    this._commissionEditorData=data;
+    el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">'+
+      Object.entries(data).map(([cat,val])=>{
+        const rate=typeof val==='object'?val.rate:val;
+        return `
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px">
+            <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">${_esc(cat)}</label>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input class="sa-input" type="number" id="comm-${_esc(cat)}" value="${_esc(String(rate))}" min="0" max="100" step="0.5" style="width:70px">
+              <span style="color:var(--muted)">%</span>
+            </div>
+          </div>
+        `;
+      }).join('')+
+    '</div>';
+  },
+
+  async saveCommissions(){
+    const data={};
+    Object.keys(this._commissionEditorData).forEach(cat=>{
+      const el=document.getElementById('comm-'+cat);
+      if(el)data[cat]={rate:parseFloat(el.value)||0,type:'percentage'};
+    });
+    _confirm(
+      'Save Commission Rates',
+      'This will update commission rates in Firestore. Existing orders are not affected.',
+      async()=>{
+        try{
+          await this._db.collection('platformConfig').doc('commissions').set(data,{merge:true});
+          _toast('Commission rates saved','success');
+        }catch(e){_toast('Error: '+e.message,'error');}
+      },
+      'Save Rates',false
+    );
+  },
+
+  // ══ SECTION 5: Emergency Controls ═══════════════════════
+  async loadEmergency(){
+    // Check maintenance status
+    try{
+      const doc=await this._db.collection('platformConfig').doc('maintenance').get();
+      const active=doc.exists&&doc.data().active;
+      document.getElementById('saMaintenanceStatus').innerHTML=
+        `Status: <strong style="color:${active?'var(--red)':'var(--green)'}">${active?'MAINTENANCE ON':'OPERATIONAL'}</strong>`;
+    }catch(_){
+      document.getElementById('saMaintenanceStatus').textContent='Status: Unknown';
+    }
+  },
+
+  armControl(type){
+    // Hide all confirm gates
+    document.querySelectorAll('.confirm-gate').forEach(el=>el.style.display='none');
+    const cg=document.getElementById('cg-'+type);
+    if(cg){
+      cg.style.display='flex';
+      const inp=cg.querySelector('.saConfirmInput');
+      if(inp){inp.value='';const btn=cg.querySelector('.sa-btn.danger');if(btn)btn.disabled=true;}
+    }
+    _armedControl=type;
+  },
+
+  cancelControl(type){
+    const cg=document.getElementById('cg-'+type);
+    if(cg)cg.style.display='none';
+    _armedControl=null;
+  },
+
+  async executeControl(type){
+    const active=type==='maintenance-on';
+    try{
+      await this._db.collection('platformConfig').doc('maintenance').set({active,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      _toast('Maintenance mode '+(active?'ENABLED':'DISABLED'),'success');
+      document.getElementById('cg-maintenance').style.display='none';
+      this.loadEmergency();
+    }catch(e){_toast('Error: '+e.message,'error');}
+  },
+
+  armKill(feature){
+    _armedKill=feature;
+    document.getElementById('cg-kill-feature').textContent=feature.toUpperCase();
+    document.getElementById('cg-kill').style.display='flex';
+    const inp=document.getElementById('saConfirmInputKill');
+    if(inp){inp.value='';document.getElementById('cg-kill-btn').disabled=true;}
+  },
+
+  async executeKill(){
+    if(!_armedKill)return;
+    try{
+      await this._db.collection('platformConfig').doc('killSwitches').set({
+        [_armedKill]:true,
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+      },{merge:true});
+      _toast(_armedKill.toUpperCase()+' killed','warn',5000);
+      document.getElementById('cg-kill').style.display='none';
+      _armedKill=null;
+    }catch(e){_toast('Error: '+e.message,'error');}
+  },
+
+  executeCacheClear(){
+    try{
+      if('serviceWorker' in navigator&&navigator.serviceWorker.controller){
+        navigator.serviceWorker.controller.postMessage({type:'SKIP_WAITING'});
+        _toast('Cache clear signal sent to service worker','success');
+      }else{
+        _toast('No active service worker found','warn');
+      }
+    }catch(e){_toast('Error: '+e.message,'error');}
+    document.getElementById('cg-cache').style.display='none';
+  },
+
+  async executeEmergencyBroadcast(){
+    const msg=document.getElementById('saEmergencyMsg').value.trim();
+    if(!msg){_toast('Enter a message first','warn');return;}
+    try{
+      const fn=this._fns.httpsCallable('sendPlatformBroadcast');
+      await fn({
+        title:'Emergency Notice',
+        message:msg,
+        priority:'critical',
+        audience:'all',
+        emergency:true
+      });
+      _toast('Emergency broadcast sent','success');
+      document.getElementById('cg-broadcast-emergency').style.display='none';
+      document.getElementById('saEmergencyMsg').value='';
+    }catch(e){_toast('Error: '+e.message,'error');}
+  },
+
+  // ══ SECTION 6: Audit Log ════════════════════════════════
+  async loadAudit(){
+    document.getElementById('saAuditBody').innerHTML=`<tr><td colspan="5" class="empty-cell"><div class="sa-spinner"><div></div></div></td></tr>`;
+    try{
+      const snap=await this._db.collection('auditLog')
+        .where('severity','in',['high','critical'])
+        .orderBy('timestamp','desc')
+        .limit(50)
+        .get();
+      this._auditAll=snap.docs.map(d=>({id:d.id,...d.data()}));
+      this.filterAudit();
+    }catch(e){
+      document.getElementById('saAuditBody').innerHTML=`<tr><td colspan="5" class="empty-cell">Error: ${_esc(e.message)}</td></tr>`;
+    }
+  },
+
+  filterAudit(){
+    const sev=(document.getElementById('saAuditSevFilter')||{}).value||'';
+    const actor=((document.getElementById('saAuditActorFilter')||{}).value||'').toLowerCase();
+    const date=(document.getElementById('saAuditDateFilter')||{}).value||'';
+
+    const list=this._auditAll.filter(e=>{
+      if(sev&&e.severity!==sev)return false;
+      if(actor&&!(e.actorUid||'').toLowerCase().includes(actor))return false;
+      if(date){
+        const eDate=e.timestamp&&e.timestamp.toDate?e.timestamp.toDate():new Date(e.timestamp||0);
+        if(eDate.toISOString().slice(0,10)!==date)return false;
+      }
+      return true;
+    });
+
+    const tb=document.getElementById('saAuditBody');
+    if(!list.length){tb.innerHTML='<tr><td colspan="5" class="empty-cell">No matching audit entries.</td></tr>';return;}
+    tb.innerHTML=list.map(e=>`
+      <tr>
+        <td style="font-size:11px;white-space:nowrap;color:var(--muted)">${_esc(_fmtDate(e.timestamp))}</td>
+        <td><span style="font-family:monospace;font-size:11px">${_esc((e.actorUid||'—').substring(0,14)+'…')}</span></td>
+        <td><span class="audit-action">${_esc(e.action||'—')}</span></td>
+        <td style="font-size:12px">${_esc(e.resource||e.collection||'—')}</td>
+        <td><span class="sev-${_esc(e.severity||'low')}">${_esc((e.severity||'low').toUpperCase())}</span></td>
+      </tr>
+    `).join('');
+  },
+
+  exportAuditCSV(){
+    const sev=(document.getElementById('saAuditSevFilter')||{}).value||'';
+    const actor=((document.getElementById('saAuditActorFilter')||{}).value||'').toLowerCase();
+    const list=this._auditAll.filter(e=>{
+      if(sev&&e.severity!==sev)return false;
+      if(actor&&!(e.actorUid||'').toLowerCase().includes(actor))return false;
+      return true;
+    });
+    const header='Timestamp,Actor UID,Action,Resource,Severity\n';
+    const rows=list.map(e=>[
+      '"'+(_fmtDate(e.timestamp)).replace(/"/g,'""')+'"',
+      '"'+(e.actorUid||'').replace(/"/g,'""')+'"',
+      '"'+(e.action||'').replace(/"/g,'""')+'"',
+      '"'+(e.resource||e.collection||'').replace(/"/g,'""')+'"',
+      '"'+(e.severity||'').replace(/"/g,'""')+'"',
+    ].join(',')).join('\n');
+    const blob=new Blob([header+rows],{type:'text/csv'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='sokoni-audit-log-'+new Date().toISOString().slice(0,10)+'.csv';
+    a.click();
+    _toast('Audit log exported','success');
+  },
+
+  // ══ SECTION 7: Platform Broadcast ═══════════════════════
+  previewBroadcast(){
+    const title=document.getElementById('bcTitle').value.trim();
+    const msg=document.getElementById('bcMessage').value.trim();
+    const audience=document.getElementById('bcAudience').value;
+    const priority=document.getElementById('bcPriority').value;
+    if(!title&&!msg){_toast('Fill in title and message first','warn');return;}
+    document.getElementById('bcPreviewTitle').textContent=title||'(no title)';
+    document.getElementById('bcPreviewMessage').textContent=msg||'(no message)';
+    document.getElementById('bcPreviewAudience').textContent=audience;
+    document.getElementById('bcPreviewPriority').textContent=priority;
+    document.getElementById('bcPreview').style.display='block';
+  },
+
+  async sendBroadcast(e){
+    e.preventDefault();
+    const title=document.getElementById('bcTitle').value.trim();
+    const message=document.getElementById('bcMessage').value.trim();
+    const priority=document.getElementById('bcPriority').value;
+    const audience=document.getElementById('bcAudience').value;
+    if(!title||!message){_toast('Title and message are required','warn');return;}
+    try{
+      const fn=this._fns.httpsCallable('sendPlatformBroadcast');
+      await fn({title,message,priority,audience});
+      _toast('Broadcast sent successfully','success');
+      document.getElementById('bcTitle').value='';
+      document.getElementById('bcMessage').value='';
+      document.getElementById('bcPreview').style.display='none';
+      this.loadBroadcastHistory();
+    }catch(err){
+      _toast('Error: '+err.message,'error');
+    }
+  },
+
+  async loadBroadcastHistory(){
+    const el=document.getElementById('saBroadcastHistory');
+    try{
+      const snap=await this._db.collection('platformBroadcasts')
+        .orderBy('sentAt','desc').limit(10).get();
+      if(snap.empty){el.innerHTML='<p style="color:var(--muted);font-size:13px">No broadcasts sent yet.</p>';return;}
+      el.innerHTML=snap.docs.map(d=>{
+        const bc=d.data();
+        const cls='bc-'+(bc.priority||'info');
+        return `
+          <div class="bc-item ${_esc(cls)}">
+            <strong style="font-size:13px">${_esc(bc.title||'Untitled')}</strong>
+            <p style="font-size:12px;color:var(--muted);margin-top:4px">${_esc(bc.message||'')}</p>
+            <div class="bc-meta">
+              <span>Audience: ${_esc(bc.audience||'all')}</span>
+              <span>Priority: ${_esc(bc.priority||'info')}</span>
+              <span>${_esc(_fmtDate(bc.sentAt))}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }catch(e){el.innerHTML='<p style="color:var(--muted);font-size:13px">'+_esc(e.message)+'</p>';}
+  },
+};
+
+// ═══════════════════════════════════════════════════════════
+// Auth Gate — superAdmin custom claim check
+// ═══════════════════════════════════════════════════════════
+firebase.auth().onAuthStateChanged(async user=>{
+  if(!user){
+    location.href='login.html?redirect=super-admin.html';
+    return;
+  }
+  try{
+    const idTokenResult=await user.getIdTokenResult(true);
+    if(idTokenResult.claims.superAdmin!==true){
+      // Not a super admin — redirect
+      location.href='admin-os.html?error=insufficient_privileges';
+      return;
+    }
+    // Authorized — hide gate, init app
+    document.getElementById('authGate').style.display='none';
+    SA.init(user);
+  }catch(err){
+    console.error('[SuperAdmin] Auth check failed:',err);
+    location.href='login.html?error=auth_check_failed';
+  }
+});
+</script>
+</body>
+</html>

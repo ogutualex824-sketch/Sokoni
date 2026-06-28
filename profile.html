@@ -726,6 +726,9 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#080808;color:#fff;paddi
         <a href="seller-analytics.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:10px;text-decoration:none;color:white;font-size:11px;font-weight:800;">
           <span style="font-size:18px;">&#128200;</span>Seller Analytics
         </a>
+          <a href="super-admin.html" id="superAdminLink" style="display:none;align-items:center;gap:8px;padding:10px 12px;background:rgba(224,64,251,0.05);border:1px solid rgba(224,64,251,0.2);border-radius:10px;text-decoration:none;color:#e040fb;font-size:11px;font-weight:800;">
+            <span style="font-size:18px;">&#x1F451;</span> Super Admin Portal
+          </a>
         <a href="business-analytics.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;text-decoration:none;color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;">
           <span style="font-size:18px;">&#128203;</span>Business
         </a>
@@ -1891,6 +1894,27 @@ function logoutUser(_c){
   window.location.href = 'login.html';
 }
 window.logoutUser = logoutUser;
+
+/* Reveal super-admin link for superAdmin custom claim holders */
+(function(){
+  function _checkSuperAdmin(){
+    if(!window.firebase || !firebase.auth) return;
+    var u=firebase.auth().currentUser;
+    if(!u) return;
+    u.getIdTokenResult(false).then(function(r){
+      if(r.claims&&r.claims.superAdmin===true){
+        var el=document.getElementById('superAdminLink');
+        if(el) el.style.display='flex';
+      }
+    }).catch(function(){});
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',_checkSuperAdmin);
+  } else {
+    _checkSuperAdmin();
+    setTimeout(_checkSuperAdmin,1500);
+  }
+})();
 </script>
 <script defer src="kass-widget.js"></script>
   <!-- Enterprise v2.0: core stack -->
