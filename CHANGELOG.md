@@ -1,4 +1,44 @@
-﻿## [2026-06-29] — POS Setup Wizard v1.0 (pos-setup.html)
+﻿## [2026-06-29] — Firestore Index Split + POS Boot Guard
+
+### Summary
+Two infrastructure and UX hardening changes:
+
+1. **Firestore Index Splitter** (`scripts/split-indexes.js`) — Node.js script that reads the
+   226-entry `firestore.indexes.json` and splits it into a primary database file (≤200 indexes)
+   and a `firestore.indexes.sokoni-ops.json` file for the `sokoni-ops` admin/monitoring database.
+   Includes a safety exit-with-error if primary would exceed 200, printing the top collections
+   by count so the engineer can adjust the ops list. On first run: 199 primary + 27 ops.
+
+2. **POS boot guard** (`pos.html`) — Added an inline IIFE at the top of the first `<script>`
+   block that checks `localStorage` for `sokoni_setup_complete` and `sokoni_merchant_id`. Fresh
+   devices with no merchant ID are immediately redirected to `pos-setup.html` before any other JS
+   runs, preventing the POS app from loading in an unconfigured state.
+
+### Files Changed
+- `scripts/split-indexes.js` — NEW; index splitter with 28-collection ops list, safety guard
+- `firestore.indexes.json` — UPDATED; trimmed to 199 primary indexes (was 226)
+- `firestore.indexes.sokoni-ops.json` — NEW; 27 ops/monitoring indexes for sokoni-ops DB
+- `pos.html` — UPDATED; boot guard IIFE inserted as first JS in page
+- `CHANGELOG.md` — UPDATED
+
+### Security / Ops
+- Index split enables separate IAM/quota management for the sokoni-ops database
+- Boot guard closes the gap where a fresh device could reach `pos.html` without setup, avoiding
+  unauthenticated Firestore reads and ensuring `sokoni_merchant_id` is always present before
+  the POS app initialises
+
+### Deploy Steps
+```bash
+# Deploy primary database indexes
+firebase deploy --only firestore:indexes
+
+# Deploy sokoni-ops database indexes
+firebase deploy --only firestore:indexes --database sokoni-ops --config firestore.indexes.sokoni-ops.json
+```
+
+---
+
+## [2026-06-29] — POS Setup Wizard v1.0 (pos-setup.html)
 
 ### Summary
 Added `pos-setup.html` — the plug-and-play first-time POS setup wizard for SOKONI. A standalone,

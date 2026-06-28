@@ -15,6 +15,18 @@
   <script src="sokoni-branch.js"></script>
   <!-- Keyboard avoidance for POS wizard — inline for immediate availability -->
   <script>
+  // Plug-and-Play boot guard — redirect first-time users to setup wizard
+  (function() {
+    var setupDone = localStorage.getItem('sokoni_setup_complete');
+    if (!setupDone || setupDone !== '1') {
+      // Check if this is a fresh device (no merchantId stored)
+      var merchantId = localStorage.getItem('sokoni_merchant_id');
+      if (!merchantId) {
+        window.location.replace('pos-setup.html');
+      }
+    }
+  })();
+
   (function(){
     /* iOS visual viewport keyboard avoidance for #pos-wizard */
     function _adjustForKeyboard() {
