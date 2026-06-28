@@ -393,6 +393,20 @@ exports.processPendingPayouts = onSchedule(
   async () => {
     const db      = _db();
     const privKey = INTASEND_PRIV.value();
+
+    /* Recover payouts stuck in 'processing' for >10 min (CF crash recovery) */
+    const stuckCutoff = admin.firestore.Timestamp.fromMillis(Date.now() - 10 * 60 * 1000);
+    const stuckSnap   = await db.collection('payouts')
+      .where('status', '==', 'processing')
+      .where('processingAt', '<', stuckCutoff)
+      .limit(50).get().catch(() => null);
+    if (stuckSnap && !stuckSnap.empty) {
+      const resetBatch = db.batch();
+      stuckSnap.docs.forEach(d => resetBatch.update(d.ref, { status: 'pending', failureReason: 'Recovered from stuck processing state' }));
+      await resetBatch.commit().catch(e => logger.error('[finos] Stuck-payout reset failed', { error: e.message }));
+      logger.warn('[finos] Reset stuck payouts', { count: stuckSnap.size });
+    }
+
     const snap    = await db.collection('payouts').where('status', '==', 'pending').limit(100).get();
     if (snap.empty) return;
 

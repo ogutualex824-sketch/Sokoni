@@ -677,3 +677,63 @@ exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true }, async (re
 
   return { success: true, newBalance };
 });
+
+// ─── Scheduled: clear stale pending wallet top-ups ─────────────────────────
+// Q2 fix: pendingTopUp set during initiateWalletTopUp but never cleared if
+// the user never calls confirmWalletTopUp (network loss, app kill, etc.)
+
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+
+exports.sweepStaleWalletTopUps = onSchedule(
+  { schedule: 'every 30 minutes', timeZone: 'Africa/Nairobi', secrets: [INTASEND_KEY] },
+  async () => {
+    const db      = getFirestore();
+    const cutoff  = Timestamp.fromMillis(Date.now() - 30 * 60 * 1000); // 30 min ago
+    const stale   = await db.collection('walletTransactions')
+      .where('status', '==', 'pending')
+      .where('createdAt', '<', cutoff)
+      .limit(50)
+      .get();
+
+    if (stale.empty) return;
+
+    let resolved = 0;
+    for (const doc of stale.docs) {
+      const tx = doc.data();
+      let finalStatus = 'expired';
+
+      /* Poll IntaSend if we have an invoiceId */
+      if (tx.invoiceId) {
+        try {
+          const IntaSend = require('intasend-node');
+          const client   = new IntaSend(INTASEND_KEY.value(), { testMode: process.env.NODE_ENV !== 'production' });
+          const result   = await client.collection().status(tx.invoiceId);
+          const state    = (result?.invoice?.state || result?.state || '').toUpperCase();
+          if (state === 'COMPLETE') {
+            finalStatus = 'completed';
+          } else if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(state)) {
+            finalStatus = 'failed';
+          } else {
+            continue; // still genuinely pending — skip
+          }
+        } catch (_) { /* IntaSend unreachable — expire anyway */ }
+      }
+
+      await db.runTransaction(async t => {
+        const walletRef  = db.collection('wallets').doc(tx.uid);
+        const walletSnap = await t.get(walletRef);
+        t.update(doc.ref, { status: finalStatus, resolvedAt: Timestamp.now(), resolvedBy: 'sweepStaleWalletTopUps' });
+        if (walletSnap.exists && walletSnap.data().pendingTopUp === doc.id) {
+          t.update(walletRef, { pendingTopUp: null });
+        }
+        if (finalStatus === 'completed') {
+          const amt = tx.amount || 0;
+          t.update(walletRef, { balance: FieldValue.increment(amt), lastTopUp: Timestamp.now() });
+        }
+      }).catch(e => console.error('[sweepStaleWalletTopUps] txn error:', e.message));
+
+      resolved++;
+    }
+    console.log(`[sweepStaleWalletTopUps] Resolved ${resolved}/${stale.size} stale top-ups`);
+  }
+);

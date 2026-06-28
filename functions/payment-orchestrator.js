@@ -158,17 +158,21 @@ exports.createPayment = onCall({ enforceAppCheck: true }, async (request) => {
     throw new HttpsError('invalid-argument', 'orderId or referenceId required');
   }
 
-  /* Idempotency check */
-  if (idempotencyKey) {
-    const existing = await admin.firestore()
-      .collection('payments')
-      .where('idempotencyKey', '==', _san(idempotencyKey, 128))
-      .where('buyerId', '==', auth.uid)
-      .limit(1)
-      .get();
-    if (!existing.empty) {
-      return { paymentId: existing.docs[0].id, status: STATUS.CREATED, idempotent: true };
-    }
+  /* Idempotency: client key takes precedence; if absent, derive a stable key
+     from (buyerId + orderId/referenceId) so browser refreshes don't double-charge */
+  const stableRef = orderId || referenceId;
+  const resolvedKey = idempotencyKey
+    ? _san(idempotencyKey, 128)
+    : require('crypto').createHash('sha256').update(`${auth.uid}|${stableRef}`).digest('hex');
+
+  const existing = await admin.firestore()
+    .collection('payments')
+    .where('idempotencyKey', '==', resolvedKey)
+    .where('buyerId', '==', auth.uid)
+    .limit(1)
+    .get();
+  if (!existing.empty) {
+    return { paymentId: existing.docs[0].id, status: STATUS.CREATED, idempotent: true };
   }
 
   const ref       = admin.firestore().collection('payments').doc();
@@ -183,7 +187,7 @@ exports.createPayment = onCall({ enforceAppCheck: true }, async (request) => {
     provider,
     orderId:        orderId       ? _san(orderId, 64)       : null,
     referenceId:    referenceId   ? _san(referenceId, 128)  : null,
-    idempotencyKey: idempotencyKey ? _san(idempotencyKey, 128) : null,
+    idempotencyKey: resolvedKey,
     status:         STATUS.CREATED,
     attempts:       0,
     maxAttempts:    3,

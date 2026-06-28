@@ -4824,13 +4824,20 @@ exports.intasendWebhook = onRequest(
     });
 
     if (fsStatus === "COMPLETE") {
-      const payData       = existing;
-      const commissionPct = payData.meta?.commissionPct || 10;
+      const payData  = existing;
+      const category = payData.meta?.category || "default";
+      /* Commission rate MUST come from server-side config — never trust client metadata */
+      const SERVER_COMMISSION_RATES = {
+        marketplace: 8, food: 10, property: 5, vehicle: 5, jobs: 12,
+        healthcare: 8, legal: 10, education: 8, entertainment: 10,
+        events: 8, logistics: 10, default: 10,
+      };
+      const commissionPct = SERVER_COMMISSION_RATES[category] || SERVER_COMMISSION_RATES.default;
       const sokoniCut     = Math.round(amount * commissionPct / 100);
       await db.collection("commissionLedger").add({
         ref: apiRef, checkoutId, uid: payData.uid,
         providerName:  payData.meta?.providerName || "",
-        category:      payData.meta?.category || "default",
+        category,
         commissionPct, sokoniCut,
         providerNet:   amount - sokoniCut,
         serviceTotal:  amount,
@@ -8109,7 +8116,8 @@ exports.requestSellerPayout    = wallet.requestSellerPayout;
 exports.getPayoutHistory       = wallet.getPayoutHistory;
 exports.adminProcessPayout     = wallet.adminProcessPayout;
 exports.adminGetPendingPayouts = wallet.adminGetPendingPayouts;
-exports.refundToWallet         = wallet.refundToWallet;
+exports.refundToWallet           = wallet.refundToWallet;
+exports.sweepStaleWalletTopUps   = wallet.sweepStaleWalletTopUps;
 
 /* ── Jobs Marketplace v1.0 ───────────────────────────────────────────────── */
 const jobs = require('./jobs');

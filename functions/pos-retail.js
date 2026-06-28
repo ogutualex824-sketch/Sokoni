@@ -36,10 +36,17 @@ exports.posSyncToMarketplace = onCall(
     /* Verify caller is authenticated */
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in');
 
-    const { branchId, items } = request.data;
+    const { branchId, items, saleId } = request.data;
     if (!Array.isArray(items) || items.length === 0) {
       throw new HttpsError('invalid-argument', 'items must be a non-empty array');
     }
+    if (!saleId) throw new HttpsError('invalid-argument', 'saleId is required for idempotency');
+
+    /* Idempotency: reject duplicate syncs for the same sale */
+    const idempRef = db.collection('posSyncIdempotency').doc(String(saleId).slice(0, 128));
+    const idempSnap = await idempRef.get();
+    if (idempSnap.exists) return { synced: 0, duplicate: true };
+    await idempRef.set({ saleId, syncedAt: admin.firestore.FieldValue.serverTimestamp(), uid: request.auth.uid });
 
     const batch = db.batch();
     const errors = [];
