@@ -66,14 +66,20 @@
       {
         "source": "service-worker.js",
         "headers": [
-          { "key": "Cache-Control",        "value": "no-cache, no-store, must-revalidate" },
+          { "key": "Cache-Control",         "value": "no-cache, no-store, must-revalidate" },
+          { "key": "CDN-Cache-Control",     "value": "no-store" },
+          { "key": "Cloudflare-CDN-Cache-Control", "value": "no-store" },
+          { "key": "Surrogate-Control",     "value": "no-store" },
           { "key": "Service-Worker-Allowed","value": "/" }
         ]
       },
       {
         "source": "firebase-messaging-sw.js",
         "headers": [
-          { "key": "Cache-Control",        "value": "no-cache, no-store, must-revalidate" },
+          { "key": "Cache-Control",         "value": "no-cache, no-store, must-revalidate" },
+          { "key": "CDN-Cache-Control",     "value": "no-store" },
+          { "key": "Cloudflare-CDN-Cache-Control", "value": "no-store" },
+          { "key": "Surrogate-Control",     "value": "no-store" },
           { "key": "Service-Worker-Allowed","value": "/" }
         ]
       },
