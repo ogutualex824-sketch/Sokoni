@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260628-async-jobs-v1";
+const CACHE_VERSION = "sokoni-20260628-event-hub-v1";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -135,6 +135,15 @@ const PRECACHE_STATIC = [
   "/pos-hq.html", "/pos-bi.html", "/pos-ai.html",
   /* SmartPOS 4.0 — Polish, Scale & Market Readiness */
   "/pos-onboard.html", "/pos-daily.html", "/pos-observability.html", "/pos-marketplace.html",
+  /* Security 6.0 — Security Operations Center */
+  "/security-center.html",
+  /* Vision 2030 — Executive Dashboard, Release Certification, Developer & Wholesale Portals */
+  "/executive-dashboard.html",
+  "/release-readiness.html",
+  "/developer-portal.html",
+  "/wholesale-portal.html",
+  "/event-hub.html",
+  "/event-manager.html",
   "/pos-checkout.html", "/pos-display.html", "/pos-loyalty-engine.js",
   "/print-station.html", "/pos-printer-setup.html", "/manager-auth.html", "/commissioning.html",
   /* Self-checkout kiosk */
@@ -318,7 +327,8 @@ self.addEventListener("fetch", event => {
 
   /* Frequently-updated UI scripts â†' Network First so changes are instant */
   const ALWAYS_FRESH = ["scroll-top.js","contact-guard.js","script.js","style.css","mobile.css","premium.css","seller.css","adult-gate.js",
-    "sokoni-desktop.css","security.js","sokoni-permissions.js","sokoni-pay.js","sokoni-db.js","sokoni-config.js"];
+    "sokoni-desktop.css","security.js","sokoni-permissions.js","sokoni-pay.js","sokoni-db.js","sokoni-config.js",
+    "sokoni-payment-engine.js","sokoni-payment-trust.js","sokoni-fraud-engine.js","sokoni-webhook-engine.js"];
   if (ALWAYS_FRESH.some(f => url.pathname.endsWith(f))) {
     event.respondWith(networkFirst(request, STATIC_CACHE));
     return;

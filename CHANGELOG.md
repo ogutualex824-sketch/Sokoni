@@ -1,4 +1,144 @@
-﻿## [2026-06-28] — Final Infrastructure Sprint: Enterprise Operations & Launch Platform
+﻿## [2026-06-28] — Event Hub v1.0
+
+### Summary
+Full event lifecycle platform: event creation, multi-tier ticketing, QR gate check-in, organizer
+analytics, promo codes. 19 Cloud Functions (18 callable + 1 scheduled). Two HTML portals:
+`event-hub.html` (public discovery) and `event-manager.html` (organizer dashboard). Firestore
+rules for 7 new collections. 3% platform commission on paid tickets.
+
+### New Cloud Functions (`functions/event-hub.js` — 19 CFs)
+- `createEvent`, `updateEvent`, `publishEvent`, `cancelEvent` — event lifecycle
+- `getEvent`, `listEvents`, `searchEvents` — public discovery with category + text filters
+- `createTicketTier`, `updateTicketTier` — multi-tier ticketing (Free/Paid, MOQ, perks, sale deadline)
+- `purchaseTickets` — atomic: Firestore transaction, seat decrement, idempotency key, promo code, ticket doc generation, 3% platform fee
+- `getMyTickets`, `getTicket` — buyer ticket access with QR data
+- `checkInTicket` — gate scan: validates token, marks used, logs to `eventCheckins`
+- `getEventOrders`, `getEventAnalytics`, `getOrganizerDashboard` — organizer management
+- `createEventPromoCode`, `validateEventPromoCode` — discount codes (percent/fixed, max uses, expiry)
+- `autoEndEvents` — scheduled hourly: moves past-startDate live events to `ended` status
+
+### New HTML Portals (LIVE)
+- `event-hub.html` — Public discovery: hero search, 14 category pills, event card grid, event detail modal with tier selection, quantity picker, promo code, QR ticket confirmation, My Tickets panel
+- `event-manager.html` — 7-tab organizer SPA: Dashboard, My Events, Create/Edit Event, Orders table, Gate Check-In (QR scanner), Analytics (tier breakdown, check-in rate, revenue), Promo Codes
+
+### Files Modified
+- `functions/index.js` — 19 new CF exports wired
+- `firestore.rules` — 7 new collection rules (events, eventTicketTiers, eventOrders, eventTickets, eventCheckins, eventPromoCodes, eventOrderIdempotency)
+- `service-worker.js` — event-hub.html + event-manager.html precached; CACHE_VERSION → `sokoni-20260628-event-hub-v1`
+
+### Database Changes (7 new collections — no composite indexes required)
+- `events/{eventId}` — event details, status, totalTicketsSold, checkinsCount
+- `eventTicketTiers/{tierId}` — per-event tiers with sold counter
+- `eventOrders/{orderId}` — buyer purchase records with platform fee split
+- `eventTickets/{ticketId}` — individual tickets with QR token
+- `eventCheckins/{checkinId}` — immutable gate check-in audit log
+- `eventPromoCodes/{codeId}` — organizer discount codes
+- `eventOrderIdempotency/{key}` — idempotency guard (CF-only, no client access)
+
+### Security Notes
+- `purchaseTickets` uses Firestore transaction for atomic seat count decrement
+- `checkInTicket` validates HMAC-equivalent token before marking used
+- All 19 CFs: `enforceAppCheck: true`
+- Organizer access: role >= 2 (seller) — any seller can host events
+- Gate check-in: organizer UID match or admin (role >= 4)
+- `cancelEvent` marks all paid orders `pending_refund` in a single batch write
+- XSS: `esc()` on all dynamic DOM content in both HTML files
+
+### Performance Notes
+- `listEvents` uses single-field queries only — no composite indexes consumed
+- `purchaseTickets` pre-validates tier + event before entering transaction
+- `autoEndEvents` paginates 100 events per hourly run
+
+### Deployment
+- Hosting: LIVE (event-hub.html, event-manager.html deployed 2026-06-28)
+- Firestore rules: LIVE (7 new collection rules)
+- CFs (19): CODE COMPLETE — pending Cloud Run quota increase
+
+---
+
+## [2026-06-28] — SOKONI Vision 2030: Enterprise Platform Completion Sprint
+
+### Summary
+Delivers the final enterprise platform modules to complete SOKONI Vision 2030. Adds Release Readiness
+Certification System (8 CFs with GO/NO-GO recommendation engine), Executive BI Dashboard
+(6-tab C-suite dashboard), B2B/Wholesale Commerce module (12 CFs), Developer Portal, and
+Vision 2030 Roadmap. Platform reaches ~1,100+ deployed CFs across 130+ modules.
+
+### New Cloud Functions
+
+**`functions/release-readiness.js` — 8 CFs**
+- `runReleaseReadinessCheck` — Master orchestrator; runs 5 checks in parallel; weighted score:
+  Infrastructure 20%, Security 30%, Platform 25%, Performance 15%, Compliance 10%
+- `checkInfrastructure` — 6 items: secrets (HMAC blocker), Redis, Firestore rules, Admin SDK
+- `checkSecurityReadiness` — 6 items: HMAC key (blocker), fraud alerts, audit log, scorecard ≥70
+- `checkPlatformModules` — 7 items: sellers, orders, DLQ, payments, POS, campaigns, AI key
+- `checkPerformanceReadiness` — 5 items: DLQ count, stuck jobs, Redis, queue, CF error rate
+- `checkComplianceReadiness` — 5 items: audit immutability, eTIMS, data retention, PITR, privacy
+- `approveRelease` — Super admin gate; NO-GO requires "OVERRIDE" in notes; writes audit log
+- `getLatestReleaseReport` — Queries `releaseReports` by version or latest
+
+**`functions/b2b-wholesale.js` — 12 CFs**
+- `createWholesaleAccount`, `approveWholesaleAccount` — Account lifecycle with KRA PIN validation
+- `createWholesaleOrder`, `approveWholesaleOrder` — Net-30 B2B orders, wholesale discount engine
+- `getWholesaleOrders`, `processWholesalePayment` — Orders query + wallet/credit-note payments
+- `issueWholesaleCreditNote`, `getWholesaleCreditNotes` — Credit note issuance (90-day TTL)
+- `getWholesaleCatalog`, `updateWholesaleProduct` — Wholesale catalog with min order qty
+- `getWholesaleAnalytics`, `getWholesaleAccount` — GMV analytics + ledger history
+
+### New HTML Dashboards
+- `executive-dashboard.html` — 6-tab C-suite platform overview (platform health, revenue,
+  SmartPOS, people, security, ops); real-time Canvas charts; role >= 4 gate
+- `release-readiness.html` — Release certification dashboard; GO/NO-GO banner; score ring;
+  5 expandable check cards; super_admin approval workflow; report history
+- `developer-portal.html` — 5-tab developer SPA: API Reference (7 groups, 22+ endpoints with
+  param tables), Quickstart (6-step guide), Webhooks & Events (16 events + Node.js verify
+  example), SDKs & Tools (10 SDK cards), API Keys (create/list/revoke); role >= 3 gate;
+  calls `createAPIKey`, `listAPIKeys`, `revokeAPIKey` CFs
+- `wholesale-portal.html` — B2B wholesale portal; 4-state auth flow (apply/pending/suspended/main);
+  5-tab SPA: Dashboard, Catalog (pagination, search), Place Order (MOQ enforcement, discount tiers,
+  due-date display), My Orders (overdue highlighting, pay modal), Credit Notes; KRA PIN validation;
+  server prices enforced (client never trusted)
+
+### New Documentation
+- `VISION_2030_ROADMAP.md` — Complete platform roadmap tracking all 130+ modules
+- `SOKONI_PLATFORM_STATUS.md` — Infrastructure status: CFs, portals, secrets, security posture,
+  compliance, pre-launch action items
+- `DEVELOPER_PLATFORM.md` — Developer portal reference documentation
+
+### Files Modified
+- `functions/index.js` — 20 new CF exports wired (8 release-readiness + 12 b2b-wholesale)
+- `firestore.rules` — 5 new collection rules (wholesaleAccounts, wholesaleOrders, wholesaleLedger,
+  wholesaleCreditNotes, releaseReports) — all CF-write-only
+- `firebase.json` — COEP upgraded from report-only to full enforcement (`require-corp`)
+- `service-worker.js` — Added 4 new portals to PRECACHE_STATIC;
+  CACHE_VERSION bumped to `sokoni-20260628-vision2030-v2`
+
+### Security Notes
+- All new CFs: `enforceAppCheck: true`, RBAC enforced per CF
+- `approveRelease` requires super_admin (role 5); NO-GO override gate with audit trail
+- XSS: `escHtml()` applied to all dynamic DOM content in all new HTML files
+- B2B wholesale: server-side price validation (client prices never trusted)
+- Idempotency: `processWholesalePayment` checks `paidAt` before processing
+
+### Performance Notes
+- Release readiness: infrastructure check runs first, then 4 checks run concurrently via `Promise.all`
+- Progressive Firestore writes during check run so real-time progress is visible
+- Executive dashboard: auto-refreshes every 60s; Canvas charts (no external libraries)
+
+### Database Changes
+- New collection: `releaseReports/{reportId}` — CF-write-only; status: running|complete|approved|rejected
+- New collections (B2B): `wholesaleAccounts`, `wholesaleOrders`, `wholesaleLedger`,
+  `wholesaleCreditNotes`
+
+### Deployment
+- Hosting: DEPLOYED (executive-dashboard.html, release-readiness.html live)
+- Firestore rules: DEPLOYED (releaseReports rule active)
+- CFs (20 new): CODE COMPLETE — blocked on Cloud Run quota increase (1,017/1,300, pending ~48h)
+- After quota approval: `firebase deploy --only functions`
+
+---
+
+## [2026-06-28] — Final Infrastructure Sprint: Enterprise Operations & Launch Platform
 
 ### Summary
 Transforms SOKONI from feature-complete into a self-monitoring, self-healing, enterprise-grade

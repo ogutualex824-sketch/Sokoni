@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event Manager — SOKONI</title>
+  <link rel="icon" href="/favicon.ico" />
+  <style>
+    :root {
+      --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+      --text:#e6edf3;--text2:#8b949e;
+      --green:#3fb950;--blue:#58a6ff;--purple:#bc8cff;--orange:#d29922;--red:#f85149;
+      --r:8px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh;}
+    a{color:var(--blue);}
+    .hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+    .hdr-logo{font-size:17px;font-weight:700;}
+    .hdr-logo span{color:var(--blue);}
+    .hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+    .btn-sm{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;font-size:12px;}
+    .btn-sm:hover{background:#2d333b;}
+    .btn-primary{padding:8px 18px;background:var(--blue);color:#000;border:none;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;}
+    .btn-primary:hover{opacity:.85;}
+    .btn-danger{padding:6px 14px;border:1px solid rgba(248,81,73,.4);border-radius:6px;background:rgba(248,81,73,.1);color:var(--red);cursor:pointer;font-size:12px;}
+    .btn-success{padding:6px 14px;border:none;border-radius:6px;background:var(--green);color:#000;cursor:pointer;font-weight:600;font-size:12px;}
+    .layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 56px);}
+    .sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:16px 0;}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;color:var(--text2);font-size:13px;}
+    .nav-item:hover{background:var(--bg3);color:var(--text);}
+    .nav-item.active{color:var(--blue);background:rgba(88,166,255,.08);font-weight:600;}
+    .nav-icon{font-size:16px;width:20px;text-align:center;}
+    .nav-divider{border-top:1px solid var(--border);margin:8px 0;}
+    .content{padding:24px;max-width:1100px;}
+    .section{display:none;}
+    .section.active{display:block;}
+    .page-title{font-size:20px;font-weight:800;margin-bottom:20px;}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:16px;}
+    .card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);margin-bottom:14px;}
+    .g2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+    .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+    .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+    @media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr 1fr;}.layout{grid-template-columns:1fr;}.sidebar{display:none;}}
+    .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;}
+    .stat-val{font-size:26px;font-weight:800;margin-bottom:4px;}
+    .stat-label{font-size:11px;color:var(--text2);}
+    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;}
+    .badge-green{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.3);}
+    .badge-blue{background:rgba(88,166,255,.15);color:var(--blue);border:1px solid rgba(88,166,255,.3);}
+    .badge-orange{background:rgba(210,153,34,.15);color:var(--orange);border:1px solid rgba(210,153,34,.3);}
+    .badge-gray{background:rgba(139,148,158,.1);color:var(--text2);border:1px solid var(--border);}
+    .badge-red{background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.3);}
+    .form-group{margin-bottom:14px;}
+    .form-label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px;}
+    .form-label span{color:var(--red);}
+    .form-input,.form-select,.form-textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;}
+    .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--blue);}
+    .form-select option{background:var(--bg3);}
+    .form-textarea{resize:vertical;min-height:80px;}
+    .event-row{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:14px;display:flex;gap:14px;align-items:center;margin-bottom:8px;cursor:pointer;}
+    .event-row:hover{border-color:rgba(88,166,255,.3);}
+    .event-row-info{flex:1;}
+    .event-row-title{font-size:14px;font-weight:700;margin-bottom:4px;}
+    .event-row-meta{font-size:11px;color:var(--text2);}
+    .event-row-actions{display:flex;gap:6px;flex-shrink:0;}
+    .tbl{width:100%;border-collapse:collapse;font-size:12px;}
+    .tbl th{text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);border-bottom:1px solid var(--border);}
+    .tbl td{padding:8px 8px;border-bottom:1px solid var(--border);vertical-align:middle;}
+    .tbl tr:last-child td{border-bottom:none;}
+    .tbl tr:hover td{background:rgba(255,255,255,.02);}
+    .checkin-input-row{display:flex;gap:8px;margin-bottom:16px;}
+    .checkin-input-row input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-size:14px;outline:none;}
+    .checkin-input-row button{padding:10px 20px;background:var(--green);color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;}
+    .checkin-result{padding:16px;border-radius:8px;font-size:14px;margin-top:8px;display:none;}
+    .checkin-result.success{background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);}
+    .checkin-result.error{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red);}
+    .checkin-result.warn{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--orange);}
+    .code-block{background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:12px;font-family:monospace;font-size:12px;overflow-x:auto;}
+    .empty{text-align:center;padding:40px;color:var(--text2);}
+    .progress-bar{background:var(--bg3);border-radius:4px;height:6px;overflow:hidden;margin-top:6px;}
+    .progress-fill{height:100%;border-radius:4px;background:var(--blue);transition:width .3s;}
+    #toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:13px;z-index:9999;display:none;}
+    #toast.show{display:block;}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .6s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .promo-code-badge{font-family:monospace;font-size:12px;color:var(--green);background:rgba(63,185,80,.08);padding:2px 8px;border-radius:4px;border:1px solid rgba(63,185,80,.2);}
+  </style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-logo">SOKONI <span>Event Manager</span></div>
+  <div class="hdr-right">
+    <span id="uid-badge" style="font-size:11px;color:var(--text2)"></span>
+    <a href="/event-hub.html" class="btn-sm">← Browse Events</a>
+    <button class="btn-sm" onclick="firebase.auth(app).signOut().then(()=>location.href='/login.html')">Sign Out</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar">
+    <div class="nav-item active" onclick="showSection('dashboard',this)"><span class="nav-icon">📊</span>Dashboard</div>
+    <div class="nav-item" onclick="showSection('events',this)"><span class="nav-icon">📅</span>My Events</div>
+    <div class="nav-item" onclick="showSection('create',this)"><span class="nav-icon">➕</span>Create Event</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item" onclick="showSection('orders',this)"><span class="nav-icon">🎟</span>Orders</div>
+    <div class="nav-item" onclick="showSection('checkin',this)"><span class="nav-icon">✅</span>Gate Check-In</div>
+    <div class="nav-item" onclick="showSection('analytics',this)"><span class="nav-icon">📈</span>Analytics</div>
+    <div class="nav-item" onclick="showSection('promo',this)"><span class="nav-icon">🏷</span>Promo Codes</div>
+  </nav>
+
+  <div class="content">
+
+    <!-- DASHBOARD -->
+    <section id="sec-dashboard" class="section active">
+      <div class="page-title">Dashboard</div>
+      <div class="g4" id="dash-stats" style="margin-bottom:20px">
+        <div class="stat-card"><div class="stat-val" id="stat-events">—</div><div class="stat-label">Total Events</div></div>
+        <div class="stat-card"><div class="stat-val" id="stat-tickets">—</div><div class="stat-label">Tickets Sold</div></div>
+        <div class="stat-card"><div class="stat-val" id="stat-revenue">—</div><div class="stat-label">Total Revenue (KES)</div></div>
+        <div class="stat-card"><div class="stat-val" id="stat-checkins">—</div><div class="stat-label">Check-Ins</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Upcoming Events</div>
+        <div id="dash-upcoming"></div>
+      </div>
+    </section>
+
+    <!-- MY EVENTS -->
+    <section id="sec-events" class="section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div class="page-title" style="margin:0">My Events</div>
+        <button class="btn-primary" onclick="showSection('create',document.querySelector('.nav-item:nth-child(3)'))">+ New Event</button>
+      </div>
+      <div id="events-list"></div>
+    </section>
+
+    <!-- CREATE EVENT -->
+    <section id="sec-create" class="section">
+      <div class="page-title" id="create-title">Create Event</div>
+      <input type="hidden" id="edit-event-id" />
+      <div class="g2">
+        <div>
+          <div class="card">
+            <div class="card-title">Basic Info</div>
+            <div class="form-group">
+              <label class="form-label">Title <span>*</span></label>
+              <input class="form-input" id="ev-title" placeholder="Event title" maxlength="120" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Category <span>*</span></label>
+              <select class="form-select" id="ev-category">
+                <option value="">Select category</option>
+                <option value="concerts">Concerts</option>
+                <option value="conferences">Conferences</option>
+                <option value="weddings">Weddings</option>
+                <option value="sports">Sports</option>
+                <option value="comedy">Comedy</option>
+                <option value="food_drink">Food & Drink</option>
+                <option value="arts">Arts & Culture</option>
+                <option value="education">Education</option>
+                <option value="networking">Networking</option>
+                <option value="festivals">Festivals</option>
+                <option value="fashion">Fashion</option>
+                <option value="fitness">Fitness</option>
+                <option value="corporate">Corporate</option>
+                <option value="charity">Charity</option>
+                <option value="kids">Kids</option>
+                <option value="religious">Religious</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <textarea class="form-textarea" id="ev-desc" placeholder="Describe your event…" rows="5"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Banner Image URL</label>
+              <input class="form-input" id="ev-banner" placeholder="https://…" />
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="card-title">Date & Location</div>
+            <div class="form-group">
+              <label class="form-label">Start Date & Time <span>*</span></label>
+              <input class="form-input" id="ev-start" type="datetime-local" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">End Date & Time</label>
+              <input class="form-input" id="ev-end" type="datetime-local" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Venue Name</label>
+              <input class="form-input" id="ev-venue" placeholder="KICC, The Alchemist…" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Address</label>
+              <input class="form-input" id="ev-address" placeholder="Street address" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">City</label>
+              <input class="form-input" id="ev-city" placeholder="Nairobi" />
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="ev-online" style="accent-color:var(--blue);width:14px;height:14px" />
+              <label class="form-label" for="ev-online" style="margin:0;cursor:pointer">This is an online event</label>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">Settings</div>
+            <div class="form-group">
+              <label class="form-label">Currency</label>
+              <select class="form-select" id="ev-currency">
+                <option value="KES">KES — Kenyan Shilling</option>
+                <option value="USD">USD — US Dollar</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Total Capacity (optional)</label>
+              <input class="form-input" id="ev-capacity" type="number" min="1" placeholder="e.g. 500" />
+            </div>
+          </div>
+          <button class="btn-primary" style="width:100%;padding:12px" onclick="saveEvent()">Save Event</button>
+          <div style="font-size:11px;color:var(--text2);margin-top:8px;text-align:center">Saved as draft. Add ticket tiers then publish.</div>
+        </div>
+      </div>
+
+      <!-- Ticket tiers (shown after event is created) -->
+      <div id="tiers-section" style="display:none;margin-top:24px">
+        <div class="card">
+          <div class="card-title">Ticket Tiers</div>
+          <div id="tier-list-mgr" style="margin-bottom:16px"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end">
+            <div class="form-group" style="margin:0"><label class="form-label">Tier Name</label><input class="form-input" id="new-tier-name" placeholder="General Admission" /></div>
+            <div class="form-group" style="margin:0"><label class="form-label">Price (KES)</label><input class="form-input" id="new-tier-price" type="number" min="0" placeholder="0 = Free" /></div>
+            <div class="form-group" style="margin:0"><label class="form-label">Quantity</label><input class="form-input" id="new-tier-qty" type="number" min="1" /></div>
+            <button class="btn-primary" style="padding:8px 16px" onclick="addTier()">Add Tier</button>
+          </div>
+          <div class="form-group" style="margin-top:8px"><label class="form-label">Perks (comma-separated)</label><input class="form-input" id="new-tier-perks" placeholder="Free parking, VIP lounge, Buffet" /></div>
+        </div>
+        <button class="btn-success" style="width:100%;padding:12px;font-size:14px" onclick="publishCurrent()">🚀 Publish Event</button>
+      </div>
+    </section>
+
+    <!-- ORDERS -->
+    <section id="sec-orders" class="section">
+      <div class="page-title">Orders</div>
+      <div class="form-group" style="max-width:320px;margin-bottom:16px">
+        <label class="form-label">Select Event</label>
+        <select class="form-select" id="orders-event-select" onchange="loadOrders()">
+          <option value="">Choose an event…</option>
+        </select>
+      </div>
+      <div id="orders-table"></div>
+    </section>
+
+    <!-- GATE CHECK-IN -->
+    <section id="sec-checkin" class="section">
+      <div class="page-title">Gate Check-In</div>
+      <div class="form-group" style="max-width:320px;margin-bottom:16px">
+        <label class="form-label">Select Event</label>
+        <select class="form-select" id="checkin-event-select">
+          <option value="">Choose an event…</option>
+        </select>
+      </div>
+      <div class="card" style="max-width:520px">
+        <div class="card-title">Scan / Enter Ticket ID</div>
+        <div class="checkin-input-row">
+          <input id="checkin-input" placeholder="Ticket ID or scan QR code…" onkeydown="if(event.key==='Enter')doCheckin()" />
+          <button onclick="doCheckin()">Check In ✓</button>
+        </div>
+        <div id="checkin-result" class="checkin-result"></div>
+      </div>
+    </section>
+
+    <!-- ANALYTICS -->
+    <section id="sec-analytics" class="section">
+      <div class="page-title">Analytics</div>
+      <div class="form-group" style="max-width:320px;margin-bottom:16px">
+        <label class="form-label">Select Event</label>
+        <select class="form-select" id="analytics-event-select" onchange="loadAnalytics()">
+          <option value="">Choose an event…</option>
+        </select>
+      </div>
+      <div id="analytics-body"></div>
+    </section>
+
+    <!-- PROMO CODES -->
+    <section id="sec-promo" class="section">
+      <div class="page-title">Promo Codes</div>
+      <div class="g2">
+        <div class="card">
+          <div class="card-title">Create Promo Code</div>
+          <div class="form-group">
+            <label class="form-label">Event</label>
+            <select class="form-select" id="promo-event-select"><option value="">Choose event…</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Code</label>
+            <input class="form-input" id="promo-code" placeholder="LAUNCH20" style="text-transform:uppercase" />
+          </div>
+          <div class="g2">
+            <div class="form-group">
+              <label class="form-label">Discount Type</label>
+              <select class="form-select" id="promo-type">
+                <option value="percent">Percent (%)</option>
+                <option value="fixed">Fixed (KES)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Value</label>
+              <input class="form-input" id="promo-value" type="number" min="1" placeholder="20" />
+            </div>
+          </div>
+          <div class="g2">
+            <div class="form-group">
+              <label class="form-label">Max Uses (optional)</label>
+              <input class="form-input" id="promo-max" type="number" min="1" placeholder="Unlimited" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Expires At (optional)</label>
+              <input class="form-input" id="promo-expires" type="datetime-local" />
+            </div>
+          </div>
+          <button class="btn-primary" onclick="createPromo()">Create Code</button>
+        </div>
+        <div class="card">
+          <div class="card-title">How Codes Work</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.7">
+            <p>• Buyers enter the code during checkout on the event page</p>
+            <p>• Percent codes apply a % off the total, fixed codes deduct a flat amount</p>
+            <p>• Codes are scoped to a single event — create separate codes per event</p>
+            <p>• Platform commission (3%) is applied on the discounted price</p>
+            <p>• Codes are auto-uppercase alphanumeric only</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="/sokoni-config.js"></script>
+<script>
+  const app  = firebase.initializeApp(window.SOKONI_CONFIG, 'event-manager');
+  const auth = firebase.auth(app);
+  const fns  = firebase.functions(app);
+  fns.useRegion('us-central1');
+
+  let myEvents = [];
+  let currentEventId = null;
+
+  function esc(s){ return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3200); }
+  async function callCF(name,data={}){ const r=await fns.httpsCallable(name)(data); return r.data; }
+
+  auth.onAuthStateChanged(async user => {
+    if (!user) { location.href='/login.html?redirect=/event-manager.html'; return; }
+    const tok = await user.getIdTokenResult();
+    const role = tok.claims.role || 0;
+    if (role < 2) {
+      document.body.innerHTML = '<div style="padding:80px;text-align:center;color:var(--red);font-size:16px">Organizer access required (seller role or above).</div>';
+      return;
+    }
+    document.getElementById('uid-badge').textContent = user.email || user.uid;
+    loadDashboard();
+  });
+
+  function showSection(name, el) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    if (el) el.classList.add('active');
+    document.getElementById('sec-' + name).classList.add('active');
+  }
+
+  /* ── Dashboard ── */
+  async function loadDashboard() {
+    try {
+      const res = await callCF('getOrganizerDashboard');
+      myEvents = res.events || [];
+      const s = res.summary || {};
+      document.getElementById('stat-events').textContent = s.totalEvents || 0;
+      document.getElementById('stat-tickets').textContent = s.totalTicketsSold || 0;
+      document.getElementById('stat-revenue').textContent = 'KES ' + (s.totalRevenue || 0).toLocaleString();
+      document.getElementById('stat-checkins').textContent = s.totalCheckins || 0;
+      populateEventSelects();
+      renderEventList('dash-upcoming', myEvents.filter(e => e.status === 'live').slice(0, 5));
+      renderEventList('events-list', myEvents);
+    } catch(e) { toast('Failed to load dashboard: ' + e.message); }
+  }
+
+  function populateEventSelects() {
+    const selects = ['orders-event-select', 'checkin-event-select', 'analytics-event-select', 'promo-event-select'];
+    selects.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const prev = el.value;
+      el.innerHTML = '<option value="">Choose an event…</option>';
+      myEvents.forEach(e => {
+        const opt = document.createElement('option');
+        opt.value = e.eventId;
+        opt.textContent = e.title + ' (' + e.status + ')';
+        el.appendChild(opt);
+      });
+      if (prev) el.value = prev;
+    });
+  }
+
+  const STATUS_BADGE = {
+    draft:'badge-gray', live:'badge-green', ended:'badge-blue', cancelled:'badge-red'
+  };
+
+  function renderEventList(containerId, events) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    if (!events.length) { el.innerHTML = '<div class="empty">No events yet. <a href="#" onclick="showSection(\'create\',null)">Create your first event</a></div>'; return; }
+    el.innerHTML = events.map(e => {
+      const dateStr = e.startDate ? new Date(e.startDate).toLocaleDateString('en-KE', { day:'numeric', month:'short', year:'numeric' }) : '';
+      return `<div class="event-row" onclick="openEditEvent('${esc(e.eventId)}')">
+        <div style="font-size:24px">${statusEmoji(e.status)}</div>
+        <div class="event-row-info">
+          <div class="event-row-title">${esc(e.title)}</div>
+          <div class="event-row-meta">${dateStr} · ${esc(e.venue || '')} · ${e.totalTicketsSold || 0} tickets sold · KES ${(e.totalRevenue||0).toLocaleString()}</div>
+        </div>
+        <div class="event-row-actions">
+          <span class="badge ${STATUS_BADGE[e.status] || 'badge-gray'}">${esc(e.status.toUpperCase())}</span>
+          ${e.status === 'draft' ? `<button class="btn-sm" onclick="event.stopPropagation();publishEvent('${esc(e.eventId)}')">Publish</button>` : ''}
+          ${e.status === 'live' ? `<button class="btn-sm" onclick="event.stopPropagation();showAnalyticsFor('${esc(e.eventId)}')">Analytics</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function statusEmoji(s) { return {draft:'📝', live:'🟢', ended:'✅', cancelled:'❌'}[s] || '📅'; }
+
+  /* ── Create / Edit Event ── */
+  function openEditEvent(eventId) {
+    const ev = myEvents.find(e => e.eventId === eventId);
+    if (!ev) return;
+    currentEventId = eventId;
+    document.getElementById('create-title').textContent = 'Edit Event';
+    document.getElementById('edit-event-id').value = eventId;
+    document.getElementById('ev-title').value = ev.title || '';
+    document.getElementById('ev-category').value = ev.category || '';
+    document.getElementById('ev-start').value = ev.startDate ? ev.startDate.slice(0, 16) : '';
+    document.getElementById('ev-venue').value = ev.venue || '';
+    document.getElementById('ev-city').value = ev.city || '';
+    document.getElementById('tiers-section').style.display = ev.status !== 'cancelled' ? 'block' : 'none';
+    if (ev.status !== 'cancelled') loadTiers(eventId);
+    showSection('create', document.querySelector('.nav-item:nth-child(3)'));
+  }
+
+  async function saveEvent() {
+    const eventId = document.getElementById('edit-event-id').value;
+    const title = document.getElementById('ev-title').value.trim();
+    const category = document.getElementById('ev-category').value;
+    const startDate = document.getElementById('ev-start').value;
+    const endDate = document.getElementById('ev-end').value;
+    const venue = document.getElementById('ev-venue').value.trim();
+    const address = document.getElementById('ev-address').value.trim();
+    const city = document.getElementById('ev-city').value.trim();
+    const description = document.getElementById('ev-desc').value.trim();
+    const bannerImageUrl = document.getElementById('ev-banner').value.trim();
+    const currency = document.getElementById('ev-currency').value;
+    const capacity = document.getElementById('ev-capacity').value;
+    const isOnline = document.getElementById('ev-online').checked;
+
+    if (!title || !category || !startDate) { toast('Title, category, and start date are required'); return; }
+
+    try {
+      if (eventId) {
+        await callCF('updateEvent', { eventId, title, startDate, endDate: endDate || null, venue, address, city, description, bannerImageUrl, isOnline });
+        toast('Event updated');
+      } else {
+        const res = await callCF('createEvent', { title, category, startDate, endDate: endDate || null, venue, address, city, description, bannerImageUrl, capacity: capacity || null, currency, isOnline });
+        document.getElementById('edit-event-id').value = res.eventId;
+        currentEventId = res.eventId;
+        document.getElementById('create-title').textContent = 'Edit Event';
+        document.getElementById('tiers-section').style.display = 'block';
+        loadTiers(res.eventId);
+        toast('Event created as draft! Add ticket tiers and publish.');
+      }
+      await loadDashboard();
+    } catch(e) { toast('Error: ' + e.message); }
+  }
+
+  /* ── Ticket Tiers ── */
+  async function loadTiers(eventId) {
+    const el = document.getElementById('tier-list-mgr');
+    el.innerHTML = '<span class="spinner"></span>';
+    try {
+      const res = await callCF('getEvent', { eventId });
+      const tiers = res.tiers || [];
+      if (!tiers.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text2)">No tiers yet. Add one below.</div>'; return; }
+      el.innerHTML = `<table class="tbl"><thead><tr><th>Tier</th><th>Price</th><th>Qty</th><th>Sold</th><th>Available</th><th>%</th></tr></thead>
+        <tbody>${tiers.map(t => {
+          const pct = t.quantity > 0 ? Math.round((t.sold / t.quantity) * 100) : 0;
+          return `<tr>
+            <td><b>${esc(t.name)}</b></td>
+            <td style="color:var(--green)">${t.price === 0 ? 'FREE' : 'KES ' + t.price.toLocaleString()}</td>
+            <td>${t.quantity}</td>
+            <td>${t.sold}</td>
+            <td>${t.available}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                ${pct}%
+                <div class="progress-bar" style="width:60px"><div class="progress-fill" style="width:${pct}%"></div></div>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}</tbody></table>`;
+    } catch(e) { el.innerHTML = '<div style="color:var(--red);font-size:12px">Failed to load tiers</div>'; }
+  }
+
+  async function addTier() {
+    const eventId = document.getElementById('edit-event-id').value || currentEventId;
+    if (!eventId) { toast('Save event first'); return; }
+    const name = document.getElementById('new-tier-name').value.trim();
+    const price = document.getElementById('new-tier-price').value;
+    const quantity = document.getElementById('new-tier-qty').value;
+    const perksStr = document.getElementById('new-tier-perks').value;
+    if (!name || price === '' || !quantity) { toast('Name, price and quantity required'); return; }
+    const perks = perksStr ? perksStr.split(',').map(p => p.trim()).filter(Boolean) : [];
+    try {
+      await callCF('createTicketTier', { eventId, name, price: parseFloat(price), quantity: parseInt(quantity, 10), perks });
+      document.getElementById('new-tier-name').value = '';
+      document.getElementById('new-tier-price').value = '';
+      document.getElementById('new-tier-qty').value = '';
+      document.getElementById('new-tier-perks').value = '';
+      loadTiers(eventId);
+      toast('Tier added');
+    } catch(e) { toast('Error: ' + e.message); }
+  }
+
+  async function publishCurrent() {
+    const eventId = document.getElementById('edit-event-id').value || currentEventId;
+    if (!eventId) { toast('Save event first'); return; }
+    if (!confirm('Publish this event? It will go live on the Event Hub.')) return;
+    try {
+      await callCF('publishEvent', { eventId });
+      toast('🚀 Event is LIVE on SOKONI Event Hub!');
+      await loadDashboard();
+      showSection('events', document.querySelector('.nav-item:nth-child(2)'));
+    } catch(e) { toast('Error: ' + e.message); }
+  }
+
+  async function publishEvent(eventId) {
+    if (!confirm('Publish this event?')) return;
+    try {
+      await callCF('publishEvent', { eventId });
+      toast('Event published!');
+      loadDashboard();
+    } catch(e) { toast('Error: ' + e.message); }
+  }
+
+  /* ── Orders ── */
+  async function loadOrders() {
+    const eventId = document.getElementById('orders-event-select').value;
+    if (!eventId) return;
+    const el = document.getElementById('orders-table');
+    el.innerHTML = '<span class="spinner"></span>';
+    try {
+      const res = await callCF('getEventOrders', { eventId, limit: 100 });
+      const orders = res.orders || [];
+      if (!orders.length) { el.innerHTML = '<div class="empty">No orders yet</div>'; return; }
+      const totRev = orders.filter(o => o.status === 'paid').reduce((s, o) => s + (o.totalAmount || 0), 0);
+      el.innerHTML = `
+        <div style="font-size:13px;color:var(--text2);margin-bottom:12px">${orders.length} orders · KES ${totRev.toLocaleString()} confirmed revenue</div>
+        <table class="tbl">
+          <thead><tr><th>Order ID</th><th>Tier</th><th>Qty</th><th>Amount</th><th>Status</th><th>Attendee</th><th>Date</th></tr></thead>
+          <tbody>${orders.map(o => {
+            const d = o.createdAt?.toDate ? o.createdAt.toDate() : (o.createdAt ? new Date(o.createdAt) : null);
+            const ds = d ? d.toLocaleDateString('en-KE') : '';
+            const sc = {paid:'badge-green', pending_payment:'badge-orange', pending_refund:'badge-red', cancelled:'badge-gray'}[o.status] || 'badge-gray';
+            return `<tr>
+              <td style="font-family:monospace;font-size:11px">${esc(o.orderId.slice(-8))}</td>
+              <td>${esc(o.tierName)}</td>
+              <td>${o.quantity}</td>
+              <td style="color:var(--green)">${o.totalAmount === 0 ? 'FREE' : 'KES ' + (o.totalAmount || 0).toLocaleString()}</td>
+              <td><span class="badge ${sc}">${esc(o.status.replace('_',' ').toUpperCase())}</span></td>
+              <td style="color:var(--text2)">${esc(o.attendeeName || o.buyerUid?.slice(0, 8))}</td>
+              <td style="color:var(--text2)">${ds}</td>
+            </tr>`;
+          }).join('')}</tbody></table>`;
+    } catch(e) { el.innerHTML = `<div class="empty" style="color:var(--red)">${e.message}</div>`; }
+  }
+
+  /* ── Check-in ── */
+  async function doCheckin() {
+    const eventId = document.getElementById('checkin-event-select').value;
+    if (!eventId) { toast('Select an event first'); return; }
+    const raw = document.getElementById('checkin-input').value.trim();
+    if (!raw) { toast('Enter a ticket ID or scan QR'); return; }
+
+    // Parse QR: "sokoni-ticket:ticketId:token" or plain ticketId
+    let ticketId = raw;
+    let token = '';
+    if (raw.startsWith('sokoni-ticket:')) {
+      const parts = raw.split(':');
+      ticketId = parts[1] || '';
+      token = parts[2] || '';
+    }
+
+    const res = document.getElementById('checkin-result');
+    res.style.display = 'block';
+    res.className = 'checkin-result';
+    res.textContent = 'Checking…';
+
+    try {
+      const r = await callCF('checkInTicket', { ticketId, token });
+      document.getElementById('checkin-input').value = '';
+      if (r.result === 'success') {
+        res.className = 'checkin-result success';
+        res.innerHTML = `✅ <b>CHECK-IN CONFIRMED</b><br>${esc(r.attendeeName || '')} — ${esc(r.tierName || '')}`;
+      } else if (r.result === 'already_used') {
+        res.className = 'checkin-result warn';
+        res.innerHTML = `⚠️ <b>ALREADY USED</b><br>This ticket was checked in at ${r.checkedInAt ? new Date(r.checkedInAt).toLocaleTimeString() : 'earlier'}`;
+      } else {
+        res.className = 'checkin-result error';
+        res.textContent = '✗ INVALID — ' + (r.reason || 'Ticket not valid');
+      }
+    } catch(e) {
+      res.className = 'checkin-result error';
+      res.textContent = '✗ Error: ' + e.message;
+    }
+    setTimeout(() => { res.style.display = 'none'; }, 5000);
+  }
+
+  /* ── Analytics ── */
+  async function showAnalyticsFor(eventId) {
+    document.getElementById('analytics-event-select').value = eventId;
+    showSection('analytics', document.querySelector('.nav-item:nth-child(6)'));
+    loadAnalytics();
+  }
+
+  async function loadAnalytics() {
+    const eventId = document.getElementById('analytics-event-select').value;
+    if (!eventId) return;
+    const el = document.getElementById('analytics-body');
+    el.innerHTML = '<span class="spinner"></span>';
+    try {
+      const a = await callCF('getEventAnalytics', { eventId });
+      el.innerHTML = `
+        <div class="g4" style="margin-bottom:20px">
+          <div class="stat-card"><div class="stat-val" style="color:var(--green)">KES ${(a.organizerRevenue||0).toLocaleString()}</div><div class="stat-label">Your Revenue</div></div>
+          <div class="stat-card"><div class="stat-val">${a.totalTickets||0}</div><div class="stat-label">Tickets Sold</div></div>
+          <div class="stat-card"><div class="stat-val">${a.checkins||0} <span style="font-size:14px;color:var(--text2)">/ ${a.totalTickets||0}</span></div><div class="stat-label">Check-Ins (${a.checkInRate||0}%)</div></div>
+          <div class="stat-card"><div class="stat-val">${a.capacityUtilization||0}%</div><div class="stat-label">Capacity Used</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Tier Breakdown</div>
+          <table class="tbl">
+            <thead><tr><th>Tier</th><th>Price</th><th>Sold</th><th>Available</th><th>Revenue</th><th>Fill %</th></tr></thead>
+            <tbody>${(a.tierBreakdown||[]).map(t => `<tr>
+              <td><b>${esc(t.name)}</b></td>
+              <td style="color:var(--green)">${t.price===0?'FREE':'KES '+t.price.toLocaleString()}</td>
+              <td>${t.sold}</td>
+              <td>${t.available}</td>
+              <td style="color:var(--green)">KES ${(t.revenue||0).toLocaleString()}</td>
+              <td>
+                <div style="display:flex;align-items:center;gap:8px">
+                  ${t.percentSold}%
+                  <div class="progress-bar" style="width:80px"><div class="progress-fill" style="width:${t.percentSold}%;background:${t.percentSold>80?'var(--green)':t.percentSold>40?'var(--orange)':'var(--blue)'}"></div></div>
+                </div>
+              </td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title">Platform Fee</div>
+          <div style="font-size:12px;color:var(--text2)">
+            Total revenue: KES ${(a.totalRevenue||0).toLocaleString()} · Platform fee (3%): KES ${(a.platformFees||0).toLocaleString()} · <b style="color:var(--green)">Your payout: KES ${(a.organizerRevenue||0).toLocaleString()}</b>
+          </div>
+        </div>`;
+    } catch(e) { el.innerHTML = `<div class="empty" style="color:var(--red)">${e.message}</div>`; }
+  }
+
+  /* ── Promo Codes ── */
+  async function createPromo() {
+    const eventId = document.getElementById('promo-event-select').value;
+    const code = document.getElementById('promo-code').value.trim();
+    const discountType = document.getElementById('promo-type').value;
+    const discountValue = document.getElementById('promo-value').value;
+    const maxUses = document.getElementById('promo-max').value;
+    const expiresAt = document.getElementById('promo-expires').value;
+
+    if (!eventId || !code || !discountValue) { toast('Event, code, and discount value required'); return; }
+    try {
+      const res = await callCF('createEventPromoCode', {
+        eventId, code, discountType, discountValue: parseFloat(discountValue),
+        maxUses: maxUses ? parseInt(maxUses, 10) : null,
+        expiresAt: expiresAt || null,
+      });
+      toast(`Code ${res.code} created!`);
+      document.getElementById('promo-code').value = '';
+      document.getElementById('promo-value').value = '';
+    } catch(e) { toast('Error: ' + e.message); }
+  }
+</script>
+</body>
+</html>

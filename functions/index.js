@@ -2551,7 +2551,7 @@ exports.onNewOrderCreated = onDocumentCreated(
           `${buyerName} ordered KES ${total} — confirm now`,
           "seller.html"
         );
-      })
+      }).catch(err => console.error('[onNewOrderCreated] FCM push failed:', err.message))
     );
 
     /* ── 2. In-app notification ── */
@@ -8249,12 +8249,12 @@ exports.monthlyAccountingSnapshot  = posAccounting.monthlyAccountingSnapshot;
 
 /* ── SmartPOS 3.0 — CRM Pro ─────────────────────────────────── */
 const posCrmPro = require('./pos-crm-pro');
-/* Wallet */
-exports.getWalletBalance           = posCrmPro.getWalletBalance;
-exports.topUpWallet                = posCrmPro.topUpWallet;
-exports.deductWallet               = posCrmPro.deductWallet;
-exports.refundToWallet             = posCrmPro.refundToWallet;
-exports.getWalletTransactions      = posCrmPro.getWalletTransactions;
+/* POS Wallet — prefixed to avoid collision with main SOKONI wallet (wallet.js) */
+exports.posCrmGetWalletBalance     = posCrmPro.getWalletBalance;
+exports.posCrmTopUpWallet          = posCrmPro.topUpWallet;
+exports.posCrmDeductWallet         = posCrmPro.deductWallet;
+exports.posCrmRefundToWallet       = posCrmPro.refundToWallet;
+exports.posCrmGetWalletTransactions = posCrmPro.getWalletTransactions;
 /* Gift Cards */
 exports.issueGiftCard              = posCrmPro.issueGiftCard;
 exports.redeemGiftCard             = posCrmPro.redeemGiftCard;
@@ -8594,3 +8594,25 @@ exports.checkPerformanceReadiness= relReadiness.checkPerformanceReadiness;
 exports.checkComplianceReadiness = relReadiness.checkComplianceReadiness;
 exports.approveRelease           = relReadiness.approveRelease;
 exports.getLatestReleaseReport   = relReadiness.getLatestReleaseReport;
+
+/* ── Event Hub v1.0 ─────────────────────────────────────────────────────── */
+const eventHub = require('./event-hub');
+exports.createEvent            = eventHub.createEvent;
+exports.updateEvent            = eventHub.updateEvent;
+exports.publishEvent           = eventHub.publishEvent;
+exports.cancelEvent            = eventHub.cancelEvent;
+exports.getEvent               = eventHub.getEvent;
+exports.listEvents             = eventHub.listEvents;
+exports.searchEvents           = eventHub.searchEvents;
+exports.createTicketTier       = eventHub.createTicketTier;
+exports.updateTicketTier       = eventHub.updateTicketTier;
+exports.purchaseTickets        = eventHub.purchaseTickets;
+exports.getMyTickets           = eventHub.getMyTickets;
+exports.getTicket              = eventHub.getTicket;
+exports.checkInTicket          = eventHub.checkInTicket;
+exports.getEventOrders         = eventHub.getEventOrders;
+exports.getEventAnalytics      = eventHub.getEventAnalytics;
+exports.getOrganizerDashboard  = eventHub.getOrganizerDashboard;
+exports.createEventPromoCode   = eventHub.createEventPromoCode;
+exports.validateEventPromoCode = eventHub.validateEventPromoCode;
+exports.autoEndEvents          = eventHub.autoEndEvents;

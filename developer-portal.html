@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Developer Portal — SOKONI</title>
+  <link rel="icon" href="/favicon.ico" />
+  <style>
+    :root {
+      --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+      --text:#e6edf3;--text2:#8b949e;
+      --green:#3fb950;--blue:#58a6ff;--purple:#bc8cff;--orange:#d29922;--red:#f85149;--cyan:#79c0ff;
+      --r:8px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh;}
+    a{color:var(--blue);}
+    .hdr{background:var(--bg2);border-bottom:1px solid var(--border);height:56px;padding:0 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+    .hdr-logo{font-size:17px;font-weight:700;}
+    .hdr-logo span{color:var(--blue);}
+    .dev-badge{background:rgba(188,140,255,.15);border:1px solid rgba(188,140,255,.3);color:var(--purple);border-radius:4px;font-size:10px;font-weight:700;padding:2px 7px;letter-spacing:.05em;}
+    .hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+    .btn-sm{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;font-size:12px;}
+    .btn-sm:hover{background:#2d333b;}
+    .nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;display:flex;overflow-x:auto;}
+    .tab{padding:12px 16px;border-bottom:2px solid transparent;color:var(--text2);cursor:pointer;white-space:nowrap;font-size:13px;}
+    .tab:hover{color:var(--text);}
+    .tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+    .main{max-width:1200px;margin:0 auto;padding:24px;}
+    .section{display:none;}
+    .section.active{display:block;}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:16px;}
+    .card-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text2);margin-bottom:12px;}
+    .g2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+    .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+    @media(max-width:768px){.g2,.g3{grid-template-columns:1fr;}}
+    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;}
+    .badge-green{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.3);}
+    .badge-blue{background:rgba(88,166,255,.15);color:var(--blue);border:1px solid rgba(88,166,255,.3);}
+    .badge-purple{background:rgba(188,140,255,.15);color:var(--purple);border:1px solid rgba(188,140,255,.3);}
+    .badge-orange{background:rgba(210,153,34,.15);color:var(--orange);border:1px solid rgba(210,153,34,.3);}
+    .code-block{background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:16px;font-family:'Courier New',monospace;font-size:12px;overflow-x:auto;white-space:pre;line-height:1.6;margin:8px 0;}
+    .kw{color:#ff7b72;}.str{color:#a5d6ff;}.fn{color:#d2a8ff;}.cm{color:#6e7681;}.num{color:#79c0ff;}
+    .api-group{margin-bottom:24px;}
+    .api-group-title{font-size:16px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+    .api-entry{background:var(--bg2);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden;}
+    .api-hdr{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;}
+    .api-hdr:hover{background:var(--bg3);}
+    .api-method{background:#2d333b;color:var(--cyan);font-family:monospace;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;flex-shrink:0;}
+    .api-name{font-weight:600;font-size:13px;flex:1;}
+    .api-desc{font-size:12px;color:var(--text2);}
+    .api-body{padding:14px;border-top:1px solid var(--border);display:none;}
+    .api-body.open{display:block;}
+    .tbl{width:100%;border-collapse:collapse;font-size:12px;}
+    .tbl th{text-align:left;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);border-bottom:1px solid var(--border);}
+    .tbl td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:middle;}
+    .tbl tr:last-child td{border-bottom:none;}
+    .tbl tr:hover td{background:rgba(255,255,255,.02);}
+    .pm{font-family:monospace;color:var(--cyan);}.pt{font-family:monospace;color:var(--orange);}
+    .step{display:flex;gap:16px;margin-bottom:20px;}
+    .step-num{width:28px;height:28px;border-radius:50%;background:var(--blue);color:#000;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .step-body{flex:1;}
+    .step-title{font-weight:600;margin-bottom:6px;}
+    .step-desc{font-size:12px;color:var(--text2);margin-bottom:8px;}
+    .event-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+    .event-row:last-child{border-bottom:none;}
+    .event-name{font-family:monospace;color:var(--purple);font-size:12px;min-width:200px;flex-shrink:0;}
+    .event-desc{font-size:12px;color:var(--text2);}
+    .sdk-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:14px;}
+    .sdk-file{font-family:monospace;color:var(--cyan);font-size:11px;margin-bottom:4px;}
+    .sdk-title{font-size:13px;font-weight:600;margin-bottom:6px;}
+    .sdk-desc{font-size:12px;color:var(--text2);}
+    .form-group{margin-bottom:14px;}
+    .form-label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px;}
+    .form-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;}
+    .form-input:focus{border-color:var(--blue);}
+    .btn-primary{padding:8px 18px;background:var(--blue);color:#000;border:none;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;}
+    .btn-primary:hover{opacity:.85;}
+    .btn-danger{padding:3px 8px;border:1px solid rgba(248,81,73,.4);border-radius:4px;background:rgba(248,81,73,.1);color:var(--red);font-size:11px;cursor:pointer;}
+    .btn-copy{padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg3);color:var(--text);font-size:11px;cursor:pointer;}
+    .key-val{font-family:monospace;font-size:12px;color:var(--green);}
+    .sh{display:flex;align-items:center;gap:10px;margin-bottom:20px;}
+    .sh h2{font-size:18px;font-weight:700;}
+    .empty{text-align:center;padding:24px;color:var(--text2);font-size:13px;}
+    #toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:13px;z-index:9999;display:none;}
+    #toast.show{display:block;}
+  </style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-logo">SOKONI <span>Developer</span></div>
+  <div class="dev-badge">DEVELOPER PORTAL</div>
+  <div class="hdr-right">
+    <span id="uid-badge" style="font-size:11px;color:var(--text2)"></span>
+    <button class="btn-sm" onclick="firebase.auth(app).signOut().then(()=>location.href='/login.html')">Sign Out</button>
+  </div>
+</header>
+
+<nav class="nav">
+  <div class="tab active" onclick="showTab('api',this)">API Reference</div>
+  <div class="tab" onclick="showTab('quickstart',this)">Quickstart</div>
+  <div class="tab" onclick="showTab('events',this)">Events & Webhooks</div>
+  <div class="tab" onclick="showTab('sdks',this)">SDKs & Tools</div>
+  <div class="tab" onclick="showTab('keys',this)">API Keys</div>
+</nav>
+
+<main class="main">
+
+<!-- ══ TAB: API REFERENCE ══ -->
+<section id="sec-api" class="section active">
+  <div class="sh"><h2>API Reference</h2><span style="font-size:12px;color:var(--text2)">All endpoints are Firebase Gen2 Callable Functions (POST) · enforceAppCheck: true · region: us-central1</span></div>
+  <div id="api-groups"></div>
+</section>
+
+<!-- ══ TAB: QUICKSTART ══ -->
+<section id="sec-quickstart" class="section">
+  <div class="sh"><h2>Quickstart</h2><span style="font-size:12px;color:var(--text2)">Call your first Cloud Function in 5 minutes</span></div>
+
+  <div class="step"><div class="step-num">1</div><div class="step-body">
+    <div class="step-title">Install Firebase SDK</div>
+    <div class="step-desc">Add to your HTML &lt;head&gt; or install via npm.</div>
+    <div class="code-block"><span class="cm">&lt;!-- CDN --&gt;</span>
+&lt;script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"&gt;&lt;/script&gt;
+&lt;script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"&gt;&lt;/script&gt;
+&lt;script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"&gt;&lt;/script&gt;
+&lt;script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"&gt;&lt;/script&gt;
+
+<span class="cm">// npm</span>
+npm install firebase</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">2</div><div class="step-body">
+    <div class="step-title">Load Config & Initialize</div>
+    <div class="step-desc">All apps use the same config from <code>/sokoni-config.js</code>.</div>
+    <div class="code-block">&lt;script src="/sokoni-config.js"&gt;&lt;/script&gt;  <span class="cm">&lt;!-- exposes window.SOKONI_CONFIG --&gt;</span>
+
+<span class="kw">const</span> app  = firebase.initializeApp(window.SOKONI_CONFIG, <span class="str">'my-app'</span>);
+<span class="kw">const</span> auth = firebase.auth(app);
+<span class="kw">const</span> fns  = firebase.functions(app);
+fns.useRegion(<span class="str">'us-central1'</span>);</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">3</div><div class="step-body">
+    <div class="step-title">Authenticate</div>
+    <div class="step-desc">All callable functions require a Firebase Auth user. Read custom claims to check role.</div>
+    <div class="code-block">auth.onAuthStateChanged(<span class="kw">async</span> user => {
+  <span class="kw">if</span> (!user) { window.location.href = <span class="str">'/login.html'</span>; <span class="kw">return</span>; }
+  <span class="kw">const</span> token = <span class="kw">await</span> user.getIdTokenResult();
+  <span class="kw">const</span> role  = token.claims.role || <span class="num">0</span>;  <span class="cm">// 0=guest 1=buyer 2=seller 3=dev 4=admin 5=super</span>
+  <span class="kw">const</span> shopId = token.claims.shopId;     <span class="cm">// set for sellers</span>
+});</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">4</div><div class="step-body">
+    <div class="step-title">Call a Cloud Function</div>
+    <div class="code-block"><span class="cm">// Helper wrapper</span>
+<span class="kw">const</span> <span class="fn">callCF</span> = <span class="kw">async</span> (name, data = {}) => {
+  <span class="kw">const</span> r = <span class="kw">await</span> fns.httpsCallable(name)(data);
+  <span class="kw">return</span> r.data;
+};
+
+<span class="cm">// Example: search products</span>
+<span class="kw">const</span> results = <span class="kw">await</span> <span class="fn">callCF</span>(<span class="str">'searchProducts'</span>, { query: <span class="str">'maize flour'</span>, limit: <span class="num">20</span> });
+console.log(results.hits);</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">5</div><div class="step-body">
+    <div class="step-title">Handle Errors</div>
+    <div class="code-block"><span class="kw">try</span> {
+  <span class="kw">const</span> order = <span class="kw">await</span> <span class="fn">callCF</span>(<span class="str">'createOrder'</span>, data);
+} <span class="kw">catch</span> (err) {
+  <span class="kw">switch</span> (err.code) {
+    <span class="kw">case</span> <span class="str">'functions/unauthenticated'</span>:    window.location.href = <span class="str">'/login.html'</span>; <span class="kw">break</span>;
+    <span class="kw">case</span> <span class="str">'functions/permission-denied'</span>:  alert(<span class="str">'Access denied'</span>); <span class="kw">break</span>;
+    <span class="kw">case</span> <span class="str">'functions/resource-exhausted'</span>: <span class="cm">/* rate limit — back off and retry */</span> <span class="kw">break</span>;
+    <span class="kw">case</span> <span class="str">'functions/not-found'</span>:         alert(<span class="str">'Not found'</span>); <span class="kw">break</span>;
+    <span class="kw">default</span>:                             console.error(err.message);
+  }
+}</div>
+  </div></div>
+
+  <div class="step"><div class="step-num">6</div><div class="step-body">
+    <div class="step-title">Role Reference</div>
+    <table class="tbl" style="margin-top:4px">
+      <thead><tr><th>Role</th><th>Value</th><th>Access</th></tr></thead>
+      <tbody>
+        <tr><td>Guest</td><td class="num">0</td><td style="color:var(--text2)">Public read-only</td></tr>
+        <tr><td>Buyer</td><td class="num">1</td><td style="color:var(--text2)">Place orders, wallet, loyalty</td></tr>
+        <tr><td>Seller</td><td class="num">2</td><td style="color:var(--text2)">Products, orders, POS, payouts</td></tr>
+        <tr><td>Developer</td><td class="num">3</td><td style="color:var(--text2)">API keys, webhooks, analytics</td></tr>
+        <tr><td>Admin</td><td class="num">4</td><td style="color:var(--text2)">Full platform management</td></tr>
+        <tr><td>Super Admin</td><td class="num">5</td><td style="color:var(--text2)">System configuration, release approval</td></tr>
+      </tbody>
+    </table>
+  </div></div>
+</section>
+
+<!-- ══ TAB: EVENTS & WEBHOOKS ══ -->
+<section id="sec-events" class="section">
+  <div class="sh"><h2>Events & Webhooks</h2></div>
+  <div class="g2">
+    <div>
+      <div class="card">
+        <div class="card-title">Platform Events</div>
+        <div id="event-list"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-title">Register a Webhook</div>
+        <div class="code-block"><span class="kw">await</span> <span class="fn">callCF</span>(<span class="str">'registerWebhook'</span>, {
+  url:    <span class="str">'https://yoursite.com/hook'</span>,
+  events: [<span class="str">'order.created'</span>, <span class="str">'payment.success'</span>],
+  name:   <span class="str">'My Integration'</span>,
+});</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Verify Webhook Signature (Node.js)</div>
+        <div class="code-block"><span class="kw">const</span> crypto = require(<span class="str">'crypto'</span>);
+
+<span class="kw">function</span> <span class="fn">verify</span>(body, sig, secret) {
+  <span class="kw">const</span> expected = crypto
+    .createHmac(<span class="str">'sha256'</span>, secret)
+    .update(JSON.stringify(body))
+    .digest(<span class="str">'hex'</span>);
+  <span class="kw">return</span> crypto.timingSafeEqual(
+    Buffer.from(expected),
+    Buffer.from(sig)
+  );
+}
+
+<span class="cm">// Express middleware</span>
+app.post(<span class="str">'/hook'</span>, (req, res) => {
+  <span class="kw">const</span> sig = req.headers[<span class="str">'x-sokoni-signature'</span>];
+  <span class="kw">if</span> (!<span class="fn">verify</span>(req.body, sig, process.env.WEBHOOK_SECRET))
+    <span class="kw">return</span> res.status(<span class="num">401</span>).end();
+  <span class="cm">// Process event</span>
+  res.sendStatus(<span class="num">200</span>);
+});</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Webhook CFs</div>
+        <table class="tbl">
+          <thead><tr><th>Function</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td class="pm">registerWebhook</td><td style="color:var(--text2)">Register endpoint for events</td></tr>
+            <tr><td class="pm">listWebhooks</td><td style="color:var(--text2)">List registered webhooks</td></tr>
+            <tr><td class="pm">deleteWebhook</td><td style="color:var(--text2)">Remove a webhook</td></tr>
+            <tr><td class="pm">testWebhook</td><td style="color:var(--text2)">Send a test payload</td></tr>
+            <tr><td class="pm">publishEvent</td><td style="color:var(--text2)">Publish a custom platform event</td></tr>
+            <tr><td class="pm">queryEvents</td><td style="color:var(--text2)">Query event history</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ TAB: SDKs ══ -->
+<section id="sec-sdks" class="section">
+  <div class="sh"><h2>SDKs & Tools</h2></div>
+  <div class="g3" id="sdk-grid"></div>
+</section>
+
+<!-- ══ TAB: API KEYS ══ -->
+<section id="sec-keys" class="section">
+  <div class="sh"><h2>API Keys</h2></div>
+  <div class="g2">
+    <div>
+      <div class="card">
+        <div class="card-title">Create API Key</div>
+        <div class="form-group">
+          <label class="form-label">Key Name</label>
+          <input class="form-input" id="key-name" placeholder="My Integration" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shop ID (optional — scope to a shop)</label>
+          <input class="form-input" id="key-shop" placeholder="Leave blank for platform-wide key" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Permissions</label>
+          <div id="perm-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px"></div>
+        </div>
+        <button class="btn-primary" onclick="createKey()">Generate Key</button>
+        <div id="new-key-box" style="display:none;margin-top:14px"></div>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-title">Your Keys</div>
+        <div id="key-list"><div class="empty">Loading…</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="/sokoni-config.js"></script>
+<script>
+  const app = firebase.initializeApp(window.SOKONI_CONFIG, 'developer-portal');
+  const auth = firebase.auth(app);
+  const fns  = firebase.functions(app);
+  fns.useRegion('us-central1');
+
+  /* ── Auth gate ── */
+  auth.onAuthStateChanged(async user => {
+    if (!user) { location.href = '/login.html?redirect=/developer-portal.html'; return; }
+    const tok  = await user.getIdTokenResult();
+    const role = tok.claims.role || 0;
+    if (role < 3 && !tok.claims.developer) {
+      document.body.innerHTML = '<div style="padding:80px;text-align:center;color:var(--red);font-size:16px">Access denied. Developer access required (role >= 3).</div>';
+      return;
+    }
+    document.getElementById('uid-badge').textContent = user.email || user.uid;
+    init();
+    loadKeys();
+  });
+
+  /* ── Helpers ── */
+  function esc(s) { return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function toast(m) { const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3000); }
+  async function callCF(name, data={}) { const r=await fns.httpsCallable(name)(data); return r.data; }
+  function showTab(name,el) {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('sec-'+name).classList.add('active');
+  }
+  function toggleEntry(id) { const el=document.getElementById(id); if(el) el.classList.toggle('open'); }
+
+  /* ══ API REFERENCE DATA ══ */
+  const GROUPS = [
+    { title:'Authentication & Identity', entries:[
+      { n:'initiateTOTPEnrollment', d:'Begin TOTP MFA enrollment; returns secret + QR URI', p:[] },
+      { n:'verifyTOTPEnrollment', d:'Activate MFA by verifying first TOTP code', p:[{n:'code',t:'string',r:1,d:'6-digit TOTP'}] },
+      { n:'verifyTOTP', d:'Verify TOTP during step-up auth', p:[{n:'code',t:'string',r:1,d:'6-digit TOTP'},{n:'challengeId',t:'string',r:0,d:'Step-up challenge ID'}] },
+      { n:'getMFAStatus', d:'MFA enrollment status for current user', p:[] },
+      { n:'registerDevice', d:'Fingerprint and trust a new device', p:[{n:'fingerprint',t:'string',r:1,d:'SHA-256 device fingerprint'},{n:'name',t:'string',r:1,d:'Device label'},{n:'type',t:'string',r:1,d:'browser|mobile|pos_terminal'}] },
+      { n:'getDevices', d:'List all trusted devices', p:[] },
+      { n:'evaluateAccessRequest', d:'Zero Trust ABAC policy check (10 attributes)', p:[{n:'resource',t:'string',r:1,d:'Resource path'},{n:'action',t:'string',r:1,d:'read|write|delete|admin'}] },
+      { n:'triggerStepUpAuth', d:'Request elevated auth for sensitive operation', p:[{n:'reason',t:'string',r:1,d:'Why step-up is needed'},{n:'resource',t:'string',r:1,d:'Resource requiring elevation'}] },
+    ]},
+    { title:'Marketplace', entries:[
+      { n:'searchProducts', d:'Full-text product search with NLP + filters', p:[{n:'query',t:'string',r:1,d:'Search query'},{n:'category',t:'string',r:0,d:'Category filter'},{n:'limit',t:'number',r:0,d:'Max results (default 20)'}] },
+      { n:'getProduct', d:'Get a single product by ID', p:[{n:'productId',t:'string',r:1,d:'Product document ID'}] },
+      { n:'createOrder', d:'Place an order (validates stock, idempotent)', p:[{n:'items',t:'array',r:1,d:'[{productId,variantId,qty}]'},{n:'addressId',t:'string',r:1,d:'Delivery address ID'},{n:'paymentMethod',t:'string',r:1,d:'wallet|mpesa|card'}] },
+      { n:'getMyOrders', d:'Buyer order history', p:[{n:'status',t:'string',r:0,d:'Filter by status'},{n:'limit',t:'number',r:0,d:'Max results'}] },
+      { n:'applyPromoCode', d:'Validate & apply promotion code', p:[{n:'code',t:'string',r:1,d:'Promo code'},{n:'cartTotal',t:'number',r:1,d:'Cart total KES'}] },
+    ]},
+    { title:'SmartPOS', entries:[
+      { n:'createPosSession', d:'Open a POS terminal session', p:[{n:'shopId',t:'string',r:1,d:'Shop ID'},{n:'terminalId',t:'string',r:1,d:'Terminal ID'},{n:'openingFloat',t:'number',r:0,d:'Opening cash float KES'}] },
+      { n:'recordPOSSale', d:'Record a completed POS sale', p:[{n:'items',t:'array',r:1,d:'Sale line items'},{n:'paymentMethod',t:'string',r:1,d:'cash|mpesa|card|wallet'},{n:'customerId',t:'string',r:0,d:'POS customer ID'}] },
+      { n:'getPOSSale', d:'Get sale details + receipt data', p:[{n:'saleId',t:'string',r:1,d:'Sale document ID'}] },
+      { n:'getPOSCustomer', d:'Look up customer by phone or loyalty card', p:[{n:'phone',t:'string',r:0,d:'Phone number'},{n:'cardId',t:'string',r:0,d:'Loyalty card'}] },
+      { n:'getLivePOSMetrics', d:'Real-time sales KPIs for today', p:[{n:'shopId',t:'string',r:1,d:'Shop ID'}] },
+    ]},
+    { title:'Payments & Finance', entries:[
+      { n:'createPayment', d:'Create payment record (idempotent)', p:[{n:'orderId',t:'string',r:1,d:'Order ID'},{n:'method',t:'string',r:1,d:'mpesa|wallet|card'},{n:'amount',t:'number',r:1,d:'Amount KES'},{n:'idempotencyKey',t:'string',r:1,d:'Client UUID'}] },
+      { n:'initiatePayment', d:'Trigger STK push or payment gateway', p:[{n:'paymentId',t:'string',r:1,d:'Payment ID'},{n:'phone',t:'string',r:0,d:'M-Pesa phone'}] },
+      { n:'getWalletBalance', d:'Current wallet balance', p:[] },
+      { n:'initiateWalletTopUp', d:'Start M-Pesa wallet top-up via STK push', p:[{n:'amount',t:'number',r:1,d:'Amount KES (min 10)'},{n:'phone',t:'string',r:1,d:'M-Pesa number'}] },
+      { n:'requestSellerPayout', d:'Withdraw seller earnings to M-Pesa', p:[{n:'amount',t:'number',r:1,d:'Amount KES'},{n:'phone',t:'string',r:1,d:'Payout number'}] },
+    ]},
+    { title:'Logistics', entries:[
+      { n:'dispatchDelivery', d:'Assign order to nearest available rider', p:[{n:'orderId',t:'string',r:1,d:'Order ID'},{n:'pickupCoords',t:'object',r:1,d:'{lat,lng}'},{n:'dropCoords',t:'object',r:1,d:'{lat,lng}'}] },
+      { n:'navGetCustomerTracking', d:'Live rider location for customer tracking', p:[{n:'orderId',t:'string',r:1,d:'Order being tracked'}] },
+      { n:'captureProofOfDelivery', d:'Record POD signature or photo', p:[{n:'deliveryId',t:'string',r:1,d:'Delivery ID'},{n:'proof',t:'object',r:1,d:'{type,storagePath}'},{n:'recipientName',t:'string',r:0,d:'Recipient name'}] },
+    ]},
+    { title:'AI & KASS', entries:[
+      { n:'sokoniChat', d:'KASS AI concierge — natural language platform assistant', p:[{n:'message',t:'string',r:1,d:'User message'},{n:'sessionId',t:'string',r:0,d:'Conversation session ID'}] },
+      { n:'validateAIPrompt', d:'Check prompt for injection before sending to AI', p:[{n:'prompt',t:'string',r:1,d:'Prompt text'},{n:'context',t:'string',r:0,d:'UI context'}] },
+      { n:'askPOSAssistant', d:'SmartPOS AI coaching assistant', p:[{n:'question',t:'string',r:1,d:'Question text'},{n:'shopId',t:'string',r:1,d:'Shop context'}] },
+    ]},
+    { title:'Admin & Platform', entries:[
+      { n:'getAdminDashboard', d:'Platform overview: GMV, orders, users, health', p:[] },
+      { n:'getSecurityScorecard', d:'Security score across all 23 domains', p:[] },
+      { n:'runReleaseReadinessCheck', d:'Run full release certification', p:[{n:'version',t:'string',r:1,d:'Version label e.g. v1.2.0'}] },
+      { n:'getLatestReleaseReport', d:'Most recent release certification', p:[{n:'version',t:'string',r:0,d:'Specific version; omit for latest'}] },
+      { n:'createAPIKey', d:'Generate new API key for integration', p:[{n:'name',t:'string',r:1,d:'Key name'},{n:'permissions',t:'array',r:1,d:'Permission array'},{n:'shopId',t:'string',r:0,d:'Scope to shop'}] },
+      { n:'getFraudAlerts', d:'Open fraud alerts', p:[{n:'status',t:'string',r:0,d:'open|dismissed'},{n:'limit',t:'number',r:0,d:'Max results'}] },
+    ]},
+  ];
+
+  function buildAPI() {
+    const el = document.getElementById('api-groups');
+    if (!el) return;
+    el.innerHTML = GROUPS.map(g => `
+      <div class="api-group">
+        <div class="api-group-title">${esc(g.title)}</div>
+        ${g.entries.map((e,i) => {
+          const id = 'ae-' + g.title.replace(/\W/g,'') + i;
+          return `<div class="api-entry">
+            <div class="api-hdr" onclick="toggleEntry('${id}')">
+              <span class="api-method">CALL</span>
+              <span class="api-name">${esc(e.n)}</span>
+              <span class="api-desc">${esc(e.d)}</span>
+            </div>
+            <div class="api-body" id="${id}">
+              ${e.p.length ? `<table class="tbl" style="margin-bottom:10px">
+                <thead><tr><th>Parameter</th><th>Type</th><th>Req</th><th>Description</th></tr></thead>
+                <tbody>${e.p.map(p=>`<tr>
+                  <td class="pm">${esc(p.n)}</td>
+                  <td class="pt">${esc(p.t)}</td>
+                  <td style="color:var(--red);font-size:11px">${p.r?'●':''}</td>
+                  <td style="color:var(--text2)">${esc(p.d)}</td>
+                </tr>`).join('')}</tbody>
+              </table>` : `<div style="font-size:12px;color:var(--text2);margin-bottom:8px">No parameters.</div>`}
+              <div class="code-block"><span class="cm">// Usage</span>
+<span class="kw">const</span> result = <span class="kw">await</span> <span class="fn">callCF</span>(<span class="str">'${esc(e.n)}'</span>${e.p.filter(p=>p.r).length?`, {\n  ${e.p.filter(p=>p.r).map(p=>`<span class="str">'${esc(p.n)}'</span>: …`).join(',\n  ')}\n}`:''}); </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`).join('');
+  }
+
+  /* ══ EVENTS DATA ══ */
+  const ALL_EVENTS = [
+    { name:'order.created',        desc:'New order placed by buyer', badge:'Commerce' },
+    { name:'order.completed',      desc:'Order fulfilled and delivered', badge:'Commerce' },
+    { name:'order.cancelled',      desc:'Order cancelled by buyer or seller', badge:'Commerce' },
+    { name:'payment.success',      desc:'Payment processed successfully', badge:'Commerce' },
+    { name:'payment.failed',       desc:'Payment attempt failed', badge:'Commerce' },
+    { name:'payment.refunded',     desc:'Refund issued to buyer', badge:'Commerce' },
+    { name:'delivery.dispatched',  desc:'Rider assigned and en route', badge:'Logistics' },
+    { name:'delivery.picked_up',   desc:'Rider collected order from seller', badge:'Logistics' },
+    { name:'delivery.completed',   desc:'Delivery confirmed with proof of delivery', badge:'Logistics' },
+    { name:'delivery.failed',      desc:'Delivery failed after retries', badge:'Logistics' },
+    { name:'seller.approved',      desc:'Seller account verified and activated', badge:'Platform' },
+    { name:'seller.suspended',     desc:'Seller account suspended by admin', badge:'Platform' },
+    { name:'job.created',          desc:'New job listing posted', badge:'Platform' },
+    { name:'job.applied',          desc:'Candidate applied to a job', badge:'Platform' },
+    { name:'user.banned',          desc:'User banned by Trust & Safety', badge:'Platform' },
+    { name:'security.incident',    desc:'Security incident created or escalated', badge:'Security' },
+  ];
+
+  function buildEvents() {
+    const el = document.getElementById('event-list');
+    if (!el) return;
+    el.innerHTML = ALL_EVENTS.map(e => `
+      <div class="event-row">
+        <div class="event-name">${esc(e.name)}</div>
+        <div class="event-desc">${esc(e.desc)} <span class="badge badge-${e.badge==='Commerce'?'green':e.badge==='Security'?'orange':'blue'}" style="font-size:9px">${esc(e.badge)}</span></div>
+      </div>`).join('');
+  }
+
+  /* ══ SDKs DATA ══ */
+  const SDKS = [
+    { file:'/sokoni-config.js',          title:'Platform Config',     desc:'Exposes SOKONI_CONFIG. Load first before all scripts.', tag:'Core' },
+    { file:'/sokoni-platform.js',        title:'Platform SDK',        desc:'Capability registry, feature flags, platform events. Call sokoniPlatform.init() on load.', tag:'Core' },
+    { file:'/sokoni-search-pro.js',      title:'Search Pro v3.0',     desc:'Full-text search with Swahili NLP, typo tolerance, circuit breakers.', tag:'Search' },
+    { file:'/sokoni-chat-engine.js',     title:'Chat Engine',         desc:'Real-time messaging. Transaction-gated. SokoniChat.open(conversationId).', tag:'Messaging' },
+    { file:'/sokoni-delivery-pricing.js',title:'Delivery Pricing',    desc:'Client-side route + pricing tiers. Calls getDeliveryPricing CF for server quote.', tag:'Logistics' },
+    { file:'/sokoni-payment-trust.js',   title:'Payment Trust',       desc:'Client payment integrity. SokoniTrust.verifyReceipt(), .getAlerts().', tag:'Payments' },
+    { file:'/sokoni-nav-engine.js',      title:'Nav Engine v1.1',     desc:'Role-based navigation: 7 workspaces, auto-inject bottom nav, deep-links.', tag:'UX' },
+    { file:'/sokoni-appcheck.js',        title:'App Check',           desc:'Initializes Firebase App Check with ReCaptcha v3. Load once per page before Auth.', tag:'Security' },
+    { file:'/sokoni-tokens.css',         title:'Design Tokens',       desc:'CSS custom properties: colors, spacing, typography, breakpoints.', tag:'Design' },
+    { file:'/redis-service.js',          title:'Redis Service',       desc:'INTERNAL ONLY — secureSet(), redactForCache(). Server-side Cloud Functions only.', tag:'Internal' },
+  ];
+
+  function buildSdks() {
+    const el = document.getElementById('sdk-grid');
+    if (!el) return;
+    const tagColor = t => t==='Core'?'blue':t==='Internal'?'orange':t==='Security'?'green':'purple';
+    el.innerHTML = SDKS.map(s => `
+      <div class="sdk-card">
+        <div class="sdk-file">${esc(s.file)}</div>
+        <div class="sdk-title">${esc(s.title)} <span class="badge badge-${tagColor(s.tag)}">${esc(s.tag)}</span></div>
+        <div class="sdk-desc">${esc(s.desc)}</div>
+      </div>`).join('');
+  }
+
+  /* ══ API KEYS ══ */
+  const PERMS = [
+    'read:products','write:products','read:orders','write:orders',
+    'read:customers','read:analytics','write:webhooks','read:inventory',
+    'write:inventory','read:payments','pos:sales','pos:reports',
+  ];
+
+  function buildPermGrid() {
+    const el = document.getElementById('perm-grid');
+    if (!el) return;
+    el.innerHTML = PERMS.map(p => `
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+        <input type="checkbox" value="${esc(p)}" style="accent-color:var(--blue)" />
+        ${esc(p)}
+      </label>`).join('');
+  }
+
+  async function createKey() {
+    const name = document.getElementById('key-name').value.trim();
+    if (!name) { toast('Key name required'); return; }
+    const shopId = document.getElementById('key-shop').value.trim() || null;
+    const permissions = [...document.querySelectorAll('#perm-grid input:checked')].map(e=>e.value);
+    if (!permissions.length) { toast('Select at least one permission'); return; }
+    try {
+      const res = await callCF('createAPIKey', { name, shopId, permissions });
+      const rawKey = res.key || res.apiKey || '(key not returned)';
+      document.getElementById('new-key-box').style.display = 'block';
+      document.getElementById('new-key-box').innerHTML = `
+        <div style="background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.3);border-radius:6px;padding:12px">
+          <div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:6px">Copy now — won't be shown again</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="key-val" id="_nkv">${esc(rawKey)}</span>
+            <button class="btn-copy" onclick="navigator.clipboard.writeText(document.getElementById('_nkv').textContent).then(()=>toast('Copied!'))">Copy</button>
+          </div>
+        </div>`;
+      loadKeys();
+    } catch(e) { toast('Error: ' + e.message); }
+  }
+
+  async function loadKeys() {
+    const el = document.getElementById('key-list');
+    try {
+      const res = await callCF('listAPIKeys');
+      const keys = res.keys || res || [];
+      if (!keys.length) { el.innerHTML = '<div class="empty">No API keys yet</div>'; return; }
+      el.innerHTML = `<table class="tbl">
+        <thead><tr><th>Name</th><th>Key Preview</th><th>Permissions</th><th></th></tr></thead>
+        <tbody>${keys.map(k => `<tr>
+          <td>${esc(k.name)}</td>
+          <td class="key-val">${esc(k.keyPreview||'sk_••••••••')}</td>
+          <td style="font-size:11px;color:var(--text2)">${(k.permissions||[]).slice(0,3).map(p=>esc(p)).join(', ')}${(k.permissions||[]).length>3?'…':''}</td>
+          <td><button class="btn-danger" onclick="revokeKey('${esc(k.id||k.keyId||'')}')">Revoke</button></td>
+        </tr>`).join('')}
+        </tbody></table>`;
+    } catch(e) { el.innerHTML = '<div class="empty">Unable to load keys</div>'; }
+  }
+
+  async function revokeKey(keyId) {
+    if (!keyId || !confirm('Revoke this API key? This cannot be undone.')) return;
+    try { await callCF('revokeAPIKey', { keyId }); toast('Key revoked'); loadKeys(); }
+    catch(e) { toast('Error: ' + e.message); }
+  }
+
+  function init() {
+    buildAPI();
+    buildEvents();
+    buildSdks();
+    buildPermGrid();
+  }
+</script>
+</body>
+</html>

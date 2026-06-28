@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Events — SOKONI</title>
+  <link rel="icon" href="/favicon.ico" />
+  <style>
+    :root {
+      --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;
+      --text:#e6edf3;--text2:#8b949e;
+      --green:#3fb950;--blue:#58a6ff;--purple:#bc8cff;--orange:#d29922;--red:#f85149;
+      --r:8px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh;}
+    a{color:var(--blue);text-decoration:none;}
+    .hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+    .hdr-logo{font-size:17px;font-weight:700;color:var(--text);}
+    .hdr-logo span{color:var(--blue);}
+    .hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+    .btn-sm{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;font-size:12px;}
+    .btn-sm:hover{background:#2d333b;}
+    .btn-primary{padding:8px 18px;background:var(--blue);color:#000;border:none;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;}
+    .btn-primary:hover{opacity:.85;}
+    .hero{background:linear-gradient(135deg,rgba(88,166,255,.08) 0%,rgba(188,140,255,.08) 100%);border-bottom:1px solid var(--border);padding:48px 24px 36px;}
+    .hero-inner{max-width:860px;margin:0 auto;text-align:center;}
+    .hero h1{font-size:32px;font-weight:800;margin-bottom:10px;}
+    .hero h1 span{color:var(--blue);}
+    .hero p{color:var(--text2);font-size:15px;margin-bottom:24px;}
+    .search-bar{display:flex;gap:8px;max-width:560px;margin:0 auto;}
+    .search-bar input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;outline:none;}
+    .search-bar input:focus{border-color:var(--blue);}
+    .search-bar button{padding:10px 20px;background:var(--blue);color:#000;border:none;border-radius:8px;font-weight:600;cursor:pointer;}
+    .main{max-width:1200px;margin:0 auto;padding:24px;}
+    .cats{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:24px;}
+    .cats::-webkit-scrollbar{height:4px;}
+    .cats::-webkit-scrollbar-thumb{background:var(--border);}
+    .cat-pill{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;white-space:nowrap;font-size:12px;}
+    .cat-pill:hover,.cat-pill.active{background:rgba(88,166,255,.15);border-color:rgba(88,166,255,.4);color:var(--blue);}
+    .section-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+    .section-head h2{font-size:18px;font-weight:700;}
+    .section-head span{font-size:12px;color:var(--text2);}
+    .events-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:32px;}
+    .event-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:border-color .15s,transform .1s;}
+    .event-card:hover{border-color:rgba(88,166,255,.4);transform:translateY(-2px);}
+    .event-banner{width:100%;height:160px;object-fit:cover;background:var(--bg3);display:block;}
+    .event-banner-ph{width:100%;height:160px;background:linear-gradient(135deg,var(--bg3),#1f2937);display:flex;align-items:center;justify-content:center;font-size:32px;}
+    .event-body{padding:12px;}
+    .event-cat{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--purple);margin-bottom:4px;}
+    .event-title{font-size:14px;font-weight:700;margin-bottom:6px;line-height:1.3;}
+    .event-meta{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--text2);}
+    .event-meta span{display:flex;align-items:center;gap:4px;}
+    .event-footer{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-top:1px solid var(--border);background:rgba(0,0,0,.15);}
+    .event-price{font-size:13px;font-weight:700;color:var(--green);}
+    .event-tickets{font-size:11px;color:var(--text2);}
+    .load-more{text-align:center;padding:16px 0;}
+    .empty{text-align:center;padding:60px 24px;color:var(--text2);}
+    .empty .icon{font-size:40px;margin-bottom:12px;}
+    /* Modal */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px;}
+    .overlay.open{display:flex;}
+    .modal{background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:100%;max-width:680px;margin:auto;}
+    .modal-banner{width:100%;height:240px;object-fit:cover;border-radius:10px 10px 0 0;display:block;background:var(--bg3);}
+    .modal-banner-ph{width:100%;height:240px;background:linear-gradient(135deg,var(--bg3),#1f2937);border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:center;font-size:56px;}
+    .modal-body{padding:20px;}
+    .modal-title{font-size:20px;font-weight:800;margin-bottom:8px;}
+    .modal-meta{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--text2);margin-bottom:16px;}
+    .modal-meta span{display:flex;align-items:center;gap:6px;}
+    .modal-desc{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6;}
+    .tier-list{display:flex;flex-direction:column;gap:10px;margin-bottom:20px;}
+    .tier-card{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px;display:flex;align-items:center;gap:12px;}
+    .tier-info{flex:1;}
+    .tier-name{font-weight:700;font-size:14px;}
+    .tier-perks{font-size:11px;color:var(--text2);margin-top:2px;}
+    .tier-avail{font-size:11px;color:var(--text2);}
+    .tier-price{font-size:16px;font-weight:800;color:var(--green);flex-shrink:0;}
+    .tier-price.free{color:var(--blue);}
+    .qty-row{display:flex;align-items:center;gap:10px;margin-top:8px;}
+    .qty-btn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--bg2);color:var(--text);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
+    .qty-val{font-size:14px;font-weight:700;min-width:20px;text-align:center;}
+    .buy-row{display:flex;gap:10px;align-items:center;justify-content:space-between;}
+    .total-label{font-size:13px;color:var(--text2);}
+    .total-val{font-size:20px;font-weight:800;}
+    .modal-close{position:absolute;top:8px;right:12px;background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;}
+    .modal-wrap{position:relative;}
+    .form-group{margin-bottom:12px;}
+    .form-label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px;}
+    .form-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;outline:none;}
+    .form-input:focus{border-color:var(--blue);}
+    .promo-row{display:flex;gap:8px;margin-bottom:16px;}
+    .promo-row input{flex:1;}
+    .promo-row button{padding:8px 14px;border:1px solid var(--border);background:var(--bg3);border-radius:6px;color:var(--text);cursor:pointer;font-size:12px;}
+    .promo-result{font-size:12px;margin-top:-10px;margin-bottom:10px;color:var(--green);}
+    .promo-result.err{color:var(--red);}
+    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;}
+    .badge-green{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.3);}
+    .badge-red{background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.3);}
+    .my-tickets-btn{display:flex;align-items:center;gap:6px;}
+    #toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:13px;z-index:9999;display:none;}
+    #toast.show{display:block;}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .6s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .ticket-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;display:flex;gap:14px;align-items:flex-start;}
+    .ticket-qr{font-size:36px;}
+    .ticket-info{flex:1;}
+    .ticket-tier{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--purple);}
+    .ticket-event{font-size:13px;font-weight:700;margin:2px 0 4px;}
+    .ticket-meta{font-size:11px;color:var(--text2);}
+    @media(max-width:600px){.hero h1{font-size:22px;}.events-grid{grid-template-columns:1fr;}}
+  </style>
+</head>
+<body>
+
+<header class="hdr">
+  <a href="/" class="hdr-logo">SOKONI <span>Events</span></a>
+  <div class="hdr-right">
+    <button class="btn-sm my-tickets-btn" onclick="toggleMyTickets()" id="my-tickets-btn" style="display:none">🎟 My Tickets</button>
+    <a href="/event-manager.html" class="btn-sm" id="organizer-link" style="display:none">+ Create Event</a>
+    <button class="btn-sm" id="auth-btn" onclick="location.href='/login.html?redirect=/event-hub.html'">Sign In</button>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="hero-inner">
+    <h1>Discover <span>Events</span> Near You</h1>
+    <p>Concerts, conferences, workshops, parties — find your next experience</p>
+    <div class="search-bar">
+      <input id="search-input" placeholder="Search events…" onkeydown="if(event.key==='Enter')doSearch()" />
+      <button onclick="doSearch()">Search</button>
+    </div>
+  </div>
+</div>
+
+<main class="main">
+  <!-- Category pills -->
+  <div class="cats" id="cats">
+    <div class="cat-pill active" data-cat="" onclick="filterCat('',this)">All Events</div>
+    <div class="cat-pill" data-cat="concerts" onclick="filterCat('concerts',this)">🎵 Concerts</div>
+    <div class="cat-pill" data-cat="conferences" onclick="filterCat('conferences',this)">🎤 Conferences</div>
+    <div class="cat-pill" data-cat="festivals" onclick="filterCat('festivals',this)">🎪 Festivals</div>
+    <div class="cat-pill" data-cat="food_drink" onclick="filterCat('food_drink',this)">🍕 Food & Drink</div>
+    <div class="cat-pill" data-cat="comedy" onclick="filterCat('comedy',this)">😂 Comedy</div>
+    <div class="cat-pill" data-cat="sports" onclick="filterCat('sports',this)">⚽ Sports</div>
+    <div class="cat-pill" data-cat="arts" onclick="filterCat('arts',this)">🎨 Arts</div>
+    <div class="cat-pill" data-cat="education" onclick="filterCat('education',this)">📚 Education</div>
+    <div class="cat-pill" data-cat="networking" onclick="filterCat('networking',this)">🤝 Networking</div>
+    <div class="cat-pill" data-cat="corporate" onclick="filterCat('corporate',this)">🏢 Corporate</div>
+    <div class="cat-pill" data-cat="weddings" onclick="filterCat('weddings',this)">💍 Weddings</div>
+    <div class="cat-pill" data-cat="fitness" onclick="filterCat('fitness',this)">🏋 Fitness</div>
+    <div class="cat-pill" data-cat="charity" onclick="filterCat('charity',this)">❤ Charity</div>
+  </div>
+
+  <!-- Events grid -->
+  <div class="section-head">
+    <h2 id="grid-label">Upcoming Events</h2>
+    <span id="grid-count"></span>
+  </div>
+  <div id="events-grid" class="events-grid"></div>
+  <div class="load-more" id="load-more" style="display:none">
+    <button class="btn-sm" onclick="loadMore()">Load More</button>
+  </div>
+
+  <!-- My Tickets panel -->
+  <div id="my-tickets-panel" style="display:none">
+    <div class="section-head"><h2>🎟 My Tickets</h2></div>
+    <div id="my-tickets-list"></div>
+  </div>
+</main>
+
+<!-- Event detail modal -->
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-wrap">
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="/sokoni-config.js"></script>
+<script>
+  const app  = firebase.initializeApp(window.SOKONI_CONFIG, 'event-hub');
+  const auth = firebase.auth(app);
+  const fns  = firebase.functions(app);
+  fns.useRegion('us-central1');
+
+  let currentUser = null;
+  let currentRole = 0;
+  let currentCat = '';
+  let nextCursor = null;
+  let selectedTierId = null;
+  let selectedQty = 1;
+  let promoDiscount = 0;
+  let promoCodeApplied = null;
+  let myTicketsVisible = false;
+
+  function esc(s){ return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3000); }
+  async function callCF(name,data={}){ const r=await fns.httpsCallable(name)(data); return r.data; }
+
+  auth.onAuthStateChanged(async user => {
+    currentUser = user;
+    if (user) {
+      const tok = await user.getIdTokenResult();
+      currentRole = tok.claims.role || 0;
+      document.getElementById('auth-btn').textContent = user.displayName || user.email || 'Profile';
+      document.getElementById('auth-btn').onclick = () => location.href = '/buyer.html';
+      document.getElementById('my-tickets-btn').style.display = 'flex';
+      if (currentRole >= 2) document.getElementById('organizer-link').style.display = 'inline-flex';
+    }
+  });
+
+  /* ── Category filter ── */
+  function filterCat(cat, el) {
+    currentCat = cat;
+    nextCursor = null;
+    document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    const labels = { '':'Upcoming Events', concerts:'Concerts', conferences:'Conferences',
+      festivals:'Festivals', food_drink:'Food & Drink', comedy:'Comedy', sports:'Sports',
+      arts:'Arts & Culture', education:'Education', networking:'Networking',
+      corporate:'Corporate', weddings:'Weddings', fitness:'Fitness', charity:'Charity' };
+    document.getElementById('grid-label').textContent = labels[cat] || 'Events';
+    loadEvents(false);
+  }
+
+  /* ── Search ── */
+  function doSearch() {
+    const q = document.getElementById('search-input').value.trim();
+    if (!q) { filterCat(currentCat, document.querySelector('.cat-pill.active')); return; }
+    searchEvents(q);
+  }
+
+  async function searchEvents(q) {
+    document.getElementById('events-grid').innerHTML = '<div style="padding:20px;color:var(--text2)"><span class="spinner"></span> Searching…</div>';
+    try {
+      const res = await callCF('searchEvents', { query: q });
+      renderEvents(res.results || [], false);
+      document.getElementById('grid-label').textContent = `Results for "${esc(q)}"`;
+      document.getElementById('grid-count').textContent = `${res.total || 0} found`;
+      document.getElementById('load-more').style.display = 'none';
+    } catch(e) { toast('Search failed: ' + e.message); }
+  }
+
+  /* ── Load events ── */
+  async function loadEvents(append = false) {
+    if (!append) {
+      document.getElementById('events-grid').innerHTML = '<div style="padding:20px;color:var(--text2)"><span class="spinner"></span></div>';
+      nextCursor = null;
+    }
+    try {
+      const res = await callCF('listEvents', { category: currentCat, limit: 24, cursor: nextCursor });
+      renderEvents(res.events || [], append);
+      nextCursor = res.nextCursor || null;
+      document.getElementById('load-more').style.display = nextCursor ? 'block' : 'none';
+    } catch(e) {
+      document.getElementById('events-grid').innerHTML = '<div class="empty"><div class="icon">📅</div><p>Could not load events.</p></div>';
+    }
+  }
+
+  function loadMore() { loadEvents(true); }
+
+  /* ── Cat emoji map ── */
+  const CAT_EMOJI = { concerts:'🎵', conferences:'🎤', weddings:'💍', sports:'⚽', comedy:'😂',
+    food_drink:'🍕', arts:'🎨', education:'📚', networking:'🤝', festivals:'🎪',
+    fashion:'👗', fitness:'🏋', corporate:'🏢', charity:'❤', kids:'🧒', religious:'🙏', other:'📌' };
+
+  function renderEvents(events, append) {
+    const grid = document.getElementById('events-grid');
+    if (!append) grid.innerHTML = '';
+    if (!events.length && !append) {
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="icon">📅</div><p>No events found.</p></div>';
+      document.getElementById('grid-count').textContent = '';
+      return;
+    }
+    events.forEach(e => {
+      const card = document.createElement('div');
+      card.className = 'event-card';
+      card.onclick = () => openEvent(e.eventId);
+      const emoji = CAT_EMOJI[e.category] || '📌';
+      const dateStr = e.startDate ? new Date(e.startDate).toLocaleDateString('en-KE', { weekday:'short', day:'numeric', month:'short', year:'numeric' }) : '';
+      const img = e.bannerImageUrl
+        ? `<img class="event-banner" src="${esc(e.bannerImageUrl)}" alt="${esc(e.title)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        : '';
+      const ph = `<div class="event-banner-ph" ${e.bannerImageUrl ? 'style="display:none"' : ''}>${emoji}</div>`;
+      card.innerHTML = `
+        ${img}${ph}
+        <div class="event-body">
+          <div class="event-cat">${emoji} ${esc(e.category || 'event')}</div>
+          <div class="event-title">${esc(e.title)}</div>
+          <div class="event-meta">
+            <span>📅 ${esc(dateStr)}</span>
+            <span>📍 ${esc(e.venue || e.city || 'Kenya')}</span>
+            ${e.isOnline ? '<span>🌐 Online event</span>' : ''}
+          </div>
+        </div>
+        <div class="event-footer">
+          <span class="event-price" id="price-${esc(e.eventId)}">—</span>
+          <span class="event-tickets">${e.totalTicketsSold || 0} attending</span>
+        </div>`;
+      grid.appendChild(card);
+    });
+    if (!append) document.getElementById('grid-count').textContent = `${events.length} events`;
+  }
+
+  /* ── Open event modal ── */
+  async function openEvent(eventId) {
+    document.getElementById('overlay').classList.add('open');
+    document.getElementById('modal-content').innerHTML = '<div style="padding:60px;text-align:center"><span class="spinner"></span></div>';
+    selectedTierId = null; selectedQty = 1; promoDiscount = 0; promoCodeApplied = null;
+
+    try {
+      const ev = await callCF('getEvent', { eventId });
+      renderModal(ev);
+    } catch(e) { document.getElementById('modal-content').innerHTML = `<div class="modal-body"><p style="color:var(--red)">Could not load event.</p></div>`; }
+  }
+
+  function renderModal(ev) {
+    const emoji = CAT_EMOJI[ev.category] || '📌';
+    const dateStr = ev.startDate ? new Date(ev.startDate).toLocaleDateString('en-KE', { weekday:'long', day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+    const endStr = ev.endDate ? ' → ' + new Date(ev.endDate).toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' }) : '';
+    const img = ev.bannerImageUrl
+      ? `<img class="modal-banner" src="${esc(ev.bannerImageUrl)}" alt="${esc(ev.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      : '';
+    const ph = `<div class="modal-banner-ph" ${ev.bannerImageUrl ? 'style="display:none"' : ''}>${emoji}</div>`;
+
+    const tiersHtml = (ev.tiers || []).map(t => {
+      const avail = t.quantity - t.sold;
+      const isFree = t.price === 0;
+      const sold = avail <= 0;
+      return `<div class="tier-card" id="tier-${esc(t.tierId)}" onclick="selectTier('${esc(t.tierId)}',${t.price},${t.quantity - t.sold})" style="cursor:${sold?'default':'pointer'}">
+        <div class="tier-info">
+          <div class="tier-name">${esc(t.name)} ${sold ? '<span class="badge badge-red">SOLD OUT</span>' : ''}</div>
+          ${t.perks && t.perks.length ? `<div class="tier-perks">${t.perks.map(p=>esc(p)).join(' · ')}</div>` : ''}
+          <div class="tier-avail">${sold ? 'No tickets remaining' : `${avail} remaining`}</div>
+        </div>
+        <div class="tier-price ${isFree ? 'free' : ''}">${isFree ? 'FREE' : 'KES ' + t.price.toLocaleString()}</div>
+      </div>`;
+    }).join('') || '<div style="color:var(--text2);font-size:12px;padding:8px 0">No ticket tiers yet</div>';
+
+    document.getElementById('modal-content').innerHTML = `
+      ${img}${ph}
+      <div class="modal-body">
+        <div class="modal-title">${esc(ev.title)}</div>
+        <div class="modal-meta">
+          <span>📅 ${esc(dateStr)}${esc(endStr)}</span>
+          <span>📍 ${esc(ev.venue || '')}${ev.city ? ', ' + esc(ev.city) : ''}</span>
+          ${ev.isOnline ? '<span>🌐 Online event</span>' : ''}
+          <span>👥 ${ev.totalTicketsSold || 0} attending · ${ev.viewCount || 0} views</span>
+        </div>
+        ${ev.description ? `<div class="modal-desc">${esc(ev.description)}</div>` : ''}
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:10px">Tickets</div>
+        <div class="tier-list" id="tier-list">${tiersHtml}</div>
+        ${ev.tiers && ev.tiers.length ? `
+        <div class="promo-row">
+          <input class="form-input" id="promo-input" placeholder="Promo / discount code" />
+          <button onclick="applyPromo('${esc(ev.eventId)}')">Apply</button>
+        </div>
+        <div id="promo-result" class="promo-result" style="display:none"></div>
+        <div id="qty-section" style="display:none">
+          <div class="qty-row">
+            <span style="font-size:12px;color:var(--text2)">Quantity:</span>
+            <button class="qty-btn" onclick="changeQty(-1)">−</button>
+            <span class="qty-val" id="qty-val">1</span>
+            <button class="qty-btn" onclick="changeQty(1)">+</button>
+          </div>
+        </div>
+        <div class="buy-row" style="margin-top:14px">
+          <div>
+            <div class="total-label">Total</div>
+            <div class="total-val" id="modal-total">—</div>
+          </div>
+          <button class="btn-primary" id="buy-btn" onclick="buyTickets('${esc(ev.eventId)}')" disabled>Select a tier</button>
+        </div>` : ''}
+      </div>`;
+  }
+
+  function selectTier(tierId, price, avail) {
+    if (avail <= 0) return;
+    selectedTierId = tierId;
+    selectedQty = 1;
+    document.querySelectorAll('.tier-card').forEach(c => c.style.borderColor = '');
+    const el = document.getElementById('tier-' + tierId);
+    if (el) el.style.borderColor = 'var(--blue)';
+    document.getElementById('qty-section').style.display = 'block';
+    document.getElementById('buy-btn').disabled = false;
+    document.getElementById('buy-btn').textContent = 'Buy Tickets';
+    updateTotal(price);
+    window._tierPrice = price;
+    window._tierAvail = avail;
+  }
+
+  function changeQty(delta) {
+    const avail = window._tierAvail || 1;
+    selectedQty = Math.max(1, Math.min(avail, Math.min(20, selectedQty + delta)));
+    document.getElementById('qty-val').textContent = selectedQty;
+    updateTotal(window._tierPrice || 0);
+  }
+
+  function updateTotal(price) {
+    const subtotal = price * selectedQty;
+    const total = Math.max(0, subtotal - promoDiscount);
+    document.getElementById('modal-total').textContent = total === 0 ? 'FREE' : 'KES ' + total.toLocaleString();
+  }
+
+  async function applyPromo(eventId) {
+    const code = (document.getElementById('promo-input')?.value || '').trim();
+    if (!code) return;
+    const res = document.getElementById('promo-result');
+    res.style.display = 'block';
+    res.textContent = 'Checking…';
+    res.className = 'promo-result';
+    try {
+      const r = await callCF('validateEventPromoCode', { eventId, code, tierId: selectedTierId, quantity: selectedQty });
+      if (r.valid) {
+        promoDiscount = r.discountAmount || 0;
+        promoCodeApplied = code;
+        res.textContent = `✓ ${r.discountType === 'percent' ? r.discountValue + '% off' : 'KES ' + r.discountValue + ' off'} applied`;
+        if (selectedTierId) updateTotal(window._tierPrice || 0);
+      } else {
+        promoDiscount = 0; promoCodeApplied = null;
+        res.className = 'promo-result err';
+        res.textContent = '✗ ' + (r.reason || 'Invalid code');
+      }
+    } catch(e) { res.className = 'promo-result err'; res.textContent = '✗ Error checking code'; }
+  }
+
+  async function buyTickets(eventId) {
+    if (!currentUser) { location.href = '/login.html?redirect=/event-hub.html'; return; }
+    if (!selectedTierId) { toast('Please select a ticket tier'); return; }
+
+    const btn = document.getElementById('buy-btn');
+    btn.disabled = true; btn.textContent = 'Processing…';
+
+    const idempotencyKey = currentUser.uid + '-' + selectedTierId + '-' + Date.now();
+    try {
+      const res = await callCF('purchaseTickets', {
+        tierId: selectedTierId,
+        quantity: selectedQty,
+        promoCode: promoCodeApplied,
+        idempotencyKey,
+        attendeeName: currentUser.displayName || '',
+        attendeeEmail: currentUser.email || '',
+      });
+
+      closeModal();
+      if (res.status === 'paid' || res.totalAmount === 0) {
+        toast(`🎟 ${res.ticketCount} ticket(s) confirmed! Check "My Tickets".`);
+      } else {
+        toast('Order placed! Complete payment to confirm your tickets.');
+        location.href = '/checkout.html?orderId=' + res.orderId + '&type=event';
+      }
+    } catch(e) {
+      btn.disabled = false; btn.textContent = 'Buy Tickets';
+      toast('Error: ' + e.message);
+    }
+  }
+
+  function closeModal() { document.getElementById('overlay').classList.remove('open'); }
+
+  /* ── My Tickets ── */
+  function toggleMyTickets() {
+    myTicketsVisible = !myTicketsVisible;
+    document.getElementById('my-tickets-panel').style.display = myTicketsVisible ? 'block' : 'none';
+    if (myTicketsVisible) loadMyTickets();
+  }
+
+  async function loadMyTickets() {
+    const el = document.getElementById('my-tickets-list');
+    el.innerHTML = '<div style="padding:20px;color:var(--text2)"><span class="spinner"></span></div>';
+    try {
+      const res = await callCF('getMyTickets', { limit: 30 });
+      const tickets = res.tickets || [];
+      if (!tickets.length) { el.innerHTML = '<div class="empty"><div class="icon">🎟</div><p>No tickets yet.</p></div>'; return; }
+      el.innerHTML = tickets.map(t => {
+        const ev = t.event || {};
+        const dateStr = ev.startDate ? new Date(ev.startDate).toLocaleDateString('en-KE', { day:'numeric', month:'short', year:'numeric' }) : '';
+        const statusColor = t.status === 'valid' ? 'var(--green)' : t.status === 'used' ? 'var(--text2)' : 'var(--orange)';
+        return `<div class="ticket-card" style="margin-bottom:10px">
+          <div class="ticket-qr">${t.status === 'used' ? '✅' : t.status === 'valid' ? '🎟' : '⏳'}</div>
+          <div class="ticket-info">
+            <div class="ticket-tier">${esc(t.tierName)}</div>
+            <div class="ticket-event">${esc(ev.title || t.eventId)}</div>
+            <div class="ticket-meta">${dateStr ? '📅 ' + esc(dateStr) + ' · ' : ''}📍 ${esc(ev.venue || ev.city || '')}</div>
+            <div style="font-size:11px;margin-top:4px;color:${statusColor}">${esc(t.status.replace('_',' ').toUpperCase())}</div>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) { el.innerHTML = '<div class="empty"><p>Could not load tickets.</p></div>'; }
+  }
+
+  /* Boot */
+  loadEvents(false);
+</script>
+</body>
+</html>
