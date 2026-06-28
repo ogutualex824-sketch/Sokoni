@@ -8072,3 +8072,24 @@ const superAdmin = require('./super-admin');
 exports.setUserRole            = superAdmin.setUserRole;
 exports.suspendUser            = superAdmin.suspendUser;
 exports.sendPlatformBroadcast  = superAdmin.sendPlatformBroadcast;
+
+/* ── Foundation Charitable Giving Platform v1.0 ────────────────── */
+const foundation = require('./foundation');
+exports.foundationGetStats           = foundation.foundationGetStats;
+exports.foundationDonate             = foundation.foundationDonate;
+exports.foundationCheckPayment       = foundation.foundationCheckPayment;
+exports.foundationDonateWallet       = foundation.foundationDonateWallet;
+exports.foundationGetMyDonations     = foundation.foundationGetMyDonations;
+exports.foundationGetMyApplications  = foundation.foundationGetMyApplications;
+exports.foundationSubmitApplication  = foundation.foundationSubmitApplication;
+exports.foundationManageRecurring    = foundation.foundationManageRecurring;
+exports.foundationGetMyRecurring     = foundation.foundationGetMyRecurring;
+exports.foundationGenerateReceipt    = foundation.foundationGenerateReceipt;
+exports.foundationEmailReceipt       = foundation.foundationEmailReceipt;
+exports.foundationVerifyReceipt      = foundation.foundationVerifyReceipt;
+exports.foundationGetCampaigns       = foundation.foundationGetCampaigns;
+exports.foundationGetTransparency    = foundation.foundationGetTransparency;
+exports.foundationAdminDashboard     = foundation.foundationAdminDashboard;
+exports.foundationAdminUpdateApp     = foundation.foundationAdminUpdateApp;
+exports.foundationAdminUpdateStats   = foundation.foundationAdminUpdateStats;
+exports.foundationScheduledRecurring = foundation.foundationScheduledRecurring;

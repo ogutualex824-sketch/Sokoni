@@ -2989,5 +2989,27 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ── Foundation Charitable Giving Platform ──────────────────────── */
+    match /foundationStats/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /foundationDonations/{donId} {
+      allow read: if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
+      allow write: if false;
+    }
+    match /foundationApplications/{appId} {
+      allow read: if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
+      allow write: if false;
+    }
+    match /foundationCampaigns/{campId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /foundationRecurring/{recId} {
+      allow read: if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
+      allow write: if false;
+    }
+
   }
 }

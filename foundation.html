@@ -218,6 +218,71 @@
       .fn-hero-actions{flex-direction:column;align-items:center;}
       .fn-btn-primary,.fn-btn-ghost{width:100%;justify-content:center;}
     }
+
+    /* ── DONATION MODAL ── */
+    .fn-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.82);backdrop-filter:blur(6px);z-index:1000;display:none;align-items:center;justify-content:center;padding:16px;}
+    .fn-overlay.open{display:flex;}
+    .fn-modal{background:#0c0c0c;border:1px solid rgba(245,158,11,0.2);border-radius:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;position:relative;}
+    .fn-modal-head{padding:24px 24px 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#0c0c0c;z-index:2;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.06);}
+    .fn-modal-title{font-size:16px;font-weight:900;color:white;}
+    .fn-modal-close{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.06);border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background .15s;}
+    .fn-modal-close:hover{background:rgba(255,255,255,0.12);}
+    .fn-modal-body{padding:24px;}
+    .fn-tab-row{display:flex;gap:6px;background:rgba(255,255,255,0.04);border-radius:10px;padding:4px;margin-bottom:20px;}
+    .fn-tab{flex:1;padding:8px 4px;border:none;background:transparent;color:rgba(255,255,255,0.4);font-size:11px;font-weight:800;border-radius:7px;cursor:pointer;font-family:inherit;transition:all .15s;text-align:center;}
+    .fn-tab.active{background:rgba(245,158,11,0.15);color:var(--gold);border:1px solid rgba(245,158,11,0.3);}
+    .fn-select{width:100%;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:10px;color:white;font-size:14px;font-family:inherit;outline:none;transition:border-color .15s;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;cursor:pointer;}
+    .fn-select:focus{border-color:rgba(245,158,11,0.45);}
+    .fn-select option{background:#1a1a1a;color:white;}
+    .fn-method-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+    .fn-method-btn{padding:10px 6px;border:1px solid rgba(255,255,255,0.09);border-radius:10px;background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;text-align:center;transition:all .15s;}
+    .fn-method-btn.active{background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.4);color:var(--gold);}
+    .fn-anon-row{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:10px;}
+    .fn-toggle{width:40px;height:22px;background:rgba(255,255,255,0.1);border-radius:11px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0;border:none;}
+    .fn-toggle.on{background:rgba(245,158,11,0.7);}
+    .fn-toggle::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:white;top:3px;left:3px;transition:left .2s;}
+    .fn-toggle.on::after{left:21px;}
+    .fn-label-sm{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:block;}
+    .fn-spinner{width:20px;height:20px;border:2px solid rgba(245,158,11,0.2);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .fn-success-anim{text-align:center;padding:32px 24px;}
+    .fn-success-icon{font-size:64px;margin-bottom:16px;animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);}
+    @keyframes popIn{0%{transform:scale(0);opacity:0;}100%{transform:scale(1);opacity:1;}}
+    .fn-receipt-box{background:rgba(255,255,255,0.03);border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:20px;margin-top:20px;text-align:left;}
+    .fn-receipt-row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px;}
+    .fn-receipt-row:last-child{border-bottom:none;}
+    .fn-receipt-label{color:rgba(255,255,255,0.4);}
+    .fn-receipt-val{color:white;font-weight:700;}
+
+    /* ── MY CONTRIBUTIONS PANEL ── */
+    .fn-panel{position:fixed;top:0;right:-100%;width:100%;max-width:420px;height:100vh;background:#0c0c0c;border-left:1px solid rgba(255,255,255,0.08);z-index:1001;transition:right .3s cubic-bezier(.4,0,.2,1);overflow-y:auto;padding:0;}
+    .fn-panel.open{right:0;}
+    .fn-panel-head{position:sticky;top:0;background:#0c0c0c;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center;z-index:2;}
+    .fn-don-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin:0 16px 10px;}
+    .fn-don-card-amount{font-size:20px;font-weight:900;color:var(--gold);}
+    .fn-don-card-meta{font-size:11px;color:rgba(255,255,255,0.4);margin-top:3px;}
+    .fn-don-card-status{display:inline-block;font-size:9px;font-weight:800;padding:2px 8px;border-radius:4px;text-transform:uppercase;margin-top:6px;}
+    .fn-don-card-status.completed{background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);color:#10b981;}
+    .fn-don-card-status.pending{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;}
+    .fn-don-card-status.failed{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#ef4444;}
+    .fn-don-card-actions{display:flex;gap:8px;margin-top:10px;}
+    .fn-btn-xs{padding:6px 12px;border-radius:7px;border:1px solid rgba(245,158,11,0.25);background:rgba(245,158,11,0.06);color:var(--gold);font-size:10px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .15s;}
+    .fn-btn-xs:hover{background:rgba(245,158,11,0.14);}
+
+    /* ── ADMIN PANEL ── */
+    .fn-admin{display:none;margin-top:40px;background:rgba(255,255,255,0.02);border:1px solid rgba(168,85,247,0.2);border-radius:20px;padding:28px;}
+    .fn-admin.visible{display:block;}
+    .fn-admin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:24px;}
+    .fn-admin-kpi{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:14px;text-align:center;}
+    .fn-admin-kpi-num{font-size:22px;font-weight:900;color:var(--violet);}
+    .fn-admin-kpi-label{font-size:9px;color:rgba(255,255,255,0.35);text-transform:uppercase;font-weight:700;letter-spacing:.06em;}
+    .fn-admin-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:16px;}
+    .fn-admin-table th{padding:8px 10px;text-align:left;color:rgba(255,255,255,0.3);font-weight:700;text-transform:uppercase;font-size:9px;letter-spacing:.06em;border-bottom:1px solid rgba(255,255,255,0.06);}
+    .fn-admin-table td{padding:10px;border-bottom:1px solid rgba(255,255,255,0.04);color:rgba(255,255,255,0.7);vertical-align:middle;}
+    .fn-admin-table tr:hover td{background:rgba(255,255,255,0.02);}
+
+    /* ── OFFLINE BANNER — only show when genuinely offline ── */
+    #fnOfflineBanner{display:none;position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#ef4444;color:white;padding:8px 20px;border-radius:999px;font-size:12px;font-weight:700;z-index:999;pointer-events:none;}
   </style>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-premium-v2.css">
@@ -233,10 +298,11 @@
     <span class="fn-nav-badge">Foundation</span>
   </a>
   <div class="fn-nav-right">
-    <a href="#programs"     class="fn-nav-link">Programs</a>
-    <a href="#impact"       class="fn-nav-link">Impact</a>
-    <a href="#apply"        class="fn-nav-link">Apply</a>
-    <a href="#contribute"   class="fn-nav-cta">Donate Now</a>
+    <a href="#programs"   class="fn-nav-link">Programs</a>
+    <a href="#impact"     class="fn-nav-link">Impact</a>
+    <a href="#apply"      class="fn-nav-link">Apply</a>
+    <button type="button" id="navMyDonations" onclick="_openMyDonations()" class="fn-nav-link" style="border:none;cursor:pointer;background:transparent;display:none;">💛 My Donations</button>
+    <button type="button" onclick="_openDonateModal()" class="fn-nav-cta" style="border:none;cursor:pointer;">Donate Now</button>
   </div>
 </nav>
 
@@ -258,8 +324,8 @@
       The SOKONI Foundation is a non-profit initiative that channels 1% of every transaction on the platform into digital education, youth entrepreneurship, and economic inclusion — across all 47 counties.
     </p>
     <div class="fn-hero-actions">
-      <a href="#apply"      class="fn-btn-primary">🎓 Apply for a Grant</a>
-      <a href="#contribute" class="fn-btn-ghost">💛 Make a Donation</a>
+      <a href="#apply" class="fn-btn-primary">🎓 Apply for a Grant</a>
+      <button type="button" onclick="_openDonateModal()" class="fn-btn-ghost" style="border:1px solid rgba(255,255,255,0.12);">💛 Make a Donation</button>
     </div>
   </div>
 </section>
@@ -353,7 +419,7 @@
           <div class="fn-pledge-stat-label">admin deductions</div>
         </div>
       </div>
-      <a href="#contribute" class="fn-btn-primary" style="margin:0 auto;">💛 Add a Personal Contribution</a>
+      <button type="button" onclick="_openDonateModal()" class="fn-btn-primary" style="margin:0 auto;border:none;cursor:pointer;">💛 Add a Personal Contribution</button>
     </div>
   </div>
 </section>
@@ -717,60 +783,44 @@
 
 <!-- CONTRIBUTE -->
 <section id="contribute" style="padding:72px 24px;">
-  <div class="fn-container" style="max-width:800px;">
-    <div style="text-align:center;margin-bottom:36px;">
+  <div class="fn-container" style="max-width:900px;">
+    <div style="text-align:center;margin-bottom:40px;">
       <div class="fn-section-label gold">💛 Donate</div>
       <h2 class="fn-section-title">Every Contribution<br>Funds a Future</h2>
-      <p class="fn-section-sub" style="margin:0 auto;">100% of individual contributions go directly to programs. No admin deductions. Receipts issued on WhatsApp within 24 hours.</p>
+      <p class="fn-section-sub" style="margin:0 auto;">100% of individual contributions go directly to programs. No admin deductions. Digital receipts issued immediately. M-Pesa STK push — no manual transfer needed.</p>
     </div>
-    <div class="fn-contribute">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-        <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;">
-          <div style="font-size:28px;font-weight:900;color:var(--gold);">KES 500</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">Covers one week's airtime<br>for a Sokoni Scholar</div>
-        </div>
-        <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;">
-          <div style="font-size:28px;font-weight:900;color:var(--emerald);">KES 5,000</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">Fully funds a She Sells<br>starter grant</div>
-        </div>
-        <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;">
-          <div style="font-size:28px;font-weight:900;color:var(--sapphire);">KES 10,000</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">Subsidises a smartphone<br>for a Trade Corps vendor</div>
-        </div>
-        <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;">
-          <div style="font-size:28px;font-weight:900;color:var(--violet);">KES 50,000</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">Sponsors a full Sokoni<br>Scholar for one cohort</div>
-        </div>
-      </div>
 
-      <div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Choose Amount</div>
-      <div class="fn-amt-grid" id="fnAmts">
-        <button type="button" class="fn-amt-btn" onclick="setDonation(100,this)">KES 100</button>
-        <button type="button" class="fn-amt-btn" onclick="setDonation(250,this)">KES 250</button>
-        <button type="button" class="fn-amt-btn active" onclick="setDonation(500,this)">KES 500</button>
-        <button type="button" class="fn-amt-btn" onclick="setDonation(1000,this)">KES 1,000</button>
-        <button type="button" class="fn-amt-btn" onclick="setDonation(5000,this)">KES 5,000</button>
-        <button type="button" class="fn-amt-btn" onclick="setDonation(10000,this)">KES 10,000</button>
+    <!-- Donation impact cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:36px;">
+      <div onclick="_openDonateModal(50)" style="cursor:pointer;text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(245,158,11,0.3)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
+        <div style="font-size:26px;font-weight:900;color:var(--gold);">KES 50</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">One day's airtime<br>for a Scholar</div>
+        <div style="margin-top:10px;font-size:10px;font-weight:800;color:var(--gold);opacity:.7;">Tap to Donate →</div>
       </div>
-      <input type="number" id="donCustom" class="fn-input" placeholder="Or enter any amount (KES)" min="50" inputmode="numeric" style="margin-bottom:16px;" oninput="if(this.value){document.querySelectorAll('#fnAmts .fn-amt-btn').forEach(b=>b.classList.remove('active'));_donAmt=parseInt(this.value)||500;}">
+      <div onclick="_openDonateModal(500)" style="cursor:pointer;text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(245,158,11,0.3)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
+        <div style="font-size:26px;font-weight:900;color:var(--emerald);">KES 500</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">One week's airtime<br>for a Scholar</div>
+        <div style="margin-top:10px;font-size:10px;font-weight:800;color:var(--emerald);opacity:.7;">Tap to Donate →</div>
+      </div>
+      <div onclick="_openDonateModal(5000)" style="cursor:pointer;text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(245,158,11,0.3)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
+        <div style="font-size:26px;font-weight:900;color:var(--sapphire);">KES 5,000</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">Funds a She Sells<br>starter grant</div>
+        <div style="margin-top:10px;font-size:10px;font-weight:800;color:var(--sapphire);opacity:.7;">Tap to Donate →</div>
+      </div>
+      <div onclick="_openDonateModal(50000)" style="cursor:pointer;text-align:center;padding:20px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(245,158,11,0.3)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
+        <div style="font-size:26px;font-weight:900;color:var(--violet);">KES 50,000</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;line-height:1.5;">Sponsors a full Scholar<br>for one cohort</div>
+        <div style="margin-top:10px;font-size:10px;font-weight:800;color:var(--violet);opacity:.7;">Tap to Donate →</div>
+      </div>
+    </div>
 
-      <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:16px;margin-bottom:18px;font-size:12px;color:rgba(255,255,255,0.5);line-height:2.1;">
-        <div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">How to Donate via M-Pesa</div>
-        <div>1. Open <strong style="color:white;">M-PESA</strong> → tap <strong style="color:white;">Send Money</strong></div>
-        <div>2. Number: <strong style="color:#71ff00;font-size:14px;letter-spacing:.05em;">0705 726 803</strong></div>
-        <div>3. Amount: <strong style="color:var(--gold);" id="donAmtDisplay">KES 500</strong></div>
-        <div>4. Reference: <strong style="color:white;">SOKONI FOUNDATION</strong></div>
-      </div>
-
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button type="button" onclick="donateWhatsApp()" style="flex:1;min-width:160px;padding:14px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:12px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .2s;" onmouseover="this.style.filter='brightness(1.08)'" onmouseout="this.style.filter=''">
-          <i class="fab fa-whatsapp" style="font-size:16px;"></i> Confirm via WhatsApp
-        </button>
-        <button type="button" onclick="copyDonNumber()" id="donCopyBtn" style="padding:14px 20px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.28);border-radius:12px;color:var(--gold);font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;">📋 Copy Number</button>
-      </div>
-      <div style="margin-top:12px;font-size:10px;color:rgba(255,255,255,0.18);text-align:center;line-height:1.7;">
-        All contributions received by SOKONI Foundation · Registration pending (KE-NGO-2026)<br>Receipts issued via WhatsApp within 24 hrs · 100% to programs — no deductions
-      </div>
+    <div style="text-align:center;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <button type="button" onclick="_openDonateModal()" class="fn-btn-primary" style="border:none;cursor:pointer;">💛 Choose My Amount</button>
+      <button type="button" onclick="_openMyDonations()" id="myDonBtn" class="fn-btn-ghost" style="display:none;cursor:pointer;border:1px solid rgba(255,255,255,0.12);">📋 My Contributions</button>
+    </div>
+    <div style="margin-top:16px;font-size:11px;color:rgba(255,255,255,0.25);text-align:center;line-height:1.8;">
+      Secure STK Push via IntaSend · No manual transfer needed · Receipt issued instantly<br>
+      SOKONI Foundation · Registration Pending (KE-NGO-2026) · 100% to programs
     </div>
   </div>
 </section>
@@ -784,8 +834,8 @@
       </div>
       <p style="font-size:15px;color:rgba(255,255,255,0.45);line-height:1.7;max-width:500px;margin:0 auto 32px;">Shop on SOKONI. Sell on SOKONI. Every transaction already contributes. Add a personal donation to multiply your impact.</p>
       <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
-        <a href="#apply"        class="fn-btn-primary">🎓 Apply for a Program</a>
-        <a href="#contribute"   class="fn-btn-ghost">💛 Donate</a>
+        <a href="#apply" class="fn-btn-primary">🎓 Apply for a Program</a>
+        <button type="button" onclick="_openDonateModal()" class="fn-btn-ghost" style="border:1px solid rgba(255,255,255,0.12);cursor:pointer;">💛 Donate Now</button>
         <a href="https://wa.me/254705726803?text=I%20want%20to%20learn%20more%20about%20SOKONI%20Foundation" target="_blank" rel="noopener noreferrer" class="fn-btn-ghost">💬 Contact Us</a>
       </div>
     </div>
@@ -820,184 +870,829 @@
 </nav>
 
 <script>
-/* STATE */
-var _donAmt = 500;
+/* ============================================================
+   SOKONI Foundation — Production JavaScript
+   Firebase-wired donation platform
+============================================================ */
+'use strict';
+
+/* ── State ── */
+var _donAmt = 500, _donFreq = 'one-time', _donMethod = 'mpesa', _donAnon = false;
 var _selectedProgram = 'scholars';
+var _activeDonationId = null, _pollTimer = null;
+var _donReceiptData = null;
+var _cf = null; /* httpsCallable factory — set after Firebase init */
 
-/* COUNTER ANIMATION */
-function animateCount(el, target, prefix, suffix, dur){
-  var start = 0, step = Math.ceil(dur/60);
-  var inc = target/step;
-  var timer = setInterval(function(){
-    start += inc;
-    if(start >= target){ start = target; clearInterval(timer); }
-    el.textContent = prefix + Math.floor(start).toLocaleString() + suffix;
-  }, 1000/60);
-}
-
-/* Intersection observer for impact numbers */
-(function(){
-  var observed = false;
-  var observer = new IntersectionObserver(function(entries){
-    entries.forEach(function(e){
-      if(e.isIntersecting && !observed){
-        observed = true;
-        animateCount(document.getElementById('statYouth'),   1240, '',      '+',  2200);
-        animateCount(document.getElementById('statGrants'),   340, '',      '',   1800);
-        animateCount(document.getElementById('statCounties'),  18, '',      '',    900);
-        animateCount(document.getElementById('statFunds'),   4200000, 'KES ', '', 2500);
-        animateCount(document.getElementById('statVendors'),   680, '',      '+', 1600);
-        animateCount(document.getElementById('statJobs'),      820, '',      '',  2000);
-      }
-    });
-  }, {threshold:0.3});
-  var el = document.getElementById('statYouth');
-  if(el) observer.observe(el.closest('.fn-impact-grid') || el);
+/* ── Init Firebase callables ── */
+(function _initCF() {
+  var tries = 0;
+  function attempt() {
+    if (window.firebaseFunctions && window.httpsCallable) {
+      _cf = function(name) { return window.httpsCallable(window.firebaseFunctions, name); };
+      _loadLiveStats();
+    } else if (tries++ < 20) {
+      setTimeout(attempt, 300);
+    }
+  }
+  attempt();
 })();
 
-/* Allocation bar animation */
+/* ── Auth state → show/hide My Donations button ── */
+(function _watchAuth() {
+  var tries = 0;
+  function attempt() {
+    if (window.firebaseAuth && window.onAuthStateChanged) {
+      window.onAuthStateChanged(window.firebaseAuth, function(user) {
+        var btn = document.getElementById('navMyDonations');
+        var btn2 = document.getElementById('myDonBtn');
+        if (btn)  btn.style.display  = user ? '' : 'none';
+        if (btn2) btn2.style.display = user ? '' : 'none';
+        /* Show admin panel for admins */
+        if (user) {
+          user.getIdTokenResult().then(function(r) {
+            var isAdmin = r.claims.admin || r.claims.superAdmin || r.claims.role === 'admin';
+            var panel = document.getElementById('fnAdminPanel');
+            if (isAdmin && panel) { panel.style.display = ''; _loadAdminPanel(); }
+          }).catch(function(){});
+        }
+      });
+    } else if (tries++ < 20) {
+      setTimeout(attempt, 300);
+    }
+  }
+  attempt();
+})();
+
+/* ── Offline detection (genuine only) ── */
+var _offlineCount = 0;
+window.addEventListener('offline', function() {
+  _offlineCount++;
+  var b = document.getElementById('fnOfflineBanner');
+  if (b) b.style.display = 'block';
+});
+window.addEventListener('online', function() {
+  _offlineCount = 0;
+  var b = document.getElementById('fnOfflineBanner');
+  if (b) b.style.display = 'none';
+});
+
+/* ── Counter animation ── */
+function _animateCount(el, target, prefix, suffix, dur) {
+  if (!el) return;
+  var start = 0, steps = Math.max(1, Math.ceil(dur / 16));
+  var inc = target / steps, frame = 0;
+  var timer = setInterval(function() {
+    frame++;
+    start = Math.min(target, start + inc);
+    el.textContent = prefix + Math.floor(start).toLocaleString() + suffix;
+    if (frame >= steps) { el.textContent = prefix + Math.floor(target).toLocaleString() + suffix; clearInterval(timer); }
+  }, 16);
+}
+
+/* ── Live stats from Firebase ── */
+function _loadLiveStats() {
+  if (!_cf) return;
+  _cf('foundationGetStats')({}).then(function(r) {
+    if (!r.data || !r.data.ok) return;
+    var s = r.data.stats;
+    var statsAnimated = false;
+    var grid = document.querySelector('.fn-impact-grid');
+    if (!grid) return;
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) {
+        if (e.isIntersecting && !statsAnimated) {
+          statsAnimated = true;
+          _animateCount(document.getElementById('statYouth'),    s.youthTrained     || 1240, '', '+', 2200);
+          _animateCount(document.getElementById('statGrants'),   s.grantsIssued     || 340,  '', '',  1800);
+          _animateCount(document.getElementById('statCounties'), s.countiesReached  || 18,   '', '',  900);
+          _animateCount(document.getElementById('statFunds'),    s.totalDisbursed   || 4200000, 'KES ', '', 2500);
+          _animateCount(document.getElementById('statVendors'),  s.vendorsDigitised || 680,  '', '+', 1600);
+          _animateCount(document.getElementById('statJobs'),     s.jobsCreated      || 820,  '', '',  2000);
+          /* Update ticker with live numbers */
+          _updateTicker(s);
+        }
+      });
+    }, { threshold: 0.3 });
+    obs.observe(grid);
+  }).catch(function(){});
+}
+
+function _updateTicker(s) {
+  var ticker = document.getElementById('tickerInner');
+  if (!ticker) return;
+  var items = [
+    ['🎓', (s.youthTrained||1240).toLocaleString() + '+', 'Youth Trained'],
+    ['💰', 'KES ' + ((s.totalDisbursed||4200000)/1000000).toFixed(1) + 'M', 'Disbursed'],
+    ['🗺️', (s.countiesReached||18) + ' Counties', 'Reached'],
+    ['🚀', (s.grantsIssued||340), 'Micro-Grants Issued'],
+    ['👩‍💼', (s.femalePct||52) + '%', 'Female Beneficiaries'],
+    ['📱', (s.vendorsDigitised||680) + '+', 'Vendors Digitised'],
+    ['🤝', '12', 'Corporate Partners'],
+    ['🌍', 'Goal:', 'All 47 Counties by 2027'],
+  ];
+  var html = items.concat(items).map(function(i) {
+    return '<span class="fn-ticker-item">' + i[0] + ' <strong>' + i[1] + '</strong> ' + i[2] + '</span>';
+  }).join('');
+  ticker.innerHTML = html;
+}
+
+/* ── Allocation bar animation (unchanged) ── */
 (function(){
   var animated = false;
-  var observer = new IntersectionObserver(function(entries){
+  var obs = new IntersectionObserver(function(entries){
     entries.forEach(function(e){
       if(e.isIntersecting && !animated){
         animated = true;
         document.querySelectorAll('.fn-alloc-fill').forEach(function(bar){
-          var t = bar.dataset.target;
-          setTimeout(function(){ bar.style.width = t + '%'; }, 200);
+          setTimeout(function(){ bar.style.width = (bar.dataset.target || 0) + '%'; }, 200);
         });
       }
     });
   }, {threshold:0.4});
   var first = document.querySelector('.fn-alloc-bar');
-  if(first) observer.observe(first);
+  if(first) obs.observe(first);
 })();
 
-/* PROGRAM NOTES */
+/* ── PROGRAM NOTES ── */
 var PROG_NOTES = {
-  scholars:     '🎓 <strong style="color:white;">Sokoni Scholars:</strong> Open to Kenyans aged 16–30. No prior digital skills needed. We provide everything — device, airtime, and instructor access. One 90-day cohort starts every quarter.',
-  shesells:     '👩‍💼 <strong style="color:white;">She Sells:</strong> For women-owned businesses. Grants KES 5K–50K, zero interest, with 6-month mentorship. Priority given to single mothers and first-time business owners.',
-  youthinc:     '🚀 <strong style="color:white;">Youth Inc.:</strong> Age 18–30 with a business idea. Grants KES 5K–25K with no repayment if your business runs 12 months. Includes business plan support and SOKONI seller onboarding.',
-  tradecorps:   '🤝 <strong style="color:white;">Trade Corps:</strong> For informal market vendors. We provide a subsidised phone, 6-month data, and a 90-day seller buddy. Already active at Gikomba, Toi, Kongowea and Muthurwa.',
-  digitalvillage:'🌐 <strong style="color:white;">Digital Village:</strong> Request a hub in your community. We partner with local leaders and county governments to set up access points with Wi-Fi, devices, and a trained digital assistant.',
-  ambassador:   '⭐ <strong style="color:white;">Foundation Ambassador:</strong> For public figures, athletes, artists, and business leaders. You pledge visibility and mentorship. You back at least two beneficiaries directly. Apply by WhatsApp.',
+  scholars:     '🎓 <strong style="color:white;">Sokoni Scholars:</strong> Open to Kenyans aged 16–30. No prior digital skills needed. Device, airtime, and instructor access provided. 90-day cohort, four per year.',
+  shesells:     '👩‍💼 <strong style="color:white;">She Sells:</strong> Zero-interest grants of KES 5K–50K for women-owned businesses + 6-month mentorship. Priority: single mothers, first-time owners.',
+  youthinc:     '🚀 <strong style="color:white;">Youth Inc.:</strong> Age 18–30. Grants of KES 5K–25K, no repayment if business runs 12 months. Business plan support + SOKONI seller onboarding.',
+  tradecorps:   '🤝 <strong style="color:white;">Trade Corps:</strong> Subsidised phone, 6-month data, 90-day seller buddy for informal market vendors. Active at Gikomba, Toi, Kongowea, Muthurwa.',
+  digitalvillage:'🌐 <strong style="color:white;">Digital Village:</strong> Physical digital access hubs — Wi-Fi, devices, and a trained digital assistant. Request one for your community.',
+  ambassador:   '⭐ <strong style="color:white;">Foundation Ambassador:</strong> For public figures, athletes, artists, business leaders. Pledge visibility + mentorship + back at least two beneficiaries.',
 };
 
-function selectProgram(prog, btn){
+function selectProgram(prog, btn) {
   _selectedProgram = prog;
   var note = document.getElementById('applyProgNote');
-  if(note) note.innerHTML = PROG_NOTES[prog] || '';
-  /* Sync tab buttons */
-  if(btn){
+  if (note) note.innerHTML = PROG_NOTES[prog] || '';
+  if (btn) {
     document.querySelectorAll('#progTabs .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); });
     btn.classList.add('active');
-  }
-  /* Scroll to apply if called from a card */
-  if(!btn){
+  } else {
     document.getElementById('apply')?.scrollIntoView({behavior:'smooth', block:'start'});
-    var match = document.querySelector('#progTabs .fn-amt-btn[onclick*="'+prog+'"]');
-    if(match){
-      document.querySelectorAll('#progTabs .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); });
-      match.classList.add('active');
-    }
+    var match = document.querySelector('#progTabs .fn-amt-btn[onclick*="' + prog + '"]');
+    if (match) { document.querySelectorAll('#progTabs .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); }); match.classList.add('active'); }
   }
 }
 window.selectProgram = selectProgram;
 
-function setDonation(amt, btn){
+/* ══════════════════════════════════════════════════════════
+   DONATE MODAL
+══════════════════════════════════════════════════════════ */
+function _openDonateModal(presetAmt) {
+  if (presetAmt) { _donAmt = Number(presetAmt); _syncAmtButtons(); }
+  _showStep(1);
+  document.getElementById('donateOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+window._openDonateModal = _openDonateModal;
+
+function _closeDonateModal() {
+  document.getElementById('donateOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+  _cancelPoll();
+}
+window._closeDonateModal = _closeDonateModal;
+
+function _showStep(n) {
+  [1,2,3].forEach(function(i){ var el = document.getElementById('donStep'+i); if(el) el.style.display = i===n?'':'none'; });
+}
+
+function _setFreq(freq, btn) {
+  _donFreq = freq;
+  document.querySelectorAll('.fn-tab-row .fn-tab').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+}
+window._setFreq = _setFreq;
+
+function _setAmt(amt, btn) {
   _donAmt = amt;
-  document.querySelectorAll('#fnAmts .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); });
-  btn.classList.add('active');
-  var d = document.getElementById('donAmtDisplay');
-  if(d) d.textContent = 'KES ' + amt.toLocaleString();
-  var inp = document.getElementById('donCustom');
-  if(inp) inp.value = '';
+  document.getElementById('donCustomAmt').value = '';
+  document.querySelectorAll('#modalAmts .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  _syncBtnLabel();
 }
-window.setDonation = setDonation;
+window._setAmt = _setAmt;
 
-function getCurrentDonAmt(){
-  var custom = parseInt(document.getElementById('donCustom')?.value || 0);
-  return custom > 0 ? custom : _donAmt;
+function _onCustomAmt(inp) {
+  var v = parseInt(inp.value) || 0;
+  if (v > 0) {
+    _donAmt = v;
+    document.querySelectorAll('#modalAmts .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); });
+    _syncBtnLabel();
+  }
 }
+window._onCustomAmt = _onCustomAmt;
 
-function donateWhatsApp(){
-  var amt = getCurrentDonAmt();
-  var msg = '💛 *SOKONI Foundation Donation*\n\n'
-    + 'I just sent *KES ' + amt.toLocaleString() + '* to 0705 726 803 via M-Pesa.\n'
-    + 'Reference: SOKONI FOUNDATION\n\n'
-    + 'Please confirm receipt and issue a contribution acknowledgement. Thank you!';
-  window.open('https://wa.me/254705726803?text=' + encodeURIComponent(msg), '_blank', 'noopener,noreferrer');
-}
-window.donateWhatsApp = donateWhatsApp;
-
-function copyDonNumber(){
-  navigator.clipboard.writeText('0705726803').then(function(){
-    var btn = document.getElementById('donCopyBtn');
-    if(btn){ btn.textContent = '✅ Copied!'; setTimeout(function(){ btn.textContent = '📋 Copy Number'; }, 2500); }
-  }).catch(function(){
-    var btn = document.getElementById('donCopyBtn');
-    if(btn){ btn.textContent = '0705 726 803'; }
+function _syncAmtButtons() {
+  document.querySelectorAll('#modalAmts .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); });
+  document.querySelectorAll('#modalAmts .fn-amt-btn').forEach(function(b){
+    var t = parseInt(b.textContent.replace(/[,\s]/g,''));
+    if (t === _donAmt) b.classList.add('active');
   });
+  _syncBtnLabel();
 }
-window.copyDonNumber = copyDonNumber;
 
-function submitApplication(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('found_apply',3,3600000)){(window._skToast||alert)('Too many applications. Please wait 1 hour.');return;}
-  var name    = (document.getElementById('applyName')?.value  || '').trim();
-  var phone   = (document.getElementById('applyPhone')?.value || '').trim();
-  var county  = (document.getElementById('applyCounty')?.value || '').trim();
-  var story   = (document.getElementById('applyStory')?.value || '').trim();
-  var msgEl   = document.getElementById('applyMsg');
+function _syncBtnLabel() {
+  var el = document.getElementById('donBtnAmt');
+  if (el) el.textContent = 'KES ' + _donAmt.toLocaleString();
+}
 
-  if(!name||!phone||!county||!story){
-    if(msgEl){ msgEl.textContent = '⚠️ Please fill in all required fields.'; msgEl.style.color = '#ff9800'; }
+function _setMethod(m, btn) {
+  _donMethod = m;
+  document.querySelectorAll('.fn-method-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.getElementById('mpesaField').style.display = m === 'mpesa' ? '' : 'none';
+  document.getElementById('walletInfo').style.display = m === 'wallet' ? '' : 'none';
+  document.getElementById('cardInfo').style.display   = m === 'card'   ? '' : 'none';
+  if (m === 'wallet') _loadWalletBal();
+}
+window._setMethod = _setMethod;
+
+function _loadWalletBal() {
+  var user = window.sokoniUser || (function(){ try { return JSON.parse(localStorage.getItem('sokoniUser')); } catch(e){ return null; } })();
+  if (!user || !window.firebaseDB || !window.getDoc || !window.doc) { document.getElementById('walletBal').textContent = 'Sign in to see balance'; return; }
+  window.getDoc(window.doc(window.firebaseDB, 'wallets', user.uid)).then(function(snap) {
+    var bal = snap.exists() ? (snap.data().balance || 0) : 0;
+    document.getElementById('walletBal').textContent = 'KES ' + Number(bal).toLocaleString();
+  }).catch(function(){ document.getElementById('walletBal').textContent = '—'; });
+}
+
+function _toggleAnon() {
+  _donAnon = !_donAnon;
+  var btn = document.getElementById('anonToggle');
+  if (btn) btn.classList.toggle('on', _donAnon);
+}
+window._toggleAnon = _toggleAnon;
+
+function _setDonErr(msg) {
+  var el = document.getElementById('donErr');
+  if (el) { el.textContent = msg || ''; }
+}
+
+/* ── Submit Donation ── */
+function _submitDonation() {
+  _setDonErr('');
+  var custom = parseInt(document.getElementById('donCustomAmt')?.value || 0);
+  if (custom > 0) _donAmt = custom;
+  if (_donAmt < 50) { _setDonErr('Minimum donation is KES 50.'); return; }
+
+  var user = window.sokoniUser || (function(){ try { return JSON.parse(localStorage.getItem('sokoniUser')); } catch(e){ return null; } })();
+  if (!user) { _setDonErr('Please sign in to donate.'); setTimeout(function(){ window.location.href='login.html?next=foundation.html'; }, 1500); return; }
+  if (!_cf) { _setDonErr('Platform not ready. Please refresh.'); return; }
+
+  var dest = document.getElementById('donDest')?.value || 'General Foundation';
+
+  if (_donMethod === 'card') {
+    /* Card: redirect to IntaSend hosted checkout (not inline) */
+    _closeDonateModal();
+    window.open('https://wa.me/254705726803?text=' + encodeURIComponent('I want to donate KES ' + _donAmt.toLocaleString() + ' to SOKONI Foundation via card. Please send me a payment link.'), '_blank', 'noopener,noreferrer');
     return;
   }
 
-  var age   = document.getElementById('applyAge')?.value || '';
-  var prog  = _selectedProgram.toUpperCase();
+  if (_donMethod === 'wallet') {
+    _showStep(2);
+    document.getElementById('donProcessMsg').textContent = 'Processing wallet donation…';
+    _cf('foundationDonateWallet')({
+      amount: _donAmt, destination: dest, frequency: _donFreq,
+      displayName: user.displayName || user.email || 'Donor',
+      anonymous: _donAnon,
+    }).then(function(r) {
+      if (r.data && r.data.ok) {
+        _donReceiptData = r.data;
+        _activeDonationId = r.data.donationId;
+        _showSuccess({ receiptNo: r.data.receiptNo, verifyCode: r.data.verifyCode });
+      } else { _showStep(1); _setDonErr('Donation failed. Please try again.'); }
+    }).catch(function(e) { _showStep(1); _setDonErr(e.message || 'Donation failed.'); });
+    return;
+  }
 
-  var wa = '🌟 *SOKONI Foundation Application — ' + prog + '*\n\n'
-    + 'Name: ' + name + '\n'
-    + 'Phone: ' + phone + '\n'
-    + 'County: ' + county + '\n'
-    + (age ? 'Age: ' + age + '\n' : '')
-    + '\n*Story / Vision:*\n' + story + '\n\n'
-    + 'Program: ' + prog + '\n'
-    + 'Source: ' + (document.getElementById('applySource')?.value || 'Not specified');
+  /* M-Pesa STK push */
+  var phone = (document.getElementById('donPhone')?.value || '').trim();
+  if (!phone) { _setDonErr('Enter your M-Pesa number.'); return; }
 
-  window.open('https://wa.me/254705726803?text=' + encodeURIComponent(wa), '_blank', 'noopener,noreferrer');
+  _showStep(2);
+  document.getElementById('donProcessMsg').textContent = 'Sending STK Push to ' + phone + '…';
 
-  /* Also persist to Firestore for admin tracking */
-  (function(){
-    var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-    import(FS).then(function(m){
-      var db = window.firebaseDB;
-      if (!db) return;
-      var u = window.sokoniUser || (function(){ try{ return JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){ return null; } })();
-      m.addDoc(m.collection(db, 'applications'), {
-        name: name, phone: phone, county: county, story: story,
-        age: age, program: prog,
-        source: document.getElementById('applySource')?.value || '',
-        uid: u ? u.uid || u.email : null,
-        status: 'pending',
-        createdAt: m.serverTimestamp()
-      });
+  _cf('foundationDonate')({
+    amount: _donAmt, phone: phone, destination: dest, frequency: _donFreq,
+    displayName: user.displayName || user.email || 'Donor',
+    anonymous: _donAnon,
+  }).then(function(r) {
+    if (r.data && r.data.ok) {
+      _activeDonationId = r.data.donationId;
+      document.getElementById('donProcessMsg').textContent = 'Waiting for M-Pesa PIN…';
+      _startPoll();
+    } else { _showStep(1); _setDonErr('STK Push failed. Please try again.'); }
+  }).catch(function(e) { _showStep(1); _setDonErr(e.message || 'STK Push failed.'); });
+}
+window._submitDonation = _submitDonation;
+
+function _startPoll() {
+  var tries = 0, max = 30; /* 30 × 3s = 90s timeout */
+  _pollTimer = setInterval(function() {
+    tries++;
+    if (!_cf || !_activeDonationId) { _cancelPoll(); return; }
+    _cf('foundationCheckPayment')({ donationId: _activeDonationId }).then(function(r) {
+      var s = r.data && r.data.status;
+      if (s === 'completed') {
+        _cancelPoll();
+        _showSuccess({ receiptNo: r.data.receiptNo, verifyCode: r.data.verifyCode });
+      } else if (s === 'failed') {
+        _cancelPoll(); _showStep(1); _setDonErr('Payment was not completed. Please try again.');
+      } else if (tries >= max) {
+        _cancelPoll(); _showStep(1); _setDonErr('Payment timed out. If you completed the payment, check My Donations.');
+      }
     }).catch(function(){});
-  })();
+  }, 3000);
+}
 
-  if(msgEl){ msgEl.innerHTML = '✅ Application sent! We review all submissions — expect a response within 48 hours.'; msgEl.style.color = '#10b981'; }
-  setTimeout(function(){ if(msgEl) msgEl.textContent = ''; }, 7000);
+function _cancelPoll() { if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; } }
+window._cancelDonation = function() { _cancelPoll(); _showStep(1); };
+
+function _showSuccess(data) {
+  _showStep(3);
+  document.getElementById('donModalTitle').textContent = '✅ Donation Received';
+  document.getElementById('donSuccessMsg').textContent = 'KES ' + _donAmt.toLocaleString() + ' donated to ' + (document.getElementById('donDest')?.value || 'Foundation') + '.';
+  var box = document.getElementById('donReceiptBox');
+  if (box && data) {
+    _donReceiptData = data;
+    box.innerHTML = [
+      ['Receipt No.', data.receiptNo || '—'],
+      ['Amount', 'KES ' + _donAmt.toLocaleString()],
+      ['Destination', document.getElementById('donDest')?.value || '—'],
+      ['Method', _donMethod === 'mpesa' ? 'M-Pesa' : 'Wallet'],
+      ['Frequency', _donFreq],
+    ].map(function(r) {
+      return '<div class="fn-receipt-row"><span class="fn-receipt-label">'+r[0]+'</span><span class="fn-receipt-val">'+r[1]+'</span></div>';
+    }).join('');
+  }
+  /* Update stats display immediately */
+  _loadLiveStats();
+}
+
+function _printReceipt() {
+  if (!_cf || !_activeDonationId) { window.print(); return; }
+  _cf('foundationGenerateReceipt')({ donationId: _activeDonationId }).then(function(r) {
+    if (r.data && r.data.html) {
+      var w = window.open('', '_blank');
+      if (w) { w.document.write(r.data.html); w.document.close(); setTimeout(function(){ w.print(); }, 800); }
+    }
+  }).catch(function(){ window.print(); });
+}
+window._printReceipt = _printReceipt;
+
+function _emailReceipt() {
+  if (!_cf || !_activeDonationId) return;
+  var user = window.sokoniUser || (function(){ try { return JSON.parse(localStorage.getItem('sokoniUser')); } catch(e){ return null; } })();
+  var email = user?.email || prompt('Enter your email address:');
+  if (!email) return;
+  var btn = document.getElementById('emailReceiptBtn');
+  if (btn) { btn.textContent = 'Sending…'; btn.disabled = true; }
+  _cf('foundationEmailReceipt')({ donationId: _activeDonationId, email: email }).then(function() {
+    if (btn) { btn.textContent = '✅ Sent!'; }
+  }).catch(function(e) {
+    if (btn) { btn.textContent = '❌ Failed'; btn.disabled = false; }
+  });
+}
+window._emailReceipt = _emailReceipt;
+
+function _shareReceipt() {
+  var text = '💛 I just donated KES ' + _donAmt.toLocaleString() + ' to SOKONI Foundation! Join me in investing in Kenya\'s future. mysokoni.co.ke/foundation';
+  if (navigator.share) { navigator.share({ title: 'SOKONI Foundation Donation', text: text, url: 'https://mysokoni.co.ke/foundation' }).catch(function(){}); }
+  else { navigator.clipboard.writeText(text).then(function(){ if(window._skToast) _skToast('Link copied!'); }); }
+}
+window._shareReceipt = _shareReceipt;
+
+/* ══════════════════════════════════════════════════════════
+   MY CONTRIBUTIONS PANEL
+══════════════════════════════════════════════════════════ */
+var _donTabCurrent = 'history';
+
+function _openMyDonations() {
+  document.getElementById('donPanel').classList.add('open');
+  document.getElementById('panelScrim').style.display = '';
+  document.body.style.overflow = 'hidden';
+  _donTabCurrent = 'history';
+  _loadDonations();
+}
+window._openMyDonations = _openMyDonations;
+
+function _closeMyDonations() {
+  document.getElementById('donPanel').classList.remove('open');
+  document.getElementById('panelScrim').style.display = 'none';
+  document.body.style.overflow = '';
+}
+window._closeMyDonations = _closeMyDonations;
+
+function _donTab(tab, btn) {
+  _donTabCurrent = tab;
+  document.querySelectorAll('#donPanelTabs .fn-amt-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  if (tab === 'history')      _loadDonations();
+  if (tab === 'recurring')    _loadRecurring();
+  if (tab === 'applications') _loadMyApplications();
+}
+window._donTab = _donTab;
+
+function _setPanelContent(html) {
+  var el = document.getElementById('donPanelContent');
+  if (el) el.innerHTML = html;
+}
+
+function _loadDonations() {
+  if (!_cf) { _setPanelContent('<p style="color:rgba(255,255,255,0.3);font-size:12px;padding:16px;text-align:center;">Platform loading…</p>'); return; }
+  _setPanelContent('<div style="color:rgba(255,255,255,0.3);font-size:13px;padding:20px;text-align:center;">Loading…</div>');
+  _cf('foundationGetMyDonations')({ limit: 20 }).then(function(r) {
+    if (!r.data || !r.data.donations.length) {
+      _setPanelContent('<div style="color:rgba(255,255,255,0.3);font-size:13px;padding:32px;text-align:center;">No donations yet.<br><br><button onclick="_openDonateModal()" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;padding:10px 20px;border-radius:10px;cursor:pointer;font-weight:800;font-size:12px;font-family:inherit;">💛 Make First Donation</button></div>');
+      return;
+    }
+    var html = r.data.donations.map(function(d) {
+      return '<div class="fn-don-card">'
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+        + '<div><div class="fn-don-card-amount">KES ' + Number(d.amount).toLocaleString() + '</div>'
+        + '<div class="fn-don-card-meta">' + (d.destination || 'Foundation') + ' · ' + (d.dateStr || '') + ' · ' + (d.method || '') + '</div>'
+        + '<span class="fn-don-card-status ' + (d.status||'pending') + '">' + (d.status||'pending') + '</span>'
+        + '</div></div>'
+        + (d.status === 'completed' ? '<div class="fn-don-card-actions"><button class="fn-btn-xs" onclick="_printReceipt2(\'' + d.id + '\')">🖨 Receipt</button><button class="fn-btn-xs" onclick="_emailReceipt2(\'' + d.id + '\')">📧 Email</button></div>' : '')
+        + '</div>';
+    }).join('');
+    _setPanelContent(html);
+  }).catch(function(e) { _setPanelContent('<p style="color:#ef4444;font-size:12px;padding:16px;">' + (e.message||'Failed to load.') + '</p>'); });
+}
+
+function _printReceipt2(donId) {
+  if (!_cf) return;
+  _cf('foundationGenerateReceipt')({ donationId: donId }).then(function(r) {
+    if (r.data && r.data.html) { var w = window.open('', '_blank'); if (w) { w.document.write(r.data.html); w.document.close(); setTimeout(function(){ w.print(); }, 800); } }
+  }).catch(function(){});
+}
+window._printReceipt2 = _printReceipt2;
+
+function _emailReceipt2(donId) {
+  var user = window.sokoniUser || (function(){ try { return JSON.parse(localStorage.getItem('sokoniUser')); } catch(e){ return null; } })();
+  var email = user?.email || prompt('Email address:');
+  if (!email || !_cf) return;
+  _cf('foundationEmailReceipt')({ donationId: donId, email: email }).then(function(){ if (window._skToast) _skToast('Receipt emailed!'); }).catch(function(){});
+}
+window._emailReceipt2 = _emailReceipt2;
+
+function _loadRecurring() {
+  if (!_cf) return;
+  _setPanelContent('<div style="color:rgba(255,255,255,0.3);font-size:13px;padding:20px;text-align:center;">Loading…</div>');
+  _cf('foundationGetMyRecurring')({}).then(function(r) {
+    if (!r.data || !r.data.recurring.length) {
+      _setPanelContent('<div style="color:rgba(255,255,255,0.3);font-size:13px;padding:32px;text-align:center;">No recurring donations.<br><br><button onclick="_openDonateModal()" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;padding:10px 20px;border-radius:10px;cursor:pointer;font-weight:800;font-size:12px;font-family:inherit;">Set Up Recurring Donation</button></div>');
+      return;
+    }
+    var html = r.data.recurring.map(function(rec) {
+      return '<div class="fn-don-card">'
+        + '<div class="fn-don-card-amount">KES ' + Number(rec.amount).toLocaleString() + ' / ' + (rec.frequency||'monthly') + '</div>'
+        + '<div class="fn-don-card-meta">' + (rec.destination||'Foundation') + '</div>'
+        + '<span class="fn-don-card-status completed">' + (rec.status||'active') + '</span>'
+        + '<div class="fn-don-card-actions">'
+        + (rec.status==='active' ? '<button class="fn-btn-xs" onclick="_manageRecurring(\'' + rec.id + '\',\'pause\')">⏸ Pause</button>' : '<button class="fn-btn-xs" onclick="_manageRecurring(\'' + rec.id + '\',\'resume\')">▶ Resume</button>')
+        + '<button class="fn-btn-xs" style="border-color:rgba(239,68,68,0.3);color:#ef4444;" onclick="_manageRecurring(\'' + rec.id + '\',\'cancel\')">✕ Cancel</button>'
+        + '</div></div>';
+    }).join('');
+    _setPanelContent(html);
+  }).catch(function(){});
+}
+
+function _manageRecurring(id, action) {
+  if (!_cf) return;
+  if (action === 'cancel' && !confirm('Cancel this recurring donation?')) return;
+  _cf('foundationManageRecurring')({ recurringId: id, action: action }).then(function() {
+    _loadRecurring();
+    if (window._skToast) _skToast(action === 'cancel' ? 'Recurring donation cancelled.' : 'Updated!');
+  }).catch(function(e){ if (window._skToast) _skToast(e.message||'Failed.'); });
+}
+window._manageRecurring = _manageRecurring;
+
+function _loadMyApplications() {
+  if (!_cf) return;
+  _setPanelContent('<div style="color:rgba(255,255,255,0.3);font-size:13px;padding:20px;text-align:center;">Loading…</div>');
+  _cf('foundationGetMyApplications')({}).then(function(r) {
+    if (!r.data || !r.data.applications.length) {
+      _setPanelContent('<div style="color:rgba(255,255,255,0.3);font-size:13px;padding:32px;text-align:center;">No applications yet.<br><br><a href="#apply" onclick="_closeMyDonations()" style="color:#f59e0b;font-weight:700;font-size:12px;">Apply for a Program →</a></div>');
+      return;
+    }
+    var statusColors = { pending:'#f59e0b', approved:'#10b981', rejected:'#ef4444', waitlisted:'#a855f7', interview:'#3b82f6' };
+    var html = r.data.applications.map(function(a) {
+      var sc = statusColors[a.status] || '#f59e0b';
+      return '<div class="fn-don-card">'
+        + '<div style="font-size:14px;font-weight:900;color:white;">' + (a.program||'—') + '</div>'
+        + '<div class="fn-don-card-meta">' + (a.county||'') + ' · ' + (a.dateStr||'') + '</div>'
+        + '<span class="fn-don-card-status" style="background:rgba(0,0,0,0);border:1px solid ' + sc + ';color:' + sc + ';">' + (a.status||'pending') + '</span>'
+        + (a.adminNotes ? '<div style="margin-top:8px;font-size:11px;color:rgba(255,255,255,0.4);padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;">' + a.adminNotes + '</div>' : '')
+        + '</div>';
+    }).join('');
+    _setPanelContent(html);
+  }).catch(function(){});
+}
+
+/* ══════════════════════════════════════════════════════════
+   APPLICATION FORM
+══════════════════════════════════════════════════════════ */
+function submitApplication() {
+  var msgEl = document.getElementById('applyMsg');
+  var name   = (document.getElementById('applyName')?.value  || '').trim();
+  var phone  = (document.getElementById('applyPhone')?.value || '').trim();
+  var county = (document.getElementById('applyCounty')?.value || '').trim();
+  var story  = (document.getElementById('applyStory')?.value || '').trim();
+
+  if (!name || !phone || !county || !story) {
+    if (msgEl) { msgEl.textContent = '⚠️ Please fill in all required fields.'; msgEl.style.color = '#ff9800'; }
+    return;
+  }
+  if (story.length < 30) {
+    if (msgEl) { msgEl.textContent = '⚠️ Please write at least 30 characters about your story.'; msgEl.style.color = '#ff9800'; }
+    return;
+  }
+
+  var submitBtn = document.querySelector('[onclick="submitApplication()"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<span class="fn-spinner"></span> Submitting…'; }
+  if (msgEl) { msgEl.textContent = ''; }
+
+  var payload = {
+    name: name, phone: phone, county: county, story: story,
+    age:     document.getElementById('applyAge')?.value    || '',
+    program: _selectedProgram.toUpperCase(),
+    source:  document.getElementById('applySource')?.value || '',
+    email:   window.sokoniUser?.email || '',
+  };
+
+  if (_cf) {
+    _cf('foundationSubmitApplication')(payload).then(function(r) {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '📤 Submit Application'; }
+      if (r.data && r.data.ok) {
+        if (msgEl) { msgEl.innerHTML = '✅ Application submitted! We review every submission within 48 hours.'; msgEl.style.color = '#10b981'; }
+        ['applyName','applyPhone','applyStory','applyAge'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+        setTimeout(function(){ if(msgEl) msgEl.textContent = ''; }, 8000);
+      }
+    }).catch(function(e) {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '📤 Submit Application'; }
+      if (msgEl) { msgEl.textContent = '❌ ' + (e.message || 'Submission failed. Please try again.'); msgEl.style.color = '#ef4444'; }
+    });
+  } else {
+    /* Fallback: WhatsApp if Firebase not ready */
+    var wa = '🌟 *SOKONI Foundation Application — ' + payload.program + '*\n\nName: ' + name + '\nPhone: ' + phone + '\nCounty: ' + county + '\n\n*Story:*\n' + story;
+    window.open('https://wa.me/254705726803?text=' + encodeURIComponent(wa), '_blank', 'noopener,noreferrer');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '📤 Submit Application'; }
+  }
 }
 window.submitApplication = submitApplication;
 
-function applyWhatsApp(){
+function applyWhatsApp() {
   window.open('https://wa.me/254705726803?text=' + encodeURIComponent(
     '👋 Hi SOKONI Foundation, I want to apply for the ' + _selectedProgram.toUpperCase() + ' program. Please guide me.'
   ), '_blank', 'noopener,noreferrer');
 }
 window.applyWhatsApp = applyWhatsApp;
+
+/* ══════════════════════════════════════════════════════════
+   ADMIN PANEL
+══════════════════════════════════════════════════════════ */
+var _adminStats = {};
+function _loadAdminPanel() {
+  if (!_cf) { setTimeout(_loadAdminPanel, 500); return; }
+  _cf('foundationAdminDashboard')({}).then(function(r) {
+    if (!r.data || !r.data.ok) return;
+    var d = r.data;
+    _adminStats = d.stats || {};
+    document.getElementById('adminLoading').style.display = 'none';
+    document.getElementById('adminContent').style.display = '';
+
+    /* KPIs */
+    var kpiData = [
+      ['💰', 'Total Donated', 'KES ' + Number(d.stats.totalDonations||0).toLocaleString()],
+      ['📤', 'Disbursed', 'KES ' + Number(d.stats.totalDisbursed||0).toLocaleString()],
+      ['👥', 'Total Donors', Number(d.stats.totalDonors||0).toLocaleString()],
+      ['📋', 'Pending Apps', d.applications.length],
+      ['🔄', 'Recurring', d.recurring.length],
+    ];
+    document.getElementById('adminKpis').innerHTML = kpiData.map(function(k) {
+      return '<div class="fn-admin-kpi"><div class="fn-admin-kpi-num">' + k[2] + '</div><div class="fn-admin-kpi-label">' + k[1] + '</div></div>';
+    }).join('');
+
+    /* Applications table */
+    if (!d.applications.length) {
+      document.getElementById('adminApps').innerHTML = '<p style="color:rgba(255,255,255,0.3);font-size:12px;">No pending applications.</p>';
+    } else {
+      document.getElementById('adminApps').innerHTML = d.applications.map(function(a) {
+        return '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px;margin-bottom:8px;font-size:12px;">'
+          + '<div style="font-weight:900;color:white;">' + (a.name||'—') + ' — ' + (a.program||'—') + ' <span style="color:rgba(255,255,255,0.4);">(' + (a.county||'') + ')</span></div>'
+          + '<div style="color:rgba(255,255,255,0.4);margin:4px 0;">' + (a.story||'').slice(0,120) + '…</div>'
+          + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">'
+          + ['approved','rejected','waitlisted','interview'].map(function(s) {
+              return '<button onclick="_adminReviewApp(\'' + a.id + '\',\'' + s + '\')" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);cursor:pointer;font-size:10px;font-weight:800;font-family:inherit;">' + s + '</button>';
+            }).join('')
+          + '</div></div>';
+      }).join('');
+    }
+
+    /* Donations table */
+    document.getElementById('adminDonBody').innerHTML = d.donations.slice(0,20).map(function(don) {
+      return '<tr><td>' + (don.dateStr||'—') + '</td><td>' + (don.donorName||'—') + '</td>'
+        + '<td style="color:#f59e0b;font-weight:700;">KES ' + Number(don.amount||0).toLocaleString() + '</td>'
+        + '<td>' + (don.destination||'—') + '</td><td>' + (don.method||'—') + '</td>'
+        + '<td><span style="color:' + (don.status==='completed'?'#10b981':don.status==='failed'?'#ef4444':'#f59e0b') + ';font-weight:700;">' + (don.status||'—') + '</span></td></tr>';
+    }).join('');
+
+    /* Stats edit form */
+    var statFields = [
+      ['youthTrained','Youth Trained'],['grantsIssued','Grants Issued'],['countiesReached','Counties Reached'],
+      ['vendorsDigitised','Vendors Digitised'],['jobsCreated','Jobs Created'],['beneficiaries','Beneficiaries'],
+      ['treesPlanted','Trees Planted'],['mealsProvided','Meals Provided'],['schoolFeesPaid','School Fees Paid'],
+      ['medicalSupport','Medical Support'],['totalDisbursed','Total Disbursed (KES)'],['femalePct','Female %'],
+    ];
+    document.getElementById('adminStatsForm').innerHTML = statFields.map(function(f) {
+      return '<div><label style="font-size:9px;color:rgba(255,255,255,0.3);display:block;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">' + f[1] + '</label>'
+        + '<input id="adminStat_' + f[0] + '" type="number" value="' + (d.stats[f[0]]||0) + '" class="fn-input" style="font-size:13px;padding:8px 10px;"></div>';
+    }).join('');
+  }).catch(function(){});
+}
+
+function _adminReviewApp(appId, status) {
+  if (!_cf) return;
+  var notes = status === 'rejected' ? (prompt('Reason for rejection (optional):') || '') : '';
+  _cf('foundationAdminUpdateApp')({ appId: appId, status: status, notes: notes }).then(function() {
+    _loadAdminPanel();
+    if (window._skToast) _skToast('Application ' + status + '!');
+  }).catch(function(e){ if (window._skToast) _skToast(e.message||'Failed.'); });
+}
+window._adminReviewApp = _adminReviewApp;
+
+function _adminSaveStats() {
+  if (!_cf) return;
+  var payload = {};
+  ['youthTrained','grantsIssued','countiesReached','vendorsDigitised','jobsCreated','beneficiaries',
+   'treesPlanted','mealsProvided','schoolFeesPaid','medicalSupport','totalDisbursed','femalePct'].forEach(function(k) {
+    var el = document.getElementById('adminStat_' + k);
+    if (el) payload[k] = Number(el.value) || 0;
+  });
+  _cf('foundationAdminUpdateStats')(payload).then(function() {
+    _loadLiveStats();
+    if (window._skToast) _skToast('Stats updated!');
+  }).catch(function(e){ if (window._skToast) _skToast(e.message||'Failed.'); });
+}
+window._adminSaveStats = _adminSaveStats;
 </script>
+<!-- ══ DONATION MODAL ══ -->
+<div class="fn-overlay" id="donateOverlay" onclick="if(event.target===this)_closeDonateModal()">
+  <div class="fn-modal" id="donateModal">
+    <div class="fn-modal-head">
+      <div class="fn-modal-title" id="donModalTitle">💛 Make a Donation</div>
+      <button class="fn-modal-close" onclick="_closeDonateModal()">✕</button>
+    </div>
+    <div class="fn-modal-body" id="donModalBody">
+      <!-- Step 1: Choose -->
+      <div id="donStep1">
+        <span class="fn-label-sm">Frequency</span>
+        <div class="fn-tab-row" style="margin-bottom:16px;">
+          <button class="fn-tab active" onclick="_setFreq('one-time',this)">One-time</button>
+          <button class="fn-tab" onclick="_setFreq('monthly',this)">Monthly</button>
+          <button class="fn-tab" onclick="_setFreq('weekly',this)">Weekly</button>
+          <button class="fn-tab" onclick="_setFreq('daily',this)">Daily</button>
+        </div>
+        <span class="fn-label-sm">Amount (KES)</span>
+        <div class="fn-amt-grid" id="modalAmts" style="margin-bottom:10px;">
+          <button class="fn-amt-btn" onclick="_setAmt(50,this)">50</button>
+          <button class="fn-amt-btn" onclick="_setAmt(100,this)">100</button>
+          <button class="fn-amt-btn" onclick="_setAmt(200,this)">200</button>
+          <button class="fn-amt-btn active" onclick="_setAmt(500,this)">500</button>
+          <button class="fn-amt-btn" onclick="_setAmt(1000,this)">1,000</button>
+          <button class="fn-amt-btn" onclick="_setAmt(5000,this)">5,000</button>
+        </div>
+        <input type="number" id="donCustomAmt" class="fn-input" placeholder="Custom amount (KES)" min="50" inputmode="numeric" style="margin-bottom:16px;" oninput="_onCustomAmt(this)">
+        <span class="fn-label-sm">Destination</span>
+        <select id="donDest" class="fn-select" style="margin-bottom:16px;">
+          <option value="General Foundation">General Foundation</option>
+          <option value="Education">Education (Sokoni Scholars)</option>
+          <option value="Women Entrepreneurs">Women Entrepreneurs (She Sells)</option>
+          <option value="Youth Grants">Youth Grants (Youth Inc.)</option>
+          <option value="Digital Villages">Digital Villages</option>
+          <option value="Trade Corps">Trade Corps — Market Vendors</option>
+          <option value="Health">Health & Medical Support</option>
+          <option value="Food Security">Food Security</option>
+          <option value="Environment">Environment & Trees</option>
+          <option value="Disaster Relief">Disaster Relief</option>
+          <option value="Emergency Appeal">Emergency Appeal</option>
+        </select>
+        <span class="fn-label-sm">Payment Method</span>
+        <div class="fn-method-row" style="margin-bottom:16px;">
+          <button class="fn-method-btn active" onclick="_setMethod('mpesa',this)">📱<br>M-Pesa</button>
+          <button class="fn-method-btn" onclick="_setMethod('wallet',this)">👛<br>Wallet</button>
+          <button class="fn-method-btn" onclick="_setMethod('card',this)">💳<br>Card</button>
+        </div>
+        <!-- M-Pesa phone field -->
+        <div id="mpesaField">
+          <span class="fn-label-sm">M-Pesa Number</span>
+          <input type="tel" id="donPhone" class="fn-input" placeholder="07XXXXXXXX" inputmode="tel" maxlength="12" style="margin-bottom:16px;">
+        </div>
+        <!-- Wallet info -->
+        <div id="walletInfo" style="display:none;padding:10px 14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:16px;">
+          💳 Balance: <strong id="walletBal" style="color:var(--gold);">—</strong>
+        </div>
+        <!-- Card info -->
+        <div id="cardInfo" style="display:none;padding:10px 14px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:10px;font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:16px;">
+          💳 Card payments are processed via IntaSend. You will be redirected to a secure checkout page.
+        </div>
+        <div class="fn-anon-row">
+          <button id="anonToggle" type="button" class="fn-toggle" onclick="_toggleAnon()"></button>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.6);">Donate Anonymously</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.3);">Your name will not appear publicly</div>
+          </div>
+        </div>
+        <div id="donErr" style="min-height:14px;font-size:12px;color:#ef4444;margin-bottom:8px;"></div>
+        <button type="button" id="donSubmitBtn" onclick="_submitDonation()" class="fn-btn-primary" style="width:100%;justify-content:center;border:none;cursor:pointer;">
+          💛 Donate <span id="donBtnAmt">KES 500</span>
+        </button>
+        <div style="margin-top:10px;font-size:10px;color:rgba(255,255,255,0.2);text-align:center;">
+          Secured by IntaSend · Receipt issued immediately · 100% to programs
+        </div>
+      </div>
+      <!-- Step 2: Processing -->
+      <div id="donStep2" style="display:none;text-align:center;padding:32px 0;">
+        <div class="fn-spinner" style="width:40px;height:40px;border-width:3px;margin:0 auto 20px;"></div>
+        <div style="font-size:15px;font-weight:700;color:white;margin-bottom:8px;" id="donProcessMsg">Sending STK Push…</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.4);">Check your phone and enter your M-Pesa PIN to complete the donation.</div>
+        <button type="button" onclick="_cancelDonation()" style="margin-top:20px;background:transparent;border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.4);padding:8px 20px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit;">Cancel</button>
+      </div>
+      <!-- Step 3: Success -->
+      <div id="donStep3" style="display:none;">
+        <div class="fn-success-anim">
+          <div class="fn-success-icon">💛</div>
+          <div style="font-size:20px;font-weight:900;color:white;margin-bottom:6px;">Thank You!</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:20px;" id="donSuccessMsg">Your donation was received.</div>
+          <div class="fn-receipt-box" id="donReceiptBox"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:20px;">
+            <button type="button" onclick="_printReceipt()" class="fn-btn-primary" style="border:none;cursor:pointer;font-size:12px;padding:10px 18px;">🖨 Print Receipt</button>
+            <button type="button" id="emailReceiptBtn" onclick="_emailReceipt()" class="fn-btn-ghost" style="font-size:12px;padding:10px 18px;cursor:pointer;border:1px solid rgba(255,255,255,0.12);">📧 Email Receipt</button>
+            <button type="button" onclick="_shareReceipt()" class="fn-btn-ghost" style="font-size:12px;padding:10px 18px;cursor:pointer;border:1px solid rgba(255,255,255,0.12);">📤 Share</button>
+          </div>
+          <button type="button" onclick="_closeDonateModal()" style="margin-top:16px;background:transparent;border:none;color:rgba(255,255,255,0.3);font-size:12px;cursor:pointer;font-family:inherit;">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MY CONTRIBUTIONS PANEL ══ -->
+<div class="fn-panel" id="donPanel">
+  <div class="fn-panel-head">
+    <div style="font-size:15px;font-weight:900;color:white;">💛 My Contributions</div>
+    <button onclick="_closeMyDonations()" class="fn-modal-close">✕</button>
+  </div>
+  <div style="padding:16px;">
+    <div id="donPanelTabs" style="display:flex;gap:6px;margin-bottom:16px;">
+      <button class="fn-amt-btn active" style="flex:1;" onclick="_donTab('history',this)">Donations</button>
+      <button class="fn-amt-btn" style="flex:1;" onclick="_donTab('recurring',this)">Recurring</button>
+      <button class="fn-amt-btn" style="flex:1;" onclick="_donTab('applications',this)">Applications</button>
+    </div>
+    <div id="donPanelContent"><div style="color:rgba(255,255,255,0.3);font-size:13px;padding:20px;text-align:center;">Loading…</div></div>
+  </div>
+</div>
+<div id="panelScrim" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.5);" onclick="_closeMyDonations()"></div>
+
+<!-- ══ ADMIN PANEL ══ -->
+<section id="fnAdminPanel" style="display:none;padding:40px 24px;background:rgba(168,85,247,0.03);border-top:1px solid rgba(168,85,247,0.1);">
+  <div class="fn-container">
+    <div class="fn-section-label violet" style="margin-bottom:16px;">🛡 Foundation Admin</div>
+    <div class="fn-admin visible" id="adminPanelInner">
+      <div id="adminLoading" style="color:rgba(255,255,255,0.4);font-size:13px;">Loading admin data…</div>
+      <div id="adminContent" style="display:none;">
+        <div class="fn-admin-grid" id="adminKpis"></div>
+        <div style="margin-bottom:24px;">
+          <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;">Pending Applications</div>
+          <div id="adminApps"></div>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;">Recent Donations</div>
+          <div style="overflow-x:auto;">
+            <table class="fn-admin-table" id="adminDonTable">
+              <thead><tr><th>Date</th><th>Donor</th><th>Amount</th><th>Destination</th><th>Method</th><th>Status</th></tr></thead>
+              <tbody id="adminDonBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div style="margin-top:24px;">
+          <div style="font-size:12px;font-weight:800;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;">Update Impact Stats</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;" id="adminStatsForm"></div>
+          <button type="button" onclick="_adminSaveStats()" class="fn-btn-primary" style="margin-top:12px;border:none;cursor:pointer;font-size:12px;padding:10px 20px;">💾 Save Stats</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ OFFLINE BANNER ══ -->
+<div id="fnOfflineBanner">📵 No internet connection</div>
+
 <script src="scroll-top.js" defer></script>
 <script src="nav-active.js" defer></script>
 <script src="sw-register.js" defer></script>

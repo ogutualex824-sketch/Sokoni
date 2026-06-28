@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260628-v2";
+const CACHE_VERSION = "sokoni-20260628-foundation-v1";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -19,7 +19,7 @@ const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
 /* NOTE: Firebase cleanUrls:true redirects all .html URLs to clean URLs.
    PRECACHE_PAGES must use the canonical (no .html) form so cache.add() succeeds. */
 const PRECACHE_PAGES = [
-  "/", "/offline",
+  "/", "/?source=pwa", "/offline",
   "/login", "/signup", "/category", "/services",
   "/product", "/cart", "/profile",
   "/notifications", "/unboxing", "/reviews",
@@ -227,9 +227,12 @@ self.addEventListener("install", event => {
 self.addEventListener("message", event => {
   if (event.data?.type === "SKIP_WAITING" || event.data?.type === "SW_SKIP_WAITING") self.skipWaiting();
 });
+const TILE_CACHE = "sokoni-tiles-v1";   /* shared constant — tiles survive SW version bumps */
+
 self.addEventListener("activate", event => {
   event.waitUntil((async () => {
-    const valid = new Set([STATIC_CACHE, PAGES_CACHE, IMAGES_CACHE]);
+    /* Keep current version caches + the persistent tile cache (map tiles are expensive to re-fetch) */
+    const valid = new Set([STATIC_CACHE, PAGES_CACHE, IMAGES_CACHE, TILE_CACHE]);
     const keys  = await caches.keys();
     await Promise.all(keys.filter(k => !valid.has(k)).map(k => caches.delete(k)));
     await self.clients.claim();
@@ -267,7 +270,6 @@ self.addEventListener("fetch", event => {
     'opentopomap.org',
   ];
   if (MAP_TILE_HOSTS.some(h => url.hostname.includes(h))) {
-    const TILE_CACHE = 'sokoni-tiles-v1';
     event.respondWith((async () => {
       const cache  = await caches.open(TILE_CACHE);
       const cached = await cache.match(request);
@@ -348,27 +350,52 @@ async function networkFirst(request, cacheName) {
 }
 
 async function networkFirstPage(request) {
+  const cache = await caches.open(PAGES_CACHE);
   try {
-    const res = await fetch(request);
+    /* Use redirect:'follow' so Firebase cleanUrls 301s are resolved inside the SW.
+       The browser never receives an opaqueredirect for navigation requests, which
+       prevents the SW from contributing to ERR_TOO_MANY_REDIRECTS chains.
+       When fetch() itself hits a redirect loop it throws TypeError — caught below. */
+    const res = await fetch(new Request(request, { redirect: “follow” }));
     if (res.ok) {
-      const cache = await caches.open(PAGES_CACHE);
-      cache.put(request, res.clone());
+      /* Guard: never cache a redirected response whose final URL differs from
+         the request URL by only a query string pointing back at itself —
+         that is the Firebase cleanUrls index.html+querystring loop signature. */
+      if (res.redirected) {
+        const reqUrl  = new URL(request.url);
+        const resUrl  = new URL(res.url);
+        const isSelf  = resUrl.pathname === reqUrl.pathname && resUrl.hostname === reqUrl.hostname;
+        if (!isSelf) cache.put(request, res.clone());
+      } else {
+        cache.put(request, res.clone());
+      }
     }
     return res;
-  } catch {
-    const cache  = await caches.open(PAGES_CACHE);
+  } catch (err) {
+    /* fetch threw — most likely a redirect loop (TypeError: too many redirects)
+       or a network failure. Recovery priority:
+         1. Exact URL cached from a prior successful request
+         2. Root “/” cached page (safe fallback for any page in the same SPA)
+         3. Offline shell  */
     const cached = await cache.match(request);
     if (cached) return cached;
-    const offline = await caches.match("/offline") || await caches.match("/offline.html");
+
+    /* Delete the bad cache entry so the next successful load replaces it */
+    await cache.delete(request);
+
+    const root = await cache.match(“/”) || await cache.match(“/?source=pwa”);
+    if (root) return root;
+
+    const offline = await caches.match(“/offline”) || await caches.match(“/offline.html”);
     return offline || new Response(
-      `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Offline</title></head>
-       <body style="background:#0a0a0a;color:white;font-family:sans-serif;text-align:center;padding:80px 24px;">
-         <h1 style="color:#71ff00;font-size:48px;margin-bottom:16px;">ðŸ“¶</h1>
+      `<!DOCTYPE html><html><head><meta charset=”UTF-8”><title>Offline — SOKONI</title></head>
+       <body style=”background:#0a0a0a;color:white;font-family:sans-serif;text-align:center;padding:80px 24px;”>
+         <div style=”font-size:48px;margin-bottom:16px;”>&#x1F4F6;</div>
          <h2>You're Offline</h2>
-         <p style="color:rgba(255,255,255,0.5);margin:12px 0 24px;">Check your connection and try again.</p>
-         <a href="/" style="padding:12px 24px;background:#71ff00;color:black;border-radius:12px;font-weight:800;text-decoration:none;">Go Home</a>
+         <p style=”color:rgba(255,255,255,0.5);margin:12px 0 24px;”>Check your connection and try again.</p>
+         <a href=”/” style=”padding:12px 24px;background:#71ff00;color:black;border-radius:12px;font-weight:800;text-decoration:none;”>Go Home</a>
        </body></html>`,
-      { headers: { "Content-Type": "text/html" }, status: 503 }
+      { headers: { “Content-Type”: “text/html” }, status: 503 }
     );
   }
 }
