@@ -647,6 +647,119 @@ img {
   box-sizing: border-box !important;
 }
 
+/* ── ADMIN OS (admin-os.html) ─────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Header search — width:220px overflows 360px viewport */
+  .aos-header-search input,
+  .aos-search input,
+  [class*="aos-search"] input {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
+
+@media (max-width: 600px) {
+  /* KPI / analytics / dashboard rows — all 2-col grids collapse to 2 */
+  .analytics-grid,
+  .dash-row,
+  .config-grid,
+  .user-detail-grid,
+  .aos-grid,
+  [class*="aos-grid"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  /* Collapse to single column on very small phones */
+  .analytics-grid,
+  .dash-row,
+  .config-grid,
+  .user-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── FINOS (finos.html / financial-os.html) ──────────────────────── */
+@media (max-width: 768px) {
+  /* Sidebar + content layout — 260px sidebar crushes at 360px */
+  .fn-layout,
+  .finos-layout,
+  [class*="fn-layout"],
+  [class*="finos-layout"] {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+
+  .fn-sidebar,
+  .finos-sidebar,
+  [class*="fn-sidebar"] {
+    width: 100% !important;
+    max-height: 220px;
+    overflow-y: auto;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+}
+
+@media (max-width: 600px) {
+  /* All inline 1fr 380px / 1fr 1fr grids inside finos pages */
+  .fn-panel > [style*="grid-template-columns"],
+  .finos-panel > [style*="grid-template-columns"],
+  [class*="fn-row"],
+  [class*="fn-grid"],
+  [class*="finos-row"],
+  [class*="finos-grid"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Inline-style 380px column — !important overrides inline styles */
+  [style*="grid-template-columns: 1fr 380px"],
+  [style*="grid-template-columns:1fr 380px"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── SUPER ADMIN (super-admin.html) ───────────────────────────────── */
+@media (max-width: 480px) {
+  /* KPI grids — minmax(160-180px) forces 2+ columns on 360px */
+  .fin-kpi-grid,
+  .kpi-grid,
+  .sa-kpi-grid,
+  [class*="kpi-grid"],
+  [class*="fin-kpi"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* Commission / commission editor grids */
+  [class*="commission-grid"],
+  [class*="comm-grid"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .fin-kpi-grid,
+  .kpi-grid,
+  [class*="kpi-grid"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Wide inputs in super-admin forms (width:220-240px inline) */
+.sa-input,
+[class*="sa-input"],
+.sa-form input,
+.sa-form select,
+[class*="sa-form"] input {
+  max-width: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
 /* ── 18. OFFLINE BAR SAFE-AREA ─────────────────────────────────────── */
 #sk-offline-bar {
   display: flex;

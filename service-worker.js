@@ -11,75 +11,77 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260628-appcheck-v1";
+const CACHE_VERSION = "sokoni-20260628-v2";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
 
+/* NOTE: Firebase cleanUrls:true redirects all .html URLs to clean URLs.
+   PRECACHE_PAGES must use the canonical (no .html) form so cache.add() succeeds. */
 const PRECACHE_PAGES = [
-  "/", "/index.html", "/offline.html",
-  "/login.html", "/signup.html", "/category.html", "/services.html",
-  "/product.html", "/cart.html", "/profile.html",
-  "/notifications.html", "/unboxing.html", "/reviews.html",
-  "/seller.html", "/checkout.html", "/messages.html",
-  "/wishlist.html", "/wallet.html", "/track.html",
-  "/flashsale.html", "/driver.html", "/food.html",
-  "/food-menu.html", "/food-cart.html", "/food-order.html", "/food-dashboard.html", "/food-rider.html",
-  "/healthcare.html", "/entertainment.html", "/car-hub.html",
-  "/car-rental.html", "/pos.html", "/pos-checkout.html", "/pos-display.html",
-  "/delivery.html", "/delivery-tracking.html",
-  "/bnb.html", "/landlord.html", "/property.html",
-  "/community.html", "/digital.html", "/b2b.html",
-  "/b2b-supplier.html", "/b2b-rfq.html", "/b2b-dashboard.html",
-  "/b2b-seller-dashboard.html", "/b2b-orders.html", "/b2b-chat.html",
-  "/banking.html", "/sports-hub.html", "/fitness-hub.html",
-  "/tech-hub.html", "/legal-hub.html", "/legal.html",
-  "/inspiq.html", "/opportunity.html", "/ministore.html",
-  "/subscriptions.html", "/loyalty.html", "/referral.html",
-  "/invoice.html", "/dispute.html", "/requests.html",
-  "/store.html", "/providers.html", "/provider.html",
-  "/business-os.html", "/admin.html",
-  "/ent-organizer.html",
-  "/home-services.html", "/cleaning.html", "/construction.html",
-  "/electrical.html", "/mechanics.html", "/phone-repair.html", "/plumbing.html",
-  "/life-events.html", "/marketing.html", "/foundation.html",
-  "/offer.html", "/success.html", "/trust.html",
-  "/register.html", "/seller-public.html", "/bnb-manage.html",
-  "/payments.html", "/revenue.html", "/seller-revenue.html",
-  "/property-hub.html", "/property-listing.html", "/property-agent.html",
-  "/property-dashboard.html", "/property-agent-dashboard.html",
-  "/bnb-hub.html",
-  "/marketing-hub.html",
-  "/sports-tournament.html", "/sports-venue.html",
-  "/businesses.html", "/business.html",
-  "/search.html", "/verification.html", "/verification-admin.html",
-  "/growth-dashboard.html",
-  "/seller-analytics.html", "/business-analytics.html", "/customer-analytics.html",
-  "/monitor.html", "/email-center.html",
-  "/onboarding.html", "/onboarding-seller.html", "/onboarding-driver.html", "/onboarding-professional.html",
-  "/help.html", "/moderation.html",
-  "/beta.html", "/beta-dashboard.html",
-  "/seller-success.html", "/driver-success.html", "/join.html", "/support.html", "/launch-metrics.html", "/launch-readiness.html", "/merchant-pipeline.html",
-  "/ride-book.html",
-  "/jobs.html", "/education.html", "/superadmin.html", "/scan.html",
-  "/inventory.html",
-  "/inv-dashboard.html",
-  "/inv-products.html",
-  "/inv-product.html",
-  "/creative-studio.html",
-  "/ai-subscriptions.html",
-  "/admin-subscriptions.html",
-  "/subscription-os.html",
-  "/chat.html",
-  "/admin-messages.html",
-  "/commission-engine.html",
-  "/subscription-billing.html",
-  "/financial-os.html",
-  "/trust-safety.html",
-  "/admin-os.html",
-  "/privacy.html",
-  "/terms.html",
-  "/data-deletion.html",
+  "/", "/offline",
+  "/login", "/signup", "/category", "/services",
+  "/product", "/cart", "/profile",
+  "/notifications", "/unboxing", "/reviews",
+  "/seller", "/checkout", "/messages",
+  "/wishlist", "/wallet", "/track",
+  "/flashsale", "/driver", "/food",
+  "/food-menu", "/food-cart", "/food-order", "/food-dashboard", "/food-rider",
+  "/healthcare", "/entertainment", "/car-hub",
+  "/car-rental", "/pos", "/pos-checkout", "/pos-display",
+  "/delivery", "/delivery-tracking",
+  "/bnb", "/landlord", "/property",
+  "/community", "/digital", "/b2b",
+  "/b2b-supplier", "/b2b-rfq", "/b2b-dashboard",
+  "/b2b-seller-dashboard", "/b2b-orders", "/b2b-chat",
+  "/banking", "/sports-hub", "/fitness-hub",
+  "/tech-hub", "/legal-hub", "/legal",
+  "/inspiq", "/opportunity", "/ministore",
+  "/subscriptions", "/loyalty", "/referral",
+  "/invoice", "/dispute", "/requests",
+  "/store", "/providers", "/provider",
+  "/business-os", "/admin",
+  "/ent-organizer",
+  "/home-services", "/cleaning", "/construction",
+  "/electrical", "/mechanics", "/phone-repair", "/plumbing",
+  "/life-events", "/marketing", "/foundation",
+  "/offer", "/success", "/trust",
+  "/register", "/seller-public", "/bnb-manage",
+  "/payments", "/revenue", "/seller-revenue",
+  "/property-hub", "/property-listing", "/property-agent",
+  "/property-dashboard", "/property-agent-dashboard",
+  "/bnb-hub",
+  "/marketing-hub",
+  "/sports-tournament", "/sports-venue",
+  "/businesses", "/business",
+  "/search", "/verification", "/verification-admin",
+  "/growth-dashboard",
+  "/seller-analytics", "/business-analytics", "/customer-analytics",
+  "/monitor", "/email-center",
+  "/onboarding", "/onboarding-seller", "/onboarding-driver", "/onboarding-professional",
+  "/help", "/moderation",
+  "/beta", "/beta-dashboard",
+  "/seller-success", "/driver-success", "/join", "/support", "/launch-metrics", "/launch-readiness", "/merchant-pipeline",
+  "/ride-book",
+  "/jobs", "/education", "/superadmin", "/scan",
+  "/inventory",
+  "/inv-dashboard",
+  "/inv-products",
+  "/inv-product",
+  "/creative-studio",
+  "/ai-subscriptions",
+  "/admin-subscriptions",
+  "/subscription-os",
+  "/chat",
+  "/admin-messages",
+  "/commission-engine",
+  "/subscription-billing",
+  "/financial-os",
+  "/trust-safety",
+  "/admin-os",
+  "/privacy",
+  "/terms",
+  "/data-deletion",
 ];
 
 const PRECACHE_STATIC = [
@@ -167,7 +169,7 @@ const PRECACHE_STATIC = [
   "/sports-hub.js", "/management-init.js",
   /* ── Architecture Layer v1.0 ── */
   "/sokoni-tokens.css", "/sokoni-ui.js", "/sokoni-layout.js", "/sokoni-bootstrap.js",
-  "/sokoni-mobile-fixes.css",
+  "/sokoni-mobile-fixes.css", "/sokoni-responsive.css",
   /* ── Enterprise Notification Center v1.0 ── */
   "/sokoni-notif-engine.js", "/sokoni-notif-center.js",
   /* ── Business Communication System v1.0 ── */
@@ -221,9 +223,9 @@ self.addEventListener("install", event => {
   })());
 });
 
-/* Client sends SW_SKIP_WAITING when it is safe (not mid-checkout / mid-chat) */
+/* Client sends SKIP_WAITING (or SW_SKIP_WAITING for back-compat) when safe */
 self.addEventListener("message", event => {
-  if (event.data?.type === "SW_SKIP_WAITING") self.skipWaiting();
+  if (event.data?.type === "SKIP_WAITING" || event.data?.type === "SW_SKIP_WAITING") self.skipWaiting();
 });
 self.addEventListener("activate", event => {
   event.waitUntil((async () => {
@@ -357,7 +359,7 @@ async function networkFirstPage(request) {
     const cache  = await caches.open(PAGES_CACHE);
     const cached = await cache.match(request);
     if (cached) return cached;
-    const offline = await caches.match("/offline.html");
+    const offline = await caches.match("/offline") || await caches.match("/offline.html");
     return offline || new Response(
       `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Offline</title></head>
        <body style="background:#0a0a0a;color:white;font-family:sans-serif;text-align:center;padding:80px 24px;">

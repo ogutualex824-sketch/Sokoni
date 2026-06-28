@@ -41,7 +41,7 @@
     btn.setAttribute("aria-label", "Back to top");
     btn.setAttribute("title", "Back to top");
     btn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#000" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
-    btn.style.cssText = "position:fixed;bottom:80px;left:14px;right:auto;z-index:9989;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(113,255,0,0.42),0 1px 4px rgba(0,0,0,0.4);opacity:0;pointer-events:none;transform:scale(0.65) translateY(8px);transition:opacity 0.25s ease,transform 0.25s cubic-bezier(0.34,1.56,0.64,1);-webkit-tap-highlight-color:transparent;touch-action:manipulation;";
+    btn.style.cssText = "position:fixed;bottom:var(--sk-scroll-bottom,82px);left:14px;right:auto;z-index:9989;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(113,255,0,0.42),0 1px 4px rgba(0,0,0,0.4);opacity:0;pointer-events:none;transform:scale(0.65) translateY(8px);transition:opacity 0.25s ease,transform 0.25s cubic-bezier(0.34,1.56,0.64,1);-webkit-tap-highlight-color:transparent;touch-action:manipulation;";
     document.body.appendChild(btn);
   }
 
