@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOKONI Operations Center</title>
+<meta name="robots" content="noindex,nofollow">
+<style>
+:root {
+  --bg:     #050508;
+  --bg2:    #0d0f14;
+  --bg3:    #161923;
+  --border: #1e2533;
+  --text:   #e4e8f0;
+  --muted:  #6b7899;
+  --green:  #22c55e;
+  --yellow: #eab308;
+  --red:    #ef4444;
+  --blue:   #3b82f6;
+  --purple: #a855f7;
+  --teal:   #14b8a6;
+  --orange: #f97316;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
+header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.03em; }
+.header-badge { background: #1a2e1a; color: var(--green); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 100px; border: 1px solid #22c55e44; }
+.header-badge.red { background: #2e1a1a; color: var(--red); border-color: #ef444444; }
+.header-actions { margin-left: auto; display: flex; gap: 10px; }
+.btn { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; transition: background 0.15s; }
+.btn:hover { background: #1e2533; }
+.btn.primary { background: #1d4ed8; border-color: #3b82f6; color: #fff; }
+.btn.primary:hover { background: #2563eb; }
+.btn.danger { background: #7f1d1d; border-color: #ef4444; color: #fff; }
+main { padding: 24px; max-width: 1600px; margin: 0 auto; }
+.status-bar { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.status-pill { padding: 8px 18px; border-radius: 100px; font-size: 13px; font-weight: 600; border: 1px solid transparent; }
+.pill-green  { background: #052e16; color: #4ade80; border-color: #16a34a44; }
+.pill-red    { background: #2e0f0f; color: #f87171; border-color: #dc262644; }
+.pill-yellow { background: #1c1a05; color: #facc15; border-color: #ca8a0444; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+.card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.card-value { font-size: 32px; font-weight: 700; line-height: 1; }
+.card-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.card-status { font-size: 12px; margin-top: 8px; font-weight: 600; }
+.ok     { color: var(--green); }
+.warn   { color: var(--yellow); }
+.crit   { color: var(--red); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+@media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+.section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.alerts-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 24px; }
+.alert-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: 10px; margin-bottom: 8px; }
+.alert-item:last-child { margin-bottom: 0; }
+.alert-item.critical { background: #1f0808; border: 1px solid #7f1d1d; }
+.alert-item.warning  { background: #1c1600; border: 1px solid #713f12; }
+.alert-item.info     { background: #08121f; border: 1px solid #1e3a5f; }
+.alert-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 3px 8px; border-radius: 100px; white-space: nowrap; margin-top: 2px; }
+.badge-critical { background: #7f1d1d; color: #fca5a5; }
+.badge-warning  { background: #713f12; color: #fde68a; }
+.badge-info     { background: #1e3a5f; color: #93c5fd; }
+.alert-message  { font-size: 13px; }
+.alert-system   { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.no-alerts { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 12px; border-bottom: 1px solid var(--border); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+tr:last-child td { border-bottom: none; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 11px; font-weight: 600; }
+.tag-ok   { background: #052e16; color: #4ade80; }
+.tag-warn { background: #1c1600; color: #fbbf24; }
+.tag-crit { background: #1f0808; color: #f87171; }
+.healers { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.healer-btn { background: var(--bg3); border: 1px solid var(--border); color: var(--text); padding: 9px 16px; border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.15s; }
+.healer-btn:hover { background: var(--bg2); border-color: var(--blue); color: var(--blue); }
+.healer-btn:active { transform: scale(0.97); }
+.pulse { animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.mini-bar { height: 6px; border-radius: 3px; background: var(--bg3); margin-top: 10px; overflow: hidden; }
+.mini-fill { height: 100%; border-radius: 3px; background: var(--green); transition: width 0.6s; }
+.refresh-time { font-size: 11px; color: var(--muted); margin-left: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="font-size:20px">⚡</div>
+  <h1>SOKONI Operations Center</h1>
+  <span class="header-badge" id="platformBadge">LOADING...</span>
+  <span class="refresh-time" id="refreshTime">Last refresh: —</span>
+  <div class="header-actions">
+    <button class="btn" onclick="refresh()">↻ Refresh</button>
+    <button class="btn primary" onclick="window.location.href='admin-os.html'">← Admin OS</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- Alerts -->
+  <div class="alerts-panel" id="alertsPanel">
+    <div class="section-title">Active Alerts</div>
+    <div id="alertsList"><div class="no-alerts">⏳ Loading alerts...</div></div>
+  </div>
+
+  <!-- Core Metrics Grid -->
+  <div class="section-title">Platform Metrics</div>
+  <div class="grid" id="metricsGrid">
+    <div class="card"><div class="card-title">Orders Active</div><div class="card-value" id="ordersActive">—</div><div class="card-sub">Currently open</div><div class="card-status" id="ordersStatus"></div></div>
+    <div class="card"><div class="card-title">Payments Today</div><div class="card-value" id="paymentsToday">—</div><div class="card-sub">24h transactions</div><div class="card-status ok" id="paymentsStatus"></div></div>
+    <div class="card"><div class="card-title">Failed Payments</div><div class="card-value crit" id="paymentsFailed">—</div><div class="card-sub">Last 24h</div></div>
+    <div class="card"><div class="card-title">Stuck Payments</div><div class="card-value" id="paymentsStuck">—</div><div class="card-sub">Pending &gt;5 minutes</div><div class="card-status" id="stuckStatus"></div></div>
+    <div class="card"><div class="card-title">POS Sessions Open</div><div class="card-value" id="posOpen">—</div><div class="card-sub">Active tills</div></div>
+    <div class="card"><div class="card-title">Users Online</div><div class="card-value" id="usersOnline">—</div><div class="card-sub">Active in last 5m</div></div>
+    <div class="card"><div class="card-title">Active Deliveries</div><div class="card-value" id="deliveriesActive">—</div><div class="card-sub">In transit</div></div>
+    <div class="card"><div class="card-title">Stock Alerts</div><div class="card-value warn" id="stockAlerts">—</div><div class="card-sub">Low-stock products</div></div>
+  </div>
+
+  <!-- Event Bus + Self-Heal -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">📡 Event Bus</div>
+      <div style="display:flex; gap:16px; margin-bottom:14px;">
+        <div><div class="card-value" id="eventsPending">—</div><div class="card-sub">Pending</div></div>
+        <div><div class="card-value crit" id="eventsDead">—</div><div class="card-sub">Dead Letter</div></div>
+      </div>
+      <div class="card-status" id="eventBusStatus"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔧 Self-Healing Actions</div>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">Run automatic recovery for common issues.</div>
+      <div class="healers">
+        <button class="healer-btn" onclick="selfHeal('retry_stuck_payments')">⚡ Retry Stuck Payments</button>
+        <button class="healer-btn" onclick="selfHeal('replay_dead_events')">📡 Replay Dead Events</button>
+        <button class="healer-btn" onclick="selfHeal('close_stale_pos_sessions')">🖥️ Close Stale POS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subsystem Status Table -->
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-title">Subsystem Health</div>
+    <table>
+      <thead><tr><th>Subsystem</th><th>Status</th><th>Key Metric</th><th>Value</th></tr></thead>
+      <tbody id="subsystemTable">
+        <tr><td colspan="4" style="color:var(--muted);">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Error Log -->
+  <div class="card">
+    <div class="card-title">Recent Errors <span style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;">(last 1h)</span></div>
+    <div id="errorLog" style="color:var(--muted); font-size:13px;">Loading...</div>
+  </div>
+
+</main>
+
+<script type="module">
+import { initializeApp }  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+
+const config = window._sokoniConfig || (await import('./sokoni-config.js').then(m => m.default || m));
+const app    = initializeApp(config);
+const auth   = getAuth(app);
+const fn     = getFunctions(app);
+
+const cfHealth    = httpsCallable(fn, 'getPlatformHealth');
+const cfSelfHeal  = httpsCallable(fn, 'triggerSelfHeal');
+const cfErrorLog  = httpsCallable(fn, 'getErrorLog');
+
+function setEl(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function statusTag(status) {
+  const map = { ok: ['tag-ok', '● OK'], warning: ['tag-warn', '▲ WARN'], degraded: ['tag-crit', '✕ DEGRADED'] };
+  const [cls, label] = map[status] || ['tag-warn', status];
+  return `<span class="tag ${cls}">${label}</span>`;
+}
+
+async function refresh() {
+  try {
+    const [healthRes, errorRes] = await Promise.all([
+      cfHealth({}),
+      cfErrorLog({ hours: 1, limit: 10 }),
+    ]);
+
+    const h = healthRes.data;
+    const s = h.subsystems;
+
+    /* Platform badge */
+    const badge = document.getElementById('platformBadge');
+    badge.textContent = h.status === 'healthy' ? '● HEALTHY' : '▲ DEGRADED';
+    badge.className   = 'header-badge' + (h.status !== 'healthy' ? ' red' : '');
+
+    /* Refresh time */
+    setEl('refreshTime', 'Last refresh: ' + new Date().toLocaleTimeString());
+
+    /* Alerts */
+    const alertsList = document.getElementById('alertsList');
+    if (!h.alerts || !h.alerts.length) {
+      alertsList.innerHTML = '<div class="no-alerts">✅ No active alerts — all systems healthy</div>';
+    } else {
+      alertsList.innerHTML = h.alerts.map(a => `
+        <div class="alert-item ${a.level}">
+          <span class="alert-badge badge-${a.level}">${a.level}</span>
+          <div>
+            <div class="alert-message">${a.message}</div>
+            <div class="alert-system">System: ${a.system}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    /* Metrics */
+    setEl('ordersActive',     s.orders.active);
+    setEl('paymentsToday',    s.payments.today);
+    setEl('paymentsFailed',   s.payments.failed);
+    setEl('paymentsStuck',    s.payments.stuck);
+    setEl('posOpen',          s.pos.openSessions);
+    setEl('usersOnline',      s.users.online);
+    setEl('deliveriesActive', s.deliveries.active);
+    setEl('stockAlerts',      s.inventory.stockAlerts);
+    setEl('eventsPending',    s.eventBus.pending);
+    setEl('eventsDead',       s.eventBus.dead_letter);
+
+    /* Status labels */
+    document.getElementById('stuckStatus').innerHTML =
+      s.payments.stuck > 10 ? '<span class="crit">● Critical</span>' : '<span class="ok">● Normal</span>';
+    document.getElementById('eventBusStatus').innerHTML =
+      s.eventBus.dead_letter > 50 ? '<span class="warn">▲ Dead events need replay</span>' : '<span class="ok">● Healthy</span>';
+
+    /* Subsystem table */
+    const rows = Object.entries(s).map(([name, sub]) => {
+      const metricMap = {
+        orders:    ['Active', sub.active],
+        payments:  ['Stuck', sub.stuck],
+        pos:       ['Open Sessions', sub.openSessions],
+        eventBus:  ['Dead Letter', sub.dead_letter],
+        users:     ['Online', sub.online],
+        deliveries:['Active', sub.active],
+        inventory: ['Stock Alerts', sub.stockAlerts],
+      };
+      const [metricName, metricVal] = metricMap[name] || ['—', '—'];
+      return `<tr>
+        <td style="font-weight:600;">${name.charAt(0).toUpperCase() + name.slice(1)}</td>
+        <td>${statusTag(sub.status || 'ok')}</td>
+        <td style="color:var(--muted)">${metricName}</td>
+        <td>${metricVal ?? '—'}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('subsystemTable').innerHTML = rows;
+
+    /* Error log */
+    const errors = errorRes.data.errors;
+    if (!errors || !errors.length) {
+      document.getElementById('errorLog').textContent = 'No errors in the last hour.';
+    } else {
+      document.getElementById('errorLog').innerHTML = errors.map(e => `
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;">
+          <span style="color:var(--red);font-weight:600;">${e.code || 'ERROR'}</span>
+          <span style="color:var(--muted);margin-left:10px;font-size:11px;">${e.function || ''}</span>
+          <div style="margin-top:4px;color:var(--text)">${e.message || ''}</div>
+        </div>
+      `).join('');
+    }
+
+  } catch (err) {
+    document.getElementById('alertsList').innerHTML =
+      `<div class="alert-item critical"><span class="alert-badge badge-critical">ERROR</span><div class="alert-message">Failed to load health data: ${err.message}</div></div>`;
+  }
+}
+
+window.selfHeal = async function(action) {
+  if (!confirm(`Run: ${action}?`)) return;
+  try {
+    const res = await cfSelfHeal({ action });
+    alert(`Done: ${res.data.affected} items affected`);
+    refresh();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+};
+
+window.refresh = refresh;
+
+onAuthStateChanged(auth, user => {
+  if (!user) {
+    window.location.href = 'auth.html?redirect=ops-center.html';
+    return;
+  }
+  refresh();
+  setInterval(refresh, 30_000); /* auto-refresh every 30s */
+});
+</script>
+</body>
+</html>

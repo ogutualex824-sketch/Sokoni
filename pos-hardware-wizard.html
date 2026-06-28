@@ -1,0 +1,1873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#050508" />
+  <title>Hardware Setup — SOKONI SmartPOS 3.0</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <script defer src="sokoni-config.js"></script>
+  <script defer src="pos-hardware-wizard.js"></script>
+  <style>
+    /* =========================================================
+       SOKONI SmartPOS 3.0 — Hardware Setup Wizard
+       Colour tokens
+       ========================================================= */
+    :root {
+      --bg:      #050508;
+      --bg2:     #0d0f14;
+      --bg3:     #161923;
+      --bg4:     #1e2533;
+      --border:  #1e2533;
+      --text:    #e4e8f0;
+      --muted:   #6b7899;
+      --green:   #22c55e;
+      --blue:    #3b82f6;
+      --red:     #ef4444;
+      --yellow:  #eab308;
+      --orange:  #f97316;
+      --purple:  #a855f7;
+      --radius:  10px;
+      --radius-sm: 6px;
+      --transition: 0.2s ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    button {
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      font-size: 13px;
+      border-radius: var(--radius-sm);
+      padding: 8px 16px;
+      transition: opacity var(--transition), background var(--transition);
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button:not(:disabled):hover { opacity: 0.88; }
+
+    .btn-primary   { background: var(--blue);   color: #fff; }
+    .btn-success   { background: var(--green);  color: #fff; }
+    .btn-danger    { background: var(--red);    color: #fff; }
+    .btn-warning   { background: var(--yellow); color: #000; }
+    .btn-ghost     { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-sm        { padding: 5px 12px; font-size: 12px; }
+    .btn-lg        { padding: 11px 24px; font-size: 15px; font-weight: 600; }
+    .btn-icon      { padding: 7px 10px; }
+
+    input, select, textarea {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      font-family: inherit;
+      font-size: 13px;
+      width: 100%;
+      outline: none;
+      transition: border-color var(--transition);
+      min-height: 40px; /* 16px+ font minimum for mobile */
+    }
+    input:focus, select:focus { border-color: var(--blue); }
+    input::placeholder { color: var(--muted); }
+
+    label { display: block; margin-bottom: 5px; font-size: 12px; color: var(--muted); font-weight: 500; }
+
+    .form-group { margin-bottom: 14px; }
+
+    /* ── Scrollbar ─────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+
+    /* =========================================================
+       HEADER
+       ========================================================= */
+    .hw-header {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 20px;
+      height: 60px;
+    }
+    .hw-header__back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg3);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .hw-header__back:hover { color: var(--text); }
+    .hw-header__title {
+      flex: 1;
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .hw-header__badge {
+      background: var(--blue);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+    }
+    .hw-header__auth {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .hw-header__avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: var(--blue);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; color: #fff;
+    }
+
+    /* =========================================================
+       STEPPER
+       ========================================================= */
+    .stepper-wrap {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      overflow-x: auto;
+    }
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      min-width: 520px;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      position: relative;
+    }
+    .step:not(:last-child)::after {
+      content: '';
+      flex: 1;
+      height: 2px;
+      background: var(--border);
+      margin: 0 8px;
+      border-radius: 1px;
+      transition: background var(--transition);
+    }
+    .step.completed:not(:last-child)::after { background: var(--green); }
+    .step.active:not(:last-child)::after    { background: var(--blue); }
+
+    .step__num {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700;
+      background: var(--bg4);
+      color: var(--muted);
+      border: 2px solid var(--border);
+      flex-shrink: 0;
+      transition: all var(--transition);
+    }
+    .step.active .step__num    { background: var(--blue);  color: #fff; border-color: var(--blue); }
+    .step.completed .step__num { background: var(--green); color: #fff; border-color: var(--green); }
+
+    .step__label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .step.active .step__label    { color: var(--text); }
+    .step.completed .step__label { color: var(--green); }
+
+    /* =========================================================
+       MAIN CONTENT AREA
+       ========================================================= */
+    .hw-main {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 28px 20px 120px;
+    }
+
+    .step-content { display: none; }
+    .step-content.active { display: block; }
+
+    .step-heading {
+      margin-bottom: 20px;
+    }
+    .step-heading h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .step-heading p {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* =========================================================
+       STEP 1 — DISCOVER
+       ========================================================= */
+    .discover-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .discover-bar .btn-primary { padding: 10px 22px; font-size: 14px; font-weight: 600; }
+
+    .hw-categories {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .hw-cat-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color var(--transition);
+    }
+    .hw-cat-card:hover { border-color: var(--blue); }
+
+    .hw-cat-card__top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .hw-cat-icon {
+      width: 44px; height: 44px;
+      border-radius: var(--radius-sm);
+      background: var(--bg3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .hw-cat-info h3 { font-size: 14px; font-weight: 600; }
+    .hw-cat-status {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+      display: inline-block;
+      margin-top: 3px;
+    }
+    .hw-cat-status.found     { background: rgba(34,197,94,0.15);  color: var(--green); }
+    .hw-cat-status.not-found { background: rgba(107,120,153,0.15); color: var(--muted); }
+    .hw-cat-status.partial   { background: rgba(234,179,8,0.15);  color: var(--yellow); }
+
+    .hw-cat-card__meta {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .conn-badge {
+      background: var(--bg4);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 11px;
+    }
+
+    .hw-cat-card__actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* IP address input for network printers */
+    .ip-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .ip-row input { flex: 1; }
+
+    /* =========================================================
+       STEP 2 — CONFIGURE
+       ========================================================= */
+    .device-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .device-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      cursor: pointer;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .device-card:hover, .device-card.selected {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+    .device-card__icon { font-size: 28px; margin-bottom: 8px; }
+    .device-card__name { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+    .device-card__model { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+    .device-card__badges { display: flex; gap: 5px; flex-wrap: wrap; }
+    .badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .badge-blue   { background: rgba(59,130,246,0.15);  color: var(--blue); }
+    .badge-green  { background: rgba(34,197,94,0.15);   color: var(--green); }
+    .badge-yellow { background: rgba(234,179,8,0.15);   color: var(--yellow); }
+    .badge-muted  { background: var(--bg4); color: var(--muted); }
+
+    /* Settings panel */
+    .settings-panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-top: 16px;
+      display: none;
+    }
+    .settings-panel.visible { display: block; }
+    .settings-panel h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 580px) { .settings-grid { grid-template-columns: 1fr; } }
+
+    /* =========================================================
+       STEP 3 — TEST
+       ========================================================= */
+    .test-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .test-progress-bar-wrap {
+      background: var(--bg3);
+      border-radius: 4px;
+      height: 6px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      display: none;
+    }
+    .test-progress-bar-wrap.visible { display: block; }
+    .test-progress-bar {
+      height: 100%;
+      background: var(--blue);
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .test-list { display: flex; flex-direction: column; gap: 10px; }
+    .test-item {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .test-item__icon { font-size: 24px; flex-shrink: 0; }
+    .test-item__info { flex: 1; }
+    .test-item__name { font-size: 13px; font-weight: 600; }
+    .test-item__detail { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .test-item__result {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .test-item__result.pass    { background: rgba(34,197,94,0.15);  color: var(--green); }
+    .test-item__result.fail    { background: rgba(239,68,68,0.15);  color: var(--red); }
+    .test-item__result.warning { background: rgba(234,179,8,0.15);  color: var(--yellow); }
+    .test-item__result.running { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .test-item__result.idle    { background: var(--bg4); color: var(--muted); }
+    .test-item__btn { flex-shrink: 0; }
+
+    /* =========================================================
+       STEP 4 — SAVE
+       ========================================================= */
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+    .summary-table th {
+      text-align: left;
+      padding: 10px 14px;
+      background: var(--bg3);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .summary-table tr:last-child td { border-bottom: none; }
+    .summary-table tr:hover td { background: var(--bg3); }
+    .table-wrap {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .save-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .save-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--bg3);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      margin-top: 14px;
+      display: none;
+    }
+    .save-status.visible { display: flex; }
+
+    /* =========================================================
+       STEP 5 — DONE
+       ========================================================= */
+    .done-screen {
+      text-align: center;
+      padding: 48px 20px;
+    }
+    .done-checkmark {
+      font-size: 72px;
+      margin-bottom: 20px;
+      animation: pop 0.4s ease;
+    }
+    @keyframes pop {
+      0%   { transform: scale(0.5); opacity: 0; }
+      80%  { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .done-screen h2 { font-size: 26px; font-weight: 700; margin-bottom: 10px; }
+    .done-screen p  { color: var(--muted); margin-bottom: 8px; }
+
+    .done-stats {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 24px 0;
+    }
+    .done-stat {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 24px;
+      min-width: 120px;
+    }
+    .done-stat__num  { font-size: 32px; font-weight: 700; }
+    .done-stat__label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .done-stat.green .done-stat__num { color: var(--green); }
+    .done-stat.blue  .done-stat__num { color: var(--blue);  }
+    .done-stat.yellow.done-stat__num { color: var(--yellow); }
+
+    .done-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 24px;
+    }
+
+    /* =========================================================
+       NAVIGATION FOOTER
+       ========================================================= */
+    .wizard-nav {
+      position: fixed;
+      bottom: 52px; /* above health monitor */
+      left: 0; right: 0;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      z-index: 100;
+    }
+    .wizard-nav__left  { display: flex; gap: 10px; }
+    .wizard-nav__right { display: flex; gap: 10px; }
+    .wizard-nav__step-label {
+      font-size: 12px;
+      color: var(--muted);
+      align-self: center;
+    }
+
+    /* =========================================================
+       HEALTH MONITOR BAR
+       ========================================================= */
+    .health-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 52px;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      z-index: 150;
+      overflow-x: auto;
+    }
+    .health-bar__label {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .health-bar__devices { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
+    .health-dot {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .health-dot__circle {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .health-dot.ok     .health-dot__circle { background: var(--green); box-shadow: 0 0 4px var(--green); }
+    .health-dot.error  .health-dot__circle { background: var(--red);   box-shadow: 0 0 4px var(--red); }
+    .health-dot.warn   .health-dot__circle { background: var(--yellow); }
+    .health-bar__last-check { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+    /* =========================================================
+       ADD DEVICE MODAL
+       ========================================================= */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(5,5,8,0.82);
+      z-index: 500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 480px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    }
+    .modal__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal__header h3 { font-size: 15px; font-weight: 700; }
+    .modal__close {
+      background: var(--bg3);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .modal__body { padding: 20px; }
+    .modal__footer {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    /* =========================================================
+       UTILITIES
+       ========================================================= */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+    }
+    .empty-state__icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state h3    { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+    .empty-state p     { font-size: 13px; }
+
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast-wrap {
+      position: fixed;
+      bottom: 110px;
+      right: 16px;
+      z-index: 600;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius-sm);
+      padding: 10px 16px;
+      font-size: 13px;
+      min-width: 220px;
+      max-width: 340px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      animation: toast-in 0.2s ease;
+      pointer-events: auto;
+    }
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error   { border-left: 3px solid var(--red);   }
+    .toast.info    { border-left: 3px solid var(--blue);  }
+    @keyframes toast-in { from { opacity: 0; transform: translateX(20px); } }
+
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 24px 0;
+    }
+
+    .info-banner {
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.25);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--blue);
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 480px) {
+      .hw-header { padding: 0 12px; }
+      .hw-main   { padding: 16px 12px 120px; }
+      .hw-header__title span:last-child { display: none; }
+      .settings-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HEADER
+═══════════════════════════════════════════════════════════ -->
+<header class="hw-header">
+  <a href="pos.html" class="hw-header__back">&#8592; Back to POS</a>
+  <div class="hw-header__title">
+    <span>&#128268; Hardware Setup</span>
+    <span class="hw-header__badge">SmartPOS 3.0</span>
+  </div>
+  <div class="hw-header__auth">
+    <div class="hw-header__avatar" id="authAvatar">?</div>
+    <span id="authName" style="display:none"></span>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STEPPER
+═══════════════════════════════════════════════════════════ -->
+<div class="stepper-wrap">
+  <div class="stepper" id="stepper">
+    <div class="step active"   data-step="1"><div class="step__num">1</div><span class="step__label">Discover</span></div>
+    <div class="step"          data-step="2"><div class="step__num">2</div><span class="step__label">Configure</span></div>
+    <div class="step"          data-step="3"><div class="step__num">3</div><span class="step__label">Test</span></div>
+    <div class="step"          data-step="4"><div class="step__num">4</div><span class="step__label">Save</span></div>
+    <div class="step"          data-step="5"><div class="step__num">&#10003;</div><span class="step__label">Done</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN
+═══════════════════════════════════════════════════════════ -->
+<main class="hw-main">
+
+  <!-- ── STEP 1: DISCOVER ─────────────────────────────────── -->
+  <div class="step-content active" id="step-1">
+    <div class="step-heading">
+      <h2>&#128268; Detect Hardware</h2>
+      <p>Click the button to scan for connected devices. You can also add devices manually.</p>
+    </div>
+    <div class="info-banner">
+      Some devices (USB, Serial, Bluetooth) require a browser permission prompt on first connection. Click "Allow" when asked.
+    </div>
+    <div class="discover-bar">
+      <button class="btn-primary" id="btnDiscover">&#128270; Detect Hardware</button>
+      <button class="btn-ghost"   id="btnAddManual">+ Add Manually</button>
+      <span id="discoverStatus" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+
+    <div class="hw-categories" id="hwCategories">
+      <!-- Cards rendered by JS -->
+    </div>
+  </div>
+
+  <!-- ── STEP 2: CONFIGURE ────────────────────────────────── -->
+  <div class="step-content" id="step-2">
+    <div class="step-heading">
+      <h2>&#9881;&#65039; Configure Devices</h2>
+      <p>Click a device card to expand its settings.</p>
+    </div>
+    <div class="device-grid" id="deviceGrid">
+      <div class="empty-state">
+        <div class="empty-state__icon">&#128268;</div>
+        <h3>No devices registered yet</h3>
+        <p>Go back to Step 1 and detect or add devices first.</p>
+      </div>
+    </div>
+    <div class="settings-panel" id="settingsPanel">
+      <h3 id="settingsPanelTitle">&#9881;&#65039; Device Settings</h3>
+      <div id="settingsPanelBody"></div>
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <button class="btn-primary" id="btnSaveSettings">Save Settings</button>
+        <button class="btn-ghost"   id="btnCloseSettings">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: TEST ─────────────────────────────────────── -->
+  <div class="step-content" id="step-3">
+    <div class="step-heading">
+      <h2>&#9989; Test Devices</h2>
+      <p>Run a test for each device to confirm it is working correctly.</p>
+    </div>
+    <div class="test-controls">
+      <button class="btn-primary" id="btnRunAllTests">&#9654; Run All Tests</button>
+      <button class="btn-ghost"   id="btnResetTests">Reset</button>
+    </div>
+    <div class="test-progress-bar-wrap" id="testProgressWrap">
+      <div class="test-progress-bar" id="testProgressBar"></div>
+    </div>
+    <div class="test-list" id="testList">
+      <div class="empty-state">
+        <div class="empty-state__icon">&#9989;</div>
+        <h3>No devices to test</h3>
+        <p>Add devices in Step 1 and configure them in Step 2 first.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: SAVE ─────────────────────────────────────── -->
+  <div class="step-content" id="step-4">
+    <div class="step-heading">
+      <h2>&#128190; Save Configuration</h2>
+      <p>Review your devices and save to local storage and Firestore.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="summary-table" id="summaryTable">
+        <thead>
+          <tr>
+            <th>Device</th>
+            <th>Category</th>
+            <th>Connection</th>
+            <th>Status</th>
+            <th>Test Result</th>
+          </tr>
+        </thead>
+        <tbody id="summaryBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">No devices configured</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="save-actions">
+      <button class="btn-success btn-lg" id="btnSaveConfig">&#128190; Save Configuration</button>
+    </div>
+    <div class="save-status" id="saveStatus">
+      <span id="saveStatusIcon"></span>
+      <span id="saveStatusMsg"></span>
+    </div>
+  </div>
+
+  <!-- ── STEP 5: DONE ─────────────────────────────────────── -->
+  <div class="step-content" id="step-5">
+    <div class="done-screen">
+      <div class="done-checkmark">&#9989;</div>
+      <h2>Hardware Setup Complete!</h2>
+      <p>Your SOKONI SmartPOS terminal hardware has been configured successfully.</p>
+      <div class="done-stats">
+        <div class="done-stat blue">
+          <div class="done-stat__num" id="doneTotal">0</div>
+          <div class="done-stat__label">Devices Configured</div>
+        </div>
+        <div class="done-stat green">
+          <div class="done-stat__num" id="donePassed">0</div>
+          <div class="done-stat__label">Tests Passed</div>
+        </div>
+        <div class="done-stat" style="--c:var(--yellow)">
+          <div class="done-stat__num" id="doneWarnings" style="color:var(--yellow)">0</div>
+          <div class="done-stat__label">Warnings</div>
+        </div>
+      </div>
+      <div class="done-actions">
+        <a href="pos.html"           class="btn-primary btn-lg">&#128241; Return to POS</a>
+        <a href="pos-workspace.html" class="btn-ghost   btn-lg">&#128187; Open Workspace</a>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════
+     WIZARD NAVIGATION FOOTER
+═══════════════════════════════════════════════════════════ -->
+<nav class="wizard-nav" id="wizardNav">
+  <div class="wizard-nav__left">
+    <button class="btn-ghost" id="btnPrev" disabled>&#8592; Back</button>
+  </div>
+  <span class="wizard-nav__step-label" id="stepLabel">Step 1 of 5</span>
+  <div class="wizard-nav__right">
+    <button class="btn-primary" id="btnNext">Next &#8594;</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HEALTH MONITOR BAR
+═══════════════════════════════════════════════════════════ -->
+<div class="health-bar" id="healthBar">
+  <span class="health-bar__label">&#128165; Hardware</span>
+  <div class="health-bar__devices" id="healthDots">
+    <span style="font-size:12px;color:var(--muted)">No devices configured</span>
+  </div>
+  <span class="health-bar__last-check" id="healthLastCheck"></span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     ADD DEVICE MODAL
+═══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="addDeviceModal">
+  <div class="modal">
+    <div class="modal__header">
+      <h3>+ Add Device Manually</h3>
+      <button class="modal__close" id="btnCloseModal">&#215;</button>
+    </div>
+    <div class="modal__body">
+      <div class="form-group">
+        <label>Vendor / Model</label>
+        <select id="modalVendor">
+          <option value="">Select a vendor...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Device Name (optional)</label>
+        <input type="text" id="modalName" placeholder="e.g. Counter 1 Printer" />
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <select id="modalCategory">
+          <option value="receipt_printer">Receipt Printer</option>
+          <option value="label_printer">Label Printer</option>
+          <option value="barcode_scanner">Barcode Scanner</option>
+          <option value="weighing_scale">Weighing Scale</option>
+          <option value="cash_drawer">Cash Drawer</option>
+          <option value="customer_display">Customer Display</option>
+          <option value="payment_terminal">Payment Terminal</option>
+          <option value="nfc_reader">NFC Reader</option>
+          <option value="biometric">Biometric</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Connection Type</label>
+        <select id="modalConnType">
+          <option value="usb">USB</option>
+          <option value="usb_hid">USB HID (Keyboard Wedge)</option>
+          <option value="usb_serial">USB Serial</option>
+          <option value="bluetooth">Bluetooth</option>
+          <option value="bluetooth_hid">Bluetooth HID</option>
+          <option value="network">Network (TCP/IP)</option>
+          <option value="browser">Browser (Software)</option>
+          <option value="camera">Camera</option>
+          <option value="serial">Serial Port</option>
+        </select>
+      </div>
+      <div class="form-group" id="modalIPGroup" style="display:none">
+        <label>IP Address</label>
+        <div class="ip-row">
+          <input type="text" id="modalIP"   placeholder="192.168.1.100" />
+          <input type="text" id="modalPort" placeholder="9100" style="max-width:80px" />
+        </div>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn-ghost"   id="btnCancelModal">Cancel</button>
+      <button class="btn-primary" id="btnConfirmAddDevice">Add Device</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TOAST CONTAINER
+═══════════════════════════════════════════════════════════ -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     FIREBASE + WIZARD LOGIC (ESM)
+═══════════════════════════════════════════════════════════ -->
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getAuth, onAuthStateChanged }
+                               from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+import { getFirestore, doc, setDoc, getDoc }
+                               from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+
+/* ── Firebase init ── */
+const app  = initializeApp(window._sokoniConfig || {});
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+/* ── Auth guard ── */
+let _currentUser = null;
+onAuthStateChanged(auth, function (user) {
+  if (!user) {
+    window.location.href = '/auth.html?redirect=' + encodeURIComponent(window.location.pathname);
+    return;
+  }
+  _currentUser = user;
+  const avatarEl = document.getElementById('authAvatar');
+  const nameEl   = document.getElementById('authName');
+  if (avatarEl) {
+    const initials = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
+    avatarEl.textContent = initials;
+  }
+  if (nameEl) {
+    nameEl.textContent = user.displayName || user.email;
+    nameEl.style.display = '';
+  }
+});
+
+/* ════════════════════════════════════════════════════════════
+   WIZARD STATE
+═══════════════════════════════════════════════════════════ */
+let _currentStep    = 1;
+const TOTAL_STEPS   = 5;
+let _testResults    = {};  // deviceId → { status, latency, error }
+let _discoverySummary = null;
+
+/* ── Category metadata ── */
+const CATS = [
+  { key: 'receipt_printer',  icon: '🖨️',  label: 'Receipt Printers',    connections: ['usb','network','bluetooth','browser'] },
+  { key: 'label_printer',    icon: '🔖',  label: 'Label Printers',      connections: ['usb','network','bluetooth'] },
+  { key: 'barcode_scanner',  icon: '📷',  label: 'Barcode Scanners',    connections: ['usb_hid','bluetooth_hid','camera'] },
+  { key: 'weighing_scale',   icon: '⚖️',  label: 'Weighing Scales',     connections: ['usb_serial','network','bluetooth','serial'] },
+  { key: 'cash_drawer',      icon: '💵',  label: 'Cash Drawers',        connections: ['usb','network'] },
+  { key: 'customer_display', icon: '📺',  label: 'Customer Displays',   connections: ['usb','network'] },
+  { key: 'payment_terminal', icon: '💳',  label: 'Payment Terminals',   connections: ['network','bluetooth'] },
+  { key: 'nfc_reader',       icon: '📡',  label: 'NFC Readers',         connections: ['usb','nfc'] },
+  { key: 'biometric',        icon: '🔐',  label: 'Biometric',           connections: ['platform'] },
+];
+
+const CAT_ICON = {};
+CATS.forEach(c => { CAT_ICON[c.key] = c.icon; });
+
+/* ════════════════════════════════════════════════════════════
+   STEPPER HELPERS
+═══════════════════════════════════════════════════════════ */
+function goToStep(n) {
+  if (n < 1 || n > TOTAL_STEPS) return;
+  _currentStep = n;
+
+  // Content panels
+  document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+  const panel = document.getElementById('step-' + n);
+  if (panel) panel.classList.add('active');
+
+  // Stepper dots
+  document.querySelectorAll('.step').forEach(el => {
+    const sn = parseInt(el.dataset.step, 10);
+    el.classList.remove('active', 'completed');
+    if (sn === n) el.classList.add('active');
+    if (sn < n)  el.classList.add('completed');
+  });
+
+  // Nav buttons
+  document.getElementById('btnPrev').disabled = (n === 1);
+  const nextBtn = document.getElementById('btnNext');
+  if (n === TOTAL_STEPS) {
+    nextBtn.style.display = 'none';
+    document.getElementById('wizardNav').style.display = 'none';
+  } else {
+    nextBtn.style.display = '';
+    document.getElementById('wizardNav').style.display = '';
+  }
+
+  document.getElementById('stepLabel').textContent = 'Step ' + n + ' of ' + TOTAL_STEPS;
+
+  // Per-step init
+  if (n === 2) renderConfigStep();
+  if (n === 3) renderTestStep();
+  if (n === 4) renderSaveStep();
+  if (n === 5) renderDoneStep();
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+document.getElementById('btnNext').addEventListener('click', () => goToStep(_currentStep + 1));
+document.getElementById('btnPrev').addEventListener('click', () => goToStep(_currentStep - 1));
+
+/* ════════════════════════════════════════════════════════════
+   STEP 1 — DISCOVER
+═══════════════════════════════════════════════════════════ */
+function renderCategoryCards(summary) {
+  const container = document.getElementById('hwCategories');
+  container.innerHTML = '';
+
+  CATS.forEach(cat => {
+    const summaryKey = _catToSummaryKey(cat.key);
+    const info = (summary && summaryKey && summary[summaryKey]) || { found: false, count: 0, types: [] };
+    const status = info.found ? (info.count > 1 ? 'partial' : 'found') : 'not-found';
+    const statusLabel = info.found ? (info.count + ' found') : 'Not Found';
+
+    const card = document.createElement('div');
+    card.className = 'hw-cat-card';
+    card.dataset.category = cat.key;
+
+    const connBadges = cat.connections.map(c =>
+      `<span class="conn-badge">${c}</span>`).join('');
+
+    const networkInput = cat.key === 'receipt_printer' || cat.key === 'label_printer' ? `
+      <div class="ip-row" style="margin-top:6px">
+        <input type="text" class="cat-ip-input" placeholder="Printer IP (e.g. 192.168.1.100)"
+               data-category="${cat.key}"
+               value="${cat.key === 'receipt_printer' && summary && summary.printers && summary.printers.savedIP
+                         ? summary.printers.savedIP : ''}" />
+        <input type="text" class="cat-port-input" placeholder="9100" style="max-width:70px" />
+      </div>` : '';
+
+    card.innerHTML = `
+      <div class="hw-cat-card__top">
+        <div class="hw-cat-icon">${cat.icon}</div>
+        <div class="hw-cat-info">
+          <h3>${cat.label}</h3>
+          <span class="hw-cat-status ${status}">${statusLabel}</span>
+        </div>
+      </div>
+      <div class="hw-cat-card__meta">${connBadges}</div>
+      ${networkInput}
+      <div class="hw-cat-card__actions">
+        <button class="btn-ghost btn-sm btn-add-cat" data-category="${cat.key}">+ Add</button>
+        ${info.found ? `<button class="btn-primary btn-sm btn-register-cat" data-category="${cat.key}">Register Detected</button>` : ''}
+      </div>`;
+    container.appendChild(card);
+  });
+
+  // Register detected
+  container.querySelectorAll('.btn-register-cat').forEach(btn => {
+    btn.addEventListener('click', () => autoRegisterCategory(btn.dataset.category, summary));
+  });
+
+  // Add manual (from card)
+  container.querySelectorAll('.btn-add-cat').forEach(btn => {
+    openAddModal(btn.dataset.category);
+  });
+}
+
+function _catToSummaryKey(catKey) {
+  const map = {
+    receipt_printer:  'printers',
+    label_printer:    'labels',
+    barcode_scanner:  'scanners',
+    qr_scanner:       'scanners',
+    weighing_scale:   'scales',
+    cash_drawer:      'drawers',
+    customer_display: 'displays',
+    payment_terminal: 'terminals',
+    nfc_reader:       'nfc',
+    biometric:        'biometric',
+  };
+  return map[catKey] || null;
+}
+
+function autoRegisterCategory(catKey, summary) {
+  if (!window.SokoniHardware) { toast('Hardware library not loaded', 'error'); return; }
+  const HW = window.SokoniHardware;
+  const summaryKey = _catToSummaryKey(catKey);
+  const info = (summary && summaryKey) ? summary[summaryKey] : null;
+  const connType = (info && info.types && info.types[0]) || 'usb';
+  const icon = CAT_ICON[catKey] || '🔌';
+  const id = catKey + '_' + Date.now();
+  try {
+    HW.registerDevice({
+      id, category: catKey,
+      name: icon + ' ' + catKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+      connectionType: connType,
+      vendorId: 'generic_' + catKey,
+      modelName: 'Auto-detected',
+      config: {},
+    });
+    toast('Device registered: ' + catKey, 'success');
+    renderCategoryCards(_discoverySummary);
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+// Detect hardware
+document.getElementById('btnDiscover').addEventListener('click', async () => {
+  const btn    = document.getElementById('btnDiscover');
+  const status = document.getElementById('discoverStatus');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Scanning...';
+  status.textContent = '';
+
+  if (!window.SokoniHardware) {
+    toast('Hardware library not loaded. Refresh the page.', 'error');
+    btn.disabled = false;
+    btn.textContent = '🔍 Detect Hardware';
+    return;
+  }
+
+  try {
+    _discoverySummary = await window.SokoniHardware.discover();
+    renderCategoryCards(_discoverySummary);
+    const found = Object.values(_discoverySummary).filter(v => v && v.found).length;
+    status.textContent = found + ' hardware categories detected';
+    toast('Hardware scan complete — ' + found + ' category(ies) found', 'success');
+  } catch (e) {
+    toast('Discovery error: ' + e.message, 'error');
+    renderCategoryCards(null);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🔍 Detect Hardware';
+  }
+});
+
+// Render empty category cards on load
+renderCategoryCards(null);
+
+/* ════════════════════════════════════════════════════════════
+   STEP 2 — CONFIGURE
+═══════════════════════════════════════════════════════════ */
+let _selectedDeviceId = null;
+
+function renderConfigStep() {
+  const HW = window.SokoniHardware;
+  const grid = document.getElementById('deviceGrid');
+  if (!HW) { grid.innerHTML = '<p style="color:var(--muted)">Hardware library not loaded.</p>'; return; }
+
+  const devices = Object.entries(HW._registry || {});
+  // Use public API
+  const allDevices = getAllDevices();
+
+  if (allDevices.length === 0) {
+    grid.innerHTML = `<div class="empty-state">
+      <div class="empty-state__icon">🔌</div>
+      <h3>No devices registered yet</h3>
+      <p>Go back to Step 1 and detect or add devices first.</p>
+    </div>`;
+    document.getElementById('settingsPanel').classList.remove('visible');
+    return;
+  }
+
+  grid.innerHTML = allDevices.map(([id, device]) => {
+    const info = device.getInfo ? device.getInfo() : {};
+    const icon = CAT_ICON[info.category] || '🔌';
+    return `<div class="device-card" data-device-id="${id}">
+      <div class="device-card__icon">${icon}</div>
+      <div class="device-card__name">${info.name || id}</div>
+      <div class="device-card__model">${info.model || '—'}</div>
+      <div class="device-card__badges">
+        <span class="badge badge-blue">${info.connection || 'unknown'}</span>
+        <span class="badge badge-muted">${(info.category || '').replace(/_/g, ' ')}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.device-card').forEach(card => {
+    card.addEventListener('click', () => {
+      grid.querySelectorAll('.device-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      _selectedDeviceId = card.dataset.deviceId;
+      openSettingsPanel(_selectedDeviceId);
+    });
+  });
+}
+
+function getAllDevices() {
+  const HW = window.SokoniHardware;
+  if (!HW) return [];
+  // Access registry — iterate categories
+  const cats = Object.values(HW.CATEGORIES || {});
+  const found = [];
+  const seen  = new Set();
+  cats.forEach(cat => {
+    const devs = HW.getDevicesByCategory(cat);
+    devs.forEach(d => {
+      const id = d._config && d._config.id;
+      if (id && !seen.has(id)) { seen.add(id); found.push([id, d]); }
+    });
+  });
+  return found;
+}
+
+function openSettingsPanel(deviceId) {
+  const HW = window.SokoniHardware;
+  const device = HW.getDevice(deviceId);
+  if (!device) return;
+  const info    = device.getInfo ? device.getInfo() : {};
+  const panel   = document.getElementById('settingsPanel');
+  const title   = document.getElementById('settingsPanelTitle');
+  const body    = document.getElementById('settingsPanelBody');
+  const icon    = CAT_ICON[info.category] || '🔌';
+
+  title.innerHTML = icon + ' ' + (info.name || deviceId) + ' — Settings';
+
+  body.innerHTML = buildSettingsForm(device, info);
+  panel.classList.add('visible');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function buildSettingsForm(device, info) {
+  const cat    = info.category;
+  const config = device._config && device._config.config ? device._config.config : {};
+
+  if (cat === 'receipt_printer') {
+    return `<div class="settings-grid">
+      <div class="form-group">
+        <label>Paper Width</label>
+        <select id="cfg_paperWidth">
+          <option value="58"  ${config.paperWidth === 58  ? 'selected' : ''}>58mm</option>
+          <option value="80"  ${config.paperWidth !== 58  ? 'selected' : ''}>80mm</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Cut Type</label>
+        <select id="cfg_cutType">
+          <option value="full"    ${config.cutType !== 'partial' ? 'selected' : ''}>Full Cut</option>
+          <option value="partial" ${config.cutType === 'partial' ? 'selected' : ''}>Partial Cut</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Network IP (if applicable)</label>
+        <input type="text" id="cfg_ip" value="${config.ip || ''}" placeholder="192.168.1.100" />
+      </div>
+      <div class="form-group">
+        <label>Port</label>
+        <input type="text" id="cfg_port" value="${config.port || 9100}" placeholder="9100" />
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="cfg_logoEnabled" ${config.logoEnabled ? 'checked' : ''} style="width:auto;min-height:auto" />
+          <span style="color:var(--text)">Print store logo on receipts</span>
+        </label>
+      </div>
+    </div>`;
+  }
+
+  if (cat === 'weighing_scale') {
+    return `<div class="settings-grid">
+      <div class="form-group">
+        <label>Unit</label>
+        <select id="cfg_unit">
+          <option value="kg" ${config.unit !== 'g' && config.unit !== 'lb' ? 'selected':''}>Kilograms (kg)</option>
+          <option value="g"  ${config.unit === 'g'  ? 'selected':''}>Grams (g)</option>
+          <option value="lb" ${config.unit === 'lb' ? 'selected':''}>Pounds (lb)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Decimal Places</label>
+        <select id="cfg_decimalPlaces">
+          <option value="2" ${config.decimalPlaces === 2 ? 'selected':''}>2</option>
+          <option value="3" ${config.decimalPlaces !== 2 ? 'selected':''}>3</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tare Offset (${config.unit || 'kg'})</label>
+        <input type="number" id="cfg_tareOffset" value="${config.tareOffset || 0}" step="0.001" min="0" />
+      </div>
+    </div>`;
+  }
+
+  if (cat === 'barcode_scanner') {
+    return `<div class="settings-grid">
+      <div class="form-group">
+        <label>Scan Mode</label>
+        <select id="cfg_mode">
+          <option value="keyboard" ${info.connection !== 'camera' ? 'selected':''}>Keyboard Wedge</option>
+          <option value="camera"   ${info.connection === 'camera' ? 'selected':''}>Camera</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Prefix Characters (optional)</label>
+        <input type="text" id="cfg_prefix" value="${config.prefix || ''}" placeholder="e.g. STX byte" />
+      </div>
+      <div class="form-group">
+        <label>Suffix Characters</label>
+        <input type="text" id="cfg_suffix" value="${config.suffix || '\r'}" placeholder="Default: CR" />
+      </div>
+    </div>`;
+  }
+
+  if (cat === 'label_printer') {
+    return `<div class="settings-grid">
+      <div class="form-group">
+        <label>Label Width (inches)</label>
+        <input type="number" id="cfg_labelWidth" value="${config.labelWidth || 4}" step="0.5" min="1" max="8" />
+      </div>
+      <div class="form-group">
+        <label>Label Height (inches)</label>
+        <input type="number" id="cfg_labelHeight" value="${config.labelHeight || 2}" step="0.5" min="0.5" max="6" />
+      </div>
+      <div class="form-group">
+        <label>DPI</label>
+        <select id="cfg_dpi">
+          <option value="203" ${config.dpi !== 300 ? 'selected':''}>203 DPI</option>
+          <option value="300" ${config.dpi === 300 ? 'selected':''}>300 DPI</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Network IP</label>
+        <input type="text" id="cfg_ip" value="${config.ip || ''}" placeholder="192.168.1.101" />
+      </div>
+    </div>`;
+  }
+
+  if (cat === 'payment_terminal') {
+    return `<div style="padding:12px;background:var(--bg3);border-radius:var(--radius-sm);font-size:13px;color:var(--muted)">
+      Payment terminal configuration is managed in
+      <a href="pos-workspace.html">POS Workspace</a>.
+      No additional setup required here.
+    </div>`;
+  }
+
+  return `<p style="color:var(--muted);font-size:13px">No configurable options for this device type.</p>`;
+}
+
+document.getElementById('btnSaveSettings').addEventListener('click', () => {
+  if (!_selectedDeviceId) return;
+  const HW     = window.SokoniHardware;
+  const device = HW.getDevice(_selectedDeviceId);
+  if (!device) return;
+
+  const cat = device._config.category;
+  const cfg = device._config.config = device._config.config || {};
+
+  function val(id) {
+    const el = document.getElementById(id);
+    return el ? el.value : null;
+  }
+
+  if (cat === 'receipt_printer') {
+    cfg.paperWidth   = parseInt(val('cfg_paperWidth'), 10);
+    cfg.cutType      = val('cfg_cutType');
+    cfg.ip           = val('cfg_ip');
+    cfg.port         = parseInt(val('cfg_port'), 10) || 9100;
+    cfg.logoEnabled  = document.getElementById('cfg_logoEnabled') &&
+                       document.getElementById('cfg_logoEnabled').checked;
+    if (device._paperWidth  !== undefined) device._paperWidth  = cfg.paperWidth;
+    if (device._cutType     !== undefined) device._cutType     = cfg.cutType;
+    if (device._networkIp   !== undefined) device._networkIp   = cfg.ip;
+    if (device._networkPort !== undefined) device._networkPort = cfg.port;
+    if (device._logoEnabled !== undefined) device._logoEnabled = cfg.logoEnabled;
+    if (cfg.ip) localStorage.setItem('_posNetworkPrinterIP', cfg.ip);
+  }
+
+  if (cat === 'weighing_scale') {
+    cfg.unit          = val('cfg_unit');
+    cfg.decimalPlaces = parseInt(val('cfg_decimalPlaces'), 10);
+    cfg.tareOffset    = parseFloat(val('cfg_tareOffset')) || 0;
+    if (device._unit          !== undefined) device._unit          = cfg.unit;
+    if (device._decimalPlaces !== undefined) device._decimalPlaces = cfg.decimalPlaces;
+    if (device._tareOffset    !== undefined) device._tareOffset    = cfg.tareOffset;
+  }
+
+  if (cat === 'barcode_scanner') {
+    cfg.mode   = val('cfg_mode');
+    cfg.prefix = val('cfg_prefix');
+    cfg.suffix = val('cfg_suffix') || '\r';
+    if (device._prefix !== undefined) device._prefix = cfg.prefix;
+    if (device._suffix !== undefined) device._suffix = cfg.suffix;
+  }
+
+  if (cat === 'label_printer') {
+    cfg.labelWidth  = parseFloat(val('cfg_labelWidth'));
+    cfg.labelHeight = parseFloat(val('cfg_labelHeight'));
+    cfg.dpi         = parseInt(val('cfg_dpi'), 10);
+    cfg.ip          = val('cfg_ip');
+    if (device._labelWidth  !== undefined) device._labelWidth  = cfg.labelWidth;
+    if (device._labelHeight !== undefined) device._labelHeight = cfg.labelHeight;
+    if (device._dpi         !== undefined) device._dpi         = cfg.dpi;
+    if (device._networkIp   !== undefined) device._networkIp   = cfg.ip;
+  }
+
+  HW.saveRegistry();
+  document.getElementById('settingsPanel').classList.remove('visible');
+  renderConfigStep();
+  toast('Settings saved for ' + (device._config.name || _selectedDeviceId), 'success');
+});
+
+document.getElementById('btnCloseSettings').addEventListener('click', () => {
+  document.getElementById('settingsPanel').classList.remove('visible');
+  document.querySelectorAll('.device-card').forEach(c => c.classList.remove('selected'));
+});
+
+/* ════════════════════════════════════════════════════════════
+   STEP 3 — TEST
+═══════════════════════════════════════════════════════════ */
+function renderTestStep() {
+  const HW      = window.SokoniHardware;
+  const list    = document.getElementById('testList');
+  const allDevs = getAllDevices();
+
+  if (!allDevs.length) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-state__icon">✅</div>
+      <h3>No devices to test</h3>
+      <p>Add devices in Step 1 first.</p>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = allDevs.map(([id, device]) => {
+    const info   = device.getInfo ? device.getInfo() : {};
+    const icon   = CAT_ICON[info.category] || '🔌';
+    const result = _testResults[id] || { status: 'idle' };
+    return `<div class="test-item" id="test-item-${id}">
+      <div class="test-item__icon">${icon}</div>
+      <div class="test-item__info">
+        <div class="test-item__name">${info.name || id}</div>
+        <div class="test-item__detail">${info.model || ''} — ${info.connection || ''}</div>
+      </div>
+      <span class="test-item__result ${result.status}" id="test-result-${id}">
+        ${_testResultLabel(result)}
+      </span>
+      <button class="btn-ghost btn-sm test-item__btn" data-device-id="${id}">Run Test</button>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.test-item__btn').forEach(btn => {
+    btn.addEventListener('click', () => runDeviceTest(btn.dataset.deviceId));
+  });
+}
+
+function _testResultLabel(result) {
+  const map = { idle: '— Idle', running: '⏳ Running', pass: '✅ PASSED', fail: '❌ FAILED', warning: '⚠️ WARNING' };
+  let label = map[result.status] || '— Idle';
+  if (result.latency !== undefined) label += ' (' + result.latency + 'ms)';
+  if (result.error)                  label  = '❌ ' + result.error.slice(0, 60);
+  return label;
+}
+
+async function runDeviceTest(deviceId) {
+  const HW     = window.SokoniHardware;
+  const device = HW.getDevice(deviceId);
+  if (!device) return;
+
+  _testResults[deviceId] = { status: 'running' };
+  updateTestItemUI(deviceId);
+
+  try {
+    await device.connect();
+    const cat = device._config.category;
+    let result = { status: 'pass', latency: 0 };
+
+    const start = Date.now();
+    if (cat === 'receipt_printer')  await device.testPrint();
+    else if (cat === 'label_printer')    await device.testLabel();
+    else if (cat === 'barcode_scanner')  await device.testScan();
+    else if (cat === 'weighing_scale')   await device.testWeigh();
+    else if (cat === 'nfc_reader')       await device.testNFC().catch(e => { throw e; });
+    else if (cat === 'biometric')        await device.testBiometric();
+    else                                 await device.ping();
+
+    result.latency = Date.now() - start;
+    _testResults[deviceId] = result;
+  } catch (e) {
+    const isWarn = e.message.includes('timeout') || e.message.includes('no tag');
+    _testResults[deviceId] = {
+      status:  isWarn ? 'warning' : 'fail',
+      error:   e.message,
+      latency: undefined,
+    };
+  }
+
+  updateTestItemUI(deviceId);
+}
+
+function updateTestItemUI(deviceId) {
+  const result  = _testResults[deviceId] || { status: 'idle' };
+  const resultEl = document.getElementById('test-result-' + deviceId);
+  if (resultEl) {
+    resultEl.className = 'test-item__result ' + result.status;
+    resultEl.innerHTML = _testResultLabel(result);
+  }
+}
+
+document.getElementById('btnRunAllTests').addEventListener('click', async () => {
+  const allDevs = getAllDevices();
+  if (!allDevs.length) { toast('No devices to test', 'error'); return; }
+
+  const wrap = document.getElementById('testProgressWrap');
+  const bar  = document.getElementById('testProgressBar');
+  wrap.classList.add('visible');
+
+  for (let i = 0; i < allDevs.length; i++) {
+    bar.style.width = ((i / allDevs.length) * 100) + '%';
+    await runDeviceTest(allDevs[i][0]);
+  }
+  bar.style.width = '100%';
+  setTimeout(() => wrap.classList.remove('visible'), 1200);
+  toast('All tests complete', 'success');
+  renderHealthBar();
+});
+
+document.getElementById('btnResetTests').addEventListener('click', () => {
+  _testResults = {};
+  renderTestStep();
+});
+
+/* ════════════════════════════════════════════════════════════
+   STEP 4 — SAVE
+═══════════════════════════════════════════════════════════ */
+function renderSaveStep() {
+  const allDevs = getAllDevices();
+  const tbody   = document.getElementById('summaryBody');
+
+  if (!allDevs.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">No devices configured</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = allDevs.map(([id, device]) => {
+    const info   = device.getInfo ? device.getInfo() : {};
+    const icon   = CAT_ICON[info.category] || '🔌';
+    const result = _testResults[id];
+    const testBadge = result
+      ? (result.status === 'pass'    ? '<span class="badge badge-green">✅ Passed</span>'
+       : result.status === 'warning' ? '<span class="badge badge-yellow">⚠️ Warning</span>'
+       : result.status === 'fail'    ? '<span style="color:var(--red);font-size:12px">❌ Failed</span>'
+       : '—')
+      : '<span style="color:var(--muted);font-size:12px">Not tested</span>';
+
+    const statusBadge = info.status === 'connected'
+      ? '<span class="badge badge-green">Connected</span>'
+      : '<span class="badge badge-muted">' + (info.status || 'unknown') + '</span>';
+
+    return `<tr>
+      <td>${icon} ${info.name || id}</td>
+      <td>${(info.category || '').replace(/_/g, ' ')}</td>
+      <td><span class="badge badge-blue">${info.connection || '—'}</span></td>
+      <td>${statusBadge}</td>
+      <td>${testBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('btnSaveConfig').addEventListener('click', async () => {
+  const HW     = window.SokoniHardware;
+  const btn    = document.getElementById('btnSaveConfig');
+  const status = document.getElementById('saveStatus');
+  const icon   = document.getElementById('saveStatusIcon');
+  const msg    = document.getElementById('saveStatusMsg');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Saving...';
+  status.classList.add('visible');
+  icon.textContent = '⏳';
+  msg.textContent  = 'Writing to local storage...';
+
+  try {
+    // 1. localStorage
+    HW.saveRegistry();
+    msg.textContent = 'Saving to Firestore...';
+
+    // 2. Firestore
+    if (_currentUser) {
+      const allDevs  = getAllDevices();
+      const sellerId = _currentUser.uid;
+      const docRef   = doc(db, 'posTerminals', sellerId + '_hardware');
+      const payload  = {
+        sellerId,
+        updatedAt: new Date().toISOString(),
+        deviceCount: allDevs.length,
+        devices: Object.fromEntries(allDevs.map(([id, device]) => {
+          const info = device.getInfo ? device.getInfo() : {};
+          return [id, {
+            name:       info.name,
+            category:   info.category,
+            model:      info.model,
+            connection: info.connection,
+            status:     info.status,
+            testResult: (_testResults[id] || {}).status || 'not_tested',
+          }];
+        })),
+      };
+      await setDoc(docRef, payload, { merge: true });
+      icon.textContent = '✅';
+      msg.textContent  = 'Configuration saved to Firestore (' + allDevs.length + ' devices)';
+      toast('Hardware configuration saved', 'success');
+    } else {
+      icon.textContent = '⚠️';
+      msg.textContent  = 'Saved locally (not logged in — Firestore skipped)';
+    }
+
+    // 3. Start health monitor
+    HW.startHealthMonitor(30000);
+    renderHealthBar();
+
+    setTimeout(() => goToStep(5), 1200);
+  } catch (e) {
+    icon.textContent = '❌';
+    msg.textContent  = 'Save failed: ' + e.message;
+    toast('Save failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '💾 Save Configuration';
+  }
+});
+
+/* ════════════════════════════════════════════════════════════
+   STEP 5 — DONE
+═══════════════════════════════════════════════════════════ */
+function renderDoneStep() {
+  const allDevs = getAllDevices();
+  const total   = allDevs.length;
+  const passed  = Object.values(_testResults).filter(r => r.status === 'pass').length;
+  const warns   = Object.values(_testResults).filter(r => r.status === 'warning').length;
+
+  document.getElementById('doneTotal').textContent    = total;
+  document.getElementById('donePassed').textContent   = passed;
+  document.getElementById('doneWarnings').textContent = warns;
+}
+
+/* ════════════════════════════════════════════════════════════
+   HEALTH MONITOR BAR
+═══════════════════════════════════════════════════════════ */
+function renderHealthBar() {
+  const HW    = window.SokoniHardware;
+  const devs  = HW ? getAllDevices() : [];
+  const dotsEl = document.getElementById('healthDots');
+  const lastEl = document.getElementById('healthLastCheck');
+
+  if (!devs.length) {
+    dotsEl.innerHTML = '<span style="font-size:12px;color:var(--muted)">No devices configured</span>';
+    return;
+  }
+
+  dotsEl.innerHTML = devs.map(([id, device]) => {
+    const info   = device.getInfo ? device.getInfo() : {};
+    const result = _testResults[id];
+    const cls    = result && result.status === 'pass' ? 'ok'
+                 : result && result.status === 'fail' ? 'error'
+                 : result && result.status === 'warning' ? 'warn'
+                 : '';
+    return `<div class="health-dot ${cls}">
+      <div class="health-dot__circle"></div>
+      <span>${info.name || id}</span>
+    </div>`;
+  }).join('');
+
+  lastEl.textContent = 'Last check: ' + new Date().toLocaleTimeString();
+}
+
+// Health monitor event
+if (window.SokoniHardware) {
+  window.SokoniHardware.on('device:health', function () {
+    renderHealthBar();
+  });
+}
+
+// Refresh health bar every 30s
+setInterval(renderHealthBar, 30000);
+
+/* ════════════════════════════════════════════════════════════
+   ADD DEVICE MODAL
+═══════════════════════════════════════════════════════════ */
+let _modalCategoryPreset = null;
+
+function openAddModal(categoryPreset) {
+  _modalCategoryPreset = categoryPreset || null;
+  const modal   = document.getElementById('addDeviceModal');
+  const catSel  = document.getElementById('modalCategory');
+  const vendSel = document.getElementById('modalVendor');
+
+  // Populate vendor dropdown
+  if (window.SokoniHardware) {
+    const adapters = window.SokoniHardware.listAdapters();
+    vendSel.innerHTML = '<option value="">Select a vendor...</option>' +
+      adapters.map(a =>
+        `<option value="${a.vendorId}">${a.adapterName} [${a.category.replace(/_/g,' ')}]</option>`
+      ).join('');
+  }
+
+  if (categoryPreset) catSel.value = categoryPreset;
+  modal.classList.add('open');
+}
+
+document.getElementById('btnAddManual').addEventListener('click', () => openAddModal(null));
+
+function closeAddModal() {
+  document.getElementById('addDeviceModal').classList.remove('open');
+  document.getElementById('modalName').value = '';
+  document.getElementById('modalIP').value   = '';
+  document.getElementById('modalPort').value = '';
+  document.getElementById('modalIPGroup').style.display = 'none';
+}
+
+document.getElementById('btnCloseModal').addEventListener('click', closeAddModal);
+document.getElementById('btnCancelModal').addEventListener('click', closeAddModal);
+document.getElementById('addDeviceModal').addEventListener('click', function (e) {
+  if (e.target === this) closeAddModal();
+});
+
+document.getElementById('modalConnType').addEventListener('change', function () {
+  const show = this.value === 'network';
+  document.getElementById('modalIPGroup').style.display = show ? '' : 'none';
+});
+
+document.getElementById('modalVendor').addEventListener('change', function () {
+  if (!window.SokoniHardware) return;
+  const adapters = window.SokoniHardware.listAdapters();
+  const found    = adapters.find(a => a.vendorId === this.value);
+  if (found) {
+    document.getElementById('modalCategory').value = found.category;
+    if (found.connections && found.connections.length) {
+      document.getElementById('modalConnType').value = found.connections[0];
+    }
+  }
+});
+
+document.getElementById('btnConfirmAddDevice').addEventListener('click', () => {
+  const HW       = window.SokoniHardware;
+  if (!HW) { toast('Hardware library not loaded', 'error'); return; }
+
+  const vendor   = document.getElementById('modalVendor').value;
+  const name     = document.getElementById('modalName').value.trim() ||
+                   (vendor ? vendor.replace(/_/g, ' ') : 'Manual Device');
+  const category = document.getElementById('modalCategory').value;
+  const connType = document.getElementById('modalConnType').value;
+  const ip       = document.getElementById('modalIP').value.trim();
+  const port     = parseInt(document.getElementById('modalPort').value, 10) || 9100;
+
+  if (!category) { toast('Please select a category', 'error'); return; }
+
+  const id = (vendor || 'device') + '_' + Date.now();
+  try {
+    HW.registerDevice({
+      id,
+      category,
+      name,
+      connectionType: connType,
+      vendorId:       vendor || 'custom',
+      modelName:      name,
+      config: ip ? { ip, port } : {},
+    });
+    closeAddModal();
+    toast('Device added: ' + name, 'success');
+    renderCategoryCards(_discoverySummary);
+    renderHealthBar();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+});
+
+/* ════════════════════════════════════════════════════════════
+   TOAST HELPER
+═══════════════════════════════════════════════════════════ */
+function toast(msg, type) {
+  const wrap = document.getElementById('toastWrap');
+  const el   = document.createElement('div');
+  el.className = 'toast ' + (type || 'info');
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity 0.3s';
+    setTimeout(() => el.remove(), 350);
+  }, 3500);
+}
+
+/* ════════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════ */
+// Restore previously saved registry on page load
+if (window.SokoniHardware) {
+  window.SokoniHardware.loadRegistry();
+  renderHealthBar();
+}
+
+// Keyboard shortcut: Escape closes modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeAddModal();
+});
+
+</script>
+</body>
+</html>

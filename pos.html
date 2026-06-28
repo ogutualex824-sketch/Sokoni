@@ -250,6 +250,7 @@
         <div class="pos-cashier-name" id="cashier-name-hdr">Login</div>
       </div>
       <button class="pos-header-btn" onclick="SPos.ui.showAlerts()" title="Low stock alerts" style="position:relative;">🔔<span id="notify-badge" style="position:absolute;top:2px;right:2px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:14px;height:14px;display:none;align-items:center;justify-content:center;line-height:1;border:1.5px solid var(--bg);"></span></button>
+      <button class="pos-header-btn" onclick="window.open('pos-workspace.html','_self')" title="Multi-device workspace" aria-label="Open multi-device workspace">📡</button>
     </div>
   </header>
 
@@ -285,6 +286,24 @@
       </aside>
 
       <section class="pos-cart">
+        <!-- Customer identification bar -->
+        <div id="pos-customer-bar" style="background:#1e2533;border-bottom:1px solid #1e2533;padding:8px 12px;display:flex;align-items:center;gap:8px;">
+          <span style="font-size:16px;">👤</span>
+          <div id="pos-customer-display" style="flex:1;min-width:0;">
+            <input id="pos-customer-phone" type="tel" inputmode="tel"
+              placeholder="Customer phone (07XXXXXXXX)"
+              style="width:100%;background:transparent;border:none;color:#e4e8f0;font-size:13px;outline:none;padding:0;"
+              oninput="SPosCustomer.handleInput(this.value)"
+              onkeydown="if(event.key==='Enter')SPosCustomer.lookup()">
+          </div>
+          <div id="pos-customer-badge" style="display:none;flex-shrink:0;font-size:11px;background:#052e16;color:#4ade80;border:1px solid #16a34a55;border-radius:100px;padding:2px 10px;cursor:pointer;" onclick="SPosCustomer.showProfile()">
+            <span id="pos-customer-tier">Bronze</span>
+            <span id="pos-customer-pts" style="margin-left:4px;color:#6b7899;"></span>
+          </div>
+          <button style="background:none;border:none;color:#6b7899;cursor:pointer;padding:4px;font-size:16px;" onclick="SPosCustomer.lookup()" title="Look up customer" aria-label="Look up customer">🔍</button>
+          <button id="pos-customer-clear-btn" style="background:none;border:none;color:#6b7899;cursor:pointer;padding:4px;font-size:14px;display:none;" onclick="SPosCustomer.clear()" title="Clear customer" aria-label="Clear customer">✕</button>
+        </div>
+
         <div class="pos-cart-header">
           <span class="pos-cart-title">Cart</span>
           <span class="pos-cart-count" id="cart-count">0 items</span>
@@ -1829,6 +1848,102 @@ window.SPosQR = (function() {
   });
 
   return { open: open, close: close, cancel: cancel, refresh: refresh, complete: complete };
+}());
+</script>
+
+<!-- SmartPOS 2.1 add-ons -->
+<script defer src="pos-session-manager.js"></script>
+<script defer src="pos-terminal-driver.js"></script>
+<script defer src="pos-receipt-engine.js"></script>
+<script defer src="pos-analytics-live.js"></script>
+
+<script>
+/* ── SPosCustomer — in-line customer identification ── */
+window.SPosCustomer = (function () {
+  'use strict';
+
+  var _customer = null; /* currently identified customer */
+  var _debounce = null;
+
+  function _normalize(phone) {
+    phone = (phone || '').replace(/\D/g, '');
+    if (phone.startsWith('254') && phone.length === 12) return phone;
+    if (phone.startsWith('07') && phone.length === 10)  return '254' + phone.slice(1);
+    if (phone.startsWith('01') && phone.length === 10)  return '254' + phone.slice(1);
+    if (phone.startsWith('7') && phone.length === 9)    return '254' + phone;
+    return phone;
+  }
+
+  function handleInput(val) {
+    clearTimeout(_debounce);
+    _debounce = setTimeout(function () {
+      if (val.replace(/\D/g, '').length >= 9) lookup();
+    }, 700);
+  }
+
+  function lookup() {
+    var rawPhone = (document.getElementById('pos-customer-phone') || {}).value || '';
+    var phone    = _normalize(rawPhone);
+    if (!phone || phone.length < 9) return;
+
+    /* Use getPOSCustomer CF */
+    var cfFn = (window.firebase
+      ? window.firebase.functions()
+      : (window.SPos && window.SPos._cfns ? window.SPos._cfns : null));
+
+    if (!cfFn) return;
+    cfFn.httpsCallable('getPOSCustomer')({ phone: phone })
+      .then(function (res) {
+        if (res && res.data && res.data.id) _applyCustomer(res.data);
+        /* else: new customer — note it silently */
+      })
+      .catch(function (e) { console.warn('[SPosCustomer]', e.message); });
+  }
+
+  function _applyCustomer(c) {
+    _customer = c;
+    /* Update cart (pass loyalty tier to checkout flow) */
+    if (window.SPos && window.SPos.cart) window.SPos.cart.setCustomer(c);
+
+    /* Show badge */
+    var badge = document.getElementById('pos-customer-badge');
+    var tier  = document.getElementById('pos-customer-tier');
+    var pts   = document.getElementById('pos-customer-pts');
+    if (badge) badge.style.display = '';
+    if (tier)  tier.textContent = c.loyaltyTier || 'Bronze';
+    if (pts)   pts.textContent  = (c.loyaltyPoints || 0).toLocaleString() + ' pts';
+
+    /* Show clear button */
+    var clearBtn = document.getElementById('pos-customer-clear-btn');
+    if (clearBtn) clearBtn.style.display = '';
+  }
+
+  function clear() {
+    _customer = null;
+    if (window.SPos && window.SPos.cart) window.SPos.cart.setCustomer(null);
+    var ph = document.getElementById('pos-customer-phone');
+    if (ph) ph.value = '';
+    var badge = document.getElementById('pos-customer-badge');
+    if (badge) badge.style.display = 'none';
+    var clearBtn = document.getElementById('pos-customer-clear-btn');
+    if (clearBtn) clearBtn.style.display = 'none';
+  }
+
+  function showProfile() {
+    if (!_customer) return;
+    var msg = [
+      'Customer: ' + (_customer.displayName || _customer.phone),
+      'Tier: '     + (_customer.loyaltyTier   || 'Bronze'),
+      'Points: '   + (_customer.loyaltyPoints  || 0).toLocaleString(),
+      'Visits: '   + (_customer.totalVisits    || 0),
+      'Total spent: KES ' + (_customer.totalSpent || 0).toLocaleString(),
+    ].join('\n');
+    alert(msg);
+  }
+
+  function currentCustomer() { return _customer; }
+
+  return { handleInput: handleInput, lookup: lookup, clear: clear, showProfile: showProfile, currentCustomer: currentCustomer };
 }());
 </script>
 

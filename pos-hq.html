@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOKONI SmartPOS 3.0 — HQ Dashboard</title>
+<script src="sokoni-config.js"></script>
+<style>
+:root {
+  --bg:#050508;--bg2:#0d0f14;--bg3:#161923;--bg4:#1e2533;
+  --border:#1e2533;--text:#e4e8f0;--muted:#6b7899;
+  --green:#22c55e;--blue:#3b82f6;--red:#ef4444;--yellow:#eab308;--purple:#a855f7;
+  --gold:#f59e0b;--orange:#f97316;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* HEADER */
+.hq-header{position:sticky;top:0;z-index:100;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:56px;gap:12px}
+.hq-logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:1rem;white-space:nowrap}
+.hq-logo span{color:var(--blue)}
+.hq-tabs{display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none}
+.hq-tabs::-webkit-scrollbar{display:none}
+.tab-btn{background:none;border:none;color:var(--muted);font-size:.82rem;font-weight:500;padding:8px 14px;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all .2s}
+.tab-btn:hover{color:var(--text);background:var(--bg3)}
+.tab-btn.active{color:var(--blue);background:rgba(59,130,246,.12)}
+.back-btn{background:var(--bg3);border:1px solid var(--border);color:var(--muted);font-size:.8rem;padding:7px 14px;border-radius:6px;cursor:pointer;white-space:nowrap;transition:all .2s;text-decoration:none;display:flex;align-items:center;gap:6px}
+.back-btn:hover{color:var(--text);border-color:var(--blue)}
+
+/* MAIN */
+.hq-main{max-width:1400px;margin:0 auto;padding:24px 20px}
+
+/* PANELS */
+.panel{display:none}
+.panel.active{display:block}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px}
+.card-sm{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px}
+.card-title{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.card-value{font-size:1.5rem;font-weight:700;color:var(--text)}
+.card-sub{font-size:.78rem;color:var(--muted);margin-top:2px}
+
+/* GRID */
+.grid-2{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+
+/* BRANCH CARDS */
+.branch-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;position:relative;transition:all .2s;cursor:default}
+.branch-card:hover{border-color:var(--blue);transform:translateY(-2px)}
+.branch-card.top{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.branch-card.low{border-color:var(--red)}
+.branch-card .b-name{font-size:.9rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.branch-card .b-revenue{font-size:1.6rem;font-weight:800;color:var(--green);margin-bottom:4px}
+.branch-card .b-txn{font-size:.8rem;color:var(--muted)}
+.branch-card .b-trend{font-size:.8rem;font-weight:600;padding:3px 8px;border-radius:20px}
+.trend-up{color:var(--green);background:rgba(34,197,94,.1)}
+.trend-down{color:var(--red);background:rgba(239,68,68,.1)}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dot-active{background:var(--green)}
+.dot-degraded{background:var(--yellow)}
+.dot-offline{background:var(--red)}
+.branch-badge{position:absolute;top:12px;right:12px;font-size:.65rem;font-weight:700;padding:3px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.05em}
+.badge-gold{background:rgba(245,158,11,.15);color:var(--gold);border:1px solid rgba(245,158,11,.3)}
+.badge-red{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+
+/* SUMMARY STRIP */
+.summary-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:20px 0}
+.strip-item{background:var(--bg2);padding:16px 20px;text-align:center}
+.strip-label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.strip-value{font-size:1.1rem;font-weight:700}
+
+/* BAR CHART */
+.chart-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin:20px 0}
+.chart-title{font-size:.85rem;font-weight:600;margin-bottom:16px;color:var(--muted)}
+.bar-chart{display:flex;align-items:flex-end;gap:8px;height:160px;padding-bottom:4px}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative}
+.bar{width:100%;border-radius:6px 6px 0 0;background:linear-gradient(180deg,var(--blue),rgba(59,130,246,.5));min-height:4px;transition:all .3s;cursor:pointer;position:relative}
+.bar:hover .bar-tooltip{display:block}
+.bar.top-bar{background:linear-gradient(180deg,var(--gold),rgba(245,158,11,.5))}
+.bar-label{font-size:.65rem;color:var(--muted);text-align:center;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-tooltip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--bg4);border:1px solid var(--border);border-radius:6px;padding:6px 10px;white-space:nowrap;font-size:.75rem;z-index:10}
+.bar-tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--border)}
+
+/* TABLES */
+.tbl-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:.83rem}
+thead th{background:var(--bg3);color:var(--muted);font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:12px 16px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--border)}
+tbody tr{border-bottom:1px solid rgba(30,37,51,.6);transition:background .15s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--bg3)}
+tbody td{padding:12px 16px;color:var(--text);vertical-align:middle}
+.td-muted{color:var(--muted);font-size:.78rem}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:600;padding:3px 9px;border-radius:20px}
+.badge-green{background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.2)}
+.badge-yellow{background:rgba(234,179,8,.1);color:var(--yellow);border:1px solid rgba(234,179,8,.2)}
+.badge-red{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+.badge-blue{background:rgba(59,130,246,.1);color:var(--blue);border:1px solid rgba(59,130,246,.2)}
+.badge-purple{background:rgba(168,85,247,.1);color:var(--purple);border:1px solid rgba(168,85,247,.2)}
+.badge-muted{background:var(--bg3);color:var(--muted);border:1px solid var(--border)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:8px;font-size:.83rem;font-weight:600;cursor:pointer;border:none;transition:all .2s;text-decoration:none}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:#2563eb}
+.btn-success{background:var(--green);color:#000}
+.btn-success:hover{background:#16a34a}
+.btn-danger{background:var(--red);color:#fff}
+.btn-danger:hover{background:#dc2626}
+.btn-outline{background:none;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--blue);color:var(--blue)}
+.btn-sm{padding:6px 12px;font-size:.77rem}
+.btn-xs{padding:4px 9px;font-size:.72rem}
+.btn-big{padding:12px 28px;font-size:.95rem}
+
+/* FORM ELEMENTS */
+.form-group{margin-bottom:16px}
+.form-label{font-size:.78rem;color:var(--muted);display:block;margin-bottom:6px;font-weight:500}
+.form-input,.form-select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 14px;font-size:.85rem;outline:none;transition:border-color .2s}
+.form-input:focus,.form-select:focus{border-color:var(--blue)}
+.form-input::placeholder{color:var(--muted)}
+.form-select option{background:var(--bg3)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.toolbar-left,.toolbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.period-tabs{display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.period-btn{background:none;border:none;color:var(--muted);padding:8px 14px;font-size:.78rem;font-weight:500;cursor:pointer;transition:all .2s}
+.period-btn.active{background:var(--blue);color:#fff}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:28px}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.modal-title{font-size:1rem;font-weight:700}
+.modal-close{background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:4px;border-radius:6px;transition:color .2s}
+.modal-close:hover{color:var(--text)}
+.modal-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border)}
+
+/* TOAST */
+#toast-container{position:fixed;bottom:24px;right:24px;z-index:300;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:.83rem;display:flex;align-items:center;gap:10px;min-width:260px;animation:slideIn .25s ease;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.toast-success{border-left:3px solid var(--green)}
+.toast-error{border-left:3px solid var(--red)}
+.toast-info{border-left:3px solid var(--blue)}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+/* SPINNER */
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-row{display:flex;align-items:center;justify-content:center;padding:40px;gap:12px;color:var(--muted);font-size:.85rem}
+
+/* PROGRESS */
+.progress-bar{width:100%;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;margin:6px 0}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--purple));border-radius:4px;transition:width .4s}
+
+/* SECTION HEADER */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.section-title{font-size:.95rem;font-weight:700}
+.section-sub{font-size:.78rem;color:var(--muted);margin-top:2px}
+
+/* STATUS PANELS */
+.sync-strip{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-bottom:10px}
+.sync-info{display:flex;flex-direction:column;gap:3px}
+.sync-name{font-size:.85rem;font-weight:600}
+.sync-time{font-size:.75rem;color:var(--muted)}
+
+/* CONFLICT CARD */
+.conflict-card{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:10px;padding:16px;margin-bottom:10px}
+.conflict-title{font-size:.85rem;font-weight:600;color:var(--red);margin-bottom:8px}
+
+/* CATALOG DIFF */
+.diff-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);font-size:.83rem}
+.diff-row:last-child{border-bottom:none}
+.diff-type{min-width:70px}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.empty-icon{font-size:2.5rem;margin-bottom:12px}
+.empty-text{font-size:.9rem}
+
+/* FILTERS */
+.filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.filter-chip{background:var(--bg3);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:20px;font-size:.77rem;cursor:pointer;transition:all .2s}
+.filter-chip.active{border-color:var(--blue);color:var(--blue);background:rgba(59,130,246,.1)}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .hq-header{height:52px;padding:0 12px}
+  .hq-tabs{display:none}
+  .mobile-tabs{display:flex;overflow-x:auto;gap:4px;padding:10px 12px;scrollbar-width:none;border-bottom:1px solid var(--border);background:var(--bg2)}
+  .hq-main{padding:16px 12px}
+  .summary-strip{grid-template-columns:repeat(2,1fr)}
+  .grid-5{grid-template-columns:repeat(2,1fr)}
+  .form-row,.form-row-3{grid-template-columns:1fr}
+  .bar-chart{height:120px}
+}
+@media(min-width:769px){.mobile-tabs{display:none}}
+
+/* TRANSFER FORM */
+.transfer-form{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.stock-preview{display:flex;gap:12px;margin-top:8px}
+.stock-chip{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:.8rem;flex:1;text-align:center}
+.stock-chip .sc-val{font-size:1.1rem;font-weight:700;color:var(--blue)}
+.stock-chip .sc-label{font-size:.72rem;color:var(--muted);margin-top:2px}
+
+/* ACTION BTNS */
+.action-cell{display:flex;gap:6px;flex-wrap:wrap}
+
+/* PUSH PROGRESS */
+.push-progress{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:16px}
+.push-branch-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:.82rem}
+
+/* HEADCOUNT */
+.headcount-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem}
+.headcount-row:last-child{border-bottom:none}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hq-header">
+  <div class="hq-logo">🏢 <span>HQ</span> Dashboard
+    <span style="font-size:.7rem;font-weight:400;color:var(--muted);margin-left:4px">SmartPOS 3.0</span>
+  </div>
+  <nav class="hq-tabs" role="tablist">
+    <button class="tab-btn active" data-tab="overview" role="tab">Overview</button>
+    <button class="tab-btn" data-tab="pricing" role="tab">Central Pricing</button>
+    <button class="tab-btn" data-tab="inventory" role="tab">Inventory</button>
+    <button class="tab-btn" data-tab="transfers" role="tab">Transfers</button>
+    <button class="tab-btn" data-tab="catalog" role="tab">Catalog</button>
+  </nav>
+  <a href="pos.html" class="back-btn">← Back to POS</a>
+</header>
+
+<!-- MOBILE TABS -->
+<nav class="mobile-tabs" role="tablist">
+  <button class="tab-btn active" data-tab="overview" role="tab">Overview</button>
+  <button class="tab-btn" data-tab="pricing" role="tab">Pricing</button>
+  <button class="tab-btn" data-tab="inventory" role="tab">Inventory</button>
+  <button class="tab-btn" data-tab="transfers" role="tab">Transfers</button>
+  <button class="tab-btn" data-tab="catalog" role="tab">Catalog</button>
+</nav>
+
+<main class="hq-main">
+
+  <!-- ═══════════════════════════════════ TAB 1: OVERVIEW ═══════════════════════════════════ -->
+  <section class="panel active" id="panel-overview">
+
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="period-tabs">
+          <button class="period-btn active" data-period="today">Today</button>
+          <button class="period-btn" data-period="week">Week</button>
+          <button class="period-btn" data-period="month">Month</button>
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-primary" id="btn-load-report">
+          <span class="spinner" id="spinner-report" style="display:none"></span>
+          📊 Load Report
+        </button>
+      </div>
+    </div>
+
+    <!-- HQ Summary Strip -->
+    <div class="summary-strip" id="summary-strip">
+      <div class="strip-item">
+        <div class="strip-label">Total Revenue</div>
+        <div class="strip-value" id="sum-revenue" style="color:var(--green)">—</div>
+      </div>
+      <div class="strip-item">
+        <div class="strip-label">Total Transactions</div>
+        <div class="strip-value" id="sum-txn">—</div>
+      </div>
+      <div class="strip-item">
+        <div class="strip-label">Avg Per Branch</div>
+        <div class="strip-value" id="sum-avg" style="color:var(--blue)">—</div>
+      </div>
+      <div class="strip-item">
+        <div class="strip-label">Best Branch</div>
+        <div class="strip-value" id="sum-best" style="color:var(--gold);font-size:.95rem">—</div>
+      </div>
+      <div class="strip-item">
+        <div class="strip-label">Worst Branch</div>
+        <div class="strip-value" id="sum-worst" style="color:var(--red);font-size:.95rem">—</div>
+      </div>
+    </div>
+
+    <!-- Branch Grid -->
+    <div class="section-header">
+      <div>
+        <div class="section-title">Regional Branch Rankings</div>
+        <div class="section-sub">Sorted by revenue — top highlighted gold, bottom 25% in red</div>
+      </div>
+    </div>
+    <div class="grid-2" id="branch-grid">
+      <div class="empty"><div class="empty-icon">🏪</div><div class="empty-text">Click "Load Report" to fetch branch data</div></div>
+    </div>
+
+    <!-- Revenue Bar Chart -->
+    <div class="chart-wrap">
+      <div class="chart-title">Revenue by Branch</div>
+      <div class="bar-chart" id="revenue-chart">
+        <div class="empty" style="flex:1;padding:20px"><div class="empty-text" style="color:var(--muted);font-size:.82rem">No data loaded</div></div>
+      </div>
+    </div>
+
+    <!-- Staff Headcount -->
+    <div class="card" style="margin-top:20px">
+      <div class="section-header" style="margin-bottom:12px">
+        <div class="section-title">Staff Headcount (Open Shifts)</div>
+      </div>
+      <div id="headcount-list">
+        <div class="empty"><div class="empty-text">Load report to view headcount</div></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ═══════════════════════════════════ TAB 2: CENTRAL PRICING ═══════════════════════════════════ -->
+  <section class="panel" id="panel-pricing">
+
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <input type="text" class="form-input" id="pricing-search" placeholder="🔍 Search product across branches…" style="width:280px">
+        <button class="btn btn-outline btn-sm" id="btn-search-pricing">Search</button>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-success btn-big" id="btn-push-all-prices">
+          <span class="spinner" id="spinner-push" style="display:none"></span>
+          🔄 Push All Prices
+        </button>
+        <button class="btn btn-primary" id="btn-set-central-price">+ Set Central Price</button>
+      </div>
+    </div>
+
+    <!-- Push Progress -->
+    <div id="push-progress-wrap" style="display:none">
+      <div class="push-progress">
+        <div style="font-size:.85rem;font-weight:600;margin-bottom:12px">Pushing prices to branches…</div>
+        <div id="push-branch-list"></div>
+      </div>
+    </div>
+
+    <!-- Price Sync Status -->
+    <div class="section-header" style="margin-top:20px">
+      <div class="section-title">Price Sync Status</div>
+      <button class="btn btn-outline btn-sm" id="btn-load-prices">
+        <span class="spinner" id="spinner-prices" style="display:none"></span>
+        Load Prices
+      </button>
+    </div>
+    <div id="sync-status-list" style="margin-bottom:20px">
+      <div class="empty"><div class="empty-text">Click "Load Prices" to fetch sync status</div></div>
+    </div>
+
+    <!-- Central Price Table -->
+    <div class="section-header">
+      <div class="section-title">Central Price Overrides</div>
+    </div>
+    <div class="tbl-wrap">
+      <table id="pricing-table">
+        <thead>
+          <tr>
+            <th>Product</th><th>SKU</th><th>Current Price</th>
+            <th>Central Price</th><th>Sale Price</th>
+            <th>Effective</th><th>Applies To</th><th>Status</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="pricing-tbody">
+          <tr><td colspan="9"><div class="loading-row">Load prices to view overrides</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Price Conflicts -->
+    <div class="section-header" style="margin-top:24px">
+      <div class="section-title">Price Conflicts</div>
+      <div class="section-sub">Products where branch price differs from central price</div>
+    </div>
+    <div id="price-conflicts">
+      <div class="empty"><div class="empty-text">No conflicts detected — load prices to check</div></div>
+    </div>
+
+  </section>
+
+  <!-- ═══════════════════════════════════ TAB 3: INVENTORY ═══════════════════════════════════ -->
+  <section class="panel" id="panel-inventory">
+
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="filter-bar" style="margin:0">
+          <button class="filter-chip active" data-inv-filter="all">All</button>
+          <button class="filter-chip" data-inv-filter="low">Low Stock Only</button>
+          <button class="filter-chip" data-inv-filter="out">Out of Stock</button>
+        </div>
+        <select class="form-select" id="inv-category-filter" style="width:160px">
+          <option value="">All Categories</option>
+        </select>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-outline btn-sm" id="btn-export-inv">📥 Export CSV</button>
+        <button class="btn btn-primary" id="btn-load-inventory">
+          <span class="spinner" id="spinner-inv" style="display:none"></span>
+          Load Inventory
+        </button>
+      </div>
+    </div>
+
+    <div class="tbl-wrap">
+      <table id="inventory-table">
+        <thead>
+          <tr id="inv-header-row">
+            <th>Product</th><th>Category</th><th>Total Stock</th><th>Status</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="inventory-tbody">
+          <tr><td colspan="5"><div class="loading-row">Click "Load Inventory" to begin</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </section>
+
+  <!-- ═══════════════════════════════════ TAB 4: TRANSFERS ═══════════════════════════════════ -->
+  <section class="panel" id="panel-transfers">
+
+    <!-- Create Transfer Form -->
+    <div class="transfer-form">
+      <div class="section-title" style="margin-bottom:16px">Create Inventory Transfer</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Product</label>
+          <input type="text" class="form-input" id="transfer-product" placeholder="Search product…">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity</label>
+          <input type="number" class="form-input" id="transfer-qty" placeholder="0" min="1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">From Branch</label>
+          <select class="form-select" id="transfer-from">
+            <option value="">Select source branch</option>
+          </select>
+          <div class="stock-preview" id="from-stock-preview" style="display:none">
+            <div class="stock-chip">
+              <div class="sc-val" id="from-stock-val">0</div>
+              <div class="sc-label">Current Stock</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">To Branch</label>
+          <select class="form-select" id="transfer-to">
+            <option value="">Select destination branch</option>
+          </select>
+          <div class="stock-preview" id="to-stock-preview" style="display:none">
+            <div class="stock-chip">
+              <div class="sc-val" id="to-stock-val">0</div>
+              <div class="sc-label">Current Stock</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-primary" id="btn-create-transfer">
+          <span class="spinner" id="spinner-transfer" style="display:none"></span>
+          Create Transfer
+        </button>
+      </div>
+    </div>
+
+    <!-- Active Transfers -->
+    <div class="section-header">
+      <div class="section-title">Active Transfers</div>
+      <div class="toolbar-right">
+        <button class="btn btn-outline btn-sm" id="btn-load-transfers">
+          <span class="spinner" id="spinner-xfers" style="display:none"></span>
+          Refresh
+        </button>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="margin-bottom:24px">
+      <table>
+        <thead>
+          <tr><th>Product</th><th>From</th><th>To</th><th>Qty</th><th>Status</th><th>Created</th><th>Action</th></tr>
+        </thead>
+        <tbody id="active-transfers-tbody">
+          <tr><td colspan="7"><div class="loading-row">Click Refresh to load active transfers</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Transfer History -->
+    <div class="section-header">
+      <div class="section-title">Transfer History (Last 30)</div>
+      <div class="toolbar-right">
+        <input type="date" class="form-input" id="hist-from" style="width:150px">
+        <input type="date" class="form-input" id="hist-to" style="width:150px">
+        <button class="btn btn-outline btn-sm" id="btn-filter-hist">Filter</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Product</th><th>From</th><th>To</th><th>Qty</th><th>Status</th><th>Completed</th></tr>
+        </thead>
+        <tbody id="history-transfers-tbody">
+          <tr><td colspan="6"><div class="loading-row">No history loaded</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </section>
+
+  <!-- ═══════════════════════════════════ TAB 5: CATALOG ═══════════════════════════════════ -->
+  <section class="panel" id="panel-catalog">
+
+    <!-- Catalog Status Card -->
+    <div class="grid-3" style="margin-bottom:20px">
+      <div class="card-sm">
+        <div class="card-title">Catalog Version</div>
+        <div class="card-value" id="cat-version">—</div>
+      </div>
+      <div class="card-sm">
+        <div class="card-title">Last Updated</div>
+        <div class="card-value" style="font-size:1rem" id="cat-updated">—</div>
+      </div>
+      <div class="card-sm">
+        <div class="card-title">Total Products</div>
+        <div class="card-value" id="cat-count">—</div>
+      </div>
+    </div>
+
+    <div class="toolbar" style="margin-bottom:20px">
+      <div class="toolbar-left">
+        <button class="btn btn-outline btn-sm" id="btn-load-catalog">
+          <span class="spinner" id="spinner-cat" style="display:none"></span>
+          Load Catalog Status
+        </button>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-primary btn-big" id="btn-publish-catalog">
+          <span class="spinner" id="spinner-pub" style="display:none"></span>
+          📤 Publish Update
+        </button>
+      </div>
+    </div>
+
+    <!-- Branch Sync Status -->
+    <div class="section-header">
+      <div class="section-title">Branch Sync Status</div>
+    </div>
+    <div class="tbl-wrap" style="margin-bottom:24px">
+      <table>
+        <thead>
+          <tr><th>Branch</th><th>Last Sync</th><th>Version</th><th>Status</th><th>Action</th></tr>
+        </thead>
+        <tbody id="catalog-sync-tbody">
+          <tr><td colspan="5"><div class="loading-row">Load catalog to view branch sync status</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Catalog Diff -->
+    <div class="section-header">
+      <div class="section-title">Catalog Changes Since Last Sync</div>
+      <div class="section-sub">Products added, modified or removed</div>
+    </div>
+    <div class="card" id="catalog-diff">
+      <div class="empty"><div class="empty-text">Load catalog to view diff</div></div>
+    </div>
+
+  </section>
+
+</main>
+
+<!-- ═══════════════════════════════════ MODAL: SET CENTRAL PRICE ═══════════════════════════════════ -->
+<div class="modal-overlay" id="modal-price">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-price-title">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-price-title">Set Central Price</div>
+      <button class="modal-close" data-close="modal-price">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Product Name</label>
+      <input type="text" class="form-input" id="mp-product" placeholder="Search product name or SKU…">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">New Price (KES)</label>
+        <input type="number" class="form-input" id="mp-price" placeholder="0.00" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sale Price (KES) — optional</label>
+        <input type="number" class="form-input" id="mp-sale" placeholder="0.00" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Effective From</label>
+        <input type="datetime-local" class="form-input" id="mp-effective">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Applies To</label>
+        <select class="form-select" id="mp-scope">
+          <option value="all">All Branches</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" data-close="modal-price">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-central-price">
+        <span class="spinner" id="spinner-save-price" style="display:none"></span>
+        Save Price
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container" aria-live="polite"></div>
+
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+import { getFunctions, httpsCallable }  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+
+// ─── Firebase init ────────────────────────────────────────────────────────────
+const app  = initializeApp(window._sokoniConfig || {});
+const auth = getAuth(app);
+const fns  = getFunctions(app);
+
+// ─── Auth guard ───────────────────────────────────────────────────────────────
+onAuthStateChanged(auth, async user => {
+  if (!user) { location.href = 'auth.html'; return; }
+  try {
+    const token = await user.getIdTokenResult();
+    const role  = token.claims?.role || '';
+    if (role !== 'owner' && role !== 'super_admin') {
+      toast('Access restricted to owners only.', 'error');
+      setTimeout(() => location.href = 'pos.html', 2000);
+      return;
+    }
+    init();
+  } catch (e) {
+    console.error('Token check failed:', e);
+    location.href = 'auth.html';
+  }
+});
+
+// ─── Cloud Function refs ──────────────────────────────────────────────────────
+const CF = name => httpsCallable(fns, name);
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const kes = n => {
+  if (n == null || isNaN(n)) return 'KES —';
+  return 'KES ' + Number(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+};
+const fmtDate = ts => {
+  if (!ts) return '—';
+  const d = ts?.toDate ? ts.toDate() : new Date(ts._seconds ? ts._seconds * 1000 : ts);
+  return d.toLocaleDateString('en-KE', { day:'2-digit', month:'short', year:'numeric' }) +
+    ' ' + d.toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' });
+};
+const safe = str => String(str || '').replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
+let _toastTimer;
+function toast(msg, type = 'info', dur = 3500) {
+  const c = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `<span>${type==='success'?'✅':type==='error'?'❌':'ℹ️'}</span><span>${safe(msg)}</span>`;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), dur);
+}
+function spin(id, on) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = on ? 'inline-block' : 'none';
+}
+function loading(tbodyId, cols) {
+  const tb = document.getElementById(tbodyId);
+  if (tb) tb.innerHTML = `<tr><td colspan="${cols}"><div class="loading-row"><span class="spinner"></span> Loading…</div></td></tr>`;
+}
+
+// ─── Tab routing ──────────────────────────────────────────────────────────────
+let currentTab = 'overview';
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentTab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${currentTab}`));
+  });
+});
+
+// ─── Period picker ────────────────────────────────────────────────────────────
+let activePeriod = 'today';
+document.querySelectorAll('.period-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activePeriod = btn.dataset.period;
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.toggle('active', b.dataset.period === activePeriod));
+  });
+});
+
+// ─── Modal helpers ────────────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id)?.classList.add('open'); }
+function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
+document.querySelectorAll('[data-close]').forEach(btn =>
+  btn.addEventListener('click', () => closeModal(btn.dataset.close))
+);
+document.querySelectorAll('.modal-overlay').forEach(ov =>
+  ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); })
+);
+
+// ═══ TAB 1: OVERVIEW ═══════════════════════════════════════════════════════════
+
+let branchList = [];
+
+document.getElementById('btn-load-report').addEventListener('click', loadReport);
+
+async function loadReport() {
+  spin('spinner-report', true);
+  try {
+    const [rep, cmp] = await Promise.all([
+      CF('getRegionalReport')({ period: activePeriod }),
+      CF('getBranchComparison')({ period: activePeriod }).catch(() => ({ data: {} }))
+    ]);
+    const data     = rep.data || {};
+    const branches = data.branches || [];
+    branchList     = branches;
+
+    renderSummary(data.summary || {}, branches);
+    renderBranchGrid(branches);
+    renderBarChart(branches);
+    renderHeadcount(branches);
+    populateBranchDropdowns(branches);
+    toast('Report loaded successfully', 'success');
+  } catch (e) {
+    console.error('getRegionalReport:', e);
+    toast('Failed to load report: ' + e.message, 'error');
+  } finally {
+    spin('spinner-report', false);
+  }
+}
+
+function renderSummary(sum, branches) {
+  const total  = branches.reduce((a, b) => a + (b.revenue || 0), 0);
+  const avg    = branches.length ? total / branches.length : 0;
+  const sorted = [...branches].sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
+  document.getElementById('sum-revenue').textContent = kes(sum.totalRevenue ?? total);
+  document.getElementById('sum-txn').textContent     = (sum.totalTransactions ?? branches.reduce((a, b) => a + (b.transactions || 0), 0)).toLocaleString();
+  document.getElementById('sum-avg').textContent     = kes(sum.avgPerBranch ?? avg);
+  document.getElementById('sum-best').textContent    = sorted[0]?.name || '—';
+  document.getElementById('sum-worst').textContent   = sorted[sorted.length - 1]?.name || '—';
+}
+
+function renderBranchGrid(branches) {
+  const grid = document.getElementById('branch-grid');
+  if (!branches.length) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">🏪</div><div class="empty-text">No branches found</div></div>';
+    return;
+  }
+  const sorted    = [...branches].sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
+  const threshold = sorted.length > 3 ? sorted[Math.floor(sorted.length * 0.75)]?.revenue || 0 : -1;
+
+  grid.innerHTML = sorted.map((b, i) => {
+    const isTop  = i === 0;
+    const isLow  = b.revenue <= threshold && i !== 0;
+    const trendUp = (b.trendPct || 0) >= 0;
+    const dotCls  = b.status === 'offline' ? 'dot-offline' : b.status === 'degraded' ? 'dot-degraded' : 'dot-active';
+    return `
+    <div class="branch-card ${isTop ? 'top' : ''} ${isLow ? 'low' : ''}">
+      ${isTop ? '<span class="branch-badge badge-gold">🥇 Top Branch</span>' : ''}
+      ${isLow ? '<span class="branch-badge badge-red">Under-performing</span>' : ''}
+      <div class="b-name">
+        <span><span class="status-dot ${dotCls}"></span> ${safe(b.name)}</span>
+        <span class="b-trend ${trendUp ? 'trend-up' : 'trend-down'}">${trendUp ? '▲' : '▼'} ${Math.abs(b.trendPct || 0).toFixed(1)}%</span>
+      </div>
+      <div class="b-revenue">${kes(b.revenue)}</div>
+      <div class="b-txn">${(b.transactions || 0).toLocaleString()} transactions · ${b.staff || 0} staff on shift</div>
+    </div>`;
+  }).join('');
+}
+
+function renderBarChart(branches) {
+  const chart = document.getElementById('revenue-chart');
+  if (!branches.length) { chart.innerHTML = '<div class="empty" style="flex:1"><div class="empty-text" style="color:var(--muted)">No data</div></div>'; return; }
+  const sorted = [...branches].sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
+  const max    = sorted[0]?.revenue || 1;
+  chart.innerHTML = sorted.map((b, i) => {
+    const pct = Math.max(4, Math.round(((b.revenue || 0) / max) * 100));
+    return `
+    <div class="bar-col">
+      <div class="bar ${i === 0 ? 'top-bar' : ''}" style="height:${pct}%">
+        <div class="bar-tooltip">${safe(b.name)}<br>${kes(b.revenue)}</div>
+      </div>
+      <div class="bar-label">${safe(b.name)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderHeadcount(branches) {
+  const list = document.getElementById('headcount-list');
+  if (!branches.length) { list.innerHTML = '<div class="empty"><div class="empty-text">No data</div></div>'; return; }
+  list.innerHTML = branches.map(b =>
+    `<div class="headcount-row">
+      <span>${safe(b.name)}</span>
+      <span style="font-weight:600">${b.staff || 0} staff <span style="color:var(--muted);font-weight:400">on ${b.openShifts || 0} open shifts</span></span>
+    </div>`
+  ).join('');
+}
+
+function populateBranchDropdowns(branches) {
+  const fromSel = document.getElementById('transfer-from');
+  const toSel   = document.getElementById('transfer-to');
+  const scopeSel = document.getElementById('mp-scope');
+
+  const opts = branches.map(b => `<option value="${safe(b.id)}">${safe(b.name)}</option>`).join('');
+  if (fromSel) fromSel.innerHTML = '<option value="">Select source branch</option>' + opts;
+  if (toSel)   toSel.innerHTML   = '<option value="">Select destination branch</option>' + opts;
+  if (scopeSel) scopeSel.innerHTML = '<option value="all">All Branches</option>' + opts;
+}
+
+// ═══ TAB 2: CENTRAL PRICING ════════════════════════════════════════════════════
+
+document.getElementById('btn-load-prices').addEventListener('click', loadPrices);
+document.getElementById('btn-set-central-price').addEventListener('click', () => {
+  document.getElementById('mp-effective').value = new Date().toISOString().slice(0, 16);
+  openModal('modal-price');
+});
+document.getElementById('btn-search-pricing').addEventListener('click', () => {
+  const q = document.getElementById('pricing-search').value.trim();
+  if (q) loadPrices(q);
+});
+document.getElementById('btn-push-all-prices').addEventListener('click', pushAllPrices);
+document.getElementById('btn-save-central-price').addEventListener('click', saveCentralPrice);
+
+async function loadPrices(searchQuery = '') {
+  spin('spinner-prices', true);
+  loading('pricing-tbody', 9);
+  try {
+    const res    = await CF('getCentralPrices')({ search: searchQuery });
+    const prices = res.data?.prices || [];
+    const syncs  = res.data?.syncStatus || [];
+    renderPricingTable(prices);
+    renderSyncStatus(syncs);
+    renderConflicts(prices);
+  } catch (e) {
+    console.error('getCentralPrices:', e);
+    toast('Failed to load prices: ' + e.message, 'error');
+    document.getElementById('pricing-tbody').innerHTML = `<tr><td colspan="9"><div class="loading-row" style="color:var(--red)">Error loading prices</div></td></tr>`;
+  } finally {
+    spin('spinner-prices', false);
+  }
+}
+
+function renderPricingTable(prices) {
+  const tb = document.getElementById('pricing-tbody');
+  if (!prices.length) { tb.innerHTML = '<tr><td colspan="9"><div class="loading-row">No central price overrides</div></td></tr>'; return; }
+  tb.innerHTML = prices.map(p => `
+    <tr>
+      <td><strong>${safe(p.name)}</strong></td>
+      <td class="td-muted">${safe(p.sku || '—')}</td>
+      <td>${kes(p.branchPrice)}</td>
+      <td style="color:var(--blue);font-weight:600">${kes(p.centralPrice)}</td>
+      <td>${p.salePrice ? kes(p.salePrice) : '<span class="td-muted">—</span>'}</td>
+      <td class="td-muted">${fmtDate(p.effectiveFrom)}</td>
+      <td>${safe(p.appliesTo === 'all' ? 'All Branches' : p.appliesTo || 'All')}</td>
+      <td><span class="badge ${p.status === 'active' ? 'badge-green' : 'badge-yellow'}">${safe(p.status || 'active')}</span></td>
+      <td class="action-cell">
+        <button class="btn btn-outline btn-xs" onclick="editPrice(${JSON.stringify(safe(JSON.stringify(p)))})">Edit</button>
+        <button class="btn btn-danger btn-xs" onclick="removePrice('${safe(p.id)}')">Remove</button>
+      </td>
+    </tr>`).join('');
+}
+
+function renderSyncStatus(syncs) {
+  const list = document.getElementById('sync-status-list');
+  if (!syncs.length) { list.innerHTML = '<div class="empty"><div class="empty-text">No branch sync info available</div></div>'; return; }
+  list.innerHTML = syncs.map(s => `
+    <div class="sync-strip">
+      <div class="sync-info">
+        <div class="sync-name">${safe(s.branchName)}</div>
+        <div class="sync-time">Last pushed: ${fmtDate(s.lastPushed)}</div>
+      </div>
+      <span class="badge ${s.synced ? 'badge-green' : 'badge-yellow'}">${s.synced ? '✅ In Sync' : '⚠️ Out of Sync'}</span>
+    </div>`).join('');
+}
+
+function renderConflicts(prices) {
+  const conflicts = prices.filter(p => p.conflict);
+  const el = document.getElementById('price-conflicts');
+  if (!conflicts.length) { el.innerHTML = '<div class="card-sm" style="border-color:var(--green)"><span style="color:var(--green)">✅</span> No price conflicts detected.</div>'; return; }
+  el.innerHTML = conflicts.map(c => `
+    <div class="conflict-card">
+      <div class="conflict-title">⚠️ ${safe(c.name)}</div>
+      <div style="font-size:.8rem;color:var(--muted)">Branch price: ${kes(c.branchPrice)} · Central price: ${kes(c.centralPrice)} · Branch: ${safe(c.branchName || 'Unknown')}</div>
+    </div>`).join('');
+}
+
+async function pushAllPrices() {
+  spin('spinner-push', true);
+  const wrap = document.getElementById('push-progress-wrap');
+  const list = document.getElementById('push-branch-list');
+  wrap.style.display = 'block';
+  list.innerHTML = branchList.map(b => `
+    <div class="push-branch-row" id="push-row-${safe(b.id)}">
+      <span>${safe(b.name)}</span>
+      <span class="spinner"></span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="push-prog-${safe(b.id)}" style="width:0%"></div></div>
+  `).join('');
+
+  try {
+    const res = await CF('pushPricesToBranches')({});
+    const results = res.data?.results || [];
+    results.forEach(r => {
+      const row  = document.getElementById(`push-row-${r.branchId}`);
+      const prog = document.getElementById(`push-prog-${r.branchId}`);
+      if (row)  row.innerHTML  = `<span>${safe(r.branchName)}</span><span class="badge ${r.success ? 'badge-green' : 'badge-red'}">${r.success ? '✅ Done' : '❌ Failed'}</span>`;
+      if (prog) prog.style.width = r.success ? '100%' : '30%';
+    });
+    toast(`Prices pushed to ${results.filter(r => r.success).length} branches`, 'success');
+  } catch (e) {
+    console.error('pushPricesToBranches:', e);
+    toast('Push failed: ' + e.message, 'error');
+    list.innerHTML = `<div style="color:var(--red);font-size:.83rem;padding:8px">Failed: ${safe(e.message)}</div>`;
+  } finally {
+    spin('spinner-push', false);
+    setTimeout(() => { wrap.style.display = 'none'; }, 5000);
+  }
+}
+
+async function saveCentralPrice() {
+  const product   = document.getElementById('mp-product').value.trim();
+  const price     = parseFloat(document.getElementById('mp-price').value);
+  const salePrice = parseFloat(document.getElementById('mp-sale').value) || null;
+  const effective = document.getElementById('mp-effective').value;
+  const scope     = document.getElementById('mp-scope').value;
+
+  if (!product) { toast('Product name is required', 'error'); return; }
+  if (!price || price <= 0) { toast('Valid price is required', 'error'); return; }
+
+  spin('spinner-save-price', true);
+  try {
+    await CF('setCentralPrice')({ product, price, salePrice, effectiveFrom: effective, appliesTo: scope });
+    closeModal('modal-price');
+    toast('Central price saved', 'success');
+    loadPrices();
+  } catch (e) {
+    toast('Save failed: ' + e.message, 'error');
+  } finally {
+    spin('spinner-save-price', false);
+  }
+}
+
+window.removePrice = async id => {
+  if (!confirm('Remove this central price override?')) return;
+  try {
+    await CF('removeCentralPrice')({ id });
+    toast('Price override removed', 'success');
+    loadPrices();
+  } catch (e) {
+    toast('Remove failed: ' + e.message, 'error');
+  }
+};
+
+// ═══ TAB 3: INVENTORY ══════════════════════════════════════════════════════════
+
+let fullInventory = [];
+let invFilter     = 'all';
+let catFilter     = '';
+
+document.getElementById('btn-load-inventory').addEventListener('click', loadInventory);
+
+document.querySelectorAll('[data-inv-filter]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    invFilter = chip.dataset.invFilter;
+    document.querySelectorAll('[data-inv-filter]').forEach(c => c.classList.toggle('active', c.dataset.invFilter === invFilter));
+    renderInventoryTable(fullInventory);
+  });
+});
+
+document.getElementById('inv-category-filter').addEventListener('change', e => {
+  catFilter = e.target.value;
+  renderInventoryTable(fullInventory);
+});
+
+document.getElementById('btn-export-inv').addEventListener('click', exportInventoryCSV);
+
+async function loadInventory() {
+  spin('spinner-inv', true);
+  loading('inventory-tbody', 5);
+  try {
+    const [invRes, stockRes] = await Promise.all([
+      CF('getHQInventoryOverview')({}),
+      CF('checkStockAcrossBranches')({})
+    ]);
+    const data = invRes.data || {};
+    fullInventory = data.products || [];
+
+    // Build dynamic header with branch columns
+    const branches = data.branches || [];
+    const hdrRow = document.getElementById('inv-header-row');
+    hdrRow.innerHTML = `<th>Product</th><th>Category</th>${branches.map(b => `<th>${safe(b.name)}</th>`).join('')}<th>Total</th><th>Status</th><th>Actions</th>`;
+
+    // Populate category filter
+    const cats = [...new Set(fullInventory.map(p => p.category).filter(Boolean))];
+    const catSel = document.getElementById('inv-category-filter');
+    catSel.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${safe(c)}">${safe(c)}</option>`).join('');
+
+    renderInventoryTable(fullInventory, branches);
+    toast('Inventory loaded', 'success');
+  } catch (e) {
+    console.error('getHQInventoryOverview:', e);
+    toast('Failed to load inventory: ' + e.message, 'error');
+  } finally {
+    spin('spinner-inv', false);
+  }
+}
+
+function renderInventoryTable(products, branches) {
+  const tb = document.getElementById('inventory-tbody');
+  let filtered = products;
+  if (invFilter === 'low')  filtered = products.filter(p => p.status === 'low');
+  if (invFilter === 'out')  filtered = products.filter(p => p.status === 'out');
+  if (catFilter) filtered = filtered.filter(p => p.category === catFilter);
+
+  if (!filtered.length) { tb.innerHTML = `<tr><td colspan="10"><div class="loading-row">No products match filter</div></td></tr>`; return; }
+
+  tb.innerHTML = filtered.map(p => {
+    const branchCols = (branches || p.branches || []).map(b => {
+      const stock = (p.branchStock || {})[b.id] || (p.branchStock || {})[b.name] || 0;
+      return `<td style="text-align:center">${stock}</td>`;
+    }).join('');
+    const statusBadge = p.status === 'out' ? '<span class="badge badge-red">❌ Out of Stock</span>'
+      : p.status === 'low' ? '<span class="badge badge-yellow">⚠️ Low Stock</span>'
+      : '<span class="badge badge-green">✅ Healthy</span>';
+    return `<tr>
+      <td><strong>${safe(p.name)}</strong></td>
+      <td class="td-muted">${safe(p.category || '—')}</td>
+      ${branchCols}
+      <td><strong>${(p.totalStock || 0).toLocaleString()}</strong></td>
+      <td>${statusBadge}</td>
+      <td><button class="btn btn-outline btn-xs" onclick="openRedistribute('${safe(p.id)}','${safe(p.name)}')">Redistribute</button></td>
+    </tr>`;
+  }).join('');
+}
+
+window.openRedistribute = (id, name) => {
+  document.getElementById('transfer-product').value = name;
+  document.querySelectorAll('.tab-btn[data-tab="transfers"]')[0]?.click();
+};
+
+function exportInventoryCSV() {
+  if (!fullInventory.length) { toast('Load inventory first', 'error'); return; }
+  const headers = ['Product', 'Category', 'Total Stock', 'Status'];
+  const rows    = fullInventory.map(p => [safe(p.name), safe(p.category || ''), p.totalStock || 0, p.status || '']);
+  const csv     = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const blob    = new Blob([csv], { type: 'text/csv' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href = url; a.download = `inventory_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  toast('Inventory exported', 'success');
+}
+
+// ═══ TAB 4: TRANSFERS ══════════════════════════════════════════════════════════
+
+document.getElementById('btn-create-transfer').addEventListener('click', createTransfer);
+document.getElementById('btn-load-transfers').addEventListener('click', loadTransfers);
+document.getElementById('btn-filter-hist').addEventListener('click', loadTransferHistory);
+
+// Stock preview on branch select
+document.getElementById('transfer-from').addEventListener('change', async e => {
+  const branchId = e.target.value;
+  const product  = document.getElementById('transfer-product').value.trim();
+  if (!branchId || !product) return;
+  try {
+    const res = await CF('checkStockAcrossBranches')({ product, branchIds: [branchId] });
+    const stock = res.data?.stock?.[branchId] || 0;
+    document.getElementById('from-stock-val').textContent = stock.toLocaleString();
+    document.getElementById('from-stock-preview').style.display = 'flex';
+  } catch (e) { /* silent */ }
+});
+
+document.getElementById('transfer-to').addEventListener('change', async e => {
+  const branchId = e.target.value;
+  const product  = document.getElementById('transfer-product').value.trim();
+  if (!branchId || !product) return;
+  try {
+    const res = await CF('checkStockAcrossBranches')({ product, branchIds: [branchId] });
+    const stock = res.data?.stock?.[branchId] || 0;
+    document.getElementById('to-stock-val').textContent = stock.toLocaleString();
+    document.getElementById('to-stock-preview').style.display = 'flex';
+  } catch (e) { /* silent */ }
+});
+
+async function createTransfer() {
+  const product = document.getElementById('transfer-product').value.trim();
+  const qty     = parseInt(document.getElementById('transfer-qty').value) || 0;
+  const from    = document.getElementById('transfer-from').value;
+  const to      = document.getElementById('transfer-to').value;
+
+  if (!product) { toast('Product is required', 'error'); return; }
+  if (qty < 1)  { toast('Quantity must be at least 1', 'error'); return; }
+  if (!from)    { toast('Select source branch', 'error'); return; }
+  if (!to)      { toast('Select destination branch', 'error'); return; }
+  if (from === to) { toast('Source and destination must differ', 'error'); return; }
+
+  spin('spinner-transfer', true);
+  try {
+    await CF('createMasterInventoryTransfer')({ product, quantity: qty, fromBranchId: from, toBranchId: to });
+    toast('Transfer created successfully', 'success');
+    document.getElementById('transfer-product').value = '';
+    document.getElementById('transfer-qty').value     = '';
+    document.getElementById('transfer-from').value    = '';
+    document.getElementById('transfer-to').value      = '';
+    document.getElementById('from-stock-preview').style.display = 'none';
+    document.getElementById('to-stock-preview').style.display   = 'none';
+    loadTransfers();
+  } catch (e) {
+    toast('Transfer failed: ' + e.message, 'error');
+  } finally {
+    spin('spinner-transfer', false);
+  }
+}
+
+async function loadTransfers() {
+  spin('spinner-xfers', true);
+  loading('active-transfers-tbody', 7);
+  try {
+    const res     = await CF('getCrossBranchFulfillments')({ status: 'active' });
+    const records = res.data?.transfers || [];
+    renderActiveTransfers(records);
+  } catch (e) {
+    toast('Failed to load transfers: ' + e.message, 'error');
+    document.getElementById('active-transfers-tbody').innerHTML = `<tr><td colspan="7"><div class="loading-row" style="color:var(--red)">Error loading transfers</div></td></tr>`;
+  } finally {
+    spin('spinner-xfers', false);
+  }
+}
+
+function renderActiveTransfers(records) {
+  const tb = document.getElementById('active-transfers-tbody');
+  const active = records.filter(r => ['pending','in_transit'].includes(r.status));
+  if (!active.length) { tb.innerHTML = '<tr><td colspan="7"><div class="loading-row">No active transfers</div></td></tr>'; return; }
+  tb.innerHTML = active.map(t => {
+    const statusBadge = t.status === 'pending' ? '<span class="badge badge-yellow">Pending</span>'
+      : t.status === 'in_transit' ? '<span class="badge badge-blue">In Transit</span>'
+      : t.status === 'completed'  ? '<span class="badge badge-green">Completed</span>'
+      : '<span class="badge badge-red">Cancelled</span>';
+    const canConfirm = t.status === 'in_transit';
+    return `<tr>
+      <td><strong>${safe(t.productName || t.product)}</strong></td>
+      <td class="td-muted">${safe(t.fromBranchName)}</td>
+      <td class="td-muted">${safe(t.toBranchName)}</td>
+      <td style="font-weight:600">${(t.quantity || 0).toLocaleString()}</td>
+      <td>${statusBadge}</td>
+      <td class="td-muted">${fmtDate(t.createdAt)}</td>
+      <td>${canConfirm ? `<button class="btn btn-success btn-xs" onclick="confirmTransfer('${safe(t.id)}')">Confirm Receipt</button>` : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+window.confirmTransfer = async id => {
+  try {
+    await CF('createMasterInventoryTransfer')({ action: 'confirm', transferId: id });
+    toast('Transfer receipt confirmed', 'success');
+    loadTransfers();
+  } catch (e) {
+    toast('Confirm failed: ' + e.message, 'error');
+  }
+};
+
+async function loadTransferHistory() {
+  const from = document.getElementById('hist-from').value;
+  const to   = document.getElementById('hist-to').value;
+  loading('history-transfers-tbody', 6);
+  try {
+    const res     = await CF('getCrossBranchFulfillments')({ status: 'history', from, to, limit: 30 });
+    const records = res.data?.transfers || [];
+    const hist    = records.filter(r => ['completed','cancelled'].includes(r.status));
+    const tb      = document.getElementById('history-transfers-tbody');
+    if (!hist.length) { tb.innerHTML = '<tr><td colspan="6"><div class="loading-row">No history found</div></td></tr>'; return; }
+    tb.innerHTML = hist.map(t => {
+      const statusBadge = t.status === 'completed' ? '<span class="badge badge-green">Completed</span>' : '<span class="badge badge-red">Cancelled</span>';
+      return `<tr>
+        <td>${safe(t.productName || t.product)}</td>
+        <td class="td-muted">${safe(t.fromBranchName)}</td>
+        <td class="td-muted">${safe(t.toBranchName)}</td>
+        <td>${(t.quantity || 0).toLocaleString()}</td>
+        <td>${statusBadge}</td>
+        <td class="td-muted">${fmtDate(t.completedAt || t.updatedAt)}</td>
+      </tr>`;
+    }).join('');
+  } catch (e) {
+    toast('Failed to load history: ' + e.message, 'error');
+  }
+}
+
+// ═══ TAB 5: CATALOG ════════════════════════════════════════════════════════════
+
+document.getElementById('btn-load-catalog').addEventListener('click', loadCatalog);
+document.getElementById('btn-publish-catalog').addEventListener('click', publishCatalog);
+
+async function loadCatalog() {
+  spin('spinner-cat', true);
+  loading('catalog-sync-tbody', 5);
+  try {
+    const res    = await CF('getSharedCatalogStatus')({});
+    const data   = res.data || {};
+    document.getElementById('cat-version').textContent = `v${data.version || 1}`;
+    document.getElementById('cat-updated').textContent = fmtDate(data.lastUpdated);
+    document.getElementById('cat-count').textContent   = (data.productCount || 0).toLocaleString();
+    renderCatalogSyncTable(data.branches || []);
+    renderCatalogDiff(data.diff || {});
+  } catch (e) {
+    toast('Failed to load catalog: ' + e.message, 'error');
+  } finally {
+    spin('spinner-cat', false);
+  }
+}
+
+function renderCatalogSyncTable(branches) {
+  const tb = document.getElementById('catalog-sync-tbody');
+  if (!branches.length) { tb.innerHTML = '<tr><td colspan="5"><div class="loading-row">No branch sync data</div></td></tr>'; return; }
+  tb.innerHTML = branches.map(b => {
+    const statusBadge = b.synced ? '<span class="badge badge-green">✅ Synced</span>' : '<span class="badge badge-yellow">⚠️ Needs Sync</span>';
+    return `<tr>
+      <td><strong>${safe(b.name)}</strong></td>
+      <td class="td-muted">${fmtDate(b.lastSync)}</td>
+      <td class="td-muted">v${b.version || 1}</td>
+      <td>${statusBadge}</td>
+      <td><button class="btn btn-outline btn-xs" onclick="syncBranch('${safe(b.id)}','${safe(b.name)}')">Sync Now</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderCatalogDiff(diff) {
+  const el = document.getElementById('catalog-diff');
+  const added    = diff.added    || [];
+  const modified = diff.modified || [];
+  const removed  = diff.removed  || [];
+
+  if (!added.length && !modified.length && !removed.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-text" style="color:var(--green)">✅ Catalog is up to date — no pending changes</div></div>';
+    return;
+  }
+
+  const rows = [
+    ...added.map(p    => ({ type: 'Added',    name: p.name, color: 'var(--green)' })),
+    ...modified.map(p => ({ type: 'Modified', name: p.name, color: 'var(--yellow)' })),
+    ...removed.map(p  => ({ type: 'Removed',  name: p.name, color: 'var(--red)' }))
+  ];
+
+  el.innerHTML = rows.map(r => `
+    <div class="diff-row">
+      <span class="diff-type" style="color:${r.color};font-weight:600">${r.type}</span>
+      <span>${safe(r.name)}</span>
+    </div>`).join('');
+}
+
+window.syncBranch = async (branchId, branchName) => {
+  try {
+    await CF('syncCatalogToBranch')({ branchId });
+    toast(`Catalog synced to ${branchName}`, 'success');
+    loadCatalog();
+  } catch (e) {
+    toast('Sync failed: ' + e.message, 'error');
+  }
+};
+
+async function publishCatalog() {
+  if (!confirm('Publish catalog update? This will mark all branches as needing a sync.')) return;
+  spin('spinner-pub', true);
+  try {
+    const res = await CF('publishCatalogUpdate')({});
+    toast(`Catalog v${res.data?.version || '?'} published — ${res.data?.branchesMarked || 0} branches queued for sync`, 'success');
+    loadCatalog();
+  } catch (e) {
+    toast('Publish failed: ' + e.message, 'error');
+  } finally {
+    spin('spinner-pub', false);
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+function init() {
+  // Set default date range for history
+  const today = new Date().toISOString().slice(0, 10);
+  const month = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  document.getElementById('hist-from').value = month;
+  document.getElementById('hist-to').value   = today;
+  // Auto-load report on start
+  loadReport();
+}
+</script>
+</body>
+</html>

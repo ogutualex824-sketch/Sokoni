@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartPOS 3.0 — Accounting | SOKONI</title>
+  <script src="sokoni-config.js"></script>
+  <style>
+    :root {
+      --bg: #050508;
+      --bg2: #0d0f14;
+      --bg3: #161923;
+      --bg4: #1e2533;
+      --border: #1e2533;
+      --text: #e4e8f0;
+      --muted: #6b7899;
+      --green: #22c55e;
+      --blue: #3b82f6;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --purple: #a855f7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+    /* ── Header ── */
+    .header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+      padding: 0 16px; height: 56px;
+    }
+    .header-back {
+      display: flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px; border-radius: 8px;
+      background: var(--bg3); border: 1px solid var(--border);
+      color: var(--text); text-decoration: none; font-size: 18px;
+      transition: background .15s;
+    }
+    .header-back:hover { background: var(--bg4); }
+    .header-title { font-size: 17px; font-weight: 600; flex: 1; }
+    .header-badge {
+      font-size: 11px; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 3px 8px; color: var(--muted);
+    }
+
+    /* ── Tab Nav ── */
+    .tab-nav {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      display: flex; overflow-x: auto; gap: 0; padding: 0 16px;
+    }
+    .tab-nav::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      padding: 12px 16px; border: none; background: none; color: var(--muted);
+      font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;
+      border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
+    }
+    .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    /* ── Tab Content ── */
+    .tab-panel { display: none; padding: 20px 16px; max-width: 1200px; margin: 0 auto; }
+    .tab-panel.active { display: block; }
+
+    /* ── Cards / Sections ── */
+    .card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px; margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 12px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--muted); margin-bottom: 12px;
+    }
+
+    /* ── Controls Row ── */
+    .controls-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+    .period-btn {
+      padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg3); color: var(--muted); font-size: 13px; cursor: pointer;
+      transition: all .15s;
+    }
+    .period-btn.active, .period-btn:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .date-input {
+      padding: 7px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg3); color: var(--text); font-size: 13px; outline: none;
+    }
+    .date-input:focus { border-color: var(--blue); }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+      font-size: 13px; font-weight: 500; transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-success { background: var(--green); color: #000; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    /* ── P&L Report Table ── */
+    .report-table { width: 100%; border-collapse: collapse; }
+    .report-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+    .report-table tr:last-child td { border-bottom: none; }
+    .report-table .section-header td {
+      background: var(--bg3); font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+      padding: 8px 12px;
+    }
+    .report-table .total-row td { font-weight: 700; background: var(--bg3); }
+    .report-table .highlight-row td { font-weight: 700; font-size: 15px; }
+    .report-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    .val-green { color: var(--green); }
+    .val-red { color: var(--red); }
+    .val-muted { color: var(--muted); }
+    .indent { padding-left: 28px !important; }
+    .indent2 { padding-left: 44px !important; }
+
+    /* ── Balance Sheet ── */
+    .bs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .bs-grid { grid-template-columns: 1fr; } }
+    .bs-balance-indicator {
+      text-align: center; padding: 12px; border-radius: 8px;
+      font-weight: 600; font-size: 14px; margin-top: 12px;
+    }
+    .bs-balance-indicator.balanced { background: rgba(34,197,94,.12); color: var(--green); }
+    .bs-balance-indicator.unbalanced { background: rgba(239,68,68,.12); color: var(--red); }
+
+    /* ── Cash Flow ── */
+    .cf-activity { margin-bottom: 16px; }
+    .cf-net {
+      background: var(--bg3); border-radius: 10px; padding: 14px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-weight: 600; font-size: 15px; margin: 8px 0;
+    }
+
+    /* ── VAT Table ── */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+      padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+      border-bottom: 1px solid var(--border); background: var(--bg3);
+    }
+    .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .data-table tr:hover td { background: var(--bg3); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .vat-summary {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px;
+    }
+    @media (max-width: 600px) { .vat-summary { grid-template-columns: 1fr; } }
+    .vat-box {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px; text-align: center;
+    }
+    .vat-box .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .vat-box .amount { font-size: 20px; font-weight: 700; margin: 4px 0; }
+    .vat-box.net { border-color: var(--yellow); background: rgba(234,179,8,.07); }
+    .filing-notice {
+      background: rgba(234,179,8,.1); border: 1px solid rgba(234,179,8,.3);
+      border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--yellow);
+      margin-top: 12px; display: flex; align-items: center; gap: 8px;
+    }
+
+    /* ── Expenses Form ── */
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; }
+    .form-input, .form-select {
+      padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg3); color: var(--text); font-size: 13px; outline: none;
+      width: 100%;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--blue); }
+    .form-select option { background: var(--bg3); }
+    .expenses-total-bar {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 16px; display: flex; justify-content: space-between; align-items: center;
+      margin-top: 12px;
+    }
+
+    /* ── Journal ── */
+    .journal-lines { margin: 10px 0; }
+    .journal-line {
+      display: grid; grid-template-columns: 1fr 130px 130px 36px;
+      gap: 8px; margin-bottom: 8px; align-items: center;
+    }
+    .journal-totals {
+      display: flex; justify-content: flex-end; gap: 24px;
+      padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px;
+    }
+    .journal-totals span { font-weight: 600; }
+    .balanced-hint { font-size: 12px; margin-left: 8px; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    }
+    .badge-posted { background: rgba(34,197,94,.15); color: var(--green); }
+    .badge-voided { background: rgba(239,68,68,.15); color: var(--red); }
+    .badge-draft { background: rgba(107,120,153,.15); color: var(--muted); }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 200;
+      display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal-box {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+      width: 100%; max-width: 620px; max-height: 90vh; overflow-y: auto;
+    }
+    .modal-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-title { font-size: 15px; font-weight: 600; }
+    .modal-close {
+      width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg3); color: var(--text); cursor: pointer; font-size: 16px;
+    }
+    .modal-body { padding: 20px; }
+    .modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* ── Toast ── */
+    .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500;
+      max-width: 320px; animation: slideUp .2s ease;
+    }
+    .toast-success { background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.3); color: var(--green); }
+    .toast-error { background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3); color: var(--red); }
+    .toast-info { background: rgba(59,130,246,.15); border: 1px solid rgba(59,130,246,.3); color: var(--blue); }
+    @keyframes slideUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+    /* ── Loading / Empty States ── */
+    .loading-state { text-align: center; padding: 40px 16px; color: var(--muted); }
+    .loading-spinner {
+      width: 28px; height: 28px; border: 3px solid var(--bg4);
+      border-top-color: var(--blue); border-radius: 50%;
+      animation: spin .7s linear infinite; margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state { text-align: center; padding: 48px 16px; color: var(--muted); }
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    /* ── Auth Guard ── */
+    #auth-guard { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .auth-spinner { width: 40px; height: 40px; border: 4px solid var(--bg4); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+  </style>
+</head>
+<body>
+
+<!-- Auth loading state -->
+<div id="auth-guard">
+  <div class="auth-spinner"></div>
+</div>
+
+<!-- Main app (hidden until auth confirmed) -->
+<div id="app" style="display:none;">
+
+  <!-- Header -->
+  <header class="header">
+    <a href="pos.html" class="header-back" title="Back to POS">←</a>
+    <span class="header-title">📊 Accounting</span>
+    <span class="header-badge">SmartPOS 3.0</span>
+  </header>
+
+  <!-- Tab Navigation -->
+  <nav class="tab-nav" role="tablist">
+    <button class="tab-btn active" data-tab="pl" role="tab">P&amp;L</button>
+    <button class="tab-btn" data-tab="bs" role="tab">Balance Sheet</button>
+    <button class="tab-btn" data-tab="cf" role="tab">Cash Flow</button>
+    <button class="tab-btn" data-tab="vat" role="tab">VAT Report</button>
+    <button class="tab-btn" data-tab="exp" role="tab">Expenses</button>
+    <button class="tab-btn" data-tab="jnl" role="tab">Journal</button>
+  </nav>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- TAB 1: PROFIT & LOSS                          -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div id="tab-pl" class="tab-panel active">
+    <div class="controls-row">
+      <button class="period-btn active" data-period="this_month">This Month</button>
+      <button class="period-btn" data-period="last_month">Last Month</button>
+      <button class="period-btn" data-period="this_year">This Year</button>
+      <button class="period-btn" data-period="custom">Custom</button>
+      <span id="pl-custom-dates" style="display:none; gap:6px; display:none;">
+        <input type="date" class="date-input" id="pl-start" />
+        <input type="date" class="date-input" id="pl-end" />
+      </span>
+      <button class="btn btn-primary" id="pl-generate-btn">⚡ Generate Report</button>
+    </div>
+
+    <div id="pl-results" style="display:none;">
+      <div class="card">
+        <table class="report-table" id="pl-table">
+          <!-- Populated by JS -->
+        </table>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:4px;">
+        <button class="btn btn-secondary" id="pl-export-pdf">📄 Export PDF</button>
+        <button class="btn btn-secondary" id="pl-export-csv">📥 Export CSV</button>
+      </div>
+    </div>
+    <div id="pl-empty" class="empty-state">
+      <div class="icon">📊</div>
+      <p>Select a period and generate your P&L report.</p>
+    </div>
+    <div id="pl-loading" class="loading-state" style="display:none;">
+      <div class="loading-spinner"></div>
+      <p>Generating report…</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- TAB 2: BALANCE SHEET                          -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div id="tab-bs" class="tab-panel">
+    <div class="controls-row">
+      <label style="color:var(--muted);font-size:13px;">As of:</label>
+      <input type="date" class="date-input" id="bs-date" />
+      <button class="btn btn-primary" id="bs-generate-btn">⚡ Generate</button>
+    </div>
+
+    <div id="bs-results" style="display:none;">
+      <div class="bs-grid">
+        <div class="card">
+          <div class="card-title">Assets</div>
+          <table class="report-table" id="bs-assets-table"></table>
+        </div>
+        <div class="card">
+          <div class="card-title">Liabilities &amp; Equity</div>
+          <table class="report-table" id="bs-liab-table"></table>
+        </div>
+      </div>
+      <div class="bs-balance-indicator balanced" id="bs-indicator">✅ Balanced</div>
+    </div>
+    <div id="bs-empty" class="empty-state">
+      <div class="icon">⚖️</div>
+      <p>Pick a date and generate the Balance Sheet.</p>
+    </div>
+    <div id="bs-loading" class="loading-state" style="display:none;">
+      <div class="loading-spinner"></div>
+      <p>Loading balance sheet…</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- TAB 3: CASH FLOW                              -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div id="tab-cf" class="tab-panel">
+    <div class="controls-row">
+      <button class="period-btn active" data-period="this_month">This Month</button>
+      <button class="period-btn" data-period="last_month">Last Month</button>
+      <button class="period-btn" data-period="this_year">This Year</button>
+      <button class="btn btn-primary" id="cf-generate-btn">⚡ Generate</button>
+    </div>
+
+    <div id="cf-results" style="display:none;">
+      <div class="card cf-activity">
+        <div class="card-title">Operating Activities</div>
+        <table class="report-table" id="cf-operating-table"></table>
+        <div class="cf-net" id="cf-operating-net">
+          <span>Net Cash from Operations</span>
+          <span id="cf-op-val">KES 0.00</span>
+        </div>
+      </div>
+      <div class="card cf-activity">
+        <div class="card-title">Investing Activities</div>
+        <table class="report-table">
+          <tr><td>Capital Expenditure</td><td style="text-align:right;" class="val-muted">KES 0.00</td></tr>
+        </table>
+        <div class="cf-net"><span>Net Cash from Investing</span><span class="val-muted">KES 0.00</span></div>
+      </div>
+      <div class="card cf-activity">
+        <div class="card-title">Financing Activities</div>
+        <table class="report-table" id="cf-financing-table"></table>
+        <div class="cf-net" id="cf-financing-net">
+          <span>Net Cash from Financing</span>
+          <span id="cf-fin-val">KES 0.00</span>
+        </div>
+      </div>
+      <div class="card" style="background:var(--bg3);">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:16px; font-weight:700;">
+          <span>Net Cash Change</span>
+          <span id="cf-total-val">KES 0.00</span>
+        </div>
+      </div>
+    </div>
+    <div id="cf-empty" class="empty-state">
+      <div class="icon">💸</div>
+      <p>Select a period and generate the Cash Flow statement.</p>
+    </div>
+    <div id="cf-loading" class="loading-state" style="display:none;">
+      <div class="loading-spinner"></div>
+      <p>Loading cash flow…</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- TAB 4: VAT REPORT                             -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div id="tab-vat" class="tab-panel">
+    <div class="controls-row">
+      <label style="color:var(--muted);font-size:13px;">Period:</label>
+      <input type="month" class="date-input" id="vat-month" />
+      <button class="btn btn-primary" id="vat-generate-btn">⚡ Generate</button>
+      <button class="btn btn-secondary" id="vat-itax-btn" style="display:none;">📤 Download for iTax</button>
+    </div>
+
+    <div id="vat-results" style="display:none;">
+      <div class="card">
+        <div class="card-title">Sales &amp; VAT Transactions</div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" id="vat-table">
+            <thead>
+              <tr>
+                <th>Date</th><th>Invoice #</th><th>Customer</th>
+                <th style="text-align:right;">Sale Amount</th>
+                <th style="text-align:right;">VAT (16%)</th>
+              </tr>
+            </thead>
+            <tbody id="vat-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="vat-summary">
+        <div class="vat-box">
+          <div class="label">Output VAT (Collected)</div>
+          <div class="amount val-green" id="vat-output">KES 0.00</div>
+        </div>
+        <div class="vat-box">
+          <div class="label">Input VAT (Paid)</div>
+          <div class="amount val-red" id="vat-input">KES 0.00</div>
+        </div>
+        <div class="vat-box net">
+          <div class="label">Net VAT Payable</div>
+          <div class="amount" id="vat-net">KES 0.00</div>
+        </div>
+      </div>
+      <div class="filing-notice" id="vat-deadline">
+        ⚠️ Filing deadline: <strong id="vat-deadline-date"></strong> — 20th of the following month
+      </div>
+    </div>
+    <div id="vat-empty" class="empty-state">
+      <div class="icon">🧾</div>
+      <p>Select a month to generate the VAT report.</p>
+    </div>
+    <div id="vat-loading" class="loading-state" style="display:none;">
+      <div class="loading-spinner"></div>
+      <p>Loading VAT data…</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- TAB 5: EXPENSES                               -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div id="tab-exp" class="tab-panel">
+    <!-- Add Expense Form -->
+    <div class="card" id="expense-form-card">
+      <div class="card-title">Add Expense</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Amount (KES)</label>
+          <input type="number" class="form-input" id="exp-amount" placeholder="0.00" min="0" step="0.01" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-select" id="exp-category">
+            <option value="">Select…</option>
+            <option value="salaries">Salaries</option>
+            <option value="rent">Rent</option>
+            <option value="utilities">Utilities</option>
+            <option value="marketing">Marketing</option>
+            <option value="delivery">Delivery</option>
+            <option value="inventory">Inventory</option>
+            <option value="equipment">Equipment</option>
+            <option value="software">Software / Subscriptions</option>
+            <option value="repairs">Repairs &amp; Maintenance</option>
+            <option value="travel">Travel</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-input" id="exp-desc" placeholder="Brief description" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payment Method</label>
+          <select class="form-select" id="exp-method">
+            <option value="cash">Cash</option>
+            <option value="mpesa">M-Pesa</option>
+            <option value="bank">Bank Transfer</option>
+            <option value="card">Card</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Vendor</label>
+          <input type="text" class="form-input" id="exp-vendor" placeholder="Supplier / vendor name" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Receipt #</label>
+          <input type="text" class="form-input" id="exp-receipt" placeholder="Optional" />
+        </div>
+      </div>
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button class="btn btn-primary" id="exp-add-btn">+ Add Expense</button>
+        <button class="btn btn-secondary" id="exp-cancel-edit-btn" style="display:none;">Cancel Edit</button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="controls-row">
+      <select class="form-select" id="exp-filter-cat" style="width:160px;">
+        <option value="">All Categories</option>
+        <option value="salaries">Salaries</option>
+        <option value="rent">Rent</option>
+        <option value="utilities">Utilities</option>
+        <option value="marketing">Marketing</option>
+        <option value="delivery">Delivery</option>
+        <option value="inventory">Inventory</option>
+        <option value="equipment">Equipment</option>
+        <option value="software">Software</option>
+        <option value="repairs">Repairs</option>
+        <option value="travel">Travel</option>
+        <option value="other">Other</option>
+      </select>
+      <input type="date" class="date-input" id="exp-filter-start" />
+      <input type="date" class="date-input" id="exp-filter-end" />
+      <button class="btn btn-secondary btn-sm" id="exp-filter-btn">Filter</button>
+      <button class="btn btn-secondary btn-sm" id="exp-filter-reset">Reset</button>
+    </div>
+
+    <!-- Expenses Table -->
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="exp-table">
+          <thead>
+            <tr>
+              <th>Date</th><th>Category</th><th>Description</th>
+              <th style="text-align:right;">Amount</th>
+              <th style="text-align:right;">VAT</th>
+              <th>Vendor</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="exp-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="exp-empty" class="empty-state" style="display:none;">
+      <div class="icon">💳</div>
+      <p>No expenses recorded yet.</p>
+    </div>
+    <div id="exp-loading" class="loading-state" style="display:none;">
+      <div class="loading-spinner"></div>
+      <p>Loading expenses…</p>
+    </div>
+    <div class="expenses-total-bar">
+      <span style="color:var(--muted); font-size:13px;">Total Expenses</span>
+      <span id="exp-total" style="font-size:16px; font-weight:700; color:var(--red);">KES 0.00</span>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- TAB 6: JOURNAL ENTRIES                        -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div id="tab-jnl" class="tab-panel">
+    <div style="display:flex; gap:8px; margin-bottom:16px;">
+      <button class="btn btn-primary" id="jnl-new-btn">+ New Entry</button>
+      <button class="btn btn-secondary" id="jnl-init-coa-btn">🗂 Init Chart of Accounts</button>
+    </div>
+
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="jnl-table">
+          <thead>
+            <tr>
+              <th>Date</th><th>Description</th><th>Reference</th>
+              <th style="text-align:right;">Debit Total</th>
+              <th>Status</th><th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="jnl-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="jnl-empty" class="empty-state" style="display:none;">
+      <div class="icon">📒</div>
+      <p>No journal entries yet. Create your first entry.</p>
+    </div>
+    <div id="jnl-loading" class="loading-state" style="display:none;">
+      <div class="loading-spinner"></div>
+      <p>Loading journal entries…</p>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ══════════════════════════════════════════════ -->
+<!-- MODAL: New / Edit Journal Entry              -->
+<!-- ══════════════════════════════════════════════ -->
+<div class="modal-overlay hidden" id="jnl-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Journal Entry</span>
+      <button class="modal-close" id="jnl-modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input type="date" class="form-input" id="jnl-date" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Reference</label>
+          <input type="text" class="form-input" id="jnl-ref" placeholder="e.g. JNL-0001" />
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px;">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-input" id="jnl-desc" placeholder="Transaction description" />
+      </div>
+
+      <div class="card-title">Lines</div>
+      <div id="jnl-lines-container" class="journal-lines"></div>
+      <button class="btn btn-secondary btn-sm" id="jnl-add-line-btn" style="margin-bottom:12px;">+ Add Line</button>
+
+      <div class="journal-totals">
+        <div>Debit Total: <span id="jnl-debit-total">KES 0.00</span></div>
+        <div>Credit Total: <span id="jnl-credit-total">KES 0.00</span>
+          <span class="balanced-hint" id="jnl-balance-hint"></span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="jnl-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="jnl-post-btn">Post Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Journal Entry Detail -->
+<div class="modal-overlay hidden" id="jnl-detail-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title" id="jnl-detail-title">Entry Detail</span>
+      <button class="modal-close" id="jnl-detail-close">✕</button>
+    </div>
+    <div class="modal-body" id="jnl-detail-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="jnl-detail-done">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- JAVASCRIPT                                                        -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<script type="module">
+import { initializeApp }       from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+
+const app  = initializeApp(window._sokoniConfig || {});
+const auth = getAuth(app);
+const fns  = getFunctions(app);
+
+/* ── Cloud Function handles ── */
+const cf = {
+  getPL:              httpsCallable(fns, 'getProfitAndLoss'),
+  getBS:              httpsCallable(fns, 'getBalanceSheet'),
+  getCF:              httpsCallable(fns, 'getCashFlow'),
+  getVAT:             httpsCallable(fns, 'getVATReport'),
+  createExpense:      httpsCallable(fns, 'createExpense'),
+  getExpenses:        httpsCallable(fns, 'getExpenses'),
+  updateExpense:      httpsCallable(fns, 'updateExpense'),
+  deleteExpense:      httpsCallable(fns, 'deleteExpense'),
+  getJournal:         httpsCallable(fns, 'getJournalEntries'),
+  createJournal:      httpsCallable(fns, 'createJournalEntry'),
+  initCOA:            httpsCallable(fns, 'initializeChartOfAccounts'),
+};
+
+/* ════════════════════════════════════════
+   UTILITIES
+════════════════════════════════════════ */
+const fmt = n => {
+  const v = parseFloat(n) || 0;
+  return 'KES ' + Math.abs(v).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+const fmtSigned = n => {
+  const v = parseFloat(n) || 0;
+  const s = 'KES ' + Math.abs(v).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return v < 0 ? `<span class="val-red">-${s}</span>` : s;
+};
+const fmtColored = (n, greenPositive = true) => {
+  const v = parseFloat(n) || 0;
+  const s = fmt(v);
+  if (v === 0) return `<span class="val-muted">${s}</span>`;
+  const isGood = greenPositive ? v > 0 : v < 0;
+  return `<span class="${isGood ? 'val-green' : 'val-red'}">${v < 0 ? '-' : ''}${fmt(Math.abs(v))}</span>`;
+};
+
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3800);
+}
+
+function showLoading(prefix) {
+  document.getElementById(`${prefix}-loading`).style.display = 'block';
+  const emp = document.getElementById(`${prefix}-empty`);
+  if (emp) emp.style.display = 'none';
+  const res = document.getElementById(`${prefix}-results`);
+  if (res) res.style.display = 'none';
+}
+function hideLoading(prefix) {
+  document.getElementById(`${prefix}-loading`).style.display = 'none';
+}
+
+/* ════════════════════════════════════════
+   AUTH GUARD
+════════════════════════════════════════ */
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'auth.html'; return; }
+
+  // Basic role guard — require manager+ claim
+  const token = await user.getIdTokenResult();
+  const role = token.claims.role || '';
+  const allowed = ['manager', 'admin', 'super_admin', 'owner'];
+  if (!allowed.includes(role)) {
+    toast('Access denied. Manager role required.', 'error');
+    setTimeout(() => window.location.href = 'pos.html', 2000);
+    return;
+  }
+
+  document.getElementById('auth-guard').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  initTabs();
+  initPL();
+  initBS();
+  initCF();
+  initVAT();
+  initExpenses();
+  initJournal();
+});
+
+/* ════════════════════════════════════════
+   TAB ROUTING
+════════════════════════════════════════ */
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+/* ════════════════════════════════════════
+   TAB 1 — PROFIT & LOSS
+════════════════════════════════════════ */
+function initPL() {
+  let selectedPeriod = 'this_month';
+
+  document.querySelectorAll('#tab-pl .period-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#tab-pl .period-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedPeriod = btn.dataset.period;
+      const custom = document.getElementById('pl-custom-dates');
+      custom.style.display = selectedPeriod === 'custom' ? 'flex' : 'none';
+    });
+  });
+
+  // Set today as default end, start of month as default start
+  const now = new Date();
+  document.getElementById('pl-end').value = now.toISOString().split('T')[0];
+  document.getElementById('pl-start').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+
+  document.getElementById('pl-generate-btn').addEventListener('click', async () => {
+    showLoading('pl');
+    try {
+      const params = { period: selectedPeriod };
+      if (selectedPeriod === 'custom') {
+        params.startDate = document.getElementById('pl-start').value;
+        params.endDate   = document.getElementById('pl-end').value;
+      }
+      const res = await cf.getPL(params);
+      renderPL(res.data);
+    } catch(e) {
+      hideLoading('pl');
+      toast('Failed to load P&L: ' + (e.message || 'Unknown error'), 'error');
+    }
+  });
+
+  document.getElementById('pl-export-csv').addEventListener('click', () => exportPLCSV());
+  document.getElementById('pl-export-pdf').addEventListener('click', () => { toast('PDF export coming soon.', 'info'); });
+}
+
+function renderPL(data) {
+  hideLoading('pl');
+  document.getElementById('pl-empty').style.display = 'none';
+  document.getElementById('pl-results').style.display = 'block';
+
+  const d = data || {};
+  const rows = [
+    ['section', 'REVENUE'],
+    ['row', 'Sales Revenue', d.salesRevenue || 0],
+    ['row', 'Service Revenue', d.serviceRevenue || 0],
+    ['row', 'Other Income', d.otherIncome || 0],
+    ['total', 'Total Revenue', (d.salesRevenue||0) + (d.serviceRevenue||0) + (d.otherIncome||0)],
+    ['section', 'COST OF GOODS'],
+    ['row', 'Cost of Goods Sold', d.cogs || 0],
+    ['highlight', 'Gross Profit', d.grossProfit || 0, true],
+    ['pct', 'Gross Margin', d.grossMarginPct || 0],
+    ['section', 'OPERATING EXPENSES'],
+    ['indent', 'Salaries & Wages', d.salaries || 0],
+    ['indent', 'Rent', d.rent || 0],
+    ['indent', 'Utilities', d.utilities || 0],
+    ['indent', 'Marketing', d.marketing || 0],
+    ['indent', 'Delivery', d.delivery || 0],
+    ['indent', 'Other Expenses', d.otherExpenses || 0],
+    ['total', 'Total Expenses', d.totalExpenses || 0],
+    ['section', 'BOTTOM LINE'],
+    ['highlight', 'Net Profit', d.netProfit || 0, true],
+    ['pct', 'Net Margin', d.netMarginPct || 0],
+  ];
+
+  const tbody = rows.map(r => {
+    if (r[0] === 'section') return `<tr class="section-header"><td colspan="2">${r[1]}</td></tr>`;
+    if (r[0] === 'total')   return `<tr class="total-row"><td>${r[1]}</td><td>${fmtColored(r[2])}</td></tr>`;
+    if (r[0] === 'highlight') return `<tr class="total-row highlight-row"><td>${r[1]}</td><td>${fmtColored(r[2], r[3])}</td></tr>`;
+    if (r[0] === 'pct')     return `<tr><td class="indent" style="color:var(--muted);">${r[1]}</td><td class="val-muted">${(parseFloat(r[2])||0).toFixed(1)}%</td></tr>`;
+    if (r[0] === 'indent')  return `<tr><td class="indent">${r[1]}</td><td>${fmtSigned(r[2])}</td></tr>`;
+    return `<tr><td>${r[1]}</td><td>${fmtSigned(r[2])}</td></tr>`;
+  }).join('');
+  document.getElementById('pl-table').innerHTML = tbody;
+}
+
+let plData = null;
+function exportPLCSV() {
+  const rows = [['Item','Amount']];
+  document.querySelectorAll('#pl-table tr').forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    if (cells.length === 2) rows.push([cells[0].textContent.trim(), cells[1].textContent.trim()]);
+  });
+  downloadCSV('pl_report.csv', rows);
+}
+
+/* ════════════════════════════════════════
+   TAB 2 — BALANCE SHEET
+════════════════════════════════════════ */
+function initBS() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('bs-date').value = today;
+
+  document.getElementById('bs-generate-btn').addEventListener('click', async () => {
+    showLoading('bs');
+    try {
+      const asOf = document.getElementById('bs-date').value;
+      const res = await cf.getBS({ asOf });
+      renderBS(res.data);
+    } catch(e) {
+      hideLoading('bs');
+      toast('Failed to load Balance Sheet: ' + (e.message || 'Unknown error'), 'error');
+    }
+  });
+}
+
+function renderBS(data) {
+  hideLoading('bs');
+  document.getElementById('bs-empty').style.display = 'none';
+  document.getElementById('bs-results').style.display = 'block';
+  const d = data || {};
+
+  const cash       = d.cash || 0;
+  const bank       = d.bank || 0;
+  const mpesa      = d.mpesa || 0;
+  const receivable = d.receivables || 0;
+  const inventory  = d.inventory || 0;
+  const totalCurrent = cash + bank + mpesa + receivable + inventory;
+  const fixedAssets  = d.fixedAssets || 0;
+  const totalAssets  = totalCurrent + fixedAssets;
+
+  const payables   = d.payables || 0;
+  const vatPayable = d.vatPayable || 0;
+  const deposits   = d.customerDeposits || 0;
+  const totalLiab  = payables + vatPayable + deposits;
+
+  const equity     = d.ownerEquity || 0;
+  const retained   = d.retainedEarnings || 0;
+  const totalEquity = equity + retained;
+  const totalLE    = totalLiab + totalEquity;
+
+  document.getElementById('bs-assets-table').innerHTML = `
+    <tr class="section-header"><td colspan="2">Current Assets</td></tr>
+    <tr><td class="indent">Cash in Hand</td><td>${fmt(cash)}</td></tr>
+    <tr><td class="indent">Bank Balance</td><td>${fmt(bank)}</td></tr>
+    <tr><td class="indent">M-Pesa Balance</td><td>${fmt(mpesa)}</td></tr>
+    <tr><td class="indent">Accounts Receivable</td><td>${fmt(receivable)}</td></tr>
+    <tr><td class="indent">Inventory</td><td>${fmt(inventory)}</td></tr>
+    <tr class="total-row"><td>Total Current Assets</td><td>${fmt(totalCurrent)}</td></tr>
+    <tr class="section-header"><td colspan="2">Fixed Assets</td></tr>
+    <tr><td class="indent val-muted">Equipment &amp; Fixtures</td><td>${fmt(fixedAssets)}</td></tr>
+    <tr class="total-row highlight-row"><td>TOTAL ASSETS</td><td>${fmt(totalAssets)}</td></tr>
+  `;
+
+  document.getElementById('bs-liab-table').innerHTML = `
+    <tr class="section-header"><td colspan="2">Current Liabilities</td></tr>
+    <tr><td class="indent">Accounts Payable</td><td>${fmt(payables)}</td></tr>
+    <tr><td class="indent">VAT Payable</td><td>${fmt(vatPayable)}</td></tr>
+    <tr><td class="indent">Customer Deposits</td><td>${fmt(deposits)}</td></tr>
+    <tr class="total-row"><td>Total Liabilities</td><td>${fmt(totalLiab)}</td></tr>
+    <tr class="section-header"><td colspan="2">Equity</td></tr>
+    <tr><td class="indent">Owner Equity</td><td>${fmt(equity)}</td></tr>
+    <tr><td class="indent">Retained Earnings</td><td>${fmtColored(retained)}</td></tr>
+    <tr class="total-row"><td>Total Equity</td><td>${fmt(totalEquity)}</td></tr>
+    <tr class="total-row highlight-row"><td>TOTAL LIABILITIES + EQUITY</td><td>${fmt(totalLE)}</td></tr>
+  `;
+
+  const balanced = Math.abs(totalAssets - totalLE) < 0.01;
+  const ind = document.getElementById('bs-indicator');
+  ind.textContent = balanced ? '✅ Balanced' : '❌ Out of Balance — Difference: ' + fmt(Math.abs(totalAssets - totalLE));
+  ind.className = 'bs-balance-indicator ' + (balanced ? 'balanced' : 'unbalanced');
+}
+
+/* ════════════════════════════════════════
+   TAB 3 — CASH FLOW
+════════════════════════════════════════ */
+function initCF() {
+  let selectedPeriod = 'this_month';
+  document.querySelectorAll('#tab-cf .period-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#tab-cf .period-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedPeriod = btn.dataset.period;
+    });
+  });
+
+  document.getElementById('cf-generate-btn').addEventListener('click', async () => {
+    showLoading('cf');
+    try {
+      const res = await cf.getCF({ period: selectedPeriod });
+      renderCF(res.data);
+    } catch(e) {
+      hideLoading('cf');
+      toast('Failed to load Cash Flow: ' + (e.message || 'Unknown error'), 'error');
+    }
+  });
+}
+
+function renderCF(data) {
+  hideLoading('cf');
+  document.getElementById('cf-empty').style.display = 'none';
+  document.getElementById('cf-results').style.display = 'block';
+  const d = data || {};
+
+  const cashSalesCash  = d.cashSales || 0;
+  const cashSalesMpesa = d.mpesaSales || 0;
+  const cashSalesBank  = d.bankSales || 0;
+  const cashExpenses   = d.cashExpenses || 0;
+  const netOps         = cashSalesCash + cashSalesMpesa + cashSalesBank - cashExpenses;
+
+  document.getElementById('cf-operating-table').innerHTML = `
+    <tr><td>Cash Sales — Cash</td><td style="text-align:right;">${fmt(cashSalesCash)}</td></tr>
+    <tr><td>Cash Sales — M-Pesa</td><td style="text-align:right;">${fmt(cashSalesMpesa)}</td></tr>
+    <tr><td>Cash Sales — Bank</td><td style="text-align:right;">${fmt(cashSalesBank)}</td></tr>
+    <tr><td style="color:var(--red);">Cash Paid for Expenses</td><td style="text-align:right;" class="val-red">-${fmt(cashExpenses)}</td></tr>
+  `;
+  document.getElementById('cf-op-val').innerHTML = fmtColored(netOps);
+
+  const drawings = d.ownerDrawings || 0;
+  document.getElementById('cf-financing-table').innerHTML = `
+    <tr><td>Owner Drawings</td><td style="text-align:right;" class="val-red">-${fmt(drawings)}</td></tr>
+  `;
+  document.getElementById('cf-fin-val').innerHTML = fmtColored(-drawings);
+
+  const netTotal = netOps - drawings;
+  const totalEl = document.getElementById('cf-total-val');
+  totalEl.innerHTML = fmtColored(netTotal);
+}
+
+/* ════════════════════════════════════════
+   TAB 4 — VAT REPORT
+════════════════════════════════════════ */
+function initVAT() {
+  const now = new Date();
+  document.getElementById('vat-month').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  document.getElementById('vat-generate-btn').addEventListener('click', async () => {
+    showLoading('vat');
+    try {
+      const month = document.getElementById('vat-month').value;
+      const res = await cf.getVAT({ month });
+      renderVAT(res.data, month);
+    } catch(e) {
+      hideLoading('vat');
+      toast('Failed to load VAT report: ' + (e.message || 'Unknown error'), 'error');
+    }
+  });
+
+  document.getElementById('vat-itax-btn').addEventListener('click', () => exportVATiTax());
+}
+
+let vatReportData = null;
+function renderVAT(data, month) {
+  hideLoading('vat');
+  document.getElementById('vat-empty').style.display = 'none';
+  document.getElementById('vat-results').style.display = 'block';
+  document.getElementById('vat-itax-btn').style.display = '';
+  vatReportData = data;
+
+  const d = data || {};
+  const transactions = d.transactions || [];
+
+  document.getElementById('vat-tbody').innerHTML = transactions.length
+    ? transactions.map(t => `
+        <tr>
+          <td>${t.date || ''}</td>
+          <td>${esc(t.invoiceNo || '')}</td>
+          <td>${esc(t.customer || 'Walk-in')}</td>
+          <td style="text-align:right;">${fmt(t.amount)}</td>
+          <td style="text-align:right; color:var(--yellow);">${fmt(t.vat)}</td>
+        </tr>`).join('')
+    : `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">No VAT transactions this period.</td></tr>`;
+
+  document.getElementById('vat-output').textContent = fmt(d.outputVAT || 0);
+  document.getElementById('vat-input').textContent  = fmt(d.inputVAT  || 0);
+  const net = (d.outputVAT || 0) - (d.inputVAT || 0);
+  const netEl = document.getElementById('vat-net');
+  netEl.textContent = fmt(net);
+  netEl.className   = 'amount ' + (net > 0 ? 'val-yellow' : 'val-green');
+
+  // Filing deadline: 20th of following month
+  const [y, m] = month.split('-').map(Number);
+  const deadline = new Date(m === 12 ? y+1 : y, m === 12 ? 0 : m, 20);
+  document.getElementById('vat-deadline-date').textContent = deadline.toLocaleDateString('en-KE', { day:'numeric', month:'long', year:'numeric' });
+}
+
+function exportVATiTax() {
+  if (!vatReportData) return;
+  const json = JSON.stringify(vatReportData, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'vat_itax_export.json';
+  a.click(); URL.revokeObjectURL(url);
+}
+
+/* ════════════════════════════════════════
+   TAB 5 — EXPENSES
+════════════════════════════════════════ */
+let editingExpenseId = null;
+
+function initExpenses() {
+  loadExpenses();
+
+  document.getElementById('exp-add-btn').addEventListener('click', async () => {
+    const amount  = parseFloat(document.getElementById('exp-amount').value);
+    const cat     = document.getElementById('exp-category').value;
+    const desc    = document.getElementById('exp-desc').value.trim();
+    const method  = document.getElementById('exp-method').value;
+    const vendor  = document.getElementById('exp-vendor').value.trim();
+    const receipt = document.getElementById('exp-receipt').value.trim();
+
+    if (!amount || amount <= 0) { toast('Enter a valid amount.', 'error'); return; }
+    if (!cat)    { toast('Select a category.', 'error'); return; }
+    if (!desc)   { toast('Add a description.', 'error'); return; }
+
+    try {
+      if (editingExpenseId) {
+        await cf.updateExpense({ id: editingExpenseId, amount, category: cat, description: desc, paymentMethod: method, vendor, receiptNo: receipt });
+        toast('Expense updated.', 'success');
+        cancelEdit();
+      } else {
+        await cf.createExpense({ amount, category: cat, description: desc, paymentMethod: method, vendor, receiptNo: receipt });
+        toast('Expense added.', 'success');
+      }
+      clearExpenseForm();
+      loadExpenses();
+    } catch(e) {
+      toast('Error: ' + (e.message || 'Failed'), 'error');
+    }
+  });
+
+  document.getElementById('exp-cancel-edit-btn').addEventListener('click', cancelEdit);
+  document.getElementById('exp-filter-btn').addEventListener('click', () => loadExpenses(true));
+  document.getElementById('exp-filter-reset').addEventListener('click', () => {
+    document.getElementById('exp-filter-cat').value   = '';
+    document.getElementById('exp-filter-start').value = '';
+    document.getElementById('exp-filter-end').value   = '';
+    loadExpenses();
+  });
+}
+
+function cancelEdit() {
+  editingExpenseId = null;
+  clearExpenseForm();
+  document.getElementById('exp-add-btn').textContent = '+ Add Expense';
+  document.getElementById('exp-cancel-edit-btn').style.display = 'none';
+}
+function clearExpenseForm() {
+  ['exp-amount','exp-desc','exp-vendor','exp-receipt'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('exp-category').value = '';
+  document.getElementById('exp-method').value = 'cash';
+}
+
+async function loadExpenses(filtered = false) {
+  document.getElementById('exp-loading').style.display = 'block';
+  document.getElementById('exp-empty').style.display   = 'none';
+  document.getElementById('exp-table').style.display   = 'none';
+
+  try {
+    const params = {};
+    if (filtered) {
+      const cat   = document.getElementById('exp-filter-cat').value;
+      const start = document.getElementById('exp-filter-start').value;
+      const end   = document.getElementById('exp-filter-end').value;
+      if (cat)   params.category  = cat;
+      if (start) params.startDate = start;
+      if (end)   params.endDate   = end;
+    }
+    const res = await cf.getExpenses(params);
+    renderExpenses(res.data || []);
+  } catch(e) {
+    document.getElementById('exp-loading').style.display = 'none';
+    toast('Failed to load expenses.', 'error');
+  }
+}
+
+function renderExpenses(items) {
+  document.getElementById('exp-loading').style.display = 'none';
+  if (!items.length) {
+    document.getElementById('exp-empty').style.display = 'block';
+    document.getElementById('exp-total').textContent   = fmt(0);
+    document.getElementById('exp-tbody').innerHTML     = '';
+    document.getElementById('exp-table').style.display = 'table';
+    return;
+  }
+
+  let total = 0;
+  document.getElementById('exp-tbody').innerHTML = items.map(e => {
+    total += parseFloat(e.amount) || 0;
+    const vatAmt = (parseFloat(e.amount) || 0) * 0.16;
+    return `
+      <tr>
+        <td>${e.date || ''}</td>
+        <td><span style="text-transform:capitalize;">${esc(e.category || '')}</span></td>
+        <td>${esc(e.description || '')}</td>
+        <td style="text-align:right; color:var(--red);">${fmt(e.amount)}</td>
+        <td style="text-align:right; color:var(--yellow);">${fmt(vatAmt)}</td>
+        <td>${esc(e.vendor || '—')}</td>
+        <td>
+          <button class="btn btn-secondary btn-sm" onclick="editExpense('${e.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteExpense('${e.id}')">Del</button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  document.getElementById('exp-total').textContent   = fmt(total);
+  document.getElementById('exp-table').style.display = 'table';
+}
+
+window.editExpense = async (id) => {
+  // Re-fetch list and find item — simple approach
+  try {
+    const res = await cf.getExpenses({});
+    const item = (res.data || []).find(e => e.id === id);
+    if (!item) return;
+    editingExpenseId = id;
+    document.getElementById('exp-amount').value   = item.amount;
+    document.getElementById('exp-category').value = item.category;
+    document.getElementById('exp-desc').value     = item.description;
+    document.getElementById('exp-method').value   = item.paymentMethod || 'cash';
+    document.getElementById('exp-vendor').value   = item.vendor || '';
+    document.getElementById('exp-receipt').value  = item.receiptNo || '';
+    document.getElementById('exp-add-btn').textContent          = '💾 Save Changes';
+    document.getElementById('exp-cancel-edit-btn').style.display = '';
+    document.getElementById('expense-form-card').scrollIntoView({ behavior: 'smooth' });
+  } catch(e) {
+    toast('Could not load expense.', 'error');
+  }
+};
+
+window.deleteExpense = async (id) => {
+  if (!confirm('Delete this expense?')) return;
+  try {
+    await cf.deleteExpense({ id });
+    toast('Expense deleted.', 'success');
+    loadExpenses();
+  } catch(e) {
+    toast('Delete failed: ' + (e.message || ''), 'error');
+  }
+};
+
+/* ════════════════════════════════════════
+   TAB 6 — JOURNAL ENTRIES
+════════════════════════════════════════ */
+function initJournal() {
+  loadJournalEntries();
+
+  document.getElementById('jnl-new-btn').addEventListener('click', openJournalModal);
+  document.getElementById('jnl-modal-close').addEventListener('click', closeJournalModal);
+  document.getElementById('jnl-modal-cancel').addEventListener('click', closeJournalModal);
+  document.getElementById('jnl-add-line-btn').addEventListener('click', addJournalLine);
+  document.getElementById('jnl-post-btn').addEventListener('click', postJournalEntry);
+
+  document.getElementById('jnl-detail-close').addEventListener('click', () => {
+    document.getElementById('jnl-detail-modal').classList.add('hidden');
+  });
+  document.getElementById('jnl-detail-done').addEventListener('click', () => {
+    document.getElementById('jnl-detail-modal').classList.add('hidden');
+  });
+
+  document.getElementById('jnl-init-coa-btn').addEventListener('click', async () => {
+    if (!confirm('Initialize the Chart of Accounts? This should only be done once.')) return;
+    try {
+      await cf.initCOA({});
+      toast('Chart of Accounts initialized.', 'success');
+    } catch(e) {
+      toast('Failed: ' + (e.message || ''), 'error');
+    }
+  });
+}
+
+function openJournalModal() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('jnl-date').value = today;
+  document.getElementById('jnl-ref').value  = '';
+  document.getElementById('jnl-desc').value = '';
+  document.getElementById('jnl-lines-container').innerHTML = '';
+  addJournalLine(); addJournalLine();
+  updateJournalTotals();
+  document.getElementById('jnl-modal').classList.remove('hidden');
+}
+function closeJournalModal() {
+  document.getElementById('jnl-modal').classList.add('hidden');
+}
+
+function addJournalLine() {
+  const container = document.getElementById('jnl-lines-container');
+  const idx = container.children.length;
+  const div = document.createElement('div');
+  div.className = 'journal-line';
+  div.innerHTML = `
+    <input class="form-input jnl-account" placeholder="Account name" />
+    <input class="form-input jnl-debit"   type="number" min="0" step="0.01" placeholder="Debit" />
+    <input class="form-input jnl-credit"  type="number" min="0" step="0.01" placeholder="Credit" />
+    <button class="btn btn-secondary btn-sm" style="padding:6px;" onclick="this.closest('.journal-line').remove(); updateJournalTotals();">✕</button>
+  `;
+  div.querySelectorAll('input').forEach(i => i.addEventListener('input', updateJournalTotals));
+  container.appendChild(div);
+}
+window.updateJournalTotals = function() {
+  let debit = 0, credit = 0;
+  document.querySelectorAll('#jnl-lines-container .journal-line').forEach(row => {
+    debit  += parseFloat(row.querySelector('.jnl-debit').value)  || 0;
+    credit += parseFloat(row.querySelector('.jnl-credit').value) || 0;
+  });
+  document.getElementById('jnl-debit-total').textContent  = fmt(debit);
+  document.getElementById('jnl-credit-total').textContent = fmt(credit);
+  const balanced = Math.abs(debit - credit) < 0.01 && debit > 0;
+  const hint = document.getElementById('jnl-balance-hint');
+  hint.textContent = balanced ? '✅' : (debit > 0 ? '❌' : '');
+  hint.style.color = balanced ? 'var(--green)' : 'var(--red)';
+};
+
+async function postJournalEntry() {
+  const date = document.getElementById('jnl-date').value;
+  const ref  = document.getElementById('jnl-ref').value.trim();
+  const desc = document.getElementById('jnl-desc').value.trim();
+  if (!date || !desc) { toast('Date and description are required.', 'error'); return; }
+
+  const lines = [];
+  let debit = 0, credit = 0;
+  document.querySelectorAll('#jnl-lines-container .journal-line').forEach(row => {
+    const account = row.querySelector('.jnl-account').value.trim();
+    const d = parseFloat(row.querySelector('.jnl-debit').value)  || 0;
+    const c = parseFloat(row.querySelector('.jnl-credit').value) || 0;
+    if (account) { lines.push({ account, debit: d, credit: c }); debit += d; credit += c; }
+  });
+
+  if (lines.length < 2)            { toast('At least 2 lines required.', 'error'); return; }
+  if (Math.abs(debit - credit) > 0.01) { toast('Entry does not balance. Debits must equal Credits.', 'error'); return; }
+
+  try {
+    await cf.createJournal({ date, reference: ref, description: desc, lines });
+    toast('Journal entry posted.', 'success');
+    closeJournalModal();
+    loadJournalEntries();
+  } catch(e) {
+    toast('Failed to post: ' + (e.message || ''), 'error');
+  }
+}
+
+async function loadJournalEntries() {
+  document.getElementById('jnl-loading').style.display = 'block';
+  document.getElementById('jnl-empty').style.display   = 'none';
+  document.getElementById('jnl-table').style.display   = 'none';
+
+  try {
+    const res = await cf.getJournal({});
+    renderJournalEntries(res.data || []);
+  } catch(e) {
+    document.getElementById('jnl-loading').style.display = 'none';
+    toast('Failed to load journal entries.', 'error');
+  }
+}
+
+function renderJournalEntries(entries) {
+  document.getElementById('jnl-loading').style.display = 'none';
+  if (!entries.length) {
+    document.getElementById('jnl-empty').style.display = 'block';
+    document.getElementById('jnl-table').style.display = 'table';
+    document.getElementById('jnl-tbody').innerHTML = '';
+    return;
+  }
+
+  document.getElementById('jnl-table').style.display = 'table';
+  document.getElementById('jnl-tbody').innerHTML = entries.map(e => {
+    const badge = e.status === 'posted' ? 'badge-posted' : e.status === 'voided' ? 'badge-voided' : 'badge-draft';
+    const label = e.status || 'draft';
+    return `
+      <tr>
+        <td>${e.date || ''}</td>
+        <td>${esc(e.description || '')}</td>
+        <td style="color:var(--muted);">${esc(e.reference || '—')}</td>
+        <td style="text-align:right;">${fmt(e.debitTotal || 0)}</td>
+        <td><span class="badge ${badge}">${label}</span></td>
+        <td><button class="btn btn-secondary btn-sm" onclick="viewJournalEntry('${e.id}')">View</button></td>
+      </tr>`;
+  }).join('');
+}
+
+window.viewJournalEntry = async (id) => {
+  try {
+    const res = await cf.getJournal({ id });
+    const entries = res.data || [];
+    const entry = Array.isArray(entries) ? entries.find(e => e.id === id) : res.data;
+    if (!entry) { toast('Entry not found.', 'error'); return; }
+
+    document.getElementById('jnl-detail-title').textContent = `Entry: ${entry.reference || entry.id}`;
+    const lines = entry.lines || [];
+    document.getElementById('jnl-detail-body').innerHTML = `
+      <div style="margin-bottom:14px; display:grid; gap:4px;">
+        <div><strong>Date:</strong> ${entry.date || ''}</div>
+        <div><strong>Description:</strong> ${esc(entry.description || '')}</div>
+        <div><strong>Reference:</strong> ${esc(entry.reference || '—')}</div>
+        <div><strong>Status:</strong> <span class="badge badge-${entry.status || 'draft'}">${entry.status || 'draft'}</span></div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Account</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th></tr></thead>
+        <tbody>
+          ${lines.map(l => `
+            <tr>
+              <td>${esc(l.account || '')}</td>
+              <td style="text-align:right;">${l.debit  ? fmt(l.debit)  : '—'}</td>
+              <td style="text-align:right;">${l.credit ? fmt(l.credit) : '—'}</td>
+            </tr>`).join('')}
+          <tr class="total-row">
+            <td>TOTAL</td>
+            <td style="text-align:right;">${fmt(lines.reduce((a,l) => a + (l.debit  || 0), 0))}</td>
+            <td style="text-align:right;">${fmt(lines.reduce((a,l) => a + (l.credit || 0), 0))}</td>
+          </tr>
+        </tbody>
+      </table>`;
+    document.getElementById('jnl-detail-modal').classList.remove('hidden');
+  } catch(e) {
+    toast('Could not load entry: ' + (e.message || ''), 'error');
+  }
+};
+
+/* ════════════════════════════════════════
+   CSV EXPORT HELPER
+════════════════════════════════════════ */
+function downloadCSV(filename, rows) {
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+/* ════════════════════════════════════════
+   XSS ESCAPE HELPER
+════════════════════════════════════════ */
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+</script>
+</body>
+</html>

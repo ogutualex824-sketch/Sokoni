@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260628-redis-v1";
+const CACHE_VERSION = "sokoni-20260628-smartpos30-v1";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -125,6 +125,14 @@ const PRECACHE_STATIC = [
   "/pos-modules.js", "/pos-scanner.js", "/pos-mobile.js",
   "/pos-manager-auth.js",
   "/pos-device-manager.js",
+  /* SmartPOS 2.0 — Multi-device session + Terminal Driver */
+  "/pos-session-manager.js", "/pos-terminal-driver.js",
+  /* SmartPOS 2.1 — Receipt Engine, Workspace, Analytics Widget */
+  "/pos-receipt-engine.js", "/pos-workspace.html", "/pos-analytics-live.js",
+  /* SmartPOS 3.0 — Enterprise BOS Pages & Hardware Layer */
+  "/pos-hardware-wizard.js", "/pos-hardware-wizard.html",
+  "/pos-accounting.html", "/pos-crm-pro.html", "/pos-staff-ops.html",
+  "/pos-hq.html", "/pos-bi.html", "/pos-ai.html",
   "/pos-checkout.html", "/pos-display.html", "/pos-loyalty-engine.js",
   "/print-station.html", "/pos-printer-setup.html", "/manager-auth.html", "/commissioning.html",
   /* Self-checkout kiosk */

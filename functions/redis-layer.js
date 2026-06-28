@@ -8,15 +8,14 @@
 
 const { onCall, HttpsError }  = require('firebase-functions/v2/https');
 const { onSchedule }          = require('firebase-functions/v2/scheduler');
-const { defineSecret }        = require('firebase-functions/params');
 const admin                   = require('firebase-admin');
 const R                       = require('./redis-service');
 
-const REDIS_URL = defineSecret('REDIS_URL');
-
-const _CF_OPTS = { enforceAppCheck: true, secrets: [REDIS_URL] };
-const _ADMIN_OPTS = { enforceAppCheck: true, secrets: [REDIS_URL] };
-const _SCHED_OPTS = { secrets: [REDIS_URL], timeZone: 'Africa/Nairobi' };
+/* REDIS_URL read from process.env — set via: firebase functions:secrets:set REDIS_URL
+   or via .env file. Redis service gracefully degrades when REDIS_URL is absent. */
+const _CF_OPTS    = { enforceAppCheck: true };
+const _ADMIN_OPTS = { enforceAppCheck: true };
+const _SCHED_OPTS = { timeZone: 'Africa/Nairobi' };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

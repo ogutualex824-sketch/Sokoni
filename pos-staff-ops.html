@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Staff Operations — SOKONI SmartPOS 3.0</title>
+  <script src="sokoni-config.js"></script>
+  <style>
+    :root {
+      --bg:#050508;--bg2:#0d0f14;--bg3:#161923;--bg4:#1e2533;
+      --border:#1e2533;--text:#e4e8f0;--muted:#6b7899;
+      --green:#22c55e;--blue:#3b82f6;--red:#ef4444;--yellow:#eab308;--purple:#a855f7;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+
+    /* Header */
+    .header{position:sticky;top:0;z-index:100;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:60px;}
+    .header h1{font-size:1.1rem;font-weight:700;letter-spacing:.02em;}
+    .back-link{color:var(--blue);text-decoration:none;font-size:.875rem;display:flex;align-items:center;gap:6px;transition:opacity .2s;}
+    .back-link:hover{opacity:.75;}
+
+    /* Tab Nav */
+    .tab-nav{background:var(--bg2);border-bottom:1px solid var(--border);display:flex;overflow-x:auto;padding:0 24px;gap:4px;}
+    .tab-btn{padding:14px 20px;font-size:.875rem;font-weight:500;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;transition:color .2s,border-color .2s;}
+    .tab-btn.active{color:var(--blue);border-bottom-color:var(--blue);}
+    .tab-btn:hover:not(.active){color:var(--text);}
+
+    /* Layout */
+    .content{max-width:1200px;margin:0 auto;padding:24px;}
+    .tab-panel{display:none;}
+    .tab-panel.active{display:block;}
+
+    /* Cards */
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;}
+    .card+.card{margin-top:16px;}
+    .section-title{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:16px;}
+
+    /* Grid layouts */
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+    .grid-auto{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
+
+    /* Forms */
+    .form-row{display:grid;gap:12px;margin-bottom:12px;}
+    .form-row.cols-2{grid-template-columns:1fr 1fr;}
+    .form-row.cols-3{grid-template-columns:1fr 1fr 1fr;}
+    label{font-size:.8125rem;color:var(--muted);display:block;margin-bottom:4px;}
+    input,select,textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 14px;font-size:.875rem;outline:none;transition:border-color .2s;}
+    input:focus,select:focus{border-color:var(--blue);}
+    select option{background:var(--bg3);}
+
+    /* Buttons */
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;border:none;transition:opacity .2s,transform .1s;}
+    .btn:hover{opacity:.85;}
+    .btn:active{transform:scale(.98);}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-green{background:var(--green);color:#000;}
+    .btn-red{background:var(--red);color:#fff;}
+    .btn-yellow{background:var(--yellow);color:#000;}
+    .btn-purple{background:var(--purple);color:#fff;}
+    .btn-ghost{background:var(--bg4);color:var(--text);}
+    .btn-sm{padding:6px 12px;font-size:.8125rem;}
+    .btn-xs{padding:4px 8px;font-size:.75rem;}
+
+    /* Tables */
+    .table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);}
+    table{width:100%;border-collapse:collapse;font-size:.875rem;}
+    th{background:var(--bg3);padding:10px 14px;text-align:left;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--border);}
+    td{padding:10px 14px;border-bottom:1px solid var(--border)20;}
+    tr:last-child td{border-bottom:none;}
+    tr:hover td{background:var(--bg3)30;}
+
+    /* Status badges */
+    .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:700;}
+    .badge-green{background:#22c55e20;color:var(--green);}
+    .badge-red{background:#ef444420;color:var(--red);}
+    .badge-yellow{background:#eab30820;color:var(--yellow);}
+    .badge-muted{background:var(--bg4);color:var(--muted);}
+    .badge-blue{background:#3b82f620;color:var(--blue);}
+    .badge-purple{background:#a855f720;color:var(--purple);}
+
+    /* Shift panel */
+    .shift-panel{background:var(--bg3);border:1px solid var(--green)30;border-radius:12px;padding:24px;}
+    .shift-panel h2{font-size:1.1rem;font-weight:700;margin-bottom:4px;}
+    .shift-stat-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin:16px 0;}
+    .shift-stat{background:var(--bg4);border-radius:8px;padding:12px;text-align:center;}
+    .shift-stat .val{font-size:1.2rem;font-weight:700;color:var(--green);}
+    .shift-stat .lbl{font-size:.7rem;color:var(--muted);margin-top:2px;}
+
+    /* Attendance */
+    .attendance-header{text-align:center;padding:20px 0;}
+    .attendance-header .date{font-size:2rem;font-weight:800;}
+    .staff-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:16px;}
+    .staff-dot-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;align-items:center;gap:12px;}
+    .staff-initial{width:38px;height:38px;border-radius:50%;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;flex-shrink:0;}
+    .status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+    .dot-present{background:var(--green);}
+    .dot-absent{background:var(--red);}
+    .dot-late{background:var(--yellow);}
+    .dot-halfday{background:var(--purple);}
+
+    /* Commission table */
+    .summary-bar{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+    .summary-item{background:var(--bg3);border-radius:10px;padding:16px;text-align:center;}
+    .summary-item .val{font-size:1.4rem;font-weight:700;}
+    .summary-item .lbl{font-size:.75rem;color:var(--muted);margin-top:4px;}
+
+    /* Approvals */
+    .approval-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+    .approval-card.expired{opacity:.5;}
+    .approval-info h4{font-weight:700;margin-bottom:4px;font-size:.9375rem;}
+    .approval-info p{font-size:.8125rem;color:var(--muted);}
+    .approval-list{display:flex;flex-direction:column;gap:10px;}
+    .approval-actions{display:flex;gap:8px;align-items:center;flex-shrink:0;}
+    .countdown{font-size:.8125rem;color:var(--yellow);font-weight:700;white-space:nowrap;}
+    .countdown.expired{color:var(--muted);}
+
+    /* Performance cards */
+    .perf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
+    .perf-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;}
+    .perf-card .medal{position:absolute;top:12px;right:12px;font-size:1.4rem;}
+    .perf-avatar{width:44px;height:44px;border-radius:50%;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:700;margin-bottom:10px;}
+    .perf-name{font-weight:700;margin-bottom:12px;}
+    .perf-stat{display:flex;justify-content:space-between;font-size:.8125rem;padding:4px 0;border-bottom:1px solid var(--border)20;}
+    .perf-stat:last-child{border-bottom:none;}
+    .perf-stat .key{color:var(--muted);}
+    .perf-stat .val{font-weight:600;}
+
+    /* Reconciliation */
+    .recon-row{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--bg3);border-radius:8px;margin-bottom:8px;}
+    .variance-balanced{color:var(--green);}
+    .variance-short{color:var(--red);}
+    .variance-over{color:var(--yellow);}
+
+    /* Clock */
+    .clock-panel{text-align:center;padding:32px 20px;}
+    .clock-time{font-size:3.5rem;font-weight:800;color:var(--blue);line-height:1;}
+    .clock-label{font-size:.875rem;color:var(--muted);margin-top:6px;}
+    .clock-actions{display:flex;justify-content:center;gap:12px;margin-top:20px;flex-wrap:wrap;}
+
+    /* Modal */
+    .modal-overlay{position:fixed;inset:0;background:#00000080;z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;}
+    .modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+    .modal h3{font-size:1.1rem;font-weight:700;margin-bottom:20px;}
+    .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;}
+
+    /* Date filter row */
+    .filter-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;}
+    .filter-row > div{min-width:120px;}
+
+    /* Empty / loading */
+    .empty{text-align:center;padding:36px 20px;color:var(--muted);}
+    .empty .icon{font-size:2.5rem;margin-bottom:10px;}
+    .spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .toast{position:fixed;bottom:24px;right:24px;z-index:300;background:var(--bg4);border:1px solid var(--border);border-left:4px solid var(--blue);border-radius:10px;padding:14px 20px;font-size:.875rem;max-width:340px;box-shadow:0 8px 32px #0008;animation:slideUp .3s ease;}
+    @keyframes slideUp{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+
+    /* Responsive */
+    @media(max-width:768px){
+      .content{padding:16px;}
+      .grid-2,.grid-3{grid-template-columns:1fr;}
+      .perf-grid{grid-template-columns:1fr 1fr;}
+    }
+    @media(max-width:480px){
+      .perf-grid,.staff-grid{grid-template-columns:1fr;}
+      .approval-card{flex-direction:column;align-items:flex-start;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <h1>👥 Staff Operations</h1>
+  <a href="pos.html" class="back-link">← Back to POS</a>
+</header>
+
+<!-- Tab Navigation -->
+<nav class="tab-nav">
+  <button class="tab-btn active" data-tab="shifts">Shifts</button>
+  <button class="tab-btn" data-tab="attendance">Attendance</button>
+  <button class="tab-btn" data-tab="commissions">Commissions</button>
+  <button class="tab-btn" data-tab="approvals">Approvals</button>
+  <button class="tab-btn" data-tab="performance">Performance</button>
+</nav>
+
+<div class="content">
+
+  <!-- ==================== TAB 1: SHIFTS ==================== -->
+  <div class="tab-panel active" id="tab-shifts">
+    <div id="currentShiftSection"></div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+        <p class="section-title" style="margin:0;">Shift History</p>
+        <div class="filter-row" style="margin:0;">
+          <div><label>From</label><input type="date" id="shiftFrom" /></div>
+          <div><label>To</label><input type="date" id="shiftTo" /></div>
+          <button class="btn btn-ghost btn-sm" onclick="loadShiftHistory()">Filter</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th><th>Cashier</th><th>Opened</th><th>Closed</th>
+              <th>Cash (KES)</th><th>M-Pesa (KES)</th><th>Card (KES)</th>
+              <th>Total (KES)</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="shiftHistoryBody">
+            <tr><td colspan="9"><div class="spinner" style="margin:16px auto;"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 2: ATTENDANCE ==================== -->
+  <div class="tab-panel" id="tab-attendance">
+    <div class="card">
+      <div class="attendance-header">
+        <div class="date" id="todayDate"></div>
+        <div style="color:var(--muted);font-size:.875rem;margin-top:4px;" id="clockDisplay"></div>
+      </div>
+      <div class="clock-panel" id="clockPanel">
+        <div class="clock-label" id="clockStatus">Checking status…</div>
+        <div class="clock-actions" id="clockActions"></div>
+      </div>
+      <hr style="border-color:var(--border);margin:16px 0;" />
+      <p class="section-title">Today's Attendance</p>
+      <div class="staff-grid" id="todayAttendanceGrid">
+        <div class="spinner" style="margin:16px auto;grid-column:1/-1;"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+        <p class="section-title" style="margin:0;">Attendance Report</p>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <div><label>Month</label><input type="month" id="attendanceMonth" /></div>
+          <button class="btn btn-ghost btn-sm" onclick="loadAttendanceReport()">Load Report</button>
+          <button class="btn btn-green btn-sm" onclick="exportAttendance()">↓ Export</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Staff Name</th><th>Present</th><th>Absent</th><th>Late</th><th>Total Hours</th><th>Avg Hrs/Day</th></tr></thead>
+          <tbody id="attendanceReportBody">
+            <tr><td colspan="6" class="empty">Select a month and load report</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 3: COMMISSIONS ==================== -->
+  <div class="tab-panel" id="tab-commissions">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+        <p class="section-title" style="margin:0;">Commission Management</p>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <div><label>Period</label><input type="month" id="commPeriod" /></div>
+          <button class="btn btn-primary btn-sm" onclick="loadCommissions()">Load</button>
+          <button class="btn btn-green btn-sm" onclick="calculateAll()">⚙ Calculate All</button>
+        </div>
+      </div>
+
+      <div class="summary-bar" id="commSummary">
+        <div class="summary-item"><div class="val" id="commTotal">KES 0</div><div class="lbl">Total Commissions</div></div>
+        <div class="summary-item"><div class="val" id="commApproved" style="color:var(--green);">KES 0</div><div class="lbl">Approved</div></div>
+        <div class="summary-item"><div class="val" id="commPending" style="color:var(--yellow);">KES 0</div><div class="lbl">Pending</div></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Cashier</th><th>Sales Total</th><th>Rate</th><th>Commission</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="commTableBody">
+            <tr><td colspan="6" class="empty">Select a period and click Load</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 4: APPROVALS ==================== -->
+  <div class="tab-panel" id="tab-approvals">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+        <p class="section-title" style="margin:0;">Pending Approvals <span id="pendingCount" class="badge badge-red" style="font-size:.85rem;"></span></p>
+        <span style="font-size:.8125rem;color:var(--muted);">Auto-refreshes every 30s</span>
+      </div>
+      <div id="approvalList" class="approval-list">
+        <div class="spinner" style="margin:24px auto;"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <p class="section-title">Approval History (last 20)</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Type</th><th>Requested By</th><th>Request</th><th>Reviewed By</th><th>Decision</th><th>Time</th></tr></thead>
+          <tbody id="approvalHistoryBody">
+            <tr><td colspan="6"><div class="spinner" style="margin:16px auto;"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 5: PERFORMANCE ==================== -->
+  <div class="tab-panel" id="tab-performance">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+        <p class="section-title" style="margin:0;">Staff Performance Dashboard</p>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <div><label>Period</label><input type="month" id="perfPeriod" /></div>
+          <button class="btn btn-primary btn-sm" onclick="loadPerformance()">Load Dashboard</button>
+        </div>
+      </div>
+      <div class="perf-grid" id="perfGrid">
+        <div class="empty" style="grid-column:1/-1;"><div class="icon">📈</div><p>Select a period and load dashboard</p></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <p class="section-title">Cash Reconciliation</p>
+      <div id="reconciliationList">
+        <div class="spinner" style="margin:24px auto;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALS ==================== -->
+
+<!-- Open Shift -->
+<div class="modal-overlay" id="openShiftModal" style="display:none;">
+  <div class="modal">
+    <h3>Open Shift</h3>
+    <div class="form-row">
+      <div><label>Opening Cash Amount (KES)</label><input type="number" id="openCash" placeholder="5000" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Notes (optional)</label><input type="text" id="openNotes" placeholder="Any notes…" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('openShiftModal')">Cancel</button>
+      <button class="btn btn-green" onclick="doOpenShift()">Open Shift</button>
+    </div>
+  </div>
+</div>
+
+<!-- Close Shift -->
+<div class="modal-overlay" id="closeShiftModal" style="display:none;">
+  <div class="modal">
+    <h3>Close Shift</h3>
+    <p style="font-size:.875rem;color:var(--muted);margin-bottom:16px;">Count your cash drawer and enter the total below.</p>
+    <div class="form-row">
+      <div><label>Actual Cash Count (KES)</label><input type="number" id="closeCash" placeholder="0" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Notes (optional)</label><textarea id="closeNotes" rows="2" placeholder="Any discrepancy notes…" style="resize:vertical;"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('closeShiftModal')">Cancel</button>
+      <button class="btn btn-red" onclick="doCloseShift()">Close Shift</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reject Approval -->
+<div class="modal-overlay" id="rejectModal" style="display:none;">
+  <div class="modal">
+    <h3>Reject Approval</h3>
+    <input type="hidden" id="rejectApprovalId" />
+    <div class="form-row">
+      <div><label>Reason for rejection</label><textarea id="rejectReason" rows="3" placeholder="Explain why this request is being rejected…" style="resize:vertical;"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('rejectModal')">Cancel</button>
+      <button class="btn btn-red" onclick="doReject()">Reject</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+
+const app  = initializeApp(window._sokoniConfig || {});
+const auth = getAuth(app);
+const fns  = getFunctions(app);
+
+let currentUser = null;
+let currentShiftId = null;
+let approvalInterval = null;
+
+onAuthStateChanged(auth, user => {
+  if (!user) { window.location.href = 'auth.html'; return; }
+  currentUser = user;
+  init();
+});
+
+function init() {
+  setDefaults();
+  loadCurrentShift();
+  loadShiftHistory();
+  loadTodayAttendance();
+  loadClockStatus();
+  loadPendingApprovals();
+  loadCashReconciliation();
+  renderLiveClock();
+  approvalInterval = setInterval(loadPendingApprovals, 30000);
+}
+
+function setDefaults() {
+  const now = new Date();
+  const ym  = now.toISOString().slice(0, 7);
+  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const to   = now.toISOString().split('T')[0];
+  document.getElementById('shiftFrom').value     = from;
+  document.getElementById('shiftTo').value       = to;
+  document.getElementById('attendanceMonth').value = ym;
+  document.getElementById('commPeriod').value    = ym;
+  document.getElementById('perfPeriod').value    = ym;
+  document.getElementById('todayDate').textContent = now.toLocaleDateString('en-KE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+}
+
+function renderLiveClock() {
+  const update = () => {
+    const el = document.getElementById('clockDisplay');
+    if (el) el.textContent = new Date().toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  };
+  update();
+  setInterval(update, 1000);
+}
+
+const cf = name => httpsCallable(fns, name);
+
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  const colors = { success: 'var(--green)', error: 'var(--red)', info: 'var(--blue)', warning: 'var(--yellow)' };
+  el.style.borderLeftColor = colors[type] || colors.info;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function esc(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Modal helpers
+window.openModal  = id => document.getElementById(id).style.display = 'flex';
+window.closeModal = id => document.getElementById(id).style.display = 'none';
+document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.style.display = 'none'; }));
+
+// Tab logic
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ──────── SHIFTS ────────
+async function loadCurrentShift() {
+  const el = document.getElementById('currentShiftSection');
+  try {
+    const res = await cf('getCurrentShift')({});
+    const shift = res.data;
+    if (shift && shift.status === 'open') {
+      currentShiftId = shift.id;
+      el.innerHTML = `
+        <div class="shift-panel">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+            <div>
+              <div class="badge badge-green" style="margin-bottom:8px;">● Shift Open</div>
+              <h2>${esc(shift.cashierName)}</h2>
+              <p style="color:var(--muted);font-size:.875rem;">Opened at ${esc(shift.openedAt)}</p>
+            </div>
+            <button class="btn btn-red" onclick="openModal('closeShiftModal')">⏹ Close Shift</button>
+          </div>
+          <div class="shift-stat-row">
+            <div class="shift-stat"><div class="val">KES ${(shift.cashSales||0).toLocaleString()}</div><div class="lbl">Cash Sales</div></div>
+            <div class="shift-stat"><div class="val">KES ${(shift.mpesaSales||0).toLocaleString()}</div><div class="lbl">M-Pesa</div></div>
+            <div class="shift-stat"><div class="val">KES ${(shift.cardSales||0).toLocaleString()}</div><div class="lbl">Card</div></div>
+            <div class="shift-stat"><div class="val">KES ${(shift.totalSales||0).toLocaleString()}</div><div class="lbl">Total Sales</div></div>
+            <div class="shift-stat"><div class="val">${shift.transactionCount||0}</div><div class="lbl">Transactions</div></div>
+          </div>
+        </div>`;
+    } else {
+      el.innerHTML = `
+        <div class="card" style="text-align:center;padding:32px;">
+          <div style="font-size:2rem;margin-bottom:12px;">🏪</div>
+          <p style="color:var(--muted);margin-bottom:16px;">No shift currently open</p>
+          <button class="btn btn-green" onclick="openModal('openShiftModal')">▶ Open Shift</button>
+        </div>`;
+    }
+  } catch(e) {
+    el.innerHTML = `<div class="card"><p style="color:var(--red);">${e.message}</p><button class="btn btn-green" style="margin-top:12px;" onclick="openModal('openShiftModal')">▶ Open Shift</button></div>`;
+  }
+}
+
+window.doOpenShift = async () => {
+  const cash  = parseFloat(document.getElementById('openCash').value) || 0;
+  const notes = document.getElementById('openNotes').value.trim();
+  try {
+    await cf('openShift')({ openingCash: cash, notes });
+    closeModal('openShiftModal');
+    toast('Shift opened!', 'success');
+    loadCurrentShift();
+    loadShiftHistory();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.doCloseShift = async () => {
+  if (!currentShiftId) return;
+  const cashCount = parseFloat(document.getElementById('closeCash').value);
+  const notes     = document.getElementById('closeNotes').value.trim();
+  if (isNaN(cashCount)) { toast('Enter cash count.', 'error'); return; }
+  try {
+    await cf('closeShift')({ shiftId: currentShiftId, cashCount, notes });
+    closeModal('closeShiftModal');
+    toast('Shift closed successfully.', 'success');
+    currentShiftId = null;
+    loadCurrentShift();
+    loadShiftHistory();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.loadShiftHistory = async () => {
+  const from  = document.getElementById('shiftFrom').value;
+  const to    = document.getElementById('shiftTo').value;
+  const tbody = document.getElementById('shiftHistoryBody');
+  tbody.innerHTML = '<tr><td colspan="9"><div class="spinner" style="margin:16px auto;"></div></td></tr>';
+  try {
+    const res = await cf('getShiftHistory')({ from, to });
+    const shifts = res.data || [];
+    if (!shifts.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty">No shifts found</td></tr>'; return; }
+    tbody.innerHTML = shifts.map(s => `
+      <tr>
+        <td>${esc(s.date)}</td>
+        <td>${esc(s.cashierName)}</td>
+        <td>${esc(s.openedAt)}</td>
+        <td>${s.closedAt ? esc(s.closedAt) : '—'}</td>
+        <td>${(s.cashSales||0).toLocaleString()}</td>
+        <td>${(s.mpesaSales||0).toLocaleString()}</td>
+        <td>${(s.cardSales||0).toLocaleString()}</td>
+        <td><strong>${(s.totalSales||0).toLocaleString()}</strong></td>
+        <td><span class="badge ${s.status==='open'?'badge-green':'badge-muted'}">${esc(s.status)}</span></td>
+      </tr>`).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red);">${e.message}</td></tr>`; }
+};
+
+// ──────── ATTENDANCE ────────
+async function loadClockStatus() {
+  const panel   = document.getElementById('clockPanel');
+  const status  = document.getElementById('clockStatus');
+  const actions = document.getElementById('clockActions');
+  try {
+    const res = await cf('getAttendance')({ date: new Date().toISOString().split('T')[0], staffId: currentUser.uid });
+    const att = res.data;
+    if (att && att.clockedIn && !att.clockedOut) {
+      const since = att.clockInTime || '';
+      status.textContent  = `Clocked in since ${since}`;
+      status.style.color  = 'var(--green)';
+      actions.innerHTML   = `<button class="btn btn-red" onclick="doClock('out')">⏱ Clock Out</button>`;
+    } else if (att && att.clockedOut) {
+      const hrs = att.hoursWorked ? `${att.hoursWorked.toFixed(2)} hrs` : '';
+      status.textContent  = `Shift complete — ${hrs}`;
+      status.style.color  = 'var(--muted)';
+      actions.innerHTML   = '';
+    } else {
+      status.textContent  = 'Not clocked in';
+      status.style.color  = 'var(--muted)';
+      actions.innerHTML   = `<button class="btn btn-green" onclick="doClock('in')">▶ Clock In</button>`;
+    }
+  } catch(e) {
+    status.textContent = 'Could not load status';
+    actions.innerHTML  = `<button class="btn btn-green" onclick="doClock('in')">▶ Clock In</button>`;
+  }
+}
+
+window.doClock = async type => {
+  try {
+    if (type === 'in') {
+      await cf('clockIn')({ staffId: currentUser.uid });
+      toast('Clocked in!', 'success');
+    } else {
+      await cf('clockOut')({ staffId: currentUser.uid });
+      toast('Clocked out!', 'success');
+    }
+    loadClockStatus();
+    loadTodayAttendance();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+async function loadTodayAttendance() {
+  const grid = document.getElementById('todayAttendanceGrid');
+  try {
+    const res  = await cf('getAttendance')({ date: new Date().toISOString().split('T')[0] });
+    const staff = res.data || [];
+    if (!staff.length) { grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">No staff records</div>'; return; }
+    const dotClass = status => ({ present:'dot-present', absent:'dot-absent', late:'dot-late', halfday:'dot-halfday' }[status] || 'dot-absent');
+    grid.innerHTML = staff.map(s => `
+      <div class="staff-dot-card">
+        <div class="staff-initial">${(s.name||'?').charAt(0).toUpperCase()}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:.875rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(s.name)}</div>
+          <div style="font-size:.75rem;color:var(--muted);">${esc(s.clockIn||'—')} ${s.clockOut ? '→ '+esc(s.clockOut) : ''}</div>
+        </div>
+        <div class="status-dot ${dotClass(s.status)}" title="${esc(s.status)}"></div>
+      </div>`).join('');
+  } catch(e) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;color:var(--red);">${e.message}</div>`; }
+}
+
+window.loadAttendanceReport = async () => {
+  const month = document.getElementById('attendanceMonth').value;
+  const tbody = document.getElementById('attendanceReportBody');
+  tbody.innerHTML = '<tr><td colspan="6"><div class="spinner" style="margin:12px auto;"></div></td></tr>';
+  try {
+    const res  = await cf('getAttendanceSummary')({ period: month });
+    const rows = res.data || [];
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No data</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${esc(r.name)}</td>
+        <td style="color:var(--green);">${r.present||0}</td>
+        <td style="color:var(--red);">${r.absent||0}</td>
+        <td style="color:var(--yellow);">${r.late||0}</td>
+        <td>${(r.totalHours||0).toFixed(1)}</td>
+        <td>${(r.avgHoursPerDay||0).toFixed(1)}</td>
+      </tr>`).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red);">${e.message}</td></tr>`; }
+};
+
+window.exportAttendance = async () => {
+  const month = document.getElementById('attendanceMonth').value;
+  try {
+    const res  = await cf('getAttendanceSummary')({ period: month });
+    const rows = res.data || [];
+    const csv  = ['Name,Present,Absent,Late,Total Hours,Avg Hours/Day']
+      .concat(rows.map(r => `${r.name},${r.present},${r.absent},${r.late},${(r.totalHours||0).toFixed(1)},${(r.avgHoursPerDay||0).toFixed(1)}`))
+      .join('\n');
+    const blob = new Blob([csv], { type:'text/csv' });
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = `attendance-${month}.csv`;
+    a.click();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+// ──────── COMMISSIONS ────────
+window.loadCommissions = async () => {
+  const period = document.getElementById('commPeriod').value;
+  const tbody  = document.getElementById('commTableBody');
+  tbody.innerHTML = '<tr><td colspan="6"><div class="spinner" style="margin:12px auto;"></div></td></tr>';
+  try {
+    const res  = await cf('getCommissionsSummary')({ period });
+    const data = res.data;
+    const rows = data.commissions || [];
+    document.getElementById('commTotal').textContent    = `KES ${(data.total||0).toLocaleString()}`;
+    document.getElementById('commApproved').textContent = `KES ${(data.approved||0).toLocaleString()}`;
+    document.getElementById('commPending').textContent  = `KES ${(data.pending||0).toLocaleString()}`;
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No commission data</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${esc(r.cashierName)}</td>
+        <td>KES ${(r.salesTotal||0).toLocaleString()}</td>
+        <td>${(r.rate||0)}%</td>
+        <td><strong>KES ${(r.commission||0).toLocaleString()}</strong></td>
+        <td><span class="badge badge-${r.status==='paid'?'green':r.status==='approved'?'blue':'yellow'}">${esc(r.status)}</span></td>
+        <td>
+          ${r.status === 'pending' ? `<button class="btn btn-green btn-xs" onclick="approveComm('${r.id}')">✓ Approve</button>` : '—'}
+        </td>
+      </tr>`).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red);">${e.message}</td></tr>`; }
+};
+
+window.calculateAll = async () => {
+  const period = document.getElementById('commPeriod').value;
+  if (!period) { toast('Select a period first.', 'error'); return; }
+  try {
+    await cf('calculateMonthlyCommission')({ period });
+    toast('Commission calculation started!', 'success');
+    setTimeout(() => window.loadCommissions(), 2000);
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.approveComm = async id => {
+  try {
+    await cf('approveCommission')({ commissionId: id });
+    toast('Commission approved!', 'success');
+    window.loadCommissions();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+// ──────── APPROVALS ────────
+const APPROVAL_TYPES = {
+  discount:      { label:'🎯 Discount',      cls:'badge-blue'   },
+  refund:        { label:'💰 Refund',         cls:'badge-yellow' },
+  void:          { label:'🚫 Void',           cls:'badge-red'    },
+  cashDrawer:    { label:'💵 Cash Drawer',    cls:'badge-green'  },
+  priceOverride: { label:'🏷️ Price Override', cls:'badge-purple' },
+};
+
+async function loadPendingApprovals() {
+  const list = document.getElementById('approvalList');
+  try {
+    const res      = await cf('getPendingApprovals')({});
+    const pending  = res.data || [];
+    const countEl  = document.getElementById('pendingCount');
+    countEl.textContent = pending.length ? String(pending.length) : '';
+    countEl.style.display = pending.length ? 'inline-flex' : 'none';
+
+    if (!pending.length) {
+      list.innerHTML = '<div class="empty"><div class="icon">✅</div><p>No pending approvals</p></div>';
+    } else {
+      list.innerHTML = pending.map(a => {
+        const cfg    = APPROVAL_TYPES[a.type] || { label: a.type, cls: 'badge-muted' };
+        const isExp  = a.expiresAt && new Date(a.expiresAt) < new Date();
+        return `
+          <div class="approval-card ${isExp ? 'expired' : ''}" id="appr-${a.id}">
+            <div class="approval-info">
+              <h4><span class="badge ${cfg.cls}" style="margin-right:6px;">${cfg.label}</span>${esc(a.requestedBy)}</h4>
+              <p>${esc(a.description)}</p>
+              <p style="margin-top:4px;font-size:.75rem;color:var(--muted);">${esc(a.requestedAt)}</p>
+            </div>
+            <div class="approval-actions">
+              <span class="countdown ${isExp?'expired':''}" id="cd-${a.id}">${isExp ? 'Expired' : formatCountdown(a.expiresAt)}</span>
+              ${!isExp ? `
+                <button class="btn btn-green btn-sm" onclick="approveRequest('${a.id}')">✅</button>
+                <button class="btn btn-red btn-sm" onclick="openReject('${a.id}')">❌</button>` : ''}
+            </div>
+          </div>`;
+      }).join('');
+
+      // Live countdowns
+      pending.filter(a => a.expiresAt && new Date(a.expiresAt) > new Date()).forEach(a => {
+        const interval = setInterval(() => {
+          const el  = document.getElementById(`cd-${a.id}`);
+          if (!el)  { clearInterval(interval); return; }
+          const rem = new Date(a.expiresAt) - new Date();
+          if (rem <= 0) { el.textContent = 'Expired'; el.classList.add('expired'); clearInterval(interval); }
+          else          { el.textContent = formatCountdown(a.expiresAt); }
+        }, 1000);
+      });
+    }
+
+    loadApprovalHistory();
+  } catch(e) {
+    list.innerHTML = `<p style="color:var(--red);">${e.message}</p>`;
+  }
+}
+
+function formatCountdown(expiresAt) {
+  const rem = Math.max(0, new Date(expiresAt) - new Date());
+  const m   = Math.floor(rem / 60000);
+  const s   = Math.floor((rem % 60000) / 1000);
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+window.approveRequest = async id => {
+  try {
+    await cf('reviewApproval')({ approvalId: id, decision: 'approved' });
+    toast('Approved!', 'success');
+    loadPendingApprovals();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.openReject = id => {
+  document.getElementById('rejectApprovalId').value = id;
+  openModal('rejectModal');
+};
+
+window.doReject = async () => {
+  const id     = document.getElementById('rejectApprovalId').value;
+  const reason = document.getElementById('rejectReason').value.trim();
+  if (!reason) { toast('Enter a reason.', 'error'); return; }
+  try {
+    await cf('reviewApproval')({ approvalId: id, decision: 'rejected', reason });
+    closeModal('rejectModal');
+    toast('Rejected.', 'info');
+    loadPendingApprovals();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+async function loadApprovalHistory() {
+  const tbody = document.getElementById('approvalHistoryBody');
+  try {
+    const res  = await cf('checkApproval')({ limit: 20 });
+    const rows = res.data || [];
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No history</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => {
+      const cfg = APPROVAL_TYPES[r.type] || { label: r.type, cls: 'badge-muted' };
+      return `
+        <tr>
+          <td><span class="badge ${cfg.cls}">${cfg.label}</span></td>
+          <td>${esc(r.requestedBy)}</td>
+          <td style="font-size:.8rem;">${esc(r.description)}</td>
+          <td>${esc(r.reviewedBy||'—')}</td>
+          <td><span class="badge badge-${r.decision==='approved'?'green':'red'}">${esc(r.decision)}</span></td>
+          <td style="font-size:.8rem;color:var(--muted);">${esc(r.reviewedAt||r.requestedAt)}</td>
+        </tr>`;
+    }).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red);">${e.message}</td></tr>`; }
+}
+
+// ──────── PERFORMANCE ────────
+window.loadPerformance = async () => {
+  const period = document.getElementById('perfPeriod').value;
+  const grid   = document.getElementById('perfGrid');
+  grid.innerHTML = '<div style="grid-column:1/-1;"><div class="spinner" style="margin:24px auto;"></div></div>';
+  try {
+    const res   = await cf('getStaffPerformanceDashboard')({ period });
+    const staff = (res.data || []).sort((a, b) => (b.totalSales||0) - (a.totalSales||0));
+    if (!staff.length) { grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">No performance data</div>'; return; }
+    const medals = ['🥇','🥈','🥉'];
+    grid.innerHTML = staff.map((s, i) => `
+      <div class="perf-card">
+        ${i < 3 ? `<div class="medal">${medals[i]}</div>` : ''}
+        <div class="perf-avatar">${(s.name||'?').charAt(0).toUpperCase()}</div>
+        <div class="perf-name">${esc(s.name)}</div>
+        <div class="perf-stat"><span class="key">Total Sales</span><span class="val" style="color:var(--green);">KES ${(s.totalSales||0).toLocaleString()}</span></div>
+        <div class="perf-stat"><span class="key">Transactions</span><span class="val">${s.transactionCount||0}</span></div>
+        <div class="perf-stat"><span class="key">Sales/Hour</span><span class="val">KES ${(s.salesPerHour||0).toLocaleString()}</span></div>
+        <div class="perf-stat"><span class="key">Avg Basket</span><span class="val">KES ${(s.avgBasket||0).toLocaleString()}</span></div>
+        <div class="perf-stat"><span class="key">Attendance</span><span class="val">${(s.attendanceRate||0)}%</span></div>
+        <div class="perf-stat"><span class="key">Discount Rate</span><span class="val ${(s.discountRate||0) > 15 ? 'style="color:var(--red);"' : ''}">${(s.discountRate||0)}%</span></div>
+      </div>`).join('');
+  } catch(e) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;color:var(--red);">${e.message}</div>`; }
+};
+
+async function loadCashReconciliation() {
+  const el = document.getElementById('reconciliationList');
+  try {
+    const res   = await cf('getCashReconciliation')({});
+    const items = res.data || [];
+    if (!items.length) { el.innerHTML = '<div class="empty">No reconciliation records</div>'; return; }
+    el.innerHTML = items.map(r => {
+      const variance = (r.actualCash||0) - (r.expectedCash||0);
+      const varClass = variance === 0 ? 'variance-balanced' : variance < 0 ? 'variance-short' : 'variance-over';
+      const varLabel = variance === 0 ? 'Balanced' : variance < 0 ? `Short KES ${Math.abs(variance).toLocaleString()}` : `Over KES ${variance.toLocaleString()}`;
+      return `
+        <div class="recon-row">
+          <div>
+            <div style="font-weight:600;">${esc(r.cashierName)} <span style="color:var(--muted);font-size:.8rem;">${esc(r.date)}</span></div>
+            <div style="font-size:.8125rem;color:var(--muted);">Expected: KES ${(r.expectedCash||0).toLocaleString()} | Actual: KES ${(r.actualCash||0).toLocaleString()}</div>
+          </div>
+          <div class="${varClass}" style="font-weight:700;font-size:.9rem;">${varLabel}</div>
+        </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = `<p style="color:var(--red);">${e.message}</p>`; }
+}
+</script>
+</body>
+</html>

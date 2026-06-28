@@ -1,0 +1,1815 @@
+<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+  <script src="security.js"></script>
+  <script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SmartPOS 2.1 — Workspace | SOKONI</title>
+  <meta name="description" content="SOKONI SmartPOS 2.1 multi-device workspace — manage connected devices, peripherals and session settings.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#050508">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+
+  <style>
+    /* ============================================================
+       SOKONI SmartPOS 2.1 Workspace — All styles inline
+    ============================================================ */
+    :root {
+      --bg:     #050508;
+      --bg2:    #0d0d14;
+      --bg3:    #13131e;
+      --border: #1e1e2e;
+      --green:  #00c853;
+      --blue:   #2979ff;
+      --red:    #ff1744;
+      --amber:  #ffab00;
+      --purple: #aa00ff;
+      --text:   #e8eaf6;
+      --muted:  #6b6b80;
+      --radius: 12px;
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --header-h: 64px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      outline: none;
+      transition: opacity 0.15s, transform 0.12s, background 0.15s;
+    }
+    button:active { transform: scale(0.96); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Loading Overlay ── */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(5,5,8,0.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 9999;
+      backdrop-filter: blur(6px);
+    }
+    #loading-overlay.hidden { display: none; }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Header ── */
+    .ws-header {
+      position: sticky;
+      top: 0;
+      height: var(--header-h);
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      z-index: 100;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+    }
+
+    .ws-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .back-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 16px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .back-btn:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.15); }
+
+    .header-brand {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .header-brand span {
+      color: var(--green);
+    }
+
+    .ws-header-center {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .session-code-display {
+      font-family: 'Courier New', 'Roboto Mono', monospace;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      color: var(--text);
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 16px;
+      user-select: all;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+
+    .icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 16px;
+      flex-shrink: 0;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .icon-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); }
+
+    .ws-header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--green), #00897b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 800;
+      color: #000;
+      flex-shrink: 0;
+    }
+
+    .user-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── Status Strip ── */
+    .ws-status-strip {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .ws-status-strip::-webkit-scrollbar { display: none; }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      flex-shrink: 0;
+      color: var(--muted);
+      transition: border-color 0.15s;
+    }
+    .status-pill .pill-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .pill-dot.green  { background: var(--green); box-shadow: 0 0 0 2px rgba(0,200,83,0.25); }
+    .pill-dot.red    { background: var(--red);   box-shadow: 0 0 0 2px rgba(255,23,68,0.25); }
+    .pill-dot.blue   { background: var(--blue);  box-shadow: 0 0 0 2px rgba(41,121,255,0.25); }
+    .pill-dot.amber  { background: var(--amber); box-shadow: 0 0 0 2px rgba(255,171,0,0.25); }
+    .pill-dot.grey   { background: var(--muted); }
+    .status-pill .pill-label { color: var(--text); }
+
+    /* ── Main Content ── */
+    .ws-main {
+      padding: 24px 16px 48px;
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    /* ── Section Header ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    /* ── Device Cards Grid ── */
+    .ws-devices {}
+
+    #devices-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .device-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+      position: relative;
+      overflow: hidden;
+    }
+    .device-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255,255,255,0.12);
+      box-shadow: var(--shadow);
+    }
+    .device-card.is-current { border-color: rgba(41,121,255,0.4); }
+
+    .device-icon-wrap {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+
+    .device-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .device-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .role-badge {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-radius: 999px;
+      padding: 3px 10px;
+    }
+    .role-badge.cashier    { background: rgba(41,121,255,0.15); color: var(--blue);   border: 1px solid rgba(41,121,255,0.3); }
+    .role-badge.supervisor { background: rgba(255,171,0,0.15);  color: var(--amber);  border: 1px solid rgba(255,171,0,0.3); }
+    .role-badge.manager    { background: rgba(0,200,83,0.15);   color: var(--green);  border: 1px solid rgba(0,200,83,0.3); }
+    .role-badge.owner      { background: rgba(170,0,255,0.15);  color: var(--purple); border: 1px solid rgba(170,0,255,0.3); }
+
+    .this-device-badge {
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 3px 10px;
+      border: 1px solid var(--blue);
+      color: var(--blue);
+      background: transparent;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .active-badge {
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 3px 10px;
+      background: rgba(0,200,83,0.2);
+      color: var(--green);
+      border: 1px solid rgba(0,200,83,0.35);
+      animation: pulse-badge 2s ease-in-out infinite;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    @keyframes pulse-badge {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.55; }
+    }
+
+    .device-online {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .online-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .online-dot.is-online  { background: var(--green); box-shadow: 0 0 0 3px rgba(0,200,83,0.2); }
+    .online-dot.is-offline { background: var(--muted); }
+
+    .device-remove-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .device-remove-btn:hover {
+      background: rgba(255,23,68,0.12);
+      color: var(--red);
+      border-color: rgba(255,23,68,0.3);
+    }
+
+    /* ── Peripherals ── */
+    .ws-peripherals {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    .peripheral-section {
+      border-top: 1px solid var(--border);
+      padding: 16px 0 0;
+      margin-top: 16px;
+    }
+    .peripheral-section:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+
+    .peripheral-section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 12px;
+    }
+
+    .peripheral-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .peripheral-row:last-child { border-bottom: none; }
+
+    .peripheral-icon {
+      font-size: 18px;
+      width: 28px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .peripheral-info { flex: 1; min-width: 0; }
+    .peripheral-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .peripheral-sub {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .status-badge {
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 3px 10px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .status-badge.available { background: rgba(0,200,83,0.15); color: var(--green); border: 1px solid rgba(0,200,83,0.3); }
+    .status-badge.granted   { background: rgba(0,200,83,0.12); color: var(--green); border: 1px solid rgba(0,200,83,0.25); }
+    .status-badge.unavailable { background: rgba(107,107,128,0.15); color: var(--muted); border: 1px solid rgba(107,107,128,0.2); }
+    .status-badge.denied    { background: rgba(255,23,68,0.12); color: var(--red); border: 1px solid rgba(255,23,68,0.25); }
+    .status-badge.pending   { background: rgba(255,171,0,0.12); color: var(--amber); border: 1px solid rgba(255,171,0,0.25); }
+    .status-badge.default   { background: rgba(255,171,0,0.12); color: var(--amber); border: 1px solid rgba(255,171,0,0.25); }
+
+    .btn-sm {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 14px;
+      border-radius: 8px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      flex-shrink: 0;
+    }
+    .btn-sm:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.18); }
+    .btn-sm.blue-tint { background: rgba(41,121,255,0.12); border-color: rgba(41,121,255,0.3); color: var(--blue); }
+    .btn-sm.blue-tint:hover { background: rgba(41,121,255,0.2); }
+
+    .unavail-msg {
+      font-size: 12px;
+      color: var(--muted);
+      font-style: italic;
+      padding: 8px 0;
+    }
+
+    #usb-list, #bt-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .network-printer-form {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .network-printer-form input {
+      flex: 1;
+      min-width: 140px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .network-printer-form input::placeholder { color: var(--muted); }
+    .network-printer-form input:focus { border-color: var(--blue); }
+    .network-printer-form input.port-input { width: 80px; flex: none; }
+
+    #printer-list { display: flex; flex-direction: column; gap: 0; }
+
+    /* ── Add Device Panel ── */
+    .ws-add-device {
+      background: var(--bg2);
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      text-align: center;
+    }
+
+    .add-device-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .add-device-code {
+      font-family: 'Courier New', 'Roboto Mono', monospace;
+      font-size: 40px;
+      font-weight: 900;
+      letter-spacing: 0.22em;
+      color: var(--green);
+      line-height: 1;
+      user-select: all;
+    }
+
+    .add-device-instructions {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 320px;
+    }
+
+    #qr-img {
+      width: 180px;
+      height: 180px;
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      background: #fff;
+      display: block;
+    }
+
+    .add-device-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* ── Session Actions ── */
+    .ws-actions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .action-btn {
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid transparent;
+      transition: opacity 0.15s, transform 0.12s, filter 0.12s;
+    }
+    .action-btn:hover { filter: brightness(1.12); }
+
+    .action-btn.danger {
+      background: rgba(255,23,68,0.14);
+      border-color: rgba(255,23,68,0.3);
+      color: var(--red);
+    }
+    .action-btn.primary {
+      background: rgba(41,121,255,0.15);
+      border-color: rgba(41,121,255,0.35);
+      color: var(--blue);
+    }
+    .action-btn.secondary {
+      background: var(--bg2);
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .action-btn.ghost {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--muted);
+    }
+    .action-btn.ghost:hover { color: var(--text); }
+
+    /* ── No-Session State ── */
+    #no-session-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - var(--header-h) - 80px);
+      gap: 20px;
+      padding: 40px 16px;
+      text-align: center;
+    }
+    #no-session-state.hidden { display: none; }
+
+    .no-session-icon { font-size: 56px; line-height: 1; }
+    .no-session-title { font-size: 22px; font-weight: 800; color: var(--text); }
+    .no-session-sub { font-size: 14px; color: var(--muted); max-width: 300px; line-height: 1.6; }
+
+    .btn-start-session {
+      padding: 14px 32px;
+      background: var(--green);
+      color: #000;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 800;
+      border: none;
+      box-shadow: 0 4px 20px rgba(0,200,83,0.3);
+    }
+    .btn-start-session:hover { filter: brightness(1.08); }
+
+    .link-join {
+      font-size: 13px;
+      color: var(--blue);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .link-join:hover { opacity: 0.8; }
+
+    /* ── Confirm Dialog ── */
+    #confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(5,5,8,0.88);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9000;
+      padding: 16px;
+      backdrop-filter: blur(4px);
+    }
+    #confirm-overlay.hidden { display: none; }
+
+    .confirm-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 24px;
+      max-width: 360px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: var(--shadow);
+    }
+    .confirm-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .confirm-body {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .confirm-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    .confirm-cancel {
+      padding: 10px 20px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .confirm-confirm {
+      padding: 10px 20px;
+      background: var(--red);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 10px 22px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      z-index: 9500;
+      transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s;
+      opacity: 0;
+      pointer-events: none;
+      white-space: nowrap;
+      box-shadow: var(--shadow);
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.success { border-color: rgba(0,200,83,0.4); color: var(--green); }
+    #toast.error   { border-color: rgba(255,23,68,0.4); color: var(--red); }
+
+    /* ── Empty state for grids ── */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .empty-state .es-icon { font-size: 32px; margin-bottom: 10px; display: block; }
+
+    /* ── Section card wrapper ── */
+    .ws-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 600px) {
+      .ws-header {
+        padding: 0 12px;
+        gap: 8px;
+      }
+      .header-brand { display: none; }
+      .session-code-display {
+        font-size: 16px;
+        letter-spacing: 0.12em;
+        padding: 5px 10px;
+        max-width: 130px;
+      }
+      .user-name { display: none; }
+      .ws-main { padding: 16px 12px 48px; gap: 20px; }
+      #devices-grid {
+        grid-template-columns: 1fr;
+      }
+      .ws-actions-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .add-device-code { font-size: 28px; letter-spacing: 0.16em; }
+      #qr-img { width: 150px; height: 150px; }
+    }
+
+    @media (max-width: 400px) {
+      .ws-actions-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <p class="loading-text">Connecting to workspace…</p>
+  </div>
+
+  <!-- Confirm Dialog -->
+  <div id="confirm-overlay" class="hidden">
+    <div class="confirm-card">
+      <p class="confirm-title" id="confirm-title">Confirm Action</p>
+      <p class="confirm-body" id="confirm-body"></p>
+      <div class="confirm-actions">
+        <button class="confirm-cancel" id="confirm-cancel-btn">Cancel</button>
+        <button class="confirm-confirm" id="confirm-ok-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+  <!-- Header -->
+  <header class="ws-header">
+    <div class="ws-header-left">
+      <a href="pos.html" class="back-btn" title="Back to POS" aria-label="Back to POS">&#8592;</a>
+      <span class="header-brand">SmartPOS <span>2.1</span> Workspace</span>
+    </div>
+
+    <div class="ws-header-center">
+      <div class="session-code-display" id="header-session-code" title="Session Code">——————</div>
+      <button class="icon-btn" id="btn-copy-header" title="Copy session code" aria-label="Copy session code">&#128203;</button>
+      <button class="icon-btn" id="btn-share-header" title="Share session" aria-label="Share session">&#8679;</button>
+    </div>
+
+    <div class="ws-header-right">
+      <div class="user-avatar" id="user-avatar">?</div>
+      <span class="user-name" id="user-name">Loading…</span>
+    </div>
+  </header>
+
+  <!-- Session Status Strip -->
+  <div class="ws-status-strip" id="status-strip">
+    <div class="status-pill" id="pill-session">
+      <span class="pill-dot grey"></span>
+      <span class="pill-label">Initialising</span>
+    </div>
+    <div class="status-pill" id="pill-devices">
+      <span class="pill-dot blue"></span>
+      <span class="pill-label">— Devices</span>
+    </div>
+    <div class="status-pill" id="pill-sync">
+      <span class="pill-dot grey"></span>
+      <span class="pill-label">Not synced</span>
+    </div>
+    <div class="status-pill" id="pill-quality">
+      <span class="pill-dot grey"></span>
+      <span class="pill-label">Checking…</span>
+    </div>
+  </div>
+
+  <!-- No-Session State -->
+  <div id="no-session-state" class="hidden">
+    <span class="no-session-icon">&#128203;</span>
+    <p class="no-session-title">No Active Session</p>
+    <p class="no-session-sub">Start a new POS session to connect devices and manage your workspace.</p>
+    <button class="btn-start-session" id="btn-start-session">Start New Session</button>
+    <a href="pos.html" class="link-join">Join Existing Session</a>
+  </div>
+
+  <!-- Main Content (hidden until session confirmed) -->
+  <main class="ws-main" id="ws-main" style="display:none;">
+
+    <!-- Connected Devices -->
+    <section class="ws-devices">
+      <div class="section-header">
+        <h2 class="section-title">Connected Devices</h2>
+        <button class="icon-btn" id="btn-refresh-devices" title="Refresh devices" aria-label="Refresh devices">&#8635;</button>
+      </div>
+      <div id="devices-grid">
+        <div class="empty-state">
+          <span class="es-icon">&#128241;</span>
+          Loading devices…
+        </div>
+      </div>
+    </section>
+
+    <!-- Peripheral Detection -->
+    <section class="ws-peripherals">
+      <div class="section-header" style="margin-bottom:0;">
+        <h2 class="section-title">Connected Hardware</h2>
+        <button class="icon-btn" id="btn-scan-peripherals" title="Re-scan peripherals" aria-label="Scan peripherals">&#128269;</button>
+      </div>
+
+      <!-- USB -->
+      <div class="peripheral-section">
+        <p class="peripheral-section-title">USB Devices</p>
+        <div id="usb-list">
+          <p class="unavail-msg">Detecting USB devices…</p>
+        </div>
+      </div>
+
+      <!-- Bluetooth -->
+      <div class="peripheral-section">
+        <p class="peripheral-section-title">Bluetooth Devices</p>
+        <div id="bt-list">
+          <p class="unavail-msg">Detecting Bluetooth…</p>
+        </div>
+      </div>
+
+      <!-- Network Printer -->
+      <div class="peripheral-section">
+        <p class="peripheral-section-title">Network Printer</p>
+        <div class="network-printer-form">
+          <input type="text" id="printer-ip" placeholder="Printer IP (e.g. 192.168.1.100)" aria-label="Printer IP address">
+          <input type="number" id="printer-port" class="port-input" value="9100" min="1" max="65535" aria-label="Printer port">
+          <button class="btn-sm blue-tint" id="btn-add-printer">Add Printer</button>
+        </div>
+        <div id="printer-list"></div>
+      </div>
+
+      <!-- Quick Status Rows -->
+      <div class="peripheral-section">
+        <p class="peripheral-section-title">Device Capabilities</p>
+        <div class="peripheral-row">
+          <span class="peripheral-icon">&#128247;</span>
+          <div class="peripheral-info">
+            <p class="peripheral-name">Camera</p>
+            <p class="peripheral-sub">Used for barcode &amp; QR scanning</p>
+          </div>
+          <span class="status-badge pending" id="cap-camera">Checking…</span>
+        </div>
+        <div class="peripheral-row">
+          <span class="peripheral-icon">&#128246;</span>
+          <div class="peripheral-info">
+            <p class="peripheral-name">NFC</p>
+            <p class="peripheral-sub">Tap-to-pay &amp; tag reading</p>
+          </div>
+          <span class="status-badge pending" id="cap-nfc">Checking…</span>
+        </div>
+        <div class="peripheral-row">
+          <span class="peripheral-icon">&#128279;</span>
+          <div class="peripheral-info">
+            <p class="peripheral-name">Serial Port</p>
+            <p class="peripheral-sub">Receipt printers, cash drawers</p>
+          </div>
+          <span class="status-badge pending" id="cap-serial">Checking…</span>
+        </div>
+        <div class="peripheral-row" style="border-bottom:none;">
+          <span class="peripheral-icon">&#128276;</span>
+          <div class="peripheral-info">
+            <p class="peripheral-name">Notifications</p>
+            <p class="peripheral-sub">Sale alerts &amp; low stock warnings</p>
+          </div>
+          <span class="status-badge pending" id="cap-notif">Checking…</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Add Device Panel -->
+    <div class="ws-add-device" id="add-device-panel">
+      <p class="add-device-title">Add Another Device</p>
+      <div class="add-device-code" id="add-device-code">——————</div>
+      <p class="add-device-instructions">
+        On another device, open the SOKONI POS app and tap <strong>"Join Session"</strong>, then enter the code above — or scan the QR code below.
+      </p>
+      <img id="qr-img" src="" alt="Session QR Code" width="180" height="180">
+      <div class="add-device-btns">
+        <button class="btn-sm blue-tint" id="btn-copy-code">&#128203; Copy Code</button>
+        <button class="btn-sm" id="btn-copy-link">&#128279; Copy Join Link</button>
+      </div>
+    </div>
+
+    <!-- Session Actions -->
+    <div class="ws-card">
+      <div class="section-header" style="margin-bottom:16px;">
+        <h2 class="section-title">Session Actions</h2>
+      </div>
+      <div class="ws-actions-grid">
+        <button class="action-btn danger" id="btn-close-session" style="display:none;">
+          &#10005; Close Session
+        </button>
+        <button class="action-btn primary" id="btn-share-session">
+          &#8679; Share Session
+        </button>
+        <a href="pos-analytics-live.html" class="action-btn secondary">
+          &#128200; View Analytics
+        </a>
+        <a href="pos.html" class="action-btn ghost">
+          &#8592; Back to POS
+        </a>
+      </div>
+    </div>
+
+  </main>
+
+  <script type="module">
+    import { initializeApp }         from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+    import { getFirestore, doc, onSnapshot, getDoc, serverTimestamp, updateDoc }
+                                      from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+    import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+
+    /* ── Firebase Config ── */
+    const firebaseConfig = {
+      apiKey:            window.SOKONI_CONFIG?.apiKey            || '',
+      authDomain:        window.SOKONI_CONFIG?.authDomain        || 'sokoni-ke.firebaseapp.com',
+      projectId:         window.SOKONI_CONFIG?.projectId         || 'sokoni-ke',
+      storageBucket:     window.SOKONI_CONFIG?.storageBucket     || 'sokoni-ke.appspot.com',
+      messagingSenderId: window.SOKONI_CONFIG?.messagingSenderId || '',
+      appId:             window.SOKONI_CONFIG?.appId             || ''
+    };
+
+    const app  = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+    const fns  = getFunctions(app, 'us-central1');
+
+    /* ── Cloud Function handles ── */
+    const createPosSession      = httpsCallable(fns, 'createPosSession');
+    const closePosSessionFn     = httpsCallable(fns, 'closePosSession');
+    const removeDeviceFromSession = httpsCallable(fns, 'removeDeviceFromSession');
+
+    /* ── State ── */
+    let currentUser       = null;
+    let sessionData       = null;
+    let currentSessionId  = null;
+    let currentDeviceId   = null;
+    let currentRole       = null;
+    let lastSyncTime      = null;
+    let syncIntervalId    = null;
+    let unsubscribeSnap   = null;
+    let confirmCallback   = null;
+    let networkPrinters   = [];
+
+    /* ── DOM refs ── */
+    const loadingOverlay       = document.getElementById('loading-overlay');
+    const noSessionState       = document.getElementById('no-session-state');
+    const wsMain               = document.getElementById('ws-main');
+    const headerCode           = document.getElementById('header-session-code');
+    const addDeviceCode        = document.getElementById('add-device-code');
+    const qrImg                = document.getElementById('qr-img');
+    const devicesGrid          = document.getElementById('devices-grid');
+    const pillSession          = document.getElementById('pill-session');
+    const pillDevices          = document.getElementById('pill-devices');
+    const pillSync             = document.getElementById('pill-sync');
+    const pillQuality          = document.getElementById('pill-quality');
+    const userAvatar           = document.getElementById('user-avatar');
+    const userNameEl           = document.getElementById('user-name');
+    const btnCloseSession      = document.getElementById('btn-close-session');
+    const confirmOverlay       = document.getElementById('confirm-overlay');
+    const confirmTitle         = document.getElementById('confirm-title');
+    const confirmBody          = document.getElementById('confirm-body');
+    const confirmCancelBtn     = document.getElementById('confirm-cancel-btn');
+    const confirmOkBtn         = document.getElementById('confirm-ok-btn');
+    const toastEl              = document.getElementById('toast');
+
+    /* ====================================================
+       TOAST
+    ==================================================== */
+    function showToast(msg, type = '', duration = 3000) {
+      toastEl.textContent = msg;
+      toastEl.className   = 'show' + (type ? ' ' + type : '');
+      clearTimeout(toastEl._timer);
+      toastEl._timer = setTimeout(() => {
+        toastEl.className = '';
+      }, duration);
+    }
+
+    /* ====================================================
+       CONFIRM DIALOG
+    ==================================================== */
+    function showConfirm(title, body, okLabel, okClass, onConfirm) {
+      confirmTitle.textContent = title;
+      confirmBody.textContent  = body;
+      confirmOkBtn.textContent = okLabel || 'Confirm';
+      confirmOkBtn.className   = 'confirm-confirm';
+      if (okClass) confirmOkBtn.classList.add(okClass);
+      confirmCallback = onConfirm;
+      confirmOverlay.classList.remove('hidden');
+    }
+
+    confirmCancelBtn.addEventListener('click', () => {
+      confirmOverlay.classList.add('hidden');
+      confirmCallback = null;
+    });
+    confirmOkBtn.addEventListener('click', () => {
+      confirmOverlay.classList.add('hidden');
+      if (typeof confirmCallback === 'function') confirmCallback();
+      confirmCallback = null;
+    });
+
+    /* ====================================================
+       CLIPBOARD
+    ==================================================== */
+    async function copyToClipboard(text) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          // Fallback
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0;';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        showToast('Copied to clipboard', 'success');
+      } catch (e) {
+        showToast('Copy failed — please copy manually', 'error');
+      }
+    }
+
+    /* ====================================================
+       SHARE SESSION
+    ==================================================== */
+    async function shareSession() {
+      const code     = sessionData?.sessionCode || '';
+      const joinUrl  = buildJoinUrl(code);
+      const shareData = {
+        title: 'Join SOKONI SmartPOS Session',
+        text:  'Join my SmartPOS session with code: ' + code,
+        url:   joinUrl
+      };
+      if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+        try {
+          await navigator.share(shareData);
+        } catch (e) {
+          if (e.name !== 'AbortError') copyToClipboard(joinUrl);
+        }
+      } else {
+        copyToClipboard(joinUrl);
+      }
+    }
+
+    /* ====================================================
+       BUILD JOIN URL
+    ==================================================== */
+    function buildJoinUrl(code) {
+      return 'https://mysokoni.co.ke/pos.html?joinSession=' + encodeURIComponent(code);
+    }
+
+    /* ====================================================
+       STATUS STRIP UPDATE
+    ==================================================== */
+    function setPill(el, dotClass, label) {
+      const dot = el.querySelector('.pill-dot');
+      const lbl = el.querySelector('.pill-label');
+      dot.className = 'pill-dot ' + dotClass;
+      lbl.textContent = label;
+    }
+
+    function updateStatusStrip(data) {
+      if (!data) return;
+      const isOpen      = data.status === 'open';
+      const deviceCount = Array.isArray(data.devices) ? data.devices.length : 0;
+
+      // Session status pill
+      setPill(pillSession, isOpen ? 'green' : 'red', isOpen ? 'OPEN' : 'CLOSED');
+      // Device count pill
+      setPill(pillDevices, 'blue', deviceCount + ' Device' + (deviceCount !== 1 ? 's' : ''));
+    }
+
+    /* ====================================================
+       SYNC TIMER (every 5s)
+    ==================================================== */
+    function startSyncTimer() {
+      if (syncIntervalId) clearInterval(syncIntervalId);
+      syncIntervalId = setInterval(() => {
+        if (!lastSyncTime) {
+          setPill(pillSync, 'grey', 'Not synced');
+          return;
+        }
+        const delta = Math.floor((Date.now() - lastSyncTime) / 1000);
+        setPill(pillSync, 'green', 'Synced ' + delta + 's ago');
+      }, 5000);
+    }
+
+    /* ====================================================
+       CONNECTION QUALITY (every 10s)
+    ==================================================== */
+    async function measureConnectionQuality() {
+      if (!currentSessionId) return;
+      const t0 = Date.now();
+      try {
+        await getDoc(doc(db, 'posSessions', currentSessionId));
+        const rtt = Date.now() - t0;
+        if (rtt < 200) {
+          setPill(pillQuality, 'green', 'Excellent');
+        } else if (rtt < 600) {
+          setPill(pillQuality, 'amber', 'Good (' + rtt + 'ms)');
+        } else {
+          setPill(pillQuality, 'red', 'Poor (' + rtt + 'ms)');
+        }
+      } catch {
+        setPill(pillQuality, 'red', 'Offline');
+      }
+      setTimeout(measureConnectionQuality, 10000);
+    }
+
+    /* ====================================================
+       QR CODE
+    ==================================================== */
+    function updateQRCode(code) {
+      if (!code) return;
+      const joinUrl = buildJoinUrl(code);
+      const qrUrl   = 'https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=' + encodeURIComponent(joinUrl);
+      qrImg.src = qrUrl;
+      qrImg.alt = 'QR Code for session ' + code;
+    }
+
+    /* ====================================================
+       DEVICE TYPE ICON
+    ==================================================== */
+    function deviceTypeIcon(type) {
+      if (!type) return '&#128241;';
+      const t = type.toLowerCase();
+      if (t === 'desktop')  return '&#128421;'; // 🖥️
+      if (t === 'tablet')   return '&#128218;'; // 📚 fallback
+      if (t === 'phone' || t === 'mobile') return '&#128241;'; // 📱
+      return '&#128241;';
+    }
+
+    /* ====================================================
+       TIME AGO HELPER
+    ==================================================== */
+    function timeAgo(ts) {
+      if (!ts) return 'Unknown';
+      const ms = typeof ts.toDate === 'function'
+        ? ts.toDate().getTime()
+        : (typeof ts === 'number' ? ts : Date.parse(ts));
+      const delta = Math.floor((Date.now() - ms) / 1000);
+      if (delta < 5)   return 'just now';
+      if (delta < 60)  return delta + 's ago';
+      const mins = Math.floor(delta / 60);
+      if (mins < 60)   return mins + 'm ago';
+      const hrs = Math.floor(mins / 60);
+      return hrs + 'h ago';
+    }
+
+    /* ====================================================
+       RENDER DEVICES
+    ==================================================== */
+    function renderDevices(devices) {
+      devicesGrid.innerHTML = '';
+      if (!Array.isArray(devices) || devices.length === 0) {
+        devicesGrid.innerHTML = '<div class="empty-state"><span class="es-icon">&#128241;</span>No devices connected yet.</div>';
+        return;
+      }
+
+      const canManage = currentRole === 'manager' || currentRole === 'owner';
+      const nowMs = Date.now();
+
+      devices.forEach(device => {
+        const {
+          deviceId   = '',
+          deviceName = 'Unknown Device',
+          deviceType = 'phone',
+          role       = 'cashier',
+          lastSeen,
+          activeSale = false
+        } = device;
+
+        // Online check: lastSeen within 60s
+        let lastSeenMs = 0;
+        if (lastSeen && typeof lastSeen.toDate === 'function') {
+          lastSeenMs = lastSeen.toDate().getTime();
+        } else if (typeof lastSeen === 'number') {
+          lastSeenMs = lastSeen;
+        }
+        const isOnline  = lastSeenMs > 0 && (nowMs - lastSeenMs) < 60000;
+        const isCurrent = deviceId === currentDeviceId;
+
+        const card = document.createElement('div');
+        card.className = 'device-card' + (isCurrent ? ' is-current' : '');
+        card.dataset.deviceId = deviceId;
+
+        const roleLower = role.toLowerCase();
+
+        card.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="device-icon-wrap">${deviceTypeIcon(deviceType)}</div>
+            <div style="flex:1;min-width:0;">
+              <p class="device-name">${escHtml(deviceName)}</p>
+              <div class="device-badges" style="margin-top:6px;">
+                <span class="role-badge ${roleLower}">${escHtml(role)}</span>
+                ${isCurrent ? '<span class="this-device-badge">This Device</span>' : ''}
+                ${activeSale ? '<span class="active-badge">&#127383; Active Sale</span>' : ''}
+              </div>
+            </div>
+          </div>
+          <div class="device-online">
+            <span class="online-dot ${isOnline ? 'is-online' : 'is-offline'}"></span>
+            <span>${isOnline ? 'Online' : 'Offline ' + timeAgo(lastSeen)}</span>
+          </div>
+        `;
+
+        // Remove button — only for Manager/Owner, not this device
+        if (canManage && !isCurrent) {
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'device-remove-btn';
+          removeBtn.title = 'Remove device';
+          removeBtn.innerHTML = '&#128465;';
+          removeBtn.addEventListener('click', () => onRemoveDevice(deviceId, deviceName));
+          card.appendChild(removeBtn);
+        }
+
+        devicesGrid.appendChild(card);
+      });
+    }
+
+    /* ====================================================
+       REMOVE DEVICE
+    ==================================================== */
+    function onRemoveDevice(deviceId, deviceName) {
+      showConfirm(
+        'Remove Device',
+        'Remove "' + deviceName + '" from this session? They will be disconnected immediately.',
+        'Remove',
+        '',
+        async () => {
+          try {
+            await removeDeviceFromSession({ sessionId: currentSessionId, deviceId });
+            showToast(deviceName + ' removed', 'success');
+          } catch (e) {
+            console.error('Remove device error:', e);
+            showToast('Failed to remove device: ' + (e.message || 'Unknown error'), 'error');
+          }
+        }
+      );
+    }
+
+    /* ====================================================
+       ESCAPE HTML
+    ==================================================== */
+    function escHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    /* ====================================================
+       DETECT PERIPHERALS
+    ==================================================== */
+    async function detectPeripherals() {
+      // USB
+      const usbList = document.getElementById('usb-list');
+      if ('usb' in navigator) {
+        try {
+          const devices = await navigator.usb.getDevices();
+          if (devices.length === 0) {
+            usbList.innerHTML = '<p class="unavail-msg">No paired USB devices found. Connect a USB device and it will appear here.</p>';
+          } else {
+            usbList.innerHTML = '';
+            devices.forEach(d => {
+              const row = document.createElement('div');
+              row.className = 'peripheral-row';
+              row.innerHTML = `
+                <span class="peripheral-icon">&#128190;</span>
+                <div class="peripheral-info">
+                  <p class="peripheral-name">${escHtml(d.productName || 'USB Device')}</p>
+                  <p class="peripheral-sub">Product ID: 0x${d.productId.toString(16).toUpperCase()} · Vendor: 0x${d.vendorId.toString(16).toUpperCase()}</p>
+                </div>
+                <button class="btn-sm" onclick="testUsbDevice(${d.productId})">Test</button>
+              `;
+              usbList.appendChild(row);
+            });
+          }
+        } catch (e) {
+          usbList.innerHTML = '<p class="unavail-msg">Could not enumerate USB devices: ' + escHtml(e.message) + '</p>';
+        }
+      } else {
+        usbList.innerHTML = '<p class="unavail-msg">USB detection requires a compatible browser (Chrome / Edge).</p>';
+      }
+
+      // Bluetooth
+      const btList = document.getElementById('bt-list');
+      if ('bluetooth' in navigator) {
+        btList.innerHTML = `
+          <div class="peripheral-row">
+            <span class="peripheral-icon">&#128246;</span>
+            <div class="peripheral-info">
+              <p class="peripheral-name">Bluetooth</p>
+              <p class="peripheral-sub">Tap Scan to pair a Bluetooth device (printer, scanner)</p>
+            </div>
+            <button class="btn-sm blue-tint" id="btn-bt-scan">Scan</button>
+          </div>
+        `;
+        document.getElementById('btn-bt-scan')?.addEventListener('click', async () => {
+          try {
+            const device = await navigator.bluetooth.requestDevice({
+              acceptAllDevices: true,
+              optionalServices: ['generic_access']
+            });
+            showToast('Paired: ' + (device.name || 'Unknown device'), 'success');
+            const row = document.createElement('div');
+            row.className = 'peripheral-row';
+            row.innerHTML = `
+              <span class="peripheral-icon">&#128246;</span>
+              <div class="peripheral-info">
+                <p class="peripheral-name">${escHtml(device.name || 'BT Device')}</p>
+                <p class="peripheral-sub">ID: ${escHtml(device.id)}</p>
+              </div>
+              <span class="status-badge available">Paired</span>
+            `;
+            btList.insertBefore(row, btList.firstChild);
+          } catch (e) {
+            if (e.name !== 'NotFoundError' && e.name !== 'AbortError') {
+              showToast('Bluetooth error: ' + e.message, 'error');
+            }
+          }
+        });
+      } else {
+        btList.innerHTML = '<p class="unavail-msg">Bluetooth is not available in this browser. Use Chrome on Android or a supported desktop browser.</p>';
+      }
+
+      // Camera
+      const camBadge = document.getElementById('cap-camera');
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const cameras = devices.filter(d => d.kind === 'videoinput');
+          if (cameras.length > 0) {
+            camBadge.textContent = 'Available (' + cameras.length + ')';
+            camBadge.className = 'status-badge available';
+          } else {
+            camBadge.textContent = 'Unavailable';
+            camBadge.className = 'status-badge unavailable';
+          }
+        } catch {
+          camBadge.textContent = 'Denied';
+          camBadge.className = 'status-badge denied';
+        }
+      } else {
+        camBadge.textContent = 'Unavailable';
+        camBadge.className = 'status-badge unavailable';
+      }
+
+      // NFC
+      const nfcBadge = document.getElementById('cap-nfc');
+      if ('NDEFReader' in window) {
+        nfcBadge.textContent = 'Available';
+        nfcBadge.className = 'status-badge available';
+      } else {
+        nfcBadge.textContent = 'Unavailable';
+        nfcBadge.className = 'status-badge unavailable';
+      }
+
+      // Serial
+      const serialBadge = document.getElementById('cap-serial');
+      if ('serial' in navigator) {
+        serialBadge.textContent = 'Available';
+        serialBadge.className = 'status-badge available';
+      } else {
+        serialBadge.textContent = 'Unavailable';
+        serialBadge.className = 'status-badge unavailable';
+      }
+
+      // Notifications
+      const notifBadge = document.getElementById('cap-notif');
+      const perm = Notification.permission;
+      if (perm === 'granted') {
+        notifBadge.textContent = 'Granted';
+        notifBadge.className = 'status-badge granted';
+      } else if (perm === 'denied') {
+        notifBadge.textContent = 'Denied';
+        notifBadge.className = 'status-badge denied';
+      } else {
+        notifBadge.textContent = 'Default';
+        notifBadge.className = 'status-badge default';
+      }
+    }
+
+    /* ====================================================
+       NETWORK PRINTER
+    ==================================================== */
+    function renderPrinterList() {
+      const container = document.getElementById('printer-list');
+      container.innerHTML = '';
+      if (networkPrinters.length === 0) {
+        container.innerHTML = '<p class="unavail-msg">No network printers added yet.</p>';
+        return;
+      }
+      networkPrinters.forEach((p, idx) => {
+        const row = document.createElement('div');
+        row.className = 'peripheral-row';
+        row.innerHTML = `
+          <span class="peripheral-icon">&#128424;</span>
+          <div class="peripheral-info">
+            <p class="peripheral-name">${escHtml(p.ip)}</p>
+            <p class="peripheral-sub">Port: ${escHtml(String(p.port))}</p>
+          </div>
+          <button class="btn-sm blue-tint" data-idx="${idx}" data-action="test">Test Print</button>
+          <button class="btn-sm" style="color:var(--red);border-color:rgba(255,23,68,0.3);" data-idx="${idx}" data-action="remove">Remove</button>
+        `;
+        container.appendChild(row);
+      });
+
+      container.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx    = parseInt(btn.dataset.idx, 10);
+          const action = btn.dataset.action;
+          if (action === 'test') {
+            showToast('Test print sent to ' + networkPrinters[idx].ip + ':' + networkPrinters[idx].port, 'success');
+          } else if (action === 'remove') {
+            networkPrinters.splice(idx, 1);
+            saveLocalPrinters();
+            renderPrinterList();
+          }
+        });
+      });
+    }
+
+    function saveLocalPrinters() {
+      try {
+        localStorage.setItem('_posPrinters', JSON.stringify(networkPrinters));
+      } catch {}
+    }
+
+    function loadLocalPrinters() {
+      try {
+        const raw = localStorage.getItem('_posPrinters');
+        if (raw) networkPrinters = JSON.parse(raw);
+      } catch {}
+    }
+
+    document.getElementById('btn-add-printer').addEventListener('click', () => {
+      const ip   = document.getElementById('printer-ip').value.trim();
+      const port = parseInt(document.getElementById('printer-port').value, 10) || 9100;
+      if (!ip) {
+        showToast('Please enter a printer IP address', 'error');
+        return;
+      }
+      // Basic IP/hostname validation
+      const ipPattern = /^(\d{1,3}\.){3}\d{1,3}$|^[a-zA-Z0-9.-]+$/;
+      if (!ipPattern.test(ip)) {
+        showToast('Invalid IP address or hostname', 'error');
+        return;
+      }
+      networkPrinters.push({ ip, port });
+      saveLocalPrinters();
+      renderPrinterList();
+      document.getElementById('printer-ip').value = '';
+      showToast('Printer added: ' + ip, 'success');
+    });
+
+    /* ====================================================
+       INIT WORKSPACE (called after auth)
+    ==================================================== */
+    async function initWorkspace(user) {
+      // Populate header user info
+      const displayName = user.displayName || user.email || 'User';
+      const initial     = displayName.charAt(0).toUpperCase();
+      userAvatar.textContent = initial;
+      userNameEl.textContent = displayName.split(' ')[0];
+
+      // Read session from localStorage
+      let sessionStore = null;
+      try {
+        const raw = localStorage.getItem('_posSession');
+        if (raw) sessionStore = JSON.parse(raw);
+      } catch {}
+
+      if (!sessionStore || !sessionStore.sessionId) {
+        hideLoading();
+        showNoSession();
+        return;
+      }
+
+      currentSessionId = sessionStore.sessionId;
+      currentDeviceId  = sessionStore.deviceId || null;
+      currentRole      = (sessionStore.role || 'cashier').toLowerCase();
+
+      // Subscribe to session document
+      subscribeToSession();
+    }
+
+    /* ====================================================
+       SUBSCRIBE TO SESSION
+    ==================================================== */
+    function subscribeToSession() {
+      if (unsubscribeSnap) unsubscribeSnap();
+
+      unsubscribeSnap = onSnapshot(
+        doc(db, 'posSessions', currentSessionId),
+        snap => {
+          hideLoading();
+          if (!snap.exists()) {
+            showNoSession();
+            return;
+          }
+          sessionData  = snap.data();
+          lastSyncTime = Date.now();
+
+          const code = sessionData.sessionCode || '';
+
+          // Update header & add-device panel
+          headerCode.textContent    = code || '——————';
+          addDeviceCode.textContent = code || '——————';
+          updateQRCode(code);
+          updateStatusStrip(sessionData);
+
+          // Show/hide close session button
+          if (currentRole === 'manager' || currentRole === 'owner') {
+            btnCloseSession.style.display = '';
+          }
+
+          // Re-read role from device list in case it was updated
+          if (Array.isArray(sessionData.devices)) {
+            const myDevice = sessionData.devices.find(d => d.deviceId === currentDeviceId);
+            if (myDevice?.role) {
+              currentRole = myDevice.role.toLowerCase();
+              // persist updated role
+              try {
+                const raw  = localStorage.getItem('_posSession');
+                const store = raw ? JSON.parse(raw) : {};
+                store.role  = currentRole;
+                localStorage.setItem('_posSession', JSON.stringify(store));
+              } catch {}
+            }
+          }
+
+          renderDevices(sessionData.devices || []);
+          showMain();
+        },
+        err => {
+          console.error('Session snapshot error:', err);
+          hideLoading();
+          showToast('Error loading session: ' + err.message, 'error');
+          showNoSession();
+        }
+      );
+    }
+
+    /* ====================================================
+       START SESSION
+    ==================================================== */
+    async function initStartSession() {
+      const ua = navigator.userAgent || '';
+      let deviceType = 'desktop';
+      if (/Mobi|Android|iPhone/i.test(ua)) deviceType = 'phone';
+      else if (/iPad|Tablet/i.test(ua)) deviceType = 'tablet';
+
+      // Build a friendly device name
+      let deviceName = 'Browser';
+      if (/Chrome/i.test(ua))  deviceName = 'Chrome ' + (ua.match(/Chrome\/([\d.]+)/)?.[1]?.split('.')[0] || '');
+      else if (/Firefox/i.test(ua)) deviceName = 'Firefox';
+      else if (/Safari/i.test(ua))  deviceName = 'Safari';
+      deviceName += ' / ' + (deviceType.charAt(0).toUpperCase() + deviceType.slice(1));
+
+      const btn = document.getElementById('btn-start-session');
+      btn.disabled    = true;
+      btn.textContent = 'Starting…';
+
+      try {
+        const result = await createPosSession({
+          deviceName,
+          deviceType,
+          role: 'Owner'
+        });
+        const { sessionId, deviceId, sessionCode, role } = result.data || {};
+        if (!sessionId) throw new Error('Invalid response from server');
+
+        localStorage.setItem('_posSession', JSON.stringify({ sessionId, deviceId, sessionCode, role: role || 'Owner' }));
+        currentSessionId = sessionId;
+        currentDeviceId  = deviceId;
+        currentRole      = (role || 'owner').toLowerCase();
+
+        noSessionState.classList.add('hidden');
+        showLoading();
+        subscribeToSession();
+      } catch (e) {
+        console.error('Create session error:', e);
+        showToast('Failed to start session: ' + (e.message || 'Unknown error'), 'error');
+      } finally {
+        btn.disabled    = false;
+        btn.textContent = 'Start New Session';
+      }
+    }
+
+    /* ====================================================
+       SHOW / HIDE HELPERS
+    ==================================================== */
+    function hideLoading()  { loadingOverlay.classList.add('hidden'); }
+    function showLoading()  { loadingOverlay.classList.remove('hidden'); }
+    function showNoSession() {
+      wsMain.style.display = 'none';
+      noSessionState.classList.remove('hidden');
+    }
+    function showMain() {
+      noSessionState.classList.add('hidden');
+      wsMain.style.display = '';
+    }
+
+    /* ====================================================
+       CLOSE SESSION
+    ==================================================== */
+    function onCloseSession() {
+      showConfirm(
+        'Close Session',
+        'Closing the session will disconnect all devices. Active sales will not be affected. Continue?',
+        'Close Session',
+        '',
+        async () => {
+          try {
+            btnCloseSession.disabled = true;
+            await closePosSessionFn({ sessionId: currentSessionId });
+            showToast('Session closed', 'success');
+            localStorage.removeItem('_posSession');
+            setTimeout(() => { window.location.href = 'pos.html'; }, 1500);
+          } catch (e) {
+            console.error('Close session error:', e);
+            showToast('Failed to close session: ' + (e.message || 'Unknown error'), 'error');
+          } finally {
+            btnCloseSession.disabled = false;
+          }
+        }
+      );
+    }
+
+    /* ====================================================
+       AUTH GUARD
+    ==================================================== */
+    let authTimeout = null;
+    authTimeout = setTimeout(() => {
+      if (!currentUser) {
+        window.location.href = 'auth.html?redirect=pos-workspace.html';
+      }
+    }, 3000);
+
+    onAuthStateChanged(auth, user => {
+      clearTimeout(authTimeout);
+      if (!user) {
+        window.location.href = 'auth.html?redirect=pos-workspace.html';
+        return;
+      }
+      currentUser = user;
+      initWorkspace(user);
+    });
+
+    /* ====================================================
+       EVENT WIRING
+    ==================================================== */
+    document.getElementById('btn-copy-header').addEventListener('click', () => {
+      const code = sessionData?.sessionCode || '';
+      if (!code) { showToast('No active session code', 'error'); return; }
+      copyToClipboard(code);
+    });
+
+    document.getElementById('btn-share-header').addEventListener('click', shareSession);
+
+    document.getElementById('btn-refresh-devices').addEventListener('click', () => {
+      if (!currentSessionId) return;
+      // Trigger a manual re-read (snapshot will update naturally; do a direct get)
+      getDoc(doc(db, 'posSessions', currentSessionId)).then(snap => {
+        if (snap.exists()) {
+          renderDevices(snap.data().devices || []);
+          showToast('Devices refreshed', 'success');
+        }
+      }).catch(e => showToast('Refresh failed: ' + e.message, 'error'));
+    });
+
+    document.getElementById('btn-scan-peripherals').addEventListener('click', () => {
+      detectPeripherals();
+      showToast('Scanning peripherals…', '');
+    });
+
+    document.getElementById('btn-copy-code').addEventListener('click', () => {
+      const code = sessionData?.sessionCode || '';
+      if (!code) { showToast('No session code', 'error'); return; }
+      copyToClipboard(code);
+    });
+
+    document.getElementById('btn-copy-link').addEventListener('click', () => {
+      const code = sessionData?.sessionCode || '';
+      if (!code) { showToast('No session code', 'error'); return; }
+      copyToClipboard(buildJoinUrl(code));
+    });
+
+    btnCloseSession.addEventListener('click', onCloseSession);
+
+    document.getElementById('btn-share-session').addEventListener('click', shareSession);
+
+    document.getElementById('btn-start-session').addEventListener('click', initStartSession);
+
+    /* ====================================================
+       STARTUP
+    ==================================================== */
+    loadLocalPrinters();
+    renderPrinterList();
+    startSyncTimer();
+    // Peripheral detection runs after auth/workspace init to avoid premature prompts
+    // It is also triggered by the scan button above
+    setTimeout(detectPeripherals, 1500);
+
+    // Start quality measurement after a short delay (session may not be ready yet)
+    setTimeout(() => {
+      if (currentSessionId) measureConnectionQuality();
+      else {
+        // Retry after workspace likely loaded
+        setTimeout(measureConnectionQuality, 5000);
+      }
+    }, 3000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartPOS 3.0 — Business Intelligence | SOKONI</title>
+  <script src="sokoni-config.js"></script>
+  <style>
+    :root {
+      --bg: #050508;
+      --bg2: #0d0f14;
+      --bg3: #161923;
+      --bg4: #1e2533;
+      --border: #1e2533;
+      --text: #e4e8f0;
+      --muted: #6b7899;
+      --green: #22c55e;
+      --blue: #3b82f6;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --purple: #a855f7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .header-title {
+      font-size: 1rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .period-toggle {
+      display: flex;
+      background: var(--bg3);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .period-btn {
+      padding: 5px 12px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .period-btn.active {
+      background: var(--blue);
+      color: #fff;
+    }
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .refresh-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .toggle-pill {
+      width: 32px;
+      height: 17px;
+      background: var(--bg4);
+      border-radius: 99px;
+      position: relative;
+      transition: background 0.2s;
+    }
+    .toggle-pill.on { background: var(--green); }
+    .toggle-pip {
+      width: 13px;
+      height: 13px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: left 0.2s;
+    }
+    .toggle-pill.on .toggle-pip { left: 17px; }
+    .last-updated {
+      font-size: 0.7rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .back-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.75rem;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .back-btn:hover { background: var(--bg3); }
+
+    /* ── LAYOUT ── */
+    .main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+    .section { margin-bottom: 24px; }
+    .section-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    /* ── KPI STRIP ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .kpi-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .kpi-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+    .kpi-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 6px;
+    }
+    .kpi-sub {
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .kpi-change {
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .up { color: var(--green); }
+    .down { color: var(--red); }
+    .neutral { color: var(--muted); }
+
+    /* ── SKELETON ── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg3) 25%, var(--bg4) 50%, var(--bg3) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 6px;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    .skeleton-line { height: 14px; margin-bottom: 8px; }
+    .skeleton-big { height: 36px; margin-bottom: 6px; }
+
+    /* ── CHART SECTION ── */
+    .chart-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .chart-title { font-size: 0.9rem; font-weight: 700; }
+    .drill-select {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 7px;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+    .bar-chart-wrap {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 140px;
+      padding-bottom: 2px;
+    }
+    .bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      height: 100%;
+      justify-content: flex-end;
+    }
+    .bar {
+      width: 100%;
+      background: var(--blue);
+      border-radius: 3px 3px 0 0;
+      min-height: 4px;
+      position: relative;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .bar:hover { opacity: 0.8; }
+    .bar-tooltip {
+      display: none;
+      position: absolute;
+      bottom: 110%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      white-space: nowrap;
+      font-size: 0.7rem;
+      color: var(--text);
+      z-index: 10;
+    }
+    .bar:hover .bar-tooltip { display: block; }
+    .bar-label {
+      font-size: 0.6rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    .x-axis {
+      display: flex;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .x-label {
+      flex: 1;
+      text-align: center;
+      font-size: 0.6rem;
+      color: var(--muted);
+    }
+    .drill-table { margin-top: 16px; }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+    .data-table th {
+      text-align: left;
+      padding: 8px 10px;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--bg3); }
+
+    /* ── THREE COL ── */
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .panel-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    /* ── CATEGORY BARS ── */
+    .cat-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .cat-name {
+      font-size: 0.72rem;
+      width: 90px;
+      flex-shrink: 0;
+      color: var(--text);
+    }
+    .cat-bar-wrap {
+      flex: 1;
+      height: 10px;
+      background: var(--bg4);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .cat-bar {
+      height: 100%;
+      border-radius: 99px;
+    }
+    .cat-amt {
+      font-size: 0.7rem;
+      color: var(--muted);
+      width: 75px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* ── PAYMENT TILES ── */
+    .payment-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .pay-tile {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .pay-icon { font-size: 1.2rem; margin-bottom: 4px; }
+    .pay-name { font-size: 0.7rem; color: var(--muted); font-weight: 600; }
+    .pay-amt { font-size: 0.95rem; font-weight: 700; margin: 4px 0 2px; }
+    .pay-pct { font-size: 0.7rem; color: var(--muted); }
+
+    /* ── INVENTORY GAUGE ── */
+    .gauge-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .gauge-number {
+      font-size: 3rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .gauge-grade {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .gauge-label { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+    .inv-stat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .inv-stat-row:last-child { border-bottom: none; }
+    .inv-stat-label { color: var(--muted); }
+
+    /* ── CUSTOMER INTEL ── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.78rem;
+    }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-label { color: var(--muted); }
+    .metric-value { font-weight: 700; }
+    .progress-wrap {
+      height: 6px;
+      background: var(--bg4);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--blue);
+      border-radius: 99px;
+    }
+    .cust-rank {
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: var(--muted);
+      width: 20px;
+    }
+    .cust-name { font-size: 0.76rem; flex: 1; }
+    .tier-badge {
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .tier-platinum { background: #7c3aed22; color: var(--purple); border: 1px solid #7c3aed44; }
+    .tier-gold { background: #eab30822; color: var(--yellow); border: 1px solid #eab30844; }
+    .tier-silver { background: #6b789922; color: var(--muted); border: 1px solid #6b789944; }
+    .tier-bronze { background: #f9731622; color: #f97316; border: 1px solid #f9731644; }
+    .cust-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      text-decoration: none;
+      color: var(--text);
+    }
+    .cust-row:last-child { border-bottom: none; }
+    .cust-row:hover { opacity: 0.8; }
+    .cust-spend { font-size: 0.75rem; font-weight: 700; text-align: right; white-space: nowrap; }
+    .cust-visits { font-size: 0.65rem; color: var(--muted); text-align: right; }
+
+    /* ── STAFF TABLE ── */
+    .top-staff td { background: #22c55e0d; }
+
+    /* ── FORECAST ── */
+    .horizon-btns {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .horizon-btn {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .horizon-btn.active { background: var(--purple); border-color: var(--purple); }
+    .gen-forecast-btn {
+      margin-left: auto;
+      padding: 7px 16px;
+      background: var(--purple);
+      border: none;
+      border-radius: 7px;
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .gen-forecast-btn:hover { opacity: 0.85; }
+
+    /* ── CSS LINE CHART ── */
+    .line-chart-wrap {
+      position: relative;
+      height: 120px;
+      margin: 8px 0 20px;
+      display: flex;
+      align-items: flex-end;
+      gap: 0;
+    }
+    .lc-col {
+      flex: 1;
+      position: relative;
+      height: 100%;
+      display: flex;
+      align-items: flex-end;
+    }
+    .lc-point {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translate(-50%, 50%);
+      z-index: 2;
+    }
+    .lc-point.hist { background: var(--blue); border: 2px solid var(--bg2); }
+    .lc-point.fore { background: var(--purple); border: 2px solid var(--bg2); }
+    .lc-line {
+      position: absolute;
+      height: 2px;
+      bottom: 0;
+      left: 50%;
+      transform-origin: left center;
+    }
+    .lc-line.hist { background: var(--blue); }
+    .lc-line.fore { background: var(--purple); border-top: 2px dashed var(--purple); height: 0; }
+    .forecast-disclaimer {
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 12px;
+      font-style: italic;
+    }
+    .forecast-legend {
+      display: flex;
+      gap: 16px;
+      font-size: 0.72rem;
+      margin-bottom: 10px;
+    }
+    .legend-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 4px;
+    }
+
+    /* ── ALERTS PANEL ── */
+    .alerts-list { display: flex; flex-direction: column; gap: 10px; }
+    .alert-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+    .alert-icon { font-size: 1.1rem; flex-shrink: 0; }
+    .alert-msg { flex: 1; font-size: 0.78rem; }
+    .alert-action {
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      font-size: 0.7rem;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .alert-action:hover { background: var(--bg3); }
+    .alert-item.alert-red { border-left: 3px solid var(--red); }
+    .alert-item.alert-yellow { border-left: 3px solid var(--yellow); }
+    .alert-item.alert-green { border-left: 3px solid var(--green); }
+
+    /* ── LOADING STATE ── */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(5,5,8,0.6);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .loading-overlay.active { display: flex; }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── UTILITY ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+    }
+    .badge-green { background: #22c55e1a; color: var(--green); }
+    .badge-red { background: #ef44441a; color: var(--red); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .three-col { grid-template-columns: 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 500px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .main { padding: 12px; }
+      .header { gap: 8px; }
+      .header-title { font-size: 0.85rem; }
+      .payment-grid { grid-template-columns: 1fr 1fr; }
+      .period-btn { padding: 5px 7px; font-size: 0.7rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+</div>
+
+<!-- Header -->
+<header class="header">
+  <span class="header-title">📈 Business Intelligence</span>
+  <div class="period-toggle" id="periodToggle">
+    <button class="period-btn active" data-period="today">Today</button>
+    <button class="period-btn" data-period="week">Week</button>
+    <button class="period-btn" data-period="month">Month</button>
+    <button class="period-btn" data-period="quarter">Quarter</button>
+  </div>
+  <div class="header-right">
+    <div class="refresh-toggle" id="refreshToggle" title="Auto-refresh every 30s">
+      <div class="toggle-pill" id="refreshPill">
+        <div class="toggle-pip"></div>
+      </div>
+      <span>Auto</span>
+    </div>
+    <span class="last-updated" id="lastUpdated">—</span>
+    <a href="pos.html" class="back-btn">← Back to POS</a>
+  </div>
+</header>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- §1 Executive KPI Strip -->
+  <section class="section">
+    <div class="section-title">Executive KPIs</div>
+    <div class="kpi-grid" id="kpiGrid">
+      <!-- Rendered by JS -->
+      <div class="kpi-card skeleton" style="height:100px"></div>
+      <div class="kpi-card skeleton" style="height:100px"></div>
+      <div class="kpi-card skeleton" style="height:100px"></div>
+      <div class="kpi-card skeleton" style="height:100px"></div>
+      <div class="kpi-card skeleton" style="height:100px"></div>
+      <div class="kpi-card skeleton" style="height:100px"></div>
+      <div class="kpi-card skeleton" style="height:100px"></div>
+      <div class="kpi-card skeleton" style="height:100px"></div>
+    </div>
+  </section>
+
+  <!-- §2 Revenue Trend -->
+  <section class="section">
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">📊 Revenue Trend — Last 14 Days</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:0.72rem;color:var(--muted);">Drill Down:</label>
+          <select class="drill-select" id="drillSelect">
+            <option value="">— Select —</option>
+            <option value="product">By Product</option>
+            <option value="category">By Category</option>
+            <option value="cashier">By Cashier</option>
+            <option value="payment">By Payment Method</option>
+            <option value="hour">By Hour</option>
+          </select>
+        </div>
+      </div>
+      <div class="bar-chart-wrap" id="revChart">
+        <!-- Skeleton bars -->
+      </div>
+      <div class="x-axis" id="revXAxis"></div>
+      <div class="drill-table" id="drillTable" style="display:none;">
+        <table class="data-table" id="drillDataTable">
+          <thead>
+            <tr>
+              <th>Name</th><th>Revenue</th><th>Count</th><th>Contribution %</th>
+            </tr>
+          </thead>
+          <tbody id="drillBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- §3 Three-column -->
+  <section class="section">
+    <div class="three-col">
+      <!-- Category Performance -->
+      <div class="panel">
+        <div class="panel-title">🗂 Category Performance</div>
+        <div id="categoryPanel">
+          <div class="skeleton skeleton-line" style="width:80%"></div>
+          <div class="skeleton skeleton-line" style="width:65%"></div>
+          <div class="skeleton skeleton-line" style="width:70%"></div>
+        </div>
+      </div>
+
+      <!-- Payment Methods -->
+      <div class="panel">
+        <div class="panel-title">💳 Payment Methods</div>
+        <div class="payment-grid" id="paymentPanel">
+          <div class="pay-tile skeleton" style="height:80px"></div>
+          <div class="pay-tile skeleton" style="height:80px"></div>
+          <div class="pay-tile skeleton" style="height:80px"></div>
+          <div class="pay-tile skeleton" style="height:80px"></div>
+        </div>
+      </div>
+
+      <!-- Inventory Health -->
+      <div class="panel">
+        <div class="panel-title">📦 Inventory Health</div>
+        <div id="inventoryPanel">
+          <div class="gauge-wrap">
+            <div class="gauge-number skeleton" style="width:80px;height:48px;border-radius:8px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- §4 Customer Intelligence -->
+  <section class="section">
+    <div class="section-title">👥 Customer Intelligence</div>
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-title">📈 Growth Metrics</div>
+        <div id="customerGrowthPanel">
+          <div class="skeleton skeleton-line"></div>
+          <div class="skeleton skeleton-line" style="width:75%"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">⭐ Top Customers</div>
+        <div id="topCustomersPanel">
+          <div class="skeleton skeleton-line"></div>
+          <div class="skeleton skeleton-line"></div>
+          <div class="skeleton skeleton-line"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- §5 Staff Productivity -->
+  <section class="section">
+    <div class="section-title">🧑‍💼 Staff Productivity</div>
+    <div class="chart-card" style="overflow-x:auto;">
+      <table class="data-table" id="staffTable">
+        <thead>
+          <tr>
+            <th>Cashier</th>
+            <th>Total Sales</th>
+            <th>Transactions</th>
+            <th>Sales/Hour</th>
+            <th>Avg Basket</th>
+            <th>Attendance</th>
+          </tr>
+        </thead>
+        <tbody id="staffBody">
+          <tr><td colspan="6"><div class="skeleton skeleton-line"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- §6 Revenue Forecast -->
+  <section class="section">
+    <div class="section-title">🔮 Revenue Forecast</div>
+    <div class="chart-card">
+      <div class="horizon-btns" id="horizonBtns">
+        <button class="horizon-btn active" data-days="7">7 Days</button>
+        <button class="horizon-btn" data-days="14">14 Days</button>
+        <button class="horizon-btn" data-days="30">30 Days</button>
+        <button class="gen-forecast-btn" id="genForecastBtn">Generate Forecast</button>
+      </div>
+      <div class="forecast-legend">
+        <span><span class="legend-dot" style="background:var(--blue)"></span>Historical</span>
+        <span><span class="legend-dot" style="background:var(--purple)"></span>Forecast</span>
+      </div>
+      <div class="line-chart-wrap" id="forecastChart" style="min-height:120px;">
+        <div class="skeleton" style="width:100%;height:100%;border-radius:8px;"></div>
+      </div>
+      <div id="forecastTableWrap" style="display:none;overflow-x:auto;">
+        <table class="data-table" id="forecastTable">
+          <thead>
+            <tr><th>Date</th><th>Forecast</th><th>Lower Bound</th><th>Upper Bound</th><th>Confidence</th></tr>
+          </thead>
+          <tbody id="forecastBody"></tbody>
+        </table>
+      </div>
+      <p class="forecast-disclaimer" id="forecastDisclaimer" style="display:none;">
+        Based on historical trends. Actual results may vary.
+      </p>
+    </div>
+  </section>
+
+  <!-- §7 Alerts Panel -->
+  <section class="section">
+    <div class="section-title">🔔 Alerts</div>
+    <div class="alerts-list" id="alertsPanel">
+      <div class="alert-item skeleton" style="height:52px;"></div>
+    </div>
+  </section>
+
+</main>
+
+<script type="module">
+import { initializeApp }         from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+
+const app  = initializeApp(window._sokoniConfig || {});
+const auth = getAuth(app);
+const fns  = getFunctions(app);
+
+/* ── Callables ── */
+const cfGetExecutiveDashboard      = httpsCallable(fns, 'getExecutiveDashboard');
+const cfGetRevenueDrilldown        = httpsCallable(fns, 'getRevenueDrilldown');
+const cfGetRevenueTrend            = httpsCallable(fns, 'getRevenueTrend');
+const cfGetInventoryHealthScore    = httpsCallable(fns, 'getInventoryHealthScore');
+const cfGetCustomerGrowthMetrics   = httpsCallable(fns, 'getCustomerGrowthMetrics');
+const cfGetStaffProductivityMetrics = httpsCallable(fns, 'getStaffProductivityMetrics');
+const cfGetCategoryPerformance     = httpsCallable(fns, 'getCategoryPerformance');
+const cfGetRevenueForecast         = httpsCallable(fns, 'getRevenueForecast');
+const cfGetPaymentTrends           = httpsCallable(fns, 'getPaymentTrends');
+
+/* ── State ── */
+let currentPeriod  = 'today';
+let currentHorizon = 7;
+let autoRefresh    = false;
+let refreshTimer   = null;
+let currentUser    = null;
+
+/* ── Formatting ── */
+const fmt = n => 'KES ' + Math.round(n || 0).toLocaleString('en-KE');
+const pct  = n => (n >= 0 ? '+' : '') + (n || 0).toFixed(1) + '%';
+const arrow = n => n >= 0 ? '↑' : '↓';
+const chgClass = n => n >= 0 ? 'up' : 'down';
+
+/* ── Auth Guard ── */
+onAuthStateChanged(auth, async user => {
+  if (!user) { window.location.href = 'auth.html'; return; }
+  currentUser = user;
+  await loadDashboard();
+});
+
+/* ── Period Toggle ── */
+document.getElementById('periodToggle').addEventListener('click', e => {
+  const btn = e.target.closest('.period-btn');
+  if (!btn) return;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentPeriod = btn.dataset.period;
+  loadDashboard();
+});
+
+/* ── Auto Refresh Toggle ── */
+document.getElementById('refreshToggle').addEventListener('click', () => {
+  autoRefresh = !autoRefresh;
+  document.getElementById('refreshPill').classList.toggle('on', autoRefresh);
+  if (autoRefresh) {
+    refreshTimer = setInterval(loadDashboard, 30000);
+  } else {
+    clearInterval(refreshTimer);
+  }
+});
+
+/* ── Drill Down ── */
+document.getElementById('drillSelect').addEventListener('change', async e => {
+  const dim = e.target.value;
+  const drillTable = document.getElementById('drillTable');
+  if (!dim) { drillTable.style.display = 'none'; return; }
+  try {
+    const r = await cfGetRevenueDrilldown({ period: currentPeriod, dimension: dim });
+    renderDrillTable(r.data || []);
+    drillTable.style.display = 'block';
+  } catch { /* silent */ }
+});
+
+/* ── Forecast Buttons ── */
+document.getElementById('horizonBtns').addEventListener('click', e => {
+  const btn = e.target.closest('.horizon-btn');
+  if (!btn || !btn.dataset.days) return;
+  document.querySelectorAll('.horizon-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentHorizon = parseInt(btn.dataset.days);
+});
+document.getElementById('genForecastBtn').addEventListener('click', loadForecast);
+
+/* ── Main Load ── */
+async function loadDashboard() {
+  setLoading(true);
+  try {
+    const [execRes, trendRes, invRes, custRes, staffRes, catRes, payRes] = await Promise.allSettled([
+      cfGetExecutiveDashboard({ period: currentPeriod }),
+      cfGetRevenueTrend({ period: currentPeriod, days: 14 }),
+      cfGetInventoryHealthScore({ period: currentPeriod }),
+      cfGetCustomerGrowthMetrics({ period: currentPeriod }),
+      cfGetStaffProductivityMetrics({ period: currentPeriod }),
+      cfGetCategoryPerformance({ period: currentPeriod }),
+      cfGetPaymentTrends({ period: currentPeriod }),
+    ]);
+
+    const exec  = execRes.status  === 'fulfilled' ? execRes.value.data   : null;
+    const trend = trendRes.status === 'fulfilled' ? trendRes.value.data  : null;
+    const inv   = invRes.status   === 'fulfilled' ? invRes.value.data    : null;
+    const cust  = custRes.status  === 'fulfilled' ? custRes.value.data   : null;
+    const staff = staffRes.status === 'fulfilled' ? staffRes.value.data  : null;
+    const cats  = catRes.status   === 'fulfilled' ? catRes.value.data    : null;
+    const pay   = payRes.status   === 'fulfilled' ? payRes.value.data    : null;
+
+    renderKPIs(exec || mockExec());
+    renderTrend(trend || mockTrend());
+    renderCategories(cats || mockCats());
+    renderPayments(pay || mockPay());
+    renderInventory(inv || mockInv());
+    renderCustomerGrowth(cust || mockCust());
+    renderTopCustomers(cust || mockCust());
+    renderStaff(staff || mockStaff());
+    renderAlerts(exec || mockExec(), inv || mockInv(), cust || mockCust());
+
+    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (err) {
+    console.error('BI load error:', err);
+    // Render mocks for demo
+    renderKPIs(mockExec());
+    renderTrend(mockTrend());
+    renderCategories(mockCats());
+    renderPayments(mockPay());
+    renderInventory(mockInv());
+    renderCustomerGrowth(mockCust());
+    renderTopCustomers(mockCust());
+    renderStaff(mockStaff());
+    renderAlerts(mockExec(), mockInv(), mockCust());
+    document.getElementById('lastUpdated').textContent = 'Demo data';
+  } finally {
+    setLoading(false);
+  }
+}
+
+/* ── Render: KPIs ── */
+function renderKPIs(d) {
+  const kpis = [
+    { icon:'💰', label:'Revenue',         value: fmt(d.revenue),       sub: '',  change: d.revenueChange },
+    { icon:'📊', label:'Gross Profit',    value: fmt(d.grossProfit),   sub: (d.grossMargin||0).toFixed(1)+'% margin', change: d.grossProfitChange },
+    { icon:'💵', label:'Net Profit',      value: fmt(d.netProfit),     sub: (d.netMargin||0).toFixed(1)+'% margin', change: d.netProfitChange },
+    { icon:'🧾', label:'Transactions',    value: (d.transactions||0).toLocaleString(), sub: 'Avg '+fmt(d.avgBasket), change: d.transactionsChange },
+    { icon:'👤', label:'New Customers',   value: (d.newCustomers||0).toLocaleString(), sub:'',  change: d.newCustomersChange },
+    { icon:'🔄', label:'Returning',       value: (d.returningCustomers||0).toLocaleString(), sub:'Repeat rate '+(d.repeatRate||0).toFixed(1)+'%', change: d.returningChange },
+    { icon:'📦', label:'Inventory Health',value: (d.inventoryScore||0)+'/100', sub:'Grade '+(d.inventoryGrade||'—'), change: null, grade: d.inventoryGrade },
+    { icon:'🌿', label:'Net Cash',        value: fmt(d.netCash),       sub:'Operating cash flow', change: d.netCashChange },
+  ];
+
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = kpis.map(k => {
+    const gradeColor = k.grade ? gradeColorOf(k.grade) : null;
+    const chg = k.change != null
+      ? `<div class="kpi-change ${chgClass(k.change)}">${arrow(k.change)} ${Math.abs(k.change).toFixed(1)}% vs prior</div>`
+      : '';
+    return `
+      <div class="kpi-card">
+        <div class="kpi-label">${k.icon} ${k.label}</div>
+        <div class="kpi-value" style="${gradeColor ? 'color:'+gradeColor : ''}">${k.value}</div>
+        <div class="kpi-sub">${k.sub}</div>
+        ${chg}
+      </div>`;
+  }).join('');
+}
+
+/* ── Render: Trend Bars ── */
+function renderTrend(bars) {
+  const max = Math.max(...bars.map(b => b.revenue), 1);
+  const chart = document.getElementById('revChart');
+  const xaxis = document.getElementById('revXAxis');
+  chart.innerHTML = bars.map(b => {
+    const h = Math.max(4, Math.round((b.revenue / max) * 128));
+    return `
+      <div class="bar-col">
+        <div class="bar" style="height:${h}px">
+          <div class="bar-tooltip">${b.label}<br>${fmt(b.revenue)}</div>
+        </div>
+      </div>`;
+  }).join('');
+  xaxis.innerHTML = bars.map(b =>
+    `<div class="x-label">${b.label}</div>`
+  ).join('');
+}
+
+/* ── Render: Drill Table ── */
+function renderDrillTable(rows) {
+  const total = rows.reduce((s, r) => s + (r.revenue || 0), 0);
+  document.getElementById('drillBody').innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.name}</td>
+      <td>${fmt(r.revenue)}</td>
+      <td>${(r.count || 0).toLocaleString()}</td>
+      <td>${total > 0 ? ((r.revenue / total) * 100).toFixed(1) : 0}%</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:16px">No data</td></tr>';
+}
+
+/* ── Render: Categories ── */
+const CAT_COLORS = ['#3b82f6','#22c55e','#a855f7','#eab308','#ef4444','#f97316','#06b6d4','#ec4899'];
+function renderCategories(cats) {
+  const max = Math.max(...cats.map(c => c.revenue), 1);
+  document.getElementById('categoryPanel').innerHTML = cats.slice(0, 8).map((c, i) => {
+    const w = ((c.revenue / max) * 100).toFixed(1);
+    return `
+      <div class="cat-row">
+        <div class="cat-name">${c.name}</div>
+        <div class="cat-bar-wrap"><div class="cat-bar" style="width:${w}%;background:${CAT_COLORS[i % CAT_COLORS.length]}"></div></div>
+        <div class="cat-amt">${fmt(c.revenue)}</div>
+      </div>`;
+  }).join('') || '<p style="color:var(--muted);font-size:.8rem">No data</p>';
+}
+
+/* ── Render: Payments ── */
+const PAY_ICONS = { mpesa:'📱', cash:'💵', card:'💳', qr:'🔲', wallet:'👛' };
+function renderPayments(methods) {
+  const total = methods.reduce((s, m) => s + (m.amount || 0), 0);
+  document.getElementById('paymentPanel').innerHTML = methods.slice(0, 4).map(m => {
+    const share = total > 0 ? ((m.amount / total) * 100).toFixed(1) : 0;
+    const icon = PAY_ICONS[m.key] || '💳';
+    const chg = m.change != null
+      ? `<div class="${chgClass(m.change)}" style="font-size:0.65rem">${arrow(m.change)} ${Math.abs(m.change).toFixed(1)}%</div>`
+      : '';
+    return `
+      <div class="pay-tile">
+        <div class="pay-icon">${icon}</div>
+        <div class="pay-name">${m.name}</div>
+        <div class="pay-amt">${fmt(m.amount)}</div>
+        <div class="pay-pct">${share}% of total ${chg}</div>
+      </div>`;
+  }).join('') || '<p style="color:var(--muted)">No data</p>';
+}
+
+/* ── Render: Inventory ── */
+function gradeColorOf(g) {
+  return { A: '#22c55e', B: '#3b82f6', C: '#eab308', D: '#f97316', F: '#ef4444' }[g] || '#6b7899';
+}
+function renderInventory(d) {
+  const score = d.score || 0;
+  const grade = d.grade || 'F';
+  const color = gradeColorOf(grade);
+  document.getElementById('inventoryPanel').innerHTML = `
+    <div class="gauge-wrap">
+      <div class="gauge-number" style="color:${color}">${score}</div>
+      <div class="gauge-grade" style="color:${color}">Grade ${grade}</div>
+      <div class="gauge-label">Inventory Health Score</div>
+    </div>
+    <div class="inv-stat-row"><span class="inv-stat-label">Stockout Events</span><span class="${d.stockouts > 0 ? 'down' : 'up'}">${d.stockouts || 0}</span></div>
+    <div class="inv-stat-row"><span class="inv-stat-label">Overstock Items</span><span class="neutral">${d.overstock || 0}</span></div>
+    <div class="inv-stat-row"><span class="inv-stat-label">Expiring Soon</span><span style="color:var(--yellow)">${d.expiringSoon || 0} items (${fmt(d.expiringValue || 0)})</span></div>
+    <div class="inv-stat-row"><span class="inv-stat-label">Turnover Rate</span><span>${(d.turnoverRate || 0).toFixed(2)}x</span></div>`;
+}
+
+/* ── Render: Customer Growth ── */
+function renderCustomerGrowth(d) {
+  const repeatPct = d.repeatRate || 0;
+  document.getElementById('customerGrowthPanel').innerHTML = `
+    <div class="metric-row">
+      <span class="metric-label">New Customers</span>
+      <span class="metric-value up">+${(d.newCustomers||0).toLocaleString()}</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Returning Customers</span>
+      <span class="metric-value" style="color:var(--blue)">${(d.returningCustomers||0).toLocaleString()}</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Churned Customers</span>
+      <span class="metric-value down">${(d.churn||0).toLocaleString()}</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Avg Lifetime Value</span>
+      <span class="metric-value">${fmt(d.avgLtv||0)}</span>
+    </div>
+    <div class="metric-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
+      <div style="display:flex;justify-content:space-between;width:100%">
+        <span class="metric-label">Repeat Rate</span>
+        <span class="metric-value">${repeatPct.toFixed(1)}%</span>
+      </div>
+      <div class="progress-wrap" style="width:100%">
+        <div class="progress-bar" style="width:${Math.min(repeatPct,100)}%"></div>
+      </div>
+    </div>`;
+}
+
+/* ── Render: Top Customers ── */
+const TIER_CLASSES = { Platinum:'tier-platinum', Gold:'tier-gold', Silver:'tier-silver', Bronze:'tier-bronze' };
+function renderTopCustomers(d) {
+  const custs = d.topCustomers || [];
+  document.getElementById('topCustomersPanel').innerHTML = custs.slice(0, 10).map((c, i) => `
+    <a href="pos-crm-pro.html?uid=${c.uid}" class="cust-row">
+      <span class="cust-rank">#${i + 1}</span>
+      <span class="cust-name">${esc(c.name || c.phone || 'Unknown')}</span>
+      <span class="tier-badge ${TIER_CLASSES[c.tier] || 'tier-bronze'}">${c.tier || 'Bronze'}</span>
+      <div style="text-align:right">
+        <div class="cust-spend">${fmt(c.totalSpent)}</div>
+        <div class="cust-visits">${c.visits||0} visits</div>
+      </div>
+    </a>`).join('') || '<p style="color:var(--muted);font-size:.8rem">No customer data</p>';
+}
+
+/* ── Render: Staff ── */
+function renderStaff(staff) {
+  const sorted = [...(staff || [])].sort((a, b) => (b.totalSales||0) - (a.totalSales||0));
+  document.getElementById('staffBody').innerHTML = sorted.map((s, i) => {
+    const top = i < 3 ? ' class="top-staff"' : '';
+    const attColor = (s.attendanceRate||0) >= 90 ? 'var(--green)' : (s.attendanceRate||0) >= 75 ? 'var(--yellow)' : 'var(--red)';
+    return `
+      <tr${top}>
+        <td>${esc(s.name)} ${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ''}</td>
+        <td>${fmt(s.totalSales)}</td>
+        <td>${(s.transactions||0).toLocaleString()}</td>
+        <td>${fmt(s.salesPerHour)}/hr</td>
+        <td>${fmt(s.avgBasket)}</td>
+        <td style="color:${attColor}">${(s.attendanceRate||0).toFixed(0)}%</td>
+      </tr>`;
+  }).join('') || '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:16px">No staff data</td></tr>';
+}
+
+/* ── Forecast ── */
+async function loadForecast() {
+  const btn = document.getElementById('genForecastBtn');
+  btn.textContent = 'Generating…';
+  btn.disabled = true;
+  try {
+    const r = await cfGetRevenueForecast({ period: currentPeriod, days: currentHorizon });
+    const data = r.data || mockForecast(currentHorizon);
+    renderForecast(data);
+  } catch {
+    renderForecast(mockForecast(currentHorizon));
+  } finally {
+    btn.textContent = 'Generate Forecast';
+    btn.disabled = false;
+  }
+}
+
+function renderForecast(data) {
+  const hist = data.historical || [];
+  const fore = data.forecast || [];
+  const all = [...hist.map(p => p.value), ...fore.map(p => p.upper || p.value)];
+  const max = Math.max(...all, 1);
+
+  const chart = document.getElementById('forecastChart');
+  const allPoints = [
+    ...hist.map(p => ({ ...p, type: 'hist' })),
+    ...fore.map(p => ({ ...p, type: 'fore' })),
+  ];
+  const total = allPoints.length;
+
+  chart.innerHTML = allPoints.map((p, i) => {
+    const botPct = ((p.value / max) * 80).toFixed(1);
+    const cls = p.type === 'hist' ? 'hist' : 'fore';
+    let lineHtml = '';
+    if (i < total - 1) {
+      const nextP = allPoints[i + 1];
+      const nextBot = ((nextP.value / max) * 80).toFixed(1);
+      const dx = 100 / total;
+      const dy = parseFloat(nextBot) - parseFloat(botPct);
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(-dy, dx) * (180 / Math.PI);
+      lineHtml = `<div class="lc-line ${cls}" style="
+        width:${(len / 100 * chart.offsetWidth / total).toFixed(0)}px;
+        bottom:${botPct}%;
+        transform:rotate(${angle}deg);
+      "></div>`;
+    }
+    return `
+      <div class="lc-col">
+        <div class="lc-point ${cls}" style="bottom:${botPct}%;left:50%;transform:translate(-50%,50%)" title="${p.label||''}: ${fmt(p.value)}"></div>
+      </div>`;
+  }).join('');
+
+  // Table
+  document.getElementById('forecastTableWrap').style.display = 'block';
+  document.getElementById('forecastDisclaimer').style.display = 'block';
+  document.getElementById('forecastBody').innerHTML = fore.map(r => `
+    <tr>
+      <td>${r.label || r.date}</td>
+      <td>${fmt(r.value)}</td>
+      <td>${fmt(r.lower || r.value * 0.85)}</td>
+      <td>${fmt(r.upper || r.value * 1.15)}</td>
+      <td><span class="badge ${(r.confidence||0)>=80 ? 'badge-green' : 'badge-red'}">${(r.confidence||75).toFixed(0)}%</span></td>
+    </tr>`).join('');
+}
+
+/* ── Alerts ── */
+function renderAlerts(exec, inv, cust) {
+  const alerts = [];
+  const revChg = exec.revenueChange || 0;
+  const invScore = inv.score || 100;
+  const stockouts = inv.stockouts || 0;
+  const churnRate = exec.churnRate || 0;
+
+  if (revChg <= -20) alerts.push({ cls:'alert-red', icon:'🔴', msg:`Revenue is down ${Math.abs(revChg).toFixed(1)}% vs prior period.`, href:'pos-bi.html', action:'View Trend' });
+  if (invScore < 70)  alerts.push({ cls:'alert-yellow', icon:'🟡', msg:`Inventory health score is ${invScore}/100 — attention needed.`, href:'pos-inventory.html', action:'View Inventory' });
+  if (stockouts > 3)  alerts.push({ cls:'alert-red', icon:'🔴', msg:`${stockouts} stockout events detected this period.`, href:'pos-inventory.html', action:'Restock Now' });
+  if (churnRate > 15) alerts.push({ cls:'alert-yellow', icon:'🟡', msg:`High churn rate detected: ${churnRate.toFixed(1)}%.`, href:'pos-crm-pro.html', action:'View CRM' });
+  if (revChg >= 20)   alerts.push({ cls:'alert-green', icon:'🟢', msg:`Revenue record! Up ${revChg.toFixed(1)}% vs prior period.`, href:'pos-bi.html', action:'View Report' });
+
+  if (!alerts.length) alerts.push({ cls:'alert-green', icon:'🟢', msg:'All metrics within normal range.', href:'#', action:'OK' });
+
+  document.getElementById('alertsPanel').innerHTML = alerts.map(a => `
+    <div class="alert-item ${a.cls}">
+      <span class="alert-icon">${a.icon}</span>
+      <span class="alert-msg">${a.msg}</span>
+      <a href="${a.href}" class="alert-action">${a.action}</a>
+    </div>`).join('');
+}
+
+/* ── Utilities ── */
+function setLoading(on) {
+  document.getElementById('loadingOverlay').classList.toggle('active', on);
+}
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Mock Data (fallback / offline / demo) ── */
+function mockExec() {
+  return {
+    revenue: 284560, revenueChange: 12.4,
+    grossProfit: 98000, grossMargin: 34.5, grossProfitChange: 8.1,
+    netProfit: 51200, netMargin: 18.0, netProfitChange: 5.7,
+    transactions: 312, avgBasket: 912, transactionsChange: 3.2,
+    newCustomers: 47, newCustomersChange: 18.6,
+    returningCustomers: 265, repeatRate: 84.9, returningChange: 2.3,
+    inventoryScore: 82, inventoryGrade: 'B',
+    netCash: 72400, netCashChange: 9.1,
+    churnRate: 6.2,
+  };
+}
+function mockTrend() {
+  const now = new Date();
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - (13 - i));
+    return {
+      label: d.toLocaleDateString('en-KE', { day:'numeric', month:'short' }).split(' ')[0] + (d.toLocaleDateString('en-KE',{month:'short'}).slice(0,3)),
+      revenue: 18000 + Math.random() * 35000,
+    };
+  });
+}
+function mockCats() {
+  return [
+    { name:'Groceries', revenue:84200 }, { name:'Electronics', revenue:62300 },
+    { name:'Clothing', revenue:48100 }, { name:'Beverages', revenue:36700 },
+    { name:'Pharmacy', revenue:28400 }, { name:'Household', revenue:19800 },
+    { name:'Beauty', revenue:14600 }, { name:'Snacks', revenue:9400 },
+  ];
+}
+function mockPay() {
+  return [
+    { key:'mpesa', name:'M-Pesa', amount:182000, change:7.3 },
+    { key:'cash',  name:'Cash',   amount:56400,  change:-2.1 },
+    { key:'card',  name:'Card',   amount:29600,  change:14.8 },
+    { key:'qr',    name:'QR/Wallet', amount:16560, change:31.2 },
+  ];
+}
+function mockInv() {
+  return { score:82, grade:'B', stockouts:2, overstock:8, expiringSoon:14, expiringValue:18400, turnoverRate:4.7 };
+}
+function mockCust() {
+  const tiers = ['Platinum','Gold','Gold','Silver','Silver','Bronze','Bronze','Bronze','Bronze','Bronze'];
+  return {
+    newCustomers:47, returningCustomers:265, churn:12, repeatRate:84.9, avgLtv:42800,
+    topCustomers: Array.from({ length:10 }, (_, i) => ({
+      uid: 'uid'+i, name:'Customer '+(i+1),
+      phone:'+2547'+(Math.random()*89999999+10000000|0),
+      tier: tiers[i], totalSpent: 120000 - i*9800, visits: 28 - i*2,
+    })),
+  };
+}
+function mockStaff() {
+  return [
+    { name:'Jane Mwangi', totalSales:98400, transactions:112, salesPerHour:12300, avgBasket:878, attendanceRate:97 },
+    { name:'Peter Kamau', totalSales:82100, transactions:94,  salesPerHour:10262, avgBasket:873, attendanceRate:94 },
+    { name:'Aisha Omar',  totalSales:71600, transactions:86,  salesPerHour:8950,  avgBasket:833, attendanceRate:100 },
+    { name:'Brian Oloo',  totalSales:32460, transactions:37,  salesPerHour:8115,  avgBasket:877, attendanceRate:85 },
+  ];
+}
+function mockForecast(days) {
+  const hist = Array.from({ length: 7 }, (_, i) => ({
+    label: 'D-'+(7-i), value: 20000 + Math.random() * 30000, confidence: null,
+  }));
+  const fore = Array.from({ length: days }, (_, i) => {
+    const base = 28000 + i * 800;
+    return {
+      label: 'D+'+(i+1), value: base + Math.random()*8000,
+      lower: base * 0.85, upper: base * 1.15,
+      confidence: 90 - i * 1.5,
+    };
+  });
+  return { historical: hist, forecast: fore };
+}
+</script>
+</body>
+</html>

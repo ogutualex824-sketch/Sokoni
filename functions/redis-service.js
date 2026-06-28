@@ -23,8 +23,10 @@
  * @module redis-service
  */
 
-const { defineSecret } = require('firebase-functions/params');
-const REDIS_URL = defineSecret('REDIS_URL');
+/* REDIS_URL is read from process.env — set via Firebase Functions environment:
+   firebase functions:secrets:set REDIS_URL  OR  via .env file: REDIS_URL=redis://...
+   Redis gracefully degrades to Firestore fallback when REDIS_URL is absent. */
+const REDIS_URL = { value: () => process.env.REDIS_URL || '' };
 
 // ─── TTL Constants ────────────────────────────────────────────────────────────
 /**

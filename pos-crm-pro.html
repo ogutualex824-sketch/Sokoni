@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRM & Loyalty — SOKONI SmartPOS 3.0</title>
+  <script src="sokoni-config.js"></script>
+  <style>
+    :root {
+      --bg:#050508;--bg2:#0d0f14;--bg3:#161923;--bg4:#1e2533;
+      --border:#1e2533;--text:#e4e8f0;--muted:#6b7899;
+      --green:#22c55e;--blue:#3b82f6;--red:#ef4444;--yellow:#eab308;--purple:#a855f7;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;}
+
+    /* Header */
+    .header{position:sticky;top:0;z-index:100;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:60px;}
+    .header h1{font-size:1.1rem;font-weight:700;letter-spacing:.02em;}
+    .back-link{color:var(--blue);text-decoration:none;font-size:.875rem;display:flex;align-items:center;gap:6px;transition:opacity .2s;}
+    .back-link:hover{opacity:.75;}
+
+    /* Tabs */
+    .tab-nav{background:var(--bg2);border-bottom:1px solid var(--border);display:flex;overflow-x:auto;padding:0 24px;gap:4px;}
+    .tab-btn{padding:14px 20px;font-size:.875rem;font-weight:500;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;transition:color .2s,border-color .2s;}
+    .tab-btn.active{color:var(--blue);border-bottom-color:var(--blue);}
+    .tab-btn:hover:not(.active){color:var(--text);}
+
+    /* Content */
+    .content{max-width:1200px;margin:0 auto;padding:24px;}
+    .tab-panel{display:none;}
+    .tab-panel.active{display:block;}
+
+    /* Cards & Panels */
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;}
+    .card+.card{margin-top:16px;}
+    .section-title{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:16px;}
+
+    /* Forms */
+    .form-row{display:grid;gap:12px;margin-bottom:12px;}
+    .form-row.cols-2{grid-template-columns:1fr 1fr;}
+    .form-row.cols-3{grid-template-columns:1fr 1fr 1fr;}
+    label{font-size:.8125rem;color:var(--muted);display:block;margin-bottom:4px;}
+    input,select,textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 14px;font-size:.875rem;outline:none;transition:border-color .2s;}
+    input:focus,select:focus,textarea:focus{border-color:var(--blue);}
+    select option{background:var(--bg3);}
+
+    /* Buttons */
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;border:none;transition:opacity .2s,transform .1s;}
+    .btn:hover{opacity:.85;}
+    .btn:active{transform:scale(.98);}
+    .btn-primary{background:var(--blue);color:#fff;}
+    .btn-green{background:var(--green);color:#000;}
+    .btn-red{background:var(--red);color:#fff;}
+    .btn-yellow{background:var(--yellow);color:#000;}
+    .btn-purple{background:var(--purple);color:#fff;}
+    .btn-ghost{background:var(--bg4);color:var(--text);}
+    .btn-sm{padding:6px 12px;font-size:.8125rem;}
+    .btn-xs{padding:4px 8px;font-size:.75rem;}
+
+    /* Search bar */
+    .search-row{display:flex;gap:10px;margin-bottom:20px;}
+    .search-row input{flex:1;}
+
+    /* Customer Card */
+    .customer-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:20px;}
+    .customer-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+    .customer-avatar{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;background:var(--bg4);flex-shrink:0;}
+    .customer-info h2{font-size:1.1rem;font-weight:700;margin-bottom:4px;}
+    .customer-info p{font-size:.8125rem;color:var(--muted);}
+    .tier-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:700;text-transform:uppercase;}
+    .tier-bronze{background:#7c3d1220;color:#cd7c3d;border:1px solid #cd7c3d40;}
+    .tier-silver{background:#6b788920;color:#a8b5cc;border:1px solid #a8b5cc40;}
+    .tier-gold{background:#eab30820;color:#eab308;border:1px solid #eab30840;}
+    .tier-platinum{background:#a855f720;color:#a855f7;border:1px solid #a855f740;}
+    .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin:16px 0;}
+    .stat-item{background:var(--bg4);border-radius:8px;padding:12px;text-align:center;}
+    .stat-item .val{font-size:1.1rem;font-weight:700;color:var(--green);}
+    .stat-item .lbl{font-size:.7rem;color:var(--muted);margin-top:2px;}
+    .action-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
+
+    /* Tables */
+    .table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);}
+    table{width:100%;border-collapse:collapse;font-size:.875rem;}
+    th{background:var(--bg3);padding:10px 14px;text-align:left;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--border);}
+    td{padding:10px 14px;border-bottom:1px solid var(--border)20;}
+    tr:last-child td{border-bottom:none;}
+    tr:hover td{background:var(--bg3)30;}
+
+    /* Status badges */
+    .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:700;}
+    .badge-green{background:#22c55e20;color:var(--green);}
+    .badge-red{background:#ef444420;color:var(--red);}
+    .badge-yellow{background:#eab30820;color:var(--yellow);}
+    .badge-muted{background:var(--bg4);color:var(--muted);}
+    .badge-blue{background:#3b82f620;color:var(--blue);}
+    .badge-purple{background:#a855f720;color:var(--purple);}
+
+    /* Segment grid */
+    .segment-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;}
+    .segment-card{border-radius:12px;padding:20px;border:1px solid transparent;}
+    .seg-champions{background:#7c5e0620;border-color:#eab30830;}
+    .seg-loyal{background:#14532d20;border-color:#22c55e30;}
+    .seg-atrisk{background:#78350f20;border-color:#eab30830;}
+    .seg-lost{background:#450a0a20;border-color:#ef444430;}
+    .seg-new{background:#1e3a5f20;border-color:#3b82f630;}
+    .seg-highvalue{background:#3b0764 20;border-color:#a855f730;}
+    .seg-occasional{background:#1e253320;border-color:#6b789930;}
+    .segment-card h3{font-size:1rem;font-weight:700;margin-bottom:4px;}
+    .segment-card .count{font-size:1.8rem;font-weight:700;line-height:1;}
+    .segment-card .pct{font-size:.8125rem;color:var(--muted);margin-top:2px;}
+    .segment-card .top-list{margin-top:12px;font-size:.8125rem;}
+    .segment-card .top-list li{list-style:none;padding:3px 0;color:var(--muted);}
+
+    /* Wallet */
+    .wallet-balance{text-align:center;padding:32px 20px;}
+    .wallet-balance .amount{font-size:3rem;font-weight:800;color:var(--green);line-height:1;}
+    .wallet-balance .label{font-size:.875rem;color:var(--muted);margin-top:6px;}
+    .wallet-actions{display:flex;justify-content:center;gap:12px;margin-top:20px;flex-wrap:wrap;}
+
+    /* Gift Cards */
+    .gc-code{font-family:monospace;font-size:1.1rem;letter-spacing:.1em;color:var(--yellow);}
+
+    /* Offers */
+    .offer-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+    .offer-card.active-offer{border-color:var(--green)40;background:#22c55e08;}
+    .offer-info h4{font-weight:700;margin-bottom:4px;}
+    .offer-info p{font-size:.8125rem;color:var(--muted);}
+    .offer-list{display:flex;flex-direction:column;gap:10px;}
+
+    /* Modal */
+    .modal-overlay{position:fixed;inset:0;background:#00000080;z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;}
+    .modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;}
+    .modal h3{font-size:1.1rem;font-weight:700;margin-bottom:20px;}
+    .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;}
+
+    /* Toggle */
+    .toggle{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;}
+    .toggle input{opacity:0;width:0;height:0;}
+    .slider{position:absolute;inset:0;background:var(--bg4);border-radius:11px;cursor:pointer;transition:.3s;}
+    .slider:before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.3s;}
+    .toggle input:checked+.slider{background:var(--green);}
+    .toggle input:checked+.slider:before{transform:translateX(18px);}
+
+    /* Insights */
+    .insights-panel{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:16px;}
+    .insight-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)30;font-size:.875rem;}
+    .insight-row:last-child{border-bottom:none;}
+
+    /* Empty / Loading */
+    .empty{text-align:center;padding:48px 20px;color:var(--muted);}
+    .empty .icon{font-size:3rem;margin-bottom:12px;}
+    .spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .toast{position:fixed;bottom:24px;right:24px;z-index:300;background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:14px 20px;font-size:.875rem;max-width:340px;box-shadow:0 8px 32px #0008;animation:slideUp .3s ease;}
+    @keyframes slideUp{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+
+    /* Responsive */
+    @media(max-width:640px){
+      .content{padding:16px;}
+      .form-row.cols-2,.form-row.cols-3{grid-template-columns:1fr;}
+      .stat-grid{grid-template-columns:repeat(2,1fr);}
+      .segment-grid{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <h1>👤 CRM &amp; Loyalty</h1>
+  <a href="pos.html" class="back-link">← Back to POS</a>
+</header>
+
+<!-- Tab Navigation -->
+<nav class="tab-nav" id="tabNav">
+  <button class="tab-btn active" data-tab="customers">Customers</button>
+  <button class="tab-btn" data-tab="wallet">Wallet</button>
+  <button class="tab-btn" data-tab="giftcards">Gift Cards</button>
+  <button class="tab-btn" data-tab="offers">Offers</button>
+  <button class="tab-btn" data-tab="segments">Segments</button>
+</nav>
+
+<div class="content">
+
+  <!-- ==================== TAB 1: CUSTOMERS ==================== -->
+  <div class="tab-panel active" id="tab-customers">
+    <div class="card">
+      <p class="section-title">Customer Lookup</p>
+      <div class="search-row">
+        <input type="text" id="custSearch" placeholder="Search by phone or name…" />
+        <button class="btn btn-primary" onclick="searchCustomer()">Search</button>
+        <button class="btn btn-ghost" onclick="openModal('newCustomerModal')">+ New Customer</button>
+      </div>
+      <div id="custResult"></div>
+    </div>
+
+    <div id="custInsights" class="insights-panel" style="display:none;">
+      <p class="section-title">Customer Insights</p>
+      <div id="insightsContent"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 2: WALLET ==================== -->
+  <div class="tab-panel" id="tab-wallet">
+    <div class="card">
+      <p class="section-title">Wallet Lookup</p>
+      <div class="search-row">
+        <input type="text" id="walletPhone" placeholder="Enter customer phone…" />
+        <button class="btn btn-primary" onclick="loadWallet()">Load Wallet</button>
+      </div>
+      <div id="walletDisplay" style="display:none;">
+        <div class="wallet-balance">
+          <div class="amount" id="walletAmount">KES 0</div>
+          <div class="label" id="walletCustomerName">—</div>
+        </div>
+        <div class="wallet-actions">
+          <button class="btn btn-green" onclick="openModal('topUpModal')">⬆ Top Up</button>
+          <button class="btn btn-red" onclick="openModal('deductModal')">⬇ Deduct</button>
+          <button class="btn btn-yellow" onclick="openModal('refundModal')">↩ Refund to Wallet</button>
+        </div>
+        <div style="margin-top:24px;">
+          <p class="section-title">Transaction History</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Type</th><th>Amount (KES)</th><th>Reference</th></tr></thead>
+              <tbody id="walletTxBody"><tr><td colspan="4" class="empty">No transactions</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 3: GIFT CARDS ==================== -->
+  <div class="tab-panel" id="tab-giftcards">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+        <p class="section-title" style="margin:0;">Gift Cards</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" onclick="openModal('issueGcModal')">+ Issue Gift Card</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+        <div style="background:var(--bg3);border-radius:10px;padding:16px;">
+          <p class="section-title">Check Balance</p>
+          <div class="form-row">
+            <div><label>Gift Card Code</label><input type="text" id="gcCheckCode" placeholder="Enter code…" style="font-family:monospace;text-transform:uppercase;" /></div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="checkGiftCard()">Check Balance</button>
+          <div id="gcCheckResult" style="margin-top:12px;"></div>
+        </div>
+        <div style="background:var(--bg3);border-radius:10px;padding:16px;">
+          <p class="section-title">Redeem at Checkout</p>
+          <div class="form-row">
+            <div><label>Code</label><input type="text" id="gcRedeemCode" placeholder="XXXX-XXXX-XXXX" style="font-family:monospace;text-transform:uppercase;" /></div>
+            <div><label>Amount (KES)</label><input type="number" id="gcRedeemAmount" placeholder="0" /></div>
+            <div><label>Sale Reference</label><input type="text" id="gcRedeemSale" placeholder="Sale ID" /></div>
+          </div>
+          <button class="btn btn-green btn-sm" onclick="redeemGiftCard()">Redeem</button>
+        </div>
+      </div>
+
+      <p class="section-title">All Gift Cards</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Code</th><th>Recipient</th><th>Amount</th><th>Remaining</th><th>Status</th><th>Expiry</th><th>Actions</th></tr></thead>
+          <tbody id="gcListBody"><tr><td colspan="7"><div class="spinner" style="margin:16px auto;"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 4: OFFERS ==================== -->
+  <div class="tab-panel" id="tab-offers">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+        <p class="section-title" style="margin:0;">Personalized Offers</p>
+        <button class="btn btn-primary btn-sm" onclick="openModal('createOfferModal')">+ Create Offer</button>
+      </div>
+      <div id="offerList" class="offer-list">
+        <div class="spinner" style="margin:24px auto;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 5: SEGMENTS ==================== -->
+  <div class="tab-panel" id="tab-segments">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
+        <p class="section-title" style="margin:0;">Customer Segments</p>
+        <button class="btn btn-primary" onclick="analyzeSegments()">🔍 Analyze Segments</button>
+      </div>
+      <div id="segmentGrid" class="segment-grid">
+        <div class="empty" style="grid-column:1/-1;"><div class="icon">📊</div><p>Click Analyze Segments to load data</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODALS ==================== -->
+
+<!-- New Customer -->
+<div class="modal-overlay" id="newCustomerModal" style="display:none;">
+  <div class="modal">
+    <h3>New Customer</h3>
+    <div class="form-row">
+      <div><label>Full Name *</label><input type="text" id="ncName" placeholder="Jane Doe" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Phone Number *</label><input type="tel" id="ncPhone" placeholder="+254 7XX XXX XXX" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Birthday (optional)</label><input type="date" id="ncBirthday" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('newCustomerModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createCustomer()">Save Customer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Top Up Wallet -->
+<div class="modal-overlay" id="topUpModal" style="display:none;">
+  <div class="modal">
+    <h3>Top Up Wallet</h3>
+    <div class="form-row">
+      <div><label>Amount (KES)</label><input type="number" id="tuAmount" placeholder="500" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Payment Method</label>
+        <select id="tuMethod">
+          <option value="mpesa">M-Pesa</option>
+          <option value="cash">Cash</option>
+          <option value="card">Card</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div><label>Reference</label><input type="text" id="tuRef" placeholder="Transaction reference" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('topUpModal')">Cancel</button>
+      <button class="btn btn-green" onclick="doTopUp()">Top Up</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deduct Wallet -->
+<div class="modal-overlay" id="deductModal" style="display:none;">
+  <div class="modal">
+    <h3>Deduct from Wallet</h3>
+    <div class="form-row">
+      <div><label>Amount (KES)</label><input type="number" id="deductAmount" placeholder="200" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Sale Reference</label><input type="text" id="deductSale" placeholder="Sale ID" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('deductModal')">Cancel</button>
+      <button class="btn btn-red" onclick="doDeduct()">Deduct</button>
+    </div>
+  </div>
+</div>
+
+<!-- Refund to Wallet -->
+<div class="modal-overlay" id="refundModal" style="display:none;">
+  <div class="modal">
+    <h3>Refund to Wallet</h3>
+    <div class="form-row">
+      <div><label>Amount (KES)</label><input type="number" id="refundAmount" placeholder="500" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Original Sale Reference</label><input type="text" id="refundSale" placeholder="Original sale ID" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('refundModal')">Cancel</button>
+      <button class="btn btn-yellow" onclick="doRefund()">Refund</button>
+    </div>
+  </div>
+</div>
+
+<!-- Issue Gift Card -->
+<div class="modal-overlay" id="issueGcModal" style="display:none;">
+  <div class="modal">
+    <h3>Issue Gift Card</h3>
+    <div class="form-row cols-2">
+      <div><label>Recipient Name</label><input type="text" id="gcRecipient" placeholder="John Mwangi" /></div>
+      <div><label>Recipient Phone</label><input type="tel" id="gcPhone" placeholder="+254 7XX XXX XXX" /></div>
+    </div>
+    <div class="form-row cols-2">
+      <div><label>Amount (KES)</label><input type="number" id="gcAmount" placeholder="1000" /></div>
+      <div><label>Expiry Date</label><input type="date" id="gcExpiry" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('issueGcModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="issueGiftCard()">Issue Card</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Offer -->
+<div class="modal-overlay" id="createOfferModal" style="display:none;">
+  <div class="modal">
+    <h3>Create Personalized Offer</h3>
+    <div class="form-row">
+      <div><label>Offer Name</label><input type="text" id="offerName" placeholder="Weekend Special" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Description</label><textarea id="offerDesc" rows="2" placeholder="Brief description…" style="resize:vertical;"></textarea></div>
+    </div>
+    <div class="form-row cols-2">
+      <div><label>Type</label>
+        <select id="offerType" onchange="updateOfferFields()">
+          <option value="percent">% Discount</option>
+          <option value="fixed">Fixed Discount</option>
+          <option value="freeItem">Free Item</option>
+          <option value="bogo">BOGO</option>
+        </select>
+      </div>
+      <div><label>Value (% or KES)</label><input type="number" id="offerValue" placeholder="10" /></div>
+    </div>
+    <div class="form-row cols-2">
+      <div><label>Eligibility</label>
+        <select id="offerEligibility" onchange="updateEligibilityFields()">
+          <option value="all">All Customers</option>
+          <option value="tier">By Tier</option>
+          <option value="minSpend">Min Spend</option>
+          <option value="segment">By Segment</option>
+        </select>
+      </div>
+      <div id="tierFieldWrap" style="display:none;"><label>Target Tier</label>
+        <select id="offerTier">
+          <option value="bronze">Bronze</option>
+          <option value="silver">Silver</option>
+          <option value="gold">Gold</option>
+          <option value="platinum">Platinum</option>
+        </select>
+      </div>
+      <div id="minSpendFieldWrap" style="display:none;"><label>Min Spend (KES)</label><input type="number" id="offerMinSpend" placeholder="1000" /></div>
+    </div>
+    <div class="form-row cols-2">
+      <div><label>Start Date</label><input type="date" id="offerStart" /></div>
+      <div><label>End Date</label><input type="date" id="offerEnd" /></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+      <label class="toggle"><input type="checkbox" id="offerActive" checked /><span class="slider"></span></label>
+      <span style="font-size:.875rem;">Active immediately</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('createOfferModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveOffer()">Create Offer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Store Credit Modal -->
+<div class="modal-overlay" id="storeCreditModal" style="display:none;">
+  <div class="modal">
+    <h3>Add Store Credit</h3>
+    <div class="form-row">
+      <div><label>Amount (KES)</label><input type="number" id="scAmount" placeholder="500" /></div>
+    </div>
+    <div class="form-row">
+      <div><label>Reason</label><input type="text" id="scReason" placeholder="Loyalty reward, return, etc." /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('storeCreditModal')">Cancel</button>
+      <button class="btn btn-green" onclick="doStoreCredit()">Add Credit</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+
+const app  = initializeApp(window._sokoniConfig || {});
+const auth = getAuth(app);
+const fns  = getFunctions(app);
+
+// Auth guard
+onAuthStateChanged(auth, user => {
+  if (!user) { window.location.href = 'auth.html'; return; }
+  window._uid = user.uid;
+  init();
+});
+
+function init() {
+  loadOffers();
+  loadGiftCards();
+  setDefaultGcExpiry();
+}
+
+// ──────── CF helpers ────────
+const cf = name => httpsCallable(fns, name);
+
+// ──────── Toast ────────
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.style.borderLeftColor = type === 'success' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--blue)';
+  el.style.borderLeftWidth = '4px';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ──────── Tab logic ────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ──────── Modals ────────
+window.openModal  = id => document.getElementById(id).style.display = 'flex';
+window.closeModal = id => document.getElementById(id).style.display = 'none';
+document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.style.display = 'none'; }));
+
+// ──────── CUSTOMERS ────────
+let currentCustomer = null;
+
+window.searchCustomer = async () => {
+  const q = document.getElementById('custSearch').value.trim();
+  if (!q) return;
+  const el = document.getElementById('custResult');
+  el.innerHTML = '<div class="spinner" style="margin:20px auto;"></div>';
+  try {
+    const res = await cf('getPOSCustomer')({ query: q });
+    currentCustomer = res.data;
+    renderCustomerCard(res.data);
+  } catch (e) {
+    el.innerHTML = `<div class="empty"><div class="icon">😕</div><p>${e.message}</p></div>`;
+  }
+};
+
+document.getElementById('custSearch').addEventListener('keydown', e => { if (e.key === 'Enter') window.searchCustomer(); });
+
+function tierClass(tier) {
+  return { bronze: 'tier-bronze', silver: 'tier-silver', gold: 'tier-gold', platinum: 'tier-platinum' }[tier?.toLowerCase()] || 'tier-bronze';
+}
+function tierLabel(tier) {
+  const labels = { bronze: '🥉 Bronze', silver: '🥈 Silver', gold: '🥇 Gold', platinum: '💎 Platinum' };
+  return labels[tier?.toLowerCase()] || '🥉 Bronze';
+}
+
+function renderCustomerCard(c) {
+  const el = document.getElementById('custResult');
+  const initial = (c.name || 'C').charAt(0).toUpperCase();
+  el.innerHTML = `
+    <div class="customer-card" style="margin-top:16px;">
+      <div class="customer-header">
+        <div style="display:flex;gap:14px;align-items:flex-start;">
+          <div class="customer-avatar">${initial}</div>
+          <div class="customer-info">
+            <h2>${esc(c.name)}</h2>
+            <p>${esc(c.phone)}</p>
+            <span class="tier-badge ${tierClass(c.tier)}" style="margin-top:6px;">${tierLabel(c.tier)}</span>
+            ${c.birthday ? `<p style="margin-top:4px;font-size:.8rem;color:var(--muted);">🎂 ${esc(c.birthday)}</p>` : ''}
+          </div>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-ghost btn-sm" onclick="viewHistory()">📋 View History</button>
+          <button class="btn btn-green btn-sm" onclick="openModal('storeCreditModal')">➕ Store Credit</button>
+          <button class="btn btn-yellow btn-sm" onclick="checkBirthdayReward()">🎂 Birthday Reward</button>
+          <button class="btn btn-blue btn-sm" onclick="viewCustomerOffers()" style="background:var(--blue);color:#fff;">🎁 View Offers</button>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-item"><div class="val">${(c.loyaltyPoints||0).toLocaleString()}</div><div class="lbl">Loyalty Points</div></div>
+        <div class="stat-item"><div class="val">KES ${(c.totalSpent||0).toLocaleString()}</div><div class="lbl">Total Spent</div></div>
+        <div class="stat-item"><div class="val">${c.totalVisits||0}</div><div class="lbl">Total Visits</div></div>
+        <div class="stat-item"><div class="val">KES ${(c.storeCredit||0).toLocaleString()}</div><div class="lbl">Store Credit</div></div>
+        <div class="stat-item"><div class="val">KES ${(c.walletBalance||0).toLocaleString()}</div><div class="lbl">Wallet Balance</div></div>
+      </div>
+    </div>`;
+}
+
+window.viewHistory = async () => {
+  if (!currentCustomer) return;
+  const panel = document.getElementById('custInsights');
+  const inner = document.getElementById('insightsContent');
+  panel.style.display = 'block';
+  inner.innerHTML = '<div class="spinner"></div>';
+  try {
+    const res = await cf('getCustomerInsights')({ customerId: currentCustomer.id });
+    const d = res.data;
+    inner.innerHTML = `
+      <div class="insight-row"><span style="color:var(--muted);">Favourite Products</span><span>${(d.favourites||[]).join(', ') || '—'}</span></div>
+      <div class="insight-row"><span style="color:var(--muted);">Last Visit</span><span>${d.lastVisit || '—'}</span></div>
+      <div style="margin-top:12px;"><p class="section-title">Last 5 Purchases</p>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Items</th><th>Amount</th></tr></thead><tbody>
+          ${(d.lastPurchases||[]).map(p => `<tr><td>${esc(p.date)}</td><td>${esc(p.items)}</td><td>KES ${(p.amount||0).toLocaleString()}</td></tr>`).join('') || '<tr><td colspan="3">No purchases</td></tr>'}
+        </tbody></table></div></div>`;
+  } catch(e) { inner.innerHTML = `<p style="color:var(--red);">${e.message}</p>`; }
+};
+
+window.checkBirthdayReward = async () => {
+  if (!currentCustomer) return;
+  try {
+    const res = await cf('checkBirthdayReward')({ customerId: currentCustomer.id });
+    const d = res.data;
+    toast(d.eligible ? `🎂 Birthday reward available! ${d.reward}` : 'No birthday reward at this time.', d.eligible ? 'success' : 'info');
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.viewCustomerOffers = async () => {
+  if (!currentCustomer) return;
+  try {
+    const res = await cf('getActiveOffers')({ customerId: currentCustomer.id });
+    const offers = res.data || [];
+    toast(offers.length ? `${offers.length} offer(s) available for this customer.` : 'No offers available.', 'info');
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.createCustomer = async () => {
+  const name  = document.getElementById('ncName').value.trim();
+  const phone = document.getElementById('ncPhone').value.trim();
+  const birthday = document.getElementById('ncBirthday').value;
+  if (!name || !phone) { toast('Name and phone are required.', 'error'); return; }
+  try {
+    await cf('upsertPOSCustomer')({ name, phone, birthday });
+    closeModal('newCustomerModal');
+    toast('Customer created!', 'success');
+    document.getElementById('custSearch').value = phone;
+    window.searchCustomer();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.doStoreCredit = async () => {
+  if (!currentCustomer) return;
+  const amount = parseFloat(document.getElementById('scAmount').value);
+  const reason = document.getElementById('scReason').value.trim();
+  if (!amount || amount <= 0) { toast('Enter a valid amount.', 'error'); return; }
+  try {
+    await cf('issueStoreCredit')({ customerId: currentCustomer.id, amount, reason });
+    closeModal('storeCreditModal');
+    toast(`KES ${amount} store credit added.`, 'success');
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+// ──────── WALLET ────────
+let walletCustomerId = null;
+
+window.loadWallet = async () => {
+  const phone = document.getElementById('walletPhone').value.trim();
+  if (!phone) return;
+  document.getElementById('walletDisplay').style.display = 'none';
+  try {
+    const [custRes, balRes, txRes] = await Promise.all([
+      cf('getPOSCustomer')({ query: phone }),
+      cf('getWalletBalance')({ phone }),
+      cf('getWalletTransactions')({ phone })
+    ]);
+    walletCustomerId = custRes.data.id;
+    document.getElementById('walletAmount').textContent = `KES ${(balRes.data.balance||0).toLocaleString()}`;
+    document.getElementById('walletCustomerName').textContent = custRes.data.name || phone;
+    document.getElementById('walletDisplay').style.display = 'block';
+    renderWalletTx(txRes.data || []);
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+function renderWalletTx(txs) {
+  const tbody = document.getElementById('walletTxBody');
+  if (!txs.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">No transactions</td></tr>'; return; }
+  tbody.innerHTML = txs.map(t => `
+    <tr>
+      <td>${esc(t.date)}</td>
+      <td><span class="badge badge-${t.type === 'credit' ? 'green' : 'red'}">${esc(t.type)}</span></td>
+      <td style="color:${t.type === 'credit' ? 'var(--green)' : 'var(--red)'};">${t.type === 'credit' ? '+' : '-'}${(t.amount||0).toLocaleString()}</td>
+      <td style="font-size:.8rem;color:var(--muted);">${esc(t.reference)}</td>
+    </tr>`).join('');
+}
+
+window.doTopUp = async () => {
+  const amount = parseFloat(document.getElementById('tuAmount').value);
+  const method = document.getElementById('tuMethod').value;
+  const ref    = document.getElementById('tuRef').value.trim();
+  if (!amount || !ref) { toast('Amount and reference required.', 'error'); return; }
+  try {
+    await cf('topUpWallet')({ phone: document.getElementById('walletPhone').value.trim(), amount, method, reference: ref });
+    closeModal('topUpModal');
+    toast(`Wallet topped up with KES ${amount}.`, 'success');
+    window.loadWallet();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.doDeduct = async () => {
+  const amount = parseFloat(document.getElementById('deductAmount').value);
+  const saleId = document.getElementById('deductSale').value.trim();
+  if (!amount || !saleId) { toast('Amount and sale ID required.', 'error'); return; }
+  try {
+    await cf('deductWallet')({ phone: document.getElementById('walletPhone').value.trim(), amount, saleId });
+    closeModal('deductModal');
+    toast(`KES ${amount} deducted from wallet.`, 'success');
+    window.loadWallet();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.doRefund = async () => {
+  const amount  = parseFloat(document.getElementById('refundAmount').value);
+  const origSale = document.getElementById('refundSale').value.trim();
+  if (!amount || !origSale) { toast('Amount and original sale ID required.', 'error'); return; }
+  try {
+    await cf('refundToWallet')({ phone: document.getElementById('walletPhone').value.trim(), amount, originalSaleId: origSale });
+    closeModal('refundModal');
+    toast(`KES ${amount} refunded to wallet.`, 'success');
+    window.loadWallet();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+// ──────── GIFT CARDS ────────
+function setDefaultGcExpiry() {
+  const d = new Date(); d.setFullYear(d.getFullYear() + 1);
+  const el = document.getElementById('gcExpiry');
+  if (el) el.value = d.toISOString().split('T')[0];
+}
+
+async function loadGiftCards() {
+  try {
+    const res = await cf('getGiftCards')({});
+    renderGiftCards(res.data || []);
+  } catch(e) { document.getElementById('gcListBody').innerHTML = `<tr><td colspan="7" style="color:var(--red);">${e.message}</td></tr>`; }
+}
+
+function gcStatusBadge(status) {
+  const map = { active:'badge-green', depleted:'badge-muted', expired:'badge-red' };
+  return `<span class="badge ${map[status]||'badge-muted'}">${status}</span>`;
+}
+
+function renderGiftCards(cards) {
+  const tbody = document.getElementById('gcListBody');
+  if (!cards.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No gift cards yet</td></tr>'; return; }
+  tbody.innerHTML = cards.map(c => `
+    <tr>
+      <td class="gc-code">${esc(c.code)}</td>
+      <td>${esc(c.recipientName)}</td>
+      <td>KES ${(c.amount||0).toLocaleString()}</td>
+      <td>KES ${(c.remaining||0).toLocaleString()}</td>
+      <td>${gcStatusBadge(c.status)}</td>
+      <td style="font-size:.8rem;">${esc(c.expiry)}</td>
+      <td><button class="btn btn-ghost btn-xs" onclick="copyCode('${esc(c.code)}')">Copy</button></td>
+    </tr>`).join('');
+}
+
+window.copyCode = code => { navigator.clipboard.writeText(code); toast('Code copied!', 'success'); };
+
+window.checkGiftCard = async () => {
+  const code = document.getElementById('gcCheckCode').value.trim().toUpperCase();
+  if (!code) return;
+  const el = document.getElementById('gcCheckResult');
+  try {
+    const res = await cf('checkGiftCardBalance')({ code });
+    const d = res.data;
+    el.innerHTML = `<div style="background:var(--bg4);border-radius:8px;padding:12px;margin-top:8px;">
+      <p style="font-size:.8rem;color:var(--muted);">Remaining Balance</p>
+      <p style="font-size:1.5rem;font-weight:700;color:var(--green);">KES ${(d.remaining||0).toLocaleString()}</p>
+      <p style="font-size:.8rem;color:var(--muted);">Status: ${gcStatusBadge(d.status)} | Expires: ${esc(d.expiry)}</p>
+    </div>`;
+  } catch(e) { el.innerHTML = `<p style="color:var(--red);font-size:.875rem;">${e.message}</p>`; }
+};
+
+window.redeemGiftCard = async () => {
+  const code   = document.getElementById('gcRedeemCode').value.trim().toUpperCase();
+  const amount = parseFloat(document.getElementById('gcRedeemAmount').value);
+  const saleId = document.getElementById('gcRedeemSale').value.trim();
+  if (!code || !amount || !saleId) { toast('Code, amount and sale ID are required.', 'error'); return; }
+  try {
+    const res = await cf('redeemGiftCard')({ code, amount, saleId });
+    toast(`Redeemed KES ${amount}. Remaining: KES ${res.data.remaining}.`, 'success');
+    loadGiftCards();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.issueGiftCard = async () => {
+  const recipientName  = document.getElementById('gcRecipient').value.trim();
+  const recipientPhone = document.getElementById('gcPhone').value.trim();
+  const amount  = parseFloat(document.getElementById('gcAmount').value);
+  const expiry  = document.getElementById('gcExpiry').value;
+  if (!recipientName || !recipientPhone || !amount) { toast('All fields required.', 'error'); return; }
+  try {
+    const res = await cf('issueGiftCard')({ recipientName, recipientPhone, amount, expiry });
+    closeModal('issueGcModal');
+    toast(`Gift card issued! Code: ${res.data.code}`, 'success');
+    loadGiftCards();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+// ──────── OFFERS ────────
+async function loadOffers() {
+  const el = document.getElementById('offerList');
+  try {
+    const res = await cf('getOffers')({});
+    const offers = res.data || [];
+    if (!offers.length) { el.innerHTML = '<div class="empty"><div class="icon">🎁</div><p>No offers yet</p></div>'; return; }
+    el.innerHTML = offers.map(o => `
+      <div class="offer-card ${o.active ? 'active-offer' : ''}">
+        <div class="offer-info">
+          <h4>${esc(o.name)} ${o.active ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-muted">Inactive</span>'}</h4>
+          <p>${esc(o.description)}</p>
+          <p style="margin-top:4px;font-size:.75rem;color:var(--muted);">${esc(o.type)} · ${esc(String(o.value))} · ${esc(o.eligibility)} · ${esc(o.startDate)} → ${esc(o.endDate)}</p>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn btn-ghost btn-sm" onclick="toggleOffer('${o.id}', ${!o.active})">${o.active ? 'Disable' : 'Enable'}</button>
+          <button class="btn btn-red btn-xs" onclick="deleteOffer('${o.id}')">✕</button>
+        </div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<p style="color:var(--red);">${e.message}</p>`; }
+}
+
+window.updateEligibilityFields = () => {
+  const val = document.getElementById('offerEligibility').value;
+  document.getElementById('tierFieldWrap').style.display     = val === 'tier'     ? 'block' : 'none';
+  document.getElementById('minSpendFieldWrap').style.display = val === 'minSpend' ? 'block' : 'none';
+};
+
+window.updateOfferFields = () => {};
+
+window.saveOffer = async () => {
+  const payload = {
+    name:        document.getElementById('offerName').value.trim(),
+    description: document.getElementById('offerDesc').value.trim(),
+    type:        document.getElementById('offerType').value,
+    value:       parseFloat(document.getElementById('offerValue').value),
+    eligibility: document.getElementById('offerEligibility').value,
+    targetTier:  document.getElementById('offerTier').value,
+    minSpend:    parseFloat(document.getElementById('offerMinSpend').value) || 0,
+    startDate:   document.getElementById('offerStart').value,
+    endDate:     document.getElementById('offerEnd').value,
+    active:      document.getElementById('offerActive').checked
+  };
+  if (!payload.name || !payload.value) { toast('Name and value required.', 'error'); return; }
+  try {
+    await cf('createOffer')(payload);
+    closeModal('createOfferModal');
+    toast('Offer created!', 'success');
+    loadOffers();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.toggleOffer = async (id, active) => {
+  try {
+    await cf('toggleOffer')({ offerId: id, active });
+    toast(`Offer ${active ? 'enabled' : 'disabled'}.`, 'success');
+    loadOffers();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+window.deleteOffer = async id => {
+  if (!confirm('Delete this offer?')) return;
+  try {
+    await cf('toggleOffer')({ offerId: id, deleted: true });
+    toast('Offer deleted.', 'success');
+    loadOffers();
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+// ──────── SEGMENTS ────────
+const SEG_CONFIG = [
+  { key:'champions',   label:'🏆 Champions',   cls:'seg-champions'  },
+  { key:'loyal',       label:'💚 Loyal',        cls:'seg-loyal'      },
+  { key:'atRisk',      label:'⚠️ At Risk',      cls:'seg-atrisk'     },
+  { key:'lost',        label:'😴 Lost',          cls:'seg-lost'       },
+  { key:'new',         label:'🆕 New',           cls:'seg-new'        },
+  { key:'highValue',   label:'💎 High Value',    cls:'seg-highvalue'  },
+  { key:'occasional',  label:'😐 Occasional',   cls:'seg-occasional' },
+];
+
+window.analyzeSegments = async () => {
+  const grid = document.getElementById('segmentGrid');
+  grid.innerHTML = '<div style="grid-column:1/-1;"><div class="spinner" style="margin:24px auto;"></div></div>';
+  try {
+    const res = await cf('getCustomerSegments')({});
+    const data = res.data || {};
+    const total = Object.values(data).reduce((s, seg) => s + (seg.count || 0), 0);
+    grid.innerHTML = SEG_CONFIG.map(s => {
+      const seg = data[s.key] || { count: 0, topCustomers: [] };
+      const pct = total ? ((seg.count / total) * 100).toFixed(1) : 0;
+      return `
+        <div class="segment-card ${s.cls}">
+          <h3>${s.label}</h3>
+          <div class="count">${seg.count}</div>
+          <div class="pct">${pct}% of all customers</div>
+          <ul class="top-list">
+            ${(seg.topCustomers||[]).slice(0,3).map(c => `<li>• ${esc(c.name)} — KES ${(c.spend||0).toLocaleString()}</li>`).join('') || '<li>No data</li>'}
+          </ul>
+          <button class="btn btn-ghost btn-xs" style="margin-top:12px;" onclick="exportSegment('${s.key}', '${s.label}', ${JSON.stringify(seg.topCustomers||[]).replace(/'/g,"\\'")}  )">↓ Export CSV</button>
+        </div>`;
+    }).join('');
+  } catch(e) { grid.innerHTML = `<div class="empty" style="grid-column:1/-1;"><p style="color:var(--red);">${e.message}</p></div>`; }
+};
+
+window.exportSegment = (key, label, customers) => {
+  const rows = [['Name','Phone','Spend']].concat((customers||[]).map(c => [c.name, c.phone, c.spend]));
+  const csv  = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `segment-${key}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+// ──────── Utility ────────
+function esc(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

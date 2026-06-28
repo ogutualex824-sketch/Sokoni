@@ -1183,6 +1183,16 @@ service cloud.firestore {
       allow write: if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
     }
 
+    /* SmartPOS 2.0 — Multi-device sessions */
+    match /posSessions/{sessionId} {
+      /* Seller always has full read access; other session members via memberUids array */
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.sellerId == request.auth.uid)
+                    || (isAuthed() && request.auth.uid in resource.data.memberUids);
+      /* Only Cloud Functions (Admin SDK) write session state */
+      allow write:  if false;
+    }
+
     match /posPayments/{checkoutId} {
       allow read:  if isAdmin()
                    || (isAuthed() && (resource.data.sellerUid == request.auth.uid || resource.data.sellerId == request.auth.uid))
@@ -1747,6 +1757,41 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    /* SmartPOS 2.1 — Sale records */
+    match /posSales/{saleId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerId == request.auth.uid)
+                   || (isAuthed() && resource.data.cashierUid == request.auth.uid);
+      allow write: if false; /* CF only */
+    }
+
+    /* Digital receipts — public verify, CF write */
+    match /receipts/{receiptId} {
+      allow read:  if true; /* public verification endpoint */
+      allow write: if false;
+    }
+
+    /* POS audit trail — manager+ read, CF write */
+    match /posAuditLog/{logId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && (request.auth.token.posRole == 'manager'
+                       || request.auth.token.posRole == 'owner'));
+      allow write: if false;
+    }
+
+    /* Inventory transfers */
+    match /inventoryTransfers/{transferId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerId == request.auth.uid);
+      allow write: if false;
+    }
+
+    /* Branches */
+    match /branches/{branchId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
     match /posRefunds/{refundId} {
       allow create: if claimsPosOwner()
                     && request.resource.data.originalTxnId is string
@@ -1792,6 +1837,155 @@ service cloud.firestore {
       allow update: if isAdmin()
                     || (isAuthed() && resource.data.businessId == request.auth.uid
                         && request.resource.data.businessId == resource.data.businessId);
+      allow delete: if isAdmin();
+    }
+
+    /* ─── SmartPOS 3.0 — Smart Inventory Pro ───────────────────── */
+    match /posBatches/{batchId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posSerials/{serialId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posWarehouses/{warehouseId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posWarehouseStock/{stockId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posPurchaseOrders/{poId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posSuppliers/{supplierId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posReorderQueue/{itemId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posStockValuation/{valuationId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    /* ─── SmartPOS 3.0 — Accounting ────────────────────────────── */
+    match /posAccounts/{accountId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posJournalEntries/{entryId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posExpenses/{expenseId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posAccountingPeriods/{periodId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posAccountBalances/{balanceId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    /* ─── SmartPOS 3.0 — CRM Pro ───────────────────────────────── */
+    match /posWallets/{walletId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posWalletTransactions/{txnId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posGiftCards/{cardId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posStoreCreditLog/{creditId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posReferrals/{referralId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posOffers/{offerId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    /* ─── SmartPOS 3.0 — Staff Ops ─────────────────────────────── */
+    match /posAttendance/{attendanceId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posCommissions/{commissionId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posCommissionRates/{rateId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posApprovals/{approvalId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posCashReconciliation/{reconcileId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    /* ─── SmartPOS 3.0 — HQ / Branch Mgmt ──────────────────────── */
+    match /posCentralPrices/{priceId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posSharedCatalog/{catalogId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posCrossBranchFulfillments/{fulfillmentId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    /* ─── SmartPOS 3.0 — BI Snapshots ──────────────────────────── */
+    match /posBISnapshots/{snapshotId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    /* ─── SmartPOS 3.0 — AI Assistant ──────────────────────────── */
+    match /posAIQueries/{queryId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    /* ─── SmartPOS 3.0 — Integrations ──────────────────────────── */
+    match /posWebhooks/{webhookId} {
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /posAPIKeys/{keyId} {
+      /* never expose key hash to client — owner can read metadata only */
+      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    /* ─── SmartPOS 3.0 — Hardware Registry ─────────────────────── */
+    match /posTerminals/{terminalId} {
+      allow read:  if isAuthed() && (resource.data.uid == request.auth.uid || isAdmin());
+      /* hardware wizard writes directly — allow owner write */
+      allow create, update: if isAuthed() && request.resource.data.uid == request.auth.uid;
       allow delete: if isAdmin();
     }
 
@@ -2293,7 +2487,37 @@ service cloud.firestore {
 
     match /platformEvents/{eventId} {
       allow read:  if isAdmin()
-                   || (isAuthed() && resource.data.publisherUid == request.auth.uid);
+                   || (isAuthed() && resource.data.metadata.publishedBy == request.auth.uid);
+      allow write: if false; /* CF only */
+    }
+
+    /* Event Bus subscriber registry */
+    match /eventSubscribers/{subId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* Operations Center metrics */
+    match /opsMetrics/{metricId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    match /selfHealLog/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    match /platformErrors/{errId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* Unified Payment Orchestrator */
+    match /payments/{paymentId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.buyerId == request.auth.uid);
+      allow write: if false; /* CF only */
     }
 
     match /platformSubscriptions/{subId} {

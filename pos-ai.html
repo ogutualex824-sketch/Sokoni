@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KASS — AI Business Assistant | SOKONI SmartPOS 3.0</title>
+  <meta name="description" content="KASS AI Business Intelligence Assistant for SOKONI SmartPOS" />
+  <script src="sokoni-config.js"></script>
+  <style>
+    :root {
+      --bg:#050508;--bg2:#0d0f14;--bg3:#161923;--bg4:#1e2533;
+      --border:#1e2533;--text:#e4e8f0;--muted:#6b7899;
+      --green:#22c55e;--blue:#3b82f6;--red:#ef4444;--yellow:#eab308;--purple:#a855f7;
+      --sidebar-w:260px;
+      --header-h:64px;
+      --input-h:76px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: var(--header-h);
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      z-index: 100;
+    }
+    .header-icon { font-size: 28px; flex-shrink: 0; }
+    .header-info { flex: 1; min-width: 0; }
+    .header-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .header-sub {
+      font-size: 11px;
+      color: var(--purple);
+      font-weight: 500;
+      letter-spacing: 0.03em;
+    }
+    .btn-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-back:hover { color: var(--text); border-color: var(--blue); }
+    .btn-sidebar-toggle {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 36px; height: 36px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    /* ── BODY LAYOUT ── */
+    .layout {
+      display: flex;
+      height: 100dvh;
+      padding-top: var(--header-h);
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow: hidden;
+      transition: transform 0.25s ease;
+    }
+    .sidebar-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .history-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .history-list::-webkit-scrollbar { width: 4px; }
+    .history-list::-webkit-scrollbar-track { background: transparent; }
+    .history-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .history-item {
+      padding: 10px 16px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .history-item:hover { background: var(--bg3); border-left-color: var(--blue); }
+    .history-item.active { background: var(--bg3); border-left-color: var(--blue); }
+    .history-q {
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .history-ts {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .history-empty {
+      padding: 24px 16px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.6;
+    }
+    .sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+    }
+    .btn-clear-history {
+      width: 100%;
+      padding: 8px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--red);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-clear-history:hover { background: rgba(239,68,68,0.08); }
+
+    /* ── CHAT AREA ── */
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px calc(var(--input-h) + 16px);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── WELCOME STATE ── */
+    .welcome {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px;
+      text-align: center;
+      gap: 12px;
+    }
+    .welcome-icon { font-size: 80px; line-height: 1; margin-bottom: 4px; }
+    .welcome-title { font-size: 26px; font-weight: 700; color: var(--text); }
+    .welcome-sub { font-size: 14px; color: var(--muted); max-width: 380px; line-height: 1.6; }
+    .chips-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 8px;
+    }
+    .chips-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 8px;
+      width: 100%;
+      max-width: 600px;
+      margin-top: 4px;
+    }
+    .chip {
+      padding: 10px 14px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s, border-color 0.15s;
+      line-height: 1.4;
+    }
+    .chip:hover { background: var(--bg4); border-color: var(--blue); color: var(--blue); }
+
+    /* ── MESSAGES ── */
+    .msg-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .msg-row.user { align-items: flex-end; }
+    .msg-row.kass { align-items: flex-start; }
+
+    .msg-bubble-user {
+      max-width: min(480px, 80%);
+      background: var(--blue);
+      color: #fff;
+      border-radius: 18px 18px 4px 18px;
+      padding: 10px 16px;
+      font-size: 14px;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+    .msg-ts-user {
+      font-size: 10px;
+      color: var(--muted);
+      padding-right: 4px;
+    }
+
+    .msg-kass-wrap {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      max-width: min(600px, 92%);
+    }
+    .kass-avatar {
+      width: 32px; height: 32px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .msg-bubble-kass {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px 18px 18px 18px;
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.6;
+      word-break: break-word;
+      flex: 1;
+    }
+    .kass-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--purple);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .kass-body { color: var(--text); }
+    .kass-body strong { font-weight: 700; color: #fff; }
+    .kass-body ul { padding-left: 0; margin: 6px 0; list-style: none; }
+    .kass-body ul li { padding: 2px 0 2px 16px; position: relative; }
+    .kass-body ul li::before { content: '•'; position: absolute; left: 0; color: var(--blue); }
+    .kass-body ol { padding-left: 0; margin: 6px 0; list-style: none; counter-reset: kass-counter; }
+    .kass-body ol li { padding: 2px 0 2px 20px; position: relative; counter-increment: kass-counter; }
+    .kass-body ol li::before { content: counter(kass-counter) "."; position: absolute; left: 0; color: var(--blue); font-weight: 600; }
+    .kass-body p { margin-bottom: 6px; }
+    .kass-body p:last-child { margin-bottom: 0; }
+    .intent-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    .intent-inventory  { background: rgba(34,197,94,0.12);  color: var(--green); }
+    .intent-staff      { background: rgba(59,130,246,0.12); color: var(--blue); }
+    .intent-revenue    { background: rgba(234,179,8,0.12);  color: var(--yellow); }
+    .intent-forecast   { background: rgba(168,85,247,0.12); color: var(--purple); }
+    .intent-branch     { background: rgba(59,130,246,0.12); color: var(--blue); }
+    .intent-promo      { background: rgba(234,179,8,0.12);  color: var(--yellow); }
+    .intent-general    { background: rgba(107,120,153,0.12); color: var(--muted); }
+    .intent-error      { background: rgba(239,68,68,0.12);  color: var(--red); }
+    .data-source {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .msg-ts-kass {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ── FOLLOW-UP CHIPS ── */
+    .followup-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+      margin-left: 42px;
+    }
+    .followup-chip {
+      padding: 6px 12px;
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .followup-chip:hover { background: var(--bg3); border-color: var(--blue); color: var(--blue); }
+
+    /* ── TYPING INDICATOR ── */
+    .typing-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .typing-bubble {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px 18px 18px 18px;
+      padding: 14px 18px;
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .dot {
+      width: 7px; height: 7px;
+      background: var(--muted);
+      border-radius: 50%;
+      animation: bounce 1.2s infinite ease-in-out;
+    }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+      40% { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* ── INPUT BAR ── */
+    .input-bar {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      left: var(--sidebar-w);
+      height: var(--input-h);
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      z-index: 50;
+    }
+    .input-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0 12px;
+      transition: border-color 0.15s;
+    }
+    .input-wrap:focus-within { border-color: var(--blue); }
+    #questionInput {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      padding: 14px 0;
+      resize: none;
+      line-height: 1.4;
+    }
+    #questionInput::placeholder { color: var(--muted); }
+    #questionInput:disabled { opacity: 0.5; cursor: not-allowed; }
+    .char-count {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .char-count.warn { color: var(--yellow); }
+    .char-count.over { color: var(--red); }
+    .btn-voice {
+      width: 36px; height: 36px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+    .btn-voice:hover { color: var(--text); border-color: var(--blue); }
+    .btn-voice.listening { color: var(--red); border-color: var(--red); background: rgba(239,68,68,0.08); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .btn-send {
+      width: 44px; height: 44px;
+      background: var(--blue);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.15s, transform 0.1s;
+      flex-shrink: 0;
+    }
+    .btn-send:hover:not(:disabled) { opacity: 0.85; transform: scale(1.04); }
+    .btn-send:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    /* ── SIDEBAR OVERLAY (mobile) ── */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 90;
+    }
+    .sidebar-overlay.active { display: block; }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed;
+      bottom: calc(var(--input-h) + 12px);
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--bg4);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 13px;
+      color: var(--text);
+      z-index: 200;
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 899px) {
+      .sidebar {
+        position: fixed;
+        top: var(--header-h);
+        bottom: 0;
+        left: 0;
+        z-index: 95;
+        transform: translateX(-100%);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .btn-sidebar-toggle { display: flex; }
+      .input-bar { left: 0; }
+    }
+    @media (max-width: 500px) {
+      .chips-grid { grid-template-columns: 1fr 1fr; }
+      .welcome-title { font-size: 20px; }
+      .welcome-icon { font-size: 60px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <button class="btn-sidebar-toggle" id="sidebarToggle" title="Toggle history" aria-label="Toggle conversation history">☰</button>
+  <span class="header-icon">🤖</span>
+  <div class="header-info">
+    <div class="header-title">KASS — AI Business Assistant</div>
+    <div class="header-sub">Powered by Claude AI</div>
+  </div>
+  <a href="pos.html" class="btn-back">← Back to POS</a>
+</header>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR OVERLAY (mobile) -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar" role="complementary" aria-label="Conversation history">
+    <div class="sidebar-header">
+      <div class="sidebar-title">History</div>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty" id="historyEmpty">No conversations yet.<br>Ask KASS your first question!</div>
+    </div>
+    <div class="sidebar-footer">
+      <button class="btn-clear-history" id="clearHistory">🗑 Clear History</button>
+    </div>
+  </aside>
+
+  <!-- CHAT AREA -->
+  <main class="chat-area" role="main">
+    <div class="messages" id="messages">
+
+      <!-- WELCOME STATE -->
+      <div class="welcome" id="welcomeState">
+        <div class="welcome-icon">🤖</div>
+        <h1 class="welcome-title">Hello, I'm KASS</h1>
+        <p class="welcome-sub">Your AI-powered business intelligence assistant. Ask me anything about your store.</p>
+        <div class="chips-label">Suggested Questions</div>
+        <div class="chips-grid" id="suggestedChips">
+          <button class="chip">📦 Which products need reordering?</button>
+          <button class="chip">👥 Which cashier sold the most today?</button>
+          <button class="chip">📉 Why did revenue decrease this week?</button>
+          <button class="chip">🔮 Which products will run out tomorrow?</button>
+          <button class="chip">🏪 Which branch is underperforming?</button>
+          <button class="chip">🎁 Recommend promotions based on my sales</button>
+          <button class="chip">🏆 What's my best-selling product this month?</button>
+          <button class="chip">🧾 How much VAT do I owe this month?</button>
+        </div>
+      </div>
+
+    </div><!-- /messages -->
+  </main>
+</div><!-- /layout -->
+
+<!-- INPUT BAR -->
+<div class="input-bar">
+  <div class="input-wrap">
+    <textarea
+      id="questionInput"
+      rows="1"
+      maxlength="500"
+      placeholder="Ask KASS anything about your business..."
+      aria-label="Ask KASS a question"
+    ></textarea>
+    <span class="char-count" id="charCount">500</span>
+  </div>
+  <button class="btn-voice" id="voiceBtn" title="Voice input" aria-label="Voice input" style="display:none">🎤</button>
+  <button class="btn-send" id="sendBtn" title="Send (Enter)" aria-label="Send message">➤</button>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- FIREBASE + APP LOGIC -->
+<script type="module">
+  import { initializeApp }        from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+
+  // ─── Init ───────────────────────────────────────────────────────────────────
+  const app  = initializeApp(window._sokoniConfig || {});
+  const auth = getAuth(app);
+  const fns  = getFunctions(app);
+
+  const cfAsk     = httpsCallable(fns, 'askPOSAssistant');
+  const cfHistory = httpsCallable(fns, 'getAIQueryHistory');
+
+  let currentUser   = null;
+  let isLoading     = false;
+  let recognition   = null;
+  let isListening   = false;
+  let history       = []; // [{id, question, answer, intent, dataContext, ts}]
+  let activeId      = null;
+
+  // ─── DOM refs ────────────────────────────────────────────────────────────────
+  const messagesEl     = document.getElementById('messages');
+  const welcomeEl      = document.getElementById('welcomeState');
+  const inputEl        = document.getElementById('questionInput');
+  const sendBtn        = document.getElementById('sendBtn');
+  const voiceBtn       = document.getElementById('voiceBtn');
+  const charCountEl    = document.getElementById('charCount');
+  const historyListEl  = document.getElementById('historyList');
+  const historyEmpty   = document.getElementById('historyEmpty');
+  const clearHistoryBtn= document.getElementById('clearHistory');
+  const sidebar        = document.getElementById('sidebar');
+  const sidebarToggle  = document.getElementById('sidebarToggle');
+  const sidebarOverlay = document.getElementById('sidebarOverlay');
+  const toastEl        = document.getElementById('toast');
+
+  // ─── Auth Guard ──────────────────────────────────────────────────────────────
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      window.location.href = 'auth.html';
+      return;
+    }
+    currentUser = user;
+    window._sellerId = user.uid;
+
+    // Check manager+ role via custom claims
+    const token = await user.getIdTokenResult();
+    const role = token.claims.role || 'buyer';
+    const allowed = ['manager','admin','superadmin','owner','cashier'];
+    if (!allowed.includes(role)) {
+      showToast('Access denied — manager role required.', true);
+      setTimeout(() => { window.location.href = 'pos.html'; }, 2000);
+      return;
+    }
+
+    await loadHistory();
+  });
+
+  // ─── History Sidebar ─────────────────────────────────────────────────────────
+  async function loadHistory() {
+    try {
+      const res = await cfHistory({ sellerId: window._sellerId, limit: 20 });
+      history = res.data.history || [];
+      renderHistoryList();
+    } catch (_) {
+      // Silently ignore — history is non-critical
+    }
+  }
+
+  function renderHistoryList() {
+    historyListEl.innerHTML = '';
+    if (history.length === 0) {
+      historyListEl.appendChild(historyEmpty);
+      return;
+    }
+    history.forEach(item => {
+      const el = document.createElement('div');
+      el.className = 'history-item' + (item.id === activeId ? ' active' : '');
+      el.dataset.id = item.id;
+      el.innerHTML = `
+        <div class="history-q">${escHtml(item.question.slice(0, 80))}</div>
+        <div class="history-ts">${formatTs(item.ts)}</div>
+      `;
+      el.addEventListener('click', () => replayHistoryItem(item));
+      historyListEl.appendChild(el);
+    });
+  }
+
+  function replayHistoryItem(item) {
+    activeId = item.id;
+    renderHistoryList();
+    hideWelcome();
+    // Remove existing non-welcome messages (replay single QA)
+    Array.from(messagesEl.querySelectorAll('.msg-row, .followup-chips')).forEach(n => n.remove());
+    appendUserMessage(item.question);
+    appendKASSMessage(item.answer, item.intent, item.dataContext, item.ts);
+    showFollowUpChips(item.intent);
+    closeSidebarOnMobile();
+  }
+
+  clearHistoryBtn.addEventListener('click', () => {
+    if (!confirm('Clear all conversation history?')) return;
+    history = [];
+    activeId = null;
+    renderHistoryList();
+    showToast('History cleared');
+  });
+
+  // ─── Main Ask Function ───────────────────────────────────────────────────────
+  async function askKASS(question) {
+    if (!question.trim() || isLoading) return;
+    if (question.length > 500) { showToast('Message too long (max 500 chars)', true); return; }
+
+    hideWelcome();
+    activeId = null;
+    appendUserMessage(question);
+    const typingEl = showTypingIndicator();
+    setLoading(true);
+
+    try {
+      const res = await cfAsk({ sellerId: window._sellerId, question: question.trim() });
+      typingEl.remove();
+      const { answer, intent, dataContext } = res.data;
+      const ts = new Date().toISOString();
+
+      appendKASSMessage(answer, intent, dataContext, ts);
+      showFollowUpChips(intent);
+
+      // Persist to local history
+      const entry = { id: Date.now().toString(), question, answer, intent, dataContext, ts };
+      history.unshift(entry);
+      if (history.length > 20) history.pop();
+      activeId = entry.id;
+      renderHistoryList();
+
+    } catch (e) {
+      typingEl.remove();
+      appendKASSMessage(
+        'Sorry, I encountered an error processing your request: ' + (e.message || 'Unknown error'),
+        'error',
+        null,
+        new Date().toISOString()
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ─── DOM Builders ────────────────────────────────────────────────────────────
+  function hideWelcome() {
+    if (welcomeEl && welcomeEl.parentElement) welcomeEl.remove();
+  }
+
+  function appendUserMessage(text) {
+    const row = document.createElement('div');
+    row.className = 'msg-row user';
+    row.innerHTML = `
+      <div class="msg-bubble-user">${escHtml(text)}</div>
+      <div class="msg-ts-user">${formatTs(new Date().toISOString())}</div>
+    `;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+  }
+
+  function appendKASSMessage(text, intent, dataContext, ts) {
+    const row = document.createElement('div');
+    row.className = 'msg-row kass';
+
+    const intentMeta = getIntentMeta(intent);
+
+    row.innerHTML = `
+      <div class="msg-kass-wrap">
+        <div class="kass-avatar">🤖</div>
+        <div class="msg-bubble-kass">
+          <div class="kass-label">KASS</div>
+          <div class="kass-body">${formatMessage(text)}</div>
+          <div class="intent-badge intent-${intentMeta.cls}">${intentMeta.icon} ${intentMeta.label}</div>
+          ${dataContext ? `<div class="data-source">📊 ${escHtml(dataContext)}</div>` : ''}
+          <div class="msg-ts-kass">${formatTs(ts || new Date().toISOString())}</div>
+        </div>
+      </div>
+    `;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+  }
+
+  function showTypingIndicator() {
+    const row = document.createElement('div');
+    row.className = 'typing-row';
+    row.innerHTML = `
+      <div class="kass-avatar">🤖</div>
+      <div class="typing-bubble">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+    `;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+    return row;
+  }
+
+  function showFollowUpChips(intent) {
+    const map = {
+      reorder_check:           ['Create PO', 'View Suppliers', 'Set Reorder Points'],
+      inventory:               ['Create PO', 'View Suppliers', 'Set Reorder Points'],
+      top_cashier:             ['View Full Report', 'Commission Details'],
+      staff:                   ['View Full Report', 'Commission Details'],
+      revenue_decline:         ['View Trend', 'Check By Category'],
+      revenue:                 ['View Trend', 'Check By Category'],
+      stockout_forecast:       ['Order Stock', 'View Forecast'],
+      forecast:                ['Order Stock', 'View Forecast'],
+      branch_performance:      ['Open HQ Dashboard', 'View Branch Details'],
+      branch:                  ['Open HQ Dashboard', 'View Branch Details'],
+      promotion_recommendation:['Create Offer', 'View Slow Movers'],
+      promo:                   ['Create Offer', 'View Slow Movers'],
+      vat:                     ['Download VAT Report', 'View Tax Summary'],
+      general:                 ['Ask Another Question', 'View Analytics'],
+      error:                   ['Try Again', 'Contact Support'],
+    };
+    const chips = map[intent] || map['general'];
+    const wrap = document.createElement('div');
+    wrap.className = 'followup-chips';
+    chips.forEach(label => {
+      const btn = document.createElement('button');
+      btn.className = 'followup-chip';
+      btn.textContent = label;
+      btn.addEventListener('click', () => handleFollowUp(label, intent));
+      wrap.appendChild(btn);
+    });
+    messagesEl.appendChild(wrap);
+    scrollToBottom();
+  }
+
+  function handleFollowUp(label, intent) {
+    // Map chip labels to navigation or new questions
+    const navMap = {
+      'Create PO':           'pos.html#purchase-orders',
+      'View Suppliers':      'pos.html#suppliers',
+      'Set Reorder Points':  'pos.html#inventory-settings',
+      'View Full Report':    'pos-analytics.html',
+      'Commission Details':  'pos-analytics.html#commissions',
+      'Open HQ Dashboard':   'pos-analytics.html#branches',
+      'View Branch Details': 'pos-analytics.html#branches',
+      'View Forecast':       'pos-analytics.html#forecast',
+      'View Trend':          'pos-analytics.html#revenue',
+      'Check By Category':   'pos-analytics.html#categories',
+      'Download VAT Report': 'pos-analytics.html#vat',
+      'View Tax Summary':    'pos-analytics.html#vat',
+      'View Analytics':      'pos-analytics.html',
+      'Contact Support':     'trust.html',
+    };
+    if (navMap[label]) {
+      window.location.href = navMap[label];
+    } else if (label === 'Try Again') {
+      inputEl.focus();
+    } else {
+      // Convert to a question and ask
+      const questionMap = {
+        'Order Stock':    'Which items should I order stock for urgently?',
+        'Create Offer':   'What promotions should I create right now?',
+        'View Slow Movers':'Which products are the slowest moving this month?',
+        'Ask Another Question': '',
+      };
+      const q = questionMap[label];
+      if (q) { setInput(q); askKASS(q); }
+    }
+  }
+
+  // ─── Markdown Formatter (XSS-safe) ───────────────────────────────────────────
+  function formatMessage(text) {
+    if (!text) return '';
+
+    // Split into blocks on double newlines
+    const blocks = text.split(/\n\n+/);
+    let html = '';
+
+    for (const block of blocks) {
+      const lines = block.split('\n');
+
+      // Check if block is a bullet list
+      if (lines.every(l => /^[-•*]\s/.test(l.trim()) || l.trim() === '')) {
+        const items = lines.filter(l => l.trim()).map(l => {
+          const content = l.replace(/^[-•*]\s+/, '').trim();
+          return `<li>${inlineFormat(content)}</li>`;
+        });
+        html += `<ul>${items.join('')}</ul>`;
+        continue;
+      }
+
+      // Check if block is a numbered list
+      if (lines.every(l => /^\d+\.\s/.test(l.trim()) || l.trim() === '')) {
+        const items = lines.filter(l => l.trim()).map(l => {
+          const content = l.replace(/^\d+\.\s+/, '').trim();
+          return `<li>${inlineFormat(content)}</li>`;
+        });
+        html += `<ol>${items.join('')}</ol>`;
+        continue;
+      }
+
+      // Mixed lines — handle inline
+      const paraLines = lines.map(l => {
+        const t = l.trim();
+        if (!t) return '';
+        if (/^[-•*]\s/.test(t)) return `<ul><li>${inlineFormat(t.replace(/^[-•*]\s+/, ''))}</li></ul>`;
+        if (/^\d+\.\s/.test(t)) return `<ol><li>${inlineFormat(t.replace(/^\d+\.\s+/, ''))}</li></ol>`;
+        return inlineFormat(t);
+      });
+      const joined = paraLines.filter(Boolean).join('<br>');
+      if (joined) html += `<p>${joined}</p>`;
+    }
+
+    return html;
+  }
+
+  function inlineFormat(text) {
+    // Escape HTML first, then apply safe formatting
+    let s = escHtml(text);
+    // **bold**
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // *italic*
+    s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    return s;
+  }
+
+  // ─── Intent Meta ─────────────────────────────────────────────────────────────
+  function getIntentMeta(intent) {
+    const map = {
+      reorder_check:            { cls:'inventory', icon:'📦', label:'Inventory Analysis' },
+      inventory:                { cls:'inventory', icon:'📦', label:'Inventory Analysis' },
+      top_cashier:              { cls:'staff',     icon:'👥', label:'Staff Performance' },
+      staff:                    { cls:'staff',     icon:'👥', label:'Staff Performance' },
+      revenue_decline:          { cls:'revenue',   icon:'📉', label:'Revenue Analysis' },
+      revenue:                  { cls:'revenue',   icon:'💰', label:'Revenue Analysis' },
+      stockout_forecast:        { cls:'forecast',  icon:'🔮', label:'Stock Forecast' },
+      forecast:                 { cls:'forecast',  icon:'🔮', label:'Stock Forecast' },
+      branch_performance:       { cls:'branch',    icon:'🏪', label:'Branch Performance' },
+      branch:                   { cls:'branch',    icon:'🏪', label:'Branch Performance' },
+      promotion_recommendation: { cls:'promo',     icon:'🎁', label:'Promotions' },
+      promo:                    { cls:'promo',     icon:'🎁', label:'Promotions' },
+      vat:                      { cls:'revenue',   icon:'🧾', label:'Tax & Compliance' },
+      general:                  { cls:'general',   icon:'💡', label:'Business Insight' },
+      error:                    { cls:'error',     icon:'⚠️', label:'Error' },
+    };
+    return map[intent] || map['general'];
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
+  function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+              .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function formatTs(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      const now = new Date();
+      const diff = now - d;
+      if (diff < 60000) return 'just now';
+      if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+      if (d.toDateString() === now.toDateString()) {
+        return d.toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' });
+      }
+      return d.toLocaleDateString('en-KE', { day:'2-digit', month:'short' });
+    } catch(_) { return ''; }
+  }
+
+  function scrollToBottom() {
+    requestAnimationFrame(() => {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
+  }
+
+  function setLoading(state) {
+    isLoading = state;
+    inputEl.disabled = state;
+    sendBtn.disabled = state;
+    if (voiceBtn) voiceBtn.disabled = state;
+  }
+
+  function setInput(text) {
+    inputEl.value = text;
+    updateCharCount();
+  }
+
+  function updateCharCount() {
+    const len = inputEl.value.length;
+    const rem = 500 - len;
+    charCountEl.textContent = rem;
+    charCountEl.className = 'char-count' + (rem < 50 ? ' warn' : '') + (rem < 0 ? ' over' : '');
+  }
+
+  function showToast(msg, isError = false) {
+    toastEl.textContent = msg;
+    toastEl.style.borderColor = isError ? 'var(--red)' : 'var(--border)';
+    toastEl.classList.add('show');
+    clearTimeout(toastEl._t);
+    toastEl._t = setTimeout(() => toastEl.classList.remove('show'), 3000);
+  }
+
+  // ─── Input Events ─────────────────────────────────────────────────────────────
+  inputEl.addEventListener('input', () => {
+    updateCharCount();
+    // Auto-resize textarea (max 3 rows)
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 72) + 'px';
+  });
+
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  });
+
+  sendBtn.addEventListener('click', handleSend);
+
+  function handleSend() {
+    const q = inputEl.value.trim();
+    if (!q || isLoading) return;
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+    updateCharCount();
+    askKASS(q);
+  }
+
+  // ─── Suggested Chips ─────────────────────────────────────────────────────────
+  document.getElementById('suggestedChips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    const text = chip.textContent.trim().replace(/^[^\s]+\s/, ''); // strip emoji prefix
+    // Keep emoji prefix stripped for clean question
+    const question = chip.textContent.replace(/^[📦👥📉🔮🏪🎁🏆🧾]\s/, '').trim();
+    setInput(question);
+    askKASS(question);
+  });
+
+  // ─── Voice Input ──────────────────────────────────────────────────────────────
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) {
+    voiceBtn.style.display = 'flex';
+    recognition = new SR();
+    recognition.lang = 'en-KE';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setInput(inputEl.value ? inputEl.value + ' ' + transcript : transcript);
+    };
+    recognition.onend = () => {
+      isListening = false;
+      voiceBtn.classList.remove('listening');
+      voiceBtn.title = 'Voice input';
+    };
+    recognition.onerror = (e) => {
+      isListening = false;
+      voiceBtn.classList.remove('listening');
+      if (e.error !== 'no-speech') showToast('Voice error: ' + e.error, true);
+    };
+
+    voiceBtn.addEventListener('click', () => {
+      if (isListening) {
+        recognition.stop();
+      } else {
+        recognition.start();
+        isListening = true;
+        voiceBtn.classList.add('listening');
+        voiceBtn.title = 'Listening… click to stop';
+      }
+    });
+  }
+
+  // ─── Sidebar Toggle (mobile) ──────────────────────────────────────────────────
+  sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('open');
+    sidebarOverlay.classList.toggle('active');
+  });
+
+  sidebarOverlay.addEventListener('click', closeSidebarOnMobile);
+
+  function closeSidebarOnMobile() {
+    sidebar.classList.remove('open');
+    sidebarOverlay.classList.remove('active');
+  }
+
+  // ─── Init char count ─────────────────────────────────────────────────────────
+  updateCharCount();
+  inputEl.focus();
+</script>
+</body>
+</html>

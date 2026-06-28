@@ -8122,6 +8122,255 @@ exports.impactGetEnvironmental             = impact.impactGetEnvironmental;
 exports.impactAdminUpdateEnvironmental     = impact.impactAdminUpdateEnvironmental;
 exports.impactAdminCreateEnvProject        = impact.impactAdminCreateEnvProject;
 
+/* ── SmartPOS 2.0 — Multi-Device Session ──────────────────── */
+const posSession = require('./pos-session');
+exports.createPosSession          = posSession.createPosSession;
+exports.joinPosSession            = posSession.joinPosSession;
+exports.leavePosSession           = posSession.leavePosSession;
+exports.closePosSession           = posSession.closePosSession;
+exports.posHeartbeat              = posSession.posHeartbeat;
+exports.updatePosCart             = posSession.updatePosCart;
+exports.getPosSession             = posSession.getPosSession;
+exports.removeDeviceFromSession   = posSession.removeDeviceFromSession;
+exports.listActiveSessions        = posSession.listActiveSessions;
+exports.posSessionCleanup         = posSession.posSessionCleanup;
+
+/* ── SmartPOS 2.1 Retail Engine ─────────────────────────────── */
+const posRetailEngine = require('./pos-retail-engine');
+/* Customer Engine */
+exports.getPOSCustomer             = posRetailEngine.getPOSCustomer;
+exports.upsertPOSCustomer          = posRetailEngine.upsertPOSCustomer;
+/* Sale Recording */
+exports.recordPOSSale              = posRetailEngine.recordPOSSale;
+exports.getPOSSale                 = posRetailEngine.getPOSSale;
+exports.voidPOSSale                = posRetailEngine.voidPOSSale;
+/* Receipt Engine */
+exports.getReceipt                 = posRetailEngine.getReceipt;
+exports.emailReceipt               = posRetailEngine.emailReceipt;
+/* Inventory Intelligence */
+exports.getInventoryAlerts         = posRetailEngine.getInventoryAlerts;
+exports.getInventoryInsights       = posRetailEngine.getInventoryInsights;
+exports.getReorderSuggestions      = posRetailEngine.getReorderSuggestions;
+/* POS Analytics */
+exports.getPOSAnalytics            = posRetailEngine.getPOSAnalytics;
+exports.getLivePOSMetrics          = posRetailEngine.getLivePOSMetrics;
+/* Staff Management */
+exports.getStaffPermissions        = posRetailEngine.getStaffPermissions;
+exports.recordAuditEvent           = posRetailEngine.recordAuditEvent;
+exports.getAuditLog                = posRetailEngine.getAuditLog;
+exports.getShiftSummary            = posRetailEngine.getShiftSummary;
+/* Multi-Branch */
+exports.getBranchComparison        = posRetailEngine.getBranchComparison;
+exports.initiateInventoryTransfer  = posRetailEngine.initiateInventoryTransfer;
+/* Scheduled */
+exports.inventoryAlertSweep        = posRetailEngine.inventoryAlertSweep;
+
+/* ── SmartPOS 3.0 — Smart Inventory Pro ─────────────────────── */
+const posInventoryPro = require('./pos-inventory-pro');
+/* Batch / Lot */
+exports.createBatch                = posInventoryPro.createBatch;
+exports.getBatches                 = posInventoryPro.getBatches;
+exports.consumeBatch               = posInventoryPro.consumeBatch;
+/* Serial Numbers */
+exports.registerSerial             = posInventoryPro.registerSerial;
+exports.getSerial                  = posInventoryPro.getSerial;
+exports.updateSerialStatus         = posInventoryPro.updateSerialStatus;
+/* Warehouses */
+exports.createWarehouse            = posInventoryPro.createWarehouse;
+exports.getWarehouses              = posInventoryPro.getWarehouses;
+exports.transferWarehouseStock     = posInventoryPro.transferWarehouseStock;
+/* Purchase Orders */
+exports.createPurchaseOrder        = posInventoryPro.createPurchaseOrder;
+exports.receivePurchaseOrder       = posInventoryPro.receivePurchaseOrder;
+exports.updatePurchaseOrderStatus  = posInventoryPro.updatePurchaseOrderStatus;
+exports.getPurchaseOrders          = posInventoryPro.getPurchaseOrders;
+/* Suppliers */
+exports.upsertSupplier             = posInventoryPro.upsertSupplier;
+exports.getSuppliers               = posInventoryPro.getSuppliers;
+exports.deleteSupplier             = posInventoryPro.deleteSupplier;
+/* Reorder */
+exports.getReorderQueue            = posInventoryPro.getReorderQueue;
+exports.dismissReorderItem         = posInventoryPro.dismissReorderItem;
+exports.createAutoReorderPO        = posInventoryPro.createAutoReorderPO;
+/* Valuation */
+exports.getStockValuation          = posInventoryPro.getStockValuation;
+/* Forecasting */
+exports.getInventoryForecast       = posInventoryPro.getInventoryForecast;
+/* Scheduled */
+exports.batchExpiryAlertSweep      = posInventoryPro.batchExpiryAlertSweep;
+
+/* ── SmartPOS 3.0 — Accounting ──────────────────────────────── */
+const posAccounting = require('./pos-accounting');
+exports.initializeChartOfAccounts  = posAccounting.initializeChartOfAccounts;
+exports.getChartOfAccounts         = posAccounting.getChartOfAccounts;
+exports.createAccount              = posAccounting.createAccount;
+exports.createJournalEntry         = posAccounting.createJournalEntry;
+exports.getJournalEntries          = posAccounting.getJournalEntries;
+exports.voidJournalEntry           = posAccounting.voidJournalEntry;
+exports.getProfitAndLoss           = posAccounting.getProfitAndLoss;
+exports.getBalanceSheet            = posAccounting.getBalanceSheet;
+exports.getCashFlow                = posAccounting.getCashFlow;
+exports.getVATReport               = posAccounting.getVATReport;
+exports.createExpense              = posAccounting.createExpense;
+exports.getExpenses                = posAccounting.getExpenses;
+exports.updateExpense              = posAccounting.updateExpense;
+exports.deleteExpense              = posAccounting.deleteExpense;
+exports.getExpenseSummary          = posAccounting.getExpenseSummary;
+exports.closeAccountingPeriod      = posAccounting.closeAccountingPeriod;
+exports.getAccountingPeriods       = posAccounting.getAccountingPeriods;
+exports.exportAccountingData       = posAccounting.exportAccountingData;
+exports.monthlyAccountingSnapshot  = posAccounting.monthlyAccountingSnapshot;
+
+/* ── SmartPOS 3.0 — CRM Pro ─────────────────────────────────── */
+const posCrmPro = require('./pos-crm-pro');
+/* Wallet */
+exports.getWalletBalance           = posCrmPro.getWalletBalance;
+exports.topUpWallet                = posCrmPro.topUpWallet;
+exports.deductWallet               = posCrmPro.deductWallet;
+exports.refundToWallet             = posCrmPro.refundToWallet;
+exports.getWalletTransactions      = posCrmPro.getWalletTransactions;
+/* Gift Cards */
+exports.issueGiftCard              = posCrmPro.issueGiftCard;
+exports.redeemGiftCard             = posCrmPro.redeemGiftCard;
+exports.checkGiftCardBalance       = posCrmPro.checkGiftCardBalance;
+exports.getGiftCards               = posCrmPro.getGiftCards;
+/* Store Credit */
+exports.issueStoreCredit           = posCrmPro.issueStoreCredit;
+exports.useStoreCredit             = posCrmPro.useStoreCredit;
+exports.getStoreCreditBalance      = posCrmPro.getStoreCreditBalance;
+/* Birthday & Referrals */
+exports.checkBirthdayReward        = posCrmPro.checkBirthdayReward;
+exports.getBirthdayCustomers       = posCrmPro.getBirthdayCustomers;
+exports.recordReferral             = posCrmPro.recordReferral;
+exports.completeReferralReward     = posCrmPro.completeReferralReward;
+exports.getReferralStats           = posCrmPro.getReferralStats;
+/* Offers */
+exports.createOffer                = posCrmPro.createOffer;
+exports.getActiveOffers            = posCrmPro.getActiveOffers;
+exports.getOffers                  = posCrmPro.getOffers;
+exports.toggleOffer                = posCrmPro.toggleOffer;
+/* Segmentation */
+exports.getCustomerSegments        = posCrmPro.getCustomerSegments;
+exports.getCustomerInsights        = posCrmPro.getCustomerInsights;
+/* Tiers */
+exports.upgradeMembershipTier      = posCrmPro.upgradeMembershipTier;
+exports.getMembershipStats         = posCrmPro.getMembershipStats;
+/* Scheduled */
+exports.birthdayRewardSweep        = posCrmPro.birthdayRewardSweep;
+
+/* ── SmartPOS 3.0 — Staff Operations ───────────────────────── */
+const posStaffOps = require('./pos-staff-ops');
+/* Shifts */
+exports.openShift                  = posStaffOps.openShift;
+exports.closeShift                 = posStaffOps.closeShift;
+exports.getCurrentShift            = posStaffOps.getCurrentShift;
+exports.getShiftHistory            = posStaffOps.getShiftHistory;
+/* Attendance */
+exports.clockIn                    = posStaffOps.clockIn;
+exports.clockOut                   = posStaffOps.clockOut;
+exports.getAttendance              = posStaffOps.getAttendance;
+exports.getAttendanceSummary       = posStaffOps.getAttendanceSummary;
+/* Commissions */
+exports.setCommissionRate          = posStaffOps.setCommissionRate;
+exports.getCommissionRate          = posStaffOps.getCommissionRate;
+exports.calculateMonthlyCommission = posStaffOps.calculateMonthlyCommission;
+exports.approveCommission          = posStaffOps.approveCommission;
+exports.getCommissionsSummary      = posStaffOps.getCommissionsSummary;
+/* Approvals */
+exports.createApprovalRequest      = posStaffOps.createApprovalRequest;
+exports.reviewApproval             = posStaffOps.reviewApproval;
+exports.getPendingApprovals        = posStaffOps.getPendingApprovals;
+exports.checkApproval              = posStaffOps.checkApproval;
+/* Cash Reconciliation */
+exports.submitCashCount            = posStaffOps.submitCashCount;
+exports.getCashReconciliation      = posStaffOps.getCashReconciliation;
+exports.getCashVarianceSummary     = posStaffOps.getCashVarianceSummary;
+/* Performance */
+exports.getStaffPerformanceDashboard = posStaffOps.getStaffPerformanceDashboard;
+/* Scheduled */
+exports.dailyStaffReport           = posStaffOps.dailyStaffReport;
+
+/* ── SmartPOS 3.0 — HQ Multi-Branch ─────────────────────────── */
+const posHQ = require('./pos-hq');
+exports.setCentralPrice            = posHQ.setCentralPrice;
+exports.getCentralPrices           = posHQ.getCentralPrices;
+exports.pushPricesToBranches       = posHQ.pushPricesToBranches;
+exports.removeCentralPrice         = posHQ.removeCentralPrice;
+exports.syncCatalogToBranch        = posHQ.syncCatalogToBranch;
+exports.getSharedCatalogStatus     = posHQ.getSharedCatalogStatus;
+exports.publishCatalogUpdate       = posHQ.publishCatalogUpdate;
+exports.checkStockAcrossBranches   = posHQ.checkStockAcrossBranches;
+exports.createCrossBranchFulfillment = posHQ.createCrossBranchFulfillment;
+exports.getCrossBranchFulfillments = posHQ.getCrossBranchFulfillments;
+exports.getHQInventoryOverview     = posHQ.getHQInventoryOverview;
+exports.createMasterInventoryTransfer = posHQ.createMasterInventoryTransfer;
+exports.getRegionalReport          = posHQ.getRegionalReport;
+
+/* ── SmartPOS 3.0 — Business Intelligence ───────────────────── */
+const posBI = require('./pos-bi');
+exports.getExecutiveDashboard      = posBI.getExecutiveDashboard;
+exports.getRevenueDrilldown        = posBI.getRevenueDrilldown;
+exports.getRevenueTrend            = posBI.getRevenueTrend;
+exports.getInventoryHealthScore    = posBI.getInventoryHealthScore;
+exports.getCustomerGrowthMetrics   = posBI.getCustomerGrowthMetrics;
+exports.getStaffProductivityMetrics = posBI.getStaffProductivityMetrics;
+exports.getCategoryPerformance     = posBI.getCategoryPerformance;
+exports.getRevenueForecast         = posBI.getRevenueForecast;
+exports.getPaymentTrends           = posBI.getPaymentTrends;
+exports.biDailySnapshot            = posBI.biDailySnapshot;
+
+/* ── SmartPOS 3.0 — AI Assistant ────────────────────────────── */
+const posAI = require('./pos-ai-assistant');
+exports.askPOSAssistant            = posAI.askPOSAssistant;
+exports.getAIQueryHistory          = posAI.getAIQueryHistory;
+exports.clearAIQueryHistory        = posAI.clearAIQueryHistory;
+
+/* ── SmartPOS 3.0 — Integrations & Observability ───────────── */
+const posIntegrations = require('./pos-integrations');
+exports.registerWebhook            = posIntegrations.registerWebhook;
+exports.deleteWebhook              = posIntegrations.deleteWebhook;
+exports.listWebhooks               = posIntegrations.listWebhooks;
+exports.testWebhook                = posIntegrations.testWebhook;
+exports.deliverWebhookEvent        = posIntegrations.deliverWebhookEvent;
+exports.createAPIKey               = posIntegrations.createAPIKey;
+exports.revokeAPIKey               = posIntegrations.revokeAPIKey;
+exports.listAPIKeys                = posIntegrations.listAPIKeys;
+exports.validateAPIKey             = posIntegrations.validateAPIKey;
+exports.getPOSSaleForETIMS         = posIntegrations.getPOSSaleForETIMS;
+exports.markSaleSubmittedToETIMS   = posIntegrations.markSaleSubmittedToETIMS;
+exports.exportToAccountingFormat   = posIntegrations.exportToAccountingFormat;
+exports.importBankStatement        = posIntegrations.importBankStatement;
+exports.getPOSSystemHealth         = posIntegrations.getPOSSystemHealth;
+exports.getPOSAlertHistory         = posIntegrations.getPOSAlertHistory;
+
+/* ── Platform Event Bus ─────────────────────────────────────── */
+const eventBus = require('./platform-event-bus');
+exports.publishEvent                = eventBus.publishEvent;
+exports.getEvent                    = eventBus.getEvent;
+exports.queryEvents                 = eventBus.queryEvents;
+exports.replayEvent                 = eventBus.replayEvent;
+exports.getEventStats               = eventBus.getEventStats;
+exports.registerEventSubscriber     = eventBus.registerEventSubscriber;
+exports.onPlatformEventCreated      = eventBus.onPlatformEventCreated;
+exports.eventBusCleanup             = eventBus.eventBusCleanup;
+
+/* ── Payment Orchestrator v2.0 ──────────────────────────────── */
+const payOrch = require('./payment-orchestrator');
+exports.createPayment               = payOrch.createPayment;
+exports.initiatePayment             = payOrch.initiatePayment;
+exports.confirmPayment              = payOrch.confirmPayment;
+exports.refundPayment               = payOrch.refundPayment;
+exports.getPayment                  = payOrch.getPayment;
+exports.paymentTimeoutSweep         = payOrch.paymentTimeoutSweep;
+
+/* ── Operations Center ──────────────────────────────────────── */
+const opsCenter = require('./operations-center');
+exports.getPlatformHealth           = opsCenter.getPlatformHealth;
+exports.getMetricHistory            = opsCenter.getMetricHistory;
+exports.triggerSelfHeal             = opsCenter.triggerSelfHeal;
+exports.getErrorLog                 = opsCenter.getErrorLog;
+exports.snapshotPlatformMetrics     = opsCenter.snapshotPlatformMetrics;
+
 /* ── Smart POS QR Payments ─────────────────────────────────── */
 const posQr = require('./pos-qr');
 exports.generatePOSPaymentQR    = posQr.generatePOSPaymentQR;
