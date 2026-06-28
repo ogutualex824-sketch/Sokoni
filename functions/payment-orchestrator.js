@@ -102,13 +102,14 @@ function _validateTransition(currentStatus, nextStatus) {
 }
 
 function _validateAmount(amount, currency = 'KES') {
-  if (typeof amount !== 'number' || isNaN(amount) || amount <= 0) {
+  if (!Number.isFinite(amount) || amount <= 0) {
     throw new HttpsError('invalid-argument', 'amount must be a positive number');
   }
   if (currency !== 'KES') {
     throw new HttpsError('invalid-argument', 'Only KES supported in current version');
   }
-  if (amount < 1) throw new HttpsError('invalid-argument', 'Minimum amount is KES 1');
+  const amountCents = Math.round(amount * 100);
+  if (amountCents < 100) throw new HttpsError('invalid-argument', 'Minimum payment is KSh 1.00');
   if (amount > 300000) throw new HttpsError('invalid-argument', 'Maximum amount is KES 300,000');
 }
 
@@ -176,7 +177,8 @@ exports.createPayment = onCall({ enforceAppCheck: true }, async (request) => {
   await ref.set({
     paymentId,
     buyerId:        auth.uid,
-    amount:         Math.round(amount * 100) / 100,
+    amount:         Math.round(amount * 100) / 100,   // KES float — display/legacy
+    amountCents:    Math.round(amount * 100),          // integer cents — FinOS/arithmetic
     currency,
     provider,
     orderId:        orderId       ? _san(orderId, 64)       : null,
@@ -370,17 +372,21 @@ exports.refundPayment = onCall({ enforceAppCheck: true }, async (request) => {
   _validateTransition(payment.status, STATUS.REFUNDED);
 
   const amount = refundAmount || payment.amount;
-  if (amount > payment.amount) {
+  // Use integer-cent comparison to avoid float rounding errors
+  const refundCents   = Math.round(amount * 100);
+  const originalCents = payment.amountCents || Math.round(payment.amount * 100);
+  if (refundCents > originalCents) {
     throw new HttpsError('invalid-argument', 'Refund cannot exceed original payment');
   }
 
   await ref.update({
-    status:          STATUS.REFUNDED,
-    refundAmount:    amount,
-    refundReason:    reason ? _san(reason, 500) : null,
-    refundInitiator: auth.uid,
-    refundedAt:      now(),
-    updatedAt:       now(),
+    status:           STATUS.REFUNDED,
+    refundAmount:     amount,                  // KES float — display/legacy
+    refundAmountCents: refundCents,            // integer cents — FinOS compatibility
+    refundReason:     reason ? _san(reason, 500) : null,
+    refundInitiator:  auth.uid,
+    refundedAt:       now(),
+    updatedAt:        now(),
     history: admin.firestore.FieldValue.arrayUnion({
       status: STATUS.REFUNDED, at: new Date().toISOString(), actor: auth.uid, amount,
     }),
