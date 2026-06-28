@@ -135,6 +135,48 @@ main { max-width: 1400px; margin: 0 auto; padding: 24px; }
       </div>
     </div>
 
+    <!-- Operational Counts -->
+    <div class="section-title">Operational State</div>
+    <div class="grid grid-3">
+      <div class="card">
+        <h2>Active Sessions</h2>
+        <div class="big-stat">
+          <div class="num blue" id="activeSessions">—</div>
+          <div class="lbl">Redis session keys</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Connected POS Terminals</h2>
+        <div class="big-stat">
+          <div class="num green" id="activePosTerminals">—</div>
+          <div class="lbl">Active terminal states</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Active Locks</h2>
+        <div class="big-stat">
+          <div class="num yellow" id="activeLocks">—</div>
+          <div class="lbl">Distributed lock keys</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Slow Operations</h2>
+        <div class="big-stat">
+          <div class="num" id="slowlogLen">—</div>
+          <div class="lbl">Entries in slowlog</div>
+        </div>
+        <p style="color:var(--muted);font-size:11px;margin-top:8px">Default threshold: 10ms. Run <code>SLOWLOG RESET</code> to clear.</p>
+      </div>
+      <div class="card">
+        <h2>Error Rate</h2>
+        <div class="big-stat">
+          <div class="num" id="errorCount">—</div>
+          <div class="lbl">Errors in current CF instance</div>
+        </div>
+        <p id="lastError" style="color:var(--red);font-size:11px;margin-top:8px;word-break:break-all"></p>
+      </div>
+    </div>
+
     <!-- Presence -->
     <div class="section-title">Live Presence</div>
     <div class="card">
@@ -197,6 +239,26 @@ async function loadMetrics() {
     document.getElementById('version').textContent = data.version || '—';
     document.getElementById('clients').textContent = data.connectedClients ?? '—';
     document.getElementById('totalKeys').textContent = (data.totalKeys ?? '—').toLocaleString();
+
+    // Operational counts
+    document.getElementById('activeSessions').textContent = (data.activeSessions ?? '—').toLocaleString();
+    document.getElementById('activePosTerminals').textContent = (data.activePosTerminals ?? '—').toLocaleString();
+
+    const lockCount = data.activeLocks ?? 0;
+    const lockEl = document.getElementById('activeLocks');
+    lockEl.textContent = lockCount.toLocaleString();
+    lockEl.className = 'num ' + (lockCount > 50 ? 'red' : lockCount > 10 ? 'yellow' : 'green');
+
+    const slowCount = data.slowlogLen ?? 0;
+    const slowEl = document.getElementById('slowlogLen');
+    slowEl.textContent = slowCount.toLocaleString();
+    slowEl.className = 'num ' + (slowCount > 100 ? 'red' : slowCount > 20 ? 'yellow' : 'green');
+
+    const errCount = data.errorCount ?? 0;
+    const errEl = document.getElementById('errorCount');
+    errEl.textContent = errCount.toLocaleString();
+    errEl.className = 'num ' + (errCount > 10 ? 'red' : errCount > 0 ? 'yellow' : 'green');
+    document.getElementById('lastError').textContent = data.lastError ? `Last: ${data.lastError}` : '';
 
     // Hit rate
     const hr = data.hitRate || 0;

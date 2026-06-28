@@ -1,4 +1,82 @@
-﻿## [2026-06-28] — Redis Infrastructure Layer v1.0
+﻿## [2026-06-28] — Redis Infrastructure Layer v1.0 (Refined)
+
+### Summary
+Refactored Redis layer to named service objects, centralised TTL constants, enhanced monitoring with 5 additional metrics (active locks, sessions, POS terminals, slow ops, error rate), and complete architecture documentation.
+
+### Changes
+- `functions/redis-service.js` — Named service objects: `CacheService`, `SessionService`, `LockService`, `PresenceService`, `RateLimitService`, `DashboardService`, `PaymentService`, `POSService`, `InventoryService`, `EventBusService`, `QueueService`. Centralised `TTL` constants. `adminInfo()` now includes SCAN-based active locks/sessions/POS counts, `SLOWLOG LEN`, per-instance error counter.
+- `redis-monitor.html` — Added: Active Sessions, Connected POS Terminals, Active Locks (threshold-coloured), Slow Operations, Error Rate panels.
+- `docs/REDIS_ARCHITECTURE.md` — New: why Redis, module map, service API, key schema, TTL table, deployment (Memorystore + Redis Cloud), monitoring thresholds, failover, performance benchmarks, cost/break-even analysis, scalability guidance.
+
+### Pending
+Set `REDIS_URL` secret before deploying: `firebase functions:secrets:set REDIS_URL`
+
+---
+
+## [2026-06-28] — Final Enterprise Sprint: Smart POS QR Payments + Universal Form Engine + Seller Nav 2.0
+
+### Summary
+Completed the final pre-launch enterprise sprint covering Smart POS QR Payments (7 new CFs + customer-facing pay.html), Universal Form Engine for mobile scrollability, seller navigation upgrade to 18 items, offline detection hardening, and production certification with 652/652 tests passing.
+
+### Files Added
+- `pay.html` — Customer-facing dynamic QR payment landing page. Reads transaction from `/pay/{id}` URL, shows merchant info + items + total, M-Pesa STK push or card, polls for confirmation, shows receipt.
+- `functions/pos-qr.js` — 7 Cloud Functions: `generatePOSPaymentQR`, `getPOSPaymentDetails`, `initiatePOSQRPayment`, `completePOSQRPayment`, `cancelPOSPaymentQR`, `refundPOSPayment`, `getPOSPaymentHistory`
+- `sokoni-form-engine.css` — Universal Form Engine CSS: overflow-y fixes for all modals/drawers/wizards, safe-area insets, sticky nav, horizontal overflow prevention, 16px input floor
+- `sokoni-form-engine.js` — Universal Form Engine JS: visual-viewport keyboard avoidance, SokoniWizard manager, SokoniFormValidator, safe-area CSS vars, auto-fix overflow detector, SokoniProgressBar
+
+### Files Modified
+- `functions/index.js` — 7 new exports for Smart POS QR CFs
+- `firebase.json` — Added `/pay/**` rewrite to `/pay.html`
+- `firestore.rules` — Updated posPayments rule to support both `sellerId` + `sellerUid`; added `posQrLog` explicit deny; write guards on 5 financial collections
+- `pos.html` — Added QR Pay payment method button + Smart QR Payment modal (SPosQR manager); sokoni-form-engine.css link; Visual Viewport keyboard fix; sokoni-form-engine.js
+- `pos.css` — Fixed `#pos-wizard` bottom padding (was 40px → max(140px, safe-area+140px)); added 320/380/430/520px breakpoints for wizard on small phones
+- `seller.html` — Fixed `#withdrawModal` missing overflow-y + max-height; added scrollability to modal content
+- `shared-header.js` — Global injection of sokoni-form-engine.css + sokoni-form-engine.js (deferred) on every page
+- `sokoni-nav-engine.js` — Seller subnav updated to 18 items: added Inventory (#inventory) + Customers (#customers); reordered per spec; renamed QR→QR Payments, Live→Live Dashboard
+- `service-worker.js` — SW version bumped; `/pay` added to precache; sokoni-form-engine.css + .js added to static cache
+
+### New Cloud Functions (7)
+`generatePOSPaymentQR` · `getPOSPaymentDetails` · `initiatePOSQRPayment` · `completePOSQRPayment` · `cancelPOSPaymentQR` · `refundPOSPayment` · `getPOSPaymentHistory`
+
+### QR Payment Flow
+```
+Seller → generatePOSPaymentQR(items) → returns qrUrl: /pay/{txnId}
+          ↓
+         QR displayed in POS (pos.html SPosQR modal)
+          ↓
+Customer scans → pay.html loads → getPOSPaymentDetails(txnId)
+          ↓
+Customer enters M-Pesa number → initiatePOSQRPayment(txnId, method, phone)
+          ↓
+STK push sent → customer enters PIN → IntaSend webhook → completePOSQRPayment
+          ↓
+POS polls getPOSPaymentDetails every 3s → status=paid → SPosQR shows success
+          ↓
+Seller taps "Complete Sale" → receipt printed, inventory updated
+```
+
+### Security
+- QR contains only 32-char random transactionId — no amount/merchant exposed
+- HMAC-SHA256 signature (QR_SIGNING_SECRET) on every transactionId
+- Max 5 payment attempts per transaction before lockout
+- Rate limit: 60 QR generations per minute per seller
+- QR expires after configurable time (default 10 min)
+- Replay attack prevention via status check before every payment step
+- Idempotent completion — already-paid returns receipt without double-charging
+
+### Mobile Form Scrollability
+- POS registration wizard: fields no longer hidden behind keyboard on iPhone/Android
+- Visual Viewport API used for real keyboard height detection (not window.innerHeight)
+- Safe-area insets applied to all form bottoms, wizard padding
+- All modals: overflow-y: auto + max-height bounded to viewport
+- Input min-size 16px enforced everywhere (prevents iOS zoom)
+
+### Tests
+652/652 passing (14 suites, no regressions)
+
+---
+
+## [2026-06-28] — Redis Infrastructure Layer v1.0
 
 ### Summary
 Introduced Redis as a high-performance infrastructure layer alongside Firestore. Redis handles caching, sessions, distributed locks, presence tracking, rate limiting, SmartPOS synchronisation, payment coordination, event bus, and background job queues. Firestore remains the source of truth. All operations fall back gracefully to Firestore/defaults if Redis is unavailable. SW bumped to `sokoni-20260628-redis-v1`.
