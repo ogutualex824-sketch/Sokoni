@@ -1,4 +1,143 @@
-﻿## [2026-06-29] — HR & Payroll Portal — Staff, Payroll, Attendance & Leaves SPA
+﻿## [2026-06-29] — CRM Engine v1.0
+
+### Summary
+Added `functions/crm.js` (13 Cloud Functions) implementing a full Customer Relationship Management
+engine: lead pipeline with Kanban-style status tracking, customer profile builder with CLV and churn
+risk scoring, support ticket management, and a daily scheduled churn recalculation job. Added
+`crm.html` — a dark-theme single-page CRM portal with Dashboard, Leads, Customers, and Support tabs.
+Wired all 13 exports into `functions/index.js`.
+
+### Files Changed
+- `functions/crm.js` — NEW; 13 Cloud Functions (CRM Engine v1.0)
+- `crm.html` — NEW; dark-theme CRM portal SPA
+- `functions/index.js` — UPDATED; +13 CRM exports
+
+### New Cloud Functions (13)
+| Function | Description |
+|---|---|
+| `createLead` | Create a new CRM lead with source, value, contact info |
+| `updateLead` | Update lead status/assignee/value; auto-logs status change activity |
+| `logLeadActivity` | Record call/email/visit/whatsapp/demo against a lead |
+| `convertLead` | Transition lead to converted; optionally enriches crmCustomerProfiles |
+| `getLeadBoard` | Lead pipeline grouped by status with conversion rate summary |
+| `buildCustomerProfile` | Build full 360 profile from orders + loyalty; scores churn risk + CLV |
+| `getCustomerProfile` | Read or auto-build customer profile |
+| `calculateCLV` | avgOrderValue × purchaseFrequency × 24-month lifespan; persists to profile |
+| `getChurnRisk` | List customers by churn risk level, sorted by score desc |
+| `createSupportTicket` | Create support ticket; alerts adminAlerts for urgent priority |
+| `updateSupportTicket` | Update ticket status/assignee/resolution notes; sets resolvedAt |
+| `getCRMDashboard` | Parallel aggregation: pipeline, tickets, churn, top CLV, conversion rate |
+| `computeChurnRiskDaily` | Scheduled 03:00 UTC; paginates all profiles; recalculates churn scores |
+
+### New Firestore Collections
+- `crmLeads/{leadId}` — lead lifecycle: new → contacted → qualified → converted/lost
+- `crmLeadActivities/{activityId}` — activity log per lead
+- `crmCustomerProfiles/{uid}` — CLV, churn risk, segments, preferred categories
+- `crmSegments/{segmentId}` — segment definitions with criteria
+- `crmSupportTickets/{ticketId}` — support ticket lifecycle
+
+### Security
+- All callable functions enforce `enforceAppCheck: true`
+- Merchant ownership guard (`assertMerchantOwner`) on every CF
+- Input sanitization on all string fields; enum validation on status/type/priority
+- `adminAlerts` write on urgent ticket creation
+
+### Performance
+- `getCRMDashboard` uses `Promise.all` for 6 parallel Firestore queries
+- `computeChurnRiskDaily` paginates in batches of 100 with `db.batch()` writes
+- `buildCustomerProfile` limits order history to 500 docs; extracts top-3 categories in-memory
+
+---
+
+## [2026-06-29] — Advanced BI v1.0 + Production Certification Runner v1.0
+
+### Summary
+Added `functions/bi-advanced.js` (5 CFs) for cross-branch revenue comparison, single-metric
+performance drill-down, marketing ROI attribution (campaigns, flash sales, bundles), customer
+loyalty-tier segment revenue, and multi-channel order breakdown.
+
+Extended `functions/release-readiness.js` with two new exports — `runProductionCertification`
+(12-domain automated cert runner writing to `certificationReports/`) and `getCertificationHistory`
+(paginated cert history per merchant). Updated `functions/index.js` to wire all 7 new exports.
+
+### Files Changed
+- `functions/bi-advanced.js` — NEW; 5 Cloud Functions (Advanced BI)
+- `functions/release-readiness.js` — UPDATED; +2 CFs; module.exports expanded from 8→10
+- `functions/index.js` — UPDATED; +7 exports (5 BI + 2 cert); relReadiness block comment updated
+
+### New Cloud Functions (7)
+| Function | Module | Description |
+|---|---|---|
+| `getMultiBranchRevenue` | bi-advanced | Revenue, orders, AOV, topProduct across ≤10 branches |
+| `getBranchPerformanceComparison` | bi-advanced | Single-metric bar-chart data per branch |
+| `getMarketingROI` | bi-advanced | Campaign + flash-sale + bundle ROI attribution |
+| `getCustomerSegmentRevenue` | bi-advanced | Revenue grouped by loyalty tier |
+| `getRevenueByChannel` | bi-advanced | web / pos / app / whatsapp / delivery split |
+| `runProductionCertification` | release-readiness | 12-domain automated cert; writes certificationReports |
+| `getCertificationHistory` | release-readiness | Paginated cert report history per merchant |
+
+### Firestore Collections Used (new reads)
+- `orders` — revenue, channel, promoCode, campaignId
+- `posProducts` — qty, reorderPoint (inventoryHealth)
+- `mktCampaigns` / `mktFlashSales` / `mktBundleDeals` — marketing ROI attribution
+- `loyaltyAccounts` — tier-based segment analysis
+- `certificationReports` — written by runProductionCertification
+- `ledger` — accounting drift check
+- `loyaltyReconciliation` — loyalty ledger check
+- `adminAlerts` / `authEvents` — security & monitoring checks
+- `etimsProfiles` — compliance check
+- `chaosTestReports` — disaster recovery check
+
+### Security Notes
+- All 7 CFs use `enforceAppCheck: true` (OPT / CF_OPTIONS)
+- `getMultiBranchRevenue`, `getRevenueByChannel`, `getCustomerSegmentRevenue` — merchant-or-admin guard (owner can only query their own merchantId)
+- `runProductionCertification`, `getCertificationHistory` — admin-only guard
+- merchantId is sanitized to `[a-zA-Z0-9_-]` before use as Firestore document ID in cert runner
+- Notes fields stripped of HTML in approval path; no PII exposed in logs
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-06-29] — Firestore Index Rotation: CRM + Certification Indexes
+
+### Summary
+Rotated 7 low-value indexes out and added 7 high-value CRM/certification indexes to stay
+within the 200-index hard limit. Dropped collections were either redundant (feedback — client-side
+sort acceptable), ultra-low-traffic (priceAlerts, homeServiceBookings, homeServiceReviews,
+loyaltyDrawEntries, productPriceHistory).
+
+### Files Changed
+- `firestore.indexes.json` — removed 7 indexes, added 7 indexes; total remains 200/200
+
+### Dropped Indexes (7)
+| Collection | Reason |
+|---|---|
+| `feedback` (×2) | Product reviews — client-side sort acceptable; admin-only low-frequency access |
+| `priceAlerts` (×1) | Very low traffic; single-field query sufficient |
+| `homeServiceBookings` (×1) | Low traffic; simple UID lookup, no compound sort needed |
+| `homeServiceReviews` (×1) | Low traffic; single-provider lookup, no compound sort needed |
+| `productPriceHistory` (×1) | Audit trail only; admin-accessed, low frequency |
+| `loyaltyDrawEntries` (×1) | Niche feature; drawId+uid query rarely compound-sorted |
+
+### Added Indexes (7)
+| Collection | Fields | Purpose |
+|---|---|---|
+| `crmLeads` | merchantId, status, createdAt DESC | Lead pipeline list by merchant |
+| `crmLeads` | merchantId, assignedTo, updatedAt DESC | Lead assignment view per rep |
+| `crmLeadActivities` | leadId, createdAt DESC | Activity timeline per lead |
+| `crmCustomerProfiles` | merchantId, churnRiskScore DESC | Churn risk dashboard |
+| `crmSupportTickets` | merchantId, status, priority ASC | Ticket queue sorted by priority |
+| `certificationReports` | merchantId, certifiedAt DESC | Merchant certification history |
+| `mktCampaigns` | merchantId, type, status ASC | Campaign list filtered by type/status |
+
+### Breaking Changes
+None — dropped indexes are for low-traffic collections where client-side sorting is acceptable.
+
+---
+
+## [2026-06-29] — HR & Payroll Portal — Staff, Payroll, Attendance & Leaves SPA
 
 ### Summary
 Created `hr-payroll.html`, a complete HR & Payroll management portal for SOKONI merchants.

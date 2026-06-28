@@ -2087,6 +2087,14 @@ service cloud.firestore {
       match /inventory_audit/{logId} {
         allow read:   if isTenantAdmin();
       }
+      match /inventory_avco/{avcoId} {
+        allow read:  if isTenantMember();
+        allow write: if false; // CF-only — inventoryUpdateAVCO, inventoryDeductAVCO
+        match /history/{histId} {
+          allow read:  if isTenantMember();
+          allow write: if false; // CF-only
+        }
+      }
       match /inventory_health/{docId} {
         allow read:   if isTenantMember();
       }
@@ -4013,11 +4021,44 @@ service cloud.firestore {
       allow read, write: if false; // CF-only — transient test documents
     }
 
-    // ── AVCO Inventory Costing ────────────────────────────────────────────
-    match /inventory_avco/{avcoId} {
+    // ── CRM — Customer Relationship Management ───────────────────────────
+    match /crmLeads/{leadId} {
       allow read:  if isAdmin()
-                   || (isAuthed() && resource.data.tenantId == request.auth.uid);
-      allow write: if false; // CF-only — inventoryUpdateAVCO, inventoryDeductAVCO
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid)
+                   || (isAuthed() && resource.data.assignedTo == request.auth.uid);
+      allow write: if false; // CF-only — createLead, updateLead, convertLead
+    }
+
+    match /crmLeadActivities/{activityId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — logLeadActivity
+    }
+
+    match /crmCustomerProfiles/{uid} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && request.auth.uid == uid)
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only — buildCustomerProfile, calculateCLV
+    }
+
+    match /crmSegments/{segmentId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid);
+      allow write: if false; // CF-only
+    }
+
+    match /crmSupportTickets/{ticketId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid)
+                   || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow write: if false; // CF-only — createSupportTicket, updateSupportTicket
+    }
+
+    // ── Certification Reports ─────────────────────────────────────────────
+    match /certificationReports/{reportId} {
+      allow read:  if isAdmin();
+      allow write: if false; // CF-only — runProductionCertification
     }
 
   }

@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOKONI CRM — Customer Relationship Management</title>
+  <style>
+    /* ── Reset & Base ───────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-base:    #0f0f1a;
+      --bg-card:    #1a1a2e;
+      --bg-surface: #16213e;
+      --bg-input:   #0d0d1a;
+      --accent:     #7c3aed;
+      --accent-h:   #6d28d9;
+      --accent-lt:  #a78bfa;
+      --text-1:     #f1f5f9;
+      --text-2:     #94a3b8;
+      --text-3:     #64748b;
+      --border:     #1e293b;
+      --border-h:   #334155;
+      --green:      #22c55e;
+      --amber:      #f59e0b;
+      --red:        #ef4444;
+      --blue:       #3b82f6;
+      --purple:     #8b5cf6;
+      --gray:       #6b7280;
+      --radius:     10px;
+      --shadow:     0 4px 24px rgba(0,0,0,.45);
+    }
+    html, body {
+      height: 100%;
+      background: var(--bg-base);
+      color: var(--text-1);
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    a { color: var(--accent-lt); text-decoration: none; }
+    button { cursor: pointer; font-family: inherit; }
+    input, select, textarea {
+      font-family: inherit;
+      font-size: 14px;
+      background: var(--bg-input);
+      color: var(--text-1);
+      border: 1px solid var(--border-h);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      width: 100%;
+      outline: none;
+      transition: border-color .2s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 80px; }
+    select option { background: var(--bg-card); }
+
+    /* ── Layout ─────────────────────────────────────────────────────────── */
+    #app { display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* Header */
+    #header {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      position: sticky; top: 0; z-index: 100;
+    }
+    #header .logo { font-size: 18px; font-weight: 700; color: var(--accent-lt); letter-spacing: -.5px; }
+    #header .logo span { color: var(--text-2); font-weight: 400; font-size: 13px; margin-left: 8px; }
+    #mid-bar {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 13px; color: var(--text-2);
+    }
+    #mid-bar label { white-space: nowrap; }
+    #mid-bar input { width: 220px; font-size: 13px; }
+    #user-info { font-size: 12px; color: var(--text-3); }
+
+    /* Tabs */
+    #tabs {
+      display: flex; gap: 0;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+    .tab-btn {
+      padding: 14px 20px;
+      background: none; border: none; color: var(--text-2);
+      font-size: 14px; font-weight: 500;
+      border-bottom: 3px solid transparent;
+      transition: color .2s, border-color .2s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--text-1); }
+    .tab-btn.active { color: var(--accent-lt); border-bottom-color: var(--accent); }
+
+    /* Main */
+    #main { flex: 1; padding: 24px; max-width: 1400px; margin: 0 auto; width: 100%; }
+
+    /* Panels */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Cards & KPI tiles */
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .kpi {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .kpi .label { font-size: 12px; color: var(--text-2); text-transform: uppercase; letter-spacing: .5px; }
+    .kpi .value { font-size: 28px; font-weight: 700; color: var(--text-1); }
+    .kpi .sub   { font-size: 12px; color: var(--text-3); }
+
+    /* Section cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 15px; font-weight: 600; color: var(--text-1);
+      margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;
+    }
+
+    /* Funnel */
+    .funnel { display: flex; flex-direction: column; gap: 10px; }
+    .funnel-row { display: grid; grid-template-columns: 110px 1fr 60px; align-items: center; gap: 12px; }
+    .funnel-label { font-size: 12px; color: var(--text-2); text-align: right; }
+    .funnel-bar-wrap { background: var(--bg-base); border-radius: 4px; height: 22px; overflow: hidden; }
+    .funnel-bar { height: 100%; border-radius: 4px; transition: width .6s ease; min-width: 4px; }
+    .funnel-count { font-size: 13px; font-weight: 600; text-align: right; }
+    .f-new    .funnel-bar { background: var(--blue); }
+    .f-cont   .funnel-bar { background: var(--purple); }
+    .f-qual   .funnel-bar { background: var(--amber); }
+    .f-conv   .funnel-bar { background: var(--green); }
+    .f-lost   .funnel-bar { background: var(--gray); }
+
+    /* Tables */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; padding: 10px 14px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
+      color: var(--text-3); border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr.clickable:hover td { background: var(--bg-surface); cursor: pointer; }
+    .empty-state { text-align: center; padding: 40px; color: var(--text-3); }
+
+    /* Badges */
+    .badge {
+      display: inline-block; padding: 3px 9px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .badge-new      { background: #1d4ed8; color: #bfdbfe; }
+    .badge-contacted{ background: #581c87; color: #e9d5ff; }
+    .badge-qualified{ background: #92400e; color: #fde68a; }
+    .badge-converted{ background: #166534; color: #bbf7d0; }
+    .badge-lost     { background: #374151; color: #d1d5db; }
+    .badge-open       { background: #1d4ed8; color: #bfdbfe; }
+    .badge-in_progress{ background: #581c87; color: #e9d5ff; }
+    .badge-resolved   { background: #166534; color: #bbf7d0; }
+    .badge-closed     { background: #374151; color: #d1d5db; }
+    .badge-low    { background: #14532d; color: #86efac; }
+    .badge-medium { background: #78350f; color: #fcd34d; }
+    .badge-high   { background: #7f1d1d; color: #fca5a5; }
+    .badge-urgent { background: #450a0a; color: #f87171; border: 1px solid #ef4444; }
+
+    /* Sub-tabs (Leads filter) */
+    .sub-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+    .sub-tab {
+      padding: 6px 14px; border-radius: 20px;
+      background: var(--bg-surface); border: 1px solid var(--border);
+      color: var(--text-2); font-size: 12px; font-weight: 500;
+      transition: all .2s;
+    }
+    .sub-tab:hover { border-color: var(--accent); color: var(--accent-lt); }
+    .sub-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    /* Action buttons */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: var(--radius);
+      font-size: 14px; font-weight: 600;
+      border: none; transition: background .2s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-h); }
+    .btn-ghost {
+      background: transparent; color: var(--text-2);
+      border: 1px solid var(--border-h);
+    }
+    .btn-ghost:hover { background: var(--bg-surface); color: var(--text-1); }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+    /* Search bar */
+    .search-bar { display: flex; gap: 10px; margin-bottom: 16px; }
+    .search-bar input { max-width: 320px; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.7); z-index: 500;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg-card); border: 1px solid var(--border-h);
+      border-radius: 14px; padding: 28px; width: 100%; max-width: 520px;
+      max-height: 90vh; overflow-y: auto;
+      box-shadow: var(--shadow);
+    }
+    .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 20px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .form-label { font-size: 12px; color: var(--text-2); margin-bottom: 4px; display: block; }
+    .form-group { display: flex; flex-direction: column; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .error-msg { color: var(--red); font-size: 12px; margin-top: 8px; }
+
+    /* Detail slide panel */
+    .slide-panel {
+      position: fixed; right: 0; top: 0; bottom: 0; width: 480px;
+      background: var(--bg-card); border-left: 1px solid var(--border);
+      padding: 24px; overflow-y: auto; z-index: 200;
+      transform: translateX(100%); transition: transform .3s ease;
+      box-shadow: -8px 0 40px rgba(0,0,0,.5);
+    }
+    .slide-panel.open { transform: translateX(0); }
+    .slide-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .slide-panel-title  { font-size: 16px; font-weight: 700; }
+    .close-btn { background: none; border: none; color: var(--text-2); font-size: 22px; line-height: 1; }
+    .close-btn:hover { color: var(--text-1); }
+
+    /* Activity timeline */
+    .timeline { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+    .timeline-item {
+      display: flex; gap: 12px;
+      padding: 12px; background: var(--bg-surface);
+      border-radius: var(--radius); border: 1px solid var(--border);
+    }
+    .timeline-icon { font-size: 18px; flex-shrink: 0; }
+    .timeline-body .t-type { font-size: 12px; font-weight: 600; color: var(--accent-lt); }
+    .timeline-body .t-text { font-size: 13px; color: var(--text-1); margin-top: 2px; }
+    .timeline-body .t-meta { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+
+    /* Customer 360 */
+    .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .profile-stat { background: var(--bg-surface); border-radius: var(--radius); padding: 12px; }
+    .profile-stat .ps-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; }
+    .profile-stat .ps-val   { font-size: 18px; font-weight: 700; color: var(--text-1); margin-top: 2px; }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--bg-card); border: 1px solid var(--border-h);
+      border-radius: var(--radius); padding: 12px 18px;
+      font-size: 13px; color: var(--text-1);
+      box-shadow: var(--shadow);
+      transform: translateY(80px); opacity: 0;
+      transition: transform .3s ease, opacity .3s ease;
+      z-index: 1000; max-width: 320px;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.success { border-color: var(--green); }
+    #toast.error   { border-color: var(--red); }
+
+    /* Loading spinner */
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-h); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-wrap { display: flex; align-items: center; gap: 10px; color: var(--text-2); padding: 24px; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      #header { padding: 0 12px; }
+      #main   { padding: 12px; }
+      #tabs   { padding: 0 12px; overflow-x: auto; }
+      .kpi-row { grid-template-columns: 1fr 1fr; }
+      .slide-panel { width: 100%; }
+      .form-grid { grid-template-columns: 1fr; }
+      .profile-grid { grid-template-columns: 1fr; }
+      #mid-bar input { width: 140px; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header id="header">
+    <div class="logo">SOKONI <span>CRM</span></div>
+    <div id="mid-bar">
+      <label for="mid-input">Merchant ID:</label>
+      <input id="mid-input" placeholder="Enter merchant ID" />
+      <button class="btn btn-primary btn-sm" onclick="CRMPortal.onMerchantChange()">Load</button>
+    </div>
+    <div id="user-info">Not signed in</div>
+  </header>
+
+  <!-- Tabs -->
+  <nav id="tabs">
+    <button class="tab-btn active" onclick="CRMPortal.switchTab('dashboard')">Dashboard</button>
+    <button class="tab-btn" onclick="CRMPortal.switchTab('leads')">Leads</button>
+    <button class="tab-btn" onclick="CRMPortal.switchTab('customers')">Customers</button>
+    <button class="tab-btn" onclick="CRMPortal.switchTab('support')">Support</button>
+  </nav>
+
+  <!-- Main -->
+  <main id="main">
+
+    <!-- ── DASHBOARD ──────────────────────────────────────────────────── -->
+    <section id="panel-dashboard" class="panel active">
+      <div id="dash-content">
+        <div class="loading-wrap"><div class="spinner"></div> Select a merchant to load dashboard.</div>
+      </div>
+    </section>
+
+    <!-- ── LEADS ─────────────────────────────────────────────────────── -->
+    <section id="panel-leads" class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-size:18px;font-weight:700;">Lead Pipeline</h2>
+        <button class="btn btn-primary" onclick="CRMPortal.openLeadModal()">+ New Lead</button>
+      </div>
+      <div class="sub-tabs" id="lead-sub-tabs">
+        <button class="sub-tab active" onclick="CRMPortal.filterLeads('')">All</button>
+        <button class="sub-tab" onclick="CRMPortal.filterLeads('new')">New</button>
+        <button class="sub-tab" onclick="CRMPortal.filterLeads('contacted')">Contacted</button>
+        <button class="sub-tab" onclick="CRMPortal.filterLeads('qualified')">Qualified</button>
+        <button class="sub-tab" onclick="CRMPortal.filterLeads('converted')">Converted</button>
+        <button class="sub-tab" onclick="CRMPortal.filterLeads('lost')">Lost</button>
+      </div>
+      <div class="card">
+        <div id="leads-table-wrap"><div class="loading-wrap"><div class="spinner"></div> Load a merchant first.</div></div>
+      </div>
+    </section>
+
+    <!-- ── CUSTOMERS ─────────────────────────────────────────────────── -->
+    <section id="panel-customers" class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-size:18px;font-weight:700;">Customer Intelligence</h2>
+      </div>
+      <div class="search-bar">
+        <input id="cust-search" placeholder="Search by name or phone…" oninput="CRMPortal.filterCustomers()" />
+      </div>
+      <div class="card">
+        <div id="customers-table-wrap"><div class="loading-wrap"><div class="spinner"></div> Load a merchant first.</div></div>
+      </div>
+    </section>
+
+    <!-- ── SUPPORT ───────────────────────────────────────────────────── -->
+    <section id="panel-support" class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-size:18px;font-weight:700;">Support Tickets</h2>
+        <button class="btn btn-primary" onclick="CRMPortal.openTicketModal()">+ New Ticket</button>
+      </div>
+      <div class="sub-tabs" id="ticket-sub-tabs">
+        <button class="sub-tab active" onclick="CRMPortal.filterTickets('')">All</button>
+        <button class="sub-tab" onclick="CRMPortal.filterTickets('open')">Open</button>
+        <button class="sub-tab" onclick="CRMPortal.filterTickets('in_progress')">In Progress</button>
+        <button class="sub-tab" onclick="CRMPortal.filterTickets('resolved')">Resolved</button>
+        <button class="sub-tab" onclick="CRMPortal.filterTickets('closed')">Closed</button>
+      </div>
+      <div class="card">
+        <div id="tickets-table-wrap"><div class="loading-wrap"><div class="spinner"></div> Load a merchant first.</div></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ── MODALS ────────────────────────────────────────────────────────────── -->
+
+<!-- New Lead Modal -->
+<div class="modal-overlay" id="lead-modal">
+  <div class="modal">
+    <div class="modal-title">New Lead</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Name *</label>
+        <input id="l-name" placeholder="Full name" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phone</label>
+        <input id="l-phone" placeholder="+254…" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input id="l-email" type="email" placeholder="email@example.com" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Source *</label>
+        <select id="l-source">
+          <option value="online">Online</option>
+          <option value="walk_in">Walk In</option>
+          <option value="referral">Referral</option>
+          <option value="social">Social</option>
+          <option value="event">Event</option>
+          <option value="cold_call">Cold Call</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estimated Value (KES)</label>
+        <input id="l-value" type="number" placeholder="0" min="0" />
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Notes</label>
+        <textarea id="l-notes" placeholder="Any additional details…"></textarea>
+      </div>
+    </div>
+    <div id="lead-modal-err" class="error-msg"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="CRMPortal.closeModal('lead-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="CRMPortal.submitLead()">Create Lead</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lead Detail / Activity Modal -->
+<div class="slide-panel" id="lead-detail-panel">
+  <div class="slide-panel-header">
+    <div class="slide-panel-title" id="ldp-name">Lead Detail</div>
+    <button class="close-btn" onclick="CRMPortal.closePanel('lead-detail-panel')">&times;</button>
+  </div>
+  <div id="lead-detail-content"></div>
+</div>
+
+<!-- Customer 360 Panel -->
+<div class="slide-panel" id="customer-panel">
+  <div class="slide-panel-header">
+    <div class="slide-panel-title" id="cp-name">Customer 360</div>
+    <button class="close-btn" onclick="CRMPortal.closePanel('customer-panel')">&times;</button>
+  </div>
+  <div id="customer-content"></div>
+</div>
+
+<!-- Ticket Detail Panel -->
+<div class="slide-panel" id="ticket-panel">
+  <div class="slide-panel-header">
+    <div class="slide-panel-title" id="tp-subject">Ticket Detail</div>
+    <button class="close-btn" onclick="CRMPortal.closePanel('ticket-panel')">&times;</button>
+  </div>
+  <div id="ticket-content"></div>
+</div>
+
+<!-- New Ticket Modal -->
+<div class="modal-overlay" id="ticket-modal">
+  <div class="modal">
+    <div class="modal-title">New Support Ticket</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Customer UID *</label>
+        <input id="t-uid" placeholder="User UID" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Priority *</label>
+        <select id="t-priority">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Subject *</label>
+        <input id="t-subject" placeholder="Brief description of the issue" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Order ID (optional)</label>
+        <input id="t-order" placeholder="orderId if applicable" />
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Description *</label>
+        <textarea id="t-desc" placeholder="Detailed description of the issue…"></textarea>
+      </div>
+    </div>
+    <div id="ticket-modal-err" class="error-msg"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="CRMPortal.closeModal('ticket-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="CRMPortal.submitTicket()">Create Ticket</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ── Firebase SDK ───────────────────────────────────────────────────────── -->
+<script type="module">
+import { initializeApp }          from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js';
+import { getFunctions, httpsCallable }  from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-functions.js';
+import {
+  getFirestore, collection, query, where, orderBy, limit, getDocs
+} from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js';
+import { getConfig } from './sokoni-config.js';
+
+const app    = initializeApp(getConfig());
+const auth   = getAuth(app);
+const fns    = getFunctions(app, 'us-central1');
+const db     = getFirestore(app);
+
+/* ── Callable helpers ────────────────────────────────────────────────────── */
+const call = (name) => httpsCallable(fns, name);
+
+const CF = {
+  createLead:          call('createLead'),
+  updateLead:          call('updateLead'),
+  logLeadActivity:     call('logLeadActivity'),
+  convertLead:         call('convertLead'),
+  getLeadBoard:        call('getLeadBoard'),
+  buildCustomerProfile:call('buildCustomerProfile'),
+  getCustomerProfile:  call('getCustomerProfile'),
+  calculateCLV:        call('calculateCLV'),
+  getChurnRisk:        call('getChurnRisk'),
+  createSupportTicket: call('createSupportTicket'),
+  updateSupportTicket: call('updateSupportTicket'),
+  getCRMDashboard:     call('getCRMDashboard'),
+};
+
+/* ── Utility ─────────────────────────────────────────────────────────────── */
+function fmtKES(n) {
+  if (!n && n !== 0) return '—';
+  return 'KES ' + Number(n).toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+function fmtDate(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts.seconds ? ts.seconds * 1000 : ts);
+  return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function actIcon(type) {
+  const map = { call:'📞', email:'📧', visit:'🤝', whatsapp:'💬', demo:'🖥️', conversion:'✅' };
+  return map[type] || '📝';
+}
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+let _toastTimer;
+function toast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+}
+
+/* ── CRMPortal IIFE ──────────────────────────────────────────────────────── */
+window.CRMPortal = (() => {
+  let _uid = null;
+  let _mid = '';
+  let _currentTab = 'dashboard';
+  let _allLeads = [];
+  let _allCustomers = [];
+  let _allTickets = [];
+  let _currentLeadFilter = '';
+  let _currentTicketFilter = '';
+
+  /* Auth */
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      _uid = user.uid;
+      document.getElementById('user-info').textContent = user.email || user.uid;
+    } else {
+      _uid = null;
+      document.getElementById('user-info').textContent = 'Not signed in';
+    }
+  });
+
+  /* Tab switching */
+  function switchTab(tab) {
+    _currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach((b, i) => {
+      const tabs = ['dashboard', 'leads', 'customers', 'support'];
+      b.classList.toggle('active', tabs[i] === tab);
+    });
+    document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+    document.getElementById(`panel-${tab}`).classList.add('active');
+
+    if (!_mid) return;
+    if (tab === 'dashboard')  loadDashboard(_mid);
+    if (tab === 'leads')      loadLeads(_mid, _currentLeadFilter);
+    if (tab === 'customers')  loadCustomers(_mid);
+    if (tab === 'support')    loadTickets(_mid);
+  }
+
+  /* Merchant change */
+  function onMerchantChange() {
+    const v = document.getElementById('mid-input').value.trim();
+    if (!v) { toast('Enter a merchant ID', 'error'); return; }
+    _mid = v;
+    switchTab(_currentTab);
+  }
+
+  /* ─── DASHBOARD ────────────────────────────────────────────────────────── */
+  async function loadDashboard(mid) {
+    const wrap = document.getElementById('dash-content');
+    wrap.innerHTML = '<div class="loading-wrap"><div class="spinner"></div> Loading dashboard…</div>';
+    try {
+      const { data } = await CF.getCRMDashboard({ merchantId: mid });
+      const { leads, tickets, churnRisk, topCustomers, conversionRate, newLeadsToday } = data;
+      const pl = leads.pipeline;
+      const maxPipe = Math.max(1, pl.new + pl.contacted + pl.qualified + pl.converted + pl.lost);
+
+      wrap.innerHTML = `
+        <div class="kpi-row">
+          <div class="kpi">
+            <div class="label">Total Leads</div>
+            <div class="value">${leads.total}</div>
+            <div class="sub">${newLeadsToday} new today</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Open Tickets</div>
+            <div class="value">${tickets.open}</div>
+            <div class="sub">${tickets.byPriority.urgent} urgent</div>
+          </div>
+          <div class="kpi">
+            <div class="label">High Churn Risk</div>
+            <div class="value" style="color:var(--red)">${churnRisk.highCount}</div>
+            <div class="sub">customers at risk</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Conversion Rate</div>
+            <div class="value">${conversionRate}%</div>
+            <div class="sub">last 30 days</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;flex-wrap:wrap;">
+          <div class="card">
+            <div class="card-title">Lead Pipeline</div>
+            <div class="funnel">
+              ${funnelRow('New', pl.new, maxPipe, 'f-new')}
+              ${funnelRow('Contacted', pl.contacted, maxPipe, 'f-cont')}
+              ${funnelRow('Qualified', pl.qualified, maxPipe, 'f-qual')}
+              ${funnelRow('Converted', pl.converted, maxPipe, 'f-conv')}
+              ${funnelRow('Lost', pl.lost, maxPipe, 'f-lost')}
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Top Customers by CLV</div>
+            ${topCustomers.length === 0 ? '<div class="empty-state">No customer data yet.</div>' : `
+            <table>
+              <thead><tr><th>Name</th><th>Orders</th><th>CLV</th><th>Segment</th></tr></thead>
+              <tbody>${topCustomers.map((c) => `
+                <tr class="clickable" onclick="CRMPortal.openCustomerProfile('${c.uid}')">
+                  <td>${esc(c.name) || c.uid}</td>
+                  <td>${c.orderCount}</td>
+                  <td>${fmtKES(c.clv)}</td>
+                  <td><span class="badge badge-new">${c.segment}</span></td>
+                </tr>`).join('')}
+              </tbody>
+            </table>`}
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      wrap.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+      toast(e.message, 'error');
+    }
+  }
+
+  function funnelRow(label, count, max, cls) {
+    const pct = max > 0 ? (count / max) * 100 : 0;
+    return `<div class="funnel-row ${cls}">
+      <div class="funnel-label">${label}</div>
+      <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:${pct.toFixed(1)}%"></div></div>
+      <div class="funnel-count">${count}</div>
+    </div>`;
+  }
+
+  /* ─── LEADS ────────────────────────────────────────────────────────────── */
+  async function loadLeads(mid, statusFilter) {
+    const wrap = document.getElementById('leads-table-wrap');
+    wrap.innerHTML = '<div class="loading-wrap"><div class="spinner"></div> Loading leads…</div>';
+    try {
+      const { data } = await CF.getLeadBoard({ merchantId: mid, status: statusFilter || undefined });
+      const statuses = statusFilter ? [statusFilter] : ['new', 'contacted', 'qualified', 'converted', 'lost'];
+      let rows = [];
+      for (const s of statuses) rows = rows.concat((data[s] || []).map((l) => ({ ...l, _status: s })));
+      _allLeads = rows;
+      renderLeadsTable(rows);
+    } catch (e) {
+      wrap.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+      toast(e.message, 'error');
+    }
+  }
+
+  function renderLeadsTable(rows) {
+    const wrap = document.getElementById('leads-table-wrap');
+    if (!rows.length) { wrap.innerHTML = '<div class="empty-state">No leads found.</div>'; return; }
+    wrap.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Contact</th><th>Source</th><th>Status</th><th>Est. Value</th><th>Last Contact</th></tr></thead>
+      <tbody>${rows.map((l) => `
+        <tr class="clickable" onclick="CRMPortal.openLeadDetail(${JSON.stringify(l).replace(/"/g, '&quot;')})">
+          <td>${esc(l.name)}</td>
+          <td>${esc(l.phone || l.email || '—')}</td>
+          <td>${esc(l.source)}</td>
+          <td><span class="badge badge-${l.status || l._status}">${l.status || l._status}</span></td>
+          <td>${fmtKES(l.estimatedValue)}</td>
+          <td>${fmtDate(l.lastContactedAt)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  }
+
+  function filterLeads(status) {
+    _currentLeadFilter = status;
+    document.querySelectorAll('#lead-sub-tabs .sub-tab').forEach((b) => {
+      const labels = { '': 'all', new: 'new', contacted: 'contacted', qualified: 'qualified', converted: 'converted', lost: 'lost' };
+      b.classList.toggle('active', b.textContent.toLowerCase() === (labels[status] || status));
+    });
+    if (!_mid) return;
+    loadLeads(_mid, status);
+  }
+
+  /* Lead detail panel */
+  function openLeadDetail(lead) {
+    document.getElementById('ldp-name').textContent = lead.name;
+    const panel = document.getElementById('lead-detail-panel');
+    const content = document.getElementById('lead-detail-content');
+    content.innerHTML = `<div class="loading-wrap"><div class="spinner"></div> Loading activities…</div>`;
+    panel.classList.add('open');
+
+    // Render static info
+    content.innerHTML = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+        <span class="badge badge-${lead.status}">${lead.status}</span>
+        <span class="badge" style="background:var(--bg-surface);color:var(--text-2)">${esc(lead.source)}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div><div style="font-size:11px;color:var(--text-3)">Phone</div><div>${esc(lead.phone || '—')}</div></div>
+        <div><div style="font-size:11px;color:var(--text-3)">Email</div><div>${esc(lead.email || '—')}</div></div>
+        <div><div style="font-size:11px;color:var(--text-3)">Est. Value</div><div>${fmtKES(lead.estimatedValue)}</div></div>
+        <div><div style="font-size:11px;color:var(--text-3)">Created</div><div>${fmtDate(lead.createdAt)}</div></div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:4px;">Notes</div>
+        <div style="background:var(--bg-surface);padding:10px;border-radius:8px;font-size:13px;">${esc(lead.notes) || '<em style="color:var(--text-3)">No notes</em>'}</div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+        <button class="btn btn-primary btn-sm" onclick="CRMPortal.openLogActivity('${lead.id}','${lead.merchantId || _mid}')">Log Activity</button>
+        ${lead.status !== 'converted' ? `<button class="btn btn-ghost btn-sm" onclick="CRMPortal.doConvertLead('${lead.id}','${lead.name}')">Mark Converted</button>` : ''}
+        <select id="ldp-status-sel" style="width:auto;font-size:12px;">
+          ${['new','contacted','qualified','converted','lost'].map((s) => `<option value="${s}" ${s === lead.status ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="CRMPortal.doUpdateLeadStatus('${lead.id}')">Update Status</button>
+      </div>
+
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Activity Timeline</div>
+      <div id="activities-timeline"><div class="loading-wrap"><div class="spinner"></div> Loading…</div></div>
+    `;
+
+    loadActivities(lead.id);
+  }
+
+  async function loadActivities(leadId) {
+    const wrap = document.getElementById('activities-timeline');
+    try {
+      const q = query(
+        collection(db, 'crmLeadActivities'),
+        where('leadId', '==', leadId),
+        orderBy('createdAt', 'desc'),
+        limit(30),
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) { wrap.innerHTML = '<div class="empty-state">No activities yet.</div>'; return; }
+      wrap.innerHTML = `<div class="timeline">${snap.docs.map((doc) => {
+        const d = doc.data();
+        return `<div class="timeline-item">
+          <div class="timeline-icon">${actIcon(d.type)}</div>
+          <div class="timeline-body">
+            <div class="t-type">${d.type.toUpperCase()} ${d.durationMin ? `· ${d.durationMin}min` : ''}</div>
+            <div class="t-text">${esc(d.outcome) || ''}</div>
+            ${d.notes ? `<div class="t-text" style="color:var(--text-2)">${esc(d.notes)}</div>` : ''}
+            <div class="t-meta">${fmtDate(d.createdAt)} · by ${esc(d.staffId)}</div>
+          </div>
+        </div>`;
+      }).join('')}</div>`;
+    } catch (e) {
+      wrap.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+    }
+  }
+
+  /* Log Activity inline modal — reuse lead modal overlay with different fields */
+  function openLogActivity(leadId, merchantId) {
+    const subject = prompt('Activity type (call / email / visit / whatsapp / demo):') || 'call';
+    const outcome = prompt('Outcome:') || '';
+    const notes   = prompt('Notes (optional):') || '';
+    if (!outcome && !notes) return;
+    CF.logLeadActivity({ leadId, merchantId, type: subject, outcome, notes, durationMin: 0 })
+      .then(() => { toast('Activity logged'); loadActivities(leadId); })
+      .catch((e) => toast(e.message, 'error'));
+  }
+
+  async function doUpdateLeadStatus(leadId) {
+    const sel = document.getElementById('ldp-status-sel');
+    if (!sel) return;
+    try {
+      await CF.updateLead({ leadId, status: sel.value });
+      toast('Status updated');
+      if (_mid) loadLeads(_mid, _currentLeadFilter);
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  async function doConvertLead(leadId, name) {
+    if (!confirm(`Convert "${name}" to a customer?`)) return;
+    try {
+      await CF.convertLead({ leadId, notes: 'Converted via CRM portal' });
+      toast('Lead converted successfully');
+      closePanel('lead-detail-panel');
+      if (_mid) loadLeads(_mid, _currentLeadFilter);
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  /* New lead modal */
+  function openLeadModal() { document.getElementById('lead-modal').classList.add('open'); }
+
+  async function submitLead() {
+    if (!_mid) { toast('Load a merchant first', 'error'); return; }
+    const errEl = document.getElementById('lead-modal-err');
+    errEl.textContent = '';
+    const payload = {
+      merchantId:     _mid,
+      name:           document.getElementById('l-name').value.trim(),
+      phone:          document.getElementById('l-phone').value.trim(),
+      email:          document.getElementById('l-email').value.trim(),
+      source:         document.getElementById('l-source').value,
+      notes:          document.getElementById('l-notes').value.trim(),
+      estimatedValue: parseFloat(document.getElementById('l-value').value) || 0,
+    };
+    if (!payload.name) { errEl.textContent = 'Name is required.'; return; }
+    if (!payload.phone && !payload.email) { errEl.textContent = 'Phone or email required.'; return; }
+    try {
+      await CF.createLead(payload);
+      toast('Lead created');
+      closeModal('lead-modal');
+      loadLeads(_mid, _currentLeadFilter);
+    } catch (e) { errEl.textContent = e.message; }
+  }
+
+  /* ─── CUSTOMERS ────────────────────────────────────────────────────────── */
+  async function loadCustomers(mid) {
+    const wrap = document.getElementById('customers-table-wrap');
+    wrap.innerHTML = '<div class="loading-wrap"><div class="spinner"></div> Loading customers…</div>';
+    try {
+      const q = query(
+        collection(db, 'crmCustomerProfiles'),
+        where('merchantId', '==', mid),
+        orderBy('clv', 'desc'),
+        limit(100),
+      );
+      const snap = await getDocs(q);
+      _allCustomers = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      renderCustomersTable(_allCustomers);
+    } catch (e) {
+      wrap.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+    }
+  }
+
+  function renderCustomersTable(rows) {
+    const wrap = document.getElementById('customers-table-wrap');
+    if (!rows.length) { wrap.innerHTML = '<div class="empty-state">No customer profiles found. Profiles are built when orders are placed.</div>'; return; }
+    wrap.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Name</th><th>Phone</th><th>Orders</th><th>Total Spend</th><th>CLV</th><th>Churn Risk</th></tr></thead>
+      <tbody>${rows.map((c) => `
+        <tr class="clickable" onclick="CRMPortal.openCustomerProfile('${c.id}')">
+          <td>${esc(c.name || c.id)}</td>
+          <td>${esc(c.phone || '—')}</td>
+          <td>${c.orderCount || 0}</td>
+          <td>${fmtKES(c.totalSpend)}</td>
+          <td>${fmtKES(c.clv)}</td>
+          <td><span class="badge badge-${c.churnRiskLevel || 'low'}">${c.churnRiskLevel || 'low'}</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  }
+
+  function filterCustomers() {
+    const q = document.getElementById('cust-search').value.toLowerCase();
+    if (!q) { renderCustomersTable(_allCustomers); return; }
+    renderCustomersTable(_allCustomers.filter((c) =>
+      (c.name || '').toLowerCase().includes(q) || (c.phone || '').includes(q)
+    ));
+  }
+
+  async function openCustomerProfile(uid) {
+    if (!_mid) return;
+    const panel   = document.getElementById('customer-panel');
+    const content = document.getElementById('customer-content');
+    document.getElementById('cp-name').textContent = 'Customer 360';
+    content.innerHTML = '<div class="loading-wrap"><div class="spinner"></div> Loading profile…</div>';
+    panel.classList.add('open');
+
+    try {
+      const { data: p } = await CF.getCustomerProfile({ merchantId: _mid, uid });
+      document.getElementById('cp-name').textContent = p.name || uid;
+      content.innerHTML = `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+          <span class="badge badge-new">${esc(p.segment)}</span>
+          <span class="badge badge-${p.churnRiskLevel}">${p.churnRiskLevel} churn risk</span>
+        </div>
+        <div class="profile-grid">
+          <div class="profile-stat"><div class="ps-label">Lifetime Value</div><div class="ps-val">${fmtKES(p.clv)}</div></div>
+          <div class="profile-stat"><div class="ps-label">Total Spend</div><div class="ps-val">${fmtKES(p.totalSpend)}</div></div>
+          <div class="profile-stat"><div class="ps-label">Orders</div><div class="ps-val">${p.orderCount || 0}</div></div>
+          <div class="profile-stat"><div class="ps-label">Avg Order</div><div class="ps-val">${fmtKES(p.avgOrderValue)}</div></div>
+          <div class="profile-stat"><div class="ps-label">Loyalty Points</div><div class="ps-val">${p.loyaltyPoints || 0}</div></div>
+          <div class="profile-stat"><div class="ps-label">Loyalty Tier</div><div class="ps-val" style="text-transform:capitalize">${p.loyaltyTier || '—'}</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+          <div><div style="font-size:11px;color:var(--text-3)">Phone</div><div>${esc(p.phone || '—')}</div></div>
+          <div><div style="font-size:11px;color:var(--text-3)">Email</div><div>${esc(p.email || '—')}</div></div>
+          <div><div style="font-size:11px;color:var(--text-3)">First Order</div><div>${fmtDate(p.firstOrderAt)}</div></div>
+          <div><div style="font-size:11px;color:var(--text-3)">Last Order</div><div>${fmtDate(p.lastOrderAt)}</div></div>
+        </div>
+        ${p.preferredCategories && p.preferredCategories.length ? `
+        <div style="margin-bottom:16px;">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">Preferred Categories</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${p.preferredCategories.map((c) => `<span class="badge" style="background:var(--bg-surface);color:var(--text-2)">${esc(c)}</span>`).join('')}
+          </div>
+        </div>` : ''}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <button class="btn btn-primary btn-sm" onclick="CRMPortal.doCalcCLV('${uid}')">Recalculate CLV</button>
+          <button class="btn btn-ghost btn-sm" onclick="CRMPortal.openTicketModalForCustomer('${uid}')">Open Ticket</button>
+        </div>
+      `;
+    } catch (e) {
+      content.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+    }
+  }
+
+  async function doCalcCLV(uid) {
+    if (!_mid) return;
+    try {
+      const { data } = await CF.calculateCLV({ merchantId: _mid, uid });
+      toast(`CLV updated: ${fmtKES(data.clv)}`);
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  /* ─── SUPPORT ───────────────────────────────────────────────────────────── */
+  async function loadTickets(mid) {
+    const wrap = document.getElementById('tickets-table-wrap');
+    wrap.innerHTML = '<div class="loading-wrap"><div class="spinner"></div> Loading tickets…</div>';
+    try {
+      const q = query(
+        collection(db, 'crmSupportTickets'),
+        where('merchantId', '==', mid),
+        orderBy('createdAt', 'desc'),
+        limit(100),
+      );
+      const snap = await getDocs(q);
+      _allTickets = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      renderTicketsTable(_allTickets, _currentTicketFilter);
+    } catch (e) {
+      wrap.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+    }
+  }
+
+  function renderTicketsTable(rows, statusFilter) {
+    const filtered = statusFilter ? rows.filter((t) => t.status === statusFilter) : rows;
+    const wrap = document.getElementById('tickets-table-wrap');
+    if (!filtered.length) { wrap.innerHTML = '<div class="empty-state">No tickets found.</div>'; return; }
+    wrap.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr><th>Subject</th><th>Priority</th><th>Status</th><th>Customer</th><th>Created</th></tr></thead>
+      <tbody>${filtered.map((t) => `
+        <tr class="clickable" onclick="CRMPortal.openTicketDetail(${JSON.stringify(t).replace(/"/g, '&quot;')})">
+          <td>${esc(t.subject)}</td>
+          <td><span class="badge badge-${t.priority}">${t.priority}</span></td>
+          <td><span class="badge badge-${t.status.replace('_', '_')}">${t.status}</span></td>
+          <td>${esc(t.uid || '—')}</td>
+          <td>${fmtDate(t.createdAt)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>`;
+  }
+
+  function filterTickets(status) {
+    _currentTicketFilter = status;
+    document.querySelectorAll('#ticket-sub-tabs .sub-tab').forEach((b) => {
+      const map = { '': 'all', open: 'open', in_progress: 'in progress', resolved: 'resolved', closed: 'closed' };
+      b.classList.toggle('active', b.textContent.toLowerCase() === (map[status] || status));
+    });
+    renderTicketsTable(_allTickets, status);
+  }
+
+  function openTicketDetail(ticket) {
+    document.getElementById('tp-subject').textContent = ticket.subject;
+    const panel   = document.getElementById('ticket-panel');
+    const content = document.getElementById('ticket-content');
+    content.innerHTML = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+        <span class="badge badge-${ticket.priority}">${ticket.priority}</span>
+        <span class="badge badge-${ticket.status}">${ticket.status}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div><div style="font-size:11px;color:var(--text-3)">Customer</div><div>${esc(ticket.uid || '—')}</div></div>
+        <div><div style="font-size:11px;color:var(--text-3)">Order</div><div>${esc(ticket.orderId || '—')}</div></div>
+        <div><div style="font-size:11px;color:var(--text-3)">Created</div><div>${fmtDate(ticket.createdAt)}</div></div>
+        <div><div style="font-size:11px;color:var(--text-3)">Resolved</div><div>${fmtDate(ticket.resolvedAt)}</div></div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:4px;">Description</div>
+        <div style="background:var(--bg-surface);padding:10px;border-radius:8px;font-size:13px;">${esc(ticket.description)}</div>
+      </div>
+      ${ticket.resolutionNotes ? `<div style="margin-bottom:16px;">
+        <div style="font-size:12px;color:var(--text-2);margin-bottom:4px;">Resolution Notes</div>
+        <div style="background:var(--bg-surface);padding:10px;border-radius:8px;font-size:13px;">${esc(ticket.resolutionNotes)}</div>
+      </div>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <select id="tp-status-sel" style="width:auto;font-size:12px;">
+          ${['open','in_progress','resolved','closed'].map((s) => `<option value="${s}" ${s === ticket.status ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="CRMPortal.doUpdateTicket('${ticket.id}')">Update Status</button>
+      </div>
+    `;
+    panel.classList.add('open');
+  }
+
+  async function doUpdateTicket(ticketId) {
+    const sel = document.getElementById('tp-status-sel');
+    if (!sel) return;
+    const notes = prompt('Resolution notes (optional):') || '';
+    try {
+      await CF.updateSupportTicket({ ticketId, status: sel.value, notes: notes || undefined });
+      toast('Ticket updated');
+      closePanel('ticket-panel');
+      if (_mid) loadTickets(_mid);
+    } catch (e) { toast(e.message, 'error'); }
+  }
+
+  function openTicketModal() { document.getElementById('ticket-modal').classList.add('open'); }
+  function openTicketModalForCustomer(uid) {
+    document.getElementById('t-uid').value = uid;
+    openTicketModal();
+    closePanel('customer-panel');
+  }
+
+  async function submitTicket() {
+    if (!_mid) { toast('Load a merchant first', 'error'); return; }
+    const errEl = document.getElementById('ticket-modal-err');
+    errEl.textContent = '';
+    const payload = {
+      merchantId:  _mid,
+      uid:         document.getElementById('t-uid').value.trim(),
+      subject:     document.getElementById('t-subject').value.trim(),
+      description: document.getElementById('t-desc').value.trim(),
+      priority:    document.getElementById('t-priority').value,
+      orderId:     document.getElementById('t-order').value.trim() || undefined,
+    };
+    if (!payload.uid) { errEl.textContent = 'Customer UID is required.'; return; }
+    if (!payload.subject) { errEl.textContent = 'Subject is required.'; return; }
+    if (!payload.description) { errEl.textContent = 'Description is required.'; return; }
+    try {
+      await CF.createSupportTicket(payload);
+      toast('Ticket created');
+      closeModal('ticket-modal');
+      if (_mid) loadTickets(_mid);
+    } catch (e) { errEl.textContent = e.message; }
+  }
+
+  /* ─── Helpers ───────────────────────────────────────────────────────────── */
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+  function closePanel(id) { document.getElementById(id).classList.remove('open'); }
+
+  /* Close modals on backdrop click */
+  document.querySelectorAll('.modal-overlay').forEach((el) => {
+    el.addEventListener('click', (e) => { if (e.target === el) el.classList.remove('open'); });
+  });
+
+  return {
+    switchTab, onMerchantChange,
+    loadDashboard, loadLeads, filterLeads, loadCustomers, filterCustomers, loadTickets, filterTickets,
+    openLeadModal, submitLead, openLeadDetail, openLogActivity, doUpdateLeadStatus, doConvertLead,
+    openCustomerProfile, doCalcCLV,
+    openTicketModal, openTicketModalForCustomer, submitTicket, openTicketDetail, doUpdateTicket,
+    closeModal, closePanel,
+  };
+})();
+</script>
+</body>
+</html>

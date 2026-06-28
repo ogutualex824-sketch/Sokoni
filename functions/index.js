@@ -8691,16 +8691,18 @@ exports.updateWholesaleProduct   = b2bWholesale.updateWholesaleProduct;
 exports.getWholesaleAnalytics    = b2bWholesale.getWholesaleAnalytics;
 exports.getWholesaleAccount      = b2bWholesale.getWholesaleAccount;
 
-/* ── Release Readiness Certification v1.0 ──────────────────────────────── */
+/* ── Release Readiness Certification v1.0 + Production Cert Runner v1.0 ── */
 const relReadiness = require('./release-readiness');
-exports.runReleaseReadinessCheck = relReadiness.runReleaseReadinessCheck;
-exports.checkInfrastructure      = relReadiness.checkInfrastructure;
-exports.checkSecurityReadiness   = relReadiness.checkSecurityReadiness;
-exports.checkPlatformModules     = relReadiness.checkPlatformModules;
-exports.checkPerformanceReadiness= relReadiness.checkPerformanceReadiness;
-exports.checkComplianceReadiness = relReadiness.checkComplianceReadiness;
-exports.approveRelease           = relReadiness.approveRelease;
-exports.getLatestReleaseReport   = relReadiness.getLatestReleaseReport;
+exports.runReleaseReadinessCheck    = relReadiness.runReleaseReadinessCheck;
+exports.checkInfrastructure         = relReadiness.checkInfrastructure;
+exports.checkSecurityReadiness      = relReadiness.checkSecurityReadiness;
+exports.checkPlatformModules        = relReadiness.checkPlatformModules;
+exports.checkPerformanceReadiness   = relReadiness.checkPerformanceReadiness;
+exports.checkComplianceReadiness    = relReadiness.checkComplianceReadiness;
+exports.approveRelease              = relReadiness.approveRelease;
+exports.getLatestReleaseReport      = relReadiness.getLatestReleaseReport;
+exports.runProductionCertification  = relReadiness.runProductionCertification;
+exports.getCertificationHistory     = relReadiness.getCertificationHistory;
 
 /* ── Event Hub v1.0 ─────────────────────────────────────────────────────── */
 const eventHub = require('./event-hub');
@@ -8884,3 +8886,27 @@ exports.approveLeave                    = hrPayroll.approveLeave;
 exports.assignTraining                  = hrPayroll.assignTraining;
 exports.markTrainingComplete            = hrPayroll.markTrainingComplete;
 exports.getStaffDashboard               = hrPayroll.getStaffDashboard;
+
+/* ── Advanced BI — Branch Comparison + Marketing ROI v1.0 ───────────────── */
+const biAdvanced = require('./bi-advanced');
+exports.getMultiBranchRevenue           = biAdvanced.getMultiBranchRevenue;
+exports.getBranchPerformanceComparison  = biAdvanced.getBranchPerformanceComparison;
+exports.getMarketingROI                 = biAdvanced.getMarketingROI;
+exports.getCustomerSegmentRevenue       = biAdvanced.getCustomerSegmentRevenue;
+exports.getRevenueByChannel             = biAdvanced.getRevenueByChannel;
+
+/* ── CRM — Customer Relationship Management v1.0 ─────────────────────── */
+const crm = require('./crm');
+exports.createLead              = crm.createLead;
+exports.updateLead              = crm.updateLead;
+exports.logLeadActivity         = crm.logLeadActivity;
+exports.convertLead             = crm.convertLead;
+exports.getLeadBoard            = crm.getLeadBoard;
+exports.buildCustomerProfile    = crm.buildCustomerProfile;
+exports.getCustomerProfile      = crm.getCustomerProfile;
+exports.calculateCLV            = crm.calculateCLV;
+exports.getChurnRisk            = crm.getChurnRisk;
+exports.createSupportTicket     = crm.createSupportTicket;
+exports.updateSupportTicket     = crm.updateSupportTicket;
+exports.getCRMDashboard         = crm.getCRMDashboard;
+exports.computeChurnRiskDaily   = crm.computeChurnRiskDaily;
