@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+  <script src="/security.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enterprise Operations Center — SOKONI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --eoc-bg:        #0d0d0d;
+      --eoc-surface:   #161616;
+      --eoc-surface2:  #1e1e1e;
+      --eoc-border:    #222;
+      --eoc-accent:    #7c3aed;
+      --eoc-accent2:   #a78bfa;
+      --eoc-success:   #34d399;
+      --eoc-warn:      #fbbf24;
+      --eoc-danger:    #f87171;
+      --eoc-info:      #60a5fa;
+      --eoc-text:      #e4e4e7;
+      --eoc-muted:     #71717a;
+      --eoc-sidebar-w: 240px;
+      --eoc-header-h:  56px;
+      --eoc-radius:    8px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--eoc-bg);
+      color: var(--eoc-text);
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ─────────────────────────────────────── */
+    .eoc-header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: var(--eoc-header-h);
+      background: var(--eoc-surface);
+      border-bottom: 1px solid var(--eoc-border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+      z-index: 1000;
+    }
+    .eoc-header-logo {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--eoc-accent2);
+      flex-shrink: 0;
+    }
+    .eoc-header-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--eoc-text);
+    }
+    .eoc-header-sep { flex: 1; }
+    .eoc-platform-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--eoc-border);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    .eoc-platform-badge .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .eoc-header-meta {
+      font-size: 11px;
+      color: var(--eoc-muted);
+      white-space: nowrap;
+    }
+    .eoc-refresh-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--eoc-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    .eoc-refresh-toggle input[type="checkbox"] {
+      accent-color: var(--eoc-accent);
+      cursor: pointer;
+      width: 14px; height: 14px;
+    }
+    .eoc-hamburger {
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      cursor: pointer;
+      padding: 4px;
+    }
+    .eoc-hamburger span {
+      display: block;
+      width: 20px; height: 2px;
+      background: var(--eoc-text);
+      border-radius: 2px;
+      transition: opacity .2s;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────── */
+    .eoc-sidebar {
+      position: fixed;
+      top: var(--eoc-header-h);
+      left: 0;
+      bottom: 0;
+      width: var(--eoc-sidebar-w);
+      background: var(--eoc-surface);
+      border-right: 1px solid var(--eoc-border);
+      overflow-y: auto;
+      padding: 16px 0;
+      z-index: 900;
+      transition: transform .25s ease;
+    }
+    .eoc-sidebar::-webkit-scrollbar { width: 4px; }
+    .eoc-sidebar::-webkit-scrollbar-track { background: transparent; }
+    .eoc-sidebar::-webkit-scrollbar-thumb { background: var(--eoc-border); border-radius: 4px; }
+
+    .eoc-sidebar-section {
+      padding: 8px 16px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--eoc-muted);
+    }
+    .eoc-sidebar a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      color: var(--eoc-muted);
+      text-decoration: none;
+      border-radius: 0;
+      font-size: 13px;
+      transition: background .15s, color .15s;
+      border-left: 3px solid transparent;
+    }
+    .eoc-sidebar a:hover { background: var(--eoc-surface2); color: var(--eoc-text); }
+    .eoc-sidebar a.active {
+      background: var(--eoc-surface2);
+      color: var(--eoc-accent2);
+      border-left-color: var(--eoc-accent);
+    }
+    .eoc-sidebar a .nav-icon { font-size: 15px; flex-shrink: 0; }
+
+    /* ── Main ─────────────────────────────────────────── */
+    .eoc-main {
+      margin-left: var(--eoc-sidebar-w);
+      margin-top: var(--eoc-header-h);
+      padding: 24px;
+      min-height: calc(100vh - var(--eoc-header-h));
+    }
+
+    /* ── Section ─────────────────────────────────────── */
+    .eoc-section {
+      margin-bottom: 36px;
+      scroll-margin-top: calc(var(--eoc-header-h) + 16px);
+    }
+    .eoc-section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .eoc-section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--eoc-text);
+    }
+    .eoc-section-icon { font-size: 18px; }
+    .eoc-section-refresh {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--eoc-muted);
+    }
+    .eoc-section-refresh button {
+      background: none;
+      border: 1px solid var(--eoc-border);
+      color: var(--eoc-muted);
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: border-color .15s, color .15s;
+    }
+    .eoc-section-refresh button:hover { border-color: var(--eoc-accent2); color: var(--eoc-accent2); }
+
+    /* ── KPI Grid ─────────────────────────────────────── */
+    .eoc-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .eoc-kpi {
+      background: var(--eoc-surface);
+      border: 1px solid var(--eoc-border);
+      border-radius: var(--eoc-radius);
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .eoc-kpi::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--eoc-accent);
+    }
+    .eoc-kpi-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      color: var(--eoc-muted);
+      margin-bottom: 10px;
+    }
+    .eoc-kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--eoc-text);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .eoc-kpi-sub {
+      font-size: 11px;
+      color: var(--eoc-muted);
+    }
+
+    /* ── Subsystem pills ─────────────────────────────── */
+    .eoc-subsystem-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .eoc-subsystem-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--eoc-surface);
+      border: 1px solid var(--eoc-border);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: var(--eoc-text);
+    }
+    .eoc-pill-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .eoc-pill-latency {
+      font-size: 10px;
+      color: var(--eoc-muted);
+      margin-left: 2px;
+    }
+
+    /* ── Card grid ───────────────────────────────────── */
+    .eoc-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+    .eoc-card-grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .eoc-card-grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .eoc-card {
+      background: var(--eoc-surface);
+      border: 1px solid var(--eoc-border);
+      border-radius: var(--eoc-radius);
+      padding: 16px 18px;
+    }
+    .eoc-card-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--eoc-muted);
+      margin-bottom: 8px;
+    }
+    .eoc-card-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--eoc-text);
+      margin-bottom: 2px;
+    }
+    .eoc-card-sub {
+      font-size: 11px;
+      color: var(--eoc-muted);
+    }
+
+    /* ── Alert feed ──────────────────────────────────── */
+    .eoc-alert-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .eoc-alert-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: var(--eoc-surface);
+      border: 1px solid var(--eoc-border);
+      border-radius: var(--eoc-radius);
+      padding: 12px 16px;
+    }
+    .eoc-alert-badge {
+      flex-shrink: 0;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      margin-top: 1px;
+    }
+    .eoc-alert-body { flex: 1; min-width: 0; }
+    .eoc-alert-msg { font-size: 13px; color: var(--eoc-text); word-break: break-word; }
+    .eoc-alert-meta { font-size: 11px; color: var(--eoc-muted); margin-top: 3px; }
+    .eoc-alert-empty {
+      text-align: center;
+      padding: 40px 0;
+      color: var(--eoc-muted);
+      font-size: 13px;
+    }
+
+    /* ── DR section ──────────────────────────────────── */
+    .eoc-dr-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .eoc-dr-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .eoc-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: var(--eoc-radius);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity .15s, transform .1s;
+    }
+    .eoc-btn:hover { opacity: .85; }
+    .eoc-btn:active { transform: scale(.97); }
+    .eoc-btn-primary { background: var(--eoc-accent); color: #fff; }
+    .eoc-btn-secondary { background: var(--eoc-surface2); color: var(--eoc-text); border: 1px solid var(--eoc-border); }
+    .eoc-btn-danger { background: #7f1d1d; color: #fca5a5; }
+    .eoc-select {
+      background: var(--eoc-surface2);
+      border: 1px solid var(--eoc-border);
+      color: var(--eoc-text);
+      padding: 8px 12px;
+      border-radius: var(--eoc-radius);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    /* ── Loading / error states ──────────────────────── */
+    .eoc-loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--eoc-muted);
+      font-size: 13px;
+      padding: 20px 0;
+    }
+    .eoc-spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--eoc-border);
+      border-top-color: var(--eoc-accent2);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .eoc-error {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--eoc-danger);
+      font-size: 13px;
+      padding: 12px 16px;
+      background: #1f0f0f;
+      border: 1px solid #7f1d1d;
+      border-radius: var(--eoc-radius);
+    }
+
+    /* ── Toast ───────────────────────────────────────── */
+    #eoc-toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9999;
+    }
+    .eoc-toast {
+      min-width: 260px;
+      max-width: 380px;
+      background: var(--eoc-surface2);
+      border: 1px solid var(--eoc-border);
+      border-radius: var(--eoc-radius);
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--eoc-text);
+      box-shadow: 0 8px 24px rgba(0,0,0,.4);
+      animation: toast-in .2s ease;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .eoc-toast.success { border-color: var(--eoc-success); }
+    .eoc-toast.error   { border-color: var(--eoc-danger); }
+    .eoc-toast.warn    { border-color: var(--eoc-warn); }
+    .eoc-toast-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* ── Divider ─────────────────────────────────────── */
+    .eoc-divider {
+      border: none;
+      border-top: 1px solid var(--eoc-border);
+      margin: 24px 0;
+    }
+
+    /* ── Provider row ────────────────────────────────── */
+    .eoc-provider-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .eoc-provider-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--eoc-surface2);
+      border: 1px solid var(--eoc-border);
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* ── Responsive ──────────────────────────────────── */
+    @media (max-width: 1100px) {
+      .eoc-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .eoc-card-grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .eoc-card-grid-3 { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .eoc-sidebar {
+        transform: translateX(-100%);
+      }
+      .eoc-sidebar.open {
+        transform: translateX(0);
+        box-shadow: 4px 0 24px rgba(0,0,0,.5);
+      }
+      .eoc-main { margin-left: 0; padding: 16px; }
+      .eoc-hamburger { display: flex; }
+      .eoc-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .eoc-card-grid-4 { grid-template-columns: repeat(2, 1fr); }
+      .eoc-card-grid-3 { grid-template-columns: 1fr; }
+      .eoc-dr-grid { grid-template-columns: 1fr; }
+      .eoc-header-title { font-size: 13px; }
+    }
+    @media (max-width: 440px) {
+      .eoc-kpi-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────── -->
+<header class="eoc-header">
+  <button class="eoc-hamburger" id="hamburger" aria-label="Toggle navigation" onclick="toggleSidebar()">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="eoc-header-logo">SOKONI</div>
+  <div class="eoc-header-title">Enterprise Operations Center</div>
+  <div class="eoc-header-sep"></div>
+  <div id="platformBadge" class="eoc-platform-badge" style="border-color:#333">
+    <span class="dot" style="background:#888"></span>
+    <span>LOADING</span>
+  </div>
+  <div class="eoc-header-meta">Last refresh: <span id="lastRefresh">—</span></div>
+  <label class="eoc-refresh-toggle" title="Auto-refresh every 30 seconds">
+    <input type="checkbox" id="autoRefreshToggle" checked onchange="toggleAutoRefresh(this.checked)" />
+    Auto-refresh
+  </label>
+</header>
+
+<!-- ── Sidebar ─────────────────────────────────────────── -->
+<nav class="eoc-sidebar" id="sidebar">
+  <div class="eoc-sidebar-section">Overview</div>
+  <a href="#sec-overview" class="active" onclick="setActive(this)"><span class="nav-icon">📊</span> System Overview</a>
+  <a href="#sec-alerts" onclick="setActive(this)"><span class="nav-icon">🔔</span> Platform Alerts</a>
+  <div class="eoc-sidebar-section">Infrastructure</div>
+  <a href="#sec-infra" onclick="setActive(this)"><span class="nav-icon">🏗️</span> Infrastructure</a>
+  <div class="eoc-sidebar-section">Platform</div>
+  <a href="#sec-marketplace" onclick="setActive(this)"><span class="nav-icon">🛒</span> Marketplace</a>
+  <a href="#sec-smartpos" onclick="setActive(this)"><span class="nav-icon">🖥️</span> SmartPOS</a>
+  <a href="#sec-payments" onclick="setActive(this)"><span class="nav-icon">💳</span> Payments</a>
+  <a href="#sec-ai" onclick="setActive(this)"><span class="nav-icon">🤖</span> AI & Intelligence</a>
+  <a href="#sec-jobs" onclick="setActive(this)"><span class="nav-icon">⚙️</span> Async Jobs</a>
+  <a href="#sec-security" onclick="setActive(this)"><span class="nav-icon">🔒</span> Security</a>
+  <div class="eoc-sidebar-section">Reliability</div>
+  <a href="#sec-dr" onclick="setActive(this)"><span class="nav-icon">🛡️</span> Disaster Recovery</a>
+</nav>
+
+<!-- ── Main Content ────────────────────────────────────── -->
+<main class="eoc-main">
+
+  <!-- 1. System Overview -->
+  <section class="eoc-section" id="sec-overview">
+    <div class="eoc-section-header">
+      <span class="eoc-section-icon">📊</span>
+      <h2 class="eoc-section-title">System Overview</h2>
+      <div class="eoc-section-refresh">
+        <button onclick="loadOverview()">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="eoc-kpi-grid">
+      <div class="eoc-kpi" id="kpi-status">
+        <div class="eoc-kpi-label">Overall Status</div>
+        <div class="eoc-kpi-value" id="kpi-status-val">—</div>
+        <div class="eoc-kpi-sub" id="kpi-status-sub">Loading…</div>
+      </div>
+      <div class="eoc-kpi" id="kpi-health">
+        <div class="eoc-kpi-label">Health Score</div>
+        <div class="eoc-kpi-value" id="kpi-health-val">—</div>
+        <div class="eoc-kpi-sub">out of 100</div>
+      </div>
+      <div class="eoc-kpi">
+        <div class="eoc-kpi-label">Active Subsystems</div>
+        <div class="eoc-kpi-value" id="kpi-subsystems-val">—</div>
+        <div class="eoc-kpi-sub" id="kpi-subsystems-sub">of 10 monitored</div>
+      </div>
+      <div class="eoc-kpi">
+        <div class="eoc-kpi-label">Open Alerts</div>
+        <div class="eoc-kpi-value" id="kpi-alerts-val">—</div>
+        <div class="eoc-kpi-sub" id="kpi-alerts-sub">Loading…</div>
+      </div>
+    </div>
+    <div id="subsystem-grid" class="eoc-subsystem-grid">
+      <div class="eoc-loading"><div class="eoc-spinner"></div> Loading subsystem health…</div>
+    </div>
+  </section>
+
+  <hr class="eoc-divider" />
+
+  <!-- 2. Platform Alerts -->
+  <section class="eoc-section" id="sec-alerts">
+    <div class="eoc-section-header">
+      <span class="eoc-section-icon">🔔</span>
+      <h2 class="eoc-section-title">Platform Alerts</h2>
+      <div class="eoc-section-refresh">
+        <span style="font-size:11px;color:var(--eoc-muted);margin-right:8px">Realtime</span>
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--eoc-success);display:inline-block;vertical-align:middle"></span>
+      </div>
+    </div>
+    <div id="alert-feed" class="eoc-alert-feed">
+      <div class="eoc-loading"><div class="eoc-spinner"></div> Connecting to alert stream…</div>
+    </div>
+  </section>
+
+  <hr class="eoc-divider" />
+
+  <!-- 3. Infrastructure -->
+  <section class="eoc-section" id="sec-infra">
+    <div class="eoc-section-header">
+      <span class="eoc-section-icon">🏗️</span>
+      <h2 class="eoc-section-title">Infrastructure</h2>
+      <div class="eoc-section-refresh"><button onclick="loadInfra()">↻ Refresh</button></div>
+    </div>
+    <div id="infra-content" class="eoc-card-grid eoc-card-grid-4">
+      <div class="eoc-loading"><div class="eoc-spinner"></div> Loading…</div>
+    </div>
+  </section>
+
+  <hr class="eoc-divider" />
+
+  <!-- 4. Marketplace -->
+  <section class="eoc-section" id="sec-marketplace">
+    <div class="eoc-section-header">
+      <span class="eoc-section-icon">🛒</span>
+      <h2 class="eoc-section-title">Marketplace</h2>
+      <div class="eoc-section-refresh"><button onclick="loadMarketplace()">↻ Refresh</button></div>
+    </div>
+    <div id="marketplace-content" class="eoc-card-grid eoc-card-grid-4">
+      <div class="eoc-loading"><div class="eoc-spinner"></div> Loading…</div>
+    </div>
+  </section>
+
+  <hr class="eoc-divider" />
+
+  <!-- 5. SmartPOS -->
+  <section class="eoc-section" id="sec-smartpos">
+    <div class="eoc-section-header">
+      <span class="eoc-section-icon">🖥️</span>
+      <h2 class="eoc-section-title">SmartPOS</h2>
+      <div class="eoc-section-refresh"><button onclick="loadPOS()">↻ Refresh</button></div>
+    </div>
+    <div id="pos-content" class="eoc-card-grid eoc-card-grid-3">
+      <div class="eoc-loading"><div class="eoc-spinner"></div> Loading…</div>
+    </div>
+  </section>
+
+  <hr class="eoc-divider" />
+
+  <!-- 6. Payments -->
+  <section class="eoc-section" id="sec-payments">
+    <div class="eoc-section-header">
+      <span class="eoc-section-icon">💳</span>
+      <h2 class="eoc-section-title">Payments</h2>
+      <div class="eoc-section-refresh"><button onclick="loadPayments()">↻ Refresh</button></div>
+    </div>
+    <div id="payments-content" class="eoc-card-grid eoc-card-grid-4">
+      <div class="eoc-loading"><div class="eoc-spinner"></div> Loading…</div>
+    </div>
+    <div id="payments-providers" class="eoc-provider-row" style="display:none"></div>
+  </section>
+
+  <hr class="eoc-divider" />
+
+  <!-- 7. AI & Intelligence -->
+  <section class="eoc-section" id="sec-ai">
+    <div class="eoc-section-header">
+      <span class="eoc-section-icon">🤖</span>
+      <h2 class="eoc-section-title">AI &amp; Intelligence</h2>
+      <div class="eoc-section-refresh"><button onclick="loadAI()">↻ Refresh</button></div>
+    </div>
+    <div id="ai-content" class="eoc-card-grid eoc-card-grid-3">
+      <div class="eoc-loading"><div class="eoc-spinner"></div> Loading…</div>
+    </div>
+  </section>
+
+  <hr class="eoc-divider" />
+
+  <!-- 8. Async Jobs -->
+  <section class="eoc-section" id="sec-jobs">
+    <div class="eoc-section-header">
+      <span class="eoc-section-icon">⚙️</span>
+      <h2 class="eoc-section-title">Async Jobs</h2>
+      <div class="eoc-section-refresh"><button onclick="loadJobs()">↻ Refresh</button></div>
+    </div>
+    <div id="jobs-content" class="eoc-card-grid eoc-card-grid-4">
+      <div class="eoc-loading"><div class="eoc-spinner"></div> Loading…</div>
+    </div>
+  </section>
+
+  <hr class="eoc-divider" />
+
+  <!-- 9. Security -->
+  <section class="eoc-section" id="sec-security">
+    <div class="eoc-section-header">
+      <span class="eoc-section-icon">🔒</span>
+      <h2 class="eoc-section-title">Security</h2>
+      <div class="eoc-section-refresh"><button onclick="loadSecurity()">↻ Refresh</button></div>
+    </div>
+    <div id="security-content" class="eoc-card-grid eoc-card-grid-4">
+      <div class="eoc-loading"><div class="eoc-spinner"></div> Loading…</div>
+    </div>
+  </section>
+
+  <hr class="eoc-divider" />
+
+  <!-- 10. Disaster Recovery -->
+  <section class="eoc-section" id="sec-dr">
+    <div class="eoc-section-header">
+      <span class="eoc-section-icon">🛡️</span>
+      <h2 class="eoc-section-title">Disaster Recovery</h2>
+      <div class="eoc-section-refresh"><button onclick="loadDR()">↻ Refresh</button></div>
+    </div>
+    <div class="eoc-dr-grid">
+      <div class="eoc-card">
+        <div class="eoc-card-label">DR Status</div>
+        <div class="eoc-card-value" id="dr-status-val" style="font-size:16px">—</div>
+        <div class="eoc-card-sub" id="dr-status-sub">Loading…</div>
+      </div>
+      <div class="eoc-card">
+        <div class="eoc-card-label">Last DR Simulation</div>
+        <div class="eoc-card-value" id="dr-sim-val" style="font-size:16px">—</div>
+        <div class="eoc-card-sub" id="dr-sim-sub">Loading…</div>
+      </div>
+      <div class="eoc-card">
+        <div class="eoc-card-label">Last Backup Verification</div>
+        <div class="eoc-card-value" id="dr-backup-val" style="font-size:16px">—</div>
+        <div class="eoc-card-sub" id="dr-backup-sub">Loading…</div>
+      </div>
+      <div class="eoc-card">
+        <div class="eoc-card-label">Recovery Time Objective</div>
+        <div class="eoc-card-value" id="dr-rto-val">—</div>
+        <div class="eoc-card-sub">target RTO</div>
+      </div>
+    </div>
+    <div class="eoc-dr-actions">
+      <select class="eoc-select" id="dr-scenario">
+        <option value="full_outage">Scenario: Full Outage</option>
+        <option value="region_failover">Scenario: Region Failover</option>
+        <option value="data_corruption">Scenario: Data Corruption</option>
+        <option value="ddos_attack">Scenario: DDoS Attack</option>
+        <option value="payment_failure">Scenario: Payment Provider Failure</option>
+      </select>
+      <button class="eoc-btn eoc-btn-primary" onclick="runDRSim()">▶ Run DR Simulation</button>
+      <button class="eoc-btn eoc-btn-secondary" onclick="verifyBackup()">✓ Verify Backup</button>
+      <button class="eoc-btn eoc-btn-secondary" onclick="runDRReport()">📄 DR Report</button>
+    </div>
+    <div id="dr-result" style="margin-top:14px"></div>
+  </section>
+
+</main>
+
+<!-- ── Toast Container ─────────────────────────────────── -->
+<div id="eoc-toast-container"></div>
+
+<!-- ── Firebase SDKs ───────────────────────────────────── -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="/sokoni-config.js"></script>
+<script src="/sokoni-appcheck.js"></script>
+
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════════
+   FIREBASE INIT
+═══════════════════════════════════════════════════════ */
+firebase.initializeApp(window.SOKONI_CONFIG?.firebase || window.SOKONI_CONFIG);
+const auth      = firebase.auth();
+const functions = firebase.functions();
+const db        = firebase.firestore();
+
+/* ═══════════════════════════════════════════════════════
+   AUTH GUARD
+═══════════════════════════════════════════════════════ */
+auth.onAuthStateChanged(user => {
+  if (!user) {
+    window.location.href = '/index.html';
+    return;
+  }
+  init();
+});
+
+/* ═══════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════ */
+const call = (name, data = {}) =>
+  functions.httpsCallable(name)(data).then(r => r.data);
+
+function statusBadge(s) {
+  const map = {
+    healthy:   '#34d399',
+    degraded:  '#fbbf24',
+    down:      '#f87171',
+    unknown:   '#888',
+    active:    '#34d399',
+    inactive:  '#f87171',
+    configured:'#34d399',
+    pending:   '#fbbf24',
+    ok:        '#34d399',
+    error:     '#f87171',
+  };
+  const col = map[(s || '').toLowerCase()] || '#888';
+  return `<span style="color:${col};font-weight:700">${(s || 'UNKNOWN').toUpperCase()}</span>`;
+}
+
+function statusColor(s) {
+  const map = {
+    healthy:   '#34d399',
+    degraded:  '#fbbf24',
+    down:      '#f87171',
+    active:    '#34d399',
+    ok:        '#34d399',
+  };
+  return map[(s || '').toLowerCase()] || '#888';
+}
+
+function alertBadgeStyle(severity) {
+  const map = {
+    critical: { bg: '#450a0a', color: '#f87171', border: '#7f1d1d' },
+    high:     { bg: '#431407', color: '#fb923c', border: '#7c2d12' },
+    medium:   { bg: '#422006', color: '#fbbf24', border: '#78350f' },
+    low:      { bg: '#052e16', color: '#34d399', border: '#14532d' },
+    info:     { bg: '#082f49', color: '#60a5fa', border: '#0c4a6e' },
+  };
+  const s = (severity || 'info').toLowerCase();
+  const style = map[s] || map.info;
+  return `background:${style.bg};color:${style.color};border:1px solid ${style.border}`;
+}
+
+function fmtNum(v) {
+  if (v == null || v === undefined) return '—';
+  return Number(v).toLocaleString();
+}
+
+function fmtPct(v) {
+  if (v == null) return '—';
+  return `${Number(v).toFixed(1)}%`;
+}
+
+function fmtTs(ts) {
+  if (!ts) return '—';
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleString('en-KE', { dateStyle: 'short', timeStyle: 'short' });
+  } catch { return String(ts); }
+}
+
+function relTime(ts) {
+  if (!ts) return '';
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    const diff = Date.now() - d.getTime();
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return `${Math.floor(diff / 86400000)}d ago`;
+  } catch { return ''; }
+}
+
+function loadingHTML() {
+  return `<div class="eoc-loading"><div class="eoc-spinner"></div> Loading…</div>`;
+}
+
+function errorHTML(msg) {
+  return `<div class="eoc-error">⚠ Error loading: ${escHtml(msg)}</div>`;
+}
+
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function card(label, value, sub, accentColor) {
+  const style = accentColor ? `color:${accentColor}` : '';
+  return `
+    <div class="eoc-card">
+      <div class="eoc-card-label">${escHtml(label)}</div>
+      <div class="eoc-card-value" style="${style}">${value}</div>
+      ${sub ? `<div class="eoc-card-sub">${escHtml(sub)}</div>` : ''}
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════ */
+function toast(msg, type = 'info', duration = 4000) {
+  const iconMap = { success: '✅', error: '❌', warn: '⚠️', info: 'ℹ️' };
+  const icon = iconMap[type] || 'ℹ️';
+  const el = document.createElement('div');
+  el.className = `eoc-toast ${type}`;
+  el.innerHTML = `<span class="eoc-toast-icon">${icon}</span><span>${escHtml(msg)}</span>`;
+  document.getElementById('eoc-toast-container').appendChild(el);
+  setTimeout(() => el.remove(), duration);
+}
+
+/* ═══════════════════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════════════════ */
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+function setActive(link) {
+  document.querySelectorAll('.eoc-sidebar a').forEach(a => a.classList.remove('active'));
+  link.classList.add('active');
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.remove('open');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   AUTO-REFRESH
+═══════════════════════════════════════════════════════ */
+let autoRefreshInterval = null;
+
+function toggleAutoRefresh(enabled) {
+  if (enabled) {
+    autoRefreshInterval = setInterval(loadAll, 30000);
+    toast('Auto-refresh enabled (30s)', 'info', 2500);
+  } else {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+    toast('Auto-refresh paused', 'warn', 2500);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   HEADER — PLATFORM BADGE & REFRESH TIME
+═══════════════════════════════════════════════════════ */
+function updatePlatformBadge(status) {
+  const badge  = document.getElementById('platformBadge');
+  const colMap = { healthy: '#34d399', degraded: '#fbbf24', down: '#f87171', unknown: '#888' };
+  const s      = (status || 'unknown').toLowerCase();
+  const col    = colMap[s] || '#888';
+  badge.style.borderColor = col;
+  badge.innerHTML = `<span class="dot" style="background:${col}"></span><span style="color:${col}">${s.toUpperCase()}</span>`;
+}
+
+function updateRefreshTime() {
+  document.getElementById('lastRefresh').textContent =
+    new Date().toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+/* ═══════════════════════════════════════════════════════
+   1. SYSTEM OVERVIEW
+═══════════════════════════════════════════════════════ */
+const SUBSYSTEMS = [
+  'Firebase Hosting', 'Cloud Functions', 'Firestore', 'Cloud Storage',
+  'Redis', 'Payments', 'SmartPOS', 'AI Engine', 'Security', 'Scheduler'
+];
+
+async function loadOverview() {
+  // Try to gather data from all section calls; fall back gracefully
+  let overallStatus = 'unknown';
+  let healthScore   = null;
+  let activeCount   = 0;
+  let alertCount    = '—';
+
+  try {
+    // Aggregate health from available CFs
+    const results = await Promise.allSettled([
+      call('getInfrastructureStatus'),
+      call('getPaymentSystemHealth'),
+      call('getPOSSystemStatus'),
+      call('getAISystemHealth'),
+      call('getSecuritySystemHealth'),
+    ]);
+
+    let healthy = 0, total = 0;
+    const subsystemStatuses = {};
+    const subsystemLatencies = {};
+
+    results.forEach((r, i) => {
+      const labels = ['Firebase Hosting', 'Payments', 'SmartPOS', 'AI Engine', 'Security'];
+      total++;
+      if (r.status === 'fulfilled' && r.value) {
+        const st = (r.value.status || r.value.overall || '').toLowerCase();
+        subsystemStatuses[labels[i]] = st || 'unknown';
+        subsystemLatencies[labels[i]] = r.value.latencyMs || r.value.latency || null;
+        if (st === 'healthy' || st === 'ok' || st === 'active') { healthy++; activeCount++; }
+        else if (st === 'degraded') { healthy += 0.5; activeCount++; }
+      } else {
+        subsystemStatuses[labels[i]] = 'unknown';
+      }
+    });
+
+    // Firestore direct check
+    ['Firestore', 'Cloud Functions', 'Cloud Storage', 'Redis', 'Scheduler'].forEach(s => {
+      if (!subsystemStatuses[s]) subsystemStatuses[s] = 'unknown';
+    });
+
+    healthScore  = total > 0 ? Math.round((healthy / total) * 100) : null;
+    overallStatus = healthScore >= 80 ? 'healthy' : healthScore >= 50 ? 'degraded' : 'down';
+
+    // Render subsystem grid
+    const grid = document.getElementById('subsystem-grid');
+    grid.innerHTML = SUBSYSTEMS.map(name => {
+      const st  = subsystemStatuses[name] || 'unknown';
+      const lat = subsystemLatencies[name];
+      const col = statusColor(st);
+      return `
+        <div class="eoc-subsystem-pill">
+          <span class="eoc-pill-dot" style="background:${col}"></span>
+          <span>${escHtml(name)}</span>
+          ${lat ? `<span class="eoc-pill-latency">${fmtNum(lat)}ms</span>` : ''}
+        </div>`;
+    }).join('');
+
+    // Alert count
+    try {
+      const snap = await db.collection('platformAlerts')
+        .where('resolved', '==', false)
+        .limit(50)
+        .get();
+      alertCount = snap.size;
+    } catch (_) { alertCount = '—'; }
+
+  } catch (err) {
+    console.warn('Overview load error:', err);
+    overallStatus = 'unknown';
+    document.getElementById('subsystem-grid').innerHTML =
+      errorHTML('Could not aggregate subsystem health');
+  }
+
+  // KPI updates
+  const statusEl = document.getElementById('kpi-status-val');
+  statusEl.innerHTML = statusBadge(overallStatus);
+  document.getElementById('kpi-status-sub').textContent = `Platform is ${overallStatus}`;
+  document.getElementById('kpi-health-val').textContent = healthScore != null ? healthScore : '—';
+  document.getElementById('kpi-subsystems-val').textContent = activeCount;
+  document.getElementById('kpi-subsystems-sub').textContent = `of ${SUBSYSTEMS.length} monitored`;
+  document.getElementById('kpi-alerts-val').textContent = alertCount;
+  document.getElementById('kpi-alerts-sub').textContent =
+    typeof alertCount === 'number' ? (alertCount === 0 ? 'No open alerts' : 'open & unresolved') : '';
+
+  updatePlatformBadge(overallStatus);
+}
+
+/* ═══════════════════════════════════════════════════════
+   2. PLATFORM ALERTS — REALTIME LISTENER
+═══════════════════════════════════════════════════════ */
+let alertsUnsubscribe = null;
+
+function startAlertsListener() {
+  if (alertsUnsubscribe) alertsUnsubscribe();
+
+  const feed = document.getElementById('alert-feed');
+
+  try {
+    alertsUnsubscribe = db.collection('platformAlerts')
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .onSnapshot(snapshot => {
+        if (snapshot.empty) {
+          feed.innerHTML = `<div class="eoc-alert-empty">✅ No active alerts</div>`;
+          return;
+        }
+        feed.innerHTML = snapshot.docs.map(doc => {
+          const d   = doc.data();
+          const sev = (d.severity || 'info').toLowerCase();
+          const badgeStyle = alertBadgeStyle(sev);
+          const ts  = d.createdAt ? relTime(d.createdAt) : '';
+          return `
+            <div class="eoc-alert-item">
+              <span class="eoc-alert-badge" style="${badgeStyle}">${escHtml(sev)}</span>
+              <div class="eoc-alert-body">
+                <div class="eoc-alert-msg">${escHtml(d.message || d.title || 'No message')}</div>
+                <div class="eoc-alert-meta">
+                  ${d.subsystem ? `<strong>${escHtml(d.subsystem)}</strong> · ` : ''}${ts}
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+      }, err => {
+        console.error('Alerts listener error:', err);
+        feed.innerHTML = errorHTML(err.message);
+      });
+  } catch (err) {
+    feed.innerHTML = errorHTML(err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   3. INFRASTRUCTURE
+═══════════════════════════════════════════════════════ */
+async function loadInfra() {
+  const el = document.getElementById('infra-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await call('getInfrastructureStatus');
+    const d = data || {};
+    el.className = 'eoc-card-grid eoc-card-grid-4';
+    el.innerHTML = [
+      card('Firebase Hosting', statusBadge(d.hosting?.status || 'unknown'),
+        d.hosting?.region || 'us-central1'),
+      card('Cloud Functions',  statusBadge(d.functions?.status || 'unknown'),
+        `${d.functions?.region || 'us-central1'} · ${d.functions?.generation || 'Gen2'}`),
+      card('Firestore', statusBadge(d.firestore?.status || 'unknown'),
+        d.firestore?.latencyMs != null ? `${d.firestore.latencyMs}ms avg latency` : 'Native mode'),
+      card('Cloud Storage', statusBadge(d.storage?.status || 'unknown'),
+        d.storage?.bucket || '—'),
+      card('Redis', statusBadge(d.redis?.configured ? 'configured' : 'inactive'),
+        d.redis?.configured ? 'REDIS_URL set' : 'Not configured'),
+      card('Cloud Scheduler', statusBadge(d.scheduler?.status || 'unknown'),
+        d.scheduler?.jobCount != null ? `${d.scheduler.jobCount} jobs` : '—'),
+      card('App Check', statusBadge(d.appCheck?.status || 'unknown'),
+        d.appCheck?.provider || 'reCAPTCHA v3'),
+      card('Overall', statusBadge(d.status || d.overall || 'unknown'),
+        d.message || 'Infrastructure layer'),
+    ].join('');
+  } catch (err) {
+    el.innerHTML = errorHTML(err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   4. MARKETPLACE
+═══════════════════════════════════════════════════════ */
+async function loadMarketplace() {
+  const el = document.getElementById('marketplace-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await call('getMarketplaceHealth');
+    const d = data || {};
+    el.className = 'eoc-card-grid eoc-card-grid-4';
+    el.innerHTML = [
+      card('Orders / Hour',   fmtNum(d.ordersPerHour),   'in last 60 min'),
+      card('Active Sellers',  fmtNum(d.activeSellers),   d.newSellers != null ? `+${d.newSellers} new today` : ''),
+      card('Open Disputes',   fmtNum(d.openDisputes),
+        d.openDisputes > 0 ? 'requires attention' : 'all clear',
+        d.openDisputes > 5 ? '#f87171' : null),
+      card('Refunds / Hour',  fmtNum(d.refundsPerHour),
+        d.refundRate != null ? `${fmtPct(d.refundRate)} refund rate` : '',
+        d.refundRate > 5 ? '#fbbf24' : null),
+      card('Pending Orders',  fmtNum(d.pendingOrders),   ''),
+      card('GMV Today',       d.gmvToday != null ? `KES ${fmtNum(d.gmvToday)}` : '—', ''),
+      card('Avg Order Value', d.avgOrderValue != null ? `KES ${fmtNum(d.avgOrderValue)}` : '—', ''),
+      card('Status',          statusBadge(d.status || 'unknown'), d.message || ''),
+    ].join('');
+  } catch (err) {
+    el.innerHTML = errorHTML(err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   5. SMARTPOS
+═══════════════════════════════════════════════════════ */
+async function loadPOS() {
+  const el = document.getElementById('pos-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await call('getPOSSystemStatus');
+    const d = data || {};
+    el.className = 'eoc-card-grid eoc-card-grid-3';
+    el.innerHTML = [
+      card('Active Sessions',    fmtNum(d.activeSessions),
+        d.peakToday != null ? `peak today: ${d.peakToday}` : ''),
+      card('Registered Devices', fmtNum(d.registeredDevices),
+        d.onlineDevices != null ? `${d.onlineDevices} online` : ''),
+      card('Stale Sessions',     fmtNum(d.staleSessions),
+        d.staleSessions > 0 ? 'idle > 2 hours' : 'none',
+        d.staleSessions > 10 ? '#fbbf24' : null),
+      card('Transactions Today', fmtNum(d.transactionsToday), ''),
+      card('Offline Devices',    fmtNum(d.offlineDevices),
+        '', d.offlineDevices > 5 ? '#f87171' : null),
+      card('Status',             statusBadge(d.status || 'unknown'), d.message || ''),
+    ].join('');
+  } catch (err) {
+    el.innerHTML = errorHTML(err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   6. PAYMENTS
+═══════════════════════════════════════════════════════ */
+async function loadPayments() {
+  const el = document.getElementById('payments-content');
+  const prov = document.getElementById('payments-providers');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await call('getPaymentSystemHealth');
+    const d = data || {};
+    const failRate = d.failRate ?? (d.transactionsPerHour > 0
+      ? (d.failedPerHour / d.transactionsPerHour) * 100 : 0);
+    const rateColor = failRate > 10 ? '#f87171' : failRate > 3 ? '#fbbf24' : null;
+
+    el.className = 'eoc-card-grid eoc-card-grid-4';
+    el.innerHTML = [
+      card('Transactions / Hour', fmtNum(d.transactionsPerHour), 'last 60 min'),
+      card('Failed / Hour',       fmtNum(d.failedPerHour),
+        '', d.failedPerHour > 5 ? '#f87171' : null),
+      card('Fail Rate',           fmtPct(failRate), '', rateColor),
+      card('Status',              statusBadge(d.status || 'unknown'), d.message || ''),
+    ].join('');
+
+    // Provider chips
+    const providers = d.providers || {};
+    const chips = Object.entries(providers).map(([name, info]) => {
+      const s = typeof info === 'string' ? info : (info?.status || 'unknown');
+      const col = statusColor(s);
+      return `<div class="eoc-provider-chip">
+        <span style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block"></span>
+        ${escHtml(name)}: <span style="color:${col};margin-left:4px">${escHtml(s.toUpperCase())}</span>
+      </div>`;
+    });
+
+    // Add default M-PESA/IntaSend chips if not in response
+    if (!Object.keys(providers).length) {
+      ['M-PESA', 'IntaSend'].forEach(name => {
+        chips.push(`<div class="eoc-provider-chip">
+          <span style="width:7px;height:7px;border-radius:50%;background:#888;display:inline-block"></span>
+          ${escHtml(name)}: <span style="color:#888;margin-left:4px">UNKNOWN</span>
+        </div>`);
+      });
+    }
+
+    if (chips.length) {
+      prov.style.display = 'flex';
+      prov.innerHTML = chips.join('');
+    }
+  } catch (err) {
+    el.innerHTML = errorHTML(err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   7. AI & INTELLIGENCE
+═══════════════════════════════════════════════════════ */
+async function loadAI() {
+  const el = document.getElementById('ai-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await call('getAISystemHealth');
+    const d = data || {};
+    el.className = 'eoc-card-grid eoc-card-grid-3';
+    const keyStatus = d.apiKeyConfigured === true ? 'configured'
+      : d.apiKeyConfigured === false ? 'missing' : 'unknown';
+    el.innerHTML = [
+      card('API Key Status', statusBadge(keyStatus),
+        d.keySource || 'Secret Manager',
+        keyStatus === 'missing' ? '#f87171' : null),
+      card('Model', escHtml(d.model || d.modelId || '—'), d.provider || ''),
+      card('Errors / Hour', fmtNum(d.errorsPerHour),
+        '', d.errorsPerHour > 10 ? '#f87171' : null),
+      card('Requests / Hour', fmtNum(d.requestsPerHour), ''),
+      card('Avg Latency',    d.avgLatencyMs != null ? `${fmtNum(d.avgLatencyMs)}ms` : '—', ''),
+      card('Status',         statusBadge(d.status || 'unknown'), d.message || ''),
+    ].join('');
+  } catch (err) {
+    el.innerHTML = errorHTML(err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   8. ASYNC JOBS
+═══════════════════════════════════════════════════════ */
+async function loadJobs() {
+  const el = document.getElementById('jobs-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await call('getQueueDepth');
+    const d = data || {};
+    const successRate = d.successRate ?? (d.processed > 0
+      ? ((d.processed - (d.failed || 0)) / d.processed) * 100 : null);
+    el.className = 'eoc-card-grid eoc-card-grid-4';
+    el.innerHTML = [
+      card('Queued',        fmtNum(d.queued ?? d.pending),
+        '', d.queued > 500 ? '#fbbf24' : null),
+      card('Running',       fmtNum(d.running ?? d.inProgress), ''),
+      card('DLQ Size',      fmtNum(d.dlq ?? d.deadLetterQueue),
+        'dead-letter queue', d.dlq > 0 ? '#f87171' : null),
+      card('Success Rate',  successRate != null ? fmtPct(successRate) : '—',
+        d.processed != null ? `${fmtNum(d.processed)} processed` : '',
+        successRate != null && successRate < 95 ? '#fbbf24' : null),
+    ].join('');
+  } catch (err) {
+    el.innerHTML = errorHTML(err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   9. SECURITY
+═══════════════════════════════════════════════════════ */
+async function loadSecurity() {
+  const el = document.getElementById('security-content');
+  el.innerHTML = loadingHTML();
+  try {
+    const data = await call('getSecuritySystemHealth');
+    const d = data || {};
+    el.className = 'eoc-card-grid eoc-card-grid-4';
+    el.innerHTML = [
+      card('Rate Limit Hits / Hour', fmtNum(d.rateLimitHitsPerHour),
+        'last 60 min', d.rateLimitHitsPerHour > 100 ? '#fbbf24' : null),
+      card('High Alerts / Hour',     fmtNum(d.highAlertsPerHour),
+        '', d.highAlertsPerHour > 5 ? '#f87171' : null),
+      card('Blocked IPs / 24h',      fmtNum(d.blockedIPs24h),
+        'd.blockedIPs24h > 0 ? "under active block" : "none"'),
+      card('App Check Status',       statusBadge(d.appCheckStatus || d.appCheck || 'unknown'),
+        d.appCheckEnforced ? 'Enforced on all services' : 'Partial enforcement'),
+      card('Auth Failures / Hour',   fmtNum(d.authFailuresPerHour), ''),
+      card('Suspicious Events / 24h', fmtNum(d.suspiciousEvents24h),
+        '', d.suspiciousEvents24h > 10 ? '#fbbf24' : null),
+      card('CSP Violations',         fmtNum(d.cspViolations), '24h'),
+      card('Status',                 statusBadge(d.status || 'unknown'), d.message || ''),
+    ].join('');
+  } catch (err) {
+    el.innerHTML = errorHTML(err.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   10. DISASTER RECOVERY
+═══════════════════════════════════════════════════════ */
+async function loadDR() {
+  try {
+    const data = await call('generateDRReport', { reportOnly: true });
+    const d = data || {};
+    document.getElementById('dr-status-val').innerHTML = statusBadge(d.status || 'unknown');
+    document.getElementById('dr-status-sub').textContent = d.message || '—';
+    document.getElementById('dr-sim-val').textContent   = d.lastSimulation?.result || '—';
+    document.getElementById('dr-sim-sub').textContent   = d.lastSimulation?.runAt
+      ? `Run ${relTime({ toDate: () => new Date(d.lastSimulation.runAt) })}` : 'Never run';
+    document.getElementById('dr-backup-val').textContent = d.lastBackup?.status || '—';
+    document.getElementById('dr-backup-sub').textContent = d.lastBackup?.verifiedAt
+      ? `Verified ${relTime({ toDate: () => new Date(d.lastBackup.verifiedAt) })}` : 'Not verified';
+    document.getElementById('dr-rto-val').textContent   = d.rto || '< 4 hours';
+  } catch (err) {
+    ['dr-status-val','dr-sim-val','dr-backup-val','dr-rto-val'].forEach(id => {
+      document.getElementById(id).textContent = '—';
+    });
+    document.getElementById('dr-status-sub').textContent = 'Error loading DR data';
+  }
+}
+
+async function runDRSim() {
+  const scenario = document.getElementById('dr-scenario').value;
+  const result   = document.getElementById('dr-result');
+  result.innerHTML = `<div class="eoc-loading"><div class="eoc-spinner"></div> Running DR simulation: <strong>${escHtml(scenario)}</strong>…</div>`;
+  try {
+    const data = await call('runDRSimulation', { scenario });
+    const d = data || {};
+    const success = (d.result || '').toLowerCase() === 'pass';
+    result.innerHTML = `
+      <div class="eoc-card" style="border-color:${success ? '#34d399' : '#f87171'}">
+        <div class="eoc-card-label">DR Simulation Result — ${escHtml(scenario.replace(/_/g, ' ').toUpperCase())}</div>
+        <div class="eoc-card-value" style="color:${success ? '#34d399' : '#f87171'}">${escHtml(d.result || 'UNKNOWN')}</div>
+        <div class="eoc-card-sub">${escHtml(d.summary || d.message || '')}</div>
+        ${d.rtoAchievedMinutes != null
+          ? `<div class="eoc-card-sub" style="margin-top:6px">RTO achieved: <strong>${d.rtoAchievedMinutes} min</strong></div>` : ''}
+      </div>`;
+    toast(`DR Simulation ${d.result || 'complete'}`, success ? 'success' : 'error');
+    loadDR();
+  } catch (err) {
+    result.innerHTML = errorHTML(err.message);
+    toast('DR Simulation failed: ' + err.message, 'error');
+  }
+}
+
+async function verifyBackup() {
+  toast('Verifying Firestore backup…', 'info');
+  const result = document.getElementById('dr-result');
+  try {
+    const data = await call('verifyFirestoreBackup');
+    const d = data || {};
+    const ok = d.verified === true || (d.status || '').toLowerCase() === 'ok';
+    result.innerHTML = `
+      <div class="eoc-card" style="border-color:${ok ? '#34d399' : '#f87171'}">
+        <div class="eoc-card-label">Backup Verification</div>
+        <div class="eoc-card-value" style="color:${ok ? '#34d399' : '#f87171'}">${ok ? 'VERIFIED' : 'FAILED'}</div>
+        <div class="eoc-card-sub">${escHtml(d.message || d.backupId || '')}</div>
+      </div>`;
+    toast(ok ? 'Backup verified successfully' : 'Backup verification failed', ok ? 'success' : 'error');
+    loadDR();
+  } catch (err) {
+    result.innerHTML = errorHTML(err.message);
+    toast('Backup verification error: ' + err.message, 'error');
+  }
+}
+
+async function runDRReport() {
+  toast('Generating DR report…', 'info');
+  const result = document.getElementById('dr-result');
+  try {
+    const data = await call('generateDRReport');
+    const d = data || {};
+    result.innerHTML = `
+      <div class="eoc-card">
+        <div class="eoc-card-label">DR Report Generated</div>
+        <div class="eoc-card-value" style="font-size:15px">${statusBadge(d.status || 'unknown')}</div>
+        <div class="eoc-card-sub">${escHtml(d.reportId ? `Report ID: ${d.reportId}` : d.message || '')}</div>
+        ${d.recommendations?.length
+          ? `<ul style="margin-top:10px;padding-left:18px;color:var(--eoc-muted);font-size:12px;display:flex;flex-direction:column;gap:4px">
+              ${d.recommendations.slice(0, 5).map(r => `<li>${escHtml(r)}</li>`).join('')}
+            </ul>` : ''}
+      </div>`;
+    toast('DR report generated', 'success');
+  } catch (err) {
+    result.innerHTML = errorHTML(err.message);
+    toast('DR report error: ' + err.message, 'error');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   LOAD ALL
+═══════════════════════════════════════════════════════ */
+function loadAll() {
+  updateRefreshTime();
+  loadOverview();
+  loadInfra();
+  loadMarketplace();
+  loadPOS();
+  loadPayments();
+  loadAI();
+  loadJobs();
+  loadSecurity();
+  loadDR();
+}
+
+/* ═══════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════ */
+function init() {
+  loadAll();
+  startAlertsListener();
+  // Auto-refresh every 30s (default: on)
+  autoRefreshInterval = setInterval(loadAll, 30000);
+}
+
+/* ═══════════════════════════════════════════════════════
+   ACTIVE SECTION HIGHLIGHT ON SCROLL
+═══════════════════════════════════════════════════════ */
+const sectionIds = [
+  'sec-overview','sec-alerts','sec-infra','sec-marketplace',
+  'sec-smartpos','sec-payments','sec-ai','sec-jobs','sec-security','sec-dr'
+];
+
+window.addEventListener('scroll', () => {
+  const scrollY = window.scrollY + 80;
+  let current = sectionIds[0];
+  for (const id of sectionIds) {
+    const el = document.getElementById(id);
+    if (el && el.offsetTop <= scrollY) current = id;
+  }
+  document.querySelectorAll('.eoc-sidebar a').forEach(a => {
+    const href = a.getAttribute('href');
+    if (href === '#' + current) a.classList.add('active');
+    else a.classList.remove('active');
+  });
+}, { passive: true });
+
+/* Close sidebar on outside tap (mobile) */
+document.addEventListener('click', e => {
+  const sidebar = document.getElementById('sidebar');
+  const hamburger = document.getElementById('hamburger');
+  if (sidebar.classList.contains('open') &&
+      !sidebar.contains(e.target) &&
+      !hamburger.contains(e.target)) {
+    sidebar.classList.remove('open');
+  }
+});
+</script>
+</body>
+</html>

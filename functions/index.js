@@ -7932,8 +7932,8 @@ exports.scheduledFraudSweep    = secFraud.scheduledFraudSweep;
 
 /* ── Security Incident Response v1.0 — suspend, lock, incidents ─────────── */
 const secIncident = require('./security-incident-response');
-exports.suspendUser            = secIncident.suspendUser;
-exports.unsuspendUser          = secIncident.unsuspendUser;
+exports.secSuspendUser         = secIncident.suspendUser;
+exports.secUnsuspendUser       = secIncident.unsuspendUser;
 exports.lockStore              = secIncident.lockStore;
 exports.unlockStore            = secIncident.unlockStore;
 exports.revokeUserSessions     = secIncident.revokeUserSessions;
@@ -8536,3 +8536,34 @@ exports.getAIRateLimitStatus          = secAI.getAIRateLimitStatus;
 exports.reportAIAbuse                 = secAI.reportAIAbuse;
 exports.getAIContextPolicy            = secAI.getAIContextPolicy;
 exports.blockAISession                = secAI.blockAISession;
+
+/* ── Post-Launch Monitoring Suite v1.0 ─────────────────────────────────── */
+const postLaunchMonitor = require('./post-launch-monitor');
+exports.getPostLaunchDashboard          = postLaunchMonitor.getPostLaunchDashboard;
+exports.detectAnomalies                 = postLaunchMonitor.detectAnomalies;
+exports.generateExecutiveSummary        = postLaunchMonitor.generateExecutiveSummary;
+exports.getExecutiveSummaries           = postLaunchMonitor.getExecutiveSummaries;
+exports.scheduledHourlyMonitor          = postLaunchMonitor.scheduledHourlyMonitor;
+exports.scheduledDailyExecutiveSummary  = postLaunchMonitor.scheduledDailyExecutiveSummary;
+
+/* ── Enterprise Health v1.0 ─────────────────────────────────────────────── */
+const entHealth = require('./enterprise-health');
+exports.getSystemHealth              = entHealth.getSystemHealth;
+exports.getInfrastructureStatus      = entHealth.getInfrastructureStatus;
+exports.getMarketplaceHealth         = entHealth.getMarketplaceHealth;
+exports.getPOSSystemStatus           = entHealth.getPOSSystemStatus;
+exports.getPaymentSystemHealth       = entHealth.getPaymentSystemHealth;
+exports.getAISystemHealth            = entHealth.getAISystemHealth;
+exports.getSecuritySystemHealth      = entHealth.getSecuritySystemHealth;
+exports.getHealthHistory             = entHealth.getHealthHistory;
+exports.recordSystemHealthSnapshot   = entHealth.recordSystemHealthSnapshot;
+
+/* ── Disaster Recovery v1.0 ─────────────────────────────────────────────── */
+const drModule = require('./disaster-recovery');
+exports.runDRSimulation              = drModule.runDRSimulation;
+exports.verifyFirestoreBackup        = drModule.verifyFirestoreBackup;
+exports.verifyStorageIntegrity       = drModule.verifyStorageIntegrity;
+exports.testSecretAccess             = drModule.testSecretAccess;
+exports.generateDRReport             = drModule.generateDRReport;
+exports.runRecoveryPlaybook          = drModule.runRecoveryPlaybook;
+exports.getDRHistory                 = drModule.getDRHistory;

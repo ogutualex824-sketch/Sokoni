@@ -3352,5 +3352,151 @@ service cloud.firestore {
       allow write: if false; // CF-only
     }
 
+    /* ══════════════════════════════════════════════════════════════
+       SECURITY 6.0 — ZERO TRUST COLLECTIONS
+       All collections below are CF-write-only or CF-only.
+       No client can write directly. Admins read via CFs only.
+       ══════════════════════════════════════════════════════════════ */
+
+    /* Immutable security audit log — CF writes only; never updated or deleted */
+    match /securityAuditLog/{eventId} {
+      allow read:   if isAdmin();
+      allow create: if false; // CF-only; immutable by design
+      allow update, delete: if false;
+    }
+
+    /* Security events (login attempts, payment events) — CF-write only */
+    match /securityEvents/{eventId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.userId == request.auth.uid);
+      allow write:  if false; // CF-only
+    }
+
+    /* Fraud and security alerts — admin read/write via CFs */
+    match /securityAlerts/{alertId} {
+      allow read:   if isAdmin();
+      allow write:  if false; // CF-only
+    }
+
+    /* Security incidents — admin-only; never deleted */
+    match /securityIncidents/{incidentId} {
+      allow read:   if isAdmin();
+      allow write:  if false; // CF-only
+    }
+
+    /* User risk profiles — owner reads own; admin reads all */
+    match /securityRisk/{userId} {
+      allow read:   if isAuthed() && (request.auth.uid == userId || isAdmin());
+      allow write:  if false; // CF-only — updateRiskProfile CF manages writes
+    }
+
+    /* MFA enrollment records — owner reads own; CF writes */
+    match /securityMFA/{userId} {
+      allow read:   if isAuthed() && request.auth.uid == userId;
+      allow write:  if false; // CF-only
+    }
+
+    /* Step-up auth challenges — transient; CF creates and marks used */
+    match /securityStepUp/{challengeId} {
+      allow read:   if false; // CF-only; clients never read directly
+      allow write:  if false;
+    }
+
+    /* Device trust registry — owner reads own devices */
+    match /securityDevices/{userId} {
+      allow read:   if isAuthed() && request.auth.uid == userId;
+      allow write:  if false;
+      match /devices/{deviceId} {
+        allow read:   if isAuthed() && request.auth.uid == userId;
+        allow write:  if false; // CF-only
+      }
+    }
+
+    /* WebAuthn passkey credentials — owner reads own; CF writes */
+    match /securityPasskeys/{userId} {
+      allow read:   if isAuthed() && request.auth.uid == userId;
+      allow write:  if false;
+      match /credentials/{credentialId} {
+        allow read:   if isAuthed() && request.auth.uid == userId;
+        allow write:  if false;
+      }
+      match /challenges/{challengeId} {
+        allow read:   if false; // CF-only
+        allow write:  if false;
+      }
+    }
+
+    /* Pen test scan results — super admin only */
+    match /securityPenTestResults/{scanId} {
+      allow read:   if isAdmin();
+      allow write:  if false; // CF-only
+    }
+
+    /* AI security audit log — admin reads; CF writes */
+    match /aiSecurityLog/{eventId} {
+      allow read:   if isAdmin();
+      allow write:  if false; // CF-only
+    }
+
+    /* AI abuse reports — reporter reads own; admin reads all */
+    match /aiAbuseReports/{reportId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.reportedBy == request.auth.uid);
+      allow write:  if false; // CF-only
+    }
+
+    /* AI access blocks — admin reads; CF writes */
+    match /aiBlocks/{userId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && request.auth.uid == userId);
+      allow write:  if false; // CF-only
+    }
+
+    /* ── Enterprise Health & Operations v1.0 ─────────────────────────── */
+    match /systemHealthHistory/{snapId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /platformAlerts/{alertId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /executiveSummaries/{dateId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /hourlyMetrics/{hourId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /analyticsSnapshots/{snapId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* ── Disaster Recovery v1.0 ──────────────────────────────────────── */
+    match /drSimulations/{simId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /drPlaybookLog/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /backupVerifications/{verifyId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* ── Post-Launch Monitoring v1.0 ─────────────────────────────────── */
+    match /platformConfig/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+    match /_health/{docId} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
   }
 }
