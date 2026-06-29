@@ -207,10 +207,18 @@
       }
     ]
   },
-  "firestore": {
-    "rules":   "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
+  "firestore": [
+    {
+      "database": "(default)",
+      "rules":    "firestore.rules",
+      "indexes":  "firestore.indexes.json"
+    },
+    {
+      "database": "sokoni-ops",
+      "rules":    "firestore.rules.sokoni-ops",
+      "indexes":  "firestore.indexes.sokoni-ops.json"
+    }
+  ],
   "storage": {
     "rules": "storage.rules"
   }
