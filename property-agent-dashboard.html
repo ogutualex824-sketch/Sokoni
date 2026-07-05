@@ -1,178 +1,449 @@
-<!DOCTYPE html>
-<html lang="en">
+﻿<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Property Agent Dashboard — SOKONI</title>
-<link rel="icon" href="/assets/logosokoni.png">
-<script src="/__/firebase/10.12.0/firebase-app-compat.js"></script>
-<script src="/__/firebase/10.12.0/firebase-auth-compat.js"></script>
-<script src="/__/firebase/10.12.0/firebase-functions-compat.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Agent Dashboard — SOKONI Property Hub</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#10b981">
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<script src="shared-header.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
-.hdr{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
-.logo{font-weight:700;font-size:18px;color:#f0883e}
-.tabs{display:flex;border-bottom:1px solid #30363d;padding:0 16px;background:#161b22;overflow-x:auto}
-.tab{padding:11px 14px;cursor:pointer;font-size:14px;border-bottom:2px solid transparent;color:#8b949e;white-space:nowrap}
-.tab.active{color:#e6edf3;border-color:#f0883e}
-.container{max-width:1100px;margin:0 auto;padding:20px 16px}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:24px}
-.stat{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}
-.stat label{font-size:11px;color:#8b949e;display:block;margin-bottom:4px}
-.stat .val{font-size:20px;font-weight:700;color:#f0883e}
-.section-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.section-hdr h2{font-size:16px;font-weight:600}
-.prop-item{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start}
-.pthumb{width:70px;height:56px;background:#21262d;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;overflow:hidden}
-.pthumb img{width:100%;height:100%;object-fit:cover}
-.pbody{flex:1}
-.ptitle{font-weight:600;font-size:14px;margin-bottom:3px}
-.pmeta{font-size:13px;color:#8b949e;margin-bottom:4px}
-.pstats{display:flex;gap:12px;font-size:12px;color:#8b949e;margin-bottom:6px}
-.pactions{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
-.btn{padding:7px 12px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:.2s}
-.btn-o{background:#f0883e;color:#fff}.btn-o:hover{background:#e0773d}
-.btn-g{background:#238636;color:#fff}.btn-g:hover{background:#2ea043}
-.btn-out{background:transparent;border:1px solid #30363d;color:#e6edf3}
-.stat-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
-.sa{background:#1a3a2a;color:#3fb950}.sd{background:#2d2a1a;color:#e3b341}.si{background:#21262d;color:#8b949e}
-.enq-item{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;margin-bottom:8px}
-.view-item{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;margin-bottom:8px}
-.vtime{font-size:13px;margin-bottom:4px}
-.vnotes{font-size:13px;color:#8b949e}
-.empty{text-align:center;padding:60px;color:#8b949e}
-.spinner{display:inline-block;width:24px;height:24px;border:2px solid #30363d;border-top-color:#f0883e;border-radius:50%;animation:sp .8s linear infinite}
-@keyframes sp{to{transform:rotate(360deg)}}
-.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:14px;z-index:999;animation:fi .3s;max-width:300px}
-.tok{background:#238636;color:#fff}.terr{background:#da3633;color:#fff}
-@keyframes fi{from{opacity:0;transform:translateY(8px)}}
-@media(max-width:600px){.prop-item{flex-wrap:wrap}.pactions{width:100%}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+.fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.ad-body{max-width:860px;margin:0 auto;padding:16px;}
+/* STATS */
+.ad-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;}
+.ad-stat{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;text-align:center;}
+.ad-stat-num{font-size:22px;font-weight:900;color:#10b981;margin-bottom:2px;}
+.ad-stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);}
+/* TABS */
+.ad-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:16px;}
+.ad-tabs::-webkit-scrollbar{display:none;}
+.ad-tab{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;transition:all .2s;flex-shrink:0;}
+.ad-tab.active{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.3);color:#10b981;}
+/* ADD LISTING FORM */
+.ad-form{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px;}
+.ad-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:580px){.ad-form-grid{grid-template-columns:1fr;}}
+.ad-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:10px;}
+.ad-input:focus{border-color:rgba(16,185,129,0.4);}
+.ad-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:4px;display:block;}
+.ad-submit{padding:12px 24px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:11px;color:white;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;}
+.ad-section-h{font-size:13px;font-weight:800;color:rgba(255,255,255,0.6);margin:16px 0 8px;text-transform:uppercase;letter-spacing:.5px;}
+/* LISTING CARD */
+.ad-listing{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;}
+.ad-listing-icon{width:50px;height:50px;border-radius:12px;background:rgba(16,185,129,0.06);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;}
+.ad-listing-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+.ad-btn{padding:5px 12px;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;border:none;font-family:inherit;}
+.ad-btn.green{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:#10b981;}
+.ad-btn.red{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#ef4444;}
+.ad-btn.amber{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;}
+/* INQUIRY / VIEWING CARD */
+.ad-lead{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:12px;margin-bottom:10px;}
+/* ANALYTICS */
+.ad-chart-bar{height:8px;border-radius:4px;background:rgba(16,185,129,0.2);margin-bottom:8px;position:relative;overflow:hidden;}
+.ad-chart-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#10b981,#059669);}
 </style>
 </head>
 <body>
-<div class="hdr">
-  <span style="color:#8b949e;font-size:14px;cursor:pointer" onclick="history.back()">← Back</span>
-  <div class="logo">🏠 Agent Dashboard</div>
-  <div style="margin-left:auto;display:flex;gap:8px">
-    <a href="/property-listing" style="background:#f0883e;color:#fff;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">+ New Listing</a>
-    <a href="/property-hub" style="color:#8b949e;font-size:13px;padding:7px 14px;text-decoration:none">Marketplace →</a>
-  </div>
-</div>
-<div class="tabs">
-  <div class="tab active" onclick="setTab('overview',this)">Overview</div>
-  <div class="tab" onclick="setTab('listings',this)">My Listings</div>
-  <div class="tab" onclick="setTab('enquiries',this)">Enquiries</div>
-  <div class="tab" onclick="setTab('viewings',this)">Viewings</div>
-</div>
-<div class="container" id="content">
-  <div class="empty"><div class="spinner"></div></div>
-</div>
+<script src="splash.js"></script>
+<script src="sokoni-property.js"></script>
 
-<script src="/sokoni-config.js"></script>
+<nav class="fn">
+  <a href="property-hub.html" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;">←</a>
+  <span style="font-size:14px;font-weight:800;flex:1;">Agent Dashboard</span>
+  <a href="property-dashboard.html" style="padding:7px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.6);font-size:12px;font-weight:800;text-decoration:none;">👤 My Acc</a>
+  <a href="messages.html" style="position:relative;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:16px;flex-shrink:0;">💬<span id="adInboxBadge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#ff3c3c;color:white;border-radius:999px;font-size:9px;font-weight:900;line-height:16px;text-align:center;padding:0 3px;"></span></a>
+  <a href="notifications.html" style="position:relative;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:16px;flex-shrink:0;">🔔<span id="adBellBadge" style="display:none;position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;background:#ff3c3c;color:white;border-radius:999px;font-size:9px;font-weight:900;line-height:16px;text-align:center;padding:0 3px;"></span></a>
+</nav>
 <script>
-let app,fns,auth,cu=null,analytics=null;
-function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML}
-function toast(m,ok=true){const t=document.createElement('div');t.className='toast '+(ok?'tok':'terr');t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3500);}
-try{app=firebase.initializeApp(firebaseConfig,'pagent');fns=app.functions('us-central1');auth=app.auth();auth.onAuthStateChanged(u=>{cu=u;if(u)loadData();else showSignIn();});}catch(e){}
-async function call(n,d){try{const r=await fns.httpsCallable(n)(d);return{ok:true,data:r.data};}catch(e){return{ok:false,err:e.message};}}
-
-function showSignIn(){document.getElementById('content').innerHTML='<div class="empty">Sign in to access your agent dashboard.</div>';}
-
-async function loadData(){
-  const r=await call('getPropertyAnalytics',{});
-  if(!r.ok){document.getElementById('content').innerHTML=`<div class="empty">No listings yet.<br><a href="/property-listing" style="color:#f0883e;margin-top:16px;display:inline-block">Create your first listing →</a></div>`;return;}
-  analytics=r.data;showOverview();
-}
-
-function showOverview(){
-  const d=analytics;
-  document.getElementById('content').innerHTML=`
-    <div class="stats-grid">
-      ${[['Total Listings',d.totalListings],['Active',d.activeListings],['Draft',d.draftListings||0],['Total Views',d.totalViews||0],['Enquiries',d.totalEnquiries||0],['Viewings',d.totalViewings||0],['Conversion','~'+(d.conversionRate||0)+'%']].map(([k,v])=>`
-      <div class="stat"><label>${k}</label><div class="val">${v??0}</div></div>`).join('')}
-    </div>
-    <div class="section-hdr">
-      <h2>Recent Activity</h2>
-    </div>
-    ${(d.recentActivity||[]).length?d.recentActivity.map(a=>`
-    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
-      <div style="font-size:20px">${a.type==='enquiry'?'📧':a.type==='viewing'?'📅':'👁'}</div>
-      <div>
-        <div style="font-size:14px;font-weight:600">${esc(a.summary||'')}</div>
-        <div style="font-size:12px;color:#8b949e">${new Date(a.timestamp?.seconds?a.timestamp.seconds*1000:a.timestamp).toLocaleString()}</div>
-      </div>
-    </div>`).join(''):'<div style="color:#8b949e;font-size:14px">No recent activity.</div>'}`;
-}
-
-function showListings(){
-  const listings=(analytics?.listings||[]);
-  document.getElementById('content').innerHTML=`<div class="section-hdr"><h2>My Listings</h2><a href="/property-listing" class="btn btn-o" style="text-decoration:none">+ New Listing</a></div>`+
-  (listings.length?listings.map(l=>`
-    <div class="prop-item">
-      <div class="pthumb">${l.images?.[0]?`<img src="${esc(l.images[0])}" loading="lazy">`:'🏠'}</div>
-      <div class="pbody">
-        <div class="ptitle">${esc(l.title)}</div>
-        <div class="pmeta">KES ${(l.price||0).toLocaleString()} · ${l.propertyType?.replace(/_/g,' ')||''} · ${l.listingType?.replace(/_/g,' ')||''}</div>
-        <div class="pstats"><span>👁 ${l.viewCount||0} views</span><span>📧 ${l.enquiryCount||0} enquiries</span><span>📅 ${l.viewingCount||0} viewings</span></div>
-        <span class="stat-tag ${l.status==='active'?'sa':l.status==='draft'?'sd':'si'}">${l.status}</span>
-      </div>
-      <div class="pactions">
-        ${l.status==='draft'?`<button class="btn btn-g" onclick="publish('${esc(l.listingId)}')">Publish</button>`:''}
-        ${l.status==='active'?`<button class="btn btn-out" onclick="deactivate('${esc(l.listingId)}')">Deactivate</button>`:''}
-      </div>
-    </div>`).join(''):'<div class="empty">No listings yet. <a href="/property-listing" style="color:#f0883e">Create one →</a></div>');
-}
-
-async function publish(id){
-  const r=await call('publishPropertyListing',{listingId:id});
-  if(r.ok){toast('Listing published!');await loadData();showListings();}else toast(r.err||'Failed',false);
-}
-async function deactivate(id){
-  const r=await call('deactivatePropertyListing',{listingId:id});
-  if(r.ok){toast('Listing deactivated.');await loadData();showListings();}else toast(r.err||'Failed',false);
-}
-
-async function showEnquiries(){
-  const r=await call('getPropertyEnquiries',{limit:30});
-  const list=r.ok?(r.data.enquiries||[]):[];
-  document.getElementById('content').innerHTML=`<div class="section-hdr"><h2>Enquiries (${list.length})</h2></div>`+
-  (list.length?list.map(e=>`
-    <div class="enq-item">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
-        <div style="font-weight:600">${esc(e.listingTitle||'')}</div>
-        <div style="font-size:12px;color:#8b949e">${new Date(e.createdAt?.seconds?e.createdAt.seconds*1000:e.createdAt).toLocaleDateString()}</div>
-      </div>
-      <p style="font-size:14px;color:#8b949e;margin-bottom:8px">${esc(e.message||'')}</p>
-      <div style="display:flex;gap:12px;font-size:13px">
-        ${e.buyerPhone?`<a href="tel:${esc(e.buyerPhone)}" style="color:#3fb950">📞 Call</a>`:''}
-        ${e.buyerEmail?`<a href="mailto:${esc(e.buyerEmail)}" style="color:#58a6ff">✉️ Email</a>`:''}
-        ${e.budget?`<span style="color:#8b949e">Budget: KES ${e.budget.toLocaleString()}</span>`:''}
-      </div>
-    </div>`).join(''):'<div class="empty">No enquiries yet.</div>');
-}
-
-async function showViewings(){
-  const r=await call('getPropertyViewings',{limit:30});
-  const list=r.ok?(r.data.viewings||[]):[];
-  document.getElementById('content').innerHTML=`<div class="section-hdr"><h2>Scheduled Viewings (${list.length})</h2></div>`+
-  (list.length?list.map(v=>`
-    <div class="view-item">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <div style="font-weight:600">${esc(v.listingTitle||'')}</div>
-        <span style="padding:2px 8px;border-radius:4px;font-size:11px;background:${v.status==='confirmed'?'#1a3a2a':'#2d2a1a'};color:${v.status==='confirmed'?'#3fb950':'#e3b341'}">${v.status}</span>
-      </div>
-      <div class="vtime">📅 ${v.preferredDate} ${v.preferredTime?'at '+v.preferredTime:''}</div>
-      ${v.notes?`<div class="vnotes">${esc(v.notes)}</div>`:''}
-    </div>`).join(''):'<div class="empty">No viewings scheduled yet.</div>');
-}
-
-function setTab(t,el){
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));el.classList.add('active');
-  if(t==='overview') showOverview();
-  else if(t==='listings') showListings();
-  else if(t==='enquiries') showEnquiries();
-  else if(t==='viewings') showViewings();
-}
+(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var bb=document.getElementById('adBellBadge'),ib=document.getElementById('adInboxBadge');if(bb){bb.textContent=n>9?'9+':n;bb.style.display='block';}if(ib){ib.textContent=n>9?'9+':n;ib.style.display='block';}}window.addEventListener('sokoniInboxUnread',function(e){var c=e.detail?.count||0;var bb=document.getElementById('adBellBadge'),ib=document.getElementById('adInboxBadge');if(bb){bb.textContent=c>9?'9+':c;bb.style.display=c>0?'block':'none';}if(ib){ib.textContent=c>9?'9+':c;ib.style.display=c>0?'block':'none';}});})();
 </script>
+
+<div class="ad-body">
+  <!-- STATS -->
+  <div class="ad-stats">
+    <div class="ad-stat"><div class="ad-stat-num" id="stListings">0</div><div class="ad-stat-lbl">My Listings</div></div>
+    <div class="ad-stat"><div class="ad-stat-num" id="stInquiries">0</div><div class="ad-stat-lbl">Inquiries</div></div>
+    <div class="ad-stat"><div class="ad-stat-num" id="stViewings">0</div><div class="ad-stat-lbl">Viewings</div></div>
+    <div class="ad-stat"><div class="ad-stat-num" id="stConfirmed">0</div><div class="ad-stat-lbl">Confirmed</div></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="ad-tabs">
+    <button class="ad-tab active" onclick="switchTab('listings',this)">🏠 My Listings</button>
+    <button class="ad-tab" onclick="switchTab('add',this)">➕ Add Listing</button>
+    <button class="ad-tab" onclick="switchTab('inquiries',this)">💬 Inquiries</button>
+    <button class="ad-tab" onclick="switchTab('viewings',this)">📅 Viewings</button>
+    <button class="ad-tab" onclick="switchTab('analytics',this)">📊 Analytics</button>
+  </div>
+
+  <div id="adContent"></div>
+</div>
+
+<nav style="position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0;z-index:50;backdrop-filter:blur(16px);">
+  <a href="index.html" style="display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;"><i class="fas fa-home" style="font-size:18px;"></i><span>Home</span></a>
+  <a href="property-hub.html" style="display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;"><i class="fas fa-building" style="font-size:18px;"></i><span>Property</span></a>
+  <a href="property-agent-dashboard.html" style="display:flex;flex-direction:column;align-items:center;gap:3px;color:#10b981;text-decoration:none;font-size:10px;font-weight:600;min-width:52px;"><i class="fas fa-upload" style="font-size:18px;"></i><span>List</span></a>
+  <a href="property-dashboard.html" style="display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;"><i class="fas fa-user" style="font-size:18px;"></i><span>My Account</span></a>
+</nav>
+
+<script>
+const P = window.SokoniProperty;
+const AGENT_ID = new URLSearchParams(window.location.search).get('agentId') || 'agt001';
+let _stats = {};
+
+function init() {
+  _stats = P.getAgentStats(AGENT_ID);
+  document.getElementById('stListings').textContent = _stats.listings;
+  document.getElementById('stInquiries').textContent = _stats.inquiries;
+  document.getElementById('stViewings').textContent = _stats.viewings;
+  document.getElementById('stConfirmed').textContent = _stats.confirmed;
+  renderTab('listings');
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.ad-tab').forEach(t=>t.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderTab(tab);
+}
+window.switchTab = switchTab;
+
+function renderTab(tab) {
+  const el = document.getElementById('adContent');
+  if (tab==='listings') {
+    const listings = P.getListings({}).filter(p=>p.agentId===AGENT_ID);
+    if (!listings.length) {
+      el.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);"><div style="font-size:48px;margin-bottom:14px;">🏠</div><p style="font-size:15px;font-weight:700;">No listings yet</p><p style="font-size:12px;margin-top:8px;">Add your first listing to get started.</p><button onclick="switchTab('add',null)" style="margin-top:16px;padding:10px 22px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:10px;color:#10b981;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">➕ Add Listing</button></div>`;
+      return;
+    }
+    el.innerHTML = listings.map(p=>{
+      const st = P.PROPERTY_STATUS[p.status]||{label:p.status,color:'white',icon:'🏠'};
+      return `<div class="ad-listing">
+        <div class="ad-listing-icon">${p.icon||'🏠'}</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:800;color:white;">${p.title}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">📍 ${p.location}</div>
+          <div style="font-size:15px;font-weight:900;color:#10b981;margin-top:4px;">${P.fmtPrice(p.price,p.priceUnit)}</div>
+          <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap;">
+            <span style="padding:3px 9px;border-radius:5px;font-size:10px;font-weight:900;background:${st.color}15;border:1px solid ${st.color}40;color:${st.color};">${st.icon} ${st.label}</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.3);">👁️ ${p.views||0} views · 💬 ${p.inquiries||0} inquiries</span>
+          </div>
+          <div class="ad-listing-actions">
+            <button class="ad-btn green" onclick="window.location.href='property-listing.html?id=${p.id}'">View</button>
+            <button class="ad-btn amber" onclick="editListing('${p.id}')">✏️ Edit</button>
+            <button class="ad-btn" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);" onclick="markSold('${p.id}')">✅ Mark Sold/Rented</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  else if (tab==='add') {
+    el.innerHTML = `
+      <div class="ad-form">
+        <div style="font-size:16px;font-weight:900;margin-bottom:16px;">➕ Add New Listing</div>
+        <div class="ad-section-h">Property Details</div>
+        <div class="ad-form-grid">
+          <div>
+            <label class="ad-label">Listing Title *</label>
+            <input class="ad-input" id="fTitle" placeholder="e.g. 3BR House for Sale in Karen">
+          </div>
+          <div>
+            <label class="ad-label">Location *</label>
+            <input class="ad-input" id="fLocation" placeholder="e.g. Karen, Nairobi">
+          </div>
+          <div>
+            <label class="ad-label">Category *</label>
+            <select class="ad-input" id="fCategory">
+              <option value="house">House</option>
+              <option value="apartment">Apartment</option>
+              <option value="bedsitter">Bedsitter / Studio</option>
+              <option value="commercial">Commercial Space</option>
+              <option value="land">Land / Plot</option>
+              <option value="warehouse">Warehouse</option>
+              <option value="office">Office Space</option>
+            </select>
+          </div>
+          <div>
+            <label class="ad-label">Status *</label>
+            <select class="ad-input" id="fStatus">
+              <option value="for_sale">For Sale</option>
+              <option value="for_rent">For Rent</option>
+              <option value="sold">Sold</option>
+              <option value="rented">Rented</option>
+            </select>
+          </div>
+          <div>
+            <label class="ad-label">Price (KES) *</label>
+            <input class="ad-input" type="number" id="fPrice" placeholder="e.g. 15000000">
+          </div>
+          <div>
+            <label class="ad-label">Price Unit</label>
+            <select class="ad-input" id="fPriceUnit">
+              <option value="KES">KES (for sale)</option>
+              <option value="KES/month">KES/month (rent)</option>
+              <option value="KES/sqm">KES/sqm</option>
+            </select>
+          </div>
+        </div>
+        <div class="ad-section-h">Property Specs</div>
+        <div class="ad-form-grid">
+          <div>
+            <label class="ad-label">Bedrooms</label>
+            <input class="ad-input" type="number" id="fBeds" placeholder="0" min="0">
+          </div>
+          <div>
+            <label class="ad-label">Bathrooms</label>
+            <input class="ad-input" type="number" id="fBaths" placeholder="0" min="0">
+          </div>
+          <div>
+            <label class="ad-label">Size (sqm)</label>
+            <input class="ad-input" type="number" id="fSize" placeholder="e.g. 200">
+          </div>
+          <div>
+            <label class="ad-label">Parking Spaces</label>
+            <input class="ad-input" type="number" id="fParking" placeholder="0" min="0">
+          </div>
+          <div>
+            <label class="ad-label">County</label>
+            <select class="ad-input" id="fCounty">
+              <option value="nairobi">Nairobi</option>
+              <option value="mombasa">Mombasa</option>
+              <option value="kisumu">Kisumu</option>
+              <option value="nakuru">Nakuru</option>
+              <option value="kiambu">Kiambu</option>
+              <option value="machakos">Machakos</option>
+              <option value="kwale">Kwale</option>
+              <option value="laikipia">Laikipia</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="ad-label">Furnished?</label>
+            <select class="ad-input" id="fFurnished">
+              <option value="false">Unfurnished</option>
+              <option value="true">Furnished</option>
+              <option value="part">Partially Furnished</option>
+            </select>
+          </div>
+        </div>
+        <div class="ad-section-h">Description & Features</div>
+        <label class="ad-label">Description *</label>
+        <textarea class="ad-input" id="fDesc" rows="4" placeholder="Describe the property — location, nearby amenities, condition, unique features..."></textarea>
+        <label class="ad-label">Key Features (comma-separated)</label>
+        <input class="ad-input" id="fFeatures" placeholder="Swimming pool, Garden, DSQ, Generator backup...">
+        <label class="ad-label">Amenities (comma-separated)</label>
+        <input class="ad-input" id="fAmenities" placeholder="parking, security, borehole, generator, wifi...">
+        <div style="display:flex;gap:10px;margin-top:6px;">
+          <button class="ad-submit" onclick="submitListing()">✅ Publish Listing</button>
+          <button onclick="switchTab('listings',null)" style="padding:12px 18px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:rgba(255,255,255,0.5);font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">Cancel</button>
+        </div>
+      </div>`;
+  }
+  else if (tab==='inquiries') {
+    const inqs = P.getInquiries().filter(i=>i.agentId===AGENT_ID);
+    if (!inqs.length) { el.innerHTML = empty('💬','No inquiries yet','Inquiries from potential buyers and renters will appear here.'); return; }
+    el.innerHTML = inqs.map(i=>{
+      const is = P.INQUIRY_STATUS[i.status]||{label:i.status,color:'white'};
+      return `<div class="ad-lead">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div style="font-size:13px;font-weight:800;color:white;">💬 ${i.name}</div>
+          <span style="padding:3px 8px;border-radius:5px;font-size:10px;font-weight:900;background:${is.color}15;border:1px solid ${is.color}40;color:${is.color};">${is.label}</span>
+        </div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${i.propertyTitle||'Property'} · ${P.timeSince(i.createdAt||Date.now())}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.55);margin-top:6px;line-height:1.5;">"${(i.message||'').slice(0,120)}${(i.message||'').length>120?'...':''}"</div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <a href="tel:${i.phone}" class="ad-btn green">📞 Call ${i.phone}</a>
+          <a href="https://wa.me/254${(i.phone||'').replace(/[^0-9]/g,'').replace(/^0/,'')}" target="_blank" class="ad-btn" style="background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;">WhatsApp</a>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  else if (tab==='viewings') {
+    const viewings = P.getViewings().filter(v=>v.agentId===AGENT_ID);
+    if (!viewings.length) { el.innerHTML = empty('📅','No viewing requests yet','When buyers request viewings on your listings they appear here.'); return; }
+    el.innerHTML = viewings.map(v=>{
+      const vs = P.VIEWING_STATUS[v.status]||{label:v.status,color:'white'};
+      return `<div class="ad-lead">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div style="font-size:13px;font-weight:800;color:white;">📅 ${v.name}</div>
+          <span style="padding:3px 8px;border-radius:5px;font-size:10px;font-weight:900;background:${vs.color}15;border:1px solid ${vs.color}40;color:${vs.color};">${vs.label}</span>
+        </div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 ${v.propertyTitle||'Property'} · 🗓️ ${v.date||'Date TBC'} · ⏰ ${v.time||'Time TBC'}</div>
+        ${v.notes?`<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:6px;">"${v.notes}"</div>`:''}
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+          <a href="tel:${v.phone}" class="ad-btn green">📞 ${v.phone}</a>
+          <button class="ad-btn green" onclick="confirmViewing('${v.id}')">✅ Confirm</button>
+          <button class="ad-btn red" onclick="cancelViewing('${v.id}')">✕ Cancel</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  else if (tab==='analytics') {
+    const listings = P.getListings({}).filter(p=>p.agentId===AGENT_ID);
+    const totalViews = listings.reduce((s,p)=>s+(p.views||0),0);
+    const totalInq = listings.reduce((s,p)=>s+(p.inquiries||0),0);
+    const byStatus = {};
+    listings.forEach(p=>{ byStatus[p.status]=(byStatus[p.status]||0)+1; });
+    const catCounts = {};
+    listings.forEach(p=>{ catCounts[p.category]=(catCounts[p.category]||0)+1; });
+
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;text-align:center;">
+          <div style="font-size:26px;font-weight:900;color:#10b981;">${totalViews}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">Total Views</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;text-align:center;">
+          <div style="font-size:26px;font-weight:900;color:#f59e0b;">${totalInq}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">Total Inquiries</div>
+        </div>
+      </div>
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:800;margin-bottom:12px;">🏘️ Listings by Status</div>
+        ${Object.entries(byStatus).map(([s,c])=>{
+          const st=P.PROPERTY_STATUS[s]||{label:s,color:'#10b981'};
+          const pct = listings.length ? Math.round(c/listings.length*100) : 0;
+          return `<div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span style="color:${st.color};">${st.label}</span><span style="color:rgba(255,255,255,0.4);">${c} (${pct}%)</span></div>
+            <div class="ad-chart-bar"><div class="ad-chart-fill" style="width:${pct}%;background:${st.color};opacity:0.7;"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;">
+        <div style="font-size:13px;font-weight:800;margin-bottom:12px;">📊 Top Performing Listings</div>
+        ${listings.sort((a,b)=>(b.views||0)-(a.views||0)).slice(0,5).map(p=>{
+          const pct = totalViews ? Math.round((p.views||0)/totalViews*100) : 0;
+          return `<div style="margin-bottom:10px;cursor:pointer;" onclick="window.location.href='property-listing.html?id=${p.id}'">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span style="color:white;font-weight:700;">${p.title.slice(0,40)}...</span><span style="color:rgba(255,255,255,0.4);">${p.views||0} views</span></div>
+            <div class="ad-chart-bar"><div class="ad-chart-fill" style="width:${pct}%;"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+    `;
+  }
+}
+
+function submitListing() {
+  const title=document.getElementById('fTitle').value.trim();
+  const location=document.getElementById('fLocation').value.trim();
+  const price=parseInt(document.getElementById('fPrice').value)||0;
+  const desc=document.getElementById('fDesc').value.trim();
+  if (!title||!location||!price||!desc){(window._skToast||alert)('Please fill all required fields (marked with *).');return;}
+  const features=document.getElementById('fFeatures').value.split(',').map(f=>f.trim()).filter(Boolean);
+  const amenities=document.getElementById('fAmenities').value.split(',').map(a=>a.trim()).filter(Boolean);
+  const listing = P.createListing({
+    title, location, price, description:desc, features, amenities,
+    status: document.getElementById('fStatus').value,
+    category: document.getElementById('fCategory').value,
+    priceUnit: document.getElementById('fPriceUnit').value,
+    bedrooms: parseInt(document.getElementById('fBeds').value)||0,
+    bathrooms: parseInt(document.getElementById('fBaths').value)||0,
+    size: parseInt(document.getElementById('fSize').value)||0,
+    parking: parseInt(document.getElementById('fParking').value)||0,
+    county: document.getElementById('fCounty').value,
+    furnished: document.getElementById('fFurnished').value==='true',
+    agentId: AGENT_ID,
+    icon: categoryIcon(document.getElementById('fCategory').value),
+  });
+  (window._skToast||alert)(`✅ Listing published!\n\nTitle: ${listing.title}\nID: ${listing.id}\n\nIt is now live on the Property Hub.`);
+  switchTab('listings',null);
+  document.querySelectorAll('.ad-tab')[0].classList.add('active');
+  init();
+}
+window.submitListing=submitListing;
+
+function categoryIcon(cat){ const m={house:'🏡',apartment:'🏢',bedsitter:'🛏️',commercial:'🏪',land:'🌍',warehouse:'🏭',office:'💼'}; return m[cat]||'🏠'; }
+
+function editListing(id){
+  const p = P.getListings({}).find(l=>l.id===id);
+  if(!p){ (window._skToast||alert)('Listing not found.'); return; }
+  // Switch to add tab, then pre-fill fields
+  switchTab('add', null);
+  document.querySelectorAll('.ad-tab').forEach(t=>{ if(t.textContent.includes('Add')) t.classList.add('active'); });
+  // Update heading
+  const heading = document.querySelector('#adContent .ad-form > div:first-child');
+  if(heading) heading.textContent = '✏️ Edit Listing';
+  // Pre-fill all fields
+  const set = (id, val) => { const el=document.getElementById(id); if(el) el.value=val||''; };
+  set('fTitle', p.title); set('fLocation', p.location); set('fCategory', p.category);
+  set('fStatus', p.status); set('fPrice', p.price); set('fPriceUnit', p.priceUnit);
+  set('fBeds', p.bedrooms); set('fBaths', p.bathrooms); set('fSize', p.size);
+  set('fParking', p.parking); set('fCounty', p.county);
+  set('fFeatures', (p.features||[]).join(', ')); set('fAmenities', (p.amenities||[]).join(', '));
+  set('fDesc', p.description);
+  const furnished = document.getElementById('fFurnished');
+  if(furnished) furnished.value = p.furnished ? 'true' : 'false';
+  // Override submit to UPDATE instead of create
+  const submitBtn = document.querySelector('#adContent button[onclick="submitListing()"]');
+  if(submitBtn){ submitBtn.textContent = '💾 Save Changes'; submitBtn.onclick = function(){ updateListing(id); }; }
+  window._editingId = id;
+}
+window.editListing = editListing;
+
+function updateListing(id){
+  const title=document.getElementById('fTitle').value.trim();
+  const location=document.getElementById('fLocation').value.trim();
+  const price=parseInt(document.getElementById('fPrice').value)||0;
+  const desc=document.getElementById('fDesc').value.trim();
+  if(!title||!location||!price||!desc){ (window._skToast||alert)('Please fill all required fields.'); return; }
+  P.updateListing(id, {
+    title, location, price, description:desc,
+    features: document.getElementById('fFeatures').value.split(',').map(f=>f.trim()).filter(Boolean),
+    amenities: document.getElementById('fAmenities').value.split(',').map(a=>a.trim()).filter(Boolean),
+    status: document.getElementById('fStatus').value,
+    category: document.getElementById('fCategory').value,
+    priceUnit: document.getElementById('fPriceUnit').value,
+    bedrooms: parseInt(document.getElementById('fBeds').value)||0,
+    bathrooms: parseInt(document.getElementById('fBaths').value)||0,
+    size: parseInt(document.getElementById('fSize').value)||0,
+    parking: parseInt(document.getElementById('fParking').value)||0,
+    county: document.getElementById('fCounty').value,
+    furnished: document.getElementById('fFurnished').value==='true',
+    icon: categoryIcon(document.getElementById('fCategory').value),
+  });
+  (window._skToast||alert)('✅ Listing updated successfully!');
+  window._editingId = null;
+  switchTab('listings', null);
+  document.querySelectorAll('.ad-tab')[0].classList.add('active');
+  init();
+}
+window.updateListing = updateListing;
+
+function markSold(id){
+  _skConfirm('Mark this listing as sold/rented?',function(){
+  P.updateListing(id,{status:'sold'});
+  renderTab('listings');
+  (window._skToast||alert)('✅ Listing marked as sold/rented.');
+}
+window.markSold=markSold;
+
+function confirmViewing(id){ P.updateViewingStatus(id,'confirmed'); renderTab('viewings'); (window._skToast||alert)('✅ Viewing confirmed! The client will be notified.'); }
+function cancelViewing(id){ P.updateViewingStatus(id,'cancelled'); renderTab('viewings'); }
+window.confirmViewing=confirmViewing;
+window.cancelViewing=cancelViewing;
+
+function empty(icon,title,sub){return`<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);"><div style="font-size:48px;margin-bottom:14px;">${icon}</div><p style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.4);">${title}</p><p style="font-size:12px;margin-top:8px;">${sub}</p></div>`;}
+
+init();
+</script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: dashboard stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
+  <script defer src="sokoni-service-mesh.js"></script>
 </body>
 </html>
+
+
+

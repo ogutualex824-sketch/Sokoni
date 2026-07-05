@@ -1,178 +1,426 @@
-<!DOCTYPE html>
-<html lang="en">
+﻿<!DOCTYPE html>
+<html lang="en" data-splash="1">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Car Rental — SOKONI</title>
-<link rel="icon" href="/assets/logosokoni.png">
-<script src="/__/firebase/10.12.0/firebase-app-compat.js"></script>
-<script src="/__/firebase/10.12.0/firebase-auth-compat.js"></script>
-<script src="/__/firebase/10.12.0/firebase-functions-compat.js"></script>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
-.hdr{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
-.logo{font-weight:700;font-size:18px;color:#58a6ff}
-.hero{background:linear-gradient(135deg,#0d1117,#091020);padding:40px 16px 28px;text-align:center}
-.hero h1{font-size:clamp(22px,5vw,36px);font-weight:700;margin-bottom:8px}
-.hero p{color:#8b949e;font-size:14px;max-width:480px;margin:0 auto 20px}
-.fbar{background:#161b22;border-bottom:1px solid #30363d;padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.fbar select,.fbar input{padding:8px 12px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:13px}
-.pill{padding:6px 13px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid #30363d;background:transparent;color:#8b949e;transition:.2s;white-space:nowrap}
-.pill.active,.pill:hover{background:#1f6feb;border-color:#1f6feb;color:#fff}
-.container{max-width:1200px;margin:0 auto;padding:20px 16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-.card{background:#161b22;border:1px solid #30363d;border-radius:12px;overflow:hidden;cursor:pointer;transition:.2s}
-.card:hover{border-color:#58a6ff;transform:translateY(-2px)}
-.cimg{height:165px;background:#21262d;display:flex;align-items:center;justify-content:center;font-size:48px;overflow:hidden}
-.cimg img{width:100%;height:100%;object-fit:cover}
-.cbody{padding:14px}
-.cmake{font-size:17px;font-weight:700;margin-bottom:2px}
-.cmeta{font-size:12px;color:#8b949e;margin-bottom:8px}
-.cchips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
-.chip{padding:3px 8px;background:#21262d;border-radius:4px;font-size:12px;color:#8b949e}
-.cprice{font-size:18px;font-weight:700;color:#58a6ff}
-.cloc{font-size:12px;color:#8b949e;margin-top:3px}
-.spinner{display:inline-block;width:24px;height:24px;border:2px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:sp .8s linear infinite}
-@keyframes sp{to{transform:rotate(360deg)}}
-.btn{padding:10px 18px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:.2s}
-.btn-b{background:#1f6feb;color:#fff}.btn-b:hover{background:#388bfd}
-.btn-out{background:transparent;border:1px solid #30363d;color:#e6edf3}
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto}
-.overlay.open{display:flex}
-.modal{background:#161b22;border:1px solid #30363d;border-radius:16px;width:100%;max-width:560px;margin:auto}
-.mhdr{padding:18px 22px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center}
-.mhdr h2{font-size:16px;font-weight:600}.xbtn{background:none;border:none;color:#8b949e;font-size:22px;cursor:pointer}
-.mbody{padding:20px}
-.stbl{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px}
-.stbl tr:nth-child(even){background:#0d1117}
-.stbl td{padding:7px 10px;border-bottom:1px solid #30363d}
-.stbl td:first-child{color:#8b949e;width:38%}
-.fg{margin-bottom:12px}
-.fg label{display:block;font-size:13px;color:#8b949e;margin-bottom:4px}
-.fg input,.fg textarea{width:100%;padding:10px 14px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:14px}
-.fg textarea{resize:vertical;min-height:70px}
-.empty{text-align:center;padding:60px;color:#8b949e}
-.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:14px;z-index:999;animation:fi .3s;max-width:300px}
-.tok{background:#238636;color:#fff}.terr{background:#da3633;color:#fff}
-@keyframes fi{from{opacity:0;transform:translateY(8px)}}
-@media(max-width:600px){.grid{grid-template-columns:1fr}}
-</style>
+  <meta charset="UTF-8">
+  <script src="security.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Car Rental in Kenya — Hire Cars in Nairobi & Across Kenya | SOKONI</title>
+  <meta name="description" content="Rent economy cars, SUVs, vans and minibuses in Nairobi, Mombasa, Kisumu and across Kenya. Self-drive and chauffeur-driven options. Pay with M-Pesa.">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0ea5e9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="sokoni-premium-v2.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#020c14;color:white;min-height:100vh;padding-bottom:80px;}
+    .pg-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(2,12,20,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);}
+    .pg-logo{height:32px;}
+    .pg-nav-right{display:flex;gap:8px;align-items:center;}
+    .pg-nav-link{padding:7px 13px;border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.55);text-decoration:none;font-size:12px;font-weight:600;transition:all .15s;}
+    .pg-nav-link:hover{color:white;border-color:rgba(255,255,255,0.25);}
+    .pg-nav-book{background:rgba(14,165,233,0.12);border-color:rgba(14,165,233,0.35);color:#0ea5e9;}
+    .pg-hero{background:linear-gradient(135deg,rgba(14,165,233,0.1),rgba(2,80,140,0.06),transparent);border-bottom:1px solid rgba(255,255,255,0.07);padding:32px 20px 28px;position:relative;overflow:hidden;}
+    .pg-hero::before{content:'🚗🚙🚐🏎️';position:absolute;right:-10px;top:50%;transform:translateY(-50%);font-size:80px;opacity:0.04;letter-spacing:-6px;pointer-events:none;}
+    .pg-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.28);border-radius:999px;font-size:10px;font-weight:800;color:#0ea5e9;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;}
+    .pg-hero h1{font-size:clamp(22px,5vw,38px);font-weight:900;line-height:1.1;margin-bottom:8px;}
+    .pg-hero h1 span{color:#0ea5e9;}
+    .pg-hero p{font-size:13px;color:rgba(255,255,255,0.45);line-height:1.55;max-width:520px;margin-bottom:20px;}
+    .pg-search{display:flex;gap:8px;max-width:560px;margin-bottom:18px;}
+    .pg-search input{flex:1;padding:12px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;}
+    .pg-search input:focus{border-color:rgba(14,165,233,0.4);}
+    .pg-search input::placeholder{color:rgba(255,255,255,0.28);}
+    .pg-search-btn{padding:12px 20px;background:linear-gradient(135deg,#0ea5e9,#0284c7);border:none;border-radius:11px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+    .pg-hero-stats{display:flex;gap:20px;flex-wrap:wrap;}
+    .pg-stat{font-size:11px;color:rgba(255,255,255,0.4);display:flex;align-items:center;gap:5px;}
+    .pg-stat strong{color:#0ea5e9;font-size:14px;font-weight:900;}
+    .pg-section{padding:24px 20px 8px;}
+    .pg-section-title{display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+    .pg-section-title h2{font-size:16px;font-weight:900;}
+    .pg-section-title span{flex:1;height:1px;background:rgba(255,255,255,0.07);}
+    .pg-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;}
+    .pg-type-card{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;transition:all .2s;text-decoration:none;color:white;}
+    .pg-type-card:hover,.pg-type-card.active{background:rgba(14,165,233,0.08);border-color:rgba(14,165,233,0.3);color:#0ea5e9;}
+    .pg-type-card span{font-size:28px;line-height:1;}
+    .pg-type-card p{font-size:11px;font-weight:700;text-align:center;line-height:1.3;}
+    .pg-steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
+    .pg-step{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px 14px;text-align:center;}
+    .pg-step-num{width:32px;height:32px;border-radius:50%;background:rgba(14,165,233,0.12);border:1px solid rgba(14,165,233,0.28);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#0ea5e9;margin:0 auto 10px;}
+    .pg-step h3{font-size:12px;font-weight:800;margin-bottom:4px;}
+    .pg-step p{font-size:10px;color:rgba(255,255,255,0.38);line-height:1.5;}
+    .pg-providers{padding:0 20px 24px;}
+    .pg-filter-row{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:6px;margin-bottom:14px;}
+    .pg-filter-row::-webkit-scrollbar{display:none;}
+    .pg-filter-pill{flex-shrink:0;padding:5px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;}
+    .pg-filter-pill:hover,.pg-filter-pill.active{background:rgba(14,165,233,0.1);border-color:rgba(14,165,233,0.3);color:#0ea5e9;}
+    .pg-provider-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;}
+    .pg-provider-card{background:rgba(255,255,255,0.028);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;transition:border-color .2s,transform .2s;}
+    .pg-provider-card:hover{border-color:rgba(14,165,233,0.28);transform:translateY(-2px);}
+    .pg-car-img{width:100%;height:140px;background:linear-gradient(135deg,rgba(14,165,233,0.15),rgba(2,80,140,0.1));display:flex;align-items:center;justify-content:center;font-size:64px;position:relative;}
+    .pg-car-badge{position:absolute;top:10px;right:10px;background:rgba(14,165,233,0.15);border:1px solid rgba(14,165,233,0.3);color:#0ea5e9;font-size:9px;font-weight:800;padding:3px 8px;border-radius:6px;}
+    .pg-car-avail{position:absolute;top:10px;left:10px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;font-size:9px;font-weight:800;padding:3px 8px;border-radius:6px;display:flex;align-items:center;gap:4px;}
+    .pg-car-avail-dot{width:5px;height:5px;border-radius:50%;background:#22c55e;}
+    .pg-car-body{padding:14px 16px;}
+    .pg-car-name{font-size:15px;font-weight:900;margin-bottom:2px;}
+    .pg-car-meta{font-size:11px;color:rgba(255,255,255,0.38);margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap;}
+    .pg-car-specs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;}
+    .pg-car-spec{font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(14,165,233,0.07);border:1px solid rgba(14,165,233,0.15);color:rgba(14,165,233,0.8);}
+    .pg-car-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+    .pg-car-rate{font-size:16px;font-weight:900;color:#0ea5e9;}
+    .pg-car-rate small{font-size:10px;font-weight:400;color:rgba(255,255,255,0.35);}
+    .pg-car-btns{display:flex;gap:6px;}
+    .pg-book-btn{padding:8px 16px;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:white;font-weight:900;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-family:inherit;}
+    .pg-wa-btn{padding:8px 12px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);color:#25d366;border-radius:9px;font-size:12px;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:5px;}
+    .pg-pricing{padding:0 20px 24px;}
+    .pg-price-table{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;}
+    .pg-price-row{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid rgba(255,255,255,0.06);}
+    .pg-price-row:last-child{border-bottom:none;}
+    .pg-price-row:nth-child(even){background:rgba(255,255,255,0.015);}
+    .pg-price-svc{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:700;}
+    .pg-price-emoji{font-size:18px;width:28px;text-align:center;}
+    .pg-price-range{font-size:13px;font-weight:900;color:#0ea5e9;white-space:nowrap;}
+    .pg-reviews{padding:0 20px 24px;}
+    .pg-review-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;}
+    .pg-review-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;}
+    .pg-review-stars{color:#f59e0b;font-size:12px;margin-bottom:8px;}
+    .pg-review-text{font-size:12px;color:rgba(255,255,255,0.55);line-height:1.55;margin-bottom:10px;font-style:italic;}
+    .pg-review-author{font-size:11px;font-weight:800;color:rgba(255,255,255,0.65);}
+    .pg-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99998;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px);}
+    .pg-modal-overlay.open{display:flex;}
+    .pg-modal{background:#020c14;border:1px solid rgba(14,165,233,0.2);border-radius:24px 24px 0 0;padding:24px 20px 36px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;}
+    .pg-modal h2{font-size:17px;font-weight:900;margin-bottom:4px;}
+    .pg-modal-sub{font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;}
+    .pg-modal-close{float:right;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;}
+    .pg-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;}
+    .pg-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;outline:none;margin-bottom:12px;}
+    .pg-input:focus{border-color:rgba(14,165,233,0.4);}
+    .pg-input::placeholder{color:rgba(255,255,255,0.22);}
+    .pg-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+    .pg-chip{padding:6px 12px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;}
+    .pg-chip.sel{background:rgba(14,165,233,0.1);border-color:rgba(14,165,233,0.3);color:#0ea5e9;}
+    .pg-submit-btn{width:100%;padding:13px;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:white;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;}
+    .pg-modal-msg{font-size:12px;min-height:16px;margin-top:10px;text-align:center;}
+    @media(max-width:600px){.pg-type-grid{grid-template-columns:repeat(3,1fr);}.pg-provider-grid{grid-template-columns:1fr;}}
+    @media(min-width:769px){.bottom-nav{display:none!important;}body{padding-bottom:0;}}
+  </style>
+<script src="shared-header.js" defer></script>
+  <link rel="stylesheet" href="sokoni-desktop.css">
 </head>
 <body>
-<div class="hdr">
-  <span style="color:#8b949e;font-size:14px;cursor:pointer" onclick="history.back()">← Back</span>
-  <div class="logo">🚗 Car Rental</div>
-  <div style="margin-left:auto"><a href="/car-hub" style="color:#8b949e;font-size:13px">All Vehicles →</a></div>
-</div>
-<div class="hero">
-  <h1>Rent a Vehicle in Kenya</h1>
-  <p>Browse cars, SUVs, minibuses and more available for daily rental across Kenya.</p>
-</div>
-<div class="fbar">
-  <div id="vTypeF" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-  <select id="fuelF" onchange="filter()"><option value="">Any Fuel</option><option value="petrol">Petrol</option><option value="diesel">Diesel</option><option value="electric">Electric</option></select>
-  <input type="number" id="maxP" placeholder="Max/day (KES)" style="width:130px" oninput="filter()">
-  <input type="text" id="countyF" placeholder="County…" style="width:100px" oninput="filter()">
-</div>
-<div class="container">
-  <div id="listArea"><div class="empty"><div class="spinner"></div></div></div>
-  <div style="text-align:center;margin-top:16px;display:none" id="moreBtn"><button class="btn btn-out" onclick="loadMore()">Load More</button></div>
-</div>
+<script src="splash.js"></script>
 
-<div class="overlay" id="vModal">
-  <div class="modal">
-    <div class="mhdr"><h2 id="mTitle"></h2><button class="xbtn" onclick="close('vModal')">×</button></div>
-    <div class="mbody">
-      <div style="height:160px;background:#21262d;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:48px;margin-bottom:14px;overflow:hidden" id="mImg"></div>
-      <div style="font-size:20px;font-weight:700;color:#58a6ff;margin-bottom:8px" id="mPrice"></div>
-      <table class="stbl" id="mSpec"></table>
-      <p id="mDesc" style="font-size:14px;color:#8b949e;line-height:1.6;margin-bottom:14px"></p>
-      <hr style="border:none;border-top:1px solid #30363d;margin:14px 0">
-      <h4 style="margin-bottom:12px">Contact Owner</h4>
-      <div class="fg"><label>Message</label><textarea id="enqMsg" placeholder="I'd like to rent this vehicle. Is it available?"></textarea></div>
-      <div class="fg"><label>Rental Dates</label><input type="text" id="enqDates" placeholder="e.g. 15 Dec – 18 Dec 2026"></div>
-      <div class="fg"><label>Phone (optional)</label><input type="tel" id="enqPh" placeholder="+254…"></div>
-      <button class="btn btn-b" style="width:100%" onclick="sendEnq()">Send Rental Enquiry</button>
-    </div>
+<nav class="pg-nav sk-sub-nav">
+  <!-- Logo hidden: shared-header provides the platform logo -->
+  <a href="index.html" style="display:none;"><img loading="lazy" src="assets/Sokonilogo2.png" class="pg-logo" alt="SOKONI"></a>
+  <div class="pg-nav-right">
+    <a href="index.html" class="pg-nav-link">&#x1F3E0; Home</a>
+    <a href="car-hub.html" class="pg-nav-link">&#x1F697; Car Hub</a>
+    <button type="button" class="pg-nav-link pg-nav-book" onclick="openBooking()">&#x1F4C5; Book Now</button>
+  </div>
+</nav>
+
+<div class="pg-hero">
+  <div class="pg-badge">🚗 Car Rental Kenya</div>
+  <h1>Self-Drive & Chauffeur<br><span>From KES 3,500/day.</span></h1>
+  <p>Hire economy cars, SUVs, vans, matatus and buses across Kenya. Self-drive or with a professional driver. Pay with M-Pesa. Insurance included.</p>
+  <div class="pg-search">
+    <input type="text" id="pgSearch" placeholder="🔍 Search car type, model, location..." oninput="renderCars()">
+    <button type="button" class="pg-search-btn" onclick="renderCars()">Search</button>
+  </div>
+  <div class="pg-hero-stats">
+    <div class="pg-stat"><strong>80+</strong> Vehicles</div>
+    <div class="pg-stat"><strong>4.8★</strong> Avg Rating</div>
+    <div class="pg-stat"><strong>Same Day</strong> Pickup</div>
+    <div class="pg-stat"><strong>M-Pesa</strong> Accepted</div>
   </div>
 </div>
 
-<script src="/sokoni-config.js"></script>
+<div class="pg-section">
+  <div class="pg-section-title"><h2>🚗 What Are You Hiring?</h2><span></span></div>
+  <div class="pg-type-grid">
+    <a href="#cars" class="pg-type-card" onclick="filterByType('economy',this)"><span>🚗</span><p>Economy Car</p></a>
+    <a href="#cars" class="pg-type-card" onclick="filterByType('suv',this)"><span>🚙</span><p>SUV / 4x4</p></a>
+    <a href="#cars" class="pg-type-card" onclick="filterByType('van',this)"><span>🚐</span><p>Van / Minibus</p></a>
+    <a href="#cars" class="pg-type-card" onclick="filterByType('luxury',this)"><span>🏎️</span><p>Luxury Car</p></a>
+    <a href="#cars" class="pg-type-card" onclick="filterByType('pickup',this)"><span>🛻</span><p>Pickup Truck</p></a>
+    <a href="#cars" class="pg-type-card" onclick="filterByType('chauffeur',this)"><span>🚕</span><p>With Driver</p></a>
+    <a href="#cars" class="pg-type-card" onclick="filterByType('',this)"><span>🌍</span><p>All Vehicles</p></a>
+  </div>
+</div>
+
+<div class="pg-section">
+  <div class="pg-section-title"><h2>⚡ How It Works</h2><span></span></div>
+  <div class="pg-steps">
+    <div class="pg-step"><div class="pg-step-num">1</div><h3>🔍 Pick Vehicle</h3><p>Browse verified cars, vans & buses in your city</p></div>
+    <div class="pg-step"><div class="pg-step-num">2</div><h3>📅 Set Dates</h3><p>Choose pickup date, duration & delivery option</p></div>
+    <div class="pg-step"><div class="pg-step-num">3</div><h3>💳 Confirm & Pay</h3><p>Pay deposit via M-Pesa — balance on pickup</p></div>
+    <div class="pg-step"><div class="pg-step-num">4</div><h3>🚗 Hit the Road!</h3><p>Collect your vehicle with full insurance</p></div>
+  </div>
+</div>
+
+<div class="pg-providers" id="cars">
+  <div class="pg-section-title"><h2>🚗 Available Vehicles</h2><span></span><span id="pgCarCount" style="font-size:11px;color:rgba(255,255,255,0.3);font-weight:600;white-space:nowrap;"></span></div>
+  <div class="pg-filter-row">
+    <button type="button" class="pg-filter-pill active" onclick="filterByLoc('',this)">📍 All Kenya</button>
+    <button type="button" class="pg-filter-pill" onclick="filterByLoc('nairobi',this)">Nairobi</button>
+    <button type="button" class="pg-filter-pill" onclick="filterByLoc('mombasa',this)">Mombasa</button>
+    <button type="button" class="pg-filter-pill" onclick="filterByLoc('kisumu',this)">Kisumu</button>
+    <button type="button" class="pg-filter-pill" onclick="filterByLoc('nakuru',this)">Nakuru</button>
+  </div>
+  <div class="pg-provider-grid" id="pgCarGrid"></div>
+</div>
+
+<div class="pg-pricing">
+  <div class="pg-section-title"><h2>💰 Price Guide</h2><span></span><span style="font-size:10px;color:rgba(255,255,255,0.25);">Per day, insurance included</span></div>
+  <div class="pg-price-table">
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🚗</span>Economy Car (Vitz, Alto, Belta)</div><div class="pg-price-range">KES 3,500 – 5,500</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🚙</span>Compact SUV (RAV4, CX-5, Tucson)</div><div class="pg-price-range">KES 6,500 – 10,000</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🛻</span>Pickup Truck (Hilux, D-Max, Navara)</div><div class="pg-price-range">KES 8,000 – 14,000</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🚐</span>Minivan / Matatu (8–14 seater)</div><div class="pg-price-range">KES 10,000 – 18,000</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🚌</span>Bus (25–33 seater)</div><div class="pg-price-range">KES 18,000 – 35,000</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🏎️</span>Luxury / Executive (Mercedes, BMW)</div><div class="pg-price-range">KES 15,000 – 40,000</div></div>
+    <div class="pg-price-row"><div class="pg-price-svc"><span class="pg-price-emoji">🚕</span>Chauffeur (driver + fuel)</div><div class="pg-price-range">KES 2,000 – 5,000 /day extra</div></div>
+  </div>
+  <p style="font-size:10px;color:rgba(255,255,255,0.22);margin-top:8px;padding:0 4px;">* Prices include basic insurance. Weekend & long-term rates available.</p>
+</div>
+
+<div class="pg-reviews">
+  <div class="pg-section-title"><h2>⭐ Customer Reviews</h2><span></span></div>
+  <div class="pg-review-grid">
+    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Rented a Hilux pickup for our Maasai Mara road trip. Clean car, full tank, zero issues. Will definitely use SOKONI again."</div><div class="pg-review-author">James M. — Nairobi</div></div>
+    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Needed a 14-seater for our office trip to Naivasha. KwikRide confirmed in 20 minutes. Professional driver, on time."</div><div class="pg-review-author">Grace K. — Westlands</div></div>
+    <div class="pg-review-card"><div class="pg-review-stars">★★★★☆</div><div class="pg-review-text">"Got a Vitz for a week at KES 3,800/day. Insurance included, M-Pesa payment was instant. Great value."</div><div class="pg-review-author">Brian O. — Mombasa</div></div>
+    <div class="pg-review-card"><div class="pg-review-stars">★★★★★</div><div class="pg-review-text">"Executive Mercedes for our CEO's airport transfer. Arrived spotless, driver was punctual and professional."</div><div class="pg-review-author">Ruth W. — Karen</div></div>
+  </div>
+</div>
+
+<div style="padding:0 20px 24px;">
+  <div style="background:linear-gradient(135deg,rgba(14,165,233,0.1),rgba(2,80,140,0.07));border:1px solid rgba(14,165,233,0.22);border-radius:20px;padding:24px 20px;text-align:center;">
+    <div style="font-size:32px;margin-bottom:10px;">🚗✈️</div>
+    <h2 style="font-size:18px;font-weight:900;margin-bottom:6px;">Need Airport or Safari Transfer?</h2>
+    <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:16px;">JKIA, WRA, MIA pickups · Mara, Amboseli, Tsavo transfers · 24/7</p>
+    <button type="button" onclick="openBooking()" style="padding:12px 24px;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;">📅 Book Airport Transfer</button>
+  </div>
+</div>
+
+<div style="padding:0 20px 32px;">
+  <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <span style="font-size:40px;flex-shrink:0;">🚗</span>
+    <div style="flex:1;"><div style="font-size:15px;font-weight:900;margin-bottom:3px;">Own a Vehicle? Earn with SOKONI</div><div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;">List your car, van or bus and earn KES 3,500–40,000/day. We handle bookings, insurance & payments.</div></div>
+    <a href="opportunity.html" style="flex-shrink:0;padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;text-decoration:none;font-size:12px;font-weight:800;">List My Car →</a>
+  </div>
+</div>
+
+<div class="pg-modal-overlay" id="pgModalOverlay" onclick="if(event.target===this)closeBooking()">
+  <div class="pg-modal">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <h2>🚗 Book a Vehicle</h2>
+      <button type="button" class="pg-modal-close" onclick="closeBooking()">✕</button>
+    </div>
+    <div class="pg-modal-sub" id="pgModalSub">Fill in your details and the owner will confirm within 30 minutes.</div>
+    <label class="pg-label">Vehicle Type</label>
+    <div class="pg-chips" id="pgChips">
+      <span class="pg-chip sel" onclick="this.classList.toggle('sel')">🚗 Economy</span>
+      <span class="pg-chip" onclick="this.classList.toggle('sel')">🚙 SUV</span>
+      <span class="pg-chip" onclick="this.classList.toggle('sel')">🛻 Pickup</span>
+      <span class="pg-chip" onclick="this.classList.toggle('sel')">🚐 Matatu/Van</span>
+      <span class="pg-chip" onclick="this.classList.toggle('sel')">🚌 Bus</span>
+      <span class="pg-chip" onclick="this.classList.toggle('sel')">🏎️ Luxury</span>
+    </div>
+    <label class="pg-label">Pickup Location</label>
+    <input class="pg-input" type="text" id="pgPickup" placeholder="e.g. Westlands Nairobi, JKIA Airport">
+    <label class="pg-label">Drop-off / Destination</label>
+    <input class="pg-input" type="text" id="pgDrop" placeholder="e.g. Maasai Mara, Mombasa, CBD">
+    <label class="pg-label">Pickup Date & Time</label>
+    <input class="pg-input" type="datetime-local" id="pgDate">
+    <label class="pg-label">Duration (days)</label>
+    <input class="pg-input" type="number" id="pgDays" placeholder="e.g. 3" min="1">
+    <label class="pg-label">Your Name</label>
+    <input class="pg-input" type="text" id="pgName" placeholder="e.g. John Kamau">
+    <label class="pg-label">Phone Number</label>
+    <input class="pg-input" type="tel" id="pgPhone" placeholder="07XXXXXXXX">
+    <label class="pg-label">Extra Notes (optional)</label>
+    <textarea class="pg-input" id="pgNotes" rows="2" placeholder="e.g. Need child seat, prefer automatic, airport flight number..." style="resize:none;"></textarea>
+    <button type="button" class="pg-submit-btn" onclick="submitBooking()">📅 Confirm via WhatsApp →</button>
+    <div class="pg-modal-msg" id="pgModalMsg"></div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="car-hub.html" class="bnav-item"><span class="bnav-emoji">🚗</span><span>Car Hub</span></a>
+  <a href="car-rental.html" class="bnav-item active-bnav"><span class="bnav-emoji">🔑</span><span>Rentals</span></a>
+  <a href="driver.html" class="bnav-item"><span class="bnav-emoji">🚕</span><span>Hire Driver</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
 <script>
-let app,fns,auth,cu=null,all=[],sel=null,cursor=null;
-const VT=['sedan','suv','pickup','van','bus','motorbike','other'];
-const VE={sedan:'🚗',suv:'🚙',pickup:'🛻',van:'🚐',bus:'🚌',motorbike:'🏍️',other:'🚘'};
-function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML}
-function toast(m,ok=true){const t=document.createElement('div');t.className='toast '+(ok?'tok':'terr');t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3500);}
-function open(id){document.getElementById(id).classList.add('open');}
-function close(id){document.getElementById(id).classList.remove('open');}
-document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
-try{app=firebase.initializeApp(firebaseConfig,'rental');fns=app.functions('us-central1');auth=app.auth();auth.onAuthStateChanged(u=>{cu=u;});}catch(e){}
-async function call(n,d){try{const r=await fns.httpsCallable(n)(d);return{ok:true,data:r.data};}catch(e){return{ok:false,err:e.message};}}
+const CARS = [
+  {id:'CR01',name:'Toyota Vitz',emoji:'🚗',type:['economy'],location:'nairobi',locationLabel:'Nairobi (Westlands)',rate:'KES 3,800',rateType:'per day',rating:4.8,trips:214,phone:'0711300101',available:true,seats:5,trans:'Automatic',fuel:'Petrol',specs:['5 Seats','Auto','Petrol','AC','Insurance'],owner:'QuickRide Kenya',bio:'Well-maintained economy car. Full tank on pickup. Insurance & 200km free per day.'},
+  {id:'CR02',name:'Toyota RAV4 2020',emoji:'🚙',type:['suv'],location:'nairobi',locationLabel:'Nairobi (Karen)',rate:'KES 8,500',rateType:'per day',rating:4.9,trips:98,phone:'0722300202',available:true,seats:5,trans:'Automatic',fuel:'Petrol',specs:['5 Seats','AWD','Auto','Safari-Ready','Insurance'],owner:'SafariDrive KE',bio:'4WD RAV4 perfect for safari, upcountry & city. Comes with full insurance & safari kit.'},
+  {id:'CR03',name:'Toyota Hilux D-Cab',emoji:'🛻',type:['pickup'],location:'nairobi',locationLabel:'Nairobi (Industrial Area)',rate:'KES 11,000',rateType:'per day',rating:4.7,trips:56,phone:'0733300303',available:true,seats:5,trans:'Manual',fuel:'Diesel',specs:['5 Seats','4WD','Diesel','Cargo Space','Insurance'],owner:'HeavyHire Kenya',bio:'Double cab Hilux — ideal for construction, upcountry and cargo. Robust & reliable.'},
+  {id:'CR04',name:'Toyota HiAce (14-Seater)',emoji:'🚐',type:['van'],location:'nairobi',locationLabel:'Nairobi (Eastlands)',rate:'KES 14,000',rateType:'per day',rating:4.8,trips:143,phone:'0744300404',available:true,seats:14,trans:'Manual',fuel:'Diesel',specs:['14 Seats','AC','Diesel','Events','Insurance'],owner:'EventRide KE',bio:'Clean 14-seater matatu for events, school trips and group travel. Driver available +KES 2,000/day.'},
+  {id:'CR05',name:'Mercedes E-Class',emoji:'🏎️',type:['luxury','chauffeur'],location:'nairobi',locationLabel:'Nairobi (Kilimani)',rate:'KES 22,000',rateType:'per day',rating:5.0,trips:34,phone:'0755300505',available:true,seats:4,trans:'Automatic',fuel:'Petrol',specs:['Executive','Leather','Auto','Chauffeur','Full Insurance'],owner:'Executive Cars KE',bio:'Premium executive vehicle for airport transfers, corporate events & VIP chauffeuring.'},
+  {id:'CR06',name:'Isuzu NPR Bus (33-Seater)',emoji:'🚌',type:['van'],location:'mombasa',locationLabel:'Mombasa (Nyali)',rate:'KES 28,000',rateType:'per day',rating:4.7,trips:29,phone:'0766300606',available:true,seats:33,trans:'Manual',fuel:'Diesel',specs:['33 Seats','AC','Church/School','Events','Insurance'],owner:'CoastBus Hire',bio:'Large bus for school trips, church events & corporate outings. Experienced driver included.'},
+  {id:'CR07',name:'Suzuki Alto (Budget)',emoji:'🚗',type:['economy'],location:'kisumu',locationLabel:'Kisumu (Milimani)',rate:'KES 3,500',rateType:'per day',rating:4.6,trips:88,phone:'0777300707',available:false,seats:4,trans:'Automatic',fuel:'Petrol',specs:['4 Seats','Fuel Saver','Auto','City Drive','Insurance'],owner:'LakeCity Cars',bio:'Most affordable self-drive in Kisumu. Perfect for city errands & short trips.'},
+];
+let activeType='',activeLoc='',selectedCar=null;
 
-let activeVT=new Set();
-function buildF(){document.getElementById('vTypeF').innerHTML=VT.map(t=>`<div class="pill" onclick="toggleT('${t}',this)">${VE[t]} ${t}</div>`).join('');}
-function toggleT(t,el){activeVT.has(t)?(activeVT.delete(t),el.classList.remove('active')):(activeVT.add(t),el.classList.add('active'));filter();}
-function filter(){
-  const fuel=document.getElementById('fuelF').value;
-  const maxP=parseFloat(document.getElementById('maxP').value)||Infinity;
-  const county=document.getElementById('countyF').value.toLowerCase();
-  let list=[...all];
-  if(activeVT.size) list=list.filter(v=>activeVT.has(v.vehicleType));
-  if(fuel) list=list.filter(v=>v.fuelType===fuel);
-  if(maxP<Infinity) list=list.filter(v=>v.price<=maxP);
-  if(county) list=list.filter(v=>(v.county||'').toLowerCase().includes(county));
-  render(list);
-}
-
-async function load(){
-  const r=await call('listVehicles',{listingType:'for_rent',limit:24});
-  if(!r.ok){document.getElementById('listArea').innerHTML='<div class="empty">Could not load rentals.</div>';return;}
-  all=r.data.listings||[];cursor=r.data.nextCursor;
-  document.getElementById('moreBtn').style.display=cursor?'block':'none';
-  render(all);
-}
-async function loadMore(){
-  if(!cursor)return;
-  const r=await call('listVehicles',{listingType:'for_rent',limit:24,cursor});
-  if(!r.ok)return;
-  all=[...all,...(r.data.listings||[])];cursor=r.data.nextCursor;
-  document.getElementById('moreBtn').style.display=cursor?'block':'none';
-  render(all);
-}
-function render(list){
-  if(!list.length){document.getElementById('listArea').innerHTML='<div class="empty">No rentals available.</div>';return;}
-  document.getElementById('listArea').innerHTML='<div class="grid">'+list.map(v=>`
-    <div class="card" onclick="openV('${esc(v.listingId)}')">
-      <div class="cimg">${v.images?.[0]?`<img src="${esc(v.images[0])}" loading="lazy">`:VE[v.vehicleType]||'🚗'}</div>
-      <div class="cbody">
-        <div class="cmake">${esc(v.make)} ${esc(v.model)}</div>
-        <div class="cmeta">${v.year} · ${v.color||''} · ${v.seats||'—'} seats</div>
-        <div class="cchips"><span class="chip">${v.fuelType||''}</span><span class="chip">${v.transmission||''}</span>${v.negotiable?'<span class="chip">Negotiable</span>':''}</div>
-        <div class="cprice">KES ${(v.price||0).toLocaleString()}/day</div>
-        <div class="cloc">📍 ${esc(v.county||'Kenya')}</div>
+function renderCars(){
+  const q=(document.getElementById('pgSearch')?.value||'').toLowerCase();
+  let list=[...CARS];
+  if(activeType) list=list.filter(c=>c.type.includes(activeType));
+  if(activeLoc)  list=list.filter(c=>c.location===activeLoc);
+  if(q) list=list.filter(c=>c.name.toLowerCase().includes(q)||c.owner.toLowerCase().includes(q)||c.bio.toLowerCase().includes(q)||c.specs.some(s=>s.toLowerCase().includes(q)));
+  const grid=document.getElementById('pgCarGrid');
+  const cnt=document.getElementById('pgCarCount');
+  if(cnt) cnt.textContent=list.length+' vehicles found';
+  if(!list.length){
+    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);"><div style="font-size:40px;margin-bottom:10px;">🔍</div><div style="font-size:13px;">No vehicles found.<br><button type="button" onclick="clearFilters();" style="color:#0ea5e9;font-weight:700;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">Clear filters →</button></div></div>`;
+    return;
+  }
+  grid.innerHTML=list.map(c=>`
+    <div class="pg-provider-card">
+      <div class="pg-car-img">
+        ${c.emoji}
+        <span class="pg-car-badge">${c.specs[0]}</span>
+        ${c.available?'<span class="pg-car-avail"><span class="pg-car-avail-dot"></span> Available</span>':'<span class="pg-car-avail" style="background:rgba(255,80,80,0.1);border-color:rgba(255,80,80,0.25);color:#ff5050;">Unavailable</span>'}
       </div>
-    </div>`).join('')+'</div>';
+      <div class="pg-car-body">
+        <div class="pg-car-name">${c.name}</div>
+        <div class="pg-car-meta">
+          <span><i class="fas fa-map-marker-alt" style="color:#0ea5e9;font-size:9px;"></i> ${c.locationLabel}</span>
+          <span>⭐ ${c.rating} · ${c.trips}+ trips</span>
+        </div>
+        <div class="pg-car-specs">${c.specs.map(s=>`<span class="pg-car-spec">${s}</span>`).join('')}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;margin-bottom:10px;">"${c.bio}"</div>
+        <div class="pg-car-foot">
+          <div class="pg-car-rate">${c.rate} <small>${c.rateType}</small></div>
+          <div class="pg-car-btns">
+            <a href="https://wa.me/254${c.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I found '+c.name+' on SOKONI. Is it available for rental? Please confirm.')}" target="_blank" class="pg-wa-btn"><i class="fab fa-whatsapp"></i></a>
+            <button type="button" class="pg-book-btn" onclick="openBookingFor('${c.id}','${c.name}')">Book →</button>
+          </div>
+        </div>
+      </div>
+    </div>`).join('');
 }
-async function openV(id){
-  sel=all.find(v=>v.listingId===id)||{};
-  if(!sel.description){const r=await call('getVehicle',{listingId:id});if(r.ok)sel=r.data;}
-  const v=sel;
-  document.getElementById('mTitle').textContent=`${v.year||''} ${v.make||''} ${v.model||''}`;
-  document.getElementById('mPrice').textContent=`KES ${(v.price||0).toLocaleString()} / day${v.negotiable?' (Negotiable)':''}`;
-  document.getElementById('mImg').innerHTML=v.images?.[0]?`<img src="${esc(v.images[0])}" style="width:100%;height:100%;object-fit:cover">`:VE[v.vehicleType]||'🚗';
-  document.getElementById('mSpec').innerHTML=[['Make',v.make],['Model',v.model],['Year',v.year],['Fuel',v.fuelType],['Transmission',v.transmission],['Seats',v.seats||'—'],['Color',v.color],['County',v.county]].filter(([,val])=>val!=null).map(([k,val])=>`<tr><td>${k}</td><td><strong>${esc(String(val))}</strong></td></tr>`).join('');
-  document.getElementById('mDesc').textContent=v.description||'';
-  open('vModal');
+
+function filterByType(type,el){
+  activeType=type;
+  document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));
+  if(el) el.classList.add('active');
+  renderCars();
 }
-async function sendEnq(){
-  if(!cu){toast('Sign in to contact the owner',false);return;}
-  const msg=document.getElementById('enqMsg').value.trim();
-  if(!msg){toast('Write a message',false);return;}
-  const r=await call('submitVehicleEnquiry',{listingId:sel.listingId,message:msg+'\nRental dates: '+document.getElementById('enqDates').value,phone:document.getElementById('enqPh').value.trim()});
-  if(r.ok){toast('Enquiry sent!');close('vModal');}else toast(r.err||'Failed',false);
+function filterByLoc(loc,btn){
+  activeLoc=loc;
+  document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderCars();
 }
-buildF();load();
+function clearFilters(){
+  activeType='';activeLoc='';
+  document.querySelectorAll('.pg-type-card').forEach(c=>c.classList.remove('active'));
+  document.querySelectorAll('.pg-filter-pill').forEach(p=>p.classList.remove('active'));
+  document.querySelector('.pg-filter-pill')?.classList.add('active');
+  document.getElementById('pgSearch').value='';
+  renderCars();
+}
+function openBooking(){
+  selectedCar=null;
+  document.getElementById('pgModalSub').textContent='Fill in your details and a vehicle owner will confirm within 30 minutes.';
+  document.getElementById('pgModalOverlay').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function openBookingFor(id,name){
+  selectedCar=CARS.find(c=>c.id===id);
+  document.getElementById('pgModalSub').textContent=`Booking: ${selectedCar?.emoji||''} ${name}`;
+  document.getElementById('pgModalOverlay').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeBooking(){
+  document.getElementById('pgModalOverlay').classList.remove('open');
+  document.body.style.overflow='';
+  document.getElementById('pgModalMsg').textContent='';
+}
+async function submitBooking(){
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('car_rental_book',10,300000)){(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
+  const name=document.getElementById('pgName')?.value.trim();
+  const phone=document.getElementById('pgPhone')?.value.trim();
+  const pickup=document.getElementById('pgPickup')?.value.trim();
+  const drop=document.getElementById('pgDrop')?.value.trim();
+  const date=document.getElementById('pgDate')?.value;
+  const days=document.getElementById('pgDays')?.value;
+  const notes=document.getElementById('pgNotes')?.value.trim();
+  const msgEl=document.getElementById('pgModalMsg');
+  const types=[...document.querySelectorAll('#pgChips .pg-chip.sel')].map(c=>c.textContent.trim()).join(', ');
+  if(!name||!phone||!pickup){if(msgEl){msgEl.textContent='⚠️ Please fill name, phone and pickup location.';msgEl.style.color='#ff6b6b';}return;}
+  /* If car has sellerUid and a daily rate — pay with M-Pesa */
+  if(selectedCar?.sellerUid && window.SokoniMpesa && days && selectedCar.rateNum){
+    const total = selectedCar.rateNum * Number(days);
+    const outcome = await window.SokoniMpesa.pay({
+      sellerUid:   selectedCar.sellerUid,
+      amount:      total,
+      phone:       phone,
+      orderId:     'CAR'+Date.now().toString().slice(-8),
+      hub:         'car',
+      description: selectedCar.name + ' · ' + days + ' day(s)',
+      sellerName:  selectedCar.owner,
+    });
+    if(outcome !== 'success') return;
+  }
+  const id='CAR'+Date.now().toString().slice(-7);
+  const msg=`Hi${selectedCar?' '+selectedCar.owner:''}! I found you on SOKONI and need a car rental.\n\n📋 Booking ID: ${id}\n👤 Name: ${name}\n📞 Phone: ${phone}\n🚗 Vehicle Type: ${types||'Not specified'}\n📍 Pickup: ${pickup}\n🏁 Drop-off: ${drop||'Not specified'}\n📅 Date: ${date||'Flexible'}\n🗓️ Duration: ${days||'TBD'} day(s)\n${notes?'📝 Notes: '+notes+'\n':''}\nPlease confirm availability & price. Thank you!`;
+  const _crWA = (selectedCar?.phone||'0705726803').replace(/^0/,'254').replace(/\D/g,'');
+  if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
+    SokoniPay.waConnect(_crWA, msg, {providerName:selectedCar?.owner||'SOKONI Car Rental',category:'car-rental',serviceDesc:(selectedCar?.name||types||'Car Rental')+(days?' · '+days+' day(s)':'')});
+  } else {
+    window.open(`https://wa.me/${_crWA}?text=${encodeURIComponent(msg)}`,'_blank');
+  }
+  let bks=[];try{bks=JSON.parse(localStorage.getItem('sokoniBookings')||'[]');}catch(e){}
+  bks.unshift({id,type:'car-rental',vehicle:selectedCar?.name||types||'Car Rental',name,phone,pickup,drop,date,days,notes,status:'requested',createdAt:new Date().toISOString()});
+  localStorage.setItem('sokoniBookings',JSON.stringify(bks.slice(0,100)));
+  (async()=>{try{
+    const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+    const {getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
+    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+    const _a=getApps().find(a=>a.name==="cr-write")||initializeApp(_cfg,"cr-write");
+    await addDoc(collection(getFirestore(_a),'carRentals'),{id,hub:'car-rental',vehicle:selectedCar?.name||types||'Car Rental',vehicleId:selectedCar?.id||null,ownerName:selectedCar?.owner||null,ownerPhone:selectedCar?.phone||null,clientName:name,phone,pickup,dropoff:drop,date,days:Number(days)||1,notes,status:'pending',createdAt:serverTimestamp()});
+  }catch(e){}})();
+  if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:(selectedCar?.name||types||'Car Rental')+(days?' — '+days+' day(s)':''),category:'Car Rental',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'WhatsApp Booking',paymentRef:id,sellerName:selectedCar?.owner||'SOKONI Car Rental',date:new Date().toISOString(),notes:pickup});},700);
+  if(msgEl){msgEl.innerHTML=`✅ Booking <strong style="color:#0ea5e9;">${id}</strong> sent via WhatsApp!`;msgEl.style.color='#22c55e';}
+  setTimeout(closeBooking,3000);
+}
+window.openBooking=openBooking;window.openBookingFor=openBookingFor;window.closeBooking=closeBooking;window.submitBooking=submitBooking;
+renderCars();
 </script>
+
+<script src="scroll-top.js" defer></script>
+<script src="seo.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sokoni-config.js" defer></script>
+<script src="sokoni-invoice.js"></script>
+<script src="sokoni-pay.js"></script>
+<script src="sw-register.js" defer></script>
+<script type="module" src="sokoni-init.js"></script>
+<script src="sokoni-audit.js" defer></script>
+<script src="sokoni-mpesa.js" defer></script>
+<script src="sokoni-social.js" defer></script>
+<script src="sokoni-referral.js" defer></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
 </body>
 </html>
+
+

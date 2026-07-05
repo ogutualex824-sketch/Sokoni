@@ -1,284 +1,918 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Property Hub — SOKONI</title>
-<link rel="icon" href="/assets/logosokoni.png">
-<script src="/__/firebase/10.12.0/firebase-app-compat.js"></script>
-<script src="/__/firebase/10.12.0/firebase-auth-compat.js"></script>
-<script src="/__/firebase/10.12.0/firebase-functions-compat.js"></script>
+<head><script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI Property Hub — Houses, Land, Apartments & Commercial Kenya</title>
+<meta name="description" content="Find houses, apartments, land, commercial property and offices across Kenya. Buy, rent, sell and manage property on SOKONI.">
+<meta property="og:title" content="SOKONI Property Hub — Buy, Rent & Sell Property in Kenya">
+<meta property="og:description" content="Browse thousands of houses, apartments, land and commercial spaces across Kenya. Verified agents, instant contact, fair pricing — on SOKONI.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://mysokoni.co.ke/property-hub.html">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="SOKONI Property Hub — Kenya Real Estate">
+<meta name="twitter:description" content="Find houses, land and commercial property across Kenya on SOKONI.">
+<meta name="twitter:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#10b981">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "RealEstateAgent",
+  "name": "SOKONI Property Hub",
+  "description": "Find houses, apartments, land, commercial property and offices across Kenya.",
+  "url": "https://mysokoni.co.ke/property-hub.html",
+  "logo": "https://mysokoni.co.ke/assets/Sokonilogo2.png",
+  "areaServed": {"@type": "Country", "name": "Kenya"},
+  "sameAs": ["https://mysokoni.co.ke"]
+}
+</script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
-.hdr{background:#161b22;border-bottom:1px solid #30363d;padding:0 16px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
-.logo{font-weight:700;font-size:18px;color:#f0883e}
-.hero{background:linear-gradient(135deg,#0d1117,#1a0f00);padding:40px 16px 28px;text-align:center}
-.hero h1{font-size:clamp(22px,5vw,36px);font-weight:700;margin-bottom:8px}
-.hero p{color:#8b949e;font-size:14px;max-width:480px;margin:0 auto}
-.tabs{display:flex;border-bottom:1px solid #30363d;padding:0 16px;background:#161b22;overflow-x:auto}
-.tab{padding:12px 14px;cursor:pointer;font-size:14px;border-bottom:2px solid transparent;color:#8b949e;white-space:nowrap}
-.tab.active{color:#e6edf3;border-color:#f0883e}
-.fbar{background:#161b22;border-bottom:1px solid #30363d;padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.pill{padding:5px 12px;border-radius:16px;font-size:12px;cursor:pointer;border:1px solid #30363d;background:transparent;color:#8b949e;transition:.2s;white-space:nowrap}
-.pill.active,.pill:hover{background:#f0883e;border-color:#f0883e;color:#fff}
-.fbar select,.fbar input{padding:6px 10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:13px}
-.container{max-width:1200px;margin:0 auto;padding:20px 16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px}
-.card{background:#161b22;border:1px solid #30363d;border-radius:12px;overflow:hidden;cursor:pointer;transition:.2s}
-.card:hover{border-color:#f0883e;transform:translateY(-2px)}
-.cimg{height:175px;background:#21262d;display:flex;align-items:center;justify-content:center;font-size:48px;position:relative;overflow:hidden}
-.cimg img{width:100%;height:100%;object-fit:cover}
-.ltag{position:absolute;top:10px;left:10px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700}
-.ts{background:#f0883e;color:#fff}.tr{background:#3fb950;color:#fff}.tl{background:#58a6ff;color:#fff}
-.cbody{padding:14px}
-.cprice{font-size:19px;font-weight:700;color:#f0883e;margin-bottom:3px}
-.ctitle{font-size:14px;font-weight:600;margin-bottom:3px}
-.cloc{font-size:12px;color:#8b949e;margin-bottom:8px}
-.cspecs{display:flex;gap:10px;font-size:12px;color:#8b949e}
-.spinner{display:inline-block;width:24px;height:24px;border:2px solid #30363d;border-top-color:#f0883e;border-radius:50%;animation:sp .8s linear infinite}
-@keyframes sp{to{transform:rotate(360deg)}}
-.btn{padding:10px 18px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-weight:600;transition:.2s}
-.btn-o{background:#f0883e;color:#fff}.btn-o:hover{background:#e0773d}
-.btn-out{background:transparent;border:1px solid #30363d;color:#e6edf3}.btn-out:hover{border-color:#8b949e}
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto}
-.overlay.open{display:flex}
-.modal{background:#161b22;border:1px solid #30363d;border-radius:16px;width:100%;max-width:660px;margin:auto}
-.mhdr{padding:18px 22px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center}
-.mhdr h2{font-size:16px;font-weight:600}.xbtn{background:none;border:none;color:#8b949e;font-size:22px;cursor:pointer}
-.mbody{padding:20px}
-.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:14px;border-radius:8px;overflow:hidden}
-.ph{height:110px;background:#21262d;display:flex;align-items:center;justify-content:center}
-.ph img{width:100%;height:100%;object-fit:cover}
-.igrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
-.ii label{font-size:11px;color:#8b949e;display:block;margin-bottom:2px}.ii span{font-size:14px;font-weight:600}
-.atags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-.atag{padding:3px 9px;background:#21262d;border-radius:6px;font-size:12px;color:#8b949e}
-.divider{border:none;border-top:1px solid #30363d;margin:14px 0}
-.atabs{display:flex;border-bottom:1px solid #30363d;margin-bottom:16px}
-.atab{padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:2px solid transparent;color:#8b949e}
-.atab.active{color:#e6edf3;border-color:#f0883e}
-.fg{margin-bottom:12px}
-.fg label{display:block;font-size:13px;color:#8b949e;margin-bottom:4px}
-.fg input,.fg textarea{width:100%;padding:10px 14px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#e6edf3;font-size:14px}
-.fg textarea{resize:vertical;min-height:76px}
-.empty{text-align:center;padding:60px;color:#8b949e}
-.stat{display:inline-block;padding:3px 8px;border-radius:4px;font-size:12px;font-weight:600}
-.sa{background:#1a3a2a;color:#3fb950}.si{background:#2d2a1a;color:#e3b341}.sd{background:#21262d;color:#8b949e}
-.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:14px;z-index:999;animation:fi .3s;max-width:300px}
-.tok{background:#238636;color:#fff}.terr{background:#da3633;color:#fff}
-@keyframes fi{from{opacity:0;transform:translateY(8px)}}
-@media(max-width:600px){.grid{grid-template-columns:1fr}.photos{grid-template-columns:1fr 1fr}.igrid{grid-template-columns:1fr}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+
+/* NAV */
+.ph-nav{display:flex;align-items:center;gap:12px;padding:12px 18px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
+.ph-logo{font-size:20px;font-weight:900;color:#10b981;text-decoration:none;}
+.ph-nav-links{display:flex;gap:8px;margin-left:auto;align-items:center;}
+.ph-nav-btn{padding:7px 14px;border-radius:9px;font-size:12px;font-weight:800;cursor:pointer;border:none;font-family:inherit;text-decoration:none;transition:all .2s;}
+.ph-nav-btn.outline{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);}
+.ph-nav-btn.green{background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:#10b981;}
+.ph-nav-btn.solid{background:linear-gradient(135deg,#10b981,#059669);border:none;color:white;}
+.ph-notif{width:36px;height:36px;border-radius:50%;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;position:relative;flex-shrink:0;}
+.ph-notif-badge{position:absolute;top:-3px;right:-3px;width:16px;height:16px;border-radius:50%;background:#ef4444;font-size:9px;font-weight:900;display:none;align-items:center;justify-content:center;}
+
+/* HERO */
+.ph-hero{background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(5,150,105,0.06));border-bottom:1px solid rgba(16,185,129,0.12);padding:44px 18px 36px;text-align:center;}
+.ph-hero h1{font-size:clamp(24px,5vw,40px);font-weight:900;margin-bottom:10px;line-height:1.2;}
+.ph-hero h1 span{color:#10b981;}
+.ph-hero p{color:rgba(255,255,255,0.5);font-size:14px;max-width:520px;margin:0 auto 22px;}
+.ph-stats{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:22px;}
+.ph-stat{text-align:center;}
+.ph-stat-num{font-size:20px;font-weight:900;color:#10b981;}
+.ph-stat-lbl{font-size:10px;color:rgba(255,255,255,0.35);}
+
+/* SEARCH BAR */
+.ph-search-box{display:flex;max-width:640px;margin:0 auto;gap:8px;flex-wrap:wrap;}
+.ph-search-box input{flex:1;min-width:200px;padding:13px 16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;font-family:inherit;outline:none;}
+.ph-search-box input:focus{border-color:rgba(16,185,129,0.4);}
+.ph-search-btn{padding:13px 22px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+
+/* BODY */
+.ph-body{max-width:1000px;margin:0 auto;padding:16px 16px;}
+
+/* CATEGORY TABS */
+.ph-cat-bar{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-bottom:14px;}
+.ph-cat-bar::-webkit-scrollbar{display:none;}
+.ph-cat{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;transition:all .2s;}
+.ph-cat.active,.ph-cat:hover{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.3);color:#10b981;}
+
+/* FILTER ROW */
+.ph-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
+.ph-filter-sel{padding:9px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);font-size:13px;font-family:inherit;cursor:pointer;outline:none;min-width:120px;}
+.ph-filter-sel:focus{border-color:rgba(16,185,129,0.4);}
+.ph-filter-sel option{background:#111;}
+.ph-filter-btn{padding:9px 16px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;color:#10b981;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;}
+.ph-filter-reset{padding:9px 14px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.4);font-size:12px;cursor:pointer;font-family:inherit;}
+
+/* SECTION */
+.ph-section-h{font-size:14px;font-weight:800;color:white;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
+.ph-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
+
+/* PROPERTY GRID */
+.ph-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:24px;}
+.prop-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:16px;overflow:hidden;cursor:pointer;transition:all .25s;position:relative;}
+.prop-card:hover{border-color:rgba(16,185,129,0.35);transform:translateY(-3px);box-shadow:0 8px 32px rgba(16,185,129,0.08);}
+.prop-card-img{height:160px;display:flex;align-items:center;justify-content:center;font-size:64px;position:relative;}
+.prop-card-img.house{background:linear-gradient(135deg,rgba(34,197,94,0.15),rgba(16,185,129,0.08));}
+.prop-card-img.house_sale{background:linear-gradient(135deg,rgba(34,197,94,0.15),rgba(16,185,129,0.08));}
+.prop-card-img.house_rent{background:linear-gradient(135deg,rgba(0,170,255,0.15),rgba(59,130,246,0.08));}
+.prop-card-img.apartment{background:linear-gradient(135deg,rgba(168,85,247,0.15),rgba(139,92,246,0.08));}
+.prop-card-img.bedsitter{background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(217,119,6,0.08));}
+.prop-card-img.commercial{background:linear-gradient(135deg,rgba(20,184,166,0.15),rgba(13,148,136,0.08));}
+.prop-card-img.land{background:linear-gradient(135deg,rgba(132,204,22,0.15),rgba(101,163,13,0.08));}
+.prop-card-img.warehouse{background:linear-gradient(135deg,rgba(107,114,128,0.2),rgba(75,85,99,0.1));}
+.prop-card-img.office{background:linear-gradient(135deg,rgba(14,165,233,0.15),rgba(2,132,199,0.08));}
+.prop-status-badge{position:absolute;top:10px;left:10px;padding:4px 10px;border-radius:6px;font-size:10px;font-weight:900;}
+.prop-save-btn{position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.4);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:all .2s;backdrop-filter:blur(4px);}
+.prop-save-btn:hover{background:rgba(16,185,129,0.3);}
+.prop-featured-badge{position:absolute;bottom:10px;left:10px;padding:3px 8px;background:rgba(245,158,11,0.9);border-radius:5px;font-size:9px;font-weight:900;color:black;}
+.prop-card-body{padding:14px;}
+.prop-price{font-size:18px;font-weight:900;color:#10b981;margin-bottom:4px;}
+.prop-title{font-size:13px;font-weight:800;color:white;margin-bottom:4px;line-height:1.3;}
+.prop-loc{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:8px;display:flex;align-items:center;gap:4px;}
+.prop-specs{display:flex;gap:10px;font-size:11px;color:rgba(255,255,255,0.5);flex-wrap:wrap;margin-bottom:10px;}
+.prop-spec{display:flex;align-items:center;gap:3px;}
+.prop-cta-row{display:flex;gap:6px;margin-top:10px;}
+.prop-cta-btn{flex:1;padding:8px 10px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;border:none;font-family:inherit;transition:all .2s;text-align:center;}
+.prop-cta-btn.primary{background:linear-gradient(135deg,#10b981,#059669);color:white;}
+.prop-cta-btn.secondary{background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#10b981;}
+.prop-cta-btn:hover{opacity:0.85;transform:scale(0.98);}
+
+/* CATEGORY GRID */
+.ph-cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:24px;}
+.ph-cat-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;text-align:center;cursor:pointer;transition:all .2s;text-decoration:none;display:block;}
+.ph-cat-card:hover{border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.04);transform:translateY(-2px);}
+.ph-cat-card-icon{font-size:30px;margin-bottom:8px;}
+.ph-cat-card-label{font-size:12px;font-weight:800;color:white;}
+.ph-cat-card-count{font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;}
+
+/* AGENT CARDS */
+.ph-agent-row{display:flex;gap:12px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;margin-bottom:24px;}
+.ph-agent-row::-webkit-scrollbar{display:none;}
+.agent-mini-card{flex-shrink:0;width:170px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;text-align:center;cursor:pointer;transition:all .2s;}
+.agent-mini-card:hover{border-color:rgba(16,185,129,0.3);transform:translateY(-2px);}
+.agent-icon{font-size:32px;margin-bottom:6px;}
+.agent-name{font-size:12px;font-weight:800;color:white;margin-bottom:2px;}
+.agent-listings{font-size:10px;color:rgba(255,255,255,0.35);}
+.verified-badge{font-size:10px;font-weight:700;color:#22c55e;margin-top:3px;}
+.agent-contact-btn{margin-top:8px;width:100%;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:800;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#10b981;cursor:pointer;font-family:inherit;transition:all .2s;}
+.agent-contact-btn:hover{background:rgba(16,185,129,0.18);}
+
+/* SERVICES GRID */
+.ph-svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:24px;}
+.ph-svc-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:13px;padding:14px;transition:all .2s;}
+.ph-svc-card:hover{border-color:rgba(16,185,129,0.2);transform:translateY(-1px);}
+.ph-svc-book-btn{margin-top:10px;width:100%;padding:8px;border-radius:8px;font-size:11px;font-weight:800;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#10b981;cursor:pointer;font-family:inherit;transition:all .2s;}
+.ph-svc-book-btn:hover{background:rgba(16,185,129,0.18);}
+
+/* CTA BANNERS */
+.ph-cta-banner{border-radius:16px;padding:20px;margin-bottom:14px;display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+.ph-cta-banner.finance{background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(5,150,105,0.04));border:1px solid rgba(16,185,129,0.18);}
+.ph-cta-banner.legal{background:linear-gradient(135deg,rgba(168,85,247,0.08),rgba(139,92,246,0.04));border:1px solid rgba(168,85,247,0.18);}
+.ph-cta-banner.list{background:linear-gradient(135deg,rgba(245,158,11,0.08),rgba(217,119,6,0.04));border:1px solid rgba(245,158,11,0.18);}
+.ph-cta-icon{font-size:36px;flex-shrink:0;margin-top:2px;}
+.ph-cta-title{font-size:15px;font-weight:900;color:white;margin-bottom:4px;}
+.ph-cta-sub{font-size:12px;color:rgba(255,255,255,0.45);}
+.ph-cta-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.ph-cta-btn{padding:9px 18px;border-radius:10px;font-size:12px;font-weight:800;cursor:pointer;text-decoration:none;border:none;font-family:inherit;display:inline-flex;align-items:center;gap:5px;transition:all .2s;}
+.ph-cta-btn:hover{opacity:0.85;}
+.ph-cta-btn.green{background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:#10b981;}
+.ph-cta-btn.purple{background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);color:#a855f7;}
+.ph-cta-btn.amber{background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;}
+
+/* MORTGAGE COLLAPSIBLE */
+.mortgage-accordion{margin-bottom:14px;}
+.mortgage-toggle{width:100%;display:flex;align-items:center;gap:12px;padding:16px 18px;background:linear-gradient(135deg,rgba(16,185,129,0.08),rgba(5,150,105,0.04));border:1px solid rgba(16,185,129,0.25);border-radius:14px;cursor:pointer;font-family:inherit;color:white;font-size:14px;font-weight:900;transition:all .2s;}
+.mortgage-toggle:hover{background:linear-gradient(135deg,rgba(16,185,129,0.14),rgba(5,150,105,0.08));}
+.mortgage-toggle .toggle-arrow{margin-left:auto;font-size:12px;color:#10b981;transition:transform .25s;}
+.mortgage-toggle.open .toggle-arrow{transform:rotate(180deg);}
+.mortgage-body{display:none;padding:16px;border:1px solid rgba(16,185,129,0.15);border-top:none;border-radius:0 0 14px 14px;background:rgba(16,185,129,0.03);margin-top:-4px;}
+.mortgage-body.open{display:block;}
+.mortgage-banks{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px;}
+.mortgage-bank{padding:6px 14px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);font-size:12px;font-weight:700;color:rgba(255,255,255,0.65);}
+.mortgage-apply-btn{width:100%;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:11px;color:white;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;letter-spacing:0.3px;}
+
+/* LIST PROPERTY SECTION */
+.list-prop-section{background:linear-gradient(135deg,rgba(245,158,11,0.06),rgba(217,119,6,0.03));border:1px solid rgba(245,158,11,0.15);border-radius:16px;padding:20px;margin-bottom:14px;}
+.list-prop-header{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.list-prop-title{font-size:15px;font-weight:900;color:white;}
+.list-prop-sub{font-size:12px;color:rgba(255,255,255,0.45);margin-top:2px;}
+.list-prop-perks{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.list-perk{padding:5px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:8px;font-size:11px;font-weight:700;color:#f59e0b;}
+.list-prop-btn{padding:11px 24px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;border-radius:11px;color:black;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;transition:all .2s;}
+.list-prop-btn:hover{opacity:0.88;}
+
+/* MODAL */
+#phModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:1000;align-items:flex-end;justify-content:center;animation:fadein .2s;}
+#phModal.open{display:flex;}
+#phModalBox{background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.ph-modal-hdr{font-size:16px;font-weight:900;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
+.ph-modal-close{font-size:20px;font-weight:300;color:rgba(255,255,255,0.4);cursor:pointer;background:none;border:none;line-height:1;padding:0;}
+.ph-input{width:100%;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;margin-bottom:10px;outline:none;-webkit-appearance:none;}
+.ph-input:focus{border-color:rgba(16,185,129,0.4);}
+.ph-input option{background:#111;}
+.ph-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:4px;display:block;}
+.ph-submit{width:100%;padding:13px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:11px;color:white;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:4px;letter-spacing:0.3px;}
+.ph-empty{text-align:center;padding:48px 24px;color:rgba(255,255,255,0.3);}
+
+/* FIRESTORE LIVE BADGE */
+.live-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:999px;font-size:10px;font-weight:700;color:#10b981;margin-bottom:10px;}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#10b981;animation:pulse 1.6s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,0);z-index:50;backdrop-filter:blur(16px);}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:3px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:10px;font-weight:600;min-width:52px;transition:color .2s;}
+.bnav-emoji{font-size:18px;line-height:1;}
+.bnav-item.active-bnav,.bnav-item:hover{color:#10b981;}
+
+@media(min-width:769px){.bottom-nav{display:none;}}
 </style>
+  <script type="module" src="firebase.js"></script>
 </head>
 <body>
-<div class="hdr">
-  <span style="color:#8b949e;font-size:14px;cursor:pointer" onclick="history.back()">← Back</span>
-  <div class="logo">🏠 Property Hub</div>
-  <div style="margin-left:auto"><button class="btn btn-out" style="padding:7px 14px;font-size:13px" onclick="setTab('agent',document.querySelectorAll('.tab')[3])">Agent Portal</button></div>
-</div>
-<div class="hero">
-  <h1>Find Your Perfect Property</h1>
-  <p>Apartments, houses, land & commercial spaces for sale and rent across Kenya.</p>
-</div>
-<div class="tabs">
-  <div class="tab active" onclick="setTab('buy',this)">🏷️ For Sale</div>
-  <div class="tab" onclick="setTab('rent',this)">🔑 For Rent</div>
-  <div class="tab" onclick="setTab('let',this)">📅 Short Let</div>
-  <div class="tab" onclick="setTab('agent',this)">📊 Agent Portal</div>
-</div>
-<div class="fbar">
-  <div id="typeF" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-  <select id="bedsF" onchange="filter()"><option value="">Any Beds</option><option value="1">1+</option><option value="2">2+</option><option value="3">3+</option><option value="4">4+</option></select>
-  <input type="number" id="maxP" placeholder="Max KES" style="width:110px" oninput="filter()">
-  <input type="text" id="cityF" placeholder="City…" style="width:110px" oninput="filter()">
-</div>
-<div class="container">
-  <div id="tBuy"><div class="empty"><div class="spinner"></div></div></div>
-  <div id="tRent" style="display:none"><div class="empty"><div class="spinner"></div></div></div>
-  <div id="tLet" style="display:none"><div class="empty"><div class="spinner"></div></div></div>
-  <div id="tAgent" style="display:none"><div id="agentArea" class="empty">Loading…</div></div>
-  <div style="text-align:center;margin-top:20px;display:none" id="moreBtn">
-    <button class="btn btn-out" onclick="loadMore()">Load More</button>
+<script src="splash.js"></script>
+<script src="sokoni-property.js"></script>
+
+<!-- NAV -->
+<nav class="ph-nav">
+  <a href="index.html" class="ph-logo">🏘️ SOKONI Property</a>
+  <div class="ph-nav-links">
+    <a href="landlord.html" class="ph-nav-btn outline">🔑 Landlord</a>
+    <a href="property-agent-dashboard.html" class="ph-nav-btn outline" style="display:none;" id="navListBtn">📤 List Property</a>
+    <a href="property-dashboard.html" class="ph-nav-btn green">👤 My Account</a>
+    <a href="notifications.html" class="ph-notif" title="Notifications" style="text-decoration:none;">🔔<span id="phNotifBadge" class="ph-notif-badge"></span></a>
+  </div>
+</nav>
+
+<script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('phNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.cssText+=';display:flex;background:#ef4444;color:white;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;align-items:center;justify-content:center;';}}})()</script>
+<!-- HERO -->
+<div class="ph-hero">
+  <div style="display:inline-flex;align-items:center;gap:6px;padding:4px 14px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:999px;font-size:11px;font-weight:700;color:#10b981;margin-bottom:12px;">🏠 Kenya's Complete Property Platform</div>
+  <h1>Find Your Perfect Property<br>in <span>Kenya</span></h1>
+  <p>Buy, rent, sell and manage houses, apartments, land, offices and commercial space — all in one place.</p>
+  <div class="ph-stats">
+    <div class="ph-stat"><div class="ph-stat-num" id="statProps">20+</div><div class="ph-stat-lbl">Properties</div></div>
+    <div class="ph-stat"><div class="ph-stat-num">6</div><div class="ph-stat-lbl">Verified Agents</div></div>
+    <div class="ph-stat"><div class="ph-stat-num">8</div><div class="ph-stat-lbl">Counties</div></div>
+    <div class="ph-stat"><div class="ph-stat-num">24hr</div><div class="ph-stat-lbl">Response Time</div></div>
+  </div>
+  <div class="ph-search-box">
+    <input type="text" id="phSearch" placeholder="Search location, property type, price..." oninput="handleSearch()">
+    <button class="ph-search-btn" onclick="doSearch()">🔍 Search</button>
   </div>
 </div>
 
-<div class="overlay" id="propModal">
-  <div class="modal">
-    <div class="mhdr"><h2 id="mTitle"></h2><button class="xbtn" onclick="close('propModal')">×</button></div>
-    <div class="mbody">
-      <div class="photos" id="mPhotos"></div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-        <div style="font-size:22px;font-weight:700;color:#f0883e" id="mPrice"></div>
-        <span id="mLtype" class="ltag"></span>
+<!-- BODY -->
+<div class="ph-body">
+
+  <!-- LIVE BADGE -->
+  <div class="live-badge"><span class="live-dot"></span> Live listings — updated in real time</div>
+
+  <!-- CATEGORY TABS -->
+  <div class="ph-cat-bar" id="catBar"></div>
+
+  <!-- FILTERS -->
+  <div class="ph-filter-row" id="filterRow">
+    <select class="ph-filter-sel" id="fCounty" onchange="applyFilters()">
+      <option value="">📍 All Counties</option>
+      <option value="nairobi">Nairobi</option>
+      <option value="mombasa">Mombasa / Coast</option>
+      <option value="kisumu">Kisumu</option>
+      <option value="nakuru">Nakuru</option>
+      <option value="kiambu">Kiambu / Thika</option>
+      <option value="machakos">Machakos / Athi River</option>
+    </select>
+    <select class="ph-filter-sel" id="fBeds" onchange="applyFilters()">
+      <option value="">🛏️ Bedrooms</option>
+      <option value="1">1+ Bed</option>
+      <option value="2">2+ Beds</option>
+      <option value="3">3+ Beds</option>
+      <option value="4">4+ Beds</option>
+    </select>
+    <select class="ph-filter-sel" id="fMaxPrice" onchange="applyFilters()">
+      <option value="">💰 Max Price</option>
+      <option value="50000">KES 50K/mo</option>
+      <option value="100000">KES 100K/mo</option>
+      <option value="5000000">KES 5M</option>
+      <option value="15000000">KES 15M</option>
+      <option value="30000000">KES 30M</option>
+      <option value="50000000">KES 50M</option>
+    </select>
+    <select class="ph-filter-sel" id="fFurnished" onchange="applyFilters()">
+      <option value="">🛋️ Furnished?</option>
+      <option value="true">Furnished</option>
+      <option value="false">Unfurnished</option>
+    </select>
+    <button class="ph-filter-btn" onclick="applyFilters()">Apply</button>
+    <button class="ph-filter-reset" onclick="resetFilters()">✕ Reset</button>
+  </div>
+
+  <!-- RESULTS COUNT -->
+  <div style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:12px;" id="resultsCount"></div>
+
+  <!-- PROPERTY GRID -->
+  <div class="ph-section-h">🏠 Properties</div>
+  <div class="ph-grid" id="propGrid"></div>
+
+  <!-- CATEGORY SHOWCASE -->
+  <div class="ph-section-h">🗂️ Browse by Category</div>
+  <div class="ph-cat-grid" id="catGrid"></div>
+
+  <!-- FEATURED AGENTS -->
+  <div class="ph-section-h">🏢 Top Agents</div>
+  <div class="ph-agent-row" id="agentRow"></div>
+
+  <!-- MORTGAGE / FINANCE COLLAPSIBLE -->
+  <div class="ph-section-h">💰 Finance & Mortgages</div>
+  <div class="mortgage-accordion" id="mortgageAccordion">
+    <button class="mortgage-toggle" id="mortgageToggle" onclick="toggleMortgage()">
+      <span style="font-size:22px;">🏦</span>
+      <div style="text-align:left;">
+        <div>Apply for a Mortgage or Property Loan</div>
+        <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.45);margin-top:2px;">Pre-qualify in minutes · Compare KCB, Stanbic, HF Group & more</div>
       </div>
-      <div style="color:#8b949e;font-size:13px;margin-bottom:10px" id="mLoc"></div>
-      <div class="igrid" id="mInfo"></div>
-      <div class="atags" id="mAmen"></div>
-      <p id="mDesc" style="font-size:14px;color:#8b949e;line-height:1.6;margin-bottom:14px"></p>
-      <hr class="divider">
-      <div class="atabs">
-        <div class="atab active" onclick="selActionTab('enq',this)">📧 Enquiry</div>
-        <div class="atab" onclick="selActionTab('view',this)">📅 Schedule Viewing</div>
+      <span class="toggle-arrow">▼</span>
+    </button>
+    <div class="mortgage-body" id="mortgageBody">
+      <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:10px;">SOKONI Finance connects you with Kenya's leading mortgage lenders. Get pre-qualified and a specialist will call you within 24 hours.</div>
+      <div class="mortgage-banks">
+        <span class="mortgage-bank">🏦 KCB</span>
+        <span class="mortgage-bank">🏦 Stanbic</span>
+        <span class="mortgage-bank">🏦 HF Group</span>
+        <span class="mortgage-bank">🏦 NCBA</span>
+        <span class="mortgage-bank">🏦 Equity</span>
+        <span class="mortgage-bank">🏦 Co-op Bank</span>
+        <span class="mortgage-bank">🏦 ABSA</span>
       </div>
-      <div id="fEnq">
-        <div class="fg"><label>Message</label><textarea id="enqMsg" placeholder="I'm interested in this property…"></textarea></div>
-        <div class="fg"><label>Phone (optional)</label><input type="tel" id="enqPh" placeholder="+254…"></div>
-        <div class="fg"><label>Budget (optional, KES)</label><input type="number" id="enqBudget"></div>
-        <button class="btn btn-o" style="width:100%" onclick="sendEnq()">Send Enquiry</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div style="padding:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;text-align:center;">
+          <div style="font-size:18px;font-weight:900;color:#10b981;">12.5%</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);">Avg. Interest Rate (p.a.)</div>
+        </div>
+        <div style="padding:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:10px;text-align:center;">
+          <div style="font-size:18px;font-weight:900;color:#10b981;">25 yrs</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);">Max Repayment Period</div>
+        </div>
       </div>
-      <div id="fView" style="display:none">
-        <div class="fg"><label>Preferred Date</label><input type="date" id="vDate"></div>
-        <div class="fg"><label>Preferred Time</label><input type="text" id="vTime" placeholder="e.g. 2:00 PM"></div>
-        <div class="fg"><label>Notes</label><textarea id="vNotes" placeholder="Any questions or access notes…"></textarea></div>
-        <button class="btn btn-o" style="width:100%" onclick="sendView()">Schedule Viewing</button>
+      <button class="mortgage-apply-btn" onclick="applyMortgage()">🏠 Apply for Mortgage Consultation</button>
+      <button class="mortgage-apply-btn" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:#10b981;margin-top:8px;" onclick="openFinance('rent_finance')">🔑 Rent Financing</button>
+    </div>
+  </div>
+
+  <!-- LIST YOUR PROPERTY -->
+  <div class="ph-section-h">📤 Sell / Rent Your Property</div>
+  <div class="list-prop-section">
+    <div class="list-prop-header">
+      <span style="font-size:32px;">📤</span>
+      <div>
+        <div class="list-prop-title">List Your Property on SOKONI</div>
+        <div class="list-prop-sub">Reach thousands of verified buyers, renters and investors across Kenya.</div>
+      </div>
+    </div>
+    <div class="list-prop-perks">
+      <span class="list-perk">✅ Free Listing</span>
+      <span class="list-perk">🔍 SEO Optimised</span>
+      <span class="list-perk">💬 Direct Enquiries</span>
+      <span class="list-perk">📊 View Analytics</span>
+      <span class="list-perk">🛡️ Verified Buyers Only</span>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="list-prop-btn" onclick="openListPropertyModal()">📤 List My Property</button>
+      <a href="property-agent-dashboard.html" class="list-prop-btn" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">🏢 Agent Portal</a>
+    </div>
+  </div>
+
+  <!-- PROPERTY SERVICES -->
+  <div class="ph-section-h">🔧 Property Services</div>
+  <div class="ph-svc-grid" id="svcGrid"></div>
+
+  <!-- CTA BANNERS -->
+  <div class="ph-cta-banner legal">
+    <div class="ph-cta-icon">⚖️</div>
+    <div style="flex:1;">
+      <div class="ph-cta-title">Legal Services</div>
+      <div class="ph-cta-sub">Lease agreements, sale agreements, title deed verification, legal due diligence. Powered by Sokoni Legal Hub.</div>
+      <div class="ph-cta-btns">
+        <a href="legal-hub.html" class="ph-cta-btn purple">⚖️ Legal Hub</a>
+        <button class="ph-cta-btn purple" onclick="openLegal('lease')">📄 Get Lease Agreement</button>
       </div>
     </div>
   </div>
+
+  <!-- BnB CROSS-LINK -->
+  <div class="ph-cta-banner" style="background:linear-gradient(135deg,rgba(239,68,68,0.08),rgba(220,38,38,0.04));border:1px solid rgba(239,68,68,0.18);">
+    <div class="ph-cta-icon">🌴</div>
+    <div style="flex:1;">
+      <div class="ph-cta-title">Looking for Short Stay & Accommodation?</div>
+      <div class="ph-cta-sub">Airbnb-style stays, hotels, guesthouses, serviced apartments, vacation homes and daily rentals are on the SOKONI BnB Hub.</div>
+      <div class="ph-cta-btns">
+        <a href="bnb-hub.html" class="ph-cta-btn" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#ef4444;">🌴 Go to BnB Hub</a>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /ph-body -->
+
+<!-- MODAL -->
+<div id="phModal"><div id="phModalBox"><div id="phModalContent"></div></div></div>
+
+<!-- NOTIFICATION PANEL -->
+<div id="notifPanel" style="display:none;position:fixed;top:56px;right:12px;width:320px;max-height:420px;overflow-y:auto;background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:16px;z-index:500;padding:14px;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <div style="font-size:14px;font-weight:800;">🔔 Notifications</div>
+    <button onclick="markAllNotifs()" style="font-size:11px;font-weight:700;color:#10b981;background:none;border:none;cursor:pointer;">Mark All Read</button>
+  </div>
+  <div id="notifList"></div>
 </div>
 
-<script src="/sokoni-config.js"></script>
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="property-hub.html" class="bnav-item active-bnav"><span class="bnav-emoji">🏘️</span><span>Property</span></a>
+  <a href="bnb-hub.html" class="bnav-item"><span class="bnav-emoji">🛏️</span><span>BnB</span></a>
+  <a href="landlord.html" class="bnav-item"><span class="bnav-emoji">🔑</span><span>Landlord</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+</nav>
+
 <script>
-let app,fns,auth,cu=null,all=[],curType='for_sale',sel=null,cursor=null;
-const PTYPES=['apartment','house','townhouse','villa','land','commercial','studio','other'];
-const PEMO={apartment:'🏢',house:'🏠',townhouse:'🏘️',villa:'🏡',land:'🌿',commercial:'🏪',studio:'🛏️',other:'🏗️'};
-function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML}
-function toast(m,ok=true){const t=document.createElement('div');t.className='toast '+(ok?'tok':'terr');t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3500);}
-function open(id){document.getElementById(id).classList.add('open');}
-function close(id){document.getElementById(id).classList.remove('open');}
-document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');}));
-try{app=firebase.initializeApp(firebaseConfig,'prop');fns=app.functions('us-central1');auth=app.auth();auth.onAuthStateChanged(u=>{cu=u;});}catch(e){}
-async function call(n,d){try{const r=await fns.httpsCallable(n)(d);return{ok:true,data:r.data};}catch(e){return{ok:false,err:e.message};}}
+/* ── XSS escape helper ── */
+function escapeHTML(s){ if(!s)return''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
-const tabMap={buy:'for_sale',rent:'for_rent',let:'short_let'};
+/* ── Extra property listings (supplement sokoni-property.js PROPERTIES) ── */
+const EXTRA_PROPERTIES = [
+  /* Houses for Sale */
+  {id:'ep001',agentId:'agt002',agentName:'Coastal Homes Kenya',agentPhone:'0700000002',category:'house',status:'for_sale',title:'4BR Beach Villa in Diani',location:'Diani, Kwale / Coast',county:'mombasa',price:38500000,priceUnit:'KES',bedrooms:4,bathrooms:4,size:310,sizeUnit:'sqm',parking:2,furnished:true,amenities:['parking','pool','garden','ac','security','wifi'],description:'Stunning fully furnished 4-bedroom beach villa 200m from Diani Beach. Private pool, landscaped garden and ocean views from the rooftop terrace.',icon:'🏖️',featured:true,views:312,inquiries:24},
+  {id:'ep002',agentId:'agt005',agentName:'Landmark Realty',agentPhone:'0756 005 005',category:'house',status:'for_sale',title:'3BR Modern Home — Kisumu Milimani',location:'Milimani, Kisumu',county:'kisumu',price:15800000,priceUnit:'KES',bedrooms:3,bathrooms:2,size:200,sizeUnit:'sqm',parking:2,furnished:false,amenities:['parking','garden','security','borehole'],description:'Contemporary 3-bedroom home in sought-after Kisumu Milimani. Open plan with modern kitchen, DSQ and beautiful garden.',icon:'🏡',featured:false,views:94,inquiries:7},
+  {id:'ep003',agentId:'agt001',agentName:'Amani Properties',agentPhone:'0700000001',category:'house',status:'for_sale',title:'5BR Smart Home — Muthaiga',location:'Muthaiga, Nairobi',county:'nairobi',price:45000000,priceUnit:'KES',bedrooms:5,bathrooms:5,size:480,sizeUnit:'sqm',parking:3,furnished:false,amenities:['parking','pool','gym','security','generator','cctv','gate','ac','solar'],description:'Exceptional 5-bedroom smart home in exclusive Muthaiga. Solar powered, home automation, cinema room and heated pool.',icon:'🏰',featured:true,views:278,inquiries:19},
 
-function buildTypeFilters(){
-  document.getElementById('typeF').innerHTML=PTYPES.map(t=>`<div class="pill" onclick="toggleType('${t}',this)">${PEMO[t]} ${t}</div>`).join('');
+  /* Houses for Rent */
+  {id:'ep004',agentId:'agt002',agentName:'Coastal Homes Kenya',agentPhone:'0700000002',category:'house',status:'for_rent',title:'3BR Furnished Cottage — Nyali',location:'Nyali, Mombasa',county:'mombasa',price:85000,priceUnit:'KES/month',bedrooms:3,bathrooms:2,size:180,sizeUnit:'sqm',parking:2,furnished:true,amenities:['parking','garden','ac','security','wifi','backup_water'],description:'Charming furnished 3-bedroom cottage in Nyali. Tropical garden, air conditioning throughout. Minutes to Nyali Beach and City Mall.',icon:'🌴',featured:false,views:121,inquiries:11},
+  {id:'ep005',agentId:'agt004',agentName:'Valley Properties',agentPhone:'0745 004 004',category:'house',status:'for_rent',title:'4BR Executive Home — Nakuru GRA',location:'GRA, Nakuru',county:'nakuru',price:65000,priceUnit:'KES/month',bedrooms:4,bathrooms:3,size:280,sizeUnit:'sqm',parking:2,furnished:false,amenities:['parking','garden','borehole','security','gate'],description:'Spacious 4-bedroom house in the prestigious Nakuru GRA. Two en-suite bedrooms, DSQ, large garden and borehole.',icon:'🏠',featured:false,views:67,inquiries:5},
+  {id:'ep006',agentId:'agt006',agentName:'Sun Lettings Kenya',agentPhone:'0767 006 006',category:'house',status:'for_rent',title:'2BR Townhouse — Ruaka, Kiambu',location:'Ruaka, Kiambu',county:'kiambu',price:45000,priceUnit:'KES/month',bedrooms:2,bathrooms:2,size:130,sizeUnit:'sqm',parking:1,furnished:false,amenities:['parking','security','backup_water'],description:'Modern 2-bedroom townhouse in fast-growing Ruaka. Both bedrooms en-suite. Secure estate, close to Limuru Road.',icon:'🏠',featured:false,views:88,inquiries:9},
+
+  /* Apartments */
+  {id:'ep007',agentId:'agt002',agentName:'Coastal Homes Kenya',agentPhone:'0700000002',category:'apartment',status:'for_rent',title:'Studio Apartment — Mombasa CBD',location:'Mombasa CBD',county:'mombasa',price:22000,priceUnit:'KES/month',bedrooms:1,bathrooms:1,size:40,sizeUnit:'sqm',parking:0,furnished:true,amenities:['security','wifi','backup_water','furnished'],description:'Cosy furnished studio in Mombasa CBD with AC and WiFi. Walking distance to Mombasa GPO, banks and ferry.',icon:'🏢',featured:false,views:203,inquiries:31},
+  {id:'ep008',agentId:'agt003',agentName:'Prime Real Estate',agentPhone:'0700000003',category:'apartment',status:'for_sale',title:'2BR Investment Apartment — Parklands',location:'Parklands, Nairobi',county:'nairobi',price:12500000,priceUnit:'KES',bedrooms:2,bathrooms:2,size:95,sizeUnit:'sqm',parking:1,furnished:false,amenities:['parking','security','elevator','pool','gym','cctv'],description:'Premium 2-bedroom apartment in Parklands. Communal rooftop pool and gym. ROI of 10% p.a. when rented.',icon:'🏢',featured:true,views:167,inquiries:22},
+  {id:'ep009',agentId:'agt005',agentName:'Landmark Realty',agentPhone:'0756 005 005',category:'apartment',status:'for_rent',title:'3BR Penthouse — Kisumu Lakefront',location:'Lakeside, Kisumu',county:'kisumu',price:55000,priceUnit:'KES/month',bedrooms:3,bathrooms:3,size:160,sizeUnit:'sqm',parking:2,furnished:false,amenities:['parking','security','elevator','balcony','backup_water'],description:'Spectacular 3-bedroom penthouse on the Kisumu lakefront. Panoramic Lake Victoria views. Top floor with wrap-around balcony.',icon:'🌊',featured:true,views:89,inquiries:8},
+
+  /* Land */
+  {id:'ep010',agentId:'agt002',agentName:'Coastal Homes Kenya',agentPhone:'0700000002',category:'land',status:'for_sale',title:'1/2 Acre Beach Plot — Malindi',location:'Malindi, Kilifi',county:'mombasa',price:18500000,priceUnit:'KES',bedrooms:0,bathrooms:0,size:0.5,sizeUnit:'acres',parking:0,furnished:false,amenities:[],description:'Prime half-acre plot 100m from Malindi Beach. Title deed ready. Ideal for boutique resort, holiday cottages or private villa.',icon:'🌴',featured:true,views:244,inquiries:38},
+  {id:'ep011',agentId:'agt004',agentName:'Valley Properties',agentPhone:'0745 004 004',category:'land',status:'for_sale',title:'50 x 100 Residential Plot — Nakuru',location:'Lanet, Nakuru',county:'nakuru',price:1850000,priceUnit:'KES',bedrooms:0,bathrooms:0,size:0.125,sizeUnit:'acres',parking:0,furnished:false,amenities:[],description:'Ready-to-build 50x100 ft residential plot in Lanet, Nakuru. Tarmac access, all utilities nearby. Title deed available.',icon:'🌍',featured:false,views:110,inquiries:17},
+  {id:'ep012',agentId:'agt003',agentName:'Prime Real Estate',agentPhone:'0700000003',category:'land',status:'for_sale',title:'2-Acre Industrial Plot — Athi River',location:'Athi River, Machakos',county:'machakos',price:22000000,priceUnit:'KES',bedrooms:0,bathrooms:0,size:2,sizeUnit:'acres',parking:0,furnished:false,amenities:[],description:'2-acre industrial zoned plot in Athi River EPZ area. Ideal for manufacturing, logistics hub or warehousing. Excellent tarmac access.',icon:'🏭',featured:false,views:88,inquiries:14},
+
+  /* Commercial */
+  {id:'ep013',agentId:'agt005',agentName:'Landmark Realty',agentPhone:'0756 005 005',category:'commercial',status:'for_rent',title:'Ground Floor Shop — Kisumu CBD',location:'Oginga Odinga Street, Kisumu',county:'kisumu',price:55000,priceUnit:'KES/month',bedrooms:0,bathrooms:1,size:120,sizeUnit:'sqm',parking:2,furnished:false,amenities:['parking','security','cctv'],description:'Prime ground floor 120 sqm commercial space on Kisumu\'s main street. High foot traffic. Ideal for retail, pharmacy or restaurant.',icon:'🏪',featured:false,views:72,inquiries:10},
+  {id:'ep014',agentId:'agt002',agentName:'Coastal Homes Kenya',agentPhone:'0700000002',category:'commercial',status:'for_rent',title:'Restaurant Space — Nyali Mombasa',location:'Nyali Centre, Mombasa',county:'mombasa',price:120000,priceUnit:'KES/month',bedrooms:0,bathrooms:3,size:200,sizeUnit:'sqm',parking:8,furnished:false,amenities:['parking','security','generator','cctv'],description:'Premium 200 sqm restaurant-ready space in busy Nyali Centre Mall. Full kitchen infrastructure, customer parking, generator backup.',icon:'🍽️',featured:false,views:59,inquiries:8},
+
+  /* Offices */
+  {id:'ep015',agentId:'agt003',agentName:'Prime Real Estate',agentPhone:'0700000003',category:'office',status:'for_rent',title:'Furnished Office Suite — Kilimani',location:'Kilimani, Nairobi',county:'nairobi',price:95000,priceUnit:'KES/month',bedrooms:0,bathrooms:2,size:150,sizeUnit:'sqm',parking:3,furnished:true,amenities:['parking','security','elevator','wifi','ac','furnished','cctv','generator'],description:'Fully furnished 150 sqm office suite in Kilimani. Fibre internet, 3 meeting rooms, reception, kitchenette. Move-in ready.',icon:'💼',featured:false,views:143,inquiries:18},
+  {id:'ep016',agentId:'agt005',agentName:'Landmark Realty',agentPhone:'0756 005 005',category:'office',status:'for_rent',title:'SME Office Space — Kisumu Mega City',location:'Mega City, Kisumu',county:'kisumu',price:35000,priceUnit:'KES/month',bedrooms:0,bathrooms:1,size:60,sizeUnit:'sqm',parking:2,furnished:false,amenities:['parking','security','backup_water','elevator'],description:'Affordable 60 sqm office in Kisumu Mega City mall complex. Lift access, 2 parking bays, 24hr security.',icon:'💼',featured:false,views:48,inquiries:5},
+];
+
+const P = window.SokoniProperty;
+let _activeFilter = {category:'all'};
+let _allProperties = [];
+
+/* ── agents with phone numbers for SokoniPay ── */
+const AGENT_PHONES = {
+  agt001:'0700000001', agt002:'0700000002', agt003:'0700000003',
+  agt004:'0700000004', agt005:'0700000005', agt006:'0700000006'
+};
+
+function init() {
+  /* merge extra properties into sokoni-property's list */
+  _allProperties = [...(P ? P.PROPERTIES : []), ...EXTRA_PROPERTIES];
+  renderCatBar();
+  renderCatGrid();
+  renderAgents();
+  renderServices();
+  renderProperties();
+  updateNotifBadge();
+  document.getElementById('statProps').textContent = _allProperties.length + '+';
+  const urlP = new URLSearchParams(window.location.search);
+  if (urlP.get('cat')) { _activeFilter.category=urlP.get('cat'); renderCatBar(); renderProperties(); }
+  if (urlP.get('q')) { document.getElementById('phSearch').value=urlP.get('q'); handleSearch(); }
 }
-let activeT=new Set();
-function toggleType(t,el){activeT.has(t)?(activeT.delete(t),el.classList.remove('active')):(activeT.add(t),el.classList.add('active'));filter();}
 
-function filter(){
-  const maxP=parseFloat(document.getElementById('maxP').value)||Infinity;
-  const minB=parseInt(document.getElementById('bedsF').value)||0;
-  const city=document.getElementById('cityF').value.toLowerCase();
-  let list=[...all];
-  if(activeT.size) list=list.filter(l=>activeT.has(l.propertyType));
-  if(maxP<Infinity) list=list.filter(l=>l.price<=maxP);
-  if(minB) list=list.filter(l=>l.bedrooms>=minB);
-  if(city) list=list.filter(l=>(l.city||'').toLowerCase().includes(city));
-  render(list);
+function renderCatBar() {
+  const types = P ? P.PROPERTY_TYPES : [];
+  document.getElementById('catBar').innerHTML = types.map(t=>`
+    <button class="ph-cat ${_activeFilter.category===t.id?'active':''}" onclick="setCategory('${escapeHTML(t.id)}',this)">${t.icon} ${escapeHTML(t.label)}</button>`).join('');
 }
 
-function tabId(t){return{for_sale:'tBuy',for_rent:'tRent',short_let:'tLet'}[t]||'tBuy';}
-
-async function loadListings(lt){
-  curType=lt;cursor=null;
-  const tid=tabId(lt);
-  document.getElementById(tid).innerHTML='<div class="empty"><div class="spinner"></div></div>';
-  const r=await call('listProperties',{listingType:lt,limit:24});
-  if(!r.ok){document.getElementById(tid).innerHTML=`<div class="empty">Could not load listings.</div>`;return;}
-  all=r.data.listings||[];cursor=r.data.nextCursor;
-  document.getElementById('moreBtn').style.display=cursor?'block':'none';
-  render(all);
+function setCategory(id) {
+  _activeFilter.category = id;
+  renderCatBar();
+  applyFilters();
 }
-async function loadMore(){
-  if(!cursor)return;
-  const r=await call('listProperties',{listingType:curType,limit:24,cursor});
-  if(!r.ok)return;
-  all=[...all,...(r.data.listings||[])];cursor=r.data.nextCursor;
-  document.getElementById('moreBtn').style.display=cursor?'block':'none';
-  render(all);
+window.setCategory = setCategory;
+
+function renderCatGrid() {
+  if(!P) return;
+  const counts = {};
+  _allProperties.forEach(p=>{ counts[p.category]=(counts[p.category]||0)+1; });
+  document.getElementById('catGrid').innerHTML = P.PROPERTY_TYPES.slice(1).map(t=>`
+    <div class="ph-cat-card" onclick="setCategory('${escapeHTML(t.id)}')">
+      <div class="ph-cat-card-icon">${t.icon}</div>
+      <div class="ph-cat-card-label">${escapeHTML(t.label)}</div>
+      <div class="ph-cat-card-count">${counts[t.category||t.id.replace('_sale','').replace('_rent','')] || counts[t.id] || 0} available</div>
+    </div>`).join('');
 }
 
-function render(list){
-  const tid=tabId(curType);
-  if(!list.length){document.getElementById(tid).innerHTML='<div class="empty">No listings found.</div>';return;}
-  const bmap={for_sale:'ts',for_rent:'tr',short_let:'tl'};
-  document.getElementById(tid).innerHTML='<div class="grid">'+list.map(l=>`
-    <div class="card" onclick="openProp('${esc(l.listingId)}')">
-      <div class="cimg">${l.images?.[0]?`<img src="${esc(l.images[0])}" loading="lazy" onerror="this.style.display='none'">`:PEMO[l.propertyType]||'🏠'}<span class="ltag ${bmap[l.listingType]||'ts'}">${(l.listingType||'').replace(/_/g,' ')}</span></div>
-      <div class="cbody">
-        <div class="cprice">KES ${(l.price||0).toLocaleString()}</div>
-        <div class="ctitle">${esc(l.title)}</div>
-        <div class="cloc">📍 ${esc([l.neighborhood,l.city,l.county].filter(Boolean).join(', '))}</div>
-        <div class="cspecs">
-          ${l.bedrooms?`<span>🛏 ${l.bedrooms}</span>`:''}${l.bathrooms?`<span>🚿 ${l.bathrooms}</span>`:''}
-          ${l.sizeM2?`<span>📐 ${l.sizeM2}m²</span>`:''}${l.furnished?'<span>🪑 Furnished</span>':''}
-        </div>
+function renderAgents() {
+  if(!P) return;
+  document.getElementById('agentRow').innerHTML = P.AGENTS.map(a=>`
+    <div class="agent-mini-card">
+      <div class="agent-icon">${a.icon}</div>
+      <div class="agent-name">${escapeHTML(a.name)}</div>
+      <div class="agent-listings">${a.listings} listings · ⭐ ${a.rating}</div>
+      ${a.verified?'<div class="verified-badge">✅ Verified</div>':''}
+      <button class="agent-contact-btn" onclick="contactAgent(${JSON.stringify({name:a.name,phone:a.phone||AGENT_PHONES[a.id]||''})})">📞 Contact Agent</button>
+    </div>`).join('');
+}
+
+function contactAgent(agent) {
+  if(!agent.phone) { (window._skToast||alert)('Agent contact unavailable.'); return; }
+  if(typeof SokoniPay !== 'undefined' && SokoniPay.bookNow) {
+    SokoniPay.bookNow({providerName: agent.name, category:'property', serviceDesc:'Property Agent Consultation', providerPhone: agent.phone}, function(res){
+      if(res && res.success && typeof window._savePropertyBooking === 'function') {
+        window._savePropertyBooking({type:'agent_consultation', agentName: agent.name, agentPhone: agent.phone, ts: Date.now()});
+      }
+    });
+  } else {
+    (window._skToast||alert)('Payment gateway loading. Please try again shortly.');
+  }
+}
+window.contactAgent = contactAgent;
+
+function renderServices() {
+  if(!P) return;
+  document.getElementById('svcGrid').innerHTML = P.PROPERTY_SERVICES.map(s=>`
+    <div class="ph-svc-card">
+      <div style="font-size:24px;margin-bottom:8px;">${s.icon}</div>
+      <div style="font-size:13px;font-weight:800;color:white;margin-bottom:3px;">${escapeHTML(s.name)}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:8px;">${escapeHTML(s.location)} · ${P.starsHTML ? P.starsHTML(s.rating) : '⭐ '+s.rating}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:8px;">${escapeHTML(s.desc)}</div>
+      <button class="ph-svc-book-btn" onclick="bookService(${JSON.stringify({name:s.name,phone:s.phone,desc:s.desc})})">📞 Book Service</button>
+    </div>`).join('');
+}
+
+function bookService(svc) {
+  if(typeof SokoniPay !== 'undefined' && SokoniPay.bookNow) {
+    SokoniPay.bookNow({providerName: svc.name, category:'property', serviceDesc: escapeHTML(svc.desc), providerPhone: svc.phone}, function(res){
+      if(res && res.success && typeof window._savePropertyBooking === 'function') {
+        window._savePropertyBooking({type:'service_booking', serviceName: svc.name, servicePhone: svc.phone, ts: Date.now()});
+      }
+    });
+  } else {
+    (window._skToast||alert)('Payment gateway loading. Please try again.');
+  }
+}
+window.bookService = bookService;
+
+function renderProperties(props) {
+  const list = props || getFilteredProperties();
+  document.getElementById('resultsCount').textContent = `${list.length} propert${list.length!==1?'ies':'y'} found`;
+  if (!list.length) {
+    document.getElementById('propGrid').innerHTML = `<div class="ph-empty" style="grid-column:1/-1;"><div style="font-size:48px;margin-bottom:14px;">🔍</div><p style="font-size:15px;font-weight:700;color:rgba(255,255,255,0.4);">No properties found</p><p style="font-size:12px;margin-top:8px;">Try adjusting your filters or search terms.</p></div>`;
+    return;
+  }
+  document.getElementById('propGrid').innerHTML = list.map(p=>propCardHTML(p)).join('');
+}
+
+function getFilteredProperties() {
+  const f = {..._activeFilter};
+  const q = document.getElementById('phSearch').value.trim();
+  if (q) f.q = q;
+  const county = document.getElementById('fCounty')?.value;
+  if (county) f.county = county;
+  const beds = document.getElementById('fBeds')?.value;
+  if (beds) f.bedrooms = parseInt(beds);
+  const maxPrice = document.getElementById('fMaxPrice')?.value;
+  if (maxPrice) f.maxPrice = parseInt(maxPrice);
+  const furnished = document.getElementById('fFurnished')?.value;
+  if (furnished==='true') f.furnished=true;
+  else if (furnished==='false') f.furnished=false;
+
+  let list = [..._allProperties];
+
+  /* category filter */
+  if (f.category && f.category!=='all' && P) {
+    const typeDef = P.PROPERTY_TYPES.find(t=>t.id===f.category);
+    if (typeDef?.status && typeDef.status!=='any') list=list.filter(p=>p.status===typeDef.status);
+    if (typeDef?.category) list=list.filter(p=>p.category===typeDef.category);
+  }
+  if (f.county) list=list.filter(p=>p.county?.toLowerCase().includes(f.county.toLowerCase()));
+  if (f.bedrooms) list=list.filter(p=>p.bedrooms>=parseInt(f.bedrooms));
+  if (f.maxPrice) list=list.filter(p=>p.price<=parseInt(f.maxPrice));
+  if (f.furnished===true) list=list.filter(p=>p.furnished===true);
+  else if (f.furnished===false) list=list.filter(p=>!p.furnished);
+  if (f.q) { const qq=f.q.toLowerCase(); list=list.filter(p=>(p.title+' '+p.location+' '+(p.county||'')+' '+(p.description||'')).toLowerCase().includes(qq)); }
+
+  return list;
+}
+
+function fmtPrice(price, unit) {
+  if (P && P.fmtPrice) return P.fmtPrice(price, unit);
+  if(!price) return 'POA';
+  const s = price>=1000000 ? (price/1000000).toFixed(price%1000000===0?0:1)+'M' : price>=1000 ? (price/1000).toFixed(0)+'K' : price;
+  return 'KES ' + s + (unit && unit.includes('month') ? '/mo' : '');
+}
+
+function getPropStatus(p) {
+  if (!P || !P.PROPERTY_STATUS) return {label: p.status==='for_sale'?'For Sale':'For Rent', icon:'🏷️', color:'#22c55e'};
+  return P.PROPERTY_STATUS[p.status]||{label:p.status,icon:'🏠',color:'white'};
+}
+
+function isSaved(id) { try { const s=JSON.parse(localStorage.getItem('ph_saved')||'[]'); return s.includes(id); } catch(e){return false;} }
+
+function propCardHTML(p) {
+  const st = getPropStatus(p);
+  const saved = isSaved(p.id);
+  const agentPhone = p.agentPhone || AGENT_PHONES[p.agentId] || '';
+  const agentName = escapeHTML(p.agentName || 'SOKONI Agent');
+  const propTitle = escapeHTML(p.title);
+  return `
+  <div class="prop-card" onclick="openProperty('${escapeHTML(p.id)}')">
+    <div class="prop-card-img ${escapeHTML(p.category)}">
+      <span style="font-size:64px;">${p.icon||'🏠'}</span>
+      <div class="prop-status-badge" style="background:${st.color}20;border:1px solid ${st.color}60;color:${st.color};">${st.icon} ${st.label}</div>
+      <button class="prop-save-btn" onclick="event.stopPropagation();toggleSave('${escapeHTML(p.id)}',this)" title="${saved?'Unsave':'Save'}">${saved?'❤️':'🤍'}</button>
+      ${p.featured?'<div class="prop-featured-badge">⭐ Featured</div>':''}
+    </div>
+    <div class="prop-card-body">
+      <div class="prop-price">${fmtPrice(p.price,p.priceUnit)}</div>
+      <div class="prop-title">${propTitle}</div>
+      <div class="prop-loc">📍 ${escapeHTML(p.location)}</div>
+      <div class="prop-specs">
+        ${p.bedrooms>0?`<span class="prop-spec">🛏️ ${p.bedrooms} Bed${p.bedrooms!==1?'s':''}</span>`:''}
+        ${p.bathrooms>0?`<span class="prop-spec">🚿 ${p.bathrooms} Bath${p.bathrooms!==1?'s':''}</span>`:''}
+        ${p.size?`<span class="prop-spec">📐 ${p.size} ${p.sizeUnit||'sqm'}</span>`:''}
+        ${p.furnished?`<span class="prop-spec">🛋️ Furnished</span>`:''}
       </div>
-    </div>`).join('')+'</div>';
+      <div class="prop-cta-row">
+        <button class="prop-cta-btn primary" onclick="event.stopPropagation();bookViewing(${JSON.stringify({id:p.id,title:p.title,agentName:p.agentName||'Agent',agentPhone:agentPhone})})">📅 Book Viewing</button>
+        <button class="prop-cta-btn secondary" onclick="event.stopPropagation();enquireNow(${JSON.stringify({id:p.id,title:p.title,agentName:p.agentName||'Agent',agentPhone:agentPhone})})">💬 Enquire</button>
+      </div>
+    </div>
+  </div>`;
+}
+window.propCardHTML = propCardHTML;
+
+function bookViewing(prop) {
+  if(typeof SokoniPay !== 'undefined' && SokoniPay.bookNow) {
+    SokoniPay.bookNow({
+      providerName: prop.agentName,
+      category: 'property',
+      serviceDesc: 'Property Viewing — ' + prop.title,
+      providerPhone: prop.agentPhone
+    }, function(res){
+      if(res && res.success) {
+        if(typeof window._savePropertyBooking === 'function') {
+          window._savePropertyBooking({type:'viewing', propertyId:prop.id, propertyTitle:prop.title, agentName:prop.agentName, ts:Date.now()});
+        }
+        if(P && P.requestViewing) P.requestViewing({propertyId:prop.id, propertyTitle:prop.title, agentId:prop.agentId});
+      }
+    });
+  } else {
+    (window._skToast||alert)('Payment gateway loading. Please refresh and try again.');
+  }
+}
+window.bookViewing = bookViewing;
+
+function enquireNow(prop) {
+  if(typeof SokoniPay !== 'undefined' && SokoniPay.bookNow) {
+    SokoniPay.bookNow({
+      providerName: prop.agentName,
+      category: 'property',
+      serviceDesc: 'Property Enquiry — ' + prop.title,
+      providerPhone: prop.agentPhone
+    }, function(res){
+      if(res && res.success) {
+        if(typeof window._savePropertyBooking === 'function') {
+          window._savePropertyBooking({type:'enquiry', propertyId:prop.id, propertyTitle:prop.title, agentName:prop.agentName, ts:Date.now()});
+        }
+        if(P && P.sendInquiry) P.sendInquiry({propertyId:prop.id, propertyTitle:prop.title});
+      }
+    });
+  } else {
+    (window._skToast||alert)('Payment gateway loading. Please refresh and try again.');
+  }
+}
+window.enquireNow = enquireNow;
+
+function openProperty(id) { window.location.href = 'property-listing.html?id='+encodeURIComponent(id); }
+window.openProperty = openProperty;
+
+function toggleSave(id, btn) {
+  try {
+    const s=JSON.parse(localStorage.getItem('ph_saved')||'[]');
+    const idx=s.indexOf(id);
+    if(idx>-1){ s.splice(idx,1); btn.textContent='🤍'; } else { s.push(id); btn.textContent='❤️'; }
+    localStorage.setItem('ph_saved', JSON.stringify(s));
+    if(P && P.saveProperty) P.saveProperty(id);
+  } catch(e){}
+}
+window.toggleSave = toggleSave;
+
+function handleSearch() { if (document.getElementById('phSearch').value.length>1) applyFilters(); }
+window.handleSearch = handleSearch;
+function doSearch() { applyFilters(); }
+window.doSearch = doSearch;
+function applyFilters() { renderProperties(); }
+window.applyFilters = applyFilters;
+function resetFilters() {
+  _activeFilter={category:'all'};
+  document.getElementById('phSearch').value='';
+  document.getElementById('fCounty').value='';
+  document.getElementById('fBeds').value='';
+  document.getElementById('fMaxPrice').value='';
+  document.getElementById('fFurnished').value='';
+  renderCatBar();
+  renderProperties();
+}
+window.resetFilters = resetFilters;
+
+/* ── Mortgage ── */
+function toggleMortgage() {
+  const btn = document.getElementById('mortgageToggle');
+  const body = document.getElementById('mortgageBody');
+  btn.classList.toggle('open');
+  body.classList.toggle('open');
+}
+window.toggleMortgage = toggleMortgage;
+
+function applyMortgage() {
+  if(typeof SokoniPay !== 'undefined' && SokoniPay.bookNow) {
+    SokoniPay.bookNow({
+      providerName: 'SOKONI Finance',
+      category: 'finance',
+      serviceDesc: 'Mortgage Consultation',
+      providerPhone: '0800 SOKONI'
+    }, function(res){
+      if(res && res.success) {
+        openFinance('mortgage');
+      }
+    });
+  } else {
+    openFinance('mortgage');
+  }
+}
+window.applyMortgage = applyMortgage;
+
+/* ── Finance modal ── */
+function openFinance(type) {
+  document.getElementById('phModalContent').innerHTML = `
+    <div class="ph-modal-hdr">💰 ${type==='mortgage'?'Mortgage Request':'Rent Financing'}<button class="ph-modal-close" onclick="closeModal()">✕</button></div>
+    <label class="ph-label">Full Name *</label><input class="ph-input" id="finName" placeholder="John Kamau" autocomplete="name">
+    <label class="ph-label">Phone *</label><input class="ph-input" id="finPhone" type="tel" placeholder="0712 345 678" autocomplete="tel">
+    <label class="ph-label">Employment Status</label>
+    <select class="ph-input" id="finEmploy"><option value="employed">Employed</option><option value="self_employed">Self-Employed</option><option value="business">Business Owner</option></select>
+    <label class="ph-label">Monthly Income (KES)</label><input class="ph-input" type="number" id="finIncome" placeholder="150000" min="0">
+    <label class="ph-label">Property Value / Loan Amount (KES)</label><input class="ph-input" type="number" id="finAmount" placeholder="10000000" min="0">
+    <label class="ph-label">Notes</label><textarea class="ph-input" id="finNotes" rows="2" placeholder="Tell us more about your needs..."></textarea>
+    <button class="ph-submit" onclick="submitFinance('${escapeHTML(type)}')">✅ Submit Request</button>`;
+  document.getElementById('phModal').classList.add('open');
+}
+window.openFinance = openFinance;
+
+function submitFinance(type) {
+  const name=document.getElementById('finName').value.trim();
+  const phone=document.getElementById('finPhone').value.trim();
+  if (!name||!phone){(window._skToast||alert)('Please enter name and phone.');return;}
+  if(P && P.submitFinanceRequest) P.submitFinanceRequest({type,name,phone,employment:document.getElementById('finEmploy').value,income:document.getElementById('finIncome').value,amount:document.getElementById('finAmount').value,notes:document.getElementById('finNotes').value});
+  if(typeof window._savePropertyBooking === 'function') window._savePropertyBooking({type:'finance_request', financeType:type, name, phone, ts:Date.now()});
+  closeModal();
+  (window._skToast||alert)('✅ Finance request submitted! A specialist will contact you within 24 hours.');
+}
+window.submitFinance = submitFinance;
+
+/* ── List Property Modal ── */
+function openListPropertyModal() {
+  document.getElementById('phModalContent').innerHTML = `
+    <div class="ph-modal-hdr">📤 List Your Property<button class="ph-modal-close" onclick="closeModal()">✕</button></div>
+    <label class="ph-label">Your Name *</label><input class="ph-input" id="lpName" placeholder="Jane Wanjiku" autocomplete="name">
+    <label class="ph-label">Phone Number *</label><input class="ph-input" id="lpPhone" type="tel" placeholder="0712 345 678" autocomplete="tel">
+    <label class="ph-label">Property Type *</label>
+    <select class="ph-input" id="lpType">
+      <option value="house">House</option>
+      <option value="apartment">Apartment</option>
+      <option value="bedsitter">Bedsitter / Studio</option>
+      <option value="land">Land / Plot</option>
+      <option value="commercial">Commercial Space</option>
+      <option value="office">Office Space</option>
+      <option value="warehouse">Warehouse</option>
+    </select>
+    <label class="ph-label">Listing Type *</label>
+    <select class="ph-input" id="lpListing">
+      <option value="for_rent">For Rent</option>
+      <option value="for_sale">For Sale</option>
+    </select>
+    <label class="ph-label">Asking Price / Rent (KES) *</label><input class="ph-input" type="number" id="lpPrice" placeholder="e.g. 45000 (monthly) or 8500000 (sale)" min="0">
+    <label class="ph-label">Location / Area *</label><input class="ph-input" id="lpLocation" placeholder="e.g. Westlands, Nairobi">
+    <label class="ph-label">Brief Description</label><textarea class="ph-input" id="lpDesc" rows="3" placeholder="Bedrooms, bathrooms, special features, nearby amenities..."></textarea>
+    <button class="ph-submit" onclick="submitListProperty()">📤 Submit Listing</button>`;
+  document.getElementById('phModal').classList.add('open');
+}
+window.openListPropertyModal = openListPropertyModal;
+
+function submitListProperty() {
+  const name=document.getElementById('lpName').value.trim();
+  const phone=document.getElementById('lpPhone').value.trim();
+  const price=document.getElementById('lpPrice').value.trim();
+  const location=document.getElementById('lpLocation').value.trim();
+  if (!name||!phone||!price||!location){ (window._skToast||alert)('Please fill in all required fields.'); return; }
+  const entry = {
+    id: 'LST'+Date.now(),
+    name: escapeHTML(name),
+    phone: escapeHTML(phone),
+    propertyType: document.getElementById('lpType').value,
+    listingType: document.getElementById('lpListing').value,
+    price: parseInt(price)||0,
+    location: escapeHTML(location),
+    description: escapeHTML(document.getElementById('lpDesc').value.trim()),
+    submittedAt: Date.now()
+  };
+  try {
+    const arr = JSON.parse(localStorage.getItem('sokoniListedProperties')||'[]');
+    arr.unshift(entry);
+    localStorage.setItem('sokoniListedProperties', JSON.stringify(arr.slice(0,100)));
+  } catch(e){}
+  if(typeof window._savePropertyListing === 'function') window._savePropertyListing(entry);
+  closeModal();
+  (window._skToast||alert)('✅ Your property has been listed! Our team will review and publish it within 24 hours.');
+}
+window.submitListProperty = submitListProperty;
+
+/* ── Inject live Firestore properties ── */
+window.injectFirestoreProperties = function(liveProps) {
+  if (!liveProps || !liveProps.length) return;
+  const ids = _allProperties.map(p=>p.id);
+  const newOnes = liveProps.filter(p=>!ids.includes(p.id));
+  if(newOnes.length) { _allProperties = [...newOnes, ..._allProperties]; renderProperties(); }
+};
+
+/* ── Legal ── */
+function openLegal(type) { window.location.href = 'legal-hub.html?type='+encodeURIComponent(type); }
+window.openLegal = openLegal;
+
+/* ── Modal ── */
+function closeModal() { document.getElementById('phModal').classList.remove('open'); }
+window.closeModal = closeModal;
+document.getElementById('phModal').addEventListener('click',e=>{if(e.target===document.getElementById('phModal'))closeModal();});
+
+/* ── Notifications ── */
+function toggleNotifs() {
+  const panel=document.getElementById('notifPanel');
+  panel.style.display=panel.style.display==='none'?'block':'none';
+  if(panel.style.display==='block') renderNotifs();
+}
+window.toggleNotifs = toggleNotifs;
+
+function renderNotifs() {
+  if(!P || !P.getNotifications) { document.getElementById('notifList').innerHTML='<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">No notifications yet.</div>'; return; }
+  const notifs=P.getNotifications().slice(0,10);
+  document.getElementById('notifList').innerHTML=notifs.length?notifs.map(n=>`
+    <div onclick="P.markNotifRead('${escapeHTML(n.id)}');renderNotifs();updateNotifBadge();" style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer;${n.read?'opacity:0.5':''}">
+      <div style="font-size:20px;">${n.type==='viewing'?'📅':n.type==='booking'?'🌴':n.type==='inquiry'?'💬':n.type==='finance'?'💰':'🔔'}</div>
+      <div><div style="font-size:12px;font-weight:800;color:white;">${escapeHTML(n.title)}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);">${escapeHTML(n.body)}</div><div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:3px;">${P.timeSince?P.timeSince(n.ts):''}</div></div>
+    </div>`).join(''):'<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">No notifications yet.</div>';
 }
 
-async function openProp(id){
-  const cached=all.find(l=>l.listingId===id);
-  if(cached&&!cached.description){const r=await call('getProperty',{listingId:id});sel=r.ok?r.data:cached;}
-  else sel=cached||{};
-  const l=sel;
-  document.getElementById('mTitle').textContent=l.title||'';
-  document.getElementById('mPrice').textContent=`KES ${(l.price||0).toLocaleString()}${l.listingType==='for_rent'?'/mo':''}`;
-  const bmap={for_sale:['ts','For Sale'],for_rent:['tr','For Rent'],short_let:['tl','Short Let']};
-  const [cls,lbl]=bmap[l.listingType]||['ts',''];
-  document.getElementById('mLtype').className=`ltag ${cls}`;document.getElementById('mLtype').textContent=lbl;
-  document.getElementById('mLoc').textContent='📍 '+[l.address,l.neighborhood,l.city,l.county].filter(Boolean).join(', ');
-  const imgs=(l.images||[]).slice(0,3);
-  document.getElementById('mPhotos').innerHTML=imgs.length?imgs.map(i=>`<div class="ph"><img src="${esc(i)}" loading="lazy" onerror="this.textContent='${PEMO[l.propertyType]||'🏠'}'"></div>`).join(''):`<div class="ph" style="grid-column:1/-1;font-size:48px">${PEMO[l.propertyType]||'🏠'}</div>`;
-  document.getElementById('mInfo').innerHTML=[['Type',l.propertyType?.replace(/_/g,' ')],['Beds',l.bedrooms],['Baths',l.bathrooms],['Size',l.sizeM2?l.sizeM2+'m²':null],['Built',l.yearBuilt],['Parking',l.parkingSpaces||null],['Furnished',l.furnished?'Yes':'No']].filter(([,v])=>v!=null).map(([k,v])=>`<div class="ii"><label>${k}</label><span>${esc(String(v))}</span></div>`).join('');
-  document.getElementById('mAmen').innerHTML=(l.amenities||[]).map(a=>`<span class="atag">${esc(a)}</span>`).join('');
-  document.getElementById('mDesc').textContent=l.description||'';
-  document.getElementById('vDate').min=new Date().toISOString().split('T')[0];
-  open('propModal');
+function markAllNotifs() { if(P&&P.getNotifications) P.getNotifications().forEach(n=>P.markNotifRead(n.id)); renderNotifs(); updateNotifBadge(); }
+window.markAllNotifs = markAllNotifs;
+
+function updateNotifBadge() {
+  if(!P||!P.getUnreadCount) return;
+  const count=P.getUnreadCount(); const b=document.getElementById('phNotifBadge');
+  if(b){b.textContent=count||'';b.style.display=count?'flex':'none';}
 }
 
-function selActionTab(t,el){
-  document.querySelectorAll('.atab').forEach(x=>x.classList.remove('active'));el.classList.add('active');
-  document.getElementById('fEnq').style.display=t==='enq'?'':'none';
-  document.getElementById('fView').style.display=t==='view'?'':'none';
-}
-async function sendEnq(){
-  if(!cu){toast('Sign in to send enquiries',false);return;}
-  const msg=document.getElementById('enqMsg').value.trim();
-  if(!msg){toast('Write a message',false);return;}
-  const r=await call('submitPropertyEnquiry',{listingId:sel.listingId,message:msg,phone:document.getElementById('enqPh').value.trim(),budget:parseFloat(document.getElementById('enqBudget').value)||undefined});
-  if(r.ok){toast('Enquiry sent!');close('propModal');}else toast(r.err||'Failed',false);
-}
-async function sendView(){
-  if(!cu){toast('Sign in to schedule viewings',false);return;}
-  const d=document.getElementById('vDate').value;if(!d){toast('Select a date',false);return;}
-  const r=await call('scheduleViewing',{listingId:sel.listingId,preferredDate:d,preferredTime:document.getElementById('vTime').value.trim(),notes:document.getElementById('vNotes').value.trim()});
-  if(r.ok){toast('Viewing scheduled!');close('propModal');}else toast(r.err||'Failed',false);
-}
+document.addEventListener('click',e=>{ if(!e.target.closest('#notifPanel')&&!e.target.closest('.ph-notif')) document.getElementById('notifPanel').style.display='none'; });
 
-async function loadAgent(){
-  const a=document.getElementById('agentArea');
-  if(!cu){a.innerHTML='<div class="empty">Sign in to access the agent portal.</div>';return;}
-  const r=await call('getPropertyAnalytics',{});
-  if(!r.ok){a.innerHTML='<div class="empty">No listings found. <a href="/property-listing" style="color:#f0883e">Create your first listing →</a></div>';return;}
-  const d=r.data;
-  a.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px">
-    ${[['Listings',d.totalListings],['Active',d.activeListings],['Views',d.totalViews],['Enquiries',d.totalEnquiries],['Viewings',d.totalViewings],['Conversion',d.conversionRate+'%']].map(([k,v])=>`
-    <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px"><div style="font-size:11px;color:#8b949e">${k}</div><div style="font-size:20px;font-weight:700;color:#f0883e">${v??0}</div></div>`).join('')}
-  </div>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h3>Your Listings</h3>
-    <a href="/property-listing" style="background:#f0883e;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">+ New Listing</a>
-  </div>
-  ${(d.listings||[]).map(l=>`<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-    <div><div style="font-weight:600">${esc(l.title)}</div><div style="font-size:12px;color:#8b949e">KES ${(l.price||0).toLocaleString()} · 👁 ${l.viewCount||0} · 📧 ${l.enquiryCount||0}</div></div>
-    <span class="stat ${l.status==='active'?'sa':l.status==='draft'?'si':'sd'}">${l.status}</span>
-  </div>`).join('')}`;
-}
-
-function setTab(t,el){
-  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));el?.classList.add('active');
-  ['tBuy','tRent','tLet','tAgent'].forEach(id=>document.getElementById(id).style.display='none');
-  if(t==='buy'){document.getElementById('tBuy').style.display='';if(!all.length)loadListings('for_sale');}
-  else if(t==='rent'){document.getElementById('tRent').style.display='';all=[];loadListings('for_rent');}
-  else if(t==='let'){document.getElementById('tLet').style.display='';all=[];loadListings('short_let');}
-  else if(t==='agent'){document.getElementById('tAgent').style.display='';loadAgent();}
-  document.getElementById('moreBtn').style.display='none';
-}
-
-buildTypeFilters();loadListings('for_sale');
+init();
 </script>
+
+<!-- Firestore real-time module -->
+<script type="module">
+import { db, auth } from './firebase.js';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+/* Save a new property listing — writes to propertyListings so the
+   onSnapshot listener below picks it up immediately on all devices */
+window._savePropertyListing = async function(entry) {
+  try { await addDoc(collection(db,'propertyListings'), {...entry, status:'pending', createdAt: serverTimestamp()}); } catch(e){}
+};
+
+/* Keep the booking writer for inquiries/viewings that call it */
+window._savePropertyBooking = async function(bk) {
+  try { await addDoc(collection(db,'bookings'), {...bk, hub:'property', createdAt: serverTimestamp()}); } catch(e){}
+};
+
+// Real-time property listings from Firestore
+const q = query(collection(db,'propertyListings'), orderBy('createdAt','desc'));
+onSnapshot(q, snap => {
+  const live = snap.docs.map(d=>({id:d.id,...d.data()}));
+  if(live.length && typeof window.injectFirestoreProperties === 'function') window.injectFirestoreProperties(live);
+});
+</script>
+
+<script src="sokoni-pay.js"></script>
+<script src="scroll-top.js" defer></script>
+<script src="shared-header.js" defer></script>
+<script src="analytics.js" defer></script>
+<script src="sw-register.js" defer></script>
+  <!-- REGISTER CTA — universal fallback for other business types -->
+  <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
+    <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
+    <button onclick="HubRegister.open({hub:'property', category:'property-agent'})" style="padding:10px 24px;background:#38bdf8;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+  </div>
+  <script defer src="hub-register.js"></script>
+  <script defer src="kass-widget.js"></script>
+<script src="sokoni-ui-extras.js" defer></script>
+  <!-- Enterprise v2.0: core stack -->
+  <script defer src="sokoni-event-bus.js"></script>
+  <script defer src="sokoni-observability.js"></script>
+  <script defer src="sokoni-gateway.js"></script>
 </body>
 </html>
+
+
