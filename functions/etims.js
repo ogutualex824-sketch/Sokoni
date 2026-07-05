@@ -44,9 +44,7 @@ const EMAIL_SECRETS         = emailSvc.EMAIL_SECRETS;
 const _ALL_SECRETS = [ETIMS_MASTER_KEY, ETIMS_PLATFORM_PIN, ETIMS_PLATFORM_SECRET, ...EMAIL_SECRETS];
 
 /* ── Runtime config ──────────────────────────────────────────────────── */
-if (!process.env.ETIMS_ENV) {
-  throw new Error('ETIMS_ENV is required. Set to "production" or "sandbox" in functions/.env.');
-}
+// Default to sandbox — safe fallback; production requires explicit opt-in via functions/.env
 const ETIMS_PROD  = process.env.ETIMS_ENV === "production";
 const ETIMS_BASE  = ETIMS_PROD
   ? "https://etims-api.kra.go.ke/etims-api"

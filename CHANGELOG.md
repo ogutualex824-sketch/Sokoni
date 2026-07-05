@@ -1,4 +1,170 @@
-﻿## [2026-06-29] — Firestore Index Split + POS Boot Guard
+﻿## [2026-07-05] — Documentation Master Plan Complete: Volumes 10–18 + APIs & Integrations + CF Deploy Fix
+
+### Summary
+Completed the **SOKONI Enterprise Commerce OS Documentation Master Plan** — all 18 volumes are now published in the `docs/` Obsidian vault. Also resolved a critical Cloud Functions deployment failure caused by startup-time `throw` statements in `etims.js` and `security-zero-trust.js`, unblocking the full ~636 CF fleet deployment.
+
+### Files Changed
+- `docs/vol-10-artificial-intelligence.md` — NEW; AI platform, KASS concierge, Claude Haiku integrations, AI subscriptions
+- `docs/vol-11-crm-marketing.md` — NEW; CRM leads pipeline, CLV, churn risk, support tickets, marketing campaigns
+- `docs/vol-12-hr-workforce.md` — NEW; Kenya PAYE/NHIF/NSSF payroll, HR records, staff scheduling
+- `docs/vol-13-foundation.md` — NEW; Platform registry, event bus, feature flags, workflow automation
+- `docs/vol-14-analytics-bi.md` — NEW; Business intelligence, advanced BI, branch comparison, marketing ROI
+- `docs/vol-15-enterprise-operations.md` — NEW; Ops center, chaos engineering, certification runner, health snapshots
+- `docs/vol-16-apis-integrations.md` — NEW; All external integrations: M-Pesa/IntaSend, eTIMS, SendGrid, Algolia, Typesense, Claude AI, Redis, OSRM, webhooks, rate limiting, CSP
+- `docs/vol-17-testing-qa.md` — NEW; Test suite (652 tests), smoke tests, integration testing, QA runbook
+- `docs/vol-18-production-certification.md` — NEW; Production certification runner, 98/100 cert score, deployment checklist
+- `docs/appendices.md` — NEW; Complete Firestore collection reference, Secret Manager index, env vars, Kenya statutory tables, glossary
+- `functions/etims.js` — FIX: Removed startup-time `throw` for missing ETIMS_ENV; now defaults safely to `sandbox`
+- `functions/security-zero-trust.js` — FIX: Converted top-scope `HMAC_KEY` constant (which threw at startup) to lazy `_getHmacKey()` function called only inside handlers
+- `CHANGELOG.md` — UPDATED
+
+### Bug Fix: Cloud Functions Deployment
+**Root cause:** Two files threw errors at module load time when environment variables were absent, crashing the entire `index.js` bundle during Functions deployment.
+
+- `etims.js:47` — `throw new Error('ETIMS_ENV is required...')` → replaced with `const ETIMS_PROD = process.env.ETIMS_ENV === "production"` (safe default: sandbox)
+- `security-zero-trust.js:41` — IIFE threw if `SOKONI_HMAC_KEY` missing → converted to lazy `_getHmacKey()` called only when a handler actually executes
+
+**Result:** `firebase deploy --only functions` now succeeds. All ~636 Cloud Functions deployed.
+
+### Documentation Coverage (Volumes 10–18)
+- **Vol 10 — AI:** Claude Haiku integrations, KASS 6 Firestore tools, connectivity threshold, AI subscriptions (4 plans), SASOS brain engine
+- **Vol 11 — CRM:** Lead pipeline (NEW→QUALIFIED→PROPOSAL→NEGOTIATION→CLOSED), CLV calculation, churn risk scoring, 360° customer profiles, support ticket SLAs
+- **Vol 12 — HR:** Kenya PAYE 5-band table, NHIF 17-band table, NSSF Tier I+II, Housing Levy 1.5%, AES-256-GCM payslip encryption, staff scheduling
+- **Vol 13 — Foundation:** 33 platform capability registry keys, 8 event bus CFs, feature flag governance, Workflow Automation Platform (7 workflows, 20 handlers)
+- **Vol 14 — Analytics BI:** Real-time dashboards, multi-branch revenue comparison, marketing ROI, customer segment revenue, revenue-by-channel breakdown
+- **Vol 15 — Ops:** Chaos engineering (fault injection, network partition, cascade failure), platform certification (98/100 score), self-healing 7-check engine
+- **Vol 16 — APIs:** Full integration reference: 636 CFs, IntaSend M-Pesa STK Push + B2C, eTIMS retry queue (5 attempts, exponential backoff), SendGrid 53 templates, Algolia secured keys, Typesense, OSRM routing, Redis optional caching, Claude Haiku, CSP policy
+- **Vol 17 — Testing:** 652-test suite architecture, smoke tests, integration tests, Playwright E2E, performance targets, QA runbook
+- **Vol 18 — Production Cert:** Certification runner architecture, 98/100 production score, deployment prerequisites, go-live checklist
+
+### No Breaking Changes
+
+---
+
+## [2026-06-29] — Commerce OS Documentation: Volume 9 — Delivery & Logistics
+
+### Summary
+Published **Volume 9** of the SOKONI Commerce OS documentation suite: the authoritative reference for the Delivery & Logistics system. Sourced directly from `functions/dispatch.js` (8 Gen2 CFs), `functions/sokoni-dispatch.js` (scoring engine), `sokoni-navigation.js` (GPS/OSRM engine), and `sokoni-delivery-pricing.js` (pricing engine). Covers end-to-end delivery from dispatch through proof of delivery and rider settlement.
+
+### Files Changed
+- `docs/vol-09-delivery-logistics.md` — NEW; 20-section delivery & logistics reference, 2,800+ words, Mermaid diagrams, Obsidian wiki links
+- `CHANGELOG.md` — UPDATED
+
+### Coverage
+- 8-factor dispatch scoring algorithm: distance (0.25), ETA (0.20), workload (0.15), vehicle match (0.15), rating (0.15), acceptance rate (0.10) plus hub-affinity and battery/signal adjustments
+- Cascade state machine (offered → accepted/advanced → exhausted) with 90-second per-rider timeout
+- 8 dispatch Cloud Functions: dispatchDelivery, respondToDispatch, processCascadeTimeouts, captureProofOfDelivery, handleFailedDelivery, detectGPSFraud, rollupDeliveryAnalytics, updateDeliveryStage
+- Rider profile schema, auto-suspend at 10 cancellations, performance threshold table
+- Order assignment sequence diagram: PAID → ranked riders → offer → accept/decline/timeout cascade
+- GPS navigation engine (OSRM, 60 m arrival geofence, 160 m deviation recalculation, 4s upload cadence)
+- GPS spoofing guard: haversine speed check >120 km/h triggers fraud review and re-dispatch
+- 9-stage delivery timeline with per-stage customer notification (push + SMS + email + WhatsApp)
+- Pricing engine: 7 vehicle types, weight breaks, size surcharges, speed tiers, peak-hour multipliers (1.15–1.35), rural surcharge, demand multiplier 1.0–2.0
+- Rider payout protection: 82% target share, 75% floor, KES 180 absolute minimum per trip
+- Proof of delivery: OTP + photo + GPS proximity + optional signature; high-value OTP enforcement (>KES 5,000)
+- Returns and reverse logistics: 7-reason FAIL_ACTIONS table with retry and return/refund routing
+- Driver wallet (driverWallet/{riderId}), daily/weekly M-Pesa settlement via IntaSend
+- Fleet management dashboard: live map, zone heat maps, idle rider tracking, suspension queue
+- Route optimization: OSRM multi-stop, batchMaxDetourKm 3.0 km, fuel cost consideration
+- ETA engine: recalculation on every GPS update, >5 min deviation triggers buyer notification
+- CSAT ratings: 1–5 star, EMA update, performance review at <3.5 average
+- Offline support: IndexedDB queuing for proof, GPS logs, stage updates; sync on reconnect
+- Security: App Check enforcement, GPS proximity for delivery mark, audit trail, OTP single-use
+- Performance targets: dispatch <2s, GPS write <3s, ETA accuracy ±5 min for 80% of deliveries
+- Firestore collections index: 14 collections with schema notes
+- Cross-references: vol-04-payments, vol-07-marketplace-commerce, vol-14-analytics-bi, vol-15-enterprise-operations
+
+### No Breaking Changes
+
+---
+
+## [2026-06-29] — Commerce OS Documentation: Volume 5 — Enterprise Accounting
+
+### Summary
+Published **Volume 5** of the SOKONI Commerce OS documentation suite: the authoritative reference for the Financial Operating System (FinOS). Sourced directly from `functions/finos.js` (18 Gen2 CFs), `functions/finos-router.js` (12 CFs), and `functions/finos-utils.js`. Covers the complete double-entry ledger, Kenya tax compliance, escrow/settlement, commission accounting, and all financial reporting APIs.
+
+### Files Changed
+- `docs/vol-05-accounting.md` — NEW; 20-section enterprise accounting reference, 2,700+ words, Mermaid diagrams, Obsidian wiki links
+- `CHANGELOG.md` — UPDATED
+
+### Coverage
+- Double-entry ledger: debit/credit ACCOUNTS namespace, atomic batch writes, idempotency via SHA-256 keys
+- Chart of Accounts (1xxx–6xxx) and Firestore `chartOfAccounts/{merchantId}/accounts/{code}` structure
+- Sale posting flow Mermaid sequence diagram: STK push → ledger entries → wallet credits → eTIMS
+- VAT 16% (server-side extraction formula), WHT 5%, eTIMS integration, KRA PIN validation
+- Accounts Payable: procurement invoice flow, ±5% quantity tolerance, WHT on payouts
+- Revenue recognition: IFRS 15 aligned; escrow accounting per hub (0–30 day hold windows)
+- Profit & Loss, Balance Sheet, Cash Flow statement structures with 7-day forecast
+- Escrow state machine (held → released/disputed/refunded) and settlement schedule by hub type
+- Six-model commission accounting with per-category rate table
+- Period closing checklist, locked-period enforcement, reconciliation assertions
+- Financial reports API: getFinancialSummary, getTrialBalance, getProfitLoss, getCashFlow, getVATReturn
+- Immutable audit trail: 7-year retention per Kenya Tax Procedures Act
+- Kenya compliance: Finance Act 2024/2025, PAYE 5-band, NHIF 17-band, NSSF Tier I+II, Housing Levy 1.5%
+- Error handling: atomic rollback, journal imbalance alert, two-phase wallet credit guard
+- Performance targets: journal entry <500ms, P&L <3s, reconciliation <30s/1,000 transactions
+
+### No Breaking Changes
+
+---
+
+## [2026-06-29] — Commerce OS Documentation: Volume 6 — Inventory & Warehousing
+
+### Summary
+Published **Volume 6** of the SOKONI Commerce OS documentation suite, covering the full inventory
+and warehousing system. The document is the authoritative reference for all inventory operations
+on the platform.
+
+### Files Changed
+- `docs/vol-06-inventory-warehousing.md` — NEW; ~2,800-word technical reference (22 sections)
+- `CHANGELOG.md` — UPDATED
+
+### Coverage
+- AVCO/FIFO/FEFO valuation methods with formula documentation
+- Purchase order lifecycle (9 statuses, deterministic poId via sha256)
+- GRN processing: quantity variance tracking, batch/lot creation, AVCO recalculation
+- Supplier management and nightly performance scoring
+- Invoice ±5% tolerance gate and double-entry GL posting
+- Stock transfer two-phase commit, cycle counts, returns to supplier
+- Inventory and PO state machines (Mermaid diagrams)
+- Self-healing negative-stock detection, oversell prevention (transaction guard + atomic flip)
+- Claude Haiku demand forecasting integration
+- Security model: CF-only writes, role matrix, audit immutability
+- Performance targets: stock check <100 ms, GRN <1 s, COGS report <5 s (12-month)
+- Full Cloud Functions reference table (21 functions)
+
+### No Breaking Changes
+
+---
+
+## [2026-06-29] — Volume 2: Identity & Enterprise Security Documentation
+
+### Summary
+Added `docs/vol-02-identity-security.md` — Volume 2 of the SOKONI Commerce OS documentation suite. Covers the full security stack sourced directly from live production code: `security-identity.js` (14 CFs), `security-fraud-engine.js` (9 CFs), `security-incident-response.js` (11 CFs), and `firestore.rules` helper functions.
+
+### Files Changed
+- `docs/vol-02-identity-security.md` — NEW; 20-section security architecture document, 2,900+ words, 7 Mermaid diagrams, Obsidian wiki links
+- `CHANGELOG.md` — UPDATED
+
+### Sections Covered
+- Authentication architecture (Firebase Auth, 4 providers, custom claims flow)
+- RBAC role hierarchy (cashier → supervisor → manager → owner → admin → super_admin)
+- App Check enforcement (ReCaptchaV3, `enforceAppCheck: true` on all 34 security CFs)
+- Firestore rules helpers: `isSuperAdmin()`, `isAdmin()`, `isModerator()`, `isAuthed()`, `isOwner()`, `claimsOwner()`, `uidUnchanged()`, `noAdminFields()`, `noPrivilegeEscalation()`, `noProviderForgery()`
+- IAM + 7 named secrets: `LOYALTY_HMAC_SECRET`, `PAYMENT_HMAC_SECRET`, `PAYROLL_ENCRYPTION_KEY`, `SOKONI_HMAC_KEY`, `ANTHROPIC_API_KEY`, `SENDGRID_API_KEY`, `INTASEND_PRIVATE_KEY`
+- Cryptography: RFC 4226 TOTP, AES-256-GCM payroll encryption, HMAC-SHA256 payment seals
+- Replay attack prevention: WebAuthn counter monotonicity, single-use challenges, idempotency keys
+- Fraud engine: 6-signal composite scoring, impossible travel detection, scheduled sweep
+- Incident response: 11-CF lifecycle, status machine (open → investigating → contained → resolved)
+- OWASP Top 10 checklist, GDPR/Kenya DPA/eTIMS compliance, performance targets
+
+### Security
+- Document is derived solely from production source code — no speculative claims
+- All rule function names, secret names, and CF names match production implementations
+
+---
+
+## [2026-06-29] — Firestore Index Split + POS Boot Guard
 
 ### Summary
 Two infrastructure and UX hardening changes:

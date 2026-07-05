@@ -38,12 +38,12 @@ const RISK_LEVEL = { low: 'low', medium: 'medium', high: 'high', critical: 'crit
 /* ── Constants ─────────────────────────────────────────────────────────────── */
 const HIGH_VALUE_THRESHOLD_KES = 100_000;
 const STEP_UP_TTL_MS           = 10 * 60 * 1000; // 10 minutes
-const HMAC_KEY = (() => {
-  if (!process.env.SOKONI_HMAC_KEY) {
-    throw new Error('SOKONI_HMAC_KEY secret is required but not set. Configure it in Firebase Secret Manager.');
-  }
-  return process.env.SOKONI_HMAC_KEY;
-})();
+// Secret accessed lazily inside function handlers — not available at module load time in Cloud Functions
+const _getHmacKey = () => {
+  const key = process.env.SOKONI_HMAC_KEY;
+  if (!key) throw new HttpsError('internal', 'HMAC key not configured.');
+  return key;
+};
 
 /* ── Helpers ───────────────────────────────────────────────────────────────── */
 function _requireAuth(auth) {
@@ -591,7 +591,7 @@ exports.verifyStepUpAuth = onCall(CF_OPTIONS, async ({ data, auth }) => {
     if (verified) {
       const ts = Date.now();
       signedToken = crypto
-        .createHmac('sha256', HMAC_KEY)
+        .createHmac('sha256', _getHmacKey())
         .update(`step-up:${challengeId}:${userId}:${ts}`)
         .digest('hex');
     }
