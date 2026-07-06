@@ -13,7 +13,7 @@
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#2196f3">
+  <meta name="theme-color" content="#080808">
   <script src="shared-header.js"></script>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="mobile.css">
@@ -22,20 +22,20 @@
   <style>
     /* ── Design tokens ───────────────────────────────────────── */
     :root {
-      --bg:      #f5f7ff;
-      --surface: #ffffff;
-      --border:  #e4e8f5;
-      --accent:  #2196f3;
-      --accent2: #1976d2;
+      --bg:      #080808;
+      --surface: rgba(255,255,255,0.04);
+      --border:  rgba(255,255,255,0.08);
+      --accent:  #3b82f6;
+      --accent2: #2563eb;
       --green:   #4caf50;
       --orange:  #ff9800;
-      --red:     #f44336;
-      --purple:  #7c4dff;
-      --text:    #1a1a2e;
-      --muted:   #6b7280;
-      --card:    #ffffff;
-      --radius:  12px;
-      --shadow:  0 2px 12px rgba(0,0,0,.06);
+      --red:     #ef4444;
+      --purple:  #a855f7;
+      --text:    #ffffff;
+      --muted:   rgba(255,255,255,0.45);
+      --card:    rgba(255,255,255,0.04);
+      --radius:  14px;
+      --shadow:  0 2px 20px rgba(0,0,0,0.5);
     }
 
     /* ── Reset ──────────────────────────────────────────────── */
@@ -63,39 +63,6 @@
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* ── Header ─────────────────────────────────────────────── */
-    .site-header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      z-index: 200;
-      height: 60px;
-      display: flex;
-      align-items: center;
-      padding: 0 20px;
-      gap: 12px;
-      box-shadow: var(--shadow);
-    }
-    .header-brand {
-      display: flex;
-      align-items: center;
-      gap: 2px;
-      font-size: 20px;
-      font-weight: 900;
-      color: var(--text);
-      text-decoration: none;
-    }
-    .header-brand .brand-accent { color: var(--accent); }
-    .header-jobs-label {
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--muted);
-      border-left: 1px solid var(--border);
-      padding-left: 12px;
-    }
-    .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-
     /* ── Buttons ─────────────────────────────────────────────── */
     .btn {
       display: inline-flex;
@@ -115,19 +82,20 @@
     .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
     .btn-primary  { background: var(--accent); color: #fff; }
     .btn-primary:hover  { background: var(--accent2); text-decoration: none; color: #fff; }
-    .btn-outline  { background: none; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline  { background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--text); }
     .btn-outline:hover  { border-color: var(--accent); color: var(--accent); text-decoration: none; }
     .btn-ghost  { background: none; border: none; color: var(--muted); }
     .btn-ghost:hover  { color: var(--text); text-decoration: none; }
     .btn-sm  { padding: 7px 14px; font-size: 13px; }
     .btn.applied  {
-      background: #e8f5e9; color: var(--green);
-      cursor: default; border: 1px solid var(--green);
+      background: rgba(76,175,80,0.12); color: var(--green);
+      cursor: default; border: 1px solid rgba(76,175,80,0.3);
     }
 
     /* ── Hero ────────────────────────────────────────────────── */
     .hero {
-      background: linear-gradient(135deg, #1a237e 0%, #1976d2 60%, #42a5f5 100%);
+      background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(0,0,0,0) 60%);
+      border-bottom: 1px solid var(--border);
       color: #fff;
       padding: 52px 20px 44px;
       text-align: center;
@@ -136,8 +104,8 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(255,255,255,.15);
-      border: 1px solid rgba(255,255,255,.25);
+      background: rgba(59,130,246,0.15);
+      border: 1px solid rgba(59,130,246,0.3);
       border-radius: 20px;
       padding: 5px 14px;
       font-size: 12px;
@@ -153,7 +121,7 @@
     }
     .hero-sub {
       font-size: 16px;
-      opacity: .85;
+      opacity: .7;
       margin-bottom: 28px;
       max-width: 480px;
       margin-left: auto;
@@ -164,10 +132,11 @@
       gap: 8px;
       max-width: 700px;
       margin: 0 auto;
-      background: #fff;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
       border-radius: 14px;
       padding: 8px 8px 8px 16px;
-      box-shadow: 0 8px 32px rgba(0,0,0,.18);
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
       align-items: center;
     }
     .hero-input {
@@ -175,16 +144,24 @@
       border: none;
       outline: none;
       font-size: 15px;
-      color: var(--text);
+      color: #fff;
       background: transparent;
       min-width: 0;
       padding: 4px 0;
     }
-    .hero-divider { width: 1px; background: var(--border); align-self: stretch; margin: 0 2px; }
+    .hero-input::placeholder { color: rgba(255,255,255,0.35); }
+    .hero-divider { width: 1px; background: rgba(255,255,255,0.15); align-self: stretch; margin: 0 2px; }
     @media (max-width: 520px) {
       .hero-search { flex-direction: column; border-radius: 12px; padding: 10px; gap: 6px; }
       .hero-divider { width: auto; height: 1px; }
     }
+
+    /* ── Hero action buttons ─────────────────────────────────── */
+    .jobs-hero-actions {
+      display: flex; gap: 10px; flex-wrap: wrap;
+      justify-content: center; margin-top: 20px;
+    }
+    .jobs-hero-actions .btn.hidden { display: none !important; }
 
     /* ── Section wrapper ─────────────────────────────────────── */
     .section { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
@@ -214,7 +191,7 @@
       scrollbar-width: thin;
     }
     #jobsFeaturedList::-webkit-scrollbar { height: 4px; }
-    #jobsFeaturedList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    #jobsFeaturedList::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
 
     .featured-card {
       flex-shrink: 0;
@@ -229,8 +206,8 @@
     }
     .featured-card:hover {
       transform: translateY(-2px);
-      border-color: var(--accent);
-      box-shadow: 0 6px 20px rgba(33,150,243,.12);
+      border-color: rgba(59,130,246,0.4);
+      background: rgba(59,130,246,0.06);
     }
     .featured-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
     .featured-title  { font-size: 14px; font-weight: 700; line-height: 1.3; }
@@ -242,9 +219,11 @@
     /* ── Filters ─────────────────────────────────────────────── */
     .filters-bar {
       position: sticky;
-      top: 60px;
+      top: 64px;
       z-index: 100;
-      background: var(--bg);
+      background: rgba(8,8,8,0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
       padding: 10px 0;
     }
@@ -269,13 +248,13 @@
       font-weight: 500;
       border: 1px solid var(--border);
       background: var(--surface);
-      color: var(--text);
+      color: var(--muted);
       cursor: pointer;
       white-space: nowrap;
       flex-shrink: 0;
       transition: all .15s;
     }
-    .filter-chip:hover  { border-color: var(--accent); color: var(--accent); }
+    .filter-chip:hover  { border-color: var(--accent); color: #fff; background: rgba(59,130,246,0.1); }
     .filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
     /* ── Results bar ─────────────────────────────────────────── */
@@ -297,6 +276,7 @@
       cursor: pointer;
       outline: none;
     }
+    .sort-select option { background: #1a1a2e; }
 
     /* ── Jobs grid ───────────────────────────────────────────── */
     #jobsResultsList {
@@ -322,15 +302,15 @@
     }
     .job-card:hover {
       transform: translateY(-2px);
-      border-color: var(--accent);
-      box-shadow: 0 6px 20px rgba(33,150,243,.1);
+      border-color: rgba(59,130,246,0.35);
+      background: rgba(59,130,246,0.04);
     }
     .job-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .job-card-header { display: flex; align-items: flex-start; gap: 12px; }
     .job-avatar {
       width: 44px; height: 44px; min-width: 44px;
       border-radius: 10px;
-      background: linear-gradient(135deg, var(--accent), #42a5f5);
+      background: linear-gradient(135deg, var(--accent), #60a5fa);
       color: #fff;
       font-size: 18px; font-weight: 800;
       display: flex; align-items: center; justify-content: center;
@@ -340,8 +320,9 @@
     .job-company { font-size: 13px; color: var(--muted); }
     .job-featured-badge {
       flex-shrink: 0; font-size: 11px; font-weight: 700;
-      background: #fff3e0; color: var(--orange);
+      background: rgba(255,152,0,0.12); color: var(--orange);
       padding: 3px 8px; border-radius: 6px; white-space: nowrap;
+      border: 1px solid rgba(255,152,0,0.2);
     }
     .job-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
     .job-meta-item { display: flex; align-items: center; gap: 3px; }
@@ -349,14 +330,15 @@
       display: inline-flex; align-items: center;
       padding: 3px 10px; border-radius: 20px;
       font-size: 12px; font-weight: 600;
-      background: #e3f2fd; color: var(--accent2);
+      background: rgba(59,130,246,0.12); color: var(--accent);
+      border: 1px solid rgba(59,130,246,0.2);
     }
-    .job-type-full-time  { background: #e8f5e9; color: #2e7d32; }
-    .job-type-part-time  { background: #fff3e0; color: #e65100; }
-    .job-type-contract   { background: #f3e5f5; color: #6a1b9a; }
-    .job-type-internship { background: #e1f5fe; color: #0277bd; }
-    .job-type-remote     { background: #e8f5e9; color: #1b5e20; }
-    .job-salary { font-size: 14px; font-weight: 700; color: var(--green); }
+    .job-type-full-time  { background: rgba(76,175,80,0.1); color: #4caf50; border-color: rgba(76,175,80,0.2); }
+    .job-type-part-time  { background: rgba(255,152,0,0.1); color: var(--orange); border-color: rgba(255,152,0,0.2); }
+    .job-type-contract   { background: rgba(168,85,247,0.1); color: var(--purple); border-color: rgba(168,85,247,0.2); }
+    .job-type-internship { background: rgba(59,130,246,0.1); color: var(--accent); border-color: rgba(59,130,246,0.2); }
+    .job-type-remote     { background: rgba(76,175,80,0.1); color: #4caf50; border-color: rgba(76,175,80,0.2); }
+    .job-salary { font-size: 14px; font-weight: 700; color: #4caf50; }
     .job-footer { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: auto; }
 
     /* ── Load more ───────────────────────────────────────────── */
@@ -381,7 +363,7 @@
     }
     @media (min-width: 640px) { #jobDetailModal { align-items: center; padding: 20px; } }
     .job-detail-sheet {
-      background: var(--surface);
+      background: #111111;
       width: 100%;
       max-width: 720px;
       max-height: 92vh;
@@ -389,6 +371,7 @@
       border-radius: var(--radius) var(--radius) 0 0;
       display: flex;
       flex-direction: column;
+      border: 1px solid var(--border);
     }
     @media (min-width: 640px) { .job-detail-sheet { border-radius: var(--radius); } }
     .modal-header {
@@ -399,7 +382,7 @@
       border-bottom: 1px solid var(--border);
       position: sticky;
       top: 0;
-      background: var(--surface);
+      background: #111111;
       z-index: 10;
     }
     .modal-header-title { font-size: 15px; font-weight: 700; }
@@ -410,7 +393,7 @@
       display: flex; align-items: center; justify-content: center;
       border-radius: 50%; transition: background .15s;
     }
-    .modal-close-btn:hover { background: var(--bg); }
+    .modal-close-btn:hover { background: rgba(255,255,255,0.08); }
     .modal-body { padding: 20px; flex: 1; overflow-y: auto; }
     .modal-loading { text-align: center; padding: 40px; color: var(--muted); }
     .modal-error   { color: var(--red); padding: 16px; font-size: 14px; }
@@ -418,7 +401,7 @@
     .job-detail-avatar {
       width: 60px; height: 60px; min-width: 60px;
       border-radius: 14px;
-      background: linear-gradient(135deg, var(--accent), #42a5f5);
+      background: linear-gradient(135deg, var(--accent), #60a5fa);
       color: #fff; font-size: 24px; font-weight: 800;
       display: flex; align-items: center; justify-content: center;
     }
@@ -434,7 +417,8 @@
     .job-detail-meta-item {
       display: flex; align-items: center; gap: 6px;
       font-size: 13px; color: var(--muted);
-      background: var(--bg); padding: 8px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--border);
     }
     .meta-icon { font-size: 15px; }
     .job-detail-section { margin-bottom: 22px; }
@@ -443,7 +427,7 @@
       text-transform: uppercase; letter-spacing: .5px;
       color: var(--muted); margin-bottom: 10px;
     }
-    .job-detail-body { font-size: 14px; line-height: 1.75; color: var(--text); }
+    .job-detail-body { font-size: 14px; line-height: 1.75; color: rgba(255,255,255,0.8); }
 
     /* Apply section within modal */
     #jobApplySection { display: none; border-top: 1px solid var(--border); }
@@ -454,33 +438,34 @@
       text-transform: uppercase; letter-spacing: .5px;
     }
     .form-input {
-      background: var(--bg); border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
       border-radius: 9px; padding: 11px 13px;
       color: var(--text); font-size: 15px;
       outline: none; width: 100%;
       transition: border-color .15s;
     }
-    .form-input:focus { border-color: var(--accent); background: #fff; }
+    .form-input::placeholder { color: rgba(255,255,255,0.3); }
+    .form-input:focus { border-color: var(--accent); background: rgba(59,130,246,0.06); }
     textarea.form-input { resize: vertical; min-height: 110px; }
     .char-hint { font-size: 11px; color: var(--muted); margin-top: 3px; }
     .modal-footer {
       display: flex; align-items: center; justify-content: flex-end;
       gap: 10px; padding: 14px 20px;
       border-top: 1px solid var(--border);
-      position: sticky; bottom: 0; background: var(--surface);
+      position: sticky; bottom: 0; background: #111111;
     }
 
     /* ── My Applications panel ───────────────────────────────── */
     #myAppsPanel {
       position: fixed; right: 0; top: 0; height: 100%;
       width: min(420px, 100%);
-      background: var(--surface);
+      background: #111111;
       border-left: 1px solid var(--border);
       z-index: 400;
       transform: translateX(100%);
       transition: transform .3s cubic-bezier(.4,0,.2,1);
       display: flex; flex-direction: column;
-      box-shadow: -4px 0 24px rgba(0,0,0,.1);
+      box-shadow: -4px 0 24px rgba(0,0,0,.5);
     }
     .panel-header {
       display: flex; align-items: center; justify-content: space-between;
@@ -496,7 +481,7 @@
     .my-app-avatar {
       width: 40px; height: 40px; min-width: 40px;
       border-radius: 9px;
-      background: linear-gradient(135deg, var(--accent), #42a5f5);
+      background: linear-gradient(135deg, var(--accent), #60a5fa);
       color: #fff; font-size: 16px; font-weight: 800;
       display: flex; align-items: center; justify-content: center;
     }
@@ -516,7 +501,7 @@
 
     /* ── Seeker profile section ──────────────────────────────── */
     .seeker-section {
-      background: linear-gradient(135deg, #e3f2fd 0%, #f5f7ff 100%);
+      background: linear-gradient(135deg, rgba(59,130,246,0.05) 0%, rgba(0,0,0,0) 60%);
       border-top: 1px solid var(--border);
       margin-top: 8px;
     }
@@ -560,31 +545,6 @@
 <body>
 
 <!-- ══════════════════════════════════════════════
-     HEADER
-═══════════════════════════════════════════════ -->
-<header class="site-header">
-  <a class="header-brand" href="index.html">
-    <span class="brand-accent">S</span>OKONI
-  </a>
-  <span class="header-jobs-label">Jobs</span>
-
-  <div class="header-actions">
-    <button
-      class="btn btn-outline btn-sm hidden"
-      data-my-apps
-      onclick="SokoniJobs.openMyApps()"
-      aria-label="View my job applications"
-    >
-      📋 My Applications
-    </button>
-
-    <a href="job-post.html" class="btn btn-primary btn-sm">✏️ Post a Job</a>
-    <a href="login.html" class="btn btn-ghost btn-sm">Sign In</a>
-  </div>
-</header>
-
-
-<!-- ══════════════════════════════════════════════
      HERO
 ═══════════════════════════════════════════════ -->
 <section class="hero" aria-label="Job search">
@@ -613,6 +573,19 @@
       autocomplete="off"
     >
     <button class="btn btn-primary" onclick="SokoniJobs.searchJobs()">Search</button>
+  </div>
+
+  <div class="jobs-hero-actions">
+    <button
+      class="btn btn-sm hidden"
+      data-my-apps
+      onclick="SokoniJobs.openMyApps()"
+      aria-label="View my job applications"
+      style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);"
+    >📋 My Applications</button>
+    <a href="job-post.html" class="btn btn-primary btn-sm">✏️ Post a Job</a>
+    <a id="jobsAuthBtn" href="login.html?return=jobs.html" class="btn btn-sm"
+       style="background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);">Sign In</a>
   </div>
 </section>
 

@@ -23,6 +23,7 @@
   var _SKIP = [
     'index.html',     /* home page has hand-crafted bottom nav */
     'education.html', /* education hub has its own education bottom nav */
+    'jobs.html',      /* jobs hub has its own bottom nav */
     'pos.html', 'seller.html', 'login.html', 'signup.html',
     'register.html', 'success.html', 'offline.html', 'admin.html',
     'profile.html', 'ecc.html', 'wap.html', 'gip.html', 'platform.html',
