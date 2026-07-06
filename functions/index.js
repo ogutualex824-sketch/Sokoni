@@ -9029,3 +9029,10 @@ exports.posGetLedgerExport     = posIntegrationsApi.posGetLedgerExport;
 exports.posGetEtimsExport      = posIntegrationsApi.posGetEtimsExport;
 exports.posReceiveErpUpdate    = posIntegrationsApi.posReceiveErpUpdate;
 exports.posGetApiDocs          = posIntegrationsApi.posGetApiDocs;
+
+/* ── SmartPOS 4.0 — Performance Monitoring & Benchmarking ──────────────── */
+const posPerf = require('./pos-perf');
+exports.recordPosEvent            = posPerf.recordPosEvent;
+exports.getPosPerfMetrics         = posPerf.getPosPerfMetrics;
+exports.getPosSpeedReport         = posPerf.getPosSpeedReport;
+exports.posScheduledPerfRollup    = posPerf.posScheduledPerfRollup;

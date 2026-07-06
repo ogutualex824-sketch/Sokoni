@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-no-header="true">
 <head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#111118">
@@ -559,7 +561,7 @@
       async function printQR(managerId, managerName) {
         const info = await ManagerAuth.getManagerQRData(managerId);
         const w = window.open('', '_blank', 'width=400,height=500');
-        w.document.write(`<!DOCTYPE html><html><head><title>QR Badge — ${_escH(managerName)}</title>
+        w.document.write(`<!DOCTYPE html><html data-no-header="true"><head><title>QR Badge — ${_escH(managerName)}</title>
           <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
           <style>body{font-family:sans-serif;text-align:center;padding:30px;background:#fff}
             .badge{border:2px solid #000;border-radius:12px;padding:20px;display:inline-block;max-width:240px}
