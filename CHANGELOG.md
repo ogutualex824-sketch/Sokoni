@@ -1,4 +1,50 @@
-﻿## [2026-07-07] — Async Jobs Engine v2.0 — Enterprise Background Processing
+﻿## [2026-07-07] — SmartPOS 4.0 — Polish, Scale & Market Readiness
+
+### Summary
+Full UX overhaul and operational excellence sprint for SmartPOS. Delivers premium daily operations hub, 10-panel real-time observability center, performance benchmarking Cloud Functions, and an enterprise launch report. All layouts redesigned with glassmorphism dark theme, animated KPI strips, phase-based workflows, and Firestore-wired live data.
+
+### Files Added / Changed
+| File | Change |
+|---|---|
+| `pos-daily.html` | Full rewrite — premium daily ops hub with Morning/Trading/Closing phase tabs, KPI strip, animated checklists, live Firestore metrics |
+| `pos-observability.html` | Full rewrite — 10-panel observability center: sessions, devices, queue, Redis, CF latency, payments, email, API, hardware, sync |
+| `functions/pos-perf.js` | New — 4 CFs: `recordPosEvent`, `getPosPerfMetrics`, `getPosSpeedReport`, `posScheduledPerfRollup` |
+| `SMARTPOS_4_LAUNCH_REPORT.md` | New — Enterprise launch report: benchmarks, terminal matrix, module checklist, deployment checklist, limitations |
+| `pos-launch-report.html` | New — Premium interactive launch report dashboard with score cards, animated bars, terminal matrix |
+| `functions/index.js` | +4 exports for pos-perf module |
+
+### New Collections
+- `posPerfEvents` — individual operation timing events
+- `posPerfRollup` — daily aggregates per seller/event type
+- `posPerfMonthly` — monthly roll-ups (created by scheduled CF)
+
+### New Firestore Indexes Needed
+- `posPerfEvents`: `(sellerId, day, eventType)`
+- `posPerfRollup`: `(sellerId, day)`, `(sellerId, day, eventType)`
+
+### Performance Targets (SmartPOS 4.0 Spec)
+| Operation | Target |
+|---|---|
+| New sale complete | < 10s |
+| Barcode scan | < 100ms |
+| Receipt print | < 2s |
+| M-Pesa STK push | < 5s |
+| Product search | < 500ms |
+
+### Security
+- No new secrets required for this sprint
+- All existing secrets (PAYMENT_HMAC_SECRET, LOYALTY_HMAC_SECRET) carry over
+- `recordPosEvent` validates event type allowlist server-side
+- Metadata is sanitised to an allowed-key allowlist only
+
+### Deployment Notes
+- Deploy `functions/pos-perf.js` with existing function deploy
+- No new Firestore rules required — existing auth rules apply
+- Scheduled rollup runs nightly at 01:00 EAT (22:00 UTC)
+
+---
+
+## [2026-07-07] — Async Jobs Engine v2.0 — Enterprise Background Processing
 
 ### Summary
 Complete enterprise-grade background job processing system built on Firestore + Cloud Functions Gen2. Replaces the placeholder `async-jobs-engine` module with a production-ready 11-CF engine backed by a per-job-type handler registry (27 handlers), distributed locking via Firestore transactions, 5-level priority queues (Critical → Background), exponential backoff (30s → 128m), DLQ with replay, event-driven job creation via `platformEvents`, and a premium admin monitoring dashboard.
