@@ -148,15 +148,26 @@ async function loginUser(){
 
     try {
         /* ── Firebase Authentication ── */
+        // ⚠️ AUTH DEBUG — remove logs once auth confirmed working
+        console.group('[SOKONI AUTH DEBUG] loginUser()');
+        console.log('firebaseAuth :', window.firebaseAuth ? 'ready ✓' : 'NULL ✗ — firebase.js may not have loaded');
+        console.log('firebaseApp  :', window.firebaseApp?.name);
+        console.log('email        :', email);
+
         const { signInWithEmailAndPassword } = await import(
             "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"
         );
 
         if(!window.firebaseAuth){
+            console.error('[SOKONI AUTH DEBUG] window.firebaseAuth is null — aborting login');
+            console.groupEnd();
             throw new Error("Firebase not ready. Please refresh the page.");
         }
 
+        console.log('Calling signInWithEmailAndPassword...');
         const cred = await signInWithEmailAndPassword(window.firebaseAuth, email, password);
+        console.log('Sign-in SUCCESS:', cred.user?.uid);
+        console.groupEnd();
 
         /* Fetch full profile from Firestore users collection */
         let profile = {
@@ -295,6 +306,10 @@ async function loginUser(){
         setTimeout(() => window.location.href = _safeRedir, 1200);
 
     } catch(err){
+        // ⚠️ AUTH DEBUG — exposes raw Firebase error code/message
+        console.error('[SOKONI AUTH DEBUG] loginUser FAILED — code:', err.code, '| message:', err.message, '| full error:', err);
+        console.groupEnd();
+
         if(btn){ btn.disabled = false; btn.textContent = "Sign In →"; }
 
         if(typeof SokoniSecurity !== 'undefined'){
@@ -783,6 +798,12 @@ async function signInWithGoogle() {
         return;
     }
 
+    // ⚠️ AUTH DEBUG
+    console.group('[SOKONI AUTH DEBUG] signInWithGoogle()');
+    console.log('firebaseAuth :', window.firebaseAuth ? 'ready ✓' : 'NULL ✗');
+    console.log('popup supported:', _isPopupSupported());
+    console.log('domain       :', location.hostname);
+
     const btn = document.getElementById('googleSignInBtn');
     if (btn) { btn.disabled = true; _googleBtnLabel(btn, 'Connecting to Google…'); }
 
@@ -800,9 +821,13 @@ async function signInWithGoogle() {
 
         if (_isPopupSupported()) {
             try {
+                console.log('[SOKONI AUTH DEBUG] Calling signInWithPopup...');
                 const result = await signInWithPopup(window.firebaseAuth, provider);
+                console.log('[SOKONI AUTH DEBUG] Popup sign-in SUCCESS:', result.user?.uid);
+                console.groupEnd();
                 await _handleGoogleResult(result);
             } catch (popupErr) {
+                console.error('[SOKONI AUTH DEBUG] signInWithPopup FAILED — code:', popupErr.code, '| message:', popupErr.message, '| full:', popupErr);
                 if (popupErr.code === 'auth/popup-blocked') {
                     /* Transparent fallback to redirect */
                     _googleBtnLabel(btn, 'Redirecting to Google…');
@@ -811,6 +836,7 @@ async function signInWithGoogle() {
                     _handleGoogleLinkError(popupErr);
                 } else if (popupErr.code === 'auth/popup-closed-by-user' ||
                            popupErr.code === 'auth/cancelled-popup-request') {
+                    console.groupEnd();
                     _resetGoogleBtn(); /* silent */
                 } else {
                     throw popupErr;
@@ -818,10 +844,15 @@ async function signInWithGoogle() {
             }
         } else {
             /* PWA / iOS — redirect flow */
+            console.log('[SOKONI AUTH DEBUG] Using signInWithRedirect (PWA/iOS)');
+            console.groupEnd();
             _googleBtnLabel(btn, 'Redirecting to Google…');
             await signInWithRedirect(window.firebaseAuth, provider);
         }
     } catch (err) {
+        // ⚠️ AUTH DEBUG
+        console.error('[SOKONI AUTH DEBUG] signInWithGoogle FAILED — code:', err.code, '| message:', err.message, '| full:', err);
+        console.groupEnd();
         _resetGoogleBtn();
         const msg = _googleAuthErr(err.code);
         if (msg) showAuthMsg(msg, 'error');
@@ -1078,7 +1109,9 @@ async function sendPhoneOTP() {
             });
         }
 
+        console.log('[SOKONI AUTH DEBUG] Calling signInWithPhoneNumber to', fullPhone);
         _phoneConfirmResult = await signInWithPhoneNumber(window.firebaseAuth, fullPhone, _recaptchaVerifier);
+        console.log('[SOKONI AUTH DEBUG] OTP sent successfully ✓');
 
         const otpEntry = document.getElementById('otpEntry');
         if (otpEntry) otpEntry.style.display = 'block';
@@ -1089,6 +1122,8 @@ async function sendPhoneOTP() {
         showAuthMsg('OTP sent to ' + fullPhone + '. Check your messages.', 'success');
 
     } catch (err) {
+        // ⚠️ AUTH DEBUG
+        console.error('[SOKONI AUTH DEBUG] sendPhoneOTP FAILED — code:', err.code, '| message:', err.message, '| full:', err);
         if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
         _recaptchaVerifier = null;
         showAuthMsg(
@@ -1223,7 +1258,10 @@ async function _setPersistenceFromUI() {
             window.firebaseAuth,
             remember ? browserLocalPersistence : browserSessionPersistence
         );
-    } catch (_) {}
+    } catch (err) {
+        // ⚠️ AUTH DEBUG — was silently swallowed
+        console.error('[SOKONI AUTH DEBUG] _setPersistenceFromUI FAILED:', err.code, err.message, err);
+    }
 }
 
 function toggleLoginPw() {

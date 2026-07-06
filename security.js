@@ -51,15 +51,15 @@ const SokoniSecurity = (() => {
   function injectCSP(){
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net https://cdn.intasend.com https://www.gstatic.com https://apis.google.com",
+      "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net https://cdn.intasend.com https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net",
       "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net",
       "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.tile.openstreetmap.org https://images.unsplash.com https://*.googleusercontent.com https://mysokoni.co.ke https://www.google.com https://www.gstatic.com",
-      "connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://fcm.googleapis.com https://firebase.googleapis.com https://firebaseappcheck.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://www.gstatic.com https://api.intasend.com https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://www.google.com https://etims-api.kra.go.ke https://etims-sbx.kra.go.ke https://us-central1-sokoni-aeb26.cloudfunctions.net",
+      "connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://fcm.googleapis.com https://firebase.googleapis.com https://firebaseappcheck.googleapis.com https://content-firebaseappcheck.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://www.gstatic.com https://api.intasend.com https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://www.google.com https://etims-api.kra.go.ke https://etims-sbx.kra.go.ke https://us-central1-sokoni-aeb26.cloudfunctions.net",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
       "media-src 'self' blob: https://firebasestorage.googleapis.com https://storage.googleapis.com",
-      "frame-src 'self' https://www.google.com https://maps.google.com https://maps.googleapis.com https://*.firebaseapp.com",
+      "frame-src 'self' https://www.google.com https://maps.google.com https://maps.googleapis.com https://*.firebaseapp.com https://accounts.google.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -674,11 +674,12 @@ window.handleError       = SokoniSecurity.handleError;
   window.addEventListener('unhandledrejection', function(e){
     var reason = e.reason;
     var msg = reason && (reason.message || reason.code || String(reason));
-    /* Only suppress non-critical errors — let actual logic errors through */
-    if(!msg || /network|quota|offline|unavailable|aborted|fetch|firebase/i.test(msg)){
-      console.warn('[SOKONI] Suppressed rejection:', msg);
-      e.preventDefault();
-    }
+    /* ⚠️ AUTH DEBUG: suppression disabled — all Firebase/network errors now visible in console.
+       Re-enable e.preventDefault() once root cause is confirmed and fixed. */
+    console.error('[SOKONI] Unhandled rejection (auth debug):', msg, reason);
+    // if(!msg || /network|quota|offline|unavailable|aborted|fetch|firebase/i.test(msg)){
+    //   e.preventDefault();
+    // }
   });
 
   /* 2. Passive touch/scroll listeners — eliminates scroll jank on mobile */
