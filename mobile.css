@@ -2356,7 +2356,7 @@ html {
     gap: 5px;
     position: fixed;
     top: 220px;
-    right: 0;
+    right: env(safe-area-inset-right, 0px);
     z-index: 8997;
     background: rgba(8,8,8,0.96);
     border: 1px solid rgba(113,255,0,0.3);

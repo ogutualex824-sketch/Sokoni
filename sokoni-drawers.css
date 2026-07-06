@@ -1,5 +1,5 @@
 /* =============================================================
-   SOKONI Universal Drawer System v1.0
+   SOKONI Universal Drawer System v2.0
    Mobile  : 90vw / max 420px
    Tablet  : 480px
    Desktop : 520px
@@ -188,18 +188,55 @@
 /* ── Body scroll lock — applied while any drawer is open ─────── */
 body.sk-body-locked {
   overflow: hidden !important;
+  overflow-x: hidden !important;
   /* iOS: prevents the document from scrolling behind the drawer */
   position: fixed !important;
   width: 100% !important;
 }
 
-/* ── FABs slide away from open drawer ───────────────────────── */
+/* ── Global overflow guard — no page-level horizontal scroll ─── */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* ── FABs — hide while any SK drawer is open ────────────────── */
 body.sk-drawer-active #sokoniScrollTop,
 body.sk-drawer-active #kassBtn,
 body.sk-drawer-active #sokoni-wa-support,
 body.sk-drawer-active .sk-fab,
 body.sk-drawer-active [class*="float-btn"] {
-  transition: right var(--sk-d-dur) ease, left var(--sk-d-dur) ease !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity var(--sk-d-dur) ease !important;
+}
+
+/* ── FABs — also hide while seller Live Panel is open ───────── */
+body.slp-panel-open #sokoniScrollTop,
+body.slp-panel-open #kassBtn,
+body.slp-panel-open #sokoni-wa-support,
+body.slp-panel-open .sk-fab,
+body.slp-panel-open [class*="float-btn"],
+body.slp-panel-open #slpTrigger {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity var(--sk-d-dur) ease !important;
+}
+
+/* ── Drawer inner content — never overflow horizontally ─────── */
+.sk-drawer-body * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.sk-drawer-body table {
+  table-layout: fixed;
+  width: 100%;
+}
+.sk-drawer-body img,
+.sk-drawer-body video,
+.sk-drawer-body canvas {
+  max-width: 100% !important;
+  height: auto;
 }
 
 /* ── Light mode overrides ───────────────────────────────────── */

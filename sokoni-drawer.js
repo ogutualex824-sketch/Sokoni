@@ -1,5 +1,5 @@
 /* =============================================================
-   SOKONI Universal Drawer Manager v1.0
+   SOKONI Universal Drawer Manager v2.0
    API:
      SokoniDrawer.open(id, title?, opts?)
      SokoniDrawer.close(id)
@@ -194,8 +194,23 @@
 
   /* ── Global ESC key ─────────────────────────────────────── */
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && _stack.length > 0) {
+    if (e.key !== 'Escape') return;
+    /* Close topmost SK drawer */
+    if (_stack.length > 0) {
       close(_stack[_stack.length - 1]);
+      return;
+    }
+    /* Also close seller More drawer if open */
+    var moreDrawer = document.getElementById('sdmMoreDrawer');
+    if (moreDrawer && moreDrawer.style.display !== 'none') {
+      var morePanel = document.getElementById('sdmMorePanel');
+      moreDrawer.style.display = 'none';
+      if (morePanel) morePanel.style.transform = 'translateY(100%)';
+    }
+    /* Also close seller Live Panel if open */
+    if (typeof closeLivePanel === 'function') {
+      var lp = document.getElementById('sellerLivePanel');
+      if (lp && lp.classList.contains('slp-active')) closeLivePanel();
     }
   });
 
