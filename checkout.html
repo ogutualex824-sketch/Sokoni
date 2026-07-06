@@ -1730,6 +1730,28 @@ function placeOrder(){
     showPushToast("⚠️ Slow Down", "Too many attempts. Please wait a moment.", "orange");
     return;
   }
+
+  /* Zero Trust: evaluate access before processing payment */
+  if (typeof SokoniZeroTrust !== 'undefined') {
+    const _cartTotal = (typeof cart !== 'undefined' ? cart : [])
+      .reduce(function (s, i) { return s + (parseFloat(i.price) || 0) * (parseInt(i.qty) || 1); }, 0);
+    SokoniZeroTrust.guard('checkout', 'orders', { transactionAmount: _cartTotal })
+      .then(function (decision) {
+        if (!decision.allowed && !decision.failedOpen) {
+          showPushToast('🔒 Access Denied', decision.reason === 'step_up_cancelled'
+            ? 'Verification is required to complete this purchase.'
+            : 'Checkout blocked. Please contact support.', 'red');
+          return;
+        }
+        _placeOrderCore();
+      })
+      .catch(function () { _placeOrderCore(); }); /* fail open on guard error */
+    return;
+  }
+  _placeOrderCore();
+}
+
+function _placeOrderCore(){
   const name = document.getElementById("coName").value.trim();
   const phone = document.getElementById("coPhone").value.trim();
   const addr = document.getElementById("coAddress").value.trim();

@@ -541,6 +541,116 @@ if (_bc) {
 
 /* Start idle timer on load */
 _idleTimer = setTimeout(() => {}, 0);
+
+/* ── Firestore cross-device subscription ────────────────────────────────────
+   When opened on a separate physical device (tablet / pole display), the URL
+   must include ?session=<sessionId>.  The display subscribes to the
+   posCustomerDisplays/{sessionId} Firestore document that the cashier POS
+   writes to via posUpdateCustomerDisplay Cloud Function.
+
+   Falls back gracefully to BroadcastChannel-only mode when no session param
+   is present (same-device window scenario).
+─────────────────────────────────────────────────────────────────────────── */
+(function initFirestoreDisplay() {
+  const params    = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session');
+  if (!sessionId) return; // same-device mode — BroadcastChannel handles it
+
+  /* Load Firebase if not already loaded */
+  if (typeof firebase === 'undefined') {
+    const s = document.createElement('script');
+    s.src = 'firebase.js';
+    s.onload = () => subscribeToSession(sessionId);
+    document.head.appendChild(s);
+  } else {
+    subscribeToSession(sessionId);
+  }
+
+  function subscribeToSession(sid) {
+    if (typeof firebase === 'undefined') return;
+
+    const db = firebase.firestore();
+    const docRef = db.collection('posCustomerDisplays').doc(sid);
+
+    /* Show a "connecting" state */
+    const merchantEl = document.getElementById('merchant-name');
+    if (merchantEl) merchantEl.innerHTML = 'Connecting… <span>POS</span>';
+
+    const unsubscribe = docRef.onSnapshot(
+      (snap) => {
+        if (!snap.exists) return;
+        const data = snap.data();
+
+        /* Update merchant branding from display config */
+        if (data.branding?.name) {
+          _state.merchantName = data.branding.name;
+          const el = document.getElementById('merchant-name');
+          if (el) {
+            const d = document.createElement('div');
+            d.textContent = data.branding.name;
+            el.innerHTML = d.innerHTML + ' <span>POS</span>';
+          }
+        }
+        if (data.branding?.promo) {
+          const el = document.getElementById('idle-promo');
+          if (el && data.branding.promo.title) {
+            const h3 = document.createElement('h3');
+            const p  = document.createElement('p');
+            h3.textContent = data.branding.promo.title || '';
+            p.textContent  = data.branding.promo.body  || '';
+            el.textContent = '';
+            el.appendChild(h3);
+            el.appendChild(p);
+          }
+        }
+
+        /* Map Firestore display document → render() call */
+        const type = data.type || 'idle';
+
+        if (type === 'idle') {
+          resetToIdle();
+          return;
+        }
+
+        if (type === 'thankyou') {
+          showThankYou({
+            customerName:  data.customerName || '',
+            loyaltyEarned: Number(data.loyaltyEarned) || 0,
+            receiptUrl:    data.receiptUrl   || '',
+          });
+          return;
+        }
+
+        /* type === 'cart' or 'payment' */
+        render({
+          items:    Array.isArray(data.cart) ? data.cart : [],
+          subtotal: Number(data.subtotal) || 0,
+          discount: Number(data.discount) || 0,
+          tax:      Number(data.tax)      || 0,
+          total:    Number(data.total)    || 0,
+          loyalty:  data.loyalty  || null,
+          payment:  data.payment  || null,
+          customer: data.customer || null,
+        });
+      },
+      (err) => {
+        /* Connection error — show degraded UI without crashing */
+        console.warn('[POS Display] Firestore subscription error:', err.code);
+        const el = document.getElementById('merchant-name');
+        if (el) el.innerHTML = 'SOKONI <span>POS</span>';
+        /* Remain functional via BroadcastChannel */
+      }
+    );
+
+    /* Clean up subscription if window is closed */
+    window.addEventListener('beforeunload', unsubscribe);
+
+    /* Signal to the cashier POS that the display is online */
+    if (_bc) {
+      setTimeout(() => _bc.postMessage({ type: 'display_ready', sessionId: sid }), 800);
+    }
+  }
+})();
 </script>
 </body>
 </html>

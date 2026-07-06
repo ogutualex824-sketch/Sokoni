@@ -36,6 +36,17 @@
   _injectAsset('script', { src: 'sokoni-notif-engine.js', defer: true }, 'sk-notif-engine-script');
   /* Notification center — bell UI, slide-in panel, inline actions */
   _injectAsset('script', { src: 'sokoni-notif-center.js', defer: true }, 'sk-notif-center-script');
+  /* Zero Trust client SDK — device fingerprint, risk cache, step-up auth guard */
+  _injectAsset('script', { src: 'sokoni-zero-trust.js', defer: true }, 'sk-zero-trust-script');
+
+  /* Initialize Zero Trust after Firebase auth is available */
+  (function () {
+    function _initZT() {
+      if (window.SokoniZeroTrust) { window.SokoniZeroTrust.init(); return; }
+      setTimeout(_initZT, 400);
+    }
+    window.addEventListener('load', function () { setTimeout(_initZT, 600); }, { once: true });
+  }());
 
   /* ── Offline development mock layer — lazy-loads ONLY when Firebase is
      unavailable. Zero cost in production when Firebase is connected.

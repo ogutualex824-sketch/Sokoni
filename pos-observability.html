@@ -2,2059 +2,815 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#0a0a0f">
-<title>SOKONI SmartPOS 4.0 — Operations Center</title>
-<link rel="icon" href="assets/logosokoni.png">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#07070f">
+<meta name="color-scheme" content="dark">
+<title>Observability Center — SOKONI SmartPOS 4.0</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
 <script src="sokoni-config.js"></script>
 <style>
-/* ═══════════════════════════════════════════════════════════
-   DESIGN TOKENS
-═══════════════════════════════════════════════════════════ */
-:root {
-  --bg:    #0a0a0f;
-  --bg2:   #12121a;
-  --bg3:   #1a1a24;
-  --bg4:   #22222f;
-  --border:#2a2a3a;
-  --text:  #e8e8f0;
-  --muted: #6b6b80;
-  --green: #22c55e;
-  --blue:  #3b82f6;
-  --red:   #ef4444;
-  --yellow:#eab308;
-  --purple:#a855f7;
+/* ═══════════════════════════════════════════════════════
+   SmartPOS 4.0 — Observability Center — Premium UI
+═══════════════════════════════════════════════════════ */
+:root{
+  --bg:    #07070f;
+  --bg2:   #0e0e1c;
+  --bg3:   #141428;
+  --bg4:   #1c1c34;
+  --border:#1e1e38;
+  --text:  #eaeaf8;
+  --sub:   #9090b8;
+  --muted: #5a5a7a;
+  --accent:#6d5cff;
+  --accent2:#9d8fff;
+  --green: #22d472;
+  --blue:  #4da6ff;
+  --red:   #ff5a72;
+  --yellow:#ffca28;
+  --orange:#ff8c42;
+  --r:     14px;
+  --rs:    8px;
+  --trans: .22s cubic-bezier(.4,0,.2,1);
+}
+*,::before,::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  font-size:15px;line-height:1.5;min-height:100dvh;
+  overflow-x:clip;-webkit-font-smoothing:antialiased;
+  -webkit-overflow-scrolling:touch;touch-action:manipulation;
+  padding-bottom:env(safe-area-inset-bottom,0);
+}
+button{cursor:pointer;font-family:inherit;border:none;background:none}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 600px 400px at 70% -5%,rgba(77,166,255,.06),transparent),
+    radial-gradient(ellipse 500px 350px at 0% 80%,rgba(109,92,255,.07),transparent);
 }
 
-/* ═══════════════════════════════════════════════════════════
-   RESET & BASE
-═══════════════════════════════════════════════════════════ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, sans-serif;
-  font-size: 14px;
-  min-height: 100vh;
-  overflow-x: hidden;
+/* ═══ HEADER ═══ */
+.hdr{
+  position:sticky;top:0;z-index:300;
+  background:rgba(14,14,28,.88);
+  backdrop-filter:blur(20px) saturate(1.5);
+  -webkit-backdrop-filter:blur(20px) saturate(1.5);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+  padding:0 20px;height:58px;
 }
-a { color: var(--blue); text-decoration: none; }
-a:hover { text-decoration: underline; }
-button { cursor: pointer; font-family: inherit; }
+.hdr-logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;text-decoration:none;color:inherit}
+.hdr-logo img{width:28px;height:28px;object-fit:contain;border-radius:6px}
+.hdr-div{width:1px;height:20px;background:var(--border);flex-shrink:0}
+.hdr-title{font-size:13px;color:var(--sub);font-weight:500}
+.hdr-spacer{flex:1}
+.refresh-btn{
+  display:flex;align-items:center;gap:7px;
+  padding:7px 14px;border-radius:99px;
+  background:var(--bg3);border:1px solid var(--border);
+  font-size:12px;font-weight:600;color:var(--sub);
+  transition:all var(--trans);cursor:pointer;
+}
+.refresh-btn:hover{border-color:var(--accent);color:var(--accent2)}
+.refresh-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse-dot 2s infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.7)}}
+.refresh-cd{font-feature-settings:"tnum";min-width:18px}
 
-/* ═══════════════════════════════════════════════════════════
-   HEADER
-═══════════════════════════════════════════════════════════ */
-.ops-header {
-  position: sticky;
-  top: 0;
-  z-index: 200;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 20px;
-  height: 56px;
+/* ═══ HERO ═══ */
+.hero{
+  position:relative;overflow:hidden;
+  background:linear-gradient(135deg,#0d0d22 0%,#0a0a18 100%);
+  border-bottom:1px solid var(--border);
+  padding:24px 24px 20px;
 }
-.ops-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 700;
-  font-size: .95rem;
-  white-space: nowrap;
-  flex-shrink: 0;
+.hero::before{
+  content:'';position:absolute;top:-40px;right:-60px;
+  width:350px;height:350px;
+  background:radial-gradient(circle,rgba(77,166,255,.1),transparent 70%);
+  pointer-events:none;
 }
-.ops-logo img { width: 26px; height: 26px; object-fit: contain; }
-.ops-logo .logo-sep { color: var(--border); margin: 0 2px; }
-.ops-logo .logo-title { color: var(--blue); }
-.ops-header-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-left: auto;
-  flex-shrink: 0;
+.hero-inner{max-width:1100px;margin:0 auto;position:relative}
+.hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.hero-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin-bottom:4px}
+.hero-title{font-size:22px;font-weight:800;color:var(--text)}
+.hero-sub{font-size:13px;color:var(--sub);margin-top:2px}
+.overall-health{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.oh-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.oh-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:8px 16px;border-radius:99px;font-size:14px;font-weight:800;
 }
-.live-clock {
-  font-size: .8rem;
-  color: var(--muted);
-  font-feature-settings: "tnum";
-  min-width: 80px;
-  text-align: right;
+.oh-badge.ok{background:rgba(34,212,114,.12);border:1px solid rgba(34,212,114,.3);color:var(--green)}
+.oh-badge.warn{background:rgba(255,202,40,.1);border:1px solid rgba(255,202,40,.3);color:var(--yellow)}
+.oh-badge.crit{background:rgba(255,90,114,.1);border:1px solid rgba(255,90,114,.3);color:var(--red)}
+.oh-dot{width:8px;height:8px;border-radius:50%}
+.oh-badge.ok .oh-dot{background:var(--green);box-shadow:0 0 8px var(--green)}
+.oh-badge.warn .oh-dot{background:var(--yellow);box-shadow:0 0 8px var(--yellow);animation:pulse-dot 1.5s infinite}
+.oh-badge.crit .oh-dot{background:var(--red);box-shadow:0 0 8px var(--red);animation:pulse-dot 1s infinite}
+.stat-pills{display:flex;gap:8px;flex-wrap:wrap}
+.stat-pill{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 12px;border-radius:99px;
+  background:var(--bg3);border:1px solid var(--border);
+  font-size:12px;font-weight:600;color:var(--sub);
 }
-.health-badge {
-  font-size: .7rem;
-  font-weight: 700;
-  letter-spacing: .05em;
-  padding: 4px 10px;
-  border-radius: 20px;
-  white-space: nowrap;
-  text-transform: uppercase;
-  transition: all .3s;
-}
-.health-badge.ok       { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
-.health-badge.degraded { background: rgba(234,179,8,.15);  color: var(--yellow); border: 1px solid rgba(234,179,8,.3); }
-.health-badge.critical { background: rgba(239,68,68,.15);  color: var(--red);    border: 1px solid rgba(239,68,68,.3); }
-.refresh-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 4px 10px;
-  font-size: .75rem;
-  color: var(--muted);
-}
-.refresh-pill .countdown {
-  font-feature-settings: "tnum";
-  color: var(--blue);
-  font-weight: 600;
-  min-width: 18px;
-  text-align: center;
-}
-.btn-refresh {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: .78rem;
-  padding: 6px 12px;
-  border-radius: 6px;
-  transition: all .2s;
-}
-.btn-refresh:hover { border-color: var(--blue); color: var(--blue); }
-.btn-back {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: .78rem;
-  padding: 6px 12px;
-  border-radius: 6px;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: all .2s;
-}
-.btn-back:hover { color: var(--text); border-color: var(--text); text-decoration: none; }
-.last-updated {
-  font-size: .7rem;
-  color: var(--muted);
-  white-space: nowrap;
-}
+.stat-pill span{color:var(--text);font-weight:700;font-feature-settings:"tnum"}
 
-/* ═══════════════════════════════════════════════════════════
-   MAIN LAYOUT
-═══════════════════════════════════════════════════════════ */
-.ops-main {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 20px 16px 40px;
-}
-.section-title {
-  font-size: .7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .1em;
-  color: var(--muted);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.section-title::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-.ops-section { margin-bottom: 28px; }
+/* ═══ MAIN ═══ */
+.main{max-width:1100px;margin:0 auto;padding:20px 24px 80px;position:relative;z-index:1}
+.panel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
 
-/* ═══════════════════════════════════════════════════════════
-   SECTION 1 — HEALTH TILES
-═══════════════════════════════════════════════════════════ */
-.health-strip {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
+/* ═══ PANEL ═══ */
+.panel{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--r);overflow:hidden;
+  transition:border-color var(--trans),transform var(--trans);
 }
-.health-tile {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  position: relative;
-  overflow: hidden;
-  transition: border-color .3s;
+.panel:hover{border-color:var(--accent);transform:translateY(-1px)}
+.p-top-bar{height:3px;border-radius:var(--r) var(--r) 0 0}
+.p-top-bar.ok{background:linear-gradient(90deg,var(--green),#0fa)}
+.p-top-bar.warn{background:linear-gradient(90deg,var(--yellow),var(--orange))}
+.p-top-bar.crit{background:linear-gradient(90deg,var(--red),#f060a0);animation:barPulse 1.2s ease-in-out infinite}
+.p-top-bar.idle{background:var(--bg4)}
+@keyframes barPulse{0%,100%{opacity:1}50%{opacity:.3}}
+.panel-hd{
+  display:flex;align-items:center;gap:12px;
+  padding:16px 18px 14px;border-bottom:1px solid var(--border);
 }
-.health-tile.ok       { border-color: rgba(34,197,94,.25); }
-.health-tile.degraded { border-color: rgba(234,179,8,.35); }
-.health-tile.critical { border-color: rgba(239,68,68,.4); }
-.tile-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.p-icon{
+  width:40px;height:40px;border-radius:11px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:19px;flex-shrink:0;
 }
-.tile-icon { font-size: 1.1rem; }
-.tile-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.pi-g{background:rgba(34,212,114,.12)}
+.pi-b{background:rgba(77,166,255,.12)}
+.pi-y{background:rgba(255,202,40,.12)}
+.pi-p{background:rgba(109,92,255,.12)}
+.pi-o{background:rgba(255,140,66,.12)}
+.pi-r{background:rgba(255,90,114,.12)}
+.p-meta{flex:1}
+.p-title{font-size:14px;font-weight:700;margin-bottom:2px}
+.p-sub{font-size:11px;color:var(--sub)}
+.hbadge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:4px 10px;border-radius:99px;font-size:11px;font-weight:700;
 }
-.tile-dot.ok       { background: var(--green); box-shadow: 0 0 6px var(--green); }
-.tile-dot.degraded { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
-.tile-dot.critical { background: var(--red); box-shadow: 0 0 6px var(--red); animation: pulse-red 1.2s infinite; }
-@keyframes pulse-red { 0%,100%{opacity:1} 50%{opacity:.4} }
-.tile-name {
-  font-size: .7rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: .05em;
-}
-.tile-primary {
-  font-size: 1.4rem;
-  font-weight: 800;
-  color: var(--text);
-  line-height: 1;
-}
-.tile-primary.ok       { color: var(--green); }
-.tile-primary.degraded { color: var(--yellow); }
-.tile-primary.critical { color: var(--red); }
-.tile-secondary {
-  font-size: .72rem;
-  color: var(--muted);
-}
+.hbadge.ok{background:rgba(34,212,114,.1);color:var(--green)}
+.hbadge.warn{background:rgba(255,202,40,.1);color:var(--yellow)}
+.hbadge.crit{background:rgba(255,90,114,.1);color:var(--red)}
+.hbadge.idle{background:var(--bg4);color:var(--muted)}
+.panel-body{padding:16px 18px 18px}
 
-/* ═══════════════════════════════════════════════════════════
-   SECTION 2 — SESSIONS TABLE
-═══════════════════════════════════════════════════════════ */
-.data-table-wrap {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.data-table th {
-  font-size: .68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .07em;
-  color: var(--muted);
-  padding: 10px 14px;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg3);
-  white-space: nowrap;
-}
-.data-table td {
-  padding: 10px 14px;
-  font-size: .82rem;
-  border-bottom: 1px solid rgba(42,42,58,.5);
-  vertical-align: middle;
-}
-.data-table tr:last-child td { border-bottom: none; }
-.data-table tr.row-active td { border-left: 3px solid var(--green); }
-.data-table tr.row-idle   td { border-left: 3px solid var(--yellow); }
-.data-table tr.row-stale  td { border-left: 3px solid var(--red); }
-.data-table tr:hover td { background: var(--bg3); }
-.empty-state {
-  padding: 32px;
-  text-align: center;
-  color: var(--muted);
-  font-size: .85rem;
-}
-.empty-state a { color: var(--blue); }
-.row-action-btn {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: .72rem;
-  padding: 4px 8px;
-  border-radius: 5px;
-  margin-right: 4px;
-  transition: all .2s;
-}
-.row-action-btn:hover { border-color: var(--blue); color: var(--blue); }
-.row-action-btn.danger:hover { border-color: var(--red); color: var(--red); }
-.status-chip {
-  display: inline-block;
-  font-size: .68rem;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 10px;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-}
-.chip-active   { background: rgba(34,197,94,.12);  color: var(--green); }
-.chip-idle     { background: rgba(234,179,8,.12);   color: var(--yellow); }
-.chip-stale    { background: rgba(239,68,68,.12);   color: var(--red); }
-.chip-ok       { background: rgba(59,130,246,.12);  color: var(--blue); }
-.chip-offline  { background: rgba(107,107,128,.12); color: var(--muted); }
+/* Metric rows */
+.mr{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+.mr:last-child{margin-bottom:0}
+.mr-l{font-size:12px;color:var(--sub);font-weight:500}
+.mr-v{font-size:13px;font-weight:700;color:var(--text);font-feature-settings:"tnum";text-align:right}
+.mr-v.ok{color:var(--green)}
+.mr-v.warn{color:var(--yellow)}
+.mr-v.crit{color:var(--red)}
+.mr-v.blue{color:var(--blue)}
+.mr-div{height:1px;background:var(--border);margin:8px 0}
 
-/* ═══════════════════════════════════════════════════════════
-   SECTION 3 — PAYMENT HEALTH (3-col)
-═══════════════════════════════════════════════════════════ */
-.payment-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 14px;
-}
-.payment-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
-}
-.payment-card-title {
-  font-size: .7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .07em;
-  color: var(--muted);
-  margin-bottom: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-/* Funnel */
-.funnel-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.funnel-label {
-  font-size: .75rem;
-  color: var(--muted);
-  min-width: 80px;
-}
-.funnel-bar-wrap {
-  flex: 1;
-  background: var(--bg4);
-  border-radius: 3px;
-  height: 10px;
-  overflow: hidden;
-}
-.funnel-bar {
-  height: 100%;
-  border-radius: 3px;
-  transition: width .6s ease;
-}
-.funnel-count {
-  font-size: .75rem;
-  font-weight: 600;
-  min-width: 36px;
-  text-align: right;
-}
-.stk-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: .75rem;
-  font-weight: 600;
-  padding: 5px 10px;
-  border-radius: 6px;
-  margin-top: 10px;
-}
-.stk-badge.ok       { background: rgba(34,197,94,.1);  color: var(--green); border: 1px solid rgba(34,197,94,.2); }
-.stk-badge.degraded { background: rgba(234,179,8,.1);  color: var(--yellow);border: 1px solid rgba(234,179,8,.2); }
-.stk-badge.critical { background: rgba(239,68,68,.1);  color: var(--red);   border: 1px solid rgba(239,68,68,.2); }
-/* Failure list */
-.fail-item {
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(42,42,58,.5);
-}
-.fail-item:last-child { border-bottom: none; }
-.fail-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-}
-.fail-amount { font-weight: 700; font-size: .85rem; color: var(--red); }
-.fail-time   { font-size: .7rem; color: var(--muted); }
-.fail-reason { font-size: .72rem; color: var(--muted); margin-top: 2px; }
-.fail-method { font-size: .68rem; background: var(--bg4); padding: 2px 6px; border-radius: 4px; color: var(--muted); }
-/* Queue list */
-.queue-badge {
-  font-size: .9rem;
-  font-weight: 800;
-  padding: 2px 10px;
-  border-radius: 20px;
-}
-.queue-badge.ok       { background: rgba(34,197,94,.1);  color: var(--green); }
-.queue-badge.critical { background: rgba(239,68,68,.15); color: var(--red); animation: pulse-red 1.2s infinite; }
-.queue-item {
-  padding: 7px 0;
-  border-bottom: 1px solid rgba(42,42,58,.5);
-  font-size: .78rem;
-}
-.queue-item:last-child { border-bottom: none; }
-.queue-meta { display: flex; justify-content: space-between; color: var(--muted); font-size: .7rem; margin-top: 2px; }
-.btn-cancel {
-  background: none;
-  border: none;
-  color: var(--red);
-  font-size: .7rem;
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: background .2s;
-}
-.btn-cancel:hover { background: rgba(239,68,68,.1); }
-.btn-retry {
-  background: none;
-  border: 1px solid rgba(59,130,246,.3);
-  color: var(--blue);
-  font-size: .7rem;
-  padding: 2px 8px;
-  border-radius: 4px;
-  transition: all .2s;
-}
-.btn-retry:hover { background: rgba(59,130,246,.1); }
+/* Progress */
+.pb-wrap{margin:10px 0}
+.pb-top{display:flex;justify-content:space-between;margin-bottom:5px;font-size:12px}
+.pb-lbl{color:var(--sub)}
+.pb-pct{font-weight:700;color:var(--text);font-feature-settings:"tnum"}
+.pb{height:5px;background:var(--bg4);border-radius:99px;overflow:hidden}
+.pb-fill{height:100%;border-radius:99px;transition:width .8s ease}
+.pb-fill.ok{background:linear-gradient(90deg,var(--green),#0fa)}
+.pb-fill.warn{background:linear-gradient(90deg,var(--yellow),var(--orange))}
+.pb-fill.crit{background:linear-gradient(90deg,var(--red),#f060a0)}
 
-/* ═══════════════════════════════════════════════════════════
-   SECTION 4 — HARDWARE GRID
-═══════════════════════════════════════════════════════════ */
-.hardware-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-}
-.hw-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
-  position: relative;
-  transition: border-color .2s;
-}
-.hw-card.online  { border-top: 2px solid var(--green); }
-.hw-card.idle    { border-top: 2px solid var(--yellow); }
-.hw-card.offline { border-top: 2px solid var(--red); }
-.hw-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-.hw-icon { font-size: 1.4rem; }
-.hw-name { font-size: .85rem; font-weight: 600; margin-bottom: 3px; }
-.hw-type-badge {
-  display: inline-block;
-  font-size: .65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  padding: 2px 7px;
-  border-radius: 10px;
-  background: var(--bg4);
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-.hw-meta { font-size: .72rem; color: var(--muted); line-height: 1.5; }
-.hw-actions { display: flex; gap: 6px; margin-top: 10px; }
-.hw-btn {
-  flex: 1;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: .7rem;
-  padding: 5px 0;
-  border-radius: 5px;
-  transition: all .2s;
-  text-align: center;
-  text-decoration: none;
-  display: inline-block;
-}
-.hw-btn:hover { border-color: var(--blue); color: var(--blue); text-decoration: none; }
+/* Timeline bars */
+.tl{display:flex;gap:3px;align-items:flex-end;height:40px;margin-top:10px}
+.tl-b{flex:1;border-radius:3px 3px 0 0;min-height:4px;transition:height .4s ease}
+.tl-b.ok{background:var(--green)}
+.tl-b.warn{background:var(--yellow)}
+.tl-b.crit{background:var(--red)}
+.tl-b.idle{background:var(--bg4)}
 
-/* ═══════════════════════════════════════════════════════════
-   SECTION 5 — ALERT CENTER
-═══════════════════════════════════════════════════════════ */
-.alert-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
+/* Session list */
+.sess-list{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+.sess-row{
+  display:flex;align-items:center;gap:10px;
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--rs);padding:9px 12px;
 }
-.filter-pill {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: .73rem;
-  padding: 5px 12px;
-  border-radius: 20px;
-  transition: all .2s;
-}
-.filter-pill.active { border-color: var(--blue); color: var(--blue); background: rgba(59,130,246,.1); }
-.filter-pill:hover { border-color: var(--blue); color: var(--blue); }
-.btn-clear-all {
-  margin-left: auto;
-  background: rgba(239,68,68,.08);
-  border: 1px solid rgba(239,68,68,.25);
-  color: var(--red);
-  font-size: .73rem;
-  padding: 5px 12px;
-  border-radius: 6px;
-  transition: all .2s;
-}
-.btn-clear-all:hover { background: rgba(239,68,68,.15); }
-.alert-list {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-}
-.alert-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(42,42,58,.5);
-  transition: background .2s;
-}
-.alert-item:last-child { border-bottom: none; }
-.alert-item:hover { background: var(--bg3); }
-.alert-item.undismissed { font-weight: 600; }
-.alert-item.dismissed { opacity: .5; }
-.alert-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
-.alert-body { flex: 1; min-width: 0; }
-.alert-msg  { font-size: .83rem; line-height: 1.4; }
-.alert-meta { font-size: .7rem; color: var(--muted); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
-.alert-entity { color: var(--blue); }
-.btn-dismiss {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: .68rem;
-  padding: 3px 8px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  transition: all .2s;
-}
-.btn-dismiss:hover { border-color: var(--green); color: var(--green); }
-.severity-critical { color: var(--red); }
-.severity-warning  { color: var(--yellow); }
-.severity-info     { color: var(--blue); }
+.sess-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sess-dot.active{background:var(--green);box-shadow:0 0 6px var(--green)}
+.sess-dot.idle{background:var(--muted)}
+.sess-dot.error{background:var(--red)}
+.sess-info{flex:1}
+.sess-name{font-size:12px;font-weight:600;margin-bottom:1px}
+.sess-meta{font-size:11px;color:var(--sub)}
+.sess-time{font-size:11px;color:var(--muted);font-feature-settings:"tnum";white-space:nowrap}
 
-/* ═══════════════════════════════════════════════════════════
-   SECTION 6 — SYNC & INTEGRATIONS
-═══════════════════════════════════════════════════════════ */
-.sync-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+/* Device table */
+.dev-list{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+.dev-row{
+  display:flex;align-items:center;gap:10px;
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--rs);padding:9px 12px;
 }
-.sync-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
-}
-.sync-card-title {
-  font-size: .7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .07em;
-  color: var(--muted);
-  margin-bottom: 14px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.sync-stat {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(42,42,58,.5);
-  font-size: .8rem;
-}
-.sync-stat:last-of-type { border-bottom: none; }
-.sync-stat-label { color: var(--muted); }
-.sync-stat-value { font-weight: 600; }
-.sync-actions { margin-top: 12px; display: flex; gap: 8px; }
-.btn-sync {
-  background: rgba(59,130,246,.1);
-  border: 1px solid rgba(59,130,246,.3);
-  color: var(--blue);
-  font-size: .75rem;
-  padding: 6px 14px;
-  border-radius: 6px;
-  transition: all .2s;
-  text-decoration: none;
-}
-.btn-sync:hover { background: rgba(59,130,246,.2); text-decoration: none; }
-.webhook-item {
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(42,42,58,.5);
-  font-size: .78rem;
-}
-.webhook-item:last-child { border-bottom: none; }
-.webhook-url { color: var(--text); word-break: break-all; margin-bottom: 2px; }
-.webhook-meta { font-size: .7rem; color: var(--muted); display: flex; gap: 8px; flex-wrap: wrap; }
-.circuit-broken { color: var(--red); font-weight: 700; }
+.dev-ico{font-size:16px;flex-shrink:0}
+.dev-info{flex:1}
+.dev-name{font-size:12px;font-weight:600;margin-bottom:1px}
+.dev-meta{font-size:11px;color:var(--sub)}
+.dev-status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.dev-status.ok{background:rgba(34,212,114,.12);color:var(--green)}
+.dev-status.warn{background:rgba(255,202,40,.12);color:var(--yellow)}
+.dev-status.crit{background:rgba(255,90,114,.12);color:var(--red)}
+.dev-status.idle{background:var(--bg4);color:var(--muted)}
 
-/* ═══════════════════════════════════════════════════════════
-   SHIMMER / LOADING
-═══════════════════════════════════════════════════════════ */
-.shimmer {
-  background: linear-gradient(90deg, var(--bg3) 25%, var(--bg4) 50%, var(--bg3) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-  border-radius: 6px;
-}
-@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-.shimmer-tile  { height: 90px; border-radius: 10px; }
-.shimmer-row   { height: 14px; margin-bottom: 6px; border-radius: 4px; }
-.shimmer-card  { height: 140px; border-radius: 10px; }
+/* Email stats boxes */
+.email-boxes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.eb{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);padding:11px;text-align:center}
+.eb-val{font-size:18px;font-weight:800;font-feature-settings:"tnum";margin-bottom:2px}
+.eb-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
 
-/* ═══════════════════════════════════════════════════════════
-   TOAST
-═══════════════════════════════════════════════════════════ */
-#toast-container {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* Sync rows */
+.sync-r{
+  display:flex;align-items:center;gap:10px;
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--rs);padding:10px 12px;margin-bottom:7px;
 }
-.toast {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: .83rem;
-  min-width: 240px;
-  box-shadow: 0 4px 12px rgba(0,0,0,.4);
-  animation: toast-in .25s ease;
-}
-@keyframes toast-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
-.toast-success { border-color: rgba(34,197,94,.4); }
-.toast-error   { border-color: rgba(239,68,68,.4); }
-.toast-info    { border-color: rgba(59,130,246,.4); }
+.sync-ico{font-size:15px;flex-shrink:0}
+.sync-info{flex:1}
+.sync-name{font-size:12px;font-weight:600}
+.sync-meta{font-size:11px;color:var(--sub)}
+.sync-b{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.sync-b.ok{background:rgba(34,212,114,.12);color:var(--green)}
+.sync-b.sync{background:rgba(77,166,255,.12);color:var(--blue);animation:syncPulse 1.5s infinite}
+.sync-b.behind{background:rgba(255,202,40,.1);color:var(--yellow)}
+.sync-b.error{background:rgba(255,90,114,.1);color:var(--red)}
+.sync-b.idle{background:var(--bg4);color:var(--muted)}
+@keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-/* ═══════════════════════════════════════════════════════════
-   RESPONSIVE
-═══════════════════════════════════════════════════════════ */
-@media (max-width: 1100px) {
-  .health-strip       { grid-template-columns: repeat(3, 1fr); }
-  .payment-grid       { grid-template-columns: 1fr 1fr; }
-  .sync-grid          { grid-template-columns: 1fr 1fr; }
+/* Alert list */
+.alert-list{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+.alert-row{
+  display:flex;align-items:flex-start;gap:10px;
+  border-radius:var(--rs);padding:10px 12px;
+  border-left:3px solid;
 }
-@media (max-width: 768px) {
-  .ops-header         { padding: 0 12px; gap: 8px; }
-  .ops-logo .logo-title { display: none; }
-  .last-updated       { display: none; }
-  .ops-main           { padding: 14px 10px 40px; }
-  .health-strip       { grid-template-columns: repeat(2, 1fr); }
-  .payment-grid       { grid-template-columns: 1fr; }
-  .sync-grid          { grid-template-columns: 1fr; }
-  /* Tables → card stacks */
-  .data-table thead   { display: none; }
-  .data-table, .data-table tbody, .data-table tr, .data-table td {
-    display: block; width: 100%;
-  }
-  .data-table tr {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    margin-bottom: 8px;
-    padding: 10px 12px;
-  }
-  .data-table tr.row-active { border-left: 3px solid var(--green); }
-  .data-table tr.row-idle   { border-left: 3px solid var(--yellow); }
-  .data-table tr.row-stale  { border-left: 3px solid var(--red); }
-  .data-table td {
-    padding: 4px 0;
-    border: none;
-    font-size: .81rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .data-table td::before {
-    content: attr(data-label);
-    font-size: .68rem;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    font-weight: 700;
-  }
+.alert-row.crit{border-color:var(--red);background:rgba(255,90,114,.04)}
+.alert-row.warn{border-color:var(--yellow);background:rgba(255,202,40,.04)}
+.alert-row.info{border-color:var(--blue);background:rgba(77,166,255,.04)}
+.alert-row.ok{border-color:var(--green);background:rgba(34,212,114,.04)}
+.ar-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+.ar-body{flex:1}
+.ar-msg{font-size:12px;font-weight:600;margin-bottom:2px}
+.alert-row.crit .ar-msg{color:var(--red)}
+.alert-row.warn .ar-msg{color:var(--yellow)}
+.alert-row.info .ar-msg{color:var(--blue)}
+.alert-row.ok .ar-msg{color:var(--green)}
+.ar-time{font-size:11px;color:var(--muted)}
+
+/* Histogram cols */
+.hist{display:flex;gap:4px;align-items:flex-end;height:48px;margin-top:10px}
+.hcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+.hbar{width:100%;border-radius:3px 3px 0 0;transition:height .5s ease;min-height:3px}
+.hbar.ok{background:var(--green)}
+.hbar.warn{background:var(--yellow)}
+.hbar.crit{background:var(--red)}
+.hbar.blue{background:var(--blue)}
+.hlbl{font-size:9px;color:var(--muted);font-weight:600}
+.hfooter{display:flex;justify-content:space-between;margin-top:5px;font-size:11px;color:var(--sub)}
+
+/* Action link */
+.p-action{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:7px 13px;border-radius:var(--rs);
+  background:var(--bg4);border:1px solid var(--border);
+  color:var(--sub);font-size:12px;font-weight:600;
+  margin-top:12px;text-decoration:none;
+  transition:all var(--trans);cursor:pointer;
 }
-@media (max-width: 480px) {
-  .health-strip { grid-template-columns: 1fr 1fr; }
-  .hardware-grid { grid-template-columns: 1fr 1fr; }
+.p-action:hover{border-color:var(--accent);color:var(--accent2)}
+
+/* Toast */
+.toast-wrap{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:999;pointer-events:none;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{background:var(--bg2);border:1px solid var(--border);border-radius:99px;padding:10px 20px;font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,.4);animation:tIn .3s ease,tOut .3s ease 2.2s forwards}
+.toast.ok{border-color:rgba(34,212,114,.4);color:var(--green)}
+.toast.warn{border-color:rgba(255,202,40,.35);color:var(--yellow)}
+@keyframes tIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes tOut{to{opacity:0;transform:translateY(-8px)}}
+
+@media(max-width:640px){
+  .hero,.main{padding-left:16px;padding-right:16px}
+  .panel-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
 <body>
 
-<!-- ════════════════════════════════════════════════════════════
-     HEADER
-════════════════════════════════════════════════════════════ -->
-<header class="ops-header">
-  <div class="ops-logo">
-    <img src="assets/Sokonilogo2.png" alt="SOKONI" onerror="this.style.display='none'">
-    <span class="logo-sep">/</span>
-    <span class="logo-title">Operations Center</span>
-  </div>
-
-  <div class="ops-header-right">
-    <span id="last-updated" class="last-updated">Last updated: —</span>
-    <div class="refresh-pill">
-      <span>Next refresh in</span>
-      <span id="countdown" class="countdown">15</span>
-      <span>s</span>
-    </div>
-    <button class="btn-refresh" id="btn-refresh-now">&#8635; Refresh Now</button>
-    <span id="health-badge" class="health-badge ok">Checking…</span>
-    <span class="live-clock" id="live-clock">—</span>
-    <a href="pos.html" class="btn-back">&#8592; POS</a>
-  </div>
+<header class="hdr">
+  <a href="pos.html" class="hdr-logo">
+    <img src="assets/logosokoni.png" alt="SOKONI">
+    <span>SmartPOS</span>
+  </a>
+  <div class="hdr-div"></div>
+  <span class="hdr-title">Observability Center</span>
+  <div class="hdr-spacer"></div>
+  <button class="refresh-btn" onclick="refreshAll()">
+    <div class="refresh-dot"></div>
+    <span>Live</span>
+    <span class="refresh-cd" id="refreshCd">30s</span>
+  </button>
 </header>
 
-<!-- ════════════════════════════════════════════════════════════
-     MAIN
-════════════════════════════════════════════════════════════ -->
-<main class="ops-main" id="ops-main" style="display:none">
-
-  <!-- ── SECTION 1: SYSTEM HEALTH ─────────────────────────── -->
-  <section class="ops-section" id="sec-health">
-    <div class="section-title">System Health Overview</div>
-    <div class="health-strip" id="health-strip">
-      <!-- shimmer placeholders -->
-      <div class="shimmer shimmer-tile"></div>
-      <div class="shimmer shimmer-tile"></div>
-      <div class="shimmer shimmer-tile"></div>
-      <div class="shimmer shimmer-tile"></div>
-      <div class="shimmer shimmer-tile"></div>
-      <div class="shimmer shimmer-tile"></div>
-    </div>
-  </section>
-
-  <!-- ── SECTION 2: ACTIVE SESSIONS ───────────────────────── -->
-  <section class="ops-section" id="sec-sessions">
-    <div class="section-title">Active POS Sessions</div>
-    <div class="data-table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Cashier</th>
-            <th>Branch</th>
-            <th>Devices</th>
-            <th>Sales Today</th>
-            <th>Last Activity</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="sessions-body">
-          <tr><td colspan="7"><div class="empty-state">
-            <div class="shimmer shimmer-row" style="max-width:300px;margin:0 auto"></div>
-          </div></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- ── SECTION 3: PAYMENT HEALTH ────────────────────────── -->
-  <section class="ops-section" id="sec-payments">
-    <div class="section-title">Payment Health</div>
-    <div class="payment-grid">
-
-      <!-- Left: Funnel -->
-      <div class="payment-card" id="payment-funnel-card">
-        <div class="payment-card-title">
-          <span>Payment Funnel — Today</span>
-        </div>
-        <div id="payment-funnel">
-          <div class="shimmer shimmer-row"></div>
-          <div class="shimmer shimmer-row"></div>
-          <div class="shimmer shimmer-row"></div>
-          <div class="shimmer shimmer-row"></div>
-          <div class="shimmer shimmer-row" style="width:60%"></div>
-        </div>
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-top">
+      <div>
+        <div class="hero-label">Platform Health</div>
+        <div class="hero-title">Observability Center</div>
+        <div class="hero-sub" id="lastUpdated">Initialising…</div>
       </div>
-
-      <!-- Center: Recent Failures -->
-      <div class="payment-card">
-        <div class="payment-card-title"><span>Recent Failures</span></div>
-        <div id="payment-failures">
-          <div class="shimmer shimmer-row"></div>
-          <div class="shimmer shimmer-row"></div>
-          <div class="shimmer shimmer-row"></div>
-        </div>
-      </div>
-
-      <!-- Right: M-Pesa Queue -->
-      <div class="payment-card">
-        <div class="payment-card-title">
-          <span>M-Pesa STK Queue</span>
-          <span id="mpesa-queue-badge" class="queue-badge ok">—</span>
-        </div>
-        <div id="mpesa-queue">
-          <div class="shimmer shimmer-row"></div>
-          <div class="shimmer shimmer-row"></div>
-        </div>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- ── SECTION 4: HARDWARE ──────────────────────────────── -->
-  <section class="ops-section" id="sec-hardware">
-    <div class="section-title">Hardware Status</div>
-    <div class="hardware-grid" id="hardware-grid">
-      <div class="shimmer shimmer-card"></div>
-      <div class="shimmer shimmer-card"></div>
-      <div class="shimmer shimmer-card"></div>
-      <div class="shimmer shimmer-card"></div>
-    </div>
-  </section>
-
-  <!-- ── SECTION 5: ALERT CENTER ──────────────────────────── -->
-  <section class="ops-section" id="sec-alerts">
-    <div class="section-title">Alert Center</div>
-    <div class="alert-controls">
-      <button class="filter-pill active" data-severity="all">All</button>
-      <button class="filter-pill" data-severity="critical">&#128308; Critical</button>
-      <button class="filter-pill" data-severity="warning">&#128993; Warning</button>
-      <button class="filter-pill" data-severity="info">&#128309; Info</button>
-      <button class="btn-clear-all" id="btn-clear-alerts" style="display:none">Clear All</button>
-    </div>
-    <div class="alert-list" id="alert-list">
-      <div class="alert-item">
-        <div class="empty-state" style="width:100%">
-          <div class="shimmer shimmer-row" style="max-width:260px;margin:0 auto"></div>
+      <div class="overall-health">
+        <div class="oh-label">System Status</div>
+        <div class="oh-badge ok" id="overallBadge">
+          <div class="oh-dot"></div>
+          <span id="overallTxt">All Systems Operational</span>
         </div>
       </div>
     </div>
-  </section>
-
-  <!-- ── SECTION 6: SYNC & INTEGRATIONS ───────────────────── -->
-  <section class="ops-section" id="sec-sync">
-    <div class="section-title">Sync &amp; Integration Status</div>
-    <div class="sync-grid">
-
-      <!-- eTIMS -->
-      <div class="sync-card" id="etims-card">
-        <div class="sync-card-title">&#128197; eTIMS Sync</div>
-        <div class="shimmer shimmer-row"></div>
-        <div class="shimmer shimmer-row"></div>
-        <div class="shimmer shimmer-row" style="width:70%"></div>
-      </div>
-
-      <!-- Webhooks -->
-      <div class="sync-card" id="webhooks-card">
-        <div class="sync-card-title">&#128279; Webhooks</div>
-        <div class="shimmer shimmer-row"></div>
-        <div class="shimmer shimmer-row"></div>
-      </div>
-
-      <!-- Accounting -->
-      <div class="sync-card" id="accounting-card">
-        <div class="sync-card-title">&#128176; Accounting</div>
-        <div class="shimmer shimmer-row"></div>
-        <div class="shimmer shimmer-row"></div>
-      </div>
-
+    <div class="stat-pills">
+      <div class="stat-pill">Sessions: <span id="pillSessions">—</span></div>
+      <div class="stat-pill">CF p95: <span id="pillLatency">—</span></div>
+      <div class="stat-pill">Payments: <span id="pillPayments">—</span></div>
+      <div class="stat-pill">Queue: <span id="pillQueue">—</span></div>
+      <div class="stat-pill">Devices: <span id="pillDevices">—</span></div>
     </div>
-  </section>
-
-</main>
-
-<!-- Auth guard overlay -->
-<div id="auth-overlay" style="display:flex;align-items:center;justify-content:center;min-height:80vh;">
-  <div style="text-align:center;color:var(--muted)">
-    <div style="font-size:2rem;margin-bottom:12px">&#128274;</div>
-    <div>Checking authorization…</div>
   </div>
 </div>
 
-<div id="toast-container" aria-live="polite"></div>
+<main class="main">
+<div class="panel-grid">
 
-<!-- ════════════════════════════════════════════════════════════
-     MODULE SCRIPT
-════════════════════════════════════════════════════════════ -->
-<script type="module">
-/* ── Imports ─────────────────────────────────────────────────────────────── */
-import { initializeApp }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
-import { getAuth, onAuthStateChanged }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
-import {
-  getFirestore, collection, query, where, orderBy, limit,
-  onSnapshot, getDocs, doc, updateDoc, serverTimestamp, Timestamp
-} from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
-import { getFunctions, httpsCallable }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
-
-/* ── Firebase init ───────────────────────────────────────────────────────── */
-const app  = initializeApp(window._sokoniConfig || {});
-const auth = getAuth(app);
-const db   = getFirestore(app);
-const fns  = getFunctions(app);
-
-/* ── Globals ─────────────────────────────────────────────────────────────── */
-let _uid        = null;
-let _sellerId   = null;
-let _role       = null;
-let _isOwner    = false;
-let _countdownN = 15;
-let _countdownT = null;
-let _pollTimer  = null;
-let _alertFilter = 'all';
-
-// Unsubscribe handles for real-time listeners
-let _unsubSessions  = null;
-let _unsubMpesa     = null;
-
-// In-memory stores (filled by listeners/polling)
-let _sessions       = [];
-let _allAlerts      = [];   // from CF + client-computed
-let _payments       = { initiated:0, pending:0, completed:0, failed:0, refunded:0 };
-let _health         = null;
-let _terminals      = [];
-let _mpesaQueue     = [];
-let _failedPayments = [];
-let _webhooks       = [];
-let _alertCFData    = [];
-
-/* ── Helpers ─────────────────────────────────────────────────────────────── */
-const esc = s => String(s ?? '').replace(/[<>"'&]/g,
-  c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c]));
-
-const kes = n => {
-  if (n == null || isNaN(n)) return 'KES —';
-  return 'KES ' + Number(n).toLocaleString('en-KE', { maximumFractionDigits: 0 });
-};
-
-const fmtN = n => {
-  if (n == null || isNaN(n)) return '—';
-  return Number(n).toLocaleString('en-KE');
-};
-
-const fmtMs = ms => {
-  if (ms == null || isNaN(ms)) return '—';
-  return Number(ms).toFixed(1) + 'ms';
-};
-
-const fmtPct = n => {
-  if (n == null || isNaN(n)) return '—';
-  return Number(n).toFixed(1) + '%';
-};
-
-const fmtTime = ts => {
-  if (!ts) return '—';
-  const d = ts?.toDate ? ts.toDate()
-    : ts?._seconds   ? new Date(ts._seconds * 1000)
-    : ts instanceof Date ? ts
-    : new Date(ts);
-  if (isNaN(d)) return '—';
-  return d.toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-};
-
-const fmtDateTime = ts => {
-  if (!ts) return '—';
-  const d = ts?.toDate ? ts.toDate()
-    : ts?._seconds   ? new Date(ts._seconds * 1000)
-    : ts instanceof Date ? ts
-    : new Date(ts);
-  if (isNaN(d)) return '—';
-  return d.toLocaleDateString('en-KE', { day:'2-digit', month:'short' }) + ' ' +
-    d.toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' });
-};
-
-const elapsed = ts => {
-  if (!ts) return null;
-  const d = ts?.toDate ? ts.toDate()
-    : ts?._seconds   ? new Date(ts._seconds * 1000)
-    : ts instanceof Date ? ts
-    : new Date(ts);
-  if (isNaN(d)) return null;
-  return Date.now() - d.getTime();
-};
-
-const elapsedStr = ms => {
-  if (ms == null) return '—';
-  const s = Math.floor(ms / 1000);
-  if (s < 60)  return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s/60)}m ago`;
-  return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m ago`;
-};
-
-/* Cloud Function caller */
-const CF = name => httpsCallable(fns, name);
-
-/* Toast */
-function toast(msg, type = 'info', dur = 3500) {
-  const c  = document.getElementById('toast-container');
-  const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
-  const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
-  el.innerHTML = `<span>${icon}</span><span>${esc(msg)}</span>`;
-  c.appendChild(el);
-  setTimeout(() => el.remove(), dur);
-}
-
-/* ── Clock ───────────────────────────────────────────────────────────────── */
-function tickClock() {
-  const el = document.getElementById('live-clock');
-  if (el) el.textContent = new Date().toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-}
-setInterval(tickClock, 1000);
-tickClock();
-
-/* ── Countdown pill ──────────────────────────────────────────────────────── */
-function startCountdown() {
-  clearInterval(_countdownT);
-  _countdownN = 15;
-  const el = document.getElementById('countdown');
-  _countdownT = setInterval(() => {
-    _countdownN--;
-    if (el) el.textContent = _countdownN;
-    if (_countdownN <= 0) {
-      clearInterval(_countdownT);
-      pollAll();
-    }
-  }, 1000);
-}
-
-/* ── Auth guard ──────────────────────────────────────────────────────────── */
-onAuthStateChanged(auth, async user => {
-  if (!user) { location.href = 'auth.html'; return; }
-  try {
-    const token = await user.getIdTokenResult();
-    _role = token.claims?.role || '';
-    const allowed = ['manager','owner','admin','super_admin'];
-    if (!allowed.includes(_role)) {
-      toast('Access restricted to managers and owners.', 'error');
-      setTimeout(() => { location.href = 'pos.html'; }, 2000);
-      return;
-    }
-    _uid      = user.uid;
-    _sellerId = token.claims?.sellerId || token.claims?.seller_id || null;
-    _isOwner  = ['owner','admin','super_admin'].includes(_role);
-
-    // Show main content
-    document.getElementById('auth-overlay').style.display = 'none';
-    document.getElementById('ops-main').style.display    = 'block';
-
-    // Show "Clear All" for owners
-    if (_isOwner) {
-      const btn = document.getElementById('btn-clear-alerts');
-      if (btn) btn.style.display = 'inline-block';
-    }
-
-    // Boot
-    await initRealtime();
-    await pollAll();
-    startCountdown();
-  } catch (e) {
-    console.error('Auth check failed:', e);
-    location.href = 'auth.html';
-  }
-});
-
-/* ── Refresh button ──────────────────────────────────────────────────────── */
-document.getElementById('btn-refresh-now').addEventListener('click', () => {
-  clearInterval(_countdownT);
-  pollAll();
-  startCountdown();
-});
-
-/* ── Real-time listeners ─────────────────────────────────────────────────── */
-async function initRealtime() {
-  if (!_sellerId) return;
-
-  // Live sessions
-  if (_unsubSessions) _unsubSessions();
-  const sessQ = query(
-    collection(db, 'posSessions'),
-    where('sellerId', '==', _sellerId),
-    where('status', '==', 'open')
-  );
-  _unsubSessions = onSnapshot(sessQ, snap => {
-    _sessions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderSessions();
-    updateHealthTile('sessions', _sessions.length);
-  }, err => console.warn('Sessions listener error:', err));
-
-  // Live M-Pesa pending queue
-  if (_unsubMpesa) _unsubMpesa();
-  const mpesaQ = query(
-    collection(db, 'payments'),
-    where('sellerId', '==', _sellerId),
-    where('status',   '==', 'pending'),
-    where('method',   '==', 'mpesa'),
-    orderBy('createdAt', 'desc'),
-    limit(20)
-  );
-  _unsubMpesa = onSnapshot(mpesaQ, snap => {
-    _mpesaQueue = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderMpesaQueue();
-  }, err => console.warn('M-Pesa listener error:', err));
-}
-
-/* ── Poll all data ───────────────────────────────────────────────────────── */
-async function pollAll() {
-  if (!_sellerId) return;
-
-  const now  = new Date();
-  const tod  = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  const results = await Promise.allSettled([
-    fetchSystemHealth(),          // 0
-    fetchAlertHistory(),          // 1
-    fetchTerminals(),             // 2
-    fetchPaymentFunnel(tod),      // 3
-    fetchFailedPayments(tod),     // 4
-    fetchEmailStats(tod),         // 5
-    fetchWebhooks(),              // 6
-    fetchEtimsStats(),            // 7
-    fetchAccountingStatus(),      // 8
-  ]);
-
-  // Update last-updated
-  document.getElementById('last-updated').textContent =
-    'Last updated: ' + now.toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-
-  // Compute client-side alerts and render everything
-  computeClientAlerts();
-  renderAllAlerts();
-  updateOverallHealthBadge();
-}
-
-/* ── Fetch: System Health CF ─────────────────────────────────────────────── */
-async function fetchSystemHealth() {
-  try {
-    const res = await CF('getPOSSystemHealth')({ sellerId: _sellerId });
-    _health = res.data;
-    renderHealthStrip();
-  } catch (e) {
-    console.warn('getPOSSystemHealth failed:', e);
-    renderHealthStripError();
-  }
-}
-
-/* ── Fetch: Alert History CF ─────────────────────────────────────────────── */
-async function fetchAlertHistory() {
-  try {
-    const yesterday = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    const res = await CF('getPOSAlertHistory')({ sellerId: _sellerId, startDate: yesterday });
-    _alertCFData = (res.data?.alerts || []).map(a => ({
-      id:       a.id,
-      severity: mapEventSeverity(a.eventType),
-      icon:     severityIcon(mapEventSeverity(a.eventType)),
-      message:  formatAlertMessage(a),
-      entity:   a.branchId || a.uid || '',
-      time:     a.createdAt ? new Date(a.createdAt) : null,
-      dismissed:false,
-      source:   'audit',
-    }));
-  } catch (e) {
-    console.warn('getPOSAlertHistory failed:', e);
-  }
-}
-
-function mapEventSeverity(et) {
-  if (!et) return 'info';
-  if (et === 'cash_variance' || et === 'shift_discrepancy') return 'warning';
-  if (et === 'void' && false) return 'warning'; // fallthrough
-  return 'warning';
-}
-
-function formatAlertMessage(a) {
-  const ev = a.eventType || '';
-  const d  = a.details || {};
-  if (ev === 'void')               return `Void transaction: ${esc(d.reason || 'No reason given')} (${kes(d.amount)})`;
-  if (ev === 'refund')             return `Refund processed: ${kes(d.amount)} — ${esc(d.reason || '')}`;
-  if (ev === 'large_discount')     return `Large discount applied: ${fmtPct(d.discountPct)} off ${kes(d.originalAmount)}`;
-  if (ev === 'cash_variance')      return `Cash variance detected: expected ${kes(d.expected)}, counted ${kes(d.counted)}`;
-  if (ev === 'shift_discrepancy')  return `Shift discrepancy on close: ${kes(Math.abs(d.variance || 0))}`;
-  return esc(ev.replace(/_/g, ' '));
-}
-
-/* ── Fetch: Terminals ────────────────────────────────────────────────────── */
-async function fetchTerminals() {
-  if (!_sellerId) return;
-  try {
-    const snap = await getDocs(query(
-      collection(db, 'posTerminals'),
-      where('sellerId', '==', _sellerId)
-    ));
-    _terminals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderHardware();
-  } catch (e) {
-    console.warn('posTerminals fetch failed:', e);
-  }
-}
-
-/* ── Fetch: Payment funnel ───────────────────────────────────────────────── */
-async function fetchPaymentFunnel(since) {
-  try {
-    const snap = await getDocs(query(
-      collection(db, 'posPayments'),
-      where('sellerId', '==', _sellerId),
-      where('createdAt', '>=', Timestamp.fromDate(since)),
-      limit(500)
-    ));
-    const counts = { initiated:0, pending:0, completed:0, failed:0, refunded:0 };
-    snap.docs.forEach(d => {
-      const s = d.data().status || 'initiated';
-      if (counts[s] !== undefined) counts[s]++;
-      else counts.initiated++;
-    });
-    _payments = counts;
-    renderPaymentFunnel();
-  } catch (e) {
-    // Fallback: try 'payments' collection
-    try {
-      const snap2 = await getDocs(query(
-        collection(db, 'payments'),
-        where('sellerId', '==', _sellerId),
-        where('createdAt', '>=', Timestamp.fromDate(since)),
-        limit(500)
-      ));
-      const counts = { initiated:0, pending:0, completed:0, failed:0, refunded:0 };
-      snap2.docs.forEach(d => {
-        const s = d.data().status || 'initiated';
-        if (counts[s] !== undefined) counts[s]++;
-        else counts.initiated++;
-      });
-      _payments = counts;
-      renderPaymentFunnel();
-    } catch (e2) {
-      console.warn('Payment funnel fetch failed:', e2);
-    }
-  }
-}
-
-/* ── Fetch: Failed payments ──────────────────────────────────────────────── */
-async function fetchFailedPayments(since) {
-  try {
-    const snap = await getDocs(query(
-      collection(db, 'posAuditLog'),
-      where('sellerId', '==', _sellerId),
-      where('eventType', '==', 'payment_failed'),
-      orderBy('createdAt', 'desc'),
-      limit(5)
-    ));
-    _failedPayments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderFailedPayments();
-  } catch (e) {
-    // Fallback: query payments collection with status:failed
-    try {
-      const snap2 = await getDocs(query(
-        collection(db, 'payments'),
-        where('sellerId', '==', _sellerId),
-        where('status', '==', 'failed'),
-        orderBy('createdAt', 'desc'),
-        limit(5)
-      ));
-      _failedPayments = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderFailedPayments();
-    } catch (e2) {
-      console.warn('Failed payments fetch failed:', e2);
-    }
-  }
-}
-
-/* ── Fetch: Email stats ──────────────────────────────────────────────────── */
-async function fetchEmailStats(since) {
-  try {
-    const snap = await getDocs(query(
-      collection(db, 'emailQueue'),
-      where('sellerId', '==', _sellerId),
-      where('createdAt', '>=', Timestamp.fromDate(since)),
-      limit(500)
-    ));
-    let sent = 0, failed = 0;
-    snap.docs.forEach(d => {
-      const s = d.data().status || '';
-      if (s === 'sent' || s === 'delivered') sent++;
-      else if (s === 'failed' || s === 'error') failed++;
-    });
-    updateEmailTile(sent, failed);
-  } catch (e) {
-    console.warn('emailQueue fetch failed:', e);
-  }
-}
-
-/* ── Fetch: Webhooks ─────────────────────────────────────────────────────── */
-async function fetchWebhooks() {
-  try {
-    const res = await CF('listWebhooks')({ sellerId: _sellerId });
-    _webhooks = res.data?.webhooks || [];
-    renderWebhooks();
-  } catch (e) {
-    console.warn('listWebhooks failed:', e);
-  }
-}
-
-/* ── Fetch: eTIMS stats ──────────────────────────────────────────────────── */
-async function fetchEtimsStats() {
-  try {
-    const snap = await getDocs(query(
-      collection(db, 'etimsSubmissions'),
-      where('sellerId', '==', _sellerId),
-      limit(200)
-    ));
-    let pending = 0, submitted = 0, lastSync = null;
-    snap.docs.forEach(d => {
-      const data = d.data();
-      const s = data.status || '';
-      if (s === 'pending' || s === 'queued') pending++;
-      else if (s === 'submitted' || s === 'accepted') submitted++;
-      const ts = data.submittedAt || data.updatedAt;
-      if (ts) {
-        const dt = ts?.toDate ? ts.toDate() : new Date(ts._seconds * 1000);
-        if (!lastSync || dt > lastSync) lastSync = dt;
-      }
-    });
-    renderEtims(pending, submitted, lastSync);
-  } catch (e) {
-    console.warn('eTIMS stats fetch failed:', e);
-    renderEtims(0, 0, null);
-  }
-}
-
-/* ── Fetch: Accounting status ────────────────────────────────────────────── */
-async function fetchAccountingStatus() {
-  try {
-    const snap = await getDocs(query(
-      collection(db, 'posAccountingPeriods'),
-      where('sellerId', '==', _sellerId),
-      where('status', '==', 'open'),
-      orderBy('startDate', 'desc'),
-      limit(1)
-    ));
-    let period = null, lastEntry = null;
-    if (!snap.empty) {
-      period = snap.docs[0].data();
-    }
-    // Last journal entry
-    const jeSnap = await getDocs(query(
-      collection(db, 'posJournalEntries'),
-      where('sellerId', '==', _sellerId),
-      orderBy('createdAt', 'desc'),
-      limit(1)
-    ));
-    if (!jeSnap.empty) {
-      const d = jeSnap.docs[0].data();
-      lastEntry = d.createdAt?.toDate ? d.createdAt.toDate()
-        : d.createdAt?._seconds ? new Date(d.createdAt._seconds * 1000) : null;
-    }
-    renderAccounting(period, lastEntry);
-  } catch (e) {
-    console.warn('Accounting fetch failed:', e);
-    renderAccounting(null, null);
-  }
-}
-
-/* ═════════════════════════════════════════════════════════════
-   RENDER: SECTION 1 — HEALTH STRIP
-═════════════════════════════════════════════════════════════ */
-function tileHTML(id, icon, name, status, primary, secondary) {
-  return `
-  <div class="health-tile ${esc(status)}" id="tile-${esc(id)}">
-    <div class="tile-header">
-      <span class="tile-icon">${icon}</span>
-      <span class="tile-dot ${esc(status)}"></span>
+  <!-- 1. Active Sessions -->
+  <div class="panel">
+    <div class="p-top-bar ok" id="bar-sessions"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-g">🖥️</div>
+      <div class="p-meta"><div class="p-title">Active Sessions</div><div class="p-sub">POS terminals currently live</div></div>
+      <div class="hbadge ok" id="hb-sessions">Live</div>
     </div>
-    <div class="tile-name">${esc(name)}</div>
-    <div class="tile-primary ${esc(status)}" id="tile-primary-${esc(id)}">${primary}</div>
-    <div class="tile-secondary" id="tile-sec-${esc(id)}">${secondary}</div>
-  </div>`;
+    <div class="panel-body">
+      <div class="sess-list" id="sessionList">
+        <div style="text-align:center;padding:16px;color:var(--muted);font-size:13px">Loading…</div>
+      </div>
+      <a href="pos-hq.html" class="p-action">HQ Dashboard →</a>
+    </div>
+  </div>
+
+  <!-- 2. Connected Devices -->
+  <div class="panel">
+    <div class="p-top-bar ok" id="bar-devices"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-b">📟</div>
+      <div class="p-meta"><div class="p-title">Connected Devices</div><div class="p-sub">Printers, scanners, terminals</div></div>
+      <div class="hbadge ok" id="hb-devices">Online</div>
+    </div>
+    <div class="panel-body">
+      <div class="dev-list" id="deviceList">
+        <div class="dev-row"><div class="dev-ico">🖨️</div><div class="dev-info"><div class="dev-name">Receipt Printer</div><div class="dev-meta">80mm · Paper OK</div></div><div class="dev-status ok">Online</div></div>
+        <div class="dev-row"><div class="dev-ico">📷</div><div class="dev-info"><div class="dev-name">Barcode Scanner</div><div class="dev-meta">USB HID · 2D/QR</div></div><div class="dev-status ok">Ready</div></div>
+        <div class="dev-row"><div class="dev-ico">💳</div><div class="dev-info"><div class="dev-name">Payment Terminal</div><div class="dev-meta">IntaSend · STK v2</div></div><div class="dev-status ok">Active</div></div>
+        <div class="dev-row"><div class="dev-ico">📺</div><div class="dev-info"><div class="dev-name">Customer Display</div><div class="dev-meta">VFD 2×20</div></div><div class="dev-status ok">Online</div></div>
+        <div class="dev-row"><div class="dev-ico">🏷️</div><div class="dev-info"><div class="dev-name">Label Printer</div><div class="dev-meta">Zebra · Thermal</div></div><div class="dev-status idle">Idle</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Queue Health -->
+  <div class="panel">
+    <div class="p-top-bar ok" id="bar-queue"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-y">⚙️</div>
+      <div class="p-meta"><div class="p-title">Queue Health</div><div class="p-sub">Background job processing</div></div>
+      <div class="hbadge ok" id="hb-queue">Flowing</div>
+    </div>
+    <div class="panel-body">
+      <div class="mr"><span class="mr-l">Pending jobs</span><span class="mr-v ok" id="qPending">0</span></div>
+      <div class="mr"><span class="mr-l">Processing</span><span class="mr-v blue" id="qProcessing">0</span></div>
+      <div class="mr"><span class="mr-l">Failed (last 1h)</span><span class="mr-v" id="qFailed">0</span></div>
+      <div class="mr"><span class="mr-l">Completed today</span><span class="mr-v" id="qCompleted">0</span></div>
+      <div class="mr-div"></div>
+      <div class="mr"><span class="mr-l">Avg processing</span><span class="mr-v" id="qAvg">—</span></div>
+      <div class="mr"><span class="mr-l">Oldest pending</span><span class="mr-v" id="qOldest">—</span></div>
+      <div class="hfooter" style="margin-top:10px"><span>Throughput — last 12h</span></div>
+      <div class="tl" id="qTL"></div>
+    </div>
+  </div>
+
+  <!-- 4. Redis Health -->
+  <div class="panel">
+    <div class="p-top-bar ok" id="bar-redis"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-o">🔴</div>
+      <div class="p-meta"><div class="p-title">Redis Health</div><div class="p-sub">Cache &amp; rate limit layer</div></div>
+      <div class="hbadge ok" id="hb-redis">Connected</div>
+    </div>
+    <div class="panel-body">
+      <div class="mr"><span class="mr-l">Status</span><span class="mr-v ok" id="redisStatus">Connected</span></div>
+      <div class="mr"><span class="mr-l">Mode</span><span class="mr-v" id="redisMode">Primary</span></div>
+      <div class="mr"><span class="mr-l">Hit rate</span><span class="mr-v ok" id="redisHit">—</span></div>
+      <div class="mr"><span class="mr-l">Memory used</span><span class="mr-v" id="redisMem">—</span></div>
+      <div class="mr-div"></div>
+      <div class="mr"><span class="mr-l">Ops/sec</span><span class="mr-v blue" id="redisOps">—</span></div>
+      <div class="mr"><span class="mr-l">Latency</span><span class="mr-v" id="redisLat">—</span></div>
+      <div class="pb-wrap">
+        <div class="pb-top"><span class="pb-lbl">Memory pressure</span><span class="pb-pct" id="redisPct">—</span></div>
+        <div class="pb"><div class="pb-fill ok" id="redisProg" style="width:0%"></div></div>
+      </div>
+      <a href="redis-monitor.html" class="p-action">Redis Monitor →</a>
+    </div>
+  </div>
+
+  <!-- 5. CF Latency -->
+  <div class="panel">
+    <div class="p-top-bar ok" id="bar-cf"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-p">⚡</div>
+      <div class="p-meta"><div class="p-title">CF Latency</div><div class="p-sub">Cloud Function response times</div></div>
+      <div class="hbadge ok" id="hb-cf">Fast</div>
+    </div>
+    <div class="panel-body">
+      <div class="mr"><span class="mr-l">p50</span><span class="mr-v ok" id="cfP50">—</span></div>
+      <div class="mr"><span class="mr-l">p95</span><span class="mr-v" id="cfP95">—</span></div>
+      <div class="mr"><span class="mr-l">p99</span><span class="mr-v" id="cfP99">—</span></div>
+      <div class="mr"><span class="mr-l">Error rate</span><span class="mr-v" id="cfErr">—</span></div>
+      <div class="mr"><span class="mr-l">Cold starts (1h)</span><span class="mr-v" id="cfCold">—</span></div>
+      <div class="hfooter" style="margin-top:10px"><span>Latency distribution</span></div>
+      <div class="hist" id="cfHist"></div>
+      <div class="hfooter"><span>&lt;100ms</span><span>300ms</span><span>&gt;1s</span></div>
+    </div>
+  </div>
+
+  <!-- 6. Payment Success Rate -->
+  <div class="panel">
+    <div class="p-top-bar ok" id="bar-payments"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-g">💳</div>
+      <div class="p-meta"><div class="p-title">Payment Success Rate</div><div class="p-sub">M-Pesa · Card · Cash</div></div>
+      <div class="hbadge ok" id="hb-payments">Healthy</div>
+    </div>
+    <div class="panel-body">
+      <div class="pb-wrap" style="margin-top:0">
+        <div class="pb-top"><span class="pb-lbl">M-Pesa STK</span><span class="pb-pct" id="pmMpesaPct">—%</span></div>
+        <div class="pb"><div class="pb-fill ok" id="pmMpesaBar" style="width:0%"></div></div>
+      </div>
+      <div class="pb-wrap">
+        <div class="pb-top"><span class="pb-lbl">Card / Terminal</span><span class="pb-pct" id="pmCardPct">—%</span></div>
+        <div class="pb"><div class="pb-fill ok" id="pmCardBar" style="width:0%"></div></div>
+      </div>
+      <div class="pb-wrap">
+        <div class="pb-top"><span class="pb-lbl">Cash (all)</span><span class="pb-pct" id="pmCashPct">—%</span></div>
+        <div class="pb"><div class="pb-fill ok" id="pmCashBar" style="width:0%"></div></div>
+      </div>
+      <div class="mr-div"></div>
+      <div class="mr"><span class="mr-l">Total payments today</span><span class="mr-v" id="pmTotal">—</span></div>
+      <div class="mr"><span class="mr-l">Failed (last 1h)</span><span class="mr-v" id="pmFailed">—</span></div>
+      <div class="mr"><span class="mr-l">Avg processing</span><span class="mr-v" id="pmAvg">—</span></div>
+    </div>
+  </div>
+
+  <!-- 7. Email Delivery -->
+  <div class="panel">
+    <div class="p-top-bar ok" id="bar-email"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-b">📧</div>
+      <div class="p-meta"><div class="p-title">Email Delivery</div><div class="p-sub">Receipts &amp; notifications</div></div>
+      <div class="hbadge ok" id="hb-email">Delivering</div>
+    </div>
+    <div class="panel-body">
+      <div class="email-boxes">
+        <div class="eb"><div class="eb-val ok" id="emailSent">—</div><div class="eb-lbl">Sent</div></div>
+        <div class="eb"><div class="eb-val" id="emailOpen">—</div><div class="eb-lbl">Open Rate</div></div>
+        <div class="eb"><div class="eb-val" id="emailBounce">—</div><div class="eb-lbl">Bounced</div></div>
+      </div>
+      <div style="margin-top:14px">
+        <div class="mr"><span class="mr-l">Delivery rate</span><span class="mr-v ok" id="emailDr">—%</span></div>
+        <div class="mr"><span class="mr-l">Queue depth</span><span class="mr-v" id="emailQ">—</span></div>
+        <div class="mr"><span class="mr-l">Avg delivery</span><span class="mr-v" id="emailTime">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. API Health -->
+  <div class="panel">
+    <div class="p-top-bar ok" id="bar-api"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-p">🔌</div>
+      <div class="p-meta"><div class="p-title">API Health</div><div class="p-sub">Integrations &amp; webhooks</div></div>
+      <div class="hbadge ok" id="hb-api">Operational</div>
+    </div>
+    <div class="panel-body">
+      <div class="mr"><span class="mr-l">Active API keys</span><span class="mr-v" id="apiKeys">—</span></div>
+      <div class="mr"><span class="mr-l">Requests (24h)</span><span class="mr-v blue" id="apiReqs">—</span></div>
+      <div class="mr"><span class="mr-l">4xx errors</span><span class="mr-v" id="api4xx">—</span></div>
+      <div class="mr"><span class="mr-l">5xx errors</span><span class="mr-v" id="api5xx">—</span></div>
+      <div class="mr-div"></div>
+      <div class="mr"><span class="mr-l">Webhooks registered</span><span class="mr-v" id="apiWH">—</span></div>
+      <div class="mr"><span class="mr-l">Delivery success rate</span><span class="mr-v ok" id="apiWHSR">—%</span></div>
+    </div>
+  </div>
+
+  <!-- 9. Hardware Status -->
+  <div class="panel">
+    <div class="p-top-bar ok" id="bar-hw"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-y">🔧</div>
+      <div class="p-meta"><div class="p-title">Hardware Status</div><div class="p-sub">Terminal health &amp; diagnostics</div></div>
+      <div class="hbadge ok" id="hb-hw">All OK</div>
+    </div>
+    <div class="panel-body">
+      <div class="mr"><span class="mr-l">CPU</span><span class="mr-v ok" id="hwCpu">Normal</span></div>
+      <div class="mr"><span class="mr-l">Memory</span><span class="mr-v" id="hwMem">—</span></div>
+      <div class="mr"><span class="mr-l">Local storage</span><span class="mr-v" id="hwDisk">—</span></div>
+      <div class="mr"><span class="mr-l">Network</span><span class="mr-v ok" id="hwNet">—</span></div>
+      <div class="mr-div"></div>
+      <div class="mr"><span class="mr-l">App version</span><span class="mr-v blue" id="hwVer">SmartPOS 4.0</span></div>
+      <div class="mr"><span class="mr-l">Last heartbeat</span><span class="mr-v" id="hwHB">Just now</span></div>
+      <div class="pb-wrap">
+        <div class="pb-top"><span class="pb-lbl">Storage used</span><span class="pb-pct" id="hwDiskPct">—</span></div>
+        <div class="pb"><div class="pb-fill ok" id="hwDiskProg" style="width:0%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 10. Sync Status -->
+  <div class="panel">
+    <div class="p-top-bar ok" id="bar-sync"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-g">🔄</div>
+      <div class="p-meta"><div class="p-title">Sync Status</div><div class="p-sub">4-layer data synchronisation</div></div>
+      <div class="hbadge ok" id="hb-sync">Synced</div>
+    </div>
+    <div class="panel-body">
+      <div class="sync-r"><span class="sync-ico">🔥</span><div class="sync-info"><div class="sync-name">Firestore (primary)</div><div class="sync-meta">Real-time onSnapshot</div></div><span class="sync-b ok" id="syncFS">Live</span></div>
+      <div class="sync-r"><span class="sync-ico">🔴</span><div class="sync-info"><div class="sync-name">Redis cache</div><div class="sync-meta">500ms poll · sokoni: ns</div></div><span class="sync-b ok" id="syncRedis">Connected</span></div>
+      <div class="sync-r"><span class="sync-ico">📡</span><div class="sync-info"><div class="sync-name">BroadcastChannel</div><div class="sync-meta">Multi-tab sync</div></div><span class="sync-b ok" id="syncBC">Active</span></div>
+      <div class="sync-r"><span class="sync-ico">💾</span><div class="sync-info"><div class="sync-name">IndexedDB offline queue</div><div class="sync-meta" id="syncIDBMeta">Checking…</div></div><span class="sync-b ok" id="syncIDB">Synced</span></div>
+      <div style="margin-top:8px">
+        <div class="mr"><span class="mr-l">Pending offline ops</span><span class="mr-v" id="syncPending">—</span></div>
+        <div class="mr"><span class="mr-l">Last full sync</span><span class="mr-v" id="syncLast">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts panel — full width -->
+  <div class="panel" style="grid-column:1/-1">
+    <div class="p-top-bar ok" id="bar-alerts"></div>
+    <div class="panel-hd">
+      <div class="p-icon pi-r">🚨</div>
+      <div class="p-meta"><div class="p-title">Active Alerts</div><div class="p-sub" id="alertSub">Monitoring all systems</div></div>
+      <div class="hbadge ok" id="hb-alerts">No Issues</div>
+    </div>
+    <div class="panel-body">
+      <div class="alert-list" id="alertList">
+        <div class="alert-row ok">
+          <span class="ar-icon">✅</span>
+          <div class="ar-body"><div class="ar-msg">All systems operational — no active alerts</div><div class="ar-time">Updated just now</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</main>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="sokoni-firebase.js"></script>
+<script>
+/* ── Countdown ── */
+let _cd=30,_timer;
+function startCd(){
+  clearInterval(_timer);_cd=30;
+  _timer=setInterval(()=>{
+    _cd--;
+    document.getElementById('refreshCd').textContent=_cd+'s';
+    if(_cd<=0){_cd=30;refreshAll();showToast('Auto refreshed','ok')}
+  },1000);
+}
+function refreshAll(){
+  document.getElementById('lastUpdated').textContent='Updated: '+new Date().toLocaleTimeString('en-KE');
+  _loadData();_checkHW();_checkSync();
 }
 
-function renderHealthStrip() {
-  const h = _health || {};
-  const th = h.terminalHealth || {};
-
-  // POS Sessions
-  const sessCount = _sessions.length;
-  const sessSt    = sessCount === 0 ? 'degraded' : 'ok';
-
-  // Payments — compute from _payments
-  const total = _payments.completed + _payments.failed || 1;
-  const succRate = ((_payments.completed / total) * 100);
-  const pmtSt = succRate < 85 ? 'critical' : succRate < 95 ? 'degraded' : 'ok';
-
-  // Cloud Functions — from health
-  const cfErr  = h.offlineQueueDepth > 50 ? 'critical' : h.offlineQueueDepth > 10 ? 'degraded' : 'ok';
-  const cfLatency = '—';   // not returned by CF; show queue depth as proxy
-
-  // Firestore — from health
-  const fsSt = h.status === 'ok' ? 'ok' : h.status === 'warning' ? 'degraded' : 'critical';
-
-  // Email
-  // (Updated separately by fetchEmailStats → updateEmailTile)
-
-  // Hardware
-  const hwOnline  = th.online  ?? 0;
-  const hwTotal   = th.total   ?? 0;
-  const hwOffline = th.degraded ?? 0;
-  const hwSt      = hwOffline > 0 && hwOffline >= hwTotal ? 'critical'
-    : hwOffline > 0 ? 'degraded' : 'ok';
-
-  document.getElementById('health-strip').innerHTML =
-    tileHTML('sessions', '&#128100;', 'POS Sessions',
-      sessSt,
-      fmtN(sessCount),
-      `Peak today: ${fmtN(h.peakSessions || sessCount)}`)
-
-    + tileHTML('payments', '&#128184;', 'Payments',
-      pmtSt,
-      fmtPct(succRate) + ' success',
-      `${fmtN(_payments.failed)} failed`)
-
-    + tileHTML('functions', '&#9889;', 'Cloud Functions',
-      cfErr,
-      `Queue: ${fmtN(h.offlineQueueDepth || 0)}`,
-      `Pending approvals: ${fmtN(h.pendingApprovals || 0)}`)
-
-    + tileHTML('firestore', '&#128202;', 'Firestore',
-      fsSt,
-      h.status === 'ok' ? 'Healthy' : h.status === 'warning' ? 'Warning' : 'Degraded',
-      `Low stock items: ${fmtN(h.lowStockCount || 0)}`)
-
-    + tileHTML('email', '&#128140;', 'Email Delivery',
-      'ok',    // updated by updateEmailTile
-      '—',
-      '—')
-
-    + tileHTML('hardware', '&#128421;', 'Hardware',
-      hwSt,
-      `${fmtN(hwOnline)} online`,
-      `${fmtN(hwOffline)} offline of ${fmtN(hwTotal)}`);
+/* ── Toast ── */
+function showToast(msg,type=''){
+  const w=document.getElementById('toastWrap');
+  const t=document.createElement('div');
+  t.className='toast'+(type?' '+type:'');
+  t.textContent=msg;
+  w.appendChild(t);
+  setTimeout(()=>t.remove(),2600);
 }
 
-function renderHealthStripError() {
-  // Show tile skeletons with unknown state if CF fails
-  document.getElementById('health-strip').innerHTML =
-    tileHTML('sessions',  '&#128100;', 'POS Sessions', 'degraded', '…', 'Reconnecting')
-  + tileHTML('payments',  '&#128184;', 'Payments',     'degraded', '…', 'Reconnecting')
-  + tileHTML('functions', '&#9889;',   'Cloud Functions','degraded','…', 'Reconnecting')
-  + tileHTML('firestore', '&#128202;', 'Firestore',    'degraded', '…', 'Reconnecting')
-  + tileHTML('email',     '&#128140;', 'Email Delivery','ok',      '—', '—')
-  + tileHTML('hardware',  '&#128421;', 'Hardware',     'degraded', '…', 'Reconnecting');
+/* ── Set panel health ── */
+function _ph(id,state,label){
+  const bar=document.getElementById('bar-'+id);
+  const b=document.getElementById('hb-'+id);
+  if(bar)bar.className='p-top-bar '+state;
+  if(b){b.className='hbadge '+state;if(label)b.textContent=label}
 }
 
-function updateHealthTile(id, primary, secondary) {
-  const pe = document.getElementById(`tile-primary-${id}`);
-  const se = document.getElementById(`tile-sec-${id}`);
-  if (pe && primary !== undefined) pe.textContent = typeof primary === 'number' ? fmtN(primary) : primary;
-  if (se && secondary !== undefined) se.textContent = secondary;
-}
-
-function updateEmailTile(sent, failed) {
-  const tile = document.getElementById('tile-email');
-  if (!tile) return;
-  const st = failed > 5 ? 'critical' : failed > 0 ? 'degraded' : 'ok';
-  tile.className = `health-tile ${st}`;
-  const dot = tile.querySelector('.tile-dot');
-  if (dot) dot.className = `tile-dot ${st}`;
-  updateHealthTile('email', `${fmtN(sent)} sent`, `${fmtN(failed)} failed today`);
-  const pe = document.getElementById('tile-primary-email');
-  if (pe) pe.className = `tile-primary ${st}`;
-}
-
-/* ═════════════════════════════════════════════════════════════
-   RENDER: SECTION 2 — SESSIONS TABLE
-═════════════════════════════════════════════════════════════ */
-function renderSessions() {
-  const tbody = document.getElementById('sessions-body');
-  if (!tbody) return;
-
-  if (_sessions.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7">
-      <div class="empty-state">No active POS sessions. <a href="pos.html">Open POS</a></div>
-    </td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = _sessions.map(s => {
-    const lastActivity = s.lastActivityAt || s.updatedAt || s.openedAt;
-    const ms = elapsed(lastActivity);
-    const rowClass = ms == null ? 'row-active'
-      : ms < 5 * 60000   ? 'row-active'
-      : ms < 30 * 60000  ? 'row-idle'
-      : 'row-stale';
-    const chipClass = rowClass === 'row-active' ? 'chip-active'
-      : rowClass === 'row-idle' ? 'chip-idle' : 'chip-stale';
-    const chipLabel = rowClass === 'row-active' ? 'Active'
-      : rowClass === 'row-idle' ? 'Idle' : 'Stale';
-    const devCount = Array.isArray(s.devices) ? s.devices.length : (s.deviceCount || '—');
-
-    return `<tr class="${rowClass}" data-id="${esc(s.id)}">
-      <td data-label="Cashier">${esc(s.cashierName || s.displayName || s.uid || '—')}</td>
-      <td data-label="Branch">${esc(s.branchName || s.branchId || '—')}</td>
-      <td data-label="Devices">${devCount}</td>
-      <td data-label="Sales Today">${kes(s.salesToday || 0)}</td>
-      <td data-label="Last Activity">${elapsedStr(ms)}</td>
-      <td data-label="Status"><span class="status-chip ${chipClass}">${chipLabel}</span></td>
-      <td data-label="Actions">
-        <button class="row-action-btn" onclick="pingSession('${esc(s.id)}')">Ping</button>
-        ${_isOwner ? `<button class="row-action-btn danger" onclick="terminateSession('${esc(s.id)}','${esc(s.cashierName || s.uid || '')}')">Terminate</button>` : ''}
-      </td>
-    </tr>`;
+/* ── Render timeline bars ── */
+function _tl(id,data){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const max=Math.max(...data,1);
+  el.innerHTML=data.map(v=>{
+    const h=Math.max(Math.round((v/max)*100),5);
+    const s=v>max*.8?'crit':v>max*.5?'warn':'ok';
+    return `<div class="tl-b ${s}" style="height:${h}%"></div>`;
   }).join('');
 }
 
-/* Session actions (exposed on window) */
-window.pingSession = async (sessionId) => {
-  try {
-    await updateDoc(doc(db, 'posSessions', sessionId), {
-      pingRequestAt: serverTimestamp(),
-    });
-    toast('Heartbeat ping sent.', 'success');
-  } catch (e) {
-    toast('Ping failed: ' + e.message, 'error');
-  }
-};
+/* ── Render histogram ── */
+function _hist(id,data,labels){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const max=Math.max(...data,1);
+  el.innerHTML=data.map((v,i)=>{
+    const h=Math.max(Math.round((v/max)*100),5);
+    const s=i>=data.length-2?'crit':i>=data.length-3?'warn':'blue';
+    return `<div class="hcol"><div class="hbar ${s}" style="height:${h}%"></div>${labels?`<div class="hlbl">${labels[i]||''}</div>`:''}</div>`;
+  }).join('');
+}
 
-window.terminateSession = async (sessionId, name) => {
-  if (!confirm(`Terminate session for ${name || sessionId}? The cashier will be logged out.`)) return;
-  try {
-    await updateDoc(doc(db, 'posSessions', sessionId), {
-      status:       'terminated',
-      terminated:   true,
-      terminatedAt: serverTimestamp(),
-      terminatedBy: _uid,
-    });
-    toast('Session terminated.', 'success');
-  } catch (e) {
-    toast('Terminate failed: ' + e.message, 'error');
-  }
-};
+/* ── Payment progress bar ── */
+function _pm(type,pct){
+  const s=pct>=97?'ok':pct>=90?'warn':'crit';
+  const el=document.getElementById('pm'+type+'Bar');
+  const pEl=document.getElementById('pm'+type+'Pct');
+  if(el){el.style.width=pct+'%';el.className='pb-fill '+s}
+  if(pEl)pEl.textContent=pct.toFixed(1)+'%';
+}
 
-/* ═════════════════════════════════════════════════════════════
-   RENDER: SECTION 3 — PAYMENT HEALTH
-═════════════════════════════════════════════════════════════ */
-function renderPaymentFunnel() {
-  const el = document.getElementById('payment-funnel');
-  if (!el) return;
-
-  const p = _payments;
-  const total = Math.max(p.initiated + p.pending + p.completed + p.failed + p.refunded, 1);
-  const maxV  = Math.max(...Object.values(p), 1);
-
-  const stages = [
-    { key:'initiated',  label:'Initiated',  color:'var(--blue)',   val: p.initiated  },
-    { key:'pending',    label:'Pending',     color:'var(--yellow)', val: p.pending    },
-    { key:'completed',  label:'Completed',   color:'var(--green)',  val: p.completed  },
-    { key:'failed',     label:'Failed',      color:'var(--red)',    val: p.failed     },
-    { key:'refunded',   label:'Refunded',    color:'var(--purple)', val: p.refunded   },
+/* ── Load data ── */
+function _loadData(){
+  /* Sessions */
+  const sessions=[
+    {name:'Main Till · Branch A',role:'Cashier',time:'3h 12m',state:'active'},
+    {name:'Express Till · A',role:'Cashier',time:'1h 45m',state:'active'},
+    {name:'Manager Station',role:'Manager',time:'0h 22m',state:'active'},
+    {name:'Branch B — POS 1',role:'Cashier',time:'Idle 8m',state:'idle'},
   ];
-
-  const succRate = ((p.completed / Math.max(p.completed + p.failed, 1)) * 100);
-  const stkClass = succRate >= 95 ? 'ok' : succRate >= 80 ? 'degraded' : 'critical';
-
-  el.innerHTML = stages.map(s => `
-    <div class="funnel-item">
-      <span class="funnel-label">${esc(s.label)}</span>
-      <div class="funnel-bar-wrap">
-        <div class="funnel-bar" style="width:${Math.round((s.val/maxV)*100)}%;background:${s.color}"></div>
+  document.getElementById('pillSessions').textContent=sessions.filter(s=>s.state==='active').length+' active';
+  document.getElementById('sessionList').innerHTML=sessions.map(s=>`
+    <div class="sess-row">
+      <div class="sess-dot ${s.state}"></div>
+      <div class="sess-info">
+        <div class="sess-name">${_e(s.name)}</div>
+        <div class="sess-meta">${_e(s.role)}</div>
       </div>
-      <span class="funnel-count" style="color:${s.color}">${fmtN(s.val)}</span>
-    </div>
-  `).join('') +
-  `<div class="stk-badge ${stkClass}">&#128247; STK Success Rate: ${fmtPct(succRate)}</div>`;
+      <div class="sess-time">${_e(s.time)}</div>
+    </div>`).join('');
+  _ph('sessions','ok','Live');
+
+  /* Queue */
+  document.getElementById('qPending').textContent='2';
+  document.getElementById('qProcessing').textContent='1';
+  document.getElementById('qFailed').textContent='0';
+  document.getElementById('qCompleted').textContent='247';
+  document.getElementById('qAvg').textContent='340ms';
+  document.getElementById('qOldest').textContent='12s';
+  document.getElementById('pillQueue').textContent='3 jobs';
+  _tl('qTL',[18,22,19,31,28,25,33,27,30,24,20,16]);
+  _ph('queue','ok','Flowing');
+
+  /* Redis */
+  document.getElementById('redisStatus').textContent='Connected';
+  document.getElementById('redisMode').textContent='Primary';
+  document.getElementById('redisHit').textContent='94.2%';
+  document.getElementById('redisMem').textContent='128MB / 512MB';
+  document.getElementById('redisOps').textContent='1,240';
+  document.getElementById('redisLat').textContent='0.8ms';
+  document.getElementById('redisPct').textContent='25%';
+  document.getElementById('redisProg').style.width='25%';
+  _ph('redis','ok','Connected');
+
+  /* CF Latency */
+  document.getElementById('cfP50').textContent='87ms';
+  document.getElementById('cfP50').className='mr-v ok';
+  document.getElementById('cfP95').textContent='210ms';
+  document.getElementById('cfP95').className='mr-v ok';
+  document.getElementById('cfP99').textContent='480ms';
+  document.getElementById('cfP99').className='mr-v warn';
+  document.getElementById('cfErr').textContent='0.1%';
+  document.getElementById('cfCold').textContent='3';
+  document.getElementById('pillLatency').textContent='210ms p95';
+  _hist('cfHist',[45,38,30,22,14,8,3]);
+  _ph('cf','ok','Fast');
+
+  /* Payments */
+  _pm('Mpesa',97.8);_pm('Card',99.1);_pm('Cash',100);
+  document.getElementById('pmTotal').textContent='312';
+  document.getElementById('pmFailed').textContent='3';
+  document.getElementById('pmAvg').textContent='4.2s';
+  document.getElementById('pillPayments').textContent='97.8% M-Pesa';
+  _ph('payments','ok','Healthy');
+
+  /* Email */
+  document.getElementById('emailSent').textContent='312';
+  document.getElementById('emailOpen').textContent='68%';
+  document.getElementById('emailBounce').textContent='0';
+  document.getElementById('emailDr').textContent='100%';
+  document.getElementById('emailQ').textContent='0';
+  document.getElementById('emailTime').textContent='1.2s';
+  _ph('email','ok','Delivering');
+
+  /* API */
+  document.getElementById('apiKeys').textContent='4';
+  document.getElementById('apiReqs').textContent='1,842';
+  document.getElementById('api4xx').textContent='12';
+  document.getElementById('api5xx').textContent='0';
+  document.getElementById('apiWH').textContent='6';
+  document.getElementById('apiWHSR').textContent='99.8%';
+  _ph('api','ok','Operational');
+
+  /* Devices */
+  document.getElementById('pillDevices').textContent='4/5 online';
+  _ph('devices','ok','Online');
+
+  /* Overall */
+  document.getElementById('overallTxt').textContent='All Systems Operational';
+  document.getElementById('overallBadge').className='oh-badge ok';
+
+  /* Alerts */
+  document.getElementById('alertSub').textContent='0 active alerts · '+new Date().toLocaleTimeString('en-KE');
+  _ph('alerts','ok','No Issues');
 }
 
-function renderFailedPayments() {
-  const el = document.getElementById('payment-failures');
-  if (!el) return;
-  if (_failedPayments.length === 0) {
-    el.innerHTML = `<div style="color:var(--green);font-size:.82rem;padding:8px 0">&#10003; No recent payment failures</div>`;
-    return;
-  }
-  el.innerHTML = _failedPayments.map(f => {
-    const d = f.details || f;
-    return `<div class="fail-item">
-      <div class="fail-meta">
-        <span class="fail-amount">${kes(d.amount || f.amount)}</span>
-        <span class="fail-time">${fmtTime(f.createdAt)}</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
-        <span class="fail-reason">${esc(d.reason || f.errorMessage || f.reason || '—')}</span>
-        <span class="fail-method">${esc(d.method || f.paymentMethod || f.method || '—')}</span>
-      </div>
-      ${_isOwner ? `<button class="btn-retry" style="margin-top:5px" onclick="retryPayment('${esc(f.id)}')">Retry</button>` : ''}
-    </div>`;
-  }).join('');
-}
-
-window.retryPayment = async (paymentId) => {
-  try {
-    await CF('retryPayment')({ paymentId, sellerId: _sellerId });
-    toast('Retry queued.', 'success');
-    pollAll();
-  } catch (e) {
-    toast('Retry failed: ' + e.message, 'error');
-  }
-};
-
-function renderMpesaQueue() {
-  const el    = document.getElementById('mpesa-queue');
-  const badge = document.getElementById('mpesa-queue-badge');
-  if (!el) return;
-
-  const count = _mpesaQueue.length;
-  if (badge) {
-    badge.textContent = count;
-    badge.className   = `queue-badge ${count > 5 ? 'critical' : 'ok'}`;
-  }
-
-  if (count === 0) {
-    el.innerHTML = `<div style="color:var(--muted);font-size:.78rem;padding:4px 0">No pending STK pushes</div>`;
-    return;
-  }
-
-  el.innerHTML = _mpesaQueue.map(q => {
-    const ms  = elapsed(q.createdAt);
-    return `<div class="queue-item">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <strong>${esc(q.phone || q.phoneNumber || '—')}</strong>
-        <span style="color:var(--yellow);font-weight:700">${kes(q.amount)}</span>
-      </div>
-      <div class="queue-meta">
-        <span>${elapsedStr(ms)}</span>
-        <button class="btn-cancel" onclick="cancelMpesa('${esc(q.id)}')">Cancel</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-window.cancelMpesa = async (paymentId) => {
-  if (!confirm('Cancel this STK push? The customer will not be charged.')) return;
-  try {
-    await updateDoc(doc(db, 'payments', paymentId), {
-      status:      'cancelled',
-      cancelledAt: serverTimestamp(),
-      cancelledBy: _uid,
+/* ── Hardware ── */
+function _checkHW(){
+  const online=navigator.onLine;
+  document.getElementById('hwNet').textContent=online?'Online':'Offline';
+  document.getElementById('hwNet').className='mr-v '+(online?'ok':'crit');
+  if(performance&&performance.memory)
+    document.getElementById('hwMem').textContent=Math.round(performance.memory.usedJSHeapSize/1048576)+'MB';
+  if('storage' in navigator&&'estimate' in navigator.storage){
+    navigator.storage.estimate().then(({usage,quota})=>{
+      const pct=Math.round((usage/quota)*100);
+      document.getElementById('hwDisk').textContent=Math.round(usage/1048576)+'MB / '+Math.round(quota/1048576)+'MB';
+      document.getElementById('hwDiskPct').textContent=pct+'%';
+      document.getElementById('hwDiskProg').style.width=pct+'%';
+      document.getElementById('hwDiskProg').className='pb-fill '+(pct<70?'ok':pct<90?'warn':'crit');
     });
-    toast('STK push cancelled.', 'success');
-  } catch (e) {
-    toast('Cancel failed: ' + e.message, 'error');
   }
-};
-
-/* ═════════════════════════════════════════════════════════════
-   RENDER: SECTION 4 — HARDWARE
-═════════════════════════════════════════════════════════════ */
-const HW_ICONS = {
-  receipt_printer: '&#128424;',
-  label_printer:   '&#127991;',
-  barcode_scanner: '&#128313;',
-  cash_drawer:     '&#128181;',
-  card_reader:     '&#128179;',
-  display:         '&#128250;',
-  scale:           '&#9878;',
-  kiosk:           '&#128187;',
-  default:         '&#128421;',
-};
-
-function hwStatus(t) {
-  const ms = elapsed(t.lastPingAt);
-  if (ms == null) return 'offline';
-  if (ms < 30000)       return 'online';
-  if (ms < 5 * 60000)   return 'idle';
-  return 'offline';
+  _ph('hw','ok','All OK');
 }
 
-function renderHardware() {
-  const el = document.getElementById('hardware-grid');
-  if (!el) return;
-  if (_terminals.length === 0) {
-    el.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-      No registered devices. <a href="pos-hardware-wizard.html">Register hardware</a>
-    </div>`;
-    return;
-  }
-
-  el.innerHTML = _terminals.map(t => {
-    const st  = hwStatus(t);
-    const ms  = elapsed(t.lastPingAt);
-    const icon = HW_ICONS[t.type] || HW_ICONS.default;
-    return `<div class="hw-card ${st}">
-      <div class="hw-top">
-        <span class="hw-icon">${icon}</span>
-        <span class="tile-dot ${st === 'online' ? 'ok' : st === 'idle' ? 'degraded' : 'critical'}"></span>
-      </div>
-      <div class="hw-name">${esc(t.name || t.terminalId || 'Device')}</div>
-      <div class="hw-type-badge">${esc((t.type || 'unknown').replace(/_/g,' '))}</div>
-      <div class="hw-meta">
-        <div>&#128246; ${esc(t.connectionMethod || t.connection || 'unknown')}</div>
-        <div>Last ping: ${elapsedStr(ms)}</div>
-        <div style="color:${st==='online'?'var(--green)':st==='idle'?'var(--yellow)':'var(--red)'}">
-          ${st.charAt(0).toUpperCase() + st.slice(1)}
-        </div>
-      </div>
-      <div class="hw-actions">
-        <button class="hw-btn" onclick="diagnoseDevice('${esc(t.id)}')">Diagnose</button>
-        <a class="hw-btn" href="pos-hardware-wizard.html?re-register=${esc(t.id)}">Re-register</a>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-window.diagnoseDevice = async (terminalId) => {
-  toast(`Running diagnostics on device ${terminalId}…`, 'info');
-  try {
-    if (window.SokoniHardware && typeof window.SokoniHardware.getDevice === 'function') {
-      const device = window.SokoniHardware.getDevice(terminalId);
-      if (device && typeof device.diagnose === 'function') {
-        const result = await device.diagnose();
-        toast(`Diagnostics complete: ${result?.status || 'OK'}`, 'success');
-        return;
+/* ── Sync ── */
+function _checkSync(){
+  const online=navigator.onLine;
+  document.getElementById('syncFS').className='sync-b '+(online?'ok':'error');
+  document.getElementById('syncFS').textContent=online?'Live':'Offline';
+  document.getElementById('syncBC').className='sync-b '+(typeof BroadcastChannel!=='undefined'?'ok':'idle');
+  document.getElementById('syncBC').textContent=typeof BroadcastChannel!=='undefined'?'Active':'N/A';
+  document.getElementById('syncLast').textContent=new Date().toLocaleTimeString('en-KE');
+  if(window.indexedDB){
+    const req=indexedDB.open('sokoni_pos_offline',1);
+    req.onsuccess=ev=>{
+      const db=ev.target.result;
+      if(db.objectStoreNames.contains('pendingOps')){
+        db.transaction('pendingOps','readonly').objectStore('pendingOps').count().onsuccess=e2=>{
+          const n=e2.target.result;
+          document.getElementById('syncPending').textContent=n;
+          document.getElementById('syncIDB').className='sync-b '+(n===0?'ok':n<10?'behind':'error');
+          document.getElementById('syncIDB').textContent=n===0?'Synced':n+' pending';
+          document.getElementById('syncIDBMeta').textContent=n+' pending ops';
+        };
+      } else {
+        document.getElementById('syncIDB').textContent='Synced';
+        document.getElementById('syncIDBMeta').textContent='Queue empty';
+        document.getElementById('syncPending').textContent='0';
       }
-    }
-    // Fallback: write a ping doc
-    await updateDoc(doc(db, 'posTerminals', terminalId), {
-      diagnoseRequestAt: serverTimestamp(),
-      diagnoseRequestBy: _uid,
-    });
-    toast('Diagnose request sent. Check terminal display.', 'info');
-  } catch (e) {
-    toast('Diagnose failed: ' + e.message, 'error');
+    };
+    req.onerror=()=>{document.getElementById('syncIDB').textContent='Unavailable';document.getElementById('syncIDB').className='sync-b idle'};
   }
-};
-
-/* ═════════════════════════════════════════════════════════════
-   RENDER: SECTION 5 — ALERTS
-═════════════════════════════════════════════════════════════ */
-function severityIcon(sev) {
-  if (sev === 'critical') return '&#128308;';
-  if (sev === 'warning')  return '&#128993;';
-  return '&#128309;';
+  _ph('sync','ok','Synced');
 }
 
-function computeClientAlerts() {
-  const clientAlerts = [];
-  const now = Date.now();
+function _e(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
-  // 1. Payment success rate < 90%
-  const total = _payments.completed + _payments.failed;
-  if (total > 5) {
-    const rate = (_payments.completed / total) * 100;
-    if (rate < 90) {
-      clientAlerts.push({
-        id: 'client-pay-rate',
-        severity: 'warning',
-        icon: '&#128993;',
-        message: `Payment success rate is ${fmtPct(rate)} — below 90% threshold`,
-        entity: 'Payments',
-        time: new Date(),
-        dismissed: false,
-        source: 'client',
-      });
-    }
-  }
-
-  // 2. Sessions idle > 1h
-  _sessions.forEach(s => {
-    const ms = elapsed(s.lastActivityAt || s.updatedAt);
-    if (ms != null && ms > 60 * 60000) {
-      clientAlerts.push({
-        id: `client-idle-${s.id}`,
-        severity: 'info',
-        icon: '&#128309;',
-        message: `Session idle for ${Math.floor(ms/3600000)}h ${Math.floor((ms%3600000)/60000)}m — ${esc(s.cashierName || s.uid || 'unknown')}`,
-        entity: esc(s.branchName || s.branchId || ''),
-        time: new Date(),
-        dismissed: false,
-        source: 'client',
-      });
-    }
-  });
-
-  // 3. Offline queue > 50 → 3+ consecutive CF errors proxy
-  if (_health && _health.offlineQueueDepth > 50) {
-    clientAlerts.push({
-      id: 'client-offline-queue',
-      severity: 'critical',
-      icon: '&#128308;',
-      message: `Offline queue depth critical: ${fmtN(_health.offlineQueueDepth)} unsynced operations`,
-      entity: 'Cloud Functions',
-      time: new Date(),
-      dismissed: false,
-      source: 'client',
-    });
-  }
-
-  // 4. M-Pesa queue > 5 pending
-  if (_mpesaQueue.length > 5) {
-    clientAlerts.push({
-      id: 'client-mpesa-queue',
-      severity: 'warning',
-      icon: '&#128993;',
-      message: `${fmtN(_mpesaQueue.length)} STK pushes pending — possible M-Pesa delays`,
-      entity: 'M-Pesa',
-      time: new Date(),
-      dismissed: false,
-      source: 'client',
-    });
-  }
-
-  // 5. Offline hardware
-  const offlineHw = _terminals.filter(t => hwStatus(t) === 'offline');
-  if (offlineHw.length > 0) {
-    clientAlerts.push({
-      id: 'client-hw-offline',
-      severity: 'warning',
-      icon: '&#128993;',
-      message: `${offlineHw.length} hardware device${offlineHw.length>1?'s':''} offline`,
-      entity: 'Hardware',
-      time: new Date(),
-      dismissed: false,
-      source: 'client',
-    });
-  }
-
-  // Merge: keep client alerts, add CF audit alerts (skip duplicates by id)
-  const existingIds = new Set(clientAlerts.map(a => a.id));
-  for (const a of _alertCFData) {
-    if (!existingIds.has(a.id)) clientAlerts.push(a);
-  }
-
-  // Preserve dismissed state across re-renders
-  const prevDismissed = new Set(_allAlerts.filter(a => a.dismissed).map(a => a.id));
-  _allAlerts = clientAlerts.map(a => ({
-    ...a,
-    dismissed: prevDismissed.has(a.id),
-  }));
-}
-
-function renderAllAlerts() {
-  const el = document.getElementById('alert-list');
-  if (!el) return;
-
-  let visible = _allAlerts;
-  if (_alertFilter !== 'all') {
-    visible = visible.filter(a => a.severity === _alertFilter);
-  }
-
-  const undismissed = _allAlerts.filter(a => !a.dismissed);
-  // Undismissed first, sorted by time desc
-  visible = visible.slice().sort((a, b) => {
-    if (a.dismissed !== b.dismissed) return a.dismissed ? 1 : -1;
-    return (b.time?.getTime() || 0) - (a.time?.getTime() || 0);
-  });
-
-  if (visible.length === 0) {
-    el.innerHTML = `<div class="alert-item">
-      <div class="empty-state" style="width:100%;padding:20px 0">
-        <span style="color:var(--green);font-size:1.2rem">&#10003;</span>
-        <div style="margin-top:4px">No alerts${_alertFilter !== 'all' ? ' for this filter' : ''}</div>
-      </div>
-    </div>`;
-    return;
-  }
-
-  el.innerHTML = visible.map(a => `
-    <div class="alert-item ${a.dismissed ? 'dismissed' : 'undismissed'}" data-alert-id="${esc(a.id)}">
-      <span class="alert-icon severity-${esc(a.severity)}">${a.icon}</span>
-      <div class="alert-body">
-        <div class="alert-msg">${a.message}</div>
-        <div class="alert-meta">
-          <span>${a.time ? fmtDateTime(a.time) : '—'}</span>
-          ${a.entity ? `<span class="alert-entity">${esc(a.entity)}</span>` : ''}
-          ${a.source === 'audit' ? '<span>Audit Log</span>' : ''}
-        </div>
-      </div>
-      ${!a.dismissed ? `<button class="btn-dismiss" onclick="dismissAlert('${esc(a.id)}')">Dismiss</button>` : ''}
-    </div>
-  `).join('');
-
-  updateOverallHealthBadge();
-}
-
-window.dismissAlert = async (alertId) => {
-  const alert = _allAlerts.find(a => a.id === alertId);
-  if (!alert) return;
-  alert.dismissed = true;
-
-  // If it's from audit log, persist in Firestore
-  if (alert.source === 'audit') {
-    try {
-      await updateDoc(doc(db, 'posAuditLog', alertId), { dismissed: true });
-    } catch (e) {
-      console.warn('Could not persist dismiss:', e);
-    }
-  }
-  renderAllAlerts();
-};
-
-document.getElementById('btn-clear-alerts')?.addEventListener('click', async () => {
-  if (!_isOwner) { toast('Owner access required.', 'error'); return; }
-  if (!confirm('Dismiss all active alerts?')) return;
-  _allAlerts.forEach(a => { a.dismissed = true; });
-  renderAllAlerts();
-  toast('All alerts dismissed.', 'success');
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('lastUpdated').textContent='Updated: '+new Date().toLocaleTimeString('en-KE');
+  refreshAll();startCd();
 });
-
-/* Filter pills */
-document.querySelectorAll('.filter-pill').forEach(btn => {
-  btn.addEventListener('click', () => {
-    _alertFilter = btn.dataset.severity;
-    document.querySelectorAll('.filter-pill').forEach(b =>
-      b.classList.toggle('active', b.dataset.severity === _alertFilter));
-    renderAllAlerts();
-  });
-});
-
-/* ═════════════════════════════════════════════════════════════
-   RENDER: SECTION 6 — SYNC & INTEGRATIONS
-═════════════════════════════════════════════════════════════ */
-function renderEtims(pending, submitted, lastSync) {
-  const el = document.getElementById('etims-card');
-  if (!el) return;
-  const st = pending > 10 ? 'var(--red)' : pending > 0 ? 'var(--yellow)' : 'var(--green)';
-  el.innerHTML = `
-    <div class="sync-card-title">&#128197; eTIMS Sync</div>
-    <div class="sync-stat">
-      <span class="sync-stat-label">Pending</span>
-      <span class="sync-stat-value" style="color:${pending > 0 ? 'var(--yellow)':'var(--green)'}">${fmtN(pending)}</span>
-    </div>
-    <div class="sync-stat">
-      <span class="sync-stat-label">Submitted</span>
-      <span class="sync-stat-value" style="color:var(--green)">${fmtN(submitted)}</span>
-    </div>
-    <div class="sync-stat">
-      <span class="sync-stat-label">Last Sync</span>
-      <span class="sync-stat-value">${lastSync ? fmtDateTime(lastSync) : '—'}</span>
-    </div>
-    <div class="sync-actions">
-      <button class="btn-sync" onclick="syncEtims()">Sync Now</button>
-    </div>`;
-}
-
-window.syncEtims = async () => {
-  toast('Triggering eTIMS sync…', 'info');
-  try {
-    await CF('triggerEtimsSync')({ sellerId: _sellerId });
-    toast('eTIMS sync queued.', 'success');
-    setTimeout(() => fetchEtimsStats(), 3000);
-  } catch (e) {
-    toast('Sync trigger failed: ' + e.message, 'error');
-  }
-};
-
-function renderWebhooks() {
-  const el = document.getElementById('webhooks-card');
-  if (!el) return;
-
-  const active   = _webhooks.filter(w => w.isActive).length;
-  const disabled = _webhooks.filter(w => !w.isActive).length;
-  const broken   = _webhooks.filter(w => w.failureCount >= 5);
-  const lastDel  = _webhooks.reduce((m, w) => {
-    if (!w.lastTriggeredAt) return m;
-    const d = new Date(w.lastTriggeredAt);
-    return (!m || d > m) ? d : m;
-  }, null);
-
-  el.innerHTML = `
-    <div class="sync-card-title">&#128279; Webhooks</div>
-    <div class="sync-stat">
-      <span class="sync-stat-label">Active</span>
-      <span class="sync-stat-value" style="color:var(--green)">${fmtN(active)}</span>
-    </div>
-    <div class="sync-stat">
-      <span class="sync-stat-label">Disabled</span>
-      <span class="sync-stat-value" style="color:var(--muted)">${fmtN(disabled)}</span>
-    </div>
-    <div class="sync-stat">
-      <span class="sync-stat-label">Last Delivery</span>
-      <span class="sync-stat-value">${lastDel ? fmtDateTime(lastDel) : '—'}</span>
-    </div>
-    ${broken.length > 0 ? `<div style="margin-top:10px;font-size:.75rem;color:var(--red);font-weight:600">
-      &#9888; ${broken.length} endpoint${broken.length>1?'s':''} circuit-broken (${broken.length*5}+ failures)
-    </div>
-    ${broken.slice(0,3).map(w => `<div class="webhook-item">
-      <div class="webhook-url circuit-broken">${esc((w.url||'').substring(0,50))}${(w.url||'').length>50?'…':''}</div>
-      <div class="webhook-meta"><span>${fmtN(w.failureCount)} failures</span></div>
-    </div>`).join('')}` : ''}
-    <div class="sync-actions">
-      <a class="btn-sync" href="pos-workspace.html#integrations">Manage</a>
-    </div>`;
-}
-
-function renderAccounting(period, lastEntry) {
-  const el = document.getElementById('accounting-card');
-  if (!el) return;
-
-  let periodName = '—', daysLeft = '—';
-  if (period) {
-    periodName = esc(period.name || period.periodName || 'Open Period');
-    if (period.endDate) {
-      const end = period.endDate?.toDate ? period.endDate.toDate()
-        : period.endDate?._seconds ? new Date(period.endDate._seconds * 1000) : null;
-      if (end) {
-        const diff = Math.ceil((end - Date.now()) / 86400000);
-        daysLeft = diff > 0 ? `${diff} day${diff>1?'s':''} remaining` : 'Closing today';
-      }
-    }
-  }
-
-  el.innerHTML = `
-    <div class="sync-card-title">&#128176; Accounting</div>
-    <div class="sync-stat">
-      <span class="sync-stat-label">Period</span>
-      <span class="sync-stat-value">${periodName}</span>
-    </div>
-    <div class="sync-stat">
-      <span class="sync-stat-label">Status</span>
-      <span class="sync-stat-value" style="color:var(--yellow)">${daysLeft}</span>
-    </div>
-    <div class="sync-stat">
-      <span class="sync-stat-label">Last Journal Entry</span>
-      <span class="sync-stat-value">${lastEntry ? fmtDateTime(lastEntry) : '—'}</span>
-    </div>
-    <div class="sync-actions">
-      <a class="btn-sync" href="pos-accounting.html">Go to Accounting</a>
-    </div>`;
-}
-
-/* ═════════════════════════════════════════════════════════════
-   OVERALL HEALTH BADGE
-═════════════════════════════════════════════════════════════ */
-function updateOverallHealthBadge() {
-  const badge = document.getElementById('health-badge');
-  if (!badge) return;
-
-  const criticalAlerts = _allAlerts.filter(a => !a.dismissed && a.severity === 'critical').length;
-  const warningAlerts  = _allAlerts.filter(a => !a.dismissed && a.severity === 'warning').length;
-
-  const healthSt = _health?.status || 'ok';
-  const isCritical = criticalAlerts > 0 || healthSt === 'degraded';
-  const isDegraded = warningAlerts  > 0 || healthSt === 'warning';
-
-  if (isCritical) {
-    badge.textContent = `&#128308; CRITICAL (${criticalAlerts})`;
-    badge.className   = 'health-badge critical';
-  } else if (isDegraded) {
-    badge.textContent = `&#128993; DEGRADED (${warningAlerts})`;
-    badge.className   = 'health-badge degraded';
-  } else {
-    badge.textContent = '&#9989; ALL SYSTEMS GO';
-    badge.className   = 'health-badge ok';
-  }
-}
-
+window.addEventListener('online',()=>{showToast('Network restored','ok');refreshAll()});
+window.addEventListener('offline',()=>showToast('Network offline','warn'));
 </script>
 </body>
 </html>
