@@ -1,4 +1,52 @@
-﻿## [2026-07-05] — Documentation Master Plan Complete: Volumes 10–18 + APIs & Integrations + CF Deploy Fix
+﻿## [2026-07-06] — Critical Fix: CSP Was Blocking App Check (Platform-Wide Button/Data Failure) + Navigation Cleanup
+
+### Summary
+Fixed a **critical, platform-wide regression** where the Content Security Policy blocked Firebase App Check's reCAPTCHA and token-exchange endpoint. Without an App Check token, **Firestore could not authenticate any request** ("Could not reach Cloud Firestore backend"), so data-driven buttons across the entire platform — most visibly the **Seller Dashboard** — appeared dead. Also finished two navigation cleanups: replaced the redundant bottom-nav **Cart** button with **Services** (cart stays in the header), and fixed the bottom-nav **Orders** button which 404'd on a non-existent `orders.html`.
+
+### Bug Fix 1 — CSP blocking Firebase App Check (CRITICAL)
+**Root cause:** The CSP (injected client-side by `security.js` on every page, and served as an HTTP header via `firebase.json`) was missing two hosts that App Check requires:
+- `script-src` lacked `https://www.google.com` → the reCAPTCHA v3 script (`recaptcha/api.js`) was blocked.
+- `connect-src` listed `firebaseappcheck.googleapis.com` but **not** the actual subdomain the SDK calls, `content-firebaseappcheck.googleapis.com` → the App Check `exchangeDebugToken`/token call was blocked.
+
+With App Check unable to obtain a token, every Firestore/Functions call failed, which is why the Seller Dashboard (and other authenticated views) loaded no data and their buttons did nothing.
+
+**Fix:**
+- `security.js` — added `https://www.google.com` + `https://www.recaptcha.net` to `script-src`; added `https://content-firebaseappcheck.googleapis.com` to `connect-src`.
+- `firebase.json` — same additions to both the enforced `Content-Security-Policy` and `Content-Security-Policy-Report-Only` headers.
+
+**Verification:** Loaded the site under a local static server via Playwright. Before: 11 CSP/App Check console violations per page. After: **0 violations**; injected CSP confirmed to allow `www.google.com` (script-src) and `content-firebaseappcheck` (connect-src).
+
+### Bug Fix 2 — Bottom-nav "Orders" button 404
+**Root cause:** The buyer bottom-nav Orders tab pointed to `orders.html`, which does not exist (only `b2b-orders.html` exists). Buyer orders actually live in the **Orders tab of `profile.html`**, but `switchTab()` ignored the URL hash, so even a `#orders` link would have opened the default tab.
+
+**Fix:**
+- `sokoni-nav-engine.js` — buyer Orders tab `orders.html` → `profile.html#orders`.
+- `profile.html` — added `_openTabFromHash()` + a `hashchange` listener so `profile.html#orders` opens the Orders tab on load.
+- `chat.html` — `cancel_order` / `return_item` quick-actions repointed off `orders.html` to `profile.html?...#orders`.
+
+### Change 3 — Bottom-nav Cart → Services (cart already in header)
+Replaced the redundant bottom-nav Cart button with a Services shortcut (`🛠️ → services.html`) since the cart pill is present in the shared header on every page.
+- `sokoni-nav-engine.js` — buyer bottom-nav tab (covers all engine-rendered pages).
+- Hardcoded bottom navs: `cart.html`, `food.html`, `flashsale.html` (also dropped the now-unused cart pip), `search.html`, `education.html`, `jobs.html`, `food-order.html`.
+- Header/top-bar cart buttons were intentionally left in place.
+
+### Files Changed
+- `security.js` — FIX: CSP `script-src` + `connect-src` App Check/reCAPTCHA hosts
+- `firebase.json` — FIX: CSP header (enforced + report-only) App Check/reCAPTCHA hosts
+- `sokoni-nav-engine.js` — buyer bottom-nav: Cart→Services, Orders→`profile.html#orders`
+- `profile.html` — hash-driven tab opening (`_openTabFromHash` + `hashchange`)
+- `chat.html` — order quick-action routes off non-existent `orders.html`
+- `cart.html`, `food.html`, `flashsale.html`, `search.html`, `education.html`, `jobs.html`, `food-order.html` — bottom-nav Cart→Services
+- `CHANGELOG.md` — UPDATED
+
+### Security / Deployment Notes
+- **Security:** The CSP change *adds* narrowly-scoped Google/Firebase App Check hosts required by the SDK — it does not broaden the policy for untrusted origins. App Check enforcement is unchanged; this simply lets the legitimate token flow through.
+- **Deployment:** `firebase.json` header changes require a **Hosting redeploy** (`firebase deploy --only hosting`) to take effect in production. The `security.js` meta-tag CSP takes effect on next static asset deploy / cache bump. No Cloud Functions or Firestore changes.
+- **No breaking changes.**
+
+---
+
+## [2026-07-05] — Documentation Master Plan Complete: Volumes 10–18 + APIs & Integrations + CF Deploy Fix
 
 ### Summary
 Completed the **SOKONI Enterprise Commerce OS Documentation Master Plan** — all 18 volumes are now published in the `docs/` Obsidian vault. Also resolved a critical Cloud Functions deployment failure caused by startup-time `throw` statements in `etims.js` and `security-zero-trust.js`, unblocking the full ~636 CF fleet deployment.
