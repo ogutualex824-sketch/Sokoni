@@ -186,7 +186,7 @@
       { i:'📊',  l:'Dashboard',  h:'seller.html' },
       { i:'📦',  l:'Products',   h:'seller.html#products' },
       { i:'🛒',  l:'Orders',     h:'seller.html#orders' },
-      { i:'📈',  l:'Analytics',  h:'seller-analytics.html' },
+      { i:'💰',  l:'Earnings',   h:'seller-earnings.html' },
       { i:'⋯',   l:'More',       h:'#', a:'sk-seller-more' }
     ],
     rider: [
@@ -227,28 +227,36 @@
     ]
   };
 
-  /* ── Seller sub-nav (20 items) ───────────────────────────── */
+  /* ── Seller sub-nav items (with category metadata for More drawer grouping) ── */
   var _SUBNAV = [
-    { i:'📊',  l:'Dashboard',    h:'seller.html' },
-    { i:'📦',  l:'Products',     h:'seller.html#products' },
-    { i:'🏪',  l:'MiniShop',     h:'minishop-admin.html' },
-    { i:'📋',  l:'Inventory',    h:'inventory.html' },
-    { i:'🛒',  l:'Orders',       h:'seller.html#orders' },
-    { i:'📈',  l:'Analytics',    h:'seller-analytics.html' },
-    { i:'📣',  l:'Marketing',    h:'seller.html#marketing' },
-    { i:'⚡',  l:'Flash Sales',  h:'flash-sales.html' },
-    { i:'🖥️', l:'POS',          h:'pos.html' },
-    { i:'💳',  l:'Payments',     h:'seller.html#payments' },
-    { i:'💰',  l:'Revenue',      h:'seller-revenue.html' },
-    { i:'👥',  l:'Customers',    h:'seller.html#customers' },
-    { i:'💬',  l:'Messages',     h:'messages.html' },
-    { i:'⚖️', l:'Disputes',     h:'seller.html#disputes' },
-    { i:'⬛',  l:'QR',           h:'qr-center.html' },
-    { i:'🧾',  l:'eTIMS',        h:'etims-seller.html' },
-    { i:'🎁',  l:'Loyalty',      h:'loyalty-merchant.html' },
-    { i:'🗓️', l:'Availability', h:'availability-manager.html' },
-    { i:'🔴',  l:'Live',         h:'seller.html#live' },
-    { i:'⚙️', l:'Settings',     h:'seller.html#settings' }
+    { i:'📊',  l:'Dashboard',    h:'seller.html',              cat:'core'  },
+    { i:'📦',  l:'Products',     h:'seller.html#products',     cat:'core'  },
+    { i:'🛒',  l:'Orders',       h:'seller.html#orders',       cat:'core'  },
+    { i:'📋',  l:'Inventory',    h:'inventory.html',           cat:'core'  },
+    { i:'📈',  l:'Analytics',    h:'seller-analytics.html',    cat:'grow'  },
+    { i:'📣',  l:'Marketing',    h:'seller.html#marketing',    cat:'grow'  },
+    { i:'⚡',  l:'Flash Sales',  h:'flash-sales.html',         cat:'grow'  },
+    { i:'🎁',  l:'Loyalty',      h:'loyalty-merchant.html',    cat:'grow'  },
+    { i:'🏪',  l:'MiniShop',     h:'minishop-admin.html',      cat:'grow'  },
+    { i:'💳',  l:'Payments',     h:'seller.html#payments',     cat:'money' },
+    { i:'💰',  l:'Revenue',      h:'seller-revenue.html',      cat:'money' },
+    { i:'💵',  l:'Earnings',     h:'seller-earnings.html',     cat:'money' },
+    { i:'🧾',  l:'eTIMS',        h:'etims-seller.html',        cat:'money' },
+    { i:'🖥️', l:'POS',          h:'pos.html',                 cat:'tools' },
+    { i:'💬',  l:'Messages',     h:'messages.html',            cat:'tools' },
+    { i:'⚖️', l:'Disputes',     h:'seller.html#disputes',     cat:'tools' },
+    { i:'⬛',  l:'QR',           h:'qr-center.html',           cat:'tools' },
+    { i:'🗓️', l:'Availability', h:'availability-manager.html', cat:'tools' },
+    { i:'🔴',  l:'Live',         h:'seller.html#live',         cat:'tools' },
+    { i:'👥',  l:'Customers',    h:'seller.html#customers',    cat:'tools' },
+    { i:'⚙️', l:'Settings',     h:'seller.html#settings',     cat:'tools' }
+  ];
+
+  var _SUBNAV_CATS = [
+    { key:'core',  l:'Core',   i:'🎯' },
+    { key:'grow',  l:'Grow',   i:'🚀' },
+    { key:'money', l:'Money',  i:'💵' },
+    { key:'tools', l:'Tools',  i:'🔧' }
   ];
 
   /* ── Back destination per workspace ─────────────────────── */
@@ -379,8 +387,9 @@
   }
 
   function _setSnavTop() {
-    var topNav = document.getElementById('sk-top-nav');
-    var h      = topNav ? topNav.getBoundingClientRect().height : 64;
+    var topNav = document.getElementById('sk-top-nav') ||
+                 document.querySelector('.seller-navbar, .pos-navbar, [class*="navbar"]');
+    var h = topNav ? topNav.getBoundingClientRect().height : 64;
     document.documentElement.style.setProperty('--sk-snav-top', Math.ceil(h) + 'px');
   }
 
@@ -449,7 +458,7 @@
   }
 
   /* ═══════════════════════════════════════════════════════════
-     "MORE" DRAWER — full tool grid + role switcher
+     "MORE" DRAWER — store identity + categorised tool grid + role switcher
   ═══════════════════════════════════════════════════════════ */
   function _buildMoreDrawer() {
     if (document.getElementById('sk-seller-more-drawer')) return;
@@ -471,14 +480,50 @@
           'onclick="if(window.SokoniDrawer)SokoniDrawer.close(\'sk-seller-more-drawer\')">&#10005;</button>' +
       '</div>';
 
-    var items = '';
+    /* Store identity card (reads from localStorage) */
+    var storeCard = '';
+    try {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      if (u) {
+        var initial   = (u.storeName || u.name || 'S').charAt(0).toUpperCase();
+        var storeName = u.storeName || u.businessName || 'My Store';
+        var sellerName = u.name || '';
+        storeCard =
+          '<div class="sk-more-store-card">' +
+            '<div class="sk-more-store-avatar" aria-hidden="true">' + initial + '</div>' +
+            '<div class="sk-more-store-info">' +
+              '<div class="sk-more-store-name">' + _esc(storeName) + '</div>' +
+              (sellerName ? '<div class="sk-more-store-sub">' + _esc(sellerName) + ' · Seller</div>' : '<div class="sk-more-store-sub">SOKONI Seller</div>') +
+            '</div>' +
+            '<a href="seller.html" class="sk-more-dash-link" aria-label="Open dashboard">Dashboard &#8594;</a>' +
+          '</div>';
+      }
+    } catch (_) {}
+
+    /* Group items by category */
+    var grouped = {};
     _SUBNAV.forEach(function (t) {
-      var active = _isActive(t.h) ? ' sk-more-item--active' : '';
-      items +=
-        '<a href="' + t.h + '" class="sk-more-item' + active + '">' +
-          '<span class="sk-more-icon" aria-hidden="true">' + t.i + '</span>' +
-          '<span>' + t.l + '</span>' +
-        '</a>';
+      var c = t.cat || 'tools';
+      if (!grouped[c]) grouped[c] = [];
+      grouped[c].push(t);
+    });
+
+    var body = '';
+    _SUBNAV_CATS.forEach(function (cat) {
+      var catItems = grouped[cat.key] || [];
+      if (!catItems.length) return;
+      body += '<div class="sk-more-cat">' +
+        '<h3 class="sk-more-cat-label"><span aria-hidden="true">' + cat.i + '</span> ' + cat.l + '</h3>' +
+        '<div class="sk-more-cat-grid">';
+      catItems.forEach(function (t) {
+        var active = _isActive(t.h) ? ' sk-more-item--active' : '';
+        body +=
+          '<a href="' + t.h + '" class="sk-more-item' + active + '">' +
+            '<span class="sk-more-icon" aria-hidden="true">' + t.i + '</span>' +
+            '<span>' + t.l + '</span>' +
+          '</a>';
+      });
+      body += '</div></div>';
     });
 
     /* Role switcher — only for multi-role users */
@@ -498,8 +543,13 @@
       roleSwitcher += '</div></div>';
     }
 
-    drawer.innerHTML = header + '<div class="sk-drawer-body">' + items + '</div>' + roleSwitcher;
+    drawer.innerHTML = header + storeCard + '<div class="sk-drawer-body">' + body + '</div>' + roleSwitcher;
     document.body.appendChild(drawer);
+  }
+
+  /* Simple HTML escaper used in store card */
+  function _esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   function _openMoreDrawer() {

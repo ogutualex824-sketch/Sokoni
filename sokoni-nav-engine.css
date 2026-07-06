@@ -1,46 +1,48 @@
 /* ================================================================
-   SOKONI Navigation Engine v1.1 — Role-Based Navigation Styles
-   Back button | Role chip | Hub shortcut | Seller sub-nav (20 items)
-   Multi-role switcher | Role-themed bottom nav
-   Viewport: 320px → 1440px
+   SOKONI Navigation Engine v2.0 — Premium Role-Based Navigation
+   Back button | Role chip | Hub shortcut
+   Seller sub-nav | Context bottom nav | More drawer
+   Multi-role switcher | Store identity card
 ================================================================ */
 
-/* ── Smart back button (top nav) ────────────────────────────── */
+/* ── Smart back button (in #sk-top-nav) ─────────────────────── */
 #sk-nav-back-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
+  border-radius: 10px;
   background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.09);
   cursor: pointer;
-  font-size: 17px;
-  color: rgba(255,255,255,0.8);
+  font-size: 18px;
+  color: rgba(255,255,255,0.75);
   flex-shrink: 0;
   transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
-  margin-right: 2px;
+  margin-right: 4px;
+  line-height: 1;
 }
 #sk-nav-back-btn:hover {
   background: rgba(113,255,0,0.1);
-  border-color: rgba(113,255,0,0.28);
+  border-color: rgba(113,255,0,0.3);
   color: #71ff00;
   transform: translateX(-2px);
 }
+#sk-nav-back-btn:active { transform: scale(0.92); }
 
-/* ── Role chip (workspace label) ─────────────────────────── */
+/* ── Role chip (workspace label in top nav) ────────────────── */
 #sk-nav-role-chip {
   font-size: 10px;
   font-weight: 800;
-  padding: 3px 10px;
+  padding: 4px 11px;
   border-radius: 999px;
   background: rgba(113,255,0,0.08);
   border: 1px solid rgba(113,255,0,0.2);
-  color: rgba(113,255,0,0.8);
+  color: rgba(113,255,0,0.85);
   white-space: nowrap;
   flex-shrink: 0;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
   margin-right: 4px;
   text-transform: uppercase;
 }
@@ -51,19 +53,19 @@ body.sk-workspace-rider      #sk-nav-role-chip { background: rgba(255,77,109,0.0
 body.sk-workspace-provider   #sk-nav-role-chip { background: rgba(182,109,255,0.08); border-color: rgba(182,109,255,0.22); color: rgba(182,109,255,0.85); }
 @media (max-width: 440px) { #sk-nav-role-chip { display: none; } }
 
-/* ── "Hub" dashboard shortcut (top nav — seller pages only) ── */
+/* ── "Hub" dashboard shortcut (seller sub-pages only) ────────── */
 #sk-nav-dash-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 10px 3px 8px;
+  padding: 4px 11px 4px 9px;
   border-radius: 999px;
   background: rgba(113,255,0,0.06);
   border: 1px solid rgba(113,255,0,0.18);
   color: rgba(113,255,0,0.75);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.03em;
   text-decoration: none;
   white-space: nowrap;
   flex-shrink: 0;
@@ -77,16 +79,18 @@ body.sk-workspace-provider   #sk-nav-role-chip { background: rgba(182,109,255,0.
 }
 @media (max-width: 380px) { #sk-nav-dash-btn { display: none; } }
 
-/* ── Seller Sub-Nav (persistent horizontal scroll strip) ── */
+/* ═══════════════════════════════════════════════════════════════
+   SELLER SUB-NAV — persistent horizontal scroll strip
+═══════════════════════════════════════════════════════════════ */
 #sk-seller-subnav {
   position: fixed;
   top: var(--sk-snav-top, 64px);
   left: 0;
   right: 0;
   z-index: 100000;
-  height: 46px;
-  background: rgba(6,6,6,0.98);
-  border-bottom: 1px solid rgba(113,255,0,0.08);
+  height: 48px;
+  background: rgba(5,8,5,0.98);
+  border-bottom: 1px solid rgba(113,255,0,0.1);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   display: flex;
@@ -96,7 +100,7 @@ body.sk-workspace-provider   #sk-nav-role-chip { background: rgba(182,109,255,0.
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   will-change: transform;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.5);
+  box-shadow: 0 3px 20px rgba(0,0,0,0.45);
 }
 #sk-seller-subnav::-webkit-scrollbar { display: none; }
 
@@ -105,157 +109,301 @@ body.sk-workspace-provider   #sk-nav-role-chip { background: rgba(182,109,255,0.
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  padding: 4px 14px;
+  gap: 2px;
+  padding: 5px 13px;
   white-space: nowrap;
   font-size: 9px;
-  font-weight: 700;
-  color: rgba(255,255,255,0.38);
+  font-weight: 800;
+  color: rgba(255,255,255,0.35);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  position: relative;
+  transition: color 0.15s, background 0.15s;
   cursor: pointer;
   flex-shrink: 0;
-  min-width: 52px;
-  letter-spacing: 0.4px;
+  min-width: 54px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  border-radius: 0;
 }
 .sk-snav-item:hover {
-  color: rgba(255,255,255,0.75);
+  color: rgba(255,255,255,0.72);
   background: rgba(255,255,255,0.04);
 }
 .sk-snav-item.active {
   color: #71ff00;
-  border-bottom-color: #71ff00;
+  background: rgba(113,255,0,0.06);
 }
-.sk-snav-icon { font-size: 14px; line-height: 1; }
+.sk-snav-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 20%;
+  right: 20%;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: #71ff00;
+  box-shadow: 0 0 6px rgba(113,255,0,0.6);
+}
+.sk-snav-icon {
+  font-size: 15px;
+  line-height: 1;
+}
 
-/* Body padding compensation: seller subnav adds 46px below the top nav */
+/* Body padding: sub-nav adds 48px below top nav */
 body.sk-workspace-seller {
-  padding-top: calc(var(--sk-snav-top, 64px) + 46px) !important;
+  padding-top: calc(var(--sk-snav-top, 64px) + 48px) !important;
 }
 @media (max-width: 600px) {
   body.sk-workspace-seller.sk-has-search {
-    padding-top: calc(var(--sk-snav-top, 120px) + 46px) !important;
+    padding-top: calc(var(--sk-snav-top, 120px) + 48px) !important;
   }
 }
 
-/* ── Role-themed bottom nav active states ─────────────────── */
-.bottom-nav .active-bnav                            { color: #71ff00; }
-body.sk-workspace-admin      .active-bnav           { color: #00aaff; }
-body.sk-workspace-superAdmin .active-bnav           { color: #ffd700; }
-body.sk-workspace-driver     .active-bnav           { color: #ff7c00; }
-body.sk-workspace-rider      .active-bnav           { color: #ff4d6d; }
-body.sk-workspace-provider   .active-bnav           { color: #b66dff; }
-
-.active-bnav .bnav-emoji {
-  filter: drop-shadow(0 0 5px currentColor);
-}
-
-/* Super admin has 6 items — compress slightly */
-.bottom-nav[data-workspace="superAdmin"] .bnav-item {
-  padding: 7px 2px;
-  font-size: 9px;
-  min-width: 0;
-}
-.bottom-nav[data-workspace="superAdmin"] .bnav-emoji { font-size: 17px; }
-
-/* ── Injected .bottom-nav (pages that had none) ─────────── */
+/* ═══════════════════════════════════════════════════════════════
+   INJECTED BOTTOM NAV — role-themed context navigation
+═══════════════════════════════════════════════════════════════ */
 .bottom-nav.sk-nav-injected {
   position: fixed;
-  bottom: 0; left: 0; right: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
   z-index: 200;
   display: flex;
   align-items: stretch;
-  background: rgba(8,8,8,0.97);
+  background: rgba(6,6,6,0.97);
   border-top: 1px solid rgba(255,255,255,0.07);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
 }
+
+/* Seller workspace: green border-top accent */
+body.sk-workspace-seller     .bottom-nav.sk-nav-injected { border-top-color: rgba(113,255,0,0.22); }
+body.sk-workspace-admin      .bottom-nav.sk-nav-injected { border-top-color: rgba(0,170,255,0.22); }
+body.sk-workspace-superAdmin .bottom-nav.sk-nav-injected { border-top-color: rgba(255,215,0,0.22); }
+body.sk-workspace-driver     .bottom-nav.sk-nav-injected { border-top-color: rgba(255,124,0,0.22); }
+body.sk-workspace-rider      .bottom-nav.sk-nav-injected { border-top-color: rgba(255,77,109,0.22);}
+body.sk-workspace-provider   .bottom-nav.sk-nav-injected { border-top-color: rgba(182,109,255,0.22);}
+
 .bottom-nav.sk-nav-injected .bnav-item {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 8px 4px 6px;
-  color: rgba(255,255,255,0.38);
+  gap: 3px;
+  padding: 10px 4px 8px;
+  color: rgba(255,255,255,0.35);
   text-decoration: none;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 800;
   -webkit-tap-highlight-color: transparent;
-  transition: color 0.15s;
+  transition: color 0.18s;
+  position: relative;
+  letter-spacing: 0.02em;
 }
-.bottom-nav.sk-nav-injected .bnav-emoji { font-size: 20px; line-height: 1; }
+.bottom-nav.sk-nav-injected .bnav-item:active { transform: scale(0.92); }
+.bottom-nav.sk-nav-injected .bnav-emoji {
+  font-size: 21px;
+  line-height: 1;
+  transition: filter 0.2s, transform 0.18s;
+}
 
-/* ── "More" drawer — tool grid ───────────────────────────── */
-#sk-seller-more-drawer .sk-drawer-body {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 16px;
-  align-content: start;
+/* ── Active tab state ── */
+.bottom-nav.sk-nav-injected .active-bnav {
+  color: #71ff00;
 }
+
+/* Active indicator: green pill at the very top of the tab */
+.bottom-nav.sk-nav-injected .active-bnav::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 3px;
+  border-radius: 0 0 4px 4px;
+  background: #71ff00;
+  box-shadow: 0 1px 8px rgba(113,255,0,0.55);
+}
+
+/* Active emoji: glow effect */
+.bottom-nav.sk-nav-injected .active-bnav .bnav-emoji {
+  filter: drop-shadow(0 0 7px rgba(113,255,0,0.55));
+}
+
+/* ── Role-themed active colours ── */
+body.sk-workspace-admin      .bottom-nav.sk-nav-injected .active-bnav           { color: #00aaff; }
+body.sk-workspace-admin      .bottom-nav.sk-nav-injected .active-bnav::before    { background: #00aaff; box-shadow: 0 1px 8px rgba(0,170,255,0.55); }
+body.sk-workspace-admin      .bottom-nav.sk-nav-injected .active-bnav .bnav-emoji{ filter: drop-shadow(0 0 7px rgba(0,170,255,0.55)); }
+
+body.sk-workspace-superAdmin .bottom-nav.sk-nav-injected .active-bnav           { color: #ffd700; }
+body.sk-workspace-superAdmin .bottom-nav.sk-nav-injected .active-bnav::before    { background: #ffd700; box-shadow: 0 1px 8px rgba(255,215,0,0.55); }
+body.sk-workspace-superAdmin .bottom-nav.sk-nav-injected .active-bnav .bnav-emoji{ filter: drop-shadow(0 0 7px rgba(255,215,0,0.55)); }
+
+body.sk-workspace-driver     .bottom-nav.sk-nav-injected .active-bnav           { color: #ff7c00; }
+body.sk-workspace-driver     .bottom-nav.sk-nav-injected .active-bnav::before    { background: #ff7c00; box-shadow: 0 1px 8px rgba(255,124,0,0.55); }
+body.sk-workspace-driver     .bottom-nav.sk-nav-injected .active-bnav .bnav-emoji{ filter: drop-shadow(0 0 7px rgba(255,124,0,0.55)); }
+
+body.sk-workspace-rider      .bottom-nav.sk-nav-injected .active-bnav           { color: #ff4d6d; }
+body.sk-workspace-rider      .bottom-nav.sk-nav-injected .active-bnav::before    { background: #ff4d6d; box-shadow: 0 1px 8px rgba(255,77,109,0.55); }
+body.sk-workspace-rider      .bottom-nav.sk-nav-injected .active-bnav .bnav-emoji{ filter: drop-shadow(0 0 7px rgba(255,77,109,0.55)); }
+
+body.sk-workspace-provider   .bottom-nav.sk-nav-injected .active-bnav           { color: #b66dff; }
+body.sk-workspace-provider   .bottom-nav.sk-nav-injected .active-bnav::before    { background: #b66dff; box-shadow: 0 1px 8px rgba(182,109,255,0.55); }
+body.sk-workspace-provider   .bottom-nav.sk-nav-injected .active-bnav .bnav-emoji{ filter: drop-shadow(0 0 7px rgba(182,109,255,0.55)); }
+
+/* Super admin has 6 items — compress */
+.bottom-nav[data-workspace="superAdmin"] .bnav-item { padding: 8px 2px 6px; font-size: 9px; min-width: 0; }
+.bottom-nav[data-workspace="superAdmin"] .bnav-emoji { font-size: 18px; }
+.bottom-nav[data-workspace="superAdmin"] .active-bnav::before { width: 20px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   "MORE" DRAWER — store card + categorised tool grid
+═══════════════════════════════════════════════════════════════ */
+
+/* Store identity card */
+.sk-more-store-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: rgba(113,255,0,0.04);
+  border-bottom: 1px solid rgba(113,255,0,0.1);
+  text-decoration: none;
+}
+.sk-more-store-avatar {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #71ff00, #4fc800);
+  color: #050f05;
+  font-size: 18px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.sk-more-store-info { flex: 1; min-width: 0; }
+.sk-more-store-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+.sk-more-store-sub {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  margin-top: 2px;
+}
+.sk-more-dash-link {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(113,255,0,0.75);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 6px 12px;
+  border: 1px solid rgba(113,255,0,0.2);
+  border-radius: 8px;
+  background: rgba(113,255,0,0.06);
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.sk-more-dash-link:hover { background: rgba(113,255,0,0.12); color: #71ff00; }
+
+/* Categorised tool sections */
+#sk-seller-more-drawer .sk-drawer-body {
+  padding: 12px 16px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.sk-more-cat { margin-bottom: 16px; }
+.sk-more-cat-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  margin: 0 0 8px 2px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.sk-more-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+/* Tool tile */
 .sk-more-item {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 5px;
-  padding: 14px 8px;
+  padding: 12px 6px;
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 14px;
+  border-radius: 12px;
   text-decoration: none;
-  color: rgba(255,255,255,0.7);
-  font-size: 11px;
-  font-weight: 600;
+  color: rgba(255,255,255,0.65);
+  font-size: 10px;
+  font-weight: 700;
   text-align: center;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
   cursor: pointer;
+  letter-spacing: 0.01em;
+  -webkit-tap-highlight-color: transparent;
 }
 .sk-more-item:hover,
 .sk-more-item:focus {
-  background: rgba(113,255,0,0.06);
-  border-color: rgba(113,255,0,0.2);
+  background: rgba(113,255,0,0.07);
+  border-color: rgba(113,255,0,0.22);
   color: #71ff00;
   transform: translateY(-2px);
   outline: none;
 }
+.sk-more-item:active { transform: scale(0.94); }
 .sk-more-item--active {
-  background: rgba(113,255,0,0.08) !important;
+  background: rgba(113,255,0,0.09) !important;
   border-color: rgba(113,255,0,0.3) !important;
   color: #71ff00 !important;
 }
-.sk-more-icon { font-size: 22px; line-height: 1; }
+.sk-more-icon { font-size: 20px; line-height: 1; }
 
-/* ── Role switcher (inside More drawer) ──────────────────── */
+/* ── Role switcher ── */
 .sk-role-switcher {
-  padding: 0 16px 20px;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  padding: 0 16px 24px;
+  border-top: 1px solid rgba(255,255,255,0.05);
   margin-top: 4px;
 }
 .sk-role-switcher-label {
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: rgba(255,255,255,0.3);
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.28);
   margin: 14px 0 10px;
 }
-.sk-role-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
+.sk-role-pills { display: flex; flex-wrap: wrap; gap: 8px; }
 .sk-role-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 14px;
+  padding: 7px 14px;
   border-radius: 999px;
   background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.1);
-  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.09);
+  color: rgba(255,255,255,0.55);
   font-size: 12px;
   font-weight: 700;
   text-decoration: none;
@@ -264,7 +412,7 @@ body.sk-workspace-provider   .active-bnav           { color: #b66dff; }
 }
 .sk-role-pill:hover {
   background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.18);
   color: #fff;
   transform: translateY(-1px);
 }
@@ -274,28 +422,59 @@ body.sk-workspace-provider   .active-bnav           { color: #b66dff; }
   color: #71ff00 !important;
 }
 
-/* ── Desktop — hide bottom nav, keep sub-nav ─────────────── */
+/* ── Role badge in hamburger overlay ── */
+#sk-menu-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  margin: 16px 0 4px 16px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.55);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════════════════════════ */
+
+/* Desktop: hide bottom nav, keep sub-nav */
 @media (min-width: 769px) {
   .bottom-nav.sk-nav-injected { display: none !important; }
 }
 
-/* ── Viewport tweaks: 320px → 430px ─────────────────────── */
+/* 5-column grid on wide drawers */
+@media (min-width: 480px) {
+  .sk-more-cat-grid { grid-template-columns: repeat(5, 1fr); }
+}
+
+/* ── 430px → 380px ── */
 @media (max-width: 430px) {
-  .sk-snav-item { padding: 4px 11px; min-width: 48px; }
+  .sk-snav-item { padding: 5px 11px; min-width: 50px; }
+  .sk-more-cat-grid { grid-template-columns: repeat(4, 1fr); }
 }
 @media (max-width: 380px) {
-  .sk-snav-item { padding: 4px 9px; min-width: 44px; }
-  .sk-snav-icon { font-size: 13px; }
+  .sk-snav-item { padding: 5px 9px; min-width: 46px; }
+  .sk-snav-icon { font-size: 14px; }
+  #sk-nav-role-chip { display: none; }
 }
+
+/* ── Sub 360px (very small phones) ── */
 @media (max-width: 360px) {
-  .bnav-emoji { font-size: 17px !important; }
-  .bottom-nav .bnav-item { padding: 7px 3px !important; font-size: 9px !important; }
-  #sk-seller-subnav { height: 42px !important; }
-  .sk-snav-item { padding: 4px 9px !important; min-width: 42px !important; }
-  #sk-seller-more-drawer .sk-drawer-body { grid-template-columns: repeat(2,1fr); }
+  .bnav-emoji { font-size: 18px !important; }
+  .bottom-nav.sk-nav-injected .bnav-item { padding: 8px 3px 6px !important; font-size: 9px !important; }
+  #sk-seller-subnav { height: 43px !important; }
+  .sk-snav-item { padding: 4px 8px !important; min-width: 42px !important; }
+  .sk-more-cat-grid { grid-template-columns: repeat(3, 1fr) !important; }
+  .sk-more-item { padding: 10px 4px; font-size: 9px; }
+  .sk-more-icon { font-size: 18px; }
 }
 @media (max-width: 320px) {
-  .bnav-emoji { font-size: 15px !important; }
-  .bottom-nav .bnav-item { padding: 6px 2px !important; font-size: 8px !important; }
+  .bnav-emoji { font-size: 16px !important; }
+  .bottom-nav.sk-nav-injected .bnav-item { padding: 7px 2px 5px !important; font-size: 8px !important; }
   .sk-snav-item { padding: 4px 7px !important; min-width: 38px !important; }
 }
