@@ -1,4 +1,274 @@
-﻿## [2026-07-06] — Critical Fix: CSP Was Blocking App Check (Platform-Wide Button/Data Failure) + Navigation Cleanup
+﻿## [2026-07-06] — Premium UI System v1.0 + Platform-Wide Visual Upgrade
+
+### Summary
+Established a canonical premium component library (`sokoni-components.css`) and auto-injected it on every page via `shared-header.js`. Rebranded `admin-os.html` from off-brand cyan to SOKONI green. Upgraded the global body font from `Arial` to the system font stack. Completed full mobile drawer UX overhaul for Seller Dashboard, Live Panel, and Analytics drawers. Delivered premium dark hub redesign for `jobs.html`.
+
+### New Files
+
+**`sokoni-components.css`** — SOKONI Premium Component Library v1.0
+- Cards: `.sk-card`, `.sk-card-sm`, `.sk-card-glow`, `.sk-card-flat`, `.sk-card-interactive`
+- Buttons: `.sk-btn-primary` (SOKONI green gradient), `.sk-btn-secondary` (outlined), `.sk-btn-ghost`, `.sk-btn-danger` + size modifiers (`-xs`, `-sm`, `-lg`) and `.sk-btn-icon`
+- Forms: `.sk-input`, `.sk-select`, `.sk-textarea`, `.sk-label`, `.sk-form-group` — 16px font prevents iOS auto-zoom; green focus ring
+- Badges: `.sk-badge-green/red/yellow/blue/purple/gray`, `.sk-badge-live` (pulsing glow animation)
+- Chips: `.sk-chip`, `.sk-chip-active` — filter/tab pills
+- Stats: `.sk-stat`, `.sk-stat-value`, `.sk-stat-label`, `.sk-stat-delta`
+- Sections: `.sk-section`, `.sk-section-title`, `.sk-section-sub`, `.sk-section-row`, `.sk-eyebrow`
+- Avatars: `.sk-avatar`, `.sk-avatar-sm/lg/xl`, `.sk-avatar-sq`
+- Alerts: `.sk-alert-success/error/warn/info`
+- Tables: `.sk-table-wrap`, `.sk-table` — sticky headers, alternating hover
+- Lists: `.sk-list`, `.sk-list-item`
+- Loading: `.sk-skeleton` (shimmer), `.sk-spinner`
+- Empty state: `.sk-empty`, `.sk-empty-icon/title/sub/action`
+- Grid helpers: `.sk-grid-2/3/4/auto/auto-sm`, responsive breakpoints
+- Flex helpers: `.sk-row`, `.sk-row-sb`, `.sk-col`, `.sk-wrap`
+- Utilities: `.sk-text-green/muted/secondary/white/red/amber/blue`, `.sk-truncate`, `.sk-hide-mobile/desktop`
+- Global: thin SOKONI green scrollbars; `::selection` green tint; `.sk-page` entrance animation
+
+**`sokoni-float.js`** — FAB repositioning manager (prevents FABs clashing with open drawers/bottom nav)
+
+**`sokoni-offline.js`** — Smart offline detection banner (shows only when truly offline)
+
+### Modified Files
+
+**`shared-header.js`**
+- Phase 1 now injects `sokoni-components.css` on every page automatically after `sokoni-tokens.css`
+- Every page instantly gains `.sk-*` class support without any per-page changes
+
+**`admin-os.html`** — Full SOKONI rebrand (was entirely off-brand cyan)
+- Added `sokoni-tokens.css` direct link (page doesn't load `shared-header.js`)
+- `--aos-bg`: `#0f1117` → `#060a06` (SOKONI dark green-black)
+- `--aos-surface`: `#1a1d2e` → `rgba(255,255,255,0.03)`
+- `--aos-surface2`: `#222540` → `rgba(255,255,255,0.06)`
+- `--aos-accent`: `#00bcd4` (cyan) → `#71ff00` (SOKONI green)
+- `--aos-accent2`: `#7c4dff` (purple) → `#4fc800`
+- `--aos-text`: `#e0e0e0` → `rgba(255,255,255,0.9)`
+- `--aos-muted`: `#888` → `rgba(255,255,255,0.4)`
+- All 8 hardcoded `rgba(0,188,212,…)` instances replaced with SOKONI green equivalents
+- User avatar gradient rebranded: `#00bcd4→#7c4dff` → `#71ff00→#4fc800`
+- Border-radius: `8px` → `10px` (softer, matching platform standard)
+
+**`style.css`**
+- `body { font-family: Arial, sans-serif }` → `var(--sk-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif)`
+- System font stack used on all pages; actual font resolved from `sokoni-tokens.css` var when available
+
+**`sokoni-drawers.css`** (v1.0 → v2.0)
+- Global overflow guard: `html, body { max-width: 100%; overflow-x: hidden }`
+- FABs (`#kassBtn`, `#sokoniScrollTop`, `.sk-fab`, `[class*="float-btn"]`) hidden via `opacity:0` when any drawer is active
+- `body.slp-panel-open` rules: hides `#slpTrigger` + all FABs when Seller Live Panel is open
+- Drawer body overflow guard: `* { max-width: 100%; box-sizing: border-box }`, images/videos/canvas capped at 100%
+
+**`sokoni-drawer.js`** (v1.0 → v2.0)
+- ESC key now dismisses all three panel types: SK drawers, Seller More bottom sheet (`#sdmMorePanel`), Seller Live Panel (`#sellerLivePanel`)
+- Back/close buttons wired idempotently on each `open()` call
+
+**`jobs.html`** — Premium dark hub redesign
+- CSS tokens rewritten: dark base `#080808`, glass surfaces `rgba(255,255,255,0.04)`, blue accent `#3b82f6`
+- Hero: dark gradient overlay, glass search bar with `backdrop-filter: blur`
+- Removed dead `<header class="site-header">` (was hidden by `style.css` global rule anyway)
+- Action buttons moved into hero `.jobs-hero-actions`
+- Job type badges: dark tints matching platform pattern
+- Modal/panel backgrounds: solid `#111111`
+- Filters bar: `top: 64px` with `backdrop-filter: blur(12px)` sticky
+
+**`sokoni-nav-engine.js`** — `jobs.html` added to SKIP list so its hand-crafted bottom nav is preserved
+
+**`seller.html`** — Mobile drawer UX overhaul
+- Stats grid overflow fix: `display: flex` → `display: grid; grid-template-columns: repeat(2, 1fr)` in mobile mode
+- More bottom sheet: added sticky header with title + close ✕ button (was entirely missing)
+- `#sdmTabBar`, `#sdm-back-bar` safe area insets added (`env(safe-area-inset-*)`)
+- `_revSnapshot` grid: `1fr 1fr 1fr` → `repeat(3, minmax(0, 1fr))` (prevents overflow on narrow phones)
+- `body.slp-panel-open` class: added/removed on Live Panel open/close
+- `sokoni-drawers.css` and `sokoni-drawer.js` linked
+
+**`mobile.css`**
+- `#slpTrigger`: `right: 0` → `right: env(safe-area-inset-right, 0px)` (notched iPhone clearance)
+
+### Security
+- No security implications; purely presentational changes.
+
+### Performance
+- `sokoni-components.css` adds one additional blocking stylesheet request. Impact is negligible (~7 KB gzipped) and it replaces per-page inline style duplication over time, reducing total CSS payload.
+
+### Migration Notes
+- `sokoni-components.css` is opt-in at the markup level. Existing pages are not retroactively restyled — they benefit progressively as new features use `.sk-*` classes. No breaking changes.
+- `admin-os.html` colour change is purely visual; no functionality affected.
+
+---
+
+## [2026-07-06] — Commission Engine v2.0 — Universal Revenue & Earnings Platform
+
+### Summary
+Upgraded the SOKONI Commission Engine from v1.0 to **v2.0** — a universal, configurable revenue engine covering all current and future hubs. Fixed two silent bugs in the commission calculator, added 2 new Cloud Functions for seller earnings and admin revenue analytics, wired transparent pricing into checkout, and built two new production portals: `seller-earnings.html` and `revenue-dashboard.html`.
+
+### Bug Fixes (Backend — `functions/finos-utils.js`)
+
+**Fix 1: `minCommissionCents` floor was never applied (silent bug)**
+- `calculateCommission()` stored `minCommissionCents` in Firestore rules but never enforced it.
+- Added: `if (rule && rule.minCommissionCents) commissionCents = Math.max(commissionCents, rule.minCommissionCents);`
+- Impact: floor caps now work correctly; sellers with negotiated minimum commissions are billed accurately.
+
+**Fix 2: `percentage_plus_fixed` rule type was silently ignored**
+- The `percentage_plus_fixed` branch fell through to the `else` clause, computing only the percentage component and ignoring the fixed `amountCents`.
+- Added explicit branch: `commissionCents = Math.round(orderAmountCents * rate / 100) + amountCents`
+- Impact: hybrid commission rules (e.g. "5% + KES 50 per transaction") now calculate correctly.
+
+### New Cloud Functions (`functions/commission.js` — v2.0)
+
+**CF 6: `getSellerEarningsReport`** (seller-callable)
+- Queries the `ledger` collection filtered by `sellerId` + date range
+- Returns: gross sales, platform fees deducted, refund clawbacks, net earnings, all as period summary
+- Returns wallet snapshot: available, pending, held, withdrawable, lifetime earnings/withdrawals/refunds
+- Returns paginated transaction entries (30 per page) with cursor-based pagination
+- Max date range: 366 days; max page: 30 entries per call
+
+**CF 7: `getAdminRevenueByHub`** (admin-only)
+- Reads `finosHubCounters` for lifetime totals and `finosSnapshots` for period-specific data
+- Aggregates revenue, commission, and transaction counts by hub for the period (7/14/30/90/365 days)
+- Returns: platform totals, per-hub breakdown sorted by period revenue descending, daily trend array
+- `finosHubCounters` are populated by `finosRecordTransaction` (FinOS v2.0 entry point)
+
+### Transparent Checkout Pricing (`checkout.html`)
+- Added `_fetchPlatformFee()` IIFE that calls `previewCommission` on page load with the cart's category and subtotal
+- Result feeds `setPlatformFee(rate)` — platform fee row now shows the real server-side rate instead of always being hidden
+- Category detection: food_delivery, hub (pharmacy), services, marketplace — matches the cart composition
+- Failure is non-critical (non-blocking try/catch) — buyer still sees correct totals if CF is unavailable
+
+### New Pages
+
+**`seller-earnings.html`** — Seller Earnings Portal
+- Period picker: Last 7 / 14 / 30 / 90 days / 12 months
+- Wallet cards: Available, Pending, On Hold, Lifetime Earned, Withdrawn, Refunds (6 tiles)
+- Period summary: Gross Sales, Platform Fees, Refunds, Net Earnings
+- Paginated transaction history with credit/debit icons, type labels, relative timestamps
+- Withdraw modal: M-Pesa phone validation, amount validation vs available balance, calls `requestSellerPayout` CF
+- Auth guard → redirects to login if not authenticated
+
+**`revenue-dashboard.html`** — Admin Revenue Dashboard
+- Period tabs: 7 / 14 / 30 / 90 days / 12 months
+- 6 KPI tiles: Period Revenue, Period Commission, Transactions, Lifetime Revenue, Lifetime Transactions, Active Hubs
+- Hub breakdown table: name, period revenue, commission, transaction count, share bar, lifetime revenue
+- Daily revenue trend bar chart built from `finosSnapshots`
+- Active commission rules preview (top 10, links to `commission-engine.html` for management)
+- Admin-only: redirects non-admins to index.html
+
+### Files Changed
+- `functions/finos-utils.js` — FIX: `percentage_plus_fixed` branch + `minCommissionCents` floor (lines 308–322)
+- `functions/commission.js` — UPGRADED v1.0 → v2.0; 2 new CFs `getSellerEarningsReport` + `getAdminRevenueByHub`
+- `functions/index.js` — re-exports `getSellerEarningsReport`, `getAdminRevenueByHub`
+- `checkout.html` — transparent pricing: `_fetchPlatformFee()` wired to `previewCommission`
+- `seller-earnings.html` — NEW; seller earnings portal (~350 lines)
+- `revenue-dashboard.html` — NEW; admin revenue analytics dashboard (~400 lines)
+- `CHANGELOG.md` — UPDATED
+
+### Deployment Status
+- Hosting: **LIVE** — `seller-earnings.html`, `revenue-dashboard.html`, `checkout.html` deployed
+- Cloud Functions (2 new): **PENDING** — Cloud Run quota exhausted; run when quota resets:
+  ```
+  firebase deploy --only "functions:getSellerEarningsReport,functions:getAdminRevenueByHub,functions:getConversationContext,functions:searchConversations,functions:editMessage,functions:updateConversationStatus" --project sokoni-aeb26
+  ```
+
+### Security Notes
+- `getSellerEarningsReport`: seller can only query their own `sellerId` (enforced by `req.auth.uid`, no parameter override possible)
+- `getAdminRevenueByHub`: requires `admin` or `superAdmin` custom claim — non-admins get `permission-denied`
+- Checkout fee preview: `previewCommission` is authenticated (requires login); unauthenticated calls return `unauthenticated` error caught silently
+- All user data in new pages escaped with `_esc()` — no `innerHTML` with unescaped strings
+
+### No Breaking Changes
+
+---
+
+## [2026-07-06] — Business Communication System v2.0 + Auth Debug Instrumentation
+
+### Summary
+Upgraded the **Business Communication System** from v1.0 (11 CFs) to **v2.0 (15 CFs)** — adding conversation context retrieval, full-text search, message editing, and transaction status updates. Built a complete production-grade individual conversation view (`chat.html`). Enhanced the messages inbox with filter chips covering all 17 transaction types. Added temporary auth debug instrumentation to diagnose all-auth-methods-failing regression.
+
+### Business Communication System v2.0
+
+#### New Cloud Functions (CFs 12–15)
+| CF | Name | Purpose |
+|---|---|---|
+| 12 | `getConversationContext` | Reads source transaction doc and returns normalized fields: status, amount, currency, reference, title, buyer/seller names, location, notes |
+| 13 | `searchConversations` | Queries `userConversations/{uid}/items`, optional transaction-type filter, client-side text filter on title/participantName/lastMessageText |
+| 14 | `editMessage` | Validates sender, message age < 15 min, type === text; updates text with `edited: true` + `editedAt` |
+| 15 | `updateConversationStatus` | Updates conversation `transactionStatus`, optionally posts system message |
+
+#### `chat.html` — Complete Conversation View (NEW, ~1,460 lines)
+Full production-grade individual conversation page at `chat.html?id=CONVERSATION_ID`:
+- Auth guard with redirect to `login.html?redirect=chat.html`
+- Sticky header: avatar (photo or initials fallback), participant name, transaction subtitle, typing status
+- Collapsible context banner: transaction icon, title, colored status badge, metadata rows, smart action chips per transaction type
+- Read-only mode banner when `conv.status === 'read_only'`
+- Real-time message list via `SokoniChat.onMessagesChanged()` with date separator pills (Today/Yesterday)
+- All message types: text (✓/✓✓/✓✓blue), image (thumbnail + lightbox), PDF, voice (custom audio player), system pills, deleted, reply-to quotes
+- Long-press/right-click context menu: Reply, Copy, Delete
+- Attachment picker slide-up, voice recording with hold-mic UX
+- Image lightbox with download, report dialog, more menu slide-up
+- XSS-safe throughout (`_esc()` on all dynamic content)
+- Listener cleanup + `setTyping(false)` on `beforeunload`
+
+#### `sokoni-chat-engine.js` — 4 New SDK Methods
+- `SokoniChat.editMessage(conversationId, messageId, newText)`
+- `SokoniChat.getConversationContext(conversationId)`
+- `SokoniChat.searchConversations(query, transactionType, cursor)`
+- `SokoniChat.updateConversationStatus(conversationId, newStatus, systemMessage)`
+
+#### `messages.html` — Enhanced Filter Chips
+Added missing transaction type filters: Legal, Hotels, Delivery, Quotes — now covers all 17 transaction types.
+
+#### `firestore.rules` — `moderationQueue` Collection
+```
+match /moderationQueue/{reportId} {
+  allow read:   if isAdmin();
+  allow create: if isAuthed() && request.resource.data.reportedBy == request.auth.uid
+                && data has ['conversationId','reportedBy','reason','status','createdAt']
+                && data.status == 'pending';
+  allow update: if isAdmin();
+}
+```
+
+#### `functions/index.js` — Re-exports for 4 new CFs
+Added `exports.getConversationContext`, `exports.searchConversations`, `exports.editMessage`, `exports.updateConversationStatus`.
+
+### Auth Debug Instrumentation (Temporary)
+
+Added `[SOKONI AUTH DEBUG]` logging to `firebase.js` and `auth.js` to surface exact Firebase error codes when all auth methods fail simultaneously:
+- `firebase.js`: console group on init — logs project ID, auth domain, App ID, App Check status, `window.firebaseAuth` global
+- `auth.js`: debug groups in `loginUser()`, `signInWithGoogle()`, `sendPhoneOTP()`, `_setPersistenceFromUI()`
+- `security.js`: `e.preventDefault()` suppression disabled so Firebase errors surface in console
+
+**To clean up once auth root cause confirmed:**
+- Remove all `[SOKONI AUTH DEBUG]` console blocks from `firebase.js` and `auth.js`
+- Re-enable `e.preventDefault()` in `security.js` `unhandledrejection` handler
+
+### Files Changed
+- `functions/messages.js` — UPGRADED v1.0 → v2.0; 4 new CFs (lines 519–666)
+- `functions/index.js` — re-exports `getConversationContext`, `searchConversations`, `editMessage`, `updateConversationStatus`
+- `chat.html` — NEW; complete individual conversation view
+- `sokoni-chat-engine.js` — 4 new SDK methods + updated public API object
+- `messages.html` — additional filter chips (Legal, Hotels, Delivery, Quotes)
+- `firestore.rules` — `moderationQueue` collection rules
+- `firebase.js` — TEMP: auth debug instrumentation
+- `auth.js` — TEMP: auth debug instrumentation at 4 call sites
+- `security.js` — FIX: `accounts.google.com` in meta-tag `frame-src`; TEMP: `e.preventDefault()` suppression disabled
+- `service-worker.js` — cache version bumped to `sokoni-20260706-auth-debug-v2`
+- `CHANGELOG.md` — UPDATED
+
+### Deployment Status
+- Hosting: **LIVE** — `chat.html`, `messages.html`, `sokoni-chat-engine.js`, all assets deployed
+- Firestore rules: **LIVE** — `moderationQueue` rules active
+- Cloud Functions (4 new): **PENDING** — quota exhausted during deploy; will auto-retry or run `firebase deploy --only "functions:getConversationContext,functions:searchConversations,functions:editMessage,functions:updateConversationStatus"` after quota resets
+
+### Security Notes
+- All chat content is XSS-escaped; no `innerHTML` with user-controlled strings
+- Attachment paths validated server-side; Cloud Storage rules restrict access to conversation participants
+- `moderationQueue` is write-once for users, admin-only read/update
+- `editMessage` enforces 15-minute edit window and sender-only access
+
+### No Breaking Changes
+
+---
+
+## [2026-07-06] — Critical Fix: CSP Was Blocking App Check (Platform-Wide Button/Data Failure) + Navigation Cleanup
 
 ### Summary
 Fixed a **critical, platform-wide regression** where the Content Security Policy blocked Firebase App Check's reCAPTCHA and token-exchange endpoint. Without an App Check token, **Firestore could not authenticate any request** ("Could not reach Cloud Firestore backend"), so data-driven buttons across the entire platform — most visibly the **Seller Dashboard** — appeared dead. Also finished two navigation cleanups: replaced the redundant bottom-nav **Cart** button with **Services** (cart stays in the header), and fixed the bottom-nav **Orders** button which 404'd on a non-existent `orders.html`.
