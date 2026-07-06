@@ -15,11 +15,25 @@ npm config delete fetch-timeout
 npm config delete fetch-retry-mintimeout
 ```
 
-## Full pending CF deploy (run as one command)
+## Status — 2026-07-06
+
+**0/23 LIVE — All blocked by Cloud Run CPU quota**
+
+The quota was exhausted during the big 1,512-function update deploy. All 23 new Cloud Run
+service creations failed silently (only `pcGetHubRegistry` showed an explicit 429 in the log).
+Verified via `firebase functions:list` — none of the 23 appear in the live list.
+
+**All 23 blocked — deploy when quota is increased:**
 
 ```powershell
 npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:fosInitiatePayment,functions:fosSecureWebhook,functions:fosSubmitRefund,functions:fosApproveRefund,functions:fosGenerateInvoice,functions:fosExportReport,functions:fosGetProviderHealth,functions:fosGetAdminConsole,functions:subScheduleRenewals,functions:subAutoActivateOnPayment,functions:subUpgradeWithProration,functions:getSellerEarningsReport,functions:getAdminRevenueByHub,functions:getConversationContext,functions:searchConversations,functions:editMessage,functions:updateConversationStatus,functions:pcGetHubRegistry,functions:pcRegisterHub,functions:pcUpdateHubConfig,functions:pcGetFeatureFlags,functions:pcSetFeatureFlag,functions:pcGetCrossHubMetrics" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
 ```
+
+**To fix**: Request a GCP Cloud Run CPU quota increase:
+1. GCP Console → IAM & Admin → Quotas
+2. Filter: "Cloud Run Admin API" + "us-central1"
+3. Find "Total CPU (all regions)" — request increase to 2000+ vCPUs
+
 
 ## Functions and their source files
 

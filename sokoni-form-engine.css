@@ -84,7 +84,11 @@
 .pos-setup-step,
 .pos-setup-slide,
 .pos-reg-step,
-.commissioning-step {
+.commissioning-step,
+/* pos-onboard.html */
+.step,
+/* onboarding-seller/driver/professional.html */
+.wiz-step {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
@@ -371,4 +375,128 @@ form img,
 .modal-content img {
   max-width: 100%;
   height: auto;
+}
+
+/* ── 17. WIZARD PAGE INTEGRATION ────────────────────────── */
+
+/* Wizard topbar must sit BELOW the injected SOKONI global nav.
+   --sk-header-h is 64px when shared-header.js injects the nav;
+   0px (or unset) on standalone pages with no global nav.       */
+.wiz-topbar {
+  top: var(--sk-header-h, 0px) !important;
+  z-index: 90 !important;      /* below global nav z-index:1000 */
+}
+
+/* Pad the page body below the global nav on wizard pages.
+   :has() is supported in Safari 15.4+, Chrome 105+, FF 121+.  */
+body:has(.wiz-topbar) {
+  padding-top: var(--sk-header-h, 0px);
+}
+
+/* wiz-step: extra padding at the bottom so the last field and
+   action buttons are never hidden under the home indicator.    */
+.wiz-step {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* Sticky action buttons inside wizard steps.
+   Works whether scroll container is body or .wiz-step itself.  */
+.wiz-btn-row {
+  position: sticky;
+  bottom: 0;
+  background: inherit;
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  padding-top: 12px;
+  z-index: 5;
+  /* Lift above the bottom-nav bar injected by shared-header.js */
+  bottom: var(--bnav-h, 0px);
+  margin-bottom: 0;
+}
+
+/* pos-onboard.html: #wizard-wrap scroll padding and safe-area  */
+#wizard-wrap {
+  scroll-padding-bottom: 140px;
+  padding-bottom: max(60px, calc(env(safe-area-inset-bottom, 0px) + 24px)) !important;
+}
+
+/* pos-onboard.html: btn-row sticky above home indicator         */
+#wizard-wrap .btn-row {
+  position: sticky;
+  bottom: max(8px, env(safe-area-inset-bottom, 8px));
+  z-index: 5;
+  background: var(--bg, #0a0a0f);
+  padding: 8px 0 max(12px, env(safe-area-inset-bottom, 12px));
+}
+
+/* ── 18. SAFE AREA — PROGRESS / TOP BARS ───────────────── */
+
+/* Any fixed top bar must clear the notch / Dynamic Island.    */
+#progress-bar,
+.wiz-topbar,
+.wizard-header,
+.step-topbar,
+.setup-topbar {
+  padding-top: max(12px, calc(env(safe-area-inset-top, 0px) + 12px));
+}
+
+/* #wizard-wrap must offset for progress-bar height including
+   any safe area top padding.                                   */
+#wizard-wrap {
+  padding-top: calc(88px + env(safe-area-inset-top, 0px)) !important;
+}
+
+/* ── 19. KEYBOARD AVOIDANCE — scroll-margin on inputs ───── */
+
+/* Ensures the focused input scrolls into view above the keyboard
+   on iOS when the visual viewport shrinks.                     */
+input,
+textarea,
+select {
+  scroll-margin-bottom: 140px;
+}
+
+/* ── 20. BODY OVERFLOW FIX FOR STANDALONE WIZARD PAGES ──── */
+
+/* Pages that include their own top bar (not shared-header.js)
+   must NOT use overflow-x: hidden — it suppresses iOS touch-
+   momentum scroll. Use overflow-x: clip instead (clip does not
+   create a scroll container, so body momentum scroll is kept). */
+body {
+  overflow-x: clip;                  /* replaces: overflow-x: hidden */
+  touch-action: manipulation;        /* prevents 300ms tap delay on iOS */
+  -webkit-overflow-scrolling: touch; /* legacy iOS momentum scroll */
+  overscroll-behavior-x: none;       /* prevent accidental horizontal pull */
+}
+
+/* ── 21. SMALL-PHONE FIELD VISIBILITY ───────────────────── */
+
+/* On very small phones (320px / iPhone SE 1st gen), ensure
+   inputs never collapse below the 44px tap target minimum.    */
+@media (max-width: 360px) {
+  input,
+  select,
+  textarea,
+  .wiz-input,
+  .wiz-select,
+  .wiz-textarea,
+  .wiz-btn {
+    min-height: 44px;
+  }
+
+  /* Reduce field padding so more fields fit in the viewport   */
+  .wiz-field,
+  .field {
+    margin-bottom: 12px;
+  }
+}
+
+/* ── 22. HORIZONTAL SCROLL LOCKOUT ON ALL FORMS ─────────── */
+
+/* Catch any form that could cause a horizontal scroll.        */
+.wiz-step *,
+.step *,
+.wizard-step *,
+.form-step * {
+  max-width: 100%;
+  box-sizing: border-box;
 }

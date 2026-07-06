@@ -10,6 +10,7 @@ const { onCall, HttpsError }  = require('firebase-functions/v2/https');
 const { onSchedule }          = require('firebase-functions/v2/scheduler');
 const admin                   = require('firebase-admin');
 const R                       = require('./redis-service');
+const { dispatch }            = require('./redis-jobs');
 
 /* REDIS_URL read from process.env — set via: firebase functions:secrets:set REDIS_URL
    or via .env file. Redis service gracefully degrades when REDIS_URL is absent. */
@@ -428,26 +429,48 @@ exports.redisScheduledPresenceCleanup = onSchedule(
 exports.redisScheduledQueueWorker = onSchedule(
   { schedule: '* * * * *', ...  _SCHED_OPTS },
   async () => {
-    const queues = ['email', 'notification', 'sms'];
+    /* Process 10 jobs per queue per minute per queue type.
+       Queues are prioritised: payment → receipt → email → notification → sms → ai → report → bulk */
+    const queues = ['payment', 'receipt', 'email', 'notification', 'sms', 'ai', 'report', 'bulk'];
+    const BATCH  = 10;
+    let totalProcessed = 0;
+    let totalFailed    = 0;
+
     for (const q of queues) {
-      const jobs = await R.queuePop(q, 10);
-      if (!jobs.length) continue;
+      let jobs;
+      try {
+        jobs = await R.QueueService.pop(q, BATCH);
+      } catch (err) {
+        console.warn(JSON.stringify({ severity: 'WARNING', message: `[Redis Queue] Pop failed for ${q}`, error: err.message }));
+        continue;
+      }
+      if (!jobs || !jobs.length) continue;
+
       console.log(JSON.stringify({
         severity: 'INFO',
-        message: `[Redis Queue] Processing ${jobs.length} ${q} jobs`,
+        message:  `[Redis Queue] Processing ${jobs.length} ${q} jobs`,
         queue: q, count: jobs.length,
       }));
+
       for (const job of jobs) {
         try {
-          // TODO: route to actual handler (email → SendGrid, notification → FCM, etc.)
-          // For now log the job for observability
-          console.log(JSON.stringify({ severity: 'INFO', message: `[Redis Queue] Job processed`, queue: q, jobId: job._id }));
+          await dispatch(q, job);
+          totalProcessed++;
         } catch (err) {
-          // Re-queue failed jobs with low priority (effectively end of queue)
-          await R.queuePush(q, { ...job, _retries: (job._retries || 0) + 1 }, 'normal');
-          console.error(JSON.stringify({ severity: 'ERROR', message: `[Redis Queue] Job failed, re-queued`, queue: q, error: err.message }));
+          totalFailed++;
+          console.error(JSON.stringify({
+            severity: 'ERROR',
+            message:  `[Redis Queue] Job dispatch failed`,
+            queue: q, jobId: job._id || job.id, error: err.message,
+          }));
         }
       }
     }
+
+    console.log(JSON.stringify({
+      severity: 'INFO',
+      message:  `[Redis Queue] Worker cycle complete`,
+      processed: totalProcessed, failed: totalFailed,
+    }));
   }
 );

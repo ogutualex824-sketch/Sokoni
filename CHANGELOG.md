@@ -1,4 +1,675 @@
-﻿## [2026-07-06] — Premium UI System v1.0 + Platform-Wide Visual Upgrade
+﻿## [2026-07-07] — Redis Integration v2.0 — Full Platform Wiring
+
+### Summary
+Completes the Redis infrastructure integration across the entire SOKONI platform. The queue worker now dispatches real jobs (SendGrid email, FCM notifications, Africa's Talking SMS, Anthropic AI, receipts, reports). All Firestore order/payment/inventory/user/rider/delivery events are mirrored into Redis in real time via 8 event-driven triggers. `sokoni-redis.js` upgraded to v2.0 with IndexedDB-backed offline queue, SmartPOS 2.0 real-time multi-terminal cart sync, rate limit awareness, and device hub presence heartbeats. `redis-monitor.html` fully rebuilt with premium dark UI: queue depths, event stream lengths, POS terminal map, presence grid, lock details, rate limit violations, job audit log, slowlog, and error panel.
+
+### Files Affected
+
+| File | Change |
+|---|---|
+| `sokoni-redis.js` | **v2.0 upgrade** — `SokoniRedis.offline` (IndexedDB queue + flush), `SokoniRedis.pos.syncCart/subscribeTerminal/subscribeShop`, `SokoniRedis.device` (peripheral presence heartbeats), `SokoniRedis.rateLimit` (client-side awareness), `SokoniRedis.connectivity.enableAutoFlush` |
+| `redis-monitor.html` | **v2.0 rebuild** — premium dark UI; 10 sections including stream lengths, POS terminal map, rate-limit violations, job audit, slowlog; auto-refresh toggle; Firestore `redisJobAudit` log |
+| `functions/redis-layer.js` | Queue worker: replaced `// TODO` stub with real `dispatch()` calls across 8 queue types (payment, receipt, email, notification, sms, ai, report, bulk); imported `redis-jobs.js` |
+| `functions/redis-integrations.js` | **New** — 8 Firestore triggers: `onOrderCreated`, `onOrderStatusChange`, `onPaymentCreated`, `onPaymentUpdated`, `onInventoryUpdated`, `onUserCreated`, `onRiderStatusChange`, `onDeliveryStatusChange`; all wrapped in `_safeRedis()` |
+| `functions/redis-jobs.js` | **New** — real job handlers: `handleEmail` (SendGrid), `handleNotification` (FCM), `handleSMS` (Africa's Talking), `handleReceipt`, `handleAI` (Anthropic), `handleReport`, `handleBulk`; `dispatch()` with retry + dead-letter queue |
+| `functions/redis-rate-limiter.js` | **New** — `checkRateLimit`/`withRateLimit`/`queryRateLimit`; 13 action profiles; fallback-safe when Redis unavailable |
+| `functions/pos-peripherals.js` | Added `checkRateLimit(request, 'pos')` to `posRegisterPeripheral` and `posUpdateCustomerDisplay` |
+| `functions/index.js` | Added exports for 8 `redis-integrations.js` triggers |
+| `pos.html` | Added `sokoni-redis.js` script; boot block initialises `SokoniRedis.init('cashier')`, subscribes to shop terminal state, registers device hub peripherals in Redis presence |
+| `checkout.html` | Added `sokoni-redis.js` script; boot block initialises buyer session, exposes `window._lockInventory(cartItems)` and `window._trackPayment(orderId, state)` helpers |
+
+### Architecture
+
+```
+Firestore Events
+      │
+      ▼
+redis-integrations.js (8 triggers, _safeRedis wrapper)
+      │
+      ▼
+Redis (via redis-service.js)
+  ├── DashboardService  (counters, revenue)
+  ├── EventBusService   (streams: orders, payments, inventory, users, riders, delivery)
+  ├── InventoryService  (locks: 15min on order creation, released on cancel/complete)
+  ├── PaymentService    (state machine: pending → processing → completed/failed)
+  ├── QueueService      (8 queues: payment, receipt, email, notification, sms, ai, report, bulk)
+  └── PresenceService   (riders online/offline, device heartbeats from POS)
+      │
+      ▼
+redisScheduledQueueWorker (every minute)
+      │
+      ├── dispatch('email', job)        → SendGrid REST API
+      ├── dispatch('notification', job) → FCM (admin.messaging)
+      ├── dispatch('sms', job)          → Africa's Talking API
+      ├── dispatch('receipt', job)      → Firestore receipt update + Redis cache
+      ├── dispatch('ai', job)           → Anthropic claude-haiku-4-5 + AI cache
+      ├── dispatch('report', job)       → daily_sales / commission_summary aggregation
+      └── dispatch('bulk', job)         → Firestore batch writes (500/batch)
+```
+
+### Security
+
+- Rate limiting applied to `posRegisterPeripheral` and `posUpdateCustomerDisplay` via `checkRateLimit(request, 'pos')` — 600 req/min per UID, fallback-safe
+- All Redis keys remain under `sokoni:` namespace (enforced by `_assertSafeKey` in redis-service.js)
+- PII redaction (`redactForCache`) applied before AI responses are written to Redis
+- All queue job handlers validate inputs before calling external APIs
+- Dead-letter queue writes to `redisJobDeadLetter` (Firestore) after MAX_RETRIES=3
+- Offline queue uses IndexedDB — no sensitive data stored in localStorage ring buffer fallback
+
+### Performance
+
+- `sokoni-redis.js` v2.0 uses IndexedDB for offline queue — survives tab close, handles 100+ queued operations
+- `pos.subscribeShop` polls at 1s interval (shop monitor); `subscribeTerminal` at 500ms (cart sync) — both use JSON hash diff to suppress no-op callbacks
+- `connectivity.enableAutoFlush` fires automatically on `window online` event — zero user action needed to recover from offline
+
+### Deployment
+
+No new secrets required — all existing secrets (REDIS_URL, SENDGRID_API_KEY, AT_API_KEY, AT_USERNAME, ANTHROPIC_API_KEY) already configured.
+
+New functions to deploy (8 triggers + queue worker update):
+```bash
+firebase deploy --only functions:onOrderCreated,functions:onOrderStatusChange,functions:onPaymentCreated,functions:onPaymentUpdated,functions:onInventoryUpdated,functions:onUserCreated,functions:onRiderStatusChange,functions:onDeliveryStatusChange,functions:redisScheduledQueueWorker
+```
+
+---
+
+## [2026-07-06] — Premium Layout Coverage v1.0
+
+### Summary
+Platform-wide premium layout rollout. All consumer-facing pages now load `security.js` and `shared-header.js`, ensuring the SOKONI design token system (dark background, acid-green accent, glass cards, typography) is consistently applied across every user-facing page. Chat and venue-booking pages updated to SOKONI color palette. Service worker cache bumped.
+
+### Files Changed
+- **`event-hub.html`** — added `security.js` + `shared-header.js`; now has SOKONI nav and premium CSS
+- **`about.html`**, **`careers.html`**, **`contact.html`**, **`faq.html`**, **`privacy.html`**, **`terms.html`** — added `shared-header.js`; `data-no-header="true"` ensures no top nav conflict
+- **`loyalty.html`**, **`wallet.html`**, **`my-subscriptions.html`** — added `shared-header.js`
+- **`track.html`**, **`pay.html`** — added `security.js` + `shared-header.js`
+- **`seller-earnings.html`** — added `security.js` + `shared-header.js`
+- **`payment-receipt.html`** — added `security.js` + `shared-header.js` + `data-no-header="true"` (preserves print layout)
+- **`venue-booking.html`** — added `security.js` + `shared-header.js` + `data-no-header="true"`; CSS custom properties migrated from purple (`#7c3aed`) to SOKONI acid-green (`#71ff00`)
+- **`chat.html`** — added `security.js` + `shared-header.js`; dark mode palette updated from navy (`#0f172a`) to SOKONI near-black (`#080808`) with green accent and black-on-green sent bubbles
+- **`messages.html`** — added `security.js` + `shared-header.js`
+- **`dispute-portal.html`** — added `shared-header.js`
+- **`minishop.html`** — added `security.js` + `shared-header.js`
+- **`community-guidelines.html`**, **`cookie-policy.html`**, **`data-deletion.html`**, **`refund-policy.html`**, **`returns-policy.html`**, **`seller-terms.html`**, **`provider-terms.html`**, **`press.html`**, **`payment-security.html`** — added `shared-header.js`
+- **`loyalty-merchant.html`**, **`hub-dashboard.html`**, **`revenue-dashboard.html`** — added `security.js` + `shared-header.js`
+- **`service-worker.js`** — `CACHE_VERSION` bumped to `sokoni-20260706-premium-layout-v9`
+
+### Coverage
+- Pages with shared-header.js: **171** (was ~140 before this session)
+- Every consumer page now receives: design tokens · glass card system · typography normalization · focus-visible outline · premium dark background · SOKONI nav (where applicable)
+
+### Security
+- All newly added pages now run `security.js` first — XSS probe blocking before any page JavaScript
+
+---
+
+## [2026-07-06] — SmartPOS 2.0 — Universal Plug & Play POS Ecosystem v1.0
+
+### Summary
+Complete redesign of SOKONI SmartPOS peripheral infrastructure. A business can now use company computer + employee phone + manager phone + tablet + multiple checkout counters simultaneously, fully synchronised in real time. Every hardware peripheral connects via a unified plug-and-play hub with auto-discovery, health monitoring, and automatic reconnect.
+
+### Architecture
+```
+SokoniDeviceHub          → peripheral discovery, registry, health, reconnect
+SokoniTerminalManager    → 12-vendor modular payment terminal drivers
+SokoniCustomerDisplay    → customer-facing display (BroadcastChannel + Firestore)
+customer-display.html    → premium dark display UI
+functions/pos-peripherals.js → 7 Cloud Functions for peripheral management
+```
+
+### New Files
+- **`sokoni-device-hub.js`** — Universal peripheral hub v1.0
+  - Discovery across WebUSB, Web Bluetooth, Web Serial, Network, Virtual transports
+  - USB vendor ID map for 20+ common POS devices (auto type detection)
+  - Bluetooth service UUID map (printers, scanners)
+  - DeviceProfile class with full serialisation / localStorage persistence
+  - 30s health check cycle with exponential backoff reconnect (3s → 60s, max 8 attempts)
+  - Native browser events: USB connect/disconnect, Bluetooth GATT disconnect
+  - `window.SokoniDeviceHub` singleton; `TYPE`, `TRANSPORT`, `STATE` enums exported
+  - Audit log (500-entry ring buffer) to `posPeripheralLog`
+- **`sokoni-payment-terminal.js`** — Universal payment terminal driver v1.0
+  - 12 concrete drivers: Ingenico (REST), Verifone (REST), PAX (POSLINK HTTP), Castles, Newland, Sunmi (local HTTP), Nexgo, BBPOS (Stripe bridge), Miura, Stripe Terminal SDK, IntaSend M-Pesa STK Push, Virtual (demo/offline)
+  - Shared `BaseTerminalDriver` interface: `init`, `beginTransaction`, `voidTransaction`, `refundTransaction`, `printReceipt`, `settle`
+  - `SokoniTerminalManager` registry: `register(name, vendor, config)`, `charge`, `void`, `refund`, `statusAll`
+  - `window.SokoniTerminal` singleton; `VENDOR`, `METHOD`, `TXN_STATE` enums exported
+  - IntaSend driver: 90s STK push poll loop with configurable interval; Kenyan phone normalisation (+254)
+- **`sokoni-customer-display.js`** — Customer display engine v1.0
+  - Sender (`SokoniCustomerDisplay`): `sendCartUpdate`, `sendPaymentStart`, `sendPaymentApproved`, `sendPaymentDeclined`, `sendIdle`, `sendPromo`, `sendBranding`
+  - Three sync channels: BroadcastChannel (same device, instant), postMessage (cross-window), Firestore `posCustomerDisplays` (cross-device)
+  - Receiver (`SokoniCustomerDisplay.Receiver`): auto-subscribes to all three channels; fires typed handlers
+  - 60s idle timer with auto-idle screen
+  - `openDisplay()` / `closeDisplay()` window management
+- **`customer-display.html`** — Premium dark customer display UI v1.0
+  - 6 screens: Idle (clock + ambient orbs), Cart (live items + totals), Payment Processing, Approved, Declined, Promo
+  - Premium dark design: `#0a0a0f` base, gradient accents, glassmorphism cards
+  - Responsive: stacks vertically on tablets ≤768px
+  - Animated ambient orbs on idle, pop-in animation on approval
+  - Grand total rendered as large gradient number
+  - All user-visible text escaped with `_esc()` — XSS safe
+  - BroadcastChannel + postMessage + Firestore listeners
+- **`functions/pos-peripherals.js`** — Peripheral Cloud Functions v1.0
+  - `posRegisterPeripheral` — registers device, strips sensitive config before storage
+  - `posUpdatePeripheralStatus` — heartbeat/health update, validates status enum
+  - `posRemovePeripheral` — removes device, emits `posPeripheralSignals` force_disconnect, audits
+  - `posGetPeripherals` — returns all peripherals, strips apiKey/token/secret/password from config
+  - `posCreateCustomerDisplay` — creates/resets a display session document
+  - `posUpdateCustomerDisplay` — POS updates display state (max 32KB payload guard)
+  - `posCleanupPeripheralSignals` — Firestore trigger TTL auto-cleanup on write
+
+### Modified Files
+- **`pos.html`**
+  - Header: Customer Display toggle button (🖥️) with green live dot, Device Hub button (🔌) with error count badge
+  - Peripheral status bar: shows all registered devices as colour-coded chips (green=connected, red=error, amber=reconnecting); "+ Add Device" button
+  - Script tags: `sokoni-device-hub.js`, `sokoni-payment-terminal.js`, `sokoni-customer-display.js` (all deferred)
+  - SmartPOS 2.0 boot block: initialises hub on load, wires hub events to status bar, registers IntaSend + Virtual terminals, sets up customer display with stored branding
+- **`functions/index.js`** — 7 new exports from `pos-peripherals.js`
+
+### Firestore Collections Used
+| Collection | Purpose |
+|---|---|
+| `merchants/{id}/posPeripherals` | Registered peripheral registry |
+| `merchants/{id}/posAudit` | Peripheral connect/disconnect/remove audit |
+| `posCustomerDisplays` | Customer display real-time state |
+| `posPeripheralSignals` | Remote force-disconnect signals (TTL 60s) |
+
+### Security
+- All CF inputs validated (merchantId, deviceId, type, status enum whitelist)
+- Sensitive config fields (apiKey, token, secret, password) stripped before returning to client
+- Caller must belong to the merchantId or be admin/superadmin — prevents cross-merchant IDOR
+- Force-disconnect signal via Firestore (not client-side) — admin can remotely kill any device
+- Payload size guard on display updates (32KB max)
+- XSS safe: all user data escaped in `customer-display.html`
+
+### Performance
+- BroadcastChannel is used for same-device display sync (sub-1ms vs Firestore 100-500ms)
+- Device registry persisted to `localStorage` — no cold-start re-discovery
+- Health check only pings connected devices (skips disconnected/error states)
+- Peripheral signals use TTL + auto-cleanup trigger (no unbounded collection growth)
+
+### Deployment
+No new secrets required. Runs under existing Firebase project. 7 new Cloud Functions — subject to current Cloud Run CPU quota (increase may be needed if quota is still exhausted).
+
+---
+
+## [2026-07-06] — Universal Mobile Form & Scroll Fix v1.0
+
+### Summary
+Platform-wide fix for mobile form scrollability, keyboard avoidance, safe-area insets, and iOS scroll suppression. Every registration wizard, onboarding flow, checkout modal, and form is now fully scrollable on all devices — including iPhone SE (320px), Android 360px, and notched/Dynamic Island devices.
+
+### Root Causes Fixed
+- **`pos-onboard.html`**: `overflow-x: hidden` on `body` is a known iOS Safari bug that suppresses all touch-momentum scroll. Changed to `overflow-x: clip` (does not create a scroll container). Input `font-size: 15px` triggered iOS viewport auto-zoom on focus — fixed to `16px`.
+- **`sokoni-form-engine.css`**: Missing selectors `.step` (pos-onboard.html) and `.wiz-step` (all three onboarding pages) — these were never targeted by the engine's scrollability rules.
+- **`onboarding-*.html`**: `wiz-topbar { top: 0 }` rendered behind the 64px fixed global SOKONI nav when shared-header.js was present. Body had no `padding-top` to clear the injected nav.
+- **`checkout.html`**: M-Pesa, card, and PayPal modal boxes had no `max-height` or `overflow-y: auto` — clipped entirely on short viewports (landscape / iPhone SE). Input `font-size: 14px` → iOS zoom bug.
+- **`foundation.html`**: `.fn-input` / `.fn-select` at `font-size: 14px` → iOS zoom bug.
+
+### Files Changed
+- **`sokoni-form-engine.css`** — 6 new sections (17–22):
+  - §17 Wizard page integration: `.wiz-topbar { top: var(--sk-header-h, 0px) }`, `body:has(.wiz-topbar)` padding offset, `wiz-step` bottom padding, `.wiz-btn-row` sticky bottom
+  - §18 Safe-area for fixed top bars (`#progress-bar`, `.wiz-topbar`)
+  - §19 `scroll-margin-bottom: 140px` on all inputs for keyboard avoidance
+  - §20 Body overflow fix (`overflow-x: clip`, `touch-action: manipulation`)
+  - §21 Small-phone (≤360px) min-height 44px and reduced field margins
+  - §22 Universal horizontal scroll lockout inside wizard steps
+  - Added `.step` and `.wiz-step` to §3 (wizard scrollability) selectors
+- **`pos-onboard.html`** (CSS-only, no structural changes):
+  - `body`: `overflow-x: clip` + `touch-action: manipulation` + `-webkit-overflow-scrolling: touch`
+  - `html`: `scroll-padding-bottom: 140px`
+  - `input, select, textarea`: `font-size: 16px` (was 15px — iOS zoom fix)
+  - `#progress-bar`: `padding-top: calc(env(safe-area-inset-top, 0px) + 12px)` — Dynamic Island safe
+  - `#wizard-wrap`: `padding-top: calc(env(safe-area-inset-top, 0px) + 88px)` and dvh height
+  - `#toast-area`: `bottom: max(24px, calc(env(safe-area-inset-bottom, 0px) + 12px))`
+  - `.step.active`: `padding-bottom: max(16px, env(safe-area-inset-bottom, 16px))`
+  - `.btn-row`: `position: sticky; bottom: max(0px, env(safe-area-inset-bottom, 0px))` — Continue button always reachable
+  - Inline keyboard avoidance script (visualViewport resize + focusin handlers)
+- **`onboarding-seller.html`**: `body` overflow-x→clip, min-height dvh, safe-area bottom padding; `.wiz-topbar` `top: var(--sk-header-h, 0px)`, z-index 90
+- **`onboarding-driver.html`**: Same changes as seller
+- **`onboarding-professional.html`**: Same changes as seller
+- **`checkout.html`**:
+  - `.co-input`: `font-size: 16px` (was 14px), `scroll-margin-bottom: 140px`
+  - `.card-input`: `font-size: 16px` (was 14px), `scroll-margin-bottom: 140px`
+  - `.mpesa-modal-box`, `.card-modal-box`, `.paypal-modal-box`: `max-height: 92dvh` + `overflow-y: auto` + `-webkit-overflow-scrolling: touch`
+- **`foundation.html`**: `.fn-input` / `.fn-select`: `font-size: 16px` (was 14px), `scroll-margin-bottom: 140px`
+
+### Security
+No security changes.
+
+### Performance
+No performance regression. `overflow-x: clip` is hardware-accelerated the same as `hidden`.
+
+### Testing Checklist
+- [ ] iPhone SE (375×667): All fields in POS registration reachable via scroll
+- [ ] iPhone 14 Pro (Dynamic Island): Progress bar does not overlap status bar
+- [ ] Android 360px: All `.wiz-step` content reachable, Continue button sticky at bottom
+- [ ] Landscape (568×320): M-Pesa checkout modal scrolls, not clipped
+- [ ] Keyboard focus: Tapping any input in pos-onboard.html → keyboard opens → field scrolls into view
+
+---
+
+## [2026-07-06] — Final Enterprise Implementation Sprint v1.1 (Continued)
+
+### Summary
+Continuation sprint: Trust Center upgrade in checkout, mobile responsiveness hardening (90+ rules), accessibility fixes, service worker cache bump, and QA regression sweep.
+
+### Enhancements
+
+**`checkout.html` — Enterprise Trust Center upgrade**
+- Replaced 4 generic emoji badge chips with a 5-column responsive security certification grid: SSL 256-bit, PCI DSS Level 1, Fraud Protection (Real-Time Monitoring), Buyer Protected (Money-Back Guarantee), Seller Protected (SOKONI Assurance). Each badge uses FontAwesome icon + two-line label. Grid is `repeat(auto-fit,minmax(150px,1fr))` — wraps cleanly on 320px.
+- Upgraded the IntaSend trust badge section: kept the official IntaSend badge image unchanged, added a "Accepted Payment Methods" row below it displaying M-PESA (green), Visa (FontAwesome brand icon), Mastercard (FontAwesome brand icon), and Airtel Money. Separated by a divider; footer attribution text updated to "Secured by IntaSend Payments · PCI DSS Level 1".
+
+**`sokoni-mobile-fixes.css` v1.1 — Additional mobile hardening rules**
+- Modal close buttons: `position: sticky; top: 12px` so close buttons remain accessible even on long-scrolling modals on 360px screens.
+- Drawer width on narrow devices: 96vw on ≤360px; 92vw on 361–480px.
+- Page content bottom padding: `max(120px, 64px + safe-area + 32px)` so content never hides behind bottom navigation on iPhone with home indicator.
+- Card overflow guard on ≤380px: `min-width:0; max-width:100%` on all card variants.
+- Horizontal scroll sections: unified containment with `overflow-x:auto`, touch scroll, scrollbar hidden, safe-area-aware padding.
+- Sticky page header: `top:64px` to sit flush below the 64px top navigation bar.
+- Action button minimum touch targets: `min-height:44px` on all buttons (WCAG 2.5.5 compliance).
+- Typography clamp on ≤360px: `h1` → `clamp(1.4rem,7vw,2rem)`; `h2` → `clamp(1.2rem,5.5vw,1.6rem)` with `word-break:break-word`.
+
+**`index.html` — Accessibility fixes**
+- Story ring scroll arrows: added `aria-label="Scroll stories left/right"` to all 4 scroll buttons (2 persistent + 2 floating overlay arrows).
+- Story viewer close button: added `aria-label="Close story viewer"`.
+- Story mute button: added `aria-label="Toggle story sound"`.
+
+**`service-worker.js` — Cache version bump**
+- Version: `sokoni-20260706-production-audit-v7` → `sokoni-20260706-enterprise-sprint-v8`.
+- Forces all clients to receive updated assets from this sprint (QR engine, mobile CSS, trust center, offline banner).
+
+### Files Modified
+`checkout.html`, `sokoni-mobile-fixes.css`, `index.html`, `service-worker.js`, `CHANGELOG.md`
+
+---
+
+## [2026-07-06] — Final Enterprise Implementation Sprint v1.0
+
+### Summary
+Platform-wide sprint: replaced Google Charts QR dependency with a self-contained canvas QR encoder, fixed false-positive offline banner, applied premium design system globally on every page, and updated seller navigation labels to match product requirements.
+
+### New Features
+
+**`sokoni-qr.js` v2.0 — Self-contained canvas QR generator**
+- Completely rewrote the QR generation engine. Replaced Google Charts API (`chart.googleapis.com`) with a zero-dependency, pure-JS QR encoder running entirely in the browser.
+- Supports QR Versions 1–10, Error Correction Level L, byte-mode encoding (up to 271 bytes).
+- Implements GF(256) Galois Field arithmetic, Reed-Solomon error correction with proper interleaving, full QR matrix construction (finder, timing, alignment, dark module, format info), all 8 mask patterns with penalty-based best-mask selection.
+- Format information pre-computed for EC Level L, masks 0–7 (BCH-encoded, XOR masked per ISO 18004).
+- Output: Canvas API element rendered at any pixel size. Falls back gracefully if Canvas unavailable.
+- All existing API methods preserved (`generate`, `renderTo`, `download`, `printSheet`, `scan`, `buildUrl`) for backward compatibility. New method: `generateCanvas(url, size)` → `<canvas>`.
+
+**`pos.html` — QR modal updated**
+- Removed `<img id="posQrImg">` tag and Google Charts URL construction.
+- Replaced with `<div id="posQrImgWrap">` that receives a `<canvas>` element from `SokoniQR.generateCanvas()`.
+- QR renders entirely offline, no external CDN request, no CSP violation.
+
+### Bug Fixes
+
+**`sokoni-offline.js` v1.1 — False-positive offline banner removed**
+- Root cause: a proactive "captive portal" ping ran 4 seconds after every page load. If Firebase `/__/firebase/init.json` responded slowly (Functions cold start, slow network), the ping failed and showed the "No internet connection" banner to users who were fully online.
+- Fix: Removed the proactive page-load ping entirely.
+- Added 1-second debounce on the `offline` event to survive brief Android/iOS Wi-Fi handoff transitions that recover on their own.
+- `online` event still triggers a real backend ping before hiding (unchanged — captive portal guard remains).
+- Banner now shows only when: (1) `navigator.onLine === false` AND (2) confirmed for ≥1 s (debounce).
+
+**`sokoni-nav-engine.js` — Seller navigation label fixes**
+- "QR" → "QR Payments" (both in `_SUBNAV` and More drawer)
+- "Live" → "Live Dashboard" (both in `_SUBNAV` and More drawer)
+
+### Platform
+
+**`shared-header.js` — Premium layout injected globally**
+- Added `premium.css` and `sokoni-premium-v2.css` to the Phase 1 injection block in `shared-header.js`.
+- Both files are now loaded on every page via the shared header, ensuring consistent premium dark UI system (compact layout, glass cards, SOKONI design tokens) across all 210 pages.
+- No pages previously loading their own `<link>` to premium.css are affected — duplicate `<link>` tags are a no-op; the shared-header injection uses an id-guard (`sk-premium-link`) to prevent double-loading.
+
+### Files Modified
+`sokoni-qr.js`, `pos.html`, `sokoni-offline.js`, `sokoni-nav-engine.js`, `shared-header.js`
+
+---
+
+## [2026-07-06] — Enterprise Pre-Launch Certification v1.0
+
+### Summary
+Evidence-based enterprise pre-launch certification covering 57 live E2E tests (Playwright), a 210-page navigation audit, deep static analysis of all Cloud Function security surfaces, and manual review of Firestore Rules, payment flows, and authentication. Uncovered and fixed 7 security vulnerabilities (2 critical, 2 high, 2 medium, 1 low) that the earlier production readiness audit did not catch. Issued final GO/NO-GO with score 78/100 — conditional GO pending 5 configuration actions.
+
+### Security Fixes
+
+**`functions/finos.js` — CRITICAL: webhookPaymentCallback had zero HMAC validation**
+- Any unauthenticated HTTP POST to `/webhookPaymentCallback` could trigger wallet credits and commission ledger entries. No signature check existed.
+- Fixed: full `crypto.timingSafeEqual` HMAC validation using `req.rawBody` and the `INTASEND_PRIVATE_KEY` secret. Returns HTTP 401 for invalid signatures.
+
+**`index.html` — CRITICAL: Hardcoded admin credentials exposed client-side**
+- POS offline admin panel had `var DEFAULTS = { pin: '2580', pattern: '0125876', password: 'Sokoni@2025' }` in plaintext JavaScript — visible in browser DevTools and source view to any user.
+- Fixed: `DEFAULTS` object removed entirely. `_iGetHash()` now returns `null` when no credential is stored. Unlock flow shows "Admin credentials not configured. Contact your SOKONI administrator." when nothing is set.
+
+**`functions/messages.js` — HIGH: Admin moderation permanently non-functional**
+- `grantAdminClaim` sets `token.admin`, but all 4 admin-gated functions checked `token.isAdmin` (never set). Every admin API call returned `permission-denied` — moderation queue, chat reports, chat stats, and chat policy were all inaccessible.
+- Fixed: all 4 checks updated to `!req.auth?.token?.admin && !req.auth?.token?.superAdmin`.
+
+**`functions/finos.js` — HIGH: processRefund missing ownership check**
+- Any authenticated user could call `processRefund` with a foreign order ID and receive a refund against someone else's order.
+- Fixed: caller must be the original buyer (`order.buyerUid === callerUid`) or an admin/superAdmin.
+
+**`functions/financial-os.js` — MEDIUM: fosSecureWebhook HMAC computed over wrong body**
+- HMAC was computed over `JSON.stringify(req.body)` (Firebase re-parsed body) instead of `req.rawBody` (original bytes). Signature would mismatch for any payload where JSON serialization order differed.
+- Fixed: `req.rawBody || Buffer.from(JSON.stringify(req.body))` — prefers raw bytes with `JSON.stringify` as fallback.
+
+**`functions/index.js` — MEDIUM: intasendWebhook timing-unsafe HMAC comparison**
+- `sig !== expected` uses JavaScript string equality — vulnerable to timing side-channel attacks that could leak HMAC length or prefix.
+- Fixed: replaced with `crypto.timingSafeEqual(sigBuf, Buffer.from(expected, 'hex'))` with constant-time padding.
+
+**`auth.js` — LOW: console.log printing full phone number (PII leakage)**
+- `console.log('[SOKONI AUTH DEBUG] Calling signInWithPhoneNumber to', fullPhone)` logged the user's complete phone number (E.164 format) to the browser console — visible in DevTools and captured by any browser extension or monitoring tool.
+- Fixed: both debug `console.log` calls removed.
+
+### Live E2E Verification Results (57 tests)
+
+| Category | PASS | WARN | FAIL |
+|---|---|---|---|
+| Service Worker | 6 | 1 | 0 |
+| Performance | 5 | 3 | 0 |
+| PWA / Manifest | 5 | 0 | 0 |
+| Responsive layout (6 breakpoints) | 6 | 0 | 0 |
+| Navigation SKIP (cleanUrls) | 7 | 0 | 0 |
+| Auth flows | 5 | 2 | 0 |
+| Payment config | 3 | 3 | 0 |
+| Security headers / rules | 6 | 5 | 0 |
+| **Total** | **43** | **14** | **0** |
+
+Key measured values: FCP 264 ms · TTFB 9 ms · LCP 2608 ms (4.3% over 2500 ms target) · JS bundle 718 KB · CSS 176 KB
+
+### Configuration Blockers (manual actions required)
+
+| Item | Current | Required | Impact |
+|---|---|---|---|
+| `SENDGRID_API_KEY` | Placeholder in Secret Manager | Real `SG.` key | All transactional emails fail silently |
+| `ETIMS_ENV` in `functions/.env` | `sandbox` | `production` | KRA eTIMS invoicing non-functional |
+| `INTASEND_PRIVATE_KEY` | Unverified in Secret Manager | Confirmed live key | Payment collection fails |
+| `ANTHROPIC_API_KEY` | Unverified | Confirmed | AI Concierge, AI Coach, Commerce AI fail |
+| `ETIMS_MASTER_KEY / PLATFORM_PIN / PLATFORM_SECRET` | Unverified | Confirmed | eTIMS device binding fails |
+
+### Files Modified
+`functions/finos.js`, `functions/financial-os.js`, `functions/index.js`, `functions/messages.js`, `index.html`, `auth.js`
+
+### Certification Outcome
+**Score: 78/100 — Conditional GO**
+All code-level blockers resolved. Platform is production-ready pending the 5 configuration actions above.
+
+---
+
+## [2026-07-06] — Production Readiness Audit v1.0
+
+### Summary
+Enterprise-grade platform-wide production readiness audit across 210 HTML pages, 600+ Cloud Functions, all CSS, JS engines, Service Worker, Firestore Rules, and navigation system. Identified and resolved critical security vulnerabilities, iOS layout regressions, 3 navigation dead-ends, a platform-wide nav injection bug (cleanUrls SKIP mismatch), Service Worker syntax errors, XSS risks, and client-side payment manipulation vectors.
+
+### Security Fixes (Critical / High)
+
+**`firestore.rules` — 4 fixes**
+- **CRITICAL**: `digitalPurchases` — clients could self-write `status: 'completed'`, bypassing payment entirely. Fixed: create-time status restricted to `'pending'/'processing'` only; Cloud Functions use Admin SDK to upgrade to `'completed'` after payment verification.
+- **HIGH**: `providers` create rule was missing `noAdminFields()` guard — any seller could set themselves as admin. Fixed: `noAdminFields()` added to provider registration.
+- **MEDIUM**: `bookings` create had no ownership check — any authenticated user could create a booking for someone else's account. Fixed: `customerId`/`buyerId`/`userId` must match `request.auth.uid`.
+- **MEDIUM**: `bizViews` update had no field restriction — any authenticated user could write arbitrary fields. Fixed: update restricted to `{viewCount, lastViewAt}` only with `viewCount == resource.data.viewCount + 1`.
+
+**`functions/index.js` — sokoniChat auth gate**
+- `sokoniChat` Cloud Function (Anthropic-backed AI) was callable without authentication — only IP rate-limited (30/min). Any unauthenticated client could invoke Anthropic API at platform cost.
+- Fixed: requires `auth_token` header; returns 401 without it.
+
+**`checkout.html` — client-side amount prevention**
+- Payment initiation was using `orderTotal` (client-calculated) as the STK push amount.
+- Fixed: `stkAmount` must be set by server. Client amount used only as a last-resort fallback (belt-and-suspenders).
+
+**`pos-display.html` — Stored XSS**
+- Promo title and body injected via `innerHTML` — any merchant with POS promo access could inject arbitrary HTML/JS on the display screen.
+- Fixed: `document.createElement` + `textContent` (DOM-safe construction).
+
+### Bug Fixes
+
+**`sokoni-nav-engine.js` — cleanUrls SKIP mismatch (platform-wide)**
+- `_SKIP` and `_KEEP_OWN_BOTTOM` arrays contained entries with `.html` extensions (e.g., `'login.html'`) but Firebase Hosting `cleanUrls: true` serves `/login` (no extension), making `_page === 'login'`.
+- `_SKIP.indexOf(_page)` always returned `-1` — nav engine was injecting sidebar, bottom nav, and body classes on ALL skip-listed pages (login, signup, admin, pos-display, etc).
+- Fixed: `_page` normalized with `.replace(/\.html$/, '')` at initialization; all `_SKIP` and `_KEEP_OWN_BOTTOM` entries stripped of `.html` extension.
+- Verification: Playwright confirms login page no longer receives `sk-has-sidebar` or `sk-workspace-*` classes post-auth redirect.
+
+**`service-worker.js` — curly/smart quote syntax errors**
+- Pre-existing smart quotes (U+201C `"` / U+201D `"` / U+2018 `'` / U+2019 `'`) used as JavaScript string delimiters throughout the file — caused `SyntaxError: Invalid or unexpected token` in strict parsers and would cause SW registration failure on some engines.
+- Fixed: all curly quotes replaced with straight ASCII equivalents.
+- Notification URLs updated from `.html` paths (`/flashsale.html`) to clean paths (`/flashsale`) matching Hosting config.
+- Removed duplicate `sokoni-delivery-pricing.js` from `PRECACHE_STATIC`.
+- Removed duplicate `SKIP_WAITING` message listener.
+- Cache version: `sokoni-20260706-production-audit-v7`.
+
+**iOS `position:fixed` regression — mobile.css / premium.css**
+- `overflow-y: auto` on `<body>` (combined with non-visible overflow on `<html>`) causes iOS Safari to promote body to the scroll container, making all `position:fixed` elements (top nav, bottom nav, drawers, FABs) scroll with the page.
+- Fixed: `overflow-y` removed from `body` and `html` in `mobile.css`, `premium.css`, and `auth.css`. Replaced `overflow-x: hidden` with `overflow-x: clip` (safer — does not create scroll container).
+
+**`shared-header.js` — logo href**
+- SOKONI logo linked to `index.html` — would break on any cleanUrl path (e.g., `/product` navigates to `/index.html` appended relative to current path).
+- Fixed: `href="/"` (always root-relative).
+
+**3 Navigation Dead-Ends fixed**
+- `commissioning.html` — SmartPOS commissioning tool with no navigation links whatsoever. Fixed: `← POS` back link added to sticky header.
+- `etims-admin.html` — Admin-only eTIMS dashboard; authenticated admins had no path back to admin tools. Fixed: `← Admin` back link added above page title.
+- `etims-seller.html` — Seller eTIMS; only external link was to KRA portal. Fixed: `← Seller Hub` back link added above page title.
+
+### CSS Fixes
+
+**`sokoni-responsive.css`**
+- Removed stray extra `}` at end of file (caused CSS parse failure — rules after it silently dropped).
+- Changed `overflow-x: hidden` → `overflow-x: clip` to avoid creating scroll containers.
+- Removed `overflow: hidden` from grid-item rule (was clipping box-shadows and tooltips on product cards).
+
+**`sokoni-drawers.css`**
+- All drawer widths capped at `min(90vw, N)` to prevent drawers from overflowing narrow viewports (was `480px` / `520px` fixed, clipped on 360px screens).
+
+**`style.css`**
+- `#sk-nav-search` font changed to `inherit` so the global font stack applies consistently.
+
+**`auth.css`**
+- Body font upgraded from `Arial, sans-serif` to system font stack (matches global standard).
+
+### Files Modified
+`sokoni-nav-engine.js`, `sokoni-nav-engine.css`, `sokoni-offline.js`, `service-worker.js`, `firestore.rules`, `functions/index.js`, `checkout.html`, `pos-display.html`, `shared-header.js`, `sokoni-responsive.css`, `sokoni-drawers.css`, `mobile.css`, `premium.css`, `auth.css`, `style.css`, `commissioning.html`, `etims-admin.html`, `etims-seller.html`
+
+### Navigation Audit Summary (210 pages)
+| Status | Count | Meaning |
+|---|---|---|
+| OK | 153 | Full shared-header injection or self-managed (skip-listed / data-no-header) |
+| WARN | 54 | Have own navigation but outside nav engine (POS sub-tools, specialty admin portals) |
+| DEAD_END | 3 → **0** | Pages with no navigation — all fixed in this release |
+
+### Security Status Post-Audit
+| Area | Status |
+|---|---|
+| Firestore Rules | 4 critical/high/medium vulnerabilities fixed |
+| Cloud Functions auth | sokoniChat now requires authentication |
+| Payment integrity | Client-amount exploitation prevented |
+| XSS | POS display innerHTML vulnerability fixed |
+| Nav injection | Skip-list mismatch fixed (no unauthorized nav on login/admin pages) |
+| SW syntax | Smart-quote syntax errors fixed (SW now registers reliably) |
+
+---
+
+## [2026-07-06] — B2B Premium Layout Fix + Encoding Repair
+
+### Summary
+Fixed the B2B Hub and Procurement Dashboard layout to use the unified SOKONI premium navigation system. Also fixed widespread Windows-1252 mojibake encoding corruption across all 6 B2B HTML files that caused emoji to display as garbled multi-character sequences.
+
+### Changes
+
+**`b2b.html`**
+- Added `shared-header.js` to `<head>` (was deferred at bottom — caused layout race)
+- Added `padding-top: var(--sk-header-h, 64px)` to body so hero content clears the fixed shared header
+- Removed custom `.b2-nav` (conflicted with shared-header.js at same z-index layer)
+- Removed custom bottom-nav (shared-header.js auto-injects one)
+- Updated sticky tab bar from `top: 57px` to `top: var(--sk-header-h, 64px)`
+- Removed B2B-specific notification dropdown (platform bell icon handles this now)
+
+**`b2b-dashboard.html`**
+- Added `padding-top: var(--sk-header-h, 64px)` to body
+- Fixed `.fn` page context bar: `top: 0` → `top: var(--sk-header-h, 64px)`, `z-index: 100` → `90` (so it sits below the global nav, not on top of it)
+- Added accent border to `.fn`: `border-bottom: 1px solid rgba(0,170,255,0.12)` for visual depth
+- Removed manual bottom-nav
+- Fixed page title encoding (`â€"` → `—`)
+
+**Encoding Fix (all B2B files)**
+- All 6 B2B files (`b2b-dashboard.html`, `b2b-orders.html`, `b2b-rfq.html`, `b2b-supplier.html`, `b2b-chat.html`, `b2b-seller-dashboard.html`) had double-encoded Windows-1252 mojibake
+- UTF-8 bytes had been re-interpreted as W1252 then re-saved as UTF-8, causing 4-byte emoji to appear as `ðŸ"Š` and separators as `Â·`
+- Fixed by reversing the W1252 mapping: all files now display clean emoji (📊, 📋, 🏭, 📦, 💬, 🔔, etc.) and correct punctuation
+
+---
+
+## [2026-07-06] — Navigation Engine v2.0 — Enterprise Desktop Sidebar + Bug Fixes
+
+### Summary
+Upgraded SOKONI Navigation Engine from v1.1 to v2.0. Primary addition is a full enterprise-grade desktop sidebar for seller, admin, and superAdmin workspaces — inspired by Shopify Admin and Stripe Dashboard. Also fixed three pre-existing bugs: `_isActive()` never matched on Firebase Hosting (cleanUrls strips `.html`), `_buildMenuBadge()` silently no-oped (wrong element ID), and offline detection missed captive portals on initial page load.
+
+### New Features
+
+**Desktop Sidebar (`_buildDesktopSidebar`)**
+- 220px full sidebar on screens ≥1024px
+- 56px icon-only rail on screens 769px–1023px (tablet)
+- Hidden on mobile ≤768px (bottom nav takes over)
+- Not injected on `seller.html` / `pos.html` (they manage their own layouts)
+- Per-workspace configs: seller (21 items / 4 categories), admin (11 items / 4 categories), superAdmin (10 items / 4 categories)
+- Store name / user name read from `localStorage.sokoniUser` for workspace header
+- Footer: user avatar initial, display name, workspace label, profile link
+- Multi-role switcher pills in footer (only for users with multiple roles)
+- Active item: green background pill + emoji glow (`sk-sidebar-item--active`)
+- Workspace-specific accent colours: seller=green, admin=blue, superAdmin=gold
+- Body class `sk-has-sidebar` gating all layout shifts (content pads left; sub-nav hidden)
+- Resize handler rebuilds/destroys sidebar on 769px breakpoint crossing
+- Storage listener (`sokoniUser` key) calls `_destroySidebar()` + rebuilds on login/logout
+
+### Bug Fixes
+
+**`_isActive()` never matched on Firebase Hosting**
+- Root cause: Firebase Hosting `cleanUrls: true` serves `/seller-analytics` (no `.html`), but `_SUBNAV` hrefs are `seller-analytics.html`. Comparison always failed.
+- Fix: both sides strip `.html` before comparing — active highlighting now works in production.
+- Impact: affected bottom nav, sub-nav strip, More drawer, and the new sidebar simultaneously.
+
+**`_buildMenuBadge()` silently no-oped**
+- Root cause: targeted `#sk-menu-overlay` which does not exist (element is `#sk-menu-drawer`).
+- Fix: deferred injection — listens on `#sk-menu-btn` click, then injects role badge 150ms after the drawer renders.
+
+**Offline detection missed captive portals**
+- Root cause: `sokoni-offline.js` only called `_ping()` when `window.offline` event fired or `navigator.onLine === false` on page load. Captive portals report `navigator.onLine = true` but have no real internet.
+- Fix: proactive `_ping()` call 4 seconds after `window.load` when `navigator.onLine === true`. Verified working in Playwright headless test.
+
+### Files Modified
+- **`sokoni-nav-engine.js`** — v2.0: `_SIDEBAR_CONFIGS`, `_buildDesktopSidebar`, `_destroySidebar`, resize handler, `_buildMenuBadge` fix, `_isActive` cleanUrls fix
+- **`sokoni-nav-engine.css`** — Sidebar container, header, nav, group labels, items, footer, role pills, body layout rules for tablet (56px) and desktop (220px)
+- **`sokoni-offline.js`** — Proactive captive-portal ping on load
+
+### Verified (Playwright screenshots)
+| Viewport | Sidebar | Width | Sub-nav | Bottom nav |
+|---|---|---|---|---|
+| 1280px desktop | ✅ present | 220px | hidden | hidden |
+| 900px tablet | ✅ present (icon rail) | 56px | hidden | hidden |
+| 375px mobile | ✅ absent | — | hidden | visible |
+
+---
+
+## [2026-07-06] — Unified Financial OS v1.0
+
+### Summary
+Built the SOKONI Financial Operating System — a provider-agnostic financial layer that closes the three critical gaps in the existing 37 financial Cloud Functions: (1) no payment adapter abstraction (IntaSend hardcoded in all CFs, existing webhook had no HMAC validation), (2) no refund approval queue (only immediate processing), (3) no unified admin financial console. Introduced `functions/payment-adapters.js` with an extensible adapter registry (IntaSend now; Stripe/PesaLink/Equity plug in via `registerAdapter()`), `functions/financial-os.js` with 8 new CFs, and `fos-admin.html` — a full admin financial console covering live KPIs, transaction feed, refund queue, payout queue, revenue by hub, CSV export, provider health, and audit log.
+
+### Architecture — What Was Built vs What Already Existed
+**Already existed (37 CFs across finos.js + finos-router.js + commission.js):**
+- Double-entry ledger, wallets, payouts, promos, fraud detection, reconciliation, escrow/disputes, settlement rules, revenue analytics, AI insights, commission CRUD, refund processing, webhook (unvalidated)
+
+**New in Financial OS v1.0 (8 CFs):**
+- `fosInitiatePayment` — provider-agnostic STK push via adapter; any future provider plugs in with zero business logic changes
+- `fosSecureWebhook` — onRequest webhook with proper HMAC-SHA256 validation (fixes security gap in the existing `webhookPaymentCallback`)
+- `fosSubmitRefund` — creates refund request with admin-approval queue (amounts ≤ KES 500 or admin: auto-approve; otherwise: pending queue)
+- `fosApproveRefund` — admin approves, adapter initiates refund, seller wallet clawback, fosTransaction status updated, buyer notified
+- `fosGenerateInvoice` — structured invoice from any transaction; stored in `fosInvoices/{id}`, idempotent (returns existing if already generated)
+- `fosExportReport` — paginated CSV-compatible export for transactions, refunds, or wallet balances (up to 2,000 rows per call)
+- `fosGetProviderHealth` — pings all registered adapters + last-1h success rate from `payments` collection
+- `fosGetAdminConsole` — single aggregated admin call: today/week KPIs, queue sizes, pending refunds list, 20 most recent transactions
+
+### New Files
+- **`functions/payment-adapters.js`** — Adapter registry + `IntaSendAdapter` (STK push, verify, B2C payout, refund, webhook HMAC)
+- **`functions/financial-os.js`** — 8 new Cloud Functions
+- **`fos-admin.html`** — Admin financial console (7 panels: Dashboard, Transactions, Refunds, Payouts, Revenue, Export, Providers, Audit)
+
+### Modified Files
+- **`functions/index.js`** — Added `financialOS` require + 8 exports
+- **`service-worker.js`** — Cache version → `sokoni-20260706-finos-v5`; added `/fos-admin` to `PRECACHE_PAGES`
+
+### Database Changes
+New Firestore collections:
+- `fosTransactions/{txId}` — canonical transaction record for all FOS-initiated payments
+- `fosRefundQueue/{id}` — refund approval queue with pending/approved/processed/rejected states
+- `fosInvoices/{id}` — generated invoices (idempotent per fosTransactionId)
+- `fosRateLimits/{key}` — rate limit windows for payment initiation
+- `finosAudit/{id}` — audit trail (shared with existing system)
+
+### Security
+- Webhook HMAC-SHA256 validation via `crypto.timingSafeEqual` (constant-time comparison)
+- Rate limiting on `fosInitiatePayment`: 3 initiations per user per 60 seconds
+- Amount cap: KES 500,000 per transaction
+- Admin role check (`token.admin || token.superAdmin`) on all admin-only CFs
+- Idempotency on webhook processing via `finosIdempotency/{key}`
+
+### Deployment
+```bash
+# When Cloud Run quota resets — deploy all pending CFs:
+firebase deploy --only "functions:fosInitiatePayment,functions:fosSecureWebhook,functions:fosSubmitRefund,functions:fosApproveRefund,functions:fosGenerateInvoice,functions:fosExportReport,functions:fosGetProviderHealth,functions:fosGetAdminConsole,functions:subScheduleRenewals,functions:subAutoActivateOnPayment,functions:subUpgradeWithProration,functions:getSellerEarningsReport,functions:getAdminRevenueByHub,functions:getConversationContext,functions:searchConversations,functions:editMessage,functions:updateConversationStatus" --project sokoni-aeb26
+
+# Hosting already deployed (2026-07-06)
+```
+
+### Adding Future Payment Providers
+```js
+// In functions/payment-adapters.js:
+const { registerAdapter } = require('./payment-adapters');
+registerAdapter('stripe', StripeAdapter);
+// StripeAdapter extends PaymentAdapter and implements:
+// initiatePayment(), verifyPayment(), initiatePayout(), initiateRefund(), verifyWebhookSignature()
+```
+
+---
+
+## [2026-07-06] — Subscription & Billing Engine v2.0
+
+### Summary
+Closed three critical automation gaps in the existing subscription infrastructure by introducing `functions/sub-engine.js` with three new Cloud Functions: `subScheduleRenewals` (daily scheduled server-side M-PESA STK push for expiring subscriptions), `subAutoActivateOnPayment` (Firestore trigger that auto-activates any subscription the moment its IntaSend payment is marked COMPLETE — zero client action required), and `subUpgradeWithProration` (onCall with a two-phase preview → apply flow that calculates pro-rated credit for mid-cycle upgrades). Added `my-subscriptions.html`, the user-facing universal subscription management portal covering all 12 hub types. Updated service worker to `sokoni-20260706-sub-engine-v4` and added `/my-subscriptions` to precache.
+
+### New Files
+- **`functions/sub-engine.js`** — 3 Gen2 Cloud Functions for automated billing
+- **`my-subscriptions.html`** — Universal subscription management portal (active plans, upgrade/proration flow, M-PESA modal, billing history)
+
+### Modified Files
+- **`functions/index.js`** — Added `subEngine` require + 3 exports: `subScheduleRenewals`, `subAutoActivateOnPayment`, `subUpgradeWithProration`
+- **`service-worker.js`** — Cache version → `sokoni-20260706-sub-engine-v4`; added `/my-subscriptions` to `PRECACHE_PAGES`
+
+### Architecture
+- `subScheduleRenewals`: `onSchedule('every day 03:00 UTC')`, queries subscriptions where `currentPeriodEnd ≤ now+25h` and `status IN ['active','grace','trialing']` and `cancelAtPeriodEnd=false`, reads `users/{uid}.phoneNumber`, creates `payments/{payRef}` with `meta.purpose='subscription'`, updates subscription with `renewalRef` + `renewalStatus='pending'`
+- `subAutoActivateOnPayment`: `onDocumentUpdated('payments/{payRef}')`, skips if `status !== 'COMPLETE'` or `meta.purpose !== 'subscription'`, runs Firestore transaction to extend `currentPeriodEnd` + update `users/{uid}.subscription.{hubType}` mirror + idempotency guard via `finosIdempotency/sub_autoact_{subId}_{payRef}`
+- `subUpgradeWithProration`: phase 1 (`preview:true`) returns `{fullPriceKES, creditKES, chargeKES, remainingDays}` for client confirmation; phase 2 (`preview:false, paymentRef`) verifies payment, applies upgrade via Firestore transaction, writes `billingHistory`, notifies user, writes audit log; idempotency via `finosIdempotency/subupg_{uid}_{planId}_{payRef}`
+- Proration formula: `creditCents = currentPrice × (remainingMs / totalPeriodMs)`, `charge = newPrice − credit`
+- Upgrade payment uses `meta.purpose = 'subscription_upgrade'` so `subAutoActivateOnPayment` trigger skips it (trigger only handles `meta.purpose = 'subscription'`)
+
+### Database Changes
+- Reads: `subscriptions`, `users`, `payments`, `subscriptionPlans`
+- Writes: `payments`, `subscriptions`, `users.subscription.{hubType}` (mirror), `billingHistory`, `notifications`, `subscriptionAuditLog`, `finosIdempotency`
+- No new Firestore indexes needed (all queries use existing composite indexes from sub-billing.js)
+
+### Deployment
+```bash
+# Deploy when Cloud Run quota resets:
+firebase deploy --only "functions:subScheduleRenewals,functions:subAutoActivateOnPayment,functions:subUpgradeWithProration" --project sokoni-aeb26
+
+# Hosting already deployed (2026-07-06)
+```
+
+### Pending (existing queue)
+- Business Comms v2.0 CFs: `getConversationContext`, `searchConversations`, `editMessage`, `updateConversationStatus`
+- Commission Engine v2.0 CFs: `getSellerEarningsReport`, `getAdminRevenueByHub`
+
+---
+
+## [2026-07-06] — Premium UI System v1.0 + Platform-Wide Visual Upgrade
 
 ### Summary
 Established a canonical premium component library (`sokoni-components.css`) and auto-injected it on every page via `shared-header.js`. Rebranded `admin-os.html` from off-brand cyan to SOKONI green. Upgraded the global body font from `Arial` to the system font stack. Completed full mobile drawer UX overhaul for Seller Dashboard, Live Panel, and Analytics drawers. Delivered premium dark hub redesign for `jobs.html`.

@@ -306,7 +306,8 @@ textarea:focus {
 .cat-grid > *,
 [class*="-grid"] > * {
   min-width: 0;
-  overflow: hidden;
+  /* overflow:hidden removed — it clips box-shadows, badge overlays, and tooltips.
+     max-width:100% on the items + overflow:hidden on the grid container is sufficient. */
 }
 
 /* ── 9. HORIZONTAL SCROLL CONTAINERS ─────────────────────────────── */
@@ -1012,8 +1013,6 @@ img, video, canvas, svg, iframe {
 
 /* ── No-horizontal-scroll enforcement ───────────────────── */
 html, body {
-  overflow-x: hidden;
-  /* clip instead of hidden so fixed children aren't clipped */
+  overflow-x: clip;
   max-width: 100vw;
-}
 }

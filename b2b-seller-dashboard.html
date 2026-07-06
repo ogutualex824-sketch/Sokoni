@@ -244,7 +244,7 @@ let _sid = null;
 let _allRFQs = [];
 
 function init() {
-  /* Try to determine supplier — URL param or first supplier in list */
+  /* Try to determine supplier � URL param or first supplier in list */
   const p = new URLSearchParams(window.location.search);
   _sid = p.get('id') || (B.SUPPLIERS[0]||{}).id || null;
 
@@ -253,7 +253,7 @@ function init() {
     const ind = B.INDUSTRIES.find(i=>i.id===sup.industry)||{icon:'🏭'};
     document.getElementById('sdHeroIcon').textContent = ind.icon;
     document.getElementById('sdHeroName').textContent = sup.name;
-    document.getElementById('sdHeroSub').textContent = `${sup.type} · ${sup.location}`;
+    document.getElementById('sdHeroSub').textContent = `${sup.type} � ${sup.location}`;
     if (!sup.verified) document.getElementById('sdHeroBadge').style.display='none';
   }
 
@@ -298,7 +298,7 @@ function filterRFQs() {
       <div class="rfq-card-hd">
         <div>
           <div class="rfq-card-title">${r.title}</div>
-          <div class="rfq-card-meta">#${r.id} · ${B.timeSince(r.createdAt)} · Qty: ${r.qty||'N/A'} ${r.unit||''}</div>
+          <div class="rfq-card-meta">#${r.id} � ${B.timeSince(r.createdAt)} � Qty: ${r.qty||'N/A'} ${r.unit||''}</div>
         </div>
         <span class="rfq-badge" style="background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.label}</span>
       </div>
@@ -330,7 +330,7 @@ function renderQuotes() {
     <div class="qt-row">
       <div>
         <div class="qt-id">${q.id}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">For: ${rfq?.title||q.rfqId} · ${B.timeSince(q.createdAt)}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">For: ${rfq?.title||q.rfqId} � ${B.timeSince(q.createdAt)}</div>
         <div style="font-size:12px;color:#71ff00;font-weight:800;margin-top:3px;">KES ${B.fmt(q.unitPrice||0)} / ${q.unit||'unit'}</div>
       </div>
       <div style="text-align:right;">
@@ -350,7 +350,7 @@ function renderOrdersToFulfill() {
     return `
     <div class="ord-card">
       <div class="ord-hd">
-        <div><div class="ord-id">${o.id}</div><div class="ord-meta">${o.createdAt?new Date(o.createdAt).toLocaleDateString():''} · ${o.trackingRef||'—'}</div></div>
+        <div><div class="ord-id">${o.id}</div><div class="ord-meta">${o.createdAt?new Date(o.createdAt).toLocaleDateString():''} � ${o.trackingRef||'�'}</div></div>
         <div class="ord-total">KES ${B.fmt(o.total)}</div>
       </div>
       <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:10px;">${st.icon} ${st.label}</div>
@@ -380,7 +380,7 @@ function renderLeads() {
       <div class="lead-icon">${l.interest==='high'?'🔥':'⭐'}</div>
       <div style="flex:1;">
         <div class="lead-title">${l.name}</div>
-        <div class="lead-meta">Interested in: ${l.product} · ${B.timeSince(l.ts)}</div>
+        <div class="lead-meta">Interested in: ${l.product} � ${B.timeSince(l.ts)}</div>
       </div>
       <span style="font-size:10px;font-weight:800;color:${l.interest==='high'?'#ef4444':'#f59e0b'};">${l.interest.toUpperCase()}</span>
     </div>`).join('');
@@ -437,12 +437,12 @@ function openQuoteForm(rfqId) {
   document.getElementById('sdModalBody').innerHTML = `
     <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px;margin-bottom:14px;">
       <div style="font-size:13px;font-weight:800;color:white;">${rfq?.title||rfqId}</div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);">Qty: ${rfq?.qty||'—'} · Budget: ${rfq?.budget?'KES '+B.fmt(rfq.budget):'Not specified'}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);">Qty: ${rfq?.qty||'�'} � Budget: ${rfq?.budget?'KES '+B.fmt(rfq.budget):'Not specified'}</div>
     </div>
     <label class="sd-label">Unit Price (KES) *</label>
     <input type="number" id="qUnitPrice" class="sd-input" placeholder="e.g. 1200">
     <label class="sd-label">Total Amount (KES) *</label>
-    <input type="number" id="qTotal" class="sd-input" placeholder="Unit × Qty">
+    <input type="number" id="qTotal" class="sd-input" placeholder="Unit � Qty">
     <label class="sd-label">Unit (e.g. piece, kg, box)</label>
     <input type="text" id="qUnit" class="sd-input" placeholder="piece">
     <label class="sd-label">Lead Time</label>

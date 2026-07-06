@@ -263,9 +263,24 @@
       </div>
       <button class="pos-header-btn" onclick="SPos.ui.showAlerts()" title="Low stock alerts" style="position:relative;">🔔<span id="notify-badge" style="position:absolute;top:2px;right:2px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:14px;height:14px;display:none;align-items:center;justify-content:center;line-height:1;border:1.5px solid var(--bg);"></span></button>
       <button class="pos-header-btn" onclick="window.open('pos-workspace.html','_self')" title="Multi-device workspace" aria-label="Open multi-device workspace">📡</button>
+      <!-- SmartPOS 2.0: customer display toggle -->
+      <button class="pos-header-btn" id="btn-customer-display" onclick="SPos.customerDisplay.toggle()" title="Customer Display" aria-label="Open customer display" style="position:relative;">
+        🖥️<span id="customer-display-dot" style="position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:50%;background:#34d399;display:none;box-shadow:0 0 6px #34d399;"></span>
+      </button>
+      <!-- SmartPOS 2.0: device hub status -->
+      <button class="pos-header-btn" id="btn-device-hub" onclick="SPos.deviceHub.showPanel()" title="Peripherals" aria-label="Peripheral devices" style="position:relative;">
+        🔌<span id="device-hub-badge" style="position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;border-radius:50%;font-size:9px;font-weight:900;width:14px;height:14px;display:none;align-items:center;justify-content:center;line-height:1;border:1.5px solid var(--bg);">0</span>
+      </button>
       <button class="pos-header-btn pos-kb-help-btn" onclick="SPos.modal.open('kb-help-modal')" title="Keyboard shortcuts" aria-label="Show keyboard shortcuts">?</button>
     </div>
   </header>
+
+  <!-- SmartPOS 2.0: Peripheral status bar -->
+  <div id="pos-peripheral-bar" style="display:none;background:#0e1117;border-bottom:1px solid rgba(255,255,255,0.06);padding:6px 16px;display:flex;align-items:center;gap:12px;overflow-x:auto;font-size:12px;">
+    <span style="color:rgba(240,240,248,0.4);font-weight:600;letter-spacing:1px;text-transform:uppercase;flex-shrink:0;">Devices</span>
+    <div id="peripheral-bar-chips" style="display:flex;gap:8px;flex-wrap:nowrap;"></div>
+    <button onclick="SPos.deviceHub.discover()" style="margin-left:auto;background:rgba(124,111,255,0.12);border:1px solid rgba(124,111,255,0.25);color:#a78bfa;border-radius:8px;padding:4px 12px;font-size:11px;cursor:pointer;flex-shrink:0;">+ Add Device</button>
+  </div>
 
   <nav class="pos-tabs" role="tablist" aria-label="POS sections">
     <button class="pos-tab active" role="tab" aria-selected="true"  data-tab="pos"      onclick="SPos.ui.switchTab('pos')">      <span class="tab-icon" aria-hidden="true">🛒</span><span>Checkout</span></button>
@@ -1923,8 +1938,8 @@ document.addEventListener('DOMContentLoaded', function() {
     <!-- QR ready state -->
     <div id="qrStateReady" style="display:none;flex-direction:column;align-items:center;gap:16px;">
       <div style="font-size:15px;font-weight:700;color:#e8e8e8;">Scan to Pay</div>
-      <div style="background:#fff;border-radius:12px;padding:12px;display:inline-block;">
-        <img id="posQrImg" src="" alt="Payment QR code" style="display:block;width:220px;height:220px;">
+      <div style="background:#fff;border-radius:12px;padding:10px;display:inline-block;">
+        <div id="posQrImgWrap" style="width:248px;height:248px;display:flex;align-items:center;justify-content:center;"></div>
       </div>
       <div style="background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);border-radius:10px;padding:10px 16px;font-size:14px;font-weight:700;color:#71ff00;" id="posQrTotal"></div>
       <div id="posQrTimer" style="font-size:13px;color:rgba(255,255,255,.45);display:flex;align-items:center;gap:5px;">
@@ -2102,11 +2117,16 @@ window.SPosQR = (function() {
       var d = res.data;
       _txnId = d.transactionId;
 
-      /* Render QR using Google Charts (same as sokoni-qr.js) */
+      /* Render QR using SokoniQR (self-contained canvas, no external API) */
       var qrUrl = d.qrUrl;
-      var chartUrl = 'https://chart.googleapis.com/chart?cht=qr&chs=440x440&chl=' + encodeURIComponent(qrUrl) + '&choe=UTF-8&chld=M';
-      var img = document.getElementById('posQrImg');
-      if (img) img.src = chartUrl;
+      var qrContainer = document.getElementById('posQrImgWrap');
+      if (qrContainer && window.SokoniQR) {
+        var canvas = SokoniQR.generateCanvas(qrUrl, 248);
+        canvas.style.cssText = 'display:block;width:248px;height:248px;border-radius:8px;';
+        canvas.setAttribute('aria-label', 'QR code for payment');
+        qrContainer.innerHTML = '';
+        qrContainer.appendChild(canvas);
+      }
 
       var totalEl = document.getElementById('posQrTotal');
       if (totalEl) totalEl.textContent = 'KES ' + Number(d.total).toLocaleString('en-KE', { minimumFractionDigits: 2 });
@@ -2183,6 +2203,230 @@ window.SPosQR = (function() {
 <script defer src="pos-terminal-driver.js"></script>
 <script defer src="pos-receipt-engine.js"></script>
 <script defer src="pos-analytics-live.js"></script>
+
+<!-- ════ SmartPOS 2.0 — Universal Plug & Play Ecosystem ════ -->
+<script defer src="sokoni-redis.js"></script>
+<script defer src="sokoni-device-hub.js"></script>
+<script defer src="sokoni-payment-terminal.js"></script>
+<script defer src="sokoni-customer-display.js"></script>
+<script>
+/* ── SmartPOS 2.0 — boot integration ────────────────────────────
+   Initialises Device Hub, Payment Terminal, and Customer Display
+   after all deferred scripts have loaded.
+────────────────────────────────────────────────────────────── */
+window.addEventListener('load', function () {
+  /* ── Device Hub ─────────────────────────────────────────── */
+  if (!window.SokoniDeviceHub) return;
+
+  const hub  = window.SokoniDeviceHub;
+  const TYPE = hub.TYPE;
+
+  /* Restore previously registered devices and attempt connection */
+  hub.discover().then(() => {
+    _refreshPeripheralBar();
+  });
+
+  /* React to device state changes */
+  hub.on('connected',    () => _refreshPeripheralBar());
+  hub.on('disconnected', () => _refreshPeripheralBar());
+  hub.on('discovered',   () => _refreshPeripheralBar());
+  hub.on('error',        () => _refreshPeripheralBar());
+
+  /* Sync hub into SPos namespace */
+  if (window.SPos) {
+    SPos.deviceHub = {
+      hub,
+      discover: () => hub.discover(),
+      showPanel: _showDevicePanel,
+      getConnected: () => hub.getConnectedDevices(),
+    };
+
+    /* ── Customer Display ───────────────────────────────── */
+    if (window.SokoniCustomerDisplay) {
+      const cd    = window.SokoniCustomerDisplay;
+      const sessId = localStorage.getItem('sokoni_pos_display_session') ||
+                     'disp_' + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('sokoni_pos_display_session', sessId);
+
+      cd.init({
+        sessionId: sessId,
+        branding: {
+          storeName: localStorage.getItem('sokoni_biz_name') || 'SOKONI',
+          tagline:   'Thank you for shopping with us',
+          icon:      '🛒',
+        },
+        db: typeof firebase !== 'undefined' ? firebase.firestore() : null,
+      });
+
+      SPos.customerDisplay = {
+        _open: false,
+        toggle() {
+          if (this._open && cd.isDisplayOpen()) {
+            cd.closeDisplay();
+            this._open = false;
+            document.getElementById('customer-display-dot').style.display = 'none';
+          } else {
+            cd.openDisplay();
+            this._open = true;
+            document.getElementById('customer-display-dot').style.display = 'block';
+          }
+        },
+        updateCart(items, sub, disc, tax, total, cur) {
+          cd.sendCartUpdate(items, sub, disc, tax, total, cur);
+        },
+        paymentStart(method, amount, currency) {
+          cd.sendPaymentStart(method, amount, currency);
+        },
+        paymentApproved(result) {
+          cd.sendPaymentApproved(result);
+        },
+        paymentDeclined(reason) {
+          cd.sendPaymentDeclined(reason);
+        },
+        idle() { cd.sendIdle(); },
+      };
+    }
+
+    /* ── Payment Terminal ───────────────────────────────── */
+    if (window.SokoniTerminal) {
+      SPos.terminal = window.SokoniTerminal;
+
+      /* Auto-register IntaSend (always available) */
+      SokoniTerminal.register('mpesa', SokoniTerminal.VENDOR.INTASEND, {
+        pollInterval: 3000,
+        pollTimeout:  90000,
+      }).catch(() => {});
+
+      /* Auto-register virtual terminal for offline / demo */
+      SokoniTerminal.register('virtual', SokoniTerminal.VENDOR.VIRTUAL, {
+        autoApprove: true,
+        delay: 1200,
+      }).catch(() => {});
+    }
+  }
+
+  /* ── Redis v2.0 — session + presence + offline sync ────── */
+  if (window.SokoniRedis) {
+    /* Determine shopId / terminalId from SPos session if available */
+    const shopId     = window.SPos?.session?.shopId    || localStorage.getItem('pos_shop_id')     || 'unknown';
+    const terminalId = window.SPos?.session?.terminalId || localStorage.getItem('pos_terminal_id') || ('term_' + Date.now().toString(36));
+
+    SokoniRedis.init('cashier', { shopId, terminalId }, { autoFlushOffline: true }).catch(() => {});
+
+    /* Subscribe to real-time shop terminal state for manager view */
+    SokoniRedis.pos.subscribeShop(shopId, function (terminals) {
+      if (window.SPos && SPos._onRedisTerminals) SPos._onRedisTerminals(terminals);
+    }, 2000);
+
+    /* Register device hub peripherals in Redis presence when connected */
+    if (window.SokoniDeviceHub) {
+      SokoniDeviceHub.on('connected', function (dev) {
+        if (dev && dev.type && dev.id) {
+          SokoniRedis.device.startHeartbeat(dev.id, dev.type, { name: dev.name, shopId });
+        }
+      });
+      SokoniDeviceHub.on('disconnected', function (dev) {
+        if (dev && dev.id) SokoniRedis.device.stopHeartbeat(dev.id);
+      });
+    }
+
+    SPos.redis = SokoniRedis;
+  }
+
+  /* ── Peripheral status bar ──────────────────────────────── */
+  function _refreshPeripheralBar() {
+    const bar    = document.getElementById('pos-peripheral-bar');
+    const chips  = document.getElementById('peripheral-bar-chips');
+    const badge  = document.getElementById('device-hub-badge');
+    if (!bar || !chips) return;
+
+    const devices   = hub.getDevices();
+    const errors    = devices.filter(d => d.status === 'error').length;
+
+    if (devices.length) {
+      bar.style.display = 'flex';
+    }
+
+    /* Badge for errors */
+    if (errors) {
+      badge.textContent = errors;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+
+    /* Render chips */
+    chips.innerHTML = devices.map(d => {
+      const icon = {
+        printer: '🖨️', scanner: '📷', payment_terminal: '💳',
+        cash_drawer: '💰', customer_display: '🖥️',
+        weight_scale: '⚖️', label_printer: '🏷️', card_reader: '💳',
+      }[d.type] || '🔌';
+      const colour = {
+        connected:    '#34d399',
+        disconnected: 'rgba(240,240,248,0.25)',
+        error:        '#f87171',
+        reconnecting: '#fbbf24',
+        registered:   'rgba(240,240,248,0.25)',
+      }[d.status] || 'rgba(240,240,248,0.25)';
+      return `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.07);border-radius:100px;padding:3px 10px;white-space:nowrap;cursor:pointer;" onclick="SPos.deviceHub.showPanel()" title="${_esc(d.name)}">
+        <span style="width:6px;height:6px;border-radius:50%;background:${colour};flex-shrink:0;"></span>
+        <span>${icon} ${_esc(d.name.slice(0,18))}</span>
+      </span>`;
+    }).join('');
+  }
+
+  function _showDevicePanel() {
+    /* Use existing SPos modal system */
+    const devices = hub.getDevices();
+    const rows = devices.length
+      ? devices.map(d => {
+          const st = d.status;
+          const dot = st === 'connected' ? '#34d399' : st === 'error' ? '#f87171' : st === 'reconnecting' ? '#fbbf24' : 'rgba(255,255,255,0.2)';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+            <span style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0;"></span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:500;font-size:14px;">${_esc(d.name)}</div>
+              <div style="font-size:12px;color:rgba(240,240,248,0.4);">${_esc(d.vendor || d.type)} · ${_esc(d.transport)} · ${_esc(d.status)}</div>
+            </div>
+            ${st !== 'connected'
+              ? `<button onclick="window.SokoniDeviceHub.connect('${d.id}')" style="background:rgba(124,111,255,0.12);border:1px solid rgba(124,111,255,0.25);color:#a78bfa;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer;">Connect</button>`
+              : `<button onclick="window.SokoniDeviceHub.disconnect('${d.id}')" style="background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.15);color:#f87171;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer;">Disconnect</button>`
+            }
+          </div>`;
+        }).join('')
+      : '<div style="text-align:center;padding:32px;color:rgba(240,240,248,0.3);font-size:14px;">No devices registered yet</div>';
+
+    const cap = hub.getCapabilities();
+    const capStr = [
+      cap.usb       ? '<span style="color:#34d399">✓ USB</span>'       : '<span style="color:rgba(255,255,255,0.25)">✗ USB</span>',
+      cap.bluetooth ? '<span style="color:#34d399">✓ Bluetooth</span>' : '<span style="color:rgba(255,255,255,0.25)">✗ Bluetooth</span>',
+      cap.serial    ? '<span style="color:#34d399">✓ Serial</span>'    : '<span style="color:rgba(255,255,255,0.25)">✗ Serial</span>',
+      '<span style="color:#34d399">✓ Network</span>',
+    ].join(' &nbsp; ');
+
+    if (window.SPos?.modal?.open) {
+      document.getElementById('modal-title') && (document.getElementById('modal-title').textContent = 'Peripheral Devices');
+      const body = document.getElementById('modal-body');
+      if (body) {
+        body.innerHTML = `
+          <div style="font-size:12px;color:rgba(240,240,248,0.4);margin-bottom:12px;">${capStr}</div>
+          ${rows}
+          <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button onclick="window.SokoniDeviceHub.requestDevice('usb')" style="background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.2);color:#a78bfa;border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer;">+ USB Device</button>
+            <button onclick="window.SokoniDeviceHub.requestDevice('bluetooth')" style="background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.2);color:#a78bfa;border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer;">+ Bluetooth</button>
+            <button onclick="window.SokoniDeviceHub.requestDevice('serial')" style="background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.2);color:#a78bfa;border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer;">+ Serial</button>
+          </div>`;
+        SPos.modal.open('generic-modal');
+      }
+    }
+  }
+
+  function _esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+});
+</script>
 
 <script>
 /* ── SPosCustomer — in-line customer identification ── */

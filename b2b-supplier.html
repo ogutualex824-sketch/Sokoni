@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Supplier Profile â€” SOKONI B2B</title>
+<title>Supplier Profile — SOKONI B2B</title>
 <link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#00aaff">
@@ -93,15 +93,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 <script src="sokoni-b2b.js"></script>
 
 <nav class="fn">
-  <a href="b2b.html" class="fn-back">â†</a>
+  <a href="b2b.html" class="fn-back">←</a>
   <span style="font-size:14px;font-weight:800;flex:1;" id="navTitle">Supplier Profile</span>
   <button onclick="sharePage()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:white;padding:7px 14px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">Share</button>
 </nav>
 
 <div class="sp-cover" id="spCover">
   <div class="sp-avatar-wrap">
-    <div class="sp-avatar" id="spAvatar">ðŸ­</div>
-    <div class="sp-verified-badge" id="spVerifiedBadge" style="display:none;">âœ… Verified</div>
+    <div class="sp-avatar" id="spAvatar">🏭</div>
+    <div class="sp-verified-badge" id="spVerifiedBadge" style="display:none;">✅ Verified</div>
   </div>
 </div>
 
@@ -112,10 +112,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
   </div>
 
   <div class="sp-tabs">
-    <button class="sp-tab active" onclick="switchTab('catalog',this)">ðŸ“¦ Catalog</button>
-    <button class="sp-tab" onclick="switchTab('about',this)">â„¹ï¸ About</button>
-    <button class="sp-tab" onclick="switchTab('reviews',this)">â­ Reviews</button>
-    <button class="sp-tab" onclick="switchTab('rfq',this)">ðŸ“‹ Send RFQ</button>
+    <button class="sp-tab active" onclick="switchTab('catalog',this)">📦 Catalog</button>
+    <button class="sp-tab" onclick="switchTab('about',this)">ℹ️ About</button>
+    <button class="sp-tab" onclick="switchTab('reviews',this)">⭐ Reviews</button>
+    <button class="sp-tab" onclick="switchTab('rfq',this)">📋 Send RFQ</button>
   </div>
 
   <div class="sp-pane active" id="pane-catalog">
@@ -132,7 +132,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 
   <div class="sp-pane" id="pane-rfq">
     <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;">
-      <div style="font-size:14px;font-weight:900;color:white;margin-bottom:16px;">ðŸ“‹ Send RFQ to <span id="rfqSupName"></span></div>
+      <div style="font-size:14px;font-weight:900;color:white;margin-bottom:16px;">📋 Send RFQ to <span id="rfqSupName"></span></div>
       <input id="rfqTitle" class="sp-input" placeholder="What do you need? (e.g. 500 branded polo shirts)">
       <textarea id="rfqDesc" class="sp-textarea" placeholder="Specifications, quality requirements, timeline, delivery location..."></textarea>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
@@ -141,7 +141,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
       </div>
       <input id="rfqName" class="sp-input" placeholder="Your Business Name">
       <input id="rfqContact" class="sp-input" placeholder="Phone / Email">
-      <button class="sp-submit" onclick="sendRFQ()">ðŸ“‹ Send RFQ to Supplier</button>
+      <button class="sp-submit" onclick="sendRFQ()">📋 Send RFQ to Supplier</button>
       <div id="rfqMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
     </div>
   </div>
@@ -162,11 +162,11 @@ let _sup = null;
 
 function load() {
   _sup = B.getSupplierById(_sid);
-  if (!_sup) { document.getElementById('spHeader').innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">Supplier not found. <a href="b2b.html" style="color:#00aaff;">Browse suppliers â†’</a></div>'; return; }
+  if (!_sup) { document.getElementById('spHeader').innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">Supplier not found. <a href="b2b.html" style="color:#00aaff;">Browse suppliers →</a></div>'; return; }
 
-  document.title = _sup.name + ' â€” SOKONI B2B';
+  document.title = _sup.name + ' — SOKONI B2B';
   document.getElementById('navTitle').textContent = _sup.name;
-  const ind = B.INDUSTRIES.find(i=>i.id===_sup.industry)||{icon:'ðŸ¢'};
+  const ind = B.INDUSTRIES.find(i=>i.id===_sup.industry)||{icon:'🏢'};
   document.getElementById('spAvatar').textContent = ind.icon;
   if (_sup.verified) document.getElementById('spVerifiedBadge').style.display='block';
 
@@ -183,27 +183,27 @@ function load() {
       <div>
         <div class="sp-name">${_sup.name}</div>
         <span class="sp-type-chip">${type.label}</span>
-        ${_sup.exportReady?'<span class="sp-export-chip">âœˆï¸ Export Ready</span>':''}
+        ${_sup.exportReady?'<span class="sp-export-chip">✈️ Export Ready</span>':''}
       </div>
       <div style="text-align:right;">
         <div style="font-size:18px;color:#f59e0b;">${B.starsHTML(avg)}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.35);">${avg} Â· ${count} reviews</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35);">${avg} · ${count} reviews</div>
       </div>
     </div>
     <div class="sp-meta-grid">
       <div class="sp-meta-item"><div class="sp-meta-val">${_sup.minOrder}</div><div class="sp-meta-lbl">Min Order</div></div>
       <div class="sp-meta-item"><div class="sp-meta-val">${_sup.established}</div><div class="sp-meta-lbl">Est. Year</div></div>
       <div class="sp-meta-item"><div class="sp-meta-val">${_sup.employees}</div><div class="sp-meta-lbl">Employees</div></div>
-      <div class="sp-meta-item"><div class="sp-meta-val">ðŸ“ ${_sup.city}</div><div class="sp-meta-lbl">Location</div></div>
+      <div class="sp-meta-item"><div class="sp-meta-val">📍 ${_sup.city}</div><div class="sp-meta-lbl">Location</div></div>
     </div>
     <div class="sp-desc">${_sup.desc}</div>
     <div class="sp-tags">${(_sup.tags||[]).map(t=>`<span class="sp-tag">#${t}</span>`).join('')}</div>
-    ${(_sup.certifications||[]).length?`<div class="sp-certs">${_sup.certifications.map(c=>`<span class="sp-cert">ðŸ… ${c}</span>`).join('')}</div>`:''}
+    ${(_sup.certifications||[]).length?`<div class="sp-certs">${_sup.certifications.map(c=>`<span class="sp-cert">🏅 ${c}</span>`).join('')}</div>`:''}
     <div class="sp-actions">
-      <button class="sp-btn blue" onclick="contactSupplier()">ðŸ’¬ Message</button>
-      <button class="sp-btn green" onclick="switchTab('rfq',document.querySelector('.sp-tab:nth-child(4)'))">ðŸ“‹ Send RFQ</button>
-      <a href="tel:${_sup.phone}" class="sp-btn blue">ðŸ“ž Call</a>
-      <a href="https://wa.me/254${(_sup.phone||'').replace(/^0/,'')}?text=${encodeURIComponent('Hi '+_sup.name+', I found your profile on SOKONI B2B. I am interested in your products.')}" target="_blank" class="sp-btn wa">ðŸ’¬ WhatsApp</a>
+      <button class="sp-btn blue" onclick="contactSupplier()">💬 Message</button>
+      <button class="sp-btn green" onclick="switchTab('rfq',document.querySelector('.sp-tab:nth-child(4)'))">📋 Send RFQ</button>
+      <a href="tel:${_sup.phone}" class="sp-btn blue">📞 Call</a>
+      <a href="https://wa.me/254${(_sup.phone||'').replace(/^0/,'')}?text=${encodeURIComponent('Hi '+_sup.name+', I found your profile on SOKONI B2B. I am interested in your products.')}" target="_blank" class="sp-btn wa">💬 WhatsApp</a>
     </div>`;
 
   document.getElementById('rfqSupName').textContent = _sup.name;
@@ -215,9 +215,9 @@ function load() {
 function renderCatalog() {
   const products = B.getProducts({supplierId: _sid});
   const grid = document.getElementById('catalogGrid');
-  if (!products.length) { grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,0.3);"><div style="font-size:40px;margin-bottom:10px;">ðŸ“¦</div><p>No products listed yet.</p></div>'; return; }
+  if (!products.length) { grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,0.3);"><div style="font-size:40px;margin-bottom:10px;">📦</div><p>No products listed yet.</p></div>'; return; }
   grid.innerHTML = products.map(p=>{
-    const icon = B.CAT_ICONS[p.category]||'ðŸ“¦';
+    const icon = B.CAT_ICONS[p.category]||'📦';
     return `
     <div class="sp-prod-card">
       <div class="sp-prod-img">${icon}</div>
@@ -227,7 +227,7 @@ function renderCatalog() {
         <div class="sp-prod-price">KES ${B.fmt(p.wholesalePrice)} / ${p.unit||'unit'}</div>
         <div class="sp-prod-moq">Min: ${p.moq} ${p.unit||'units'}</div>
         ${p.desc?`<div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:6px;line-height:1.5;">${p.desc.slice(0,70)}...</div>`:''}
-        <button onclick="enquire('${p.id}')" style="width:100%;margin-top:10px;padding:8px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);border-radius:9px;color:#00aaff;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">ðŸ’¬ Enquire</button>
+        <button onclick="enquire('${p.id}')" style="width:100%;margin-top:10px;padding:8px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);border-radius:9px;color:#00aaff;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">💬 Enquire</button>
       </div>
     </div>`;
   }).join('');
@@ -241,18 +241,18 @@ function renderAbout() {
       <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;">
         <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Company Type</span><span style="color:white;font-weight:700;">${B.SUPPLIER_TYPES.find(t=>t.id===_sup.type)?.label||_sup.type}</span></div>
         <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Industry</span><span style="color:white;font-weight:700;">${_sup.industry}</span></div>
-        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Location</span><span style="color:white;font-weight:700;">ðŸ“ ${_sup.location}</span></div>
+        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Location</span><span style="color:white;font-weight:700;">📍 ${_sup.location}</span></div>
         <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Established</span><span style="color:white;font-weight:700;">${_sup.established}</span></div>
         <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Employees</span><span style="color:white;font-weight:700;">${_sup.employees}</span></div>
         <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Min Order</span><span style="color:#00aaff;font-weight:700;">${_sup.minOrder}</span></div>
-        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Export Ready</span><span style="color:${_sup.exportReady?'#22c55e':'rgba(255,255,255,0.35)'};font-weight:700;">${_sup.exportReady?'âœ… Yes':'No'}</span></div>
+        <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Export Ready</span><span style="color:${_sup.exportReady?'#22c55e':'rgba(255,255,255,0.35)'};font-weight:700;">${_sup.exportReady?'✅ Yes':'No'}</span></div>
         <div style="display:flex;gap:12px;"><span style="color:rgba(255,255,255,0.4);width:120px;flex-shrink:0;">Phone</span><a href="tel:${_sup.phone}" style="color:#00aaff;font-weight:700;">${_sup.phone}</a></div>
       </div>
     </div>
     ${(_sup.certifications||[]).length?`
     <div class="sp-sh">Certifications</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      ${_sup.certifications.map(c=>`<span class="sp-cert">ðŸ… ${c}</span>`).join('')}
+      ${_sup.certifications.map(c=>`<span class="sp-cert">🏅 ${c}</span>`).join('')}
     </div>`:''}
     <div class="sp-sh" style="margin-top:16px;">Specializations</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;">${(_sup.tags||[]).map(t=>`<span class="sp-tag">#${t}</span>`).join('')}</div>`;
@@ -271,7 +271,7 @@ function renderReviews() {
     <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;margin-bottom:14px;">
       <div style="font-size:13px;font-weight:800;color:white;margin-bottom:12px;">Leave a Review</div>
       <div style="display:flex;gap:8px;margin-bottom:10px;" id="starPicker">
-        ${[1,2,3,4,5].map(i=>`<span style="font-size:28px;cursor:pointer;opacity:.3;transition:opacity .15s;" onclick="setRev(${i})" id="revStar${i}">â­</span>`).join('')}
+        ${[1,2,3,4,5].map(i=>`<span style="font-size:28px;cursor:pointer;opacity:.3;transition:opacity .15s;" onclick="setRev(${i})" id="revStar${i}">⭐</span>`).join('')}
       </div>
       <textarea id="revComment" class="sp-textarea" placeholder="Describe your experience with this supplier..." style="margin-bottom:10px;"></textarea>
       <button class="sp-submit" onclick="submitReview()">Submit Review</button>
@@ -281,7 +281,7 @@ function renderReviews() {
       ${ratings.length ? ratings.slice(0,10).map(r=>`
       <div class="sp-review">
         <div class="sp-rev-header">
-          <div class="sp-rev-rating">${'â­'.repeat(r.rating)}</div>
+          <div class="sp-rev-rating">${'⭐'.repeat(r.rating)}</div>
           <div class="sp-rev-time">${r.ts?new Date(r.ts).toLocaleDateString():''}</div>
         </div>
         ${r.comment?`<div class="sp-rev-text">"${r.comment}"</div>`:''}
@@ -301,7 +301,7 @@ function submitReview() {
   const msg = document.getElementById('revMsg');
   if (!_selRev) { msg.innerHTML='<span style="color:#ef4444;">Please select a star rating</span>'; return; }
   B.saveRating(_sid, _selRev, comment);
-  msg.innerHTML='<span style="color:#22c55e;">âœ… Review submitted! Thank you.</span>';
+  msg.innerHTML='<span style="color:#22c55e;">✅ Review submitted! Thank you.</span>';
   setTimeout(renderReviews, 1000);
 }
 window.submitReview = submitReview;
@@ -314,10 +314,10 @@ function sendRFQ() {
   const name=document.getElementById('rfqName')?.value.trim();
   const contact=document.getElementById('rfqContact')?.value.trim();
   const msg=document.getElementById('rfqMsg');
-  if(!title||!name||!contact){msg.innerHTML='<span style="color:#ef4444;">âš ï¸ Fill all required fields</span>';return;}
+  if(!title||!name||!contact){msg.innerHTML='<span style="color:#ef4444;">⚠️ Fill all required fields</span>';return;}
   const rfq=B.createRFQ({title,desc,qty:Number(qty)||0,budget:Number(budget)||0,name,contact,notes:'Directed to: '+(_sup?.name||'Supplier'),targetSupplierId:_sid});
-  B.sendMessage({threadId:_sid+'_rfq',from:'me',to:_sid,text:`ðŸ“‹ New RFQ: ${title} | Qty: ${qty||'â€”'} | Budget: KES ${budget||'Negotiable'} | Contact: ${contact}`});
-  msg.innerHTML=`<span style="color:#22c55e;">âœ… RFQ sent! Ref: ${rfq.id}. Supplier will respond via messaging.</span>`;
+  B.sendMessage({threadId:_sid+'_rfq',from:'me',to:_sid,text:`📋 New RFQ: ${title} | Qty: ${qty||'—'} | Budget: KES ${budget||'Negotiable'} | Contact: ${contact}`});
+  msg.innerHTML=`<span style="color:#22c55e;">✅ RFQ sent! Ref: ${rfq.id}. Supplier will respond via messaging.</span>`;
   ['rfqTitle','rfqDesc','rfqQty','rfqBudget','rfqName','rfqContact'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
 }
 window.sendRFQ = sendRFQ;

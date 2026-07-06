@@ -1,36 +1,36 @@
 /* ================================================================
-   SOKONI Navigation Engine v1.1
-   Context-aware role-based navigation for every page.
+   SOKONI Navigation Engine v2.0
+   Enterprise role-based navigation — mobile + desktop.
 
-   New in v1.1:
-   • seller.html + pos.html removed from full-skip — sub-nav + back
-     button injected without overriding their own bottom nav
-   • _WS_MAP expanded: all POS pages, specialty seller pages (~60 entries)
-   • Seller bottom nav: Dashboard | Products | Orders | Analytics | More
-   • Seller sub-nav (20 items) shown on ALL seller workspace pages
-   • Navigation history in sessionStorage for smart back button
-   • "Hub" shortcut chip in top nav on non-root seller pages
-   • Multi-role switcher section inside the More drawer
+   v2.0 additions:
+   • Desktop sidebar for seller / admin / superAdmin workspaces
+     — 220px full panel on ≥1024px, 56px icon-rail on 769–1023px
+   • _SIDEBAR_CONFIGS: categorised items for all 3 workspaces
+   • _buildDesktopSidebar / _destroySidebar
+   • Resize handler: sidebar rebuilds on 769px breakpoint crossing
+   • Fixed _buildMenuBadge: deferred injection after first drawer open
+   • Storage listener: calls _destroySidebar() before re-init
 ================================================================ */
 (function () {
   'use strict';
 
-  var _page = (location.pathname.split('/').pop().split('?')[0] || 'index.html').toLowerCase();
+  /* Normalize: strip .html so this works with both /login and /login.html (Firebase cleanUrls) */
+  var _page = (location.pathname.split('/').pop().split('?')[0] || 'index').toLowerCase().replace(/\.html$/, '');
 
   /* Pages that are fully self-managed — zero injection */
   var _SKIP = [
-    'index.html',
-    'education.html',
-    'jobs.html',
-    'login.html', 'signup.html',
-    'register.html', 'success.html', 'offline.html', 'admin.html',
-    'profile.html', 'ecc.html', 'wap.html', 'gip.html', 'platform.html',
-    'sasos-admin.html', 'pos-kiosk.html', 'pos-display.html', 'superadmin.html',
-    'monitor.html', 'moderation.html', 'verification-admin.html'
+    'index',
+    'education',
+    'jobs',
+    'login', 'signup',
+    'register', 'success', 'offline', 'admin',
+    'profile', 'ecc', 'wap', 'gip', 'platform',
+    'sasos-admin', 'pos-kiosk', 'pos-display', 'superadmin',
+    'monitor', 'moderation', 'verification-admin'
   ];
 
   /* Pages that manage their own bottom nav — get sub-nav + back btn only */
-  var _KEEP_OWN_BOTTOM = ['seller.html', 'pos.html'];
+  var _KEEP_OWN_BOTTOM = ['seller', 'pos'];
 
   if (_SKIP.indexOf(_page) > -1) return;
   if (document.documentElement.dataset.noHeader === 'true') return;
@@ -245,9 +245,9 @@
     { i:'🖥️', l:'POS',          h:'pos.html',                 cat:'tools' },
     { i:'💬',  l:'Messages',     h:'messages.html',            cat:'tools' },
     { i:'⚖️', l:'Disputes',     h:'seller.html#disputes',     cat:'tools' },
-    { i:'⬛',  l:'QR',           h:'qr-center.html',           cat:'tools' },
+    { i:'⬛',  l:'QR Payments',  h:'qr-center.html',           cat:'tools' },
     { i:'🗓️', l:'Availability', h:'availability-manager.html', cat:'tools' },
-    { i:'🔴',  l:'Live',         h:'seller.html#live',         cat:'tools' },
+    { i:'🔴',  l:'Live Dashboard',h:'seller.html#live',        cat:'tools' },
     { i:'👥',  l:'Customers',    h:'seller.html#customers',    cat:'tools' },
     { i:'⚙️', l:'Settings',     h:'seller.html#settings',     cat:'tools' }
   ];
@@ -258,6 +258,61 @@
     { key:'money', l:'Money',  i:'💵' },
     { key:'tools', l:'Tools',  i:'🔧' }
   ];
+
+  /* ── Desktop sidebar nav configurations ─────────────────── */
+  var _SIDEBAR_CONFIGS = {
+    seller: {
+      icon:  '🏪',
+      label: 'Seller Hub',
+      cats:  _SUBNAV_CATS,
+      items: _SUBNAV
+    },
+    admin: {
+      icon:  '⚙️',
+      label: 'Admin',
+      cats: [
+        { key:'core',      l:'Core',      i:'🎯' },
+        { key:'analytics', l:'Analytics', i:'📈' },
+        { key:'security',  l:'Security',  i:'🔒' },
+        { key:'settings',  l:'Settings',  i:'⚙️' }
+      ],
+      items: [
+        { i:'📊', l:'Overview',       h:'admin-os.html',             cat:'core'      },
+        { i:'🏪', l:'Marketplace',    h:'admin-os.html#marketplace', cat:'core'      },
+        { i:'👥', l:'Users',          h:'admin-os.html#users',       cat:'core'      },
+        { i:'📦', l:'Orders',         h:'admin-os.html#orders',      cat:'core'      },
+        { i:'🚨', l:'Alerts',         h:'admin-os.html#alerts',      cat:'core'      },
+        { i:'📈', l:'Analytics',      h:'business-analytics.html',   cat:'analytics' },
+        { i:'💹', l:'Reports',        h:'reliability-center.html',   cat:'analytics' },
+        { i:'🏥', l:'Health',         h:'platform-health.html',      cat:'analytics' },
+        { i:'🔒', l:'Trust & Safety', h:'trust-safety.html',         cat:'security'  },
+        { i:'🛡️',l:'Security',       h:'admin-os.html#security',    cat:'security'  },
+        { i:'⚙️',l:'Settings',       h:'admin-os.html#settings',    cat:'settings'  }
+      ]
+    },
+    superAdmin: {
+      icon:  '👑',
+      label: 'Super Admin',
+      cats: [
+        { key:'core',     l:'Core',    i:'🎯' },
+        { key:'finance',  l:'Finance', i:'💵' },
+        { key:'security', l:'Security',i:'🔒' },
+        { key:'ai',       l:'AI',      i:'🤖' }
+      ],
+      items: [
+        { i:'📊', l:'Dashboard',  h:'super-admin.html',           cat:'core'     },
+        { i:'🏗️',l:'Platform',   h:'platform.html',              cat:'core'     },
+        { i:'👥', l:'Users',      h:'super-admin.html#users',     cat:'core'     },
+        { i:'💵', l:'Finance',    h:'finos.html',                 cat:'finance'  },
+        { i:'🏦', l:'FinOS',      h:'financial-os.html',          cat:'finance'  },
+        { i:'💳', l:'Billing',    h:'subscription-os.html',       cat:'finance'  },
+        { i:'🔒', l:'Security',   h:'trust-safety.html',          cat:'security' },
+        { i:'🛡️',l:'Zero Trust', h:'super-admin.html#security',  cat:'security' },
+        { i:'🤖', l:'AI',         h:'ai-subscriptions.html',      cat:'ai'       },
+        { i:'🔍', l:'Search',     h:'enterprise-search.html',     cat:'ai'       }
+      ]
+    }
+  };
 
   /* ── Back destination per workspace ─────────────────────── */
   var _BACK = {
@@ -312,9 +367,13 @@
   }
 
   /* ── Active tab detection ────────────────────────────────── */
+  /* Normalise both sides: strip .html so Firebase cleanUrls (/page vs page.html)
+     doesn't prevent active-state matching in production. */
   function _isActive(href) {
     if (!href || href === '#') return false;
-    return href.split('#')[0].split('?')[0].toLowerCase() === _page;
+    var a = href.split('#')[0].split('?')[0].toLowerCase().replace(/\.html$/, '');
+    var b = _page.replace(/\.html$/, '');
+    return a === b;
   }
 
   /* ═══════════════════════════════════════════════════════════
@@ -443,18 +502,25 @@
      ROLE BADGE in hamburger overlay
   ═══════════════════════════════════════════════════════════ */
   function _buildMenuBadge(ws) {
-    var overlay = document.getElementById('sk-menu-overlay');
-    if (!overlay || document.getElementById('sk-menu-role-badge')) return;
-    var badge = document.createElement('div');
-    badge.id  = 'sk-menu-role-badge';
-    badge.setAttribute('aria-label', 'Workspace: ' + ws);
-    badge.style.cssText =
-      'display:inline-flex;align-items:center;gap:6px;padding:5px 14px;margin:16px 0 4px 16px;' +
-      'border-radius:999px;font-size:11px;font-weight:800;letter-spacing:0.5px;' +
-      'background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);' +
-      'color:rgba(255,255,255,0.6);';
-    badge.textContent = _LABEL[ws] || ws;
-    overlay.insertBefore(badge, overlay.firstChild);
+    /* The menu drawer (#sk-menu-drawer) is built lazily on first hamburger click.
+       Defer injection until that first click so the element actually exists. */
+    var btn = document.getElementById('sk-menu-btn');
+    if (!btn) return;
+    var _done = false;
+    btn.addEventListener('click', function () {
+      if (_done) return;
+      _done = true;
+      /* Give the drawer 150 ms to render before we inject the badge */
+      setTimeout(function () {
+        var drawer = document.getElementById('sk-menu-drawer');
+        if (!drawer || document.getElementById('sk-menu-role-badge')) return;
+        var badge = document.createElement('div');
+        badge.id  = 'sk-menu-role-badge';
+        badge.setAttribute('aria-label', 'Workspace: ' + ws);
+        badge.textContent = _LABEL[ws] || ws;
+        drawer.insertBefore(badge, drawer.firstChild);
+      }, 150);
+    });
   }
 
   /* ═══════════════════════════════════════════════════════════
@@ -552,6 +618,113 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  /* ═══════════════════════════════════════════════════════════
+     DESKTOP SIDEBAR — seller / admin / superAdmin workspaces
+     Fixed 220px panel replacing horizontal sub-nav on ≥1024px,
+     collapsed to 56px icon-rail on 769px–1023px.
+  ═══════════════════════════════════════════════════════════ */
+  function _buildDesktopSidebar(ws) {
+    var cfg = _SIDEBAR_CONFIGS[ws];
+    if (!cfg) return;                                    /* buyer/driver/rider have no sidebar */
+    if (window.innerWidth < 769) return;                 /* mobile: use bottom nav instead */
+    if (_KEEP_OWN_BOTTOM.indexOf(_page) > -1) return;   /* seller.html/pos.html own their layout */
+    if (document.getElementById('sk-ws-sidebar')) return;
+
+    var sidebar = document.createElement('aside');
+    sidebar.id        = 'sk-ws-sidebar';
+    sidebar.className = 'sk-ws-sidebar sk-ws-sidebar--' + ws;
+    sidebar.setAttribute('aria-label', cfg.label + ' navigation');
+
+    /* Workspace label from localStorage */
+    var wsName = cfg.label;
+    try {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      if (u) {
+        if (ws === 'seller')     wsName = u.storeName || u.businessName || cfg.label;
+        else                     wsName = u.name || cfg.label;
+      }
+    } catch (_) {}
+
+    var header =
+      '<div class="sk-sidebar-header">' +
+        '<div class="sk-sidebar-ws">' +
+          '<span class="sk-sidebar-ws-icon" aria-hidden="true">' + cfg.icon + '</span>' +
+          '<div class="sk-sidebar-ws-info">' +
+            '<div class="sk-sidebar-ws-name">' + _esc(wsName) + '</div>' +
+            '<div class="sk-sidebar-ws-role">' + cfg.label + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    /* Group items by category */
+    var grouped = {};
+    cfg.items.forEach(function (t) {
+      var c = t.cat || 'core';
+      if (!grouped[c]) grouped[c] = [];
+      grouped[c].push(t);
+    });
+
+    var navHtml = '<nav class="sk-sidebar-nav" aria-label="' + cfg.label + '">';
+    cfg.cats.forEach(function (cat) {
+      var catItems = grouped[cat.key] || [];
+      if (!catItems.length) return;
+      navHtml += '<div class="sk-sidebar-group"><span class="sk-sidebar-group-label">' + cat.l + '</span>';
+      catItems.forEach(function (t) {
+        var active = _isActive(t.h) ? ' sk-sidebar-item--active' : '';
+        navHtml +=
+          '<a href="' + t.h + '" class="sk-sidebar-item' + active + '">' +
+            '<span class="sk-sidebar-item-icon" aria-hidden="true">' + t.i + '</span>' +
+            '<span class="sk-sidebar-item-label">' + t.l + '</span>' +
+          '</a>';
+      });
+      navHtml += '</div>';
+    });
+    navHtml += '</nav>';
+
+    /* Footer: user avatar + name + role + profile link + role switcher */
+    var footer = '';
+    try {
+      var u2 = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      if (u2) {
+        var initial  = (u2.name || 'U').charAt(0).toUpperCase();
+        var userName = _esc(u2.name || 'User');
+        footer = '<div class="sk-sidebar-footer">' +
+          '<div class="sk-sidebar-user">' +
+            '<div class="sk-sidebar-user-av">' + initial + '</div>' +
+            '<div class="sk-sidebar-user-info">' +
+              '<span class="sk-sidebar-user-name">' + userName + '</span>' +
+              '<span class="sk-sidebar-user-role">' + cfg.label + '</span>' +
+            '</div>' +
+            '<a href="profile.html" class="sk-sidebar-profile-link" title="Edit profile" aria-label="Edit profile">&#8594;</a>' +
+          '</div>';
+        var roles = _allRoles();
+        if (roles.length > 1) {
+          footer += '<div class="sk-sidebar-role-pills">';
+          roles.forEach(function (r) {
+            var meta    = _ROLE_META[r] || { i:'👤', l:r, h:'index.html' };
+            var current = (r === ws) ? ' sk-sidebar-role-pill--active' : '';
+            footer +=
+              '<a href="' + meta.h + '" class="sk-sidebar-role-pill' + current + '">' +
+                '<span aria-hidden="true">' + meta.i + '</span> ' + meta.l +
+              '</a>';
+          });
+          footer += '</div>';
+        }
+        footer += '</div>';
+      }
+    } catch (_) {}
+
+    sidebar.innerHTML = header + navHtml + footer;
+    document.body.appendChild(sidebar);
+    document.body.classList.add('sk-has-sidebar');
+  }
+
+  function _destroySidebar() {
+    var s = document.getElementById('sk-ws-sidebar');
+    if (s) s.remove();
+    document.body.classList.remove('sk-has-sidebar');
+  }
+
   function _openMoreDrawer() {
     _buildMoreDrawer();
     if (window.SokoniDrawer) {
@@ -585,11 +758,27 @@
     if (ws !== 'buyer') _buildBackBtn(ws);
 
     _buildMenuBadge(ws);
+
+    _buildDesktopSidebar(ws);
   }
+
+  /* Rebuild sidebar when viewport crosses the 769px breakpoint */
+  var _sidebarPrevWide = window.innerWidth >= 769;
+  window.addEventListener('resize', function () {
+    var nowWide = window.innerWidth >= 769;
+    if (nowWide === _sidebarPrevWide) return;
+    _sidebarPrevWide = nowWide;
+    if (nowWide) {
+      _buildDesktopSidebar(_workspace());
+    } else {
+      _destroySidebar();
+    }
+  }, { passive: true });
 
   /* ── Re-run on login / logout ───────────────────────────── */
   window.addEventListener('storage', function (e) {
     if (e.key !== 'sokoniUser') return;
+    _destroySidebar();
     ['sk-seller-subnav','sk-nav-back-btn','sk-nav-role-chip',
      'sk-menu-role-badge','sk-nav-dash-btn','sk-seller-more-drawer'].forEach(function (id) {
       var el = document.getElementById(id);

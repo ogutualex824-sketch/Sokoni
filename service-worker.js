@@ -2,7 +2,7 @@
    SOKONI SERVICE WORKER  v12.11
    Strategy:
      APP SHELL      â†' Cache First  (index.html as app shell)
-     STATIC ASSETS  â†' Cache First  (CSS, JS â€” fast load)
+     STATIC ASSETS  â†' Cache First  (CSS, JS â€" fast load)
      HTML PAGES     â†' Network First with Cache Fallback
      CDN RESOURCES  â†' Stale While Revalidate
      IMAGES         â†' Cache First (capped at 300 entries)
@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260706-auth-debug-v2";
+const CACHE_VERSION = "sokoni-20260706-premium-layout-v9";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -83,6 +83,31 @@ const PRECACHE_PAGES = [
   "/privacy",
   "/terms",
   "/data-deletion",
+  /* SmartPOS extended pages (moved from PRECACHE_STATIC — cleanUrls:true requires no .html) */
+  "/pos-workspace", "/pos-hardware-wizard",
+  "/pos-accounting", "/pos-crm-pro", "/pos-staff-ops",
+  "/pos-hq", "/pos-bi", "/pos-ai",
+  "/pos-onboard", "/pos-daily", "/pos-observability", "/pos-marketplace",
+  "/pos-kiosk", "/print-station", "/pos-printer-setup", "/manager-auth", "/commissioning",
+  /* Platform admin portals */
+  "/security-center",
+  "/executive-dashboard", "/release-readiness", "/developer-portal", "/wholesale-portal",
+  /* Hub pages */
+  "/event-hub", "/event-manager",
+  "/gip", "/wap", "/ecc", "/sasos-admin", "/platform",
+  "/availability-manager",
+  /* Navigation & Dispatch */
+  "/rider-nav", "/fleet-monitor",
+  /* Jobs, Disputes */
+  "/dispute-portal", "/job-post",
+  /* Infrastructure monitors */
+  "/redis-monitor", "/async-jobs",
+  /* Revenue & Earnings (2026-07-06) */
+  "/seller-earnings", "/revenue-dashboard",
+  /* Subscription portal (2026-07-06) */
+  "/my-subscriptions",
+  /* Financial OS admin console (2026-07-06) */
+  "/fos-admin",
 ];
 
 const PRECACHE_STATIC = [
@@ -91,6 +116,7 @@ const PRECACHE_STATIC = [
   "/auth.css", "/checkout.css", "/premium.css",
   "/product.css", "/profile.css", "/seller.css",
   "/landlord.css", "/compact-grid.css", "/sokoni-premium-v2.css",
+  "/sokoni-hscroll.css", "/sokoni-home-v3.css",
   "/auth.js", "/sokoni-db.js", "/sokoni-pay.js", "/sokoni-social.js", "/sokoni-referral.js",
   "/sokoni-desktop.css", "/sokoni-routing.js", "/sokoni-delivery.js", "/sokoni-delivery-pricing.js", "/sokoni-dispatch.js", "/sokoni-logistics.js", "/sokoni-invoice.js", "/sokoni-config.js", "/sokoni-mpesa.js", "/sokoni-revenue.js", "/sokoni-featured.js",
   "/category.js", "/profile.js", "/product.js", "/analytics.js",
@@ -118,7 +144,7 @@ const PRECACHE_STATIC = [
   "/sw-register.js", "/pos-terminals.js",
   "/etims.js", "/inspiq.js",
   /* SmartPOS core modules */
-  "/pos.html", "/pos.css", "/pos-bos.css", "/pos-mobile.css",
+  "/pos.css", "/pos-bos.css", "/pos-mobile.css",
   "/pos.js", "/pos-db.js", "/pos-printer.js", "/sokoni-print-engine.js", "/sokoni-universal-printer.js", "/pos-health.js", "/pos-idempotency.js", "/pos-sync.js", "/pos-resilience.js", "/pos-omni.js", "/pos-barcode.js",
   "/pos-ai.js", "/pos-analytics.js", "/pos-boss.js", "/pos-plugins.js",
   "/pos-voice.js", "/pos-ai-engine.js", "/pos-finance.js", "/pos-audit.js",
@@ -128,26 +154,11 @@ const PRECACHE_STATIC = [
   /* SmartPOS 2.0 — Multi-device session + Terminal Driver */
   "/pos-session-manager.js", "/pos-terminal-driver.js",
   /* SmartPOS 2.1 — Receipt Engine, Workspace, Analytics Widget */
-  "/pos-receipt-engine.js", "/pos-workspace.html", "/pos-analytics-live.js",
+  "/pos-receipt-engine.js", "/pos-analytics-live.js",
   /* SmartPOS 3.0 — Enterprise BOS Pages & Hardware Layer */
-  "/pos-hardware-wizard.js", "/pos-hardware-wizard.html",
-  "/pos-accounting.html", "/pos-crm-pro.html", "/pos-staff-ops.html",
-  "/pos-hq.html", "/pos-bi.html", "/pos-ai.html",
+  "/pos-hardware-wizard.js",
   /* SmartPOS 4.0 — Polish, Scale & Market Readiness */
-  "/pos-onboard.html", "/pos-daily.html", "/pos-observability.html", "/pos-marketplace.html",
-  /* Security 6.0 — Security Operations Center */
-  "/security-center.html",
-  /* Vision 2030 — Executive Dashboard, Release Certification, Developer & Wholesale Portals */
-  "/executive-dashboard.html",
-  "/release-readiness.html",
-  "/developer-portal.html",
-  "/wholesale-portal.html",
-  "/event-hub.html",
-  "/event-manager.html",
-  "/pos-checkout.html", "/pos-display.html", "/pos-loyalty-engine.js",
-  "/print-station.html", "/pos-printer-setup.html", "/manager-auth.html", "/commissioning.html",
-  /* Self-checkout kiosk */
-  "/pos-kiosk.html",
+  "/pos-loyalty-engine.js",
   /* Inventory Management System V1+V2 */
   "/sokoni-inventory.js",
   "/sokoni-inventory-v2.js",
@@ -157,7 +168,6 @@ const PRECACHE_STATIC = [
   /* GIP — Geo Intelligence Platform */
   "/sokoni-gip.js", "/sokoni-gip-dispatch.js", "/sokoni-gip-analytics.js",
   "/sokoni-gip-router.js", "/sokoni-gip-fleet.js", "/sokoni-gip-api.js",
-  "/gip.html",
   /* AI Policy Engine + Enterprise Intelligence Platform */
   "/sokoni-ai-policy.js",
   "/sokoni-decision-engine.js", "/sokoni-data-quality.js",
@@ -165,13 +175,12 @@ const PRECACHE_STATIC = [
   "/sokoni-eip.js",
   /* Workflow Automation Platform */
   "/sokoni-wap.js", "/sokoni-wap-definitions.js",
-  "/wap.html",
   /* Enterprise Control Center */
-  "/sokoni-ecc.js", "/ecc.html",
+  "/sokoni-ecc.js",
   /* SASOS — Universal AI Subscription Operating System */
-  "/sokoni-sasos.js", "/sasos-admin.html",
+  "/sokoni-sasos.js",
   /* Platform Registry + Event Bus + Operations Center */
-  "/sokoni-platform.js", "/platform.html",
+  "/sokoni-platform.js",
   /* Commerce — Orders, Notifications, Subscriptions, Vouchers */
   "/sokoni-orders.js", "/sokoni-notifications.js",
   "/sokoni-subscriptions.js", "/sokoni-vouchers.js", "/sokoni-intasend.js",
@@ -198,17 +207,14 @@ const PRECACHE_STATIC = [
   "/sokoni-subscription.js",
   /* ── Universal Availability & Scheduling Engine v1.0 ── */
   "/sokoni-availability.js",
-  "/availability-manager.html",
   /* ── Reviews & Ratings ── */
   "/sokoni-reviews.js",
   /* ── Navigation & Dispatch v1.0 ── */
   "/sokoni-navigation.js", "/sokoni-appcheck.js",
-  "/rider-nav.html", "/fleet-monitor.html",
   /* ── Loyalty v2 + Wallet v2 + Jobs Hub ── */
   "/sokoni-wallet.js", "/sokoni-jobs.js",
-  "/dispute-portal.html", "/job-post.html",
-  /* ── Delivery pricing & merchant success ── */
-  "/sokoni-delivery-pricing.js", "/sokoni-merchant-success.js",
+  /* ── Merchant success ── (sokoni-delivery-pricing.js already in line 120) */
+  "/sokoni-merchant-success.js",
   "/sokoni-payment-trust.js",
   /* ── Mobile Drawer UX + Role-Based Navigation Engine ── */
   "/sokoni-drawers.css", "/sokoni-drawer.js",
@@ -216,10 +222,8 @@ const PRECACHE_STATIC = [
   "/sokoni-form-engine.css", "/sokoni-form-engine.js",
   /* ── Redis Infrastructure Layer v1.0 ── */
   "/sokoni-redis.js",
-  "/redis-monitor.html",
   /* ── Async Jobs Engine v1.0 ── */
   "/sokoni-async-jobs.js",
-  "/async-jobs.html",
 ];
 
 const CDN_ORIGINS = [
@@ -243,7 +247,7 @@ self.onerror = (msg, src, line, col, err) => {
 self.addEventListener("unhandledrejection", event => {
   console.error("[SW] Unhandled promise rejection:", event.reason);
 });
-/* â”€â”€ INSTALL â”€â”€ */
+/* â"€â"€ INSTALL â"€â"€ */
 self.addEventListener("install", event => {
   /* Precache silently — do NOT skipWaiting() here.
      Active checkouts, chats and POS sessions must not be interrupted.
@@ -280,18 +284,18 @@ self.addEventListener("activate", event => {
     await Promise.all(keys.filter(k => !valid.has(k)).map(k => caches.delete(k)));
     await self.clients.claim();
     /* Welcome notification is handled by sw-register.js on appinstalled event,
-       not here â€” this activate fires on every update, not just first install */
+       not here â€" this activate fires on every update, not just first install */
   })());
 });
 
-/* â”€â”€ FETCH â”€â”€ */
+/* â"€â"€ FETCH â"€â"€ */
 self.addEventListener("fetch", event => {
   const { request } = event;
   const url = new URL(request.url);
 
   if (request.method !== "GET") return;
   if (SKIP_CACHE_PATTERNS.some(p => request.url.includes(p))) return;
-  /* Skip service worker for file:// â€” direct file opens should never hit offline.html */
+  /* Skip service worker for file:// â€" direct file opens should never hit offline.html */
   if (url.protocol === "file:") return;
   if (!["https:", "http:"].includes(url.protocol)) return;
 
@@ -363,7 +367,7 @@ self.addEventListener("fetch", event => {
   event.respondWith(networkFirst(request, STATIC_CACHE));
 });
 
-/* â”€â”€ STRATEGIES â”€â”€ */
+/* â"€â"€ STRATEGIES â"€â"€ */
 
 async function cacheFirst(request, cacheName) {
   const cache  = await caches.open(cacheName);
@@ -400,7 +404,7 @@ async function networkFirstPage(request) {
        The browser never receives an opaqueredirect for navigation requests, which
        prevents the SW from contributing to ERR_TOO_MANY_REDIRECTS chains.
        When fetch() itself hits a redirect loop it throws TypeError — caught below. */
-    const res = await fetch(new Request(request, { redirect: “follow” }));
+    const res = await fetch(new Request(request, { redirect: "follow" }));
     if (res.ok) {
       /* Guard: never cache a redirected response whose final URL differs from
          the request URL by only a query string pointing back at itself —
@@ -419,7 +423,7 @@ async function networkFirstPage(request) {
     /* fetch threw — most likely a redirect loop (TypeError: too many redirects)
        or a network failure. Recovery priority:
          1. Exact URL cached from a prior successful request
-         2. Root “/” cached page (safe fallback for any page in the same SPA)
+         2. Root "/" cached page (safe fallback for any page in the same SPA)
          3. Offline shell  */
     const cached = await cache.match(request);
     if (cached) return cached;
@@ -427,19 +431,19 @@ async function networkFirstPage(request) {
     /* Delete the bad cache entry so the next successful load replaces it */
     await cache.delete(request);
 
-    const root = await cache.match(“/”) || await cache.match(“/?source=pwa”);
+    const root = await cache.match("/") || await cache.match("/?source=pwa");
     if (root) return root;
 
-    const offline = await caches.match(“/offline”) || await caches.match(“/offline.html”);
+    const offline = await caches.match("/offline") || await caches.match("/offline.html");
     return offline || new Response(
-      `<!DOCTYPE html><html><head><meta charset=”UTF-8”><title>Offline — SOKONI</title></head>
-       <body style=”background:#0a0a0a;color:white;font-family:sans-serif;text-align:center;padding:80px 24px;”>
-         <div style=”font-size:48px;margin-bottom:16px;”>&#x1F4F6;</div>
+      `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Offline — SOKONI</title></head>
+       <body style="background:#0a0a0a;color:white;font-family:sans-serif;text-align:center;padding:80px 24px;">
+         <div style="font-size:48px;margin-bottom:16px;">&#x1F4F6;</div>
          <h2>You're Offline</h2>
-         <p style=”color:rgba(255,255,255,0.5);margin:12px 0 24px;”>Check your connection and try again.</p>
-         <a href=”/” style=”padding:12px 24px;background:#71ff00;color:black;border-radius:12px;font-weight:800;text-decoration:none;”>Go Home</a>
+         <p style="color:rgba(255,255,255,0.5);margin:12px 0 24px;">Check your connection and try again.</p>
+         <a href="/" style="padding:12px 24px;background:#71ff00;color:black;border-radius:12px;font-weight:800;text-decoration:none;">Go Home</a>
        </body></html>`,
-      { headers: { “Content-Type”: “text/html” }, status: 503 }
+      { headers: { "Content-Type": "text/html" }, status: 503 }
     );
   }
 }
@@ -476,7 +480,7 @@ async function cacheFirstImage(request) {
   }
 }
 
-/* â”€â”€ PUSH NOTIFICATIONS â”€â”€ */
+/* â"€â"€ PUSH NOTIFICATIONS â"€â"€ */
 self.addEventListener("push", event => {
   if (!event.data) return;
   let data = { title: "SOKONI", body: "You have a new notification!", icon: "/assets/logosokoni.png" };
@@ -496,18 +500,19 @@ self.addEventListener("push", event => {
   );
 });
 
-/* notificationclick handler consolidated below â€” see NOTIFICATION ACTION HANDLER */
+/* notificationclick handler consolidated below â€" see NOTIFICATION ACTION HANDLER */
 
-/* â”€â”€ MESSAGE HANDLER â”€â”€ */
+/* â"€â"€ MESSAGE HANDLER (CACHE_URLS) â"€â"€ */
+/* SKIP_WAITING is already handled by the listener at line 274.
+   This handler is consolidated to only handle CACHE_URLS. */
 self.addEventListener("message", event => {
-  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
   if (event.data?.type === "CACHE_URLS") {
     const urls = event.data.urls || [];
     caches.open(PAGES_CACHE).then(c => c.addAll(urls.map(u => new Request(u))));
   }
 });
 
-/* â”€â”€ BACKGROUND SYNC â”€â”€ */
+/* â"€â"€ BACKGROUND SYNC â"€â"€ */
 self.addEventListener("sync", event => {
   if (event.tag === "sokoni-sync") {
     event.waitUntil(
@@ -522,36 +527,36 @@ self.addEventListener("sync", event => {
   }
 });
 
-/* â”€â”€ PERIODIC SYNC (Chrome Android) â”€â”€ */
+/* â"€â"€ PERIODIC SYNC (Chrome Android) â"€â"€ */
 self.addEventListener("periodicsync", event => {
   if (event.tag === "sokoni-daily") {
     event.waitUntil(_checkScheduledNotifications());
   }
 });
 
-/* â”€â”€ SMART SCHEDULED NOTIFICATIONS â”€â”€ */
+/* â"€â"€ SMART SCHEDULED NOTIFICATIONS â"€â"€ */
 async function _checkScheduledNotifications() {
   try {
     const notifications = [
       {
         id:    "daily-deals",
         title: "âš¡ Daily Deals on SOKONI",
-        body:  "New products & flash sales added today â€” check what's new!",
-        url:   "/flashsale.html",
+        body:  "New products & flash sales added today - check what's new!",
+        url:   "/flashsale",
         icon:  "/assets/logosokoni.png",
       },
       {
         id:    "sell-reminder",
         title: "ðŸª Got something to sell?",
         body:  "List it on SOKONI for FREE and reach thousands of Kenyan buyers today.",
-        url:   "/seller.html",
+        url:   "/seller",
         icon:  "/assets/logosokoni.png",
       },
       {
         id:    "cart-reminder",
         title: "ðŸ›' Items waiting in your cart!",
         body:  "Complete your purchase before items sell out.",
-        url:   "/cart.html",
+        url:   "/cart",
         icon:  "/assets/logosokoni.png",
       },
     ];
@@ -574,7 +579,7 @@ async function _checkScheduledNotifications() {
   } catch (e) {}
 }
 
-/* â”€â”€ NOTIFICATION ACTION HANDLER â”€â”€ */
+/* â"€â"€ NOTIFICATION ACTION HANDLER â"€â"€ */
 self.addEventListener("notificationclick", event => {
   /* Handle action buttons on scheduled/push notifications */
   const action = event.action;
@@ -586,9 +591,9 @@ self.addEventListener("notificationclick", event => {
 
   /* Map action strings to specific pages */
   const actionUrls = {
-    shop:    "/category.html?cat=all",
-    sell:    "/seller.html",
-    track:   "/track.html",
+    shop:    "/category?cat=all",
+    sell:    "/seller",
+    track:   "/track",
     open:    url,
   };
   const dest = actionUrls[action] || url;

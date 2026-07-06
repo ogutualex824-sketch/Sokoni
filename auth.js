@@ -1109,9 +1109,7 @@ async function sendPhoneOTP() {
             });
         }
 
-        console.log('[SOKONI AUTH DEBUG] Calling signInWithPhoneNumber to', fullPhone);
         _phoneConfirmResult = await signInWithPhoneNumber(window.firebaseAuth, fullPhone, _recaptchaVerifier);
-        console.log('[SOKONI AUTH DEBUG] OTP sent successfully ✓');
 
         const otpEntry = document.getElementById('otpEntry');
         if (otpEntry) otpEntry.style.display = 'block';

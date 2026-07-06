@@ -512,17 +512,49 @@ function getConversation(conversationId) {
   });
 }
 
+function editMessage(conversationId, messageId, newText) {
+  return _fns().httpsCallable('editMessage')({
+    conversationId: conversationId,
+    messageId:      messageId,
+    newText:        newText,
+  }).then(function(r) { return r.data; });
+}
+
+function getConversationContext(conversationId) {
+  return _fns().httpsCallable('getConversationContext')({ conversationId: conversationId })
+    .then(function(r) { return r.data; });
+}
+
+function searchConversations(query, transactionType, cursor) {
+  return _fns().httpsCallable('searchConversations')({
+    query:           query           || '',
+    transactionType: transactionType || null,
+    cursor:          cursor          || null,
+  }).then(function(r) { return r.data; });
+}
+
+function updateConversationStatus(conversationId, newStatus, systemMessage) {
+  return _fns().httpsCallable('updateConversationStatus')({
+    conversationId: conversationId,
+    newStatus:      newStatus,
+    systemMessage:  systemMessage || null,
+  }).then(function(r) { return r.data; });
+}
+
 /* ─────────────────────────────────────────────────────────────
    PUBLIC API
 ──────────────────────────────────────────────────────────────*/
 var SokoniChat = {
   /* Conversation */
-  createConversation:    createConversation,
-  getConversation:       getConversation,
-  onConversationsChanged:onConversationsChanged,
+  createConversation:      createConversation,
+  getConversation:         getConversation,
+  onConversationsChanged:  onConversationsChanged,
+  searchConversations:     searchConversations,
+  updateConversationStatus:updateConversationStatus,
 
   /* Messages */
   sendMessage:      sendMessage,
+  editMessage:      editMessage,
   deleteMessage:    deleteMessage,
   onMessagesChanged:onMessagesChanged,
   loadOlderMessages:loadOlderMessages,
@@ -546,8 +578,9 @@ var SokoniChat = {
   /* Reports */
   reportConversation: reportConversation,
 
-  /* Context registry */
-  CONTEXTS:           CONTEXTS,
+  /* Context */
+  getConversationContext: getConversationContext,
+  CONTEXTS:               CONTEXTS,
   getContext: function(type) { return CONTEXTS[type] || { label:'Conversation', icon:'chat', actions:[], fields:[] }; },
 
   /* Utilities */

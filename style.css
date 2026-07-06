@@ -53,7 +53,7 @@ html:not(.sk-no-header) body {
   width: 100%; padding: 10px 16px 10px 40px;
   background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
   border-radius: 28px; color: rgba(255,255,255,0.92); font-size: 14px;
-  font-family: 'Segoe UI', system-ui, sans-serif; outline: none;
+  font-family: inherit; outline: none;
 }
 #sk-nav-search::placeholder { color: rgba(255,255,255,0.32); font-size: 13px; }
 #sk-nav-search-icon {

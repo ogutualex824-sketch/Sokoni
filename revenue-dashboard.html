@@ -1,0 +1,405 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revenue Dashboard — SOKONI Admin</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<link rel="stylesheet" href="sokoni-tokens.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#090b10;--surface:#111318;--surface2:#191d27;--border:#242838;
+  --primary:#6366f1;--primary-light:rgba(99,102,241,.12);
+  --green:#10b981;--green-light:rgba(16,185,129,.1);
+  --yellow:#f59e0b;--yellow-light:rgba(245,158,11,.1);
+  --red:#ef4444;--red-light:rgba(239,68,68,.1);
+  --blue:#3b82f6;--blue-light:rgba(59,130,246,.1);
+  --purple:#8b5cf6;--orange:#f97316;
+  --text:#f1f5f9;--sub:#7c8496;--muted:#4b5563;--radius:14px;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ── TOPBAR ── */
+.topbar{position:sticky;top:0;z-index:100;background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 24px;height:60px;display:flex;align-items:center;gap:12px}
+.topbar h1{font-size:18px;font-weight:700;flex:1}
+.icon-btn{width:36px;height:36px;border:none;background:none;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--sub)}
+.icon-btn:hover{background:var(--surface2);color:var(--text)}
+.icon-btn .material-icons{font-size:20px}
+.badge-admin{font-size:10px;font-weight:700;background:var(--primary-light);color:var(--primary);border-radius:6px;padding:2px 8px}
+
+/* ── PERIOD TABS ── */
+.period-tabs{display:flex;gap:0;background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px}
+.period-tab{padding:12px 20px;font-size:13px;font-weight:600;color:var(--sub);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;transition:.15s}
+.period-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+
+/* ── CONTENT ── */
+.content{padding:24px;max-width:1400px;margin:0 auto}
+section{margin-bottom:32px}
+h2.sec-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--sub);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+h2.sec-title .material-icons{font-size:16px}
+
+/* ── KPI GRID ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+@media(min-width:600px){.kpi-grid{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:900px){.kpi-grid{grid-template-columns:repeat(6,1fr)}}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;position:relative;overflow:hidden}
+.kpi-card::before{content:'';position:absolute;inset:0;opacity:.04;border-radius:var(--radius)}
+.kpi-card.green::before{background:var(--green)}
+.kpi-card.blue::before{background:var(--blue)}
+.kpi-card.purple::before{background:var(--purple)}
+.kpi-card.yellow::before{background:var(--yellow)}
+.kpi-card.red::before{background:var(--red)}
+.kpi-card .kpi-icon{font-size:18px;margin-bottom:10px;opacity:.7}
+.kpi-card.green .kpi-icon{color:var(--green)}
+.kpi-card.blue  .kpi-icon{color:var(--blue)}
+.kpi-card.purple .kpi-icon{color:var(--purple)}
+.kpi-card.yellow .kpi-icon{color:var(--yellow)}
+.kpi-card.red   .kpi-icon{color:var(--red)}
+.kpi-card .kpi-val{font-size:22px;font-weight:700;margin-bottom:4px}
+.kpi-card .kpi-label{font-size:11px;color:var(--sub)}
+
+/* ── HUB TABLE ── */
+.hub-table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.hub-table{width:100%;border-collapse:collapse}
+.hub-table th{padding:12px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);border-bottom:1px solid var(--border)}
+.hub-table td{padding:12px 16px;font-size:13px;border-bottom:1px solid var(--border)}
+.hub-table tr:last-child td{border-bottom:none}
+.hub-table tr:hover td{background:var(--surface2)}
+.hub-chip{display:inline-flex;align-items:center;gap:5px;font-weight:600}
+.hub-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.bar-bg{background:var(--surface2);border-radius:4px;height:6px;overflow:hidden;min-width:80px}
+.bar-fill{height:100%;border-radius:4px;transition:width .6s ease}
+.amount-cell{font-weight:600;font-size:14px}
+.green-val{color:var(--green)}
+.sub-val{color:var(--sub);font-size:12px}
+
+/* ── CHART ── */
+.chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+.chart-title{font-size:14px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.chart-legend{display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--sub)}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+.chart-canvas-wrap{position:relative;height:200px;overflow:hidden}
+.chart-bars{display:flex;align-items:flex-end;gap:3px;height:180px;padding-bottom:24px;overflow-x:auto}
+.chart-col{display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;min-width:28px}
+.chart-bar{width:20px;border-radius:3px 3px 0 0;transition:height .5s ease;cursor:pointer;position:relative}
+.chart-bar:hover::after{content:attr(data-tip);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#1e2230;color:#f1f5f9;font-size:10px;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:10;margin-bottom:4px;border:1px solid var(--border)}
+.chart-label{font-size:9px;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg);margin-top:2px;max-height:40px;overflow:hidden}
+
+/* ── COMMISSION RULES PREVIEW ── */
+.rules-list{display:flex;flex-direction:column;gap:8px}
+.rule-row{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.rule-type-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--primary-light);color:var(--primary);white-space:nowrap}
+.rule-body{flex:1;min-width:0}
+.rule-cat{font-size:13px;font-weight:600}
+.rule-desc{font-size:11px;color:var(--sub);margin-top:1px}
+.rule-rate{font-size:16px;font-weight:700;color:var(--primary);flex-shrink:0}
+
+/* ── SETTLEMENT STATUS ── */
+.settlement-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media(min-width:600px){.settlement-cards{grid-template-columns:repeat(4,1fr)}}
+.settlement-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px}
+.settlement-card .sc-label{font-size:11px;color:var(--sub);margin-bottom:6px}
+.settlement-card .sc-val{font-size:20px;font-weight:700}
+
+/* ── SKELETON ── */
+.skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);background-size:200%;animation:shimmer 1.2s infinite;border-radius:8px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.sk-kpi{height:90px;border-radius:var(--radius)}
+.sk-row{height:50px}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface2);color:var(--text);padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:300;opacity:0;transition:.3s;pointer-events:none;border:1px solid var(--border)}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="icon-btn" onclick="history.back()"><span class="material-icons">arrow_back</span></button>
+  <h1>Revenue Dashboard</h1>
+  <span class="badge-admin">ADMIN</span>
+  <button class="icon-btn" id="refreshBtn" onclick="_load()" title="Refresh"><span class="material-icons">refresh</span></button>
+  <button class="icon-btn" onclick="location.href='commission-engine.html'" title="Commission Rules"><span class="material-icons">tune</span></button>
+</div>
+
+<div class="period-tabs" id="periodTabs">
+  <button class="period-tab active" data-days="7">7 Days</button>
+  <button class="period-tab" data-days="14">14 Days</button>
+  <button class="period-tab" data-days="30">30 Days</button>
+  <button class="period-tab" data-days="90">90 Days</button>
+  <button class="period-tab" data-days="365">12 Months</button>
+</div>
+
+<div class="content">
+
+  <!-- KPI Cards -->
+  <section>
+    <h2 class="sec-title"><span class="material-icons">insights</span>Platform Revenue</h2>
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="skeleton sk-kpi"></div>
+      <div class="skeleton sk-kpi"></div>
+      <div class="skeleton sk-kpi"></div>
+      <div class="skeleton sk-kpi"></div>
+      <div class="skeleton sk-kpi"></div>
+      <div class="skeleton sk-kpi"></div>
+    </div>
+  </section>
+
+  <!-- Revenue Trend Chart -->
+  <section>
+    <div class="chart-wrap">
+      <div class="chart-title"><span class="material-icons" style="color:var(--primary)">bar_chart</span>Daily Revenue Trend</div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div>Revenue</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Payouts</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Refunds</div>
+      </div>
+      <div class="chart-canvas-wrap">
+        <div class="chart-bars" id="chartBars"><div class="skeleton" style="width:100%;height:180px;border-radius:8px"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hub Breakdown -->
+  <section>
+    <h2 class="sec-title"><span class="material-icons">hub</span>Revenue by Hub</h2>
+    <div class="hub-table-wrap">
+      <table class="hub-table" id="hubTable">
+        <thead>
+          <tr>
+            <th>Hub</th>
+            <th>Period Revenue</th>
+            <th>Commission</th>
+            <th>Transactions</th>
+            <th>Share</th>
+            <th>Lifetime Revenue</th>
+          </tr>
+        </thead>
+        <tbody id="hubTbody">
+          <tr><td colspan="6"><div class="skeleton sk-row" style="margin:8px 0"></div></td></tr>
+          <tr><td colspan="6"><div class="skeleton sk-row" style="margin:8px 0"></div></td></tr>
+          <tr><td colspan="6"><div class="skeleton sk-row" style="margin:8px 0"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Active Commission Rules -->
+  <section>
+    <h2 class="sec-title"><span class="material-icons">percent</span>Active Commission Rules
+      <a href="commission-engine.html" style="margin-left:auto;font-size:11px;color:var(--primary);text-decoration:none;font-weight:600;letter-spacing:0;text-transform:none">Manage →</a>
+    </h2>
+    <div class="rules-list" id="rulesList">
+      <div class="skeleton sk-row"></div>
+      <div class="skeleton sk-row"></div>
+      <div class="skeleton sk-row"></div>
+    </div>
+  </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="firebase.js"></script>
+<script>
+'use strict';
+(function(){
+
+var _days = 7;
+var _fn   = firebase.functions();
+var _data = null;
+
+/* Hub colour palette */
+var HUB_COLORS = {
+  marketplace:'#6366f1', services:'#10b981', food_delivery:'#f59e0b',
+  events:'#3b82f6', property:'#8b5cf6', vehicles:'#f97316',
+  jobs:'#14b8a6', healthcare:'#ef4444', education:'#ec4899',
+  digital_products:'#a855f7', logistics:'#84cc16', legal:'#0ea5e9',
+  hotels:'#fb923c', bookings:'#22d3ee', hub:'#94a3b8',
+  subscriptions:'#c084fc', advertising:'#fbbf24', default:'#6b7280',
+};
+var HUB_LABELS = {
+  marketplace:'Marketplace', services:'Services', food_delivery:'Food Delivery',
+  events:'Events', property:'Property', vehicles:'Vehicles',
+  jobs:'Jobs', healthcare:'Healthcare', education:'Education',
+  digital_products:'Digital Products', logistics:'Logistics', legal:'Legal',
+  hotels:'Hotels & BnBs', bookings:'Bookings', hub:'Hub',
+  subscriptions:'Subscriptions', advertising:'Advertising',
+};
+
+/* ── Auth guard — admin only ── */
+firebase.auth().onAuthStateChanged(function(user){
+  if(!user){ location.href='login.html?redirect=revenue-dashboard.html'; return; }
+  user.getIdTokenResult().then(function(t){
+    if(!t.claims.admin && !t.claims.superAdmin){
+      location.href='index.html'; return;
+    }
+    _load();
+  }).catch(function(){ _load(); });
+});
+
+/* ── Period tabs ── */
+document.querySelectorAll('.period-tab').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.period-tab').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    _days = parseInt(btn.dataset.days, 10);
+    _load();
+  });
+});
+
+/* ── Main load ── */
+function _load(){
+  _resetSkeletons();
+  Promise.all([
+    _fn.httpsCallable('getAdminRevenueByHub')({ periodDays: _days }),
+    _fn.httpsCallable('listCommissionRules')({ includeInactive: false }),
+  ]).then(function(results){
+    _data = results[0].data;
+    var rules = results[1].data.rules || [];
+    _renderKPIs(_data);
+    _renderChart(_data.dailyTrend || []);
+    _renderHubTable(_data.hubs || [], _data.totals || {});
+    _renderRules(rules);
+  }).catch(function(err){
+    _showToast('Failed to load revenue data: ' + (err.message || 'Network error'));
+    _resetError();
+  });
+}
+window._load = _load;
+
+/* ── Render KPIs ── */
+function _renderKPIs(d){
+  var t = d.totals || {};
+  var cards = [
+    { color:'green',  icon:'trending_up',        label:'Period Revenue',     val: _fmtKES(t.periodRevenueKES || 0) },
+    { color:'blue',   icon:'percent',             label:'Period Commission',  val: _fmtKES(t.periodCommissionKES || 0) },
+    { color:'',       icon:'receipt_long',        label:'Transactions',       val: _fmtNum(t.periodTransactions || 0) },
+    { color:'purple', icon:'all_time',            label:'Lifetime Revenue',   val: _fmtKES(t.lifetimeRevenueKES || 0) },
+    { color:'',       icon:'group',               label:'Lifetime Txns',      val: _fmtNum(t.lifetimeTransactions || 0) },
+    { color:'yellow', icon:'hub',                 label:'Active Hubs',        val: _fmtNum((d.hubs||[]).filter(function(h){return h.period.transactionCount>0;}).length) },
+  ];
+  document.getElementById('kpiGrid').innerHTML = cards.map(function(c){
+    return '<div class="kpi-card'+(c.color?' '+c.color:'')+'">'+
+      '<div class="kpi-icon material-icons">'+c.icon+'</div>'+
+      '<div class="kpi-val">'+_esc(c.val)+'</div>'+
+      '<div class="kpi-label">'+_esc(c.label)+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+/* ── Render chart ── */
+function _renderChart(trend){
+  if(!trend.length){
+    document.getElementById('chartBars').innerHTML='<div style="color:var(--sub);font-size:13px;padding:40px">No trend data available</div>';
+    return;
+  }
+  var maxRev = Math.max.apply(null, trend.map(function(d){ return d.revenueKES||0; })) || 1;
+  var html = trend.map(function(d){
+    var h     = Math.max(4, Math.round((d.revenueKES / maxRev) * 140));
+    var ph    = Math.max(2, Math.round((d.payoutsKES / maxRev) * 140));
+    var rh    = Math.max(2, Math.round((d.refundsKES / maxRev) * 140));
+    var label = d.date ? d.date.slice(5) : '';
+    return '<div class="chart-col">'+
+      '<div class="chart-bar" style="height:'+h+'px;background:var(--primary);opacity:.8" data-tip="Rev: KES '+_fmt(d.revenueKES)+' | '+label+'"></div>'+
+      '<div class="chart-label">'+_esc(label)+'</div>'+
+    '</div>';
+  }).join('');
+  document.getElementById('chartBars').innerHTML = html;
+}
+
+/* ── Render hub table ── */
+function _renderHubTable(hubs, totals){
+  if(!hubs.length){
+    document.getElementById('hubTbody').innerHTML='<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--sub)">No hub data available</td></tr>';
+    return;
+  }
+  var totalRev = totals.periodRevenueKES || 1;
+  var rows = hubs.map(function(h){
+    var pct   = totalRev > 0 ? Math.round(h.period.revenueKES / totalRev * 100) : 0;
+    var color = HUB_COLORS[h.hub] || HUB_COLORS.default;
+    var label = HUB_LABELS[h.hub] || h.hub;
+    return '<tr>'+
+      '<td><span class="hub-chip"><span class="hub-dot" style="background:'+color+'"></span>'+_esc(label)+'</span></td>'+
+      '<td class="amount-cell green-val">'+_fmtKES(h.period.revenueKES)+'</td>'+
+      '<td class="amount-cell">'+_fmtKES(h.period.commissionKES)+'</td>'+
+      '<td>'+_fmtNum(h.period.transactionCount)+'</td>'+
+      '<td style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div class="bar-bg" style="flex:1"><div class="bar-fill" style="width:'+pct+'%;background:'+color+'"></div></div><span style="font-size:11px;color:var(--sub);width:30px;text-align:right">'+pct+'%</span></div></td>'+
+      '<td class="sub-val">'+_fmtKES(h.lifetime.revenueKES)+'</td>'+
+    '</tr>';
+  }).join('');
+  document.getElementById('hubTbody').innerHTML = rows;
+}
+
+/* ── Render commission rules ── */
+function _renderRules(rules){
+  if(!rules.length){
+    document.getElementById('rulesList').innerHTML='<div style="color:var(--sub);font-size:13px;padding:16px">No active commission rules. Using default rates.</div>';
+    return;
+  }
+  var top = rules.slice(0, 10);
+  var TYPE_LABELS = {
+    percentage:'%', fixed:'Fixed', percentage_plus_fixed:'%+Fixed',
+    tiered:'Tiered', commission_holiday:'Holiday',
+  };
+  document.getElementById('rulesList').innerHTML = top.map(function(r){
+    var cat   = HUB_LABELS[r.category] || r.category || 'All';
+    var typeL = TYPE_LABELS[r.type] || r.type;
+    var rateStr = r.type === 'fixed'      ? 'KES '+_fmt(r.amountCents/100)+' flat'
+               : r.type === 'tiered'     ? 'Tiered'
+               : r.type === 'commission_holiday' ? '0% (Campaign)'
+               : (r.rate || 0)+'%' + (r.amountCents ? ' + KES '+_fmt(r.amountCents/100) : '');
+    var scope = r.entityId ? '· Seller-specific' : '';
+    return '<div class="rule-row">'+
+      '<span class="rule-type-badge">'+_esc(typeL)+'</span>'+
+      '<div class="rule-body">'+
+        '<div class="rule-cat">'+_esc(cat)+'  '+_esc(scope)+'</div>'+
+        (r.description?'<div class="rule-desc">'+_esc(r.description)+'</div>':'')+
+      '</div>'+
+      '<div class="rule-rate">'+_esc(rateStr)+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+/* ── Reset skeletons ── */
+function _resetSkeletons(){
+  document.getElementById('kpiGrid').innerHTML = '<div class="skeleton sk-kpi"></div>'.repeat(6);
+  document.getElementById('chartBars').innerHTML = '<div class="skeleton" style="width:100%;height:180px;border-radius:8px"></div>';
+  document.getElementById('hubTbody').innerHTML = '<tr><td colspan="6"><div class="skeleton sk-row" style="margin:8px 0"></div></td></tr>'.repeat(3);
+  document.getElementById('rulesList').innerHTML = '<div class="skeleton sk-row"></div>'.repeat(3);
+}
+
+function _resetError(){
+  document.getElementById('kpiGrid').innerHTML = '<div style="grid-column:1/-1;color:var(--sub);font-size:13px;padding:16px">Failed to load data — please refresh.</div>';
+  document.getElementById('hubTbody').innerHTML = '<tr><td colspan="6" style="color:var(--sub);padding:24px">No data available</td></tr>';
+  document.getElementById('rulesList').innerHTML = '<div style="color:var(--sub);font-size:13px;padding:16px">Could not load rules.</div>';
+  document.getElementById('chartBars').innerHTML = '';
+}
+
+/* ── Helpers ── */
+function _fmtKES(n){ return 'KES '+Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function _fmtNum(n){ return Number(n||0).toLocaleString('en-KE'); }
+function _fmt(n)   { return Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function _esc(s)   { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _showToast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 4000);
+}
+
+})();
+</script>
+</body>
+</html>

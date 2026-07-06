@@ -91,11 +91,12 @@
       border:1px solid rgba(255,255,255,0.1);
       border-radius:14px;
       color:white;
-      font-size:14px;
+      font-size:16px; /* 16px minimum — iOS auto-zooms on < 16px */
       outline:none;
       font-family:inherit;
       margin-bottom:12px;
       transition:border-color 0.2s;
+      scroll-margin-bottom:140px;
     }
 
     .co-input:focus{ border-color:rgba(113,255,0,0.45); }
@@ -303,6 +304,11 @@
       animation:modalPop 0.35s cubic-bezier(0.34,1.56,0.64,1);
       box-shadow:0 32px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(76,175,80,0.1);
       position:relative;
+      /* Prevent clipping on short viewports (landscape / iPhone SE) */
+      max-height:calc(92dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+      max-height:calc(92vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
     }
 
     @keyframes modalPop{
@@ -494,6 +500,10 @@
       animation:modalPop 0.35s cubic-bezier(0.34,1.56,0.64,1);
       box-shadow:0 32px 80px rgba(0,0,0,0.8);
       position:relative;
+      max-height:calc(92dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+      max-height:calc(92vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
     }
 
     .card-modal-title{ color:white; font-size:20px; font-weight:900; margin-bottom:4px; }
@@ -548,11 +558,12 @@
       border:1px solid rgba(255,255,255,0.1);
       border-radius:12px;
       color:white;
-      font-size:14px;
+      font-size:16px; /* 16px minimum — iOS auto-zooms on < 16px */
       outline:none;
       font-family:inherit;
       margin-bottom:12px;
       transition:border-color 0.2s;
+      scroll-margin-bottom:140px;
     }
 
     .card-input:focus{ border-color:rgba(0,170,255,0.5); }
@@ -624,6 +635,10 @@
       animation:modalPop 0.35s cubic-bezier(0.34,1.56,0.64,1);
       box-shadow:0 32px 80px rgba(0,0,0,0.8);
       position:relative;
+      max-height:calc(92dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+      max-height:calc(92vh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
     }
 
     .paypal-logo{ font-size:48px; margin-bottom:12px; }
@@ -824,19 +839,42 @@
 
   <h1 class="checkout-heading"><i class="fas fa-lock" style="color:#71ff00;font-size:22px;" aria-hidden="true"></i> Secure <span>Checkout</span></h1>
 
-  <!-- Trust badges strip -->
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px;">
-    <div style="display:flex;align-items:center;gap:7px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:30px;padding:7px 14px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);">
-      <span style="color:#71ff00;font-size:13px;">🔒</span> SSL Encrypted
+  <!-- Trust & Security Bar -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:26px;" role="list" aria-label="Security certifications">
+    <div role="listitem" style="display:flex;align-items:center;gap:9px;background:rgba(113,255,0,0.04);border:1px solid rgba(113,255,0,0.14);border-radius:12px;padding:10px 13px;">
+      <i class="fas fa-lock" style="color:#71ff00;font-size:14px;flex-shrink:0;" aria-hidden="true"></i>
+      <div>
+        <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.88);line-height:1.2;">SSL 256-bit</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.42);font-weight:600;">End-to-End Encrypted</div>
+      </div>
     </div>
-    <div style="display:flex;align-items:center;gap:7px;background:rgba(76,175,80,0.05);border:1px solid rgba(76,175,80,0.15);border-radius:30px;padding:7px 14px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);">
-      <span style="font-size:13px;">📱</span> M-Pesa STK Push
+    <div role="listitem" style="display:flex;align-items:center;gap:9px;background:rgba(0,200,255,0.04);border:1px solid rgba(0,200,255,0.14);border-radius:12px;padding:10px 13px;">
+      <i class="fas fa-shield-halved" style="color:#00c8ff;font-size:14px;flex-shrink:0;" aria-hidden="true"></i>
+      <div>
+        <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.88);line-height:1.2;">PCI DSS</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.42);font-weight:600;">Level 1 Compliant</div>
+      </div>
     </div>
-    <div style="display:flex;align-items:center;gap:7px;background:rgba(0,170,255,0.05);border:1px solid rgba(0,170,255,0.15);border-radius:30px;padding:7px 14px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);">
-      <span style="font-size:13px;">🛡️</span> Buyer Protected
+    <div role="listitem" style="display:flex;align-items:center;gap:9px;background:rgba(255,170,0,0.04);border:1px solid rgba(255,170,0,0.14);border-radius:12px;padding:10px 13px;">
+      <i class="fas fa-magnifying-glass-dollar" style="color:#ffaa00;font-size:14px;flex-shrink:0;" aria-hidden="true"></i>
+      <div>
+        <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.88);line-height:1.2;">Fraud Protection</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.42);font-weight:600;">Real-Time Monitoring</div>
+      </div>
     </div>
-    <div style="display:flex;align-items:center;gap:7px;background:rgba(255,193,7,0.05);border:1px solid rgba(255,193,7,0.15);border-radius:30px;padding:7px 14px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);">
-      <span style="font-size:13px;">⚡</span> Instant Confirm
+    <div role="listitem" style="display:flex;align-items:center;gap:9px;background:rgba(76,175,80,0.04);border:1px solid rgba(76,175,80,0.14);border-radius:12px;padding:10px 13px;">
+      <i class="fas fa-user-shield" style="color:#4caf50;font-size:14px;flex-shrink:0;" aria-hidden="true"></i>
+      <div>
+        <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.88);line-height:1.2;">Buyer Protected</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.42);font-weight:600;">Money-Back Guarantee</div>
+      </div>
+    </div>
+    <div role="listitem" style="display:flex;align-items:center;gap:9px;background:rgba(160,80,255,0.04);border:1px solid rgba(160,80,255,0.14);border-radius:12px;padding:10px 13px;">
+      <i class="fas fa-store" style="color:#a050ff;font-size:14px;flex-shrink:0;" aria-hidden="true"></i>
+      <div>
+        <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.88);line-height:1.2;">Seller Protected</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.42);font-weight:600;">SOKONI Assurance</div>
+      </div>
     </div>
   </div>
 
@@ -1180,14 +1218,44 @@
         <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:2px;" id="estDeliveryNote">Select zone above to calculate</div>
       </div>
 
-      <!-- IntaSend Trust Badge — order summary -->
-      <div style="margin-top:18px;text-align:center;padding:18px 14px 14px;background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.06);border-radius:16px;position:relative;">
+      <!-- Secure Payments Trust Panel -->
+      <div style="margin-top:18px;text-align:center;padding:18px 14px 16px;background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.06);border-radius:16px;position:relative;">
         <div style="position:absolute;top:0;left:50%;transform:translateX(-50%) translateY(-50%);background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:999px;padding:3px 12px;font-size:9px;font-weight:800;color:rgba(113,255,0,0.75);letter-spacing:1.5px;white-space:nowrap;">SECURE PAYMENTS</div>
-        <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:inline-block;transition:transform 0.2s ease,filter 0.2s ease;" onmouseover="this.style.transform='scale(1.04)';this.style.filter='drop-shadow(0 4px 16px rgba(113,255,0,0.2))'" onmouseout="this.style.transform='';this.style.filter=''" aria-label="IntaSend security — opens in new tab">
-          <img src="https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-with-mpesa-hr-dark.png" width="260" alt="IntaSend Secure Payments (PCI-DSS Compliant)" loading="lazy" decoding="async" style="max-width:100%;height:auto;display:block;margin:0 auto;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-          <span style="display:none;align-items:center;justify-content:center;gap:8px;padding:12px 16px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.16);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;">🔐 Secured by IntaSend</span>
+
+        <!-- IntaSend official trust badge — do NOT recreate this image -->
+        <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:inline-block;transition:transform 0.2s ease,filter 0.2s ease;" onmouseover="this.style.transform='scale(1.04)';this.style.filter='drop-shadow(0 4px 16px rgba(113,255,0,0.2))'" onmouseout="this.style.transform='';this.style.filter=''" aria-label="IntaSend security certification — opens in new tab">
+          <img src="https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-with-mpesa-hr-dark.png" width="260" alt="IntaSend Secure Payments — PCI-DSS Compliant" loading="lazy" decoding="async" style="max-width:100%;height:auto;display:block;margin:0 auto;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+          <span style="display:none;align-items:center;justify-content:center;gap:8px;padding:12px 16px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.16);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;"><i class="fas fa-lock" aria-hidden="true"></i> Secured by IntaSend</span>
         </a>
-        <strong><a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:block;color:rgba(255,255,255,0.45);text-decoration:none;font-size:10px;margin-top:8px;font-weight:600;">Secured by IntaSend Payments</a></strong>
+
+        <!-- Accepted payment methods -->
+        <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;">
+          <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,0.3);letter-spacing:1.2px;margin-bottom:10px;">ACCEPTED PAYMENT METHODS</div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;">
+            <!-- M-PESA -->
+            <div style="display:flex;align-items:center;gap:5px;background:rgba(0,168,80,0.1);border:1px solid rgba(0,168,80,0.25);border-radius:8px;padding:5px 10px;" aria-label="M-PESA">
+              <span style="font-size:13px;" aria-hidden="true">📱</span>
+              <span style="font-size:11px;font-weight:900;color:#4caf50;letter-spacing:0.5px;">M-PESA</span>
+            </div>
+            <!-- Visa -->
+            <div style="display:flex;align-items:center;gap:5px;background:rgba(26,31,113,0.35);border:1px solid rgba(26,31,113,0.55);border-radius:8px;padding:5px 10px;" aria-label="Visa">
+              <i class="fab fa-cc-visa" style="font-size:18px;color:#1a90ff;" aria-hidden="true"></i>
+              <span style="font-size:11px;font-weight:900;color:rgba(255,255,255,0.7);letter-spacing:0.5px;">VISA</span>
+            </div>
+            <!-- Mastercard -->
+            <div style="display:flex;align-items:center;gap:5px;background:rgba(80,10,0,0.3);border:1px solid rgba(235,0,27,0.25);border-radius:8px;padding:5px 10px;" aria-label="Mastercard">
+              <i class="fab fa-cc-mastercard" style="font-size:18px;color:#eb001b;" aria-hidden="true"></i>
+              <span style="font-size:11px;font-weight:900;color:rgba(255,255,255,0.7);letter-spacing:0.5px;">MASTERCARD</span>
+            </div>
+            <!-- Airtel Money -->
+            <div style="display:flex;align-items:center;gap:5px;background:rgba(220,0,0,0.1);border:1px solid rgba(220,0,0,0.22);border-radius:8px;padding:5px 10px;" aria-label="Airtel Money">
+              <span style="font-size:13px;" aria-hidden="true">🔴</span>
+              <span style="font-size:11px;font-weight:900;color:rgba(255,120,120,0.85);letter-spacing:0.5px;">AIRTEL</span>
+            </div>
+          </div>
+        </div>
+
+        <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:block;color:rgba(255,255,255,0.35);text-decoration:none;font-size:10px;margin-top:10px;font-weight:600;">Secured by IntaSend Payments · PCI DSS Level 1</a>
       </div>
 
       <!-- Payment status bar (activated during payment flow by JS) -->
@@ -1511,14 +1579,32 @@ itemsEl.innerHTML = _itemsHTML.join("");
   } catch(e){}
 })();
 
-/* Platform fee: 10% default — overridden by server-side commission engine */
-var _platformFeeRate = 0;   /* set to 0 so buyers only see it when non-zero */
+/* Platform fee: fetched from server-side commission engine via previewCommission */
+var _platformFeeRate = 0;
 var _platformFee     = 0;
 
 function setPlatformFee(ratePct){
   _platformFeeRate = ratePct;
   updateTotals();
 }
+
+/* Fetch the real commission rate for this cart from the server and show it in the order summary */
+(async function _fetchPlatformFee() {
+  try {
+    if (!subtotal || subtotal <= 0) return;
+    const hasFoodItem   = cart.some(i => (i.category||'').toLowerCase() === 'food');
+    const hasPharmaItem = cart.some(i => (i.category||'').toLowerCase() === 'pharmacy');
+    const hasServiceItem = cart.some(i => (i.category||'').toLowerCase() === 'services' || (i.category||'').toLowerCase() === 'service');
+    const cartCategory  = hasFoodItem ? 'food_delivery' : hasPharmaItem ? 'hub' : hasServiceItem ? 'services' : 'marketplace';
+    const firstSellerId = cart[0]?.sellerUid || cart[0]?.sellerId || null;
+
+    const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js");
+    const preview = httpsCallable(getFunctions(undefined, 'us-central1'), 'previewCommission');
+    const res = await preview({ orderAmountKES: subtotal, category: cartCategory, sellerId: firstSellerId });
+    const rate = res.data?.effectiveRate || 0;
+    if (rate > 0) setPlatformFee(rate);
+  } catch (_) { /* non-critical — buyer still sees correct total without the fee row */ }
+})();
 
 function _calcLoyaltyDiscount(baseTotal) {
   if (!_loyaltyRedeeming || _loyaltyBalance <= 0) return 0;
@@ -1814,8 +1900,14 @@ async function sendStkPush(){
 
   /* ── Server-side cart lock: create a checkout session so the server
      controls the amount charged, not the client. ── */
-  let stkAmount = orderTotal; /* used only if session creation fails or not available */
+  let stkAmount = null; /* must be set by server — never default to client orderTotal */
   let _sessionId = null;
+
+  if (!SOKONI_FUNCTIONS_URL) {
+    btn.disabled = false;
+    showPushToast("❌ Config Error", "Payment service is unavailable. Please contact support.", "red");
+    return;
+  }
 
   if (SOKONI_FUNCTIONS_URL && cart.length > 0) {
     try {
@@ -1929,7 +2021,7 @@ async function sendStkPush(){
     resetStkSteps();
   })
   .run({
-    amount:       stkAmount,   /* server-verified total from createCheckoutSession */
+    amount:       stkAmount ?? orderTotal, /* stkAmount set by server; fallback is belt-and-suspenders only */
     currency:     "KES",
     phone_number: phone,
     email:        user?.email || "",
@@ -2846,6 +2938,8 @@ window.processPaypalPayment = processPaypalPayment;
 <script src="sokoni-mpesa.js" defer></script>
 <script defer src="kass-widget.js"></script>
 <script defer src="sokoni-loyalty.js"></script>
+<!-- Redis v2.0 — session management + inventory locking + payment coordination -->
+<script defer src="sokoni-redis.js"></script>
 <!-- Enterprise v2.0: event bus, observability, and payment/fraud engines are required on checkout -->
 <script defer src="sokoni-event-bus.js"></script>
 <script defer src="sokoni-observability.js"></script>
@@ -2856,6 +2950,42 @@ window.processPaypalPayment = processPaypalPayment;
 <script defer src="sokoni-vouchers.js"></script>
 <script defer src="sokoni-payment-trust.js"></script>
 <script>
+/* ── Redis v2.0 checkout integration ── */
+window.addEventListener('load', function () {
+  if (!window.SokoniRedis) return;
+
+  /* Start buyer session + presence (non-blocking — Redis is optional) */
+  SokoniRedis.init('buyer', {}, { autoFlushOffline: false }).catch(() => {});
+  window._redisCheckout = SokoniRedis;
+
+  /*
+   * Expose inventory locking helper for checkout.js.
+   * Usage in checkout.js: await window._lockInventory(cartItems)
+   * Returns a lockRelease() fn — call after payment completes or fails.
+   */
+  window._lockInventory = async function (cartItems) {
+    if (!Array.isArray(cartItems) || !cartItems.length) return () => {};
+    const locks = [];
+    for (const item of cartItems) {
+      if (!item.productId) continue;
+      try {
+        const r = await SokoniRedis.inventory.lock(item.productId, item.variantId || '', item.qty || 1, 120_000);
+        if (r.lockId && !r.fallback) locks.push({ productId: item.productId, variantId: item.variantId || '', lockId: r.lockId });
+      } catch {}
+    }
+    return async function releaseAll() {
+      for (const l of locks) {
+        SokoniRedis.inventory.release(l.productId, l.variantId, l.lockId).catch(() => {});
+      }
+    };
+  };
+
+  /* Expose payment state tracking helper */
+  window._trackPayment = async function (orderId, state, meta) {
+    try { await SokoniRedis.payment.setState(orderId, state, meta || {}); } catch {}
+  };
+});
+
 /* ── Checkout trust integration ── */
 document.addEventListener('DOMContentLoaded', function () {
   /* Show payment status bar when a payment flow starts */

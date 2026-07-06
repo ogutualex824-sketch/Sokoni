@@ -168,6 +168,9 @@
   <button class="poc-tab" data-tab="dependencies">Dependencies</button>
   <button class="poc-tab" data-tab="architecture">Architecture</button>
   <button class="poc-tab" data-tab="register">Register Service</button>
+  <button class="poc-tab" data-tab="hubs">Hub Registry</button>
+  <button class="poc-tab" data-tab="flags">Feature Flags</button>
+  <button class="poc-tab" data-tab="metrics">Cross-Hub Metrics</button>
 </nav>
 
 <!-- ════════════════════════════════════ OVERVIEW ══════════════════════════════ -->
@@ -330,6 +333,56 @@
   </div>
 </main>
 
+<!-- ═══════════════════════════════════════ HUB REGISTRY ══════════════════════════════════ -->
+<main id="tab-hubs" class="poc-page">
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+    <select id="hub-status-filter" class="p-select" style="width:160px" onchange="loadHubs()">
+      <option value="">All Statuses</option>
+      <option value="live">Live</option>
+      <option value="beta">Beta</option>
+      <option value="coming_soon">Coming Soon</option>
+    </select>
+    <button class="btn btn-ghost" onclick="_loaded['hubs']=false;loadHubs()">Refresh</button>
+  </div>
+  <div class="kpi-grid" id="hub-summary" style="margin-bottom:20px"></div>
+  <div id="hub-integration-matrix" style="margin-bottom:24px">
+    <p style="color:var(--muted);font-size:13px">Loading integration matrix…</p>
+  </div>
+  <div class="s-head">All Hubs</div>
+  <div class="svc-grid" id="hub-cards">
+    <p style="color:var(--muted);font-size:13px">Loading hubs…</p>
+  </div>
+</main>
+
+<!-- ════════════════════════════════════ FEATURE FLAGS ════════════════════════════════════ -->
+<main id="tab-flags" class="poc-page">
+  <p style="color:var(--muted);font-size:13px;margin-bottom:6px">
+    Toggle platform features at runtime — no code deployment or restart required.
+    Changes take effect within seconds.
+  </p>
+  <div style="display:flex;gap:10px;margin-bottom:20px">
+    <button class="btn btn-ghost" onclick="_loaded['flags']=false;loadFlags()">Refresh</button>
+  </div>
+  <div id="flags-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;align-items:start">
+    <p style="color:var(--muted);font-size:13px">Loading feature flags…</p>
+  </div>
+</main>
+
+<!-- ══════════════════════════════════ CROSS-HUB METRICS ══════════════════════════════════ -->
+<main id="tab-metrics" class="poc-page">
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+    <select id="metrics-period" class="p-select" style="width:160px" onchange="_loaded['metrics']=false;loadMetrics()">
+      <option value="7">Last 7 days</option>
+      <option value="30" selected>Last 30 days</option>
+      <option value="90">Last 90 days</option>
+    </select>
+    <button class="btn btn-ghost" onclick="_loaded['metrics']=false;loadMetrics()">Refresh</button>
+  </div>
+  <div class="kpi-grid" id="metrics-kpis" style="margin-bottom:20px"></div>
+  <div class="s-head">Revenue by Hub</div>
+  <div id="metrics-table"><p style="color:var(--muted);font-size:13px">Loading metrics…</p></div>
+</main>
+
 <!-- ── Toast ── -->
 <div id="poc-toast"></div>
 
@@ -379,12 +432,15 @@ document.querySelectorAll('.poc-tab').forEach(btn => {
 });
 
 function loadTab(tab) {
-  if (tab === 'registry')    loadRegistry();
-  if (tab === 'health')      loadHealth();
-  if (tab === 'events')      loadEventLog();
+  if (tab === 'registry')     loadRegistry();
+  if (tab === 'health')       loadHealth();
+  if (tab === 'events')       loadEventLog();
   if (tab === 'capabilities') loadCapabilities();
   if (tab === 'dependencies') loadDependencies();
   if (tab === 'architecture') loadArchitecture();
+  if (tab === 'hubs')         loadHubs();
+  if (tab === 'flags')        loadFlags();
+  if (tab === 'metrics')      loadMetrics();
 }
 
 /* ════════════════════════════════════ OVERVIEW ════════════════════════════════ */
@@ -649,6 +705,190 @@ function prefillDemo() {
   document.getElementById('r-pub').value   = 'Healthcare.AppointmentBooked,Healthcare.ReferralCreated,Healthcare.LabResultReady';
   document.getElementById('r-sub').value   = 'Payment.Failed,Subscription.Expired,User.Banned';
   document.getElementById('r-deps').value  = 'sasos,wap,notifications,search';
+}
+
+/* ══════════════════════════════════ HUB REGISTRY ══════════════════════════════════════ */
+const INTG_COLS = [
+  { key:'financial',     label:'💳', title:'Financial OS' },
+  { key:'chat',          label:'💬', title:'Chat' },
+  { key:'notifications', label:'🔔', title:'Notifications' },
+  { key:'search',        label:'🔍', title:'Search' },
+  { key:'ai',            label:'🤖', title:'AI Engine' },
+  { key:'analytics',     label:'📊', title:'Analytics' },
+  { key:'trust_safety',  label:'🛡️', title:'Trust & Safety' },
+  { key:'subscriptions', label:'🔄', title:'Subscriptions' },
+  { key:'logistics',     label:'📦', title:'Logistics' },
+  { key:'etims',         label:'🧾', title:'eTIMS' },
+];
+
+async function loadHubs() {
+  const statusFilter = document.getElementById('hub-status-filter')?.value || '';
+  const matrix = document.getElementById('hub-integration-matrix');
+  const grid   = document.getElementById('hub-cards');
+  matrix.innerHTML = grid.innerHTML = '<p style="color:var(--muted);font-size:13px">Loading…</p>';
+  try {
+    const res = await CF('pcGetHubRegistry')({ statusFilter: statusFilter || undefined });
+    const { hubs, summary } = res.data;
+
+    document.getElementById('hub-summary').innerHTML = `
+      <div class="kpi"><div class="kpi-val" style="color:var(--g)">${summary.live}</div><div class="kpi-label">Live Hubs</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:#f59e0b">${summary.comingSoon}</div><div class="kpi-label">Coming Soon</div></div>
+      <div class="kpi"><div class="kpi-val">${summary.total}</div><div class="kpi-label">Total Hubs</div></div>
+      <div class="kpi"><div class="kpi-val">${summary.totalCFs}</div><div class="kpi-label">Total Cloud Functions</div></div>`;
+
+    /* Integration matrix — live hubs only */
+    const liveHubs  = hubs.filter(h => h.status !== 'coming_soon');
+    const totalIntg = liveHubs.reduce((a, h) => a + INTG_COLS.filter(c => h.integrations?.[c.key]).length, 0);
+    matrix.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div class="s-head" style="margin:0">Integration Matrix — ${liveHubs.length} Live Hubs</div>
+        <span style="font-size:11px;color:var(--muted)">${totalIntg}/${liveHubs.length * INTG_COLS.length} integrations active</span>
+      </div>
+      <div class="tbl-wrap">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:640px">
+        <thead><tr style="border-bottom:1px solid rgba(255,255,255,.08)">
+          <th style="text-align:left;padding:6px 10px;color:var(--g);font-weight:600;min-width:140px">Hub</th>
+          ${INTG_COLS.map(c => `<th style="padding:6px 4px;text-align:center;font-size:14px" title="${c.title}">${c.label}</th>`).join('')}
+          <th style="padding:6px 8px;text-align:right;color:var(--muted)">CFs</th>
+        </tr></thead>
+        <tbody>
+          ${liveHubs.map((h, i) => `
+            <tr style="border-bottom:1px solid rgba(255,255,255,.03);background:${i%2===0?'transparent':'rgba(255,255,255,.018)'}">
+              <td style="padding:6px 10px;white-space:nowrap">
+                <span style="margin-right:6px">${h.icon||'📦'}</span><span style="color:var(--fg)">${esc(h.name)}</span>
+                ${h.status==='beta'?'<span style="margin-left:6px;font-size:9px;background:rgba(245,158,11,.15);color:#f59e0b;padding:1px 5px;border-radius:3px">BETA</span>':''}
+              </td>
+              ${INTG_COLS.map(c => `<td style="text-align:center;color:${h.integrations?.[c.key]?'var(--g)':'rgba(255,255,255,.1)'};font-size:13px">${h.integrations?.[c.key]?'✓':'·'}</td>`).join('')}
+              <td style="text-align:right;padding:6px 8px;color:var(--muted)">${h.cfCount||0}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table></div>`;
+
+    /* Hub cards */
+    const STS_BG  = { live:'rgba(34,197,94,.12)', beta:'rgba(245,158,11,.12)', coming_soon:'rgba(99,102,241,.12)', disabled:'rgba(239,68,68,.12)' };
+    const STS_FG  = { live:'#22c55e', beta:'#f59e0b', coming_soon:'#818cf8', disabled:'#ef4444' };
+    grid.innerHTML = hubs.map(h => `
+      <div class="svc-card">
+        <div class="svc-card-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:26px;line-height:1">${h.icon||'📦'}</span>
+            <div>
+              <div class="svc-name">${esc(h.name)}</div>
+              <div class="svc-type">${h.cfCount||0} Cloud Functions</div>
+            </div>
+          </div>
+          <span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;
+            background:${STS_BG[h.status]||'rgba(255,255,255,.06)'};color:${STS_FG[h.status]||'var(--muted)'}">
+            ${(h.status||'unknown').replace(/_/g,' ').toUpperCase()}
+          </span>
+        </div>
+        ${h.description?`<p style="font-size:12px;color:var(--muted);margin:6px 0 10px">${esc(h.description)}</p>`:''}
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
+          <span class="svc-cap" title="Platform commission">💰 ${h.config?.commissionRate||0}%</span>
+          <span class="svc-cap" title="Settlement period">⏱ T+${h.config?.settlementDays||0}d</span>
+          ${h.config?.escrowEnabled?'<span class="svc-cap" style="background:rgba(99,102,241,.15);color:#818cf8">🔒 Escrow</span>':''}
+          ${h.config?.kycRequired?'<span class="svc-cap" style="background:rgba(245,158,11,.15);color:#f59e0b">🪪 KYC</span>':''}
+        </div>
+        <div class="svc-uses" style="margin-bottom:8px">
+          ${Object.entries(h.integrations||{}).filter(([,v])=>v).map(([k])=>`<span class="svc-cap" style="background:rgba(113,255,0,.07);color:rgba(113,255,0,.65)">${k.replace(/_/g,' ')}</span>`).join('')}
+        </div>
+        ${h.url?`<a href="${esc(h.url)}" style="font-size:11px;color:rgba(113,255,0,.45)">→ ${esc(h.url)}</a>`:''}
+      </div>`).join('') || '<p style="color:var(--muted)">No hubs found.</p>';
+  } catch(e) { toast('Hub registry load failed: ' + e.message, true); matrix.innerHTML = grid.innerHTML = ''; }
+}
+
+/* ══════════════════════════════════ FEATURE FLAGS ══════════════════════════════════════ */
+async function loadFlags() {
+  const grid = document.getElementById('flags-grid');
+  grid.innerHTML = '<p style="color:var(--muted);font-size:13px">Loading feature flags…</p>';
+  try {
+    const res   = await CF('pcGetFeatureFlags')({});
+    const flags = res.data.flags || {};
+    const cats  = [...new Set(Object.values(flags).map(f => f.category||'other'))].sort();
+    let html = '';
+    cats.forEach(cat => {
+      const catFlags = Object.entries(flags).filter(([,f]) => (f.category||'other') === cat);
+      if (!catFlags.length) return;
+      html += `<div style="grid-column:1/-1;padding:6px 0 2px;border-top:1px solid rgba(255,255,255,.06);margin-top:4px">
+        <span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.08em;text-transform:uppercase">${esc(cat)}</span>
+      </div>`;
+      catFlags.forEach(([key, flag]) => {
+        const on = !!flag.enabled;
+        html += `
+          <div class="svc-card" style="padding:14px 16px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+              <div style="flex:1;min-width:0">
+                <div class="svc-name" style="font-size:13px">${esc(key.replace(/_/g,' '))}</div>
+                ${flag.description?`<p style="font-size:11px;color:var(--muted);margin:4px 0 0">${esc(flag.description)}</p>`:''}
+              </div>
+              <button class="btn ${on?'btn-primary':'btn-ghost'}" style="flex-shrink:0;padding:5px 14px;font-size:11px;font-weight:700"
+                onclick="toggleFlag('${key}',${!on})">${on?'● ON':'○ OFF'}</button>
+            </div>
+            ${flag.updatedBy&&flag.updatedBy!=='system'?`<div style="font-size:10px;color:rgba(255,255,255,.18);margin-top:8px">uid: ${esc(flag.updatedBy)}</div>`:''}
+          </div>`;
+      });
+    });
+    grid.innerHTML = html || '<p style="color:var(--muted)">No feature flags configured.</p>';
+  } catch(e) { toast('Feature flags load failed: ' + e.message, true); grid.innerHTML = ''; }
+}
+
+async function toggleFlag(key, enabled) {
+  try {
+    await CF('pcSetFeatureFlag')({ key, enabled });
+    toast(`"${key}" ${enabled?'enabled':'disabled'}`);
+    _loaded['flags'] = false;
+    loadFlags();
+  } catch(e) { toast('Flag update failed: ' + e.message, true); }
+}
+
+/* ══════════════════════════════════ CROSS-HUB METRICS ══════════════════════════════════ */
+async function loadMetrics() {
+  const tbl  = document.getElementById('metrics-table');
+  const kpis = document.getElementById('metrics-kpis');
+  const pd   = parseInt(document.getElementById('metrics-period')?.value || '30', 10);
+  tbl.innerHTML = '<p style="color:var(--muted);font-size:13px">Loading metrics…</p>';
+  try {
+    const res = await CF('pcGetCrossHubMetrics')({ periodDays: pd });
+    const { rows, totals, periodDays } = res.data;
+
+    kpis.innerHTML = `
+      <div class="kpi"><div class="kpi-val" style="color:var(--g)">KES ${(totals.periodRevKES||0).toLocaleString()}</div><div class="kpi-label">Revenue (${periodDays}d)</div></div>
+      <div class="kpi"><div class="kpi-val">${(totals.periodTx||0).toLocaleString()}</div><div class="kpi-label">Transactions (${periodDays}d)</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:#22c55e">KES ${(totals.periodComKES||0).toLocaleString()}</div><div class="kpi-label">Commission (${periodDays}d)</div></div>
+      <div class="kpi"><div class="kpi-val" style="color:rgba(113,255,0,.5)">KES ${(totals.lifetimeRevKES||0).toLocaleString()}</div><div class="kpi-label">Lifetime Revenue</div></div>`;
+
+    const maxRev = Math.max(1, ...rows.map(r => r.periodRevKES));
+    tbl.innerHTML = `
+      <div class="tbl-wrap">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="border-bottom:1px solid rgba(255,255,255,.1)">
+          <th style="text-align:left;padding:8px 12px;color:var(--g);font-weight:600">Hub</th>
+          <th style="text-align:right;padding:8px 12px;color:var(--muted)">Revenue (${periodDays}d)</th>
+          <th style="text-align:right;padding:8px 12px;color:var(--muted)">Commission</th>
+          <th style="text-align:right;padding:8px 12px;color:var(--muted)">Transactions</th>
+          <th style="text-align:right;padding:8px 12px;color:var(--muted)">Lifetime Rev.</th>
+          <th style="padding:8px 12px;color:var(--muted);min-width:100px">Share</th>
+        </tr></thead>
+        <tbody>
+          ${rows.length ? rows.map(r => {
+            const pct = Math.round((r.periodRevKES / maxRev) * 100);
+            return `<tr style="border-bottom:1px solid rgba(255,255,255,.03)">
+              <td style="padding:8px 12px;color:var(--fg);font-weight:500">${esc(r.hubId.replace(/_/g,' '))}</td>
+              <td style="text-align:right;padding:8px 12px;color:var(--g)">KES ${r.periodRevKES.toLocaleString()}</td>
+              <td style="text-align:right;padding:8px 12px;color:#22c55e">KES ${r.periodComKES.toLocaleString()}</td>
+              <td style="text-align:right;padding:8px 12px">${r.periodTx.toLocaleString()}</td>
+              <td style="text-align:right;padding:8px 12px;color:rgba(113,255,0,.45)">KES ${r.lifetimeRevKES.toLocaleString()}</td>
+              <td style="padding:8px 12px">
+                <div style="height:4px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden">
+                  <div style="height:100%;width:${pct}%;background:var(--g);border-radius:2px;transition:width .4s"></div>
+                </div>
+              </td>
+            </tr>`;
+          }).join('') : '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">No transaction data for this period</td></tr>'}
+        </tbody>
+      </table></div>
+      <div style="text-align:right;font-size:11px;color:rgba(255,255,255,.2);margin-top:8px">Generated ${new Date().toLocaleString()}</div>`;
+  } catch(e) { toast('Metrics load failed: ' + e.message, true); tbl.innerHTML = ''; }
 }
 
 function esc(str) {

@@ -1,0 +1,473 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Subscriptions — SOKONI</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<script src="auth-guard.js"></script>
+<link rel="stylesheet" href="sokoni-tokens.css">
+<style>
+:root{
+  --bg:#0d0f14;--surface:#151820;--card:#1c2030;--border:#2a2f3d;
+  --text:#e8eaf0;--muted:#6b7280;--accent:#6c63ff;--accent2:#00d4aa;
+  --warn:#f59e0b;--danger:#ef4444;--success:#22c55e;--radius:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;}
+.sk-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:10;}
+.sk-hdr h1{font-size:1.05rem;font-weight:700;}
+.sk-back{display:flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;font-size:.8rem;}
+.sk-back:hover{color:var(--text);}
+.sk-wrap{max-width:860px;margin:0 auto;padding:20px 16px 100px;}
+.sk-section{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:24px 0 10px;}
+/* Plan cards */
+.plan-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:10px;position:relative;overflow:hidden;}
+.plan-card.active::before,.plan-card.trialing::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));}
+.plan-card.grace::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--warn);}
+.plan-card.expired::before,.plan-card.cancelled::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--border);}
+.pc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.pc-name{font-size:1rem;font-weight:700;}
+.pc-hub{font-size:.72rem;color:var(--muted);margin-top:2px;}
+.badge{font-size:.65rem;font-weight:700;padding:3px 9px;border-radius:99px;text-transform:uppercase;white-space:nowrap;}
+.badge.active,.badge.trialing{background:rgba(34,197,94,.12);color:var(--success);}
+.badge.trialing{background:rgba(108,99,255,.12);color:var(--accent);}
+.badge.grace{background:rgba(245,158,11,.12);color:var(--warn);}
+.badge.expired,.badge.cancelled{background:rgba(107,114,128,.12);color:var(--muted);}
+.badge.past_due{background:rgba(239,68,68,.12);color:var(--danger);}
+.pc-meta{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;}
+.pc-mi{display:flex;flex-direction:column;gap:1px;}
+.pc-mi span:first-child{font-size:.65rem;color:var(--muted);text-transform:uppercase;}
+.pc-mi span:last-child{font-size:.82rem;font-weight:600;}
+.pc-feats{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;}
+.feat-tag{font-size:.65rem;background:rgba(108,99,255,.08);color:var(--accent);border:1px solid rgba(108,99,255,.2);padding:2px 7px;border-radius:99px;}
+.pc-acts{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px;}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 14px;border-radius:8px;border:none;cursor:pointer;font-size:.77rem;font-weight:600;transition:all .15s;font-family:inherit;text-decoration:none;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:#5a52e8;}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border);}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);}
+.btn-danger{background:transparent;color:var(--danger);border:1px solid rgba(239,68,68,.25);}
+.btn-danger:hover{background:rgba(239,68,68,.07);}
+.btn-sm{padding:5px 11px;font-size:.72rem;}
+.btn:disabled{opacity:.4;pointer-events:none;}
+/* Plans grid */
+.plans-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
+.plan-opt{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;position:relative;transition:border-color .15s;}
+.plan-opt:not(.is-current):hover{border-color:var(--accent);cursor:pointer;}
+.plan-opt.recommended{border-color:var(--accent);}
+.plan-opt.is-current{opacity:.6;cursor:default;}
+.rec-pill{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:.6rem;font-weight:800;padding:2px 9px;border-radius:99px;white-space:nowrap;}
+.plan-opt-name{font-weight:700;font-size:.9rem;}
+.plan-opt-price{font-size:1.2rem;font-weight:800;color:var(--accent2);margin-top:6px;}
+.plan-opt-price sub{font-size:.6rem;font-weight:400;color:var(--muted);}
+.plan-opt-annual{font-size:.68rem;color:var(--muted);margin-top:1px;}
+.plan-opt-feats{list-style:none;margin-top:10px;display:flex;flex-direction:column;gap:4px;}
+.plan-opt-feats li{font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:5px;}
+.plan-opt-feats li::before{content:'✓';color:var(--accent2);font-weight:700;flex-shrink:0;}
+.plan-opt-btn{margin-top:12px;width:100%;}
+/* Billing table */
+.btable{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.brow{display:grid;grid-template-columns:1fr 90px 80px 75px;gap:6px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);}
+.brow:last-child{border-bottom:none;}
+.brow.hdr{font-size:.65rem;text-transform:uppercase;color:var(--muted);font-weight:700;background:rgba(255,255,255,.02);}
+.brow-plan{font-size:.82rem;font-weight:600;}
+.brow-date{font-size:.72rem;color:var(--muted);text-align:right;}
+.brow-amt{font-size:.82rem;font-weight:600;text-align:right;}
+.brow-st{text-align:right;}
+.tag{font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:99px;}
+.tag-paid{background:rgba(34,197,94,.1);color:var(--success);}
+.tag-refund{background:rgba(239,68,68,.1);color:var(--danger);}
+.tag-upgrade{background:rgba(108,99,255,.1);color:var(--accent);}
+/* Modal */
+.modal-bd{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:flex-end;justify-content:center;}
+.modal-bd.open{display:flex;}
+@media(min-width:560px){.modal-bd{align-items:center;}}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;padding:22px;width:100%;max-width:420px;position:relative;}
+@media(min-width:560px){.modal{border-radius:var(--radius);}}
+.modal h2{font-size:.95rem;font-weight:700;margin-bottom:14px;}
+.modal-x{position:absolute;top:14px;right:14px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1;padding:4px;}
+.modal-x:hover{color:var(--text);}
+.pror-row{display:flex;justify-content:space-between;font-size:.85rem;padding:7px 0;border-bottom:1px solid var(--border);}
+.pror-row.total{border-bottom:none;font-weight:700;font-size:.95rem;margin-top:3px;}
+.pror-row .credit{color:var(--success);}
+.cycle-row{display:flex;gap:6px;margin-bottom:12px;}
+.cycle-btn{flex:1;padding:7px;border-radius:8px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;text-align:center;}
+/* STK state */
+.stk-wrap{text-align:center;padding:20px 0;}
+.stk-spin{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.stk-msg{font-size:.82rem;color:var(--muted);}
+.stk-phone{font-size:1rem;font-weight:700;margin:5px 0;}
+/* Empty / loading */
+.empty{text-align:center;padding:32px 20px;color:var(--muted);font-size:.82rem;}
+.skel{background:linear-gradient(90deg,var(--card) 25%,var(--border) 50%,var(--card) 75%);background-size:200% 100%;animation:skel 1.4s infinite;border-radius:8px;}
+@keyframes skel{to{background-position:-200% 0}}
+@media(max-width:480px){.brow{grid-template-columns:1fr 80px 70px;} .brow .brow-st{display:none;}}
+</style>
+</head>
+<body>
+
+<div class="sk-hdr">
+  <a class="sk-back" href="javascript:history.back()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
+    Back
+  </a>
+  <h1>My Subscriptions</h1>
+  <a href="subscriptions.html" style="font-size:.72rem;color:var(--muted);text-decoration:none;">All Plans →</a>
+</div>
+
+<div class="sk-wrap">
+  <!-- Skeleton loader -->
+  <div id="sk-loading">
+    <div class="skel" style="height:118px;border-radius:12px;margin-bottom:10px;"></div>
+    <div class="skel" style="height:90px;border-radius:12px;margin-bottom:24px;"></div>
+    <div class="skel" style="height:30px;width:140px;border-radius:8px;margin-bottom:10px;"></div>
+    <div class="plans-grid" style="pointer-events:none;">
+      <div class="skel" style="height:200px;border-radius:12px;"></div>
+      <div class="skel" style="height:200px;border-radius:12px;"></div>
+      <div class="skel" style="height:200px;border-radius:12px;"></div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div id="sk-content" style="display:none;">
+    <div class="sk-section">Active Plans</div>
+    <div id="active-plans"></div>
+
+    <div id="upgrade-wrap" style="display:none;">
+      <div class="sk-section" id="upgrade-lbl">Upgrade</div>
+      <div id="plans-grid" class="plans-grid"></div>
+    </div>
+
+    <div class="sk-section">Billing History</div>
+    <div id="billing-wrap">
+      <div class="btable">
+        <div class="brow hdr"><span>Plan</span><span style="text-align:right">Date</span><span style="text-align:right">Amount</span><span style="text-align:right">Status</span></div>
+        <div id="billing-rows"></div>
+      </div>
+      <div id="billing-empty" class="empty" style="display:none;">No billing history yet.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Upgrade modal -->
+<div class="modal-bd" id="upgrade-modal">
+  <div class="modal">
+    <button class="modal-x" id="modal-close-btn">✕</button>
+    <h2 id="modal-title">Upgrade Plan</h2>
+    <div id="modal-proration"></div>
+    <div id="modal-acts" style="display:flex;gap:7px;margin-top:16px;flex-wrap:wrap;"></div>
+    <div id="modal-stk" style="display:none;"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp }    from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js';
+import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, getDocs }
+  from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js';
+
+/* ── Init ── */
+const cfg  = window.SOKONI_CONFIG || {};
+const app  = initializeApp(cfg);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+const fns  = getFunctions(app, 'us-central1');
+
+const CF = (name) => httpsCallable(fns, name);
+
+/* ── State ── */
+let _user = null, _subs = [], _plans = [], _selectedPlan = null;
+let _selectedCycle = 'monthly', _prorationData = null;
+let _payUnsub = null;
+
+/* ── Constants ── */
+const HUB = { seller:'Seller', service_provider:'Service Provider', restaurant:'Restaurant', hotel:'Hotel', pharmacy:'Pharmacy', driver:'Driver', property_agent:'Property Agent', car_dealer:'Car Dealer', freelancer:'Freelancer', recruiter:'Recruiter', buyer:'Buyer', enterprise:'Enterprise' };
+const TIER_FEATS = { free:['Basic listings','Community support'], basic:['20 listings','Priority support','Analytics','WhatsApp notifications'], pro:['Unlimited listings','Dedicated support','Advanced analytics','Custom store page','Commission discount'], premium:['Verified badge','Early access to deals','Priority delivery'], enterprise:['Unlimited everything','API access','Account manager','SLA guarantee'] };
+const TIER_ORDER = { free:0, basic:1, pro:2, premium:2, enterprise:3 };
+
+const kes  = (c) => 'KES ' + (c/100).toLocaleString('en-KE');
+const fmtD = (ts) => { if(!ts) return '—'; const d = ts?.seconds ? new Date(ts.seconds*1000) : new Date(ts); return d.toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'}); };
+const badge = (s) => { const L={active:'Active',trialing:'Trial',grace:'Grace',expired:'Expired',cancelled:'Cancelled',past_due:'Past Due'}; return `<span class="badge ${s}">${L[s]||s}</span>`; };
+
+/* ── Auth ── */
+onAuthStateChanged(auth, async (u) => {
+  if (!u) { window.location.href='login.html?redirect=my-subscriptions'; return; }
+  _user = u;
+  await _load();
+});
+
+async function _load() {
+  try {
+    const [sRes, pRes, hRes] = await Promise.all([
+      CF('subGetStatus')({}),
+      CF('subGetPlans')({}),
+      CF('subGetBillingHistory')({ limit: 25 }),
+    ]);
+    _subs  = sRes.data?.subscriptions || [];
+    _plans = pRes.data?.plans || [];
+    _renderActive();
+    _renderBilling(hRes.data?.history || []);
+    document.getElementById('sk-loading').style.display = 'none';
+    document.getElementById('sk-content').style.display = 'block';
+  } catch (e) {
+    document.getElementById('sk-loading').innerHTML = `<div class="empty" style="color:var(--danger)">${e.message}<br><button class="btn btn-outline btn-sm" onclick="location.reload()" style="margin-top:10px">Retry</button></div>`;
+  }
+}
+
+function _renderActive() {
+  const el = document.getElementById('active-plans');
+  if (!_subs.length) {
+    el.innerHTML = `<div class="empty"><p>No active subscriptions.</p><p style="margin-top:4px;font-size:.75rem">Pick a plan to get started.</p></div>`;
+    _renderUpgrades(null);
+    return;
+  }
+  el.innerHTML = _subs.map(s => {
+    const feats = s.features ? Object.entries(s.features).filter(([,v])=>v).map(([k])=>k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())).slice(0,6) : (TIER_FEATS[s.tier]||[]);
+    const periodEndLbl = s.status==='cancelled' ? 'Access until' : s.status==='trialing' ? 'Trial ends' : s.status==='grace' ? 'Grace ends' : 'Renews';
+    return `<div class="plan-card ${s.status}">
+      <div class="pc-top">
+        <div><div class="pc-name">${s.planName||s.planId}</div><div class="pc-hub">${HUB[s.hubType]||s.hubType} Hub</div></div>
+        ${badge(s.status)}
+      </div>
+      <div class="pc-meta">
+        <div class="pc-mi"><span>Billing</span><span>${s.billingCycle==='annual'?'Annual':'Monthly'}</span></div>
+        <div class="pc-mi"><span>Price</span><span>${s.billingCycle==='annual'?kes(s.priceAnnual||0)+'/yr':kes(s.priceMonthly||0)+'/mo'}</span></div>
+        <div class="pc-mi"><span>${periodEndLbl}</span><span>${fmtD(s.currentPeriodEnd)}</span></div>
+        ${s.status==='grace'?`<div class="pc-mi"><span>Grace ends</span><span style="color:var(--warn)">${fmtD(s.graceEnd)}</span></div>`:''}
+      </div>
+      ${feats.length?`<div class="pc-feats">${feats.map(f=>`<span class="feat-tag">${f}</span>`).join('')}</div>`:''}
+      <div class="pc-acts">
+        ${['active','trialing','grace'].includes(s.status) ? `
+          <button class="btn btn-outline btn-sm" onclick="window._showUpgrades('${s.hubType}')">Change Plan</button>
+          ${s.cancelAtPeriodEnd ? `<span style="font-size:.7rem;color:var(--warn);margin-top:3px">Cancels ${fmtD(s.currentPeriodEnd)}</span>` :
+            `<button class="btn btn-danger btn-sm" onclick="window._cancel('${s.id}','${(s.planName||s.planId).replace(/'/g,'')}')">Cancel</button>`}
+        ` : `<button class="btn btn-primary btn-sm" onclick="window._reactivate('${s.id}')">Reactivate</button>`}
+      </div>
+    </div>`;
+  }).join('');
+
+  const primary = _subs.find(s=>['active','trialing','grace'].includes(s.status)) || _subs[0];
+  if (primary) _renderUpgrades(primary.hubType);
+}
+
+window._showUpgrades = function(hubType) {
+  _renderUpgrades(hubType);
+  document.getElementById('upgrade-wrap').scrollIntoView({ behavior:'smooth', block:'start' });
+};
+
+function _renderUpgrades(hubType) {
+  const wrap = document.getElementById('upgrade-wrap');
+  const grid = document.getElementById('plans-grid');
+  const lbl  = document.getElementById('upgrade-lbl');
+  const hubPlans = _plans.filter(p => p.hubType === hubType || (!hubType && p.hubType === 'seller'));
+  if (!hubPlans.length) { wrap.style.display='none'; return; }
+  wrap.style.display = 'block';
+  lbl.textContent = `${HUB[hubType]||'Available'} Plans`;
+  const cur = _subs.find(s=>s.hubType===hubType&&['active','trialing','grace'].includes(s.status));
+  const curTierOrd = TIER_ORDER[cur?.tier||'free']||0;
+
+  grid.innerHTML = hubPlans.map(p => {
+    const isCur  = p.tier === (cur?.tier||null) && p.hubType === hubType;
+    const isUp   = (TIER_ORDER[p.tier]||0) > curTierOrd;
+    const rec    = p.tier === 'pro' && !isCur;
+    const moKES  = p.price?.monthly || p.priceMonthly || 0;
+    const yrKES  = p.price?.annual  || p.priceAnnual  || 0;
+    const feats  = p.features ? Object.entries(p.features).filter(([,v])=>v).map(([k])=>k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())).slice(0,5) : (TIER_FEATS[p.tier]||[]).slice(0,5);
+    const savePct = (yrKES && moKES) ? Math.round((1-yrKES/(moKES*12))*100) : 0;
+    return `<div class="plan-opt${rec?' recommended':''}${isCur?' is-current':''}">
+      ${rec?`<div class="rec-pill">Most Popular</div>`:''}
+      <div class="plan-opt-name">${p.name||p.id}</div>
+      <div class="plan-opt-price">${moKES===0?'Free':`${kes(moKES)}<sub>/mo</sub>`}</div>
+      ${yrKES&&yrKES>0?`<div class="plan-opt-annual">${kes(yrKES)}/yr${savePct>0?' · save '+savePct+'%':''}</div>`:''}
+      <ul class="plan-opt-feats">${feats.map(f=>`<li>${f}</li>`).join('')}</ul>
+      <button class="btn btn-${isCur?'outline':'primary'} btn-sm plan-opt-btn" ${isCur?'disabled':''} onclick="window._startUpgrade('${p.id}','${p.hubType||hubType}')">
+        ${isCur?'Current':(isUp?'Upgrade':'Select')}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function _renderBilling(history) {
+  const rows  = document.getElementById('billing-rows');
+  const empty = document.getElementById('billing-empty');
+  if (!history.length) { rows.closest('.btable').style.display='none'; empty.style.display='block'; return; }
+  const evtLabel = { renewal_auto:'Renewal', upgrade:'Upgrade', activation:'Activation', refund:'Refund', trial_start:'Trial' };
+  rows.innerHTML = history.map(h => `
+    <div class="brow">
+      <div><div class="brow-plan">${h.planName||h.planId||'—'}</div><div class="brow-date">${HUB[h.hubType]||h.hubType||''}</div></div>
+      <div class="brow-date">${fmtD(h.createdAt)}</div>
+      <div class="brow-amt">${kes(h.amountCents||0)}</div>
+      <div class="brow-st"><span class="tag ${h.event==='refund'?'tag-refund':h.event==='upgrade'?'tag-upgrade':'tag-paid'}">${evtLabel[h.event]||'Paid'}</span></div>
+    </div>`).join('');
+}
+
+/* ════════════ Upgrade flow ════════════ */
+window._startUpgrade = async function(planId, hubType) {
+  _selectedPlan = _plans.find(p=>p.id===planId);
+  if (!_selectedPlan) return;
+  _selectedCycle = 'monthly';
+  _openModal(`Upgrade to ${_selectedPlan.name||planId}`);
+  document.getElementById('modal-proration').innerHTML = `<div class="skel" style="height:90px;border-radius:8px;"></div>`;
+  document.getElementById('modal-acts').innerHTML = '';
+  document.getElementById('modal-stk').style.display = 'none';
+  await _fetchProration();
+};
+
+async function _fetchProration() {
+  if (!_selectedPlan) return;
+  const prorDiv = document.getElementById('modal-proration');
+  const actDiv  = document.getElementById('modal-acts');
+  try {
+    const res = await CF('subUpgradeWithProration')({ newPlanId:_selectedPlan.id, billingCycle:_selectedCycle, preview:true });
+    _prorationData = res.data;
+    const d = _prorationData;
+    prorDiv.innerHTML = `
+      <div class="cycle-row">
+        <button class="cycle-btn btn ${_selectedCycle==='monthly'?'btn-primary':'btn-outline'}" id="cy-mo" onclick="window._setCycle('monthly')">Monthly</button>
+        <button class="cycle-btn btn ${_selectedCycle==='annual'?'btn-primary':'btn-outline'}" id="cy-yr" onclick="window._setCycle('annual')">Annual <span style="font-size:.6rem;color:var(--success)">Save ~17%</span></button>
+      </div>
+      <div class="pror-row"><span>Plan price</span><span>KES ${d.fullPriceKES?.toLocaleString()}</span></div>
+      ${d.creditKES>0?`<div class="pror-row"><span>Unused time credit</span><span class="credit">− KES ${d.creditKES?.toLocaleString()}</span></div>`:''}
+      <div class="pror-row total"><span>Pay today</span><span>KES ${d.chargeKES?.toLocaleString()}</span></div>
+      <p style="font-size:.68rem;color:var(--muted);margin-top:9px">M-PESA STK push sent to your phone. Plan activates automatically on payment.</p>`;
+    actDiv.innerHTML = `
+      <button class="btn btn-primary" style="flex:1" id="pay-btn" onclick="window._confirmUpgrade()">Pay KES ${d.chargeKES?.toLocaleString()} via M-PESA</button>
+      <button class="btn btn-outline" onclick="window._closeModal()">Cancel</button>`;
+  } catch (e) {
+    prorDiv.innerHTML = `<p style="color:var(--danger);font-size:.82rem">${e.message}</p>`;
+    actDiv.innerHTML  = `<button class="btn btn-outline" onclick="window._closeModal()">Close</button>`;
+  }
+}
+
+window._setCycle = async function(c) {
+  _selectedCycle = c;
+  document.getElementById('cy-mo')?.classList.toggle('btn-primary', c==='monthly');
+  document.getElementById('cy-mo')?.classList.toggle('btn-outline', c!=='monthly');
+  document.getElementById('cy-yr')?.classList.toggle('btn-primary', c==='annual');
+  document.getElementById('cy-yr')?.classList.toggle('btn-outline', c!=='annual');
+  document.getElementById('modal-proration').innerHTML = `<div class="skel" style="height:90px;border-radius:8px;"></div>`;
+  await _fetchProration();
+};
+
+window._confirmUpgrade = async function() {
+  if (!_selectedPlan || !_prorationData) return;
+  document.getElementById('modal-proration').style.display = 'none';
+  document.getElementById('modal-acts').style.display = 'none';
+  const stkDiv = document.getElementById('modal-stk');
+  stkDiv.style.display = 'block';
+
+  /* Get user phone from Firestore or Auth */
+  let phone = (_user.phoneNumber||'').replace(/\D/g,'').replace(/^0/,'254');
+  if (!/^254[17]\d{8}$/.test(phone)) {
+    const uSnap = await getDocs(query(collection(db,'users'),where('uid','==',_user.uid),limit(1))).catch(()=>null);
+    const ud    = uSnap?.docs?.[0]?.data()||{};
+    phone = (ud.phoneNumber||ud.phone||'').replace(/\D/g,'').replace(/^0/,'254');
+  }
+
+  if (!/^254[17]\d{8}$/.test(phone)) {
+    stkDiv.innerHTML = `<p style="color:var(--danger);font-size:.82rem">No M-PESA number on file. Please update your profile first.</p>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="window._closeModal()">Close</button>`;
+    return;
+  }
+
+  const chargeKES = _prorationData.chargeKES;
+  stkDiv.innerHTML = `<div class="stk-wrap"><div class="stk-spin"></div>
+    <p class="stk-msg">STK push sent to</p>
+    <p class="stk-phone">+${phone}</p>
+    <p class="stk-msg" style="margin-top:4px">Enter your M-PESA PIN to confirm.</p></div>`;
+
+  const payRef = `subupg_${Date.now()}_${_selectedPlan.id}`;
+  const curSub = _subs.find(s=>s.hubType===_selectedPlan.hubType);
+
+  try {
+    await CF('initiateSTKPush')({
+      phone, amountKES: chargeKES, payRef,
+      narrative: `SOKONI ${_selectedPlan.name||_selectedPlan.id} upgrade`,
+      meta: {
+        purpose:        'subscription_upgrade',
+        planId:         _selectedPlan.id,
+        hubType:        _selectedPlan.hubType || _selectedPlan.hubType,
+        billingCycle:   _selectedCycle,
+        subscriptionId: curSub?.id || '',
+      },
+    });
+    _pollPayment(payRef);
+  } catch (e) {
+    stkDiv.innerHTML = `<p style="color:var(--danger);font-size:.82rem">${e.message}</p>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="window._closeModal()">Close</button>`;
+  }
+};
+
+function _pollPayment(payRef) {
+  if (_payUnsub) _payUnsub();
+  const stkDiv = document.getElementById('modal-stk');
+  let ticks = 0;
+  const timer = setInterval(()=>{ if(++ticks>180){clearInterval(timer);
+    stkDiv.innerHTML=`<p style="color:var(--warn);font-size:.82rem">Payment timed out. If you completed it, your plan will be activated automatically.</p>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="window._closeModal()">Close</button>`;
+  }}, 1000);
+
+  _payUnsub = onSnapshot(doc(db,'payments',payRef), async (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.data();
+    if (data.status==='COMPLETE'||data.status==='PAID') {
+      clearInterval(timer);
+      stkDiv.innerHTML = `<div class="stk-wrap"><p style="font-size:1.3rem;margin-bottom:6px">✓</p>
+        <p style="font-weight:700;color:var(--success)">Payment confirmed!</p>
+        <p class="stk-msg" style="margin-top:5px">Activating upgrade…</p></div>`;
+      try {
+        await CF('subUpgradeWithProration')({ newPlanId:_selectedPlan.id, billingCycle:_selectedCycle, paymentRef:payRef, preview:false });
+        stkDiv.innerHTML = `<div class="stk-wrap"><p style="font-size:1.4rem;margin-bottom:6px">🎉</p>
+          <p style="font-weight:700;color:var(--success)">Upgraded to ${_selectedPlan.name||_selectedPlan.id}!</p>
+          <p class="stk-msg" style="margin-top:5px">All features are now unlocked.</p>
+          <button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="location.reload()">Done</button></div>`;
+      } catch (_) {
+        stkDiv.innerHTML = `<div class="stk-wrap"><p style="color:var(--success)">Payment received. Your plan will be activated shortly.</p>
+          <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="location.reload()">Refresh</button></div>`;
+      }
+    } else if (data.status==='FAILED'||data.status==='CANCELLED') {
+      clearInterval(timer);
+      stkDiv.innerHTML = `<p style="color:var(--danger);font-size:.82rem">Payment failed or cancelled.</p>
+        <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="window._closeModal()">Close</button>`;
+    }
+  }, ()=>{});
+}
+
+/* ── Cancel ── */
+window._cancel = async function(subId, name) {
+  if (!confirm(`Cancel ${name}? You keep access until the billing period ends.`)) return;
+  try { await CF('subCancel')({ subscriptionId:subId, immediate:false }); await _load(); }
+  catch (e) { alert(e.message); }
+};
+
+/* ── Reactivate ── */
+window._reactivate = async function(subId) {
+  try { await CF('subReactivate')({ subscriptionId:subId }); await _load(); }
+  catch (e) { alert(e.message); }
+};
+
+/* ── Modal ── */
+function _openModal(title) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-proration').style.display = '';
+  document.getElementById('modal-acts').style.display = '';
+  document.getElementById('modal-stk').style.display = 'none';
+  document.getElementById('upgrade-modal').classList.add('open');
+}
+window._closeModal = function() {
+  document.getElementById('upgrade-modal').classList.remove('open');
+  if (_payUnsub) { _payUnsub(); _payUnsub = null; }
+};
+document.getElementById('modal-close-btn').onclick = window._closeModal;
+document.getElementById('upgrade-modal').addEventListener('click', (e) => { if(e.target===e.currentTarget) window._closeModal(); });
+</script>
+<script src="sokoni-config.js"></script>
+</body>
+</html>

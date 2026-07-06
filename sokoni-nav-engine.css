@@ -155,7 +155,7 @@ body.sk-workspace-seller {
 }
 @media (max-width: 600px) {
   body.sk-workspace-seller.sk-has-search {
-    padding-top: calc(var(--sk-snav-top, 120px) + 48px) !important;
+    padding-top: calc(var(--sk-snav-top, 64px) + 48px) !important;
   }
 }
 
@@ -477,4 +477,290 @@ body.sk-workspace-provider   .bottom-nav.sk-nav-injected .active-bnav .bnav-emoj
   .bnav-emoji { font-size: 16px !important; }
   .bottom-nav.sk-nav-injected .bnav-item { padding: 7px 2px 5px !important; font-size: 8px !important; }
   .sk-snav-item { padding: 4px 7px !important; min-width: 38px !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DESKTOP SIDEBAR  (sk-ws-sidebar)
+   Injected by _buildDesktopSidebar() for seller/admin/superAdmin.
+   Body gets class sk-has-sidebar when sidebar is present.
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Sidebar container ── */
+.sk-ws-sidebar {
+  position: fixed;
+  top: var(--sk-snav-top, 64px);
+  left: 0;
+  bottom: 0;
+  width: var(--sk-sidebar-w, 220px);
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  background: rgba(5,10,5,0.99);
+  border-right: 1px solid rgba(113,255,0,0.09);
+  overflow: hidden;
+  transition: width 0.22s cubic-bezier(0.4,0,0.2,1);
+  will-change: width;
+}
+.sk-ws-sidebar--admin     { border-right-color: rgba(0,170,255,0.1); }
+.sk-ws-sidebar--superAdmin{ border-right-color: rgba(255,215,0,0.1); }
+
+/* ── Workspace header ── */
+.sk-sidebar-header {
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.055);
+  flex-shrink: 0;
+}
+.sk-sidebar-ws {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+}
+.sk-sidebar-ws-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  width: 30px;
+  text-align: center;
+  line-height: 1;
+}
+.sk-sidebar-ws-info { min-width: 0; overflow: hidden; }
+.sk-sidebar-ws-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+.sk-sidebar-ws-role {
+  font-size: 9px;
+  color: rgba(113,255,0,0.6);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-top: 2px;
+}
+.sk-ws-sidebar--admin      .sk-sidebar-ws-role { color: rgba(0,170,255,0.65); }
+.sk-ws-sidebar--superAdmin .sk-sidebar-ws-role { color: rgba(255,215,0,0.65); }
+
+/* ── Nav area ── */
+.sk-sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 8px 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(113,255,0,0.08) transparent;
+}
+.sk-sidebar-nav::-webkit-scrollbar { width: 3px; }
+.sk-sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+.sk-sidebar-nav::-webkit-scrollbar-thumb { background: rgba(113,255,0,0.1); border-radius: 2px; }
+
+.sk-sidebar-group { margin-bottom: 4px; }
+.sk-sidebar-group-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.2);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 10px 6px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ── Nav item ── */
+.sk-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: rgba(255,255,255,0.5);
+  text-decoration: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background 0.13s, color 0.13s;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  line-height: 1.2;
+}
+.sk-sidebar-item:hover {
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.85);
+}
+.sk-sidebar-item--active {
+  background: rgba(113,255,0,0.1) !important;
+  color: #71ff00 !important;
+  font-weight: 700 !important;
+}
+.sk-sidebar-item--active .sk-sidebar-item-icon {
+  filter: drop-shadow(0 0 5px rgba(113,255,0,0.4));
+}
+.sk-ws-sidebar--admin      .sk-sidebar-item--active { background: rgba(0,170,255,0.1) !important; color: #00aaff !important; }
+.sk-ws-sidebar--superAdmin .sk-sidebar-item--active { background: rgba(255,215,0,0.1)  !important; color: #ffd700 !important; }
+
+.sk-sidebar-item-icon {
+  font-size: 15px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.sk-sidebar-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Footer ── */
+.sk-sidebar-footer {
+  padding: 10px 10px 14px;
+  border-top: 1px solid rgba(255,255,255,0.055);
+  flex-shrink: 0;
+}
+.sk-sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px;
+  overflow: hidden;
+}
+.sk-sidebar-user-av {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #71ff00, #4fc800);
+  color: #050f05;
+  font-size: 12px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sk-ws-sidebar--admin      .sk-sidebar-user-av { background: linear-gradient(135deg, #00aaff, #0077cc); color: #fff; }
+.sk-ws-sidebar--superAdmin .sk-sidebar-user-av { background: linear-gradient(135deg, #ffd700, #ffaa00); color: #1a1000; }
+
+.sk-sidebar-user-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.sk-sidebar-user-name {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sk-sidebar-user-role {
+  display: block;
+  font-size: 9px;
+  color: rgba(255,255,255,0.3);
+  margin-top: 1px;
+  white-space: nowrap;
+}
+.sk-sidebar-profile-link {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.3);
+  text-decoration: none;
+  font-size: 11px;
+  flex-shrink: 0;
+  transition: background 0.13s, color 0.13s;
+}
+.sk-sidebar-profile-link:hover {
+  background: rgba(113,255,0,0.08);
+  color: #71ff00;
+  border-color: rgba(113,255,0,0.2);
+}
+
+/* ── Role switcher pills (multi-role users) ── */
+.sk-sidebar-role-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+.sk-sidebar-role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.42);
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.sk-sidebar-role-pill:hover {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.82);
+}
+.sk-sidebar-role-pill--active {
+  background: rgba(113,255,0,0.1) !important;
+  border-color: rgba(113,255,0,0.3) !important;
+  color: #71ff00 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BODY LAYOUT — shifts content right when sidebar present
+   Only kicks in when sk-has-sidebar is on <body>.
+═══════════════════════════════════════════════════════════════ */
+
+/* Tablet: collapsed icon-rail (56px) */
+@media (min-width: 769px) and (max-width: 1023px) {
+  :root { --sk-sidebar-w: 56px; }
+
+  body.sk-has-sidebar {
+    padding-left: 56px !important;
+    /* top nav only — sub-nav is hidden below */
+    padding-top: var(--sk-snav-top, 64px) !important;
+  }
+  /* Hide labels and non-icon elements in collapsed state */
+  body.sk-has-sidebar .sk-sidebar-item-label,
+  body.sk-has-sidebar .sk-sidebar-group-label,
+  body.sk-has-sidebar .sk-sidebar-ws-info,
+  body.sk-has-sidebar .sk-sidebar-user-info,
+  body.sk-has-sidebar .sk-sidebar-profile-link,
+  body.sk-has-sidebar .sk-sidebar-role-pills { display: none !important; }
+  /* Center icons in collapsed state */
+  body.sk-has-sidebar .sk-sidebar-item { padding: 10px; justify-content: center; }
+  body.sk-has-sidebar .sk-sidebar-item-icon { width: auto; font-size: 18px; }
+  body.sk-has-sidebar .sk-sidebar-user { justify-content: center; }
+  body.sk-has-sidebar .sk-sidebar-header { padding: 12px 8px; }
+  body.sk-has-sidebar .sk-sidebar-ws  { justify-content: center; }
+  /* Sub-nav hidden — sidebar replaces it */
+  body.sk-has-sidebar #sk-seller-subnav { display: none !important; }
+}
+
+/* Desktop: full sidebar (220px) */
+@media (min-width: 1024px) {
+  :root { --sk-sidebar-w: 220px; }
+
+  body.sk-has-sidebar {
+    padding-left: 220px !important;
+    /* Only top nav height — sub-nav is hidden below */
+    padding-top: var(--sk-snav-top, 64px) !important;
+  }
+  /* Sub-nav hidden — sidebar replaces it */
+  body.sk-has-sidebar #sk-seller-subnav { display: none !important; }
 }

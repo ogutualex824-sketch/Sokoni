@@ -38,6 +38,7 @@
     html {
       scroll-behavior: smooth;
       -webkit-text-size-adjust: 100%;
+      scroll-padding-bottom: 140px; /* keep focused fields above keyboard */
     }
 
     body {
@@ -46,8 +47,16 @@
       font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
       font-size: 15px;
       line-height: 1.55;
-      min-height: 100vh;
-      overflow-x: hidden;
+      min-height: 100dvh;
+      min-height: 100vh; /* fallback */
+      /* CRITICAL: overflow-x:hidden suppresses iOS touch-momentum scroll.
+         Use clip instead — it blocks overflow visually without creating a
+         scroll container, so body scroll stays fully functional on iOS.  */
+      overflow-x: clip;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: manipulation;       /* removes 300ms tap delay on iOS */
+      overscroll-behavior-x: none;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -66,7 +75,9 @@
 
     input, select, textarea {
       font-family: inherit;
-      font-size: 15px;
+      /* 16px minimum — iOS auto-zooms the viewport when focused
+         input font-size is < 16px, which displaces the layout.   */
+      font-size: 16px;
       background: var(--bg3);
       color: var(--text);
       border: 1.5px solid var(--border);
@@ -75,7 +86,8 @@
       width: 100%;
       outline: none;
       transition: border-color var(--transition);
-      min-height: 44px; /* 16px min-height rule for mobile tap targets */
+      min-height: 44px;
+      scroll-margin-bottom: 140px; /* keyboard avoidance */
     }
     input:focus, select:focus, textarea:focus {
       border-color: var(--blue);
@@ -92,7 +104,11 @@
       z-index: 100;
       background: var(--bg2);
       border-bottom: 1px solid var(--border);
-      padding: 12px 16px 10px;
+      /* Respect iPhone notch / Dynamic Island (safe-area-inset-top can be
+         44–59px). Without this, the bar text overlaps the status bar.    */
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 10px;
+      padding-left: max(16px, env(safe-area-inset-left, 16px));
+      padding-right: max(16px, env(safe-area-inset-right, 16px));
     }
 
     .progress-inner {
@@ -146,8 +162,11 @@
     #wizard-wrap {
       max-width: var(--max-w);
       margin: 0 auto;
-      padding: 88px 16px 60px;
-      min-height: 100vh;
+      /* Top padding = fixed bar (~56px) + safe-area-inset-top + breathing room.
+         On iPhone 14 Pro (59px notch) this becomes 59+88 = 147px — correct.  */
+      padding: calc(env(safe-area-inset-top, 0px) + 88px) 16px max(60px, calc(env(safe-area-inset-bottom, 0px) + 24px));
+      min-height: 100dvh;
+      min-height: 100vh; /* fallback */
     }
 
     /* ── Steps ── */
@@ -155,7 +174,12 @@
       display: none;
       animation: slideIn 0.28s ease both;
     }
-    .step.active { display: block; }
+    .step.active {
+      display: block;
+      /* Extra bottom padding so the last field is never clipped by the
+         home indicator bar or sticky action buttons.                   */
+      padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    }
 
     @keyframes slideIn {
       from { opacity: 0; transform: translateX(32px); }
@@ -281,6 +305,13 @@
       align-items: center;
       gap: 10px;
       margin-top: 24px;
+      /* Stick to the bottom of the scroll container so Continue is always
+         reachable without scrolling on short screens.                   */
+      position: sticky;
+      bottom: max(0px, env(safe-area-inset-bottom, 0px));
+      background: var(--bg);
+      padding: 12px 0 max(12px, env(safe-area-inset-bottom, 12px));
+      z-index: 5;
     }
     .btn-row .btn-primary { flex: 1; }
 
@@ -332,7 +363,7 @@
     /* ── Toast ── */
     #toast-area {
       position: fixed;
-      bottom: 24px;
+      bottom: max(24px, calc(env(safe-area-inset-bottom, 0px) + 12px));
       left: 50%;
       transform: translateX(-50%);
       z-index: 9999;
@@ -2088,6 +2119,49 @@
       document.getElementById('receipt-modal').classList.remove('open');
     }
   });
+
+  /* ════════════════════════════════════════════════════════
+     MOBILE KEYBOARD AVOIDANCE
+     Scrolls the focused input into view when the virtual
+     keyboard opens / resizes the visual viewport.
+     This page does not load sokoni-form-engine.js so the
+     logic lives inline here.
+  ════════════════════════════════════════════════════════ */
+  (function () {
+    let _t = null;
+
+    function scrollToFocused() {
+      const el = document.activeElement;
+      if (!el || !['INPUT','TEXTAREA','SELECT'].includes(el.tagName)) return;
+
+      if (window.visualViewport) {
+        const vv = window.visualViewport;
+        const rect = el.getBoundingClientRect();
+        const keyboardTop = vv.offsetTop + vv.height;
+        const inputBottom = rect.bottom + 32; /* breathing room */
+        if (inputBottom > keyboardTop) {
+          el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      } else {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+
+    /* Fire when keyboard opens (visualViewport shrinks) */
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        clearTimeout(_t);
+        _t = setTimeout(scrollToFocused, 120);
+      }, { passive: true });
+    }
+
+    /* Fire on focus — delayed so keyboard has time to open */
+    document.addEventListener('focusin', e => {
+      if (!['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+      clearTimeout(_t);
+      _t = setTimeout(scrollToFocused, 350);
+    }, { passive: true });
+  }());
 
   /* ════════════════════════════════════════════════════════
      INIT — called once after auth resolves + progress restored

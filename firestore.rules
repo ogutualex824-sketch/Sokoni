@@ -112,7 +112,7 @@ service cloud.firestore {
 
     match /providers/{providerId} {
       allow read:   if true;
-      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid;
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
       allow update: if isAdmin()
                     || (isAuthed()
                         && resource.data.uid == request.auth.uid
@@ -125,7 +125,11 @@ service cloud.firestore {
 
     match /bookings/{bookingId} {
 
-      allow create: if isAuthed();
+      allow create: if isAuthed()
+                    && (request.resource.data.customerId == request.auth.uid
+                        || request.resource.data.buyerId  == request.auth.uid
+                        || request.resource.data.userId   == request.auth.uid)
+                    && noAdminFields();
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid          == request.auth.uid)
                     || (isAuthed() && resource.data.buyerId      == request.auth.uid)
@@ -742,10 +746,13 @@ service cloud.firestore {
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.buyerUid  == request.auth.uid)
                     || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+      // SECURITY: status=completed must be set exclusively by the server-side
+      // verifyIntasendPayment / processFosWebhook Cloud Functions via Admin SDK.
+      // Clients may only create a pending intent; CF upgrades it to completed.
       allow create: if isAuthed()
                     && request.resource.data.keys().hasAll(['productId','buyerUid','sellerUid','amount','ref','status'])
                     && request.resource.data.buyerUid == request.auth.uid
-                    && request.resource.data.status   == 'completed'
+                    && request.resource.data.status   in ['pending', 'processing']
                     && request.resource.data.amount    > 0;
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -1506,7 +1513,8 @@ service cloud.firestore {
                     && request.resource.data.viewCount == 1;
       allow update: if isAuthed()
                     && request.resource.data.diff(resource.data)
-                       .affectedKeys().hasOnly(['viewCount','lastViewAt']);
+                       .affectedKeys().hasOnly(['viewCount','lastViewAt'])
+                    && request.resource.data.viewCount == resource.data.viewCount + 1;
       allow delete: if isAdmin();
     }
 
@@ -3107,6 +3115,15 @@ service cloud.firestore {
 
     match /chatPolicies/{docId} {
       allow read:  if isAdmin();
+    }
+
+    match /moderationQueue/{reportId} {
+      allow read:   if isAdmin();
+      allow create: if isAuthed()
+                    && request.resource.data.reportedBy == request.auth.uid
+                    && request.resource.data.keys().hasAll(['conversationId','reportedBy','reason','status','createdAt'])
+                    && request.resource.data.status == 'pending';
+      allow update: if isAdmin();
     }
 
     match /reviews/{reviewId} {

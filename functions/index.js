@@ -8974,3 +8974,24 @@ const selfHeal = require('./self-heal');
 exports.runScheduledSelfHeal  = selfHeal.runScheduledSelfHeal;
 exports.runManualSelfHeal     = selfHeal.runManualSelfHeal;
 exports.getSelfHealHistory    = selfHeal.getSelfHealHistory;
+
+/* ── SmartPOS 2.0 — Peripheral Management ───────────────────────────────── */
+const posPeripherals = require('./pos-peripherals');
+exports.posRegisterPeripheral       = posPeripherals.posRegisterPeripheral;
+exports.posUpdatePeripheralStatus   = posPeripherals.posUpdatePeripheralStatus;
+exports.posRemovePeripheral         = posPeripherals.posRemovePeripheral;
+exports.posGetPeripherals           = posPeripherals.posGetPeripherals;
+exports.posCreateCustomerDisplay    = posPeripherals.posCreateCustomerDisplay;
+exports.posUpdateCustomerDisplay    = posPeripherals.posUpdateCustomerDisplay;
+exports.posCleanupPeripheralSignals = posPeripherals.posCleanupPeripheralSignals;
+
+/* ── Redis Integrations v1.0 — Firestore → Redis event sync ────────────── */
+const redisIntegrations = require('./redis-integrations');
+exports.onOrderCreated          = redisIntegrations.onOrderCreated;
+exports.onOrderStatusChange     = redisIntegrations.onOrderStatusChange;
+exports.onPaymentCreated        = redisIntegrations.onPaymentCreated;
+exports.onPaymentUpdated        = redisIntegrations.onPaymentUpdated;
+exports.onInventoryUpdated      = redisIntegrations.onInventoryUpdated;
+exports.onUserCreated           = redisIntegrations.onUserCreated;
+exports.onRiderStatusChange     = redisIntegrations.onRiderStatusChange;
+exports.onDeliveryStatusChange  = redisIntegrations.onDeliveryStatusChange;

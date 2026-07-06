@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>RFQ Management â€” SOKONI B2B</title>
+<title>RFQ Management — SOKONI B2B</title>
 <link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#00aaff">
@@ -87,8 +87,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 <script src="sokoni-b2b.js"></script>
 
 <nav class="fn">
-  <a href="b2b.html" class="fn-back">â†</a>
-  <span style="font-size:14px;font-weight:800;flex:1;">ðŸ“‹ RFQ Management</span>
+  <a href="b2b.html" class="fn-back">←</a>
+  <span style="font-size:14px;font-weight:800;flex:1;">📋 RFQ Management</span>
   <button onclick="deleteThisRFQ()" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#ef4444;padding:7px 14px;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">Delete RFQ</button>
 </nav>
 
@@ -99,16 +99,16 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
   </div>
 
   <div class="rfq-tab-bar">
-    <button class="rfq-tab active" onclick="switchTab('quotes',this)">ðŸ“Š Compare Quotes</button>
-    <button class="rfq-tab" onclick="switchTab('table',this)">ðŸ“‹ Comparison Table</button>
-    <button class="rfq-tab" onclick="switchTab('submit',this)">ðŸ“¤ Submit Quote</button>
-    <button class="rfq-tab" onclick="switchTab('negotiate',this)">ðŸ¤ Negotiate</button>
+    <button class="rfq-tab active" onclick="switchTab('quotes',this)">📊 Compare Quotes</button>
+    <button class="rfq-tab" onclick="switchTab('table',this)">📋 Comparison Table</button>
+    <button class="rfq-tab" onclick="switchTab('submit',this)">📤 Submit Quote</button>
+    <button class="rfq-tab" onclick="switchTab('negotiate',this)">🤝 Negotiate</button>
   </div>
 
   <div class="rfq-pane active" id="pane-quotes">
     <div id="quotesGrid" class="qc-grid"></div>
-    <div id="noQuotes" style="display:none;" class="rfq-empty"><div class="big">ðŸ’¬</div><p>No quotes received yet.<br>Share your RFQ with suppliers to get offers.</p>
-      <button onclick="switchTab('submit',document.querySelectorAll('.rfq-tab')[2])" style="margin-top:14px;padding:10px 20px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.3);color:#00aaff;border-radius:10px;cursor:pointer;font-weight:800;font-family:inherit;">Be the first to submit a quote â†’</button>
+    <div id="noQuotes" style="display:none;" class="rfq-empty"><div class="big">💬</div><p>No quotes received yet.<br>Share your RFQ with suppliers to get offers.</p>
+      <button onclick="switchTab('submit',document.querySelectorAll('.rfq-tab')[2])" style="margin-top:14px;padding:10px 20px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.3);color:#00aaff;border-radius:10px;cursor:pointer;font-weight:800;font-family:inherit;">Be the first to submit a quote →</button>
     </div>
   </div>
 
@@ -119,12 +119,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
         <tbody id="compTableBody"></tbody>
       </table>
     </div>
-    <div id="noTableData" class="rfq-empty" style="display:none;"><div class="big">ðŸ“‹</div><p>No quotes to compare yet.</p></div>
+    <div id="noTableData" class="rfq-empty" style="display:none;"><div class="big">📋</div><p>No quotes to compare yet.</p></div>
   </div>
 
   <div class="rfq-pane" id="pane-submit">
     <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;">
-      <div style="font-size:14px;font-weight:900;color:white;margin-bottom:16px;">ðŸ“¤ Submit Your Quote</div>
+      <div style="font-size:14px;font-weight:900;color:white;margin-bottom:16px;">📤 Submit Your Quote</div>
       <label class="b2-label">Your Company Name *</label>
       <input id="qtSup" class="b2-input" placeholder="XYZ Suppliers Ltd.">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -139,13 +139,13 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
       <textarea id="qtNotes" class="b2-textarea" placeholder="What's included, delivery terms, payment terms, warranties..."></textarea>
       <label class="b2-label">Your Contact *</label>
       <input id="qtContact" class="b2-input" placeholder="07XXXXXXXX or email@company.com">
-      <button class="b2-submit" onclick="submitQuote()">ðŸ“¤ Submit Quote to Buyer</button>
+      <button class="b2-submit" onclick="submitQuote()">📤 Submit Quote to Buyer</button>
       <div id="qtMsg" style="font-size:12px;margin-top:10px;min-height:14px;"></div>
     </div>
   </div>
 
   <div class="rfq-pane" id="pane-negotiate">
-    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:12px;">ðŸ¤ Negotiation Thread</div>
+    <div style="font-size:13px;font-weight:800;color:white;margin-bottom:12px;">🤝 Negotiation Thread</div>
     <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;height:300px;display:flex;flex-direction:column;margin-bottom:12px;">
       <div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;" id="negMsgList"></div>
       <div style="display:flex;gap:8px;padding:12px;border-top:1px solid rgba(255,255,255,0.07);">
@@ -172,7 +172,7 @@ let _rfq = null;
 function load() {
   if (!_rfqId) { showAllRFQs(); return; }
   _rfq = B.getRFQById(_rfqId);
-  if (!_rfq) { document.getElementById('rfqHdr').innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">RFQ not found. <a href="b2b.html" style="color:#00aaff;">Go to B2B Hub â†’</a></div>'; return; }
+  if (!_rfq) { document.getElementById('rfqHdr').innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);">RFQ not found. <a href="b2b.html" style="color:#00aaff;">Go to B2B Hub →</a></div>'; return; }
 
   renderHeader();
   renderQuotes();
@@ -183,16 +183,16 @@ function load() {
 function showAllRFQs() {
   const rfqs = B.getRFQs();
   document.getElementById('rfqHdr').innerHTML = rfqs.length ?
-    `<div style="font-size:15px;font-weight:800;color:white;margin-bottom:14px;">ðŸ“‹ All My RFQs</div>` +
+    `<div style="font-size:15px;font-weight:800;color:white;margin-bottom:14px;">📋 All My RFQs</div>` +
     rfqs.map(r=>`
     <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;margin-bottom:10px;cursor:pointer;" onclick="window.location.href='b2b-rfq.html?id=${r.id}'">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
         <span style="font-size:13px;font-weight:800;color:white;">${r.title}</span>
         <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.2);color:#00aaff;">${r.status}</span>
       </div>
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);">#${r.id} Â· ${B.timeSince(r.createdAt)} Â· ${B.getQuotes(r.id).length} quote(s)</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);">#${r.id} · ${B.timeSince(r.createdAt)} · ${B.getQuotes(r.id).length} quote(s)</div>
     </div>`).join('') :
-    '<div class="rfq-empty"><div class="big">ðŸ“‹</div><p>No RFQs posted yet.<br><a href="b2b.html?tab=rfq-create" style="color:#00aaff;font-weight:800;">Post your first RFQ â†’</a></p></div>';
+    '<div class="rfq-empty"><div class="big">📋</div><p>No RFQs posted yet.<br><a href="b2b.html?tab=rfq-create" style="color:#00aaff;font-weight:800;">Post your first RFQ →</a></p></div>';
   document.querySelector('.rfq-tab-bar').style.display='none';
   document.querySelectorAll('.rfq-pane').forEach(p=>p.style.display='none');
 }
@@ -208,16 +208,16 @@ function renderHeader() {
       </div>
       <div class="rfq-hdr-meta">
         <span>#${_rfq.id}</span>
-        <span>ðŸ“… Posted ${B.timeSince(_rfq.createdAt)}</span>
-        ${_rfq.deadline?`<span>ðŸ“… Need by: ${_rfq.deadline}</span>`:''}
-        <span>ðŸ“¦ ${_rfq.qty||'â€”'} ${_rfq.unit||'units'}</span>
-        ${_rfq.deliveryLocation?`<span>ðŸ“ ${_rfq.deliveryLocation}</span>`:''}
+        <span>📅 Posted ${B.timeSince(_rfq.createdAt)}</span>
+        ${_rfq.deadline?`<span>📅 Need by: ${_rfq.deadline}</span>`:''}
+        <span>📦 ${_rfq.qty||'—'} ${_rfq.unit||'units'}</span>
+        ${_rfq.deliveryLocation?`<span>📍 ${_rfq.deliveryLocation}</span>`:''}
       </div>
       ${_rfq.desc?`<div style="font-size:13px;color:rgba(255,255,255,0.5);line-height:1.6;margin-bottom:10px;">${_rfq.desc}</div>`:''}
       <div class="rfq-stat-row">
         <div class="rfq-stat"><div class="rfq-stat-val">${quotes.length}</div><div class="rfq-stat-lbl">Quotes Received</div></div>
         <div class="rfq-stat"><div class="rfq-stat-val">${_rfq.budget?'KES '+B.fmt(_rfq.budget):'Open'}</div><div class="rfq-stat-lbl">Budget</div></div>
-        <div class="rfq-stat"><div class="rfq-stat-val">${quotes.length?'KES '+B.fmt(Math.min(...quotes.map(q=>q.unitPrice||Infinity))):'â€”'}</div><div class="rfq-stat-lbl">Best Price / Unit</div></div>
+        <div class="rfq-stat"><div class="rfq-stat-val">${quotes.length?'KES '+B.fmt(Math.min(...quotes.map(q=>q.unitPrice||Infinity))):'—'}</div><div class="rfq-stat-lbl">Best Price / Unit</div></div>
         <div class="rfq-stat"><div class="rfq-stat-val">${quotes.filter(q=>q.status==='pending').length}</div><div class="rfq-stat-lbl">Pending Review</div></div>
       </div>
     </div>`;
@@ -236,20 +236,20 @@ function renderQuotes() {
     const isBest = i===0 && q.status!=='rejected';
     return `
     <div class="qc-card ${isBest?'best':''}">
-      ${isBest?'<div class="qc-best-badge">ðŸ† Best Price</div>':''}
+      ${isBest?'<div class="qc-best-badge">🏆 Best Price</div>':''}
       <span class="qc-status" style="background:${st.color}18;border:1px solid ${st.color}40;color:${st.color};">${st.label}</span>
-      <div class="qc-sup">ðŸ­ ${q.supplierName}</div>
+      <div class="qc-sup">🏭 ${q.supplierName}</div>
       <div class="qc-price">KES ${B.fmt(q.unitPrice)} <span style="font-size:13px;color:rgba(255,255,255,0.4);">/ unit</span></div>
       <div class="qc-total">Total: KES ${B.fmt(q.totalPrice)}</div>
-      <div class="qc-row"><span class="lbl">Lead Time</span><span class="val">${q.leadTime||'â€”'}</span></div>
-      <div class="qc-row"><span class="lbl">Valid Until</span><span class="val">${q.validUntil||'â€”'}</span></div>
+      <div class="qc-row"><span class="lbl">Lead Time</span><span class="val">${q.leadTime||'—'}</span></div>
+      <div class="qc-row"><span class="lbl">Valid Until</span><span class="val">${q.validUntil||'—'}</span></div>
       <div class="qc-row"><span class="lbl">Contact</span><span class="val">${q.contact}</span></div>
       ${q.notes?`<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:8px;line-height:1.5;">${q.notes}</div>`:''}
       ${q.status==='pending'?`
       <div class="qc-actions">
-        <button class="qc-btn qc-accept" onclick="acceptQ('${q.id}')">âœ… Accept</button>
-        <button class="qc-btn qc-msg" onclick="openNegotiate('${q.id}','${q.supplierName.replace(/'/g,"\\'")}')">ðŸ¤ Negotiate</button>
-        <button class="qc-btn qc-reject" onclick="rejectQ('${q.id}')">âœ—</button>
+        <button class="qc-btn qc-accept" onclick="acceptQ('${q.id}')">✅ Accept</button>
+        <button class="qc-btn qc-msg" onclick="openNegotiate('${q.id}','${q.supplierName.replace(/'/g,"\\'")}')">🤝 Negotiate</button>
+        <button class="qc-btn qc-reject" onclick="rejectQ('${q.id}')">✗</button>
       </div>`:''}
     </div>`;
   }).join('');
@@ -266,11 +266,11 @@ function renderTable() {
     const isBest = q.unitPrice===minPrice && q.status!=='rejected';
     const st = B.QUOTE_STATUS[q.status]||{label:q.status};
     return `<tr>
-      <td style="font-weight:800;color:white;">${q.supplierName} ${isBest?'ðŸ†':''}</td>
+      <td style="font-weight:800;color:white;">${q.supplierName} ${isBest?'🏆':''}</td>
       <td class="${isBest?'best-val':''}">KES ${B.fmt(q.unitPrice)}</td>
       <td>KES ${B.fmt(q.totalPrice)}</td>
-      <td>${q.leadTime||'â€”'}</td>
-      <td>${q.validUntil||'â€”'}</td>
+      <td>${q.leadTime||'—'}</td>
+      <td>${q.validUntil||'—'}</td>
       <td><span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.5);">${st.label}</span></td>
     </tr>`;
   }).join('');
@@ -285,7 +285,7 @@ function acceptQ(quoteId) {
     items:[{name:_rfq?.title||'B2B Order',qty:q.qty||_rfq?.qty||1,unitPrice:q.unitPrice}],
     total:q.totalPrice, deliveryAddress:_rfq?.deliveryLocation,
   });
-  B.showToast('âœ… Quote accepted! PO '+order.id+' created.');
+  B.showToast('✅ Quote accepted! PO '+order.id+' created.');
   renderHeader(); renderQuotes(); renderTable();
 }
 window.acceptQ = acceptQ;
@@ -334,11 +334,11 @@ function submitQuote() {
   const notes = document.getElementById('qtNotes')?.value.trim();
   const contact = document.getElementById('qtContact')?.value.trim();
   const msg = document.getElementById('qtMsg');
-  if (!supplierName||!contact) {msg.innerHTML='<span style="color:#ef4444;">âš ï¸ Company name and contact required</span>';return;}
-  if (!unitPrice||unitPrice<1) {msg.innerHTML='<span style="color:#ef4444;">âš ï¸ Enter a valid unit price</span>';return;}
+  if (!supplierName||!contact) {msg.innerHTML='<span style="color:#ef4444;">⚠️ Company name and contact required</span>';return;}
+  if (!unitPrice||unitPrice<1) {msg.innerHTML='<span style="color:#ef4444;">⚠️ Enter a valid unit price</span>';return;}
   const totalPrice = unitPrice*(qty||_rfq?.qty||1);
   B.submitQuote({rfqId:_rfqId, supplierName, unitPrice, totalPrice, qty, leadTime, validUntil, notes, contact});
-  msg.innerHTML='<span style="color:#22c55e;">âœ… Quote submitted! Buyer will be notified.</span>';
+  msg.innerHTML='<span style="color:#22c55e;">✅ Quote submitted! Buyer will be notified.</span>';
   ['qtSup','qtPrice','qtQty','qtLead','qtValid','qtNotes','qtContact'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   setTimeout(()=>{switchTab('quotes',document.querySelectorAll('.rfq-tab')[0]);renderHeader();renderQuotes();renderTable();},1500);
 }

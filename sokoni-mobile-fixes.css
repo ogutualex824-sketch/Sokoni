@@ -310,3 +310,121 @@ table {
     font-size: max(16px, 1rem) !important;
   }
 }
+
+/* ── Modal / overlay close buttons — sticky at top so they are always reachable
+   even when modal body is tall (360px height, 375px height etc.)             */
+.modal-close,
+.modal-close-btn,
+[class*="modal"] [class*="close"],
+[class*="overlay"] [class*="close"],
+[class*="-overlay"] button[class*="close"],
+.mpesa-close-btn,
+.card-close-btn,
+[aria-label*="Close"][class*="btn"],
+[aria-label*="close"][class*="btn"] {
+  position: sticky !important;
+  top: 12px;
+  z-index: 10;
+  flex-shrink: 0;
+  min-width: 40px !important;
+  min-height: 40px !important;
+}
+
+/* ── Drawer width on very small screens ────────────────────────────────────
+   On 320px, a 90vw drawer is fine; on 360px+, cap to avoid being full-screen */
+@media (max-width: 360px) {
+  .sk-drawer {
+    width: 96vw !important;
+  }
+}
+@media (min-width: 361px) and (max-width: 480px) {
+  .sk-drawer {
+    width: 92vw !important;
+  }
+}
+
+/* ── Content bottom padding — ensure content never hides behind bottom nav ──
+   Bottom nav is 64px; safe-area adds up to 34px on iPhone 15 Pro.
+   120px covers both without being excessive.                                */
+@media (max-width: 768px) {
+  .page-content,
+  .main-content,
+  [class*="page-body"],
+  [class*="content-wrap"],
+  .poc-page {
+    padding-bottom: max(120px, calc(64px + env(safe-area-inset-bottom, 16px) + 32px)) !important;
+  }
+}
+
+/* ── Cards — prevent horizontal overflow on 320–360px ─────────────────────*/
+@media (max-width: 380px) {
+  .sk-card,
+  .card,
+  .product-card,
+  .service-card,
+  .listing-card,
+  [class*="-card"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* ── Horizontal scroll sections — ensure they don't bleed ─────────────────*/
+.hscroll,
+[class*="hscroll"],
+.horizontal-scroll,
+[class*="scroll-row"],
+.product-row,
+.store-row,
+.category-row {
+  overflow-x: auto !important;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-width: 100%;
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+.hscroll::-webkit-scrollbar,
+.horizontal-scroll::-webkit-scrollbar,
+.product-row::-webkit-scrollbar,
+.store-row::-webkit-scrollbar,
+.category-row::-webkit-scrollbar { display: none; }
+
+/* ── Sticky page headers — account for the 64px top nav ───────────────────*/
+.page-header-sticky,
+[class*="sticky-header"],
+[class*="page-header"][class*="sticky"] {
+  position: sticky;
+  top: 64px;
+  z-index: 80;
+}
+
+/* ── Action buttons in cards — min-tap-target on mobile ───────────────────*/
+@media (max-width: 768px) {
+  .btn,
+  button,
+  [role="button"],
+  a[class*="btn"],
+  a[class*="action"] {
+    min-height: 44px;
+  }
+  /* But don't enlarge inline text links */
+  a:not([class]),
+  a[class=""] {
+    min-height: auto;
+  }
+}
+
+/* ── Typography — prevent oversized headings from overflowing on 320px ─────*/
+@media (max-width: 360px) {
+  h1, h2, h3 {
+    overflow-wrap: break-word;
+    word-break: break-word;
+    hyphens: auto;
+  }
+  h1 { font-size: clamp(1.4rem, 7vw, 2rem) !important; }
+  h2 { font-size: clamp(1.2rem, 5.5vw, 1.6rem) !important; }
+}

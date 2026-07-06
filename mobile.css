@@ -10,16 +10,16 @@
    clip prevents horizontal bleed without creating a scroll container. */
 html {
   overflow-x: clip;
-  overflow-y: auto;
+  /* overflow-y intentionally unset (default: visible) — setting overflow-y:auto
+     on <html> with a non-visible <body> overflow promotes <body> to the scroll
+     container on iOS Safari, breaking position:fixed (nav/FAB/drawers scroll away) */
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
-  /* Allow elastic bounce scroll at top/bottom (premium iOS feel) */
   overscroll-behavior-y: auto;
 }
 body {
   overflow-x: clip;
-  overflow-y: auto;
-  /* Prevent horizontal pull that triggers back-navigation on Android */
+  /* overflow-y intentionally unset — see <html> note above */
   overscroll-behavior-x: none;
 }
 

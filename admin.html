@@ -5157,7 +5157,7 @@ function deleteItem(arr,idx,lsKey,refreshFn,_c){
 /* ════════════════════════════════
    HELPERS
 ════════════════════════════════ */
-function h(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function h(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function emptyRow(cols,icon,msg){
   return '<tr><td colspan="'+cols+'"><div class="adm-empty"><div class="adm-empty-icon">'+icon+'</div><p>'+msg+'</p></div></td></tr>';
 }

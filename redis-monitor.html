@@ -1,329 +1,763 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Redis Monitor — SOKONI Super Admin</title>
-<script src="/sokoni-config.js"></script>
-<script src="/firebase.js"></script>
-<script src="/shared-header.js"></script>
-<script src="/sw-register.js"></script>
-<style>
-:root {
-  --bg: #0d1117;
-  --card: #161b22;
-  --border: #30363d;
-  --text: #e6edf3;
-  --muted: #8b949e;
-  --green: #3fb950;
-  --red: #f85149;
-  --yellow: #d29922;
-  --blue: #58a6ff;
-  --purple: #bc8cff;
-  --radius: 8px;
-  --gap: 16px;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
-header { background: var(--card); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
-header h1 { font-size: 18px; font-weight: 600; }
-.badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-.badge.live { background: #1f4a2e; color: var(--green); }
-.badge.down { background: #4a1f1f; color: var(--red); }
-.badge.loading { background: #2a2a1f; color: var(--yellow); }
-main { max-width: 1400px; margin: 0 auto; padding: 24px; }
-.refresh-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-.refresh-bar button { background: #238636; color: #fff; border: none; border-radius: var(--radius); padding: 8px 16px; cursor: pointer; font-size: 13px; }
-.refresh-bar button:hover { background: #2ea043; }
-.auto-label { color: var(--muted); font-size: 12px; }
-.grid { display: grid; gap: var(--gap); }
-.grid-3 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-.grid-2 { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
-.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
-.card h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 16px; }
-.stat { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
-.stat:last-child { border-bottom: none; }
-.stat-label { color: var(--muted); }
-.stat-val { font-weight: 600; font-variant-numeric: tabular-nums; }
-.stat-val.green { color: var(--green); }
-.stat-val.red { color: var(--red); }
-.stat-val.yellow { color: var(--yellow); }
-.stat-val.blue { color: var(--blue); }
-.stat-val.purple { color: var(--purple); }
-.big-stat { text-align: center; padding: 12px 0; }
-.big-stat .num { font-size: 36px; font-weight: 700; }
-.big-stat .lbl { color: var(--muted); font-size: 12px; margin-top: 4px; }
-.progress { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 8px; }
-.progress-bar { height: 100%; border-radius: 4px; transition: width .5s ease; }
-.progress-bar.green { background: var(--green); }
-.progress-bar.yellow { background: var(--yellow); }
-.progress-bar.red { background: var(--red); }
-.error-box { background: #4a1f1f; border: 1px solid var(--red); border-radius: var(--radius); padding: 20px; text-align: center; }
-.error-box p { color: var(--red); font-weight: 600; margin-bottom: 8px; }
-.error-box small { color: var(--muted); }
-.section-title { font-size: 16px; font-weight: 600; margin: 32px 0 16px; }
-.presence-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
-.presence-pill { background: var(--border); border-radius: 6px; padding: 10px; text-align: center; }
-.presence-pill .count { font-size: 24px; font-weight: 700; color: var(--blue); }
-.presence-pill .role { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: capitalize; }
-.queue-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
-.queue-row:last-child { border-bottom: none; }
-.queue-name { min-width: 100px; color: var(--text); font-weight: 500; }
-.queue-bar-wrap { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-.queue-bar { height: 100%; background: var(--purple); border-radius: 4px; transition: width .5s; }
-.queue-count { min-width: 40px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
-.fallback-warn { background: #2a2a1f; border: 1px solid var(--yellow); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 24px; color: var(--yellow); font-size: 13px; }
-.last-updated { color: var(--muted); font-size: 12px; }
-#authGate { display: flex; align-items: center; justify-content: center; height: 60vh; flex-direction: column; gap: 16px; }
-#authGate p { color: var(--muted); }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOKONI · Redis Monitor</title>
+  <link rel="stylesheet" href="sokoni-nav-engine.css" />
+  <style>
+    :root {
+      --bg:       #080810;
+      --bg2:      #0f0f1a;
+      --bg3:      #16162a;
+      --bg4:      #1e1e35;
+      --border:   rgba(124,111,255,.18);
+      --accent:   #7c6fff;
+      --accent2:  #a78bfa;
+      --green:    #34d399;
+      --yellow:   #fbbf24;
+      --red:      #f87171;
+      --blue:     #60a5fa;
+      --cyan:     #22d3ee;
+      --text:     #e2e8f0;
+      --muted:    #94a3b8;
+      --radius:   14px;
+      --glow:     0 0 24px rgba(124,111,255,.25);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      overflow-x: clip;
+    }
+
+    /* ─── Layout ─────────────────────────────────────────────── */
+    #rm-shell {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px 20px 100px;
+    }
+
+    /* ─── Header ────────────────────────────────────────────── */
+    #rm-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 28px;
+    }
+    .rm-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .rm-logo-dot {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      box-shadow: var(--glow);
+    }
+    .rm-logo-text h1 { font-size: 20px; font-weight: 700; letter-spacing: -.5px; }
+    .rm-logo-text p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .rm-status-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    #rm-live-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse-dot 2s infinite;
+      flex-shrink: 0;
+    }
+    #rm-live-dot.offline { background: var(--red); animation: none; }
+    @keyframes pulse-dot { 0%,100%{opacity:1}50%{opacity:.4} }
+
+    #rm-last-refresh { font-size: 12px; color: var(--muted); }
+    #rm-refresh-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    #rm-refresh-btn:hover { background: var(--bg4); }
+
+    /* ─── Section grid ──────────────────────────────────────── */
+    .rm-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .rm-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+    .rm-grid-4 { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+
+    /* ─── Card ──────────────────────────────────────────────── */
+    .rm-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color .2s;
+    }
+    .rm-card:hover { border-color: rgba(124,111,255,.35); }
+    .rm-card-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .rm-card-title .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* ─── Stat ──────────────────────────────────────────────── */
+    .rm-stat {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+    }
+    .rm-stat-val {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1;
+      background: linear-gradient(135deg, #fff, var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .rm-stat-unit {
+      font-size: 13px;
+      color: var(--muted);
+      padding-bottom: 4px;
+    }
+
+    /* ─── KV row ─────────────────────────────────────────────── */
+    .rm-kv { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 13px; }
+    .rm-kv:last-child { border-bottom: none; }
+    .rm-kv-k { color: var(--muted); }
+    .rm-kv-v { font-weight: 600; }
+    .rm-kv-v.green  { color: var(--green);  }
+    .rm-kv-v.yellow { color: var(--yellow); }
+    .rm-kv-v.red    { color: var(--red);    }
+    .rm-kv-v.blue   { color: var(--blue);   }
+    .rm-kv-v.cyan   { color: var(--cyan);   }
+
+    /* ─── Progress bar ───────────────────────────────────────── */
+    .rm-bar-wrap { margin-top: 10px; }
+    .rm-bar-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    .rm-bar-track { height: 6px; background: var(--bg4); border-radius: 99px; overflow: hidden; }
+    .rm-bar-fill  { height: 100%; border-radius: 99px; transition: width .6s ease; }
+    .rm-bar-fill.green  { background: var(--green);  }
+    .rm-bar-fill.yellow { background: var(--yellow); }
+    .rm-bar-fill.red    { background: var(--red);    }
+    .rm-bar-fill.blue   { background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+
+    /* ─── Badge ──────────────────────────────────────────────── */
+    .rm-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .rm-badge.green  { background: rgba(52,211,153,.15);  color: var(--green);  }
+    .rm-badge.yellow { background: rgba(251,191,36,.15);  color: var(--yellow); }
+    .rm-badge.red    { background: rgba(248,113,113,.15); color: var(--red);    }
+    .rm-badge.blue   { background: rgba(96,165,250,.15);  color: var(--blue);   }
+    .rm-badge.purple { background: rgba(124,111,255,.15); color: var(--accent2); }
+
+    /* ─── Section header ─────────────────────────────────────── */
+    .rm-section-hdr {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 28px 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .rm-section-hdr::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+      margin-left: 8px;
+    }
+
+    /* ─── Table ──────────────────────────────────────────────── */
+    .rm-table-wrap { overflow-x: auto; }
+    table.rm-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .rm-table thead th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .rm-table tbody td {
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      color: var(--text);
+      font-family: 'SF Mono', 'Consolas', monospace;
+    }
+    .rm-table tbody tr:last-child td { border-bottom: none; }
+    .rm-table tbody tr:hover td { background: rgba(124,111,255,.04); }
+
+    /* ─── Presence grid ──────────────────────────────────────── */
+    #rm-presence-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .rm-presence-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .rm-presence-chip .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+    .rm-presence-chip .role { color: var(--muted); }
+
+    /* ─── POS terminal map ───────────────────────────────────── */
+    #rm-pos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+    }
+    .rm-pos-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .rm-pos-card .pos-id   { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-family: monospace; }
+    .rm-pos-card .pos-shop { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .rm-pos-card .pos-total {
+      font-size: 20px; font-weight: 800;
+      background: linear-gradient(135deg, #fff, var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .rm-pos-card .pos-items  { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .rm-pos-card .pos-status { margin-top: 8px; }
+
+    /* ─── Lock list ──────────────────────────────────────────── */
+    #rm-locks-list .lock-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      font-size: 12px;
+    }
+    #rm-locks-list .lock-row:last-child { border-bottom: none; }
+    .lock-key { font-family: monospace; color: var(--cyan); max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lock-ttl { color: var(--yellow); }
+
+    /* ─── Rate-limit violation log ───────────────────────────── */
+    #rm-ratelimit-log { max-height: 200px; overflow-y: auto; }
+    .rl-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 12px;
+    }
+    .rl-row:last-child { border-bottom: none; }
+    .rl-action { font-weight: 600; }
+    .rl-id     { font-family: monospace; color: var(--muted); }
+    .rl-time   { color: var(--muted); margin-left: auto; flex-shrink: 0; }
+
+    /* ─── Job audit log ──────────────────────────────────────── */
+    #rm-job-audit { max-height: 220px; overflow-y: auto; }
+    .job-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 12px;
+    }
+    .job-row:last-child { border-bottom: none; }
+    .job-q   { font-weight: 600; width: 90px; flex-shrink: 0; }
+    .job-id  { font-family: monospace; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .job-ok  { color: var(--green); }
+    .job-err { color: var(--red); }
+    .job-time { color: var(--muted); margin-left: auto; flex-shrink: 0; }
+
+    /* ─── Slowlog ────────────────────────────────────────────── */
+    .sl-row {
+      display: flex; gap: 10px; align-items: flex-start;
+      padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 12px;
+    }
+    .sl-row:last-child { border-bottom: none; }
+    .sl-us  { color: var(--yellow); font-family: monospace; flex-shrink: 0; width: 70px; }
+    .sl-cmd { font-family: monospace; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ─── Error list ────────────────────────────────────────── */
+    .err-row { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 12px; }
+    .err-row:last-child { border-bottom: none; }
+    .err-msg { color: var(--red); }
+    .err-ts  { color: var(--muted); margin-top: 2px; }
+
+    /* ─── Auto-refresh toggle ───────────────────────────────── */
+    .rm-toggle {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--muted); cursor: pointer; user-select: none;
+    }
+    .rm-toggle input { accent-color: var(--accent); cursor: pointer; }
+
+    /* ─── Loading / empty ───────────────────────────────────── */
+    .rm-loading {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--muted); padding: 20px 0;
+    }
+    .rm-spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(124,111,255,.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .rm-empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+    /* ─── Access denied ─────────────────────────────────────── */
+    #rm-denied {
+      display: none; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 60vh; gap: 12px; text-align: center;
+    }
+    #rm-denied .icon { font-size: 48px; }
+    #rm-denied h2 { font-size: 20px; font-weight: 700; }
+    #rm-denied p  { color: var(--muted); }
+
+    /* ─── Responsive ────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      #rm-shell { padding: 16px 14px 100px; }
+      .rm-stat-val { font-size: 24px; }
+      #rm-header { gap: 10px; }
+    }
+  </style>
 </head>
 <body>
 
-<header>
-  <h1>Redis Monitor</h1>
-  <span id="statusBadge" class="badge loading">Connecting...</span>
-  <span id="lastUpdated" class="last-updated" style="margin-left:auto"></span>
-</header>
+<div id="rm-shell">
 
-<main>
-  <div id="authGate" style="display:none">
-    <p>Super Admin access required</p>
-    <button onclick="location.href='/login.html'">Sign In</button>
-  </div>
-
-  <div id="monitorContent" style="display:none">
-    <div class="refresh-bar">
-      <button onclick="loadMetrics()">&#8635; Refresh</button>
-      <span class="auto-label">Auto-refreshes every 15s</span>
-    </div>
-
-    <div id="fallbackWarn" class="fallback-warn" style="display:none">
-      ⚠ Redis is unavailable — platform is running in Firestore fallback mode. Check REDIS_URL secret and Memorystore connectivity.
-    </div>
-
-    <!-- Server Info -->
-    <div class="grid grid-3" id="serverCards">
-      <div class="card">
-        <h2>Memory</h2>
-        <div class="big-stat">
-          <div class="num blue" id="memUsed">—</div>
-          <div class="lbl">Used / <span id="memPeak">—</span> Peak</div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Performance</h2>
-        <div class="stat"><span class="stat-label">Ops / sec</span><span class="stat-val green" id="opsPerSec">—</span></div>
-        <div class="stat"><span class="stat-label">Uptime</span><span class="stat-val" id="uptime">—</span></div>
-        <div class="stat"><span class="stat-label">Redis Version</span><span class="stat-val blue" id="version">—</span></div>
-        <div class="stat"><span class="stat-label">Connected Clients</span><span class="stat-val" id="clients">—</span></div>
-      </div>
-      <div class="card">
-        <h2>Cache Hit Rate</h2>
-        <div class="big-stat">
-          <div class="num" id="hitRateNum">—</div>
-          <div class="lbl"><span id="cacheHits">—</span> hits / <span id="cacheMisses">—</span> misses</div>
-        </div>
-        <div class="progress"><div class="progress-bar green" id="hitRateBar" style="width:0%"></div></div>
-      </div>
-      <div class="card">
-        <h2>Keyspace</h2>
-        <div class="big-stat">
-          <div class="num purple" id="totalKeys">—</div>
-          <div class="lbl">Total Keys</div>
-        </div>
+  <!-- Header -->
+  <div id="rm-header">
+    <div class="rm-logo">
+      <div class="rm-logo-dot">⚡</div>
+      <div class="rm-logo-text">
+        <h1>Redis Monitor</h1>
+        <p>SOKONI Infrastructure &middot; Super Admin</p>
       </div>
     </div>
-
-    <!-- Operational Counts -->
-    <div class="section-title">Operational State</div>
-    <div class="grid grid-3">
-      <div class="card">
-        <h2>Active Sessions</h2>
-        <div class="big-stat">
-          <div class="num blue" id="activeSessions">—</div>
-          <div class="lbl">Redis session keys</div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Connected POS Terminals</h2>
-        <div class="big-stat">
-          <div class="num green" id="activePosTerminals">—</div>
-          <div class="lbl">Active terminal states</div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Active Locks</h2>
-        <div class="big-stat">
-          <div class="num yellow" id="activeLocks">—</div>
-          <div class="lbl">Distributed lock keys</div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>Slow Operations</h2>
-        <div class="big-stat">
-          <div class="num" id="slowlogLen">—</div>
-          <div class="lbl">Entries in slowlog</div>
-        </div>
-        <p style="color:var(--muted);font-size:11px;margin-top:8px">Default threshold: 10ms. Run <code>SLOWLOG RESET</code> to clear.</p>
-      </div>
-      <div class="card">
-        <h2>Error Rate</h2>
-        <div class="big-stat">
-          <div class="num" id="errorCount">—</div>
-          <div class="lbl">Errors in current CF instance</div>
-        </div>
-        <p id="lastError" style="color:var(--red);font-size:11px;margin-top:8px;word-break:break-all"></p>
-      </div>
-    </div>
-
-    <!-- Presence -->
-    <div class="section-title">Live Presence</div>
-    <div class="card">
-      <div class="presence-grid" id="presenceGrid">
-        <div class="presence-pill"><div class="count">—</div><div class="role">Loading...</div></div>
-      </div>
-    </div>
-
-    <!-- Queues -->
-    <div class="section-title">Job Queues</div>
-    <div class="card">
-      <div id="queueList"></div>
+    <div class="rm-status-bar">
+      <div id="rm-live-dot"></div>
+      <span id="rm-last-refresh">—</span>
+      <label class="rm-toggle">
+        <input type="checkbox" id="rm-auto-toggle" checked />
+        Auto-refresh 15s
+      </label>
+      <button id="rm-refresh-btn" onclick="loadMetrics()">↻ Refresh</button>
     </div>
   </div>
-</main>
 
-<script>
-let _metricsTimer = null;
+  <!-- Access denied -->
+  <div id="rm-denied">
+    <div class="icon">🔒</div>
+    <h2>Access Denied</h2>
+    <p>This page is restricted to Super Admins.</p>
+  </div>
 
-function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  <!-- Main content -->
+  <div id="rm-content" style="display:none">
 
-function _formatUptime(sec) {
-  if (!sec) return '—';
-  const d = Math.floor(sec / 86400);
-  const h = Math.floor((sec % 86400) / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
-}
+    <!-- KPIs -->
+    <div class="rm-grid-4" id="rm-kpis">
+      <div class="rm-card">
+        <div class="rm-card-title"><span class="dot" style="background:var(--green)"></span>Memory Used</div>
+        <div class="rm-stat"><span class="rm-stat-val" id="kpi-mem">—</span><span class="rm-stat-unit">MB</span></div>
+        <div class="rm-bar-wrap">
+          <div class="rm-bar-label"><span>Used</span><span id="kpi-mem-pct">—</span></div>
+          <div class="rm-bar-track"><div class="rm-bar-fill blue" id="kpi-mem-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="rm-card">
+        <div class="rm-card-title"><span class="dot" style="background:var(--cyan)"></span>Hit Rate</div>
+        <div class="rm-stat"><span class="rm-stat-val" id="kpi-hit">—</span><span class="rm-stat-unit">%</span></div>
+        <div class="rm-bar-wrap">
+          <div class="rm-bar-track"><div class="rm-bar-fill green" id="kpi-hit-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="rm-card">
+        <div class="rm-card-title"><span class="dot" style="background:var(--accent)"></span>Ops / sec</div>
+        <div class="rm-stat"><span class="rm-stat-val" id="kpi-ops">—</span><span class="rm-stat-unit">ops</span></div>
+      </div>
+      <div class="rm-card">
+        <div class="rm-card-title"><span class="dot" style="background:var(--yellow)"></span>Active Sessions</div>
+        <div class="rm-stat"><span class="rm-stat-val" id="kpi-sess">—</span></div>
+      </div>
+    </div>
 
-function _hitRateColor(pct) {
-  if (pct >= 80) return 'green';
-  if (pct >= 50) return 'yellow';
-  return 'red';
-}
+    <!-- Health Overview -->
+    <div class="rm-grid-3">
+      <div class="rm-card">
+        <div class="rm-card-title"><span class="dot" style="background:var(--blue)"></span>Connection</div>
+        <div class="rm-kv"><span class="rm-kv-k">Status</span><span class="rm-kv-v green" id="conn-status">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Uptime</span><span class="rm-kv-v" id="conn-uptime">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Connected clients</span><span class="rm-kv-v" id="conn-clients">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Total commands</span><span class="rm-kv-v" id="conn-cmds">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Keyspace hits</span><span class="rm-kv-v green" id="conn-hits">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Keyspace misses</span><span class="rm-kv-v yellow" id="conn-misses">—</span></div>
+      </div>
+      <div class="rm-card">
+        <div class="rm-card-title"><span class="dot" style="background:var(--green)"></span>Memory</div>
+        <div class="rm-kv"><span class="rm-kv-k">Used memory</span><span class="rm-kv-v" id="mem-used">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Peak memory</span><span class="rm-kv-v" id="mem-peak">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Total system</span><span class="rm-kv-v" id="mem-total">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Fragmentation ratio</span><span class="rm-kv-v" id="mem-frag">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Evicted keys</span><span class="rm-kv-v yellow" id="mem-evict">—</span></div>
+      </div>
+      <div class="rm-card">
+        <div class="rm-card-title"><span class="dot" style="background:var(--accent)"></span>Platform Totals</div>
+        <div class="rm-kv"><span class="rm-kv-k">Active sessions</span><span class="rm-kv-v blue" id="p-sessions">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Active POS terminals</span><span class="rm-kv-v cyan" id="p-pos">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Active locks</span><span class="rm-kv-v yellow" id="p-locks">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Queued jobs (total)</span><span class="rm-kv-v" id="p-jobs">—</span></div>
+        <div class="rm-kv"><span class="rm-kv-k">Online presence</span><span class="rm-kv-v green" id="p-presence">—</span></div>
+      </div>
+    </div>
 
-async function loadMetrics() {
-  if (!window.firebaseFunctions || !window.httpsCallable) return;
-  try {
-    const fn = window.httpsCallable(window.firebaseFunctions, 'redisAdminMetrics');
-    const { data } = await fn({});
+    <!-- Queue depths -->
+    <div class="rm-section-hdr">📬 Queue Depths</div>
+    <div class="rm-grid-4" id="rm-queues-grid">
+      <div class="rm-loading"><div class="rm-spinner"></div> Loading…</div>
+    </div>
 
-    document.getElementById('fallbackWarn').style.display = data.fallback ? 'block' : 'none';
-    const badge = document.getElementById('statusBadge');
+    <!-- Event Stream Lengths -->
+    <div class="rm-section-hdr">📡 Event Streams</div>
+    <div class="rm-grid-4" id="rm-streams-grid">
+      <div class="rm-loading"><div class="rm-spinner"></div> Loading…</div>
+    </div>
 
-    if (data.status === 'unavailable' || data.fallback) {
-      badge.className = 'badge down';
-      badge.textContent = 'Unavailable';
-      document.getElementById('lastUpdated').textContent = 'Last update: ' + new Date().toLocaleTimeString();
-      return;
-    }
+    <!-- POS Terminal Map -->
+    <div class="rm-section-hdr">🖥️ Active POS Terminals</div>
+    <div class="rm-card" style="margin-bottom:20px">
+      <div id="rm-pos-grid"><div class="rm-empty">No active terminals</div></div>
+    </div>
 
-    badge.className = 'badge live';
-    badge.textContent = 'Live';
+    <!-- Presence + Locks -->
+    <div class="rm-grid-2">
+      <div class="rm-card">
+        <div class="rm-card-title"><span class="dot" style="background:var(--green)"></span>Online Presence</div>
+        <div id="rm-presence-grid"><div class="rm-empty">No online users</div></div>
+      </div>
+      <div class="rm-card">
+        <div class="rm-card-title"><span class="dot" style="background:var(--yellow)"></span>Active Locks</div>
+        <div id="rm-locks-list"><div class="rm-empty">No active locks</div></div>
+      </div>
+    </div>
 
-    // Server info
-    document.getElementById('memUsed').textContent = data.memoryUsedHuman || '—';
-    document.getElementById('memPeak').textContent = data.memoryPeakHuman || '—';
-    document.getElementById('opsPerSec').textContent = (data.opsPerSec ?? '—').toLocaleString();
-    document.getElementById('uptime').textContent = _formatUptime(data.uptimeSeconds);
-    document.getElementById('version').textContent = data.version || '—';
-    document.getElementById('clients').textContent = data.connectedClients ?? '—';
-    document.getElementById('totalKeys').textContent = (data.totalKeys ?? '—').toLocaleString();
+    <!-- Rate Limit Violations -->
+    <div class="rm-section-hdr">🚦 Rate Limit Violations</div>
+    <div class="rm-card" style="margin-bottom:20px">
+      <div class="rm-card-title"><span class="dot" style="background:var(--red)"></span>Recent Blocked Requests</div>
+      <div id="rm-ratelimit-log"><div class="rm-empty">No violations logged</div></div>
+    </div>
 
-    // Operational counts
-    document.getElementById('activeSessions').textContent = (data.activeSessions ?? '—').toLocaleString();
-    document.getElementById('activePosTerminals').textContent = (data.activePosTerminals ?? '—').toLocaleString();
+    <!-- Job Audit Log -->
+    <div class="rm-section-hdr">📋 Job Audit Log</div>
+    <div class="rm-card" style="margin-bottom:20px">
+      <div class="rm-card-title"><span class="dot" style="background:var(--blue)"></span>Recent Queue Jobs</div>
+      <div id="rm-job-audit"><div class="rm-loading"><div class="rm-spinner"></div> Loading…</div></div>
+    </div>
 
-    const lockCount = data.activeLocks ?? 0;
-    const lockEl = document.getElementById('activeLocks');
-    lockEl.textContent = lockCount.toLocaleString();
-    lockEl.className = 'num ' + (lockCount > 50 ? 'red' : lockCount > 10 ? 'yellow' : 'green');
+    <!-- Slowlog -->
+    <div class="rm-section-hdr">🐢 Slowlog</div>
+    <div class="rm-card" style="margin-bottom:20px">
+      <div class="rm-card-title"><span class="dot" style="background:var(--yellow)"></span>Slowest Redis Commands</div>
+      <div id="rm-slowlog"><div class="rm-empty">No slow commands</div></div>
+    </div>
 
-    const slowCount = data.slowlogLen ?? 0;
-    const slowEl = document.getElementById('slowlogLen');
-    slowEl.textContent = slowCount.toLocaleString();
-    slowEl.className = 'num ' + (slowCount > 100 ? 'red' : slowCount > 20 ? 'yellow' : 'green');
+    <!-- Errors -->
+    <div class="rm-section-hdr">⚠️ Errors</div>
+    <div class="rm-card" style="margin-bottom:20px">
+      <div class="rm-card-title"><span class="dot" style="background:var(--red)"></span>Error Log</div>
+      <div id="rm-error-list"><div class="rm-empty">No errors recorded</div></div>
+    </div>
 
-    const errCount = data.errorCount ?? 0;
-    const errEl = document.getElementById('errorCount');
-    errEl.textContent = errCount.toLocaleString();
-    errEl.className = 'num ' + (errCount > 10 ? 'red' : errCount > 0 ? 'yellow' : 'green');
-    document.getElementById('lastError').textContent = data.lastError ? `Last: ${data.lastError}` : '';
+  </div><!-- /rm-content -->
 
-    // Hit rate
-    const hr = data.hitRate || 0;
-    document.getElementById('hitRateNum').textContent = hr + '%';
-    document.getElementById('hitRateNum').className = 'num ' + _hitRateColor(hr);
-    document.getElementById('hitRateBar').style.width = hr + '%';
-    document.getElementById('hitRateBar').className = 'progress-bar ' + _hitRateColor(hr);
-    document.getElementById('cacheHits').textContent = (data.keyspaceHits ?? '—').toLocaleString();
-    document.getElementById('cacheMisses').textContent = (data.keyspaceMisses ?? '—').toLocaleString();
+</div><!-- /rm-shell -->
 
-    // Presence
-    const p = data.presence || {};
-    const roles = ['buyer', 'seller', 'cashier', 'manager', 'rider', 'driver', 'admin', 'superAdmin', 'pos', 'printer', 'scanner'];
-    document.getElementById('presenceGrid').innerHTML = roles.map(role => `
-      <div class="presence-pill">
-        <div class="count">${(p[role] || 0).toLocaleString()}</div>
-        <div class="role">${_esc(role)}</div>
-      </div>`).join('');
+<script src="sokoni-config.js"></script>
+<script type="module">
+  import { initializeApp }        from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js';
+  import { getFirestore, collection, query, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
-    // Queues
-    const q = data.queueDepths || {};
-    const queues = Object.entries(q);
-    const maxDepth = Math.max(...queues.map(([, v]) => v), 1);
-    document.getElementById('queueList').innerHTML = queues.length === 0
-      ? '<p style="color:var(--muted)">No queues active</p>'
-      : queues.map(([name, depth]) => `
-        <div class="queue-row">
-          <span class="queue-name">${_esc(name)}</span>
-          <div class="queue-bar-wrap">
-            <div class="queue-bar" style="width:${Math.round((depth / maxDepth) * 100)}%"></div>
-          </div>
-          <span class="queue-count">${depth.toLocaleString()}</span>
-        </div>`).join('');
+  const cfg  = window.SOKONI_CONFIG || {};
+  const app  = initializeApp(cfg);
+  const auth = getAuth(app);
+  const fn   = getFunctions(app, 'us-central1');
+  const db   = getFirestore(app);
 
-    document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
-  } catch (err) {
-    document.getElementById('statusBadge').className = 'badge down';
-    document.getElementById('statusBadge').textContent = 'Error';
-    console.error('[Redis Monitor]', err);
+  const _call = (name, data = {}) => httpsCallable(fn, name)(data).then(r => r.data);
+
+  function _esc(s) {
+    if (s == null) return '—';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
-}
+  function _fmtBytes(b) {
+    const n = Number(b);
+    if (!n) return '0 B';
+    if (n > 1_048_576) return (n/1_048_576).toFixed(1) + ' MB';
+    if (n > 1_024)     return (n/1_024).toFixed(0) + ' KB';
+    return n + ' B';
+  }
+  function _fmtNum(n) { return n == null ? '—' : Number(n).toLocaleString('en-KE'); }
+  function _fmtKES(n) { return !n ? '—' : 'KES ' + Number(n).toLocaleString('en-KE', { minimumFractionDigits: 2 }); }
+  function _color(pct) { return pct < 60 ? 'green' : pct < 85 ? 'yellow' : 'red'; }
+  function _setEl(id, val) { const e = document.getElementById(id); if (e) e.textContent = val ?? '—'; }
 
-function _watchAuth() {
-  if (!window.firebaseAuth) { setTimeout(_watchAuth, 500); return; }
-  window.onAuthStateChanged(window.firebaseAuth, async (user) => {
-    if (!user) {
-      document.getElementById('authGate').style.display = 'flex';
-      document.getElementById('monitorContent').style.display = 'none';
-      return;
-    }
+  /* ── Auth gate ────────────────────────────────────────────── */
+  onAuthStateChanged(auth, async user => {
+    if (!user) { document.getElementById('rm-denied').style.display = 'flex'; return; }
     const token = await user.getIdTokenResult();
     if (!token.claims.admin && !token.claims.superAdmin) {
-      document.getElementById('authGate').style.display = 'flex';
-      document.getElementById('authGate').innerHTML = '<p style="color:var(--red)">Super Admin access required.</p>';
-      return;
+      document.getElementById('rm-denied').style.display = 'flex'; return;
     }
-    document.getElementById('authGate').style.display = 'none';
-    document.getElementById('monitorContent').style.display = 'block';
+    document.getElementById('rm-content').style.display = 'block';
     loadMetrics();
-    if (_metricsTimer) clearInterval(_metricsTimer);
-    _metricsTimer = setInterval(loadMetrics, 15000);
   });
-}
 
-document.addEventListener('DOMContentLoaded', _watchAuth);
+  /* ── Main load ────────────────────────────────────────────── */
+  window.loadMetrics = async function () {
+    const dot = document.getElementById('rm-live-dot');
+    dot.classList.remove('offline');
+    try {
+      const data = await _call('redisAdminMetrics');
+      if (data.fallback) { dot.classList.add('offline'); _setEl('rm-last-refresh', 'Redis offline'); return; }
+      renderAll(data);
+    } catch (err) {
+      dot.classList.add('offline');
+      _setEl('rm-last-refresh', 'Error: ' + err.message);
+    }
+    loadJobAudit();
+  };
+
+  function renderAll(d) {
+    const m  = d.memory       || {};
+    const p  = d.performance  || {};
+    const s  = d.summary      || {};
+    const q  = d.queues       || {};
+    const st = d.streams      || {};
+    const pos = d.posTerminals || [];
+    const pres = d.presence   || {};
+    const locks = d.locks     || [];
+    const slow  = d.slowlog   || [];
+    const errs  = d.errors    || [];
+    const rl    = d.rateLimitViolations || [];
+
+    /* KPIs */
+    const memMB  = m.usedMemoryMB != null ? m.usedMemoryMB.toFixed(0) : '—';
+    const memPct = m.memUsedPct   != null ? m.memUsedPct : 0;
+    const hitPct = p.hitRatePct   != null ? p.hitRatePct.toFixed(1) : '—';
+    _setEl('kpi-mem', memMB);
+    _setEl('kpi-mem-pct', memPct + '%');
+    document.getElementById('kpi-mem-bar').style.width = Math.min(memPct, 100) + '%';
+    document.getElementById('kpi-mem-bar').className = `rm-bar-fill ${_color(memPct)}`;
+    _setEl('kpi-hit', hitPct);
+    document.getElementById('kpi-hit-bar').style.width = Math.min(Number(hitPct) || 0, 100) + '%';
+    _setEl('kpi-ops', p.instantOpsPerSec != null ? _fmtNum(p.instantOpsPerSec) : '—');
+    _setEl('kpi-sess', s.activeSessions  != null ? _fmtNum(s.activeSessions)   : '—');
+
+    /* Connection */
+    _setEl('conn-status',  'Connected');
+    _setEl('conn-uptime',  p.uptimeHours != null ? p.uptimeHours + 'h' : '—');
+    _setEl('conn-clients', _fmtNum(p.connectedClients));
+    _setEl('conn-cmds',    _fmtNum(p.totalCommands));
+    _setEl('conn-hits',    _fmtNum(p.keyspaceHits));
+    _setEl('conn-misses',  _fmtNum(p.keyspaceMisses));
+
+    /* Memory */
+    _setEl('mem-used',  _fmtBytes(m.usedMemoryBytes));
+    _setEl('mem-peak',  _fmtBytes(m.peakMemoryBytes));
+    _setEl('mem-total', _fmtBytes(m.totalSystemMemoryBytes));
+    _setEl('mem-frag',  m.fragRatio != null ? m.fragRatio.toFixed(2) : '—');
+    _setEl('mem-evict', _fmtNum(m.evictedKeys));
+
+    /* Platform totals */
+    _setEl('p-sessions', _fmtNum(s.activeSessions));
+    _setEl('p-pos',      _fmtNum(s.posTerminals));
+    _setEl('p-locks',    _fmtNum(s.activeLocks));
+    const totalJobs = Object.values(q).reduce((a, b) => a + (b || 0), 0);
+    _setEl('p-jobs', _fmtNum(totalJobs));
+    const totalPres = Object.values(pres).reduce((a, b) => a + (Array.isArray(b) ? b.length : 0), 0);
+    _setEl('p-presence', _fmtNum(totalPres));
+
+    renderQueues(q);
+    renderStreams(st);
+    renderPOS(pos);
+    renderPresence(pres);
+    renderLocks(locks);
+    renderSlowlog(slow);
+    renderRateLimits(rl);
+    renderErrors(errs);
+
+    _setEl('rm-last-refresh', 'Updated ' + new Date().toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  }
+
+  function renderQueues(q) {
+    const grid  = document.getElementById('rm-queues-grid');
+    const names = ['payment','receipt','email','notification','sms','ai','report','bulk'];
+    const icons = { payment:'💳', receipt:'🧾', email:'📧', notification:'🔔', sms:'💬', ai:'🤖', report:'📊', bulk:'📦' };
+    const maxQ  = Math.max(...names.map(n => q[n] || 0), 1);
+    grid.innerHTML = names.map(n => {
+      const depth = q[n] || 0;
+      const pct   = Math.round((depth / maxQ) * 100);
+      const col   = depth === 0 ? 'green' : depth < 50 ? 'yellow' : 'red';
+      return `<div class="rm-card">
+        <div class="rm-card-title"><span class="dot" style="background:var(--${col})"></span>${icons[n]} ${_esc(n)}</div>
+        <div class="rm-stat"><span class="rm-stat-val">${_fmtNum(depth)}</span><span class="rm-stat-unit">jobs</span></div>
+        <div class="rm-bar-wrap"><div class="rm-bar-track"><div class="rm-bar-fill ${col}" style="width:${pct}%"></div></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderStreams(st) {
+    const grid = document.getElementById('rm-streams-grid');
+    const NAMES = ['orders','payments','inventory','users','riders','delivery','receipts','ai'];
+    const icons = { orders:'🛒', payments:'💰', inventory:'📦', users:'👤', riders:'🏍️', delivery:'📍', receipts:'🧾', ai:'🤖' };
+    grid.innerHTML = NAMES.map(n => {
+      const len = st[n] != null ? st[n] : null;
+      const col = len == null ? 'muted' : len < 1000 ? 'green' : len < 8000 ? 'yellow' : 'red';
+      return `<div class="rm-card">
+        <div class="rm-card-title" style="color:var(--${col})">${icons[n]||'📡'} ${_esc(n)}</div>
+        <div class="rm-stat"><span class="rm-stat-val" style="font-size:24px">${len == null ? '—' : _fmtNum(len)}</span><span class="rm-stat-unit">events</span></div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderPOS(terminals) {
+    const grid = document.getElementById('rm-pos-grid');
+    if (!terminals.length) { grid.innerHTML = '<div class="rm-empty">No active POS terminals</div>'; return; }
+    grid.innerHTML = terminals.map(t => {
+      const status = t.paymentStatus || 'idle';
+      const sc = { idle:'purple', processing:'yellow', approved:'green', declined:'red' }[status] || 'purple';
+      return `<div class="rm-pos-card">
+        <div class="pos-id">${_esc(String(t.terminalId||'').slice(-8))}</div>
+        <div class="pos-shop">${_esc(t.shopName || t.shopId || 'Unknown')}</div>
+        <div class="pos-total">${_fmtKES(t.total)}</div>
+        <div class="pos-items">${_esc(t.cartItems != null ? t.cartItems + ' items' : '')}</div>
+        <div class="pos-status"><span class="rm-badge ${sc}">${_esc(status)}</span></div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderPresence(pres) {
+    const grid = document.getElementById('rm-presence-grid');
+    const entries = [];
+    for (const [role, members] of Object.entries(pres)) {
+      if (Array.isArray(members)) members.forEach(m => entries.push({ role, id: m.id || m.uid || m }));
+    }
+    if (!entries.length) { grid.innerHTML = '<div class="rm-empty">No online users</div>'; return; }
+    grid.innerHTML = entries.map(e =>
+      `<div class="rm-presence-chip"><span class="dot"></span><span>${_esc(e.role)}</span><span class="role">#${_esc(String(e.id).slice(-6))}</span></div>`
+    ).join('');
+  }
+
+  function renderLocks(locks) {
+    const el = document.getElementById('rm-locks-list');
+    if (!locks.length) { el.innerHTML = '<div class="rm-empty">No active locks</div>'; return; }
+    el.innerHTML = locks.map(l =>
+      `<div class="lock-row"><span class="lock-key">${_esc(l.key || l.lockId)}</span><span class="lock-ttl">${l.ttlMs != null ? (l.ttlMs/1000).toFixed(0) + 's' : '—'}</span></div>`
+    ).join('');
+  }
+
+  function renderSlowlog(entries) {
+    const el = document.getElementById('rm-slowlog');
+    if (!entries.length) { el.innerHTML = '<div class="rm-empty">No slow commands</div>'; return; }
+    el.innerHTML = entries.map(e =>
+      `<div class="sl-row"><span class="sl-us">${_fmtNum(e.durationUs)}µs</span><span class="sl-cmd">${_esc((e.args||[]).slice(0,4).join(' '))}</span></div>`
+    ).join('');
+  }
+
+  function renderRateLimits(violations) {
+    const el = document.getElementById('rm-ratelimit-log');
+    if (!violations.length) { el.innerHTML = '<div class="rm-empty">No violations logged</div>'; return; }
+    el.innerHTML = violations.slice(-30).reverse().map(v => {
+      const ts = v.ts ? new Date(v.ts).toLocaleTimeString('en-KE') : '—';
+      return `<div class="rl-row"><span class="rm-badge red">BLOCKED</span><span class="rl-action">${_esc(v.action)}</span><span class="rl-id">${_esc(String(v.identifier||'').slice(0,16))}</span><span class="rl-time">${_esc(ts)}</span></div>`;
+    }).join('');
+  }
+
+  function renderErrors(errors) {
+    const el = document.getElementById('rm-error-list');
+    if (!errors.length) { el.innerHTML = '<div class="rm-empty">No errors recorded</div>'; return; }
+    el.innerHTML = errors.slice(-20).reverse().map(e =>
+      `<div class="err-row"><div class="err-msg">${_esc(e.message||String(e))}</div><div class="err-ts">${_esc(e.ts ? new Date(e.ts).toLocaleString('en-KE') : '')}</div></div>`
+    ).join('');
+  }
+
+  async function loadJobAudit() {
+    const el = document.getElementById('rm-job-audit');
+    try {
+      const snap = await getDocs(query(collection(db, 'redisJobAudit'), orderBy('processedAt', 'desc'), limit(30)));
+      if (snap.empty) { el.innerHTML = '<div class="rm-empty">No job records yet</div>'; return; }
+      el.innerHTML = snap.docs.map(doc => {
+        const j  = doc.data();
+        const ok = j.status === 'done' || j.ok;
+        const ts = j.processedAt?.toDate ? j.processedAt.toDate().toLocaleTimeString('en-KE') : '—';
+        return `<div class="job-row">
+          <span class="job-q">${_esc(j.queue)}</span>
+          <span class="job-id">${_esc(j.jobId || doc.id)}</span>
+          <span class="${ok ? 'job-ok' : 'job-err'}">${ok ? '✓' : '✗'}</span>
+          <span class="job-time">${_esc(ts)}</span>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      el.innerHTML = `<div class="rm-empty">Could not load job audit: ${_esc(err.message)}</div>`;
+    }
+  }
+
+  /* ── Auto-refresh ─────────────────────────────────────────── */
+  let _timer = setInterval(loadMetrics, 15_000);
+  document.getElementById('rm-auto-toggle').addEventListener('change', function () {
+    clearInterval(_timer);
+    if (this.checked) _timer = setInterval(loadMetrics, 15_000);
+  });
 </script>
+
 </body>
 </html>

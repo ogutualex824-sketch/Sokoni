@@ -1,16 +1,22 @@
 /* ================================================================
-   sokoni-offline.js — Smart Offline Detection v1.0
+   sokoni-offline.js — Smart Offline Detection v1.1
    Shows offline banner ONLY when BOTH conditions are true:
      1. navigator.onLine === false (browser sees no network), AND
      2. A lightweight backend ping fails (confirms real disconnect).
-   Prevents false positives on captive portals, slow networks, and
-   pages where navigator.onLine over-reports "connected."
+
+   v1.1 changes:
+   • Removed the proactive "captive portal" ping at page load —
+     it caused false-positive banners when Firebase init was slow.
+   • Added 1 s debounce on the `offline` event to survive brief
+     Android/iOS network transitions that recover instantly.
+   • Re-ping on `online` still required before hiding (unchanged).
 ================================================================ */
 (function () {
   'use strict';
 
-  var _banner = null;
-  var _shown  = false;
+  var _banner       = null;
+  var _shown        = false;
+  var _debounceTimer = null;
 
   /* ── Banner element ────────────────────────────────────── */
   function _ensureBanner() {
@@ -101,20 +107,23 @@
 
   /* ── Network event listeners ───────────────────────────── */
   window.addEventListener('offline', function () {
-    /* Network gone — show immediately, no ping needed */
-    _show();
+    /* Debounce 1 s — Android/iOS briefly fires `offline` during Wi-Fi handoffs
+       that resolve on their own. Only show if still offline after 1 s. */
+    clearTimeout(_debounceTimer);
+    _debounceTimer = setTimeout(function () {
+      if (!navigator.onLine) _show();
+    }, 1000);
   });
 
   window.addEventListener('online', function () {
-    /* Network restored — verify before hiding (could be captive portal) */
+    /* Network restored — verify before hiding (captive portal guard) */
+    clearTimeout(_debounceTimer);
     _ping();
   });
 
-  /* Initial state — only ping if browser already reports offline.
-     Don't waste a fetch on every page load when everything is working. */
-  if (!navigator.onLine) {
-    _show();
-  }
+  /* Initial state: show immediately if browser reports offline.
+     No proactive ping on load — that was the source of false positives. */
+  if (!navigator.onLine) { _show(); }
 
   window.SokoniOffline = { check: _check };
 }());

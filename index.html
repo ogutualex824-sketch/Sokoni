@@ -577,9 +577,9 @@
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:11px;color:rgba(255,255,255,0.3);">Tap · 24h</span>
-        <button type="button" id="sRingBtnL" onclick="scrollStoriesRing(-1)"
+        <button type="button" id="sRingBtnL" onclick="scrollStoriesRing(-1)" aria-label="Scroll stories left"
           style="display:none;width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);font-size:15px;cursor:pointer;line-height:1;flex-shrink:0;">‹</button>
-        <button type="button" id="sRingBtnR" onclick="scrollStoriesRing(1)"
+        <button type="button" id="sRingBtnR" onclick="scrollStoriesRing(1)" aria-label="Scroll stories right"
           style="display:none;width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);font-size:15px;cursor:pointer;line-height:1;flex-shrink:0;">›</button>
       </div>
     </div>
@@ -587,7 +587,7 @@
       <!-- Left fade + floating arrow -->
       <div id="sRingNavL"
         style="display:none;position:absolute;left:0;top:0;bottom:8px;width:56px;background:linear-gradient(to right,rgba(10,10,10,0.92) 45%,transparent);z-index:5;align-items:center;justify-content:center;pointer-events:none;">
-        <button type="button" onclick="scrollStoriesRing(-1)"
+        <button type="button" onclick="scrollStoriesRing(-1)" aria-label="Scroll stories left"
           style="pointer-events:all;width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background:rgba(15,15,15,0.88);color:white;font-size:16px;cursor:pointer;backdrop-filter:blur(6px);">‹</button>
       </div>
       <div id="storiesRing"
@@ -596,7 +596,7 @@
       <!-- Right fade + floating arrow -->
       <div id="sRingNavR"
         style="display:none;position:absolute;right:0;top:0;bottom:8px;width:56px;background:linear-gradient(to left,rgba(10,10,10,0.92) 45%,transparent);z-index:5;align-items:center;justify-content:center;pointer-events:none;">
-        <button type="button" onclick="scrollStoriesRing(1)"
+        <button type="button" onclick="scrollStoriesRing(1)" aria-label="Scroll stories right"
           style="pointer-events:all;width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background:rgba(15,15,15,0.88);color:white;font-size:16px;cursor:pointer;backdrop-filter:blur(6px);">›</button>
       </div>
     </div>
@@ -635,8 +635,8 @@
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           <span id="storyCounter" style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);"></span>
-          <button type="button" id="storyMuteBtn" onclick="toggleStoryMute()" style="display:none;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.25);color:white;font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);">🔊</button>
-          <button type="button" onclick="closeStoryViewer()"
+          <button type="button" id="storyMuteBtn" onclick="toggleStoryMute()" aria-label="Toggle story sound" style="display:none;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.25);color:white;font-size:16px;cursor:pointer;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px);">🔊</button>
+          <button type="button" onclick="closeStoryViewer()" aria-label="Close story viewer"
             style="width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.25);color:white;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);">✕</button>
         </div>
       </div>
@@ -3687,13 +3687,13 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
 /* ── Index page admin lock overlay ── */
 (function(){
   var CRED_KEYS={pin:'sokoniAdminPinHash',pattern:'sokoniAdminPatternHash',password:'sokoniAdminPwHash'};
-  var DEFAULTS={pin:'2580',pattern:'0125876',password:'Sokoni@2025'};
   var LOCK_ID='admin_lock';
   var _iMode=(('ontouchstart' in window)||navigator.maxTouchPoints>0)?'pattern':'password';
   var _iPin='';
 
   async function _iSha256(t){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');}
-  async function _iGetHash(mode){var h=localStorage.getItem(CRED_KEYS[mode]);if(!h){h=await _iSha256(DEFAULTS[mode]);localStorage.setItem(CRED_KEYS[mode],h);}return h;}
+  /* Returns stored hash or null — no plaintext defaults seeded into client source */
+  async function _iGetHash(mode){return localStorage.getItem(CRED_KEYS[mode]) || null;}
 
   window._showAdminLock=function(){
     var ov=document.getElementById('idxAdminLock');
@@ -3717,6 +3717,7 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
     if(li&&li.locked){_iSetErr('Too many attempts. Wait '+li.minsLeft+' min.');return;}
     var entered=await _iSha256(String(secret));
     var stored=await _iGetHash(mode);
+    if(!stored){_iSetErr('Admin credentials not configured. Set them via the SOKONI admin setup.');return;}
     if(entered===stored){
       if(sec)sec.clearLoginLockout(LOCK_ID);
       sessionStorage.setItem('sokoniAdminUnlocked','1');

@@ -521,7 +521,14 @@ if ('BroadcastChannel' in window) {
       }
       if (data.promo) {
         const el = document.getElementById('idle-promo');
-        el.innerHTML = `<h3>${data.promo.title||''}</h3><p>${data.promo.body||''}</p>`;
+        // Use textContent to prevent stored XSS from seller-supplied promo content
+        const h3 = document.createElement('h3');
+        const p  = document.createElement('p');
+        h3.textContent = data.promo.title || '';
+        p.textContent  = data.promo.body  || '';
+        el.textContent = '';
+        el.appendChild(h3);
+        el.appendChild(p);
       }
     }
   };

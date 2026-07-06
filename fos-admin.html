@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financial OS — SOKONI Admin</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<script src="security.js"></script>
+<script src="auth-guard.js"></script>
+<style>
+:root{
+  --bg:#080a0f;--surface:#0e1118;--card:#141820;--border:#1e2433;
+  --text:#e2e8f0;--muted:#64748b;--accent:#6c63ff;--green:#22c55e;
+  --red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;--cyan:#06b6d4;
+  --radius:10px;--sidebar:220px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;}
+
+/* ── App Shell ── */
+.shell{display:flex;min-height:100vh;}
+.sidebar{width:var(--sidebar);background:var(--surface);border-right:1px solid var(--border);position:sticky;top:0;height:100vh;overflow-y:auto;flex-shrink:0;}
+.main{flex:1;overflow-x:hidden;min-width:0;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5;}
+.topbar h1{font-size:.9rem;font-weight:700;}
+.content{padding:20px 24px 80px;}
+
+/* ── Sidebar ── */
+.sb-logo{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.sb-logo img{height:26px;}
+.sb-logo span{font-size:.8rem;font-weight:700;color:var(--muted);}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;font-size:.8rem;color:var(--muted);border-radius:0;transition:all .15s;border-left:3px solid transparent;}
+.nav-item:hover{color:var(--text);background:rgba(255,255,255,.03);}
+.nav-item.active{color:var(--text);background:rgba(108,99,255,.08);border-left-color:var(--accent);}
+.nav-icon{width:16px;text-align:center;flex-shrink:0;}
+.nav-section{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:12px 16px 4px;}
+
+/* ── Panels ── */
+.panel{display:none;}
+.panel.active{display:block;}
+
+/* ── KPI Grid ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:24px;}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+.kpi-label{font-size:.68rem;color:var(--muted);text-transform:uppercase;font-weight:600;letter-spacing:.06em;margin-bottom:4px;}
+.kpi-value{font-size:1.4rem;font-weight:800;}
+.kpi-sub{font-size:.7rem;color:var(--muted);margin-top:2px;}
+.kpi-green{color:var(--green);}
+.kpi-blue{color:var(--blue);}
+.kpi-amber{color:var(--amber);}
+.kpi-red{color:var(--red);}
+.kpi-cyan{color:var(--cyan);}
+.kpi-purple{color:var(--accent);}
+
+/* ── Queue cards ── */
+.queue-row{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+.queue-row-info{flex:1;min-width:0;}
+.queue-row-label{font-size:.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.queue-row-sub{font-size:.7rem;color:var(--muted);margin-top:2px;}
+.queue-row-amt{font-size:.9rem;font-weight:700;flex-shrink:0;}
+.queue-row-acts{display:flex;gap:6px;flex-shrink:0;}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:6px 12px;border-radius:7px;border:none;cursor:pointer;font-size:.75rem;font-weight:600;font-family:inherit;transition:all .15s;}
+.btn-green{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.25);}
+.btn-green:hover{background:rgba(34,197,94,.25);}
+.btn-red{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.2);}
+.btn-red:hover{background:rgba(239,68,68,.22);}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:#5a52e8;}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border);}
+.btn-outline:hover{border-color:var(--accent);}
+.btn-sm{padding:4px 9px;font-size:.7rem;}
+.btn:disabled{opacity:.4;pointer-events:none;}
+
+/* ── Table ── */
+.tbl-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{text-align:left;font-size:.65rem;text-transform:uppercase;color:var(--muted);padding:9px 12px;background:rgba(255,255,255,.02);font-weight:700;border-bottom:1px solid var(--border);}
+.tbl td{padding:9px 12px;font-size:.78rem;border-bottom:1px solid var(--border);}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:rgba(255,255,255,.02);}
+.tbl td.mono{font-family:monospace;font-size:.72rem;color:var(--muted);}
+
+/* ── Status badges ── */
+.status{font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:uppercase;white-space:nowrap;}
+.s-completed,.s-active,.s-processed{background:rgba(34,197,94,.1);color:var(--green);}
+.s-pending{background:rgba(245,158,11,.1);color:var(--amber);}
+.s-failed,.s-rejected,.s-disputed{background:rgba(239,68,68,.1);color:var(--red);}
+.s-refunded{background:rgba(59,130,246,.1);color:var(--blue);}
+.s-cancelled{background:rgba(100,116,139,.1);color:var(--muted);}
+
+/* ── Health ── */
+.health-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;}
+.health-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;align-items:center;gap:12px;}
+.health-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.health-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green);}
+.health-dot.down{background:var(--red);box-shadow:0 0 6px var(--red);}
+.health-name{font-weight:700;font-size:.85rem;}
+.health-latency{font-size:.7rem;color:var(--muted);margin-top:2px;}
+
+/* ── Section header ── */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.sec-title{font-size:.95rem;font-weight:700;}
+.sec-sub{font-size:.75rem;color:var(--muted);}
+
+/* ── Filter row ── */
+.filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.filter-select{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:6px 10px;font-size:.75rem;font-family:inherit;}
+.filter-input{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:6px 10px;font-size:.75rem;font-family:inherit;flex:1;min-width:150px;}
+
+/* ── Provider card ── */
+.provider-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;}
+
+/* ── Loading / empty ── */
+.loading{text-align:center;padding:30px;color:var(--muted);font-size:.82rem;}
+.empty{text-align:center;padding:24px;color:var(--muted);font-size:.8rem;}
+.skel{background:linear-gradient(90deg,var(--card) 25%,var(--border) 50%,var(--card) 75%);background-size:200% 100%;animation:skel 1.4s infinite;border-radius:7px;}
+@keyframes skel{to{background-position:-200% 0}}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-size:.8rem;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.4);transform:translateY(20px);opacity:0;transition:all .25s;pointer-events:none;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.ok{border-color:var(--green);color:var(--green);}
+.toast.err{border-color:var(--red);color:var(--red);}
+
+@media(max-width:700px){
+  .sidebar{display:none;}
+  .tbl td:nth-child(n+4){display:none;}
+  .tbl th:nth-child(n+4){display:none;}
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sb-logo">
+      <img src="assets/logosokoni.png" alt="SOKONI">
+      <span>Financial OS</span>
+    </div>
+    <div class="nav-section">Overview</div>
+    <div class="nav-item active" data-panel="dashboard"><span class="nav-icon">📊</span>Dashboard</div>
+    <div class="nav-section">Transactions</div>
+    <div class="nav-item" data-panel="transactions"><span class="nav-icon">💳</span>All Transactions</div>
+    <div class="nav-item" data-panel="refunds"><span class="nav-icon">↩️</span>Refund Queue</div>
+    <div class="nav-item" data-panel="payouts"><span class="nav-icon">💸</span>Payout Queue</div>
+    <div class="nav-section">Revenue</div>
+    <div class="nav-item" data-panel="revenue"><span class="nav-icon">📈</span>Revenue by Hub</div>
+    <div class="nav-item" data-panel="export"><span class="nav-icon">📥</span>Export Reports</div>
+    <div class="nav-section">Configuration</div>
+    <div class="nav-item" onclick="window.open('commission-engine.html','_blank')"><span class="nav-icon">⚙️</span>Commission Rules ↗</div>
+    <div class="nav-item" data-panel="providers"><span class="nav-icon">🔌</span>Provider Health</div>
+    <div class="nav-section">System</div>
+    <div class="nav-item" data-panel="audit"><span class="nav-icon">🔒</span>Audit Log</div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div class="main">
+    <div class="topbar">
+      <h1 id="panel-title">Financial Dashboard</h1>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span id="refresh-ts" style="font-size:.7rem;color:var(--muted);"></span>
+        <button class="btn btn-outline btn-sm" onclick="_refresh()">Refresh</button>
+        <a href="financial-os.html" class="btn btn-outline btn-sm">Full FinOS ↗</a>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ════════ DASHBOARD ════════ -->
+      <div class="panel active" id="panel-dashboard">
+        <div id="kpi-grid" class="kpi-grid">
+          <div class="skel" style="height:80px;"></div>
+          <div class="skel" style="height:80px;"></div>
+          <div class="skel" style="height:80px;"></div>
+          <div class="skel" style="height:80px;"></div>
+          <div class="skel" style="height:80px;"></div>
+          <div class="skel" style="height:80px;"></div>
+        </div>
+        <div class="sec-hdr"><span class="sec-title">Queue Alerts</span></div>
+        <div id="queue-alerts" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;"></div>
+        <div class="sec-hdr"><span class="sec-title">Recent Transactions</span></div>
+        <div id="recent-tx" class="tbl-wrap">
+          <div class="loading">Loading…</div>
+        </div>
+      </div>
+
+      <!-- ════════ TRANSACTIONS ════════ -->
+      <div class="panel" id="panel-transactions">
+        <div class="sec-hdr">
+          <span class="sec-title">All Transactions</span>
+          <button class="btn btn-outline btn-sm" onclick="_loadTransactions()">Reload</button>
+        </div>
+        <div class="filter-row">
+          <select class="filter-select" id="tx-hub-filter" onchange="_loadTransactions()">
+            <option value="">All Hubs</option>
+            <option value="marketplace">Marketplace</option>
+            <option value="food">Food</option>
+            <option value="services">Services</option>
+            <option value="property">Property</option>
+            <option value="vehicles">Vehicles</option>
+            <option value="hotel">Hotel</option>
+            <option value="healthcare">Healthcare</option>
+            <option value="events">Events</option>
+            <option value="logistics">Logistics</option>
+          </select>
+          <select class="filter-select" id="tx-status-filter" onchange="_loadTransactions()">
+            <option value="">All Statuses</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="PENDING">Pending</option>
+            <option value="FAILED">Failed</option>
+            <option value="REFUNDED">Refunded</option>
+          </select>
+        </div>
+        <div id="tx-table" class="tbl-wrap">
+          <div class="loading">Select a filter or click Reload to load transactions.</div>
+        </div>
+      </div>
+
+      <!-- ════════ REFUNDS ════════ -->
+      <div class="panel" id="panel-refunds">
+        <div class="sec-hdr">
+          <span class="sec-title">Refund Queue</span>
+          <button class="btn btn-outline btn-sm" onclick="_loadRefunds()">Reload</button>
+        </div>
+        <div id="refund-list"><div class="loading">Loading…</div></div>
+      </div>
+
+      <!-- ════════ PAYOUTS ════════ -->
+      <div class="panel" id="panel-payouts">
+        <div class="sec-hdr">
+          <span class="sec-title">Pending Payouts</span>
+          <button class="btn btn-outline btn-sm" onclick="_loadPayouts()">Reload</button>
+        </div>
+        <div id="payout-list"><div class="loading">Loading…</div></div>
+      </div>
+
+      <!-- ════════ REVENUE ════════ -->
+      <div class="panel" id="panel-revenue">
+        <div class="sec-hdr">
+          <span class="sec-title">Revenue by Hub</span>
+          <select class="filter-select" id="rev-period" onchange="_loadRevenue()">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">Last 365 days</option>
+          </select>
+        </div>
+        <div id="revenue-table"><div class="loading">Loading…</div></div>
+      </div>
+
+      <!-- ════════ EXPORT ════════ -->
+      <div class="panel" id="panel-export">
+        <div class="sec-hdr"><span class="sec-title">Export Financial Reports</span></div>
+        <div style="display:flex;flex-direction:column;gap:12px;max-width:440px;">
+          <div class="provider-card">
+            <div style="font-weight:700;margin-bottom:8px;">Transaction Export</div>
+            <div class="filter-row" style="margin-bottom:10px;">
+              <input class="filter-input" type="date" id="exp-start" placeholder="Start date">
+              <input class="filter-input" type="date" id="exp-end" placeholder="End date">
+            </div>
+            <select class="filter-select" id="exp-hub" style="margin-bottom:10px;width:100%">
+              <option value="">All Hubs</option>
+              <option value="marketplace">Marketplace</option>
+              <option value="food">Food</option>
+              <option value="services">Services</option>
+            </select>
+            <button class="btn btn-primary" onclick="_exportReport('transactions')">Download Transactions (CSV)</button>
+          </div>
+          <div class="provider-card">
+            <div style="font-weight:700;margin-bottom:8px;">Refunds Export</div>
+            <button class="btn btn-outline" onclick="_exportReport('refunds')">Download Refunds (CSV)</button>
+          </div>
+          <div class="provider-card">
+            <div style="font-weight:700;margin-bottom:8px;">Wallet Balances Export</div>
+            <button class="btn btn-outline" onclick="_exportReport('wallets')">Download Wallets (CSV)</button>
+          </div>
+          <div id="export-status" style="font-size:.78rem;color:var(--muted);"></div>
+        </div>
+      </div>
+
+      <!-- ════════ PROVIDERS ════════ -->
+      <div class="panel" id="panel-providers">
+        <div class="sec-hdr">
+          <span class="sec-title">Payment Provider Health</span>
+          <button class="btn btn-outline btn-sm" onclick="_loadProviders()">Check Now</button>
+        </div>
+        <div id="provider-grid" class="health-grid"><div class="loading">Loading…</div></div>
+        <div id="provider-stats" style="margin-top:16px;"></div>
+      </div>
+
+      <!-- ════════ AUDIT ════════ -->
+      <div class="panel" id="panel-audit">
+        <div class="sec-hdr">
+          <span class="sec-title">Audit Log</span>
+          <button class="btn btn-outline btn-sm" onclick="_loadAudit()">Reload</button>
+        </div>
+        <div id="audit-table" class="tbl-wrap"><div class="loading">Loading…</div></div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp }    from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js';
+import { getFirestore, collection, query, where, orderBy, limit, getDocs }
+  from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js';
+
+const cfg  = window.SOKONI_CONFIG || {};
+const app  = initializeApp(cfg);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+const fns  = getFunctions(app, 'us-central1');
+const CF   = (n) => httpsCallable(fns, n);
+
+/* ── Helpers ── */
+const kes  = (c) => (c||0).toLocaleString('en-KE');
+const fmtD = (s) => { try { return new Date(s).toLocaleString('en-KE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); } catch(_){return s||'—';} };
+const s    = (id) => document.getElementById(id);
+
+window._toast = (msg, type='ok') => {
+  const t = s('toast');
+  t.textContent = msg;
+  t.className   = `toast ${type} show`;
+  setTimeout(() => { t.classList.remove('show'); }, 3200);
+};
+
+/* ── Auth guard ── */
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html?redirect=fos-admin'; return; }
+  const token = await user.getIdTokenResult();
+  if (!token.claims?.admin && !token.claims?.superAdmin) {
+    window.location.href = 'index.html';
+    return;
+  }
+  _loadDashboard();
+  _setupNav();
+});
+
+/* ── Navigation ── */
+function _setupNav() {
+  document.querySelectorAll('.nav-item[data-panel]').forEach(el => {
+    el.addEventListener('click', () => {
+      const target = el.dataset.panel;
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+      s(`panel-${target}`)?.classList.add('active');
+      s('panel-title').textContent = el.textContent.trim();
+      /* Lazy-load panel data */
+      if (target==='refunds')      _loadRefunds();
+      if (target==='payouts')      _loadPayouts();
+      if (target==='revenue')      _loadRevenue();
+      if (target==='providers')    _loadProviders();
+      if (target==='audit')        _loadAudit();
+      if (target==='transactions') _loadTransactions();
+    });
+  });
+}
+
+/* ── Dashboard ── */
+window._refresh = () => { _loadDashboard(); };
+
+async function _loadDashboard() {
+  s('refresh-ts').textContent = 'Loading…';
+  try {
+    const res = await CF('fosGetAdminConsole')({});
+    const d   = res.data;
+
+    /* KPI grid */
+    s('kpi-grid').innerHTML = `
+      <div class="kpi-card"><div class="kpi-label">Today Revenue</div><div class="kpi-value kpi-green">KES ${kes(d.kpis.todayRevenueKES)}</div><div class="kpi-sub">${d.kpis.todayTransactions} transactions</div></div>
+      <div class="kpi-card"><div class="kpi-label">Today Commission</div><div class="kpi-value kpi-cyan">KES ${kes(d.kpis.todayCommissionKES)}</div><div class="kpi-sub">Platform earnings</div></div>
+      <div class="kpi-card"><div class="kpi-label">Week Revenue</div><div class="kpi-value kpi-blue">KES ${kes(d.kpis.weekRevenueKES)}</div><div class="kpi-sub">${d.kpis.weekTransactions} transactions</div></div>
+      <div class="kpi-card"><div class="kpi-label">Week Commission</div><div class="kpi-value kpi-purple">KES ${kes(d.kpis.weekCommissionKES)}</div><div class="kpi-sub">Platform earnings</div></div>
+      <div class="kpi-card"><div class="kpi-label">Platform Balance</div><div class="kpi-value kpi-green">KES ${kes(d.kpis.platformBalanceKES)}</div><div class="kpi-sub">Available</div></div>
+      <div class="kpi-card"><div class="kpi-label">Open Queues</div>
+        <div class="kpi-value ${d.queues.pendingRefunds+d.queues.pendingPayouts+d.queues.openDisputes > 0 ? 'kpi-amber' : 'kpi-green'}">
+          ${d.queues.pendingRefunds+d.queues.pendingPayouts+d.queues.openDisputes}
+        </div>
+        <div class="kpi-sub">refunds/payouts/disputes</div>
+      </div>`;
+
+    /* Queue alerts */
+    const alerts = [];
+    if (d.queues.pendingRefunds  > 0) alerts.push(`<div class="kpi-card" style="border-color:var(--amber);cursor:pointer" onclick="document.querySelector('[data-panel=refunds]').click()"><div class="kpi-label" style="color:var(--amber)">Pending Refunds</div><div class="kpi-value kpi-amber">${d.queues.pendingRefunds}</div></div>`);
+    if (d.queues.pendingPayouts  > 0) alerts.push(`<div class="kpi-card" style="border-color:var(--blue);cursor:pointer" onclick="document.querySelector('[data-panel=payouts]').click()"><div class="kpi-label" style="color:var(--blue)">Pending Payouts</div><div class="kpi-value kpi-blue">${d.queues.pendingPayouts}</div></div>`);
+    if (d.queues.openDisputes    > 0) alerts.push(`<div class="kpi-card" style="border-color:var(--red)"><div class="kpi-label" style="color:var(--red)">Open Disputes</div><div class="kpi-value kpi-red">${d.queues.openDisputes}</div></div>`);
+    s('queue-alerts').innerHTML = alerts.join('') || `<span style="font-size:.8rem;color:var(--muted)">All queues clear ✓</span>`;
+
+    /* Recent transactions */
+    _renderTxTable(d.recentTransactions, 'recent-tx');
+
+    s('refresh-ts').textContent = `Updated ${new Date().toLocaleTimeString('en-KE')}`;
+  } catch (e) {
+    s('kpi-grid').innerHTML = `<div class="empty" style="grid-column:1/-1;color:var(--red)">${e.message}</div>`;
+    s('refresh-ts').textContent = 'Error';
+  }
+}
+
+function _renderTxTable(rows, containerId) {
+  if (!rows?.length) { s(containerId).innerHTML = '<div class="empty">No transactions found.</div>'; return; }
+  s(containerId).innerHTML = `<table class="tbl">
+    <thead><tr><th>ID</th><th>Hub</th><th>Amount</th><th>Commission</th><th>Status</th><th>Provider</th><th>Date</th></tr></thead>
+    <tbody>${rows.map(tx => `<tr>
+      <td class="mono">${tx.id?.slice(0,8) || tx.payRef?.slice(0,10) || '—'}…</td>
+      <td>${tx.hubType||'—'}</td>
+      <td>KES ${kes((tx.amountCents||0)/100)}</td>
+      <td>KES ${kes((tx.commissionCents||0)/100)}</td>
+      <td><span class="status s-${(tx.status||'').toLowerCase()}">${tx.status||'—'}</span></td>
+      <td>${tx.provider||'—'}</td>
+      <td>${fmtD(tx.createdAt)}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+/* ── Transactions panel ── */
+window._loadTransactions = async function() {
+  const hub    = s('tx-hub-filter').value;
+  const status = s('tx-status-filter').value;
+  s('tx-table').innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const res = await CF('fosExportReport')({ reportType:'transactions', hubType: hub||undefined, pageSize:50 });
+    const rows = (res.data?.rows||[]).filter(r => !status || r.status === status);
+    if (!rows.length) { s('tx-table').innerHTML = '<div class="empty">No transactions found for this filter.</div>'; return; }
+    s('tx-table').innerHTML = `<table class="tbl">
+      <thead><tr><th>ID</th><th>Hub</th><th>Type</th><th>Amount KES</th><th>Comm KES</th><th>Status</th><th>Date</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td class="mono">${r.id?.slice(0,8)}…</td>
+        <td>${r.hubType}</td>
+        <td>${r.type}</td>
+        <td>${kes(r.amountKES)}</td>
+        <td>${kes(r.commissionKES)}</td>
+        <td><span class="status s-${(r.status||'').toLowerCase()}">${r.status}</span></td>
+        <td>${fmtD(r.date)}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  } catch (e) { s('tx-table').innerHTML = `<div class="empty" style="color:var(--red)">${e.message}</div>`; }
+};
+
+/* ── Refunds panel ── */
+window._loadRefunds = async function() {
+  s('refund-list').innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const res = await CF('fosGetAdminConsole')({});
+    const pending = res.data?.pendingRefundsList || [];
+    if (!pending.length) { s('refund-list').innerHTML = '<div class="empty">No pending refunds ✓</div>'; return; }
+    s('refund-list').innerHTML = pending.map(r => `
+      <div class="queue-row">
+        <div class="queue-row-info">
+          <div class="queue-row-label">Refund — ${r.buyerUid?.slice(0,8)}…</div>
+          <div class="queue-row-sub">${r.reason || '—'} · ${fmtD(r.createdAt)}</div>
+        </div>
+        <div class="queue-row-amt" style="color:var(--amber)">KES ${kes(r.amountKES)}</div>
+        <div class="queue-row-acts">
+          <button class="btn btn-green btn-sm" onclick="window._approveRefund('${r.id}')">Approve</button>
+          <button class="btn btn-red btn-sm" onclick="window._rejectRefund('${r.id}')">Reject</button>
+        </div>
+      </div>`).join('');
+  } catch (e) { s('refund-list').innerHTML = `<div class="empty" style="color:var(--red)">${e.message}</div>`; }
+};
+
+window._approveRefund = async function(id) {
+  if (!confirm('Approve and process this refund? This will debit the seller wallet and initiate the refund.')) return;
+  try {
+    await CF('fosApproveRefund')({ refundId: id, reject: false });
+    _toast('Refund approved and processed.', 'ok');
+    _loadRefunds();
+  } catch (e) { _toast(e.message, 'err'); }
+};
+
+window._rejectRefund = async function(id) {
+  const reason = prompt('Reason for rejection:');
+  if (!reason) return;
+  try {
+    await CF('fosApproveRefund')({ refundId: id, reject: true, rejectReason: reason });
+    _toast('Refund rejected.', 'ok');
+    _loadRefunds();
+  } catch (e) { _toast(e.message, 'err'); }
+};
+
+/* ── Payouts panel ── */
+window._loadPayouts = async function() {
+  s('payout-list').innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const snap = await getDocs(query(collection(db,'payouts'), where('status','==','pending'), orderBy('createdAt','desc'), limit(50)));
+    if (snap.empty) { s('payout-list').innerHTML = '<div class="empty">No pending payouts ✓</div>'; return; }
+    s('payout-list').innerHTML = snap.docs.map(d => {
+      const p = d.data();
+      return `<div class="queue-row">
+        <div class="queue-row-info">
+          <div class="queue-row-label">${p.name||p.uid?.slice(0,8)||'User'}…</div>
+          <div class="queue-row-sub">${p.phone||'—'} · ${fmtD(p.createdAt?.toDate?.()?.toISOString())}</div>
+        </div>
+        <div class="queue-row-amt" style="color:var(--blue)">KES ${kes((p.amountCents||p.amount||0))}</div>
+        <div class="queue-row-acts">
+          <span class="status s-pending">Pending</span>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) { s('payout-list').innerHTML = `<div class="empty" style="color:var(--red)">${e.message}</div>`; }
+};
+
+/* ── Revenue ── */
+window._loadRevenue = async function() {
+  s('revenue-table').innerHTML = '<div class="loading">Loading…</div>';
+  const period = parseInt(s('rev-period').value || '30');
+  try {
+    const res = await CF('getAdminRevenueByHub')({ periodDays: period });
+    const d   = res.data;
+    if (!d?.hubs?.length) { s('revenue-table').innerHTML = '<div class="empty">No revenue data yet.</div>'; return; }
+    const maxRev = Math.max(...d.hubs.map(h=>h.periodRevenueKES||0), 1);
+    s('revenue-table').innerHTML = `
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>Hub</th><th>Period Revenue</th><th>Commission</th><th>Transactions</th><th>Share</th><th>Lifetime Revenue</th></tr></thead>
+          <tbody>${d.hubs.map(h => `<tr>
+            <td style="font-weight:600">${h.hubType}</td>
+            <td>KES ${kes(h.periodRevenueKES||0)}</td>
+            <td>KES ${kes(h.periodCommissionKES||0)}</td>
+            <td>${(h.periodTransactions||0).toLocaleString()}</td>
+            <td><div style="height:6px;background:var(--border);border-radius:3px;width:120px;overflow:hidden"><div style="height:100%;background:var(--accent);width:${Math.round((h.periodRevenueKES||0)/maxRev*100)}%"></div></div></td>
+            <td>KES ${kes(h.lifetimeRevenueKES||0)}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+  } catch (e) { s('revenue-table').innerHTML = `<div class="empty" style="color:var(--red)">${e.message}</div>`; }
+};
+
+/* ── Providers ── */
+window._loadProviders = async function() {
+  s('provider-grid').innerHTML = '<div class="loading">Checking providers…</div>';
+  try {
+    const res = await CF('fosGetProviderHealth')({});
+    const d   = res.data;
+    s('provider-grid').innerHTML = (d.providers||[]).map(p => `
+      <div class="health-card">
+        <div class="health-dot ${p.healthy?'ok':'down'}"></div>
+        <div>
+          <div class="health-name">${p.provider}</div>
+          <div class="health-latency">${p.healthy ? `${p.latencyMs}ms latency` : `DOWN — ${p.error||'unreachable'}`}</div>
+        </div>
+      </div>`).join('') || '<div class="empty">No providers registered.</div>';
+    const st = d.last1hStats || {};
+    s('provider-stats').innerHTML = `<div class="provider-card" style="margin-top:0">
+      <div style="font-weight:700;margin-bottom:8px;">Last 1 Hour</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div><div style="font-size:.68rem;color:var(--muted)">Total Payments</div><div style="font-weight:700">${st.total||0}</div></div>
+        <div><div style="font-size:.68rem;color:var(--muted)">Failed</div><div style="font-weight:700;color:var(--red)">${st.failed||0}</div></div>
+        <div><div style="font-size:.68rem;color:var(--muted)">Success Rate</div><div style="font-weight:700;color:var(--green)">${st.successRate||100}%</div></div>
+      </div>
+    </div>`;
+  } catch (e) { s('provider-grid').innerHTML = `<div class="empty" style="color:var(--red)">${e.message}</div>`; }
+};
+
+/* ── Export ── */
+window._exportReport = async function(type) {
+  const btn = event.target;
+  btn.disabled = true;
+  s('export-status').textContent = `Generating ${type} export…`;
+  try {
+    const extra = {};
+    if (type === 'transactions') {
+      extra.periodStart = s('exp-start').value || undefined;
+      extra.periodEnd   = s('exp-end').value   || undefined;
+      extra.hubType     = s('exp-hub').value   || undefined;
+    }
+    const res  = await CF('fosExportReport')({ reportType: type, pageSize: 500, ...extra });
+    const rows = res.data?.rows || [];
+    if (!rows.length) { s('export-status').textContent = 'No data to export.'; return; }
+
+    /* Build CSV */
+    const headers = Object.keys(rows[0]).join(',');
+    const lines   = rows.map(r => Object.values(r).map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(','));
+    const csv     = [headers, ...lines].join('\n');
+    const blob    = new Blob([csv], { type: 'text/csv' });
+    const url     = URL.createObjectURL(blob);
+    const a       = document.createElement('a');
+    a.href = url; a.download = `sokoni-${type}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    s('export-status').textContent = `Exported ${rows.length} rows.`;
+  } catch (e) {
+    s('export-status').textContent = `Error: ${e.message}`;
+  } finally { btn.disabled = false; }
+};
+
+/* ── Audit Log ── */
+window._loadAudit = async function() {
+  s('audit-table').innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const snap = await getDocs(query(collection(db,'finosAudit'), orderBy('timestamp','desc'), limit(100)));
+    if (snap.empty) { s('audit-table').innerHTML = '<div class="empty">No audit events yet.</div>'; return; }
+    s('audit-table').innerHTML = `<table class="tbl">
+      <thead><tr><th>Action</th><th>Actor</th><th>Amount</th><th>Ref</th><th>Time</th></tr></thead>
+      <tbody>${snap.docs.map(d => {
+        const a = d.data();
+        return `<tr>
+          <td style="font-weight:600">${a.action||'—'}</td>
+          <td class="mono">${a.actorUid?.slice(0,8)||'—'}…</td>
+          <td>${a.amountKES||a.amountCents?'KES '+(a.amountKES||((a.amountCents||0)/100)):''}</td>
+          <td class="mono">${a.payRef||a.fosTransactionId||a.refundId||'—'}</td>
+          <td>${fmtD(a.timestamp?.toDate?.()?.toISOString())}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  } catch (e) { s('audit-table').innerHTML = `<div class="empty" style="color:var(--red)">${e.message}</div>`; }
+};
+</script>
+<script src="sokoni-config.js"></script>
+</body>
+</html>

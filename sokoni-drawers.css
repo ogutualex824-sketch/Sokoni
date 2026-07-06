@@ -25,8 +25,8 @@
 /* ── CSS Custom Properties ─────────────────────────────────── */
 :root {
   --sk-d-w:       min(90vw, 420px);
-  --sk-d-w-md:    480px;
-  --sk-d-w-lg:    520px;
+  --sk-d-w-md:    min(90vw, 480px);
+  --sk-d-w-lg:    min(90vw, 520px);
   --sk-d-hdr-h:   52px;
   --sk-d-z:       9500;
   --sk-d-bkdp-z:  9499;

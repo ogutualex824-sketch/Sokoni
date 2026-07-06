@@ -26,6 +26,8 @@
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-tokens.css' }, 'sk-tokens-link');
   /* Premium component library — .sk-card, .sk-btn-*, .sk-badge, .sk-stat, etc. */
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-components.css' }, 'sk-components-link');
+  /* Quality design system — --so-* tokens, focus-visible ring, WCAG touch targets, skip links */
+  _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-quality.css' }, 'sk-quality-link');
   /* UI library — shared toast / modal / spinner / skeleton */
   _injectAsset('script', { src: 'sokoni-ui.js', defer: true }, 'sk-ui-script');
   /* Layout manager — resolves floating element overlaps, sets CSS vars */
@@ -84,6 +86,24 @@
     respLink.id = 'sk-responsive-link';
     respLink.href = 'sokoni-responsive.css';
     (document.head || document.documentElement).appendChild(respLink);
+  }
+
+  /* Premium design system — dark theme, compact layout, glass cards (once) */
+  if (!document.getElementById('sk-premium-link')) {
+    const premLink = document.createElement('link');
+    premLink.rel = 'stylesheet';
+    premLink.id = 'sk-premium-link';
+    premLink.href = 'premium.css';
+    (document.head || document.documentElement).appendChild(premLink);
+  }
+
+  /* sokoni-premium-v2.css — phase 2 premium overrides (once) */
+  if (!document.getElementById('sk-premium-v2-link')) {
+    const pv2Link = document.createElement('link');
+    pv2Link.rel = 'stylesheet';
+    pv2Link.id = 'sk-premium-v2-link';
+    pv2Link.href = 'sokoni-premium-v2.css';
+    (document.head || document.documentElement).appendChild(pv2Link);
   }
 
   /* Universal drawer system — CSS + JS (once) */
@@ -527,7 +547,7 @@
 
     nav.innerHTML =
       /* Logo */
-      '<a href="index.html" id="sk-nav-logo" aria-label="SOKONI Home">' +
+      '<a href="/" id="sk-nav-logo" aria-label="SOKONI Home">' +
         '<img src="assets/Sokonilogo2.png" alt="SOKONI" ' +
           'onerror="this.style.display=\'none\';document.getElementById(\'sk-nav-logo-text\').style.display=\'block\'">' +
         '<span id="sk-nav-logo-text" style="display:none;">SOKONI</span>' +

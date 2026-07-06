@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Messages — SOKONI</title>
@@ -65,6 +67,26 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
   .bottom-nav{display:none}
   body{padding-bottom:0;max-width:640px;margin:0 auto}
 }
+
+/* ── Dark mode ── */
+@media(prefers-color-scheme:dark){
+  :root{
+    --c-bg:#0a0a0a;
+    --c-surface:#111115;
+    --c-border:rgba(255,255,255,0.08);
+    --c-primary:#71ff00;
+    --c-primary-light:rgba(113,255,0,0.07);
+    --c-text:rgba(255,255,255,0.9);
+    --c-sub:rgba(255,255,255,0.42);
+    --c-red:#f87171;
+  }
+  .conv-item:hover{background:rgba(255,255,255,0.04)}
+  .conv-item.unread{background:rgba(113,255,0,0.05)}
+  .filter-chip.active{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.35);color:#71ff00}
+  .empty .material-icons{color:rgba(255,255,255,0.18)}
+  .skeleton{background:linear-gradient(90deg,#1a1a1e 25%,#222226 50%,#1a1a1e 75%);background-size:200%}
+  .unread-badge{background:#71ff00;color:#000}
+}
 </style>
 </head>
 <body>
@@ -90,6 +112,10 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
   <button class="filter-chip" data-filter="vehicle_inquiry">Vehicles</button>
   <button class="filter-chip" data-filter="job_application">Jobs</button>
   <button class="filter-chip" data-filter="healthcare_appointment">Healthcare</button>
+  <button class="filter-chip" data-filter="legal_consultation">Legal</button>
+  <button class="filter-chip" data-filter="hotel_reservation">Hotels</button>
+  <button class="filter-chip" data-filter="logistics_request">Delivery</button>
+  <button class="filter-chip" data-filter="rfq">Quotes</button>
   <button class="filter-chip" data-filter="support_ticket">Support</button>
 </div>
 

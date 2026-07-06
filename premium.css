@@ -15,7 +15,8 @@ html {
 }
 body {
   overflow-x: clip;
-  overflow-y: auto;
+  /* overflow-y intentionally unset — overflow-y:auto on body creates a new
+     scroll container on iOS Safari, causing position:fixed elements to scroll */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: auto;
