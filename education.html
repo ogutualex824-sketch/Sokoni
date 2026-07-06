@@ -62,28 +62,6 @@
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* ── Header ────────────────────────────────────────────── */
-    .site-header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      position: sticky; top: 0; z-index: 200;
-      height: 60px;
-      display: flex; align-items: center;
-      padding: 0 20px; gap: 12px;
-      box-shadow: var(--shadow);
-    }
-    .header-brand {
-      display: flex; align-items: center; gap: 2px;
-      font-size: 20px; font-weight: 900; color: var(--text);
-      text-decoration: none;
-    }
-    .header-brand .brand-accent { color: var(--accent); }
-    .header-edu-label {
-      font-size: 13px; font-weight: 600; color: var(--muted);
-      border-left: 1px solid var(--border); padding-left: 12px;
-    }
-    .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-
     /* ── Buttons ───────────────────────────────────────────── */
     .btn {
       display: inline-flex; align-items: center; gap: 6px;
@@ -143,6 +121,14 @@
       .edu-search-bar { flex-direction: column; border-radius: 12px; padding: 10px; gap: 6px; }
     }
 
+    /* ── Hero action buttons (My Learning, Teach, Sign In) ─── */
+    .edu-hero-actions {
+      display: flex; gap: 10px; flex-wrap: wrap;
+      justify-content: center; margin-top: 20px;
+    }
+    .edu-hero-actions .btn { font-size: 13px; }
+    .edu-hero-actions .btn.hidden { display: none !important; }
+
     /* ── Section wrapper ───────────────────────────────────── */
     .section { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
 
@@ -191,7 +177,7 @@
 
     /* ── Category chips ────────────────────────────────────── */
     .edu-cats-bar {
-      position: sticky; top: 60px; z-index: 100;
+      position: sticky; top: 64px; z-index: 100;
       background: var(--bg); border-bottom: 1px solid var(--border);
       padding: 10px 0;
     }
@@ -566,39 +552,6 @@
 <body>
 
 <!-- ════════════════════════════════════════
-     HEADER
-════════════════════════════════════════ -->
-<header class="site-header">
-  <a class="header-brand" href="index.html">
-    <span class="brand-accent">S</span>OKONI
-  </a>
-  <span class="header-edu-label">Education</span>
-
-  <div class="header-actions">
-    <button
-      id="eduMyLearningBtn"
-      class="btn btn-outline btn-sm hidden"
-      onclick="SokoniEducation.openMyLearning()"
-      aria-label="View my enrolled courses"
-    >
-      📖 My Learning
-    </button>
-
-    <button
-      id="eduTeachBtn"
-      class="btn btn-green btn-sm hidden"
-      onclick="SokoniEducation.showCreateForm()"
-      aria-label="Create a new course"
-    >
-      ✏️ Teach on SOKONI
-    </button>
-
-    <a id="eduAuthAction" href="login.html?return=education.html" class="btn btn-ghost btn-sm">Sign In</a>
-  </div>
-</header>
-
-
-<!-- ════════════════════════════════════════
      HERO
 ════════════════════════════════════════ -->
 <section class="edu-hero" aria-label="Course search">
@@ -616,6 +569,26 @@
       autocomplete="off"
     >
     <button class="btn btn-primary" onclick="SokoniEducation.searchCourses()">Search</button>
+  </div>
+
+  <div class="edu-hero-actions">
+    <button
+      id="eduMyLearningBtn"
+      class="btn btn-outline btn-sm hidden"
+      onclick="SokoniEducation.openMyLearning()"
+      aria-label="View my enrolled courses"
+      style="border-color:rgba(255,255,255,0.35);color:#fff;"
+    >📖 My Learning</button>
+
+    <button
+      id="eduTeachBtn"
+      class="btn btn-green btn-sm hidden"
+      onclick="SokoniEducation.showCreateForm()"
+      aria-label="Create a new course"
+    >✏️ Teach on SOKONI</button>
+
+    <a id="eduAuthAction" href="login.html?return=education.html" class="btn btn-sm"
+       style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);">Sign In</a>
   </div>
 </section>
 
@@ -926,7 +899,7 @@
 <nav class="bottom-nav" id="bottomNav" aria-label="Main navigation">
   <a href="index.html"     class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="search.html"    class="bnav-item"><span class="bnav-emoji">🔍</span><span>Search</span></a>
-  <a href="cart.html"      class="bnav-item"><span class="bnav-emoji">🛒</span><span>Cart</span></a>
+  <a href="services.html"  class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
   <a href="education.html" class="bnav-item active"><span class="bnav-emoji">🎓</span><span>Learn</span></a>
   <a href="profile.html"   class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>

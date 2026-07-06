@@ -21,6 +21,8 @@
 
   /* ── Pages that manage their own nav entirely — skip all injection ── */
   var _SKIP = [
+    'index.html',     /* home page has hand-crafted bottom nav */
+    'education.html', /* education hub has its own education bottom nav */
     'pos.html', 'seller.html', 'login.html', 'signup.html',
     'register.html', 'success.html', 'offline.html', 'admin.html',
     'profile.html', 'ecc.html', 'wap.html', 'gip.html', 'platform.html',
@@ -93,7 +95,6 @@
     'enterprise-search.html':   'superAdmin',
     'ai-subscriptions.html':    'superAdmin',
     'admin-subscriptions.html': 'superAdmin',
-    'education.html':           'superAdmin',
     /* Rider workspace */
     'rider-nav.html':           'rider',
     /* Driver workspace */
@@ -120,8 +121,8 @@
     buyer: [
       { i:'🏠',  l:'Home',        h:'index.html' },
       { i:'🛍️', l:'Categories',  h:'category.html?cat=all' },
-      { i:'🛒',  l:'Cart',        h:'cart.html' },
-      { i:'📦',  l:'Orders',      h:'orders.html' },
+      { i:'🛠️', l:'Services',    h:'services.html' },
+      { i:'📦',  l:'Orders',      h:'profile.html#orders' },
       { i:'👤',  l:'Profile',     h:'profile.html' }
     ],
     seller: [

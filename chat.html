@@ -382,8 +382,8 @@ function _ctxAction(id){
   var txId=_conv.transactionId;
   var routes={
     track_order:     'delivery-tracking.html?orderId='+txId,
-    cancel_order:    'orders.html?cancel='+txId,
-    return_item:     'orders.html?return='+txId,
+    cancel_order:    'profile.html?cancel='+txId+'#orders',
+    return_item:     'profile.html?return='+txId+'#orders',
     view_invoice:    'invoice.html?txId='+txId,
     schedule_viewing:'properties.html?view='+txId,
     book_inspection: 'car-hub.html?inspect='+txId,

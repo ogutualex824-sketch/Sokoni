@@ -1033,6 +1033,7 @@ function initProfile(){
   loadSettingsForm();
   renderRoleModal();
   _initGrowthCards();
+  _openTabFromHash();
 
   /* listen for Firestore profile updates */
   if(window.firebaseDB){
@@ -1315,6 +1316,13 @@ function switchTab(tabKey){
     p.classList.toggle('active', p.id === 'panel-'+tabKey);
   });
 }
+
+/* Open a tab from the URL hash (e.g. profile.html#orders) and keep it in sync */
+function _openTabFromHash(){
+  var key = (location.hash || '').replace(/^#/, '');
+  if(key && document.getElementById('panel-'+key)) switchTab(key);
+}
+window.addEventListener('hashchange', _openTabFromHash);
 
 /* ══════════════════════════════════════════════════════════════
    3. OVERVIEW
