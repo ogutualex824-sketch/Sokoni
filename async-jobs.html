@@ -3,560 +3,717 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Async Jobs Dashboard — SOKONI</title>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<title>Async Jobs Engine — SOKONI</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
 <script src="/sokoni-config.js"></script>
 <script src="/sokoni-appcheck.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d0d0d;color:#e4e4e4;min-height:100vh}
-header{background:#111;border-bottom:1px solid #222;padding:16px 24px;display:flex;align-items:center;gap:12px}
-header h1{font-size:18px;font-weight:600}
-header .badge{background:#7c3aed;color:#fff;font-size:11px;padding:2px 8px;border-radius:12px}
-.container{max-width:1400px;margin:0 auto;padding:24px}
-.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
-@media(max-width:900px){.grid-4{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:500px){.grid-4{grid-template-columns:1fr}}
-.card{background:#161616;border:1px solid #222;border-radius:12px;padding:20px}
-.card h3{font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.card .num{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums}
-.card .sub{font-size:12px;color:#666;margin-top:4px}
-.num.green{color:#34d399}
-.num.yellow{color:#fbbf24}
-.num.red{color:#f87171}
-.num.blue{color:#60a5fa}
-.num.purple{color:#a78bfa}
-.section{margin-bottom:32px}
-.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-.section-header h2{font-size:16px;font-weight:600}
-.btn{background:#7c3aed;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;transition:background .15s}
-.btn:hover{background:#6d28d9}
-.btn.sm{padding:5px 12px;font-size:12px}
-.btn.danger{background:#dc2626}
-.btn.danger:hover{background:#b91c1c}
-.btn.ghost{background:transparent;border:1px solid #333;color:#aaa}
-.btn.ghost:hover{border-color:#555;color:#eee}
-table{width:100%;border-collapse:collapse}
-th{text-align:left;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;padding:8px 12px;border-bottom:1px solid #222}
-td{padding:10px 12px;border-bottom:1px solid #1a1a1a;font-size:13px;vertical-align:middle}
-tr:last-child td{border-bottom:none}
-tr:hover td{background:#1a1a1a}
-.badge-status{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:500}
-.s-queued{background:#1e3a5f;color:#60a5fa}
-.s-running{background:#1c3a2e;color:#34d399}
-.s-retrying{background:#3b2e10;color:#fbbf24}
-.s-completed{background:#1a2e1a;color:#4ade80}
-.s-failed{background:#3b1a1a;color:#f87171}
-.s-dead_letter{background:#2d1515;color:#ef4444}
-.s-cancelled{background:#222;color:#888}
-.s-waiting{background:#1e1e3a;color:#818cf8}
-.queue-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
-.queue-pill{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 14px;font-size:13px;display:flex;align-items:center;gap:8px}
-.queue-pill.paused{border-color:#ef4444;background:#1f0a0a}
-.pill-dot{width:8px;height:8px;border-radius:50%;background:#34d399}
-.pill-dot.paused{background:#ef4444}
-.queue-actions{display:flex;gap:6px;margin-top:6px}
-.tabs{display:flex;gap:4px;background:#111;border-radius:10px;padding:4px;margin-bottom:20px;width:fit-content}
-.tab{padding:7px 16px;border-radius:7px;font-size:13px;cursor:pointer;border:none;background:transparent;color:#888;transition:.15s}
-.tab.active{background:#7c3aed;color:#fff}
-.panel{display:none}
-.panel.active{display:block}
-.dlq-empty,.empty-state{text-align:center;padding:40px;color:#555;font-size:14px}
-.input-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-input,select{background:#111;border:1px solid #2a2a2a;color:#e4e4e4;padding:8px 12px;border-radius:8px;font-size:13px;outline:none}
-input:focus,select:focus{border-color:#7c3aed}
-.toast{position:fixed;bottom:24px;right:24px;background:#34d399;color:#111;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:500;z-index:999;display:none}
-.toast.err{background:#f87171}
-.progress-bar{width:100%;height:4px;background:#222;border-radius:2px;overflow:hidden}
-.progress-fill{height:100%;background:#7c3aed;transition:width .3s}
-.refresh-row{display:flex;align-items:center;gap:12px;font-size:12px;color:#555}
-.spinner{width:14px;height:14px;border:2px solid #333;border-top-color:#7c3aed;border-radius:50%;animation:spin .8s linear infinite;display:none}
-.spinner.active{display:inline-block}
-@keyframes spin{to{transform:rotate(360deg)}}
+:root{
+  --g:#71ff00;--bg:#050505;--sur:#0d0d0d;--bor:#1a1a1a;
+  --txt:#e8e8e8;--muted:#777;--r:10px;--hh:64px
+}
+html,body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;min-height:100vh}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.sk-header{
+  height:var(--hh);background:var(--sur);border-bottom:1px solid var(--bor);
+  display:flex;align-items:center;gap:14px;padding:0 24px;
+  position:sticky;top:0;z-index:200
+}
+.sk-logo{
+  width:36px;height:36px;background:var(--g);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  color:#000;font-weight:900;font-size:18px;flex-shrink:0
+}
+.sk-title{flex:1}
+.sk-title h1{font-size:17px;font-weight:800;color:#fff;letter-spacing:-.02em}
+.sk-title p{font-size:11px;color:var(--muted);margin-top:1px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--g);
+  display:inline-block;animation:pulse 2s infinite;margin-right:5px;vertical-align:middle}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.sk-user{text-align:right;font-size:12px;line-height:1.5}
+.sk-user strong{color:var(--g)}
+
+/* ── KPI row ─────────────────────────────────────────────────────────────── */
+.kpi-grid{
+  display:grid;grid-template-columns:repeat(6,1fr);gap:12px;
+  padding:20px 24px 0
+}
+@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:500px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+.kpi-box{
+  background:var(--sur);border:1px solid var(--bor);border-radius:var(--r);
+  padding:16px 14px;text-align:center;transition:border-color .2s;cursor:default
+}
+.kpi-box:hover{border-color:var(--g)}
+.kpi-n{font-size:26px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
+.kpi-l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+.kpi-box.kv-run .kpi-n{color:var(--g)}
+.kpi-box.kv-err .kpi-n{color:#ff4d4d}
+.kpi-box.kv-warn.kpi-n{color:#ffaa00}
+.kpi-box.kv-dlq .kpi-n{color:#ff7040}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+.poc-tabs{
+  display:flex;gap:0;border-bottom:1px solid var(--bor);
+  padding:20px 24px 0;overflow-x:auto
+}
+.poc-tab{
+  padding:11px 20px;font-size:13px;font-weight:500;cursor:pointer;
+  color:var(--muted);border-bottom:2px solid transparent;
+  transition:.2s;white-space:nowrap
+}
+.poc-tab.active{color:var(--g);border-bottom-color:var(--g)}
+.poc-tab:hover:not(.active){color:var(--txt)}
+.poc-page{display:none;padding:20px 24px}
+.poc-page.active{display:block}
+
+/* ── Shared helpers ──────────────────────────────────────────────────────── */
+.svc-hdr{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.svc-hdr h2{font-size:15px;font-weight:700;color:#fff}
+.svc-hdr p{font-size:12px;color:var(--muted);margin-top:2px}
+
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;
+  cursor:pointer;border:none;transition:.18s;white-space:nowrap
+}
+.btn-primary{background:var(--g);color:#000}
+.btn-primary:hover{opacity:.85}
+.btn-ghost{background:transparent;border:1px solid var(--bor);color:var(--txt)}
+.btn-ghost:hover{border-color:var(--g);color:var(--g)}
+.btn-danger{background:transparent;border:1px solid #ff4d4d;color:#ff4d4d}
+.btn-danger:hover{background:#ff4d4d1a}
+.btn-warn{background:transparent;border:1px solid #ffaa00;color:#ffaa00}
+.btn-warn:hover{background:#ffaa001a}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:default;pointer-events:none}
+
+/* ── Table ───────────────────────────────────────────────────────────────── */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--bor);border-radius:var(--r)}
+table{width:100%;border-collapse:collapse;min-width:680px}
+th{
+  background:#090909;color:var(--muted);font-size:11px;
+  text-transform:uppercase;letter-spacing:.06em;
+  padding:11px 14px;text-align:left;white-space:nowrap
+}
+td{padding:11px 14px;border-top:1px solid var(--bor);vertical-align:middle;font-size:13px}
+tr.clickable{cursor:pointer}
+tr.clickable:hover td{background:#111}
+
+/* ── Filters ─────────────────────────────────────────────────────────────── */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.f-sel{
+  background:var(--sur);border:1px solid var(--bor);color:var(--txt);
+  padding:7px 11px;border-radius:6px;font-size:13px;outline:none;cursor:pointer
+}
+.f-sel:focus{border-color:var(--g)}
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+.badge{
+  display:inline-flex;align-items:center;padding:2px 8px;
+  border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.04em;white-space:nowrap
+}
+.bs-queued     {background:#0f2a0f;color:var(--g)}
+.bs-waiting    {background:#0f0f2a;color:#7090ff}
+.bs-running    {background:#052a10;color:#00e676;animation:glow 1.5s infinite alternate}
+.bs-retrying   {background:#2a1500;color:#ffaa00}
+.bs-completed  {background:#052a05;color:#4caf50}
+.bs-cancelled  {background:#181818;color:#666}
+.bs-failed     {background:#2a0505;color:#ff4d4d}
+.bs-dead_letter{background:#2a1000;color:#ff7040}
+@keyframes glow{from{box-shadow:0 0 4px #00e67630}to{box-shadow:0 0 12px #00e676}}
+
+.bp-critical  {background:#3d0000;color:#ff4d4d}
+.bp-high      {background:#2a1200;color:#ff8c00}
+.bp-normal    {background:#0f2a0f;color:var(--g)}
+.bp-low       {background:#0a142a;color:#5c9eff}
+.bp-background{background:#151515;color:#666}
+
+.type-chip{
+  font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;
+  background:#1a1a1a;color:#bbb;font-family:monospace
+}
+
+/* ── Queue control cards ─────────────────────────────────────────────────── */
+.queue-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.q-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--r);padding:18px}
+.q-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.q-card h3{font-size:13px;font-weight:700;color:#fff}
+.q-chip{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700}
+.q-chip.on {background:#ff4d4d1a;color:#ff4d4d;border:1px solid #ff4d4d33}
+.q-chip.off{background:#71ff001a;color:var(--g);border:1px solid #71ff0033}
+.q-desc{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5}
+
+/* ── Progress bar ────────────────────────────────────────────────────────── */
+.prog-rail{background:#0f0f0f;border-radius:4px;height:4px;overflow:hidden;margin-top:6px}
+.prog-fill{height:100%;background:var(--g);border-radius:4px;transition:width .4s}
+
+/* ── Modal ───────────────────────────────────────────────────────────────── */
+.modal-bg{
+  position:fixed;inset:0;background:#000b;display:none;
+  align-items:center;justify-content:center;z-index:500;padding:16px
+}
+.modal-bg.open{display:flex}
+.modal{
+  background:var(--sur);border:1px solid var(--bor);border-radius:var(--r);
+  width:100%;max-width:700px;max-height:90vh;display:flex;flex-direction:column
+}
+.modal-hdr{
+  padding:16px 20px;border-bottom:1px solid var(--bor);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0
+}
+.modal-hdr h2{font-size:15px;font-weight:700;color:#fff}
+.modal-x{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:2px 6px;line-height:1}
+.modal-x:hover{color:#fff}
+.modal-body{padding:20px;overflow-y:auto;flex:1}
+.modal-ftr{
+  padding:14px 20px;border-top:1px solid var(--bor);
+  display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0
+}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:500px){.detail-grid{grid-template-columns:1fr}}
+.d-row{background:var(--bg);border:1px solid var(--bor);border-radius:6px;padding:10px 12px}
+.d-row label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px}
+.d-row span{font-size:13px;color:#fff;word-break:break-all}
+.d-row.full{grid-column:1/-1}
+pre.json-view{
+  background:#090909;border:1px solid var(--bor);border-radius:6px;
+  padding:12px;font-size:12px;color:#ccc;overflow:auto;
+  font-family:monospace;white-space:pre-wrap;max-height:180px
+}
+.audit-list{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.audit-item{display:flex;gap:8px;align-items:flex-start;font-size:12px}
+.audit-dot{width:6px;height:6px;border-radius:50%;background:var(--g);margin-top:4px;flex-shrink:0}
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+#toast{
+  position:fixed;bottom:22px;right:22px;background:#161616;color:#fff;
+  padding:11px 18px;border-radius:8px;font-size:13px;
+  border-left:3px solid var(--g);opacity:0;
+  transition:opacity .25s;pointer-events:none;z-index:999;max-width:320px
+}
+#toast.show{opacity:1}
+
+/* ── Loading / empty ─────────────────────────────────────────────────────── */
+.ld{display:flex;gap:8px;align-items:center;padding:40px;color:var(--muted);justify-content:center}
+.spin{
+  width:16px;height:16px;border:2px solid #1a1a1a;border-top-color:var(--g);
+  border-radius:50%;animation:sp .7s linear infinite;flex-shrink:0
+}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:13px}
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>Async Jobs Dashboard</h1>
-    <div style="font-size:12px;color:#666;margin-top:2px">SOKONI Background Processing Engine</div>
+
+<!-- ── Header ────────────────────────────────────────────────────────────── -->
+<header class="sk-header">
+  <div class="sk-logo">⚙</div>
+  <div class="sk-title">
+    <h1><span class="live-dot"></span>Async Jobs Engine</h1>
+    <p>Background processing monitor — admin</p>
   </div>
-  <span class="badge">Admin</span>
-  <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
-    <div class="refresh-row">
-      <div class="spinner" id="spinner"></div>
-      <span id="lastRefresh">—</span>
-    </div>
-    <button class="btn sm" onclick="loadAll()">Refresh</button>
-  </div>
+  <div class="sk-user" id="user-chip">—</div>
 </header>
 
-<div class="container">
+<!-- ── KPI strip ─────────────────────────────────────────────────────────── -->
+<div class="kpi-grid">
+  <div class="kpi-box kv-run"><div class="kpi-n" id="k-running">—</div><div class="kpi-l">Running</div></div>
+  <div class="kpi-box">      <div class="kpi-n" id="k-queued">—</div> <div class="kpi-l">Queued</div></div>
+  <div class="kpi-box">      <div class="kpi-n" id="k-retrying" style="color:#ffaa00">—</div><div class="kpi-l">Retrying</div></div>
+  <div class="kpi-box kv-err"><div class="kpi-n" id="k-failed">—</div> <div class="kpi-l">Failed</div></div>
+  <div class="kpi-box kv-dlq"><div class="kpi-n" id="k-dlq">—</div>   <div class="kpi-l">Dead Letter</div></div>
+  <div class="kpi-box">      <div class="kpi-n" id="k-completed">—</div><div class="kpi-l">Completed</div></div>
+</div>
 
-  <!-- KPI Strip -->
-  <div class="grid-4" id="kpis">
-    <div class="card"><h3>Queued</h3><div class="num blue" id="kpiQueued">—</div><div class="sub">Waiting to run</div></div>
-    <div class="card"><h3>Running</h3><div class="num green" id="kpiRunning">—</div><div class="sub">In progress now</div></div>
-    <div class="card"><h3>Failed / DLQ</h3><div class="num red" id="kpiFailed">—</div><div class="sub">Need attention</div></div>
-    <div class="card"><h3>Success Rate</h3><div class="num purple" id="kpiSuccess">—</div><div class="sub">Last 24 hours</div></div>
+<!-- ── Tabs ──────────────────────────────────────────────────────────────── -->
+<div class="poc-tabs">
+  <div class="poc-tab active" onclick="gotoTab('overview',this)">Overview</div>
+  <div class="poc-tab" onclick="gotoTab('jobs',this)">All Jobs</div>
+  <div class="poc-tab" onclick="gotoTab('dlq',this)">Dead Letter</div>
+  <div class="poc-tab" onclick="gotoTab('controls',this)">Queue Controls</div>
+</div>
+
+<!-- ── Overview ──────────────────────────────────────────────────────────── -->
+<div class="poc-page active" id="pg-overview">
+  <div class="svc-hdr">
+    <div><h2>Recent Jobs</h2><p>Last 20 across all types — live</p></div>
+    <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">↻ Refresh</button>
   </div>
-
-  <div class="grid-4" style="margin-bottom:24px">
-    <div class="card"><h3>Avg Exec Time</h3><div class="num blue" id="kpiAvgMs">—</div><div class="sub">p95: <span id="kpiP95">—</span></div></div>
-    <div class="card"><h3>Active Workers</h3><div class="num green" id="kpiWorkers">—</div><div class="sub">Live now</div></div>
-    <div class="card"><h3>Total (24h)</h3><div class="num" id="kpiTotal">—</div><div class="sub">All statuses</div></div>
-    <div class="card"><h3>Dead Letter</h3><div class="num red" id="kpiDLQ">—</div><div class="sub">Max-retries exhausted</div></div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Job ID</th><th>Type</th><th>Status</th><th>Priority</th>
+        <th>Owner</th><th>Retries</th><th>Created</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="tb-overview"><tr><td colspan="8" class="ld"><div class="spin"></div>Loading…</td></tr></tbody>
+    </table>
   </div>
+</div>
 
-  <!-- Queue State Pills -->
-  <div class="section">
-    <div class="section-header">
-      <h2>Queue Status</h2>
-    </div>
-    <div class="queue-bar" id="queuePills">Loading...</div>
+<!-- ── All Jobs ───────────────────────────────────────────────────────────── -->
+<div class="poc-page" id="pg-jobs">
+  <div class="filters">
+    <select class="f-sel" id="f-status">
+      <option value="">All statuses</option>
+      <option>queued</option><option>waiting</option><option>running</option>
+      <option>retrying</option><option>completed</option><option>cancelled</option>
+      <option>failed</option><option>dead_letter</option>
+    </select>
+    <select class="f-sel" id="f-priority">
+      <option value="">All priorities</option>
+      <option value="0">0 — CRITICAL</option><option value="1">1 — HIGH</option>
+      <option value="2">2 — NORMAL</option><option value="3">3 — LOW</option>
+      <option value="4">4 — BACKGROUND</option>
+    </select>
+    <select class="f-sel" id="f-type">
+      <option value="">All types</option>
+      <option>EMAIL</option><option>SMS</option><option>PUSH</option>
+      <option>RECEIPT</option><option>PDF</option><option>ETIMS</option>
+      <option>WEBHOOK</option><option>ANALYTICS</option><option>ANALYTICS_AGGREGATE</option>
+      <option>INVENTORY_RECALC</option><option>INVENTORY_ALERT</option>
+      <option>REPORT</option><option>REPORT_GENERATE</option>
+      <option>IMAGE_OPT</option><option>AI_PROCESS</option>
+      <option>PRODUCT_INDEX</option><option>SEARCH_INDEX</option>
+      <option>RECO_UPDATE</option><option>LOYALTY_UPDATE</option>
+      <option>SELLER_NOTIFICATION</option><option>CUSTOMER_SEGMENT</option>
+      <option>BULK_IMPORT</option><option>BULK_EXPORT</option>
+    </select>
+    <select class="f-sel" id="f-limit">
+      <option value="25">25/page</option><option value="50" selected>50/page</option>
+      <option value="100">100/page</option>
+    </select>
+    <button class="btn btn-primary btn-sm" onclick="loadJobs()">Apply</button>
   </div>
-
-  <!-- Tabs -->
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('overview')">Overview</button>
-    <button class="tab" onclick="showTab('failed')">Failed Jobs</button>
-    <button class="tab" onclick="showTab('dlq')">Dead Letter</button>
-    <button class="tab" onclick="showTab('workers')">Workers</button>
-    <button class="tab" onclick="showTab('tools')">Admin Tools</button>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Job ID</th><th>Type</th><th>Status</th><th>Priority</th>
+        <th>Owner</th><th>Retries</th><th>Created</th><th>Completed</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="tb-jobs"><tr><td colspan="9" class="empty">Select filters above and click Apply</td></tr></tbody>
+    </table>
   </div>
+  <div id="jobs-pager" style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px"></div>
+</div>
 
-  <!-- Overview Tab -->
-  <div class="panel active" id="tab-overview">
-    <div class="section">
-      <div class="section-header">
-        <h2>By Job Type (24h)</h2>
-      </div>
-      <div class="card">
-        <table>
-          <thead><tr><th>Type</th><th>Count</th><th>Distribution</th></tr></thead>
-          <tbody id="typeTable"><tr><td colspan="3" class="empty-state">Loading...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-    <div class="section">
-      <div class="section-header">
-        <h2>By Priority (queued)</h2>
-      </div>
-      <div class="card">
-        <table>
-          <thead><tr><th>Priority</th><th>Pending</th><th>Queue State</th></tr></thead>
-          <tbody id="priorityTable"><tr><td colspan="3" class="empty-state">Loading...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
+<!-- ── DLQ ────────────────────────────────────────────────────────────────── -->
+<div class="poc-page" id="pg-dlq">
+  <div class="svc-hdr">
+    <div><h2>Dead Letter Queue</h2><p>Jobs that exhausted all retries — replay or permanently discard</p></div>
+    <button class="btn btn-ghost btn-sm" onclick="loadDLQ()">↻ Refresh</button>
   </div>
-
-  <!-- Failed Tab -->
-  <div class="panel" id="tab-failed">
-    <div class="section">
-      <div class="section-header">
-        <h2>Recently Failed Jobs</h2>
-        <div style="display:flex;gap:8px">
-          <button class="btn sm ghost" onclick="loadDashboard()">Refresh</button>
-        </div>
-      </div>
-      <div class="card">
-        <table>
-          <thead><tr><th>Job ID</th><th>Type</th><th>Error</th><th>Retries</th><th>Created</th><th>Actions</th></tr></thead>
-          <tbody id="failedTable"><tr><td colspan="6" class="empty-state">Loading...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Job ID</th><th>Type</th><th>Priority</th><th>Owner</th>
+        <th>Final Error</th><th>Failed</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="tb-dlq"><tr><td colspan="7" class="ld"><div class="spin"></div>Loading…</td></tr></tbody>
+    </table>
   </div>
+</div>
 
-  <!-- DLQ Tab -->
-  <div class="panel" id="tab-dlq">
-    <div class="section">
-      <div class="section-header"><h2>Dead Letter Queue</h2></div>
-      <div class="card">
-        <table>
-          <thead><tr><th>DLQ ID</th><th>Type</th><th>Reason</th><th>Moved At</th><th>Actions</th></tr></thead>
-          <tbody id="dlqTable"><tr><td colspan="5" class="empty-state">Loading...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
+<!-- ── Queue Controls ─────────────────────────────────────────────────────── -->
+<div class="poc-page" id="pg-controls">
+  <div class="svc-hdr">
+    <div><h2>Queue Controls</h2><p>Pause or resume a priority lane — sweeper skips paused queues immediately</p></div>
+    <button class="btn btn-ghost btn-sm" onclick="loadControls()">↻ Refresh</button>
   </div>
-
-  <!-- Workers Tab -->
-  <div class="panel" id="tab-workers">
-    <div class="section">
-      <div class="section-header"><h2>Active Workers</h2></div>
-      <div class="card">
-        <table>
-          <thead><tr><th>Worker ID</th><th>Current Job</th><th>Jobs Processed</th><th>Heartbeat</th></tr></thead>
-          <tbody id="workerTable"><tr><td colspan="4" class="empty-state">Loading...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
+  <div class="queue-grid" id="qg">
+    <div class="ld"><div class="spin"></div>Loading…</div>
   </div>
+</div>
 
-  <!-- Admin Tools Tab -->
-  <div class="panel" id="tab-tools">
-    <div class="section">
-      <div class="section-header"><h2>Queue Control</h2></div>
-      <div class="card" style="padding:20px">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:600px">
-          <div>
-            <label style="font-size:12px;color:#888;display:block;margin-bottom:6px">Queue Priority</label>
-            <select id="queueSelect" style="width:100%">
-              <option value="CRITICAL">CRITICAL</option>
-              <option value="HIGH">HIGH</option>
-              <option value="NORMAL" selected>NORMAL</option>
-              <option value="LOW">LOW</option>
-              <option value="BACKGROUND">BACKGROUND</option>
-            </select>
-          </div>
-          <div style="display:flex;align-items:flex-end;gap:8px">
-            <button class="btn" onclick="pauseQueue()">Pause</button>
-            <button class="btn ghost" onclick="resumeQueue()">Resume</button>
-          </div>
-        </div>
-      </div>
+<!-- ── Detail Modal ───────────────────────────────────────────────────────── -->
+<div class="modal-bg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h2 id="modal-title">Job Detail</h2>
+      <button class="modal-x" onclick="closeModal()">✕</button>
     </div>
-
-    <div class="section">
-      <div class="section-header"><h2>Bulk Cancel</h2></div>
-      <div class="card" style="padding:20px">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:flex-end;max-width:700px">
-          <div>
-            <label style="font-size:12px;color:#888;display:block;margin-bottom:6px">Job Type</label>
-            <select id="bulkType" style="width:100%">
-              <option value="">All types</option>
-              <option>EMAIL</option><option>PUSH</option><option>ANALYTICS</option>
-              <option>WEBHOOK</option><option>BULK_IMPORT</option><option>BULK_EXPORT</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size:12px;color:#888;display:block;margin-bottom:6px">Priority</label>
-            <select id="bulkPriority" style="width:100%">
-              <option value="">All</option>
-              <option>CRITICAL</option><option>HIGH</option><option>NORMAL</option>
-              <option>LOW</option><option>BACKGROUND</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size:12px;color:#888;display:block;margin-bottom:6px">Older than (hours)</label>
-            <input type="number" id="bulkAge" value="24" style="width:100%"/>
-          </div>
-          <button class="btn danger" onclick="bulkCancel()">Cancel Jobs</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-header"><h2>Inspect Job</h2></div>
-      <div class="card" style="padding:20px">
-        <div style="display:flex;gap:8px;max-width:500px">
-          <input type="text" id="inspectId" placeholder="job_... or DLQ ID" style="flex:1"/>
-          <button class="btn" onclick="inspectJob()">Inspect</button>
-        </div>
-        <pre id="inspectResult" style="margin-top:16px;background:#111;padding:16px;border-radius:8px;font-size:12px;overflow:auto;max-height:400px;display:none"></pre>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-header"><h2>Retry / Replay</h2></div>
-      <div class="card" style="padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:24px">
-        <div>
-          <div style="font-size:13px;color:#aaa;margin-bottom:10px">Retry a FAILED or CANCELLED job</div>
-          <div style="display:flex;gap:8px">
-            <input type="text" id="retryId" placeholder="job_..." style="flex:1"/>
-            <button class="btn" onclick="retryJob()">Retry</button>
-          </div>
-        </div>
-        <div>
-          <div style="font-size:13px;color:#aaa;margin-bottom:10px">Replay a DLQ entry</div>
-          <div style="display:flex;gap:8px">
-            <input type="text" id="dlqId" placeholder="DLQ job_..." style="flex:1"/>
-            <button class="btn" onclick="replayDLQ()">Replay</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-ftr" id="modal-ftr"></div>
   </div>
+</div>
 
-</div><!-- /container -->
-
-<div class="toast" id="toast"></div>
+<!-- ── Toast ─────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
 
 <script>
-let db, fns, auth;
-let dashData = null;
-let depthData = null;
-let workerData = null;
-
+// ── Firebase ─────────────────────────────────────────────────────────────────
 firebase.initializeApp(window.SOKONI_CONFIG || {});
-db   = firebase.firestore();
-fns  = firebase.functions();
-auth = firebase.auth();
+const auth = firebase.auth();
+const fdb  = firebase.firestore();
+const fns  = firebase.functions();
+fns.useRegion('us-central1');
 
 const call = (name, data = {}) => fns.httpsCallable(name)(data).then(r => r.data);
 
-auth.onAuthStateChanged(user => {
-  if (user) loadAll();
-  else window.location = '/index.html';
+// ── State ─────────────────────────────────────────────────────────────────────
+let _liveUnsub = null;
+let _lastJobId = null;
+let _kpiTimer  = null;
+
+// ── Auth gate ─────────────────────────────────────────────────────────────────
+auth.onAuthStateChanged(async u => {
+  if (!u) { location.href = '/login?next=/async-jobs'; return; }
+  const tok = await u.getIdTokenResult();
+  if (!tok.claims.admin && !tok.claims.superAdmin) {
+    document.body.innerHTML =
+      '<p style="color:#ff4d4d;text-align:center;padding:80px;font-size:15px">Admin access required.</p>';
+    return;
+  }
+  document.getElementById('user-chip').innerHTML =
+    `<strong>${u.displayName || u.email}</strong><br>${tok.claims.superAdmin ? 'Super Admin' : 'Admin'}`;
+  boot();
 });
 
-function showTab(name) {
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  event.target.classList.add('active');
-  if (name === 'workers') loadWorkers();
+function boot() {
+  loadDashboard();
+  startLive();
+  _kpiTimer = setInterval(loadDashboard, 15_000);
 }
 
-function toast(msg, err = false) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'toast' + (err ? ' err' : '');
-  el.style.display = 'block';
-  setTimeout(() => { el.style.display = 'none'; }, 3000);
+// ── Tab routing ───────────────────────────────────────────────────────────────
+function gotoTab(id, el) {
+  document.querySelectorAll('.poc-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.poc-page').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('pg-' + id).classList.add('active');
+  if (id === 'dlq')      loadDLQ();
+  if (id === 'controls') loadControls();
+  if (id === 'jobs')     loadJobs();
 }
 
-function spin(on) {
-  document.getElementById('spinner').classList.toggle('active', on);
-}
-
-async function loadAll() {
-  spin(true);
-  await Promise.allSettled([loadDashboard(), loadDepth()]);
-  document.getElementById('lastRefresh').textContent =
-    new Date().toLocaleTimeString('en-KE');
-  spin(false);
+// ── Live overview stream ──────────────────────────────────────────────────────
+function startLive() {
+  if (_liveUnsub) _liveUnsub();
+  _liveUnsub = fdb.collection('asyncJobs')
+    .orderBy('createdAt', 'desc').limit(20)
+    .onSnapshot(snap => {
+      renderOverviewRows(snap.docs.map(d => ({ jobId: d.id, ...d.data() })));
+    }, () => {});
 }
 
 async function loadDashboard() {
   try {
-    dashData = await call('getJobDashboard', { hours: 24 });
-    renderKPIs();
-    renderTypeTable();
-    renderFailedTable();
-    renderDLQTable();
-  } catch (e) { console.error(e); }
+    const d = await call('asyncGetDashboard');
+    setKpi('running',   d.kpis.running);
+    setKpi('queued',    d.kpis.queued);
+    setKpi('retrying',  d.kpis.retrying);
+    setKpi('failed',    d.kpis.failed);
+    setKpi('dlq',       d.kpis.dlq);
+    setKpi('completed', fmt(d.kpis.completed));
+  } catch (e) { console.warn('dashboard:', e.message); }
 }
 
-async function loadDepth() {
+function setKpi(id, v) { document.getElementById('k-' + id).textContent = v; }
+
+// ── Overview table ────────────────────────────────────────────────────────────
+function renderOverviewRows(jobs) {
+  const tb = document.getElementById('tb-overview');
+  if (!jobs.length) { tb.innerHTML = '<tr><td colspan="8" class="empty">No recent jobs</td></tr>'; return; }
+  tb.innerHTML = jobs.map(j => `
+    <tr class="clickable" onclick="openModal('${esc(j.jobId)}')">
+      <td><code style="font-size:11px;color:var(--muted)">${j.jobId.slice(0,13)}…</code></td>
+      <td><span class="type-chip">${esc(j.type||'?')}</span></td>
+      <td>${sBadge(j.status)}</td>
+      <td>${pBadge(j.priority,j.priorityLabel)}</td>
+      <td style="color:var(--muted);font-size:12px">${(j.ownerId||'').slice(0,10)}…</td>
+      <td style="text-align:center;color:var(--muted)">${j.retryCount||0}</td>
+      <td style="font-size:12px;color:var(--muted)">${rel(j.createdAt)}</td>
+      <td onclick="event.stopPropagation()" style="display:flex;gap:6px;flex-wrap:wrap">
+        ${canCancel(j.status)?`<button class="btn btn-danger btn-sm" onclick="cancelJob('${esc(j.jobId)}')">Cancel</button>`:''}
+        ${canRetry(j.status)?`<button class="btn btn-warn btn-sm" onclick="retryJob('${esc(j.jobId)}',false)">Retry</button>`:''}
+      </td>
+    </tr>`).join('');
+}
+
+// ── All Jobs ──────────────────────────────────────────────────────────────────
+async function loadJobs() {
+  _lastJobId = null;
+  await _fetchJobs();
+}
+
+async function _fetchJobs(nextPage) {
+  const tb = document.getElementById('tb-jobs');
+  tb.innerHTML = '<tr><td colspan="9" class="ld"><div class="spin"></div>Loading…</td></tr>';
+  const p = {
+    status:    v('f-status')    || undefined,
+    type:      v('f-type')      || undefined,
+    priority:  v('f-priority') !== '' ? v('f-priority') : undefined,
+    limit:     v('f-limit')     || 50,
+    startAfter: nextPage && _lastJobId ? _lastJobId : undefined,
+  };
+  clean(p);
   try {
-    depthData = await call('getQueueDepth', {});
-    renderQueuePills();
-    renderPriorityTable();
-  } catch (e) { console.error(e); }
-}
-
-async function loadWorkers() {
-  try {
-    workerData = await call('getWorkerStats', {});
-    renderWorkers();
-  } catch (e) { console.error(e); }
-}
-
-function renderKPIs() {
-  if (!dashData) return;
-  const { summary, successRate, avgExecMs, p95ExecMs } = dashData;
-  document.getElementById('kpiQueued').textContent   = (depthData?.queued ?? '—');
-  document.getElementById('kpiRunning').textContent  = summary.running;
-  document.getElementById('kpiFailed').textContent   = summary.failed;
-  document.getElementById('kpiSuccess').textContent  = successRate + '%';
-  document.getElementById('kpiAvgMs').textContent    = avgExecMs ? fmtMs(avgExecMs) : '—';
-  document.getElementById('kpiP95').textContent      = p95ExecMs ? fmtMs(p95ExecMs) : '—';
-  document.getElementById('kpiWorkers').textContent  = dashData.activeWorkers;
-  document.getElementById('kpiTotal').textContent    = summary.total;
-  document.getElementById('kpiDLQ').textContent      = summary.dlq;
-}
-
-function fmtMs(ms) {
-  if (ms < 1000) return ms + 'ms';
-  if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
-  return (ms / 60000).toFixed(1) + 'm';
-}
-
-function renderQueuePills() {
-  if (!depthData) return;
-  const { queueStates = {}, byPriority = {} } = depthData;
-  const all = ['CRITICAL','HIGH','NORMAL','LOW','BACKGROUND'];
-  document.getElementById('queuePills').innerHTML = all.map(p => {
-    const paused  = queueStates[p] === 'paused';
-    const pending = byPriority[p] || 0;
-    return `<div class="queue-pill${paused ? ' paused' : ''}">
-      <div class="pill-dot${paused ? ' paused' : ''}"></div>
-      <div>
-        <div style="font-weight:600;font-size:13px">${p}</div>
-        <div style="font-size:11px;color:#666">${pending} pending${paused ? ' · PAUSED' : ''}</div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function renderTypeTable() {
-  if (!dashData?.byType) return;
-  const total  = dashData.summary.total || 1;
-  const sorted = Object.entries(dashData.byType).sort((a, b) => b[1] - a[1]);
-  document.getElementById('typeTable').innerHTML = sorted.length
-    ? sorted.map(([type, count]) => `
-      <tr>
-        <td style="font-family:monospace">${type}</td>
-        <td>${count}</td>
-        <td>
-          <div class="progress-bar" style="width:200px">
-            <div class="progress-fill" style="width:${Math.round(count/total*100)}%"></div>
-          </div>
+    const d    = await call('asyncGetJobs', p);
+    const jobs = d.jobs || [];
+    if (!jobs.length) { tb.innerHTML = '<tr><td colspan="9" class="empty">No jobs match filters</td></tr>'; return; }
+    _lastJobId = jobs[jobs.length - 1].jobId;
+    tb.innerHTML = jobs.map(j => `
+      <tr class="clickable" onclick="openModal('${esc(j.jobId)}')">
+        <td><code style="font-size:11px;color:var(--muted)">${j.jobId.slice(0,13)}…</code></td>
+        <td><span class="type-chip">${esc(j.type||'?')}</span></td>
+        <td>${sBadge(j.status)}</td>
+        <td>${pBadge(j.priority,j.priorityLabel)}</td>
+        <td style="color:var(--muted);font-size:12px">${(j.ownerId||'').slice(0,10)}…</td>
+        <td style="text-align:center;color:var(--muted)">${j.retryCount||0}</td>
+        <td style="font-size:12px;color:var(--muted)">${rel(j.createdAt)}</td>
+        <td style="font-size:12px;color:var(--muted)">${j.completedAt?rel(j.completedAt):'—'}</td>
+        <td onclick="event.stopPropagation()" style="display:flex;gap:6px;flex-wrap:wrap">
+          ${canCancel(j.status)?`<button class="btn btn-danger btn-sm" onclick="cancelJob('${esc(j.jobId)}')">Cancel</button>`:''}
+          ${canRetry(j.status)?`<button class="btn btn-warn btn-sm" onclick="retryJob('${esc(j.jobId)}',false)">Retry</button>`:''}
         </td>
-      </tr>`).join('')
-    : '<tr><td colspan="3" class="empty-state">No jobs in this period</td></tr>';
-}
-
-function renderPriorityTable() {
-  if (!depthData) return;
-  const { byPriority = {}, queueStates = {} } = depthData;
-  document.getElementById('priorityTable').innerHTML = Object.entries(byPriority)
-    .map(([label, count]) => `
-      <tr>
-        <td>${label}</td>
-        <td>${count}</td>
-        <td><span class="badge-status ${queueStates[label] === 'paused' ? 's-failed' : 's-completed'}">
-          ${queueStates[label] === 'paused' ? 'PAUSED' : 'ACTIVE'}
-        </span></td>
       </tr>`).join('');
-}
-
-function renderFailedTable() {
-  if (!dashData?.recentFailed) return;
-  const rows = dashData.recentFailed;
-  document.getElementById('failedTable').innerHTML = rows.length
-    ? rows.map(j => `
-      <tr>
-        <td style="font-family:monospace;font-size:11px">${j.jobId}</td>
-        <td>${j.type}</td>
-        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#f87171">
-          ${esc(j.error || '—')}</td>
-        <td>${j.retryCount}</td>
-        <td>${j.createdAt ? new Date(j.createdAt).toLocaleString('en-KE') : '—'}</td>
-        <td>
-          <button class="btn sm" onclick="retryJobId('${j.jobId}')">Retry</button>
-        </td>
-      </tr>`).join('')
-    : '<tr><td colspan="6" class="empty-state">No failed jobs</td></tr>';
-}
-
-function renderDLQTable() {
-  if (!dashData?.dlqSample) return;
-  const rows = dashData.dlqSample;
-  document.getElementById('dlqTable').innerHTML = rows.length
-    ? rows.map(j => `
-      <tr>
-        <td style="font-family:monospace;font-size:11px">${j.dlqId}</td>
-        <td>${j.type}</td>
-        <td style="color:#f87171">${esc(j.reason || '—')}</td>
-        <td>${j.movedAt ? new Date(j.movedAt).toLocaleString('en-KE') : '—'}</td>
-        <td>
-          <button class="btn sm" onclick="replayDLQId('${j.dlqId}')">Replay</button>
-        </td>
-      </tr>`).join('')
-    : '<tr><td colspan="5" class="empty-state">Dead Letter Queue is empty</td></tr>';
-}
-
-function renderWorkers() {
-  const rows = workerData?.workers || [];
-  document.getElementById('workerTable').innerHTML = rows.length
-    ? rows.map(w => `
-      <tr>
-        <td style="font-family:monospace;font-size:11px">${w.workerId}</td>
-        <td style="font-family:monospace;font-size:11px">${w.currentJobId || '—'}</td>
-        <td>${w.jobsProcessed}</td>
-        <td>${w.lastHeartbeat ? new Date(w.lastHeartbeat).toLocaleString('en-KE') : '—'}</td>
-      </tr>`).join('')
-    : '<tr><td colspan="4" class="empty-state">No active workers</td></tr>';
-}
-
-// ── Admin actions ──────────────────────────────────────────────────────────
-
-async function pauseQueue() {
-  const p = document.getElementById('queueSelect').value;
-  try {
-    await call('pauseQueue', { priority: p });
-    toast(`${p} queue paused`);
-    await loadDepth();
-  } catch (e) { toast(e.message, true); }
-}
-
-async function resumeQueue() {
-  const p = document.getElementById('queueSelect').value;
-  try {
-    await call('resumeQueue', { priority: p });
-    toast(`${p} queue resumed`);
-    await loadDepth();
-  } catch (e) { toast(e.message, true); }
-}
-
-async function bulkCancel() {
-  const type           = document.getElementById('bulkType').value || undefined;
-  const priorityLabel  = document.getElementById('bulkPriority').value || undefined;
-  const olderThanHours = Number(document.getElementById('bulkAge').value) || 24;
-  if (!confirm(`Cancel QUEUED jobs older than ${olderThanHours}h? This cannot be undone.`)) return;
-  try {
-    const r = await call('bulkCancelJobs', { type, priorityLabel, olderThanHours });
-    toast(`Cancelled ${r.cancelled} jobs`);
-    await loadAll();
-  } catch (e) { toast(e.message, true); }
-}
-
-async function inspectJob() {
-  const jobId = document.getElementById('inspectId').value.trim();
-  if (!jobId) return;
-  const el = document.getElementById('inspectResult');
-  try {
-    const r = await call('inspectJob', { jobId });
-    el.textContent = JSON.stringify(r, null, 2);
-    el.style.display = 'block';
+    const pg = document.getElementById('jobs-pager');
+    pg.innerHTML = jobs.length >= Number(p.limit)
+      ? '<button class="btn btn-ghost btn-sm" onclick="_fetchJobs(true)">Next →</button>' : '';
   } catch (e) {
-    el.textContent = 'Error: ' + e.message;
-    el.style.display = 'block';
+    tb.innerHTML = `<tr><td colspan="9" style="color:#ff4d4d;text-align:center;padding:24px">${esc(e.message)}</td></tr>`;
   }
 }
 
-async function retryJob() {
-  const jobId = document.getElementById('retryId').value.trim();
-  await retryJobId(jobId);
+// ── DLQ ──────────────────────────────────────────────────────────────────────
+async function loadDLQ() {
+  const tb = document.getElementById('tb-dlq');
+  tb.innerHTML = '<tr><td colspan="7" class="ld"><div class="spin"></div>Loading…</td></tr>';
+  try {
+    const d    = await call('asyncGetJobs', { fromDlq: true, limit: 100 });
+    const jobs = d.jobs || [];
+    if (!jobs.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">✓ Dead Letter Queue is empty</td></tr>'; return; }
+    tb.innerHTML = jobs.map(j => `
+      <tr class="clickable" onclick="openModal('${esc(j.jobId)}',true)">
+        <td><code style="font-size:11px;color:var(--muted)">${j.jobId.slice(0,13)}…</code></td>
+        <td><span class="type-chip">${esc(j.type||'?')}</span></td>
+        <td>${pBadge(j.priority,j.priorityLabel)}</td>
+        <td style="color:var(--muted);font-size:12px">${(j.ownerId||'').slice(0,10)}…</td>
+        <td style="color:#ff7040;font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${esc(j.error||j.finalError||'—')}</td>
+        <td style="font-size:12px;color:var(--muted)">${rel(j.completedAt||j.createdAt)}</td>
+        <td onclick="event.stopPropagation()" style="display:flex;gap:6px">
+          <button class="btn btn-warn btn-sm" onclick="retryJob('${esc(j.jobId)}',true)">Replay</button>
+          <button class="btn btn-danger btn-sm" onclick="discardDLQ('${esc(j.jobId)}')">Discard</button>
+        </td>
+      </tr>`).join('');
+  } catch (e) {
+    tb.innerHTML = `<tr><td colspan="7" style="color:#ff4d4d;text-align:center;padding:24px">${esc(e.message)}</td></tr>`;
+  }
 }
 
-async function retryJobId(jobId) {
-  if (!jobId) return;
+// ── Queue Controls ────────────────────────────────────────────────────────────
+const QUEUES = [
+  { p: 0, label: 'CRITICAL',   desc: 'Payments, security push notifications' },
+  { p: 1, label: 'HIGH',       desc: 'Emails, SMS, receipts, loyalty updates' },
+  { p: 2, label: 'NORMAL',     desc: 'Analytics, product indexing, reports' },
+  { p: 3, label: 'LOW',        desc: 'Bulk imports, reco updates' },
+  { p: 4, label: 'BACKGROUND', desc: 'Cleanup, image optimisation, DB sync' },
+];
+
+async function loadControls() {
+  const g = document.getElementById('qg');
+  g.innerHTML = '<div class="ld"><div class="spin"></div>Loading…</div>';
   try {
-    await call('retryJob', { jobId });
-    toast('Job re-queued');
-    await loadAll();
+    const d       = await call('asyncGetDashboard');
+    const paused  = new Set(d.pausedQueues || []);
+    g.innerHTML   = QUEUES.map(q => {
+      const pp = paused.has(q.p);
+      return `
+        <div class="q-card">
+          <div class="q-card-hdr">
+            <h3>${q.label}</h3>
+            <span class="q-chip ${pp?'on':'off'}">${pp?'PAUSED':'ACTIVE'}</span>
+          </div>
+          <p class="q-desc">${q.desc}</p>
+          <button class="btn ${pp?'btn-primary':'btn-danger'} btn-sm"
+                  onclick="toggleQ(${q.p},${!pp})">
+            ${pp ? '▶ Resume' : '⏸ Pause'}
+          </button>
+        </div>`;
+    }).join('');
+  } catch (e) { g.innerHTML = `<p style="color:#ff4d4d;padding:20px">${esc(e.message)}</p>`; }
+}
+
+async function toggleQ(p, pause) {
+  try {
+    await call('asyncPauseQueue', { priority: p, paused: pause });
+    toast(`Priority ${p} queue ${pause ? 'paused' : 'resumed'}`);
+    loadControls();
+    loadDashboard();
   } catch (e) { toast(e.message, true); }
 }
 
-async function replayDLQ() {
-  const dlqId = document.getElementById('dlqId').value.trim();
-  await replayDLQId(dlqId);
+// ── Job actions ───────────────────────────────────────────────────────────────
+async function cancelJob(jobId) {
+  if (!confirm('Cancel this job?')) return;
+  try { await call('asyncCancel', { jobId }); toast('Job cancelled'); loadDashboard(); }
+  catch (e) { toast(e.message, true); }
 }
 
-async function replayDLQId(dlqId) {
-  if (!dlqId) return;
+async function retryJob(jobId, fromDlq) {
   try {
-    const r = await call('replayDLQJob', { dlqId });
-    toast(`Replayed as ${r.jobId}`);
-    await loadAll();
+    await call('asyncRetryJob', { jobId, fromDlq });
+    toast(fromDlq ? 'Replayed from DLQ' : 'Job re-queued');
+    loadDashboard();
+    if (fromDlq) loadDLQ();
   } catch (e) { toast(e.message, true); }
 }
 
+async function discardDLQ(jobId) {
+  if (!confirm('Permanently delete from Dead Letter Queue?')) return;
+  try {
+    await fdb.collection('asyncDeadLetter').doc(jobId).delete();
+    toast('Discarded from DLQ');
+    loadDLQ(); loadDashboard();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ── Detail Modal ──────────────────────────────────────────────────────────────
+async function openModal(jobId, fromDlq) {
+  document.getElementById('modal-bg').classList.add('open');
+  document.getElementById('modal-title').textContent = 'Job: ' + jobId.slice(0,14) + '…';
+  document.getElementById('modal-body').innerHTML = '<div class="ld"><div class="spin"></div>Loading…</div>';
+  document.getElementById('modal-ftr').innerHTML  = '';
+
+  try {
+    const j   = await call('asyncInspect', { jobId, fromDlq });
+    const prg = j.progress || {};
+    const pct = prg.total > 0 ? Math.round(prg.current / prg.total * 100) : 0;
+
+    document.getElementById('modal-body').innerHTML = `
+      <div class="detail-grid">
+        <div class="d-row"><label>Job ID</label><span style="font-size:11px;font-family:monospace">${esc(j.jobId)}</span></div>
+        <div class="d-row"><label>Type</label><span><span class="type-chip">${esc(j.type||'?')}</span></span></div>
+        <div class="d-row"><label>Status</label><span>${sBadge(j.status)}</span></div>
+        <div class="d-row"><label>Priority</label><span>${pBadge(j.priority,j.priorityLabel)}</span></div>
+        <div class="d-row"><label>Retries</label><span>${j.retryCount||0} / ${j.maxRetries||3}</span></div>
+        <div class="d-row"><label>Owner</label><span style="font-size:12px">${esc(j.ownerId||'—')}</span></div>
+        <div class="d-row"><label>Workspace</label><span style="font-size:12px">${esc(j.workspaceId||'—')}</span></div>
+        <div class="d-row"><label>Worker</label><span style="font-size:11px;color:var(--muted)">${esc(j.workerInstance||'—')}</span></div>
+        <div class="d-row"><label>Created</label><span>${fmtTs(j.createdAt)}</span></div>
+        <div class="d-row"><label>Completed</label><span>${j.completedAt?fmtTs(j.completedAt):'—'}</span></div>
+        <div class="d-row"><label>Correlation</label><span style="font-size:11px;color:var(--muted)">${esc(j.correlationId||'—')}</span></div>
+        <div class="d-row"><label>Idempotency Key</label><span style="font-size:11px;color:var(--muted)">${esc(j.idempotencyKey||'—')}</span></div>
+        ${prg.total > 0 ? `
+        <div class="d-row full">
+          <label>Progress — ${pct}% (${prg.current}/${prg.total})</label>
+          <div class="prog-rail"><div class="prog-fill" style="width:${pct}%"></div></div>
+          <span style="font-size:12px;color:var(--muted);display:block;margin-top:4px">${esc(prg.message||'')}</span>
+        </div>` : ''}
+        ${j.error ? `
+        <div class="d-row full" style="border-color:#ff4d4d33">
+          <label style="color:#ff4d4d">Error</label>
+          <span style="color:#ff6b6b">${esc(j.error)}</span>
+        </div>` : ''}
+        <div class="d-row full">
+          <label>Payload</label>
+          <pre class="json-view">${esc(JSON.stringify(j.payload||{},null,2))}</pre>
+        </div>
+        ${j.result ? `
+        <div class="d-row full">
+          <label>Result</label>
+          <pre class="json-view">${esc(JSON.stringify(j.result,null,2))}</pre>
+        </div>` : ''}
+        ${(j.auditLog||[]).length ? `
+        <div class="d-row full">
+          <label>Audit Log</label>
+          <div class="audit-list">
+            ${[...(j.auditLog||[])].reverse().map(a => `
+              <div class="audit-item">
+                <div class="audit-dot"></div>
+                <div style="font-size:12px">
+                  <span style="color:#fff;font-weight:600">${esc(a.event)}</span>
+                  ${a.reason?`<span style="color:var(--muted)"> — ${esc(a.reason)}</span>`:''}
+                  ${a.by?`<span style="color:var(--muted)"> by ${esc(String(a.by).slice(0,12))}…</span>`:''}
+                  <div style="color:var(--muted);font-size:11px">${fmtTs(a.ts)}</div>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>` : ''}
+      </div>`;
+
+    const ftr = document.getElementById('modal-ftr');
+    if (canCancel(j.status)) {
+      const b = document.createElement('button');
+      b.className = 'btn btn-danger btn-sm'; b.textContent = 'Cancel Job';
+      b.onclick = () => { closeModal(); cancelJob(j.jobId); };
+      ftr.appendChild(b);
+    }
+    if (canRetry(j.status)) {
+      const b = document.createElement('button');
+      b.className = 'btn btn-warn btn-sm';
+      b.textContent = fromDlq ? 'Replay from DLQ' : 'Retry';
+      b.onclick = () => { closeModal(); retryJob(j.jobId, fromDlq); };
+      ftr.appendChild(b);
+    }
+    const cl = document.createElement('button');
+    cl.className = 'btn btn-ghost btn-sm'; cl.textContent = 'Close';
+    cl.onclick = closeModal;
+    ftr.appendChild(cl);
+  } catch (e) {
+    document.getElementById('modal-body').innerHTML = `<p style="color:#ff4d4d;padding:20px">${esc(e.message)}</p>`;
+    const cl = document.createElement('button');
+    cl.className = 'btn btn-ghost btn-sm'; cl.textContent = 'Close'; cl.onclick = closeModal;
+    document.getElementById('modal-ftr').appendChild(cl);
+  }
+}
+
+function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const CANCEL_STATUSES = ['queued','waiting','retrying'];
+const RETRY_STATUSES  = ['failed','dead_letter','cancelled'];
+function canCancel(s) { return CANCEL_STATUSES.includes(s); }
+function canRetry(s)  { return RETRY_STATUSES.includes(s); }
+
+function sBadge(s) { return `<span class="badge bs-${s||'queued'}">${(s||'?').toUpperCase()}</span>`; }
+function pBadge(p, label) {
+  const cls = ['critical','high','normal','low','background'][p] ?? 'normal';
+  return `<span class="badge bp-${cls}">${label||['CRITICAL','HIGH','NORMAL','LOW','BACKGROUND'][p]||'?'}</span>`;
+}
+function rel(ts) {
+  if (!ts) return '—';
+  let d;
+  try { d = ts.toDate ? ts.toDate() : new Date((ts._seconds||0)*1000); } catch { d = new Date(); }
+  const diff = Date.now() - d.getTime();
+  if (diff < 60000)    return Math.round(diff/1000) + 's ago';
+  if (diff < 3600000)  return Math.round(diff/60000) + 'm ago';
+  if (diff < 86400000) return Math.round(diff/3600000) + 'h ago';
+  return d.toLocaleDateString('en-KE');
+}
+function fmtTs(ts) {
+  if (!ts) return '—';
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date((ts._seconds||0)*1000);
+    return d.toLocaleString('en-KE');
+  } catch { return '—'; }
+}
+function fmt(n) {
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+  return String(n ?? '—');
+}
+function v(id) { return document.getElementById(id)?.value || ''; }
+function clean(o) { Object.keys(o).forEach(k => o[k] === undefined && delete o[k]); }
 function esc(s) {
-  return String(s).replace(/[&<>"']/g, c =>
-    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-
-// Auto-refresh every 30 seconds
-setInterval(loadAll, 30000);
+let _toastT;
+function toast(msg, err) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.borderLeftColor = err ? '#ff4d4d' : 'var(--g)';
+  el.classList.add('show');
+  clearTimeout(_toastT);
+  _toastT = setTimeout(() => el.classList.remove('show'), 3500);
+}
 </script>
 </body>
 </html>

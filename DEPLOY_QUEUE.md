@@ -71,6 +71,28 @@ firebase functions:secrets:set PAYMENT_HMAC_SECRET   --project sokoni-aeb26
 firebase functions:secrets:set PAYROLL_ENCRYPTION_KEY --project sokoni-aeb26
 ```
 
+## Additional CFs — Async Jobs Engine v2.0 (2026-07-07)
+
+Add these to the deploy command above (or deploy separately once quota clears):
+
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:asyncEnqueue,functions:asyncWorker,functions:asyncSweeper,functions:asyncEventRouter,functions:asyncCancel,functions:asyncRetryJob,functions:asyncPauseQueue,functions:asyncGetDashboard,functions:asyncGetJobs,functions:asyncInspect,functions:asyncCleanup" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+| Function | File | Type |
+|---|---|---|
+| `asyncEnqueue` | `functions/async-jobs.js` | onCall |
+| `asyncWorker` | `functions/async-jobs.js` | onDocumentCreated |
+| `asyncSweeper` | `functions/async-jobs.js` | onSchedule (every 1 min) |
+| `asyncEventRouter` | `functions/async-jobs.js` | onDocumentCreated |
+| `asyncCancel` | `functions/async-jobs.js` | onCall |
+| `asyncRetryJob` | `functions/async-jobs.js` | onCall admin |
+| `asyncPauseQueue` | `functions/async-jobs.js` | onCall admin |
+| `asyncGetDashboard` | `functions/async-jobs.js` | onCall admin |
+| `asyncGetJobs` | `functions/async-jobs.js` | onCall admin |
+| `asyncInspect` | `functions/async-jobs.js` | onCall admin |
+| `asyncCleanup` | `functions/async-jobs.js` | onSchedule (daily 03:30) |
+
 ## Hosting (already deployed 2026-07-06)
 All HTML/CSS/JS pages are LIVE. CF features will activate when quota clears.
 New pages deployed today:
@@ -78,3 +100,4 @@ New pages deployed today:
 - `/revenue-dashboard` — Admin revenue dashboard
 - `/my-subscriptions` — Universal subscription management portal
 - `/fos-admin` — Financial OS admin console
+- `/async-jobs` — Async Jobs Engine monitoring dashboard (2026-07-07)

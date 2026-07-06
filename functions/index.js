@@ -8616,31 +8616,19 @@ exports.getRiskProfile           = zeroTrust.getRiskProfile;
 exports.updateRiskProfile        = zeroTrust.updateRiskProfile;
 exports.getZeroTrustPolicyStatus = zeroTrust.getZeroTrustPolicyStatus;
 
-/* ── Async Jobs Engine v1.0 ─────────────────────────────────────────────── */
-const asyncJobs = require('./async-jobs-engine');
-/* Core */
-exports.createJob              = asyncJobs.createJob;
-exports.getJob                 = asyncJobs.getJob;
-exports.getMyJobs              = asyncJobs.getMyJobs;
-exports.cancelJob              = asyncJobs.cancelJob;
-/* Convenience */
-exports.submitEmailJob         = asyncJobs.submitEmailJob;
-exports.submitWebhookJob       = asyncJobs.submitWebhookJob;
-/* Admin */
-exports.retryJob               = asyncJobs.retryJob;
-exports.replayDLQJob           = asyncJobs.replayDLQJob;
-exports.pauseQueue             = asyncJobs.pauseQueue;
-exports.resumeQueue            = asyncJobs.resumeQueue;
-exports.getQueueDepth          = asyncJobs.getQueueDepth;
-exports.getJobDashboard        = asyncJobs.getJobDashboard;
-exports.inspectJob             = asyncJobs.inspectJob;
-exports.bulkCancelJobs         = asyncJobs.bulkCancelJobs;
-exports.getWorkerStats         = asyncJobs.getWorkerStats;
-/* Scheduled + Trigger */
-exports.processJobQueue        = asyncJobs.processJobQueue;
-exports.jobStuckRecovery       = asyncJobs.jobStuckRecovery;
-exports.jobCleanupScheduled    = asyncJobs.jobCleanupScheduled;
-exports.onJobCreated           = asyncJobs.onJobCreated;
+/* ── Async Jobs Engine v2.0 ─────────────────────────────────────────────── */
+const asyncJobs = require('./async-jobs');
+exports.asyncEnqueue       = asyncJobs.asyncEnqueue;
+exports.asyncWorker        = asyncJobs.asyncWorker;
+exports.asyncSweeper       = asyncJobs.asyncSweeper;
+exports.asyncEventRouter   = asyncJobs.asyncEventRouter;
+exports.asyncCancel        = asyncJobs.asyncCancel;
+exports.asyncRetryJob      = asyncJobs.asyncRetryJob;
+exports.asyncPauseQueue    = asyncJobs.asyncPauseQueue;
+exports.asyncGetDashboard  = asyncJobs.asyncGetDashboard;
+exports.asyncGetJobs       = asyncJobs.asyncGetJobs;
+exports.asyncInspect       = asyncJobs.asyncInspect;
+exports.asyncCleanup       = asyncJobs.asyncCleanup;
 
 /* -- Security 6.0 -- Enterprise Identity (MFA + Passkeys + Device Trust) -- */
 const secIdentity = require('./security-identity');
@@ -8995,3 +8983,49 @@ exports.onInventoryUpdated      = redisIntegrations.onInventoryUpdated;
 exports.onUserCreated           = redisIntegrations.onUserCreated;
 exports.onRiderStatusChange     = redisIntegrations.onRiderStatusChange;
 exports.onDeliveryStatusChange  = redisIntegrations.onDeliveryStatusChange;
+
+/* ── SmartPOS 2.1 — Inventory Intelligence ──────────────────────────────── */
+const posIntelligence = require('./pos-intelligence');
+exports.getPOSInventoryIntelligence = posIntelligence.getPOSInventoryIntelligence;
+exports.getProductSalesTrend        = posIntelligence.getProductSalesTrend;
+
+/* ── SmartPOS 3.0 — Production Payment Terminal Integrations ────────────── */
+const posTerminalLive = require('./pos-terminal-live');
+exports.posInitiateTerminalPayment  = posTerminalLive.posInitiateTerminalPayment;
+exports.posPollTerminalStatus       = posTerminalLive.posPollTerminalStatus;
+exports.posCancelTerminalPayment    = posTerminalLive.posCancelTerminalPayment;
+exports.posReverseTerminalPayment   = posTerminalLive.posReverseTerminalPayment;
+exports.posSettleTerminalBatch      = posTerminalLive.posSettleTerminalBatch;
+exports.posGetTerminalCapabilities  = posTerminalLive.posGetTerminalCapabilities;
+exports.posGetTerminalHealth        = posTerminalLive.posGetTerminalHealth;
+exports.posGetTerminalBatchReport   = posTerminalLive.posGetTerminalBatchReport;
+exports.posTerminalEventWebhook     = posTerminalLive.posTerminalEventWebhook;
+
+/* ── SmartPOS 3.0 — Shift Scheduling & Roster Management ───────────────── */
+const posShiftScheduler = require('./pos-shift-scheduler');
+exports.createShiftTemplate     = posShiftScheduler.createShiftTemplate;
+exports.publishWeeklyRoster     = posShiftScheduler.publishWeeklyRoster;
+exports.assignShift             = posShiftScheduler.assignShift;
+exports.swapShiftRequest        = posShiftScheduler.swapShiftRequest;
+exports.approveShiftSwap        = posShiftScheduler.approveShiftSwap;
+exports.setStaffAvailability    = posShiftScheduler.setStaffAvailability;
+exports.getRoster               = posShiftScheduler.getRoster;
+exports.getRosterGaps           = posShiftScheduler.getRosterGaps;
+exports.getStaffRoster          = posShiftScheduler.getStaffRoster;
+exports.acknowledgeShift        = posShiftScheduler.acknowledgeShift;
+exports.schedulerWeeklyDigest   = posShiftScheduler.schedulerWeeklyDigest;
+
+/* ── SmartPOS 3.0 — External Integrations API ───────────────────────────── */
+const posIntegrationsApi = require('./pos-integrations-api');
+exports.posRegisterApiKey      = posIntegrationsApi.posRegisterApiKey;
+exports.posRevokeApiKey        = posIntegrationsApi.posRevokeApiKey;
+exports.posListApiKeys         = posIntegrationsApi.posListApiKeys;
+exports.posRegisterWebhook     = posIntegrationsApi.posRegisterWebhook;
+exports.posTestWebhook         = posIntegrationsApi.posTestWebhook;
+exports.posRevokeWebhook       = posIntegrationsApi.posRevokeWebhook;
+exports.posGetSalesExport      = posIntegrationsApi.posGetSalesExport;
+exports.posGetInventoryExport  = posIntegrationsApi.posGetInventoryExport;
+exports.posGetLedgerExport     = posIntegrationsApi.posGetLedgerExport;
+exports.posGetEtimsExport      = posIntegrationsApi.posGetEtimsExport;
+exports.posReceiveErpUpdate    = posIntegrationsApi.posReceiveErpUpdate;
+exports.posGetApiDocs          = posIntegrationsApi.posGetApiDocs;

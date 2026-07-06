@@ -684,10 +684,44 @@ exports.handlers = {
   CUSTOMER_SEGMENT:     CustomerSegmentHandler,
   BULK_IMPORT:          BulkImportHandler,
   BULK_EXPORT:          BulkExportHandler,
-  REPORT_GENERATE:      ReportHandler,
   REDIS_WARMUP:         RedisWarmupHandler,
   SCHEDULED_CLEANUP:    ScheduledCleanupHandler,
   DB_MAINTENANCE:       ScheduledCleanupHandler,
   BACKUP_VERIFY:        BackupVerifyHandler,
-  EXTERNAL_SYNC:        ExternalSyncHandler
+  EXTERNAL_SYNC:        ExternalSyncHandler,
+};
+
+/* ── Job type configuration for the Async Jobs Engine ───────────────────────
+   Each entry: { maxRetries, timeoutSeconds, concurrencyLimit }
+   Covers both legacy UPPERCASE types and any new dotted-style types.
+──────────────────────────────────────────────────────────────────────────── */
+exports.JOB_TYPES = {
+  EMAIL:                { maxRetries: 5, timeoutSeconds: 30,  concurrencyLimit: 50  },
+  SMS:                  { maxRetries: 3, timeoutSeconds: 15,  concurrencyLimit: 30  },
+  PUSH:                 { maxRetries: 3, timeoutSeconds: 15,  concurrencyLimit: 100 },
+  RECEIPT:              { maxRetries: 3, timeoutSeconds: 60,  concurrencyLimit: 20  },
+  PDF:                  { maxRetries: 2, timeoutSeconds: 120, concurrencyLimit: 10  },
+  ETIMS:                { maxRetries: 5, timeoutSeconds: 60,  concurrencyLimit: 5   },
+  WEBHOOK:              { maxRetries: 5, timeoutSeconds: 30,  concurrencyLimit: 20  },
+  ANALYTICS:            { maxRetries: 2, timeoutSeconds: 120, concurrencyLimit: 5   },
+  ANALYTICS_AGGREGATE:  { maxRetries: 2, timeoutSeconds: 120, concurrencyLimit: 5   },
+  INVENTORY_RECALC:     { maxRetries: 3, timeoutSeconds: 120, concurrencyLimit: 10  },
+  INVENTORY_ALERT:      { maxRetries: 3, timeoutSeconds: 30,  concurrencyLimit: 20  },
+  REPORT:               { maxRetries: 2, timeoutSeconds: 300, concurrencyLimit: 3   },
+  REPORT_GENERATE:      { maxRetries: 2, timeoutSeconds: 300, concurrencyLimit: 3   },
+  IMAGE_OPT:            { maxRetries: 3, timeoutSeconds: 60,  concurrencyLimit: 20  },
+  AI_PROCESS:           { maxRetries: 2, timeoutSeconds: 120, concurrencyLimit: 10  },
+  PRODUCT_INDEX:        { maxRetries: 3, timeoutSeconds: 60,  concurrencyLimit: 20  },
+  SEARCH_INDEX:         { maxRetries: 3, timeoutSeconds: 60,  concurrencyLimit: 20  },
+  RECO_UPDATE:          { maxRetries: 2, timeoutSeconds: 120, concurrencyLimit: 5   },
+  LOYALTY_UPDATE:       { maxRetries: 3, timeoutSeconds: 30,  concurrencyLimit: 20  },
+  SELLER_NOTIFICATION:  { maxRetries: 3, timeoutSeconds: 30,  concurrencyLimit: 30  },
+  CUSTOMER_SEGMENT:     { maxRetries: 2, timeoutSeconds: 300, concurrencyLimit: 3   },
+  BULK_IMPORT:          { maxRetries: 1, timeoutSeconds: 540, concurrencyLimit: 2   },
+  BULK_EXPORT:          { maxRetries: 1, timeoutSeconds: 540, concurrencyLimit: 2   },
+  REDIS_WARMUP:         { maxRetries: 2, timeoutSeconds: 120, concurrencyLimit: 3   },
+  SCHEDULED_CLEANUP:    { maxRetries: 1, timeoutSeconds: 300, concurrencyLimit: 1   },
+  DB_MAINTENANCE:       { maxRetries: 1, timeoutSeconds: 300, concurrencyLimit: 1   },
+  BACKUP_VERIFY:        { maxRetries: 2, timeoutSeconds: 120, concurrencyLimit: 1   },
+  EXTERNAL_SYNC:        { maxRetries: 3, timeoutSeconds: 120, concurrencyLimit: 5   },
 };
