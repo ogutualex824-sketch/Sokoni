@@ -351,8 +351,7 @@ pre.json-view{
 firebase.initializeApp(window.SOKONI_CONFIG || {});
 const auth = firebase.auth();
 const fdb  = firebase.firestore();
-const fns  = firebase.functions();
-fns.useRegion('us-central1');
+const fns  = firebase.app().functions('us-central1');
 
 const call = (name, data = {}) => fns.httpsCallable(name)(data).then(r => r.data);
 
