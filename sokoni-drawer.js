@@ -21,7 +21,7 @@
   var _backdrop    = null;  /* shared backdrop element (lazy-created) */
 
   /* Swipe tracking */
-  var _tx0 = 0, _ty0 = 0;
+  var _tx0 = 0, _ty0 = 0, _isSwiping = false, _swipeDecided = false;
 
   /* ── Shared backdrop ────────────────────────────────────── */
   function _bd() {
@@ -52,19 +52,65 @@
     window.scrollTo(0, _savedScroll);
   }
 
-  /* ── Swipe-right to close ───────────────────────────────── */
+  /* ── Swipe-right to close (with live drag visual) ──────── */
   function _onTouchStart(e) {
     _tx0 = e.touches[0].clientX;
     _ty0 = e.touches[0].clientY;
+    _isSwiping = false;
+    _swipeDecided = false;
+  }
+
+  function _onTouchMove(e) {
+    var dx = e.touches[0].clientX - _tx0;
+    var dy = e.touches[0].clientY - _ty0;
+
+    if (!_swipeDecided) {
+      /* Wait for 8px of movement before deciding direction */
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      _swipeDecided = true;
+      /* Horizontal AND moving right → swipe to close */
+      _isSwiping = Math.abs(dx) > Math.abs(dy) && dx > 0;
+    }
+
+    if (!_isSwiping) return;
+
+    e.preventDefault(); /* block vertical scroll during horizontal drag */
+    var drawer = e.currentTarget;
+    var translate = Math.min(Math.max(0, dx), drawer.offsetWidth);
+    drawer.style.transform = 'translateX(' + translate + 'px)';
+    drawer.style.transition = 'none';
+
+    /* Dim backdrop proportionally */
+    var pct = translate / Math.max(1, drawer.offsetWidth);
+    var bd = _bd();
+    bd.style.opacity = String(Math.max(0.08, 1 - pct * 0.92));
+    bd.style.transition = 'none';
   }
 
   function _onTouchEnd(e) {
+    var drawer = e.currentTarget;
     var dx = e.changedTouches[0].clientX - _tx0;
     var dy = e.changedTouches[0].clientY - _ty0;
-    /* Accept as swipe-right: ≥ 80px horizontal, mostly horizontal */
-    if (dx >= 80 && Math.abs(dy) < 60) {
-      close(e.currentTarget.id);
+
+    if (_isSwiping && dx >= 80 && Math.abs(dy) < 120) {
+      /* Threshold met — clear drawer transform; backdrop handled by _teardown */
+      drawer.style.transform = '';
+      drawer.style.transition = '';
+      _isSwiping = false;
+      _swipeDecided = false;
+      close(drawer.id);
+      return;
     }
+
+    /* Snap back (below threshold) or non-swipe — restore all inline styles */
+    drawer.style.transform = '';
+    drawer.style.transition = '';
+    var bd = _bd();
+    bd.style.opacity = '';
+    bd.style.transition = '';
+
+    _isSwiping = false;
+    _swipeDecided = false;
   }
 
   /* ── Focus trap ─────────────────────────────────────────── */
@@ -132,8 +178,13 @@
     /* Track */
     if (_stack.indexOf(drawer.id) === -1) _stack.push(drawer.id);
 
+    /* Clear any stale inline transforms from a previous drag */
+    drawer.style.transform = '';
+    drawer.style.transition = '';
+
     /* Swipe */
     drawer.addEventListener('touchstart', _onTouchStart, { passive: true });
+    drawer.addEventListener('touchmove',  _onTouchMove,  { passive: false });
     drawer.addEventListener('touchend',   _onTouchEnd,   { passive: true });
 
     /* Open */
@@ -153,9 +204,14 @@
     var drawer = typeof id === 'string' ? document.getElementById(id) : id;
     if (!drawer) return;
 
+    /* Clear any live-drag inline styles so the CSS close transition plays */
+    drawer.style.transform = '';
+    drawer.style.transition = '';
+
     drawer.classList.remove('is-open');
     drawer.setAttribute('aria-hidden', 'true');
     drawer.removeEventListener('touchstart', _onTouchStart);
+    drawer.removeEventListener('touchmove',  _onTouchMove);
     drawer.removeEventListener('touchend',   _onTouchEnd);
     _removeTrap(drawer);
 
@@ -170,9 +226,12 @@
     _stack.slice().forEach(function (id) {
       var d = document.getElementById(id);
       if (!d) return;
+      d.style.transform = '';
+      d.style.transition = '';
       d.classList.remove('is-open');
       d.setAttribute('aria-hidden', 'true');
       d.removeEventListener('touchstart', _onTouchStart);
+      d.removeEventListener('touchmove',  _onTouchMove);
       d.removeEventListener('touchend',   _onTouchEnd);
       _removeTrap(d);
     });
@@ -181,7 +240,14 @@
   }
 
   function _teardown() {
-    _bd().classList.remove('is-active');
+    /* Restore CSS transition, then remove .is-active so backdrop fades to 0.
+       We leave any inline opacity from live drag in place so the backdrop
+       animates from wherever the swipe left it → 0, not from 1 → 0. */
+    var bd = _bd();
+    bd.style.transition = '';
+    bd.classList.remove('is-active');
+    /* Clean up inline opacity after fade completes */
+    setTimeout(function () { bd.style.opacity = ''; }, 350);
     document.body.classList.remove('sk-drawer-active');
     _unlockScroll();
     if (_focusBefore && typeof _focusBefore.focus === 'function') {

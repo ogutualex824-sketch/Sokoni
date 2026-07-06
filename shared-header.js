@@ -24,6 +24,8 @@
 
   /* Design tokens (CSS) — load first; tokens referenced by all CSS */
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-tokens.css' }, 'sk-tokens-link');
+  /* Premium component library — .sk-card, .sk-btn-*, .sk-badge, .sk-stat, etc. */
+  _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-components.css' }, 'sk-components-link');
   /* UI library — shared toast / modal / spinner / skeleton */
   _injectAsset('script', { src: 'sokoni-ui.js', defer: true }, 'sk-ui-script');
   /* Layout manager — resolves floating element overlaps, sets CSS vars */
@@ -100,6 +102,24 @@
     (document.head || document.documentElement).appendChild(drawScript);
   }
 
+  /* Smart offline detection — shows banner only when truly offline */
+  if (!document.getElementById('sk-offline-script')) {
+    const offlineJs = document.createElement('script');
+    offlineJs.id = 'sk-offline-script';
+    offlineJs.src = 'sokoni-offline.js';
+    offlineJs.defer = true;
+    (document.head || document.documentElement).appendChild(offlineJs);
+  }
+
+  /* Floating button manager — repositions FABs above bottom nav */
+  if (!document.getElementById('sk-float-script')) {
+    const floatJs = document.createElement('script');
+    floatJs.id = 'sk-float-script';
+    floatJs.src = 'sokoni-float.js';
+    floatJs.defer = true;
+    (document.head || document.documentElement).appendChild(floatJs);
+  }
+
   /* Role-based navigation engine — CSS + JS (once, runs on all pages) */
   if (!document.getElementById('sk-nav-engine-link')) {
     const navCss = document.createElement('link');
@@ -135,7 +155,7 @@
   /* ── PHASE 2: Nav injection — excluded pages stop here ──────────── */
   const EXCLUDED = [
     'pos.html', 'seller.html', 'login.html', 'signup.html',
-    'register.html', 'success.html', 'offline.html', 'admin.html',
+    'register.html', 'success.html', 'offline.html',
     /* Profile has its own fully-featured .upn navigation bar */
     'profile.html',
     /* Enterprise full-screen dashboards — have their own specialized nav */
@@ -351,28 +371,9 @@
     }
     #sk-nav-avatar:hover { background: rgba(113,255,0,0.22); }
 
-    /* ── Full-screen mobile menu overlay ── */
-    #sk-menu-overlay {
-      position: fixed; inset: 0; z-index: 100002;
-      background: rgba(0,0,0,0.92); backdrop-filter: blur(18px);
-      display: none; flex-direction: column;
-      overflow-y: auto;
-      animation: skMenuIn .22s cubic-bezier(.22,.68,0,1.1) both;
-    }
-    #sk-menu-overlay.open { display: flex; }
-    @keyframes skMenuIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
-    #sk-menu-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.07);
-      flex-shrink: 0;
-    }
-    #sk-menu-header img { height: 36px; }
-    #sk-menu-close {
-      width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6);
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; font-size: 18px;
-    }
+    /* ── Site menu drawer — layout handled by sokoni-drawers.css ── */
+    /* #sk-menu-drawer is a .sk-drawer; header/close/backdrop/swipe/ESC
+       are all managed by SokoniDrawer. Content styles below. */
     #sk-menu-grid {
       display: grid; grid-template-columns: 1fr 1fr;
       gap: 10px; padding: 20px;
@@ -421,11 +422,9 @@
       background: rgba(0,120,0,0.1); border-color: rgba(0,120,0,0.25); color: #1a8800;
     }
     body.light-mode .sk-badge { border-color: #fff; }
-    body.light-mode #sk-menu-overlay { background: rgba(255,255,255,0.96); }
+    /* Menu drawer light-mode: drawer chrome handled by sokoni-drawers.css */
     body.light-mode .sk-menu-item { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.07); color: #333; }
     body.light-mode .sk-menu-item:hover { background: rgba(0,120,0,0.07); color: #1a8800; border-color: rgba(0,120,0,0.2); }
-    body.light-mode #sk-menu-header { border-bottom-color: rgba(0,0,0,0.07); }
-    body.light-mode #sk-menu-close { border-color: rgba(0,0,0,0.12); background: rgba(0,0,0,0.04); color: #555; }
     body.light-mode #sk-menu-theme-row { border-top-color: rgba(0,0,0,0.06); }
     body.light-mode #sk-menu-theme-row span { color: rgba(0,0,0,0.5); }
     body.light-mode .sk-theme-chip { border-color: rgba(0,0,0,0.12); background: rgba(0,0,0,0.04); color: rgba(0,0,0,0.5); }
@@ -585,7 +584,7 @@
 
         /* Menu (hamburger) */
         '<button type="button" class="sk-nav-icon-btn" id="sk-menu-btn" aria-label="Menu" aria-expanded="false" ' +
-          'onclick="document.getElementById(\'sk-menu-overlay\').classList.add(\'open\');this.setAttribute(\'aria-expanded\',\'true\');">' +
+          'onclick="var _sd=window.SokoniDrawer;_sd?_sd.open(\'sk-menu-drawer\'):void 0;this.setAttribute(\'aria-expanded\',\'true\');">' +
           '<span aria-hidden="true" style="font-size:13px;font-weight:900;letter-spacing:0px;display:flex;flex-direction:column;gap:3px;">' +
             '<span style="display:block;width:18px;height:2px;background:currentColor;border-radius:2px;"></span>' +
             '<span style="display:block;width:14px;height:2px;background:currentColor;border-radius:2px;"></span>' +
@@ -598,9 +597,9 @@
     return nav;
   }
 
-  /* ── Build the full-screen menu overlay ── */
-  function _buildMenuOverlay() {
-    if (document.getElementById('sk-menu-overlay')) return;
+  /* ── Build the site menu as a SokoniDrawer (enterprise side drawer) ── */
+  function _buildMenuDrawer() {
+    if (document.getElementById('sk-menu-drawer')) return;
     const LINKS = [
       { icon:'🏠', label:'Home',          href:'index.html' },
       { icon:'🛍️', label:'Marketplace',   href:'category.html?cat=all' },
@@ -622,53 +621,71 @@
       { icon:'👤', label:'Profile',        href:'profile.html' },
     ];
 
-    const ov = document.createElement('div');
-    ov.id = 'sk-menu-overlay';
-    ov.setAttribute('role', 'dialog');
-    ov.setAttribute('aria-label', 'Site menu');
-    ov.setAttribute('aria-modal', 'true');
+    const drawer = document.createElement('div');
+    drawer.id = 'sk-menu-drawer';
+    drawer.className = 'sk-drawer';
+    drawer.setAttribute('aria-hidden', 'true');
+    drawer.setAttribute('role', 'dialog');
+    drawer.setAttribute('aria-modal', 'true');
+    drawer.setAttribute('aria-label', 'Site menu');
 
-    const closeMenu = function() {
-      ov.classList.remove('open');
-      const btn = document.getElementById('sk-menu-btn');
-      if (btn) btn.setAttribute('aria-expanded', 'false');
-    };
-
-    ov.innerHTML =
-      '<div id="sk-menu-header">' +
-        '<img src="assets/Sokonilogo2.png" alt="SOKONI">' +
-        '<button class="sk-menu-close" id="sk-menu-close" aria-label="Close menu">✕</button>' +
+    drawer.innerHTML =
+      /* Drawer header — logo + close button */
+      '<div class="sk-drawer-header">' +
+        '<img src="assets/Sokonilogo2.png" alt="SOKONI" ' +
+          'style="height:32px;width:auto;object-fit:contain;margin-left:4px;" ' +
+          'onerror="this.style.display=\'none\'">' +
+        '<button class="sk-drawer-close" type="button" aria-label="Close menu">✕</button>' +
       '</div>' +
-      '<div id="sk-menu-grid">' +
-        LINKS.map(function(l) {
-          return '<a href="' + l.href + '" class="sk-menu-item" onclick="document.getElementById(\'sk-menu-overlay\').classList.remove(\'open\')">' +
-            '<span class="sk-menu-item-icon">' + l.icon + '</span>' +
-            '<span>' + l.label + '</span>' +
-          '</a>';
-        }).join('') +
-      '</div>' +
-      '<div id="sk-menu-theme-row">' +
-        '<span>Theme</span>' +
-        '<div class="sk-theme-chips">' +
-          '<button class="sk-theme-chip" data-theme="dark" onclick="if(window.SokoniTheme)SokoniTheme.setTheme(\'dark\');document.querySelectorAll(\'.sk-theme-chip\').forEach(function(c){c.classList.toggle(\'active\',c.dataset.theme===\'dark\')});">🌙 Dark</button>' +
-          '<button class="sk-theme-chip" data-theme="light" onclick="if(window.SokoniTheme)SokoniTheme.setTheme(\'light\');document.querySelectorAll(\'.sk-theme-chip\').forEach(function(c){c.classList.toggle(\'active\',c.dataset.theme===\'light\')});">☀️ Light</button>' +
-          '<button class="sk-theme-chip" data-theme="auto" onclick="if(window.SokoniTheme)SokoniTheme.setTheme(\'auto\');document.querySelectorAll(\'.sk-theme-chip\').forEach(function(c){c.classList.toggle(\'active\',c.dataset.theme===\'auto\')});">⚙️ Auto</button>' +
+      /* Scrollable drawer body */
+      '<div class="sk-drawer-body">' +
+        '<div id="sk-menu-grid">' +
+          LINKS.map(function(l) {
+            return '<a href="' + l.href + '" class="sk-menu-item">' +
+              '<span class="sk-menu-item-icon">' + l.icon + '</span>' +
+              '<span>' + l.label + '</span>' +
+            '</a>';
+          }).join('') +
+        '</div>' +
+        '<div id="sk-menu-theme-row">' +
+          '<span>Theme</span>' +
+          '<div class="sk-theme-chips">' +
+            '<button class="sk-theme-chip" data-theme="dark" type="button">🌙 Dark</button>' +
+            '<button class="sk-theme-chip" data-theme="light" type="button">☀️ Light</button>' +
+            '<button class="sk-theme-chip" data-theme="auto" type="button">⚙️ Auto</button>' +
+          '</div>' +
         '</div>' +
       '</div>';
 
-    document.body.appendChild(ov);
+    document.body.appendChild(drawer);
 
-    ov.querySelector('#sk-menu-close').addEventListener('click', closeMenu);
-    ov.addEventListener('click', function(e) { if (e.target === ov) closeMenu(); });
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && ov.classList.contains('open')) closeMenu();
+    /* Theme chips — wire events without inline onclick to avoid XSS risk */
+    drawer.querySelectorAll('.sk-theme-chip').forEach(function(chip) {
+      chip.addEventListener('click', function() {
+        var t = chip.dataset.theme;
+        if (window.SokoniTheme) window.SokoniTheme.setTheme(t);
+        drawer.querySelectorAll('.sk-theme-chip').forEach(function(c) {
+          c.classList.toggle('active', c.dataset.theme === t);
+        });
+      });
     });
 
     /* Mark active theme chip */
-    var savedTheme = (function(){ try { return localStorage.getItem('sokoni-theme')||'dark'; } catch(_){ return 'dark'; } })();
-    ov.querySelectorAll('.sk-theme-chip').forEach(function(c) {
+    var savedTheme = (function() { try { return localStorage.getItem('sokoni-theme') || 'dark'; } catch (_) { return 'dark'; } })();
+    drawer.querySelectorAll('.sk-theme-chip').forEach(function(c) {
       c.classList.toggle('active', c.dataset.theme === savedTheme);
     });
+
+    /* Reset aria-expanded on menu btn when drawer is closed via backdrop/ESC */
+    var _menuObserver = new MutationObserver(function(muts) {
+      muts.forEach(function(m) {
+        if (m.attributeName === 'aria-hidden') {
+          var btn = document.getElementById('sk-menu-btn');
+          if (btn) btn.setAttribute('aria-expanded', drawer.getAttribute('aria-hidden') === 'false' ? 'true' : 'false');
+        }
+      });
+    });
+    _menuObserver.observe(drawer, { attributes: true, attributeFilter: ['aria-hidden'] });
   }
 
   /* ── Update live state without rebuilding ── */
@@ -995,8 +1012,8 @@
     if (showSearch) document.body.classList.add('sk-has-search');
     if (_navExists) _refresh(); /* sync avatar/cart from localStorage */
 
-    /* Build full-screen menu overlay */
-    _buildMenuOverlay();
+    /* Build site menu drawer (SokoniDrawer-based) */
+    _buildMenuDrawer();
 
     /* Init theme system — SokoniTheme may not be loaded yet; defer if needed */
     (function _initTheme() {
