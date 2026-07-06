@@ -11,6 +11,7 @@ const { defineSecret }                  = require('firebase-functions/params');
 const logger                            = require('firebase-functions/logger');
 const admin                             = require('firebase-admin');
 const Anthropic                         = require('@anthropic-ai/sdk');
+const crypto                            = require('crypto');
 
 const U = require('./finos-utils');
 
@@ -230,6 +231,12 @@ exports.processRefund = onCall(
     const orderSnap = await db.collection('packageRequests').doc(orderId).get();
     if (!orderSnap.exists) throw new HttpsError('not-found', 'Order not found');
     const order = orderSnap.data();
+
+    /* Ownership check: caller must be the buyer OR an admin */
+    const callerUid   = _uid(request);
+    const callerAdmin = request.auth?.token?.admin || request.auth?.token?.superAdmin;
+    if (!callerAdmin && order.buyerUid !== callerUid)
+      throw new HttpsError('permission-denied', 'You may only refund your own orders');
 
     const ikey = U.generateIdempotencyKey(['refund', orderId, String(refundAmountCents || 'full')]);
     const cached = await U.checkIdempotency(db, ikey);
@@ -1008,9 +1015,28 @@ Return a JSON object with these exact fields:
    Handles IntaSend payment confirmation webhooks.
 ──────────────────────────────────────────────────────────────*/
 exports.webhookPaymentCallback = onRequest(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB' },
+  { region: REGION, timeoutSeconds: 30, memory: '128MiB', secrets: [INTASEND_PRIV] },
   async (req, res) => {
     if (req.method !== 'POST') { res.status(405).send('Method Not Allowed'); return; }
+
+    /* HMAC-SHA256 signature validation — IntaSend sends X-IntaSend-Signature header */
+    const sig = req.headers['x-intasend-signature'] || req.headers['x-is-signature'] || '';
+    try {
+      const privKey  = INTASEND_PRIV.value();
+      const rawBody  = req.rawBody || Buffer.from(JSON.stringify(req.body));
+      const expected = crypto.createHmac('sha256', privKey).update(rawBody).digest('hex');
+      const sigBuf   = Buffer.from(sig.length === expected.length ? sig : '0'.repeat(expected.length), 'hex');
+      const expBuf   = Buffer.from(expected, 'hex');
+      if (!crypto.timingSafeEqual(sigBuf, expBuf)) {
+        logger.warn('[finos] webhookPaymentCallback: invalid HMAC', { sigPrefix: sig.slice(0, 8) });
+        res.status(401).json({ error: 'Invalid signature' });
+        return;
+      }
+    } catch (hmacErr) {
+      logger.error('[finos] webhookPaymentCallback: HMAC check failed', { error: hmacErr.message });
+      res.status(500).json({ error: 'Signature verification error' });
+      return;
+    }
 
     const payload   = req.body;
     const invoiceId = payload?.invoice?.invoice_id || payload?.tracking_id;

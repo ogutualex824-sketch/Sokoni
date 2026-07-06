@@ -308,6 +308,9 @@ async function calculateCommission(db, { orderAmountCents, category, sellerId, h
   if (rule && rule.type === 'fixed') {
     commissionCents = rule.amountCents || 0;
     effectiveRate   = orderAmountCents ? Math.round(commissionCents / orderAmountCents * 100) : 0;
+  } else if (rule && rule.type === 'percentage_plus_fixed') {
+    commissionCents = Math.round(orderAmountCents * effectiveRate / 100) + (rule.amountCents || 0);
+    effectiveRate   = orderAmountCents ? Math.round(commissionCents / orderAmountCents * 100) : effectiveRate;
   } else if (rule && rule.type === 'tiered') {
     const tier = (rule.tiers || []).find(t =>
       orderAmountCents >= (t.minCents || 0) &&
@@ -318,7 +321,9 @@ async function calculateCommission(db, { orderAmountCents, category, sellerId, h
     commissionCents = Math.round(orderAmountCents * effectiveRate / 100);
   }
 
+  /* Apply caps in order: ceiling first, then floor (floor wins over ceiling if min > max would occur) */
   if (rule && rule.maxCommissionCents) commissionCents = Math.min(commissionCents, rule.maxCommissionCents);
+  if (rule && rule.minCommissionCents) commissionCents = Math.max(commissionCents, rule.minCommissionCents);
 
   /* Commission holiday: if currently in a campaign with 0% rate */
   const now = admin.firestore.Timestamp.now();

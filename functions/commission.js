@@ -1,11 +1,13 @@
 /* ================================================================
-   SOKONI Commission Engine — Rule Management CFs  v1.0
-   4 Cloud Functions (all admin-only):
-     createCommissionRule  — create any rule type
-     updateCommissionRule  — edit existing rule
-     deleteCommissionRule  — soft-delete (sets isActive=false)
-     listCommissionRules   — paginated list with filters
-     previewCommission     — live calculation preview (admin + seller)
+   SOKONI Commission Engine — Rule Management CFs  v2.0
+   7 Cloud Functions:
+     createCommissionRule     — admin: create any rule type
+     updateCommissionRule     — admin: edit existing rule
+     deleteCommissionRule     — admin: soft-delete (sets isActive=false)
+     listCommissionRules      — admin: paginated list with filters
+     previewCommission        — admin + seller: live calculation preview
+     getSellerEarningsReport  — seller: earnings breakdown from ledger
+     getAdminRevenueByHub     — admin: hub-level revenue breakdown
 ================================================================ */
 'use strict';
 
@@ -278,5 +280,200 @@ exports.previewCommission = onCall(
       ruleSource:          comm.ruleSource,
       sellerReceivesKES:   (comm.sellerNetCents - wht.whtCents) / 100,
     };
+  }
+);
+
+/* ─────────────────────────────────────────────────────────────
+   6. getSellerEarningsReport
+   Returns structured earnings breakdown from the double-entry
+   ledger for the calling seller. No admin access to other sellers.
+──────────────────────────────────────────────────────────────*/
+exports.getSellerEarningsReport = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+    const uid = req.auth.uid;
+
+    const {
+      periodStart,  /* ISO date string, e.g. "2026-01-01" */
+      periodEnd,    /* ISO date string, e.g. "2026-01-31" */
+      category,     /* optional filter */
+      pageSize = 50,
+      cursor,       /* lastCreatedAtMs from previous page */
+    } = req.data || {};
+
+    const db   = _db();
+    const now  = Date.now();
+    const startMs = periodStart ? new Date(periodStart).getTime() : now - 30 * 86400000;
+    const endMs   = periodEnd   ? new Date(periodEnd).getTime()   : now;
+
+    if (isNaN(startMs) || isNaN(endMs)) throw new HttpsError('invalid-argument', 'Invalid periodStart or periodEnd');
+    if (endMs - startMs > 366 * 86400000) throw new HttpsError('invalid-argument', 'Date range must be <= 366 days');
+
+    /* Query ledger entries where sellerId === uid and type is an earning entry */
+    const EARNING_TYPES = ['seller_earning', 'seller_credit', 'payment_received'];
+    const DEDUCTION_TYPES = ['commission', 'platform_fee', 'refund_clawback', 'wht', 'wht_deduction'];
+
+    const startTs = admin.firestore.Timestamp.fromMillis(startMs);
+    const endTs   = admin.firestore.Timestamp.fromMillis(endMs);
+
+    let earningsQ = db.collection('ledger')
+      .where('sellerId', '==', uid)
+      .where('createdAt', '>=', startTs)
+      .where('createdAt', '<=', endTs)
+      .orderBy('createdAt', 'desc')
+      .limit(pageSize + 1);
+
+    if (category) earningsQ = earningsQ.where('category', '==', category);
+    if (cursor)   earningsQ = earningsQ.startAfter(admin.firestore.Timestamp.fromMillis(cursor));
+
+    const snap = await earningsQ.get();
+    const hasMore = snap.size > pageSize;
+    const docs = snap.docs.slice(0, pageSize);
+
+    /* Also fetch wallet summary in parallel */
+    const walletSnap = await db.collection('wallets').doc(uid).get();
+    const wallet = walletSnap.exists ? walletSnap.data() : {};
+
+    /* Aggregate totals from this page + period */
+    let grossCents = 0, commissionCents = 0, refundCents = 0;
+    const entries = docs.map(d => {
+      const e = d.data();
+      const amtKES = e.amountCents / 100;
+      const isEarning   = EARNING_TYPES.includes(e.type)   || e.creditAccount?.startsWith('seller:');
+      const isDeduction = DEDUCTION_TYPES.includes(e.type) || (e.debitAccount?.startsWith('seller:') && e.type !== 'reversal');
+      if (isEarning && e.type !== 'reversal')   grossCents      += e.amountCents || 0;
+      if (e.type === 'commission' || e.type === 'platform_fee') commissionCents += e.amountCents || 0;
+      if (e.type === 'refund_clawback')          refundCents     += e.amountCents || 0;
+      return {
+        id:          d.id,
+        type:        e.type,
+        amountKES:   amtKES,
+        direction:   isEarning ? 'credit' : 'debit',
+        description: e.description || '',
+        orderId:     e.orderId  || null,
+        category:    e.category || null,
+        createdAt:   e.createdAt?.toMillis?.() || null,
+        status:      e.status || 'settled',
+      };
+    });
+
+    const netCents = grossCents - commissionCents - refundCents;
+
+    return {
+      period:           { startMs, endMs },
+      summary: {
+        grossKES:         grossCents      / 100,
+        commissionKES:    commissionCents / 100,
+        refundsKES:       refundCents     / 100,
+        netKES:           netCents        / 100,
+      },
+      wallet: {
+        availableKES:     (wallet.availableBalance    || 0) / 100,
+        pendingKES:       (wallet.pendingBalance      || 0) / 100,
+        heldKES:          (wallet.heldBalance         || 0) / 100,
+        withdrawableKES:  (wallet.withdrawableBalance || 0) / 100,
+        lifetimeEarningsKES: (wallet.lifetimeEarnings || 0) / 100,
+        lifetimeWithdrawalsKES: (wallet.lifetimeWithdrawals || 0) / 100,
+        lifetimeRefundsKES: (wallet.lifetimeRefunds   || 0) / 100,
+      },
+      entries,
+      hasMore,
+      nextCursor: hasMore ? docs[docs.length - 1].data().createdAt?.toMillis?.() || null : null,
+    };
+  }
+);
+
+/* ─────────────────────────────────────────────────────────────
+   7. getAdminRevenueByHub
+   Admin: real-time hub-level revenue breakdown aggregated from
+   the finosHubCounters collection + finosSnapshots for trend data.
+──────────────────────────────────────────────────────────────*/
+exports.getAdminRevenueByHub = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  async (req) => {
+    if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin)
+      throw new HttpsError('permission-denied', 'Admin access required');
+
+    const { periodDays = 30 } = req.data || {};
+    if (![7, 14, 30, 90, 365].includes(periodDays))
+      throw new HttpsError('invalid-argument', 'periodDays must be 7, 14, 30, 90, or 365');
+
+    const db  = _db();
+    const now = Date.now();
+
+    /* Pull hub counters (running totals) */
+    const countersSnap = await db.collection('finosHubCounters').get().catch(() => null);
+    const hubData = {};
+    if (countersSnap) {
+      countersSnap.docs.forEach(d => {
+        hubData[d.id] = d.data();
+      });
+    }
+
+    /* Pull daily snapshots for the period to compute period-specific revenue */
+    const periodStartMs = now - periodDays * 86400000;
+    const snapSnap = await db.collection('finosSnapshots')
+      .where('dateMs', '>=', periodStartMs)
+      .orderBy('dateMs', 'asc')
+      .limit(370)
+      .get().catch(() => null);
+
+    const snapshots = snapSnap ? snapSnap.docs.map(d => d.data()) : [];
+
+    /* Aggregate period revenue by hub from snapshots */
+    const periodByHub = {};
+    snapshots.forEach(snap => {
+      const byHub = snap.byHub || {};
+      Object.keys(byHub).forEach(hub => {
+        if (!periodByHub[hub]) periodByHub[hub] = { revenueCents: 0, transactionCount: 0, commissionCents: 0 };
+        periodByHub[hub].revenueCents      += byHub[hub].revenueCents      || 0;
+        periodByHub[hub].transactionCount  += byHub[hub].transactionCount  || 0;
+        periodByHub[hub].commissionCents   += byHub[hub].commissionCents   || 0;
+      });
+    });
+
+    /* Merge lifetime totals with period data */
+    const allHubs = new Set([...Object.keys(hubData), ...Object.keys(periodByHub)]);
+    const hubs = [...allHubs].map(hub => {
+      const lifetime = hubData[hub] || {};
+      const period   = periodByHub[hub] || {};
+      return {
+        hub,
+        lifetime: {
+          revenueKES:       (lifetime.totalRevenueCents || 0)     / 100,
+          transactionCount: lifetime.totalTransactions  || 0,
+          commissionKES:    (lifetime.totalCommissionCents || 0)  / 100,
+        },
+        period: {
+          revenueKES:       (period.revenueCents    || 0) / 100,
+          transactionCount: period.transactionCount  || 0,
+          commissionKES:    (period.commissionCents  || 0) / 100,
+        },
+      };
+    }).sort((a, b) => b.period.revenueKES - a.period.revenueKES);
+
+    /* Platform totals */
+    const totals = hubs.reduce((acc, h) => {
+      acc.periodRevenueKES      += h.period.revenueKES;
+      acc.periodTransactions    += h.period.transactionCount;
+      acc.periodCommissionKES   += h.period.commissionKES;
+      acc.lifetimeRevenueKES    += h.lifetime.revenueKES;
+      acc.lifetimeTransactions  += h.lifetime.transactionCount;
+      return acc;
+    }, { periodRevenueKES: 0, periodTransactions: 0, periodCommissionKES: 0, lifetimeRevenueKES: 0, lifetimeTransactions: 0 });
+
+    /* Daily trend for the period */
+    const dailyTrend = snapshots.map(s => ({
+      date:        s.dateStr || null,
+      dateMs:      s.dateMs  || null,
+      revenueKES:  (s.totalRevenueCents || 0) / 100,
+      payoutsKES:  (s.totalPayoutsCents || 0) / 100,
+      refundsKES:  (s.totalRefundsCents || 0) / 100,
+      transactions: s.transactionCount || 0,
+    }));
+
+    logger.info('[commission] getAdminRevenueByHub', { periodDays, hubCount: hubs.length });
+    return { periodDays, generatedAt: now, totals, hubs, dailyTrend };
   }
 );

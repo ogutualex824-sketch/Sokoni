@@ -1,15 +1,16 @@
 /* ================================================================
-   SOKONI — Business Communication System  v1.0
-   11 Cloud Functions: transaction-gated messaging, moderation,
-   lifecycle management, admin controls.
+   SOKONI — Business Communication System  v2.0
+   15 Cloud Functions: transaction-gated messaging, context fetching,
+   search, edit, status sync, moderation, lifecycle, admin controls.
 ================================================================ */
 'use strict';
 
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { onDocumentCreated }  = require('firebase-functions/v2/firestore');
-const { onSchedule }         = require('firebase-functions/v2/scheduler');
-const logger                 = require('firebase-functions/logger');
-const admin                  = require('firebase-admin');
+const { onCall, HttpsError }   = require('firebase-functions/v2/https');
+const { onDocumentCreated,
+        onDocumentUpdated }    = require('firebase-functions/v2/firestore');
+const { onSchedule }           = require('firebase-functions/v2/scheduler');
+const logger                   = require('firebase-functions/logger');
+const admin                    = require('firebase-admin');
 
 const REGION = 'us-central1';
 
@@ -250,7 +251,7 @@ exports.reportConversation = onCall({ region: REGION, timeoutSeconds: 15 }, asyn
    4. adminGetReports
 ═══════════════════════════════════════════════════════════════ */
 exports.adminGetReports = onCall({ region: REGION, timeoutSeconds: 30 }, async (req) => {
-  if (!req.auth?.token?.isAdmin) throw new HttpsError('permission-denied', 'Admin only');
+  if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) throw new HttpsError('permission-denied', 'Admin only');
   const { status = 'pending', cursor } = req.data || {};
   let q = _db().collection('moderationQueue')
     .where('status', '==', status)
@@ -265,7 +266,7 @@ exports.adminGetReports = onCall({ region: REGION, timeoutSeconds: 30 }, async (
    5. adminReviewReport
 ═══════════════════════════════════════════════════════════════ */
 exports.adminReviewReport = onCall({ region: REGION, timeoutSeconds: 30 }, async (req) => {
-  if (!req.auth?.token?.isAdmin) throw new HttpsError('permission-denied', 'Admin only');
+  if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) throw new HttpsError('permission-denied', 'Admin only');
   const { reportId, action, note } = req.data;
   if (!reportId || !action) throw new HttpsError('invalid-argument', 'reportId and action required');
 
@@ -313,7 +314,7 @@ exports.adminReviewReport = onCall({ region: REGION, timeoutSeconds: 30 }, async
    6. adminUpdateChatPolicy
 ═══════════════════════════════════════════════════════════════ */
 exports.adminUpdateChatPolicy = onCall({ region: REGION, timeoutSeconds: 15 }, async (req) => {
-  if (!req.auth?.token?.isAdmin) throw new HttpsError('permission-denied', 'Admin only');
+  if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) throw new HttpsError('permission-denied', 'Admin only');
   const allowed  = ['maxImageSizeMB','maxPdfSizeMB','maxVoiceSeconds','readOnlyAfterDays','voiceRetentionDays','imageRetentionDays','tempRetentionDays','allowedMimeTypes'];
   const filtered = Object.fromEntries(Object.entries(req.data || {}).filter(([k]) => allowed.includes(k)));
   if (!Object.keys(filtered).length) throw new HttpsError('invalid-argument', 'No valid policy fields provided');
@@ -325,7 +326,7 @@ exports.adminUpdateChatPolicy = onCall({ region: REGION, timeoutSeconds: 15 }, a
    7. adminGetChatStats
 ═══════════════════════════════════════════════════════════════ */
 exports.adminGetChatStats = onCall({ region: REGION, timeoutSeconds: 30 }, async (req) => {
-  if (!req.auth?.token?.isAdmin) throw new HttpsError('permission-denied', 'Admin only');
+  if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) throw new HttpsError('permission-denied', 'Admin only');
   const db = _db();
   const [active, pending, flagged] = await Promise.all([
     db.collection('conversations').where('status', '==', 'active').count().get(),
@@ -508,3 +509,151 @@ exports.cleanupChatStorage = onSchedule(
     }
   }
 );
+
+
+/* ═══════════════════════════════════════════════════════════════
+   12. getConversationContext
+   Reads the source transaction document and returns normalised
+   context fields for the chat header (title, status, key metadata).
+═══════════════════════════════════════════════════════════════ */
+exports.getConversationContext = onCall({ region: REGION, timeoutSeconds: 20 }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+  const uid = req.auth.uid;
+  const { conversationId } = req.data;
+  if (!conversationId) throw new HttpsError('invalid-argument', 'conversationId required');
+
+  const db       = _db();
+  const convSnap = await db.collection('conversations').doc(conversationId).get();
+  if (!convSnap.exists) throw new HttpsError('not-found', 'Conversation not found');
+  const conv = convSnap.data();
+  if (!conv.participants.includes(uid)) throw new HttpsError('permission-denied', 'Not a participant');
+
+  const col = TX_COLLECTIONS[conv.transactionType];
+  if (!col || !conv.transactionId) return { context: conv.metadata || {} };
+
+  const txSnap = await db.collection(col).doc(conv.transactionId).get().catch(() => null);
+  if (!txSnap?.exists) return { context: conv.metadata || {} };
+
+  const tx = txSnap.data();
+
+  /* Normalise common fields across all transaction types */
+  const ctx = {
+    status:        tx.status       || tx.orderStatus   || tx.bookingStatus || 'unknown',
+    amount:        tx.amount       || tx.totalAmount    || tx.price         || tx.budget || null,
+    currency:      tx.currency     || 'KES',
+    reference:     tx.orderNumber  || tx.bookingNumber  || tx.ticketNumber  || conv.transactionId,
+    title:         tx.title        || tx.productName    || tx.jobTitle       || tx.serviceName  || tx.propertyTitle || null,
+    scheduledDate: tx.scheduledDate|| tx.appointmentDate|| tx.checkIn        || tx.eventDate     || null,
+    buyerName:     tx.buyerName    || tx.customerName   || null,
+    sellerName:    tx.sellerName   || tx.providerName   || tx.vendorName     || null,
+    location:      tx.location     || tx.venue          || tx.address        || null,
+    notes:         tx.notes        || tx.instructions   || null,
+  };
+
+  /* Merge in conversation metadata (set at creation) */
+  Object.assign(ctx, conv.metadata || {});
+  return { context: ctx };
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   13. searchConversations
+   Searches a user's conversation index by title / participant name.
+   Full-text search delegates to Firestore prefix match on title.
+═══════════════════════════════════════════════════════════════ */
+exports.searchConversations = onCall({ region: REGION, timeoutSeconds: 20 }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+  const uid   = req.auth.uid;
+  const { query = '', transactionType, cursor } = req.data || {};
+
+  const db    = _db();
+  let   q     = db.collection('userConversations').doc(uid).collection('items')
+                  .orderBy('lastMessageAt', 'desc')
+                  .limit(30);
+  if (transactionType) q = q.where('transactionType', '==', transactionType);
+  if (cursor) q = q.startAfter(cursor);
+
+  const snap  = await q.get();
+  const term  = query.toLowerCase().trim();
+  const items = snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(item => !term || [item.title, item.participantName, item.lastMessageText]
+      .some(v => v && v.toLowerCase().includes(term))
+    );
+
+  return { items, hasMore: snap.size === 30 };
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   14. editMessage
+   Allows a sender to edit their own text message within 15 minutes.
+═══════════════════════════════════════════════════════════════ */
+exports.editMessage = onCall({ region: REGION, timeoutSeconds: 15 }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+  const uid = req.auth.uid;
+  const { conversationId, messageId, newText } = req.data;
+  if (!conversationId || !messageId || !newText?.trim()) {
+    throw new HttpsError('invalid-argument', 'conversationId, messageId, newText required');
+  }
+
+  const db     = _db();
+  const msgRef = db.collection('conversations').doc(conversationId)
+                   .collection('messages').doc(messageId);
+  const snap   = await msgRef.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Message not found');
+
+  const msg = snap.data();
+  if (msg.senderId !== uid)       throw new HttpsError('permission-denied', 'Cannot edit another user\'s message');
+  if (msg.type !== 'text')        throw new HttpsError('invalid-argument', 'Only text messages can be edited');
+  if (msg.deleted)                throw new HttpsError('failed-precondition', 'Cannot edit a deleted message');
+
+  const ageMs = msg.timestamp?.toMillis ? (Date.now() - msg.timestamp.toMillis()) : Infinity;
+  if (ageMs > 15 * 60 * 1000)    throw new HttpsError('failed-precondition', 'Messages can only be edited within 15 minutes');
+
+  await msgRef.update({
+    text:     newText.trim().slice(0, 4000),
+    edited:   true,
+    editedAt: _now(),
+  });
+  return { edited: true };
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   15. updateConversationStatus
+   Called by order / booking Cloud Functions when a transaction
+   status changes. Posts a system message and updates conversation.
+═══════════════════════════════════════════════════════════════ */
+exports.updateConversationStatus = onCall({ region: REGION, timeoutSeconds: 20 }, async (req) => {
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+  const { conversationId, newStatus, systemMessage } = req.data;
+  if (!conversationId || !newStatus) {
+    throw new HttpsError('invalid-argument', 'conversationId and newStatus required');
+  }
+
+  const db       = _db();
+  const convSnap = await db.collection('conversations').doc(conversationId).get();
+  if (!convSnap.exists) throw new HttpsError('not-found', 'Conversation not found');
+  if (!convSnap.data().participants.includes(req.auth.uid)) {
+    throw new HttpsError('permission-denied', 'Not a participant');
+  }
+
+  const batch = db.batch();
+  batch.update(convSnap.ref, { transactionStatus: newStatus, updatedAt: _now() });
+
+  if (systemMessage) {
+    const msgRef = convSnap.ref.collection('messages').doc();
+    batch.set(msgRef, {
+      senderId:   'system',
+      senderName: 'SOKONI',
+      timestamp:  _now(),
+      type:       'system',
+      text:       systemMessage,
+      status:     'delivered',
+      deleted:    false,
+      edited:     false,
+      flagged:    false,
+    });
+  }
+
+  await batch.commit();
+  return { updated: true };
+});

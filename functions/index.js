@@ -1430,8 +1430,13 @@ exports.sokoniChat = onRequest(
       return;
     }
 
-    /* Verify auth token (optional — enables action tools) */
-    const uid = auth_token ? await _verifyKassToken(auth_token) : null;
+    /* Require auth — unauthenticated callers get free AI access at platform cost.
+       Verify the Firebase ID token; fall back to the legacy KASS token for old clients. */
+    if (!auth_token) {
+      res.status(401).json({ error: "Authentication required to use KASS AI." });
+      return;
+    }
+    const uid = await _verifyKassToken(auth_token);
 
     /* Sanitize: keep last 20 turns, text only */
     const history = messages.slice(-20).map(m => ({
@@ -4797,7 +4802,8 @@ exports.intasendWebhook = onRequest(
     const sig        = req.headers["x-intasend-signature"] || "";
     const expected   = crypto.createHmac("sha256", privateKey)
                              .update(JSON.stringify(req.body)).digest("hex");
-    if (sig !== expected) { res.status(401).send("Unauthorized"); return; }
+    const sigBuf = Buffer.from(sig.length === expected.length ? sig : "0".repeat(expected.length), "hex");
+    if (!crypto.timingSafeEqual(sigBuf, Buffer.from(expected, "hex"))) { res.status(401).send("Unauthorized"); return; }
 
     const { invoice, value } = req.body || {};
     const state      = invoice?.state || "FAILED";
@@ -7201,6 +7207,15 @@ exports.sasosActivateLicense          = sasosEnterprise.sasosActivateLicense;
 exports.sasosRevokeLicense            = sasosEnterprise.sasosRevokeLicense;
 exports.sasosGetLicense               = sasosEnterprise.sasosGetLicense;
 
+/* ── Platform Core — Hub Registry + Feature Flags + Cross-Hub Metrics ── */
+const platformCore = require('./platform-core');
+exports.pcGetHubRegistry    = platformCore.pcGetHubRegistry;
+exports.pcRegisterHub       = platformCore.pcRegisterHub;
+exports.pcUpdateHubConfig   = platformCore.pcUpdateHubConfig;
+exports.pcGetFeatureFlags   = platformCore.pcGetFeatureFlags;
+exports.pcSetFeatureFlag    = platformCore.pcSetFeatureFlag;
+exports.pcGetCrossHubMetrics = platformCore.pcGetCrossHubMetrics;
+
 /* ── Platform Registry + Event Bus ── */
 const platformRegistry = require("./platform-registry");
 exports.platformRegisterService    = platformRegistry.platformRegisterService;
@@ -7788,6 +7803,10 @@ exports.onMessageCreated            = messages.onMessageCreated;
 exports.moderateMessage             = messages.moderateMessage;
 exports.archiveCompletedConversations = messages.archiveCompletedConversations;
 exports.cleanupChatStorage          = messages.cleanupChatStorage;
+exports.getConversationContext      = messages.getConversationContext;
+exports.searchConversations         = messages.searchConversations;
+exports.editMessage                 = messages.editMessage;
+exports.updateConversationStatus    = messages.updateConversationStatus;
 
 /* ══════════════════════════════════════════════════════════════════
    SOKONI SmartPOS Retail Cloud Functions  v2.0
@@ -7808,11 +7827,13 @@ exports.posMarketplaceOrderSync    = posRetail.posMarketplaceOrderSync;
 ══════════════════════════════════════════════════════════════════ */
 const commission = require('./commission');
 
-exports.createCommissionRule  = commission.createCommissionRule;
-exports.updateCommissionRule  = commission.updateCommissionRule;
-exports.deleteCommissionRule  = commission.deleteCommissionRule;
-exports.listCommissionRules   = commission.listCommissionRules;
-exports.previewCommission     = commission.previewCommission;
+exports.createCommissionRule      = commission.createCommissionRule;
+exports.updateCommissionRule      = commission.updateCommissionRule;
+exports.deleteCommissionRule      = commission.deleteCommissionRule;
+exports.listCommissionRules       = commission.listCommissionRules;
+exports.previewCommission         = commission.previewCommission;
+exports.getSellerEarningsReport   = commission.getSellerEarningsReport;
+exports.getAdminRevenueByHub      = commission.getAdminRevenueByHub;
 
 /* ══════════════════════════════════════════════════════════════════
    Subscription & Billing Engine  v1.0
@@ -7838,6 +7859,12 @@ exports.adminSubExportBilling     = subBilling.adminSubExportBilling;
 exports.subProcessExpirations     = subBilling.subProcessExpirations;
 exports.subSendRenewalReminders   = subBilling.subSendRenewalReminders;
 
+/* ── Subscription Engine v2.0 — Automated Billing (3 CFs) ── */
+const subEngine = require('./sub-engine');
+exports.subScheduleRenewals       = subEngine.subScheduleRenewals;
+exports.subAutoActivateOnPayment  = subEngine.subAutoActivateOnPayment;
+exports.subUpgradeWithProration   = subEngine.subUpgradeWithProration;
+
 /* ══════════════════════════════════════════════════════════════════
    FinOS v2.0 — Universal Transaction Router + Escrow + Settlement
    12 Cloud Functions extending FinOS v1.0
@@ -7856,6 +7883,17 @@ exports.finosGetRevenueAnalytics   = finosRouter.finosGetRevenueAnalytics;
 exports.finosRequestBankPayout     = finosRouter.finosRequestBankPayout;
 exports.finosGetAdminDashboard     = finosRouter.finosGetAdminDashboard;
 exports.finosGenerateReceipt       = finosRouter.finosGenerateReceipt;
+
+/* ── Financial OS v1.0 — 8 new CFs closing adapter + refund + console gaps ── */
+const financialOS = require('./financial-os');
+exports.fosInitiatePayment  = financialOS.fosInitiatePayment;
+exports.fosSecureWebhook    = financialOS.fosSecureWebhook;
+exports.fosSubmitRefund     = financialOS.fosSubmitRefund;
+exports.fosApproveRefund    = financialOS.fosApproveRefund;
+exports.fosGenerateInvoice  = financialOS.fosGenerateInvoice;
+exports.fosExportReport     = financialOS.fosExportReport;
+exports.fosGetProviderHealth = financialOS.fosGetProviderHealth;
+exports.fosGetAdminConsole  = financialOS.fosGetAdminConsole;
 
 /* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
 const trustSafety = require('./trust-safety');
