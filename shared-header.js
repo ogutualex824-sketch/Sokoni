@@ -195,6 +195,25 @@
     (document.head || document.documentElement).appendChild(feJs);
   }
 
+  /* ── Platform override — injected after DOMContentLoaded so it sits at the
+     END of the cascade and wins over every page-level <style> block.
+     This normalises token aliases and enforces premium dark theme globally. ── */
+  (function _injectPlatformOverride() {
+    function _doInject() {
+      if (document.getElementById('sk-platform-override')) return;
+      const lnk = document.createElement('link');
+      lnk.rel  = 'stylesheet';
+      lnk.id   = 'sk-platform-override';
+      lnk.href = 'sokoni-platform-override.css';
+      document.head.appendChild(lnk);
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', _doInject, { once: true });
+    } else {
+      _doInject();
+    }
+  }());
+
   /* ── PHASE 2: Nav injection — excluded pages stop here ──────────── */
   const EXCLUDED = [
     'pos.html', 'seller.html', 'login.html', 'signup.html',

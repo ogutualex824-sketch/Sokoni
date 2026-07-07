@@ -1,0 +1,416 @@
+/*
+ * SOKONI PLATFORM THEME OVERRIDE — sokoni-platform-override.css  v1.0  2026-07-07
+ * ─────────────────────────────────────────────────────────────────────────────────
+ * Injected after DOMContentLoaded so it sits at the END of the cascade and wins
+ * over every page-level <style> block. One file enforces the premium dark theme
+ * across all 240+ SOKONI pages without editing each one individually.
+ *
+ * Responsibilities:
+ *   1. Canonical token aliases  — maps legacy short names (--bg, --surf, --accent)
+ *      to the platform canonical values so old pages are silently corrected.
+ *   2. Body enforcement         — guarantees dark canvas on every page.
+ *   3. Typography baseline      — consistent Inter/system-ui font stack + smoothing.
+ *   4. Surface normalisation    — cards, panels, dividers use premium dark glass.
+ *   5. Accent enforcement       — every accent usage becomes #71ff00.
+ *   6. Form / input dark mode   — inputs, selects, textareas follow dark theme.
+ *   7. Table dark mode          — tables use dark surface colours.
+ *   8. Scrollbar styling        — platform-wide dark thin scrollbars.
+ *   9. Selection highlight      — brand-coloured text selection.
+ *  10. Print exception          — receipt / invoice pages print on white.
+ *
+ * DO NOT use !important except where strictly necessary to override inline styles.
+ * All overrides are deliberate and documented.
+ * ─────────────────────────────────────────────────────────────────────────────────
+ */
+
+/* ══════════════════════════════════════════════════════════════════════
+   1. CANONICAL TOKEN ALIASES
+   Maps every legacy shorthand used by older pages → canonical values.
+   This `:root` block wins the cascade because this file is injected
+   after DOMContentLoaded, placing it after all page <style> blocks.
+══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Backgrounds */
+  --bg:       #050505;
+  --surf:     #0d1a0d;
+  --surf2:    rgba(255,255,255,0.04);
+  --surf3:    rgba(255,255,255,0.07);
+  --panel:    #0f200f;
+  --overlay:  rgba(5,5,5,0.85);
+
+  /* Borders */
+  --border:   rgba(255,255,255,0.08);
+  --border2:  rgba(255,255,255,0.14);
+  --divider:  rgba(255,255,255,0.06);
+
+  /* Brand accent */
+  --accent:   #71ff00;
+  --adim:     rgba(113,255,0,0.10);
+  --aborder:  rgba(113,255,0,0.25);
+  --aglow:    0 0 24px rgba(113,255,0,0.25);
+
+  /* Text */
+  --text:     rgba(255,255,255,0.90);
+  --text2:    rgba(255,255,255,0.55);
+  --text3:    rgba(255,255,255,0.28);
+  --txt:      rgba(255,255,255,0.90);   /* alias used by some pages */
+  --txt2:     rgba(255,255,255,0.55);
+  --txt3:     rgba(255,255,255,0.28);
+
+  /* Semantic */
+  --danger:   #ff4444;
+  --danger-bg:rgba(255,68,68,0.10);
+  --warn:     #ffb800;
+  --warn-bg:  rgba(255,184,0,0.10);
+  --ok:       #71ff00;
+  --ok-bg:    rgba(113,255,0,0.10);
+  --info:     #3b82f6;
+  --info-bg:  rgba(59,130,246,0.10);
+
+  /* Radius */
+  --r:        12px;
+  --r-sm:     8px;
+  --r-lg:     20px;
+  --r-xl:     28px;
+  --r-pill:   999px;
+
+  /* Shadows */
+  --shadow:   0 2px 8px rgba(0,0,0,0.5);
+  --shadow-lg:0 8px 32px rgba(0,0,0,0.6);
+  --shadow-brand: 0 4px 20px rgba(113,255,0,0.20);
+
+  /* Typography */
+  --font:     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+  --font-mono:'SF Mono', Consolas, 'Liberation Mono', monospace;
+
+  /* Z-index scale */
+  --z-base:   1;
+  --z-above:  10;
+  --z-drawer: 1000;
+  --z-modal:  1100;
+  --z-toast:  1200;
+  --z-nav:    100001;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   2. BODY ENFORCEMENT — premium dark canvas
+   Uses html,body to cover both painted background and the documentElement
+   (prevents white flash on overscroll in iOS Safari).
+══════════════════════════════════════════════════════════════════════ */
+html {
+  background-color: var(--bg) !important;
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--bg) !important;
+  color: var(--text) !important;
+  font-family: var(--font) !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  min-height: 100vh;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   3. TYPOGRAPHY BASELINE
+══════════════════════════════════════════════════════════════════════ */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text);
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+p { color: var(--text2); line-height: 1.6; }
+
+/* Green accent text always readable on dark */
+.accent, .highlight, [class*="accent-text"] { color: var(--accent) !important; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   4. SURFACE NORMALISATION
+   Any element that should look like a card/panel uses dark glass.
+   These selectors target common class patterns across all pages.
+══════════════════════════════════════════════════════════════════════ */
+
+/* Generic card patterns */
+.card, [class$="-card"], [class*="-card-"], .panel, .section-card,
+.sk-card, .fn-card, .bk-card, .fd-card, .hc-card, .sv-card {
+  background: var(--surf) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--r) !important;
+  color: var(--text) !important;
+}
+
+/* Stat/KPI blocks */
+.stat-card, .kpi-card, [class$="-stat"], [class*="-kpi"] {
+  background: var(--surf2) !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* Modal / dialog backgrounds */
+.modal-content, .dialog, [class*="-modal"], [class*="-dialog"] {
+  background: var(--surf) !important;
+  border: 1px solid var(--border2) !important;
+  color: var(--text) !important;
+}
+
+/* Side panels / drawers (not .sk-drawer — those have own system) */
+.sidebar, .side-panel, .drawer-panel {
+  background: var(--surf) !important;
+  border-right: 1px solid var(--border) !important;
+}
+
+/* Header/nav backgrounds (page-level, not sk-top-nav) */
+.page-header, .section-header, .tab-bar, [class$="-header"]:not(#sk-top-nav) {
+  background: var(--surf) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   5. ACCENT ENFORCEMENT — every CTA is SOKONI green
+══════════════════════════════════════════════════════════════════════ */
+
+/* Primary action buttons — green background, BLACK text for WCAG contrast */
+.btn-primary, .btn-accent, [class*="btn-green"], [class*="primary-btn"],
+button.primary, input[type="submit"].primary {
+  background: var(--accent) !important;
+  color: #000 !important;
+  border: none !important;
+  font-weight: 700 !important;
+}
+.btn-primary:hover, .btn-accent:hover { opacity: 0.88; }
+
+/* Outlined accent buttons */
+.btn-outline, .btn-secondary {
+  background: transparent !important;
+  border: 1px solid var(--accent) !important;
+  color: var(--accent) !important;
+}
+
+/* Active tab / nav indicators */
+[class*="-tab"].active, [class*="-tab"][aria-selected="true"],
+[class*="tab-active"], .nav-item.active {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+
+/* Progress bars */
+[class*="progress-fill"], [class*="-fill"] {
+  background: var(--accent) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   6. FORM / INPUT DARK MODE
+   Override any page that sets inputs to white/light background.
+══════════════════════════════════════════════════════════════════════ */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+select,
+textarea {
+  background: var(--surf2) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  border-radius: var(--r-sm) !important;
+  font-family: var(--font) !important;
+  -webkit-text-fill-color: var(--text) !important; /* Safari override */
+  /* 16px minimum to prevent iOS auto-zoom */
+  font-size: max(16px, 1em);
+}
+
+input::placeholder,
+textarea::placeholder { color: var(--text3) !important; opacity: 1 !important; }
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 1px;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(113,255,0,0.12) !important;
+}
+
+/* Dark select arrow */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2371ff00' d='M1 1l5 5 5-5'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  padding-right: 36px !important;
+}
+
+/* Chrome autofill dark override */
+input:-webkit-autofill,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 100px var(--surf) inset !important;
+  -webkit-text-fill-color: var(--text) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   7. TABLE DARK MODE
+══════════════════════════════════════════════════════════════════════ */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  color: var(--text);
+}
+
+thead tr {
+  background: var(--surf2) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+thead th {
+  color: var(--text3) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  padding: 10px 12px !important;
+}
+
+tbody tr {
+  border-bottom: 1px solid var(--divider) !important;
+  transition: background 0.12s;
+}
+tbody tr:hover { background: var(--surf2) !important; }
+tbody td { padding: 12px !important; color: var(--text) !important; font-size: 13px !important; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   8. SCROLLBAR STYLING — thin dark brand scrollbars
+══════════════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(113,255,0,0.25);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(113,255,0,0.45); }
+
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: rgba(113,255,0,0.25) transparent; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   9. SELECTION HIGHLIGHT
+══════════════════════════════════════════════════════════════════════ */
+::selection {
+  background: rgba(113,255,0,0.25);
+  color: #fff;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   10. STATUS BADGES
+══════════════════════════════════════════════════════════════════════ */
+.badge-success, .badge-active, .badge-live,
+[class*="status-active"], [class*="status-live"] {
+  background: var(--ok-bg) !important;
+  color: var(--ok) !important;
+  border: 1px solid rgba(113,255,0,0.20) !important;
+}
+.badge-danger, .badge-error, .badge-failed,
+[class*="status-failed"], [class*="status-error"] {
+  background: var(--danger-bg) !important;
+  color: var(--danger) !important;
+  border: 1px solid rgba(255,68,68,0.20) !important;
+}
+.badge-warn, .badge-pending,
+[class*="status-pending"] {
+  background: var(--warn-bg) !important;
+  color: var(--warn) !important;
+  border: 1px solid rgba(255,184,0,0.20) !important;
+}
+.badge-info,
+[class*="status-info"] {
+  background: var(--info-bg) !important;
+  color: var(--info) !important;
+  border: 1px solid rgba(59,130,246,0.20) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   11. LOADING SKELETONS
+══════════════════════════════════════════════════════════════════════ */
+.skeleton, [class*="skeleton"], [class*="-loading"] {
+  background: linear-gradient(
+    90deg,
+    var(--surf2) 25%,
+    rgba(255,255,255,0.07) 50%,
+    var(--surf2) 75%
+  ) !important;
+  background-size: 400px 100% !important;
+  animation: sk-shimmer 1.4s infinite linear !important;
+  border-radius: var(--r-sm) !important;
+  color: transparent !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   12. EMPTY STATES
+══════════════════════════════════════════════════════════════════════ */
+.empty-state, [class*="empty-state"], [class*="-empty"] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: var(--text3);
+  text-align: center;
+  gap: 12px;
+}
+.empty-state .material-icons-round,
+.empty-state .mir { font-size: 48px !important; color: var(--text3) !important; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   13. LINK COLOURS
+══════════════════════════════════════════════════════════════════════ */
+a:not([class]) {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:not([class]):hover { text-decoration: underline; opacity: 0.85; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   14. DIVIDERS / HORIZONTAL RULES
+══════════════════════════════════════════════════════════════════════ */
+hr, .divider, [class*="-divider"] {
+  border: none !important;
+  border-top: 1px solid var(--divider) !important;
+  margin: 16px 0 !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   15. CODE / PRE BLOCKS
+══════════════════════════════════════════════════════════════════════ */
+code, pre {
+  font-family: var(--font-mono) !important;
+  background: var(--surf2) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--r-sm) !important;
+  color: var(--accent) !important;
+}
+code { padding: 2px 6px; font-size: 12px; }
+pre  { padding: 16px; overflow-x: auto; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   16. PRINT EXCEPTION
+   Receipts and invoices must print on white. Any page that has a
+   .print-layout class on <body> or that uses @media print
+   gets a clean white canvas.
+══════════════════════════════════════════════════════════════════════ */
+@media print {
+  html,
+  body,
+  body.print-layout {
+    background: #fff !important;
+    color: #000 !important;
+    color-scheme: light !important;
+  }
+  /* Override all surfaces too */
+  .card, .panel, [class*="-card"], [class*="-panel"] {
+    background: #fff !important;
+    border-color: #e0e0e0 !important;
+    color: #000 !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   17. KEYFRAME (if not already defined by sokoni-premium-v2)
+══════════════════════════════════════════════════════════════════════ */
+@keyframes sk-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
