@@ -17,11 +17,12 @@ npm config delete fetch-retry-mintimeout
 
 ## Status — 2026-07-07
 
-**0/114 LIVE — All blocked by Cloud Run CPU quota (confirmed 2026-07-07)**
+**0/135 LIVE — All blocked by Cloud Run CPU quota (confirmed 2026-07-07)**
+_(119 from previous queue + 6 Installments CFs + 7 Franchise CFs + 3 Message Lifecycle triggers)_
 
 The quota was exhausted during the big 1,512-function update deploy. All new Cloud Run
 service creations fail silently (only `pcGetHubRegistry` showed an explicit 429 in the log).
-Verified via `firebase functions:list` — none of the 114 appear in the live list.
+Verified via `firebase functions:list` — none of the 119 appear in the live list.
 
 **To fix**: Request a GCP Cloud Run CPU quota increase:
 1. GCP Console → IAM & Admin → Quotas
@@ -30,12 +31,12 @@ Verified via `firebase functions:list` — none of the 114 appear in the live li
 
 ---
 
-## MASTER DEPLOY COMMAND (all 114 CFs)
+## MASTER DEPLOY COMMAND (all 135 CFs)
 
 Run once when quota is cleared:
 
 ```powershell
-npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:fosInitiatePayment,functions:fosSecureWebhook,functions:fosSubmitRefund,functions:fosApproveRefund,functions:fosGenerateInvoice,functions:fosExportReport,functions:fosGetProviderHealth,functions:fosGetAdminConsole,functions:subScheduleRenewals,functions:subAutoActivateOnPayment,functions:subUpgradeWithProration,functions:getSellerEarningsReport,functions:getAdminRevenueByHub,functions:getConversationContext,functions:searchConversations,functions:editMessage,functions:updateConversationStatus,functions:pcGetHubRegistry,functions:pcRegisterHub,functions:pcUpdateHubConfig,functions:pcGetFeatureFlags,functions:pcSetFeatureFlag,functions:pcGetCrossHubMetrics,functions:asyncEnqueue,functions:asyncWorker,functions:asyncSweeper,functions:asyncEventRouter,functions:asyncCancel,functions:asyncRetryJob,functions:asyncPauseQueue,functions:asyncGetDashboard,functions:asyncGetJobs,functions:asyncInspect,functions:asyncCleanup,functions:opsGetMasterDashboard,functions:opsGetAlerts,functions:opsAcknowledgeAlert,functions:opsCreateAlert,functions:opsGetPostLaunchMetrics,functions:opsScheduledHealthCheck,functions:rollbackGetSnapshots,functions:rollbackCreateSnapshot,functions:rollbackTrigger,functions:rollbackGetExecutions,functions:rollbackUpdateStatus,functions:rollbackScheduledSnapshot,functions:recordPosEvent,functions:getPosPerfMetrics,functions:getPosSpeedReport,functions:posScheduledPerfRollup,functions:acknowledgeShift,functions:approveShiftSwap,functions:assignShift,functions:createShiftTemplate,functions:getRoster,functions:getRosterGaps,functions:getStaffRoster,functions:publishWeeklyRoster,functions:schedulerWeeklyDigest,functions:setStaffAvailability,functions:swapShiftRequest,functions:createSession,functions:detectSessionAnomaly,functions:getUserSessions,functions:revokeDeviceSessions,functions:rotateSession,functions:scheduledSessionCleanup,functions:terminateAllSessions,functions:terminateSession,functions:validateSession,functions:generateSecureUploadUrl,functions:getFileAuditLog,functions:onFileUploaded,functions:quarantineFile,functions:validateUploadRequest,functions:getLatestSecurityReport,functions:runSecurityAudit,functions:scheduleWeeklySecurityAudit,functions:getPOSInventoryIntelligence,functions:getProductSalesTrend,functions:earnLoyaltyPoints,functions:onInventoryUpdated,functions:onOrderCreated,functions:onPaymentCreated,functions:onPaymentUpdated,functions:onRiderStatusChange,functions:onUserCreated,functions:posCleanupPeripheralSignals,functions:posCreateCustomerDisplay,functions:posGetPeripherals,functions:posRegisterPeripheral,functions:posRemovePeripheral,functions:posUpdateCustomerDisplay,functions:posUpdatePeripheralStatus,functions:posGetApiDocs,functions:posGetEtimsExport,functions:posGetInventoryExport,functions:posGetLedgerExport,functions:posGetSalesExport,functions:posListApiKeys,functions:posReceiveErpUpdate,functions:posRegisterApiKey,functions:posRegisterWebhook,functions:posRevokeApiKey,functions:posRevokeWebhook,functions:posTestWebhook,functions:posGetTerminalBatchReport,functions:posGetTerminalCapabilities,functions:posGetTerminalHealth,functions:posPollTerminalStatus,functions:posReverseTerminalPayment,functions:posSettleTerminalBatch,functions:posTerminalEventWebhook" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:fosInitiatePayment,functions:fosSecureWebhook,functions:fosSubmitRefund,functions:fosApproveRefund,functions:fosGenerateInvoice,functions:fosExportReport,functions:fosGetProviderHealth,functions:fosGetAdminConsole,functions:subScheduleRenewals,functions:subAutoActivateOnPayment,functions:subUpgradeWithProration,functions:getSellerEarningsReport,functions:getAdminRevenueByHub,functions:getConversationContext,functions:searchConversations,functions:editMessage,functions:updateConversationStatus,functions:pcGetHubRegistry,functions:pcRegisterHub,functions:pcUpdateHubConfig,functions:pcGetFeatureFlags,functions:pcSetFeatureFlag,functions:pcGetCrossHubMetrics,functions:asyncEnqueue,functions:asyncWorker,functions:asyncSweeper,functions:asyncEventRouter,functions:asyncCancel,functions:asyncRetryJob,functions:asyncPauseQueue,functions:asyncGetDashboard,functions:asyncGetJobs,functions:asyncInspect,functions:asyncCleanup,functions:opsGetMasterDashboard,functions:opsGetAlerts,functions:opsAcknowledgeAlert,functions:opsCreateAlert,functions:opsGetPostLaunchMetrics,functions:opsScheduledHealthCheck,functions:rollbackGetSnapshots,functions:rollbackCreateSnapshot,functions:rollbackTrigger,functions:rollbackGetExecutions,functions:rollbackUpdateStatus,functions:rollbackScheduledSnapshot,functions:recordPosEvent,functions:getPosPerfMetrics,functions:getPosSpeedReport,functions:posScheduledPerfRollup,functions:acknowledgeShift,functions:approveShiftSwap,functions:assignShift,functions:createShiftTemplate,functions:getRoster,functions:getRosterGaps,functions:getStaffRoster,functions:publishWeeklyRoster,functions:schedulerWeeklyDigest,functions:setStaffAvailability,functions:swapShiftRequest,functions:createSession,functions:detectSessionAnomaly,functions:getUserSessions,functions:revokeDeviceSessions,functions:rotateSession,functions:scheduledSessionCleanup,functions:terminateAllSessions,functions:terminateSession,functions:validateSession,functions:generateSecureUploadUrl,functions:getFileAuditLog,functions:onFileUploaded,functions:quarantineFile,functions:validateUploadRequest,functions:getLatestSecurityReport,functions:runSecurityAudit,functions:scheduleWeeklySecurityAudit,functions:getPOSInventoryIntelligence,functions:getProductSalesTrend,functions:earnLoyaltyPoints,functions:onInventoryUpdated,functions:onOrderCreated,functions:onPaymentCreated,functions:onPaymentUpdated,functions:onRiderStatusChange,functions:onUserCreated,functions:posCleanupPeripheralSignals,functions:posCreateCustomerDisplay,functions:posGetPeripherals,functions:posRegisterPeripheral,functions:posRemovePeripheral,functions:posUpdateCustomerDisplay,functions:posUpdatePeripheralStatus,functions:posGetApiDocs,functions:posGetEtimsExport,functions:posGetInventoryExport,functions:posGetLedgerExport,functions:posGetSalesExport,functions:posListApiKeys,functions:posReceiveErpUpdate,functions:posRegisterApiKey,functions:posRegisterWebhook,functions:posRevokeApiKey,functions:posRevokeWebhook,functions:posTestWebhook,functions:posGetTerminalBatchReport,functions:posGetTerminalCapabilities,functions:posGetTerminalHealth,functions:posPollTerminalStatus,functions:posReverseTerminalPayment,functions:posSettleTerminalBatch,functions:posTerminalEventWebhook,functions:currencyGetRates,functions:currencyConvert,functions:currencyUpdateRates,functions:currencyGetHistory,functions:currencyScheduledRateRefresh,functions:installmentCreatePlan,functions:installmentRecordPayment,functions:installmentGetMyPlans,functions:installmentGetSellerPlans,functions:installmentMarkOverdue,functions:installmentCancelPlan,functions:franchiseCreateBrand,functions:franchiseApplyForLocation,functions:franchiseReviewApplication,functions:franchiseRecordRoyalty,functions:franchiseGetMyLocations,functions:franchiseGetBrandDashboard,functions:franchiseGetLocations,functions:onOrderStatusChanged,functions:onBookingStatusChanged,functions:onFoodOrderStatusChanged" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
 ```
 
 ---
@@ -46,6 +47,19 @@ firebase functions:secrets:set INTASEND_PRIVATE_KEY       --project sokoni-aeb26
 firebase functions:secrets:set LOYALTY_HMAC_SECRET        --project sokoni-aeb26
 firebase functions:secrets:set PAYMENT_HMAC_SECRET        --project sokoni-aeb26
 firebase functions:secrets:set PAYROLL_ENCRYPTION_KEY     --project sokoni-aeb26
+firebase functions:secrets:set SOKONI_HMAC_KEY            --project sokoni-aeb26
+firebase functions:secrets:set SENDGRID_API_KEY           --project sokoni-aeb26
+```
+
+### After quota clears: activate Redis rate limiting
+Set `REDIS_URL` in `functions/.env` (and Secret Manager) once your Redis instance is provisioned.
+Format: `rediss://:<password>@<host>:6379` (TLS required for production).
+
+### eTIMS secrets (3 pending — contact KRA for credentials)
+```bash
+firebase functions:secrets:set ETIMS_DEVICE_SERIAL        --project sokoni-aeb26
+firebase functions:secrets:set ETIMS_PIN                  --project sokoni-aeb26
+firebase functions:secrets:set ETIMS_AES_KEY              --project sokoni-aeb26
 ```
 
 ---
@@ -77,13 +91,16 @@ firebase functions:secrets:set PAYROLL_ENCRYPTION_KEY     --project sokoni-aeb26
 | `getSellerEarningsReport` | onCall auth |
 | `getAdminRevenueByHub` | onCall admin |
 
-### messages.js (4)
+### messages.js (7)
 | Function | Type |
 |---|---|
 | `getConversationContext` | onCall auth |
 | `searchConversations` | onCall auth |
 | `editMessage` | onCall auth |
 | `updateConversationStatus` | onCall auth |
+| `onOrderStatusChanged` | onDocumentUpdated trigger |
+| `onBookingStatusChanged` | onDocumentUpdated trigger |
+| `onFoodOrderStatusChanged` | onDocumentUpdated trigger |
 
 ### platform-core.js (6)
 | Function | Type |
@@ -240,6 +257,106 @@ firebase functions:secrets:set PAYROLL_ENCRYPTION_KEY     --project sokoni-aeb26
 | `posReverseTerminalPayment` | onCall admin |
 | `posSettleTerminalBatch` | onCall admin |
 | `posTerminalEventWebhook` | onRequest webhook |
+
+---
+
+### currency-engine.js (5) — added 2026-07-07
+| Function | Type | Auth |
+|---|---|---|
+| `currencyGetRates` | onCall | Public (no auth required) |
+| `currencyConvert` | onCall | Public (no auth required) |
+| `currencyUpdateRates` | onCall | Admin only |
+| `currencyGetHistory` | onCall | Admin only |
+| `currencyScheduledRateRefresh` | onSchedule (0 */6 * * *) | — |
+
+**Firestore paths written:**
+- `exchangeRates/latest` — live rate document (base: KES)
+- `exchangeRates/latest/history/{YYYY-MM-DD}` — daily audit snapshots
+- `systemAlerts/rateRefresh` — stale-rate alert flag (set by scheduler, cleared by `currencyUpdateRates`)
+
+**No secrets required.** No external HTTP calls. Rates are admin-managed only.
+
+**Spot deploy command (these 5 only):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:currencyGetRates,functions:currencyConvert,functions:currencyUpdateRates,functions:currencyGetHistory,functions:currencyScheduledRateRefresh" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
+
+### installments.js (6) — added 2026-07-07
+| Function | Type | Auth |
+|---|---|---|
+| `installmentCreatePlan` | onCall | Buyer (auth required) |
+| `installmentRecordPayment` | onCall | Buyer — plan owner (auth required) |
+| `installmentGetMyPlans` | onCall | Buyer (auth required) |
+| `installmentGetSellerPlans` | onCall | Seller or Admin |
+| `installmentMarkOverdue` | onSchedule (`0 1 * * *` UTC) | — |
+| `installmentCancelPlan` | onCall | Buyer (no payments) or Admin (any state) |
+
+**Firestore paths written:**
+- `installmentPlans/{planId}` — plan document (schedule array, status, amounts)
+- `installmentPlans/{planId}/installmentPayments/{paymentRef}` — payment records
+- `installmentAudit/{id}` — audit log for all create / pay / cancel actions
+- `notifications/{id}` — buyer notifications on plan completion or cancellation
+
+**Plan types:**
+- `3_month` — 3 payments: 30% upfront + 2 equal monthly
+- `6_month` — 6 payments: 30% upfront + 5 equal monthly
+- `12_month` — 12 payments: 30% upfront + 11 equal monthly
+
+**No secrets required.** Amounts stored in KES (float, 2 d.p.).
+
+**Spot deploy command (these 6 only):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:installmentCreatePlan,functions:installmentRecordPayment,functions:installmentGetMyPlans,functions:installmentGetSellerPlans,functions:installmentMarkOverdue,functions:installmentCancelPlan" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
+
+### franchise-engine.js (7) — added 2026-07-07
+| Function | Type | Auth |
+|---|---|---|
+| `franchiseCreateBrand` | onCall | Admin |
+| `franchiseApplyForLocation` | onCall | Auth (franchisee) |
+| `franchiseReviewApplication` | onCall | Admin |
+| `franchiseRecordRoyalty` | onCall | Auth — location owner |
+| `franchiseGetMyLocations` | onCall | Auth |
+| `franchiseGetBrandDashboard` | onCall | Admin |
+| `franchiseGetLocations` | onCall | Admin |
+
+**Firestore paths written:**
+- `franchiseBrands/{brandId}` — brand record (name, royaltyPct, techFeePct, minInvestment, territories)
+- `franchiseApplications/{appId}` — application (status: pending → approved | rejected)
+- `franchiseLocations/{locId}` — active franchise location (created on approval)
+- `royaltyPayments/{payId}` — monthly royalty record (grossRevenue, royaltyAmount, techFeeAmount, totalDue)
+- `franchiseAudit/{id}` — immutable audit log for all franchise actions
+- `notifications/{id}` — applicant notified on approval or rejection
+
+**No secrets required.** All amounts in KES (float, 2 d.p.). Duplicate monthly revenue submission blocked at CF level.
+
+**Spot deploy command (these 7 only):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:franchiseCreateBrand,functions:franchiseApplyForLocation,functions:franchiseReviewApplication,functions:franchiseRecordRoyalty,functions:franchiseGetMyLocations,functions:franchiseGetBrandDashboard,functions:franchiseGetLocations" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
+
+### messages.js — status lifecycle triggers (3) — added 2026-07-07
+| Function | Type | Trigger |
+|---|---|---|
+| `onOrderStatusChanged` | onDocumentUpdated | `orders/{orderId}` — status field change |
+| `onBookingStatusChanged` | onDocumentUpdated | `bookings/{bookingId}` — status/bookingStatus field change |
+| `onFoodOrderStatusChanged` | onDocumentUpdated | `foodOrders/{orderId}` — status field change |
+
+Posts a system message into the linked conversation when the transaction status changes.
+Uses `STATUS_MSGS` map (16 statuses). Batch writes system message + updates `transactionStatus` field.
+
+**No secrets required.** Zero config — reads from existing `conversations` collection.
+
+**Spot deploy command (these 3 only):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:onOrderStatusChanged,functions:onBookingStatusChanged,functions:onFoodOrderStatusChanged" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
 
 ---
 

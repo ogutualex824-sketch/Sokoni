@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expense Management — SOKONI Business OS</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<style>
+:root{
+  --bg:#050505;--sur:#0d0d0d;--bor:#1a1a1a;--g:#71ff00;
+  --txt:#e8e8e8;--sub:#6b7280;--muted:#555;
+  --blue:#3b82f6;--red:#ef4444;--amber:#f59e0b;--green:#22c55e;
+  --radius:10px;--r8:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--txt);font-family:'Inter',system-ui,-apple-system,sans-serif;min-height:100vh;padding-bottom:80px;}
+
+/* ── TOPBAR ── */
+.em-top{position:sticky;top:0;z-index:50;background:var(--sur);border-bottom:1px solid var(--bor);padding:12px 20px;display:flex;align-items:center;gap:12px;}
+.em-top-left{flex:1;}
+.em-title{font-size:.95rem;font-weight:800;letter-spacing:-.01em;}
+.em-title span{color:var(--g);}
+.em-sub{font-size:.62rem;color:var(--sub);margin-top:2px;}
+.btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:var(--r8);padding:8px 16px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .15s,transform .1s;}
+.btn:active{transform:scale(.97);}
+.btn-g{background:var(--g);color:#000;}
+.btn-g:hover{opacity:.88;}
+.btn-ghost{background:transparent;border:1px solid var(--bor);color:var(--txt);}
+.btn-ghost:hover{border-color:var(--g);color:var(--g);}
+.btn-danger{background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.2);}
+.btn-danger:hover{background:rgba(239,68,68,.2);}
+.btn-sm{padding:5px 11px;font-size:.72rem;}
+
+/* ── KPI STRIP ── */
+.kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 20px;border-bottom:1px solid var(--bor);}
+@media(max-width:640px){.kpi-strip{grid-template-columns:repeat(2,1fr);}}
+.kpi-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:14px 16px;}
+.kpi-label{font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);margin-bottom:6px;}
+.kpi-val{font-size:1.45rem;font-weight:900;letter-spacing:-.02em;}
+.kpi-val.green{color:var(--g);}
+.kpi-val.amber{color:var(--amber);}
+.kpi-val.red{color:var(--red);}
+.kpi-val.blue{color:var(--blue);}
+.kpi-meta{font-size:.63rem;color:var(--sub);margin-top:3px;}
+
+/* ── TABS ── */
+.em-tabs{display:flex;background:var(--sur);border-bottom:1px solid var(--bor);padding:0 20px;overflow-x:auto;scrollbar-width:none;}
+.em-tabs::-webkit-scrollbar{display:none;}
+.em-tab{padding:12px 18px;font-size:.77rem;font-weight:600;color:var(--sub);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-family:inherit;transition:all .15s;}
+.em-tab.active{color:var(--g);border-bottom-color:var(--g);}
+.em-tab:hover:not(.active){color:var(--txt);}
+
+/* ── CONTENT ── */
+.em-content{padding:20px;max-width:1400px;margin:0 auto;}
+.em-panel{display:none;}
+.em-panel.active{display:block;}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.filter-input{background:var(--sur);border:1px solid var(--bor);color:var(--txt);border-radius:var(--r8);padding:7px 12px;font-size:.76rem;font-family:inherit;outline:none;transition:border-color .15s;}
+.filter-input:focus{border-color:var(--g);}
+.filter-input option{background:var(--sur);}
+.filter-input[type="date"]{color-scheme:dark;}
+.filter-spacer{flex:1;}
+
+/* ── TABLE ── */
+.tbl-wrap{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);overflow:hidden;}
+.tbl-scroll{overflow-x:auto;}
+.tbl{width:100%;border-collapse:collapse;min-width:720px;}
+.tbl th{text-align:left;font-size:.62rem;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);font-weight:700;padding:10px 14px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--bor);}
+.tbl td{padding:10px 14px;font-size:.79rem;border-bottom:1px solid var(--bor);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tbody tr:hover td{background:rgba(113,255,0,.025);cursor:pointer;}
+.tbl-empty{padding:40px;text-align:center;color:var(--sub);font-size:.8rem;}
+
+/* ── BADGES / STATUS CHIPS ── */
+.chip{display:inline-flex;align-items:center;font-size:.63rem;font-weight:700;padding:3px 9px;border-radius:99px;white-space:nowrap;}
+.chip-draft   {background:rgba(107,114,128,.15);color:#9ca3af;}
+.chip-pending {background:rgba(245,158,11,.12);color:#fbbf24;}
+.chip-approved{background:rgba(34,197,94,.12); color:#4ade80;}
+.chip-rejected{background:rgba(239,68,68,.12); color:#f87171;}
+
+.receipt-ico{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);color:var(--g);font-size:.75rem;cursor:pointer;transition:background .15s;}
+.receipt-ico:hover{background:rgba(113,255,0,.18);}
+.receipt-ico.no-receipt{background:rgba(255,255,255,.04);border-color:var(--bor);color:var(--muted);cursor:default;}
+
+.amount-cell{font-family:'Courier New',monospace;font-size:.8rem;font-weight:700;}
+
+/* ── SECTION HEADER ── */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.sec-hdr h2{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--sub);display:flex;align-items:center;gap:7px;}
+.sec-dot{width:7px;height:7px;border-radius:50%;background:var(--g);display:inline-block;}
+
+/* ── BUDGET TABLE ── */
+.budget-grid{display:grid;gap:12px;}
+.budget-row{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:14px 18px;}
+.budget-row-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;}
+.budget-cat{font-size:.82rem;font-weight:700;}
+.budget-nums{font-size:.75rem;color:var(--sub);}
+.budget-nums b{color:var(--txt);}
+.prog-bar{width:100%;height:8px;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:99px;transition:width .5s ease;}
+.prog-green{background:var(--g);}
+.prog-amber{background:var(--amber);}
+.prog-red{background:var(--red);}
+.budget-pct{font-size:.68rem;font-weight:700;margin-top:5px;text-align:right;}
+
+/* ── CSS BAR CHART ── */
+.chart-wrap{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:18px 20px;}
+.chart-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);margin-bottom:16px;display:flex;align-items:center;gap:7px;}
+.chart-bars{display:flex;align-items:flex-end;gap:10px;height:140px;padding-bottom:28px;position:relative;}
+.chart-bars::after{content:'';position:absolute;bottom:28px;left:0;right:0;height:1px;background:var(--bor);}
+.chart-bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;}
+.chart-bar{width:100%;border-radius:5px 5px 0 0;min-height:4px;background:var(--g);opacity:.85;transition:opacity .15s;}
+.chart-bar:hover{opacity:1;}
+.chart-bar.budget{background:rgba(113,255,0,.2);border:1px solid rgba(113,255,0,.4);}
+.chart-lbl{font-size:.58rem;color:var(--sub);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;position:absolute;bottom:4px;}
+.chart-val{font-size:.62rem;color:var(--txt);font-weight:600;position:absolute;top:-18px;}
+.chart-legend{display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;}
+.chart-legend-item{display:flex;align-items:center;gap:6px;font-size:.67rem;color:var(--sub);}
+.chart-legend-swatch{width:10px;height:10px;border-radius:3px;}
+
+/* ── APPROVAL CARD ── */
+.appr-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:16px 18px;display:grid;gap:10px;}
+.appr-card+.appr-card{margin-top:10px;}
+.appr-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.appr-info{flex:1;}
+.appr-name{font-size:.85rem;font-weight:700;margin-bottom:3px;}
+.appr-meta{font-size:.68rem;color:var(--sub);}
+.appr-amount{font-size:1.1rem;font-weight:900;color:var(--g);font-family:'Courier New',monospace;}
+.appr-desc{font-size:.76rem;color:var(--txt);padding:8px 12px;background:rgba(255,255,255,.03);border-radius:6px;border-left:3px solid var(--bor);}
+.appr-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.reject-reason-wrap{display:none;margin-top:8px;}
+.reject-reason-wrap textarea{width:100%;background:var(--bg);border:1px solid var(--bor);color:var(--txt);border-radius:var(--r8);padding:9px 12px;font-size:.76rem;font-family:inherit;outline:none;resize:vertical;min-height:60px;}
+.reject-reason-wrap textarea:focus{border-color:var(--red);}
+
+/* ── REPORTS ── */
+.report-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:700px){.report-grid{grid-template-columns:1fr;}}
+.ytd-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:20px;text-align:center;}
+.ytd-label{font-size:.7rem;color:var(--sub);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;}
+.ytd-val{font-size:2rem;font-weight:900;color:var(--g);}
+
+/* ── MODALS ── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .2s;}
+.modal-backdrop.open{opacity:1;pointer-events:all;}
+.modal{background:var(--sur);border:1px solid var(--bor);border-radius:14px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;transform:translateY(16px);transition:transform .2s;scrollbar-width:thin;}
+.modal-backdrop.open .modal{transform:translateY(0);}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bor);position:sticky;top:0;background:var(--sur);z-index:1;}
+.modal-hdr h3{font-size:.88rem;font-weight:800;}
+.modal-close{background:none;border:none;color:var(--sub);cursor:pointer;font-size:1.1rem;line-height:1;padding:4px;}
+.modal-close:hover{color:var(--txt);}
+.modal-body{padding:20px;}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--bor);display:flex;justify-content:flex-end;gap:8px;}
+
+/* ── SLIDE-IN FORM ── */
+.slide-in{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);background:var(--sur);border-left:1px solid var(--bor);z-index:210;transform:translateX(100%);transition:transform .25s ease;overflow-y:auto;scrollbar-width:thin;}
+.slide-in.open{transform:translateX(0);}
+.slide-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bor);position:sticky;top:0;background:var(--sur);z-index:1;}
+.slide-hdr h3{font-size:.88rem;font-weight:800;}
+.slide-body{padding:20px;display:grid;gap:14px;}
+.slide-footer{padding:14px 20px;border-top:1px solid var(--bor);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:var(--sur);}
+.slide-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:205;display:none;}
+.slide-backdrop.open{display:block;}
+
+/* ── FORM FIELDS ── */
+.field{display:grid;gap:5px;}
+.field label{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);}
+.field input,.field select,.field textarea{background:var(--bg);border:1px solid var(--bor);color:var(--txt);border-radius:var(--r8);padding:9px 12px;font-size:.8rem;font-family:inherit;outline:none;transition:border-color .15s;width:100%;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--g);}
+.field select option{background:var(--sur);}
+.field input[type="date"]{color-scheme:dark;}
+.field textarea{resize:vertical;min-height:72px;}
+.field-note{font-size:.63rem;color:var(--sub);}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:400px){.field-row{grid-template-columns:1fr;}}
+
+/* ── DETAIL MODAL ── */
+.detail-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--bor);font-size:.79rem;}
+.detail-row:last-child{border-bottom:none;}
+.detail-row dt{color:var(--sub);}
+.detail-row dd{font-weight:600;text-align:right;}
+.receipt-preview{width:100%;max-height:240px;object-fit:contain;border-radius:8px;border:1px solid var(--bor);background:rgba(255,255,255,.03);margin-top:10px;}
+.receipt-preview-placeholder{width:100%;height:80px;border-radius:8px;border:1px solid var(--bor);background:rgba(255,255,255,.03);display:flex;align-items:center;justify-content:center;color:var(--sub);font-size:.75rem;gap:6px;margin-top:10px;}
+
+/* ── TOAST ── */
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+.toast{background:var(--sur);border:1px solid var(--bor);border-radius:var(--r8);padding:11px 16px;font-size:.78rem;display:flex;align-items:center;gap:9px;min-width:220px;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,.5);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;pointer-events:all;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.toast-success .toast-ico{color:var(--g);}
+.toast.toast-error .toast-ico{color:var(--red);}
+.toast.toast-info .toast-ico{color:var(--blue);}
+.toast-ico{font-size:.95rem;flex-shrink:0;}
+
+/* ── LOADING / EMPTY ── */
+.loading-row td{text-align:center;padding:32px;color:var(--sub);font-size:.78rem;}
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--bor);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── MISC ── */
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.mt12{margin-top:12px;}
+.mt16{margin-top:16px;}
+.hidden{display:none!important;}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="em-top">
+  <div class="em-top-left">
+    <div class="em-title">SOKONI <span>Expense Management</span></div>
+    <div class="em-sub">Business OS — Track, approve &amp; report company spend</div>
+  </div>
+  <button class="btn btn-g" id="btnNewExpense">&#43; New Expense</button>
+</div>
+
+<!-- KPI STRIP -->
+<div class="kpi-strip">
+  <div class="kpi-card">
+    <div class="kpi-label">This Month Total</div>
+    <div class="kpi-val green" id="kpiMonthTotal">KES 0</div>
+    <div class="kpi-meta" id="kpiMonthMeta">Loading…</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Budget Used</div>
+    <div class="kpi-val amber" id="kpiBudgetPct">0%</div>
+    <div class="kpi-meta" id="kpiBudgetMeta">of monthly budget</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Pending Approval</div>
+    <div class="kpi-val blue" id="kpiPending">0</div>
+    <div class="kpi-meta">awaiting review</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Top Category</div>
+    <div class="kpi-val" id="kpiTopCat" style="font-size:1rem;">—</div>
+    <div class="kpi-meta" id="kpiTopCatAmt">this month</div>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="em-tabs">
+  <button class="em-tab active" data-tab="expenses">Expenses</button>
+  <button class="em-tab" data-tab="budgets">Budgets</button>
+  <button class="em-tab" data-tab="approval" id="tabApproval">Approval Queue</button>
+  <button class="em-tab" data-tab="reports">Reports</button>
+</div>
+
+<div class="em-content">
+
+  <!-- TAB 1: EXPENSES -->
+  <div class="em-panel active" id="panel-expenses">
+    <div class="filter-bar">
+      <input type="date" class="filter-input" id="fltFrom" title="From date">
+      <span style="color:var(--sub);font-size:.75rem;">to</span>
+      <input type="date" class="filter-input" id="fltTo" title="To date">
+      <select class="filter-input" id="fltCat">
+        <option value="">All Categories</option>
+        <option>Travel</option><option>Meals</option><option>Supplies</option>
+        <option>Marketing</option><option>Utilities</option><option>Salaries</option>
+        <option>Equipment</option><option>Other</option>
+      </select>
+      <select class="filter-input" id="fltStatus">
+        <option value="">All Status</option>
+        <option value="draft">Draft</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" id="btnApplyFilters">Apply</button>
+      <button class="btn btn-ghost btn-sm" id="btnClearFilters">Clear</button>
+    </div>
+
+    <div class="tbl-wrap">
+      <div class="tbl-scroll">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Description</th>
+              <th>Category</th>
+              <th>Amount (KES)</th>
+              <th>Receipt</th>
+              <th>Status</th>
+              <th>Submitted By</th>
+            </tr>
+          </thead>
+          <tbody id="expenseTableBody">
+            <tr class="loading-row"><td colspan="7"><span class="spinner"></span>Loading expenses…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: BUDGETS -->
+  <div class="em-panel" id="panel-budgets">
+    <div class="sec-hdr">
+      <h2><span class="sec-dot"></span>Monthly Budgets by Category</h2>
+      <button class="btn btn-g btn-sm" id="btnSetBudget">&#43; Set Budget</button>
+    </div>
+
+    <div class="budget-grid" id="budgetGrid">
+      <div style="padding:32px;text-align:center;color:var(--sub);font-size:.8rem;"><span class="spinner"></span>Loading budgets…</div>
+    </div>
+
+    <div class="mt16">
+      <div class="chart-wrap" id="budgetChartWrap">
+        <div class="chart-title"><span class="sec-dot"></span>Budget vs Actual — This Month</div>
+        <div class="chart-bars" id="budgetChartBars"></div>
+        <div class="chart-legend">
+          <div class="chart-legend-item"><div class="chart-legend-swatch" style="background:var(--g);opacity:.85;"></div>Actual Spend</div>
+          <div class="chart-legend-item"><div class="chart-legend-swatch" style="background:rgba(113,255,0,.2);border:1px solid rgba(113,255,0,.4);"></div>Budget</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: APPROVAL QUEUE -->
+  <div class="em-panel" id="panel-approval">
+    <div class="sec-hdr">
+      <h2><span class="sec-dot"></span>Pending Approval</h2>
+      <span id="pendingCount" style="font-size:.72rem;color:var(--sub);">Loading…</span>
+    </div>
+    <div id="approvalList">
+      <div style="padding:32px;text-align:center;color:var(--sub);font-size:.8rem;"><span class="spinner"></span>Loading queue…</div>
+    </div>
+  </div>
+
+  <!-- TAB 4: REPORTS -->
+  <div class="em-panel" id="panel-reports">
+    <div class="report-grid">
+      <div class="ytd-card">
+        <div class="ytd-label">Year-to-Date Total</div>
+        <div class="ytd-val" id="ytdTotal">KES 0</div>
+        <div class="kpi-meta mt12" id="ytdMeta">Approved expenses only</div>
+      </div>
+      <div class="ytd-card" style="text-align:left;">
+        <div class="ytd-label">Export Data</div>
+        <p style="font-size:.75rem;color:var(--sub);margin:8px 0 14px;">Download approved expenses as CSV (BOM-prefixed for Excel / Google Sheets).</p>
+        <button class="btn btn-g btn-sm" id="btnExportCsv">&#8659; Export CSV</button>
+      </div>
+    </div>
+
+    <div class="mt16 chart-wrap">
+      <div class="chart-title"><span class="sec-dot"></span>Monthly Spend by Category</div>
+      <div class="chart-bars" id="reportChartBars"></div>
+      <div class="chart-legend" id="reportChartLegend"></div>
+    </div>
+  </div>
+
+</div><!-- /em-content -->
+
+<!-- SLIDE-IN: NEW EXPENSE FORM -->
+<div class="slide-backdrop" id="slideBackdrop"></div>
+<div class="slide-in" id="slideForm" role="dialog" aria-modal="true" aria-label="New Expense">
+  <div class="slide-hdr">
+    <h3>New Expense</h3>
+    <button class="modal-close" id="slideClose" aria-label="Close">&#10005;</button>
+  </div>
+  <div class="slide-body">
+    <div class="field-row">
+      <div class="field">
+        <label for="fDate">Date</label>
+        <input type="date" id="fDate" required>
+      </div>
+      <div class="field">
+        <label for="fAmount">Amount (KES)</label>
+        <input type="number" id="fAmount" min="0" step="0.01" placeholder="0.00" required>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fDesc">Description</label>
+      <input type="text" id="fDesc" maxlength="200" placeholder="Brief description of expense" required>
+    </div>
+    <div class="field">
+      <label for="fCat">Category</label>
+      <select id="fCat" required>
+        <option value="" disabled selected>Select category</option>
+        <option>Travel</option><option>Meals</option><option>Supplies</option>
+        <option>Marketing</option><option>Utilities</option><option>Salaries</option>
+        <option>Equipment</option><option>Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="fReceiptUrl">Receipt URL <span style="color:var(--sub)">(optional)</span></label>
+      <input type="url" id="fReceiptUrl" placeholder="https://…">
+      <span class="field-note">Link to receipt image (Google Drive, Firebase Storage, etc.)</span>
+    </div>
+    <div class="field">
+      <label for="fNotes">Notes <span style="color:var(--sub)">(optional)</span></label>
+      <textarea id="fNotes" maxlength="500" placeholder="Additional context or business purpose…"></textarea>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <button class="btn btn-ghost btn-sm" id="slideCancelBtn">Cancel</button>
+    <button class="btn btn-g btn-sm" id="slideSubmitBtn">Save as Draft</button>
+    <button class="btn btn-sm" id="slideSubmitPendingBtn" style="background:var(--blue);color:#fff;">Submit for Approval</button>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-backdrop" id="detailModal" role="dialog" aria-modal="true" aria-label="Expense Details">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3>Expense Details</h3>
+      <button class="modal-close" id="detailClose" aria-label="Close">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <dl id="detailDl"></dl>
+      <div id="detailReceiptWrap"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" id="detailCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- SET BUDGET MODAL -->
+<div class="modal-backdrop" id="budgetModal" role="dialog" aria-modal="true" aria-label="Set Budget">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3>Set Monthly Budget</h3>
+      <button class="modal-close" id="budgetModalClose" aria-label="Close">&#10005;</button>
+    </div>
+    <div class="modal-body" style="display:grid;gap:14px;">
+      <div class="field">
+        <label for="bCat">Category</label>
+        <select id="bCat" required>
+          <option value="" disabled selected>Select category</option>
+          <option>Travel</option><option>Meals</option><option>Supplies</option>
+          <option>Marketing</option><option>Utilities</option><option>Salaries</option>
+          <option>Equipment</option><option>Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="bAmount">Monthly Budget (KES)</label>
+        <input type="number" id="bAmount" min="0" step="0.01" placeholder="0.00" required>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" id="budgetCancelBtn">Cancel</button>
+      <button class="btn btn-g btn-sm" id="budgetSaveBtn">Save Budget</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+<script>
+/* ── FIREBASE INIT ── */
+firebase.initializeApp(window.SOKONI_CONFIG || {});
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+/* ── XSS SANITISER ── */
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+/* ── TOAST ── */
+function toast(msg, type='info'){
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  const icons = {success:'✓',error:'✗',info:'ℹ'};
+  t.className = `toast toast-${type}`;
+  t.innerHTML = `<span class="toast-ico">${icons[type]||icons.info}</span><span>${esc(msg)}</span>`;
+  c.appendChild(t);
+  requestAnimationFrame(()=>{ requestAnimationFrame(()=>t.classList.add('show')); });
+  setTimeout(()=>{
+    t.classList.remove('show');
+    setTimeout(()=>t.remove(), 250);
+  }, 3500);
+}
+
+/* ── STATE ── */
+let currentUser = null, businessId = null, isManager = false;
+let allExpenses = [], allBudgets = {};
+let unsubExpenses = null, unsubApproval = null;
+
+/* ── FORMAT ── */
+const fmtKES = n => 'KES ' + Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtDate = d => d ? new Date(d.seconds ? d.seconds*1000 : d).toLocaleDateString('en-KE',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+const fmtDateStr = d => {
+  if (!d) return '—';
+  if (typeof d === 'string') return d;
+  if (d.seconds) return new Date(d.seconds*1000).toLocaleDateString('en-KE',{day:'2-digit',month:'short',year:'numeric'});
+  return String(d);
+};
+
+/* ── AUTH GUARD ── */
+auth.onAuthStateChanged(async user => {
+  if (!user) { window.location.href = 'index.html'; return; }
+  currentUser = user;
+  try {
+    const snap = await db.doc(`users/${user.uid}`).get();
+    if (!snap.exists) { window.location.href = 'index.html'; return; }
+    const data = snap.data();
+    const claims = (await user.getIdTokenResult()).claims;
+    const role = claims.role || data.role || '';
+    if (!['seller','admin','superadmin','manager'].includes(role)) {
+      toast('Access restricted to sellers and admins.','error');
+      setTimeout(()=>window.location.href='index.html', 2000);
+      return;
+    }
+    businessId = data.sellerId || data.businessId || user.uid;
+    isManager  = ['admin','superadmin','manager'].includes(role);
+    if (!isManager) document.getElementById('tabApproval').style.display = 'none';
+    init();
+  } catch(e){ toast('Auth error: '+e.message,'error'); }
+});
+
+/* ── INIT ── */
+function init(){
+  setDefaultDates();
+  bindTabs();
+  bindFilters();
+  bindSlideForm();
+  bindDetailModal();
+  bindBudgetModal();
+  loadExpenses();
+  loadBudgets();
+  if (isManager) listenApprovalQueue();
+}
+
+/* ── DEFAULT DATES ── */
+function setDefaultDates(){
+  const now = new Date();
+  const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
+  const lastDay = new Date(y, now.getMonth()+1, 0).getDate();
+  document.getElementById('fltFrom').value = `${y}-${m}-01`;
+  document.getElementById('fltTo').value   = `${y}-${m}-${String(lastDay).padStart(2,'0')}`;
+  document.getElementById('fDate').value   = new Date().toISOString().slice(0,10);
+}
+
+/* ── TABS ── */
+function bindTabs(){
+  document.querySelectorAll('.em-tab').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.em-tab').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.em-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'reports') renderReports();
+    });
+  });
+}
+
+/* ── LOAD EXPENSES ── */
+function loadExpenses(){
+  if (unsubExpenses) unsubExpenses();
+  let q = db.collection('expenses').where('businessId','==',businessId).orderBy('createdAt','desc').limit(200);
+  unsubExpenses = q.onSnapshot(snap=>{
+    allExpenses = snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderKPIs();
+    applyFiltersAndRender();
+  }, err=>{ toast('Failed to load expenses','error'); console.error(err); });
+}
+
+/* ── FILTERS ── */
+function bindFilters(){
+  document.getElementById('btnApplyFilters').addEventListener('click', applyFiltersAndRender);
+  document.getElementById('btnClearFilters').addEventListener('click',()=>{
+    document.getElementById('fltCat').value = '';
+    document.getElementById('fltStatus').value = '';
+    setDefaultDates();
+    applyFiltersAndRender();
+  });
+}
+
+function applyFiltersAndRender(){
+  const from   = document.getElementById('fltFrom').value;
+  const to     = document.getElementById('fltTo').value;
+  const cat    = document.getElementById('fltCat').value;
+  const status = document.getElementById('fltStatus').value;
+  let filtered = allExpenses.filter(e=>{
+    const eDate = e.date || '';
+    if (from && eDate < from) return false;
+    if (to   && eDate > to)   return false;
+    if (cat    && e.category !== cat)    return false;
+    if (status && e.status   !== status) return false;
+    return true;
+  });
+  renderExpenseTable(filtered);
+}
+
+/* ── RENDER EXPENSE TABLE ── */
+function renderExpenseTable(expenses){
+  const tbody = document.getElementById('expenseTableBody');
+  if (!expenses.length){
+    tbody.innerHTML = '<tr><td colspan="7" class="tbl-empty">No expenses found for the selected filters.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = expenses.map(e=>{
+    const statusClass = {draft:'chip-draft',pending:'chip-pending',approved:'chip-approved',rejected:'chip-rejected'}[e.status] || 'chip-draft';
+    const hasReceipt = !!e.receiptUrl;
+    return `<tr data-id="${esc(e.id)}" data-action="detail">
+      <td>${esc(fmtDateStr(e.date))}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(e.description||'')}</td>
+      <td>${esc(e.category||'')}</td>
+      <td class="amount-cell">${fmtKES(e.amount)}</td>
+      <td>
+        <span class="receipt-ico${hasReceipt?'':' no-receipt'}" title="${hasReceipt?'View receipt':'No receipt'}" ${hasReceipt?'data-receipt-url="'+esc(e.receiptUrl)+'"':''}>
+          ${hasReceipt?'&#128190;':'&#8212;'}
+        </span>
+      </td>
+      <td><span class="chip ${statusClass}">${esc(e.status||'draft')}</span></td>
+      <td>${esc(e.submittedByName||'')}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('tr[data-action="detail"]').forEach(row=>{
+    row.addEventListener('click', e=>{
+      const ico = e.target.closest('.receipt-ico');
+      if (ico && !ico.classList.contains('no-receipt')) {
+        // let detail modal handle receipt
+      }
+      openDetailModal(row.dataset.id);
+    });
+  });
+}
+
+/* ── KPIs ── */
+function renderKPIs(){
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const thisMonth = allExpenses.filter(e=>{
+    if (!e.date) return false;
+    const d = new Date(e.date);
+    return d.getFullYear()===y && d.getMonth()===m;
+  });
+  const totalMonth = thisMonth.reduce((s,e)=>s+(+e.amount||0), 0);
+  document.getElementById('kpiMonthTotal').textContent = fmtKES(totalMonth);
+  document.getElementById('kpiMonthMeta').textContent  = `${thisMonth.length} expense${thisMonth.length!==1?'s':''} this month`;
+
+  const pending = allExpenses.filter(e=>e.status==='pending').length;
+  document.getElementById('kpiPending').textContent = pending;
+
+  // Top category
+  const catTotals = {};
+  thisMonth.forEach(e=>{ catTotals[e.category||'Other'] = (catTotals[e.category||'Other']||0)+(+e.amount||0); });
+  const topCat = Object.entries(catTotals).sort((a,b)=>b[1]-a[1])[0];
+  if (topCat){
+    document.getElementById('kpiTopCat').textContent = topCat[0];
+    document.getElementById('kpiTopCatAmt').textContent = fmtKES(topCat[1]);
+  }
+
+  // Budget %
+  const totalBudget = Object.values(allBudgets).reduce((s,b)=>s+(+b.amount||0),0);
+  if (totalBudget > 0){
+    const pct = Math.round(totalMonth / totalBudget * 100);
+    const el = document.getElementById('kpiBudgetPct');
+    el.textContent = pct + '%';
+    el.className = 'kpi-val ' + (pct >= 90 ? 'red' : pct >= 70 ? 'amber' : 'green');
+    document.getElementById('kpiBudgetMeta').textContent = `of ${fmtKES(totalBudget)} budget`;
+  }
+}
+
+/* ── LOAD BUDGETS ── */
+async function loadBudgets(){
+  try {
+    const snap = await db.collection(`expenseBudgets/${businessId}/categories`).get();
+    allBudgets = {};
+    snap.docs.forEach(d=>{ allBudgets[d.id] = d.data(); });
+    renderBudgetGrid();
+  } catch(e){ console.error('Budgets:', e); }
+}
+
+/* ── RENDER BUDGET GRID ── */
+function renderBudgetGrid(){
+  const grid = document.getElementById('budgetGrid');
+  const cats = Object.keys(allBudgets);
+  if (!cats.length){
+    grid.innerHTML = '<div style="padding:32px;text-align:center;color:var(--sub);font-size:.8rem;">No budgets set. Click "+ Set Budget" to add one.</div>';
+    renderBudgetChart([]);
+    return;
+  }
+  const now = new Date();
+  const y = now.getFullYear(), mo = now.getMonth();
+
+  const rows = cats.map(cat=>{
+    const budget = +allBudgets[cat].amount || 0;
+    const spent  = allExpenses
+      .filter(e=>{
+        if (!e.date) return false;
+        const d = new Date(e.date);
+        return e.category===cat && d.getFullYear()===y && d.getMonth()===mo && e.status==='approved';
+      })
+      .reduce((s,e)=>s+(+e.amount||0),0);
+    const pct = budget > 0 ? Math.min(100, Math.round(spent/budget*100)) : 0;
+    const colorClass = pct>=90?'prog-red':pct>=70?'prog-amber':'prog-green';
+    const pctColorStr = pct>=90?'var(--red)':pct>=70?'var(--amber)':'var(--g)';
+    const remaining = Math.max(0, budget - spent);
+    return {cat,budget,spent,remaining,pct,colorClass,pctColorStr};
+  });
+
+  grid.innerHTML = rows.map(r=>`
+    <div class="budget-row">
+      <div class="budget-row-top">
+        <span class="budget-cat">${esc(r.cat)}</span>
+        <span class="budget-nums">Spent: <b>${fmtKES(r.spent)}</b> / Budget: <b>${fmtKES(r.budget)}</b></span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill ${r.colorClass}" style="width:${r.pct}%"></div></div>
+      <div class="budget-pct" style="color:${r.pctColorStr};">${r.pct}% used &nbsp;·&nbsp; ${fmtKES(r.remaining)} remaining</div>
+    </div>`).join('');
+
+  renderBudgetChart(rows);
+  renderKPIs();
+}
+
+/* ── BUDGET CHART (CSS only) ── */
+function renderBudgetChart(rows){
+  const container = document.getElementById('budgetChartBars');
+  if (!rows.length){ container.innerHTML = '<div style="color:var(--sub);font-size:.75rem;">No budgets to chart.</div>'; return; }
+  const maxVal = Math.max(...rows.map(r=>Math.max(r.budget,r.spent)), 1);
+  container.innerHTML = rows.map(r=>{
+    const hSpent  = Math.max(4, Math.round(r.spent  / maxVal * 112));
+    const hBudget = Math.max(4, Math.round(r.budget / maxVal * 112));
+    return `<div class="chart-bar-col" title="${esc(r.cat)}: Spent ${fmtKES(r.spent)} / Budget ${fmtKES(r.budget)}" style="position:relative;">
+      <div class="chart-bar budget" style="height:${hBudget}px;"></div>
+      <div class="chart-bar" style="height:${hSpent}px;position:absolute;bottom:0;left:15%;width:70%;"></div>
+      <span class="chart-lbl">${esc(r.cat.slice(0,6))}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ── APPROVAL QUEUE ── */
+function listenApprovalQueue(){
+  if (unsubApproval) unsubApproval();
+  unsubApproval = db.collection('expenses')
+    .where('businessId','==',businessId)
+    .where('status','==','pending')
+    .orderBy('createdAt','asc')
+    .onSnapshot(snap=>{
+      const items = snap.docs.map(d=>({id:d.id,...d.data()}));
+      document.getElementById('pendingCount').textContent = `${items.length} pending`;
+      document.getElementById('kpiPending').textContent  = items.length;
+      renderApprovalList(items);
+    }, err=>console.error('Approval queue:', err));
+}
+
+function renderApprovalList(items){
+  const list = document.getElementById('approvalList');
+  if (!items.length){
+    list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--sub);font-size:.8rem;">No expenses pending approval.</div>';
+    return;
+  }
+  list.innerHTML = items.map(e=>`
+    <div class="appr-card" data-id="${esc(e.id)}">
+      <div class="appr-top">
+        <div class="appr-info">
+          <div class="appr-name">${esc(e.submittedByName||'Unknown')}</div>
+          <div class="appr-meta">${esc(e.category||'')} &nbsp;·&nbsp; ${esc(fmtDateStr(e.date))}</div>
+        </div>
+        <div class="appr-amount">${fmtKES(e.amount)}</div>
+      </div>
+      <div class="appr-desc">${esc(e.description||'')}</div>
+      ${e.notes ? `<div style="font-size:.72rem;color:var(--sub);font-style:italic;">${esc(e.notes)}</div>` : ''}
+      <div class="appr-actions">
+        <button class="btn btn-sm" style="background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(34,197,94,.2);" data-approve="${esc(e.id)}">&#10003; Approve</button>
+        <button class="btn btn-danger btn-sm" data-reject-toggle="${esc(e.id)}">&#10007; Reject</button>
+        ${e.receiptUrl ? `<a href="${esc(e.receiptUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm" style="text-decoration:none;">&#128190; Receipt</a>` : ''}
+      </div>
+      <div class="reject-reason-wrap" id="rr-${esc(e.id)}">
+        <textarea placeholder="Reason for rejection (required)…" id="rr-text-${esc(e.id)}"></textarea>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="btn btn-danger btn-sm" data-reject-confirm="${esc(e.id)}">Confirm Rejection</button>
+          <button class="btn btn-ghost btn-sm" data-reject-cancel="${esc(e.id)}">Cancel</button>
+        </div>
+      </div>
+    </div>`).join('');
+
+  list.querySelectorAll('[data-approve]').forEach(btn=>{
+    btn.addEventListener('click',()=>approveExpense(btn.dataset.approve));
+  });
+  list.querySelectorAll('[data-reject-toggle]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.getElementById('rr-'+btn.dataset.rejectToggle).style.display='block';
+    });
+  });
+  list.querySelectorAll('[data-reject-cancel]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.getElementById('rr-'+btn.dataset.rejectCancel).style.display='none';
+    });
+  });
+  list.querySelectorAll('[data-reject-confirm]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const reason = document.getElementById('rr-text-'+btn.dataset.rejectConfirm).value.trim();
+      if (!reason){ toast('Please enter a rejection reason','error'); return; }
+      rejectExpense(btn.dataset.rejectConfirm, reason);
+    });
+  });
+}
+
+async function approveExpense(expId){
+  try {
+    await db.doc(`expenses/${expId}`).update({
+      status:'approved',
+      approvedBy: currentUser.uid,
+      approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    toast('Expense approved','success');
+  } catch(e){ toast('Approve failed: '+e.message,'error'); }
+}
+
+async function rejectExpense(expId, reason){
+  try {
+    await db.doc(`expenses/${expId}`).update({
+      status:'rejected',
+      approvedBy: currentUser.uid,
+      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      rejectionReason: reason
+    });
+    toast('Expense rejected','info');
+  } catch(e){ toast('Reject failed: '+e.message,'error'); }
+}
+
+/* ── SLIDE FORM ── */
+function bindSlideForm(){
+  const openSlide = ()=>{
+    document.getElementById('slideForm').classList.add('open');
+    document.getElementById('slideBackdrop').classList.add('open');
+    document.getElementById('fDesc').focus();
+  };
+  const closeSlide = ()=>{
+    document.getElementById('slideForm').classList.remove('open');
+    document.getElementById('slideBackdrop').classList.remove('open');
+  };
+
+  document.getElementById('btnNewExpense').addEventListener('click', openSlide);
+  document.getElementById('slideClose').addEventListener('click', closeSlide);
+  document.getElementById('slideCancelBtn').addEventListener('click', closeSlide);
+  document.getElementById('slideBackdrop').addEventListener('click', closeSlide);
+
+  document.getElementById('slideSubmitBtn').addEventListener('click', ()=>submitExpense('draft'));
+  document.getElementById('slideSubmitPendingBtn').addEventListener('click', ()=>submitExpense('pending'));
+
+  document.addEventListener('keydown', e=>{ if (e.key==='Escape') closeSlide(); });
+}
+
+async function submitExpense(status){
+  const date   = document.getElementById('fDate').value.trim();
+  const desc   = document.getElementById('fDesc').value.trim();
+  const cat    = document.getElementById('fCat').value;
+  const amount = parseFloat(document.getElementById('fAmount').value);
+  const url    = document.getElementById('fReceiptUrl').value.trim();
+  const notes  = document.getElementById('fNotes').value.trim();
+
+  if (!date || !desc || !cat || isNaN(amount) || amount <= 0){
+    toast('Please fill in all required fields','error');
+    return;
+  }
+  if (url && !url.match(/^https?:\/\//)){
+    toast('Receipt URL must start with http:// or https://','error');
+    return;
+  }
+
+  const btn = document.getElementById(status==='draft'?'slideSubmitBtn':'slideSubmitPendingBtn');
+  btn.disabled = true;
+  try {
+    await db.collection('expenses').add({
+      businessId,
+      submittedBy:     currentUser.uid,
+      submittedByName: currentUser.displayName || currentUser.email || 'Unknown',
+      date,
+      description:     desc,
+      category:        cat,
+      amount:          amount,
+      currency:        'KES',
+      receiptUrl:      url || null,
+      notes:           notes || null,
+      status,
+      approvedBy:      null,
+      approvedAt:      null,
+      createdAt:       firebase.firestore.FieldValue.serverTimestamp()
+    });
+    toast(status==='draft' ? 'Expense saved as draft' : 'Submitted for approval','success');
+    // Reset form
+    ['fDate','fDesc','fAmount','fReceiptUrl','fNotes'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('fCat').value = '';
+    document.getElementById('fDate').value = new Date().toISOString().slice(0,10);
+    document.getElementById('slideForm').classList.remove('open');
+    document.getElementById('slideBackdrop').classList.remove('open');
+  } catch(e){
+    toast('Save failed: '+e.message,'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ── DETAIL MODAL ── */
+function bindDetailModal(){
+  const closeModal = ()=>document.getElementById('detailModal').classList.remove('open');
+  document.getElementById('detailClose').addEventListener('click', closeModal);
+  document.getElementById('detailCloseBtn').addEventListener('click', closeModal);
+  document.getElementById('detailModal').addEventListener('click',e=>{
+    if (e.target===document.getElementById('detailModal')) closeModal();
+  });
+}
+
+function openDetailModal(expId){
+  const e = allExpenses.find(x=>x.id===expId);
+  if (!e) return;
+  const statusLabels = {draft:'Draft',pending:'Pending',approved:'Approved',rejected:'Rejected'};
+  const rows = [
+    ['Date',           fmtDateStr(e.date)],
+    ['Description',    e.description || '—'],
+    ['Category',       e.category || '—'],
+    ['Amount',         fmtKES(e.amount)],
+    ['Currency',       e.currency || 'KES'],
+    ['Status',         statusLabels[e.status] || e.status],
+    ['Submitted By',   e.submittedByName || '—'],
+    ['Created',        fmtDate(e.createdAt)],
+    ['Approved By',    e.approvedBy || '—'],
+    ['Approved At',    e.approvedAt ? fmtDate(e.approvedAt) : '—'],
+    ['Notes',          e.notes || '—'],
+    e.rejectionReason ? ['Rejection Reason', e.rejectionReason] : null,
+  ].filter(Boolean);
+
+  document.getElementById('detailDl').innerHTML = rows.map(([k,v])=>
+    `<div class="detail-row"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`
+  ).join('');
+
+  const rw = document.getElementById('detailReceiptWrap');
+  if (e.receiptUrl){
+    rw.innerHTML = `<img src="${esc(e.receiptUrl)}" class="receipt-preview" alt="Receipt" onerror="this.style.display='none'">
+      <a href="${esc(e.receiptUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm" style="margin-top:8px;text-decoration:none;">&#128190; Open Receipt</a>`;
+  } else {
+    rw.innerHTML = '<div class="receipt-preview-placeholder">&#128190; No receipt attached</div>';
+  }
+  document.getElementById('detailModal').classList.add('open');
+}
+
+/* ── BUDGET MODAL ── */
+function bindBudgetModal(){
+  const openModal  = ()=>document.getElementById('budgetModal').classList.add('open');
+  const closeModal = ()=>document.getElementById('budgetModal').classList.remove('open');
+  document.getElementById('btnSetBudget').addEventListener('click', openModal);
+  document.getElementById('budgetModalClose').addEventListener('click', closeModal);
+  document.getElementById('budgetCancelBtn').addEventListener('click', closeModal);
+  document.getElementById('budgetModal').addEventListener('click',e=>{
+    if (e.target===document.getElementById('budgetModal')) closeModal();
+  });
+  document.getElementById('budgetSaveBtn').addEventListener('click', saveBudget);
+}
+
+async function saveBudget(){
+  const cat    = document.getElementById('bCat').value;
+  const amount = parseFloat(document.getElementById('bAmount').value);
+  if (!cat){ toast('Please select a category','error'); return; }
+  if (isNaN(amount)||amount<0){ toast('Please enter a valid amount','error'); return; }
+  const btn = document.getElementById('budgetSaveBtn');
+  btn.disabled = true;
+  try {
+    await db.doc(`expenseBudgets/${businessId}/categories/${cat}`).set({
+      amount, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, {merge:true});
+    allBudgets[cat] = {amount};
+    renderBudgetGrid();
+    toast('Budget saved','success');
+    document.getElementById('bCat').value = '';
+    document.getElementById('bAmount').value = '';
+    document.getElementById('budgetModal').classList.remove('open');
+  } catch(e){
+    toast('Save failed: '+e.message,'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ── REPORTS ── */
+function renderReports(){
+  const now = new Date();
+  const ytd = allExpenses
+    .filter(e=>e.status==='approved' && e.date && new Date(e.date).getFullYear()===now.getFullYear())
+    .reduce((s,e)=>s+(+e.amount||0),0);
+  document.getElementById('ytdTotal').textContent = fmtKES(ytd);
+
+  // Category chart (this month)
+  const y=now.getFullYear(),mo=now.getMonth();
+  const catMap = {};
+  allExpenses.forEach(e=>{
+    if (!e.date) return;
+    const d = new Date(e.date);
+    if (d.getFullYear()===y && d.getMonth()===mo){
+      catMap[e.category||'Other'] = (catMap[e.category||'Other']||0)+(+e.amount||0);
+    }
+  });
+  const entries = Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+  const maxV = Math.max(...entries.map(([,v])=>v), 1);
+  const colors = ['#71ff00','#3b82f6','#f59e0b','#ef4444','#a855f7','#14b8a6','#f97316','#ec4899'];
+
+  document.getElementById('reportChartBars').innerHTML = entries.map(([cat,val],i)=>{
+    const h = Math.max(4, Math.round(val/maxV*112));
+    return `<div class="chart-bar-col" title="${esc(cat)}: ${fmtKES(val)}" style="position:relative;">
+      <div class="chart-bar" style="height:${h}px;background:${colors[i%colors.length]};"></div>
+      <span class="chart-lbl">${esc(cat.slice(0,6))}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('reportChartLegend').innerHTML = entries.map(([cat,val],i)=>
+    `<div class="chart-legend-item">
+       <div class="chart-legend-swatch" style="background:${colors[i%colors.length]};"></div>
+       ${esc(cat)}: ${fmtKES(val)}
+     </div>`
+  ).join('');
+}
+
+/* ── CSV EXPORT ── */
+document.getElementById('btnExportCsv').addEventListener('click',()=>{
+  const approved = allExpenses.filter(e=>e.status==='approved');
+  if (!approved.length){ toast('No approved expenses to export','info'); return; }
+  const rows = [
+    ['Date','Description','Category','Amount (KES)','Submitted By','Approved At','Notes'],
+    ...approved.map(e=>[
+      e.date||'',
+      (e.description||'').replace(/"/g,'""'),
+      e.category||'',
+      e.amount||0,
+      (e.submittedByName||'').replace(/"/g,'""'),
+      e.approvedAt ? fmtDate(e.approvedAt) : '',
+      (e.notes||'').replace(/"/g,'""')
+    ])
+  ];
+  const csv = '﻿' + rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `sokoni-expenses-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('CSV exported','success');
+});
+</script>
+</body>
+</html>

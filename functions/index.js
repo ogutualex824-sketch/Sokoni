@@ -7807,6 +7807,9 @@ exports.getConversationContext      = messages.getConversationContext;
 exports.searchConversations         = messages.searchConversations;
 exports.editMessage                 = messages.editMessage;
 exports.updateConversationStatus    = messages.updateConversationStatus;
+exports.onOrderStatusChanged        = messages.onOrderStatusChanged;
+exports.onBookingStatusChanged      = messages.onBookingStatusChanged;
+exports.onFoodOrderStatusChanged    = messages.onFoodOrderStatusChanged;
 
 /* ══════════════════════════════════════════════════════════════════
    SOKONI SmartPOS Retail Cloud Functions  v2.0
@@ -9109,4 +9112,31 @@ exports.getMyMaintenanceRequests  = propMaint.getMyMaintenanceRequests;
 exports.getLandlordRequests       = propMaint.getLandlordRequests;
 exports.updateMaintenanceStatus   = propMaint.updateMaintenanceStatus;
 exports.respondToRequest          = propMaint.respondToRequest;
+
+/* ── Franchise Management Engine v1.0 ──────────────────────────────────────── */
+const franchiseEngine = require('./franchise-engine');
+exports.franchiseCreateBrand         = franchiseEngine.franchiseCreateBrand;
+exports.franchiseApplyForLocation    = franchiseEngine.franchiseApplyForLocation;
+exports.franchiseReviewApplication   = franchiseEngine.franchiseReviewApplication;
+exports.franchiseRecordRoyalty       = franchiseEngine.franchiseRecordRoyalty;
+exports.franchiseGetMyLocations      = franchiseEngine.franchiseGetMyLocations;
+exports.franchiseGetBrandDashboard   = franchiseEngine.franchiseGetBrandDashboard;
+exports.franchiseGetLocations        = franchiseEngine.franchiseGetLocations;
 exports.getMaintenanceStats       = propMaint.getMaintenanceStats;
+
+/* ── Currency Engine v1.0 — multi-currency rates, conversion, audit history ── */
+const currencyEngine = require('./currency-engine');
+exports.currencyGetRates             = currencyEngine.currencyGetRates;
+exports.currencyConvert              = currencyEngine.currencyConvert;
+exports.currencyUpdateRates          = currencyEngine.currencyUpdateRates;
+exports.currencyGetHistory           = currencyEngine.currencyGetHistory;
+exports.currencyScheduledRateRefresh = currencyEngine.currencyScheduledRateRefresh;
+
+/* ── Installments / BNPL v1.0 ── */
+const installments = require('./installments');
+exports.installmentCreatePlan     = installments.installmentCreatePlan;
+exports.installmentRecordPayment  = installments.installmentRecordPayment;
+exports.installmentGetMyPlans     = installments.installmentGetMyPlans;
+exports.installmentGetSellerPlans = installments.installmentGetSellerPlans;
+exports.installmentMarkOverdue    = installments.installmentMarkOverdue;
+exports.installmentCancelPlan     = installments.installmentCancelPlan;

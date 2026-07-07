@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Warehouse Scanner — SOKONI</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<style>
+:root{
+  --bg:#050505;--sur:#0d0d0d;--bor:#1a1a1a;--g:#71ff00;
+  --txt:#e8e8e8;--sub:#6b7280;--muted:#444;
+  --blue:#3b82f6;--red:#ef4444;--amber:#f59e0b;--green:#22c55e;
+  --radius:12px;--r8:8px;
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-top:env(safe-area-inset-top,0px);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overscroll-behavior:none;}
+body{
+  background:var(--bg);color:var(--txt);
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  display:flex;flex-direction:column;min-height:100%;
+  padding-top:var(--safe-top);
+}
+
+/* ── HEADER ── */
+.ws-header{
+  background:var(--sur);border-bottom:1px solid var(--bor);
+  padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  position:sticky;top:0;z-index:50;
+}
+.ws-brand{flex:1;min-width:100px;}
+.ws-title{font-size:.9rem;font-weight:800;letter-spacing:-.01em;}
+.ws-title span{color:var(--g);}
+.ws-sub{font-size:.6rem;color:var(--sub);margin-top:1px;}
+.ws-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.ws-select{
+  background:var(--bg);border:1px solid var(--bor);color:var(--txt);
+  border-radius:var(--r8);padding:7px 10px;font-size:.73rem;font-family:inherit;
+  outline:none;cursor:pointer;transition:border-color .15s;min-width:100px;
+}
+.ws-select:focus{border-color:var(--g);}
+.ws-select option{background:var(--sur);}
+
+/* mode indicator pill */
+.mode-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:4px 10px;border-radius:99px;font-size:.65rem;font-weight:700;
+  background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.3);color:var(--g);
+  white-space:nowrap;
+}
+.mode-pill.receive{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:#60a5fa;}
+.mode-pill.pick   {background:rgba(239,68,68,.1); border-color:rgba(239,68,68,.3); color:#f87171;}
+.mode-pill.count  {background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:#fbbf24;}
+.mode-pill.transfer{background:rgba(168,85,247,.1);border-color:rgba(168,85,247,.3);color:#c084fc;}
+
+/* offline badge */
+.offline-badge{
+  display:none;align-items:center;gap:5px;
+  padding:3px 9px;border-radius:99px;font-size:.63rem;font-weight:700;
+  background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#f87171;
+}
+.offline-badge.visible{display:inline-flex;}
+
+/* ── MAIN SCROLL AREA ── */
+.ws-main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px;}
+
+/* ── SCAN CARD ── */
+.scan-card{
+  background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);
+  padding:20px;display:flex;flex-direction:column;align-items:center;gap:16px;
+  text-align:center;
+}
+.cam-icon{
+  width:80px;height:80px;border-radius:50%;
+  background:rgba(113,255,0,.07);border:2px solid rgba(113,255,0,.25);
+  display:flex;align-items:center;justify-content:center;font-size:2.2rem;
+  transition:background .2s;
+}
+.cam-icon.scanning{
+  background:rgba(113,255,0,.15);
+  animation:pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(113,255,0,.35);}50%{box-shadow:0 0 0 14px rgba(113,255,0,0);}}
+
+.btn-scan{
+  min-height:56px;min-width:180px;padding:14px 28px;
+  background:var(--g);color:#000;border:none;border-radius:var(--r8);
+  font-size:1rem;font-weight:800;cursor:pointer;font-family:inherit;
+  transition:opacity .15s,transform .1s;letter-spacing:.01em;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.btn-scan:active{transform:scale(.97);}
+.btn-scan:disabled{opacity:.5;cursor:not-allowed;}
+.btn-scan:hover:not(:disabled){opacity:.88;}
+
+.scanner-unsupported{
+  font-size:.72rem;color:var(--amber);
+  background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);
+  border-radius:var(--r8);padding:8px 12px;
+  display:none;
+}
+
+/* manual entry */
+.manual-wrap{
+  width:100%;display:flex;gap:8px;align-items:stretch;
+}
+.manual-input{
+  flex:1;background:var(--bg);border:1px solid var(--bor);color:var(--txt);
+  border-radius:var(--r8);padding:10px 14px;font-size:.9rem;font-family:inherit;
+  outline:none;transition:border-color .15s;min-height:48px;
+  -webkit-appearance:none;
+}
+.manual-input:focus{border-color:var(--g);}
+.btn-lookup{
+  min-height:48px;min-width:80px;padding:10px 18px;
+  background:var(--g);color:#000;border:none;border-radius:var(--r8);
+  font-size:.82rem;font-weight:800;cursor:pointer;font-family:inherit;
+  transition:opacity .15s;white-space:nowrap;
+}
+.btn-lookup:hover{opacity:.88;}
+.btn-lookup:active{transform:scale(.97);}
+
+/* ── RESULT CARD ── */
+.result-card{
+  background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);
+  padding:16px;display:none;gap:14px;flex-direction:column;
+}
+.result-card.visible{display:flex;}
+.result-card.success{border-color:rgba(113,255,0,.25);}
+.result-card.error{border-color:rgba(239,68,68,.25);}
+
+.result-top{display:flex;gap:12px;align-items:flex-start;}
+.result-img{
+  width:72px;height:72px;border-radius:var(--r8);
+  object-fit:cover;border:1px solid var(--bor);background:rgba(255,255,255,.04);
+  flex-shrink:0;
+}
+.result-img-placeholder{
+  width:72px;height:72px;border-radius:var(--r8);border:1px solid var(--bor);
+  background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;
+  font-size:1.6rem;flex-shrink:0;
+}
+.result-info{flex:1;}
+.result-name{font-size:.9rem;font-weight:800;margin-bottom:4px;}
+.result-sku{font-size:.68rem;color:var(--sub);font-family:'Courier New',monospace;margin-bottom:6px;}
+.result-stock{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);
+  color:var(--g);font-size:.72rem;font-weight:700;
+  padding:3px 9px;border-radius:99px;
+}
+.result-location{
+  font-size:.7rem;color:var(--sub);margin-top:4px;
+  display:flex;align-items:center;gap:4px;
+}
+
+/* action zone */
+.action-zone{display:grid;gap:10px;}
+.action-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}
+.field-inline{display:grid;gap:4px;flex:1;min-width:100px;}
+.field-inline label{font-size:.63rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);}
+.field-inline input,.field-inline select{
+  background:var(--bg);border:1px solid var(--bor);color:var(--txt);
+  border-radius:var(--r8);padding:10px 12px;font-size:.85rem;font-family:inherit;
+  outline:none;transition:border-color .15s;min-height:48px;width:100%;
+  -webkit-appearance:none;
+}
+.field-inline input:focus,.field-inline select:focus{border-color:var(--g);}
+.field-inline select option{background:var(--sur);}
+
+.btn-action{
+  min-height:48px;padding:12px 20px;border:none;border-radius:var(--r8);
+  font-size:.82rem;font-weight:800;cursor:pointer;font-family:inherit;
+  transition:opacity .15s,transform .1s;white-space:nowrap;flex-shrink:0;
+}
+.btn-action:active{transform:scale(.97);}
+.btn-action.receive{background:#3b82f6;color:#fff;}
+.btn-action.pick   {background:#ef4444;color:#fff;}
+.btn-action.count  {background:#f59e0b;color:#000;}
+.btn-action.transfer{background:#a855f7;color:#fff;}
+.btn-action:hover{opacity:.88;}
+.btn-action:disabled{opacity:.4;cursor:not-allowed;}
+
+/* error state */
+.result-error{
+  display:flex;align-items:center;gap:10px;padding:14px;
+  background:rgba(239,68,68,.07);border-radius:var(--r8);
+}
+.result-error-ico{font-size:1.5rem;}
+.result-error-msg{font-size:.8rem;}
+
+/* ── SCAN HISTORY ── */
+.history-wrap{
+  background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:12px;
+}
+.history-label{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.history-strip{
+  display:flex;gap:8px;overflow-x:auto;scrollbar-width:thin;
+  padding-bottom:4px;
+}
+.history-strip::-webkit-scrollbar{height:3px;}
+.history-strip::-webkit-scrollbar-track{background:var(--bg);}
+.history-strip::-webkit-scrollbar-thumb{background:var(--bor);border-radius:99px;}
+.history-item{
+  flex-shrink:0;min-width:110px;background:var(--bg);border:1px solid var(--bor);
+  border-radius:var(--r8);padding:8px 10px;cursor:pointer;transition:border-color .15s;
+}
+.history-item:hover{border-color:var(--g);}
+.history-item-sku{font-size:.62rem;color:var(--sub);font-family:'Courier New',monospace;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.history-item-name{font-size:.7rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.history-item-type{
+  font-size:.58rem;font-weight:700;margin-top:3px;
+  text-transform:uppercase;letter-spacing:.05em;
+}
+.history-item-type.receive{color:#60a5fa;}
+.history-item-type.pick   {color:#f87171;}
+.history-item-type.count  {color:#fbbf24;}
+.history-item-type.transfer{color:#c084fc;}
+.history-empty{font-size:.72rem;color:var(--sub);padding:8px 4px;}
+
+/* ── SYNC QUEUE BADGE ── */
+.sync-badge{
+  display:none;align-items:center;gap:5px;
+  padding:3px 9px;border-radius:99px;font-size:.63rem;font-weight:700;
+  background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#fbbf24;
+  cursor:pointer;
+}
+.sync-badge.visible{display:inline-flex;}
+
+/* ── TOAST ── */
+.toast-container{position:fixed;top:calc(72px + var(--safe-top));right:12px;z-index:999;display:flex;flex-direction:column;gap:6px;pointer-events:none;max-width:280px;}
+.toast{background:var(--sur);border:1px solid var(--bor);border-radius:var(--r8);padding:10px 14px;font-size:.76rem;display:flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(0,0,0,.5);opacity:0;transform:translateY(-6px);transition:opacity .2s,transform .2s;pointer-events:all;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.toast-success .toast-ico{color:var(--g);}
+.toast.toast-error   .toast-ico{color:var(--red);}
+.toast.toast-info    .toast-ico{color:var(--blue);}
+
+/* ── CAMERA MODAL ── */
+.cam-modal{
+  position:fixed;inset:0;background:#000;z-index:300;
+  display:none;flex-direction:column;
+}
+.cam-modal.open{display:flex;}
+.cam-header{
+  position:absolute;top:0;left:0;right:0;z-index:10;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;background:linear-gradient(to bottom,rgba(0,0,0,.7),transparent);
+}
+.cam-header-title{color:#fff;font-size:.85rem;font-weight:700;}
+.cam-close-btn{
+  background:rgba(255,255,255,.15);border:none;color:#fff;
+  border-radius:50%;width:40px;height:40px;font-size:1.1rem;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
+.cam-video{width:100%;height:100%;object-fit:cover;}
+.cam-overlay{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  pointer-events:none;
+}
+.cam-frame{
+  width:220px;height:220px;border-radius:16px;
+  border:2px solid rgba(113,255,0,.7);
+  box-shadow:0 0 0 9999px rgba(0,0,0,.5);
+  position:relative;
+}
+.cam-frame::before,.cam-frame::after{
+  content:'';position:absolute;width:30px;height:30px;
+  border-color:var(--g);border-style:solid;border-radius:4px;
+}
+.cam-frame::before{top:-2px;left:-2px;border-width:3px 0 0 3px;}
+.cam-frame::after {bottom:-2px;right:-2px;border-width:0 3px 3px 0;}
+.cam-hint{
+  position:absolute;bottom:20%;left:50%;transform:translateX(-50%);
+  color:#fff;font-size:.78rem;background:rgba(0,0,0,.6);
+  padding:6px 14px;border-radius:99px;white-space:nowrap;
+}
+
+/* ── MISC ── */
+.hidden{display:none!important;}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.2);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<!-- CAMERA MODAL -->
+<div class="cam-modal" id="camModal">
+  <div class="cam-header">
+    <span class="cam-header-title">&#128247; Scanning…</span>
+    <button class="cam-close-btn" id="camCloseBtn" aria-label="Close camera">&#10005;</button>
+  </div>
+  <video id="camVideo" class="cam-video" autoplay muted playsinline></video>
+  <div class="cam-overlay">
+    <div class="cam-frame"></div>
+  </div>
+  <div class="cam-hint">Centre barcode / QR within the frame</div>
+</div>
+
+<!-- HEADER -->
+<header class="ws-header">
+  <div class="ws-brand">
+    <div class="ws-title">SOKONI <span>Warehouse</span></div>
+    <div class="ws-sub">Barcode &amp; QR Scanner</div>
+  </div>
+  <div class="ws-controls">
+    <span class="offline-badge" id="offlineBadge">&#9679; Offline</span>
+    <span class="sync-badge" id="syncBadge" title="Pending offline scans">&#9650; Sync</span>
+    <select class="ws-select" id="modeSelect" aria-label="Scan mode">
+      <option value="receive">Receive</option>
+      <option value="pick">Pick</option>
+      <option value="count">Stock-Check</option>
+      <option value="transfer">Transfer</option>
+    </select>
+    <div class="mode-pill receive" id="modePill">Receive</div>
+    <select class="ws-select" id="locationSelect" aria-label="Location / bin" style="min-width:90px;">
+      <option value="MAIN">MAIN</option>
+      <option value="A1">A-1</option>
+      <option value="A2">A-2</option>
+      <option value="B1">B-1</option>
+      <option value="B2">B-2</option>
+      <option value="COLD">COLD</option>
+      <option value="RETURNS">RETURNS</option>
+      <option value="DISPATCH">DISPATCH</option>
+    </select>
+  </div>
+</header>
+
+<!-- MAIN -->
+<div class="ws-main" id="wsMain">
+
+  <!-- SCAN CARD -->
+  <div class="scan-card">
+    <div class="cam-icon" id="camIcon">&#128247;</div>
+    <div>
+      <button class="btn-scan" id="btnScan">&#128247; Tap to Scan</button>
+      <div class="scanner-unsupported" id="scannerUnsupported">
+        Camera scanning not available on this browser. Use manual entry below.
+      </div>
+    </div>
+    <div class="manual-wrap">
+      <input
+        type="text" class="manual-input" id="manualInput"
+        placeholder="Enter barcode / SKU…" autocomplete="off" autocorrect="off"
+        autocapitalize="characters" spellcheck="false" inputmode="none"
+        aria-label="Manual barcode entry"
+      >
+      <button class="btn-lookup" id="btnLookup">Lookup</button>
+    </div>
+  </div>
+
+  <!-- RESULT CARD -->
+  <div class="result-card" id="resultCard">
+    <!-- populated by JS -->
+  </div>
+
+  <!-- HISTORY STRIP -->
+  <div class="history-wrap">
+    <div class="history-label">&#8635; Last 5 scans</div>
+    <div class="history-strip" id="historyStrip">
+      <span class="history-empty">No scans yet this session.</span>
+    </div>
+  </div>
+
+</div><!-- /ws-main -->
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+<script>
+/* ── FIREBASE INIT ── */
+firebase.initializeApp(window.SOKONI_CONFIG || {});
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+/* ── XSS SANITISER ── */
+const esc = s => String(s==null?'':s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+/* ── TOAST ── */
+function toast(msg, type='info'){
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  const icons = {success:'✓',error:'✗',info:'ℹ'};
+  t.className = `toast toast-${type}`;
+  t.innerHTML = `<span class="toast-ico">${icons[type]||icons.info}</span><span>${esc(msg)}</span>`;
+  c.appendChild(t);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>t.classList.add('show')));
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),250); }, 3000);
+}
+
+/* ── WEB AUDIO ── */
+let audioCtx = null;
+function getAudioCtx(){
+  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  return audioCtx;
+}
+function beepSuccess(){
+  try {
+    const ctx = getAudioCtx();
+    [[880,0,0.12],[1100,0.14,0.12]].forEach(([freq,start,dur])=>{
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(.25, ctx.currentTime+start);
+      g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime+start+dur);
+      o.start(ctx.currentTime+start);
+      o.stop(ctx.currentTime+start+dur+.05);
+    });
+  } catch(e){}
+}
+function beepError(){
+  try {
+    const ctx = getAudioCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.type = 'square'; o.frequency.value = 220;
+    g.gain.setValueAtTime(.2, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime+0.25);
+    o.start(ctx.currentTime);
+    o.stop(ctx.currentTime+0.3);
+  } catch(e){}
+}
+
+/* ── STATE ── */
+let currentUser   = null;
+let currentMode   = 'receive';
+let currentLoc    = 'MAIN';
+let currentProduct= null;
+let sessionId     = 'sess_' + Date.now().toString(36);
+let scanHistory   = [];
+let cameraStream  = null;
+let barcodeDetector = null;
+let scanLoopActive  = false;
+
+/* ── INDEXEDDB OFFLINE QUEUE ── */
+const IDB_NAME    = 'sokoni_warehouse';
+const IDB_STORE   = 'scan_queue';
+let idb = null;
+
+function openIDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e=>{
+      e.target.result.createObjectStore(IDB_STORE, {keyPath:'id',autoIncrement:true});
+    };
+    req.onsuccess = e=>resolve(e.target.result);
+    req.onerror   = e=>reject(e.target.error);
+  });
+}
+async function queueOfflineScan(data){
+  const db2 = idb || (idb = await openIDB());
+  return new Promise((resolve,reject)=>{
+    const tx = db2.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).add({...data, queuedAt: Date.now()});
+    tx.oncomplete = resolve;
+    tx.onerror    = e=>reject(e.target.error);
+  });
+}
+async function getQueuedScans(){
+  const db2 = idb || (idb = await openIDB());
+  return new Promise((resolve,reject)=>{
+    const tx  = db2.transaction(IDB_STORE,'readonly');
+    const req = tx.objectStore(IDB_STORE).getAll();
+    req.onsuccess = e=>resolve(e.result);
+    req.onerror   = e=>reject(e.target.error);
+  });
+}
+async function clearQueuedScan(id){
+  const db2 = idb || (idb = await openIDB());
+  return new Promise((resolve,reject)=>{
+    const tx = db2.transaction(IDB_STORE,'readwrite');
+    tx.objectStore(IDB_STORE).delete(id);
+    tx.oncomplete = resolve;
+    tx.onerror    = e=>reject(e.target.error);
+  });
+}
+
+/* ── ONLINE / OFFLINE ── */
+function updateOnlineStatus(){
+  const offline = !navigator.onLine;
+  const badge = document.getElementById('offlineBadge');
+  offline ? badge.classList.add('visible') : badge.classList.remove('visible');
+  if (!offline) syncOfflineQueue();
+}
+window.addEventListener('online',  updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+updateOnlineStatus();
+
+async function syncOfflineQueue(){
+  if (!currentUser) return;
+  const queue = await getQueuedScans();
+  if (!queue.length) return;
+  document.getElementById('syncBadge').classList.add('visible');
+  let synced = 0;
+  for (const item of queue){
+    try {
+      const {id, ...data} = item;
+      await db.collection('stockMovements').add({...data, syncedAt: firebase.firestore.FieldValue.serverTimestamp()});
+      await clearQueuedScan(id);
+      synced++;
+    } catch(e){ console.error('Sync item failed:', e); }
+  }
+  document.getElementById('syncBadge').classList.remove('visible');
+  if (synced) toast(`Synced ${synced} offline scan${synced!==1?'s':''}`, 'success');
+}
+document.getElementById('syncBadge').addEventListener('click', syncOfflineQueue);
+
+/* ── AUTH GUARD ── */
+auth.onAuthStateChanged(async user=>{
+  if (!user){ window.location.href='index.html'; return; }
+  currentUser = user;
+  syncOfflineQueue();
+});
+
+/* ── MODE + LOCATION ── */
+const modePillEl = document.getElementById('modePill');
+const modeColors = {receive:'receive',pick:'pick',count:'count',transfer:'transfer'};
+const modeLabels = {receive:'Receive',pick:'Pick',count:'Stock-Check',transfer:'Transfer'};
+
+document.getElementById('modeSelect').addEventListener('change', e=>{
+  currentMode = e.target.value;
+  modePillEl.className = `mode-pill ${modeColors[currentMode]}`;
+  modePillEl.textContent = modeLabels[currentMode];
+  // Re-render action zone if product loaded
+  if (currentProduct) renderResultCard(currentProduct, true);
+});
+
+document.getElementById('locationSelect').addEventListener('change', e=>{
+  currentLoc = e.target.value;
+});
+
+/* ── BARCODE DETECTOR ── */
+function initBarcodeDetector(){
+  if ('BarcodeDetector' in window){
+    barcodeDetector = new BarcodeDetector({formats:[
+      'qr_code','ean_13','ean_8','code_128','code_39','upc_a','upc_e','itf','codabar'
+    ]});
+    return true;
+  }
+  document.getElementById('scannerUnsupported').style.display = 'block';
+  document.getElementById('btnScan').style.display = 'none';
+  return false;
+}
+
+/* ── CAMERA SCAN ── */
+document.getElementById('btnScan').addEventListener('click', openCamera);
+document.getElementById('camCloseBtn').addEventListener('click', closeCamera);
+
+async function openCamera(){
+  if (!barcodeDetector){ toast('BarcodeDetector not available','error'); return; }
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'environment', width:{ideal:1280}, height:{ideal:720}}
+    });
+    const video = document.getElementById('camVideo');
+    video.srcObject = cameraStream;
+    document.getElementById('camModal').classList.add('open');
+    document.getElementById('camIcon').classList.add('scanning');
+    scanLoopActive = true;
+    requestAnimationFrame(scanLoop);
+  } catch(e){
+    toast('Camera access denied: '+e.message,'error');
+  }
+}
+
+function closeCamera(){
+  scanLoopActive = false;
+  document.getElementById('camModal').classList.remove('open');
+  document.getElementById('camIcon').classList.remove('scanning');
+  if (cameraStream){
+    cameraStream.getTracks().forEach(t=>t.stop());
+    cameraStream = null;
+  }
+}
+
+async function scanLoop(){
+  if (!scanLoopActive) return;
+  const video = document.getElementById('camVideo');
+  if (video.readyState === video.HAVE_ENOUGH_DATA){
+    try {
+      const barcodes = await barcodeDetector.detect(video);
+      if (barcodes.length > 0){
+        const code = barcodes[0].rawValue;
+        closeCamera();
+        await lookupSKU(code);
+        return;
+      }
+    } catch(e){}
+  }
+  if (scanLoopActive) requestAnimationFrame(scanLoop);
+}
+
+/* ── MANUAL LOOKUP ── */
+document.getElementById('btnLookup').addEventListener('click', ()=>{
+  const sku = document.getElementById('manualInput').value.trim();
+  if (!sku){ toast('Enter a barcode or SKU','error'); return; }
+  lookupSKU(sku);
+});
+document.getElementById('manualInput').addEventListener('keydown', e=>{
+  if (e.key==='Enter'){
+    const sku = document.getElementById('manualInput').value.trim();
+    if (sku) lookupSKU(sku);
+  }
+});
+
+/* ── PRODUCT LOOKUP ── */
+async function lookupSKU(sku){
+  if (!currentUser){ toast('Not authenticated','error'); return; }
+  document.getElementById('resultCard').className = 'result-card visible';
+  document.getElementById('resultCard').innerHTML = `<div style="text-align:center;padding:20px;"><span class="spinner"></span> Looking up <b>${esc(sku)}</b>…</div>`;
+
+  try {
+    const snap = await db.collection('products').where('sku','==',sku.toUpperCase()).limit(1).get();
+    if (snap.empty){
+      // Try lowercase
+      const snap2 = await db.collection('products').where('sku','==',sku).limit(1).get();
+      if (snap2.empty){
+        currentProduct = null;
+        beepError();
+        renderNotFound(sku);
+        return;
+      }
+      currentProduct = {id:snap2.docs[0].id,...snap2.docs[0].data(),_sku:sku};
+    } else {
+      currentProduct = {id:snap.docs[0].id,...snap.docs[0].data(),_sku:sku};
+    }
+    beepSuccess();
+    renderResultCard(currentProduct, true);
+    document.getElementById('manualInput').value = '';
+    addToHistory(currentProduct, currentMode);
+  } catch(e){
+    beepError();
+    document.getElementById('resultCard').innerHTML = `<div class="result-error"><span class="result-error-ico">&#9888;</span><span class="result-error-msg">Lookup failed: ${esc(e.message)}</span></div>`;
+  }
+}
+
+function renderNotFound(sku){
+  document.getElementById('resultCard').className = 'result-card visible error';
+  document.getElementById('resultCard').innerHTML = `
+    <div class="result-error">
+      <span class="result-error-ico">&#128683;</span>
+      <div class="result-error-msg">
+        <b>Product not found</b><br>
+        SKU: <code>${esc(sku)}</code><br>
+        <span style="color:var(--sub);font-size:.7rem;">Check the SKU and try again, or contact the warehouse manager.</span>
+      </div>
+    </div>`;
+}
+
+/* ── RENDER RESULT CARD ── */
+function renderResultCard(p, addActionZone){
+  const card = document.getElementById('resultCard');
+  card.className = 'result-card visible success';
+
+  const imgHtml = p.imageUrl
+    ? `<img src="${esc(p.imageUrl)}" class="result-img" alt="${esc(p.name||'Product')}" onerror="this.style.display='none'">`
+    : `<div class="result-img-placeholder">&#128230;</div>`;
+
+  const stockQty = p.stockQty != null ? p.stockQty : (p.quantity != null ? p.quantity : '—');
+  const binLoc   = p.location || p.bin || currentLoc;
+
+  let actionZone = '';
+  if (addActionZone){
+    if (currentMode === 'receive'){
+      actionZone = `
+        <div class="action-zone">
+          <div class="action-row">
+            <div class="field-inline">
+              <label for="aqtyInput">Quantity to Receive</label>
+              <input type="number" id="aqtyInput" min="1" step="1" value="1" aria-label="Receive quantity">
+            </div>
+            <button class="btn-action receive" id="btnActionMain" data-mode="receive">&#43; Record Receipt</button>
+          </div>
+        </div>`;
+    } else if (currentMode === 'pick'){
+      actionZone = `
+        <div class="action-zone">
+          <div class="action-row">
+            <div class="field-inline">
+              <label for="aqtyInput">Quantity to Pick</label>
+              <input type="number" id="aqtyInput" min="1" max="${typeof stockQty==='number'?stockQty:9999}" step="1" value="1" aria-label="Pick quantity">
+            </div>
+            <button class="btn-action pick" id="btnActionMain" data-mode="pick">&#8595; Mark Picked</button>
+          </div>
+        </div>`;
+    } else if (currentMode === 'count'){
+      actionZone = `
+        <div class="action-zone">
+          <div class="action-row">
+            <div class="field-inline">
+              <label for="aqtyInput">Counted Quantity</label>
+              <input type="number" id="aqtyInput" min="0" step="1" value="${typeof stockQty==='number'?stockQty:0}" aria-label="Counted quantity">
+            </div>
+            <button class="btn-action count" id="btnActionMain" data-mode="count">&#10003; Save Count</button>
+          </div>
+        </div>`;
+    } else if (currentMode === 'transfer'){
+      actionZone = `
+        <div class="action-zone">
+          <div class="action-row">
+            <div class="field-inline">
+              <label for="transferFrom">From Location</label>
+              <select id="transferFrom" aria-label="Transfer from">
+                ${['MAIN','A1','A2','B1','B2','COLD','RETURNS','DISPATCH'].map(l=>`<option value="${l}"${l===currentLoc?' selected':''}>${l}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field-inline">
+              <label for="transferTo">To Location</label>
+              <select id="transferTo" aria-label="Transfer to">
+                ${['MAIN','A1','A2','B1','B2','COLD','RETURNS','DISPATCH'].map(l=>`<option value="${l}"${l!==currentLoc?' selected':''}>${l}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="action-row">
+            <div class="field-inline">
+              <label for="aqtyInput">Quantity</label>
+              <input type="number" id="aqtyInput" min="1" step="1" value="1" aria-label="Transfer quantity">
+            </div>
+            <button class="btn-action transfer" id="btnActionMain" data-mode="transfer">&#8646; Transfer</button>
+          </div>
+        </div>`;
+    }
+  }
+
+  card.innerHTML = `
+    <div class="result-top">
+      ${imgHtml}
+      <div class="result-info">
+        <div class="result-name">${esc(p.name||'Unnamed Product')}</div>
+        <div class="result-sku">SKU: ${esc(p.sku||p._sku||'—')}</div>
+        <span class="result-stock">&#128230; ${esc(String(stockQty))} in stock</span>
+        <div class="result-location">&#128205; ${esc(binLoc)}</div>
+      </div>
+    </div>
+    ${actionZone}`;
+
+  // Bind action button
+  const btnMain = document.getElementById('btnActionMain');
+  if (btnMain){
+    btnMain.addEventListener('click', ()=>executeAction(btnMain.dataset.mode, p));
+  }
+}
+
+/* ── EXECUTE ACTION ── */
+async function executeAction(mode, product){
+  const btn    = document.getElementById('btnActionMain');
+  const qtyEl  = document.getElementById('aqtyInput');
+  const qty    = parseInt(qtyEl ? qtyEl.value : 1, 10);
+
+  if (isNaN(qty) || qty <= 0){ toast('Enter a valid quantity','error'); return; }
+
+  const prevQty = product.stockQty != null ? product.stockQty : (product.quantity != null ? product.quantity : 0);
+  let   newQty  = prevQty;
+  let   movType = mode;
+  let   extra   = {};
+
+  if (mode === 'receive')   newQty = prevQty + qty;
+  else if (mode === 'pick'){
+    if (qty > prevQty){ toast(`Cannot pick ${qty} — only ${prevQty} in stock`, 'error'); return; }
+    newQty = prevQty - qty;
+  } else if (mode === 'count'){
+    newQty = qty; movType = 'count';
+  } else if (mode === 'transfer'){
+    const fromLoc = document.getElementById('transferFrom')?.value || currentLoc;
+    const toLoc   = document.getElementById('transferTo')?.value   || currentLoc;
+    if (fromLoc === toLoc){ toast('From and To locations must differ','error'); return; }
+    extra = {fromLocation: fromLoc, toLocation: toLoc};
+    if (qty > prevQty){ toast(`Cannot transfer ${qty} — only ${prevQty} in stock`, 'error'); return; }
+    newQty = prevQty; // total stock unchanged, location metadata only
+  }
+
+  if (btn){ btn.disabled = true; btn.textContent = '…'; }
+
+  const movData = {
+    productId:   product.id,
+    sku:         product.sku || product._sku || '',
+    type:        movType,
+    qty,
+    previousQty: prevQty,
+    newQty,
+    location:    currentLoc,
+    scannedBy:   currentUser.uid,
+    scannedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+    sessionId,
+    ...extra
+  };
+
+  if (!navigator.onLine){
+    // queue offline
+    const offlineData = {...movData, scannedAt: Date.now(), offline:true};
+    delete offlineData.scannedAt; // replace serverTimestamp with local
+    offlineData.scannedAtLocal = Date.now();
+    await queueOfflineScan(offlineData);
+    toast('Queued offline — will sync on reconnect', 'info');
+    updateHistory(product, mode, qty, newQty);
+    if (btn){ btn.disabled = false; btn.textContent = getModeLabel(mode); }
+    return;
+  }
+
+  try {
+    const productRef = db.doc(`products/${product.id}`);
+    await db.runTransaction(async tx=>{
+      const snap = await tx.get(productRef);
+      if (!snap.exists) throw new Error('Product document not found');
+      const live = snap.data();
+      const liveQty = live.stockQty != null ? live.stockQty : (live.quantity != null ? live.quantity : 0);
+
+      if (mode === 'pick' && qty > liveQty) throw new Error(`Only ${liveQty} in stock`);
+      if (mode === 'transfer' && qty > liveQty) throw new Error(`Only ${liveQty} in stock`);
+
+      let computedNew = liveQty;
+      if      (mode === 'receive')  computedNew = liveQty + qty;
+      else if (mode === 'pick')     computedNew = liveQty - qty;
+      else if (mode === 'count')    computedNew = qty;
+      else if (mode === 'transfer') computedNew = liveQty; // unchanged total
+
+      const finalMov = {...movData, previousQty: liveQty, newQty: computedNew};
+      const movRef   = db.collection('stockMovements').doc();
+
+      if (mode === 'count'){
+        tx.set(movRef, finalMov);
+        await db.collection('stockCounts').add({
+          productId: product.id,
+          sku:       product.sku || product._sku || '',
+          countedQty: qty,
+          previousQty: liveQty,
+          location:  currentLoc,
+          countedBy: currentUser.uid,
+          countedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          sessionId
+        });
+        tx.update(productRef, {stockQty: computedNew});
+      } else if (mode === 'transfer'){
+        await db.collection('stockTransfers').add({
+          productId: product.id,
+          sku:       product.sku || product._sku || '',
+          qty,
+          fromLocation: extra.fromLocation,
+          toLocation:   extra.toLocation,
+          transferredBy: currentUser.uid,
+          transferredAt: firebase.firestore.FieldValue.serverTimestamp(),
+          sessionId
+        });
+        tx.set(movRef, finalMov);
+      } else {
+        tx.set(movRef, finalMov);
+        tx.update(productRef, {stockQty: computedNew});
+      }
+
+      // Update local state
+      currentProduct = {...product, stockQty: computedNew};
+    });
+
+    beepSuccess();
+    const labels = {receive:`Received ${qty} units`,pick:`Picked ${qty} units`,count:`Count saved: ${qty}`,transfer:`Transferred ${qty} units`};
+    toast(labels[mode]||'Done','success');
+    addToHistory(currentProduct, mode, qty, currentProduct.stockQty);
+    renderResultCard(currentProduct, true);
+  } catch(e){
+    beepError();
+    toast('Action failed: '+e.message,'error');
+    if (btn){ btn.disabled = false; btn.textContent = getModeLabel(mode); }
+  }
+}
+
+function getModeLabel(m){
+  return {receive:'+ Record Receipt',pick:'↓ Mark Picked',count:'✓ Save Count',transfer:'⇆ Transfer'}[m]||'Confirm';
+}
+
+/* ── SCAN HISTORY ── */
+function addToHistory(product, mode, qty, newQty){
+  scanHistory.unshift({product, mode, qty: qty||null, newQty: newQty||null, ts: Date.now()});
+  if (scanHistory.length > 5) scanHistory.pop();
+  renderHistory();
+}
+function updateHistory(product, mode, qty, newQty){ addToHistory(product, mode, qty, newQty); }
+
+function renderHistory(){
+  const strip = document.getElementById('historyStrip');
+  if (!scanHistory.length){
+    strip.innerHTML = '<span class="history-empty">No scans yet this session.</span>';
+    return;
+  }
+  strip.innerHTML = scanHistory.map((item,i)=>`
+    <div class="history-item" data-idx="${i}" title="${esc(item.product.name||item.product._sku||'Product')}">
+      <div class="history-item-sku">${esc((item.product.sku||item.product._sku||'').slice(0,14))}</div>
+      <div class="history-item-name">${esc((item.product.name||'Product').slice(0,18))}</div>
+      <div class="history-item-type ${esc(item.mode)}">${esc(modeLabels[item.mode]||item.mode)}</div>
+    </div>`).join('');
+
+  strip.querySelectorAll('.history-item').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const item = scanHistory[+el.dataset.idx];
+      if (!item) return;
+      currentProduct = item.product;
+      document.getElementById('modeSelect').value = item.mode;
+      currentMode = item.mode;
+      modePillEl.className = `mode-pill ${modeColors[currentMode]}`;
+      modePillEl.textContent = modeLabels[currentMode];
+      renderResultCard(currentProduct, true);
+      document.getElementById('wsMain').scrollTo({top:0,behavior:'smooth'});
+    });
+  });
+}
+const modeLabels = {receive:'Receive',pick:'Pick',count:'Stock-Check',transfer:'Transfer'};
+
+/* ── ESC CLOSE CAMERA ── */
+document.addEventListener('keydown', e=>{
+  if (e.key==='Escape') closeCamera();
+});
+
+/* ── BOOT ── */
+(function boot(){
+  initBarcodeDetector();
+  // Focus manual input for handheld scanners (HID mode)
+  document.getElementById('manualInput').focus();
+  // Trigger audio context on first interaction (required by browsers)
+  document.body.addEventListener('click', ()=>{
+    if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }, {once:true});
+})();
+</script>
+</body>
+</html>

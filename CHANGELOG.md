@@ -1,4 +1,313 @@
-﻿## [2026-07-07] — Vision 2030 Sprint — Enterprise Platform Execution
+﻿## [2026-07-07] — KASS Role-Specific AI Assistants v1.0
+
+### Summary
+Three dedicated KASS (SOKONI AI Concierge) assistant pages, each tailored to a specific platform role. All three share the same premium dark-theme split-pane interface (sidebar + chat + input bar) and AI engine architecture, with role-specific context, quick actions, auth guards, and visual accent colors.
+
+### New Pages
+
+| Page | Role | Auth Guard | Accent |
+|---|---|---|---|
+| `kass-seller.html` | Seller / Vendor AI Assistant | Any authenticated user | Lime-green `#71ff00` |
+| `kass-finance.html` | Finance Manager AI Assistant | admin, finance claim, or seller | Cyan `#00d4ff` |
+| `kass-executive.html` | Executive / Founder AI Advisor | admin or superAdmin claim | Gold `#ffd700` |
+
+### Features (all 3 pages)
+- **Split-pane layout**: 280px sidebar + main chat area; collapses to bottom-sheet on mobile (≤768px)
+- **KASS avatar**: animated dual-ring pulse in role accent color
+- **Quick actions** (4 per role): pre-fill textarea with role-specific prompts
+- **AI backend**: calls `sokoniChat` Cloud Function via `firebase.app().functions('us-central1').httpsCallable('sokoniChat')` with `{ message, context, sessionId }`
+- **Message persistence**: stored in `kassConversations/{uid}/sessions/{sessionId}/messages` subcollection
+- **Session history**: sidebar loads last 25 sessions from Firestore with `onSnapshot`; click any session to resume
+- **New Chat**: generates a fresh `sessionId` via `db.collection('_k').doc().id`
+- **Rich card rendering**: parses ` ```json { "type": "table"|"stat"|"link" } ``` ` blocks from AI responses into styled cards — all other content rendered as DOM text nodes (XSS-safe)
+- **Typing indicator**: 3-dot bounce animation while awaiting AI response
+- **Error banner**: shown after 3 consecutive `sokoniChat` failures; manually dismissible
+- **Keyboard shortcut**: Ctrl+K focuses chat input
+- **Toast notifications**: slide-up toast for transient errors
+- **Auto-scroll**: chat scrolls to latest message on each new bubble
+
+### Files Affected
+| File | Status |
+|---|---|
+| `kass-seller.html` | New |
+| `kass-finance.html` | New |
+| `kass-executive.html` | New |
+
+### Security Notes
+- **XSS**: All AI-generated text rendered via `document.createTextNode()` — never `innerHTML`. Rich cards built from parsed JSON with every field passed through `String()` coercion and `textContent` assignment
+- **URL safety**: Link card `obj.url` values are blocked if they match `^https?://` or `//` (external origins map to `#`); only relative paths allowed
+- **Auth guard — executive**: Blocks access if `getIdTokenResult()` claim fetch fails (conservative fail-closed approach for the highest-privilege page)
+- **Auth guard — finance**: Graceful degradation on token fetch failure (open) to preserve UX for valid finance users with intermittent token issues
+
+### Firestore Collections
+- `kassConversations/{uid}/sessions/{sessionId}` — session metadata (`role`, `startedAt`, `lastMessage`, `lastAt`)
+- `kassConversations/{uid}/sessions/{sessionId}/messages/{msgId}` — individual messages (`role`, `text`, `ts`)
+
+### Deployment Notes
+- Static hosting: deploy 3 new HTML files — no Cloud Function changes required
+- `sokoniChat` CF must already be deployed (per KASS v2.0 — confirmed live)
+- No new Firestore indexes required (queries use `role` + `lastAt desc` — same composite index pattern as existing KASS sessions)
+
+---
+
+## [2026-07-07] — Franchise Management System v1.0
+
+### Summary
+End-to-end Franchise Management system. Franchisors can create brands and review applications; franchisees can browse available brands, apply for locations, and record monthly revenue with automatic royalty calculation; admins get a per-brand dashboard with KPIs, top-location revenue ranking, and compliance rate. 7 Gen 2 Cloud Functions + 1 premium dark-theme 3-tab portal page.
+
+### New Files
+
+| File | Description |
+|---|---|
+| `functions/franchise-engine.js` | 7 CFs — brand CRUD, application lifecycle, royalty engine, dashboards |
+| `franchise.html` | 3-tab franchise portal — My Locations / Browse & Apply / Admin |
+
+### New Cloud Functions (7 — pending GCP quota)
+
+**`functions/franchise-engine.js`**:
+`franchiseCreateBrand`, `franchiseApplyForLocation`, `franchiseReviewApplication`, `franchiseRecordRoyalty`, `franchiseGetMyLocations`, `franchiseGetBrandDashboard`, `franchiseGetLocations`
+
+### New Firestore Collections
+
+| Collection | Purpose |
+|---|---|
+| `franchiseBrands` | Brand registry (name, royaltyPct, techFeePct, minInvestment, territories) |
+| `franchiseApplications` | Application queue (pending → approved/rejected) |
+| `franchiseLocations` | Active franchise locations (created atomically on approval) |
+| `royaltyPayments` | Monthly revenue records with royalty and tech-fee breakdown |
+| `franchiseAudit` | Immutable audit log for all franchise-side actions |
+
+### Files Affected
+
+| File | Change |
+|---|---|
+| `functions/franchise-engine.js` | New — 7 Cloud Functions |
+| `franchise.html` | New — Franchise Management Portal |
+| `functions/index.js` | Appended 7 franchise exports |
+| `DEPLOY_QUEUE.md` | Updated master command (125 → 132 CFs); added franchise-engine.js section |
+
+### Security Notes
+- All user-supplied strings sanitised before Firestore storage via `_sanitise()` and before DOM insertion via `esc()`
+- `franchiseReviewApplication` uses Firestore batch write — application update + location creation are atomic
+- `franchiseRecordRoyalty` enforces `ownerId === caller.uid`; duplicate month submission rejected with `already-exists`
+- Royalty math: `Math.round(gross × pct / 100 × 100) / 100` — 2 d.p. precision, no floating-point drift
+- Admin-only CFs enforce `admin || superAdmin` custom claim; franchisee CFs enforce ownership checks
+
+### Performance Notes
+- `franchiseGetBrandDashboard` scoped to current month — no full-collection scans
+- Client-side royalty preview computed inline on revenue modal input (zero CF calls)
+
+### Deployment Notes
+- No new secrets required
+- Spot deploy command in DEPLOY_QUEUE.md; master command updated (125 → 132 CFs)
+
+---
+
+## [2026-07-07] — Business OS: Expense Management + Warehouse Scanner
+
+### Summary
+Two new Business OS portals completing key operational workflows. `expense-management.html` delivers a full expense lifecycle (submit → approve → report) with budget tracking and CSV export. `warehouse-scanner.html` provides a full-screen barcode/QR scanner interface optimised for handheld devices with offline-first support.
+
+### New Pages
+
+| Page | Description |
+|---|---|
+| `expense-management.html` | Business expense tracking — 4-tab portal: Expenses table, Budget tracker, Approval queue, Reports + CSV export |
+| `warehouse-scanner.html` | Warehouse scanner — BarcodeDetector API + manual entry, 4 modes (Receive/Pick/Stock-Check/Transfer), offline IndexedDB queue |
+
+### Features
+
+**`expense-management.html`**
+- Auth guard: seller / admin / manager role required (`users/{uid}`)
+- KPI strip: This Month Total, Budget Used %, Pending Approval, Top Category
+- Tab 1 — Expenses: date/category/status filters, sortable table, receipt preview modal, slide-in new expense form (Draft or Submit for Approval)
+- Tab 2 — Budgets: per-category monthly budgets, progress bars (green/amber/red), CSS-only budget vs actual bar chart; set budgets via modal
+- Tab 3 — Approval Queue: manager/admin only, inline Approve / Reject with required typed reason; hidden from seller role
+- Tab 4 — Reports: YTD approved total, monthly category bar chart, BOM-prefixed CSV export (Excel-safe)
+- Firestore writes: `expenses/{expId}` (draft→pending→approved/rejected), `expenseBudgets/{businessId}/categories/{category}`
+
+**`warehouse-scanner.html`**
+- Auth guard: any authenticated user
+- BarcodeDetector API (QR, EAN-13, Code-128, UPC-A, ITF, etc.) with graceful fallback to manual entry
+- 4 scan modes: Receive (+qty), Pick (−qty via transaction), Stock-Check (absolute count → `stockCounts`), Transfer (from/to location → `stockTransfers`)
+- All stock updates via `db.runTransaction()` to prevent race conditions
+- `stockMovements` written on every action (productId, sku, type, qty, previousQty, newQty, location, scannedBy, scannedAt, sessionId)
+- Web Audio API: two-tone ascending beep on success, low square-wave buzz on not-found
+- Offline-first: IndexedDB queue when `navigator.onLine` is false; auto-sync on reconnect with visual indicator
+- Scan history strip: last 5 scans scrollable horizontally; tap to reload product + mode
+- Mobile-optimised: 56px scan button, 48px all inputs, thumb-friendly layout, `viewport-fit=cover` + safe area insets
+
+### Firestore Collections Affected
+- `expenses` (new)
+- `expenseBudgets/{businessId}/categories/{category}` (new)
+- `stockMovements` (new)
+- `stockCounts` (new)
+- `stockTransfers` (new)
+- `products` (read by `sku` field; `stockQty` updated via transaction)
+
+### Security Notes
+- All user-sourced strings through `esc()` XSS sanitiser before DOM insertion
+- Receipt URLs validated to `https?://` prefix before storage
+- Stock mutations via `runTransaction` — prevents concurrent write races
+- Role check: expense approval tab hidden at DOM level and enforced server-side by Firestore rules
+- Camera stream stopped immediately on modal close (no background capture)
+- Offline queue stores no secrets; sensitive fields use server-managed `serverTimestamp()` on sync
+
+### Performance Notes
+- Expense listener: single `onSnapshot` with 200-doc limit; all filtering in-memory
+- Charts: pure CSS (no canvas, no external libraries)
+- BarcodeDetector scan loop: `requestAnimationFrame`-driven, stops immediately on detection
+- Audio context created lazily on first user interaction (browser policy)
+
+---
+
+## [2026-07-07] — Installments / BNPL v1.0
+
+### Summary
+Added a production-ready Buy Now Pay Later (BNPL) installment payment engine. Buyers can split any order into 3-, 6-, or 12-month payment plans with a 30% upfront payment and equal monthly installments. Sellers have a filtered view of their own plans. A daily scheduler automatically marks overdue items.
+
+### New Cloud Functions (6 — pending GCP quota)
+
+**`functions/installments.js`** (6 CFs):
+
+| Function | Type | Auth |
+|---|---|---|
+| `installmentCreatePlan` | onCall | Buyer (auth required) |
+| `installmentRecordPayment` | onCall | Buyer — plan owner (auth required) |
+| `installmentGetMyPlans` | onCall | Buyer (auth required) |
+| `installmentGetSellerPlans` | onCall | Seller or Admin |
+| `installmentMarkOverdue` | onSchedule `0 1 * * *` UTC | — |
+| `installmentCancelPlan` | onCall | Buyer (no payments) or Admin (any state) |
+
+### Firestore Paths
+- `installmentPlans/{planId}` — plan document (schedule array, status, amounts in KES)
+- `installmentPlans/{planId}/installmentPayments/{paymentRef}` — payment record subcollection
+- `installmentAudit/{id}` — audit log for all create/pay/cancel actions
+- `notifications/{id}` — buyer alerts on completion or cancellation
+
+### Plan Types
+| Plan | Total Payments | Structure |
+|---|---|---|
+| `3_month` | 3 | 30% upfront + 2 equal monthly |
+| `6_month` | 6 | 30% upfront + 5 equal monthly |
+| `12_month` | 12 | 30% upfront + 11 equal monthly |
+
+The final installment absorbs any KES rounding remainder so the sum equals `totalAmount` exactly.
+
+### Business Logic
+- **Idempotency**: `installmentRecordPayment` uses `runTransaction` — an installment already marked `paid` returns `already-exists`, preventing double-recording even under retries.
+- **Cancellation gating**: buyers can only cancel plans with zero payments; any paid installment requires admin override, protecting sellers.
+- **Overdue sweep**: scheduler fetches up to 500 active plans, evaluates each schedule array in-memory (Firestore cannot filter nested array fields), and batch-updates overdue items in ≤499-op batches.
+
+### Files Affected
+- `functions/installments.js` — new (6 CFs, ~320 lines)
+- `functions/index.js` — 6 new exports appended
+- `DEPLOY_QUEUE.md` — count updated 119 → 125; new section + spot deploy command added
+
+### Security Notes
+- All callable functions enforce `req.auth` before any Firestore read
+- `installmentGetSellerPlans`: sellers are always scoped to their own `sellerId`; only tokens with `admin`/`superAdmin` claim see cross-seller data
+- Input validated with strict type + range checks before any DB operation
+- No secrets required — no external payment gateway calls (payment references passed in from the client after M-Pesa/IntaSend confirmation)
+- All amounts validated as positive finite numbers; minimum plan value enforced at KES 100
+
+### Performance Notes
+- All onCall functions: 256 MiB memory, 30 s timeout
+- `installmentMarkOverdue`: 512 MiB memory, 540 s timeout; processes up to 500 active plans per run using WriteBatch (auto-flushes at 499 ops)
+
+### No Breaking Changes
+No existing functions, collections, or indexes were modified.
+
+---
+
+## [2026-07-07] — Unified Business Communication System v3.0
+
+### Summary
+Production-grade transaction-gated messaging across all 17 SOKONI hub types. Zero random messaging — every conversation tied to a live business transaction. Adds admin console, auto-lifecycle status sync, in-conversation search, message edit, and forward.
+
+### New Files
+- `messages-admin.html` — full admin console (stats, moderation queue, policies, search)
+
+### Updated Files
+- `functions/messages.js` — +3 Firestore triggers: `onOrderStatusChanged`, `onBookingStatusChanged`, `onFoodOrderStatusChanged`; `_postStatusMessage` helper; `STATUS_MSGS` map
+- `sokoni-chat-engine.js` — `forwardMessage()`, `searchMessages()` added to public API
+- `chat.html` — in-conversation search overlay; inline edit message (≤15 min); forward in context menu
+- `finos.html` — added `shared-header.js` + `data-no-header="true"` (layout compliance)
+- `functions/index.js` — registered 3 new CF exports (total **1,602**)
+- `service-worker.js` — CACHE_VERSION → `sokoni-20260707-biz-comms-v13`
+
+### Cloud Functions Added
+| Export | Trigger | Purpose |
+|---|---|---|
+| `onOrderStatusChanged` | `orders/{id}` onUpdate | Post system message when order status changes |
+| `onBookingStatusChanged` | `bookings/{id}` onUpdate | Post system message when booking status changes |
+| `onFoodOrderStatusChanged` | `foodOrders/{id}` onUpdate | Post system message when food order status changes |
+
+### Firestore Collections (pre-existing, documented here)
+`conversations`, `conversations/messages`, `userConversations`, `typingIndicators`, `chatPolicies`, `moderationQueue`
+
+### Security
+- Conversation access enforced by Firestore rules (participant array)
+- Admin console requires `admin` or `superAdmin` custom claim
+- Spam/fraud auto-detection: payment-redirect attempts, external links, scam phrases
+- System messages CF-write-only (clients cannot spoof `senderId: 'system'`)
+
+### Layout Compliance
+255 pages, 0 missing `shared-header.js`
+
+### Breaking Changes
+None.
+
+### Deployment
+3 new triggers need deploy (blocked by GCP quota — see DEPLOY_QUEUE.md).
+
+---
+
+## [2026-07-07] — Currency Engine v1.0
+
+### Summary
+Added a production-ready multi-currency engine to SOKONI. Supports 12 currencies (KES base, USD, EUR, GBP, UGX, TZS, ETB, NGN, ZAR, AED, CNY, INR). All rates are admin-managed — no external API dependency. Includes public read/convert endpoints, admin rate management, audit history, and a scheduled staleness check every 6 hours.
+
+### New Cloud Functions (5 — pending GCP quota)
+
+**`functions/currency-engine.js`** (5 CFs):
+
+| Function | Type | Auth |
+|---|---|---|
+| `currencyGetRates` | onCall | Public |
+| `currencyConvert` | onCall | Public |
+| `currencyUpdateRates` | onCall | Admin |
+| `currencyGetHistory` | onCall | Admin |
+| `currencyScheduledRateRefresh` | onSchedule `0 */6 * * *` | — |
+
+### Firestore Paths
+- `exchangeRates/latest` — live rate document (`base: 'KES'`, KES-relative rates map, `updatedAt`, `updatedBy`)
+- `exchangeRates/latest/history/{YYYY-MM-DD}` — immutable daily audit snapshots written on every admin rate update
+- `systemAlerts/rateRefresh` — staleness flag (`rateRefreshNeeded: bool`) set by scheduler when rates are >5 h old; cleared automatically by `currencyUpdateRates`
+
+### Conversion Logic
+All rates are stored relative to KES (1 KES = X foreign). Cross-rate conversion: `crossRate = rates[TO] / rates[FROM]`. KES base rate is always 1 and cannot be overridden. Results rounded to 2 decimal places.
+
+### Files Affected
+- `functions/currency-engine.js` — new (5 CFs, 230 lines)
+- `functions/index.js` — 5 new exports appended
+- `DEPLOY_QUEUE.md` — count updated 114 → 119; new section + spot deploy command added
+
+### Security Notes
+- Admin endpoints enforce `req.auth.token.admin || req.auth.token.superAdmin`
+- All currency codes upper-cased and validated against `SUPPORTED_CURRENCIES` before any Firestore read/write
+- Rate values validated: must be positive finite numbers; KES=1 is enforced
+- No external HTTP calls — eliminates supply-chain and availability risk from third-party rate APIs
+- Batch write (latest + history) is atomic — no partial state possible
+
+### Performance Notes
+- Public endpoints (`currencyGetRates`, `currencyConvert`): 128 MiB memory, 15 s timeout — single Firestore read
+- Admin endpoints: 256 MiB memory, 30 s timeout
+- Scheduled job: lightweight single-doc read, never writes on the happy path
+
+---
+
+## [2026-07-07] — Vision 2030 Sprint — Enterprise Platform Execution
 
 ### Summary
 Major platform expansion sprint targeting SOKONI's Vision 2030 gap analysis. Delivered 8 new production pages, 20 new Cloud Functions across 3 new CF modules, a master strategic dashboard, and a platform-wide premium theme unification (zero purple hex remaining). This sprint closes key gaps in SmartPOS F&B, Business OS (GL), Property Management, Returns Processing, Developer Ecosystem, and Commerce tooling.
