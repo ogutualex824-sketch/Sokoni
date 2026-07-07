@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <script src="shared-header.js"></script>
@@ -2355,7 +2355,7 @@ function renderMarginTab({ products }) {
     .map(([cat, { total, count }]) => ({ cat, avg: total / count }))
     .sort((a,b) => b.avg - a.avg);
 
-  const colours = ['#4f8ef7','#4ade80','#facc15','#f97316','#a78bfa','#f472b6'];
+  const colours = ['#4f8ef7','#4ade80','#facc15','#f97316','#c8ff80','#f472b6'];
   const maxM = Math.max(...cats.map(c => c.avg), 1);
   document.getElementById('margin-chart').innerHTML = cats.slice(0, 10).map((c, i) => {
     const pct = (c.avg / maxM * 100).toFixed(0);

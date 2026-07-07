@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
@@ -18,8 +18,8 @@
       --surface2:     #16213e;
       --surface3:     #0d1b2a;
       --border:       #2a2a4a;
-      --accent:       #7c3aed;
-      --accent-light: #a78bfa;
+      --accent:       #71ff00;
+      --accent-light: #c8ff80;
       --text:         #e2e8f0;
       --text-muted:   #94a3b8;
       --grade-a-plus: #4CAF50;
@@ -249,9 +249,9 @@
       font-size: 11px;
       padding: 2px 8px;
       border-radius: 20px;
-      background: rgba(124,58,237,.15);
+      background: rgba(113,255,0,.15);
       color: var(--accent-light);
-      border: 1px solid rgba(124,58,237,.3);
+      border: 1px solid rgba(113,255,0,.3);
     }
 
     /* ── Dimension grid ── */
@@ -662,7 +662,7 @@ const BusinessHealth = (() => {
       'A+': '#4CAF50', A: '#8BC34A', B: '#FFC107',
       C: '#FF9800', D: '#FF5722', F: '#F44336',
     };
-    return map[grade] || '#7c3aed';
+    return map[grade] || '#71ff00';
   }
 
   /* ── Show/hide states ── */
@@ -755,9 +755,9 @@ const BusinessHealth = (() => {
         datasets: [{
           label:            'Health Score',
           data,
-          backgroundColor:  'rgba(124,58,237,.15)',
-          borderColor:      '#7c3aed',
-          pointBackgroundColor: '#a78bfa',
+          backgroundColor:  'rgba(113,255,0,.15)',
+          borderColor:      '#71ff00',
+          pointBackgroundColor: '#c8ff80',
           pointBorderColor:     '#fff',
           pointRadius: 4,
           borderWidth: 2,
@@ -861,8 +861,8 @@ const BusinessHealth = (() => {
 
     // Gradient fill
     const gradient = ctx2.createLinearGradient(0, 0, 0, H);
-    gradient.addColorStop(0, 'rgba(124,58,237,.4)');
-    gradient.addColorStop(1, 'rgba(124,58,237,.02)');
+    gradient.addColorStop(0, 'rgba(113,255,0,.4)');
+    gradient.addColorStop(1, 'rgba(113,255,0,.02)');
 
     ctx2.beginPath();
     ctx2.moveTo(toX(0), toY(vals[0]));
@@ -884,7 +884,7 @@ const BusinessHealth = (() => {
       const cpx = (toX(i - 1) + toX(i)) / 2;
       ctx2.bezierCurveTo(cpx, toY(vals[i - 1]), cpx, toY(vals[i]), toX(i), toY(vals[i]));
     }
-    ctx2.strokeStyle = '#7c3aed';
+    ctx2.strokeStyle = '#71ff00';
     ctx2.lineWidth   = 2;
     ctx2.stroke();
 
@@ -892,7 +892,7 @@ const BusinessHealth = (() => {
     vals.forEach((v, i) => {
       ctx2.beginPath();
       ctx2.arc(toX(i), toY(v), 3, 0, Math.PI * 2);
-      ctx2.fillStyle = '#a78bfa';
+      ctx2.fillStyle = '#c8ff80';
       ctx2.fill();
     });
 
@@ -973,7 +973,7 @@ const BusinessHealth = (() => {
       _currentData = data;
 
       // Render all sections
-      renderGauge(data.score, data.grade, data.color || '#7c3aed');
+      renderGauge(data.score, data.grade, data.color || '#71ff00');
       renderHeroMeta(data);
       renderDimensions(data.dimensions);
       renderRadarChart(data.dimensions);

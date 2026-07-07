@@ -740,7 +740,7 @@ async function registerGarage(){
 
   let local=[]; try{local=JSON.parse(localStorage.getItem("sokoniMechanics"))||[];}catch(e){}
   local.unshift(garage); localStorage.setItem("sokoniMechanics",JSON.stringify(local));
-  if(msgEl){msgEl.textContent="Saving listing⬦";msgEl.style.color="#a78bfa";}
+  if(msgEl){msgEl.textContent="Saving listing⬦";msgEl.style.color="#c8ff80";}
   const saved=await _saveFs(garage); _fsCache=null;
   if(msgEl){msgEl.innerHTML=saved?`✅ <strong>${safeHtml(garage.name)}</strong> is now live on SOKONI Mechanics! Customers can find and book you.`:`✅ Listing saved locally. Will sync when connection is restored.`;msgEl.style.color="#71ff00";}
   ["rgName","rgPhone","rgArea","rgYears","rgRate","rgServices","rgBio"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});

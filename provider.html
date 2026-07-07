@@ -747,7 +747,7 @@ const CATS = {
   'construction':  { icon:'🧱', label:'Contractor / Materials',     color:'#fbbf24', hub:'construction.html',extraFields:[{id:'rate',label:'Day Rate / Min Order (KES)',ph:'e.g. 15000'},{id:'specialty',label:'Speciality',ph:'e.g. Masonry, Steel, Tiling'}] },
   /* ── PROFESSIONAL SERVICES ── */
   'healthcare':    { icon:'🏥', label:'Doctor / Clinic',            color:'#00c878', hub:'healthcare.html',  extraFields:[{id:'rate',label:'Consultation Fee (KES)',ph:'e.g. 500'},{id:'specialty',label:'Specialisation',ph:'e.g. General, Dentist, Paeds'}] },
-  'legal':         { icon:'⚖️', label:'Advocate / Lawyer',          color:'#a78bfa', hub:'legal-hub.html',   extraFields:[{id:'rate',label:'Consultation Rate (KES/hr)',ph:'e.g. 5000'},{id:'lsk',label:'LSK / Bar Number',ph:'e.g. LSK/A/1234'}] },
+  'legal':         { icon:'⚖️', label:'Advocate / Lawyer',          color:'#c8ff80', hub:'legal-hub.html',   extraFields:[{id:'rate',label:'Consultation Rate (KES/hr)',ph:'e.g. 5000'},{id:'lsk',label:'LSK / Bar Number',ph:'e.g. LSK/A/1234'}] },
   'accounting':    { icon:'📊', label:'Accountant / Tax Consultant', color:'#34d399', hub:'services.html',    extraFields:[{id:'rate',label:'Monthly Retainer (KES)',ph:'e.g. 8000'},{id:'specialty',label:'Speciality',ph:'e.g. Tax, Audit, Payroll'}] },
   'marketing':     { icon:'📢', label:'Marketing / Social Media',   color:'#f97316', hub:'marketing.html',   extraFields:[{id:'rate',label:'Monthly Rate (KES)',ph:'e.g. 15000'},{id:'specialty',label:'Speciality',ph:'e.g. Social Media, SEO, Branding'}] },
   /* ── EVENTS & ENTERTAINMENT ── */
@@ -1129,7 +1129,7 @@ function renderOverview(){
     {val:todayBk.length,lbl:"Today's Bookings",color:'#71ff00'},
     {val:pending,lbl:'Pending Approval',color:'#ff9800'},
     {val:_bookings.filter(b=>b.status==='confirmed').length,lbl:'Confirmed',color:'#00aaff'},
-    {val:_bookings.filter(b=>b.status==='done').length,lbl:'Completed Total',color:'#a78bfa'},
+    {val:_bookings.filter(b=>b.status==='done').length,lbl:'Completed Total',color:'#c8ff80'},
     {val:'KES '+(_bookings.filter(b=>b.status==='done').length*1200).toLocaleString(),lbl:'Est. Earnings',color:'#71ff00'},
     {val:_services.filter(s=>s.active).length,lbl:'Active Services',color:'#00c878'},
   ].map(s=>`<div class="pv-stat"><div class="pv-stat-val" style="color:${s.color};">${s.val}</div><div class="pv-stat-lbl">${s.lbl}</div></div>`).join('');
@@ -1411,7 +1411,7 @@ function renderEarnings(){
     {val:'KES '+totalEarned.toLocaleString(),lbl:'Gross Earned',color:'#71ff00'},
     {val:'KES '+commission.toLocaleString(),lbl:'SOKONI Commission (10%)',color:'#ff9800'},
     {val:'KES '+net.toLocaleString(),lbl:'Net Earnings',color:'#00c878'},
-    {val:done.length,lbl:'Jobs Completed',color:'#a78bfa'},
+    {val:done.length,lbl:'Jobs Completed',color:'#c8ff80'},
   ].map(s=>`<div class="earn-kpi"><div class="earn-kpi-val" style="color:${s.color};">${s.val}</div><div class="earn-kpi-lbl">${s.lbl}</div></div>`).join('');
   if(typeof window._updateProvCharts==='function'){
     var now=new Date(),monthEarn=Array(6).fill(0),monthLabels=[];
@@ -2046,7 +2046,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     var se=document.getElementById('provServicesChart');
     if(se&&!_sc){
-      _sc=new Chart(se,{type:'doughnut',data:{labels:['No bookings'],datasets:[{data:[1],backgroundColor:['rgba(167,139,250,0.5)'],borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{boxWidth:9,padding:7,font:{size:10},color:'rgba(255,255,255,0.5)'}},tooltip:{backgroundColor:'rgba(8,8,8,0.93)',padding:10,callbacks:{label:function(c){return c.label+': KES '+Number(c.raw||0).toLocaleString();}}}}}});
+      _sc=new Chart(se,{type:'doughnut',data:{labels:['No bookings'],datasets:[{data:[1],backgroundColor:['rgba(168,255,88,0.5)'],borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'bottom',labels:{boxWidth:9,padding:7,font:{size:10},color:'rgba(255,255,255,0.5)'}},tooltip:{backgroundColor:'rgba(8,8,8,0.93)',padding:10,callbacks:{label:function(c){return c.label+': KES '+Number(c.raw||0).toLocaleString();}}}}}});
     }
     var re=document.getElementById('provRatingChart');
     if(re&&!_rc){
@@ -2061,7 +2061,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(_sc){
       var sm=d.svcMap||{},entries=Object.entries(sm).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
       if(entries.length){
-        var cols=['rgba(167,139,250,0.85)','rgba(56,189,248,0.85)','rgba(113,255,0,0.85)','rgba(251,191,36,0.85)','rgba(248,113,113,0.85)'];
+        var cols=['rgba(168,255,88,0.85)','rgba(56,189,248,0.85)','rgba(113,255,0,0.85)','rgba(251,191,36,0.85)','rgba(248,113,113,0.85)'];
         _sc.data.labels=entries.map(function(e){return e[0];});
         _sc.data.datasets[0].data=entries.map(function(e){return e[1];});
         _sc.data.datasets[0].backgroundColor=entries.map(function(_,i){return cols[i%5];});

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-no-header="true">
 <head>
 <script src="shared-header.js"></script>
@@ -12,7 +12,7 @@
 
   <style>
     :root{
-      --g:#71ff00;--g2:#4fc800;--r:#ef4444;--o:#f59e0b;--b:#3b82f6;--p:#a78bfa;
+      --g:#71ff00;--g2:#4fc800;--r:#ef4444;--o:#f59e0b;--b:#3b82f6;--p:#c8ff80;
       --bg:#050505;--bg2:#0d0d0d;--bg3:#111;--bg4:#181818;
       --border:rgba(255,255,255,.07);--text:#fff;--muted:rgba(255,255,255,.4);--rad:14px
     }
@@ -23,7 +23,7 @@
     .poc-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.8);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px)}
     .poc-logo{font-size:16px;font-weight:800;color:var(--g);flex:1;letter-spacing:-.3px}
     .poc-logo span{color:var(--muted);font-weight:400;font-size:10px;display:block;margin-top:-2px;letter-spacing:.4px;text-transform:uppercase}
-    .poc-badge{background:linear-gradient(135deg,#7c3aed,#1d4ed8);color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px}
+    .poc-badge{background:linear-gradient(135deg,#71ff00,#1d4ed8);color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px}
     .platform-status{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700}
     .ps-dot{width:9px;height:9px;border-radius:50%;animation:pulse 2s infinite}
     .ps-dot.healthy{background:var(--g)}.ps-dot.degraded{background:var(--o)}.ps-dot.unknown{background:var(--muted)}
@@ -106,7 +106,7 @@
     .b-yellow{background:rgba(245,158,11,.12);color:#f59e0b}
     .b-red{background:rgba(239,68,68,.12);color:#ef4444}
     .b-blue{background:rgba(59,130,246,.12);color:#60a5fa}
-    .b-purple{background:rgba(167,139,250,.12);color:#a78bfa}
+    .b-purple{background:rgba(168,255,88,.12);color:#c8ff80}
     .b-gray{background:rgba(255,255,255,.06);color:var(--muted)}
 
     /* ── Inputs ── */
@@ -614,7 +614,7 @@ async function loadCapabilities() {
     const matrix = d.matrix || {};
     document.getElementById('cap-matrix-body').innerHTML = Object.entries(matrix).map(([cap, svcs]) => `
       <tr>
-        <td><code style="font-size:11px;color:#a78bfa">${esc(cap)}</code></td>
+        <td><code style="font-size:11px;color:#c8ff80">${esc(cap)}</code></td>
         <td>${svcs.length ? svcs.map(s=>`<span class="cap-pill cp-ok">${esc(s)}</span>`).join('') : '<span style="color:var(--muted);font-size:11px">None declared</span>'}</td>
       </tr>`).join('');
   } catch (e) { toast('Capability matrix failed: ' + e.message, true); }
@@ -648,7 +648,7 @@ async function loadArchitecture() {
       if (!el) return;
       el.innerHTML = list.map(s => `
         <div class="arch-mod" onclick="toast('${esc(s.serviceId)} — ${esc(s.version||'')}')">
-          <div class="arch-mod-dot" style="background:${s.type==='platform'?'#71ff00':s.type==='ai'?'#a78bfa':'#60a5fa'}"></div>
+          <div class="arch-mod-dot" style="background:${s.type==='platform'?'#71ff00':s.type==='ai'?'#c8ff80':'#60a5fa'}"></div>
           ${esc(s.name||s.serviceId)}
         </div>`).join('') || `<span style="color:var(--muted);font-size:12px">None registered</span>`;
     });

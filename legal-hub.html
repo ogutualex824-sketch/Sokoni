@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#7c3aed">
+  <meta name="theme-color" content="#71ff00">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -24,22 +24,22 @@
   <link rel="stylesheet" href="style.css">
   <style>
     /*  Legal Hub Theme  */
-    :root{ --law:#7c3aed; --law2:#4f46e5; --law-glow:rgba(124,58,237,0.2); }
+    :root{ --law:#71ff00; --law2:#4f46e5; --law-glow:rgba(113,255,0,0.2); }
 
     .law-hero{
-      background:linear-gradient(135deg,rgba(124,58,237,0.12),rgba(79,70,229,0.08),rgba(0,0,0,0));
-      border-bottom:1px solid rgba(124,58,237,0.18);
+      background:linear-gradient(135deg,rgba(113,255,0,0.12),rgba(79,70,229,0.08),rgba(0,0,0,0));
+      border-bottom:1px solid rgba(113,255,0,0.18);
       padding:56px 24px 48px;
       text-align:center;
     }
-    .law-hero h1{ font-size:clamp(28px,5vw,44px); font-weight:900; margin-bottom:12px; background:linear-gradient(135deg,#a78bfa,#818cf8,#71ff00); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .law-hero h1{ font-size:clamp(28px,5vw,44px); font-weight:900; margin-bottom:12px; background:linear-gradient(135deg,#c8ff80,#818cf8,#71ff00); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
     .law-hero p { color:rgba(255,255,255,0.5); font-size:15px; max-width:560px; margin:0 auto 28px; line-height:1.7; }
-    .law-badge  { display:inline-block; padding:5px 14px; background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.35); border-radius:20px; font-size:11px; font-weight:800; color:#a78bfa; margin-bottom:16px; text-transform:uppercase; letter-spacing:1px; }
+    .law-badge  { display:inline-block; padding:5px 14px; background:rgba(113,255,0,0.15); border:1px solid rgba(113,255,0,0.35); border-radius:20px; font-size:11px; font-weight:800; color:#c8ff80; margin-bottom:16px; text-transform:uppercase; letter-spacing:1px; }
 
     /* Tab nav */
     .law-tabs{ display:flex; gap:6px; padding:18px 24px 0; overflow-x:auto; scrollbar-width:none; border-bottom:1px solid rgba(255,255,255,0.06); }
     .law-tab{ padding:10px 20px; border-radius:12px 12px 0 0; border:1px solid rgba(255,255,255,0.08); border-bottom:none; background:rgba(255,255,255,0.02); color:rgba(255,255,255,0.5); font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; font-family:inherit; transition:all .2s; }
-    .law-tab.active{ background:rgba(124,58,237,0.1); border-color:rgba(124,58,237,0.3); color:#a78bfa; }
+    .law-tab.active{ background:rgba(113,255,0,0.1); border-color:rgba(113,255,0,0.3); color:#c8ff80; }
 
     .law-body{ max-width:1100px; margin:0 auto; padding:36px 24px 100px; }
     .law-pane{ display:none; }
@@ -48,16 +48,16 @@
     /* Lawyer cards — override compact-grid.css fixed columns */
     .lawyers-grid{ display:grid !important; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)) !important; gap:14px !important; }
     @media(max-width:600px){ .lawyers-grid{ grid-template-columns:1fr !important; } }
-    .lawyer-card{ background:rgba(255,255,255,0.03); border:1px solid rgba(124,58,237,0.18); border-radius:18px; overflow:hidden; transition:all .25s; cursor:pointer; display:flex; flex-direction:column; }
-    .lawyer-card:hover{ border-color:rgba(124,58,237,0.5); transform:translateY(-3px); box-shadow:0 12px 36px rgba(124,58,237,0.18); }
+    .lawyer-card{ background:rgba(255,255,255,0.03); border:1px solid rgba(113,255,0,0.18); border-radius:18px; overflow:hidden; transition:all .25s; cursor:pointer; display:flex; flex-direction:column; }
+    .lawyer-card:hover{ border-color:rgba(113,255,0,0.5); transform:translateY(-3px); box-shadow:0 12px 36px rgba(113,255,0,0.18); }
     .lc-header{ padding:16px 16px 12px; display:flex; align-items:flex-start; gap:12px; border-bottom:1px solid rgba(255,255,255,0.05); }
-    .lc-avatar{ width:54px; height:54px; border-radius:14px; background:linear-gradient(135deg,#7c3aed,#4f46e5); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:900; color:white; flex-shrink:0; letter-spacing:-1px; }
+    .lc-avatar{ width:54px; height:54px; border-radius:14px; background:linear-gradient(135deg,#71ff00,#4f46e5); display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:900; color:white; flex-shrink:0; letter-spacing:-1px; }
     .lc-info{ flex:1; min-width:0; }
     .lc-name{ font-size:14px; font-weight:900; color:white; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .lc-spec{ font-size:11px; color:#a78bfa; font-weight:700; margin-bottom:3px; }
+    .lc-spec{ font-size:11px; color:#c8ff80; font-weight:700; margin-bottom:3px; }
     .lc-firm{ font-size:10px; color:rgba(255,255,255,0.35); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .lc-badge{ display:inline-flex; align-items:center; gap:3px; font-size:9px; font-weight:800; padding:2px 7px; border-radius:4px; flex-shrink:0; margin-top:2px; }
-    .lc-badge-lsk{ background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.3); color:#a78bfa; }
+    .lc-badge-lsk{ background:rgba(113,255,0,0.15); border:1px solid rgba(113,255,0,0.3); color:#c8ff80; }
     .lc-badge-pending{ background:rgba(255,152,0,0.12); border:1px solid rgba(255,152,0,0.3); color:#ff9800; }
     .lc-body{ padding:12px 16px; flex:1; }
     .lc-meta-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
@@ -65,34 +65,34 @@
     .lc-stars span{ color:rgba(255,255,255,0.35); font-size:10px; font-weight:400; }
     .lc-cases{ font-size:10px; color:rgba(255,255,255,0.35); }
     .lc-skills{ display:flex; gap:5px; flex-wrap:wrap; margin-bottom:10px; }
-    .lc-skill{ font-size:9px; padding:2px 8px; border-radius:5px; background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.18); color:rgba(167,139,250,0.8); white-space:nowrap; }
+    .lc-skill{ font-size:9px; padding:2px 8px; border-radius:5px; background:rgba(113,255,0,0.08); border:1px solid rgba(113,255,0,0.18); color:rgba(168,255,88,0.8); white-space:nowrap; }
     .lc-bio{ font-size:11px; color:rgba(255,255,255,0.38); line-height:1.6; margin-bottom:10px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .lc-footer{ padding:12px 16px; background:rgba(255,255,255,0.02); border-top:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between; gap:10px; }
     .lc-rate{ display:flex; flex-direction:column; }
-    .lc-rate-num{ font-size:15px; font-weight:900; color:#a78bfa; line-height:1; }
+    .lc-rate-num{ font-size:15px; font-weight:900; color:#c8ff80; line-height:1; }
     .lc-rate-type{ font-size:9px; color:rgba(255,255,255,0.3); font-weight:400; margin-top:2px; }
     .lc-location{ font-size:10px; color:rgba(255,255,255,0.35); margin-top:4px; display:flex; align-items:center; gap:3px; }
-    .lc-book-btn{ padding:10px 18px; border:none; border-radius:10px; background:linear-gradient(135deg,#7c3aed,#4f46e5); color:white; font-weight:800; font-size:12px; cursor:pointer; font-family:inherit; transition:all .2s; white-space:nowrap; flex-shrink:0; }
+    .lc-book-btn{ padding:10px 18px; border:none; border-radius:10px; background:linear-gradient(135deg,#71ff00,#4f46e5); color:white; font-weight:800; font-size:12px; cursor:pointer; font-family:inherit; transition:all .2s; white-space:nowrap; flex-shrink:0; }
     .lc-book-btn:hover{ filter:brightness(1.12); transform:translateY(-1px); }
     /* Filter bar */
     .lc-filter-bar{ display:flex; gap:7px; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; margin-bottom:18px; }
     .lc-filter-bar::-webkit-scrollbar{ display:none; }
     .lc-filter-btn{ flex-shrink:0; padding:8px 15px; border-radius:20px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.55); font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; transition:all .2s; white-space:nowrap; }
-    .lc-filter-btn:hover,.lc-filter-btn.active-lf{ background:rgba(124,58,237,0.12); border-color:rgba(124,58,237,0.35); color:#a78bfa; }
+    .lc-filter-btn:hover,.lc-filter-btn.active-lf{ background:rgba(113,255,0,0.12); border-color:rgba(113,255,0,0.35); color:#c8ff80; }
     /* Search row */
     .lc-search-row{ display:flex; gap:8px; margin-bottom:14px; }
     .lc-search-wrap{ flex:1; position:relative; }
-    .lc-search-wrap i{ position:absolute; left:13px; top:50%; transform:translateY(-50%); color:rgba(124,58,237,0.5); font-size:13px; pointer-events:none; }
+    .lc-search-wrap i{ position:absolute; left:13px; top:50%; transform:translateY(-50%); color:rgba(113,255,0,0.5); font-size:13px; pointer-events:none; }
     .lc-search-input{ width:100%; padding:11px 14px 11px 36px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.22); border-radius:12px; color:white; font-size:16px; outline:none; font-family:inherit; transition:border-color .2s; }
-    .lc-search-input:focus{ border-color:rgba(124,58,237,0.55); background:rgba(255,255,255,0.13); }
+    .lc-search-input:focus{ border-color:rgba(113,255,0,0.55); background:rgba(255,255,255,0.13); }
     .lc-search-input::placeholder{ color:rgba(255,255,255,0.45); }
     .lc-sort-select{ padding:11px 14px; background:rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.22); border-radius:12px; color:white; font-size:16px; outline:none; font-family:inherit; cursor:pointer; white-space:nowrap; }
-    .lc-sort-select:focus{ border-color:rgba(124,58,237,0.45); }
+    .lc-sort-select:focus{ border-color:rgba(113,255,0,0.45); }
 
     /* Document Generator */
     .doc-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-bottom:28px; }
     .doc-card{ background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:14px; padding:18px; cursor:pointer; transition:all .2s; text-align:center; }
-    .doc-card:hover{ border-color:rgba(124,58,237,0.3); background:rgba(124,58,237,0.06); }
+    .doc-card:hover{ border-color:rgba(113,255,0,0.3); background:rgba(113,255,0,0.06); }
     .doc-icon{ font-size:32px; margin-bottom:10px; }
     .doc-title{ font-size:13px; font-weight:800; color:white; margin-bottom:4px; }
     .doc-desc{ font-size:11px; color:rgba(255,255,255,0.4); line-height:1.5; }
@@ -104,7 +104,7 @@
 
     /* Input helpers */
     .lh-input{ width:100%; padding:12px 14px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1); border-radius:11px; color:white; font-size:16px; outline:none; font-family:inherit; margin-bottom:10px; transition:border-color .2s; }
-    .lh-input:focus{ border-color:rgba(124,58,237,0.5); }
+    .lh-input:focus{ border-color:rgba(113,255,0,0.5); }
     .lh-input::placeholder{ color:rgba(255,255,255,0.3); }
     .lh-textarea{ min-height:80px; resize:vertical; }
     .lh-label{ font-size:11px; font-weight:700; color:rgba(255,255,255,0.45); display:block; margin-bottom:4px; }
@@ -113,7 +113,7 @@
     .lh-grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 
     /* Generated doc preview */
-    .doc-preview{ width:100%; min-height:300px; padding:20px; background:rgba(255,255,255,0.04); border:1px solid rgba(124,58,237,0.2); border-radius:12px; color:rgba(255,255,255,0.85); font-size:11.5px; line-height:1.9; outline:none; font-family:'Courier New',monospace; resize:vertical; margin-top:14px; }
+    .doc-preview{ width:100%; min-height:300px; padding:20px; background:rgba(255,255,255,0.04); border:1px solid rgba(113,255,0,0.2); border-radius:12px; color:rgba(255,255,255,0.85); font-size:11.5px; line-height:1.9; outline:none; font-family:'Courier New',monospace; resize:vertical; margin-top:14px; }
     .doc-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
     .doc-action-btn{ padding:9px 18px; border-radius:9px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; border:1px solid; transition:all .2s; }
 
@@ -121,22 +121,22 @@
     .right-card{ background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:14px; padding:16px 18px; margin-bottom:10px; }
     .right-title{ font-size:13px; font-weight:800; color:white; margin-bottom:6px; }
     .right-body{ font-size:12px; color:rgba(255,255,255,0.55); line-height:1.8; }
-    .right-law{ font-size:10px; color:rgba(124,58,237,0.7); font-weight:700; margin-top:6px; }
+    .right-law{ font-size:10px; color:rgba(113,255,0,0.7); font-weight:700; margin-top:6px; }
 
     /* Alert */
-    .law-alert{ background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.2); border-radius:12px; padding:14px 16px; font-size:12px; color:rgba(255,255,255,0.6); line-height:1.7; margin-bottom:20px; }
-    .law-alert strong{ color:#a78bfa; }
+    .law-alert{ background:rgba(113,255,0,0.08); border:1px solid rgba(113,255,0,0.2); border-radius:12px; padding:14px 16px; font-size:12px; color:rgba(255,255,255,0.6); line-height:1.7; margin-bottom:20px; }
+    .law-alert strong{ color:#c8ff80; }
 
     /* Lawyer filter buttons */
     .lc-filter-btn{ padding:8px 16px; border-radius:20px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.6); font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; transition:all .2s; }
-    .lc-filter-btn:hover, .lc-filter-btn.active-lf{ background:rgba(124,58,237,0.1); border-color:rgba(124,58,237,0.3); color:#a78bfa; }
+    .lc-filter-btn:hover, .lc-filter-btn.active-lf{ background:rgba(113,255,0,0.1); border-color:rgba(113,255,0,0.3); color:#c8ff80; }
 
     /* Register form */
     .reg-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px; }
 
     /* Doc form back link */
     .doc-back-btn{ display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:rgba(255,255,255,0.4); background:none; border:none; cursor:pointer; font-family:inherit; padding:0; margin-bottom:16px; transition:color .2s; }
-    .doc-back-btn:hover{ color:#a78bfa; }
+    .doc-back-btn:hover{ color:#c8ff80; }
 
     /* Bottom nav */
     .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:999;background:rgba(10,10,10,0.96);backdrop-filter:blur(14px);border-top:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-around;padding:8px 0 max(8px,env(safe-area-inset-bottom));}
@@ -160,7 +160,7 @@
 
       /* Stats strip — all 5 equal columns, no overflow */
       #statsStrip{ display:flex !important; overflow-x:hidden !important; scrollbar-width:none !important; padding:6px 0 !important; gap:0 !important; }
-      #statsStrip>div{ flex:1 !important; min-width:0 !important; border-left:1px solid rgba(124,58,237,0.15) !important; border-bottom:none !important; padding:6px 4px !important; }
+      #statsStrip>div{ flex:1 !important; min-width:0 !important; border-left:1px solid rgba(113,255,0,0.15) !important; border-bottom:none !important; padding:6px 4px !important; }
       #statsStrip>div:first-child{ border-left:none !important; }
       #statsStrip>div>div:first-child{ font-size:14px !important; }
       #statsStrip>div>div:last-child{ font-size:9px !important; }
@@ -252,7 +252,7 @@
     flex:1 !important;
     min-width:0 !important;
     padding:6px 4px !important;
-    border-left:1px solid rgba(124,58,237,0.15) !important;
+    border-left:1px solid rgba(113,255,0,0.15) !important;
     border-bottom:none !important;
   }
   #statsStrip>div:first-child{ border-left:none !important; }
@@ -301,15 +301,15 @@
 
 <style>
     /* ══ NEW: Appointment & Service Cards ══ */
-    .appt-card{background:rgba(255,255,255,0.03);border:1px solid rgba(124,58,237,0.18);border-radius:16px;padding:16px 18px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px;}
-    .appt-icon{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    .appt-card{background:rgba(255,255,255,0.03);border:1px solid rgba(113,255,0,0.18);border-radius:16px;padding:16px 18px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px;}
+    .appt-icon{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#71ff00,#4f46e5);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
     .appt-info{flex:1;min-width:0;}
     .appt-title{font-size:14px;font-weight:900;color:white;margin-bottom:2px;}
     .appt-meta{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:6px;}
     .appt-badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:6px;font-size:10px;font-weight:800;}
     .appt-badge.pending{background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.3);color:#ff9800;}
     .appt-badge.confirmed{background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;}
-    .appt-badge.completed{background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.25);color:#a78bfa;}
+    .appt-badge.completed{background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;}
     .appt-badge.cancelled{background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.2);color:#ff4444;}
     .appt-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
     .appt-btn{padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid;transition:all .2s;}
@@ -317,16 +317,16 @@
     /* ══ Service request cards ══ */
     .svc-cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px;}
     .svc-cat-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:20px;cursor:pointer;transition:all .2s;text-align:center;}
-    .svc-cat-card:hover{border-color:rgba(124,58,237,0.4);background:rgba(124,58,237,0.07);transform:translateY(-2px);}
+    .svc-cat-card:hover{border-color:rgba(113,255,0,0.4);background:rgba(113,255,0,0.07);transform:translateY(-2px);}
     .svc-cat-icon{font-size:36px;margin-bottom:12px;display:block;}
     .svc-cat-name{font-size:13px;font-weight:900;color:white;margin-bottom:4px;}
     .svc-cat-desc{font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;}
-    .svc-cat-price{font-size:12px;font-weight:800;color:#a78bfa;margin-top:8px;}
+    .svc-cat-price{font-size:12px;font-weight:800;color:#c8ff80;margin-top:8px;}
 
     /* ══ Review / rating ══ */
     .review-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:14px 16px;margin-bottom:10px;}
     .review-header{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
-    .review-avatar{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#4f46e5);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:white;flex-shrink:0;}
+    .review-avatar{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#71ff00,#4f46e5);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:white;flex-shrink:0;}
     .review-name{font-size:13px;font-weight:800;color:white;}
     .review-date{font-size:10px;color:rgba(255,255,255,0.3);}
     .review-stars{color:#ffc107;font-size:12px;}
@@ -336,13 +336,13 @@
     /* ══ Dashboard stats ══ */
     .dash-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:22px;}
     .dash-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;text-align:center;}
-    .dash-stat-num{font-size:24px;font-weight:900;color:#a78bfa;margin-bottom:2px;}
+    .dash-stat-num{font-size:24px;font-weight:900;color:#c8ff80;margin-bottom:2px;}
     .dash-stat-label{font-size:10px;color:rgba(255,255,255,0.4);}
 
     /* ══ Notification items ══ */
     .notif-item{display:flex;gap:12px;padding:12px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;margin-bottom:8px;align-items:flex-start;}
-    .notif-item.unread{border-color:rgba(124,58,237,0.25);background:rgba(124,58,237,0.04);}
-    .notif-dot{width:8px;height:8px;border-radius:50%;background:#a78bfa;margin-top:4px;flex-shrink:0;}
+    .notif-item.unread{border-color:rgba(113,255,0,0.25);background:rgba(113,255,0,0.04);}
+    .notif-dot{width:8px;height:8px;border-radius:50%;background:#c8ff80;margin-top:4px;flex-shrink:0;}
     .notif-content{flex:1;}
     .notif-title{font-size:12px;font-weight:800;color:white;margin-bottom:2px;}
     .notif-body{font-size:11px;color:rgba(255,255,255,0.45);line-height:1.5;}
@@ -358,13 +358,13 @@
     .avail-day{font-size:13px;font-weight:700;color:white;}
     .avail-time{font-size:11px;color:rgba(255,255,255,0.4);}
     .toggle-switch{width:40px;height:22px;border-radius:11px;background:rgba(255,255,255,0.1);position:relative;cursor:pointer;transition:background .2s;border:none;}
-    .toggle-switch.on{background:rgba(124,58,237,0.6);}
+    .toggle-switch.on{background:rgba(113,255,0,0.6);}
     .toggle-switch::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:white;top:3px;left:3px;transition:left .2s;}
     .toggle-switch.on::after{left:21px;}
 
     /* ══ Pro analytics ══ */
     .analytics-bar{background:rgba(255,255,255,0.04);border-radius:4px;height:8px;margin-top:6px;overflow:hidden;}
-    .analytics-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#7c3aed,#a78bfa);transition:width .6s;}
+    .analytics-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#71ff00,#c8ff80);transition:width .6s;}
 
     @media(max-width:600px){
       .svc-cat-grid{grid-template-columns:repeat(2,1fr);}
@@ -383,14 +383,14 @@
 
 
 <!-- NAV -->
-<nav class="navbar" style="background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(124,58,237,0.15);">
+<nav class="navbar" style="background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(113,255,0,0.15);">
   <div class="logo-section"><a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="Sokoni"></a></div>
   <div class="law-nav-links" style="gap:8px;display:flex;align-items:center;">
     <a href="legal.html" style="padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;font-weight:600;">📋 Legal Docs</a>
-    <button type="button" onclick="showLawTab('lawyers');setTimeout(()=>{const s=document.getElementById('lawyerSearch');if(s){s.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>s.focus(),400);}},300);" style="padding:8px 14px;border:1px solid rgba(124,58,237,0.3);border-radius:10px;color:#a78bfa;background:rgba(124,58,237,0.08);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">⚖️ Find a Lawyer</button>
-    <a href="provider.html?cat=legal" style="padding:8px 14px;border:1px solid rgba(124,58,237,0.3);border-radius:10px;color:#a78bfa;background:rgba(124,58,237,0.08);font-size:12px;font-weight:700;text-decoration:none;">Provider Dashboard</a>
+    <button type="button" onclick="showLawTab('lawyers');setTimeout(()=>{const s=document.getElementById('lawyerSearch');if(s){s.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>s.focus(),400);}},300);" style="padding:8px 14px;border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#c8ff80;background:rgba(113,255,0,0.08);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">⚖️ Find a Lawyer</button>
+    <a href="provider.html?cat=legal" style="padding:8px 14px;border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#c8ff80;background:rgba(113,255,0,0.08);font-size:12px;font-weight:700;text-decoration:none;">Provider Dashboard</a>
     <a href="index.html" style="padding:8px 14px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:rgba(255,255,255,0.5);text-decoration:none;font-size:12px;font-weight:600;">Home</a>
-    <a href="notifications.html" style="padding:8px 12px;border:1px solid rgba(124,58,237,0.2);border-radius:10px;color:#a78bfa;text-decoration:none;font-size:14px;position:relative;" title="Notifications">🔔<span id="lhNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
+    <a href="notifications.html" style="padding:8px 12px;border:1px solid rgba(113,255,0,0.2);border-radius:10px;color:#c8ff80;text-decoration:none;font-size:14px;position:relative;" title="Notifications">🔔<span id="lhNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
   </div>
 </nav>
 <script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('lhNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
@@ -401,18 +401,18 @@
   <h1>Your Legal Partner<br>in Kenya</h1>
   <p>Find verified advocates, generate court-ready legal documents, book consultations and know your rights  all in one place.</p>
   <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-    <button type="button" onclick="showLawTab('lawyers');setTimeout(()=>{const s=document.getElementById('lawyerSearch');if(s){s.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>s.focus(),400);}},300);" style="padding:13px 24px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border:none;border-radius:12px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">👨‍⚖️ Find an Advocate</button>
-    <button type="button" onclick="showLawTab('documents')" style="padding:13px 24px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.3);color:#a78bfa;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">📄 Generate Legal Document</button>
+    <button type="button" onclick="showLawTab('lawyers');setTimeout(()=>{const s=document.getElementById('lawyerSearch');if(s){s.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>s.focus(),400);}},300);" style="padding:13px 24px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;border:none;border-radius:12px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">👨‍⚖️ Find an Advocate</button>
+    <button type="button" onclick="showLawTab('documents')" style="padding:13px 24px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:#c8ff80;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">📄 Generate Legal Document</button>
   </div>
 </div>
 
 <!-- STATS STRIP -->
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));background:rgba(124,58,237,0.05);border-bottom:1px solid rgba(124,58,237,0.12);padding:14px 24px;gap:0;" id="statsStrip">
-  <div style="text-align:center;padding:10px 0;"><div style="font-size:20px;font-weight:900;color:#a78bfa;" id="statLawyers"></div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">LSK Verified Lawyers</div></div>
-  <div style="text-align:center;padding:10px 0;border-left:1px solid rgba(124,58,237,0.15);"><div style="font-size:20px;font-weight:900;color:#71ff00;">8</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Specialisations</div></div>
-  <div style="text-align:center;padding:10px 0;border-left:1px solid rgba(124,58,237,0.15);"><div style="font-size:20px;font-weight:900;color:#ffc107;" id="statRating"></div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Avg. Rating</div></div>
-  <div style="text-align:center;padding:10px 0;border-left:1px solid rgba(124,58,237,0.15);"><div style="font-size:20px;font-weight:900;color:#00aaff;" id="statCases"></div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Cases Handled</div></div>
-  <div style="text-align:center;padding:10px 0;border-left:1px solid rgba(124,58,237,0.15);"><div style="font-size:20px;font-weight:900;color:#ff9800;" id="statCities"></div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Cities + Remote</div></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));background:rgba(113,255,0,0.05);border-bottom:1px solid rgba(113,255,0,0.12);padding:14px 24px;gap:0;" id="statsStrip">
+  <div style="text-align:center;padding:10px 0;"><div style="font-size:20px;font-weight:900;color:#c8ff80;" id="statLawyers"></div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">LSK Verified Lawyers</div></div>
+  <div style="text-align:center;padding:10px 0;border-left:1px solid rgba(113,255,0,0.15);"><div style="font-size:20px;font-weight:900;color:#71ff00;">8</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Specialisations</div></div>
+  <div style="text-align:center;padding:10px 0;border-left:1px solid rgba(113,255,0,0.15);"><div style="font-size:20px;font-weight:900;color:#ffc107;" id="statRating"></div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Avg. Rating</div></div>
+  <div style="text-align:center;padding:10px 0;border-left:1px solid rgba(113,255,0,0.15);"><div style="font-size:20px;font-weight:900;color:#00aaff;" id="statCases"></div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Cases Handled</div></div>
+  <div style="text-align:center;padding:10px 0;border-left:1px solid rgba(113,255,0,0.15);"><div style="font-size:20px;font-weight:900;color:#ff9800;" id="statCities"></div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Cities + Remote</div></div>
 </div>
 
 <!-- SEARCH RESULTS PANE (shown when hero search is active) -->
@@ -475,8 +475,8 @@
 
     <div class="lawyers-grid" id="lawyersGrid"></div>
 
-    <div style="font-size:11px;color:rgba(255,255,255,0.2);margin-top:18px;padding:12px;background:rgba(124,58,237,0.05);border-radius:10px;line-height:1.7;">
-      ⚖️ Advocates listed must be admitted to the Roll of Advocates in Kenya (Advocates Act Cap 16). Verify credentials at <a href="https://www.lsk.or.ke" target="_blank" style="color:#a78bfa;">lsk.or.ke</a> before retaining legal services.
+    <div style="font-size:11px;color:rgba(255,255,255,0.2);margin-top:18px;padding:12px;background:rgba(113,255,0,0.05);border-radius:10px;line-height:1.7;">
+      ⚖️ Advocates listed must be admitted to the Roll of Advocates in Kenya (Advocates Act Cap 16). Verify credentials at <a href="https://www.lsk.or.ke" target="_blank" style="color:#c8ff80;">lsk.or.ke</a> before retaining legal services.
     </div>
   </div>
 
@@ -532,28 +532,28 @@
     </div>
 
     <!-- Court Filing Documents -->
-    <div style="font-size:11px;font-weight:800;color:#a78bfa;text-transform:uppercase;letter-spacing:1.5px;margin:20px 0 10px;display:flex;align-items:center;gap:8px;">
-      <span style="flex:1;height:1px;background:rgba(124,58,237,0.2);display:block;"></span>
+    <div style="font-size:11px;font-weight:800;color:#c8ff80;text-transform:uppercase;letter-spacing:1.5px;margin:20px 0 10px;display:flex;align-items:center;gap:8px;">
+      <span style="flex:1;height:1px;background:rgba(113,255,0,0.2);display:block;"></span>
       🏛️ Court Filing Documents
-      <span style="flex:1;height:1px;background:rgba(124,58,237,0.2);display:block;"></span>
+      <span style="flex:1;height:1px;background:rgba(113,255,0,0.2);display:block;"></span>
     </div>
     <div class="doc-grid" id="courtDocGrid">
-      <div class="doc-card" onclick="selectDocType('plaint')" style="border-color:rgba(124,58,237,0.3);">
+      <div class="doc-card" onclick="selectDocType('plaint')" style="border-color:rgba(113,255,0,0.3);">
         <div class="doc-icon">⚖️</div>
         <div class="doc-title">Plaint / Statement of Claim</div>
         <div class="doc-desc">File a civil suit  the founding document to start court proceedings in Kenya</div>
       </div>
-      <div class="doc-card" onclick="selectDocType('notice_motion')" style="border-color:rgba(124,58,237,0.3);">
+      <div class="doc-card" onclick="selectDocType('notice_motion')" style="border-color:rgba(113,255,0,0.3);">
         <div class="doc-icon">📋</div>
         <div class="doc-title">Notice of Motion</div>
         <div class="doc-desc">Interlocutory application  injunctions, orders, interim relief in pending suits</div>
       </div>
-      <div class="doc-card" onclick="selectDocType('witness_statement')" style="border-color:rgba(124,58,237,0.3);">
+      <div class="doc-card" onclick="selectDocType('witness_statement')" style="border-color:rgba(113,255,0,0.3);">
         <div class="doc-icon">👁️</div>
         <div class="doc-title">Witness Statement</div>
         <div class="doc-desc">Sworn witness statement for civil proceedings  replaces oral evidence-in-chief</div>
       </div>
-      <div class="doc-card" onclick="selectDocType('written_submissions')" style="border-color:rgba(124,58,237,0.3);">
+      <div class="doc-card" onclick="selectDocType('written_submissions')" style="border-color:rgba(113,255,0,0.3);">
         <div class="doc-icon">📝</div>
         <div class="doc-title">Written Submissions</div>
         <div class="doc-desc">Structured legal arguments and authorities for court  filed by advocates</div>
@@ -595,11 +595,11 @@
 
 <!-- DOCUMENT FORM MODAL  position:fixed so DOM location doesn't matter -->
   <div id="docFormModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);overflow-y:auto;-webkit-overflow-scrolling:touch;" onclick="if(event.target===this)closeDocForm()">
-    <div style="max-width:680px;margin:20px auto;background:#111;border:1px solid rgba(124,58,237,0.25);border-radius:20px;padding:0 0 30px;min-height:200px;" onclick="event.stopPropagation()">
+    <div style="max-width:680px;margin:20px auto;background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:20px;padding:0 0 30px;min-height:200px;" onclick="event.stopPropagation()">
 
       <!-- Modal header -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;background:#111;z-index:1;border-radius:20px 20px 0 0;">
-        <div id="docFormTitle" style="font-size:16px;font-weight:900;color:#a78bfa;"></div>
+        <div id="docFormTitle" style="font-size:16px;font-weight:900;color:#c8ff80;"></div>
         <button type="button" onclick="closeDocForm()" style="width:32px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit;">✕</button>
       </div>
 
@@ -608,7 +608,7 @@
 
       <!-- Generate button -->
       <div style="padding:0 22px;">
-        <button type="button" id="docGenerateBtn" onclick="generateLegalDoc()" style="width:100%;padding:15px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;font-weight:900;border:none;border-radius:13px;cursor:pointer;font-size:15px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .2s;">
+        <button type="button" id="docGenerateBtn" onclick="generateLegalDoc()" style="width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:900;border:none;border-radius:13px;cursor:pointer;font-size:15px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .2s;">
           📄 Generate Document
         </button>
         <div id="docGenMsg" style="font-size:12px;min-height:16px;margin-top:10px;text-align:center;"></div>
@@ -646,7 +646,7 @@
 
     <!-- Process steps -->
     <div style="margin-bottom:24px;">
-      <div style="font-size:13px;font-weight:800;color:#a78bfa;margin-bottom:16px;">📋 Civil Court Process (Step by Step)</div>
+      <div style="font-size:13px;font-weight:800;color:#c8ff80;margin-bottom:16px;">📋 Civil Court Process (Step by Step)</div>
       <div id="courtSteps"></div>
     </div>
 
@@ -674,17 +674,17 @@
     </div>
 
     <!-- Kenya courts directory -->
-    <div style="font-size:13px;font-weight:800;color:#a78bfa;margin-bottom:12px;">🏛️ Kenya Court Locations</div>
+    <div style="font-size:13px;font-weight:800;color:#c8ff80;margin-bottom:12px;">🏛️ Kenya Court Locations</div>
     <div id="courtsDirectory"></div>
 
     <!-- Advocate's pre-trial checklist -->
-    <div class="lh-section" style="margin-top:24px;border-color:rgba(124,58,237,0.2);">
-      <div class="lh-section-title" style="color:#a78bfa;">⚖️ Advocate's Pre-Trial Checklist</div>
+    <div class="lh-section" style="margin-top:24px;border-color:rgba(113,255,0,0.2);">
+      <div class="lh-section-title" style="color:#c8ff80;">⚖️ Advocate's Pre-Trial Checklist</div>
       <p style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:16px;">Tick off each item before your hearing date. Tap to mark complete.</p>
       <div id="advocateChecklist"></div>
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
         <button type="button" onclick="resetChecklist()" style="padding:8px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:9px;color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🔄 Reset</button>
-        <button type="button" onclick="printChecklist()" style="padding:8px 16px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.25);border-radius:9px;color:#a78bfa;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print Checklist</button>
+        <button type="button" onclick="printChecklist()" style="padding:8px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:9px;color:#c8ff80;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print Checklist</button>
       </div>
     </div>
 
@@ -719,7 +719,7 @@
     <!-- Register type toggle: Individual Lawyer vs Law Firm -->
     <div class="reg-type-toggle" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px;">
       <button type="button" id="regTypeIndBtn" onclick="switchRegType('individual')"
-        style="padding:14px;border-radius:14px;border:2px solid rgba(124,58,237,0.5);background:rgba(124,58,237,0.12);color:#a78bfa;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;transition:all .2s;">
+        style="padding:14px;border-radius:14px;border:2px solid rgba(113,255,0,0.5);background:rgba(113,255,0,0.12);color:#c8ff80;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;transition:all .2s;">
         👨‍⚖️ Individual Lawyer
       </button>
       <button type="button" id="regTypeFirmBtn" onclick="switchRegType('firm')"
@@ -791,8 +791,8 @@
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px;">
           <label style="cursor:pointer;">
             <input type="radio" name="firmPlan" value="basic" checked style="display:none;" onchange="updateFirmPlanUI()">
-            <div class="firm-plan-card" id="firmPlanBasic" style="border:2px solid rgba(124,58,237,0.4);border-radius:14px;padding:16px;background:rgba(124,58,237,0.08);transition:all .2s;">
-              <div style="font-size:15px;font-weight:900;color:#a78bfa;margin-bottom:4px;">🆓 Basic</div>
+            <div class="firm-plan-card" id="firmPlanBasic" style="border:2px solid rgba(113,255,0,0.4);border-radius:14px;padding:16px;background:rgba(113,255,0,0.08);transition:all .2s;">
+              <div style="font-size:15px;font-weight:900;color:#c8ff80;margin-bottom:4px;">🆓 Basic</div>
               <div style="font-size:20px;font-weight:900;color:white;margin-bottom:6px;">Free</div>
               <div style="font-size:11px;color:rgba(255,255,255,0.5);line-height:1.7;">• Firm listing with contact<br>• Up to 3 advocates listed<br>• Standard placement</div>
             </div>
@@ -816,14 +816,14 @@
         </div>
       </div>
       <button type="button" onclick="submitFirmRegistration()"
-        style="width:100%;padding:15px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:14px;color:white;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit;transition:all .2s;">
+        style="width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:14px;color:white;font-weight:900;font-size:15px;cursor:pointer;font-family:inherit;transition:all .2s;">
         🏢 Register Law Firm
       </button>
       <div id="firmRegMsg" style="margin-top:12px;font-size:13px;text-align:center;"></div>
       </div><!-- /firmRegForm -->
       <div id="firmRegSuccess" style="display:none;padding:28px 16px;text-align:center;">
         <div style="font-size:56px;margin-bottom:14px;">🏢✅</div>
-        <div style="font-size:20px;font-weight:900;color:#a78bfa;margin-bottom:8px;">Registration Submitted!</div>
+        <div style="font-size:20px;font-weight:900;color:#c8ff80;margin-bottom:8px;">Registration Submitted!</div>
         <div id="firmRegRef" style="font-size:12px;color:rgba(255,255,255,0.35);margin-bottom:14px;letter-spacing:.5px;"></div>
         <div style="font-size:13px;color:rgba(255,255,255,0.55);line-height:1.7;margin-bottom:22px;">Our team will review your submission and contact you within 24 hours to verify and activate your listing.</div>
         <a id="firmRegWA" href="javascript:void(0)" style="display:inline-flex;align-items:center;gap:8px;padding:13px 26px;background:linear-gradient(135deg,#25d366,#128c7e);color:white;border-radius:13px;font-weight:900;font-size:13px;text-decoration:none;">
@@ -836,27 +836,27 @@
     <div id="individualRegPanel">
 
     <!-- How verification works -->
-    <div style="background:linear-gradient(135deg,rgba(124,58,237,0.1),rgba(79,70,229,0.06));border:1px solid rgba(124,58,237,0.25);border-radius:16px;padding:18px 20px;margin-bottom:22px;">
-      <div style="font-size:13px;font-weight:900;color:#a78bfa;margin-bottom:12px;">⚖️ How Listing &amp; Verification Works</div>
+    <div style="background:linear-gradient(135deg,rgba(113,255,0,0.1),rgba(79,70,229,0.06));border:1px solid rgba(113,255,0,0.25);border-radius:16px;padding:18px 20px;margin-bottom:22px;">
+      <div style="font-size:13px;font-weight:900;color:#c8ff80;margin-bottom:12px;">⚖️ How Listing &amp; Verification Works</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
         <div style="display:flex;gap:10px;align-items:flex-start;">
-          <div style="width:26px;height:26px;border-radius:50%;background:rgba(124,58,237,0.2);color:#a78bfa;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</div>
+          <div style="width:26px;height:26px;border-radius:50%;background:rgba(113,255,0,0.2);color:#c8ff80;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">1</div>
           <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">Fill &amp; Submit</strong>Complete the form below. Your listing goes live immediately with a <span style="color:#ff9800;">⏳ Pending</span> badge.</div>
         </div>
         <div style="display:flex;gap:10px;align-items:flex-start;">
-          <div style="width:26px;height:26px;border-radius:50%;background:rgba(124,58,237,0.2);color:#a78bfa;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">SOKONI Verification</strong>We cross-check your Roll Number on the LSK portal within <strong style="color:#a78bfa;">23 business days</strong>.</div>
+          <div style="width:26px;height:26px;border-radius:50%;background:rgba(113,255,0,0.2);color:#c8ff80;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">2</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">SOKONI Verification</strong>We cross-check your Roll Number on the LSK portal within <strong style="color:#c8ff80;">23 business days</strong>.</div>
         </div>
         <div style="display:flex;gap:10px;align-items:flex-start;">
-          <div style="width:26px;height:26px;border-radius:50%;background:rgba(124,58,237,0.2);color:#a78bfa;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">3</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">LSK Badge Awarded</strong>Once verified your listing gets the <span style="color:#a78bfa;">✅ LSK Verified</span> badge  visible to all clients.</div>
+          <div style="width:26px;height:26px;border-radius:50%;background:rgba(113,255,0,0.2);color:#c8ff80;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">3</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">LSK Badge Awarded</strong>Once verified your listing gets the <span style="color:#c8ff80;">✅ LSK Verified</span> badge  visible to all clients.</div>
         </div>
         <div style="display:flex;gap:10px;align-items:flex-start;">
-          <div style="width:26px;height:26px;border-radius:50%;background:rgba(124,58,237,0.2);color:#a78bfa;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">4</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">Start Receiving Clients</strong>Clients pay a <strong style="color:#a78bfa;">KES 500 booking deposit</strong> through SOKONI before connecting with you. After case completion, log your total fee and SOKONI invoices <strong style="color:#71ff00;">5% commission</strong> via M-PESA.</div>
+          <div style="width:26px;height:26px;border-radius:50%;background:rgba(113,255,0,0.2);color:#c8ff80;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;">4</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.6);line-height:1.6;"><strong style="color:white;display:block;margin-bottom:2px;">Start Receiving Clients</strong>Clients pay a <strong style="color:#c8ff80;">KES 500 booking deposit</strong> through SOKONI before connecting with you. After case completion, log your total fee and SOKONI invoices <strong style="color:#71ff00;">5% commission</strong> via M-PESA.</div>
         </div>
       </div>
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(124,58,237,0.15);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(113,255,0,0.15);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-size:11px;color:rgba(255,255,255,0.4);">Questions about verification?</span>
         <a href="https://wa.me/254705726803?text=Hello%2C%20I%20want%20to%20enquire%20about%20advocate%20verification%20on%20SOKONI%20Legal%20Hub" target="_blank" style="padding:6px 14px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:8px;color:#25d366;font-size:11px;font-weight:700;text-decoration:none;">📲 WhatsApp SOKONI Legal Team</a>
       </div>
@@ -946,12 +946,12 @@
       <label class="lh-label">Professional Bio *</label>
       <textarea id="lawBio" class="lh-input lh-textarea" placeholder="Briefly describe your experience, years of practice, notable cases (2-3 sentences)..."></textarea>
 
-      <div style="background:rgba(124,58,237,0.07);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.55);line-height:1.7;">
-        <strong style="color:#a78bfa;">⚖️ Declaration:</strong> By registering, I confirm that I am duly admitted as an Advocate of the High Court of Kenya, I am in good standing with the Law Society of Kenya, and I hold a valid Practising Certificate for the current year. I understand that SOKONI may verify my credentials with the Law Society of Kenya and may remove my listing if this information is found to be inaccurate.
-        <div style="margin-top:10px;"><label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;"><input type="checkbox" id="lawDeclaration" style="accent-color:#7c3aed;margin-top:3px;flex-shrink:0;"> I confirm the above declaration and agree to SOKONI's <a href="legal.html#terms" style="color:#a78bfa;">Terms of Service</a></label></div>
+      <div style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12px;color:rgba(255,255,255,0.55);line-height:1.7;">
+        <strong style="color:#c8ff80;">⚖️ Declaration:</strong> By registering, I confirm that I am duly admitted as an Advocate of the High Court of Kenya, I am in good standing with the Law Society of Kenya, and I hold a valid Practising Certificate for the current year. I understand that SOKONI may verify my credentials with the Law Society of Kenya and may remove my listing if this information is found to be inaccurate.
+        <div style="margin-top:10px;"><label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;"><input type="checkbox" id="lawDeclaration" style="accent-color:#71ff00;margin-top:3px;flex-shrink:0;"> I confirm the above declaration and agree to SOKONI's <a href="legal.html#terms" style="color:#c8ff80;">Terms of Service</a></label></div>
       </div>
 
-      <button type="button" onclick="registerLawyer()" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:15px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;">⚖️ Submit Application</button>
+      <button type="button" onclick="registerLawyer()" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:15px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;">⚖️ Submit Application</button>
       <div id="lawRegMsg" style="margin-top:12px;font-size:12px;min-height:16px;"></div>
     </div>
 
@@ -962,10 +962,10 @@
       <div style="font-size:13px;color:rgba(255,255,255,0.5);line-height:1.8;max-width:400px;margin:0 auto 24px;">
         Your listing is now live with a <span style="color:#ff9800;font-weight:700;">⏳ Pending Verification</span> badge.<br>
         SOKONI will verify your Roll Number with the Law Society of Kenya within <strong style="color:white;">23 business days</strong>.
-        You will be notified via WhatsApp when your <span style="color:#a78bfa;font-weight:700;">✅ LSK Verified</span> badge is awarded.
+        You will be notified via WhatsApp when your <span style="color:#c8ff80;font-weight:700;">✅ LSK Verified</span> badge is awarded.
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;max-width:360px;margin:0 auto;">
-        <button type="button" onclick="showLawTab('lawyers',null)" style="padding:13px 24px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border:none;border-radius:12px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">👁️ View My Listing</button>
+        <button type="button" onclick="showLawTab('lawyers',null)" style="padding:13px 24px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;border:none;border-radius:12px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">👁️ View My Listing</button>
         <a id="regWAFollowUp" href="javascript:void(0)" target="_blank" style="padding:12px 24px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.25);border-radius:12px;color:#25d366;font-weight:800;font-size:13px;text-decoration:none;">📲 WhatsApp SOKONI to Expedite Verification</a>
       </div>
       <div id="regRef" style="margin-top:18px;font-size:11px;color:rgba(255,255,255,0.25);"></div>
@@ -993,7 +993,7 @@
         <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">Case fees are agreed directly between you and the client. Money may not pass through SOKONI.</div>
       </div>
       <div style="background:rgba(168,85,247,0.05);border:1px solid rgba(168,85,247,0.15);border-radius:12px;padding:14px;">
-        <div style="font-size:11px;font-weight:800;color:#a78bfa;margin-bottom:4px;">✅ Log & Pay Commission</div>
+        <div style="font-size:11px;font-weight:800;color:#c8ff80;margin-bottom:4px;">✅ Log & Pay Commission</div>
         <div style="font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6;">After completion, log the total fee below. SOKONI calculates 5% and shows M-PESA payment details.</div>
       </div>
     </div>
@@ -1073,10 +1073,10 @@
         <div style="font-size:17px;font-weight:900;color:white;">📅 My Appointments</div>
         <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Book and manage consultations with legal professionals</div>
       </div>
-      <button type="button" onclick="showBookAppointmentForm()" style="padding:10px 18px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:10px;color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">+ Book Consultation</button>
+      <button type="button" onclick="showBookAppointmentForm()" style="padding:10px 18px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:10px;color:white;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">+ Book Consultation</button>
     </div>
 
-    <div id="appointmentForm" style="display:none;background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.2);border-radius:16px;padding:20px;margin-bottom:20px;">
+    <div id="appointmentForm" style="display:none;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:16px;padding:20px;margin-bottom:20px;">
       <div style="font-size:14px;font-weight:900;color:white;margin-bottom:16px;">Book a Legal Consultation</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div>
@@ -1127,7 +1127,7 @@
         <textarea id="apptDesc" class="lh-input" rows="3" placeholder="Briefly describe your legal matter" style="resize:vertical;font-size:16px;"></textarea>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
-        <button type="button" onclick="submitAppointment()" style="padding:11px 22px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">📅 Request Appointment</button>
+        <button type="button" onclick="submitAppointment()" style="padding:11px 22px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">📅 Request Appointment</button>
         <button type="button" onclick="document.getElementById('appointmentForm').style.display='none'" style="padding:11px 18px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.5);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button>
       </div>
       <div id="apptMsg" style="margin-top:10px;font-size:12px;min-height:16px;"></div>
@@ -1188,7 +1188,7 @@
         <div class="svc-cat-price">From KES 3,000</div>
       </div>
     </div>
-    <div id="propServiceForm" style="display:none;background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.2);border-radius:16px;padding:20px;margin-top:4px;">
+    <div id="propServiceForm" style="display:none;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:16px;padding:20px;margin-top:4px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <div style="font-size:14px;font-weight:900;color:white;" id="propServiceTitle">Property Legal Service</div>
         <button type="button" onclick="document.getElementById('propServiceForm').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:18px;cursor:pointer;">&#10005;</button>
@@ -1208,7 +1208,7 @@
         </div>
       </div>
       <div style="margin-top:12px;"><label class="lh-label">Description *</label><textarea id="propSvcDesc" class="lh-input" rows="3" placeholder="Describe what you need..." style="resize:vertical;font-size:16px;"></textarea></div>
-      <button type="button" onclick="submitPropertyService()" style="margin-top:14px;padding:11px 22px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏘️ Submit Request</button>
+      <button type="button" onclick="submitPropertyService()" style="margin-top:14px;padding:11px 22px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏘️ Submit Request</button>
       <div id="propSvcMsg" style="margin-top:10px;font-size:12px;min-height:16px;"></div>
     </div>
     <div style="font-size:13px;font-weight:800;color:white;margin:24px 0 10px;display:flex;align-items:center;gap:8px;">📋 My Property Requests <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:8px;"></span></div>
@@ -1269,7 +1269,7 @@
       <div style="margin-top:12px;"><label class="lh-label">Additional Conditions</label><textarea id="vConditions" class="lh-input" rows="2" placeholder="e.g. Sold as seen, spare tyre included..." style="resize:vertical;font-size:16px;"></textarea></div>
       <button type="button" onclick="generateVehicleAgreementDoc()" style="margin-top:14px;padding:11px 22px;background:linear-gradient(135deg,#00aaff,#0077bb);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🚗 Generate Agreement</button>
     </div>
-    <div id="vehicleServiceForm" style="display:none;background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.2);border-radius:16px;padding:20px;margin-top:4px;">
+    <div id="vehicleServiceForm" style="display:none;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:16px;padding:20px;margin-top:4px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <div style="font-size:14px;font-weight:900;color:white;" id="vehicleServiceTitle">Vehicle Legal Service</div>
         <button type="button" onclick="document.getElementById('vehicleServiceForm').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:18px;cursor:pointer;">&#10005;</button>
@@ -1282,7 +1282,7 @@
         <div><label class="lh-label">Make / Model</label><input type="text" id="vSvcMake" class="lh-input" placeholder="e.g. Toyota Prado" style="font-size:16px;"></div>
       </div>
       <div style="margin-top:12px;"><label class="lh-label">Describe Your Issue *</label><textarea id="vSvcDesc" class="lh-input" rows="3" placeholder="Describe the legal matter..." style="resize:vertical;font-size:16px;"></textarea></div>
-      <button type="button" onclick="submitVehicleService()" style="margin-top:14px;padding:11px 22px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🚗 Submit Request</button>
+      <button type="button" onclick="submitVehicleService()" style="margin-top:14px;padding:11px 22px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:10px;color:white;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🚗 Submit Request</button>
       <div id="vSvcMsg" style="margin-top:10px;font-size:12px;min-height:16px;"></div>
     </div>
     <div style="font-size:13px;font-weight:800;color:white;margin:24px 0 10px;display:flex;align-items:center;gap:8px;">📋 My Vehicle Requests <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:8px;"></span></div>
@@ -1374,7 +1374,7 @@
     </div>
     <div style="font-size:13px;font-weight:800;color:white;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
       🔔 Notifications
-      <span id="notifBadge" style="display:none;background:#7c3aed;color:white;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:900;"></span>
+      <span id="notifBadge" style="display:none;background:#71ff00;color:#000;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:900;"></span>
       <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:4px;"></span>
       <button type="button" onclick="markAllNotifsRead()" style="font-size:10px;color:rgba(255,255,255,0.3);background:none;border:none;cursor:pointer;font-family:inherit;">Mark all read</button>
     </div>
@@ -1382,7 +1382,7 @@
     <div style="font-size:13px;font-weight:800;color:white;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
       📅 Upcoming Appointments
       <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:4px;"></span>
-      <button type="button" onclick="showLawTab('appointments')" style="font-size:10px;color:#a78bfa;background:none;border:none;cursor:pointer;font-family:inherit;">See all</button>
+      <button type="button" onclick="showLawTab('appointments')" style="font-size:10px;color:#c8ff80;background:none;border:none;cursor:pointer;font-family:inherit;">See all</button>
     </div>
     <div id="dashUpcomingAppts" style="margin-bottom:24px;"><div style="text-align:center;padding:16px;color:rgba(255,255,255,0.3);font-size:12px;">No upcoming appointments.</div></div>
     <div style="font-size:13px;font-weight:800;color:white;margin-bottom:10px;display:flex;align-items:center;gap:8px;">🛠️ Recent Service Requests <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:4px;"></span></div>
@@ -1397,8 +1397,8 @@
       <div style="font-size:40px;margin-bottom:16px;">⚖️</div>
       <div style="font-size:16px;font-weight:900;color:white;margin-bottom:8px;">Legal Professional Dashboard</div>
       <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;">Manage appointments, client requests, availability and track your practice analytics.</div>
-      <button type="button" onclick="showProDashLogin()" style="padding:12px 24px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">Login as Legal Professional</button>
-      <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.3);">Not registered? <button type="button" onclick="showLawTab('register')" style="background:none;border:none;color:#a78bfa;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;text-decoration:underline;">Register as Lawyer</button></div>
+      <button type="button" onclick="showProDashLogin()" style="padding:12px 24px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">Login as Legal Professional</button>
+      <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.3);">Not registered? <button type="button" onclick="showLawTab('register')" style="background:none;border:none;color:#c8ff80;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;text-decoration:underline;">Register as Lawyer</button></div>
     </div>
     <div id="proDashLoginForm" style="display:none;max-width:400px;margin:0 auto;padding:20px;">
       <div style="font-size:15px;font-weight:900;color:white;margin-bottom:16px;text-align:center;">Professional Login</div>
@@ -1406,7 +1406,7 @@
       <input type="text" id="proLskId" class="lh-input" placeholder="e.g. LSK/AD/001234" style="font-size:16px;margin-bottom:12px;">
       <label class="lh-label">Phone Number *</label>
       <input type="tel" id="proPhone" class="lh-input" placeholder="07XXXXXXXX" style="font-size:16px;margin-bottom:16px;">
-      <button type="button" onclick="loginProDashboard()" style="width:100%;padding:12px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">Login</button>
+      <button type="button" onclick="loginProDashboard()" style="width:100%;padding:12px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">Login</button>
       <div id="proLoginMsg" style="margin-top:10px;font-size:12px;text-align:center;min-height:16px;"></div>
       <button type="button" onclick="document.getElementById('proDashLoginForm').style.display='none';document.getElementById('proDashGate').style.display='block';" style="margin-top:12px;width:100%;padding:10px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.4);font-size:12px;cursor:pointer;font-family:inherit;">Cancel</button>
     </div>
@@ -1436,7 +1436,7 @@
         <div class="avail-slot"><div><div class="avail-day">Saturday</div><div class="avail-time">By appointment</div></div><button class="toggle-switch" onclick="toggleAvailDay(this,'sat')"></button></div>
         <div class="avail-slot"><div><div class="avail-day">Sunday</div><div class="avail-time">Not available</div></div><button class="toggle-switch" onclick="toggleAvailDay(this,'sun')"></button></div>
       </div>
-      <button type="button" onclick="saveAvailability()" style="margin-top:12px;padding:10px 20px;background:rgba(124,58,237,0.2);border:1px solid rgba(124,58,237,0.3);border-radius:10px;color:#a78bfa;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;">Save Availability</button>
+      <button type="button" onclick="saveAvailability()" style="margin-top:12px;padding:10px 20px;background:rgba(113,255,0,0.2);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#c8ff80;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;">Save Availability</button>
       <div id="availMsg" style="margin-top:8px;font-size:11px;min-height:14px;"></div>
       <div style="font-size:13px;font-weight:800;color:white;margin:20px 0 10px;display:flex;align-items:center;gap:8px;">📊 Practice Analytics <span style="flex:1;height:1px;background:rgba(255,255,255,0.07);display:block;margin-left:4px;"></span></div>
       <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:18px;">
@@ -1451,7 +1451,7 @@
 
 <!-- LEGAL REVIEW MODAL -->
 <div id="legalReviewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closeLegalReviewModal()">
-  <div style="width:100%;max-width:520px;background:#111;border:1px solid rgba(124,58,237,0.25);border-radius:24px 24px 0 0;padding:26px 22px 40px;" onclick="event.stopPropagation()">
+  <div style="width:100%;max-width:520px;background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:24px 24px 0 0;padding:26px 22px 40px;" onclick="event.stopPropagation()">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
       <div style="font-size:15px;font-weight:900;color:white;">Review Your Experience</div>
       <button type="button" onclick="closeLegalReviewModal()" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:22px;cursor:pointer;line-height:1;">X</button>
@@ -1476,14 +1476,14 @@
       <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.5);margin-bottom:6px;">Your Name (optional)</div>
       <input type="text" id="reviewerName" class="lh-input" placeholder="Display name or leave blank for Anonymous" style="font-size:16px;">
     </div>
-    <button type="button" onclick="submitLegalReview()" style="width:100%;padding:13px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">Submit Review</button>
+    <button type="button" onclick="submitLegalReview()" style="width:100%;padding:13px;background:linear-gradient(135deg,#71ff00,#4f46e5);border:none;border-radius:12px;color:white;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">Submit Review</button>
     <div id="reviewMsg" style="margin-top:10px;font-size:12px;text-align:center;min-height:16px;"></div>
   </div>
 </div>
 
 <!-- CONSULTATION BOOKING MODAL -->
 <div id="consultModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;align-items:flex-end;justify-content:center;" onclick="if(event.target===this)closeConsultModal()">
-  <div style="width:100%;max-width:520px;background:#111;border:1px solid rgba(124,58,237,0.25);border-radius:24px 24px 0 0;padding:26px 22px 40px;max-height:90vh;overflow-y:auto;" onclick="event.stopPropagation()">
+  <div style="width:100%;max-width:520px;background:#111;border:1px solid rgba(113,255,0,0.25);border-radius:24px 24px 0 0;padding:26px 22px 40px;max-height:90vh;overflow-y:auto;" onclick="event.stopPropagation()">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
       <div style="font-size:15px;font-weight:900;color:white;" id="consultModalTitle">Book Consultation</div>
       <button type="button" onclick="closeConsultModal()" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:22px;cursor:pointer;line-height:1;">✕</button>
@@ -1700,8 +1700,8 @@ function _renderLawyerCards(lawyers){
       <div style="font-size:48px;margin-bottom:14px;">⚖️</div>
       <p style="font-size:14px;margin-bottom:6px;">No advocates found</p>
       <p style="font-size:12px;margin-bottom:18px;">Try a different filter or search term</p>
-      <button type="button" onclick="filterLawyers('',document.querySelector('.lc-filter-btn'))" style="padding:10px 22px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25);color:#a78bfa;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:8px;">Show All</button>
-      <button type="button" onclick="showLawTab('register',null)" style="padding:10px 22px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25);color:#a78bfa;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;">+ Register as Advocate</button>
+      <button type="button" onclick="filterLawyers('',document.querySelector('.lc-filter-btn'))" style="padding:10px 22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:8px;">Show All</button>
+      <button type="button" onclick="showLawTab('register',null)" style="padding:10px 22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;">+ Register as Advocate</button>
     </div>`;
     return;
   }
@@ -1744,7 +1744,7 @@ function _renderLawyerCards(lawyers){
       <div class="lc-footer">
         <div>
           <div class="lc-rate-num">KES ${Number(l.rate||0).toLocaleString()} <span class="lc-rate-type">${_esc(rateLabel)}</span></div>
-          <div class="lc-location"><i class="fas fa-map-marker-alt" style="color:#a78bfa;font-size:9px;"></i> ${_esc(loc)}${l.rollNo ? `  Roll #${_esc(l.rollNo)}` : ""}</div>
+          <div class="lc-location"><i class="fas fa-map-marker-alt" style="color:#c8ff80;font-size:9px;"></i> ${_esc(loc)}${l.rollNo ? `  Roll #${_esc(l.rollNo)}` : ""}</div>
         </div>
         <button type="button" class="lc-book-btn" onclick="event.stopPropagation();bookLawyer('${_esc(l.id)}')">
           💬 Book
@@ -1870,7 +1870,7 @@ function _openConsultModal(id){
   const modalTitle=document.getElementById('consultModalTitle');
   const modalBody=document.getElementById('consultModalBody');
   if(modalTitle) modalTitle.textContent='Book  '+_esc(l.name);
-  if(modalBody) modalBody.innerHTML='<div style="padding:14px;background:rgba(124,58,237,0.07);border:1px solid rgba(124,58,237,0.2);border-radius:12px;margin-bottom:16px;"><div style="font-size:14px;font-weight:800;color:white;margin-bottom:3px;">'+_esc(l.name)+(l.verified?' <span style="font-size:9px;background:rgba(124,58,237,0.15);color:#a78bfa;padding:1px 6px;border-radius:3px;border:1px solid rgba(124,58,237,0.25);">✅ LSK</span>':'')+'</div><div style="font-size:11px;color:rgba(124,58,237,0.8);font-weight:700;">'+_esc(l.spec||l.category)+'</div>'+(l.firm?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 '+_esc(l.firm)+'</div>':'')+'<div style="margin-top:6px;font-size:15px;font-weight:900;color:#a78bfa;">KES '+Number(l.rate||0).toLocaleString()+' <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);">'+_esc(RATE_LBL[l.rateType]||'/ session')+'</span></div></div><label class="lh-label">Your Name *</label><input type="text" id="cbName" class="lh-input" placeholder="Full name"><label class="lh-label">Your Phone (M-Pesa / WhatsApp) *</label><input type="tel" id="cbPhone" class="lh-input" placeholder="07XXXXXXXX"><label class="lh-label">Legal Matter *</label><select id="cbMatter" class="lh-input"><option value="">-- Select matter --</option><option>🏠 Property / Land dispute</option><option>👨‍👩‍👧 Family law / Divorce</option><option>🏛️ Criminal defence</option><option>x Business / Contract dispute</option><option>⚖️ Employment / Wrongful dismissal</option><option>💡 IP / Copyright / Trademark</option><option>🌍 Immigration / Work permit</option><option>Debt recovery</option><option>⚖️ Human rights</option><option>x Document drafting</option><option>General legal advice</option></select><label class="lh-label">Preferred Date</label><input type="date" id="cbDate" class="lh-input"><label class="lh-label">Brief Description (optional)</label><textarea id="cbDetails" class="lh-input lh-textarea" style="min-height:64px;" placeholder="Briefly describe your situation..."></textarea><button type="button" onclick="confirmConsultation('+JSON.stringify(l.id)+')" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📲 Book via WhatsApp</button><button type="button" onclick="closeConsultModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.45);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button><div id="cbMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>';
+  if(modalBody) modalBody.innerHTML='<div style="padding:14px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:12px;margin-bottom:16px;"><div style="font-size:14px;font-weight:800;color:white;margin-bottom:3px;">'+_esc(l.name)+(l.verified?' <span style="font-size:9px;background:rgba(113,255,0,0.15);color:#c8ff80;padding:1px 6px;border-radius:3px;border:1px solid rgba(113,255,0,0.25);">✅ LSK</span>':'')+'</div><div style="font-size:11px;color:rgba(113,255,0,0.8);font-weight:700;">'+_esc(l.spec||l.category)+'</div>'+(l.firm?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 '+_esc(l.firm)+'</div>':'')+'<div style="margin-top:6px;font-size:15px;font-weight:900;color:#c8ff80;">KES '+Number(l.rate||0).toLocaleString()+' <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);">'+_esc(RATE_LBL[l.rateType]||'/ session')+'</span></div></div><label class="lh-label">Your Name *</label><input type="text" id="cbName" class="lh-input" placeholder="Full name"><label class="lh-label">Your Phone (M-Pesa / WhatsApp) *</label><input type="tel" id="cbPhone" class="lh-input" placeholder="07XXXXXXXX"><label class="lh-label">Legal Matter *</label><select id="cbMatter" class="lh-input"><option value="">-- Select matter --</option><option>🏠 Property / Land dispute</option><option>👨‍👩‍👧 Family law / Divorce</option><option>🏛️ Criminal defence</option><option>x Business / Contract dispute</option><option>⚖️ Employment / Wrongful dismissal</option><option>💡 IP / Copyright / Trademark</option><option>🌍 Immigration / Work permit</option><option>Debt recovery</option><option>⚖️ Human rights</option><option>x Document drafting</option><option>General legal advice</option></select><label class="lh-label">Preferred Date</label><input type="date" id="cbDate" class="lh-input"><label class="lh-label">Brief Description (optional)</label><textarea id="cbDetails" class="lh-input lh-textarea" style="min-height:64px;" placeholder="Briefly describe your situation..."></textarea><button type="button" onclick="confirmConsultation('+JSON.stringify(l.id)+')" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📲 Book via WhatsApp</button><button type="button" onclick="closeConsultModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.45);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button><div id="cbMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>';
   const today=new Date().toISOString().slice(0,10);
   const dateEl=document.getElementById('cbDate');
   if(dateEl){dateEl.min=today;dateEl.value=today;}
@@ -2227,7 +2227,7 @@ function selectDocType(type){
   /* Highlight selected card */
   document.querySelectorAll(".doc-card").forEach(c=>c.style.outline="");
   const targetCard = document.querySelector(`.doc-card[onclick*="'${type}'"]`);
-  if(targetCard) targetCard.style.outline = "2px solid rgba(124,58,237,0.6)";
+  if(targetCard) targetCard.style.outline = "2px solid rgba(113,255,0,0.6)";
 
   /* Populate modal */
   const titleEl = document.getElementById("docFormTitle");
@@ -3089,7 +3089,7 @@ function printLegalDoc(){
   <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
     <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
     <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
-    <button onclick="HubRegister.open({hub:'legal', category:'lawyer'})" style="padding:10px 24px;background:#a78bfa;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+    <button onclick="HubRegister.open({hub:'legal', category:'lawyer'})" style="padding:10px 24px;background:#c8ff80;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
   </div>
   <script defer src="hub-register.js"><\/script>
   <script defer src="kass-widget.js"><\/script>
@@ -3127,7 +3127,7 @@ function renderCourtSection(){
   if(stepsEl){
     stepsEl.innerHTML = steps.map(s=>`
       <div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
-        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,rgba(124,58,237,0.2),rgba(79,70,229,0.15));display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">${s.icon}</div>
+        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,rgba(113,255,0,0.2),rgba(79,70,229,0.15));display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">${s.icon}</div>
         <div>
           <div style="font-size:13px;font-weight:800;color:white;margin-bottom:4px;">Step ${s.n}: ${s.title}</div>
           <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.7;">${s.body}</div>
@@ -3150,7 +3150,7 @@ function renderCourtSection(){
       <div class="court-card">
         <div class="court-name">🏛️ ${c.name}</div>
         <div class="court-loc">📍 ${c.loc}</div>
-        <div style="font-size:11px;color:rgba(124,58,237,0.7);font-weight:700;margin-bottom:8px;">${c.type}</div>
+        <div style="font-size:11px;color:rgba(113,255,0,0.7);font-weight:700;margin-bottom:8px;">${c.type}</div>
         ${c.phone ? `<a href="tel:${c.phone}" style="font-size:12px;color:#71ff00;text-decoration:none;">📞 ${c.phone}</a>` : ""}
       </div>`).join("");
   }
@@ -3198,9 +3198,9 @@ function calcCourtFees(){
         <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:3px;">Service Fees</div>
         <div style="font-size:16px;font-weight:800;color:white;">KES ${service.toLocaleString()}</div>
       </div>
-      <div style="padding:10px 12px;background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.2);border-radius:10px;">
-        <div style="font-size:10px;color:rgba(124,58,237,0.7);margin-bottom:3px;">Est. Total</div>
-        <div style="font-size:16px;font-weight:900;color:#a78bfa;">KES ${total.toLocaleString()}</div>
+      <div style="padding:10px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);border-radius:10px;">
+        <div style="font-size:10px;color:rgba(113,255,0,0.7);margin-bottom:3px;">Est. Total</div>
+        <div style="font-size:16px;font-weight:900;color:#c8ff80;">KES ${total.toLocaleString()}</div>
       </div>
     </div>
     <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:8px;line-height:1.6;">⚖️ ${notes} Fees are estimates based on Civil Procedure (Fees) Rules. Verify at the court registry.</div>`;
@@ -3239,7 +3239,7 @@ function renderChecklist(){
   const cats = [...new Set(CHECKLIST_ITEMS.map(i=>i.cat))];
   el.innerHTML = cats.map(cat=>`
     <div style="margin-bottom:14px;">
-      <div style="font-size:10px;font-weight:800;color:rgba(124,58,237,0.7);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">${cat}</div>
+      <div style="font-size:10px;font-weight:800;color:rgba(113,255,0,0.7);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">${cat}</div>
       ${CHECKLIST_ITEMS.filter(i=>i.cat===cat).map(item=>{
         const done = saved[item.id];
         return `<div onclick="toggleCheck('${item.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;cursor:pointer;transition:background .15s;background:${done?"rgba(113,255,0,0.05)":"rgba(255,255,255,0.02)"};border:1px solid ${done?"rgba(113,255,0,0.15)":"rgba(255,255,255,0.06)"};margin-bottom:5px;">
@@ -3252,7 +3252,7 @@ function renderChecklist(){
   const total = CHECKLIST_ITEMS.length;
   const done  = Object.values(saved).filter(Boolean).length;
   const pct   = Math.round((done/total)*100);
-  const bar   = `<div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;"><span style="color:rgba(255,255,255,0.4);">Progress</span><span style="color:${pct===100?"#71ff00":"#a78bfa"};font-weight:800;">${done}/${total}  ${pct}%</span></div><div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${pct===100?"#71ff00":"linear-gradient(90deg,#7c3aed,#a78bfa)"};border-radius:3px;transition:width .3s;"></div></div></div>`;
+  const bar   = `<div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;"><span style="color:rgba(255,255,255,0.4);">Progress</span><span style="color:${pct===100?"#71ff00":"#c8ff80"};font-weight:800;">${done}/${total}  ${pct}%</span></div><div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${pct===100?"#71ff00":"linear-gradient(90deg,#71ff00,#c8ff80)"};border-radius:3px;transition:width .3s;"></div></div></div>`;
   el.insertAdjacentHTML("afterbegin", bar);
 }
 
@@ -3286,7 +3286,7 @@ function printChecklist(){
   <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
     <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
     <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
-    <button onclick="HubRegister.open({hub:'legal', category:'lawyer'})" style="padding:10px 24px;background:#a78bfa;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+    <button onclick="HubRegister.open({hub:'legal', category:'lawyer'})" style="padding:10px 24px;background:#c8ff80;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
   </div>
   <script defer src="hub-register.js"><\/script>
   <script defer src="kass-widget.js"><\/script>
@@ -3408,40 +3408,40 @@ function legalGlobalSearch(q) {
   const RATE_LBL = {'per hour':'/ hr','per session':'/ session','per document':'/ doc','retainer':'/ mo'};
 
   resultsEl.innerHTML = `
-    <div style="font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:16px;">${hits.length} result${hits.length!==1?'s':''} for "<span style="color:#a78bfa;">${q}</span>"
+    <div style="font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:16px;">${hits.length} result${hits.length!==1?'s':''} for "<span style="color:#c8ff80;">${q}</span>"
       <button type="button" onclick="document.getElementById('legalGlobalSearch').value='';legalGlobalSearch('');" style="margin-left:12px;padding:3px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.45);font-size:11px;cursor:pointer;font-family:inherit;">✕ Clear</button>
     </div>
     ${hits.map(h => {
       if(h.type === 'lawyer') {
         const l = h.data;
         const initials = l.name.replace(/^Advocate\s*/i,'').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
-        return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(124,58,237,0.2);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(124,58,237,0.25),rgba(79,70,229,0.2));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#a78bfa;flex-shrink:0;">${initials}</div>
+        return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(113,255,0,0.2);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(113,255,0,0.25),rgba(79,70,229,0.2));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#c8ff80;flex-shrink:0;">${initials}</div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:14px;font-weight:800;color:white;">${_esc(l.name)} ${l.verified?'<span style="font-size:9px;background:rgba(124,58,237,0.15);color:#a78bfa;padding:1px 6px;border-radius:4px;">✅ LSK</span>':'<span style="font-size:9px;background:rgba(255,152,0,0.12);color:#ff9800;padding:1px 6px;border-radius:4px;">⏳ Pending</span>'}</div>
-            <div style="font-size:11px;color:rgba(124,58,237,0.8);font-weight:700;">${_esc(l.spec||l.category)}</div>
+            <div style="font-size:14px;font-weight:800;color:white;">${_esc(l.name)} ${l.verified?'<span style="font-size:9px;background:rgba(113,255,0,0.15);color:#c8ff80;padding:1px 6px;border-radius:4px;">✅ LSK</span>':'<span style="font-size:9px;background:rgba(255,152,0,0.12);color:#ff9800;padding:1px 6px;border-radius:4px;">⏳ Pending</span>'}</div>
+            <div style="font-size:11px;color:rgba(113,255,0,0.8);font-weight:700;">${_esc(l.spec||l.category)}</div>
             ${l.firm?`<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 ${_esc(l.firm)}</div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
-            <div style="font-size:15px;font-weight:900;color:#a78bfa;">KES ${Number(l.rate||0).toLocaleString()} <span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">${RATE_LBL[l.rateType]||'/ session'}</span></div>
-            <button type="button" onclick="bookLawyer('${l.id}')" style="padding:7px 14px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;font-weight:800;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-family:inherit;">⚖️ Book</button>
+            <div style="font-size:15px;font-weight:900;color:#c8ff80;">KES ${Number(l.rate||0).toLocaleString()} <span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">${RATE_LBL[l.rateType]||'/ session'}</span></div>
+            <button type="button" onclick="bookLawyer('${l.id}')" style="padding:7px 14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:800;border:none;border-radius:9px;cursor:pointer;font-size:12px;font-family:inherit;">⚖️ Book</button>
           </div>
         </div>`;
       }
       if(h.type === 'doc') return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">
         <div style="font-size:28px;">📄</div>
         <div style="flex:1;"><div style="font-size:13px;font-weight:800;color:white;">${h.title}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Legal document template</div></div>
-        <button type="button" onclick="document.getElementById('legalGlobalSearch').value='';legalGlobalSearch('');showLawTab('documents',null);setTimeout(()=>selectDocType('${h.key}'),300);" style="padding:8px 14px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25);color:#a78bfa;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Generate  </button>
+        <button type="button" onclick="document.getElementById('legalGlobalSearch').value='';legalGlobalSearch('');showLawTab('documents',null);setTimeout(()=>selectDocType('${h.key}'),300);" style="padding:8px 14px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Generate  </button>
       </div>`;
       if(h.type === 'right') return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px 16px;margin-bottom:10px;">
         <div style="font-size:13px;font-weight:800;color:white;margin-bottom:5px;">${h.data.icon} ${h.data.title}</div>
         <div style="font-size:12px;color:rgba(255,255,255,0.5);line-height:1.7;">${h.data.body}</div>
-        <div style="font-size:10px;color:rgba(124,58,237,0.7);font-weight:700;margin-top:6px;">📝 ${h.data.law}</div>
+        <div style="font-size:10px;color:rgba(113,255,0,0.7);font-weight:700;margin-top:6px;">📝 ${h.data.law}</div>
       </div>`;
       if(h.type === 'court') return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">
         <div style="font-size:28px;">🏛️</div>
         <div style="flex:1;"><div style="font-size:13px;font-weight:800;color:white;">${h.label}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">${h.desc}</div></div>
-        <button type="button" onclick="document.getElementById('legalGlobalSearch').value='';legalGlobalSearch('');showLawTab('court',null);" style="padding:8px 14px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25);color:#a78bfa;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View  </button>
+        <button type="button" onclick="document.getElementById('legalGlobalSearch').value='';legalGlobalSearch('');showLawTab('court',null);" style="padding:8px 14px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View  </button>
       </div>`;
       return '';
     }).join('')}`;
@@ -3532,7 +3532,7 @@ async function registerLawyer(){
     createdAt: Date.now()
   };
 
-  if(msgEl){ msgEl.textContent="Submitting your application⬦"; msgEl.style.color="#a78bfa"; }
+  if(msgEl){ msgEl.textContent="Submitting your application⬦"; msgEl.style.color="#c8ff80"; }
 
   /* Save to localStorage */
   let providers = [];
@@ -4020,7 +4020,7 @@ function _renderRequests(containerId, category){
     const badge = r.status==='completed'?'completed':r.status==='cancelled'?'cancelled':'pending';
     const dt = r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-KE') : '';
     return `<div class="appt-card">
-      <div class="appt-icon" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);">📋</div>
+      <div class="appt-icon" style="background:linear-gradient(135deg,#4f46e5,#71ff00);">📋</div>
       <div class="appt-info">
         <div class="appt-title">${_esc(r.type||r.category)}</div>
         <div class="appt-meta">${dt} • Ref: ${_esc(r.id||'')}</div>
@@ -4093,7 +4093,7 @@ function renderClientDashboard(){
       recEl.innerHTML='<div style="text-align:center;padding:16px;color:rgba(255,255,255,0.3);font-size:12px;">No recent requests.</div>';
     } else {
       recEl.innerHTML = reqs.slice(0,3).map(r=>`<div class="appt-card">
-        <div class="appt-icon" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);">📋</div>
+        <div class="appt-icon" style="background:linear-gradient(135deg,#4f46e5,#71ff00);">📋</div>
         <div class="appt-info">
           <div class="appt-title">${_esc(r.type||r.category)}</div>
           <div class="appt-meta">${r.createdAt?new Date(r.createdAt).toLocaleDateString('en-KE'):''}</div>
@@ -4504,11 +4504,11 @@ function _setPct(labelId, barId, pct){
         var pctLabel = document.querySelector('#advocateChecklist span[style*="font-weight:800"]');
         if(bar){
           bar.style.width      = pct + '%';
-          bar.style.background = pct === 100 ? '#71ff00' : 'linear-gradient(90deg,#7c3aed,#a78bfa)';
+          bar.style.background = pct === 100 ? '#71ff00' : 'linear-gradient(90deg,#71ff00,#c8ff80)';
         }
         if(pctLabel){
           pctLabel.textContent = doneN + '/' + total + ' – ' + pct + '%';
-          pctLabel.style.color = pct === 100 ? '#71ff00' : '#a78bfa';
+          pctLabel.style.color = pct === 100 ? '#71ff00' : '#c8ff80';
         }
       }catch(e){}
     });
@@ -4589,12 +4589,12 @@ function _setPct(labelId, barId, pct){
     if(type === 'firm'){
       indPanel.style.display = 'none';
       firmPanel.style.display = 'block';
-      if(btnFirm){ btnFirm.style.background='rgba(124,58,237,0.9)'; btnFirm.style.color='#fff'; btnFirm.style.borderColor='rgba(124,58,237,0.8)'; }
+      if(btnFirm){ btnFirm.style.background='rgba(113,255,0,0.9)'; btnFirm.style.color='#fff'; btnFirm.style.borderColor='rgba(113,255,0,0.8)'; }
       if(btnInd){ btnInd.style.background='rgba(255,255,255,0.04)'; btnInd.style.color='rgba(255,255,255,0.5)'; btnInd.style.borderColor='rgba(255,255,255,0.1)'; }
     } else {
       indPanel.style.display = 'block';
       firmPanel.style.display = 'none';
-      if(btnInd){ btnInd.style.background='rgba(124,58,237,0.9)'; btnInd.style.color='#fff'; btnInd.style.borderColor='rgba(124,58,237,0.8)'; }
+      if(btnInd){ btnInd.style.background='rgba(113,255,0,0.9)'; btnInd.style.color='#fff'; btnInd.style.borderColor='rgba(113,255,0,0.8)'; }
       if(btnFirm){ btnFirm.style.background='rgba(255,255,255,0.04)'; btnFirm.style.color='rgba(255,255,255,0.5)'; btnFirm.style.borderColor='rgba(255,255,255,0.1)'; }
     }
   };
@@ -4609,8 +4609,8 @@ function _setPct(labelId, barId, pct){
       var card = document.getElementById('firmPlan' + p.charAt(0).toUpperCase() + p.slice(1));
       if(!card) return;
       if(p === plan){
-        card.style.border = '2px solid rgba(124,58,237,0.8)';
-        card.style.background = 'rgba(124,58,237,0.18)';
+        card.style.border = '2px solid rgba(113,255,0,0.8)';
+        card.style.background = 'rgba(113,255,0,0.18)';
       } else {
         card.style.border = '1.5px solid rgba(255,255,255,0.1)';
         card.style.background = 'rgba(255,255,255,0.03)';
@@ -4716,7 +4716,7 @@ function _setPct(labelId, barId, pct){
   <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
     <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
     <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-bottom:12px;"> Register your business and reach thousands of customers.</div>
-    <button onclick="HubRegister.open({hub:'legal', category:'lawyer'})" style="padding:10px 24px;background:#a78bfa;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
+    <button onclick="HubRegister.open({hub:'legal', category:'lawyer'})" style="padding:10px 24px;background:#c8ff80;border:none;border-radius:12px;color:#060b06;font-weight:900;font-size:13px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
   </div>
   <script defer src="hub-register.js"></script>
   <script defer src="kass-widget.js"></script>

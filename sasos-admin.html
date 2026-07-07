@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-no-header="true">
 <head>
 <script src="shared-header.js"></script>
@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/mobile.css">
 
   <style>
-    :root{--g:#71ff00;--g2:#4fc800;--r:#ff4444;--o:#ff9500;--p:#a78bfa;--b:#3b82f6;
+    :root{--g:#71ff00;--g2:#4fc800;--r:#ff4444;--o:#ff9500;--p:#c8ff80;--b:#3b82f6;
           --bg:#0d0d0d;--bg2:#111;--bg3:#181818;--border:rgba(255,255,255,.07);
           --text:#fff;--muted:rgba(255,255,255,.42);--rad:14px}
     *{box-sizing:border-box;margin:0;padding:0}
@@ -21,7 +21,7 @@
     .sa-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.7);position:sticky;top:0;z-index:100;backdrop-filter:blur(14px)}
     .sa-logo{font-size:16px;font-weight:800;color:var(--g);flex:1}
     .sa-logo span{color:var(--muted);font-weight:400;font-size:11px;display:block;margin-top:-2px}
-    .sa-badge{background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.4px}
+    .sa-badge{background:linear-gradient(135deg,#71ff00,#2563eb);color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;letter-spacing:.4px}
     .health-wrap{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}
     .health-dot{width:8px;height:8px;border-radius:50%;background:var(--g);animation:pulse 2s infinite}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -73,7 +73,7 @@
     .b-blue{background:rgba(59,130,246,.15);color:#60a5fa}
     .b-yellow{background:rgba(245,158,11,.15);color:#fbbf24}
     .b-red{background:rgba(239,68,68,.15);color:#f87171}
-    .b-purple{background:rgba(167,139,250,.15);color:#a78bfa}
+    .b-purple{background:rgba(168,255,88,.15);color:#c8ff80}
     .b-gray{background:rgba(255,255,255,.07);color:var(--muted)}
 
     /* ── Input / Select ── */
@@ -900,14 +900,14 @@ async function loadBrainSegments() {
         <div style="margin-top:10px;font-size:11px;color:var(--muted)">
           Churn risk avg: <span style="color:#fbbf24">${s.avgChurn}</span><br>
           Upgrade prob avg: <span style="color:#22c55e">${s.avgUpgrade}</span><br>
-          Total LTV: <span style="color:#a78bfa">${fmtKES(s.totalLTV)}</span>
+          Total LTV: <span style="color:#c8ff80">${fmtKES(s.totalLTV)}</span>
         </div>
       </div>`).join('') || '<p style="color:var(--muted)">No segment data yet — run sasosRunBrain first.</p>';
 
     document.getElementById('churn-dist').innerHTML = [
       { label: 'Critical (80-100)', count: 0, color: '#ef4444' },
       { label: 'High (60-79)',      count: 0, color: '#f59e0b' },
-      { label: 'Medium (40-59)',    count: 0, color: '#a78bfa' },
+      { label: 'Medium (40-59)',    count: 0, color: '#c8ff80' },
       { label: 'Low (0-39)',        count: d.totalUsersAnalysed||0, color: '#22c55e' },
     ].map(b => `
       <div class="pbar-wrap">
@@ -931,11 +931,11 @@ async function lookupBrain() {
             <div style="font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.3px;text-transform:uppercase;margin-bottom:8px">${prod}</div>
             <div style="font-size:12px;margin-bottom:4px">Churn Risk: <strong style="color:#fbbf24">${sc.churnRisk||0}</strong></div>
             <div style="font-size:12px;margin-bottom:4px">Upgrade Prob: <strong style="color:#22c55e">${sc.upgradeProb||0}</strong></div>
-            <div style="font-size:12px;margin-bottom:4px">Est. LTV: <strong style="color:#a78bfa">${fmtKES(sc.ltv||0)}</strong></div>
+            <div style="font-size:12px;margin-bottom:4px">Est. LTV: <strong style="color:#c8ff80">${fmtKES(sc.ltv||0)}</strong></div>
             ${sc.nextPlan ? `<div style="font-size:11px;color:var(--muted)">Next plan: ${sc.nextPlan}</div>` : ''}
           </div>`).join('')}
       </div>
-      <div style="margin-top:12px;font-size:12px;color:var(--muted)">Total LTV: <strong style="color:#a78bfa">${fmtKES(d.estimatedLTV||0)}</strong> &nbsp;|&nbsp; Period: ${d.period||'—'}</div>`;
+      <div style="margin-top:12px;font-size:12px;color:var(--muted)">Total LTV: <strong style="color:#c8ff80">${fmtKES(d.estimatedLTV||0)}</strong> &nbsp;|&nbsp; Period: ${d.period||'—'}</div>`;
   } catch (e) { toast('Brain lookup failed: ' + e.message, true); }
 }
 

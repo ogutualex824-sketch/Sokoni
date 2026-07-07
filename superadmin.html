@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-no-header="true">
 <head>
   <meta charset="UTF-8">
@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#7c3aed">
+  <meta name="theme-color" content="#71ff00">
   <script src="security.js"></script>
 <script src="shared-header.js"></script>
   <script src="sokoni-permissions.js"></script>
@@ -18,9 +18,9 @@
 
     /* ── Auth gate ── */
     #saGate{position:fixed;inset:0;background:#04040c;display:flex;align-items:center;justify-content:center;z-index:9999;}
-    .sa-gate-card{background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.25);border-radius:24px;
+    .sa-gate-card{background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.25);border-radius:24px;
                   padding:40px 36px;max-width:400px;width:90%;text-align:center;}
-    .sa-gate-logo{font-size:20px;font-weight:900;color:#a78bfa;margin-bottom:6px;letter-spacing:.05em;}
+    .sa-gate-logo{font-size:20px;font-weight:900;color:#c8ff80;margin-bottom:6px;letter-spacing:.05em;}
     .sa-gate-label{font-size:11px;color:rgba(255,255,255,.35);margin-bottom:28px;font-weight:700;}
     .sa-gate-title{font-size:22px;font-weight:900;margin-bottom:8px;}
     .sa-gate-sub{font-size:13px;color:rgba(255,255,255,.45);margin-bottom:24px;}
@@ -28,15 +28,15 @@
 
     /* ── Sidebar + Layout ── */
     .sa-shell{display:flex;min-height:100vh;}
-    .sa-sidebar{width:240px;flex-shrink:0;background:#09090f;border-right:1px solid rgba(124,58,237,.15);
+    .sa-sidebar{width:240px;flex-shrink:0;background:#09090f;border-right:1px solid rgba(113,255,0,.15);
                 display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;overflow-y:auto;z-index:20;}
     @media(max-width:900px){
       .sa-sidebar{width:60px;}
       .sa-sidebar .sa-nav-label,.sa-sidebar .sa-brand-sub,.sa-sidebar .sa-brand-title{display:none;}
     }
-    .sa-brand{padding:20px 18px;border-bottom:1px solid rgba(124,58,237,.12);}
-    .sa-brand-badge{font-size:10px;font-weight:800;color:#a78bfa;letter-spacing:.08em;
-                    background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.3);
+    .sa-brand{padding:20px 18px;border-bottom:1px solid rgba(113,255,0,.12);}
+    .sa-brand-badge{font-size:10px;font-weight:800;color:#c8ff80;letter-spacing:.08em;
+                    background:rgba(113,255,0,.15);border:1px solid rgba(113,255,0,.3);
                     border-radius:4px;padding:2px 7px;display:inline-block;margin-bottom:6px;}
     .sa-brand-title{font-size:17px;font-weight:900;color:white;}
     .sa-brand-sub{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px;}
@@ -50,7 +50,7 @@
                  text-align:left;}
     .sa-nav-item i{width:18px;text-align:center;font-size:14px;flex-shrink:0;}
     .sa-nav-item:hover{background:rgba(255,255,255,.05);color:white;}
-    .sa-nav-item.active{background:rgba(124,58,237,.2);color:#a78bfa;border:1px solid rgba(124,58,237,.25);}
+    .sa-nav-item.active{background:rgba(113,255,0,.2);color:#c8ff80;border:1px solid rgba(113,255,0,.25);}
     .sa-nav-badge{margin-left:auto;font-size:10px;font-weight:900;background:#ef4444;
                   color:white;border-radius:10px;padding:1px 7px;min-width:20px;text-align:center;}
 
@@ -63,14 +63,14 @@
     /* ── Main area ── */
     .sa-main{margin-left:240px;flex:1;display:flex;flex-direction:column;min-height:100vh;}
     @media(max-width:900px){.sa-main{margin-left:60px;}}
-    .sa-topbar{padding:16px 28px;background:rgba(9,9,15,.97);border-bottom:1px solid rgba(124,58,237,.1);
+    .sa-topbar{padding:16px 28px;background:rgba(9,9,15,.97);border-bottom:1px solid rgba(113,255,0,.1);
                display:flex;align-items:center;justify-content:space-between;
                position:sticky;top:0;z-index:10;backdrop-filter:blur(14px);}
     .sa-page-title{font-size:16px;font-weight:900;display:flex;align-items:center;gap:8px;}
     .sa-topbar-right{display:flex;align-items:center;gap:12px;}
     .sa-env-badge{font-size:10px;font-weight:800;padding:4px 10px;border-radius:6px;
                   background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#f87171;}
-    .sa-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6d28d9);
+    .sa-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#4db800);
                display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:white;}
 
     /* ── Content panels ── */
@@ -103,11 +103,11 @@
     .pill-green{background:rgba(74,222,128,.1);color:#4ade80;border:1px solid rgba(74,222,128,.2);}
     .pill-red{background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2);}
     .pill-yellow{background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2);}
-    .pill-purple{background:rgba(124,58,237,.15);color:#a78bfa;border:1px solid rgba(124,58,237,.25);}
+    .pill-purple{background:rgba(113,255,0,.15);color:#c8ff80;border:1px solid rgba(113,255,0,.25);}
 
     /* ── Buttons ── */
     .sa-btn{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;border:none;}
-    .sa-btn-primary{background:linear-gradient(135deg,#7c3aed,#6d28d9);color:white;}
+    .sa-btn-primary{background:linear-gradient(135deg,#71ff00,#4db800);color:white;}
     .sa-btn-danger{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#f87171;}
     .sa-btn-ghost{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.65);}
 
@@ -137,24 +137,24 @@
                transition:background .2s;flex-shrink:0;}
     .sa-toggle::after{content:'';position:absolute;width:18px;height:18px;background:white;border-radius:50%;
                       top:3px;left:3px;transition:left .2s;}
-    .sa-toggle.on{background:#7c3aed;} .sa-toggle.on::after{left:23px;}
+    .sa-toggle.on{background:#71ff00;} .sa-toggle.on::after{left:23px;}
     .sa-toggle.off{background:rgba(255,255,255,.12);}
 
     /* ── Spinner ── */
     .sa-spinner{padding:30px;text-align:center;}
-    .sa-spinner div{display:inline-block;width:30px;height:30px;border-radius:50%;border:2px solid rgba(124,58,237,.2);
-                    border-top-color:#7c3aed;animation:saspin .7s linear infinite;}
+    .sa-spinner div{display:inline-block;width:30px;height:30px;border-radius:50%;border:2px solid rgba(113,255,0,.2);
+                    border-top-color:#71ff00;animation:saspin .7s linear infinite;}
     @keyframes saspin{to{transform:rotate(360deg)}}
 
     /* ── Toast ── */
     #saToast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
-             background:#7c3aed;color:white;padding:11px 22px;border-radius:12px;font-size:13px;
+             background:#71ff00;color:#000;padding:11px 22px;border-radius:12px;font-size:13px;
              font-weight:700;opacity:0;transition:all .3s;pointer-events:none;z-index:9000;}
     #saToast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
     .sa-empty{text-align:center;padding:40px;color:rgba(255,255,255,.25);}
     .sa-empty-icon{font-size:38px;margin-bottom:10px;}
-    .sa-section-h{font-size:11px;font-weight:800;color:rgba(124,58,237,.7);
+    .sa-section-h{font-size:11px;font-weight:800;color:rgba(113,255,0,.7);
                   letter-spacing:.08em;margin:28px 0 14px;text-transform:uppercase;}
   </style>
 </head>
@@ -231,7 +231,7 @@
   <main class="sa-main">
     <div class="sa-topbar">
       <div class="sa-page-title" id="saPageTitle">
-        <i class="fas fa-chart-line" style="color:#a78bfa;"></i> Dashboard
+        <i class="fas fa-chart-line" style="color:#c8ff80;"></i> Dashboard
       </div>
       <div class="sa-topbar-right">
         <span class="sa-env-badge">⚡ PRODUCTION</span>
@@ -392,7 +392,7 @@
           <div class="sa-card-body" id="saHealthGrid" style="padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;"></div>
         </div>
         <p style="font-size:11px;color:rgba(255,255,255,.25);margin-top:10px;">
-          Full metrics available in <a href="monitor.html" style="color:#a78bfa;">monitor.html</a> and Google Cloud Console.
+          Full metrics available in <a href="monitor.html" style="color:#c8ff80;">monitor.html</a> and Google Cloud Console.
         </p>
       </div>
 
@@ -402,7 +402,7 @@
 
 <!-- Grant Role Modal -->
 <div id="saGrantModal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;display:none;align-items:center;justify-content:center;">
-  <div style="background:#0d0a1a;border:1px solid rgba(124,58,237,.25);border-radius:20px;padding:28px;width:90%;max-width:420px;">
+  <div style="background:#0d0a1a;border:1px solid rgba(113,255,0,.25);border-radius:20px;padding:28px;width:90%;max-width:420px;">
     <h3 style="font-size:16px;font-weight:900;margin-bottom:18px;">Grant Admin Role</h3>
     <label style="font-size:12px;color:rgba(255,255,255,.45);display:block;margin-bottom:5px;">User Email</label>
     <input id="grantEmail" type="email" placeholder="user@example.com" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 14px;color:white;font-size:14px;font-family:inherit;outline:none;margin-bottom:14px;">
@@ -455,8 +455,8 @@ function _showDenied(msg) {
     <div class="sa-gate-title">Access Denied</div>
     <div class="sa-gate-sub">${msg}</div>
     <a href="index.html" style="display:inline-block;margin-top:20px;padding:10px 24px;
-       background:rgba(124,58,237,.2);border:1px solid rgba(124,58,237,.35);border-radius:10px;
-       color:#a78bfa;font-weight:700;font-size:13px;text-decoration:none;">Back to Home</a>`;
+       background:rgba(113,255,0,.2);border:1px solid rgba(113,255,0,.35);border-radius:10px;
+       color:#c8ff80;font-weight:700;font-size:13px;text-decoration:none;">Back to Home</a>`;
 }
 
 function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -497,7 +497,7 @@ window.SAApp = {
     document.querySelectorAll('.sa-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('panel'+panel.charAt(0).toUpperCase()+panel.slice(1)).classList.add('active');
     const label = el.querySelector('.sa-nav-label')?.textContent || panel;
-    document.getElementById('saPageTitle').innerHTML = `<i class="${el.querySelector('i').className}" style="color:#a78bfa;"></i> ${label}`;
+    document.getElementById('saPageTitle').innerHTML = `<i class="${el.querySelector('i').className}" style="color:#c8ff80;"></i> ${label}`;
     this._currentPanel = panel;
     this['load'+panel.charAt(0).toUpperCase()+panel.slice(1)]?.();
   },
@@ -544,7 +544,7 @@ window.SAApp = {
         const icons = {create:'🟢',update:'🔵',delete:'🔴',login:'👤',payment:'💳',admin:'🛡️'};
         const icon = icons[a.type] || '⚡';
         return `<div class="sa-log-entry">
-          <div class="sa-log-icon" style="background:rgba(124,58,237,.12);">${icon}</div>
+          <div class="sa-log-icon" style="background:rgba(113,255,0,.12);">${icon}</div>
           <div class="sa-log-body">
             <div class="sa-log-action">${_esc(a.action||a.type||'Event')}</div>
             <div class="sa-log-meta">${_esc(a.actorEmail||a.uid||'System')} · ${_ago(a.ts)}</div>
@@ -809,7 +809,7 @@ window.SAApp = {
             const a=d.data();
             const icons={create:'🟢',update:'🔵',delete:'🔴',login:'👤',payment:'💳',admin:'🛡️'};
             return `<div class="sa-log-entry">
-              <div class="sa-log-icon" style="background:rgba(124,58,237,.1);">${icons[a.type]||'⚡'}</div>
+              <div class="sa-log-icon" style="background:rgba(113,255,0,.1);">${icons[a.type]||'⚡'}</div>
               <div class="sa-log-body">
                 <div class="sa-log-action">${_esc(a.action||a.type||'Event')}</div>
                 <div class="sa-log-meta">${_esc(a.actorEmail||a.uid||'System')} · ${_ago(a.ts)}

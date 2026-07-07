@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
@@ -10,21 +10,21 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f0f1a;color:#e2e8f0;min-height:100vh}
 header{background:#1a1a2e;padding:12px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid #2d2d4e}
-.logo{font-size:1.3rem;font-weight:800;color:#7c3aed;letter-spacing:1px}
+.logo{font-size:1.3rem;font-weight:800;color:#71ff00;letter-spacing:1px}
 .logo span{color:#22c55e;font-size:.8rem;margin-left:6px;font-weight:500}
 .mid-row{display:flex;align-items:center;gap:8px;margin-left:auto}
 .mid-row input{background:#0f0f1a;border:1px solid #2d2d4e;color:#e2e8f0;padding:7px 12px;border-radius:6px;font-size:.85rem;width:180px}
-.mid-row input:focus{outline:none;border-color:#7c3aed}
+.mid-row input:focus{outline:none;border-color:#71ff00}
 .btn{padding:7px 16px;border:none;border-radius:6px;cursor:pointer;font-size:.83rem;font-weight:600;transition:.15s}
-.btn-primary{background:#7c3aed;color:#fff}.btn-primary:hover{background:#6d28d9}
+.btn-primary{background:#71ff00;color:#000}.btn-primary:hover{background:#4db800}
 .btn-success{background:#22c55e;color:#0f0f1a}.btn-success:hover{background:#16a34a}
 .btn-sm{padding:4px 10px;font-size:.75rem}
-.btn-outline{background:transparent;border:1px solid #2d2d4e;color:#94a3b8}.btn-outline:hover{border-color:#7c3aed;color:#7c3aed}
+.btn-outline{background:transparent;border:1px solid #2d2d4e;color:#94a3b8}.btn-outline:hover{border-color:#71ff00;color:#71ff00}
 .btn-danger{background:#ef4444;color:#fff}
 .tabs{display:flex;gap:6px;padding:14px 20px;overflow-x:auto;background:#1a1a2e;border-bottom:1px solid #2d2d4e;scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tab{padding:7px 16px;border-radius:20px;cursor:pointer;white-space:nowrap;font-size:.83rem;font-weight:600;border:1px solid transparent;color:#94a3b8;transition:.15s}
-.tab.active{background:#7c3aed;color:#fff;border-color:#7c3aed}
+.tab.active{background:#71ff00;color:#000;border-color:#71ff00}
 .tab:hover:not(.active){border-color:#2d2d4e;color:#e2e8f0}
 main{padding:20px;max-width:1200px;margin:0 auto}
 .panel{display:none}.panel.active{display:block}
@@ -60,14 +60,14 @@ tr:hover td{background:#1f1f35}
 .field{margin-bottom:14px}
 .field label{display:block;font-size:.78rem;color:#94a3b8;margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
 .field input,.field select,.field textarea{width:100%;background:#0f0f1a;border:1px solid #2d2d4e;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:.85rem}
-.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#7c3aed}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#71ff00}
 .field textarea{resize:vertical;min-height:70px}
 .items-table{width:100%;font-size:.8rem;margin-top:8px}
 .items-table th{background:#0f0f1a;padding:6px 8px;text-align:left;color:#94a3b8;font-size:.72rem}
 .items-table td{padding:5px 4px}
 .items-table input{background:#0f0f1a;border:1px solid #2d2d4e;color:#e2e8f0;padding:5px 7px;border-radius:4px;width:100%;font-size:.8rem}
 .add-row-btn{background:transparent;border:1px dashed #2d2d4e;color:#94a3b8;padding:5px 12px;border-radius:5px;cursor:pointer;font-size:.78rem;margin-top:8px;width:100%}
-.add-row-btn:hover{border-color:#7c3aed;color:#7c3aed}
+.add-row-btn:hover{border-color:#71ff00;color:#71ff00}
 .close-btn{background:transparent;border:none;color:#94a3b8;font-size:1.2rem;cursor:pointer;line-height:1}
 .close-btn:hover{color:#ef4444}
 .empty{text-align:center;color:#4b5563;padding:30px;font-size:.85rem}
@@ -276,7 +276,7 @@ const ProcurementPortal = (() => {
   const _toast = msg => {
     const d = document.createElement('div');
     Object.assign(d.style, {
-      position:'fixed', bottom:'20px', right:'20px', background:'#7c3aed', color:'#fff',
+      position:'fixed', bottom:'20px', right:'20px', background:'#71ff00', color:'#fff',
       padding:'10px 18px', borderRadius:'8px', fontSize:'.83rem', zIndex:'9999', fontWeight:'600',
       boxShadow:'0 4px 14px rgba(0,0,0,.5)'
     });

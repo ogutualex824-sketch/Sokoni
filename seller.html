@@ -1277,7 +1277,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         <button type="button" class="boost-go-btn" style="background:linear-gradient(135deg,#1a3c8f,#2563eb);" onclick="downloadTaxReport()">
           📄 Download Tax Summary (TXT)
         </button>
-        <button type="button" class="boost-go-btn" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);" onclick="downloadTaxPDF()">
+        <button type="button" class="boost-go-btn" style="background:linear-gradient(135deg,#71ff00,#4f46e5);" onclick="downloadTaxPDF()">
           🖨️ Print / Save Tax PDF
         </button>
         <a href="invoice.html" class="boost-go-btn" style="background:linear-gradient(135deg,#0f766e,#0891b2);text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
@@ -5674,7 +5674,7 @@ window.deleteSellerAccount=deleteSellerAccount;
     }
     var cte=document.getElementById('sellerCatChart');
     if(cte&&!_cc){
-      _cc=new Chart(cte,{type:'doughnut',data:{labels:['No data'],datasets:[{data:[1],backgroundColor:['rgba(167,139,250,0.5)'],borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'bottom',labels:{boxWidth:9,padding:7,font:{size:10},color:'rgba(255,255,255,0.5)'}},tooltip:{backgroundColor:'rgba(8,8,8,0.93)',padding:10,callbacks:{label:function(c){return c.label+': KES '+Number(c.raw||0).toLocaleString();}}}}}});
+      _cc=new Chart(cte,{type:'doughnut',data:{labels:['No data'],datasets:[{data:[1],backgroundColor:['rgba(168,255,88,0.5)'],borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'bottom',labels:{boxWidth:9,padding:7,font:{size:10},color:'rgba(255,255,255,0.5)'}},tooltip:{backgroundColor:'rgba(8,8,8,0.93)',padding:10,callbacks:{label:function(c){return c.label+': KES '+Number(c.raw||0).toLocaleString();}}}}}});
     }
     return true;
   }
@@ -5685,7 +5685,7 @@ window.deleteSellerAccount=deleteSellerAccount;
     if(_cc){
       var cm=d.catRevMap||{},entries=Object.entries(cm).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
       if(entries.length){
-        var cols=['rgba(167,139,250,0.85)','rgba(56,189,248,0.85)','rgba(251,191,36,0.85)','rgba(248,113,113,0.85)','rgba(113,255,0,0.85)'];
+        var cols=['rgba(168,255,88,0.85)','rgba(56,189,248,0.85)','rgba(251,191,36,0.85)','rgba(248,113,113,0.85)','rgba(113,255,0,0.85)'];
         _cc.data.labels=entries.map(function(e){return e[0];});
         _cc.data.datasets[0].data=entries.map(function(e){return e[1];});
         _cc.data.datasets[0].backgroundColor=entries.map(function(_,i){return cols[i%5];});

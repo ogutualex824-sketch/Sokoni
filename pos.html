@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-no-header="true">
 <head><script src="security.js"></script>
 <script src="shared-header.js"></script>
@@ -280,7 +280,7 @@
   <div id="pos-peripheral-bar" style="display:none;background:#0e1117;border-bottom:1px solid rgba(255,255,255,0.06);padding:6px 16px;display:flex;align-items:center;gap:12px;overflow-x:auto;font-size:12px;">
     <span style="color:rgba(240,240,248,0.4);font-weight:600;letter-spacing:1px;text-transform:uppercase;flex-shrink:0;">Devices</span>
     <div id="peripheral-bar-chips" style="display:flex;gap:8px;flex-wrap:nowrap;"></div>
-    <button onclick="SPos.deviceHub.discover()" style="margin-left:auto;background:rgba(124,111,255,0.12);border:1px solid rgba(124,111,255,0.25);color:#a78bfa;border-radius:8px;padding:4px 12px;font-size:11px;cursor:pointer;flex-shrink:0;">+ Add Device</button>
+    <button onclick="SPos.deviceHub.discover()" style="margin-left:auto;background:rgba(124,111,255,0.12);border:1px solid rgba(124,111,255,0.25);color:#c8ff80;border-radius:8px;padding:4px 12px;font-size:11px;cursor:pointer;flex-shrink:0;">+ Add Device</button>
   </div>
 
   <nav class="pos-tabs" role="tablist" aria-label="POS sections">
@@ -2392,7 +2392,7 @@ window.addEventListener('load', function () {
               <div style="font-size:12px;color:rgba(240,240,248,0.4);">${_esc(d.vendor || d.type)} · ${_esc(d.transport)} · ${_esc(d.status)}</div>
             </div>
             ${st !== 'connected'
-              ? `<button onclick="window.SokoniDeviceHub.connect('${d.id}')" style="background:rgba(124,111,255,0.12);border:1px solid rgba(124,111,255,0.25);color:#a78bfa;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer;">Connect</button>`
+              ? `<button onclick="window.SokoniDeviceHub.connect('${d.id}')" style="background:rgba(124,111,255,0.12);border:1px solid rgba(124,111,255,0.25);color:#c8ff80;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer;">Connect</button>`
               : `<button onclick="window.SokoniDeviceHub.disconnect('${d.id}')" style="background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.15);color:#f87171;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer;">Disconnect</button>`
             }
           </div>`;
@@ -2415,9 +2415,9 @@ window.addEventListener('load', function () {
           <div style="font-size:12px;color:rgba(240,240,248,0.4);margin-bottom:12px;">${capStr}</div>
           ${rows}
           <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
-            <button onclick="window.SokoniDeviceHub.requestDevice('usb')" style="background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.2);color:#a78bfa;border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer;">+ USB Device</button>
-            <button onclick="window.SokoniDeviceHub.requestDevice('bluetooth')" style="background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.2);color:#a78bfa;border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer;">+ Bluetooth</button>
-            <button onclick="window.SokoniDeviceHub.requestDevice('serial')" style="background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.2);color:#a78bfa;border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer;">+ Serial</button>
+            <button onclick="window.SokoniDeviceHub.requestDevice('usb')" style="background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.2);color:#c8ff80;border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer;">+ USB Device</button>
+            <button onclick="window.SokoniDeviceHub.requestDevice('bluetooth')" style="background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.2);color:#c8ff80;border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer;">+ Bluetooth</button>
+            <button onclick="window.SokoniDeviceHub.requestDevice('serial')" style="background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.2);color:#c8ff80;border-radius:10px;padding:8px 16px;font-size:13px;cursor:pointer;">+ Serial</button>
           </div>`;
         SPos.modal.open('generic-modal');
       }
