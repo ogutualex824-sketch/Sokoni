@@ -20,7 +20,7 @@
       --blue: #3b82f6;
       --red: #ef4444;
       --yellow: #eab308;
-      --purple: #a855f7;
+      --purple: #71ff00;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -472,7 +472,7 @@
       cursor: pointer;
       transition: all 0.15s;
     }
-    .horizon-btn.active { background: var(--purple); border-color: var(--purple); }
+    .horizon-btn.active { background: var(--purple); border-color: var(--purple); color: #000; }
     .gen-forecast-btn {
       margin-left: auto;
       padding: 7px 16px;
@@ -1017,7 +1017,7 @@ function renderDrillTable(rows) {
 }
 
 /* ── Render: Categories ── */
-const CAT_COLORS = ['#3b82f6','#22c55e','#a855f7','#eab308','#ef4444','#f97316','#06b6d4','#ec4899'];
+const CAT_COLORS = ['#3b82f6','#22c55e','#71ff00','#eab308','#ef4444','#f97316','#06b6d4','#ec4899'];
 function renderCategories(cats) {
   const max = Math.max(...cats.map(c => c.revenue), 1);
   document.getElementById('categoryPanel').innerHTML = cats.slice(0, 8).map((c, i) => {

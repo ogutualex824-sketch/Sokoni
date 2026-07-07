@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Returns — SOKONI</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<style>
+:root{
+  --g:#71ff00;--g2:#4fc800;
+  --bg:#050505;--sur:#0d0d0d;--sur2:#141414;--bor:#1a1a1a;
+  --text:#f0f0f0;--muted:#666;
+  --red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;--purple:#71ff00;
+  --radius:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;padding-bottom:80px;}
+
+/* ── Topbar ── */
+.topbar{position:sticky;top:0;z-index:100;background:var(--sur);border-bottom:1px solid var(--bor);
+  padding:0 20px;height:60px;display:flex;align-items:center;gap:12px;}
+.tb-logo{height:26px;}
+.tb-title{flex:1;font-size:16px;font-weight:800;margin-left:6px;}
+.tb-role{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;}
+.tb-role.buyer{background:rgba(59,130,246,.12);color:var(--blue);}
+.tb-role.seller{background:rgba(113,255,0,.12);color:var(--g);}
+.tb-role.admin{background:rgba(168,85,247,.12);color:var(--g);}
+
+/* ── View containers ── */
+.view{display:none;}
+.view.active{display:block;}
+
+/* ── Tabs ── */
+.tab-nav{display:flex;border-bottom:1px solid var(--bor);background:var(--sur);overflow-x:auto;scrollbar-width:none;}
+.tab-nav::-webkit-scrollbar{display:none;}
+.tab-btn{flex-shrink:0;padding:13px 20px;font-size:13px;font-weight:600;color:var(--muted);border:none;
+  background:none;cursor:pointer;border-bottom:2px solid transparent;transition:.15s;font-family:inherit;}
+.tab-btn.active{color:var(--g);border-bottom-color:var(--g);}
+.tab-btn:hover:not(.active){color:var(--text);}
+.tab-panel{display:none;padding:20px;}
+.tab-panel.active{display:block;}
+
+/* ── Section header ── */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+.sec-hdr h2{font-size:15px;font-weight:700;}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:8px 16px;border-radius:9px;
+  border:none;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;transition:all .15s;}
+.btn-primary{background:var(--g);color:#000;}
+.btn-primary:hover{background:var(--g2);}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--bor);}
+.btn-outline:hover{border-color:var(--g);color:var(--g);}
+.btn-green{background:rgba(113,255,0,.12);color:var(--g);border:1px solid rgba(113,255,0,.2);}
+.btn-green:hover{background:rgba(113,255,0,.22);}
+.btn-red{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.2);}
+.btn-red:hover{background:rgba(239,68,68,.22);}
+.btn-blue{background:rgba(59,130,246,.12);color:var(--blue);border:1px solid rgba(59,130,246,.2);}
+.btn-blue:hover{background:rgba(59,130,246,.22);}
+.btn-sm{padding:5px 11px;font-size:11px;}
+.btn:disabled{opacity:.4;pointer-events:none;}
+
+/* ── Table ── */
+.tbl-wrap{border-radius:var(--radius);overflow:hidden;border:1px solid var(--bor);}
+.tbl-scroll{overflow-x:auto;}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:560px;}
+.tbl th{text-align:left;font-size:10px;color:var(--muted);padding:10px 12px;
+  background:rgba(255,255,255,.02);font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;border-bottom:1px solid var(--bor);}
+.tbl td{padding:11px 12px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:rgba(255,255,255,.02);cursor:pointer;}
+.tbl tr.no-hover td{cursor:default;}
+.tbl tr.no-hover:hover td{background:transparent;}
+
+/* ── Status chips ── */
+.chip{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;text-transform:uppercase;white-space:nowrap;display:inline-block;}
+.chip-g{background:rgba(113,255,0,.12);color:var(--g);}
+.chip-a{background:rgba(245,158,11,.12);color:var(--amber);}
+.chip-r{background:rgba(239,68,68,.12);color:var(--red);}
+.chip-b{background:rgba(59,130,246,.12);color:var(--blue);}
+.chip-p{background:rgba(168,85,247,.12);color:var(--g);}
+.chip-m{background:rgba(102,102,102,.12);color:var(--muted);}
+
+/* ── Return card (seller view) ── */
+.ret-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;}
+.ret-hdr{padding:13px 16px;border-bottom:1px solid var(--bor);display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.ret-hdr-left{}
+.ret-order{font-size:12px;font-family:monospace;color:var(--muted);}
+.ret-item{font-size:14px;font-weight:700;margin-top:2px;}
+.ret-body{padding:13px 16px;}
+.ret-meta{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+.ret-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:12px;}
+.ret-acts{display:flex;gap:7px;flex-wrap:wrap;}
+
+/* ── Filter bar (admin) ── */
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;}
+.filter-select{background:var(--sur);border:1px solid var(--bor);border-radius:9px;padding:7px 10px;
+  font-size:12px;color:var(--text);font-family:inherit;}
+.filter-select:focus{outline:none;border-color:var(--g);}
+.filter-input{background:var(--sur);border:1px solid var(--bor);border-radius:9px;padding:7px 10px;
+  font-size:12px;color:var(--text);font-family:inherit;}
+.filter-input:focus{outline:none;border-color:var(--g);}
+
+/* ── Modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;
+  align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--sur);border:1px solid var(--bor);border-radius:18px;width:100%;
+  max-width:500px;max-height:92vh;overflow-y:auto;}
+.modal-hdr{padding:17px 20px;border-bottom:1px solid var(--bor);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:15px;font-weight:800;}
+.modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:0;}
+.modal-body{padding:20px;}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--bor);display:flex;justify-content:flex-end;gap:8px;}
+
+/* ── Detail modal sections ── */
+.detail-row{display:flex;align-items:flex-start;gap:8px;padding:9px 0;border-bottom:1px solid var(--bor);}
+.detail-row:last-child{border-bottom:none;}
+.detail-label{font-size:11px;color:var(--muted);width:120px;flex-shrink:0;font-weight:600;text-transform:uppercase;margin-top:1px;}
+.detail-val{font-size:13px;flex:1;line-height:1.4;}
+.timeline{display:flex;flex-direction:column;margin-top:14px;}
+.tl-step{display:flex;align-items:flex-start;gap:10px;position:relative;}
+.tl-step::before{content:'';position:absolute;left:9px;top:20px;bottom:-2px;width:1px;background:var(--bor);}
+.tl-step:last-child::before{display:none;}
+.tl-dot{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;margin-top:1px;}
+.tl-dot.done{background:rgba(113,255,0,.15);color:var(--g);}
+.tl-dot.wait{background:var(--sur2);color:var(--muted);border:1px solid var(--bor);}
+.tl-info{padding-bottom:14px;}
+.tl-label{font-size:12px;font-weight:600;}
+.tl-time{font-size:11px;color:var(--muted);margin-top:2px;}
+.tl-by{font-size:11px;color:var(--muted);}
+
+/* ── Form ── */
+.form-group{margin-bottom:14px;}
+.form-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block;}
+.form-input,.form-select,.form-textarea{width:100%;background:var(--sur2);border:1px solid var(--bor);border-radius:9px;
+  padding:10px 12px;font-size:13px;color:var(--text);font-family:inherit;transition:border-color .15s;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--g);}
+.form-textarea{resize:vertical;min-height:80px;}
+.form-select option{background:var(--sur);}
+.form-hint{font-size:11px;color:var(--muted);margin-top:4px;}
+
+/* ── Auth loading ── */
+#auth-loading{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:14px;color:var(--muted);}
+.spinner{width:30px;height:30px;border:3px solid var(--bor);border-top-color:var(--g);border-radius:50%;animation:spin .75s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+#app-root{display:none;}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--sur2);
+  border:1px solid var(--bor);border-radius:12px;padding:11px 20px;font-size:13px;font-weight:600;
+  z-index:9999;display:none;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+.toast.show{display:block;}
+.toast.ok{border-color:rgba(113,255,0,.3);color:var(--g);}
+.toast.err{border-color:rgba(239,68,68,.3);color:var(--red);}
+
+/* ── Empty state ── */
+.empty{text-align:center;padding:40px 20px;color:var(--muted);}
+.em-icon{font-size:36px;margin-bottom:10px;}
+.em-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;}
+.em-desc{font-size:12px;}
+
+/* ── Rejection reason box ── */
+.reject-reason-box{background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:10px 12px;margin-bottom:12px;}
+.reject-reason-label{font-size:10px;color:var(--red);font-weight:700;text-transform:uppercase;margin-bottom:4px;}
+
+@media(max-width:500px){
+  .ret-acts{gap:5px;}
+  .btn-sm{font-size:10px;padding:4px 8px;}
+}
+</style>
+</head>
+<body>
+
+<div id="auth-loading"><div class="spinner"></div><span>Authenticating…</span></div>
+
+<div id="app-root">
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <img class="tb-logo" src="assets/logosokoni.png" alt="SOKONI">
+  <div class="tb-title">Returns &amp; Refunds</div>
+  <span class="tb-role buyer" id="tb-role-badge">Buyer</span>
+</header>
+
+<!-- BUYER VIEW (default) -->
+<div id="view-buyer" class="view">
+  <div style="padding:20px;">
+    <div class="sec-hdr">
+      <h2>My Returns</h2>
+      <button class="btn btn-primary" onclick="openReturnModal()">+ Request Return</button>
+    </div>
+    <div class="tbl-wrap"><div class="tbl-scroll">
+      <table class="tbl">
+        <thead><tr><th>Order</th><th>Item</th><th>Reason</th><th>Status</th><th>Resolution</th><th>Date</th><th></th></tr></thead>
+        <tbody id="buyer-tbody">
+          <tr class="no-hover"><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+</div>
+
+<!-- SELLER VIEW -->
+<div id="view-seller" class="view">
+  <nav class="tab-nav" role="tablist">
+    <button class="tab-btn active" role="tab" onclick="switchSellerTab('pending')">Pending Review</button>
+    <button class="tab-btn" role="tab" onclick="switchSellerTab('all')">All Returns</button>
+  </nav>
+  <div id="seller-tab-pending" class="tab-panel active">
+    <div id="seller-pending-list"><div class="empty"><div class="em-icon">&#10003;</div><div class="em-title">No pending returns</div><div class="em-desc">All returns have been reviewed</div></div></div>
+  </div>
+  <div id="seller-tab-all" class="tab-panel">
+    <div class="tbl-wrap"><div class="tbl-scroll">
+      <table class="tbl">
+        <thead><tr><th>Order</th><th>Buyer</th><th>Item</th><th>Reason</th><th>Status</th><th>Date</th><th></th></tr></thead>
+        <tbody id="seller-all-tbody">
+          <tr class="no-hover"><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+</div>
+
+<!-- ADMIN VIEW -->
+<div id="view-admin" class="view">
+  <div style="padding:20px;">
+    <div class="sec-hdr">
+      <h2>All Returns — Admin</h2>
+      <button class="btn btn-outline btn-sm" onclick="exportCSV()">&#x2193; Export CSV</button>
+    </div>
+    <div class="filter-bar">
+      <select class="filter-select" id="admin-filter-status" onchange="renderAdminTable()">
+        <option value="">All Statuses</option>
+        <option value="submitted">Submitted</option>
+        <option value="under_review">Under Review</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+        <option value="processed">Processed</option>
+      </select>
+      <input class="filter-input" id="admin-filter-seller" type="text" placeholder="Filter by seller ID…" oninput="renderAdminTable()">
+      <input class="filter-input" id="admin-filter-date" type="date" onchange="renderAdminTable()">
+    </div>
+    <div class="tbl-wrap"><div class="tbl-scroll">
+      <table class="tbl">
+        <thead><tr><th>Order</th><th>Buyer</th><th>Seller</th><th>Item</th><th>Reason</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
+        <tbody id="admin-tbody">
+          <tr class="no-hover"><td colspan="8" style="text-align:center;color:var(--muted);padding:30px;">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+</div>
+
+</div><!-- /app-root -->
+
+<!-- MODAL: Submit Return (Buyer) -->
+<div class="modal-overlay" id="return-modal" role="dialog" aria-modal="true" aria-labelledby="return-modal-title">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span class="modal-title" id="return-modal-title">Request a Return</span>
+      <button class="modal-close" onclick="closeReturnModal()" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="r-order-id">Order ID</label>
+        <input class="form-input" id="r-order-id" type="text" placeholder="e.g. ORD-20260101-XXXX" maxlength="50">
+        <div class="form-hint">Find your Order ID in your purchase confirmation email</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="r-item-name">Item Name</label>
+        <input class="form-input" id="r-item-name" type="text" placeholder="Name of the item to return" maxlength="100">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="r-reason">Return Reason</label>
+        <select class="form-select" id="r-reason">
+          <option value="">Select reason…</option>
+          <option value="Defective">Defective / Not working</option>
+          <option value="Wrong item">Wrong item received</option>
+          <option value="Changed mind">Changed mind</option>
+          <option value="Not as described">Not as described</option>
+          <option value="Damaged in transit">Damaged in transit</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="r-description">Description</label>
+        <textarea class="form-textarea" id="r-description" placeholder="Describe the issue in detail…" maxlength="600"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="r-resolution">Preferred Resolution</label>
+        <select class="form-select" id="r-resolution">
+          <option value="refund">Full Refund</option>
+          <option value="exchange">Exchange for same item</option>
+          <option value="store_credit">Store Credit</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeReturnModal()">Cancel</button>
+      <button class="btn btn-primary" id="return-submit-btn" onclick="submitReturn()">Submit Return</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Return Detail -->
+<div class="modal-overlay" id="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span class="modal-title" id="detail-modal-title">Return Details</span>
+      <button class="modal-close" onclick="closeDetailModal()" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="detail-modal-body">Loading…</div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeDetailModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Reject Reason -->
+<div class="modal-overlay" id="reject-modal" role="dialog" aria-modal="true" aria-labelledby="reject-modal-title">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span class="modal-title" id="reject-modal-title">Reject Return</span>
+      <button class="modal-close" onclick="closeRejectModal()" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Provide a clear reason so the buyer understands the decision.</p>
+      <div class="form-group">
+        <label class="form-label" for="reject-reason-input">Rejection Reason</label>
+        <textarea class="form-textarea" id="reject-reason-input" placeholder="e.g. Item shows signs of use…" maxlength="300"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeRejectModal()">Cancel</button>
+      <button class="btn btn-red" id="reject-confirm-btn" onclick="confirmReject()">Confirm Rejection</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="sk-toast" role="alert" aria-live="polite"></div>
+
+<script>
+// ── Firebase init ──────────────────────────────────────────────
+firebase.initializeApp(window.SOKONI_CONFIG || {});
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const fns  = firebase.app().functions('us-central1');
+
+let currentUser   = null;
+let userRole      = 'buyer';    // 'buyer' | 'seller' | 'admin'
+let allReturns    = [];
+let pendingReject = null;       // { returnId, force }
+
+// ── XSS-safe escape ───────────────────────────────────────────
+function esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function fmtDate(ts) {
+  if (!ts) return '—';
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('en-KE', {day:'numeric', month:'short', year:'numeric'});
+  } catch { return '—'; }
+}
+function maskName(n) {
+  if (!n || n.length < 2) return n || '—';
+  const parts = String(n).split(' ');
+  return parts.map((p, i) => i === 0 ? p : p[0] + '***').join(' ');
+}
+function statusChip(s) {
+  const map = {
+    submitted:    ['chip-m', 'SUBMITTED'],
+    under_review: ['chip-a', 'UNDER REVIEW'],
+    approved:     ['chip-g', 'APPROVED'],
+    rejected:     ['chip-r', 'REJECTED'],
+    processed:    ['chip-b', 'PROCESSED']
+  };
+  const [cls, lbl] = map[s] || ['chip-m', (s || '').toUpperCase()];
+  return `<span class="chip ${esc(cls)}">${esc(lbl)}</span>`;
+}
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('sk-toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = 'toast'; }, 3500);
+}
+
+// ── Auth guard + role detection ────────────────────────────────
+auth.onAuthStateChanged(async user => {
+  if (!user) { window.location.href = '/login.html'; return; }
+  currentUser = user;
+
+  const token = await user.getIdTokenResult();
+  if (token.claims.admin)  userRole = 'admin';
+  else if (token.claims.seller) userRole = 'seller';
+  else userRole = 'buyer';
+
+  document.getElementById('auth-loading').style.display = 'none';
+  document.getElementById('app-root').style.display = 'block';
+
+  const badge = document.getElementById('tb-role-badge');
+  badge.textContent = userRole.charAt(0).toUpperCase() + userRole.slice(1);
+  badge.className   = 'tb-role ' + userRole;
+
+  document.getElementById('view-' + userRole).classList.add('active');
+  await loadReturns();
+});
+
+// ── Load returns by role ───────────────────────────────────────
+async function loadReturns() {
+  const uid = currentUser.uid;
+  try {
+    let q = db.collection('returns');
+    if (userRole === 'buyer')  q = q.where('buyerId',  '==', uid).orderBy('submittedAt', 'desc').limit(50);
+    if (userRole === 'seller') q = q.where('sellerId', '==', uid).orderBy('submittedAt', 'desc').limit(100);
+    if (userRole === 'admin')  q = q.orderBy('submittedAt', 'desc').limit(200);
+
+    const snap = await q.get();
+    allReturns = [];
+    snap.forEach(doc => allReturns.push({ id: doc.id, ...doc.data() }));
+
+    if (userRole === 'buyer')  renderBuyerTable();
+    if (userRole === 'seller') renderSellerView();
+    if (userRole === 'admin')  renderAdminTable();
+  } catch (e) {
+    console.error('loadReturns:', e);
+    toast('Failed to load returns data', 'err');
+  }
+}
+
+// ── BUYER: table ───────────────────────────────────────────────
+function renderBuyerTable() {
+  const tbody = document.getElementById('buyer-tbody');
+  if (!allReturns.length) {
+    tbody.innerHTML = '<tr class="no-hover"><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">No return requests yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allReturns.map(r => `<tr onclick="showDetail('${esc(r.id)}')">
+    <td style="font-family:monospace;font-size:11px;">${esc((r.orderId || '').slice(0,16))}</td>
+    <td>${esc((r.items?.[0]?.name || r.itemName || '—').slice(0,28))}</td>
+    <td>${esc(r.reason || '—')}</td>
+    <td>${statusChip(r.status)}</td>
+    <td style="text-transform:capitalize;">${esc((r.resolution || '—').replace('_',' '))}</td>
+    <td>${esc(fmtDate(r.submittedAt))}</td>
+    <td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();showDetail('${esc(r.id)}')">Details</button></td>
+  </tr>`).join('');
+}
+
+// ── SELLER: pending cards + all-table ─────────────────────────
+function renderSellerView() {
+  const pending = allReturns.filter(r => r.status === 'submitted' || r.status === 'under_review');
+  const pl = document.getElementById('seller-pending-list');
+  if (!pending.length) {
+    pl.innerHTML = '<div style="padding:20px;"><div class="empty"><div class="em-icon">&#10003;</div><div class="em-title">No pending returns</div><div class="em-desc">All returns have been reviewed</div></div></div>';
+  } else {
+    pl.innerHTML = '<div style="padding:20px;">' + pending.map(r => buildReturnCard(r, false)).join('') + '</div>';
+  }
+
+  // All returns table
+  const tbody = document.getElementById('seller-all-tbody');
+  if (!allReturns.length) {
+    tbody.innerHTML = '<tr class="no-hover"><td colspan="7" style="text-align:center;color:var(--muted);padding:30px;">No returns found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allReturns.map(r => `<tr onclick="showDetail('${esc(r.id)}')">
+    <td style="font-family:monospace;font-size:11px;">${esc((r.orderId || '').slice(0,16))}</td>
+    <td>${esc(maskName(r.buyerName || r.buyerId || '—'))}</td>
+    <td>${esc((r.items?.[0]?.name || r.itemName || '—').slice(0,24))}</td>
+    <td>${esc(r.reason || '—')}</td>
+    <td>${statusChip(r.status)}</td>
+    <td>${esc(fmtDate(r.submittedAt))}</td>
+    <td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();showDetail('${esc(r.id)}')">Details</button></td>
+  </tr>`).join('');
+}
+
+function buildReturnCard(r, force) {
+  const canAct = r.status === 'submitted' || r.status === 'under_review' || force;
+  return `<div class="ret-card">
+    <div class="ret-hdr">
+      <div class="ret-hdr-left">
+        <div class="ret-order">Order: ${esc(r.orderId || '—')}</div>
+        <div class="ret-item">${esc((r.items?.[0]?.name || r.itemName || 'Unknown Item').slice(0,50))}</div>
+      </div>
+      ${statusChip(r.status)}
+    </div>
+    <div class="ret-body">
+      <div class="ret-meta">
+        <span class="chip chip-b">${esc(r.reason || '—')}</span>
+        <span class="chip chip-m" style="text-transform:capitalize;">${esc((r.resolution || '').replace('_',' ') || '—')}</span>
+        <span style="font-size:11px;color:var(--muted);">${esc(maskName(r.buyerName || r.buyerId || '—'))}</span>
+      </div>
+      <div class="ret-desc">${esc((r.description || '').slice(0,160))}${r.description && r.description.length > 160 ? '…' : ''}</div>
+      ${r.rejectionReason ? `<div class="reject-reason-box"><div class="reject-reason-label">Rejection reason</div><div style="font-size:12px;">${esc(r.rejectionReason)}</div></div>` : ''}
+      <div class="ret-acts">
+        ${canAct ? `<button class="btn btn-green btn-sm" onclick="approveReturn('${esc(r.id)}',${force})">&#10003; ${force ? 'Force Approve' : 'Approve'}</button>` : ''}
+        ${canAct ? `<button class="btn btn-red btn-sm" onclick="openRejectModal('${esc(r.id)}',${force})">&#10007; ${force ? 'Force Reject' : 'Reject'}</button>` : ''}
+        <button class="btn btn-blue btn-sm" onclick="requestMoreInfo('${esc(r.id)}')">&#9993; More Info</button>
+        <button class="btn btn-outline btn-sm" onclick="showDetail('${esc(r.id)}')">Details</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── ADMIN: full table with filters ────────────────────────────
+function renderAdminTable() {
+  const statusF = document.getElementById('admin-filter-status').value.toLowerCase();
+  const sellerF = document.getElementById('admin-filter-seller').value.trim().toLowerCase();
+  const dateF   = document.getElementById('admin-filter-date').value;
+
+  let rows = allReturns;
+  if (statusF) rows = rows.filter(r => (r.status || '') === statusF);
+  if (sellerF) rows = rows.filter(r => (r.sellerId || '').toLowerCase().includes(sellerF));
+  if (dateF)   rows = rows.filter(r => {
+    if (!r.submittedAt) return false;
+    const d = r.submittedAt.toDate ? r.submittedAt.toDate() : new Date(r.submittedAt);
+    return d.toISOString().slice(0,10) === dateF;
+  });
+
+  const tbody = document.getElementById('admin-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr class="no-hover"><td colspan="8" style="text-align:center;color:var(--muted);padding:30px;">No returns match the current filters</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td style="font-family:monospace;font-size:11px;">${esc((r.orderId || '').slice(0,16))}</td>
+    <td>${esc(maskName(r.buyerName || r.buyerId || '—'))}</td>
+    <td style="font-size:11px;color:var(--muted);">${esc((r.sellerId || '—').slice(0,16))}</td>
+    <td>${esc((r.items?.[0]?.name || r.itemName || '—').slice(0,22))}</td>
+    <td>${esc(r.reason || '—')}</td>
+    <td>${statusChip(r.status)}</td>
+    <td>${esc(fmtDate(r.submittedAt))}</td>
+    <td style="display:flex;gap:5px;flex-wrap:wrap;">
+      <button class="btn btn-green btn-sm" onclick="approveReturn('${esc(r.id)}',true)">Approve</button>
+      <button class="btn btn-red btn-sm" onclick="openRejectModal('${esc(r.id)}',true)">Reject</button>
+      <button class="btn btn-outline btn-sm" onclick="showDetail('${esc(r.id)}')">View</button>
+    </td>
+  </tr>`).join('');
+}
+
+// ── Seller tabs ────────────────────────────────────────────────
+function switchSellerTab(name) {
+  document.querySelectorAll('#view-seller .tab-btn').forEach((b,i) => b.classList.toggle('active', ['pending','all'][i] === name));
+  document.querySelectorAll('#view-seller .tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('seller-tab-' + name).classList.add('active');
+}
+
+// ── Submit return (Buyer) ──────────────────────────────────────
+function openReturnModal()  { document.getElementById('return-modal').classList.add('open'); }
+function closeReturnModal() { document.getElementById('return-modal').classList.remove('open'); }
+
+async function submitReturn() {
+  const orderId     = document.getElementById('r-order-id').value.trim();
+  const itemName    = document.getElementById('r-item-name').value.trim();
+  const reason      = document.getElementById('r-reason').value;
+  const description = document.getElementById('r-description').value.trim();
+  const resolution  = document.getElementById('r-resolution').value;
+
+  if (!orderId)     { toast('Enter an Order ID', 'err');    return; }
+  if (!itemName)    { toast('Enter the item name', 'err');  return; }
+  if (!reason)      { toast('Select a return reason', 'err'); return; }
+  if (!description) { toast('Describe the issue', 'err');   return; }
+
+  const btn = document.getElementById('return-submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  try {
+    await db.collection('returns').add({
+      orderId,
+      buyerId:    currentUser.uid,
+      buyerName:  currentUser.displayName || '',
+      sellerId:   '',
+      items:      [{ name: itemName, qty: 1, price: 0, productId: '' }],
+      reason, description, resolution,
+      status:     'submitted',
+      submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      reviewedAt:  null, reviewedBy: null,
+      rejectionReason: null,
+      refundAmount:    null,
+      timeline: [{ ts: new Date().toISOString(), event: 'Return submitted by buyer', by: currentUser.uid }]
+    });
+    closeReturnModal();
+    toast('Return request submitted', 'ok');
+    ['r-order-id','r-item-name','r-description'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('r-reason').value = '';
+    await loadReturns();
+  } catch (e) {
+    toast(e.message || 'Submission failed', 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit Return';
+  }
+}
+
+// ── Approve return ─────────────────────────────────────────────
+async function approveReturn(returnId, force = false) {
+  if (!confirm('Approve this return and trigger refund?')) return;
+  try {
+    const processReturn = fns.httpsCallable('processReturn');
+    await processReturn({ returnId, action: 'approve', force });
+    toast('Return approved — refund initiated', 'ok');
+    await loadReturns();
+  } catch (e) {
+    toast(e.message || 'Approval failed', 'err');
+  }
+}
+
+// ── Reject return ──────────────────────────────────────────────
+function openRejectModal(returnId, force = false) {
+  pendingReject = { returnId, force };
+  document.getElementById('reject-reason-input').value = '';
+  document.getElementById('reject-modal').classList.add('open');
+}
+function closeRejectModal() {
+  document.getElementById('reject-modal').classList.remove('open');
+  pendingReject = null;
+}
+
+async function confirmReject() {
+  if (!pendingReject) return;
+  const reason = document.getElementById('reject-reason-input').value.trim();
+  if (!reason) { toast('Enter a rejection reason', 'err'); return; }
+
+  const btn = document.getElementById('reject-confirm-btn');
+  btn.disabled = true; btn.textContent = 'Rejecting…';
+  try {
+    await db.collection('returns').doc(pendingReject.returnId).update({
+      status:          'rejected',
+      rejectionReason: reason,
+      reviewedAt:      firebase.firestore.FieldValue.serverTimestamp(),
+      reviewedBy:      currentUser.uid,
+      'timeline':      firebase.firestore.FieldValue.arrayUnion({
+        ts:    new Date().toISOString(),
+        event: 'Return rejected: ' + reason,
+        by:    currentUser.uid
+      })
+    });
+    closeRejectModal();
+    toast('Return rejected', 'ok');
+    await loadReturns();
+  } catch (e) {
+    toast(e.message || 'Rejection failed', 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm Rejection';
+  }
+}
+
+// ── Request more info ──────────────────────────────────────────
+async function requestMoreInfo(returnId) {
+  try {
+    await db.collection('returns').doc(returnId).update({
+      status:     'under_review',
+      reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      reviewedBy: currentUser.uid,
+      'timeline': firebase.firestore.FieldValue.arrayUnion({
+        ts: new Date().toISOString(), event: 'Seller requested more information', by: currentUser.uid
+      })
+    });
+    toast('Status updated — buyer notified', 'ok');
+    await loadReturns();
+  } catch (e) {
+    toast(e.message || 'Update failed', 'err');
+  }
+}
+
+// ── Detail modal ───────────────────────────────────────────────
+function showDetail(returnId) {
+  const r = allReturns.find(x => x.id === returnId);
+  if (!r) { toast('Return not found', 'err'); return; }
+
+  const resLabel = { refund:'Full Refund', exchange:'Exchange', store_credit:'Store Credit' };
+  const tl = Array.isArray(r.timeline) ? r.timeline : [];
+
+  document.getElementById('detail-modal-body').innerHTML = `
+    <div class="detail-row"><div class="detail-label">Order ID</div><div class="detail-val" style="font-family:monospace;">${esc(r.orderId || '—')}</div></div>
+    <div class="detail-row"><div class="detail-label">Item</div><div class="detail-val">${esc(r.items?.[0]?.name || r.itemName || '—')}</div></div>
+    <div class="detail-row"><div class="detail-label">Reason</div><div class="detail-val">${esc(r.reason || '—')}</div></div>
+    <div class="detail-row"><div class="detail-label">Resolution</div><div class="detail-val">${esc(resLabel[r.resolution] || r.resolution || '—')}</div></div>
+    <div class="detail-row"><div class="detail-label">Status</div><div class="detail-val">${statusChip(r.status)}</div></div>
+    <div class="detail-row"><div class="detail-label">Submitted</div><div class="detail-val">${esc(fmtDate(r.submittedAt))}</div></div>
+    ${r.rejectionReason ? `<div class="detail-row"><div class="detail-label">Rejection</div><div class="detail-val" style="color:var(--red);">${esc(r.rejectionReason)}</div></div>` : ''}
+    <div class="detail-row"><div class="detail-label">Description</div><div class="detail-val">${esc(r.description || '—')}</div></div>
+    ${tl.length ? `<div style="margin-top:4px;font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Timeline</div>
+    <div class="timeline">${tl.map(t => `<div class="tl-step"><div class="tl-dot done">&#10003;</div>
+      <div class="tl-info"><div class="tl-label">${esc(t.event || '')}</div><div class="tl-time">${esc(t.ts || '')}</div></div>
+    </div>`).join('')}</div>` : ''}`;
+
+  document.getElementById('detail-modal').classList.add('open');
+}
+function closeDetailModal() { document.getElementById('detail-modal').classList.remove('open'); }
+
+// ── Export CSV (Admin) ─────────────────────────────────────────
+function exportCSV() {
+  const headers = ['Return ID','Order ID','Buyer','Seller','Item','Reason','Status','Resolution','Submitted'];
+  const rows = allReturns.map(r => [
+    r.id, r.orderId, r.buyerName || r.buyerId, r.sellerId,
+    r.items?.[0]?.name || r.itemName, r.reason, r.status, r.resolution,
+    r.submittedAt ? (r.submittedAt.toDate ? r.submittedAt.toDate().toISOString() : String(r.submittedAt)) : ''
+  ].map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(','));
+
+  const csv  = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'sokoni-returns-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exported', 'ok');
+}
+
+// ── Close modals on backdrop / ESC ────────────────────────────
+['return-modal','detail-modal','reject-modal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) {
+      this.classList.remove('open');
+      if (id === 'reject-modal') pendingReject = null;
+    }
+  });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+    pendingReject = null;
+  }
+});
+</script>
+</body>
+</html>

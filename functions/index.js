@@ -9081,3 +9081,32 @@ exports.rollbackTrigger             = rollback.rollbackTrigger;
 exports.rollbackGetExecutions       = rollback.rollbackGetExecutions;
 exports.rollbackUpdateStatus        = rollback.rollbackUpdateStatus;
 exports.rollbackScheduledSnapshot   = rollback.rollbackScheduledSnapshot;
+
+/* ── Developer Portal v1.0 — API keys, webhooks, usage analytics ─────────── */
+const devPortal = require('./developer-portal');
+exports.generateApiKey  = devPortal.generateApiKey;
+exports.revokeApiKey    = devPortal.revokeApiKey;
+exports.listApiKeys     = devPortal.listApiKeys;
+exports.registerWebhook = devPortal.registerWebhook;
+exports.testWebhook     = devPortal.testWebhook;
+exports.listWebhooks    = devPortal.listWebhooks;
+exports.deleteWebhook   = devPortal.deleteWebhook;
+exports.getApiUsage     = devPortal.getApiUsage;
+
+/* ── Returns Engine v1.0 — buyer returns, seller review, admin override ───── */
+const returnsEngine = require('./returns-engine');
+exports.submitReturn         = returnsEngine.submitReturn;
+exports.getMyReturns         = returnsEngine.getMyReturns;
+exports.getSellerReturns     = returnsEngine.getSellerReturns;
+exports.reviewReturn         = returnsEngine.reviewReturn;
+exports.adminForceReturn     = returnsEngine.adminForceReturn;
+exports.markReturnProcessed  = returnsEngine.markReturnProcessed;
+
+/* ── Property Maintenance v1.0 — tenant requests, landlord workflow ────────── */
+const propMaint = require('./property-maintenance');
+exports.submitMaintenanceRequest  = propMaint.submitMaintenanceRequest;
+exports.getMyMaintenanceRequests  = propMaint.getMyMaintenanceRequests;
+exports.getLandlordRequests       = propMaint.getLandlordRequests;
+exports.updateMaintenanceStatus   = propMaint.updateMaintenanceStatus;
+exports.respondToRequest          = propMaint.respondToRequest;
+exports.getMaintenanceStats       = propMaint.getMaintenanceStats;

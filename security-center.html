@@ -20,7 +20,7 @@
       --yellow: #e3b341;
       --green: #3fb950;
       --blue: #58a6ff;
-      --purple: #bc8cff;
+      --purple: #71ff00;
       --cyan: #79c0ff;
       --card-radius: 8px;
       --font: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
@@ -150,7 +150,7 @@
     .c-yellow { color: var(--yellow); }
     .c-green { color: var(--green); }
     .c-blue { color: var(--blue); }
-    .c-purple { color: var(--purple); }
+    .c-purple { color: var(--g); }
     /* ── Tables ── */
     .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .data-table th {
@@ -1221,7 +1221,7 @@
         return `<div class="log-line">
           <span class="log-ts">${ts}</span>
           <span class="${sevClass}">[${(e.severity||'INFO').toUpperCase().padEnd(8)}]</span>
-          <span style="color:var(--purple)">[${escHtml(uid)}]</span>
+          <span style="color:var(--g)">[${escHtml(uid)}]</span>
           <span>${escHtml(e.eventType||'EVENT')}: ${escHtml(e.description||'—')}</span>
         </div>`;
       }).join('');

@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Vision 2030 — SOKONI Enterprise Platform</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --g:#71ff00;--gl:#a8ff58;--gd:#4db800;
+  --bg:#050505;--sur:#0d0d0d;--sur2:#111;--bor:#1a1a1a;
+  --txt:#e8e8e8;--muted:#777;--dim:#444;
+  --warn:#ffaa00;--danger:#ff4d4d;--info:#5c9eff;
+  --r:12px;--r-sm:8px;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
+
+/* ── Header ── */
+.hdr{position:sticky;top:0;z-index:100;background:rgba(13,13,13,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--bor);padding:0 24px;height:64px;display:flex;align-items:center;gap:16px}
+.hdr-logo{width:36px;height:36px;background:var(--g);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#000;flex-shrink:0}
+.hdr-info{flex:1}
+.hdr-title{font-size:17px;font-weight:700}
+.hdr-sub{font-size:11px;color:var(--muted)}
+.hdr-badge{background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.3);color:var(--g);font-size:11px;font-weight:700;padding:4px 12px;border-radius:999px;letter-spacing:.04em;white-space:nowrap}
+
+/* ── Main ── */
+.main{max-width:1400px;margin:0 auto;padding:32px 24px 120px}
+
+/* ── Summary strip ── */
+.summary{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:32px}
+@media(max-width:900px){.summary{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:560px){.summary{grid-template-columns:repeat(2,1fr)}}
+.sum-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--r);padding:16px 20px;text-align:center}
+.sum-val{font-size:28px;font-weight:800;color:var(--g);line-height:1}
+.sum-lbl{font-size:11px;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:.05em}
+
+/* ── Progress ring ── */
+.ring-wrap{display:flex;align-items:center;justify-content:center;gap:40px;background:var(--sur);border:1px solid var(--bor);border-radius:var(--r);padding:32px;margin-bottom:32px;flex-wrap:wrap}
+.ring-container{position:relative;width:180px;height:180px;flex-shrink:0}
+.ring-svg{transform:rotate(-90deg)}
+.ring-track{fill:none;stroke:var(--bor);stroke-width:16}
+.ring-fill{fill:none;stroke:var(--g);stroke-width:16;stroke-linecap:round;transition:stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-pct{font-size:36px;font-weight:900;color:var(--g)}
+.ring-pct-lbl{font-size:11px;color:var(--muted)}
+.ring-legend{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:360px}
+.rl-item{display:flex;align-items:center;gap:8px;font-size:13px}
+.rl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.rl-dot.complete{background:var(--g)}
+.rl-dot.partial{background:var(--warn)}
+.rl-dot.missing{background:var(--danger)}
+.rl-dot.planned{background:var(--dim)}
+
+/* ── Section grid ── */
+.sec-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+@media(max-width:1100px){.sec-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:660px){.sec-grid{grid-template-columns:1fr}}
+
+.sec-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--r);overflow:hidden;transition:border-color .2s}
+.sec-card:hover{border-color:#2a2a2a}
+.sec-card.complete{border-left:3px solid var(--g)}
+.sec-card.partial{border-left:3px solid var(--warn)}
+.sec-card.missing{border-left:3px solid var(--danger)}
+
+.sec-hdr{padding:14px 16px;border-bottom:1px solid var(--bor);display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.sec-hdr:hover{background:rgba(255,255,255,.02)}
+.sec-num{width:28px;height:28px;border-radius:6px;background:var(--sur2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0}
+.sec-title{font-size:13px;font-weight:700;flex:1}
+.sec-status{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
+.status-complete{background:rgba(113,255,0,.12);color:var(--g)}
+.status-partial{background:rgba(255,170,0,.12);color:var(--warn)}
+.status-missing{background:rgba(255,77,77,.12);color:var(--danger)}
+.status-planned{background:rgba(92,158,255,.12);color:var(--info)}
+
+.sec-body{padding:14px 16px}
+.sec-desc{font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6}
+
+.item-list{display:flex;flex-direction:column;gap:6px}
+.item{display:flex;align-items:center;gap:8px;font-size:12px}
+.item-icon{font-size:11px;flex-shrink:0;width:16px;text-align:center}
+.item-txt{color:var(--txt)}
+.item.done .item-icon::after{content:'✓';color:var(--g)}
+.item.partial .item-icon::after{content:'◑';color:var(--warn)}
+.item.missing .item-icon::after{content:'○';color:var(--danger)}
+.item.planned .item-icon::after{content:'·';color:var(--dim)}
+
+.gap-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--bor)}
+.gap-tag{background:rgba(255,77,77,.08);border:1px solid rgba(255,77,77,.2);color:var(--danger);font-size:10px;padding:2px 8px;border-radius:999px}
+
+.page-link{display:inline-flex;align-items:center;gap:4px;background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);color:var(--g);font-size:10px;padding:2px 8px;border-radius:999px;text-decoration:none;margin-top:4px;transition:background .15s}
+.page-link:hover{background:rgba(113,255,0,.15)}
+
+/* ── Section: collapsed ── */
+.sec-body{display:block}
+.sec-card.collapsed .sec-body{display:none}
+.sec-toggle{font-size:12px;color:var(--muted);margin-left:auto;transition:transform .2s}
+.sec-card.collapsed .sec-toggle{transform:rotate(-90deg)}
+
+/* ── Quota notice ── */
+.quota-notice{background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.25);border-radius:var(--r);padding:16px 20px;margin-bottom:24px;display:flex;align-items:flex-start;gap:12px}
+.quota-icon{font-size:20px;flex-shrink:0;margin-top:2px}
+.quota-txt strong{color:var(--warn);display:block;font-size:13px;margin-bottom:4px}
+.quota-txt p{font-size:12px;color:var(--muted);line-height:1.6}
+.quota-txt code{background:var(--sur2);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--txt)}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-logo">S</div>
+  <div class="hdr-info">
+    <div class="hdr-title">Vision 2030 — Enterprise Platform Roadmap</div>
+    <div class="hdr-sub">SOKONI · Africa's Digital Commerce OS · Strategic Execution Dashboard</div>
+  </div>
+  <div class="hdr-badge">2030 ROADMAP</div>
+</div>
+
+<div class="main">
+
+  <!-- Summary strip -->
+  <div class="summary">
+    <div class="sum-card"><div class="sum-val" id="sumComplete">0</div><div class="sum-lbl">Complete</div></div>
+    <div class="sum-card"><div class="sum-val" style="color:var(--warn)" id="sumPartial">0</div><div class="sum-lbl">Partial</div></div>
+    <div class="sum-card"><div class="sum-val" style="color:var(--danger)" id="sumMissing">0</div><div class="sum-lbl">Missing</div></div>
+    <div class="sum-card"><div class="sum-val" style="color:var(--info)" id="sumPlanned">0</div><div class="sum-lbl">Planned</div></div>
+    <div class="sum-card"><div class="sum-val" id="sumCFs">636+</div><div class="sum-lbl">CFs Live</div></div>
+  </div>
+
+  <!-- Progress ring -->
+  <div class="ring-wrap">
+    <div class="ring-container">
+      <svg class="ring-svg" width="180" height="180" viewBox="0 0 180 180">
+        <circle class="ring-track" cx="90" cy="90" r="74"/>
+        <circle class="ring-fill" id="ringFill" cx="90" cy="90" r="74" stroke-dasharray="465" stroke-dashoffset="465"/>
+      </svg>
+      <div class="ring-center">
+        <div class="ring-pct" id="ringPct">0%</div>
+        <div class="ring-pct-lbl">Platform Complete</div>
+      </div>
+    </div>
+    <div class="ring-legend">
+      <div class="rl-item"><div class="rl-dot complete"></div><span>Complete — fully built &amp; deployed</span></div>
+      <div class="rl-item"><div class="rl-dot partial"></div><span>Partial — exists, gaps remain</span></div>
+      <div class="rl-item"><div class="rl-dot missing"></div><span>Missing — not yet built</span></div>
+      <div class="rl-item"><div class="rl-dot planned"></div><span>Planned — roadmapped for future sprint</span></div>
+    </div>
+  </div>
+
+  <!-- Quota notice -->
+  <div class="quota-notice">
+    <div class="quota-icon">⚠</div>
+    <div class="quota-txt">
+      <strong>GCP Cloud Run CPU Quota Exhausted — 46 CFs Pending</strong>
+      <p>All new Cloud Functions are code-complete but blocked by GCP quota. Request an increase: GCP Console → IAM &amp; Admin → Quotas → filter <code>Cloud Run Admin API</code> → <code>Total CPU (all regions)</code> → request 2000+ vCPUs. Deploy command is ready in <code>DEPLOY_QUEUE.md</code>.</p>
+    </div>
+  </div>
+
+  <!-- Section grid -->
+  <div class="sec-grid" id="secGrid"></div>
+</div>
+
+<script>
+const SECTIONS = [
+  {
+    num:1, title:'Commerce Ecosystem', status:'partial',
+    desc:'Multi-vendor marketplace, checkout, orders, inventory, loyalty, subscriptions, B2B wholesale.',
+    items:[
+      {s:'done', t:'Marketplace (products, search, cart, orders)'},
+      {s:'done', t:'SmartPOS integration'},
+      {s:'done', t:'MiniShop (/shop/{handle})'},
+      {s:'done', t:'Inventory engine (FEFO, AVCO, multi-warehouse)'},
+      {s:'done', t:'Checkout with M-PESA'},
+      {s:'done', t:'Reviews & ratings'},
+      {s:'done', t:'Loyalty (Bronze→Platinum, SKN-XXXX QR)'},
+      {s:'done', t:'Subscriptions & billing engine'},
+      {s:'done', t:'Wallet system'},
+      {s:'done', t:'B2B wholesale portal'},
+      {s:'done', t:'QR commerce & barcode'},
+      {s:'partial', t:'Gift cards (flagged, not fully built)'},
+      {s:'missing', t:'Returns processing system'},
+      {s:'missing', t:'Coupon management engine (seller-facing)'},
+      {s:'missing', t:'Franchise management portal'},
+      {s:'missing', t:'Multi-company / multi-branch admin'},
+    ],
+    gaps:['returns.html','coupon-manager.html','franchise.html'],
+    pages:['marketplace.html','checkout.html','loyalty-merchant.html','b2b-chat.html']
+  },
+  {
+    num:2, title:'SmartPOS Ecosystem', status:'partial',
+    desc:'Africa\'s smartest POS — desktop, tablet, phone, customer display, KDS, manager console.',
+    items:[
+      {s:'done', t:'POS (desktop/tablet/phone responsive)'},
+      {s:'done', t:'Customer display screen'},
+      {s:'done', t:'Manager console (PIN/QR/NFC auth)'},
+      {s:'done', t:'Multi-device synchronization'},
+      {s:'done', t:'Receipt engine (BT/USB/Serial/Network/Browser)'},
+      {s:'done', t:'QR & M-PESA payments at POS'},
+      {s:'done', t:'Loyalty integration at POS'},
+      {s:'done', t:'Analytics & BI dashboards'},
+      {s:'done', t:'Accounting integration'},
+      {s:'done', t:'CRM at POS'},
+      {s:'done', t:'Offline-first with IndexedDB'},
+      {s:'partial', t:'Kitchen Display System (KDS) — building now'},
+      {s:'missing', t:'Warehouse scanner interface'},
+    ],
+    gaps:['kitchen-display.html','warehouse-scanner.html'],
+    pages:['pos.html','customer-display.html','manager-auth.html','pos-daily.html']
+  },
+  {
+    num:3, title:'Payment Platform', status:'partial',
+    desc:'World-class payment orchestration — M-PESA, cards, wallet, installments, escrow, settlements.',
+    items:[
+      {s:'done', t:'M-PESA STK push (IntaSend)'},
+      {s:'done', t:'Wallet (top-up, transfer, withdraw)'},
+      {s:'done', t:'Escrow system'},
+      {s:'done', t:'Marketplace payouts & settlements'},
+      {s:'done', t:'Refunds engine'},
+      {s:'done', t:'Scheduled payouts (every 30 min)'},
+      {s:'done', t:'Automatic reconciliation'},
+      {s:'done', t:'Fraud detection & risk scoring'},
+      {s:'done', t:'Payment analytics'},
+      {s:'partial', t:'Card payments (Stripe adapter stubbed)'},
+      {s:'partial', t:'Bank transfer / PesaLink (stubbed)'},
+      {s:'missing', t:'Installments / BNPL'},
+      {s:'missing', t:'Split payments (platform-level)'},
+      {s:'missing', t:'Seller-configurable payout schedule'},
+    ],
+    gaps:['installments.html','functions/installments.js'],
+    pages:['checkout.html','wallet.html','financial-os.html']
+  },
+  {
+    num:4, title:'Logistics Platform', status:'partial',
+    desc:'Drivers, riders, fleet, dispatch AI, live tracking, proof of delivery, route optimization.',
+    items:[
+      {s:'done', t:'Driver & rider management'},
+      {s:'done', t:'Fleet monitoring (GIP fleet analytics)'},
+      {s:'done', t:'Dispatch AI (8-factor scoring)'},
+      {s:'done', t:'Live GPS tracking'},
+      {s:'done', t:'Route optimization (OSRM)'},
+      {s:'done', t:'Proof of delivery (QR + signature)'},
+      {s:'done', t:'Delivery pricing engine'},
+      {s:'done', t:'Hub eTIMS dispatch notes'},
+      {s:'missing', t:'Warehouse management system'},
+      {s:'missing', t:'Pickup point network'},
+      {s:'missing', t:'Vehicle maintenance tracking'},
+      {s:'planned', t:'Fuel tracking & analytics'},
+    ],
+    gaps:['warehouse.html','pickup-points.html','vehicle-maintenance.html'],
+    pages:['dispatch.html','delivery-tracking.html','fleet-monitor.html','driver.html']
+  },
+  {
+    num:5, title:'Business Operating System', status:'partial',
+    desc:'Complete business management — inventory, accounting, CRM, HR, payroll, procurement, eTIMS.',
+    items:[
+      {s:'done', t:'Inventory management (full suite)'},
+      {s:'done', t:'Accounting (POS-level, double-entry ledger)'},
+      {s:'done', t:'CRM'},
+      {s:'done', t:'HR & Payroll (Kenya PAYE/NHIF/NSSF)'},
+      {s:'done', t:'Business intelligence & forecasting'},
+      {s:'done', t:'Procurement & purchase orders'},
+      {s:'done', t:'eTIMS (KRA compliance, 28 CFs)'},
+      {s:'done', t:'VAT & WHT computation'},
+      {s:'done', t:'Supplier management'},
+      {s:'partial', t:'General Ledger UI — building now'},
+      {s:'missing', t:'Fixed asset management'},
+      {s:'missing', t:'Expense management portal'},
+      {s:'missing', t:'Cash flow management UI'},
+      {s:'missing', t:'Configurable approval workflows'},
+      {s:'planned', t:'Project management'},
+    ],
+    gaps:['general-ledger.html','expenses.html','cash-flow.html'],
+    pages:['hr-payroll.html','procurement.html','crm.html','pos-accounting.html']
+  },
+  {
+    num:6, title:'SOKONI Foundation', status:'partial',
+    desc:'Transparent nonprofit operations — donations, campaigns, grants, impact reporting.',
+    items:[
+      {s:'done', t:'Donation engine (one-time & recurring)'},
+      {s:'done', t:'Campaign management'},
+      {s:'done', t:'Grant submission & approval'},
+      {s:'done', t:'Beneficiary & disbursement tracking'},
+      {s:'done', t:'Foundation admin dashboard'},
+      {s:'missing', t:'Volunteer management portal'},
+      {s:'missing', t:'Sponsor relationship management'},
+      {s:'planned', t:'Impact reporting portal (SDG mapping)'},
+    ],
+    gaps:['volunteer.html','sponsors.html'],
+    pages:['foundation.html']
+  },
+  {
+    num:7, title:'Property Ecosystem', status:'partial',
+    desc:'Rentals, sales, commercial, BnB, property management, tenant & owner portals.',
+    items:[
+      {s:'done', t:'Property listings (buy/rent/commercial/land)'},
+      {s:'done', t:'BnB hub & booking'},
+      {s:'done', t:'Landlord dashboard'},
+      {s:'done', t:'Property agent portal'},
+      {s:'done', t:'Property search & enquiries'},
+      {s:'partial', t:'Tenant portal — building now'},
+      {s:'missing', t:'Maintenance request system'},
+      {s:'missing', t:'Lease management'},
+      {s:'planned', t:'Commercial property features (CAM, NNN)'},
+    ],
+    gaps:['tenant-portal.html','maintenance-requests.html'],
+    pages:['property-hub.html','landlord.html','bnb-hub.html']
+  },
+  {
+    num:8, title:'Services Ecosystem', status:'partial',
+    desc:'Legal, healthcare, education, cleaning, tech, professional services with bookings.',
+    items:[
+      {s:'done', t:'Legal Hub (case management, lawyers)'},
+      {s:'done', t:'Healthcare Hub (doctors, clinics, pharmacy)'},
+      {s:'done', t:'Education Hub (tutors, courses)'},
+      {s:'done', t:'Tech Hub (repairs, IT services)'},
+      {s:'done', t:'Cleaning Hub'},
+      {s:'done', t:'Booking engine (slot locking, 2-min holds)'},
+      {s:'done', t:'Availability management'},
+      {s:'done', t:'Service ratings & reviews'},
+      {s:'partial', t:'Unified provider management portal'},
+      {s:'missing', t:'Service subscription contracts (monthly retainers)'},
+    ],
+    gaps:['service-subscriptions.html'],
+    pages:['legal-hub.html','healthcare.html','education.html','venue-booking.html']
+  },
+  {
+    num:9, title:'AI Platform (KASS OS)', status:'partial',
+    desc:'KASS as the intelligent operating system — 9 role-specific AI assistants across all modules.',
+    items:[
+      {s:'done', t:'KASS Admin (multi-tool, Firestore-aware)'},
+      {s:'done', t:'sokoniChat (public buyer concierge)'},
+      {s:'done', t:'POS AI assistant'},
+      {s:'done', t:'Security AI, Inventory AI, SASOS Brain'},
+      {s:'done', t:'Workflow automation AI'},
+      {s:'done', t:'Claude Haiku integration (insights)'},
+      {s:'missing', t:'Seller KASS (pricing, inventory coaching)'},
+      {s:'missing', t:'Manager KASS (staff, multi-branch)'},
+      {s:'missing', t:'Finance KASS (FinOS, reconciliation)'},
+      {s:'missing', t:'Support KASS (ticket + order context)'},
+      {s:'missing', t:'Developer KASS (API help, debugging)'},
+      {s:'missing', t:'Foundation KASS (campaign guidance)'},
+      {s:'missing', t:'Executive KASS (board summaries, KPIs)'},
+      {s:'planned', t:'Voice interaction & multilingual'},
+      {s:'planned', t:'Document generation AI'},
+    ],
+    gaps:['kass-seller.html','kass-finance.html','kass-executive.html'],
+    pages:['chat.html','pos-ai.html']
+  },
+  {
+    num:10, title:'Automation', status:'partial',
+    desc:'Everything repetitive automated — alerts, campaigns, reminders, reports, monitoring.',
+    items:[
+      {s:'done', t:'Inventory low-stock alerts'},
+      {s:'done', t:'Scheduled daily ops reports'},
+      {s:'done', t:'Scheduled payouts & reconciliation'},
+      {s:'done', t:'Async jobs engine (11 CFs, DLQ, retry)'},
+      {s:'done', t:'Workflow automation platform (WAP)'},
+      {s:'done', t:'Marketing campaign automation'},
+      {s:'done', t:'Fraud monitoring automation'},
+      {s:'partial', t:'Automated purchase orders (low stock trigger)'},
+      {s:'missing', t:'Invoice & payment reminders'},
+      {s:'planned', t:'Bulk import/export jobs'},
+    ],
+    gaps:['payment-reminders.html'],
+    pages:['wap.html','async-jobs.html']
+  },
+  {
+    num:11, title:'Event Bus Platform', status:'complete',
+    desc:'Every module communicates through the event bus — loose coupling, replay, observability.',
+    items:[
+      {s:'done', t:'Platform Event Bus (14 CFs)'},
+      {s:'done', t:'33 capability keys registered'},
+      {s:'done', t:'Event routing (20 event types)'},
+      {s:'done', t:'Dead-letter queue & replay'},
+      {s:'done', t:'Async event router'},
+      {s:'done', t:'Event auditability'},
+      {s:'done', t:'sokoni-platform.js bootstrap SDK'},
+    ],
+    gaps:[],
+    pages:['enterprise-ops.html']
+  },
+  {
+    num:12, title:'Async Jobs Platform', status:'complete',
+    desc:'All long-running work asynchronous — email, SMS, push, reports, AI, search indexing.',
+    items:[
+      {s:'done', t:'asyncEnqueue, asyncWorker, asyncSweeper'},
+      {s:'done', t:'Distributed locking (Firestore transactions)'},
+      {s:'done', t:'Exponential backoff (30s→128min)'},
+      {s:'done', t:'Dead Letter Queue + replay'},
+      {s:'done', t:'28 job types wired'},
+      {s:'done', t:'asyncCleanup (30-day purge)'},
+      {s:'done', t:'Priority levels (CRITICAL→BACKGROUND)'},
+      {s:'done', t:'async-jobs.html monitoring dashboard'},
+    ],
+    gaps:[],
+    pages:['async-jobs.html']
+  },
+  {
+    num:13, title:'Redis Platform', status:'complete',
+    desc:'Redis as the operational acceleration layer — sessions, locks, cache, realtime metrics.',
+    items:[
+      {s:'done', t:'sokoni-redis.js SDK (30 CFs)'},
+      {s:'done', t:'Sessions & presence'},
+      {s:'done', t:'Distributed locks'},
+      {s:'done', t:'Rate limiting'},
+      {s:'done', t:'AI & search result caching'},
+      {s:'done', t:'POS synchronization layer'},
+      {s:'done', t:'Redis monitor dashboard'},
+      {s:'done', t:'Fallback-safe (REDIS_URL optional)'},
+    ],
+    gaps:[],
+    pages:['redis-monitor.html']
+  },
+  {
+    num:14, title:'Security Platform', status:'partial',
+    desc:'Financial-grade Zero Trust — App Check, MFA, passkeys, RBAC+ABAC, fraud engine, SOC.',
+    items:[
+      {s:'done', t:'Zero Trust client SDK (sokoni-zero-trust.js)'},
+      {s:'done', t:'App Check (ReCaptcha v3)'},
+      {s:'done', t:'Google/Facebook/Phone/Email auth'},
+      {s:'done', t:'ABAC + TOTP + Passkeys'},
+      {s:'done', t:'Fraud detection engine'},
+      {s:'done', t:'Security Operations Center'},
+      {s:'done', t:'Immutable audit logs'},
+      {s:'done', t:'Secret Manager integration'},
+      {s:'done', t:'Device trust & risk engine'},
+      {s:'done', t:'Brute-force protection'},
+      {s:'partial', t:'Security 6.0 CFs (blocked by quota)'},
+    ],
+    gaps:[],
+    pages:['security-center.html','security-compliance.html']
+  },
+  {
+    num:15, title:'Observability', status:'partial',
+    desc:'Everything measurable — infrastructure, marketplace, POS, payments, Redis, AI.',
+    items:[
+      {s:'done', t:'Enterprise Operations Center'},
+      {s:'done', t:'Platform health scoring engine'},
+      {s:'done', t:'opsScheduledHealthCheck (every 5 min)'},
+      {s:'done', t:'Post-launch monitoring (24h/7d/30d)'},
+      {s:'done', t:'POS observability dashboard'},
+      {s:'done', t:'Security Operations Center'},
+      {s:'done', t:'Executive dashboard'},
+      {s:'done', t:'Rollback system with audit trail'},
+      {s:'partial', t:'Distributed tracing (basic, not full OTel)'},
+    ],
+    gaps:[],
+    pages:['enterprise-ops.html','ops-center.html','pos-observability.html']
+  },
+  {
+    num:16, title:'Performance', status:'partial',
+    desc:'Enterprise performance — instant UI, low latency, efficient reads, horizontal scaling.',
+    items:[
+      {s:'done', t:'Redis caching layer'},
+      {s:'done', t:'Lazy loading & code splitting'},
+      {s:'done', t:'Firestore index optimization (197 indexes)'},
+      {s:'done', t:'Pagination & infinite scrolling'},
+      {s:'done', t:'Background processing (async jobs)'},
+      {s:'done', t:'Offline-first (IndexedDB + Firestore)'},
+      {s:'done', t:'Service Worker (SW v301)'},
+      {s:'partial', t:'Image optimization (CDN, WebP)'},
+      {s:'planned', t:'Full OTel performance tracing'},
+    ],
+    gaps:[],
+    pages:['launch-readiness.html']
+  },
+  {
+    num:17, title:'Developer Platform', status:'partial',
+    desc:'SDKs, REST APIs, webhooks, documentation, testing framework, partner ecosystem.',
+    items:[
+      {s:'done', t:'developer-portal.html (docs, quickstart)'},
+      {s:'done', t:'Webhook engine (sokoni-webhook-engine.js)'},
+      {s:'done', t:'POS integrations REST API'},
+      {s:'done', t:'Platform Event Bus (public events)'},
+      {s:'done', t:'Jest + Playwright test framework'},
+      {s:'partial', t:'Partner portal (building now)'},
+      {s:'missing', t:'Published @sokoni/sdk npm package'},
+      {s:'missing', t:'Developer CLI (sokoni-cli)'},
+      {s:'missing', t:'Sandbox environment'},
+      {s:'planned', t:'OpenAPI/Swagger spec'},
+    ],
+    gaps:['partner-portal.html','functions/developer-portal.js'],
+    pages:['developer-portal.html']
+  },
+  {
+    num:18, title:'Enterprise Administration', status:'partial',
+    desc:'Enterprise console — marketplace, businesses, users, roles, payments, AI, compliance.',
+    items:[
+      {s:'done', t:'Super Admin portal'},
+      {s:'done', t:'Admin OS (17-section dark SPA)'},
+      {s:'done', t:'SASOS Admin (subscription management)'},
+      {s:'done', t:'Platform Core (feature flags, hub registry)'},
+      {s:'done', t:'Trust & Safety portal'},
+      {s:'done', t:'Merchant pipeline management'},
+      {s:'done', t:'Role-based access control matrix'},
+      {s:'partial', t:'Multi-branch administration'},
+      {s:'planned', t:'Compliance audit export'},
+    ],
+    gaps:[],
+    pages:['superadmin.html','admin-subscriptions.html','ops-center.html']
+  },
+  {
+    num:19, title:'Global Readiness', status:'missing',
+    desc:'Multi-country, multi-currency, multi-language — expansion beyond Kenya.',
+    items:[
+      {s:'done', t:'East Africa Time (EAT) support'},
+      {s:'done', t:'Swahili NLP in search'},
+      {s:'done', t:'Kenya tax (VAT/WHT/eTIMS)'},
+      {s:'missing', t:'Multi-currency (flagged, not implemented)'},
+      {s:'missing', t:'i18n framework (English-only currently)'},
+      {s:'missing', t:'Multi-country abstraction layer'},
+      {s:'missing', t:'Regional payment adapters (TZ, UG, RW)'},
+      {s:'missing', t:'Regional compliance modules'},
+      {s:'planned', t:'Language files (sw, fr, ar)'},
+    ],
+    gaps:['functions/currency-engine.js','i18n framework','country-config.js'],
+    pages:[]
+  },
+  {
+    num:20, title:'User Experience', status:'partial',
+    desc:'Premium UI — native app quality, smooth animations, consistent design, accessibility.',
+    items:[
+      {s:'done', t:'Premium dark theme (#71ff00 / #050505)'},
+      {s:'done', t:'Platform-wide theme unification (200+ pages)'},
+      {s:'done', t:'Mobile-first responsive layouts'},
+      {s:'done', t:'Role-based navigation engine'},
+      {s:'done', t:'Bottom nav (mobile) + drawer system'},
+      {s:'done', t:'Cookie consent & privacy compliance'},
+      {s:'partial', t:'Accessibility (WCAG AA — partially met)'},
+      {s:'partial', t:'Animation & micro-interactions (inconsistent)'},
+      {s:'planned', t:'Native app (PWA install promotion)'},
+    ],
+    gaps:[],
+    pages:['index.html','seller.html']
+  },
+  {
+    num:21, title:'Quality Engineering', status:'partial',
+    desc:'Continuous testing — regression, performance, security, accessibility, load, chaos.',
+    items:[
+      {s:'done', t:'652 passing tests (Jest + Playwright)'},
+      {s:'done', t:'UAT Center (24 scenarios, 9 roles)'},
+      {s:'done', t:'Enterprise Certification Report'},
+      {s:'done', t:'Security pentest scheduled CF'},
+      {s:'done', t:'Chaos testing (weeklyChaoTest CF)'},
+      {s:'done', t:'DR simulation CFs'},
+      {s:'partial', t:'Load testing (framework exists, not automated)'},
+      {s:'planned', t:'Automated regression on every deploy'},
+    ],
+    gaps:[],
+    pages:['uat-center.html','enterprise-certification.html']
+  },
+  {
+    num:22, title:'Operations', status:'partial',
+    desc:'One-click deployment, monitoring, rollback, recovery, backups, incident management.',
+    items:[
+      {s:'done', t:'Rollback system (snapshots, audit trail)'},
+      {s:'done', t:'Platform Ops Dashboard'},
+      {s:'done', t:'Health checks (every 5 min)'},
+      {s:'done', t:'Alerting (opsAlerts collection)'},
+      {s:'done', t:'Production Launch Center'},
+      {s:'done', t:'Disaster Recovery (simulation, playbooks)'},
+      {s:'done', t:'PITR enabled on Firestore'},
+      {s:'done', t:'18 Cloud Monitoring alerts'},
+      {s:'partial', t:'Capacity planning (manual currently)'},
+      {s:'planned', t:'Automated release pipeline (CI/CD)'},
+    ],
+    gaps:[],
+    pages:['enterprise-ops.html','launch.html','launch-readiness.html']
+  },
+  {
+    num:23, title:'Ecosystem', status:'partial',
+    desc:'Platform others can build on — partner APIs, hardware integrations, app marketplace.',
+    items:[
+      {s:'done', t:'POS hardware integrations (5 transports)'},
+      {s:'done', t:'Webhook delivery engine'},
+      {s:'done', t:'Platform Event Bus (public)'},
+      {s:'done', t:'M-PESA / IntaSend integration'},
+      {s:'partial', t:'Partner portal — building now'},
+      {s:'missing', t:'API key self-service management'},
+      {s:'missing', t:'Third-party app marketplace'},
+      {s:'missing', t:'Certified integration program'},
+      {s:'planned', t:'Hardware SDK (IoT, cold chain)'},
+    ],
+    gaps:['partner-portal.html','functions/developer-portal.js'],
+    pages:['developer-portal.html']
+  },
+  {
+    num:24, title:'Business Intelligence', status:'partial',
+    desc:'Executive dashboards, forecasting, KPIs, AI insights, growth & risk analytics.',
+    items:[
+      {s:'done', t:'Executive dashboard'},
+      {s:'done', t:'Business health score (AI-powered)'},
+      {s:'done', t:'7-day revenue forecast'},
+      {s:'done', t:'POS BI & analytics'},
+      {s:'done', t:'Customer analytics'},
+      {s:'done', t:'Seller performance analytics'},
+      {s:'done', t:'Admin revenue dashboard'},
+      {s:'done', t:'Merchant success engine'},
+      {s:'partial', t:'Cross-platform KPI aggregation'},
+      {s:'planned', t:'AI-generated executive narratives'},
+    ],
+    gaps:[],
+    pages:['growth-dashboard.html','business-analytics.html','pos-bi.html']
+  },
+  {
+    num:25, title:'Final Certification', status:'partial',
+    desc:'Automated production audit — readiness score, security, performance, rollback readiness.',
+    items:[
+      {s:'done', t:'Enterprise Certification Report (89/100)'},
+      {s:'done', t:'Production Launch Center (checklist)'},
+      {s:'done', t:'Launch Readiness checker'},
+      {s:'done', t:'Security 6.0 certification (86/100)'},
+      {s:'done', t:'SmartPOS 4.0 certification (98/100)'},
+      {s:'done', t:'opsScheduledHealthCheck (live monitoring)'},
+      {s:'partial', t:'Full automated pre-release audit CF'},
+      {s:'planned', t:'Release Readiness Report generator'},
+    ],
+    gaps:[],
+    pages:['enterprise-certification.html','launch.html','launch-readiness.html']
+  },
+];
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function buildCard(sec){
+  const doneCount  = sec.items.filter(i=>i.s==='done').length;
+  const total      = sec.items.length;
+  const pages      = sec.pages||[];
+  const gaps       = sec.gaps||[];
+
+  const itemsHtml = sec.items.map(it=>`
+    <div class="item ${it.s}">
+      <span class="item-icon"></span>
+      <span class="item-txt">${esc(it.t)}</span>
+    </div>`).join('');
+
+  const pagesHtml = pages.map(p=>`<a class="page-link" href="/${p.replace('.html','')}">↗ ${esc(p)}</a>`).join('');
+
+  const gapsHtml = gaps.length ? `<div class="gap-tags">${gaps.map(g=>`<span class="gap-tag">GAP: ${esc(g)}</span>`).join('')}</div>` : '';
+
+  return `
+    <div class="sec-card ${sec.status}" data-sec="${sec.num}">
+      <div class="sec-hdr" onclick="toggle(${sec.num})">
+        <div class="sec-num">${sec.num}</div>
+        <div class="sec-title">${esc(sec.title)}</div>
+        <span class="sec-status status-${sec.status}">${sec.status}</span>
+        <span class="sec-toggle">▾</span>
+      </div>
+      <div class="sec-body">
+        <p class="sec-desc">${esc(sec.desc)} &nbsp;<em style="color:var(--dim)">${doneCount}/${total} items</em></p>
+        <div class="item-list">${itemsHtml}</div>
+        ${gapsHtml}
+        ${pagesHtml ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">${pagesHtml}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+function toggle(num){
+  const card = document.querySelector(`[data-sec="${num}"]`);
+  if(card) card.classList.toggle('collapsed');
+}
+
+function render(){
+  const grid = document.getElementById('secGrid');
+  grid.innerHTML = SECTIONS.map(buildCard).join('');
+
+  const complete = SECTIONS.filter(s=>s.status==='complete').length;
+  const partial  = SECTIONS.filter(s=>s.status==='partial').length;
+  const missing  = SECTIONS.filter(s=>s.status==='missing').length;
+  const planned  = SECTIONS.filter(s=>s.status==='planned').length;
+
+  document.getElementById('sumComplete').textContent = complete;
+  document.getElementById('sumPartial').textContent  = partial;
+  document.getElementById('sumMissing').textContent  = missing;
+  document.getElementById('sumPlanned').textContent  = planned;
+
+  // Weight: complete=1, partial=0.5
+  const score = Math.round(((complete + partial*0.5) / SECTIONS.length)*100);
+  document.getElementById('ringPct').textContent = score + '%';
+
+  // Ring
+  const circumference = 465;
+  const offset = circumference - (score/100)*circumference;
+  requestAnimationFrame(()=>{
+    setTimeout(()=>{
+      const fill = document.getElementById('ringFill');
+      if(fill) fill.style.strokeDashoffset = offset;
+    }, 200);
+  });
+}
+
+render();
+</script>
+</body>
+</html>

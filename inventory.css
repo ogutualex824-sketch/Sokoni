@@ -18,7 +18,7 @@
   --green2:   #00cc6a;
   --blue:     #00aaff;
   --blue2:    #0077cc;
-  --purple:   #9b59b6;
+  --purple:   #71ff00;
   --orange:   #ffb300;
   --red:      #ff4444;
   --cyan:     #00e5ff;
@@ -387,7 +387,7 @@ body {
 .inv-timeline-dot.purchase { border-color: var(--green); }
 .inv-timeline-dot.damage { border-color: var(--red); }
 .inv-timeline-dot.transfer { border-color: var(--orange); }
-.inv-timeline-dot.adjustment { border-color: var(--purple); }
+.inv-timeline-dot.adjustment { border-color: var(--g); }
 .inv-timeline-title { font-size: 13px; font-weight: 700; }
 .inv-timeline-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
 

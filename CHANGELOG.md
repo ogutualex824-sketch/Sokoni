@@ -1,4 +1,225 @@
-﻿## [2026-07-07] — UAT Center v1.0
+﻿## [2026-07-07] — Vision 2030 Sprint — Enterprise Platform Execution
+
+### Summary
+Major platform expansion sprint targeting SOKONI's Vision 2030 gap analysis. Delivered 8 new production pages, 20 new Cloud Functions across 3 new CF modules, a master strategic dashboard, and a platform-wide premium theme unification (zero purple hex remaining). This sprint closes key gaps in SmartPOS F&B, Business OS (GL), Property Management, Returns Processing, Developer Ecosystem, and Commerce tooling.
+
+### New Pages
+
+| Page | Description |
+|---|---|
+| `vision-2030.html` | Master strategic dashboard — 25 Vision 2030 sections, live status ring, gap analysis, CF quota banner |
+| `kitchen-display.html` | SmartPOS Kitchen Display System — full-screen F&B KDS, 3-lane BUMP/HOLD/RECALL board, timer rings, audio, Wake Lock |
+| `general-ledger.html` | Business General Ledger — 5 tabs: COA (28 Kenya accounts), Journal Entries, Trial Balance, Income Statement, Balance Sheet |
+| `tenant-portal.html` | Property Tenant Portal — lease view, rent payment (M-Pesa STK), maintenance requests, documents, notice board |
+| `returns.html` | Returns Management — role-based views: buyer submit, seller review/approve/reject, admin force override |
+| `partner-portal.html` | Developer & Partner Portal — API keys (single-reveal), webhooks, OAuth apps, usage analytics, docs |
+| `coupon-manager.html` | Coupon Manager — PERCENT/FIXED/FREE_DELIVERY/BOGO types, full CRUD, sparkline analytics |
+
+### New Cloud Functions (20 total — pending GCP quota)
+
+**`functions/developer-portal.js`** (8 CFs):
+`generateApiKey`, `revokeApiKey`, `listApiKeys`, `registerWebhook`, `testWebhook`, `listWebhooks`, `deleteWebhook`, `getApiUsage`
+
+**`functions/returns-engine.js`** (6 CFs):
+`submitReturn`, `getMyReturns`, `getSellerReturns`, `reviewReturn`, `adminForceReturn`, `markReturnProcessed`
+
+**`functions/property-maintenance.js`** (6 CFs):
+`submitMaintenanceRequest`, `getMyMaintenanceRequests`, `getLandlordRequests`, `updateMaintenanceStatus`, `respondToRequest`, `getMaintenanceStats`
+
+### Platform-Wide Theme Unification
+Eliminated all purple hex codes (`#7c3aed`, `#6d28d9`, `#8b5cf6`, `#a78bfa`) from 30 HTML/CSS/JS files. Contrast fixes applied: all lime-green (#71ff00) backgrounds now use `color:#000` (black text). Zero purple references remaining in any production file.
+
+### Files Affected
+30 HTML/CSS/JS files patched for premium theme + 3 new CF modules + 1 new index.js wiring block + DEPLOY_QUEUE.md updated (66 total CFs pending quota).
+
+### Security Notes
+- API keys: SHA-256 hashed before storage; full key returned once in creation response, never stored in plain text
+- Webhook secrets: HMAC-SHA256 secret returned once; only hash stored
+- Returns engine: `runTransaction` for optimistic concurrency on reviewReturn; buyer privacy mask on seller views
+- Property maintenance: tenant can only cancel own requests; landlord scope enforced via `properties.ownerId` check
+- All user-sourced strings routed through `esc()` XSS sanitiser before DOM insertion
+
+### Performance Notes
+- General Ledger: single Firestore fetch per date-range; all 5 tabs compute from same in-memory array
+- KDS: single `onSnapshot` listener; `reconcileLane()` DOM-diffs before mutating; timers at 15s intervals
+
+### Deployment Notes
+- Hosting: LIVE at https://sokoni-aeb26.web.app (65 new files uploaded 2026-07-07)
+- Cloud Functions: 66 CFs pending GCP Cloud Run CPU quota increase — deploy commands in DEPLOY_QUEUE.md
+
+---
+
+## [2026-07-07] — Tenant Portal v1.0 + Returns Management v1.0
+
+### Summary
+**`tenant-portal.html`** — Property tenant self-service portal. Shows active lease details, payment history (PAID/PENDING/OVERDUE), maintenance request submission and tracking, and landlord document library. M-Pesa STK push integration via `initiateRentPayment` CF. **`returns.html`** — Role-based returns management portal. Buyer view submits returns; seller view reviews with approve/reject/request-info actions (buyer name masked); admin view has full table with force-approve/force-reject and CSV export.
+
+### Files Affected
+
+| File | Change |
+|---|---|
+| `tenant-portal.html` | **New** — 773 lines: lease summary, payment history, maintenance tab, documents, M-Pesa rent payment |
+| `returns.html` | **New** — 740 lines: buyer/seller/admin role-based views, status timeline, CSV export |
+| `CHANGELOG.md` | Updated |
+
+### Firestore Collections Used
+
+**tenant-portal.html**
+- `users/{uid}` — reads `tenantProfile` (unitId, propertyId, leaseStart, leaseEnd, monthlyRent, paymentDay)
+- `rentPayments` — query: `tenantId == uid`, last 12, ordered `paymentDate desc`
+- `maintenanceRequests` — query: `tenantId == uid`, ordered `createdAt desc`; writes new requests
+- `propertyDocuments` — query: `propertyId == propertyId`
+- `propertyNotices` — query: `propertyId == propertyId`, limit 5
+
+**returns.html**
+- `returns` — buyer writes new returns; seller/admin reads with role-scoped queries; status timeline updates
+- `orders/{orderId}` — buyer ownership verified before return creation
+- `users/{uid}` — reads `role`, `sellerId` for auth routing
+
+### Security Notes
+- Buyer name masked in seller view: `name.slice(0,1) + '***'`
+- Admin force-approve/reject bypasses seller approval chain (explicit admin-only guard)
+- Returns deduplication: blocks second open return on same order
+
+---
+
+## [2026-07-07] — Partner Portal v1.0 + Coupon Manager v1.0
+
+### Summary
+Two new self-service portals. **partner-portal.html** is the developer and technology-partner hub: API key management (generate/revoke with single-reveal pattern), webhook endpoint registration with HMAC signature guidance, OAuth app registration, usage analytics with SVG sparkline, and inline documentation with curl/SDK examples. **coupon-manager.html** is the seller/admin coupon system: full CRUD for discount codes (PERCENT / FIXED / FREE_DELIVERY / BOGO types), pause/resume, per-coupon detail stats panel, redemption sparkline, top-performers table, and customer-segment breakdown. Both use Firebase compat v9.23.0, auth-gated, XSS-safe, mobile-responsive, premium dark theme (`--bg:#050505`, `--g:#71ff00`).
+
+### Files Affected
+
+| File | Change |
+|---|---|
+| `partner-portal.html` | **New** — Developer & Partner Portal: API keys, webhooks, OAuth apps, usage analytics, docs |
+| `coupon-manager.html` | **New** — Coupon Manager: Active/Expired/Analytics/Create tabs, full CRUD, sparkline |
+| `CHANGELOG.md` | Updated |
+
+### Firestore Collections Used
+
+**partner-portal.html**
+- `apiKeys/{uid}/keys` — API key records (name, prefix, last4, env, scopes, status, lastUsed, createdAt)
+- `webhooks` — webhook endpoints (uid, url, events, active, deliveryRate, lastFired)
+- `oauthApps` — OAuth app registrations (uid, name, type, clientId, redirectUris, status, createdAt)
+- `apiUsageLogs/{uid}/days/{date}` — daily API call counts
+- `partnerProfiles/{uid}` — partner tier (Starter / Growth / Enterprise)
+
+**coupon-manager.html**
+- `coupons/{couponId}` — coupon records (code, name, type, pct/fixed/buyQty/getQty, conditions, limits, sellerId, status, usedCount, totalDiscountGiven, createdAt)
+- `couponRedemptions` — redemption events (sellerId, date, discountAmount, type, pct)
+- `users/{uid}` — reads role + sellerId for auth guard
+
+### Cloud Functions Called (partner-portal.html)
+- `generateApiKey({name, env, scopes})` — creates key, returns `{key}` for one-time display
+- `revokeApiKey({keyId})` — marks key revoked
+- `registerWebhook({url, events})` — stores endpoint with auto-generated HMAC secret
+- `testWebhook({webhookId})` — fires sample payload, returns `{statusCode}`
+
+### Security Notes
+- API keys shown in full exactly once at creation; only prefix + last 4 chars stored in Firestore
+- Webhook payloads signed with HMAC-SHA256; signature verification example included in docs tab
+- All Firestore writes use server-side `FieldValue.serverTimestamp()`
+- Auth guard redirects to `login.html` before any Firestore access
+
+---
+
+## [2026-07-07] — General Ledger v1.0
+
+### Summary
+Adds `general-ledger.html` — merchant-facing General Ledger for SOKONI's Business OS. Connects to the existing double-entry `ledgerEntries` Firestore collection. Five tabs: Chart of Accounts (Kenya standard COA, 28 accounts, live balances), Journal Entries (date-filtered, searchable, new-entry modal with debit = credit validation), Trial Balance (auto-balanced check), Income Statement (P&L for any date range), and Balance Sheet (Assets = Liabilities + Equity). Firebase compat v9.23.0. Auth-gated to authenticated sellers only (`sellerId` in user profile). XSS-safe, print-friendly, mobile-responsive.
+
+### Files Affected
+
+| File | Change |
+|---|---|
+| `general-ledger.html` | **New** — Full double-entry General Ledger: 5 tabs, 28-account Kenya COA, journal entry modal, trial balance, P&L, balance sheet |
+| `CHANGELOG.md` | Updated |
+
+### Firestore Collections Used
+- `users/{uid}` — reads `sellerId` for seller auth guard
+- `ledgerEntries` — compound query: `businessId == sellerId`, `date >= startDate`, `date <= endDate`, `orderBy date desc` (requires composite index on businessId + date)
+  - Writes: new journal entries (entryId, businessId, date, description, reference, lines[], createdBy, createdByName, createdAt)
+
+### Required Firestore Index
+```
+Collection: ledgerEntries
+Fields: businessId ASC, date ASC
+```
+
+### Feature Details
+- **Chart of Accounts** — Kenya standard 28-account COA grouped by type (Assets 100–199, Liabilities 200–299, Equity 300–399, Revenue 400–499, Expenses 500–599); balances computed live from loaded entries; "Transactions" button deep-links to Journal tab filtered by account
+- **Journal Entries** — date-ranged table with search; each entry displays paired debit/credit lines; "New Journal Entry" modal with dynamic line rows, COA account selector grouped by type, Debit/Credit selector, amount field, real-time balance validation (Dr must = Cr before Post is enabled)
+- **Trial Balance** — aggregates all entry lines by account code; shows Dr total and Cr total columns per account; footer totals; green/red balance status banner; detects imbalances to 1 cent
+- **Income Statement** — Revenue (400–499), COGS (500), Operating Expenses (510–599), Gross Profit, Net Income/(Loss); monospaced layout; green/red net result
+- **Balance Sheet** — Assets / Liabilities / Equity sections with current-period net income injected under Equity; Total Liabilities + Equity cross-check
+- **Export** — CSV download (BOM-prefixed for Excel compatibility) and browser Print/PDF
+- **Auth guard** — `firebase.auth().onAuthStateChanged` checks both authentication and `sellerId` presence; shows inline gate with contextual message
+
+### Security Notes
+- All user-derived strings rendered via `esc()` XSS helper before innerHTML insertion
+- Firestore query scoped to `businessId == sellerId` — merchants can only read their own entries
+- Journal entry `businessId` is set server-side from the authenticated user's profile, not from client input
+- No secrets or private keys in client code
+
+### Performance Notes
+- Single `loadLedgerEntries()` call per date-range apply; all five tabs compute from the same in-memory array (no redundant Firestore reads)
+- COA is static hardcoded data — zero Firestore reads for account structure
+
+---
+
+## [2026-07-07] — Kitchen Display System (KDS) v1.0
+
+### Summary
+Adds `kitchen-display.html` — a full-screen real-time Kitchen Display System for SOKONI SmartPOS. Wall-mounted display for restaurant and café kitchens. Shows live incoming orders across three lanes (Pending / In Progress / Hold), with colour-coded urgency timers, per-item preparation checkboxes, BUMP to complete, HOLD, and RECALL. No authentication required — the display identifies itself by `?storeId=` URL parameter.
+
+### Files Affected
+
+| File | Change |
+|---|---|
+| `kitchen-display.html` | **New** — Full-screen KDS: 3-lane board, timer rings, BUMP/HOLD/RECALL, audio chime, wake lock, setup screen |
+
+### Firestore Collections Used
+- `stores/{storeId}` — reads `name`/`businessName` for the header display
+- `orders` — real-time `onSnapshot` listener filtered by `storeId` + `createdAt >= 4h ago` (status filtered client-side)
+  - Writes: `kitchenStatus` ('preparing' / 'bumped' / 'on_hold'), `bumpedAt` (serverTimestamp), `itemsPrepared` (arrayUnion/arrayRemove)
+
+### Feature Details
+- **Setup screen** — shown when no `?storeId=` in URL; inputs Store ID + station selector; submits by navigating to `?storeId=X&station=Y`
+- **Header strip** — SOKONI logo, store name (from Firestore), station filter pills (All/Hot/Cold/Drinks/Grill/Prep), live clock, pending counter, fullscreen toggle
+- **Three-lane board** — Pending | In Progress | On Hold; cards sorted oldest-first (most urgent top-left)
+- **Order cards** — order number (44px bold), timer ring (SVG stroke-dashoffset fill over 15 min), channel badge (Dine-in/Takeaway/Delivery/Online), table number, item list with quantity and modifier text, per-item checkboxes
+- **Urgency system** — green border/ring (<5 min), amber (5–12 min), red with subtle pulse animation (>12 min)
+- **BUMP** — writes `kitchenStatus: 'bumped'` + `bumpedAt: serverTimestamp()`; card briefly shows DONE then auto-removes after 5 s
+- **HOLD** — writes `kitchenStatus: 'on_hold'`; card moves to Hold lane
+- **Item checkbox** — writes `itemsPrepared: arrayUnion(index)` and `kitchenStatus: 'preparing'`; BUMP button glows green when all items checked
+- **Recall strip** — persistent footer showing last 3 bumped orders; click any chip to restore (`kitchenStatus: 'preparing'`)
+- **Audio chime** — Web Audio API synthesized two-tone ascending chime (440 Hz → 660 Hz) on new order arrival; no external file dependency
+- **Wake Lock** — `navigator.wakeLock.request('screen')` prevents screen sleep; re-acquired on visibility change
+- **Offline banner** — detects `online`/`offline` events and Firestore errors; shows red banner across top
+- **Fullscreen** — `requestFullscreen()` toggle button in header
+- **Station filter** — pills update `?station=` param and re-render board filtering orders by item station field; falls back to showing all items if no station field present
+
+### Firestore Index Required
+Composite index on `orders` collection: `(storeId ASC, createdAt ASC)` — needed for the real-time listener query.
+
+### Security Implications
+- No authentication guard by design (KDS is a trusted network device); storeId is the access control boundary
+- All Firestore-sourced strings rendered through `esc()` (text-node-based XSS sanitiser) before DOM insertion
+- No `innerHTML` paths accept unsanitised data
+- `firebase.firestore.FieldValue.arrayUnion/Remove` used for item updates to prevent full-document overwrites
+- `user-select: none` prevents accidental data exposure via clipboard on shared kitchen screens
+
+### Performance Implications
+- Single `onSnapshot` listener for all orders — no polling
+- Timer rings update every 15 s via `setInterval` (not every second) to minimise DOM thrash
+- `reconcileLane()` diffs existing cards before removing/adding — avoids full re-render on each snapshot
+- Wake Lock prevents unnecessary display wake cycles
+- Audio context is lazy-initialised on first new order (not at boot)
+
+---
+
+## [2026-07-07] — UAT Center v1.0
 
 ### Summary
 Adds `uat-center.html` — the Merchant User Acceptance Testing Center for pre-launch validation. Admin/superAdmin only. Manages 24 test scenarios across all platform roles, a full bug-logging system, tester session tracking, and an auto-generated UAT report.

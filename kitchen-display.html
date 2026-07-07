@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#050505">
+<meta name="color-scheme" content="dark">
+<title>Kitchen Display — SOKONI SmartPOS</title>
+<link rel="icon" href="assets/logosokoni.png">
+<style>
+/* ══════════════════════════════════════════════════════════
+   SOKONI Kitchen Display System — KDS v1.0
+   Committed dark theme: wall-mounted kitchen instrument.
+   Urgency: green (new) → amber (>5 min) → red (>12 min)
+══════════════════════════════════════════════════════════ */
+
+*, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --g:     #71ff00;   /* SOKONI accent — new / safe */
+  --bg:    #050505;
+  --sur:   #0c0c0c;   /* card surface */
+  --sur2:  #131313;   /* raised elements */
+  --bor:   #1a1a1a;
+  --bor2:  #242424;
+  --text:  #eeeeec;
+  --sub:   #999;
+  --muted: #555;
+
+  --new:   #71ff00;   /* < 5 min */
+  --warn:  #ffb300;   /* 5–12 min */
+  --crit:  #ff3e3e;   /* > 12 min */
+
+  --new-bg:  rgba(113,255,0,0.04);
+  --warn-bg: rgba(255,179,0,0.05);
+  --crit-bg: rgba(255,62,62,0.06);
+
+  --ch-dine: #4da6ff;
+  --ch-take: #71ff00;
+  --ch-del:  #f97316;
+  --ch-onl:  #2dd4bf;
+
+  --hdr-h:  60px;
+  --rcl-h:  58px;
+  --r:      12px;
+  --rs:     8px;
+  --font:   'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono:   'Courier New', 'Lucida Console', monospace;
+  --trans:  .18s cubic-bezier(.4,0,.2,1);
+}
+
+html { height: 100%; overflow: hidden; -webkit-text-size-adjust: 100%; }
+
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+button { cursor: pointer; font-family: var(--font); border: none; background: none; }
+input, select { font-family: var(--font); }
+
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bor2); border-radius: 9px; }
+
+/* ── OFFLINE BANNER ───────────────────────────────────── */
+#offlineBanner {
+  display: none;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+  background: var(--crit);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  padding: 6px 16px;
+  letter-spacing: 0.04em;
+}
+
+/* ── HEADER ───────────────────────────────────────────── */
+.kds-header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--hdr-h);
+  background: rgba(5,5,5,0.94);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border-bottom: 1px solid var(--bor);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+
+.hdr-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.brand-mark {
+  width: 28px; height: 28px;
+  background: var(--g);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 900; color: #050505; line-height: 1;
+}
+.brand-name {
+  font-size: 13px; font-weight: 800; letter-spacing: 0.06em;
+  color: var(--text); opacity: 0.85;
+}
+.brand-sep { color: var(--bor2); font-size: 18px; margin: 0 2px; }
+
+.kds-store-name {
+  font-size: 15px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex-shrink: 1; min-width: 0;
+}
+
+/* station pills */
+.kds-stations {
+  display: flex; gap: 6px; align-items: center;
+  flex: 1; justify-content: center; flex-wrap: wrap;
+}
+.station-pill {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+  padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--bor2);
+  color: var(--muted); background: transparent;
+  transition: var(--trans);
+  white-space: nowrap;
+}
+.station-pill:hover { border-color: var(--g); color: var(--g); }
+.station-pill.active {
+  background: rgba(113,255,0,0.1);
+  border-color: rgba(113,255,0,0.35);
+  color: var(--g);
+}
+
+/* header right */
+.hdr-right {
+  display: flex; align-items: center; gap: 14px; flex-shrink: 0; margin-left: auto;
+}
+.kds-pending-count {
+  font-size: 12px; font-weight: 700; color: var(--sub);
+  white-space: nowrap;
+}
+.kds-pending-count span {
+  font-size: 18px; font-weight: 800; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.kds-clock {
+  font-family: var(--mono); font-size: 15px; font-weight: 700;
+  color: var(--sub); letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.btn-icon {
+  width: 34px; height: 34px; border-radius: var(--rs);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted); background: var(--sur2);
+  border: 1px solid var(--bor2);
+  transition: var(--trans);
+}
+.btn-icon:hover { color: var(--g); border-color: rgba(113,255,0,0.3); }
+
+/* ── BOARD ────────────────────────────────────────────── */
+.kds-board {
+  position: fixed;
+  top: var(--hdr-h); bottom: var(--rcl-h); left: 0; right: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0;
+  overflow: hidden;
+}
+
+/* ── LANES ────────────────────────────────────────────── */
+.kds-lane {
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--bor);
+  overflow: hidden;
+}
+.kds-lane:last-child { border-right: none; }
+
+.lane-label {
+  flex-shrink: 0;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--bor);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.14em;
+  color: var(--muted); text-transform: uppercase;
+}
+.lane-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.dot-pending    { background: var(--new); }
+.dot-inprogress { background: var(--warn); }
+.dot-hold       { background: #4da6ff; }
+
+.lane-count {
+  margin-left: auto;
+  font-size: 12px; font-weight: 900;
+  color: var(--sur2);
+  background: var(--bor2);
+  border-radius: 999px;
+  padding: 1px 8px; min-width: 22px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.lane-count.has-orders { background: var(--bor2); color: var(--sub); }
+
+.lane-cards {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 10px 10px 4px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.lane-empty {
+  padding: 40px 16px; text-align: center;
+  font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: 0.04em;
+}
+
+/* ── ORDER CARD ───────────────────────────────────────── */
+.order-card {
+  background: var(--sur);
+  border: 1px solid var(--bor2);
+  border-left: 4px solid var(--new);
+  border-radius: var(--r);
+  overflow: hidden;
+  transition: border-color var(--trans), background var(--trans);
+  animation: card-arrive 0.28s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+@keyframes card-arrive {
+  from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+
+.order-card.urgency-warn {
+  border-left-color: var(--warn);
+  background: var(--warn-bg);
+}
+.order-card.urgency-crit {
+  border-left-color: var(--crit);
+  background: var(--crit-bg);
+  animation: pulse-crit 2.4s ease-in-out infinite;
+}
+@keyframes pulse-crit {
+  0%, 100% { box-shadow: none; }
+  50%       { box-shadow: 0 0 0 1px rgba(255,62,62,0.25); }
+}
+.order-card.card-done {
+  border-left-color: var(--g);
+  opacity: 0.55;
+  animation: done-fade 5s linear forwards;
+}
+@keyframes done-fade {
+  0%   { opacity: 0.55; }
+  80%  { opacity: 0.3; }
+  100% { opacity: 0; }
+}
+
+/* card top row */
+.card-top {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 14px 0;
+}
+.timer-wrap {
+  position: relative; flex-shrink: 0;
+  width: 60px; height: 60px;
+}
+.timer-ring { display: block; }
+.ring-track {
+  fill: none;
+  stroke: var(--bor2);
+  stroke-width: 4;
+}
+.ring-fill {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 30px 30px;
+  transition: stroke-dashoffset 10s linear, stroke 0.5s;
+}
+.timer-text {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--sub); line-height: 1;
+}
+
+.card-meta { flex: 1; min-width: 0; }
+.order-num {
+  font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -0.02em;
+  color: var(--text); margin-bottom: 6px;
+}
+.card-badges {
+  display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+}
+.badge {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.07em;
+  padding: 2px 8px; border-radius: 4px;
+  text-transform: uppercase;
+}
+.badge-dine-in  { background: rgba(77,166,255,0.12);  color: var(--ch-dine); border: 1px solid rgba(77,166,255,0.2); }
+.badge-takeaway { background: rgba(167,139,250,0.12); color: var(--ch-take); border: 1px solid rgba(167,139,250,0.2); }
+.badge-delivery { background: rgba(249,115,22,0.12);  color: var(--ch-del);  border: 1px solid rgba(249,115,22,0.2); }
+.badge-online   { background: rgba(45,212,191,0.12);  color: var(--ch-onl);  border: 1px solid rgba(45,212,191,0.2); }
+.badge-table {
+  background: rgba(255,255,255,0.05);
+  color: var(--sub); border: 1px solid var(--bor2);
+  font-size: 10px; font-weight: 700;
+}
+.done-badge {
+  background: rgba(113,255,0,0.12); color: var(--g);
+  border: 1px solid rgba(113,255,0,0.2);
+  font-size: 10px; font-weight: 800; letter-spacing: 0.06em;
+  padding: 2px 8px; border-radius: 4px;
+}
+
+/* ── ITEM LIST ────────────────────────────────────────── */
+.item-list {
+  padding: 12px 14px 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.item-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 7px 8px; border-radius: var(--rs);
+  cursor: pointer;
+  transition: background var(--trans);
+}
+.item-row:hover { background: rgba(255,255,255,0.04); }
+.item-row.item-prepared .item-name,
+.item-row.item-prepared .item-qty { opacity: 0.35; text-decoration: line-through; }
+.item-row.item-prepared .item-mods { opacity: 0.25; }
+
+.item-check {
+  width: 20px; height: 20px; flex-shrink: 0; cursor: pointer;
+  accent-color: var(--g); margin-top: 1px;
+}
+.item-qty {
+  font-size: 17px; font-weight: 800; color: var(--g);
+  flex-shrink: 0; min-width: 28px;
+  font-variant-numeric: tabular-nums;
+}
+.item-body { flex: 1; min-width: 0; }
+.item-name { font-size: 17px; font-weight: 600; color: var(--text); line-height: 1.3; }
+.item-mods { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+.no-items { font-size: 13px; color: var(--muted); padding: 4px 0; }
+
+/* ── CARD ACTIONS ─────────────────────────────────────── */
+.card-actions {
+  display: flex; gap: 8px;
+  padding: 12px 14px 14px;
+}
+.btn-hold {
+  padding: 10px 16px; border-radius: var(--rs);
+  font-size: 13px; font-weight: 800; letter-spacing: 0.05em;
+  background: rgba(255,179,0,0.08);
+  border: 1px solid rgba(255,179,0,0.25);
+  color: var(--warn);
+  transition: var(--trans); flex-shrink: 0;
+}
+.btn-hold:hover {
+  background: rgba(255,179,0,0.16); border-color: rgba(255,179,0,0.45);
+}
+.btn-bump {
+  flex: 1; padding: 12px 16px; border-radius: var(--rs);
+  font-size: 15px; font-weight: 900; letter-spacing: 0.06em;
+  background: rgba(113,255,0,0.08);
+  border: 1px solid rgba(113,255,0,0.2);
+  color: rgba(113,255,0,0.7);
+  transition: var(--trans);
+}
+.btn-bump:hover {
+  background: rgba(113,255,0,0.15); border-color: rgba(113,255,0,0.4);
+  color: var(--g);
+}
+.btn-bump.bump-ready {
+  background: var(--g);
+  border-color: var(--g);
+  color: #050505;
+  box-shadow: 0 0 20px rgba(113,255,0,0.25);
+}
+.btn-bump.bump-ready:hover {
+  background: #89ff22; transform: scale(1.01);
+}
+.done-label {
+  font-size: 14px; font-weight: 800; color: var(--g);
+  letter-spacing: 0.06em; align-self: center; padding: 10px 0;
+  flex: 1; text-align: center;
+}
+
+/* ── RECALL STRIP ─────────────────────────────────────── */
+.recall-strip {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: var(--rcl-h);
+  background: rgba(5,5,5,0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--bor);
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 20px;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.recall-label {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.14em;
+  color: var(--muted); flex-shrink: 0;
+}
+.recall-items {
+  display: flex; gap: 8px; align-items: center; flex: 1; overflow-x: auto;
+}
+.recall-items::-webkit-scrollbar { display: none; }
+.recall-empty { font-size: 12px; color: var(--muted); }
+.recall-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: var(--rs);
+  background: var(--sur2); border: 1px solid var(--bor2);
+  font-size: 13px; font-weight: 700; color: var(--sub);
+  white-space: nowrap; transition: var(--trans);
+}
+.recall-chip:hover {
+  border-color: rgba(113,255,0,0.3); color: var(--g);
+  background: rgba(113,255,0,0.06);
+}
+.recall-ago {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  font-family: var(--mono);
+}
+
+/* ── SETUP SCREEN ─────────────────────────────────────── */
+.setup-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: 40px 20px; background: var(--bg);
+}
+.setup-box {
+  width: 100%; max-width: 440px;
+  background: var(--sur); border: 1px solid var(--bor2);
+  border-radius: 18px; padding: 40px 36px;
+}
+.setup-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+.setup-mark {
+  width: 40px; height: 40px; background: var(--g); border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 900; color: #050505;
+}
+.setup-wordmark {
+  font-size: 18px; font-weight: 800; letter-spacing: 0.05em; color: var(--text);
+}
+.setup-wordmark small {
+  display: block; font-size: 11px; color: var(--muted); letter-spacing: 0.1em; margin-top: 1px;
+}
+.setup-title {
+  font-size: 26px; font-weight: 800; color: var(--text);
+  margin-bottom: 6px; text-wrap: balance; letter-spacing: -0.02em;
+}
+.setup-sub {
+  font-size: 14px; color: var(--muted); margin-bottom: 32px; line-height: 1.5;
+}
+.setup-field { margin-bottom: 16px; }
+.setup-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  color: var(--sub); margin-bottom: 8px; display: block; text-transform: uppercase;
+}
+.setup-input, .setup-select {
+  width: 100%; padding: 12px 14px; border-radius: var(--rs);
+  background: var(--bg); border: 1px solid var(--bor2);
+  color: var(--text); font-size: 16px; outline: none;
+  transition: border-color var(--trans);
+}
+.setup-input:focus, .setup-select:focus { border-color: rgba(113,255,0,0.4); }
+.setup-select option { background: #111; }
+.setup-input::placeholder { color: var(--muted); }
+.btn-start {
+  width: 100%; padding: 14px; border-radius: var(--rs); margin-top: 24px;
+  background: var(--g); color: #050505; font-size: 15px; font-weight: 900;
+  letter-spacing: 0.05em; border: none; cursor: pointer;
+  transition: var(--trans);
+}
+.btn-start:hover { background: #89ff22; transform: translateY(-1px); }
+.btn-start:active { transform: scale(0.98); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     SETUP SCREEN  —  shown when ?storeId is missing
+════════════════════════════════════════════════════════ -->
+<div id="kds-setup" class="setup-screen" hidden>
+  <div class="setup-box">
+    <div class="setup-logo">
+      <div class="setup-mark">S</div>
+      <div class="setup-wordmark">SOKONI <small>SMARTPOS</small></div>
+    </div>
+    <div class="setup-title">Kitchen Display Setup</div>
+    <div class="setup-sub">Connect this screen to your store to start receiving orders in real time.</div>
+    <div class="setup-field">
+      <label class="setup-label" for="setupStoreId">Store ID</label>
+      <input class="setup-input" id="setupStoreId" placeholder="e.g. STORE123"
+        autocomplete="off" spellcheck="false">
+    </div>
+    <div class="setup-field">
+      <label class="setup-label" for="setupStation">Station</label>
+      <select class="setup-select" id="setupStation">
+        <option value="all">All Stations</option>
+        <option value="hot">Hot Kitchen</option>
+        <option value="cold">Cold Kitchen</option>
+        <option value="drinks">Drinks / Bar</option>
+        <option value="grill">Grill</option>
+        <option value="prep">Prep</option>
+      </select>
+    </div>
+    <button class="btn-start" onclick="submitSetup()">Start Kitchen Display</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MAIN KDS DISPLAY
+════════════════════════════════════════════════════════ -->
+<div id="kds-main" hidden>
+
+  <div id="offlineBanner">&#9888; No connection — displaying cached orders</div>
+
+  <!-- HEADER -->
+  <header class="kds-header">
+    <div class="hdr-brand">
+      <div class="brand-mark">S</div>
+      <div class="brand-name">SOKONI</div>
+      <div class="brand-sep">&#124;</div>
+      <div class="kds-store-name" id="storeName">&#8212;</div>
+    </div>
+
+    <div class="kds-stations" id="stationPills">
+      <button class="station-pill" data-station="all">ALL</button>
+      <button class="station-pill" data-station="hot">HOT</button>
+      <button class="station-pill" data-station="cold">COLD</button>
+      <button class="station-pill" data-station="drinks">DRINKS</button>
+      <button class="station-pill" data-station="grill">GRILL</button>
+      <button class="station-pill" data-station="prep">PREP</button>
+    </div>
+
+    <div class="hdr-right">
+      <div class="kds-pending-count"><span id="hdrCount">0</span>&nbsp;pending</div>
+      <div class="kds-clock" id="kdsClock">00:00:00</div>
+      <button class="btn-icon" id="fullscreenBtn" title="Toggle fullscreen" aria-label="Fullscreen">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ORDER BOARD -->
+  <main class="kds-board">
+    <div class="kds-lane">
+      <div class="lane-label">
+        <span class="lane-dot dot-pending"></span>
+        Pending
+        <span class="lane-count" id="count-pending">0</span>
+      </div>
+      <div class="lane-cards" id="cards-pending">
+        <div class="lane-empty" id="empty-pending">All clear</div>
+      </div>
+    </div>
+
+    <div class="kds-lane">
+      <div class="lane-label">
+        <span class="lane-dot dot-inprogress"></span>
+        In Progress
+        <span class="lane-count" id="count-inprogress">0</span>
+      </div>
+      <div class="lane-cards" id="cards-inprogress">
+        <div class="lane-empty" id="empty-inprogress">Nothing in progress</div>
+      </div>
+    </div>
+
+    <div class="kds-lane">
+      <div class="lane-label">
+        <span class="lane-dot dot-hold"></span>
+        On Hold
+        <span class="lane-count" id="count-hold">0</span>
+      </div>
+      <div class="lane-cards" id="cards-hold">
+        <div class="lane-empty" id="empty-hold">No held orders</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- RECALL STRIP -->
+  <div class="recall-strip">
+    <div class="recall-label">RECALL</div>
+    <div class="recall-items" id="recallItems">
+      <span class="recall-empty">No recent bumps</span>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase compat v9.23.0 -->
+<script src="sokoni-config.js" onerror="void 0"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════════════════════
+   KDS STATE
+══════════════════════════════════════════════════════════ */
+const KDS = {
+  storeId:      '',
+  station:      'all',
+  orders:       {},      // orderId → docData merged with id
+  bumpedRecall: [],      // [{id, orderNumber, bumpedAt}] max 3
+  doneTimers:   {},      // orderId → setTimeout handle
+  initialLoad:  true,
+  firstSnap:    true,
+  unsubscribe:  null,
+  wakeLock:     null,
+  audioCtx:     null,
+};
+
+/* ── BOOT ─────────────────────────────────────────────── */
+(function boot() {
+  const p = new URLSearchParams(location.search);
+  KDS.storeId = (p.get('storeId') || '').trim();
+  KDS.station  = p.get('station') || 'all';
+
+  if (!KDS.storeId) {
+    document.getElementById('kds-setup').hidden = false;
+  } else {
+    document.getElementById('kds-main').hidden = false;
+    startKDS();
+  }
+})();
+
+/* ── START KDS ────────────────────────────────────────── */
+async function startKDS() {
+  // Station pills
+  document.querySelectorAll('.station-pill').forEach(pill => {
+    pill.classList.toggle('active', pill.dataset.station === KDS.station);
+    pill.addEventListener('click', () => {
+      KDS.station = pill.dataset.station;
+      document.querySelectorAll('.station-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      const url = new URL(location.href);
+      url.searchParams.set('station', KDS.station);
+      history.replaceState(null, '', url.toString());
+      renderBoard();
+    });
+  });
+
+  // Clock
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  // Timer urgency refresh every 15 s
+  setInterval(refreshTimers, 15000);
+
+  // Offline / online
+  const banner = document.getElementById('offlineBanner');
+  window.addEventListener('offline', () => { banner.style.display = 'block'; });
+  window.addEventListener('online',  () => { banner.style.display = 'none';  });
+  if (!navigator.onLine) banner.style.display = 'block';
+
+  // Fullscreen
+  document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', () => {
+    const btn = document.getElementById('fullscreenBtn');
+    btn.title = document.fullscreenElement ? 'Exit fullscreen' : 'Toggle fullscreen';
+  });
+
+  // Wake lock
+  acquireWakeLock();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') acquireWakeLock();
+  });
+
+  // Firebase
+  try {
+    const cfg = window.SOKONI_CONFIG || {};
+    if (!firebase.apps.length) firebase.initializeApp(cfg);
+    await loadStore();
+    listenOrders();
+  } catch (err) {
+    console.error('[KDS] Firebase init error:', err);
+    document.getElementById('offlineBanner').style.display = 'block';
+  }
+}
+
+/* ── LOAD STORE NAME ──────────────────────────────────── */
+async function loadStore() {
+  try {
+    const db  = firebase.firestore();
+    const doc = await db.collection('stores').doc(KDS.storeId).get();
+    if (doc.exists) {
+      const d = doc.data();
+      document.getElementById('storeName').textContent =
+        d.name || d.businessName || KDS.storeId;
+    } else {
+      document.getElementById('storeName').textContent = KDS.storeId;
+    }
+  } catch (_) {
+    document.getElementById('storeName').textContent = KDS.storeId;
+  }
+}
+
+/* ── FIRESTORE LISTENER ───────────────────────────────── */
+function listenOrders() {
+  const db          = firebase.firestore();
+  const fourHrsAgo  = firebase.firestore.Timestamp.fromMillis(Date.now() - 4 * 60 * 60 * 1000);
+
+  // Note: composite index required on (storeId ASC, createdAt ASC)
+  const q = db.collection('orders')
+    .where('storeId', '==', KDS.storeId)
+    .where('createdAt', '>=', fourHrsAgo)
+    .orderBy('createdAt', 'asc');
+
+  KDS.unsubscribe = q.onSnapshot(snapshot => {
+    let newArrived = false;
+
+    snapshot.docChanges().forEach(change => {
+      const data = { id: change.doc.id, ...change.doc.data() };
+
+      if (change.type === 'added') {
+        // Filter to relevant statuses client-side
+        if (!isActiveStatus(data.status)) return;
+        if (!KDS.firstSnap) newArrived = true;
+        KDS.orders[change.doc.id] = data;
+
+      } else if (change.type === 'modified') {
+        if (!isActiveStatus(data.status)) {
+          delete KDS.orders[change.doc.id];
+          return;
+        }
+        const prev = KDS.orders[change.doc.id];
+        KDS.orders[change.doc.id] = data;
+
+        // Detect bump transition
+        if (data.kitchenStatus === 'bumped' &&
+            prev?.kitchenStatus !== 'bumped') {
+          addToRecall(data);
+          clearTimeout(KDS.doneTimers[change.doc.id]);
+          KDS.doneTimers[change.doc.id] = setTimeout(() => {
+            delete KDS.orders[change.doc.id];
+            renderBoard();
+          }, 5000);
+        }
+
+      } else if (change.type === 'removed') {
+        delete KDS.orders[change.doc.id];
+      }
+    });
+
+    KDS.firstSnap = false;
+    if (KDS.initialLoad) { KDS.initialLoad = false; }
+    else if (newArrived)  { playBeep(); }
+
+    renderBoard();
+
+  }, err => {
+    console.error('[KDS] onSnapshot error:', err);
+    document.getElementById('offlineBanner').style.display = 'block';
+  });
+}
+
+function isActiveStatus(s) {
+  return s === 'confirmed' || s === 'preparing' || s === 'ready';
+}
+
+/* ── RENDER BOARD ─────────────────────────────────────── */
+function renderBoard() {
+  const pending    = [];
+  const inprogress = [];
+  const hold       = [];
+  const done       = [];
+
+  const sorted = Object.values(KDS.orders).sort((a, b) => {
+    const ta = a.createdAt?.toMillis?.() || 0;
+    const tb = b.createdAt?.toMillis?.() || 0;
+    return ta - tb;
+  });
+
+  for (const o of sorted) {
+    // Station filter
+    if (KDS.station !== 'all') {
+      const items = o.items || [];
+      const relevant = items.some(it => !it.station || it.station === KDS.station);
+      if (!relevant && items.length > 0) continue;
+    }
+
+    const ks = o.kitchenStatus;
+    if (ks === 'bumped') {
+      done.push(o);
+    } else if (ks === 'on_hold') {
+      hold.push(o);
+    } else if (ks === 'preparing' || (o.itemsPrepared && o.itemsPrepared.length > 0)) {
+      inprogress.push(o);
+    } else {
+      pending.push(o);
+    }
+  }
+
+  reconcileLane('cards-pending',    pending);
+  reconcileLane('cards-inprogress', inprogress);
+  reconcileLane('cards-hold',       hold);
+
+  // Done cards: update / insert into pending with done styling
+  done.forEach(o => {
+    const existing = document.getElementById(`card-${o.id}`);
+    if (!existing) {
+      const card = buildCard(o, true);
+      document.getElementById('cards-pending').prepend(card);
+    }
+  });
+
+  // Update lane counts
+  setLaneCount('count-pending',    pending.length + done.length);
+  setLaneCount('count-inprogress', inprogress.length);
+  setLaneCount('count-hold',       hold.length);
+
+  // Empty state messages
+  toggleEmpty('empty-pending',    pending.length + done.length === 0);
+  toggleEmpty('empty-inprogress', inprogress.length === 0);
+  toggleEmpty('empty-hold',       hold.length === 0);
+
+  // Header counter
+  const totalActive = pending.length + inprogress.length + hold.length;
+  document.getElementById('hdrCount').textContent = totalActive;
+}
+
+function reconcileLane(containerId, orders) {
+  const container = document.getElementById(containerId);
+  const wanted    = new Set(orders.map(o => o.id));
+
+  // Remove stale cards
+  container.querySelectorAll('.order-card').forEach(card => {
+    if (!wanted.has(card.dataset.orderId)) card.remove();
+  });
+
+  // Add / refresh
+  orders.forEach(order => {
+    const existing = document.getElementById(`card-${order.id}`);
+    if (existing && existing.closest(`#${containerId}`)) {
+      // Already in the right lane — just refresh urgency
+      refreshCardUrgency(existing, order);
+    } else {
+      if (existing) existing.remove();
+      container.appendChild(buildCard(order, false));
+    }
+  });
+}
+
+function setLaneCount(id, n) {
+  const el = document.getElementById(id);
+  el.textContent = n;
+  el.classList.toggle('has-orders', n > 0);
+}
+
+function toggleEmpty(id, show) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = show ? '' : 'none';
+}
+
+/* ── BUILD ORDER CARD ─────────────────────────────────── */
+function buildCard(order, isDone) {
+  const card        = document.createElement('div');
+  const elapsedMs   = Date.now() - (order.createdAt?.toMillis?.() || Date.now());
+  const urgency     = getUrgency(elapsedMs);
+  const items       = order.items || [];
+  const preparedSet = new Set(order.itemsPrepared || []);
+  const allPrepared = items.length > 0 && items.every((_, i) => preparedSet.has(i));
+  const channel     = (order.channel || 'online').toLowerCase().replace(/[\s_]+/g, '-');
+  const channelLabel = channelText(order.channel);
+
+  card.className  = 'order-card' + (isDone ? ' card-done' : '');
+  if (!isDone && urgency !== 'new') card.classList.add(`urgency-${urgency}`);
+  card.id               = `card-${order.id}`;
+  card.dataset.orderId  = order.id;
+  card.dataset.createdAt = order.createdAt?.toMillis?.() || Date.now();
+
+  // Timer ring geometry
+  const R    = 26, CIRC = +(2 * Math.PI * R).toFixed(2);
+  const fill = Math.min(elapsedMs / (15 * 60 * 1000), 1);
+  const off  = +(CIRC * (1 - fill)).toFixed(2);
+  const ringStroke = urgency === 'new' ? 'var(--new)' :
+                     urgency === 'warn' ? 'var(--warn)' : 'var(--crit)';
+
+  // Items markup
+  const itemsHTML = items.length
+    ? items.map((it, i) => {
+        const prepared = preparedSet.has(i);
+        const mods     = it.modifiers ? `<div class="item-mods">${esc(it.modifiers)}</div>` : '';
+        return `<label class="item-row${prepared ? ' item-prepared' : ''}">
+          <input type="checkbox" class="item-check" data-idx="${i}" ${prepared ? 'checked' : ''}
+            onchange="onItemCheck(event,'${order.id}',${i})" ${isDone ? 'disabled' : ''}>
+          <div class="item-body">
+            <div class="item-name">
+              <span class="item-qty">${esc(String(it.qty || 1))}×</span>
+              ${esc(it.name || 'Item')}
+            </div>
+            ${mods}
+          </div>
+        </label>`;
+      }).join('')
+    : `<div class="no-items">No items listed</div>`;
+
+  // Table badge
+  const tableBadge = order.tableNumber
+    ? `<span class="badge badge-table">TABLE ${esc(String(order.tableNumber))}</span>` : '';
+
+  // Actions
+  const actionsHTML = isDone
+    ? `<div class="done-label">&#10003; DONE</div>`
+    : `<button class="btn-hold" onclick="onHold('${order.id}')">HOLD</button>
+       <button class="btn-bump${allPrepared ? ' bump-ready' : ''}" onclick="onBump('${order.id}')">
+         ${allPrepared ? '&#10003;&nbsp;BUMP' : 'BUMP'}
+       </button>`;
+
+  card.innerHTML = `
+    <div class="card-top">
+      <div class="timer-wrap">
+        <svg class="timer-ring" width="60" height="60" viewBox="0 0 60 60" aria-hidden="true">
+          <circle class="ring-track" cx="30" cy="30" r="${R}"/>
+          <circle class="ring-fill" cx="30" cy="30" r="${R}"
+            stroke="${ringStroke}"
+            stroke-dasharray="${CIRC}" stroke-dashoffset="${off}"/>
+        </svg>
+        <div class="timer-text">${fmtElapsed(elapsedMs)}</div>
+      </div>
+      <div class="card-meta">
+        <div class="order-num">#${esc(String(order.orderNumber || '—'))}</div>
+        <div class="card-badges">
+          <span class="badge badge-${channel}">${channelLabel}</span>
+          ${tableBadge}
+          ${isDone ? '<span class="done-badge">DONE</span>' : ''}
+        </div>
+      </div>
+    </div>
+    <div class="item-list">${itemsHTML}</div>
+    <div class="card-actions">${actionsHTML}</div>`;
+
+  return card;
+}
+
+function refreshCardUrgency(card, order) {
+  const elapsedMs = Date.now() - (order.createdAt?.toMillis?.() || Date.now());
+  const urgency   = getUrgency(elapsedMs);
+  card.classList.remove('urgency-warn', 'urgency-crit');
+  if (urgency !== 'new') card.classList.add(`urgency-${urgency}`);
+
+  const timerText = card.querySelector('.timer-text');
+  if (timerText) timerText.textContent = fmtElapsed(elapsedMs);
+
+  const ringFill = card.querySelector('.ring-fill');
+  if (ringFill) {
+    const R    = 26, CIRC = 2 * Math.PI * R;
+    const fill = Math.min(elapsedMs / (15 * 60 * 1000), 1);
+    const off  = (CIRC * (1 - fill)).toFixed(2);
+    ringFill.setAttribute('stroke-dashoffset', off);
+    ringFill.setAttribute('stroke',
+      urgency === 'new' ? 'var(--new)' :
+      urgency === 'warn' ? 'var(--warn)' : 'var(--crit)');
+  }
+}
+
+/* ── TIMER REFRESH (every 15 s) ───────────────────────── */
+function refreshTimers() {
+  document.querySelectorAll('.order-card:not(.card-done)').forEach(card => {
+    const orderId = card.dataset.orderId;
+    const order   = KDS.orders[orderId];
+    if (order) refreshCardUrgency(card, order);
+  });
+}
+
+/* ── INTERACTIONS ─────────────────────────────────────── */
+function onItemCheck(event, orderId, itemIndex) {
+  const db    = firebase.firestore();
+  const order = KDS.orders[orderId];
+  if (!order) return;
+
+  const FS = firebase.firestore.FieldValue;
+  const updates = {};
+
+  if (event.target.checked) {
+    updates.itemsPrepared = FS.arrayUnion(itemIndex);
+    updates.kitchenStatus = 'preparing';
+  } else {
+    updates.itemsPrepared = FS.arrayRemove(itemIndex);
+  }
+
+  db.collection('orders').doc(orderId).update(updates).catch(e => {
+    console.error('[KDS] itemCheck update failed:', e);
+    event.target.checked = !event.target.checked; // rollback optimistic
+  });
+
+  // Optimistic: update bump button readiness
+  const card = document.getElementById(`card-${orderId}`);
+  if (card) {
+    const checks    = card.querySelectorAll('.item-check');
+    const allChecked = Array.from(checks).every(cb => cb.checked);
+    const bumpBtn   = card.querySelector('.btn-bump');
+    if (bumpBtn) {
+      bumpBtn.classList.toggle('bump-ready', allChecked);
+      bumpBtn.innerHTML = allChecked ? '&#10003;&nbsp;BUMP' : 'BUMP';
+    }
+    const row = event.target.closest('.item-row');
+    if (row) row.classList.toggle('item-prepared', event.target.checked);
+  }
+}
+
+function onBump(orderId) {
+  const db  = firebase.firestore();
+  const FS  = firebase.firestore.FieldValue;
+
+  // Optimistic UI
+  const card = document.getElementById(`card-${orderId}`);
+  if (card) {
+    card.classList.add('card-done');
+    card.classList.remove('urgency-warn', 'urgency-crit');
+    const actions = card.querySelector('.card-actions');
+    if (actions) actions.innerHTML = '<div class="done-label">&#10003; DONE</div>';
+  }
+
+  db.collection('orders').doc(orderId).update({
+    kitchenStatus: 'bumped',
+    bumpedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  }).catch(e => console.error('[KDS] bump failed:', e));
+}
+
+function onHold(orderId) {
+  firebase.firestore().collection('orders').doc(orderId).update({
+    kitchenStatus: 'on_hold',
+  }).catch(e => console.error('[KDS] hold failed:', e));
+}
+
+function onRecall(orderId) {
+  const order = KDS.bumpedRecall.find(o => o.id === orderId);
+  if (!order) return;
+
+  firebase.firestore().collection('orders').doc(orderId).update({
+    kitchenStatus: 'preparing',
+  }).catch(e => console.error('[KDS] recall failed:', e));
+
+  // Re-add to KDS orders display
+  clearTimeout(KDS.doneTimers[orderId]);
+  delete KDS.doneTimers[orderId];
+
+  KDS.bumpedRecall = KDS.bumpedRecall.filter(o => o.id !== orderId);
+  renderRecall();
+}
+
+/* ── RECALL ───────────────────────────────────────────── */
+function addToRecall(order) {
+  KDS.bumpedRecall = KDS.bumpedRecall.filter(o => o.id !== order.id);
+  KDS.bumpedRecall.unshift({ id: order.id, orderNumber: order.orderNumber, bumpedAt: Date.now() });
+  if (KDS.bumpedRecall.length > 3) KDS.bumpedRecall.pop();
+  renderRecall();
+}
+
+function renderRecall() {
+  const el = document.getElementById('recallItems');
+  if (!KDS.bumpedRecall.length) {
+    el.innerHTML = '<span class="recall-empty">No recent bumps</span>';
+    return;
+  }
+  el.innerHTML = KDS.bumpedRecall.map(o => `
+    <button class="recall-chip" onclick="onRecall('${o.id}')">
+      #${esc(String(o.orderNumber || '—'))}
+      <span class="recall-ago">${fmtElapsed(Date.now() - o.bumpedAt)}</span>
+    </button>`).join('');
+}
+
+/* ── AUDIO BEEP ───────────────────────────────────────── */
+function playBeep() {
+  try {
+    if (!KDS.audioCtx) {
+      KDS.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const ctx = KDS.audioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+
+    // Two-tone chime: ascending 440 Hz → 660 Hz
+    [[440, 0], [660, 0.18]].forEach(([freq, delay]) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type             = 'sine';
+      osc.frequency.value  = freq;
+      const t = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.32, t + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      osc.start(t);
+      osc.stop(t + 0.4);
+    });
+  } catch (_) { /* Audio context blocked — user interaction required first */ }
+}
+
+/* ── WAKE LOCK ────────────────────────────────────────── */
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    if (KDS.wakeLock) return; // already held
+    KDS.wakeLock = await navigator.wakeLock.request('screen');
+    KDS.wakeLock.addEventListener('release', () => { KDS.wakeLock = null; });
+  } catch (_) {}
+}
+
+/* ── FULLSCREEN ───────────────────────────────────────── */
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+/* ── CLOCK ────────────────────────────────────────────── */
+function tickClock() {
+  document.getElementById('kdsClock').textContent =
+    new Date().toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+/* ── SETUP FORM ───────────────────────────────────────── */
+function submitSetup() {
+  const sid = document.getElementById('setupStoreId').value.trim();
+  const sta = document.getElementById('setupStation').value;
+  if (!sid) {
+    document.getElementById('setupStoreId').focus();
+    return;
+  }
+  const url = new URL(location.href);
+  url.searchParams.set('storeId', sid);
+  url.searchParams.set('station', sta);
+  location.href = url.toString();
+}
+
+/* ── HELPERS ──────────────────────────────────────────── */
+function getUrgency(ms) {
+  const m = ms / 60000;
+  if (m < 5)  return 'new';
+  if (m < 12) return 'warn';
+  return 'crit';
+}
+
+function fmtElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m     = Math.floor(total / 60);
+  const s     = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function channelText(raw) {
+  const map = {
+    'dine-in': 'DINE-IN', 'dine_in': 'DINE-IN',
+    'takeaway': 'TAKEAWAY', 'take_away': 'TAKEAWAY',
+    'delivery': 'DELIVERY',
+    'online': 'ONLINE',
+  };
+  return map[(raw || '').toLowerCase().replace(/[\s_-]+/g, '-')] ||
+    (raw ? raw.toUpperCase() : 'ONLINE');
+}
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// Allow setup form submit on Enter
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('setupStoreId');
+  if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') submitSetup(); });
+});
+</script>
+</body>
+</html>

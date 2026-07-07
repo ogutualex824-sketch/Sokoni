@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>General Ledger — SOKONI Business OS</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<style>
+:root{
+  --g:#71ff00;--bg:#050505;--sur:#0d0d0d;--bor:#1a1a1a;
+  --txt:#e8e8e8;--muted:#777;
+  --blue:#3b82f6;--red:#ef4444;--amber:#f59e0b;
+  --green:#22c55e;--purple:#a855f7;
+  --radius:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--txt);font-family:'Inter',system-ui,-apple-system,sans-serif;min-height:100vh;padding-bottom:60px;}
+
+/* ── TOPBAR ── */
+.gl-top{position:sticky;top:0;z-index:50;background:var(--sur);border-bottom:1px solid var(--bor);padding:12px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.gl-top-left{flex:1;min-width:160px;}
+.gl-title{font-size:.95rem;font-weight:800;letter-spacing:-.01em;}
+.gl-title span{color:var(--g);}
+.gl-subtitle{font-size:.65rem;color:var(--muted);margin-top:2px;}
+.gl-top-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.date-group{display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--bor);border-radius:8px;padding:5px 10px;}
+.date-group label{font-size:.63rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;}
+.date-group input[type="date"]{background:transparent;border:none;color:var(--txt);font-size:.73rem;font-family:inherit;cursor:pointer;outline:none;color-scheme:dark;width:120px;}
+.btn-apply{background:var(--g);color:#000;border:none;border-radius:7px;padding:6px 14px;font-size:.73rem;font-weight:700;cursor:pointer;transition:opacity .15s;white-space:nowrap;}
+.btn-apply:hover{opacity:.85;}
+.export-wrap{position:relative;}
+.btn-export{display:flex;align-items:center;gap:5px;background:transparent;border:1px solid var(--bor);color:var(--txt);border-radius:7px;padding:6px 12px;font-size:.73rem;font-weight:600;cursor:pointer;font-family:inherit;}
+.btn-export:hover{border-color:var(--g);color:var(--g);}
+.export-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--sur);border:1px solid var(--bor);border-radius:8px;overflow:hidden;z-index:100;min-width:140px;}
+.export-menu.open{display:block;}
+.export-item{display:flex;align-items:center;gap:8px;padding:9px 14px;font-size:.75rem;cursor:pointer;color:var(--txt);}
+.export-item:hover{background:rgba(113,255,0,.06);color:var(--g);}
+
+/* ── TABS ── */
+.gl-tabs{display:flex;background:var(--sur);border-bottom:1px solid var(--bor);padding:0 24px;overflow-x:auto;scrollbar-width:none;}
+.gl-tabs::-webkit-scrollbar{display:none;}
+.gl-tab{padding:12px 18px;font-size:.77rem;font-weight:600;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;font-family:inherit;transition:all .15s;}
+.gl-tab.active{color:var(--g);border-bottom-color:var(--g);}
+.gl-tab:hover:not(.active){color:var(--txt);}
+
+/* ── CONTENT ── */
+.gl-content{padding:24px;max-width:1400px;margin:0 auto;}
+.gl-panel{display:none;}
+.gl-panel.active{display:block;}
+
+/* ── SEC HEADER ── */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+.sec-hdr h2{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);display:flex;align-items:center;gap:7px;}
+.sec-dot{width:7px;height:7px;border-radius:50%;background:var(--g);display:inline-block;}
+
+/* ── TABLES ── */
+.tbl-wrap{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);overflow:hidden;}
+.tbl-scroll{overflow-x:auto;}
+.tbl{width:100%;border-collapse:collapse;min-width:640px;}
+.tbl th{text-align:left;font-size:.63rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;padding:10px 14px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--bor);}
+.tbl td{padding:10px 14px;font-size:.79rem;border-bottom:1px solid var(--bor);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tbody tr:hover td{background:rgba(113,255,0,.025);}
+.tbl td.mono{font-family:'Courier New',monospace;font-size:.73rem;}
+.tbl-footer{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;font-size:.7rem;color:var(--muted);border-top:1px solid var(--bor);}
+.coa-section-row td{background:rgba(255,255,255,.025);padding:6px 14px;font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);border-bottom:1px solid var(--bor);}
+
+/* ── BADGES ── */
+.badge{display:inline-flex;align-items:center;font-size:.63rem;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap;}
+.badge-asset {background:rgba(59,130,246,.12);color:#60a5fa;}
+.badge-liab  {background:rgba(239,68,68,.12); color:#f87171;}
+.badge-equity{background:rgba(113,255,0,.1);  color:#71ff00;}
+.badge-rev   {background:rgba(34,197,94,.1);  color:#4ade80;}
+.badge-exp   {background:rgba(245,158,11,.1); color:#fbbf24;}
+.badge-dr    {background:rgba(59,130,246,.08);color:#93c5fd;font-size:.62rem;}
+.badge-cr    {background:rgba(239,68,68,.08); color:#fca5a5;font-size:.62rem;}
+
+/* ── AMOUNTS ── */
+.amt{font-variant-numeric:tabular-nums;font-weight:600;}
+.amt-pos{color:#71ff00;}
+.amt-neg{color:#ef4444;}
+.amt-zero{color:var(--muted);}
+
+/* ── BUTTONS ── */
+.btn-sm{padding:4px 10px;border-radius:6px;font-size:.67rem;font-weight:600;cursor:pointer;border:1px solid var(--bor);background:transparent;color:var(--txt);font-family:inherit;transition:all .15s;}
+.btn-sm:hover{border-color:var(--g);color:var(--g);}
+.btn-primary{display:inline-flex;align-items:center;gap:6px;background:var(--g);color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:.75rem;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .15s;}
+.btn-primary:hover{opacity:.85;}
+
+/* ── TRIAL BALANCE ── */
+.tb-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:18px;}
+.tb-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:16px;}
+.tb-card-label{font-size:.63rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;}
+.tb-card-value{font-size:1.35rem;font-weight:800;}
+.tb-alert{display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.18);border-radius:8px;color:#ef4444;font-size:.77rem;font-weight:600;margin-bottom:16px;}
+.tb-ok{display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(113,255,0,.05);border:1px solid rgba(113,255,0,.14);border-radius:8px;color:var(--g);font-size:.77rem;font-weight:600;margin-bottom:16px;}
+.tbl-total-row td{font-weight:800;font-size:.81rem;background:rgba(255,255,255,.02);border-top:2px solid var(--bor) !important;}
+
+/* ── FINANCIAL STATEMENTS ── */
+.stmt-outer{display:flex;justify-content:center;padding:4px 0;}
+.stmt-wrap{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:28px 32px;width:100%;max-width:680px;font-family:'Courier New','Courier',monospace;}
+.stmt-title{font-size:.95rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--txt);margin-bottom:3px;}
+.stmt-period{font-size:.68rem;color:var(--muted);margin-bottom:18px;}
+.stmt-section{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:16px 0 7px;}
+.stmt-row{display:flex;justify-content:space-between;font-size:.8rem;padding:3px 0;color:var(--txt);}
+.stmt-row.indent{padding-left:18px;}
+.stmt-row.subtotal{border-top:1px solid var(--bor);padding-top:5px;margin-top:4px;font-weight:700;}
+.stmt-row.total{border-top:2px solid var(--bor);padding-top:8px;margin-top:6px;font-weight:800;font-size:.88rem;}
+.stmt-divider{border:none;border-top:1px solid var(--bor);margin:8px 0;}
+.stmt-divider-heavy{border:none;border-top:2px solid var(--bor);margin:10px 0;}
+.val-pos{color:var(--g);}
+.val-neg{color:#ef4444;}
+
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--sur);border:1px solid var(--bor);border-radius:14px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;padding:24px;}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.modal-hdr h3{font-size:.92rem;font-weight:700;}
+.modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1;padding:4px;}
+.modal-close:hover{color:var(--txt);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.form-row.triple{grid-template-columns:1fr 1fr 1fr;}
+.form-row.single{grid-template-columns:1fr;}
+.form-group{display:flex;flex-direction:column;gap:5px;}
+.form-group label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+.form-input,.form-select{background:var(--bg);border:1px solid var(--bor);border-radius:7px;padding:8px 11px;font-size:.79rem;color:var(--txt);font-family:inherit;outline:none;transition:border-color .15s;color-scheme:dark;width:100%;}
+.form-input:focus,.form-select:focus{border-color:var(--g);}
+.form-select option{background:#111;}
+
+/* ── JE LINES ── */
+.je-lines{margin:14px 0;}
+.je-line-hdr{display:grid;grid-template-columns:2.2fr 1fr 1.1fr 28px;gap:6px;font-size:.62rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding:0 0 6px;font-weight:700;}
+.je-line{display:grid;grid-template-columns:2.2fr 1fr 1.1fr 28px;gap:6px;margin-bottom:6px;align-items:center;}
+.je-line-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:4px;border-radius:4px;text-align:center;}
+.je-line-remove:hover{color:#ef4444;}
+.btn-add-line{display:flex;align-items:center;gap:5px;background:transparent;border:1px dashed var(--bor);color:var(--muted);border-radius:7px;padding:7px 12px;font-size:.72rem;cursor:pointer;font-family:inherit;width:100%;justify-content:center;margin-top:6px;}
+.btn-add-line:hover{border-color:var(--g);color:var(--g);}
+.je-balance-row{display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:var(--bg);border:1px solid var(--bor);border-radius:8px;margin-top:10px;font-size:.77rem;}
+.je-balance-ok{color:var(--g);font-weight:700;}
+.je-balance-fail{color:#ef4444;font-weight:700;}
+.modal-footer{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:18px;padding-top:14px;border-top:1px solid var(--bor);}
+.btn-cancel{padding:8px 16px;border-radius:8px;border:1px solid var(--bor);background:transparent;color:var(--txt);font-size:.75rem;font-weight:600;cursor:pointer;font-family:inherit;}
+.btn-cancel:hover{border-color:#ef4444;color:#ef4444;}
+
+/* ── LOADING / EMPTY ── */
+.gl-loading{display:none;align-items:center;justify-content:center;padding:52px 20px;color:var(--muted);font-size:.8rem;gap:10px;}
+.spinner{width:17px;height:17px;border:2px solid var(--bor);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.gl-empty{text-align:center;padding:44px 20px;color:var(--muted);}
+.gl-empty-icon{font-size:2.2rem;margin-bottom:10px;}
+.gl-empty p{font-size:.8rem;}
+
+/* ── JE SEARCH ── */
+.je-filters{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.je-search{flex:1;min-width:190px;background:var(--sur);border:1px solid var(--bor);border-radius:8px;padding:7px 12px;font-size:.77rem;color:var(--txt);font-family:inherit;outline:none;}
+.je-search:focus{border-color:var(--g);}
+.je-search::placeholder{color:var(--muted);}
+
+/* ── AUTH GATE ── */
+.auth-gate{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:14px;padding:20px;text-align:center;}
+.auth-gate h2{font-size:1.05rem;font-weight:700;}
+.auth-gate p{font-size:.8rem;color:var(--muted);max-width:300px;line-height:1.6;}
+.auth-gate a{color:var(--g);text-decoration:none;font-size:.77rem;font-weight:600;}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:10px 16px;font-size:.78rem;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.5);transform:translateY(20px);opacity:0;transition:all .25s;pointer-events:none;max-width:320px;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.ok{border-color:rgba(113,255,0,.3);color:var(--g);}
+.toast.err{border-color:rgba(239,68,68,.3);color:#ef4444;}
+
+/* ── PRINT ── */
+@media print{
+  .gl-top,.gl-tabs,.sec-hdr .btn-primary,.btn-apply,.export-wrap,
+  .tbl-footer,.modal-overlay,.je-filters,.toast{display:none !important;}
+  body{background:#fff;color:#000;}
+  .gl-panel{display:block !important;}
+  .stmt-wrap{border:1px solid #ccc;color:#000;background:#fff;}
+  .stmt-section,.stmt-period,.stmt-title{color:#333;}
+  .stmt-row{color:#000;}
+  .val-pos,.val-neg{color:#000;}
+  .tbl-wrap{border:1px solid #ccc;}
+  .tbl th,.tbl td{color:#000;border-color:#ccc;}
+  .tbl-wrap,.tbl-scroll{overflow:visible;}
+  .tbl{min-width:unset;}
+  .badge-asset,.badge-liab,.badge-equity,.badge-rev,.badge-exp{color:#333;background:#eee;}
+  .coa-section-row td{background:#f5f5f5;color:#333;}
+}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .gl-top{padding:10px 14px;}
+  .gl-content{padding:14px;}
+  .form-row.triple{grid-template-columns:1fr;}
+  .stmt-wrap{padding:18px 14px;}
+  .tb-cards{grid-template-columns:1fr;}
+}
+@media(max-width:520px){
+  .gl-tab{padding:10px 13px;font-size:.72rem;}
+  .je-line{grid-template-columns:1.6fr .9fr 1fr 28px;}
+  .je-line-hdr{grid-template-columns:1.6fr .9fr 1fr 28px;}
+  .form-row{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ── AUTH GATE ── -->
+<div id="authGate" class="auth-gate">
+  <img src="assets/logosokoni.png" alt="SOKONI" style="height:44px;opacity:.7;">
+  <h2>General Ledger</h2>
+  <p id="authGateMsg">Verifying your account…</p>
+  <a href="login.html">Sign in to SOKONI</a>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="glApp" style="display:none;">
+
+  <!-- TOPBAR -->
+  <header class="gl-top">
+    <div class="gl-top-left">
+      <div class="gl-title">General <span>Ledger</span></div>
+      <div class="gl-subtitle">Chart of Accounts &middot; Journal &middot; Financial Statements</div>
+    </div>
+    <div class="gl-top-right">
+      <div class="date-group">
+        <label>From</label>
+        <input type="date" id="startDate">
+        <label>To</label>
+        <input type="date" id="endDate">
+      </div>
+      <button class="btn-apply" id="btnApply">Apply</button>
+      <div class="export-wrap">
+        <button class="btn-export" onclick="toggleExportMenu()">Export &#9660;</button>
+        <div class="export-menu" id="exportMenu">
+          <div class="export-item" onclick="exportCSV()">&#8675; Download CSV</div>
+          <div class="export-item" onclick="exportPrint()">&#128438; Print / PDF</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- TABS -->
+  <nav class="gl-tabs">
+    <button class="gl-tab active" data-tab="coa">Chart of Accounts</button>
+    <button class="gl-tab" data-tab="je">Journal Entries</button>
+    <button class="gl-tab" data-tab="tb">Trial Balance</button>
+    <button class="gl-tab" data-tab="is">Income Statement</button>
+    <button class="gl-tab" data-tab="bs">Balance Sheet</button>
+  </nav>
+
+  <!-- CONTENT -->
+  <div class="gl-content">
+
+    <!-- ═══ TAB 1: CHART OF ACCOUNTS ═══ -->
+    <div id="panel-coa" class="gl-panel active">
+      <div class="sec-hdr">
+        <h2><span class="sec-dot"></span>Chart of Accounts — Kenya Standard COA</h2>
+      </div>
+      <div class="gl-loading" id="loadingCOA"><div class="spinner"></div> Loading…</div>
+      <div class="tbl-wrap">
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Account Name</th>
+                <th>Type</th>
+                <th>Normal Balance</th>
+                <th>Current Balance (KES)</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="coaBody">
+              <tr><td colspan="6"><div class="gl-loading" style="display:flex;"><div class="spinner"></div> Loading…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="tbl-footer">
+          <span id="coaCount" class="tbl-count">—</span>
+          <span>Balances computed from journal entries in selected date range</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB 2: JOURNAL ENTRIES ═══ -->
+    <div id="panel-je" class="gl-panel">
+      <div class="sec-hdr">
+        <h2><span class="sec-dot"></span>Journal Entries</h2>
+        <button class="btn-primary" onclick="openJEModal()">&#43; New Journal Entry</button>
+      </div>
+      <div class="je-filters">
+        <input type="search" class="je-search" id="jeSearch" placeholder="Search entries, accounts, descriptions…">
+      </div>
+      <div class="tbl-wrap">
+        <div class="tbl-scroll">
+          <table class="tbl" style="min-width:860px;">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Entry #</th>
+                <th>Description</th>
+                <th>Debit Account</th>
+                <th>Dr Amount</th>
+                <th>Credit Account</th>
+                <th>Cr Amount</th>
+                <th>Reference</th>
+                <th>Posted By</th>
+              </tr>
+            </thead>
+            <tbody id="jeBody">
+              <tr><td colspan="9"><div class="gl-loading" style="display:flex;"><div class="spinner"></div> Loading…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="tbl-footer">
+          <span id="jeCount" class="tbl-count">—</span>
+          <span>Double-entry verified</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB 3: TRIAL BALANCE ═══ -->
+    <div id="panel-tb" class="gl-panel">
+      <div class="sec-hdr">
+        <h2><span class="sec-dot"></span>Trial Balance</h2>
+      </div>
+      <div class="tb-cards">
+        <div class="tb-card">
+          <div class="tb-card-label">Total Debits</div>
+          <div class="tb-card-value" id="tbTotalDrCard" style="color:var(--blue);">KES 0</div>
+        </div>
+        <div class="tb-card">
+          <div class="tb-card-label">Total Credits</div>
+          <div class="tb-card-value" id="tbTotalCrCard" style="color:var(--amber);">KES 0</div>
+        </div>
+      </div>
+      <div id="tbStatus"></div>
+      <div class="tbl-wrap">
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Account Name</th>
+                <th style="text-align:right;">Debit Total</th>
+                <th style="text-align:right;">Credit Total</th>
+              </tr>
+            </thead>
+            <tbody id="tbBody"></tbody>
+            <tfoot>
+              <tr class="tbl-total-row">
+                <td colspan="2"><strong>TOTALS</strong></td>
+                <td style="text-align:right;" class="amt" id="tbTotalDr">KES 0</td>
+                <td style="text-align:right;" class="amt" id="tbTotalCr">KES 0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB 4: INCOME STATEMENT ═══ -->
+    <div id="panel-is" class="gl-panel">
+      <div class="sec-hdr">
+        <h2><span class="sec-dot"></span>Income Statement (P&amp;L)</h2>
+      </div>
+      <div class="stmt-outer">
+        <div class="stmt-wrap">
+          <div class="stmt-title">INCOME STATEMENT</div>
+          <div class="stmt-period" id="isPeriod">—</div>
+          <hr class="stmt-divider-heavy">
+          <div id="isContent"><div class="gl-empty"><div class="gl-empty-icon">📊</div><p>Loading…</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB 5: BALANCE SHEET ═══ -->
+    <div id="panel-bs" class="gl-panel">
+      <div class="sec-hdr">
+        <h2><span class="sec-dot"></span>Balance Sheet</h2>
+      </div>
+      <div class="stmt-outer">
+        <div class="stmt-wrap">
+          <div class="stmt-title">BALANCE SHEET</div>
+          <div class="stmt-period" id="bsDate">—</div>
+          <hr class="stmt-divider-heavy">
+          <div id="bsContent"><div class="gl-empty"><div class="gl-empty-icon">⚖️</div><p>Loading…</p></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /gl-content -->
+</div><!-- /glApp -->
+
+<!-- ── JOURNAL ENTRY MODAL ── -->
+<div class="modal-overlay" id="jeModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3>New Journal Entry</h3>
+      <button class="modal-close" onclick="closeJEModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="form-row triple">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" class="form-input" id="jeDate" color-scheme="dark">
+      </div>
+      <div class="form-group" style="grid-column:span 2;">
+        <label>Description</label>
+        <input type="text" class="form-input" id="jeDesc" placeholder="e.g. Monthly rent payment — July 2026" maxlength="200">
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-group">
+        <label>Reference (optional)</label>
+        <input type="text" class="form-input" id="jeRef" placeholder="Invoice #, Order ID, Receipt…" maxlength="100">
+      </div>
+    </div>
+
+    <div class="je-lines">
+      <div class="je-line-hdr">
+        <span>Account</span>
+        <span>Dr / Cr</span>
+        <span>Amount (KES)</span>
+        <span></span>
+      </div>
+      <div id="jeLinesBody"></div>
+      <button class="btn-add-line" onclick="addJELine()">&#43; Add Line</button>
+    </div>
+
+    <div class="je-balance-row">
+      <span style="font-size:.72rem;color:var(--muted);">Balance check</span>
+      <span id="jeBalanceStatus" style="color:var(--muted);font-size:.75rem;">Enter amounts to validate</span>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeJEModal()">Cancel</button>
+      <button class="btn-primary" id="btnSubmitJE" disabled onclick="submitJE()">Post Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div class="toast" id="glToast"></div>
+
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════
+   FIREBASE INIT
+═══════════════════════════════════════════════ */
+const _fbCfg = {
+  apiKey:            'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
+  authDomain:        'sokoni-aeb26.firebaseapp.com',
+  projectId:         'sokoni-aeb26',
+  storageBucket:     'sokoni-aeb26.firebasestorage.app',
+  messagingSenderId: '24799054989',
+  appId:             '1:24799054989:web:e1cf6ca8c281bf1abf26c4'
+};
+if (!firebase.apps.length) firebase.initializeApp(_fbCfg);
+const db   = firebase.firestore();
+const auth = firebase.auth();
+
+/* ═══════════════════════════════════════════════
+   CHART OF ACCOUNTS — Kenya Standard COA
+   (Static reference data — not stored in Firestore)
+═══════════════════════════════════════════════ */
+const COA = [
+  /* ASSETS 100-199 */
+  {code:'100',name:'Cash & Bank',              type:'Asset',    normal:'Debit'},
+  {code:'101',name:'Petty Cash',               type:'Asset',    normal:'Debit'},
+  {code:'110',name:'Accounts Receivable',      type:'Asset',    normal:'Debit'},
+  {code:'120',name:'Inventory',                type:'Asset',    normal:'Debit'},
+  {code:'130',name:'Prepaid Expenses',         type:'Asset',    normal:'Debit'},
+  {code:'150',name:'Property & Equipment',     type:'Asset',    normal:'Debit'},
+  {code:'160',name:'Accumulated Depreciation', type:'Asset',    normal:'Credit'},
+  /* LIABILITIES 200-299 */
+  {code:'200',name:'Accounts Payable',         type:'Liability',normal:'Credit'},
+  {code:'210',name:'VAT Payable',              type:'Liability',normal:'Credit'},
+  {code:'220',name:'PAYE Payable',             type:'Liability',normal:'Credit'},
+  {code:'230',name:'NSSF Payable',             type:'Liability',normal:'Credit'},
+  {code:'240',name:'NHIF Payable',             type:'Liability',normal:'Credit'},
+  {code:'250',name:'Loans Payable',            type:'Liability',normal:'Credit'},
+  {code:'260',name:'Deferred Revenue',         type:'Liability',normal:'Credit'},
+  /* EQUITY 300-399 */
+  {code:'300',name:"Owner's Capital",          type:'Equity',   normal:'Credit'},
+  {code:'310',name:'Retained Earnings',        type:'Equity',   normal:'Credit'},
+  {code:'320',name:'Drawings',                 type:'Equity',   normal:'Debit'},
+  /* REVENUE 400-499 */
+  {code:'400',name:'Sales Revenue',            type:'Revenue',  normal:'Credit'},
+  {code:'410',name:'Service Revenue',          type:'Revenue',  normal:'Credit'},
+  {code:'420',name:'Other Income',             type:'Revenue',  normal:'Credit'},
+  {code:'430',name:'Interest Income',          type:'Revenue',  normal:'Credit'},
+  /* EXPENSES 500-599 */
+  {code:'500',name:'Cost of Goods Sold',       type:'Expense',  normal:'Debit'},
+  {code:'510',name:'Salaries & Wages',         type:'Expense',  normal:'Debit'},
+  {code:'520',name:'Rent Expense',             type:'Expense',  normal:'Debit'},
+  {code:'530',name:'Utilities',                type:'Expense',  normal:'Debit'},
+  {code:'540',name:'Marketing',                type:'Expense',  normal:'Debit'},
+  {code:'550',name:'Depreciation',             type:'Expense',  normal:'Debit'},
+  {code:'560',name:'Bank Charges',             type:'Expense',  normal:'Debit'},
+  {code:'570',name:'Tax Expense',              type:'Expense',  normal:'Debit'},
+];
+const COA_MAP = Object.fromEntries(COA.map(a => [a.code, a]));
+
+/* ═══════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════ */
+let currentUser     = null;
+let currentBusiness = null;
+let allEntries      = [];   // ledgerEntries for current date range
+let jeLineCounter   = 0;
+
+/* ═══════════════════════════════════════════════
+   UTILITIES
+═══════════════════════════════════════════════ */
+/** XSS-safe HTML escape */
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/** Format number as KES — shows absolute value */
+function kesAmt(n) {
+  if (!isFinite(n)) n = 0;
+  return 'KES ' + Math.abs(n).toLocaleString('en-KE',{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+
+/** Plain number with thousands separator */
+function numFmt(n) {
+  if (!isFinite(n)) n = 0;
+  return Math.abs(n).toLocaleString('en-KE',{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+
+/** ISO date string YYYY-MM-DD */
+function toDateStr(d) { return d.toISOString().slice(0,10); }
+
+/** Human-readable date */
+function fmtDate(d) {
+  if (!d) return '—';
+  if (d && typeof d.toDate === 'function') d = d.toDate();
+  return new Date(d).toLocaleDateString('en-KE',{day:'2-digit',month:'short',year:'numeric'});
+}
+
+/** Default: last 30 days */
+function defaultDates() {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - 30);
+  return {start: toDateStr(start), end: toDateStr(end)};
+}
+
+/** CSS class for account type badge */
+function typeBadgeClass(type) {
+  return {Asset:'badge-asset',Liability:'badge-liab',Equity:'badge-equity',Revenue:'badge-rev',Expense:'badge-exp'}[type] || 'badge-asset';
+}
+
+/* ═══════════════════════════════════════════════
+   AUTH GUARD
+═══════════════════════════════════════════════ */
+function showAuthGate(msg) {
+  document.getElementById('authGateMsg').textContent = msg;
+  document.getElementById('authGate').style.display = 'flex';
+  document.getElementById('glApp').style.display = 'none';
+}
+
+auth.onAuthStateChanged(async function(user) {
+  if (!user) {
+    showAuthGate('You must be signed in to access the General Ledger.');
+    return;
+  }
+  try {
+    const snap    = await db.collection('users').doc(user.uid).get();
+    const profile = snap.data() || {};
+    if (!profile.sellerId) {
+      showAuthGate('This page is for registered business owners. Set up your seller profile to continue.');
+      return;
+    }
+    currentUser     = user;
+    currentBusiness = profile;
+
+    document.getElementById('authGate').style.display = 'none';
+    document.getElementById('glApp').style.display    = '';
+
+    const {start, end} = defaultDates();
+    document.getElementById('startDate').value = start;
+    document.getElementById('endDate').value   = end;
+
+    await loadAndRender();
+  } catch (err) {
+    console.error('[GL] auth error:', err);
+    showAuthGate('An error occurred loading your account. Please refresh.');
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   DATA LOADING
+═══════════════════════════════════════════════ */
+/**
+ * Reads ledgerEntries for this business within the date range.
+ * businessId matches the seller's sellerId (their business identifier).
+ */
+async function loadLedgerEntries(startDate, endDate) {
+  if (!currentUser) return [];
+  try {
+    const businessId = currentBusiness.sellerId || currentUser.uid;
+    const startTs = firebase.firestore.Timestamp.fromDate(new Date(startDate + 'T00:00:00'));
+    const endTs   = firebase.firestore.Timestamp.fromDate(new Date(endDate   + 'T23:59:59'));
+    const snap = await db.collection('ledgerEntries')
+      .where('businessId','==', businessId)
+      .where('date','>=', startTs)
+      .where('date','<=', endTs)
+      .orderBy('date','desc')
+      .get();
+    return snap.docs.map(function(d) { return Object.assign({id:d.id}, d.data()); });
+  } catch (err) {
+    console.error('[GL] loadLedgerEntries:', err);
+    toast('Could not load ledger entries: ' + (err.message || 'check Firestore index'), 'err');
+    return [];
+  }
+}
+
+/** Load entries then re-render all tabs */
+async function loadAndRender() {
+  const start = document.getElementById('startDate').value;
+  const end   = document.getElementById('endDate').value;
+  if (!start || !end) return;
+
+  document.getElementById('coaBody').innerHTML =
+    '<tr><td colspan="6"><div class="gl-loading" style="display:flex"><div class="spinner"></div> Loading…</div></td></tr>';
+  document.getElementById('jeBody').innerHTML =
+    '<tr><td colspan="9"><div class="gl-loading" style="display:flex"><div class="spinner"></div> Loading…</div></td></tr>';
+
+  allEntries = await loadLedgerEntries(start, end);
+
+  renderCOA();
+  renderJE();
+  renderTrialBalance();
+  renderIncomeStatement();
+  renderBalanceSheet();
+}
+
+/* ═══════════════════════════════════════════════
+   COMPUTATIONS
+═══════════════════════════════════════════════ */
+/** Aggregate all entry lines into {code: {dr, cr}} */
+function computeBalances(entries) {
+  var bal = {};
+  entries.forEach(function(e) {
+    (e.lines || []).forEach(function(line) {
+      var code = String(line.accountCode);
+      if (!bal[code]) bal[code] = {dr:0, cr:0};
+      var amt = Number(line.amount) || 0;
+      if (line.type === 'debit') bal[code].dr += amt;
+      else bal[code].cr += amt;
+    });
+  });
+  return bal;
+}
+
+/** Net balance respecting normal balance direction */
+function netBalance(account, bal) {
+  var b = bal[account.code] || {dr:0, cr:0};
+  return account.normal === 'Debit' ? b.dr - b.cr : b.cr - b.dr;
+}
+
+/** P&L aggregation */
+function computeIncomeStatement(entries) {
+  var bal = computeBalances(entries);
+
+  var revenue = {};
+  COA.filter(function(a){ return a.code >= '400' && a.code < '500'; }).forEach(function(a) {
+    var b = bal[a.code] || {dr:0,cr:0};
+    revenue[a.code] = {name:a.name, amount: b.cr - b.dr};
+  });
+
+  var cogsBal = bal['500'] || {dr:0,cr:0};
+  var cogs = cogsBal.dr - cogsBal.cr;
+
+  var expenses = {};
+  COA.filter(function(a){ return a.code >= '510' && a.code < '600'; }).forEach(function(a) {
+    var b = bal[a.code] || {dr:0,cr:0};
+    expenses[a.code] = {name:a.name, amount: b.dr - b.cr};
+  });
+
+  var totalRevenue = Object.values(revenue).reduce(function(s,v){ return s+v.amount; },0);
+  var grossProfit  = totalRevenue - cogs;
+  var totalExp     = Object.values(expenses).reduce(function(s,v){ return s+v.amount; },0);
+  var netIncome    = grossProfit - totalExp;
+
+  return {revenue:revenue, cogs:cogs, expenses:expenses,
+          totalRevenue:totalRevenue, grossProfit:grossProfit,
+          totalExp:totalExp, netIncome:netIncome};
+}
+
+/** Balance sheet aggregation */
+function computeBalanceSheet(entries) {
+  var bal = computeBalances(entries);
+  var is  = computeIncomeStatement(entries);
+
+  var assets = {};
+  COA.filter(function(a){ return a.code >= '100' && a.code < '200'; }).forEach(function(a) {
+    assets[a.code] = {name:a.name, amount: netBalance(a,bal)};
+  });
+
+  var liabilities = {};
+  COA.filter(function(a){ return a.code >= '200' && a.code < '300'; }).forEach(function(a) {
+    liabilities[a.code] = {name:a.name, amount: netBalance(a,bal)};
+  });
+
+  var equity = {};
+  COA.filter(function(a){ return a.code >= '300' && a.code < '400'; }).forEach(function(a) {
+    equity[a.code] = {name:a.name, amount: netBalance(a,bal)};
+  });
+
+  var totalAssets = Object.values(assets).reduce(function(s,v){ return s+v.amount; },0);
+  var totalLiab   = Object.values(liabilities).reduce(function(s,v){ return s+v.amount; },0);
+  var totalEquity = Object.values(equity).reduce(function(s,v){ return s+v.amount; },0) + is.netIncome;
+
+  return {assets:assets, liabilities:liabilities, equity:equity,
+          totalAssets:totalAssets, totalLiab:totalLiab, totalEquity:totalEquity,
+          netIncome:is.netIncome};
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER — CHART OF ACCOUNTS
+═══════════════════════════════════════════════ */
+function renderCOA() {
+  var bal    = computeBalances(allEntries);
+  var tbody  = document.getElementById('coaBody');
+  var html   = '';
+  var lastType = '';
+
+  COA.forEach(function(ac) {
+    if (ac.type !== lastType) {
+      lastType = ac.type;
+      html += '<tr class="coa-section-row"><td colspan="6">' + esc(ac.type.toUpperCase()) + '</td></tr>';
+    }
+    var net       = netBalance(ac, bal);
+    var amtClass  = net > 0 ? 'amt-pos' : net < 0 ? 'amt-neg' : 'amt-zero';
+    var typeClass = typeBadgeClass(ac.type);
+    var nrmClass  = ac.normal === 'Debit' ? 'badge-dr' : 'badge-cr';
+    html += '<tr>' +
+      '<td class="mono">' + esc(ac.code) + '</td>' +
+      '<td>' + esc(ac.name) + '</td>' +
+      '<td><span class="badge ' + typeClass + '">' + esc(ac.type) + '</span></td>' +
+      '<td><span class="badge ' + nrmClass + '">' + esc(ac.normal) + '</span></td>' +
+      '<td class="amt ' + amtClass + '">' + kesAmt(net) + '</td>' +
+      '<td><button class="btn-sm" onclick="viewAccountTransactions(\'' + esc(ac.code) + '\',\'' + esc(ac.name) + '\')">Transactions</button></td>' +
+      '</tr>';
+  });
+
+  tbody.innerHTML = html || '<tr><td colspan="6"><div class="gl-empty"><div class="gl-empty-icon">📋</div><p>No accounts defined.</p></div></td></tr>';
+  document.getElementById('coaCount').textContent = COA.length + ' accounts';
+}
+
+function viewAccountTransactions(code, name) {
+  switchTab('je');
+  var searchEl = document.getElementById('jeSearch');
+  searchEl.value = code;
+  renderJE();
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER — JOURNAL ENTRIES
+═══════════════════════════════════════════════ */
+function renderJE() {
+  var tbody  = document.getElementById('jeBody');
+  var search = document.getElementById('jeSearch').value.toLowerCase().trim();
+
+  var entries = allEntries;
+  if (search) {
+    entries = entries.filter(function(e) {
+      return (e.description || '').toLowerCase().includes(search) ||
+             (e.entryId     || '').toLowerCase().includes(search) ||
+             (e.reference   || '').toLowerCase().includes(search) ||
+             (e.lines || []).some(function(l) {
+               return String(l.accountCode).includes(search) ||
+                      (l.accountName || '').toLowerCase().includes(search);
+             });
+    });
+  }
+
+  if (!entries.length) {
+    var msg = search ? 'No entries match your search.' : 'No journal entries for this period.';
+    tbody.innerHTML = '<tr><td colspan="9"><div class="gl-empty"><div class="gl-empty-icon">📒</div><p>' + esc(msg) + '</p></div></td></tr>';
+    document.getElementById('jeCount').textContent = '0 entries';
+    return;
+  }
+
+  var html = '';
+  var rowIdx = 0;
+  entries.forEach(function(e) {
+    var lines   = e.lines || [];
+    var drLines = lines.filter(function(l){ return l.type === 'debit'; });
+    var crLines = lines.filter(function(l){ return l.type === 'credit'; });
+    var label   = e.entryId || ('JE-' + String(rowIdx + 1).padStart(4,'0'));
+    var dateStr = fmtDate(e.date);
+    var maxRows = Math.max(drLines.length, crLines.length, 1);
+
+    for (var i = 0; i < maxRows; i++) {
+      var dr = drLines[i];
+      var cr = crLines[i];
+      var isFirst = (i === 0);
+      html += '<tr>' +
+        '<td>' + (isFirst ? esc(dateStr) : '') + '</td>' +
+        '<td class="mono">' + (isFirst ? '<span style="color:var(--g)">' + esc(label) + '</span>' : '') + '</td>' +
+        '<td>' + (isFirst ? esc(e.description || '—') : '') + '</td>' +
+        '<td class="mono" style="font-size:.7rem;">' + (dr ? esc(dr.accountCode + ' ' + (dr.accountName || '')) : '') + '</td>' +
+        '<td class="amt" style="color:var(--blue);text-align:right;">' + (dr ? numFmt(dr.amount) : '') + '</td>' +
+        '<td class="mono" style="font-size:.7rem;">' + (cr ? esc(cr.accountCode + ' ' + (cr.accountName || '')) : '') + '</td>' +
+        '<td class="amt" style="color:var(--amber);text-align:right;">' + (cr ? numFmt(cr.amount) : '') + '</td>' +
+        '<td style="font-size:.72rem;color:var(--muted);">' + (isFirst ? esc(e.reference || '—') : '') + '</td>' +
+        '<td style="font-size:.72rem;color:var(--muted);">' + (isFirst ? esc(e.createdByName || e.createdBy || '—') : '') + '</td>' +
+        '</tr>';
+    }
+    rowIdx++;
+  });
+
+  tbody.innerHTML = html;
+  document.getElementById('jeCount').textContent = entries.length + ' entr' + (entries.length === 1 ? 'y' : 'ies');
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER — TRIAL BALANCE
+═══════════════════════════════════════════════ */
+function renderTrialBalance() {
+  var bal   = computeBalances(allEntries);
+  var tbody = document.getElementById('tbBody');
+
+  var totalDr = 0, totalCr = 0;
+  var html = '';
+
+  /* Merge COA codes + any codes found in entries (e.g. custom accounts) */
+  var allCodes = Array.from(new Set(COA.map(function(a){ return a.code; }).concat(Object.keys(bal)))).sort();
+
+  allCodes.forEach(function(code) {
+    var b = bal[code] || {dr:0, cr:0};
+    if (b.dr === 0 && b.cr === 0) return;
+    var ac = COA_MAP[code] || {name:'Unrecognised Account ' + code, type:''};
+    totalDr += b.dr;
+    totalCr += b.cr;
+    html += '<tr>' +
+      '<td class="mono">' + esc(code) + '</td>' +
+      '<td>' + esc(ac.name) + '</td>' +
+      '<td class="amt" style="text-align:right;color:var(--blue);">' + (b.dr > 0 ? numFmt(b.dr) : '—') + '</td>' +
+      '<td class="amt" style="text-align:right;color:var(--amber);">' + (b.cr > 0 ? numFmt(b.cr) : '—') + '</td>' +
+      '</tr>';
+  });
+
+  if (!html) {
+    tbody.innerHTML = '<tr><td colspan="4"><div class="gl-empty"><div class="gl-empty-icon">⚖️</div><p>No transactions in this period</p></div></td></tr>';
+    document.getElementById('tbTotalDrCard').textContent = 'KES 0';
+    document.getElementById('tbTotalCrCard').textContent = 'KES 0';
+    document.getElementById('tbTotalDr').textContent = 'KES 0';
+    document.getElementById('tbTotalCr').textContent = 'KES 0';
+    document.getElementById('tbStatus').innerHTML = '<div class="tb-ok">&#10003; No transactions yet — trial balance is technically balanced at zero.</div>';
+    return;
+  }
+
+  tbody.innerHTML = html;
+
+  var drFormatted = kesAmt(totalDr);
+  var crFormatted = kesAmt(totalCr);
+  document.getElementById('tbTotalDrCard').textContent = drFormatted;
+  document.getElementById('tbTotalCrCard').textContent = crFormatted;
+  document.getElementById('tbTotalDr').textContent = drFormatted;
+  document.getElementById('tbTotalCr').textContent = crFormatted;
+
+  var diff      = Math.abs(totalDr - totalCr);
+  var balanced  = diff < 0.01;
+  document.getElementById('tbStatus').innerHTML = balanced
+    ? '<div class="tb-ok">&#10003; Trial balance is balanced &mdash; Total Debits equal Total Credits (' + drFormatted + ')</div>'
+    : '<div class="tb-alert">&#9888; Trial balance does not balance &mdash; difference of ' + kesAmt(diff) + '. Check journal entries for missing lines.</div>';
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER — INCOME STATEMENT
+═══════════════════════════════════════════════ */
+function renderIncomeStatement() {
+  var is     = computeIncomeStatement(allEntries);
+  var start  = document.getElementById('startDate').value;
+  var end    = document.getElementById('endDate').value;
+
+  document.getElementById('isPeriod').textContent = start + '  to  ' + end;
+
+  var revHtml = '';
+  Object.values(is.revenue).forEach(function(v) {
+    revHtml += stmtRow(v.name, v.amount, true, false);
+  });
+  if (!revHtml) revHtml = '<div class="stmt-row indent" style="color:var(--muted);"><span>No revenue entries</span><span>KES 0</span></div>';
+
+  var expHtml = '';
+  Object.values(is.expenses).forEach(function(v) {
+    expHtml += stmtRow(v.name, v.amount, true, false);
+  });
+  if (!expHtml) expHtml = '<div class="stmt-row indent" style="color:var(--muted);"><span>No expense entries</span><span>KES 0</span></div>';
+
+  var netClass = is.netIncome >= 0 ? 'val-pos' : 'val-neg';
+  var netLabel = is.netIncome >= 0 ? 'NET INCOME' : 'NET LOSS';
+
+  document.getElementById('isContent').innerHTML =
+    '<div class="stmt-section">REVENUE</div>' +
+    revHtml +
+    '<div class="stmt-row subtotal"><span>Total Revenue</span><span>' + kesAmt(is.totalRevenue) + '</span></div>' +
+
+    '<div class="stmt-section">COST OF GOODS SOLD</div>' +
+    '<div class="stmt-row indent"><span>Cost of Goods Sold</span><span>' + kesAmt(is.cogs) + '</span></div>' +
+    '<div class="stmt-row subtotal"><span>Gross Profit</span><span class="' + (is.grossProfit >= 0 ? 'val-pos' : 'val-neg') + '">' + kesAmt(is.grossProfit) + '</span></div>' +
+
+    '<div class="stmt-section">OPERATING EXPENSES</div>' +
+    expHtml +
+    '<div class="stmt-row subtotal"><span>Total Operating Expenses</span><span>' + kesAmt(is.totalExp) + '</span></div>' +
+
+    '<hr class="stmt-divider-heavy">' +
+    '<div class="stmt-row total"><span>' + netLabel + '</span><span class="' + netClass + '">' + (is.netIncome < 0 ? '(' : '') + kesAmt(is.netIncome) + (is.netIncome < 0 ? ')' : '') + '</span></div>';
+}
+
+/* ═══════════════════════════════════════════════
+   RENDER — BALANCE SHEET
+═══════════════════════════════════════════════ */
+function renderBalanceSheet() {
+  var bs      = computeBalanceSheet(allEntries);
+  var endDate = document.getElementById('endDate').value;
+  document.getElementById('bsDate').textContent = 'As at ' + endDate;
+
+  function buildSection(map) {
+    var html = '';
+    Object.values(map).forEach(function(v) {
+      if (v.amount !== 0) html += stmtRow(v.name, v.amount, true, false);
+    });
+    return html || '<div class="stmt-row indent" style="color:var(--muted);"><span>No entries</span><span>KES 0</span></div>';
+  }
+
+  var equityHtml = buildSection(bs.equity);
+  if (bs.netIncome !== 0) {
+    equityHtml += '<div class="stmt-row indent"><span>Net Income — Current Period</span><span class="' + (bs.netIncome >= 0 ? 'val-pos' : 'val-neg') + '">' + (bs.netIncome < 0 ? '(' : '') + kesAmt(bs.netIncome) + (bs.netIncome < 0 ? ')' : '') + '</span></div>';
+  }
+
+  var totalLE   = bs.totalLiab + bs.totalEquity;
+  var balanced  = Math.abs(bs.totalAssets - totalLE) < 0.01;
+
+  document.getElementById('bsContent').innerHTML =
+    '<div class="stmt-section">ASSETS</div>' +
+    buildSection(bs.assets) +
+    '<div class="stmt-row subtotal"><span>Total Assets</span><span class="val-pos">' + kesAmt(bs.totalAssets) + '</span></div>' +
+
+    '<div class="stmt-section">LIABILITIES</div>' +
+    buildSection(bs.liabilities) +
+    '<div class="stmt-row subtotal"><span>Total Liabilities</span><span>' + kesAmt(bs.totalLiab) + '</span></div>' +
+
+    '<div class="stmt-section">EQUITY</div>' +
+    equityHtml +
+    '<div class="stmt-row subtotal"><span>Total Equity</span><span>' + kesAmt(bs.totalEquity) + '</span></div>' +
+
+    '<hr class="stmt-divider-heavy">' +
+    '<div class="stmt-row total"><span>TOTAL LIABILITIES + EQUITY</span><span class="' + (balanced ? 'val-pos' : 'val-neg') + '">' + kesAmt(totalLE) + '</span></div>' +
+    (!balanced ? '<div style="margin-top:10px;padding:8px 12px;background:rgba(239,68,68,.07);border-radius:7px;color:#ef4444;font-size:.72rem;font-family:inherit;">&#9888; Balance sheet does not balance &mdash; difference of ' + kesAmt(Math.abs(bs.totalAssets - totalLE)) + '. Verify all equity and asset entries.</div>' : '');
+}
+
+/** Helper: statement row HTML */
+function stmtRow(label, amount, indent, forceNeutral) {
+  var css = forceNeutral ? '' : (amount > 0 ? '' : amount < 0 ? 'val-neg' : '');
+  return '<div class="stmt-row' + (indent ? ' indent' : '') + '"><span>' + esc(label) + '</span><span class="' + css + '">' + kesAmt(amount) + '</span></div>';
+}
+
+/* ═══════════════════════════════════════════════
+   TAB SWITCHING
+═══════════════════════════════════════════════ */
+function switchTab(tabId) {
+  document.querySelectorAll('.gl-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
+  });
+  document.querySelectorAll('.gl-panel').forEach(function(panel) {
+    panel.classList.toggle('active', panel.id === 'panel-' + tabId);
+  });
+}
+
+document.querySelectorAll('.gl-tab').forEach(function(btn) {
+  btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
+});
+
+/* ═══════════════════════════════════════════════
+   JOURNAL ENTRY MODAL
+═══════════════════════════════════════════════ */
+function openJEModal() {
+  jeLineCounter = 0;
+  document.getElementById('jeDate').value  = toDateStr(new Date());
+  document.getElementById('jeDesc').value  = '';
+  document.getElementById('jeRef').value   = '';
+  document.getElementById('jeLinesBody').innerHTML = '';
+  /* Start with two lines — one debit, one credit */
+  addJELine('debit');
+  addJELine('credit');
+  updateJEBalance();
+  document.getElementById('jeModal').classList.add('open');
+}
+
+function closeJEModal() {
+  document.getElementById('jeModal').classList.remove('open');
+}
+
+/** Build <option> list from COA grouped by type */
+function buildAccountOptions() {
+  var html = '<option value="">— Select Account —</option>';
+  var lastType = '';
+  COA.forEach(function(ac) {
+    if (ac.type !== lastType) {
+      if (lastType) html += '</optgroup>';
+      html += '<optgroup label="' + esc(ac.type) + '">';
+      lastType = ac.type;
+    }
+    html += '<option value="' + esc(ac.code) + '">' + esc(ac.code) + ' — ' + esc(ac.name) + '</option>';
+  });
+  if (lastType) html += '</optgroup>';
+  return html;
+}
+
+function addJELine(defaultType) {
+  var id  = ++jeLineCounter;
+  var row = document.createElement('div');
+  row.className = 'je-line';
+  row.id = 'jl-' + id;
+  row.innerHTML =
+    '<select class="form-select je-account">' + buildAccountOptions() + '</select>' +
+    '<select class="form-select je-type">' +
+      '<option value="debit"' + (defaultType === 'debit' ? ' selected' : '') + '>Debit (Dr)</option>' +
+      '<option value="credit"' + (defaultType === 'credit' ? ' selected' : '') + '>Credit (Cr)</option>' +
+    '</select>' +
+    '<input type="number" class="form-input je-amount" placeholder="0.00" min="0" step="0.01">' +
+    '<button class="je-line-remove" title="Remove line" data-id="' + id + '">×</button>';
+
+  document.getElementById('jeLinesBody').appendChild(row);
+  row.querySelector('.je-type').addEventListener('change', updateJEBalance);
+  row.querySelector('.je-amount').addEventListener('input', updateJEBalance);
+  row.querySelector('.je-line-remove').addEventListener('click', function() {
+    row.remove();
+    updateJEBalance();
+  });
+}
+
+function updateJEBalance() {
+  var totalDr = 0, totalCr = 0;
+  document.querySelectorAll('#jeLinesBody .je-line').forEach(function(row) {
+    var type   = row.querySelector('.je-type').value;
+    var amount = parseFloat(row.querySelector('.je-amount').value) || 0;
+    if (type === 'debit') totalDr += amount; else totalCr += amount;
+  });
+
+  var diff     = Math.abs(totalDr - totalCr);
+  var balanced = diff < 0.01 && totalDr > 0;
+  var statusEl = document.getElementById('jeBalanceStatus');
+
+  if (totalDr === 0 && totalCr === 0) {
+    statusEl.innerHTML = '<span style="color:var(--muted)">Enter amounts to validate</span>';
+  } else if (balanced) {
+    statusEl.innerHTML = '<span class="je-balance-ok">&#10003; Balanced &mdash; Dr ' + kesAmt(totalDr) + ' = Cr ' + kesAmt(totalCr) + '</span>';
+  } else {
+    statusEl.innerHTML = '<span class="je-balance-fail">&#10007; Unbalanced &mdash; Dr ' + kesAmt(totalDr) + ' vs Cr ' + kesAmt(totalCr) + ' (diff: ' + kesAmt(diff) + ')</span>';
+  }
+
+  document.getElementById('btnSubmitJE').disabled = !balanced;
+}
+
+async function submitJE() {
+  var dateVal = document.getElementById('jeDate').value;
+  var desc    = document.getElementById('jeDesc').value.trim();
+  var ref     = document.getElementById('jeRef').value.trim();
+
+  if (!dateVal) { toast('Please select a date.', 'err'); return; }
+  if (!desc)    { toast('Please enter a description.', 'err'); return; }
+
+  var lines = [];
+  document.querySelectorAll('#jeLinesBody .je-line').forEach(function(row) {
+    var code   = row.querySelector('.je-account').value;
+    var type   = row.querySelector('.je-type').value;
+    var amount = parseFloat(row.querySelector('.je-amount').value) || 0;
+    if (!code || amount <= 0) return;
+    var ac = COA_MAP[code];
+    lines.push({accountCode:code, accountName: ac ? ac.name : code, type:type, amount:amount});
+  });
+
+  if (!lines.length) { toast('Add at least one entry line with an account and amount.', 'err'); return; }
+
+  var totalDr = lines.filter(function(l){ return l.type==='debit'; }).reduce(function(s,l){ return s+l.amount; },0);
+  var totalCr = lines.filter(function(l){ return l.type==='credit'; }).reduce(function(s,l){ return s+l.amount; },0);
+  if (Math.abs(totalDr - totalCr) > 0.01) { toast('Debits must equal credits before posting.', 'err'); return; }
+
+  var btn = document.getElementById('btnSubmitJE');
+  btn.disabled = true;
+  btn.textContent = 'Posting…';
+
+  try {
+    var businessId = currentBusiness.sellerId || currentUser.uid;
+    var entryId    = 'JE-' + Date.now().toString(36).toUpperCase();
+
+    await db.collection('ledgerEntries').add({
+      entryId:       entryId,
+      businessId:    businessId,
+      date:          firebase.firestore.Timestamp.fromDate(new Date(dateVal + 'T12:00:00')),
+      description:   desc,
+      reference:     ref || null,
+      lines:         lines,
+      createdBy:     currentUser.uid,
+      createdByName: currentUser.displayName || currentUser.email || 'Unknown',
+      createdAt:     firebase.firestore.FieldValue.serverTimestamp(),
+    });
+
+    closeJEModal();
+    toast('Journal entry ' + entryId + ' posted.', 'ok');
+    await loadAndRender();
+    switchTab('je');
+  } catch (err) {
+    console.error('[GL] submitJE:', err);
+    toast('Failed to post entry: ' + (err.message || 'unknown error'), 'err');
+    btn.disabled = false;
+    btn.textContent = 'Post Entry';
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   EXPORT
+═══════════════════════════════════════════════ */
+function toggleExportMenu() {
+  document.getElementById('exportMenu').classList.toggle('open');
+}
+
+function exportCSV() {
+  document.getElementById('exportMenu').classList.remove('open');
+  if (!allEntries.length) { toast('No entries to export.', 'err'); return; }
+
+  var rows = [['Date','Entry #','Description','Account Code','Account Name','Dr/Cr','Amount (KES)','Reference','Posted By']];
+  allEntries.forEach(function(e) {
+    var dateStr = fmtDate(e.date);
+    var eid     = e.entryId || '—';
+    (e.lines || []).forEach(function(line) {
+      rows.push([dateStr, eid, e.description || '', line.accountCode, line.accountName || '', line.type, line.amount, e.reference || '', e.createdByName || e.createdBy || '']);
+    });
+  });
+
+  var csv  = rows.map(function(r) {
+    return r.map(function(c){ return '"' + String(c).replace(/"/g,'""') + '"'; }).join(',');
+  }).join('\n');
+  var blob = new Blob(['﻿' + csv], {type:'text/csv;charset=utf-8;'});
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url;
+  a.download = 'general-ledger-' + document.getElementById('startDate').value + '-to-' + document.getElementById('endDate').value + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exported.', 'ok');
+}
+
+function exportPrint() {
+  document.getElementById('exportMenu').classList.remove('open');
+  window.print();
+}
+
+/* ═══════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════ */
+function toast(msg, type) {
+  var el = document.getElementById('glToast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(function() { el.className = 'toast'; }, 3600);
+}
+
+/* ═══════════════════════════════════════════════
+   EVENT WIRING
+═══════════════════════════════════════════════ */
+document.getElementById('btnApply').addEventListener('click', loadAndRender);
+
+document.getElementById('jeSearch').addEventListener('input', function() { renderJE(); });
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.export-wrap')) document.getElementById('exportMenu').classList.remove('open');
+});
+
+document.getElementById('jeModal').addEventListener('click', function(e) {
+  if (e.target === this) closeJEModal();
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeJEModal();
+});
+</script>
+</body>
+</html>

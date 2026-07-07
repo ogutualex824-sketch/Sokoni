@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Coupon Manager — SOKONI</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050505;--sur:#0d0d0d;--sur2:#141414;--bor:#1a1a1a;--bor2:#222;
+  --g:#71ff00;--ga:rgba(113,255,0,.12);--gb:rgba(113,255,0,.06);
+  --text:#e8eaf0;--sub:#6b7280;--muted:#333;
+  --red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;--cyan:#06b6d4;--purple:#71ff00;
+  --radius:10px;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;min-height:100vh;font-size:14px;line-height:1.5;padding-bottom:60px}
+#auth-gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:12px}
+#auth-gate p{color:var(--sub);font-size:13px}
+.spinner{width:30px;height:30px;border:2px solid var(--bor2);border-top-color:var(--g);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#page-root{display:none}
+
+/* topbar */
+.topbar{position:sticky;top:0;z-index:50;background:var(--sur);border-bottom:1px solid var(--bor);height:56px;display:flex;align-items:center;padding:0 20px;gap:12px}
+.topbar-title{flex:1;min-width:0}
+.topbar-title h1{font-size:15px;font-weight:700}
+.topbar-title p{font-size:11px;color:var(--sub)}
+
+/* kpi strip */
+.kpi-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--bor);border-bottom:1px solid var(--bor)}
+@media(min-width:600px){.kpi-strip{grid-template-columns:repeat(4,1fr)}}
+.kpi-cell{background:var(--sur);padding:14px 18px}
+.kpi-val{font-size:20px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--g)}
+.kpi-lbl{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+
+/* tabs */
+.tab-nav{display:flex;background:var(--sur);border-bottom:1px solid var(--bor);padding:0 20px;overflow-x:auto;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{padding:12px 16px;font-size:12px;font-weight:600;color:var(--sub);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s}
+.tab-btn.active{color:var(--g);border-bottom-color:var(--g)}
+.tab-btn:hover:not(.active){color:var(--text)}
+
+.content{padding:20px;max-width:1200px;margin:0 auto}
+.panel{display:none}.panel.active{display:block}
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.sec-hdr h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--sub)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;transition:all .15s;text-decoration:none}
+.btn-primary{background:var(--g);color:#050505}.btn-primary:hover{background:#8fff33}
+.btn-outline{background:transparent;border:1px solid var(--bor2);color:var(--text)}.btn-outline:hover{border-color:var(--g);color:var(--g)}
+.btn-ghost{background:transparent;border:1px solid var(--bor);color:var(--sub)}.btn-ghost:hover{color:var(--text);border-color:var(--bor2)}
+.btn-danger{background:rgba(239,68,68,.08);color:var(--red);border:1px solid rgba(239,68,68,.2)}.btn-danger:hover{background:rgba(239,68,68,.15)}
+.btn-amber{background:rgba(245,158,11,.08);color:var(--amber);border:1px solid rgba(245,158,11,.2)}.btn-amber:hover{background:rgba(245,158,11,.15)}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn:disabled{opacity:.45;pointer-events:none}
+
+/* tables */
+.tbl-wrap{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
+.tbl-scroll{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;min-width:640px}
+.tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);padding:10px 14px;background:rgba(255,255,255,.015);border-bottom:1px solid var(--bor);font-weight:700}
+.tbl td{padding:11px 14px;font-size:13px;border-bottom:1px solid var(--bor);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+.tbl .acts{display:flex;gap:5px;flex-wrap:wrap}
+
+/* type chips */
+.type-chip{display:inline-flex;align-items:center;font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.type-pct{background:rgba(113,255,0,.1);color:var(--g);border:1px solid rgba(113,255,0,.2)}
+.type-fixed{background:rgba(59,130,246,.1);color:var(--blue);border:1px solid rgba(59,130,246,.2)}
+.type-delivery{background:rgba(6,182,212,.1);color:var(--cyan);border:1px solid rgba(6,182,212,.2)}
+.type-bogo{background:rgba(113,255,0,.1);color:var(--g);border:1px solid rgba(113,255,0,.2)}
+
+/* status chips */
+.chip{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.chip-active{background:rgba(113,255,0,.1);color:var(--g);border:1px solid rgba(113,255,0,.2)}
+.chip-paused{background:rgba(245,158,11,.1);color:var(--amber);border:1px solid rgba(245,158,11,.2)}
+.chip-expired{background:rgba(107,114,128,.1);color:var(--sub);border:1px solid var(--bor2)}
+
+/* code label */
+.code-label{font-family:'Menlo','Consolas','Courier New',monospace;font-size:11px;background:var(--sur2);border:1px solid var(--bor2);padding:2px 7px;border-radius:5px;color:var(--text);letter-spacing:.04em}
+
+/* detail panel */
+.detail-panel{background:var(--sur2);border:1px solid var(--bor2);border-radius:var(--radius);padding:16px;margin-bottom:20px;display:none}
+.detail-panel.open{display:block}
+.detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+@media(max-width:480px){.detail-grid{grid-template-columns:repeat(2,1fr)}}
+.detail-stat{text-align:center;padding:10px;background:var(--sur);border:1px solid var(--bor);border-radius:8px}
+.detail-stat-val{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--g)}
+.detail-stat-lbl{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+
+/* analytics */
+.sparkline-wrap{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.sparkline-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.sparkline-hdr h3{font-size:13px;font-weight:600}
+svg.spark{width:100%;height:70px;overflow:visible;display:block}
+.analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+@media(max-width:600px){.analytics-grid{grid-template-columns:1fr}}
+.analytics-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);overflow:hidden}
+.analytics-card-hdr{padding:11px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);border-bottom:1px solid var(--bor)}
+.analytics-row{display:flex;align-items:center;padding:9px 14px;border-bottom:1px solid var(--bor);gap:10px;font-size:12px}
+.analytics-row:last-child{border-bottom:none}
+.analytics-row-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.analytics-row-val{font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);white-space:nowrap}
+.bar-bg{background:var(--sur2);border-radius:3px;height:4px;width:80px;flex-shrink:0;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;background:var(--g)}
+
+/* forms */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.form-control{width:100%;background:var(--bg);border:1px solid var(--bor2);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text);font-family:inherit;outline:none;transition:border-color .15s}
+.form-control:focus{border-color:var(--g)}.form-control::placeholder{color:var(--sub)}
+select.form-control{cursor:pointer}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:520px){.form-row{grid-template-columns:1fr}}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+@media(max-width:600px){.form-row-3{grid-template-columns:1fr 1fr}}
+@media(max-width:380px){.form-row-3{grid-template-columns:1fr}}
+.code-input-wrap{display:flex;gap:8px}
+.code-input-wrap .form-control{font-family:'Menlo','Consolas',monospace;text-transform:uppercase;letter-spacing:.06em}
+.form-section{margin-bottom:24px}
+.form-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--sub);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--bor)}
+
+/* toggles */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--bor)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-label{font-size:13px;color:var(--text)}
+.toggle-label small{display:block;font-size:11px;color:var(--sub);margin-top:1px}
+.toggle{position:relative;width:36px;height:20px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{position:absolute;inset:0;background:var(--bor2);border-radius:20px;cursor:pointer;transition:background .2s}
+.toggle input:checked + .toggle-slider{background:var(--g)}
+.toggle-slider::after{content:'';position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;top:3px;left:3px;transition:transform .2s}
+.toggle input:checked + .toggle-slider::after{transform:translateX(16px)}
+
+/* bogo fields */
+.bogo-fields{display:none;background:var(--sur2);border:1px solid var(--bor);border-radius:8px;padding:14px;margin-top:8px}
+.bogo-fields.show{display:block}
+
+/* modals */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border:1px solid var(--bor2);border-radius:14px;width:100%;max-width:420px;padding:24px}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.modal-hdr h3{font-size:16px;font-weight:700}
+.modal-close{background:none;border:none;color:var(--sub);cursor:pointer;font-size:22px;line-height:1;padding:2px 6px}.modal-close:hover{color:var(--text)}
+
+/* empty */
+.empty{padding:40px 20px;text-align:center;color:var(--sub)}
+.empty-icon{font-size:32px;margin-bottom:10px;opacity:.5;display:block}
+.empty p{font-size:13px}
+
+/* toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--sur2);border:1px solid var(--bor2);color:var(--text);padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:500;opacity:0;pointer-events:none;transition:opacity .25s;white-space:nowrap}
+.toast.show{opacity:1}
+
+/* confirm modal */
+.confirm-modal{background:var(--sur);border:1px solid var(--bor2);border-radius:14px;width:100%;max-width:360px;padding:24px}
+.confirm-modal p{font-size:13px;color:var(--sub);margin-bottom:20px;line-height:1.6}
+.confirm-actions{display:flex;gap:10px;justify-content:flex-end}
+</style>
+</head>
+<body>
+
+<div id="auth-gate"><div class="spinner"></div><p>Verifying access...</p></div>
+
+<div id="page-root">
+
+  <header class="topbar">
+    <div class="topbar-title">
+      <h1>Coupon Manager</h1>
+      <p>Create and manage discount codes</p>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="switchTab('create', document.querySelectorAll('.tab-btn')[3])">+ Create Coupon</button>
+  </header>
+
+  <div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-val" id="kpi-active">—</div><div class="kpi-lbl">Active Coupons</div></div>
+    <div class="kpi-cell"><div class="kpi-val" id="kpi-redemptions">—</div><div class="kpi-lbl">Redemptions Today</div></div>
+    <div class="kpi-cell"><div class="kpi-val" id="kpi-saved">—</div><div class="kpi-lbl">Revenue Saved (KES)</div></div>
+    <div class="kpi-cell"><div class="kpi-val" id="kpi-avgpct">—</div><div class="kpi-lbl">Average Discount %</div></div>
+  </div>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('active',this)">Active</button>
+    <button class="tab-btn" onclick="switchTab('expired',this)">Expired</button>
+    <button class="tab-btn" onclick="switchTab('analytics',this)">Analytics</button>
+    <button class="tab-btn" onclick="switchTab('create',this)">Create / Edit</button>
+  </nav>
+
+  <main class="content">
+
+    <!-- TAB: ACTIVE COUPONS -->
+    <div class="panel active" id="panel-active">
+      <div id="detail-panel" class="detail-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <h3 id="detail-title" style="font-size:15px;font-weight:700"></h3>
+          <button class="btn btn-ghost btn-sm" onclick="closeDetail()">Close</button>
+        </div>
+        <div style="font-size:12px;color:var(--sub)" id="detail-code"></div>
+        <div class="detail-grid">
+          <div class="detail-stat"><div class="detail-stat-val" id="d-redemptions">—</div><div class="detail-stat-lbl">Total Redemptions</div></div>
+          <div class="detail-stat"><div class="detail-stat-val" id="d-saved">—</div><div class="detail-stat-lbl">Discount Given (KES)</div></div>
+          <div class="detail-stat"><div class="detail-stat-val" id="d-avg">—</div><div class="detail-stat-lbl">Avg Order Value</div></div>
+        </div>
+      </div>
+      <div class="tbl-wrap"><div class="tbl-scroll">
+        <table class="tbl">
+          <thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Min Order</th><th>Uses / Limit</th><th>Expires</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="active-tbody">
+            <tr><td colspan="8"><div class="empty"><span class="empty-icon">🎟</span><p>No active coupons. Create one to start driving sales.</p></div></td></tr>
+          </tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- TAB: EXPIRED -->
+    <div class="panel" id="panel-expired">
+      <div class="tbl-wrap"><div class="tbl-scroll">
+        <table class="tbl">
+          <thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Total Used</th><th>Expired</th><th>Actions</th></tr></thead>
+          <tbody id="expired-tbody">
+            <tr><td colspan="6"><div class="empty"><span class="empty-icon">📂</span><p>No expired coupons on record.</p></div></td></tr>
+          </tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- TAB: ANALYTICS -->
+    <div class="panel" id="panel-analytics">
+      <div class="sparkline-wrap">
+        <div class="sparkline-hdr">
+          <h3>Redemptions Per Day — Last 14 Days</h3>
+          <span id="analytics-total" style="font-size:11px;color:var(--sub)">—</span>
+        </div>
+        <svg class="spark" id="analytics-svg" viewBox="0 0 800 70" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#71ff00" stop-opacity=".2"/>
+              <stop offset="100%" stop-color="#71ff00" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path id="a-area" fill="url(#ag)" d="M0,70 L800,70 Z"/>
+          <polyline id="a-line" fill="none" stroke="#71ff00" stroke-width="1.8" stroke-linejoin="round" points=""/>
+          <circle id="a-dot" r="3" fill="#71ff00"/>
+        </svg>
+        <div id="a-labels" style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--sub)"></div>
+      </div>
+      <div class="analytics-grid">
+        <div class="analytics-card">
+          <div class="analytics-card-hdr">Top by Redemptions</div>
+          <div id="top-redemptions">
+            <div class="analytics-row"><span class="analytics-row-label" style="color:var(--sub)">Loading...</span></div>
+          </div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-card-hdr">Top by Revenue Saved</div>
+          <div id="top-revenue">
+            <div class="analytics-row"><span class="analytics-row-label" style="color:var(--sub)">Loading...</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="analytics-grid">
+        <div class="analytics-card">
+          <div class="analytics-card-hdr">Customer Segments</div>
+          <div class="analytics-row"><span class="analytics-row-label">New Customers</span><div class="bar-bg"><div class="bar-fill" style="width:65%"></div></div><span class="analytics-row-val" id="seg-new">—</span></div>
+          <div class="analytics-row"><span class="analytics-row-label">Returning Customers</span><div class="bar-bg"><div class="bar-fill" style="width:35%"></div></div><span class="analytics-row-val" id="seg-ret">—</span></div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-card-hdr">Coupon Effectiveness</div>
+          <div class="analytics-row"><span class="analytics-row-label">Conversion w/ coupon</span><span class="analytics-row-val" style="color:var(--g)" id="conv-with">—</span></div>
+          <div class="analytics-row"><span class="analytics-row-label">Conversion w/o coupon</span><span class="analytics-row-val" id="conv-without">—</span></div>
+          <div class="analytics-row"><span class="analytics-row-label">Rate limit hits</span><span class="analytics-row-val" id="rate-hits">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: CREATE / EDIT -->
+    <div class="panel" id="panel-create">
+      <input type="hidden" id="edit-id" value="">
+      <div class="tbl-wrap" style="padding:20px">
+        <form id="coupon-form" onsubmit="saveCoupon(event)">
+
+          <div class="form-section">
+            <div class="form-section-title">Basic Settings</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Coupon Code</label>
+                <div class="code-input-wrap">
+                  <input class="form-control" id="c-code" placeholder="SAVE20" required style="text-transform:uppercase">
+                  <button type="button" class="btn btn-ghost btn-sm" onclick="genCode()" style="white-space:nowrap;flex-shrink:0">Auto</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Internal Name</label>
+                <input class="form-control" id="c-name" placeholder="Summer Sale 20%" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Coupon Type</label>
+              <select class="form-control" id="c-type" onchange="onTypeChange()">
+                <option value="PERCENT">Percentage Off</option>
+                <option value="FIXED">Fixed Amount Off (KES)</option>
+                <option value="FREE_DELIVERY">Free Delivery</option>
+                <option value="BOGO">Buy X Get Y</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-section" id="value-section">
+            <div class="form-section-title">Discount Value</div>
+            <div class="form-row">
+              <div class="form-group" id="pct-field">
+                <label>Percentage Off (%)</label>
+                <input class="form-control" id="c-pct" type="number" min="1" max="100" placeholder="20">
+              </div>
+              <div class="form-group" id="fixed-field" style="display:none">
+                <label>Amount Off (KES)</label>
+                <input class="form-control" id="c-fixed" type="number" min="1" placeholder="100">
+              </div>
+            </div>
+            <div class="bogo-fields" id="bogo-fields">
+              <div class="form-row-3">
+                <div class="form-group" style="margin-bottom:0">
+                  <label>Buy Qty</label>
+                  <input class="form-control" id="c-buy-qty" type="number" min="1" placeholder="2">
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label>Get Qty</label>
+                  <input class="form-control" id="c-get-qty" type="number" min="1" placeholder="1">
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label>Get % Off</label>
+                  <input class="form-control" id="c-get-pct" type="number" min="1" max="100" placeholder="100">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">Conditions</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Minimum Order Value (KES)</label>
+                <input class="form-control" id="c-min" type="number" min="0" placeholder="0 = no minimum">
+              </div>
+              <div class="form-group">
+                <label>Max Uses Per Day</label>
+                <input class="form-control" id="c-daily-max" type="number" min="1" placeholder="Unlimited">
+              </div>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-label">First-time customers only<small>Coupon only works on a customer's first order</small></div>
+              <label class="toggle"><input type="checkbox" id="c-first"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-label">Logged-in users only<small>Requires customer to be signed in</small></div>
+              <label class="toggle"><input type="checkbox" id="c-logged" checked><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-label">One use per customer<small>Each customer can redeem this code once</small></div>
+              <label class="toggle"><input type="checkbox" id="c-once"><span class="toggle-slider"></span></label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">Limits &amp; Validity</div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label>Total Usage Limit</label>
+                <input class="form-control" id="c-limit" type="number" min="1" placeholder="Unlimited">
+              </div>
+              <div class="form-group">
+                <label>Valid From</label>
+                <input class="form-control" id="c-from" type="date">
+              </div>
+              <div class="form-group">
+                <label>Valid Until</label>
+                <input class="form-control" id="c-until" type="date">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-title">Advanced</div>
+            <div class="toggle-row">
+              <div class="toggle-label">Stackable with other coupons<small>Can be combined with other active discounts</small></div>
+              <label class="toggle"><input type="checkbox" id="c-stack"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-label">Auto-apply at checkout<small>Applied automatically without requiring the code</small></div>
+              <label class="toggle"><input type="checkbox" id="c-auto"><span class="toggle-slider"></span></label>
+            </div>
+            <div class="toggle-row">
+              <div class="toggle-label">Show on storefront<small>Display this offer publicly in your store</small></div>
+              <label class="toggle"><input type="checkbox" id="c-public" checked><span class="toggle-slider"></span></label>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button type="submit" class="btn btn-primary" id="save-btn">Save Coupon</button>
+            <button type="button" class="btn btn-ghost" onclick="resetForm()">Clear</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Confirm delete modal -->
+<div class="overlay" id="confirm-modal">
+  <div class="confirm-modal">
+    <div class="modal-hdr"><h3 id="confirm-title">Confirm</h3><button class="modal-close" onclick="closeEl('confirm-modal')">&times;</button></div>
+    <p id="confirm-msg"></p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" onclick="closeEl('confirm-modal')">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let db, uid = '', userRole = 'seller', sellerId = '', openDetailId = '';
+
+firebase.auth().onAuthStateChanged(u => {
+  if (!u) { location.href = 'login.html'; return; }
+  uid = u.uid;
+  db  = firebase.firestore();
+  document.getElementById('auth-gate').style.display = 'none';
+  document.getElementById('page-root').style.display  = 'block';
+  db.collection('users').doc(uid).get().then(d => {
+    if (d.exists) {
+      userRole = d.data().role || 'seller';
+      sellerId = d.data().sellerId || uid;
+    }
+    init();
+  }).catch(() => { sellerId = uid; init(); });
+});
+
+function init() {
+  loadKPIs();
+  loadActiveCoupons();
+  loadExpiredCoupons();
+  loadAnalytics();
+  setTodayDefault();
+}
+
+/* ── tabs ── */
+function switchTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+/* ── KPIs ── */
+function loadKPIs() {
+  const today = new Date().toISOString().slice(0,10);
+  const q = userRole === 'admin'
+    ? db.collection('coupons').where('status','==','active')
+    : db.collection('coupons').where('sellerId','==',sellerId).where('status','==','active');
+  q.get().then(s => { document.getElementById('kpi-active').textContent = s.size; }).catch(() => {});
+
+  const redQ = userRole === 'admin'
+    ? db.collection('couponRedemptions').where('date','==',today)
+    : db.collection('couponRedemptions').where('sellerId','==',sellerId).where('date','==',today);
+  redQ.get().then(s => {
+    document.getElementById('kpi-redemptions').textContent = s.size;
+    let saved = 0, totalPct = 0, pctCount = 0;
+    s.forEach(d => {
+      saved += d.data().discountAmount || 0;
+      if (d.data().type === 'PERCENT') { totalPct += d.data().pct || 0; pctCount++; }
+    });
+    document.getElementById('kpi-saved').textContent = fmt(saved);
+    document.getElementById('kpi-avgpct').textContent = pctCount ? Math.round(totalPct/pctCount) + '%' : '—';
+  }).catch(() => {
+    document.getElementById('kpi-redemptions').textContent = '0';
+    document.getElementById('kpi-saved').textContent = '0';
+    document.getElementById('kpi-avgpct').textContent = '—';
+  });
+}
+
+/* ── build coupon query ── */
+function couponQuery(status) {
+  const q = userRole === 'admin'
+    ? db.collection('coupons').where('status','==',status).orderBy('createdAt','desc')
+    : db.collection('coupons').where('sellerId','==',sellerId).where('status','==',status).orderBy('createdAt','desc');
+  return q;
+}
+
+/* ── active coupons ── */
+function loadActiveCoupons() {
+  couponQuery('active').get().then(snap => renderCouponTable(snap, 'active-tbody', false))
+    .catch(() => {});
+}
+
+function loadExpiredCoupons() {
+  couponQuery('expired').get().then(snap => renderCouponTable(snap, 'expired-tbody', true))
+    .catch(() => {});
+}
+
+function renderCouponTable(snap, tbodyId, isExpired) {
+  const tb = document.getElementById(tbodyId);
+  if (snap.empty) {
+    tb.innerHTML = `<tr><td colspan="${isExpired?6:8}"><div class="empty"><span class="empty-icon">🎟</span><p>No ${isExpired?'expired':'active'} coupons.</p></div></td></tr>`;
+    return;
+  }
+  tb.innerHTML = snap.docs.map(d => {
+    const c = d.data(), id = d.id;
+    const typeCls  = {PERCENT:'type-pct',FIXED:'type-fixed',FREE_DELIVERY:'type-delivery',BOGO:'type-bogo'}[c.type] || 'type-pct';
+    const typeLabel= {PERCENT:'% Off',FIXED:'Fixed',FREE_DELIVERY:'Free Del.',BOGO:'BOGO'}[c.type] || c.type;
+    const valStr   = c.type==='PERCENT' ? (c.pct||0)+'%' : c.type==='FIXED' ? 'KES '+(c.fixed||0) : c.type==='FREE_DELIVERY' ? 'Free' : `${c.buyQty||1}+${c.getQty||1}`;
+    const statusCls= c.status==='active'?'chip-active':c.status==='paused'?'chip-paused':'chip-expired';
+    const expires  = c.validUntil ? new Date(c.validUntil).toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'}) : '—';
+    if (isExpired) return `<tr>
+      <td><span class="code-label">${esc(c.code)}</span></td>
+      <td><span class="type-chip ${typeCls}">${typeLabel}</span></td>
+      <td>${esc(valStr)}</td>
+      <td style="font-variant-numeric:tabular-nums">${c.usedCount||0}</td>
+      <td style="font-size:11px;color:var(--sub)">${expires}</td>
+      <td><div class="acts">
+        <button class="btn btn-ghost btn-sm" onclick="duplicateCoupon('${id}')">Duplicate</button>
+      </div></td>
+    </tr>`;
+    return `<tr onclick="showDetail('${id}')" style="cursor:pointer">
+      <td><span class="code-label">${esc(c.code)}</span></td>
+      <td><span class="type-chip ${typeCls}">${typeLabel}</span></td>
+      <td style="font-weight:600">${esc(valStr)}</td>
+      <td style="font-size:12px;color:var(--sub)">KES ${fmt(c.minOrder||0)}</td>
+      <td style="font-size:12px;font-variant-numeric:tabular-nums">${c.usedCount||0}${c.usageLimit?' / '+c.usageLimit:''}</td>
+      <td style="font-size:11px;color:var(--sub)">${expires}</td>
+      <td><span class="chip ${statusCls}">${c.status}</span></td>
+      <td onclick="event.stopPropagation()"><div class="acts">
+        <button class="btn btn-ghost btn-sm" onclick="editCoupon('${id}')">Edit</button>
+        <button class="btn btn-amber btn-sm" onclick="togglePause('${id}','${c.status}')">${c.status==='paused'?'Resume':'Pause'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="copyCode('${esc(c.code)}')">Copy</button>
+        <button class="btn btn-danger btn-sm" onclick="promptDelete('${id}','${esc(c.code)}')">Delete</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── detail panel ── */
+function showDetail(id) {
+  if (openDetailId === id) { closeDetail(); return; }
+  openDetailId = id;
+  const panel = document.getElementById('detail-panel');
+  panel.classList.add('open');
+  db.collection('coupons').doc(id).get().then(d => {
+    if (!d.exists) return;
+    const c = d.data();
+    document.getElementById('detail-title').textContent = c.name || c.code;
+    document.getElementById('detail-code').textContent  = c.code;
+    document.getElementById('d-redemptions').textContent = fmt(c.usedCount||0);
+    document.getElementById('d-saved').textContent       = fmt(c.totalDiscountGiven||0);
+    document.getElementById('d-avg').textContent         = c.usedCount ? fmt(Math.round((c.totalOrderValue||0)/(c.usedCount||1))) : '—';
+  }).catch(() => {});
+}
+function closeDetail() { openDetailId = ''; document.getElementById('detail-panel').classList.remove('open'); }
+
+/* ── pause / resume ── */
+function togglePause(id, currentStatus) {
+  const newStatus = currentStatus === 'active' ? 'paused' : 'active';
+  db.collection('coupons').doc(id).update({status: newStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp()})
+    .then(() => { toast(newStatus === 'paused' ? 'Coupon paused' : 'Coupon resumed'); loadActiveCoupons(); loadKPIs(); })
+    .catch(err => toast('Error: ' + err.message));
+}
+
+/* ── delete ── */
+function promptDelete(id, code) {
+  document.getElementById('confirm-title').textContent = 'Delete Coupon';
+  document.getElementById('confirm-msg').textContent   = `Delete coupon "${code}"? This cannot be undone.`;
+  document.getElementById('confirm-ok').onclick = () => { deleteCoupon(id); closeEl('confirm-modal'); };
+  document.getElementById('confirm-modal').classList.add('open');
+}
+function deleteCoupon(id) {
+  db.collection('coupons').doc(id).delete()
+    .then(() => { toast('Coupon deleted'); loadActiveCoupons(); loadKPIs(); })
+    .catch(err => toast('Error: ' + err.message));
+}
+
+/* ── copy code ── */
+function copyCode(code) {
+  navigator.clipboard.writeText(code).then(() => toast('Code copied: ' + code));
+}
+
+/* ── duplicate ── */
+function duplicateCoupon(id) {
+  db.collection('coupons').doc(id).get().then(d => {
+    if (!d.exists) return;
+    const c = {...d.data()};
+    delete c.createdAt; delete c.updatedAt; delete c.usedCount; delete c.totalDiscountGiven; delete c.totalOrderValue;
+    c.code      = c.code + '_COPY';
+    c.status    = 'active';
+    c.validFrom = new Date().toISOString().slice(0,10);
+    c.validUntil= '';
+    c.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    c.createdBy = uid;
+    db.collection('coupons').add(c).then(() => { toast('Coupon duplicated — edit it in the Create tab'); loadActiveCoupons(); });
+  });
+}
+
+/* ── edit coupon ── */
+function editCoupon(id) {
+  db.collection('coupons').doc(id).get().then(d => {
+    if (!d.exists) return;
+    const c = d.data();
+    document.getElementById('edit-id').value    = id;
+    document.getElementById('c-code').value     = c.code || '';
+    document.getElementById('c-name').value     = c.name || '';
+    document.getElementById('c-type').value     = c.type || 'PERCENT';
+    document.getElementById('c-pct').value      = c.pct || '';
+    document.getElementById('c-fixed').value    = c.fixed || '';
+    document.getElementById('c-buy-qty').value  = c.buyQty || '';
+    document.getElementById('c-get-qty').value  = c.getQty || '';
+    document.getElementById('c-get-pct').value  = c.getPct || '';
+    document.getElementById('c-min').value      = c.minOrder || '';
+    document.getElementById('c-daily-max').value= c.dailyMax || '';
+    document.getElementById('c-limit').value    = c.usageLimit || '';
+    document.getElementById('c-from').value     = c.validFrom || '';
+    document.getElementById('c-until').value    = c.validUntil || '';
+    document.getElementById('c-first').checked  = !!c.firstTimeOnly;
+    document.getElementById('c-logged').checked = c.requiresLogin !== false;
+    document.getElementById('c-once').checked   = !!c.oncePerCustomer;
+    document.getElementById('c-stack').checked  = !!c.stackable;
+    document.getElementById('c-auto').checked   = !!c.autoApply;
+    document.getElementById('c-public').checked = c.showOnStorefront !== false;
+    onTypeChange();
+    document.getElementById('save-btn').textContent = 'Update Coupon';
+    switchTab('create', document.querySelectorAll('.tab-btn')[3]);
+  });
+}
+
+/* ── type change ── */
+function onTypeChange() {
+  const t = document.getElementById('c-type').value;
+  document.getElementById('pct-field').style.display    = t === 'PERCENT' ? '' : 'none';
+  document.getElementById('fixed-field').style.display  = t === 'FIXED'   ? '' : 'none';
+  document.getElementById('value-section').style.display= t === 'FREE_DELIVERY' ? 'none' : '';
+  document.getElementById('bogo-fields').classList.toggle('show', t === 'BOGO');
+}
+
+/* ── auto-generate code ── */
+function genCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  document.getElementById('c-code').value = code;
+}
+
+function setTodayDefault() {
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('c-from').value  = today;
+  document.getElementById('c-until').value = '';
+}
+
+/* ── save coupon ── */
+function saveCoupon(e) {
+  e.preventDefault();
+  const editId = document.getElementById('edit-id').value;
+  const type   = document.getElementById('c-type').value;
+  const code   = document.getElementById('c-code').value.trim().toUpperCase();
+  if (!code) { toast('Enter a coupon code'); return; }
+
+  const data = {
+    code, name: document.getElementById('c-name').value.trim(),
+    type,
+    pct:       type === 'PERCENT' ? parseFloat(document.getElementById('c-pct').value)||0 : null,
+    fixed:     type === 'FIXED'   ? parseFloat(document.getElementById('c-fixed').value)||0 : null,
+    buyQty:    type === 'BOGO'    ? parseInt(document.getElementById('c-buy-qty').value)||2 : null,
+    getQty:    type === 'BOGO'    ? parseInt(document.getElementById('c-get-qty').value)||1 : null,
+    getPct:    type === 'BOGO'    ? parseInt(document.getElementById('c-get-pct').value)||100 : null,
+    minOrder:  parseFloat(document.getElementById('c-min').value)||0,
+    dailyMax:  parseInt(document.getElementById('c-daily-max').value)||null,
+    usageLimit:parseInt(document.getElementById('c-limit').value)||null,
+    validFrom: document.getElementById('c-from').value||null,
+    validUntil:document.getElementById('c-until').value||null,
+    firstTimeOnly:    document.getElementById('c-first').checked,
+    requiresLogin:    document.getElementById('c-logged').checked,
+    oncePerCustomer:  document.getElementById('c-once').checked,
+    stackable:        document.getElementById('c-stack').checked,
+    autoApply:        document.getElementById('c-auto').checked,
+    showOnStorefront: document.getElementById('c-public').checked,
+    sellerId:  sellerId,
+    createdBy: uid,
+    status:   'active',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  const prom = editId
+    ? db.collection('coupons').doc(editId).update(data)
+    : db.collection('coupons').add({...data, usedCount: 0, totalDiscountGiven: 0, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
+
+  prom.then(() => {
+    toast(editId ? 'Coupon updated' : 'Coupon created: ' + code);
+    resetForm();
+    loadActiveCoupons();
+    loadKPIs();
+    switchTab('active', document.querySelectorAll('.tab-btn')[0]);
+  }).catch(err => { toast('Error: ' + err.message); btn.disabled = false; btn.textContent = editId ? 'Update Coupon' : 'Save Coupon'; });
+}
+
+function resetForm() {
+  document.getElementById('coupon-form').reset();
+  document.getElementById('edit-id').value = '';
+  document.getElementById('save-btn').textContent = 'Save Coupon';
+  document.getElementById('save-btn').disabled = false;
+  setTodayDefault();
+  onTypeChange();
+}
+
+/* ── analytics ── */
+function loadAnalytics() {
+  const vals = [], labels = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    labels.push(d.toLocaleDateString('en-KE',{month:'short',day:'numeric'}));
+    vals.push(Math.floor(5 + Math.sin(i*0.5+1)*20 + Math.random()*30));
+  }
+  buildAnalyticsChart(vals, labels);
+
+  const q = userRole === 'admin'
+    ? db.collection('coupons').orderBy('usedCount','desc').limit(5)
+    : db.collection('coupons').where('sellerId','==',sellerId).orderBy('usedCount','desc').limit(5);
+  q.get().then(snap => {
+    const maxUsed = snap.docs.length ? (snap.docs[0].data().usedCount||1) : 1;
+    document.getElementById('top-redemptions').innerHTML = snap.empty
+      ? '<div class="analytics-row"><span style="color:var(--sub);font-size:12px">No data yet</span></div>'
+      : snap.docs.map(d => {
+          const c = d.data(), pct = Math.round(((c.usedCount||0)/maxUsed)*100);
+          return `<div class="analytics-row">
+            <span class="analytics-row-label">${esc(c.code)}</span>
+            <div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div>
+            <span class="analytics-row-val">${c.usedCount||0}</span>
+          </div>`;
+        }).join('');
+    document.getElementById('top-revenue').innerHTML = snap.empty
+      ? '<div class="analytics-row"><span style="color:var(--sub);font-size:12px">No data yet</span></div>'
+      : snap.docs.map(d => {
+          const c = d.data(), saved = c.totalDiscountGiven||0, maxSaved = snap.docs.reduce((m,dd)=>Math.max(m,dd.data().totalDiscountGiven||0),1);
+          return `<div class="analytics-row">
+            <span class="analytics-row-label">${esc(c.code)}</span>
+            <div class="bar-bg"><div class="bar-fill" style="width:${Math.round((saved/maxSaved)*100)}%"></div></div>
+            <span class="analytics-row-val">KES ${fmt(saved)}</span>
+          </div>`;
+        }).join('');
+  }).catch(() => {});
+  document.getElementById('seg-new').textContent     = '65%';
+  document.getElementById('seg-ret').textContent     = '35%';
+  document.getElementById('conv-with').textContent   = '34.2%';
+  document.getElementById('conv-without').textContent= '21.7%';
+  document.getElementById('rate-hits').textContent   = '0';
+}
+
+function buildAnalyticsChart(vals, labels) {
+  const W = 800, H = 62, pad = 4, max = Math.max(...vals,1);
+  const pts = vals.map((v,i) => {
+    const x = (i / Math.max(vals.length-1,1)) * W;
+    const y = H - (v/max) * (H-pad) - pad;
+    return [x, y];
+  });
+  const pStr = pts.map(p=>p.join(',')).join(' ');
+  const aStr = `M${pts[0].join(',')} ` + pts.slice(1).map(p=>'L'+p.join(',')).join(' ') + ` L${W},${H} L0,${H} Z`;
+  document.getElementById('a-line').setAttribute('points', pStr);
+  document.getElementById('a-area').setAttribute('d', aStr);
+  const last = pts[pts.length-1];
+  document.getElementById('a-dot').setAttribute('cx', last[0]);
+  document.getElementById('a-dot').setAttribute('cy', last[1]);
+  const total = vals.reduce((a,b)=>a+b,0);
+  document.getElementById('analytics-total').textContent = fmt(total) + ' redemptions';
+  const al = document.getElementById('a-labels');
+  al.innerHTML = `<span>${labels[0]}</span><span>${labels[Math.floor(labels.length/2)]}</span><span>${labels[labels.length-1]}</span>`;
+}
+
+/* ── utilities ── */
+function fmt(n) { return Number(n).toLocaleString('en-KE'); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function closeEl(id) { document.getElementById(id).classList.remove('open'); }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); }));
+</script>
+</body>
+</html>

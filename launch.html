@@ -219,7 +219,7 @@
       transition: transform .15s, box-shadow .15s;
     }
     .item-state-btn:hover { transform: scale(1.15); }
-    .item-state-btn.verified { background: var(--green);  color: #fff; }
+    .item-state-btn.verified { background: var(--green);  color: #000; }
     .item-state-btn.pending  { background: var(--yellow); color: #000; }
     .item-state-btn.failed   { background: var(--red);    color: #fff; }
 
@@ -280,14 +280,14 @@
 
     .btn-go {
       background: linear-gradient(135deg, var(--green-dk), var(--green));
-      color: #fff;
+      color: #000;
       box-shadow: 0 4px 16px rgba(34,197,94,.25);
     }
     .btn-go:not(:disabled):hover { box-shadow: 0 6px 24px rgba(34,197,94,.4); }
 
     .btn-report {
       background: linear-gradient(135deg, var(--purple-dk), var(--purple));
-      color: #fff;
+      color: #000;
       box-shadow: 0 4px 16px rgba(113,255,0,.25);
     }
     .btn-report:not(:disabled):hover { box-shadow: 0 6px 24px rgba(113,255,0,.4); }
@@ -1171,7 +1171,7 @@ function init() {
           </div>
           <button onclick="signInWithGoogle()" style="
             background:linear-gradient(135deg,var(--purple-dk),var(--purple));
-            color:#fff;border:none;padding:12px 28px;border-radius:8px;
+            color:#000;border:none;padding:12px 28px;border-radius:8px;
             font-size:14px;font-weight:600;cursor:pointer;width:100%">
             Sign in with Google
           </button>

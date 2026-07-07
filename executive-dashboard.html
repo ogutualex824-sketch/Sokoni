@@ -19,7 +19,7 @@
       --green:   #3fb950;
       --red:     #f85149;
       --orange:  #d29922;
-      --purple:  #bc8cff;
+      --purple:  #71ff00;
       --cyan:    #79c0ff;
       --r:       8px;
     }
@@ -1188,7 +1188,7 @@ function drawBarChart(canvasId, labels, datasets, opts) {
   const W = canvas.width, H = canvas.height;
   const PL = 52, PR = 16, PT = 12, PB = 36;
   const chartW = W - PL - PR, chartH = H - PT - PB;
-  const palette = opts.colors || ['#58a6ff','#3fb950','#f85149','#d29922','#bc8cff'];
+  const palette = opts.colors || ['#58a6ff','#3fb950','#f85149','#d29922','#71ff00'];
 
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#0d1117';
@@ -2060,7 +2060,7 @@ async function loadOperationsTab() {
 
   // Job trend chart
   const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  drawBarChart('ops-jobs-chart', days, [{ data: [840,1020,960,1180,1090,760,880] }], { colors: ['#bc8cff'] });
+  drawBarChart('ops-jobs-chart', days, [{ data: [840,1020,960,1180,1090,760,880] }], { colors: ['#71ff00'] });
 
   _setText('ops-updated', nowStr());
 }

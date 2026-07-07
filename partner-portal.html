@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Developer &amp; Partner Portal — SOKONI</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050505;--sur:#0d0d0d;--sur2:#141414;--bor:#1a1a1a;--bor2:#222;
+  --g:#71ff00;--ga:rgba(113,255,0,.12);--gb:rgba(113,255,0,.06);
+  --text:#e8eaf0;--sub:#6b7280;--muted:#333;
+  --red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;--cyan:#06b6d4;
+  --radius:10px;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;min-height:100vh;font-size:14px;line-height:1.5}
+#auth-gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:12px}
+#auth-gate p{color:var(--sub);font-size:13px}
+.spinner{width:30px;height:30px;border:2px solid var(--bor2);border-top-color:var(--g);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#page-root{display:none}
+
+/* topbar */
+.topbar{position:sticky;top:0;z-index:50;background:var(--sur);border-bottom:1px solid var(--bor);height:56px;display:flex;align-items:center;padding:0 20px;gap:12px}
+.topbar-title{flex:1;min-width:0}
+.topbar-title h1{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-title p{font-size:11px;color:var(--sub)}
+.tier-badge{font-size:10px;font-weight:800;padding:3px 10px;border-radius:99px;border:1px solid rgba(113,255,0,.25);background:var(--gb);color:var(--g);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+
+/* kpi strip */
+.kpi-strip{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--bor);border-bottom:1px solid var(--bor)}
+@media(min-width:600px){.kpi-strip{grid-template-columns:repeat(4,1fr)}}
+.kpi-cell{background:var(--sur);padding:14px 18px}
+.kpi-val{font-size:20px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--g)}
+.kpi-lbl{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+
+/* tabs */
+.tab-nav{display:flex;background:var(--sur);border-bottom:1px solid var(--bor);padding:0 20px;overflow-x:auto;scrollbar-width:none}
+.tab-nav::-webkit-scrollbar{display:none}
+.tab-btn{padding:12px 16px;font-size:12px;font-weight:600;color:var(--sub);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;transition:color .15s,border-color .15s;letter-spacing:.02em}
+.tab-btn.active{color:var(--g);border-bottom-color:var(--g)}
+.tab-btn:hover:not(.active){color:var(--text)}
+.content{padding:20px;max-width:1200px;margin:0 auto}
+.panel{display:none}.panel.active{display:block}
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.sec-hdr h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--sub)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;transition:all .15s}
+.btn-primary{background:var(--g);color:#050505}.btn-primary:hover{background:#8fff33}
+.btn-outline{background:transparent;border:1px solid var(--bor2);color:var(--text)}.btn-outline:hover{border-color:var(--g);color:var(--g)}
+.btn-ghost{background:transparent;border:1px solid var(--bor);color:var(--sub)}.btn-ghost:hover{color:var(--text);border-color:var(--bor2)}
+.btn-danger{background:rgba(239,68,68,.08);color:var(--red);border:1px solid rgba(239,68,68,.2)}.btn-danger:hover{background:rgba(239,68,68,.15)}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn:disabled{opacity:.45;pointer-events:none}
+
+/* tables */
+.tbl-wrap{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
+.tbl-scroll{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;min-width:580px}
+.tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);padding:10px 14px;background:rgba(255,255,255,.015);border-bottom:1px solid var(--bor);font-weight:700}
+.tbl td{padding:11px 14px;font-size:13px;border-bottom:1px solid var(--bor);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+.tbl .acts{display:flex;gap:6px;flex-wrap:wrap}
+.mono{font-family:'Menlo','Consolas','Courier New',monospace;font-size:12px;color:var(--cyan);letter-spacing:.02em}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.chip-active{background:rgba(113,255,0,.1);color:var(--g);border:1px solid rgba(113,255,0,.2)}
+.chip-revoked{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+.chip-live{background:rgba(6,182,212,.1);color:var(--cyan);border:1px solid rgba(6,182,212,.2)}
+.chip-sandbox{background:rgba(107,114,128,.1);color:var(--sub);border:1px solid var(--bor2)}
+
+/* modals */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border:1px solid var(--bor2);border-radius:14px;width:100%;max-width:480px;padding:24px;max-height:90vh;overflow-y:auto}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.modal-hdr h3{font-size:16px;font-weight:700}
+.modal-close{background:none;border:none;color:var(--sub);cursor:pointer;font-size:22px;line-height:1;padding:2px 6px}.modal-close:hover{color:var(--text)}
+
+/* forms */
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:11px;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.form-control{width:100%;background:var(--bg);border:1px solid var(--bor2);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text);font-family:inherit;outline:none;transition:border-color .15s}
+.form-control:focus{border-color:var(--g)}.form-control::placeholder{color:var(--sub)}
+select.form-control{cursor:pointer}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:480px){.form-row{grid-template-columns:1fr}}
+.scope-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.scope-item{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--sub);transition:color .12s}
+.scope-item:hover{color:var(--text)}
+.scope-item input[type=checkbox]{accent-color:var(--g);width:14px;height:14px;cursor:pointer;flex-shrink:0}
+.radio-group{display:flex;gap:8px;flex-wrap:wrap}
+.radio-opt{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:7px 13px;border:1px solid var(--bor2);border-radius:7px;transition:border-color .15s,background .15s;color:var(--sub)}
+.radio-opt:has(input:checked){border-color:rgba(113,255,0,.4);background:var(--gb);color:var(--g)}
+.radio-opt input{accent-color:var(--g)}
+
+/* key reveal */
+.key-reveal{background:var(--bg);border:1px solid var(--bor2);border-radius:8px;padding:14px;font-family:'Menlo','Consolas',monospace;font-size:11px;color:var(--g);word-break:break-all;margin:16px 0;line-height:1.6}
+.key-warn{font-size:12px;color:var(--amber);padding:9px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.18);border-radius:7px;margin-bottom:14px;line-height:1.5}
+
+/* webhook log */
+.log-entry{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--bor);font-size:12px}
+.log-entry:last-child{border-bottom:none}
+.log-code{font-weight:700;font-variant-numeric:tabular-nums;min-width:34px}
+.log-code.ok{color:var(--g)}.log-code.err{color:var(--red)}
+.log-url{flex:1;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log-ms{color:var(--sub);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+
+/* usage chart */
+.sparkline-wrap{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.sparkline-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+.sparkline-hdr h3{font-size:13px;font-weight:600}
+.sparkline-hdr span{font-size:11px;color:var(--sub)}
+svg.spark{width:100%;height:70px;overflow:visible;display:block}
+.range-btns{display:flex;gap:6px}
+.range-btn{padding:4px 12px;border-radius:99px;border:1px solid var(--bor2);background:none;color:var(--sub);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s}
+.range-btn.active{background:var(--gb);border-color:rgba(113,255,0,.3);color:var(--g)}
+
+/* docs */
+.doc-section{margin-bottom:28px}
+.doc-section h3{font-size:14px;font-weight:700;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--bor);color:var(--text)}
+.doc-section p,.doc-section li{font-size:13px;color:var(--sub);line-height:1.7;margin-bottom:6px}
+.doc-section ul{padding-left:16px}
+.doc-section a{color:var(--g);text-underline-offset:3px}
+pre.code-block{background:var(--bg);border:1px solid var(--bor2);border-radius:8px;padding:14px 16px;font-family:'Menlo','Consolas',monospace;font-size:11px;color:#a8ff78;overflow-x:auto;line-height:1.65;margin:10px 0;tab-size:2}
+.ic{background:var(--sur2);border:1px solid var(--bor);border-radius:4px;padding:1px 5px;font-family:'Menlo','Consolas',monospace;font-size:11px;color:var(--cyan)}
+
+/* oauth card */
+.oauth-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:14px}
+.oauth-icon{width:40px;height:40px;border-radius:9px;background:var(--sur2);border:1px solid var(--bor);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.oauth-body{flex:1;min-width:0}
+.oauth-name{font-size:14px;font-weight:600}
+.oauth-id{font-size:11px;color:var(--cyan);font-family:'Menlo','Consolas',monospace;margin-top:2px}
+.oauth-meta{font-size:11px;color:var(--sub);margin-top:2px}
+
+/* empty */
+.empty{padding:40px 20px;text-align:center;color:var(--sub)}
+.empty-icon{font-size:32px;margin-bottom:10px;opacity:.5;display:block}
+.empty p{font-size:13px}
+
+/* toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--sur2);border:1px solid var(--bor2);color:var(--text);padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:500;opacity:0;pointer-events:none;transition:opacity .25s;white-space:nowrap}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<div id="auth-gate"><div class="spinner"></div><p>Verifying access...</p></div>
+
+<div id="page-root">
+
+  <header class="topbar">
+    <div class="topbar-title">
+      <h1>Developer &amp; Partner Portal</h1>
+      <p>API Keys &middot; Webhooks &middot; Usage &middot; Documentation</p>
+    </div>
+    <span class="tier-badge" id="tier-badge">Starter</span>
+  </header>
+
+  <div class="kpi-strip">
+    <div class="kpi-cell"><div class="kpi-val" id="kpi-today">—</div><div class="kpi-lbl">API Calls Today</div></div>
+    <div class="kpi-cell"><div class="kpi-val" id="kpi-month">—</div><div class="kpi-lbl">API Calls This Month</div></div>
+    <div class="kpi-cell"><div class="kpi-val" id="kpi-wh">—</div><div class="kpi-lbl">Webhooks Delivered</div></div>
+    <div class="kpi-cell"><div class="kpi-val" id="kpi-int">—</div><div class="kpi-lbl">Active Integrations</div></div>
+  </div>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('keys',this)">API Keys</button>
+    <button class="tab-btn" onclick="switchTab('webhooks',this)">Webhooks</button>
+    <button class="tab-btn" onclick="switchTab('oauth',this)">OAuth Apps</button>
+    <button class="tab-btn" onclick="switchTab('usage',this)">Usage Analytics</button>
+    <button class="tab-btn" onclick="switchTab('docs',this)">Documentation</button>
+  </nav>
+
+  <main class="content">
+
+    <!-- TAB: API KEYS -->
+    <div class="panel active" id="panel-keys">
+      <div class="sec-hdr">
+        <h2>API Keys</h2>
+        <button class="btn btn-primary btn-sm" onclick="openKeyModal()">+ New Key</button>
+      </div>
+      <div class="tbl-wrap"><div class="tbl-scroll">
+        <table class="tbl">
+          <thead><tr><th>Name</th><th>Key</th><th>Env</th><th>Scopes</th><th>Last Used</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="keys-tbody"><tr><td colspan="7"><div class="empty"><span class="empty-icon">🔑</span><p>No API keys yet — create your first key to start integrating.</p></div></td></tr></tbody>
+        </table>
+      </div></div>
+    </div>
+
+    <!-- TAB: WEBHOOKS -->
+    <div class="panel" id="panel-webhooks">
+      <div class="sec-hdr">
+        <h2>Webhook Endpoints</h2>
+        <button class="btn btn-primary btn-sm" onclick="openWebhookModal()">+ Register Endpoint</button>
+      </div>
+      <div class="tbl-wrap"><div class="tbl-scroll">
+        <table class="tbl">
+          <thead><tr><th>URL</th><th>Events</th><th>Delivery Rate</th><th>Last Fired</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="wh-tbody"><tr><td colspan="6"><div class="empty"><span class="empty-icon">🔗</span><p>No endpoints registered.</p></div></td></tr></tbody>
+        </table>
+      </div></div>
+      <div class="sec-hdr"><h2>Recent Deliveries</h2></div>
+      <div class="tbl-wrap" id="wh-log">
+        <div class="log-entry"><span class="log-code ok">200</span><span class="log-url">https://yourserver.com/hooks/sokoni</span><span class="log-ms">142 ms</span><span style="color:var(--sub);font-size:11px;margin-left:14px">2 min ago</span></div>
+        <div class="log-entry"><span class="log-code ok">200</span><span class="log-url">https://yourserver.com/hooks/sokoni</span><span class="log-ms">98 ms</span><span style="color:var(--sub);font-size:11px;margin-left:14px">18 min ago</span></div>
+        <div class="log-entry"><span class="log-code err">500</span><span class="log-url">https://yourserver.com/hooks/sokoni</span><span class="log-ms">3 012 ms</span><span style="color:var(--sub);font-size:11px;margin-left:14px">1 hr ago</span></div>
+        <div class="log-entry"><span class="log-code ok">200</span><span class="log-url">https://yourserver.com/hooks/sokoni</span><span class="log-ms">211 ms</span><span style="color:var(--sub);font-size:11px;margin-left:14px">3 hrs ago</span></div>
+      </div>
+    </div>
+
+    <!-- TAB: OAUTH APPS -->
+    <div class="panel" id="panel-oauth">
+      <div class="sec-hdr"><h2>Registered Apps</h2></div>
+      <div id="oauth-list"></div>
+      <div class="sec-hdr" style="margin-top:8px"><h2>Register New App</h2></div>
+      <div class="tbl-wrap" style="padding:20px">
+        <form id="oauth-form" onsubmit="submitOAuth(event)">
+          <div class="form-row">
+            <div class="form-group"><label>App Name</label><input class="form-control" id="oa-name" placeholder="My Integration" required></div>
+            <div class="form-group"><label>App Type</label>
+              <select class="form-control" id="oa-type"><option value="web">Web Application</option><option value="mobile">Mobile App</option><option value="server">Server / CLI</option></select>
+            </div>
+          </div>
+          <div class="form-group"><label>Description</label><input class="form-control" id="oa-desc" placeholder="What does your app do?"></div>
+          <div class="form-group"><label>Website URL</label><input class="form-control" id="oa-url" type="url" placeholder="https://yourapp.com"></div>
+          <div class="form-group"><label>Redirect URIs <span style="font-weight:400;text-transform:none;color:var(--sub)">(one per line)</span></label>
+            <textarea class="form-control" id="oa-redirects" rows="3" placeholder="https://yourapp.com/callback"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">Register Application</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- TAB: USAGE ANALYTICS -->
+    <div class="panel" id="panel-usage">
+      <div class="sec-hdr">
+        <h2>API Usage</h2>
+        <div class="range-btns">
+          <button class="range-btn active" onclick="setRange(7,this)">7d</button>
+          <button class="range-btn" onclick="setRange(30,this)">30d</button>
+          <button class="range-btn" onclick="setRange(90,this)">90d</button>
+        </div>
+      </div>
+      <div class="sparkline-wrap">
+        <div class="sparkline-hdr">
+          <h3>API Calls Over Time</h3>
+          <span id="chart-total">—</span>
+        </div>
+        <svg class="spark" id="usage-svg" viewBox="0 0 800 70" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="ug" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#71ff00" stop-opacity=".22"/>
+              <stop offset="100%" stop-color="#71ff00" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <path id="chart-area" fill="url(#ug)" d="M0,70 L800,70 Z"/>
+          <polyline id="chart-line" fill="none" stroke="#71ff00" stroke-width="1.8" stroke-linejoin="round" points=""/>
+          <circle id="chart-dot" r="3" fill="#71ff00"/>
+        </svg>
+        <div id="chart-xlabels" style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--sub)"></div>
+      </div>
+      <div class="form-row">
+        <div class="tbl-wrap" style="margin-bottom:0">
+          <div style="padding:11px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);border-bottom:1px solid var(--bor)">Top Endpoints</div>
+          <div class="log-entry"><span class="log-url mono" style="color:var(--cyan)">GET /products</span><span class="log-ms" style="color:var(--text);font-weight:600">4,820</span></div>
+          <div class="log-entry"><span class="log-url mono" style="color:var(--cyan)">GET /orders</span><span class="log-ms" style="color:var(--text);font-weight:600">2,341</span></div>
+          <div class="log-entry"><span class="log-url mono" style="color:var(--cyan)">POST /orders</span><span class="log-ms" style="color:var(--text);font-weight:600">1,102</span></div>
+          <div class="log-entry"><span class="log-url mono" style="color:var(--cyan)">GET /inventory</span><span class="log-ms" style="color:var(--text);font-weight:600">893</span></div>
+          <div class="log-entry"><span class="log-url mono" style="color:var(--cyan)">GET /customers</span><span class="log-ms" style="color:var(--text);font-weight:600">441</span></div>
+        </div>
+        <div class="tbl-wrap" style="margin-bottom:0">
+          <div style="padding:11px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--sub);border-bottom:1px solid var(--bor)">Error Breakdown</div>
+          <div class="log-entry"><span class="log-url">400 Bad Request</span><span class="log-ms" style="color:var(--amber);font-weight:600">214</span></div>
+          <div class="log-entry"><span class="log-url">401 Unauthorized</span><span class="log-ms" style="color:var(--amber);font-weight:600">89</span></div>
+          <div class="log-entry"><span class="log-url">403 Forbidden</span><span class="log-ms" style="color:var(--amber);font-weight:600">12</span></div>
+          <div class="log-entry"><span class="log-url">429 Rate Limited</span><span class="log-ms" style="color:var(--red);font-weight:600">47</span></div>
+          <div class="log-entry"><span class="log-url">500 Server Error</span><span class="log-ms" style="color:var(--red);font-weight:600">3</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: DOCS -->
+    <div class="panel" id="panel-docs">
+      <div class="doc-section">
+        <h3>Quick Start</h3>
+        <p>The SOKONI API lets you read and write orders, products, inventory, payments, and more from any external system. Every request is authenticated with an API key issued from this portal.</p>
+      </div>
+      <div class="doc-section">
+        <h3>Authentication</h3>
+        <p>Pass your key in every request header:</p>
+        <pre class="code-block">X-Sokoni-Key: sk_live_your_key_here
+Content-Type: application/json</pre>
+        <p>Keys prefixed <span class="ic">sk_test_</span> target a sandbox environment — no live data is affected.</p>
+      </div>
+      <div class="doc-section">
+        <h3>Base URL</h3>
+        <pre class="code-block">https://api.mysokoni.co.ke/v1</pre>
+      </div>
+      <div class="doc-section">
+        <h3>Common Requests</h3>
+        <pre class="code-block"># List orders
+curl https://api.mysokoni.co.ke/v1/orders \
+  -H "X-Sokoni-Key: sk_live_..."
+
+# Get a single product
+curl https://api.mysokoni.co.ke/v1/products/{productId} \
+  -H "X-Sokoni-Key: sk_live_..."
+
+# Update inventory quantity
+curl -X PATCH https://api.mysokoni.co.ke/v1/inventory/{itemId} \
+  -H "X-Sokoni-Key: sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{"quantity": 50}'</pre>
+      </div>
+      <div class="doc-section">
+        <h3>Webhook Payload</h3>
+        <pre class="code-block">{
+  "event": "order.created",
+  "timestamp": "2026-07-07T10:30:00Z",
+  "data": {
+    "orderId": "ord_abc123",
+    "total": 1500,
+    "currency": "KES",
+    "status": "pending"
+  },
+  "signature": "sha256=a3f9c..."
+}</pre>
+        <p>Verify HMAC-SHA256 signatures to confirm payloads are from SOKONI:</p>
+        <pre class="code-block">const computed = crypto.createHmac('sha256', WEBHOOK_SECRET)
+  .update(rawBody).digest('hex');
+if (`sha256=${computed}` !== req.headers['x-sokoni-signature'])
+  return res.status(401).end('Rejected');</pre>
+      </div>
+      <div class="doc-section">
+        <h3>Firebase SDK</h3>
+        <pre class="code-block">npm install firebase
+
+import { initializeApp } from 'firebase/app';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+
+const fn = getFunctions(initializeApp(sokoniConfig), 'us-central1');
+const result = await httpsCallable(fn, 'getProducts')({ limit: 20 });</pre>
+      </div>
+      <div class="doc-section">
+        <h3>Resources</h3>
+        <ul>
+          <li><a href="#">GitHub SDK (coming soon)</a></li>
+          <li><a href="#">Postman Collection</a></li>
+          <li><a href="mailto:developers@mysokoni.co.ke">Developer Support</a></li>
+        </ul>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL: Create Key -->
+<div class="overlay" id="key-modal">
+  <div class="modal">
+    <div class="modal-hdr"><h3>Create API Key</h3><button class="modal-close" onclick="closeKeyModal()">&times;</button></div>
+    <div id="kf-form">
+      <form onsubmit="generateKey(event)">
+        <div class="form-group"><label>Key Name</label><input class="form-control" id="key-name" placeholder="Production Backend" required></div>
+        <div class="form-group"><label>Environment</label>
+          <div class="radio-group">
+            <label class="radio-opt"><input type="radio" name="kenv" value="live" checked> Live</label>
+            <label class="radio-opt"><input type="radio" name="kenv" value="sandbox"> Sandbox</label>
+          </div>
+        </div>
+        <div class="form-group"><label>Scopes</label>
+          <div class="scope-grid">
+            <label class="scope-item"><input type="checkbox" value="orders:read" checked> orders:read</label>
+            <label class="scope-item"><input type="checkbox" value="orders:write"> orders:write</label>
+            <label class="scope-item"><input type="checkbox" value="products:read" checked> products:read</label>
+            <label class="scope-item"><input type="checkbox" value="products:write"> products:write</label>
+            <label class="scope-item"><input type="checkbox" value="payments:read"> payments:read</label>
+            <label class="scope-item"><input type="checkbox" value="webhooks:manage"> webhooks:manage</label>
+            <label class="scope-item"><input type="checkbox" value="inventory:read" checked> inventory:read</label>
+            <label class="scope-item"><input type="checkbox" value="inventory:write"> inventory:write</label>
+            <label class="scope-item"><input type="checkbox" value="customers:read"> customers:read</label>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="gen-btn" style="width:100%;justify-content:center">Generate Key</button>
+      </form>
+    </div>
+    <div id="kf-reveal" style="display:none">
+      <p class="key-warn">Save this key now — it will never be shown again.</p>
+      <div class="key-reveal" id="key-val"></div>
+      <button class="btn btn-outline" onclick="copyKey()" style="width:100%;justify-content:center;margin-bottom:8px">Copy to Clipboard</button>
+      <button class="btn btn-ghost" onclick="closeKeyModal()" style="width:100%;justify-content:center">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Register Webhook -->
+<div class="overlay" id="wh-modal">
+  <div class="modal">
+    <div class="modal-hdr"><h3>Register Webhook</h3><button class="modal-close" onclick="closeEl('wh-modal')">&times;</button></div>
+    <form onsubmit="registerWebhook(event)">
+      <div class="form-group"><label>Endpoint URL</label><input class="form-control" id="wh-url" type="url" placeholder="https://yourserver.com/webhooks/sokoni" required></div>
+      <div class="form-group"><label>Events</label>
+        <div class="scope-grid">
+          <label class="scope-item"><input type="checkbox" value="order.created" checked> order.created</label>
+          <label class="scope-item"><input type="checkbox" value="order.updated"> order.updated</label>
+          <label class="scope-item"><input type="checkbox" value="payment.received" checked> payment.received</label>
+          <label class="scope-item"><input type="checkbox" value="payment.failed"> payment.failed</label>
+          <label class="scope-item"><input type="checkbox" value="product.created"> product.created</label>
+          <label class="scope-item"><input type="checkbox" value="inventory.low_stock"> inventory.low_stock</label>
+          <label class="scope-item"><input type="checkbox" value="user.registered"> user.registered</label>
+          <label class="scope-item"><input type="checkbox" value="review.submitted"> review.submitted</label>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Register Endpoint</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let db, fns, uid = '', genKey = '';
+
+firebase.auth().onAuthStateChanged(u => {
+  if (!u) { location.href = 'login.html'; return; }
+  uid = u.uid;
+  db  = firebase.firestore();
+  fns = firebase.app().functions('us-central1');
+  document.getElementById('auth-gate').style.display = 'none';
+  document.getElementById('page-root').style.display  = 'block';
+  init();
+});
+
+function init() {
+  loadKPIs(); loadKeys(); loadWebhooks(); loadOAuth(); buildChart(7);
+}
+
+/* ── tab switching ── */
+function switchTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ── KPIs ── */
+function loadKPIs() {
+  const today = new Date().toISOString().slice(0,10);
+  db.collection('apiUsageLogs').doc(uid).collection('days').doc(today).get().then(d => {
+    document.getElementById('kpi-today').textContent = fmt(d.exists ? (d.data().calls||0) : 0);
+  }).catch(() => {});
+  db.collection('apiKeys').doc(uid).collection('keys').where('status','==','active').get().then(s => {
+    document.getElementById('kpi-int').textContent = s.size;
+  }).catch(() => {});
+  db.collection('partnerProfiles').doc(uid).get().then(d => {
+    if (d.exists) document.getElementById('tier-badge').textContent = d.data().tier || 'Starter';
+  }).catch(() => {});
+  document.getElementById('kpi-month').textContent = '—';
+  document.getElementById('kpi-wh').textContent = '—';
+}
+
+/* ── API keys ── */
+function loadKeys() {
+  db.collection('apiKeys').doc(uid).collection('keys').orderBy('createdAt','desc').get().then(snap => {
+    const tb = document.getElementById('keys-tbody');
+    if (snap.empty) { tb.innerHTML = '<tr><td colspan="7"><div class="empty"><span class="empty-icon">🔑</span><p>No API keys yet.</p></div></td></tr>'; return; }
+    tb.innerHTML = snap.docs.map(d => {
+      const k = d.data();
+      const sc = (k.scopes||[]).slice(0,2).join(', ') + (k.scopes&&k.scopes.length>2 ? ` +${k.scopes.length-2}` : '');
+      return `<tr>
+        <td><strong>${esc(k.name)}</strong></td>
+        <td><span class="mono">${esc(k.prefix||'sk_live')}...${esc(k.last4||'????')}</span></td>
+        <td><span class="chip ${k.env==='sandbox'?'chip-sandbox':'chip-live'}">${esc(k.env||'live')}</span></td>
+        <td style="font-size:11px;color:var(--sub);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sc)}</td>
+        <td style="font-size:11px;color:var(--sub)">${k.lastUsed?relTime(k.lastUsed.toDate()):'Never'}</td>
+        <td><span class="chip ${k.status==='active'?'chip-active':'chip-revoked'}">${esc(k.status||'active')}</span></td>
+        <td><div class="acts">${k.status==='active'?`<button class="btn btn-danger btn-sm" onclick="revokeKey('${d.id}')">Revoke</button>`:''}</div></td>
+      </tr>`;
+    }).join('');
+  }).catch(err => toast('Failed to load keys: ' + err.message));
+}
+
+function openKeyModal() {
+  document.getElementById('kf-form').style.display = 'block';
+  document.getElementById('kf-reveal').style.display = 'none';
+  document.getElementById('key-modal').classList.add('open');
+}
+function closeKeyModal() { document.getElementById('key-modal').classList.remove('open'); genKey = ''; }
+
+function generateKey(e) {
+  e.preventDefault();
+  const btn = document.getElementById('gen-btn');
+  btn.disabled = true; btn.textContent = 'Generating...';
+  const name   = document.getElementById('key-name').value.trim();
+  const env    = document.querySelector('input[name=kenv]:checked').value;
+  const scopes = [...document.querySelectorAll('#kf-form input[type=checkbox]:checked')].map(c => c.value);
+  fns.httpsCallable('generateApiKey')({name, env, scopes}).then(r => {
+    genKey = r.data.key;
+    document.getElementById('key-val').textContent = genKey;
+    document.getElementById('kf-form').style.display   = 'none';
+    document.getElementById('kf-reveal').style.display = 'block';
+    loadKeys(); loadKPIs();
+  }).catch(err => { toast('Error: ' + err.message); btn.disabled = false; btn.textContent = 'Generate Key'; });
+}
+
+function copyKey() { navigator.clipboard.writeText(genKey).then(() => toast('Key copied to clipboard')); }
+
+function revokeKey(kid) {
+  if (!confirm('Revoke this key? It stops working immediately.')) return;
+  fns.httpsCallable('revokeApiKey')({keyId: kid})
+    .then(() => { toast('Key revoked'); loadKeys(); })
+    .catch(err => toast('Error: ' + err.message));
+}
+
+/* ── webhooks ── */
+function loadWebhooks() {
+  db.collection('webhooks').where('uid','==',uid).get().then(snap => {
+    const tb = document.getElementById('wh-tbody');
+    if (snap.empty) { tb.innerHTML = '<tr><td colspan="6"><div class="empty"><span class="empty-icon">🔗</span><p>No endpoints registered.</p></div></td></tr>'; return; }
+    tb.innerHTML = snap.docs.map(d => {
+      const w = d.data();
+      return `<tr>
+        <td class="mono" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(w.url)}</td>
+        <td style="font-size:11px;color:var(--sub)">${(w.events||[]).slice(0,3).join(', ')}</td>
+        <td style="color:var(--g);font-weight:600">${w.deliveryRate||'—'}%</td>
+        <td style="font-size:11px;color:var(--sub)">${w.lastFired?relTime(w.lastFired.toDate()):'Never'}</td>
+        <td><span class="chip ${w.active!==false?'chip-active':'chip-revoked'}">${w.active!==false?'Active':'Off'}</span></td>
+        <td><div class="acts">
+          <button class="btn btn-ghost btn-sm" onclick="testWH('${d.id}')">Test</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteWH('${d.id}')">Delete</button>
+        </div></td>
+      </tr>`;
+    }).join('');
+  }).catch(() => {});
+}
+
+function openWebhookModal() { document.getElementById('wh-modal').classList.add('open'); }
+
+function registerWebhook(e) {
+  e.preventDefault();
+  const url    = document.getElementById('wh-url').value.trim();
+  const events = [...document.querySelectorAll('#wh-modal input[type=checkbox]:checked')].map(c => c.value);
+  fns.httpsCallable('registerWebhook')({url, events}).then(() => {
+    closeEl('wh-modal'); toast('Endpoint registered'); loadWebhooks();
+  }).catch(err => toast('Error: ' + err.message));
+}
+
+function testWH(id) {
+  toast('Sending test payload...');
+  fns.httpsCallable('testWebhook')({webhookId: id})
+    .then(r => toast('Test result: ' + (r.data.statusCode||'200')))
+    .catch(err => toast('Test failed: ' + err.message));
+}
+
+function deleteWH(id) {
+  if (!confirm('Remove this endpoint?')) return;
+  db.collection('webhooks').doc(id).delete().then(() => { toast('Endpoint removed'); loadWebhooks(); });
+}
+
+/* ── OAuth apps ── */
+function loadOAuth() {
+  db.collection('oauthApps').where('uid','==',uid).get().then(snap => {
+    const el = document.getElementById('oauth-list');
+    if (snap.empty) { el.innerHTML = '<p style="color:var(--sub);font-size:13px;margin-bottom:20px">No apps registered yet.</p>'; return; }
+    el.innerHTML = snap.docs.map(d => {
+      const a = d.data();
+      return `<div class="oauth-card">
+        <div class="oauth-icon">📦</div>
+        <div class="oauth-body">
+          <div class="oauth-name">${esc(a.name)}</div>
+          <div class="oauth-id">${esc((a.clientId||'').slice(0,22))}...</div>
+          <div class="oauth-meta">${esc(a.type||'web')} &middot; Created ${a.createdAt?relTime(a.createdAt.toDate()):'—'}</div>
+        </div>
+        <span class="chip chip-active">Active</span>
+      </div>`;
+    }).join('');
+  }).catch(() => { document.getElementById('oauth-list').innerHTML = ''; });
+}
+
+function submitOAuth(e) {
+  e.preventDefault();
+  const name      = document.getElementById('oa-name').value.trim();
+  const type      = document.getElementById('oa-type').value;
+  const desc      = document.getElementById('oa-desc').value.trim();
+  const website   = document.getElementById('oa-url').value.trim();
+  const redirects = document.getElementById('oa-redirects').value.trim().split('\n').map(s=>s.trim()).filter(Boolean);
+  const clientId  = 'client_' + Math.random().toString(36).slice(2,14);
+  db.collection('oauthApps').add({
+    uid, name, type, desc, website, redirectUris: redirects, clientId,
+    status: 'active', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(() => { toast('App registered: ' + name); e.target.reset(); loadOAuth(); })
+    .catch(err => toast('Error: ' + err.message));
+}
+
+/* ── usage chart ── */
+function setRange(days, btn) {
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildChart(days);
+}
+
+function buildChart(days) {
+  const labels = [], vals = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    labels.push(d.toLocaleDateString('en-KE',{month:'short',day:'numeric'}));
+    vals.push(Math.floor(600 + Math.sin(i * 0.4) * 1500 + Math.random() * 2000));
+  }
+  const W = 800, H = 62, pad = 4, max = Math.max(...vals, 1);
+  const pts = vals.map((v,i) => {
+    const x = (i / Math.max(vals.length - 1, 1)) * W;
+    const y = H - (v / max) * (H - pad) - pad;
+    return [x, y];
+  });
+  const pStr = pts.map(p => p.join(',')).join(' ');
+  const aStr = `M${pts[0].join(',')} ` + pts.slice(1).map(p=>'L'+p.join(',')).join(' ') + ` L${W},${H} L0,${H} Z`;
+  document.getElementById('chart-line').setAttribute('points', pStr);
+  document.getElementById('chart-area').setAttribute('d', aStr);
+  const last = pts[pts.length - 1];
+  const dot  = document.getElementById('chart-dot');
+  dot.setAttribute('cx', last[0]); dot.setAttribute('cy', last[1]);
+  document.getElementById('chart-total').textContent = fmt(vals.reduce((a,b)=>a+b,0)) + ' total calls';
+  const xl = document.getElementById('chart-xlabels');
+  xl.innerHTML = `<span>${labels[0]}</span><span>${labels[Math.floor(labels.length/2)]}</span><span>${labels[labels.length-1]}</span>`;
+}
+
+/* ── utilities ── */
+function fmt(n) { return Number(n).toLocaleString('en-KE'); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function relTime(d) {
+  if (!d) return '—';
+  const s = (Date.now() - d.getTime()) / 1000;
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+function closeEl(id) { document.getElementById(id).classList.remove('open'); }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); }));
+</script>
+</body>
+</html>

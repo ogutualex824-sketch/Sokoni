@@ -15,110 +15,239 @@ npm config delete fetch-timeout
 npm config delete fetch-retry-mintimeout
 ```
 
-## Status — 2026-07-06
+## Status — 2026-07-07
 
-**0/23 LIVE — All blocked by Cloud Run CPU quota**
+**0/114 LIVE — All blocked by Cloud Run CPU quota (confirmed 2026-07-07)**
 
-The quota was exhausted during the big 1,512-function update deploy. All 23 new Cloud Run
-service creations failed silently (only `pcGetHubRegistry` showed an explicit 429 in the log).
-Verified via `firebase functions:list` — none of the 23 appear in the live list.
-
-**All 23 blocked — deploy when quota is increased:**
-
-```powershell
-npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:fosInitiatePayment,functions:fosSecureWebhook,functions:fosSubmitRefund,functions:fosApproveRefund,functions:fosGenerateInvoice,functions:fosExportReport,functions:fosGetProviderHealth,functions:fosGetAdminConsole,functions:subScheduleRenewals,functions:subAutoActivateOnPayment,functions:subUpgradeWithProration,functions:getSellerEarningsReport,functions:getAdminRevenueByHub,functions:getConversationContext,functions:searchConversations,functions:editMessage,functions:updateConversationStatus,functions:pcGetHubRegistry,functions:pcRegisterHub,functions:pcUpdateHubConfig,functions:pcGetFeatureFlags,functions:pcSetFeatureFlag,functions:pcGetCrossHubMetrics" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
-```
+The quota was exhausted during the big 1,512-function update deploy. All new Cloud Run
+service creations fail silently (only `pcGetHubRegistry` showed an explicit 429 in the log).
+Verified via `firebase functions:list` — none of the 114 appear in the live list.
 
 **To fix**: Request a GCP Cloud Run CPU quota increase:
 1. GCP Console → IAM & Admin → Quotas
 2. Filter: "Cloud Run Admin API" + "us-central1"
 3. Find "Total CPU (all regions)" — request increase to 2000+ vCPUs
 
+---
 
-## Functions and their source files
+## MASTER DEPLOY COMMAND (all 114 CFs)
 
-| Function | File | Added |
-|---|---|---|
-| `pcGetHubRegistry` | `functions/platform-core.js` | 2026-07-06 |
-| `pcRegisterHub` | `functions/platform-core.js` | 2026-07-06 |
-| `pcUpdateHubConfig` | `functions/platform-core.js` | 2026-07-06 |
-| `pcGetFeatureFlags` | `functions/platform-core.js` | 2026-07-06 |
-| `pcSetFeatureFlag` | `functions/platform-core.js` | 2026-07-06 |
-| `pcGetCrossHubMetrics` | `functions/platform-core.js` | 2026-07-06 |
-| `fosInitiatePayment` | `functions/financial-os.js` | 2026-07-06 |
-| `fosSecureWebhook` | `functions/financial-os.js` | 2026-07-06 |
-| `fosSubmitRefund` | `functions/financial-os.js` | 2026-07-06 |
-| `fosApproveRefund` | `functions/financial-os.js` | 2026-07-06 |
-| `fosGenerateInvoice` | `functions/financial-os.js` | 2026-07-06 |
-| `fosExportReport` | `functions/financial-os.js` | 2026-07-06 |
-| `fosGetProviderHealth` | `functions/financial-os.js` | 2026-07-06 |
-| `fosGetAdminConsole` | `functions/financial-os.js` | 2026-07-06 |
-| `subScheduleRenewals` | `functions/sub-engine.js` | 2026-07-06 |
-| `subAutoActivateOnPayment` | `functions/sub-engine.js` | 2026-07-06 |
-| `subUpgradeWithProration` | `functions/sub-engine.js` | 2026-07-06 |
-| `getSellerEarningsReport` | `functions/commission.js` | 2026-07-06 |
-| `getAdminRevenueByHub` | `functions/commission.js` | 2026-07-06 |
-| `getConversationContext` | `functions/messages.js` | 2026-07-06 |
-| `searchConversations` | `functions/messages.js` | 2026-07-06 |
-| `editMessage` | `functions/messages.js` | 2026-07-06 |
-| `updateConversationStatus` | `functions/messages.js` | 2026-07-06 |
+Run once when quota is cleared:
+
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:fosInitiatePayment,functions:fosSecureWebhook,functions:fosSubmitRefund,functions:fosApproveRefund,functions:fosGenerateInvoice,functions:fosExportReport,functions:fosGetProviderHealth,functions:fosGetAdminConsole,functions:subScheduleRenewals,functions:subAutoActivateOnPayment,functions:subUpgradeWithProration,functions:getSellerEarningsReport,functions:getAdminRevenueByHub,functions:getConversationContext,functions:searchConversations,functions:editMessage,functions:updateConversationStatus,functions:pcGetHubRegistry,functions:pcRegisterHub,functions:pcUpdateHubConfig,functions:pcGetFeatureFlags,functions:pcSetFeatureFlag,functions:pcGetCrossHubMetrics,functions:asyncEnqueue,functions:asyncWorker,functions:asyncSweeper,functions:asyncEventRouter,functions:asyncCancel,functions:asyncRetryJob,functions:asyncPauseQueue,functions:asyncGetDashboard,functions:asyncGetJobs,functions:asyncInspect,functions:asyncCleanup,functions:opsGetMasterDashboard,functions:opsGetAlerts,functions:opsAcknowledgeAlert,functions:opsCreateAlert,functions:opsGetPostLaunchMetrics,functions:opsScheduledHealthCheck,functions:rollbackGetSnapshots,functions:rollbackCreateSnapshot,functions:rollbackTrigger,functions:rollbackGetExecutions,functions:rollbackUpdateStatus,functions:rollbackScheduledSnapshot,functions:recordPosEvent,functions:getPosPerfMetrics,functions:getPosSpeedReport,functions:posScheduledPerfRollup,functions:acknowledgeShift,functions:approveShiftSwap,functions:assignShift,functions:createShiftTemplate,functions:getRoster,functions:getRosterGaps,functions:getStaffRoster,functions:publishWeeklyRoster,functions:schedulerWeeklyDigest,functions:setStaffAvailability,functions:swapShiftRequest,functions:createSession,functions:detectSessionAnomaly,functions:getUserSessions,functions:revokeDeviceSessions,functions:rotateSession,functions:scheduledSessionCleanup,functions:terminateAllSessions,functions:terminateSession,functions:validateSession,functions:generateSecureUploadUrl,functions:getFileAuditLog,functions:onFileUploaded,functions:quarantineFile,functions:validateUploadRequest,functions:getLatestSecurityReport,functions:runSecurityAudit,functions:scheduleWeeklySecurityAudit,functions:getPOSInventoryIntelligence,functions:getProductSalesTrend,functions:earnLoyaltyPoints,functions:onInventoryUpdated,functions:onOrderCreated,functions:onPaymentCreated,functions:onPaymentUpdated,functions:onRiderStatusChange,functions:onUserCreated,functions:posCleanupPeripheralSignals,functions:posCreateCustomerDisplay,functions:posGetPeripherals,functions:posRegisterPeripheral,functions:posRemovePeripheral,functions:posUpdateCustomerDisplay,functions:posUpdatePeripheralStatus,functions:posGetApiDocs,functions:posGetEtimsExport,functions:posGetInventoryExport,functions:posGetLedgerExport,functions:posGetSalesExport,functions:posListApiKeys,functions:posReceiveErpUpdate,functions:posRegisterApiKey,functions:posRegisterWebhook,functions:posRevokeApiKey,functions:posRevokeWebhook,functions:posTestWebhook,functions:posGetTerminalBatchReport,functions:posGetTerminalCapabilities,functions:posGetTerminalHealth,functions:posPollTerminalStatus,functions:posReverseTerminalPayment,functions:posSettleTerminalBatch,functions:posTerminalEventWebhook" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
 
 ## Secrets required (set these first if not already set)
 ```bash
-firebase functions:secrets:set INTASEND_PRIVATE_KEY  --project sokoni-aeb26
-firebase functions:secrets:set LOYALTY_HMAC_SECRET   --project sokoni-aeb26
-firebase functions:secrets:set PAYMENT_HMAC_SECRET   --project sokoni-aeb26
-firebase functions:secrets:set PAYROLL_ENCRYPTION_KEY --project sokoni-aeb26
+firebase functions:secrets:set INTASEND_PRIVATE_KEY       --project sokoni-aeb26
+firebase functions:secrets:set LOYALTY_HMAC_SECRET        --project sokoni-aeb26
+firebase functions:secrets:set PAYMENT_HMAC_SECRET        --project sokoni-aeb26
+firebase functions:secrets:set PAYROLL_ENCRYPTION_KEY     --project sokoni-aeb26
 ```
 
-## Additional CFs — Async Jobs Engine v2.0 (2026-07-07)
+---
 
-Add these to the deploy command above (or deploy separately once quota clears):
+## All 114 functions by source file
 
-```powershell
-npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:asyncEnqueue,functions:asyncWorker,functions:asyncSweeper,functions:asyncEventRouter,functions:asyncCancel,functions:asyncRetryJob,functions:asyncPauseQueue,functions:asyncGetDashboard,functions:asyncGetJobs,functions:asyncInspect,functions:asyncCleanup" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
-```
+### financial-os.js (8)
+| Function | Type |
+|---|---|
+| `fosInitiatePayment` | onCall auth |
+| `fosSecureWebhook` | onRequest webhook |
+| `fosSubmitRefund` | onCall auth |
+| `fosApproveRefund` | onCall admin |
+| `fosGenerateInvoice` | onCall auth |
+| `fosExportReport` | onCall admin |
+| `fosGetProviderHealth` | onCall admin |
+| `fosGetAdminConsole` | onCall admin |
 
-| Function | File | Type |
-|---|---|---|
-| `asyncEnqueue` | `functions/async-jobs.js` | onCall |
-| `asyncWorker` | `functions/async-jobs.js` | onDocumentCreated |
-| `asyncSweeper` | `functions/async-jobs.js` | onSchedule (every 1 min) |
-| `asyncEventRouter` | `functions/async-jobs.js` | onDocumentCreated |
-| `asyncCancel` | `functions/async-jobs.js` | onCall |
-| `asyncRetryJob` | `functions/async-jobs.js` | onCall admin |
-| `asyncPauseQueue` | `functions/async-jobs.js` | onCall admin |
-| `asyncGetDashboard` | `functions/async-jobs.js` | onCall admin |
-| `asyncGetJobs` | `functions/async-jobs.js` | onCall admin |
-| `asyncInspect` | `functions/async-jobs.js` | onCall admin |
-| `asyncCleanup` | `functions/async-jobs.js` | onSchedule (daily 03:30) |
+### sub-engine.js (3)
+| Function | Type |
+|---|---|
+| `subScheduleRenewals` | onSchedule |
+| `subAutoActivateOnPayment` | onDocumentUpdated |
+| `subUpgradeWithProration` | onCall auth |
 
-## Additional CFs — Platform Ops + Rollback System (2026-07-07)
+### commission.js (2)
+| Function | Type |
+|---|---|
+| `getSellerEarningsReport` | onCall auth |
+| `getAdminRevenueByHub` | onCall admin |
 
-```powershell
-npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:opsGetMasterDashboard,functions:opsGetAlerts,functions:opsAcknowledgeAlert,functions:opsCreateAlert,functions:opsGetPostLaunchMetrics,functions:opsScheduledHealthCheck,functions:rollbackGetSnapshots,functions:rollbackCreateSnapshot,functions:rollbackTrigger,functions:rollbackGetExecutions,functions:rollbackUpdateStatus,functions:rollbackScheduledSnapshot" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
-```
+### messages.js (4)
+| Function | Type |
+|---|---|
+| `getConversationContext` | onCall auth |
+| `searchConversations` | onCall auth |
+| `editMessage` | onCall auth |
+| `updateConversationStatus` | onCall auth |
 
-| Function | File | Type |
-|---|---|---|
-| `opsGetMasterDashboard` | `functions/platform-ops.js` | onCall admin |
-| `opsGetAlerts` | `functions/platform-ops.js` | onCall admin |
-| `opsAcknowledgeAlert` | `functions/platform-ops.js` | onCall admin |
-| `opsCreateAlert` | `functions/platform-ops.js` | onCall admin |
-| `opsGetPostLaunchMetrics` | `functions/platform-ops.js` | onCall admin |
-| `opsScheduledHealthCheck` | `functions/platform-ops.js` | onSchedule (every 5 min) |
-| `rollbackGetSnapshots` | `functions/rollback.js` | onCall admin |
-| `rollbackCreateSnapshot` | `functions/rollback.js` | onCall admin |
-| `rollbackTrigger` | `functions/rollback.js` | onCall admin |
-| `rollbackGetExecutions` | `functions/rollback.js` | onCall admin |
-| `rollbackUpdateStatus` | `functions/rollback.js` | onCall admin |
-| `rollbackScheduledSnapshot` | `functions/rollback.js` | onSchedule (daily 00:00) |
+### platform-core.js (6)
+| Function | Type |
+|---|---|
+| `pcGetHubRegistry` | onCall auth |
+| `pcRegisterHub` | onCall admin |
+| `pcUpdateHubConfig` | onCall admin |
+| `pcGetFeatureFlags` | onCall auth |
+| `pcSetFeatureFlag` | onCall admin |
+| `pcGetCrossHubMetrics` | onCall admin |
+
+### async-jobs.js (11)
+| Function | Type |
+|---|---|
+| `asyncEnqueue` | onCall auth |
+| `asyncWorker` | onDocumentCreated |
+| `asyncSweeper` | onSchedule (every 1 min) |
+| `asyncEventRouter` | onDocumentCreated |
+| `asyncCancel` | onCall auth |
+| `asyncRetryJob` | onCall admin |
+| `asyncPauseQueue` | onCall admin |
+| `asyncGetDashboard` | onCall admin |
+| `asyncGetJobs` | onCall admin |
+| `asyncInspect` | onCall admin |
+| `asyncCleanup` | onSchedule (daily 03:30) |
+
+### platform-ops.js (6)
+| Function | Type |
+|---|---|
+| `opsGetMasterDashboard` | onCall admin |
+| `opsGetAlerts` | onCall admin |
+| `opsAcknowledgeAlert` | onCall admin |
+| `opsCreateAlert` | onCall admin |
+| `opsGetPostLaunchMetrics` | onCall admin |
+| `opsScheduledHealthCheck` | onSchedule (every 5 min) |
+
+### rollback.js (6)
+| Function | Type |
+|---|---|
+| `rollbackGetSnapshots` | onCall admin |
+| `rollbackCreateSnapshot` | onCall admin |
+| `rollbackTrigger` | onCall admin |
+| `rollbackGetExecutions` | onCall admin |
+| `rollbackUpdateStatus` | onCall admin |
+| `rollbackScheduledSnapshot` | onSchedule (daily 00:00) |
+
+### pos-perf.js (4)
+| Function | Type |
+|---|---|
+| `recordPosEvent` | onCall auth |
+| `getPosPerfMetrics` | onCall auth |
+| `getPosSpeedReport` | onCall auth |
+| `posScheduledPerfRollup` | onSchedule (daily 22:00 UTC) |
+
+### pos-shift-scheduler.js (11)
+| Function | Type |
+|---|---|
+| `acknowledgeShift` | onCall auth |
+| `approveShiftSwap` | onCall admin |
+| `assignShift` | onCall admin |
+| `createShiftTemplate` | onCall admin |
+| `getRoster` | onCall auth |
+| `getRosterGaps` | onCall admin |
+| `getStaffRoster` | onCall auth |
+| `publishWeeklyRoster` | onCall admin |
+| `schedulerWeeklyDigest` | onSchedule (weekly) |
+| `setStaffAvailability` | onCall auth |
+| `swapShiftRequest` | onCall auth |
+
+### security-session.js (9)
+| Function | Type |
+|---|---|
+| `createSession` | onCall auth |
+| `detectSessionAnomaly` | onCall auth |
+| `getUserSessions` | onCall auth |
+| `revokeDeviceSessions` | onCall auth |
+| `rotateSession` | onCall auth |
+| `scheduledSessionCleanup` | onSchedule (daily) |
+| `terminateAllSessions` | onCall admin |
+| `terminateSession` | onCall auth |
+| `validateSession` | onCall auth |
+
+### security-file.js (5)
+| Function | Type |
+|---|---|
+| `generateSecureUploadUrl` | onCall auth |
+| `getFileAuditLog` | onCall admin |
+| `onFileUploaded` | onObjectFinalized |
+| `quarantineFile` | onCall admin |
+| `validateUploadRequest` | onCall auth |
+
+### security-pentest.js (3)
+| Function | Type |
+|---|---|
+| `getLatestSecurityReport` | onCall admin |
+| `runSecurityAudit` | onCall admin |
+| `scheduleWeeklySecurityAudit` | onSchedule (weekly) |
+
+### pos-intelligence.js (2)
+| Function | Type |
+|---|---|
+| `getPOSInventoryIntelligence` | onCall auth |
+| `getProductSalesTrend` | onCall auth |
+
+### loyalty.js (1)
+| Function | Type |
+|---|---|
+| `earnLoyaltyPoints` | onCall auth |
+
+### redis-integrations.js (6)
+| Function | Type |
+|---|---|
+| `onInventoryUpdated` | onDocumentUpdated |
+| `onOrderCreated` | onDocumentCreated |
+| `onPaymentCreated` | onDocumentCreated |
+| `onPaymentUpdated` | onDocumentUpdated |
+| `onRiderStatusChange` | onDocumentUpdated |
+| `onUserCreated` | onDocumentCreated |
+
+### pos-peripherals.js (7)
+| Function | Type |
+|---|---|
+| `posCleanupPeripheralSignals` | onSchedule (daily) |
+| `posCreateCustomerDisplay` | onCall auth |
+| `posGetPeripherals` | onCall auth |
+| `posRegisterPeripheral` | onCall auth |
+| `posRemovePeripheral` | onCall auth |
+| `posUpdateCustomerDisplay` | onCall auth |
+| `posUpdatePeripheralStatus` | onCall auth |
+
+### pos-integrations-api.js (12)
+| Function | Type |
+|---|---|
+| `posGetApiDocs` | onCall auth |
+| `posGetEtimsExport` | onCall auth |
+| `posGetInventoryExport` | onCall auth |
+| `posGetLedgerExport` | onCall auth |
+| `posGetSalesExport` | onCall auth |
+| `posListApiKeys` | onCall auth |
+| `posReceiveErpUpdate` | onRequest webhook |
+| `posRegisterApiKey` | onCall auth |
+| `posRegisterWebhook` | onCall auth |
+| `posRevokeApiKey` | onCall auth |
+| `posRevokeWebhook` | onCall auth |
+| `posTestWebhook` | onCall auth |
+
+### pos-terminal-live.js (7)
+| Function | Type |
+|---|---|
+| `posGetTerminalBatchReport` | onCall auth |
+| `posGetTerminalCapabilities` | onCall auth |
+| `posGetTerminalHealth` | onCall auth |
+| `posPollTerminalStatus` | onCall auth |
+| `posReverseTerminalPayment` | onCall admin |
+| `posSettleTerminalBatch` | onCall admin |
+| `posTerminalEventWebhook` | onRequest webhook |
+
+---
 
 ## Hosting (already deployed 2026-07-06)
 All HTML/CSS/JS pages are LIVE. CF features will activate when quota clears.
-New pages deployed today:
+New pages deployed:
 - `/seller-earnings` — Seller earnings dashboard
 - `/revenue-dashboard` — Admin revenue dashboard
 - `/my-subscriptions` — Universal subscription management portal
 - `/fos-admin` — Financial OS admin console
-- `/async-jobs` — Async Jobs Engine monitoring dashboard (2026-07-07)
+- `/async-jobs` — Async Jobs Engine monitoring dashboard
