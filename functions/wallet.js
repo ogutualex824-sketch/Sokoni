@@ -99,7 +99,7 @@ exports.getWalletBalance = onCall({ cors: true, enforceAppCheck: true }, async (
 // ─── 2. initiateWalletTopUp ────────────────────────────────────────────────
 
 exports.initiateWalletTopUp = onCall(
-  { cors: true, secrets: [INTASEND_KEY] },
+  { cors: true, enforceAppCheck: true, secrets: [INTASEND_KEY] },
   async (request) => {
     _requireAuth(request);
 
@@ -154,7 +154,7 @@ exports.initiateWalletTopUp = onCall(
     try {
       const IntaSend = require('intasend-node');
       const client = new IntaSend(
-        process.env.INTASEND_PRIVATE_KEY || INTASEND_KEY.value(),
+        INTASEND_KEY.value(),
         { testMode: process.env.NODE_ENV !== 'production' }
       );
 
@@ -222,7 +222,7 @@ exports.confirmWalletTopUp = onCall(
     try {
       const IntaSend = require('intasend-node');
       const client = new IntaSend(
-        process.env.INTASEND_PRIVATE_KEY || INTASEND_KEY.value(),
+        INTASEND_KEY.value(),
         { testMode: process.env.NODE_ENV !== 'production' }
       );
 
@@ -242,7 +242,16 @@ exports.confirmWalletTopUp = onCall(
       let newBalance = 0;
 
       await db.runTransaction(async (t) => {
-        const walletSnap = await t.get(walletRef);
+        // Read BOTH wallet and txRef inside the transaction so Firestore detects
+        // conflicts from a concurrent confirmWalletTopUp or sweep call
+        const [walletSnap, txCheck] = await Promise.all([t.get(walletRef), t.get(txRef)]);
+
+        // Already credited by a concurrent request — return idempotently
+        if (txCheck.exists && txCheck.data().status === 'completed') {
+          newBalance = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
+          return;
+        }
+
         const current = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
         newBalance = current + tx.amount;
 
@@ -317,7 +326,7 @@ exports.spendFromWallet = onCall({ cors: true, enforceAppCheck: true }, async (r
 
     const current = walletSnap.data().balance ?? 0;
     if (current < amt) {
-      throw new HttpsError('failed-precondition', );
+      throw new HttpsError('failed-precondition', 'Insufficient wallet balance');
     }
 
     newBalance = current - amt;
@@ -427,9 +436,9 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
     const walletSnap = await t.get(walletRef);
     const balance = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
     if (balance < amt) {
-      throw new HttpsError('failed-precondition', );
+      throw new HttpsError('failed-precondition', 'Insufficient wallet balance for this payout');
     }
-    t.update(walletRef, { balance: balance - amt, pendingPayout: admin.firestore.FieldValue.increment(amt) });
+    t.update(walletRef, { balance: balance - amt, pendingPayout: FieldValue.increment(amt) });
     t.set(reqRef, {
       sellerUid:     uid,
       amount:        amt,
@@ -529,12 +538,12 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true }, async
       if (!txSnap.exists) {
         const current = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
         if (current < payout.amount) {
-          throw new HttpsError('failed-precondition', );
+          throw new HttpsError('failed-precondition', 'Insufficient wallet balance to complete payout');
         }
         const newBalance = current - payout.amount;
 
         if (walletSnap.exists) {
-          t.update(walletRef, { balance: newBalance, pendingPayout: admin.firestore.FieldValue.increment(-payout.amount) });
+          t.update(walletRef, { balance: newBalance, pendingPayout: FieldValue.increment(-payout.amount) });
         } else {
           t.set(walletRef, {
             uid: payout.sellerUid,
@@ -610,17 +619,16 @@ exports.adminGetPendingPayouts = onCall({ cors: true, enforceAppCheck: true }, a
 
 exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
+  // Refunds must always be admin-initiated to prevent self-enrichment.
+  // User-facing return/dispute flows route through the disputes system for approval.
+  _requireAdmin(request);
 
   const db = getFirestore();
   const callerUid = request.auth.uid;
   const { orderId, amount, reason, targetUid } = request.data || {};
 
   // Determine whose wallet to credit
-  let recipientUid = callerUid;
-  if (targetUid && targetUid !== callerUid) {
-    _requireAdmin(request);
-    recipientUid = _san(targetUid, 128);
-  }
+  const recipientUid = (targetUid && _san(targetUid, 128)) || callerUid;
 
   const amt = Number(amount);
   if (!Number.isInteger(amt) || amt <= 0) {
@@ -721,7 +729,13 @@ exports.sweepStaleWalletTopUps = onSchedule(
 
       await db.runTransaction(async t => {
         const walletRef  = db.collection('wallets').doc(tx.uid);
-        const walletSnap = await t.get(walletRef);
+        // Read both wallet and the transaction doc so Firestore detects conflicts
+        // from a concurrent confirmWalletTopUp that may have already credited the wallet
+        const [walletSnap, txCheck] = await Promise.all([t.get(walletRef), t.get(doc.ref)]);
+
+        // Already resolved by a concurrent call — skip to avoid double credit
+        if (txCheck.exists && txCheck.data().status !== 'pending') return;
+
         t.update(doc.ref, { status: finalStatus, resolvedAt: Timestamp.now(), resolvedBy: 'sweepStaleWalletTopUps' });
         if (walletSnap.exists && walletSnap.data().pendingTopUp === doc.id) {
           t.update(walletRef, { pendingTopUp: null });

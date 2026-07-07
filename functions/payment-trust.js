@@ -17,7 +17,7 @@ const { defineSecret }        = require('firebase-functions/params');
 
 const db     = getFirestore();
 const REGION = 'us-central1';
-const cfg    = { region: REGION, memory: '256MiB', timeoutSeconds: 60 };
+const cfg    = { region: REGION, memory: '256MiB', timeoutSeconds: 60, enforceAppCheck: true };
 
 const SENDGRID_API_KEY = defineSecret('SENDGRID_API_KEY');
 

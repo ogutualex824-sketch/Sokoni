@@ -542,6 +542,49 @@ function updateConversationStatus(conversationId, newStatus, systemMessage) {
 }
 
 /* ─────────────────────────────────────────────────────────────
+   FORWARD MESSAGE
+   Re-sends message content into the same conversation.
+   For media types, sends a text label pointing to the original.
+──────────────────────────────────────────────────────────────*/
+function forwardMessage(conversationId, msg) {
+  var payload;
+  if (!msg || msg.deleted) return Promise.reject(new Error('Cannot forward a deleted message'));
+  if (msg.type === 'text' && msg.text) {
+    payload = { type: 'text', text: '↩ Forwarded: ' + msg.text.slice(0, 3990) };
+  } else if (msg.type === 'image') {
+    payload = { type: 'text', text: '↩ Forwarded an image' + (msg.fileName ? ': ' + msg.fileName : '') };
+  } else if (msg.type === 'pdf' || msg.type === 'document') {
+    payload = { type: 'text', text: '↩ Forwarded a document' + (msg.fileName ? ': ' + msg.fileName : '') };
+  } else if (msg.type === 'voice') {
+    payload = { type: 'text', text: '↩ Forwarded a voice note (' + _fmtDurSafe(msg.duration) + ')' };
+  } else {
+    return Promise.reject(new Error('Cannot forward this message type'));
+  }
+  return sendMessage(conversationId, payload);
+}
+
+function _fmtDurSafe(secs) {
+  var s = Math.floor(secs || 0);
+  var m = Math.floor(s / 60);
+  return m + ':' + String(s % 60).padStart(2, '0');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SEARCH MESSAGES (client-side — no extra Firestore reads)
+   Filters an array of message objects by query text.
+──────────────────────────────────────────────────────────────*/
+function searchMessages(msgs, query) {
+  if (!query || !query.trim()) return msgs || [];
+  var q = query.toLowerCase().trim();
+  return (msgs || []).filter(function(m) {
+    if (m.deleted || m.type === 'system') return false;
+    if (m.type === 'text' && m.text) return m.text.toLowerCase().indexOf(q) !== -1;
+    if (m.fileName) return m.fileName.toLowerCase().indexOf(q) !== -1;
+    return false;
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────
    PUBLIC API
 ──────────────────────────────────────────────────────────────*/
 var SokoniChat = {
@@ -577,6 +620,10 @@ var SokoniChat = {
 
   /* Reports */
   reportConversation: reportConversation,
+
+  /* Forward / search */
+  forwardMessage:  forwardMessage,
+  searchMessages:  searchMessages,
 
   /* Context */
   getConversationContext: getConversationContext,

@@ -38,9 +38,15 @@
 'use strict';
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const admin   = require('firebase-admin');
 const db      = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
+
+/* ── Secrets accessed by readiness checks ───────────────────── */
+const _SOKONI_HMAC    = defineSecret('SOKONI_HMAC_KEY');
+const _ANTHROPIC_KEY  = defineSecret('ANTHROPIC_API_KEY');
+const _SENDGRID_KEY   = defineSecret('SENDGRID_API_KEY');
 
 /* ── CF Options ─────────────────────────────────────────────── */
 const CF_OPTIONS = {
@@ -48,6 +54,7 @@ const CF_OPTIONS = {
   enforceAppCheck: true,
   timeoutSeconds: 120,
   memory:         '256MiB',
+  secrets:        [_SOKONI_HMAC, _ANTHROPIC_KEY, _SENDGRID_KEY],
 };
 
 /* ── Role levels (matches platform convention) ───────────────── */
@@ -223,7 +230,13 @@ async function _checkInfrastructureInternal() {
   const blockers = [];
   const warnings = [];
 
-  /* 1. Secret Manager secrets — check process.env for required keys */
+  /* 1. Secret Manager secrets — check via Secret Manager bindings */
+  const _secretValues = {
+    ANTHROPIC_API_KEY: _ANTHROPIC_KEY.value(),
+    SENDGRID_API_KEY:  _SENDGRID_KEY.value(),
+    SOKONI_HMAC_KEY:   _SOKONI_HMAC.value(),
+    REDIS_URL:         process.env.REDIS_URL || '',
+  };
   const requiredSecrets = [
     { key: 'ANTHROPIC_API_KEY',  blocker: false, label: 'Anthropic API Key' },
     { key: 'SENDGRID_API_KEY',   blocker: false, label: 'SendGrid API Key' },
@@ -234,7 +247,7 @@ async function _checkInfrastructureInternal() {
   const missingSecrets = [];
   const presentSecrets = [];
   for (const s of requiredSecrets) {
-    if (process.env[s.key]) {
+    if (_secretValues[s.key]) {
       presentSecrets.push(s.label);
     } else {
       missingSecrets.push(s);
@@ -365,7 +378,7 @@ async function _checkSecurityReadinessInternal() {
   const warnings = [];
 
   /* 1. SOKONI_HMAC_KEY present — mandatory for payment integrity */
-  const hmacPresent = !!process.env.SOKONI_HMAC_KEY;
+  const hmacPresent = !!_SOKONI_HMAC.value();
   details.push({
     item:    'SOKONI_HMAC_KEY present',
     status:  hmacPresent ? 'pass' : 'fail',
@@ -752,7 +765,7 @@ async function _checkPlatformModulesInternal() {
   }
 
   /* 7. AI availability — ANTHROPIC_API_KEY must be set for AI features */
-  const aiAvailable = !!process.env.ANTHROPIC_API_KEY;
+  const aiAvailable = !!_ANTHROPIC_KEY.value();
   details.push({
     item:    'AI availability',
     status:  aiAvailable ? 'pass' : 'warning',

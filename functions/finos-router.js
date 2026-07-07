@@ -844,18 +844,23 @@ exports.finosRequestBankPayout = onCall(
       throw new HttpsError('invalid-argument', 'Minimum bank payout is KES 1,000');
 
     const db     = _db();
-    const wallet = await U.getOrInitWallet(db, uid, entityType || 'seller');
-    if ((wallet.availableBalance || 0) < amountCents)
-      throw new HttpsError('failed-precondition', `Insufficient balance. Available: KES ${((wallet.availableBalance || 0) / 100).toFixed(0)}`);
-
+    await U.getOrInitWallet(db, uid, entityType || 'seller');
     await U.checkFinancialFraud(db, { entityId: uid, entityType: entityType || 'seller', eventType: 'payout', amountCents });
 
     const wht        = U.calculateWHT(amountCents);
     const netCents   = wht.netCents;
     const ikey       = U.generateIdempotencyKey(['bank_payout', uid, String(amountCents), String(Date.now())]);
     const payoutRef  = db.collection('payouts').doc();
+    const walletRef  = db.collection('wallets').doc(uid);
 
     await db.runTransaction(async (txn) => {
+      // Re-read wallet INSIDE the transaction so Firestore detects concurrent
+      // payout requests that would overdraft the same balance
+      const walletSnap = await txn.get(walletRef);
+      const available  = walletSnap.exists ? ((walletSnap.data().availableBalance || walletSnap.data().balance) ?? 0) : 0;
+      if (available < amountCents)
+        throw new HttpsError('failed-precondition', `Insufficient balance. Available: KES ${(available / 100).toFixed(0)}`);
+
       U.holdWalletTxn(txn, db, uid, amountCents, { description: `Bank payout hold ${payoutRef.id}` });
       txn.set(payoutRef, {
         id: payoutRef.id, entityId: uid, entityType: entityType || 'seller',

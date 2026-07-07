@@ -14,13 +14,15 @@
 'use strict';
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 
-const CF_OPTIONS = { region: 'us-central1', enforceAppCheck: true, secrets: ['SOKONI_HMAC_KEY'] };
+const SOKONI_HMAC_KEY = defineSecret('SOKONI_HMAC_KEY');
+const CF_OPTIONS = { region: 'us-central1', enforceAppCheck: true, secrets: [SOKONI_HMAC_KEY] };
 
 /* ── Role levels ───────────────────────────────────────────────────────────── */
 const ROLE = {
@@ -38,9 +40,9 @@ const RISK_LEVEL = { low: 'low', medium: 'medium', high: 'high', critical: 'crit
 /* ── Constants ─────────────────────────────────────────────────────────────── */
 const HIGH_VALUE_THRESHOLD_KES = 100_000;
 const STEP_UP_TTL_MS           = 10 * 60 * 1000; // 10 minutes
-// Secret accessed lazily inside function handlers — not available at module load time in Cloud Functions
+// Accessed via Secret Manager — SOKONI_HMAC_KEY is injected at runtime by Firebase
 const _getHmacKey = () => {
-  const key = process.env.SOKONI_HMAC_KEY;
+  const key = SOKONI_HMAC_KEY.value();
   if (!key) throw new HttpsError('internal', 'HMAC key not configured.');
   return key;
 };

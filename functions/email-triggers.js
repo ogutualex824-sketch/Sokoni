@@ -11,11 +11,14 @@ const { onSchedule }    = require("firebase-functions/v2/scheduler");
 const { onRequest }     = require("firebase-functions/v2/https");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { beforeUserCreated } = require("firebase-functions/v2/identity");
+const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const emailSvc = require("./email-service");
 const { getTemplate } = require("./email-templates");
 const { EMAIL_SECRETS } = emailSvc;
 const { assertAuth } = require("./shared/errors");
+
+const SENDGRID_WEBHOOK_KEY = defineSecret("SENDGRID_WEBHOOK_KEY");
 
 /* ── Helper: render template + queue ──────────────────────── */
 async function trigger(templateName, data, extraPayload = {}) {
@@ -737,12 +740,12 @@ exports.emailUnassignedDeliveryAlert = onSchedule(
    SendGrid Event Webhook  (track opens, clicks, bounces)
    Register: https://us-central1-sokoni-aeb26.cloudfunctions.net/emailWebhook
 ═══════════════════════════════════════════════════════════ */
-exports.emailWebhook = onRequest({ invoker: "public" }, async (req, res) => {
+exports.emailWebhook = onRequest({ invoker: "public", secrets: [SENDGRID_WEBHOOK_KEY] }, async (req, res) => {
   if (req.method !== "POST") { res.status(405).end(); return; }
 
   /* Verify SendGrid HMAC-SHA256 webhook signature when key is configured.
      If the env var is absent we accept (dev/CI mode) but log a warning. */
-  const webhookKey = process.env.SENDGRID_WEBHOOK_KEY || "";
+  const webhookKey = SENDGRID_WEBHOOK_KEY.value() || "";
   const sgSig  = req.headers["x-twilio-email-event-webhook-signature"] || "";
   const sgTs   = req.headers["x-twilio-email-event-webhook-timestamp"] || "";
 

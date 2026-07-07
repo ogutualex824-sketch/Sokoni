@@ -306,10 +306,19 @@ exports.initiatePayment = onCall(
    Marks payment succeeded/failed.
 ═══════════════════════════════════════════════════════════ */
 exports.confirmPayment = onCall({ enforceAppCheck: true }, async (request) => {
-  /* Authentication is always required — unauthenticated callers cannot confirm payments */
+  /* Payment confirmation must only be triggered by the payment gateway webhook
+     (fosSecureWebhook / webhookIntasend), never by end-user client calls.
+     Allowing buyers to self-confirm lets them mark a payment succeeded without
+     actually paying, bypassing the entire payment flow. */
   const auth   = _authRequired(request);
   const claims = auth.token || {};
   const isAdmin = claims.admin || claims.role === 'admin' || claims.role === 'super_admin';
+  if (!isAdmin) {
+    throw new HttpsError(
+      'permission-denied',
+      'Payment confirmation is handled automatically by the payment gateway. Contact support if your payment is not reflecting.'
+    );
+  }
   const { paymentId, succeeded, failReason, providerRef } = request.data || {};
 
   if (!paymentId) throw new HttpsError('invalid-argument', 'paymentId required');
@@ -319,11 +328,6 @@ exports.confirmPayment = onCall({ enforceAppCheck: true }, async (request) => {
   if (!snap.exists) throw new HttpsError('not-found', 'Payment not found');
 
   const payment = snap.data();
-
-  /* Only admin or the buyer who created this payment can confirm it */
-  if (!isAdmin && payment.buyerId !== auth.uid) {
-    throw new HttpsError('permission-denied', 'Access denied');
-  }
 
   const nextStatus = succeeded ? STATUS.SUCCEEDED : STATUS.FAILED;
   _validateTransition(payment.status, nextStatus);

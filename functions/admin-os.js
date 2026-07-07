@@ -135,8 +135,17 @@ exports.adminUpdateUserRole = onCall({ region: 'us-central1', maxInstances: 10, 
   const auth = getAuth();
   const db = getFirestore();
 
-  const claims = { [role]: true, ...(additionalClaims || {}) };
-  // Prevent accidental superAdmin escalation except by existing superAdmin
+  // Only allow safe, non-privilege supplementary claims to prevent escalation
+  // via the additionalClaims spread (e.g. { superAdmin: true } injection)
+  const SAFE_ADDITIONAL_KEYS = new Set(['department', 'location', 'merchantId', 'posId', 'branchId', 'teamId']);
+  const sanitizedAdditional = additionalClaims
+    ? Object.fromEntries(
+        Object.entries(additionalClaims).filter(([k]) => SAFE_ADDITIONAL_KEYS.has(k))
+      )
+    : {};
+
+  const claims = { [role]: true, ...sanitizedAdditional };
+  // Prevent superAdmin escalation except by existing superAdmin
   if (role === 'superAdmin' && !req.auth?.token?.superAdmin) throw new Error('Cannot assign superAdmin');
 
   await auth.setCustomUserClaims(uid, claims);

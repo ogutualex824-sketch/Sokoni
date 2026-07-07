@@ -362,6 +362,32 @@ input,textarea,select{font-family:inherit}
 @keyframes highlight{0%,100%{background:transparent}40%,60%{background:rgba(59,130,246,.12)}}
 .msg-highlight{animation:highlight .9s ease}
 
+/* ── Search panel ───────────────────────────────────────────────── */
+#search-panel{
+  flex-shrink:0;background:var(--c-surface);border-bottom:1px solid var(--c-border);
+  padding:8px 10px;display:none;align-items:center;gap:6px;
+}
+#search-panel.show{display:flex}
+#search-panel .mir{font-size:18px;color:var(--c-sub)}
+#search-msg-input{
+  flex:1;background:var(--c-bg);border:1px solid var(--c-border);
+  border-radius:22px;padding:6px 14px;font-size:14px;color:var(--c-text);
+  outline:none;min-width:0;
+}
+#search-msg-input:focus{border-color:var(--c-primary)}
+#search-count{font-size:12px;color:var(--c-sub);white-space:nowrap;min-width:28px;text-align:right}
+
+/* ── Inline message edit ────────────────────────────────────────── */
+.edit-ta{
+  width:100%;background:none;border:none;outline:none;resize:none;
+  font-size:15px;line-height:1.45;color:inherit;font-family:inherit;
+  border-bottom:1px solid currentColor;padding-bottom:2px;
+}
+
+/* ── Search match dim ───────────────────────────────────────────── */
+.msg-row.dim{opacity:.25;transition:opacity .2s}
+.msg-row.match-highlight{opacity:1}
+
 /* ── Misc ───────────────────────────────────────────────────────── */
 input[type=file]{display:none}
 
@@ -386,10 +412,23 @@ input[type=file]{display:none}
       <div id="hdr-sub"></div>
       <div id="hdr-typing">typing…</div>
     </div>
+    <button class="hdr-btn" id="btn-search-toggle" onclick="toggleSearch()" aria-label="Search messages">
+      <span class="mir">search</span>
+    </button>
     <button class="hdr-btn" onclick="openMoreMenu()" aria-label="More options">
       <span class="mir">more_vert</span>
     </button>
   </header>
+
+  <!-- ── In-conversation search ──────────────────────────────────── -->
+  <div id="search-panel" role="search" aria-label="Search messages">
+    <span class="mir">search</span>
+    <input type="search" id="search-msg-input" placeholder="Search messages…" autocomplete="off" aria-label="Search messages">
+    <span id="search-count"></span>
+    <button class="hdr-btn" onclick="clearSearch()" aria-label="Close search">
+      <span class="mir" style="font-size:18px">close</span>
+    </button>
+  </div>
 
   <!-- ── Context banner ──────────────────────────────────────────── -->
   <div id="ctx-banner" role="region" aria-label="Transaction details">
@@ -1222,9 +1261,16 @@ function _bindCtxMenu(row, msg, isSent) {
 function _showCtxMenu(x, y, msg, isSent) {
   var menu  = document.getElementById('ctx-menu');
   var items = [];
-  if (!IS_RO) items.push({ label: 'Reply',  icon: 'reply',        fn: function () { setReply(msg); } });
+  if (!IS_RO) items.push({ label: 'Reply',   icon: 'reply',        fn: function () { setReply(msg); } });
+  if (!IS_RO) items.push({ label: 'Forward', icon: 'forward',      fn: function () { _forwardMsg(msg); } });
   if (msg.text)  items.push({ label: 'Copy',   icon: 'content_copy', fn: function () { _copyText(msg.text); } });
-  if (isSent)    items.push({ label: 'Delete', icon: 'delete',       fn: function () { _deleteMsg(msg.id); }, danger: true });
+  if (isSent && msg.type === 'text' && !msg.deleted && !IS_RO) {
+    var _ageMs = (msg.timestamp && msg.timestamp.toMillis) ? (Date.now() - msg.timestamp.toMillis()) : Infinity;
+    if (_ageMs < 15 * 60 * 1000) {
+      items.push({ label: 'Edit', icon: 'edit', fn: function () { _startEdit(msg); } });
+    }
+  }
+  if (isSent && !IS_RO) items.push({ label: 'Delete', icon: 'delete', fn: function () { _deleteMsg(msg.id); }, danger: true });
 
   if (!items.length) return;
 
@@ -1449,6 +1495,109 @@ function _cap(str) {
 function _esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   IN-CONVERSATION SEARCH
+═══════════════════════════════════════════════════════════════════ */
+var _searchActive = false;
+
+function toggleSearch() {
+  _searchActive = !_searchActive;
+  var panel = document.getElementById('search-panel');
+  var btn   = document.getElementById('btn-search-toggle');
+  panel.classList.toggle('show', _searchActive);
+  if (_searchActive) {
+    document.getElementById('search-msg-input').focus();
+    btn.style.color = 'var(--c-primary)';
+  } else {
+    clearSearch();
+    btn.style.color = '';
+  }
+}
+
+function clearSearch() {
+  var input = document.getElementById('search-msg-input');
+  input.value = '';
+  document.getElementById('search-count').textContent = '';
+  _applySearch('');
+  _searchActive = false;
+  document.getElementById('search-panel').classList.remove('show');
+  document.getElementById('btn-search-toggle').style.color = '';
+}
+
+document.getElementById('search-msg-input').addEventListener('input', function (e) {
+  _applySearch(e.target.value);
+});
+document.getElementById('search-msg-input').addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') clearSearch();
+});
+
+function _applySearch(query) {
+  var rows   = document.getElementById('msgs-list').querySelectorAll('.msg-row[data-id]');
+  var q      = query.trim().toLowerCase();
+  var count  = 0;
+  rows.forEach(function (row) {
+    if (!q) { row.classList.remove('dim', 'match-highlight'); return; }
+    var msgId   = row.dataset.id;
+    var msgData = _allMsgs.find(function (m) { return m.id === msgId; });
+    var matches = msgData && SokoniChat.searchMessages([msgData], query).length > 0;
+    row.classList.toggle('dim',              !matches);
+    row.classList.toggle('match-highlight',   matches);
+    if (matches) count++;
+  });
+  document.getElementById('search-count').textContent = q ? (count + ' found') : '';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FORWARD MESSAGE
+═══════════════════════════════════════════════════════════════════ */
+function _forwardMsg(msg) {
+  if (IS_RO) return;
+  SokoniChat.forwardMessage(CONV_ID, msg)
+    .then(function () { _toast('Forwarded'); })
+    .catch(function (e) { _toast('Could not forward: ' + (e.message || 'Error')); });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INLINE EDIT MESSAGE
+═══════════════════════════════════════════════════════════════════ */
+function _startEdit(msg) {
+  var row = document.querySelector('[data-id="' + CSS.escape(msg.id) + '"]');
+  if (!row) return;
+  var txtEl = row.querySelector('.msg-txt');
+  if (!txtEl) return;
+
+  var original = msg.text || '';
+  var ta       = document.createElement('textarea');
+  ta.className = 'edit-ta';
+  ta.value     = original;
+  ta.rows      = Math.min(Math.max(original.split('\n').length, 1) + 1, 5);
+  txtEl.replaceWith(ta);
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  function _commitEdit() {
+    var newText = ta.value.trim();
+    if (!newText || newText === original) {
+      ta.replaceWith(txtEl);
+      return;
+    }
+    var pEl = document.createElement('div');
+    pEl.className = 'msg-txt'; pEl.textContent = newText;
+    ta.replaceWith(pEl);
+    SokoniChat.editMessage(CONV_ID, msg.id, newText)
+      .catch(function (e) {
+        pEl.replaceWith(txtEl);
+        _toast('Edit failed: ' + (e.message || 'Error'));
+      });
+  }
+
+  ta.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _commitEdit(); }
+    if (e.key === 'Escape') { ta.replaceWith(txtEl); }
+  });
+  ta.addEventListener('blur', function () { _commitEdit(); });
 }
 
 /* ═══════════════════════════════════════════════════════════════════

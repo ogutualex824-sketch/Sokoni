@@ -657,3 +657,105 @@ exports.updateConversationStatus = onCall({ region: REGION, timeoutSeconds: 20 }
   await batch.commit();
   return { updated: true };
 });
+
+/* ── Shared status-message text ──────────────────────────────────── */
+const STATUS_MSGS = {
+  pending:            'Order received — awaiting confirmation.',
+  confirmed:          'Your order has been confirmed.',
+  processing:         'Order is being prepared.',
+  ready:              'Your order is ready for collection.',
+  shipped:            'Your order has been shipped.',
+  out_for_delivery:   'Your order is out for delivery.',
+  delivered:          'Your order has been delivered.',
+  cancelled:          'This order has been cancelled.',
+  refunded:           'A refund has been processed.',
+  disputed:           'A dispute has been opened. Our team will review.',
+  completed:          'Transaction complete.',
+  accepted:           'Your booking has been accepted.',
+  en_route:           'Your provider is on the way.',
+  in_progress:        'Service is now in progress.',
+  awaiting_provider:  'Awaiting provider confirmation.',
+  awaiting_pickup:    'Package is ready for pickup.',
+  closed:             'This conversation has been closed.',
+};
+
+async function _postStatusMessage(db, transactionType, transactionId, newStatus) {
+  const snap = await db.collection('conversations')
+    .where('transactionType', '==', transactionType)
+    .where('transactionId',   '==', transactionId)
+    .limit(1).get().catch(() => null);
+  if (!snap || snap.empty) return null;
+  const convRef = snap.docs[0].ref;
+  const text    = STATUS_MSGS[String(newStatus).toLowerCase()] ||
+    `Status updated to: ${String(newStatus).replace(/_/g, ' ')}`;
+  const batch   = db.batch();
+  batch.set(convRef.collection('messages').doc(), {
+    senderId:   'system',
+    senderName: 'SOKONI',
+    timestamp:  _now(),
+    type:       'system',
+    text,
+    status:     'delivered',
+    deleted:    false,
+    edited:     false,
+    flagged:    false,
+  });
+  batch.update(convRef, { transactionStatus: newStatus, updatedAt: _now() });
+  await batch.commit();
+  return snap.docs[0].id;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   16. onOrderStatusChanged
+   Posts a system message whenever an order's status changes.
+═══════════════════════════════════════════════════════════════ */
+exports.onOrderStatusChanged = onDocumentUpdated(
+  { document: 'orders/{orderId}', region: REGION, timeoutSeconds: 30 },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after  = event.data?.after?.data();
+    if (!before || !after) return null;
+    const oldS = before.status || before.orderStatus;
+    const newS = after.status  || after.orderStatus;
+    if (!newS || oldS === newS) return null;
+    await _postStatusMessage(_db(), 'order', event.params.orderId, newS)
+      .catch(e => logger.warn('[messages] onOrderStatusChanged', { error: e.message }));
+    return null;
+  }
+);
+
+/* ═══════════════════════════════════════════════════════════════
+   17. onBookingStatusChanged
+   Posts a system message whenever a service booking status changes.
+═══════════════════════════════════════════════════════════════ */
+exports.onBookingStatusChanged = onDocumentUpdated(
+  { document: 'bookings/{bookingId}', region: REGION, timeoutSeconds: 30 },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after  = event.data?.after?.data();
+    if (!before || !after) return null;
+    const oldS = before.status || before.bookingStatus;
+    const newS = after.status  || after.bookingStatus;
+    if (!newS || oldS === newS) return null;
+    await _postStatusMessage(_db(), 'service_booking', event.params.bookingId, newS)
+      .catch(e => logger.warn('[messages] onBookingStatusChanged', { error: e.message }));
+    return null;
+  }
+);
+
+/* ═══════════════════════════════════════════════════════════════
+   18. onFoodOrderStatusChanged
+   Posts a system message whenever a food order status changes.
+═══════════════════════════════════════════════════════════════ */
+exports.onFoodOrderStatusChanged = onDocumentUpdated(
+  { document: 'foodOrders/{orderId}', region: REGION, timeoutSeconds: 30 },
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after  = event.data?.after?.data();
+    if (!before || !after) return null;
+    if (before.status === after.status) return null;
+    await _postStatusMessage(_db(), 'food_order', event.params.orderId, after.status)
+      .catch(e => logger.warn('[messages] onFoodOrderStatusChanged', { error: e.message }));
+    return null;
+  }
+);

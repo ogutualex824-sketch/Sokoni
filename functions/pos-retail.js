@@ -8,7 +8,11 @@
 ================================================================ */
 const functions  = require('firebase-functions/v2');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { defineSecret } = require('firebase-functions/params');
 const admin      = require('firebase-admin');
+
+const SENDGRID_SK     = defineSecret('SENDGRID_API_KEY');
+const AFRICASTALKING_SK = defineSecret('AFRICASTALKING_API_KEY');
 
 /* Guard against double-init in monorepo */
 if (!admin.apps.length) admin.initializeApp();
@@ -87,7 +91,7 @@ exports.posSyncToMarketplace = onCall(
    after a POS sale. Falls back gracefully if service unavailable.
 ══════════════════════════════════════════════════════════ */
 exports.sendPOSReceipt = onCall(
-  { secrets: ['SENDGRID_API_KEY', 'AFRICASTALKING_API_KEY'], region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
+  { secrets: [SENDGRID_SK, AFRICASTALKING_SK], region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in');
 
@@ -110,7 +114,7 @@ exports.sendPOSReceipt = onCall(
     let result = { sent: false, channel };
 
     if (channel === 'sms' && phone) {
-      const apiKey = process.env.AFRICASTALKING_API_KEY;
+      const apiKey = AFRICASTALKING_SK.value();
       if (!apiKey) throw new HttpsError('failed-precondition', 'SMS service not configured');
 
       const smsBody = [
@@ -128,7 +132,7 @@ exports.sendPOSReceipt = onCall(
 
     } else if (channel === 'email' && email) {
       const sgMail = require('@sendgrid/mail');
-      const apiKey = process.env.SENDGRID_API_KEY;
+      const apiKey = SENDGRID_SK.value();
       if (!apiKey) throw new HttpsError('failed-precondition', 'Email service not configured');
       sgMail.setApiKey(apiKey);
 
@@ -184,7 +188,7 @@ exports.sendPOSReceipt = onCall(
    Emails formatted PO to supplier's email address.
 ══════════════════════════════════════════════════════════ */
 exports.sendPurchaseOrder = onCall(
-  { secrets: ['SENDGRID_API_KEY'], region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
+  { secrets: [SENDGRID_SK], region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in');
 
@@ -200,7 +204,7 @@ exports.sendPurchaseOrder = onCall(
     if (po.status === 'cancelled') throw new HttpsError('failed-precondition', 'PO is cancelled');
 
     const sgMail = require('@sendgrid/mail');
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    sgMail.setApiKey(SENDGRID_SK.value());
 
     const itemRows = (po.items||[]).map(i =>
       `<tr><td style="padding:6px 10px">${_sanitize(i.productName||i.productId)}</td><td style="padding:6px 10px;text-align:center">${i.qty}</td><td style="padding:6px 10px;text-align:right">${_kes(i.unitCost)}</td><td style="padding:6px 10px;text-align:right">${_kes(i.lineTotal)}</td></tr>`

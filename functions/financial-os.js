@@ -68,10 +68,11 @@ async function _notify(uid, type, payload) {
 ════════════════════════════════════════════════════════════ */
 exports.fosInitiatePayment = onCall(
   {
-    region:         REGION,
-    timeoutSeconds: 60,
-    memory:         '256MiB',
-    secrets:        [INTASEND_PRIVATE_KEY],
+    region:          REGION,
+    timeoutSeconds:  60,
+    memory:          '256MiB',
+    enforceAppCheck: true,
+    secrets:         [INTASEND_PRIVATE_KEY],
   },
   async (req) => {
     const auth = _requireAuth(req);
@@ -217,10 +218,19 @@ exports.fosSecureWebhook = onRequest(
 
     if (!apiRef) { res.status(400).json({ error: 'Missing api_ref' }); return; }
 
-    /* Idempotency */
-    const idKey   = `webhook_${provider}_${apiRef}`;
-    const idSnap  = await db().collection('finosIdempotency').doc(idKey).get();
-    if (idSnap.exists) { res.status(200).json({ status: 'duplicate_skipped' }); return; }
+    /* Idempotency — use create() for atomic "set-if-not-exists" so two concurrent
+       webhook deliveries cannot both slip through the check before either writes */
+    const idKey = `webhook_${provider}_${apiRef}`;
+    const idRef = db().collection('finosIdempotency').doc(idKey);
+    try {
+      await idRef.create({ idKey, apiRef, provider, processedAt: now(), lockedAt: now() });
+    } catch (lockErr) {
+      if (lockErr.code === 6 || lockErr.message?.includes('ALREADY_EXISTS')) {
+        res.status(200).json({ status: 'duplicate_skipped' });
+        return;
+      }
+      throw lockErr;
+    }
 
     if (invoiceState === 'COMPLETE' && netAmount > 0) {
       /* Update payment record */
@@ -236,11 +246,6 @@ exports.fosSecureWebhook = onRequest(
           }).catch(err => logger.error('[FOS/webhook] processFOSTransaction error', { err: err.message }));
         }
       }
-
-      /* Record idempotency */
-      await db().collection('finosIdempotency').doc(idKey).set({
-        idKey, apiRef, provider, processedAt: now(),
-      });
 
       logger.info('[FOS/webhook] Payment processed', { apiRef, netAmount, provider });
     }
@@ -321,9 +326,10 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
 ════════════════════════════════════════════════════════════ */
 exports.fosSubmitRefund = onCall(
   {
-    region:         REGION,
-    timeoutSeconds: 30,
-    memory:         '256MiB',
+    region:          REGION,
+    timeoutSeconds:  30,
+    memory:          '256MiB',
+    enforceAppCheck: true,
   },
   async (req) => {
     const auth = _requireAuth(req);
@@ -364,8 +370,10 @@ exports.fosSubmitRefund = onCall(
     if (!isAdmin && tx.buyerUid !== auth.uid)
       throw new HttpsError('permission-denied', 'Not authorized to refund this transaction');
 
-    /* Auto-approve for admins or small amounts (<= KES 500) */
-    const autoApprove = isAdmin || amountKES <= 500;
+    /* All refunds require admin review — no auto-approval by amount.
+       Removing the KES 500 threshold prevents callers from exploiting
+       auto-approval with amounts not bounded by the original payment. */
+    const autoApprove = isAdmin;
     const status      = autoApprove ? 'approved' : 'pending';
 
     const refundRef = await db().collection('fosRefundQueue').add({
@@ -404,10 +412,11 @@ exports.fosSubmitRefund = onCall(
 ════════════════════════════════════════════════════════════ */
 exports.fosApproveRefund = onCall(
   {
-    region:         REGION,
-    timeoutSeconds: 60,
-    memory:         '256MiB',
-    secrets:        [INTASEND_PRIVATE_KEY],
+    region:          REGION,
+    timeoutSeconds:  60,
+    memory:          '256MiB',
+    enforceAppCheck: true,
+    secrets:         [INTASEND_PRIVATE_KEY],
   },
   async (req) => {
     _requireAdmin(req);
@@ -499,9 +508,10 @@ exports.fosApproveRefund = onCall(
 ════════════════════════════════════════════════════════════ */
 exports.fosGenerateInvoice = onCall(
   {
-    region:         REGION,
-    timeoutSeconds: 30,
-    memory:         '256MiB',
+    region:          REGION,
+    timeoutSeconds:  30,
+    memory:          '256MiB',
+    enforceAppCheck: true,
   },
   async (req) => {
     const auth = _requireAuth(req);
@@ -582,9 +592,10 @@ exports.fosGenerateInvoice = onCall(
 ════════════════════════════════════════════════════════════ */
 exports.fosExportReport = onCall(
   {
-    region:         REGION,
-    timeoutSeconds: 120,
-    memory:         '512MiB',
+    region:          REGION,
+    timeoutSeconds:  120,
+    memory:          '512MiB',
+    enforceAppCheck: true,
   },
   async (req) => {
     _requireAdmin(req);
@@ -677,10 +688,11 @@ exports.fosExportReport = onCall(
 ════════════════════════════════════════════════════════════ */
 exports.fosGetProviderHealth = onCall(
   {
-    region:         REGION,
-    timeoutSeconds: 30,
-    memory:         '128MiB',
-    secrets:        [INTASEND_PRIVATE_KEY],
+    region:          REGION,
+    timeoutSeconds:  30,
+    memory:          '128MiB',
+    enforceAppCheck: true,
+    secrets:         [INTASEND_PRIVATE_KEY],
   },
   async (req) => {
     _requireAdmin(req);
@@ -733,9 +745,10 @@ exports.fosGetProviderHealth = onCall(
 ════════════════════════════════════════════════════════════ */
 exports.fosGetAdminConsole = onCall(
   {
-    region:         REGION,
-    timeoutSeconds: 60,
-    memory:         '512MiB',
+    region:          REGION,
+    timeoutSeconds:  60,
+    memory:          '512MiB',
+    enforceAppCheck: true,
   },
   async (req) => {
     _requireAdmin(req);

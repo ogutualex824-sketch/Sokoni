@@ -1061,11 +1061,6 @@ exports.webhookPaymentCallback = onRequest(
     const order    = orderDoc.data();
     const orderId  = orderDoc.id;
 
-    if (order.financialProcessed) {
-      res.status(200).json({ received: true, duplicate: true });
-      return;
-    }
-
     const amountCents = Math.round(amountKES * 100);
 
     try {
@@ -1077,6 +1072,11 @@ exports.webhookPaymentCallback = onRequest(
       const vat = U.calculateVAT(comm.commissionCents, order.category || 'marketplace');
 
       await db.runTransaction(async (txn) => {
+        // Read orderDoc inside the transaction so Firestore's conflict detection
+        // can catch concurrent webhook deliveries for the same invoice
+        const orderCheck = await txn.get(orderDoc.ref);
+        if (!orderCheck.exists || orderCheck.data().financialProcessed) return;
+
         const sellerId = order.sellerId || order.shopOwnerId;
         if (sellerId) U.creditWalletTxn(txn, db, sellerId, 'seller', comm.sellerNetCents, { description: `Order ${orderId}`, orderId, type: 'order_earning' });
         U.creditWalletTxn(txn, db, 'platform_master', 'platform', comm.commissionCents, { description: `Commission ${orderId}`, orderId, type: 'commission' });

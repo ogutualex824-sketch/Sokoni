@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Communications Admin — SOKONI</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Round">
+<link rel="stylesheet" href="sokoni-tokens.css">
+<style>
+/* ── SOKONI Design Tokens ─────────────────────────────────────────── */
+:root {
+  --bg:      #080808;
+  --surf:    #111115;
+  --surf2:   rgba(255,255,255,0.04);
+  --border:  rgba(255,255,255,0.08);
+  --accent:  #71ff00;
+  --adim:    rgba(113,255,0,0.10);
+  --text:    rgba(255,255,255,0.90);
+  --text2:   rgba(255,255,255,0.50);
+  --text3:   rgba(255,255,255,0.25);
+  --danger:  #ff4444;
+  --warn:    #ffb800;
+  --r:       12px;
+  --r-sm:    8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text);
+       -webkit-font-smoothing: antialiased; font-size: 14px; }
+button  { cursor: pointer; border: none; background: none; font-family: inherit; color: inherit; }
+input, select, textarea { font-family: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+.mir { font-family: 'Material Icons Round'; font-style: normal; font-weight: 400;
+       font-size: 20px; line-height: 1; display: inline-block; white-space: nowrap;
+       -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga'; vertical-align: middle; }
+
+/* ── App Layout ───────────────────────────────────────────────────── */
+#app { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+
+/* ── Header ───────────────────────────────────────────────────────── */
+#hdr {
+  flex-shrink: 0; height: 60px;
+  background: var(--surf); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 16px; gap: 12px;
+}
+#hdr-title { font-size: 17px; font-weight: 700; flex: 1; }
+#hdr-title span { color: var(--accent); }
+.hdr-btn { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text2); transition: background .15s; }
+.hdr-btn:hover { background: var(--surf2); }
+
+/* ── Tab Bar ──────────────────────────────────────────────────────── */
+#tabs {
+  flex-shrink: 0; display: flex; background: var(--surf);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto; scrollbar-width: none;
+}
+#tabs::-webkit-scrollbar { display: none; }
+.tab {
+  flex-shrink: 0; padding: 0 20px; height: 48px;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 500; color: var(--text2);
+  border-bottom: 2px solid transparent; transition: color .15s; white-space: nowrap;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab .mir { font-size: 18px; }
+
+/* ── Content Area ─────────────────────────────────────────────────── */
+#content { flex: 1; overflow-y: auto; }
+#content::-webkit-scrollbar { width: 4px; }
+#content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.panel { display: none; padding: 20px 16px 40px; max-width: 960px; margin: 0 auto; }
+.panel.active { display: block; }
+
+/* ── Section Label ────────────────────────────────────────────────── */
+.sec-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
+             letter-spacing: .6px; color: var(--text3); margin-bottom: 12px; }
+
+/* ── Stats Grid ───────────────────────────────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
+@media(max-width: 600px) { .stats-grid { grid-template-columns: 1fr 1fr; } }
+.stat-card { background: var(--surf); border: 1px solid var(--border); border-radius: var(--r); padding: 18px 16px; }
+.stat-lbl  { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--text3); margin-bottom: 8px; }
+.stat-val  { font-size: 30px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.sv-green  { color: var(--accent); }
+.sv-warn   { color: var(--warn); }
+.sv-red    { color: var(--danger); }
+
+/* ── Report Card ──────────────────────────────────────────────────── */
+.report-card { background: var(--surf); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; margin-bottom: 10px; }
+.rc-top    { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.rc-icon   { width: 38px; height: 38px; border-radius: var(--r-sm); flex-shrink: 0;
+             display: flex; align-items: center; justify-content: center; }
+.rc-icon.spam     { background: rgba(255,184,0,.12); color: var(--warn); }
+.rc-icon.fraud    { background: rgba(255,68,68,.12);  color: var(--danger); }
+.rc-icon.redirect { background: rgba(255,68,68,.12);  color: var(--danger); }
+.rc-icon.harass   { background: rgba(255,68,68,.08);  color: var(--danger); }
+.rc-icon.other    { background: var(--surf2);          color: var(--text2); }
+.rc-body  { flex: 1; min-width: 0; }
+.rc-conv  { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.rc-reason { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.rc-time  { font-size: 11px; color: var(--text3); flex-shrink: 0; white-space: nowrap; }
+.rc-details { font-size: 12px; color: var(--text2); background: var(--surf2); border-radius: var(--r-sm); padding: 8px 10px; margin-bottom: 10px; line-height: 1.5; word-break: break-word; }
+.rc-done { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
+.rc-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rc-btn { padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); color: var(--text2); transition: all .15s; }
+.rc-btn:hover { color: var(--text); border-color: var(--text2); }
+.rc-dismiss:hover { color: var(--accent); border-color: var(--accent); }
+.rc-warn:hover    { color: var(--warn);   border-color: var(--warn); }
+.rc-suspend { color: var(--danger); border-color: rgba(255,68,68,.25); }
+.rc-suspend:hover { background: rgba(255,68,68,.08); border-color: var(--danger); }
+
+/* ── Policy Section ───────────────────────────────────────────────── */
+.policy-box { background: var(--surf); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; margin-bottom: 16px; }
+.policy-box h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.policy-box h3 .mir { color: var(--accent); font-size: 18px; }
+.field-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+@media(max-width: 500px) { .field-grid { grid-template-columns: 1fr; } }
+.field-group { display: flex; flex-direction: column; gap: 5px; }
+.field-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: var(--text3); }
+.field-input {
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 10px 12px; font-size: 14px; color: var(--text);
+  outline: none; width: 100%; transition: border-color .15s; -webkit-appearance: none;
+}
+.field-input:focus { border-color: var(--accent); }
+.field-unit { font-size: 11px; color: var(--text3); }
+.save-row { text-align: right; margin-top: 4px; }
+
+/* ── Search Bar ───────────────────────────────────────────────────── */
+.search-bar { display: flex; gap: 10px; margin-bottom: 16px; }
+.search-bar input {
+  flex: 1; background: var(--surf); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 10px 14px; font-size: 14px; color: var(--text);
+  outline: none; min-width: 0;
+}
+.search-bar input:focus { border-color: var(--accent); }
+.type-sel {
+  background: var(--surf); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 10px 12px; font-size: 13px; color: var(--text);
+  outline: none; -webkit-appearance: none; cursor: pointer;
+}
+.type-sel:focus { border-color: var(--accent); }
+
+/* ── Conversation Result Card ─────────────────────────────────────── */
+.conv-card {
+  background: var(--surf); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 14px 16px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  transition: border-color .15s;
+}
+.conv-card:hover { border-color: rgba(113,255,0,0.3); }
+.conv-card-ic { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; background: var(--adim); color: var(--accent); display: flex; align-items: center; justify-content: center; }
+.conv-card-body { flex: 1; min-width: 0; }
+.conv-card-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-card-sub { font-size: 12px; color: var(--text2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+.cb-active   { background: var(--adim); color: var(--accent); }
+.cb-read_only{ background: var(--surf2); color: var(--text2); }
+.cb-suspended{ background: rgba(255,68,68,.10); color: var(--danger); }
+.cb-other    { background: var(--surf2); color: var(--text3); }
+
+/* ── Buttons ──────────────────────────────────────────────────────── */
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent); color: #000; font-weight: 700;
+  padding: 10px 22px; border-radius: var(--r-sm); font-size: 14px;
+  transition: opacity .15s;
+}
+.btn-primary:hover { opacity: .88; }
+.btn-primary:disabled { opacity: .4; cursor: default; }
+
+/* ── Helpers ──────────────────────────────────────────────────────── */
+.empty-state { text-align: center; padding: 60px 24px; color: var(--text2); }
+.empty-state .mir { font-size: 48px; color: var(--text3); display: block; margin-bottom: 14px; }
+.empty-state h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+.empty-state p { font-size: 13px; max-width: 280px; margin: 0 auto; line-height: 1.5; }
+.loading-row { display: flex; align-items: center; justify-content: center; padding: 40px; }
+.spin { border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spinning .65s linear infinite; }
+.spin-md { width: 26px; height: 26px; }
+@keyframes spinning { to { transform: rotate(360deg); } }
+.divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+/* ── Toast ────────────────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: var(--surf); color: var(--text); border: 1px solid var(--border);
+  padding: 10px 22px; border-radius: 24px; font-size: 13px; font-weight: 500;
+  z-index: 900; opacity: 0; pointer-events: none; transition: all .25s ease;
+  white-space: nowrap; max-width: 320px; text-align: center;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.success { border-color: var(--accent); color: var(--accent); }
+#toast.error   { border-color: var(--danger); color: var(--danger); }
+
+/* ── Load-more ────────────────────────────────────────────────────── */
+.load-more-row { text-align: center; padding: 16px 0; }
+
+/* ── Auth guard overlay ───────────────────────────────────────────── */
+#auth-guard { position: fixed; inset: 0; background: var(--bg); z-index: 999; display: flex; align-items: center; justify-content: center; }
+#auth-guard.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div id="auth-guard">
+  <div class="loading-row"><div class="spin spin-md"></div></div>
+</div>
+
+<div id="app">
+
+  <!-- ── Header ────────────────────────────────────────────────────── -->
+  <header id="hdr">
+    <button class="hdr-btn" onclick="history.back()" aria-label="Back">
+      <span class="mir">arrow_back</span>
+    </button>
+    <div id="hdr-title">Communications <span>Admin</span></div>
+    <button class="hdr-btn" onclick="refresh()" aria-label="Refresh" title="Refresh data">
+      <span class="mir">refresh</span>
+    </button>
+  </header>
+
+  <!-- ── Tabs ──────────────────────────────────────────────────────── -->
+  <nav id="tabs" role="tablist" aria-label="Admin sections">
+    <button class="tab active" data-tab="overview"  onclick="switchTab('overview')"  role="tab" aria-selected="true">
+      <span class="mir">dashboard</span>Overview
+    </button>
+    <button class="tab" data-tab="reports"   onclick="switchTab('reports')"   role="tab">
+      <span class="mir">flag</span>Reports
+    </button>
+    <button class="tab" data-tab="policies"  onclick="switchTab('policies')"  role="tab">
+      <span class="mir">tune</span>Policies
+    </button>
+    <button class="tab" data-tab="search"    onclick="switchTab('search')"    role="tab">
+      <span class="mir">search</span>Search
+    </button>
+  </nav>
+
+  <!-- ── Content ───────────────────────────────────────────────────── -->
+  <div id="content" role="main">
+
+    <!-- ════════════════════ OVERVIEW ════════════════════════════════ -->
+    <div class="panel active" id="panel-overview" role="tabpanel">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-lbl">Active Conversations</div>
+          <div class="stat-val sv-green" id="stat-active">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-lbl">Pending Reports</div>
+          <div class="stat-val sv-warn" id="stat-pending">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-lbl">Flagged</div>
+          <div class="stat-val sv-red" id="stat-flagged">—</div>
+        </div>
+      </div>
+
+      <div class="sec-label">Recent Reports</div>
+      <div id="overview-reports"><div class="loading-row"><div class="spin spin-md"></div></div></div>
+    </div>
+
+    <!-- ════════════════════ REPORTS ════════════════════════════════ -->
+    <div class="panel" id="panel-reports" role="tabpanel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div class="sec-label" style="margin:0">Moderation Queue</div>
+        <select id="rpt-status-filter" class="type-sel" onchange="loadReports(true)" aria-label="Filter by status">
+          <option value="pending">Pending</option>
+          <option value="reviewed">Reviewed</option>
+        </select>
+      </div>
+      <div id="reports-list"><div class="loading-row"><div class="spin spin-md"></div></div></div>
+      <div class="load-more-row" id="rpt-more-row" style="display:none">
+        <button class="btn-primary" onclick="loadReportsMore()">
+          <span class="mir" style="font-size:16px">expand_more</span>Load more
+        </button>
+      </div>
+    </div>
+
+    <!-- ════════════════════ POLICIES ════════════════════════════════ -->
+    <div class="panel" id="panel-policies" role="tabpanel">
+
+      <div class="policy-box">
+        <h3><span class="mir">cloud_upload</span>Upload Limits</h3>
+        <div class="field-grid">
+          <div class="field-group">
+            <label>Max Image Size</label>
+            <input type="number" id="p-img" class="field-input" min="1" max="50" value="10">
+            <span class="field-unit">Megabytes per image</span>
+          </div>
+          <div class="field-group">
+            <label>Max Document/PDF Size</label>
+            <input type="number" id="p-pdf" class="field-input" min="1" max="100" value="20">
+            <span class="field-unit">Megabytes per file</span>
+          </div>
+          <div class="field-group">
+            <label>Max Voice Note Length</label>
+            <input type="number" id="p-voice" class="field-input" min="10" max="1800" value="300">
+            <span class="field-unit">Seconds (max 1800)</span>
+          </div>
+          <div class="field-group">
+            <label>Read-Only After</label>
+            <input type="number" id="p-readonly" class="field-input" min="1" max="365" value="30">
+            <span class="field-unit">Days since last message</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="policy-box">
+        <h3><span class="mir">delete_sweep</span>Storage Retention</h3>
+        <div class="field-grid">
+          <div class="field-group">
+            <label>Voice Note Retention</label>
+            <input type="number" id="p-voice-ret" class="field-input" min="7" max="3650" value="90">
+            <span class="field-unit">Days before deletion</span>
+          </div>
+          <div class="field-group">
+            <label>Image Retention</label>
+            <input type="number" id="p-img-ret" class="field-input" min="7" max="3650" value="180">
+            <span class="field-unit">Days before deletion</span>
+          </div>
+          <div class="field-group">
+            <label>Temporary Files</label>
+            <input type="number" id="p-temp-ret" class="field-input" min="1" max="365" value="30">
+            <span class="field-unit">Days before deletion</span>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:10px 12px;background:var(--surf2);border-radius:var(--r-sm);font-size:12px;color:var(--text3);line-height:1.5">
+          Dispute evidence and invoices are never auto-deleted. Voice &amp; image retention applies to chat attachments only.
+        </div>
+      </div>
+
+      <div class="save-row">
+        <button class="btn-primary" id="save-btn" onclick="savePolicies()">
+          <span class="mir" style="font-size:16px">save</span>Save Policies
+        </button>
+      </div>
+    </div>
+
+    <!-- ════════════════════ SEARCH ══════════════════════════════════ -->
+    <div class="panel" id="panel-search" role="tabpanel">
+      <div class="search-bar">
+        <input type="search" id="s-query" placeholder="Search by name, booking ID, transaction…" autocomplete="off" aria-label="Search conversations">
+        <select class="type-sel" id="s-type" aria-label="Transaction type filter">
+          <option value="">All types</option>
+          <option value="order">Orders</option>
+          <option value="service_booking">Services</option>
+          <option value="food_order">Food</option>
+          <option value="pharmacy_order">Pharmacy</option>
+          <option value="property_inquiry">Property</option>
+          <option value="vehicle_inquiry">Vehicles</option>
+          <option value="job_application">Jobs</option>
+          <option value="freelancer_engagement">Freelance</option>
+          <option value="event_booking">Events</option>
+          <option value="hotel_reservation">Hotels</option>
+          <option value="healthcare_appointment">Healthcare</option>
+          <option value="legal_consultation">Legal</option>
+          <option value="insurance_request">Insurance</option>
+          <option value="logistics_request">Delivery</option>
+          <option value="support_ticket">Support</option>
+          <option value="rfq">Quotes</option>
+          <option value="financial_request">Finance</option>
+        </select>
+        <button class="btn-primary" onclick="doSearch()" style="padding:10px 16px" aria-label="Search">
+          <span class="mir" style="font-size:18px">search</span>
+        </button>
+      </div>
+      <div id="search-results">
+        <div class="empty-state">
+          <span class="mir">forum</span>
+          <p>Enter a search term and press Search to find conversations.</p>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="firebase.js"></script>
+<script>
+(function () {
+'use strict';
+
+/* ── State ───────────────────────────────────────────────────────── */
+var db = null, fns = null, _toastTmr = null;
+var _reports = [], _rptCursor = null;
+
+/* ── TX type → icon ─────────────────────────────────────────────── */
+var TX_ICON = {
+  order:'shopping_bag', service_booking:'home_repair_service', food_order:'restaurant',
+  pharmacy_order:'medication', property_inquiry:'home', vehicle_inquiry:'directions_car',
+  job_application:'work', freelancer_engagement:'laptop', event_booking:'confirmation_number',
+  hotel_reservation:'hotel', financial_request:'account_balance',
+  healthcare_appointment:'local_hospital', legal_consultation:'balance',
+  insurance_request:'shield', logistics_request:'local_shipping',
+  support_ticket:'headset_mic', rfq:'request_quote',
+};
+
+/* ── Auth gate (admin/superAdmin claim required) ─────────────────── */
+firebase.auth().onAuthStateChanged(function (user) {
+  if (!user) { location.href = 'login.html?redirect=messages-admin.html'; return; }
+  user.getIdTokenResult().then(function (result) {
+    if (!result.claims.admin && !result.claims.superAdmin) {
+      location.href = 'index.html'; return;
+    }
+    db  = firebase.firestore();
+    fns = firebase.functions();
+    document.getElementById('auth-guard').classList.add('hidden');
+    refresh();
+    loadPolicy();
+    bindPolicyEnter();
+  }).catch(function () { location.href = 'login.html?redirect=messages-admin.html'; });
+});
+
+/* ── Refresh (overview + reports) ───────────────────────────────── */
+function refresh() {
+  loadStats();
+  loadReports(true);
+}
+
+/* ═══════════════════ OVERVIEW ══════════════════════════════════════ */
+function loadStats() {
+  fns.httpsCallable('adminGetChatStats')({})
+    .then(function (r) {
+      var d = r.data || {};
+      setText('stat-active',  (d.activeConversations  || 0).toLocaleString());
+      setText('stat-pending', (d.pendingReports        || 0).toLocaleString());
+      setText('stat-flagged', (d.flaggedConversations  || 0).toLocaleString());
+    })
+    .catch(function (e) { toast('Stats error: ' + e.message, 'error'); });
+}
+
+/* ═══════════════════ REPORTS ═══════════════════════════════════════ */
+function loadReports(reset) {
+  if (reset) { _reports = []; _rptCursor = null; }
+  var status = document.getElementById('rpt-status-filter').value;
+  var el     = document.getElementById('reports-list');
+  if (reset) el.innerHTML = '<div class="loading-row"><div class="spin spin-md"></div></div>';
+
+  fns.httpsCallable('adminGetReports')({ status: status, cursor: _rptCursor || null })
+    .then(function (r) {
+      var items = (r.data || {}).reports || [];
+      if (reset) _reports = items;
+      else _reports = _reports.concat(items);
+
+      var hasMore = items.length >= 20;
+      _rptCursor  = hasMore ? items[items.length - 1].createdAt : null;
+      document.getElementById('rpt-more-row').style.display = hasMore ? 'block' : 'none';
+
+      renderReports();
+      renderOverviewReports(_reports.slice(0, 5));
+    })
+    .catch(function (e) {
+      el.innerHTML = emptyHtml('error_outline', 'Could not load reports', e.message);
+    });
+}
+
+function loadReportsMore() { loadReports(false); }
+
+function renderReports() {
+  var el = document.getElementById('reports-list');
+  el.innerHTML = _reports.length
+    ? _reports.map(reportCardHtml).join('')
+    : emptyHtml('check_circle_outline', 'All clear', 'No reports in this queue.');
+}
+
+function renderOverviewReports(items) {
+  var el = document.getElementById('overview-reports');
+  el.innerHTML = items.length
+    ? items.map(reportCardHtml).join('')
+    : emptyHtml('check_circle_outline', 'No pending reports', 'The moderation queue is empty.');
+}
+
+function reportCardHtml(r) {
+  var REASON_LABEL = {
+    spam:'Spam / Unsolicited', scam:'Scam or Fraud',
+    payment_redirect:'Payment Redirect', inappropriate:'Inappropriate Content',
+    harassment:'Harassment or Threats',
+  };
+  var REASON_ICON = { spam:'warning', scam:'gpp_bad', payment_redirect:'money_off', inappropriate:'do_not_disturb_on', harassment:'report' };
+  var REASON_CLS  = { spam:'spam', scam:'fraud', payment_redirect:'redirect', inappropriate:'harass', harassment:'harass' };
+
+  var reason  = r.reason || 'other';
+  var label   = REASON_LABEL[reason] || cap(reason);
+  var icon    = REASON_ICON[reason]  || 'flag';
+  var cls     = REASON_CLS[reason]   || 'other';
+  var isAuto  = r.reportedBy === 'system';
+  var timeStr = r.createdAt ? new Date(r.createdAt.seconds ? r.createdAt.seconds * 1000 : r.createdAt).toLocaleString('en-KE', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+  var reviewed = r.status === 'reviewed';
+
+  return '<div class="report-card" id="rc-' + esc(r.id) + '">' +
+    '<div class="rc-top">' +
+      '<div class="rc-icon ' + cls + '"><span class="mir">' + icon + '</span></div>' +
+      '<div class="rc-body">' +
+        '<div class="rc-conv">' + esc(r.conversationId || '—') + '</div>' +
+        '<div class="rc-reason">' + esc(label) + ' &middot; ' + (isAuto ? 'Auto-detected' : 'User report') + '</div>' +
+      '</div>' +
+      '<div class="rc-time">' + esc(timeStr) + '</div>' +
+    '</div>' +
+    (r.details ? '<div class="rc-details">' + esc(r.details) + '</div>' : '') +
+    (reviewed
+      ? '<div class="rc-done"><span class="mir" style="font-size:16px;color:var(--accent)">check_circle</span>Reviewed — Action: ' + esc(r.action || '—') + (r.reviewNote ? ' — ' + esc(r.reviewNote) : '') + '</div>'
+      : '<div class="rc-actions">' +
+          '<button class="rc-btn rc-dismiss" onclick="reviewReport(\'' + r.id + '\',\'dismiss\')">Dismiss</button>' +
+          '<button class="rc-btn rc-warn"    onclick="reviewReport(\'' + r.id + '\',\'warn\')">Warn user</button>' +
+          '<button class="rc-btn rc-suspend" onclick="reviewReport(\'' + r.id + '\',\'suspend\')">Suspend</button>' +
+        '</div>'
+    ) +
+  '</div>';
+}
+
+function reviewReport(reportId, action) {
+  var labels = { dismiss: 'Dismiss this report?', warn: 'Send a warning to the conversation?', suspend: 'Suspend this conversation?' };
+  if (!confirm(labels[action] || (action + '?'))) return;
+
+  var card = document.getElementById('rc-' + reportId);
+  if (card) card.style.opacity = '0.5';
+
+  fns.httpsCallable('adminReviewReport')({ reportId: reportId, action: action })
+    .then(function () {
+      toast(cap(action) + ' applied', 'success');
+      loadReports(true);
+    })
+    .catch(function (e) {
+      if (card) card.style.opacity = '';
+      toast('Failed: ' + e.message, 'error');
+    });
+}
+
+/* ═══════════════════ POLICIES ══════════════════════════════════════ */
+function loadPolicy() {
+  if (!db) return;
+  db.collection('chatPolicies').doc('default').get()
+    .then(function (snap) {
+      if (!snap.exists) return;
+      var d = snap.data();
+      setVal('p-img',       d.maxImageSizeMB);
+      setVal('p-pdf',       d.maxPdfSizeMB);
+      setVal('p-voice',     d.maxVoiceSeconds);
+      setVal('p-readonly',  d.readOnlyAfterDays);
+      setVal('p-voice-ret', d.voiceRetentionDays);
+      setVal('p-img-ret',   d.imageRetentionDays);
+      setVal('p-temp-ret',  d.tempRetentionDays);
+    })
+    .catch(function () {});
+}
+
+function bindPolicyEnter() {
+  document.querySelectorAll('.policy-box input').forEach(function (el) {
+    el.addEventListener('keydown', function (e) { if (e.key === 'Enter') savePolicies(); });
+  });
+}
+
+function savePolicies() {
+  var btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="mir" style="font-size:16px;animation:spinning .65s linear infinite">refresh</span>Saving…';
+
+  var payload = {
+    maxImageSizeMB:     parseInt(getVal('p-img'),       10) || 10,
+    maxPdfSizeMB:       parseInt(getVal('p-pdf'),       10) || 20,
+    maxVoiceSeconds:    parseInt(getVal('p-voice'),     10) || 300,
+    readOnlyAfterDays:  parseInt(getVal('p-readonly'),  10) || 30,
+    voiceRetentionDays: parseInt(getVal('p-voice-ret'), 10) || 90,
+    imageRetentionDays: parseInt(getVal('p-img-ret'),   10) || 180,
+    tempRetentionDays:  parseInt(getVal('p-temp-ret'),  10) || 30,
+  };
+
+  fns.httpsCallable('adminUpdateChatPolicy')(payload)
+    .then(function () {
+      toast('Policies saved', 'success');
+      btn.disabled = false;
+      btn.innerHTML = '<span class="mir" style="font-size:16px">save</span>Save Policies';
+    })
+    .catch(function (e) {
+      toast('Save failed: ' + e.message, 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<span class="mir" style="font-size:16px">save</span>Save Policies';
+    });
+}
+
+/* ═══════════════════ SEARCH ═════════════════════════════════════════ */
+function doSearch() {
+  var query = document.getElementById('s-query').value.trim();
+  var type  = document.getElementById('s-type').value;
+  var el    = document.getElementById('search-results');
+  el.innerHTML = '<div class="loading-row"><div class="spin spin-md"></div></div>';
+
+  fns.httpsCallable('searchConversations')({ query: query, transactionType: type || null })
+    .then(function (r) {
+      var items = (r.data || {}).items || [];
+      if (!items.length) {
+        el.innerHTML = emptyHtml('search_off', 'No conversations found', 'Try a different search term or type filter.');
+        return;
+      }
+      el.innerHTML = items.map(convCardHtml).join('');
+    })
+    .catch(function (e) {
+      el.innerHTML = emptyHtml('error_outline', 'Search failed', esc(e.message));
+    });
+}
+
+/* Enter triggers search */
+document.getElementById('s-query').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') doSearch();
+});
+
+function convCardHtml(c) {
+  var icon   = TX_ICON[c.transactionType] || 'chat';
+  var status = c.status || 'active';
+  var stsCls = status === 'active' ? 'cb-active' : status === 'read_only' ? 'cb-read_only' : status === 'suspended' ? 'cb-suspended' : 'cb-other';
+  var sub    = [c.transactionType ? cap(c.transactionType) : null, c.participantName].filter(Boolean).join(' · ');
+  var convId = c.conversationId || c.id || '';
+
+  return '<a class="conv-card" href="chat.html?id=' + encodeURIComponent(convId) + '" target="_blank">' +
+    '<div class="conv-card-ic"><span class="mir">' + icon + '</span></div>' +
+    '<div class="conv-card-body">' +
+      '<div class="conv-card-title">' + esc(c.title || convId || 'Conversation') + '</div>' +
+      '<div class="conv-card-sub">' + esc(sub) + '</div>' +
+    '</div>' +
+    '<span class="conv-badge ' + stsCls + '">' + esc(cap(status.replace('_', ' '))) + '</span>' +
+  '</a>';
+}
+
+/* ═══════════════════ TAB NAV ════════════════════════════════════════ */
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(function (t) {
+    t.classList.toggle('active', t.dataset.tab === id);
+    t.setAttribute('aria-selected', t.dataset.tab === id);
+  });
+  document.querySelectorAll('.panel').forEach(function (p) {
+    p.classList.toggle('active', p.id === 'panel-' + id);
+  });
+}
+
+/* ═══════════════════ UTILITIES ══════════════════════════════════════ */
+function setText(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+function setVal(id, v)  { if (v !== undefined && v !== null) { var el = document.getElementById(id); if (el) el.value = v; } }
+function getVal(id)     { var el = document.getElementById(id); return el ? el.value : ''; }
+
+function cap(s) {
+  return (s || '').replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+}
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function emptyHtml(icon, title, body) {
+  return '<div class="empty-state"><span class="mir">' + icon + '</span><h3>' + esc(title) + '</h3><p>' + esc(body) + '</p></div>';
+}
+
+function toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = 'show' + (type ? ' ' + type : '');
+  clearTimeout(_toastTmr);
+  _toastTmr = setTimeout(function () { el.className = ''; }, 3200);
+}
+
+})();
+</script>
+</body>
+</html>
