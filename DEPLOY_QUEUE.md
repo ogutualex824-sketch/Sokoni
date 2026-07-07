@@ -17,8 +17,12 @@ npm config delete fetch-retry-mintimeout
 
 ## Status — 2026-07-07
 
-**0/135 LIVE — All blocked by Cloud Run CPU quota (confirmed 2026-07-07)**
-_(119 from previous queue + 6 Installments CFs + 7 Franchise CFs + 3 Message Lifecycle triggers)_
+**0/143 LIVE — All blocked by Cloud Run CPU quota (confirmed 2026-07-07)**
+_(135 from previous queue + 5 Commission Engine CFs + 3 Subscription Engine v2 CFs)_
+
+New CFs added 2026-07-07:
+- `commission.js`: processSettlement, requestWithdrawal, approveWithdrawal, rejectWithdrawal, getWithdrawals
+- `sub-engine.js`: subCheckFeature, subRetryFailedPayments, subDowngrade
 
 The quota was exhausted during the big 1,512-function update deploy. All new Cloud Run
 service creations fail silently (only `pcGetHubRegistry` showed an explicit 429 in the log).
@@ -28,6 +32,27 @@ Verified via `firebase functions:list` — none of the 119 appear in the live li
 1. GCP Console → IAM & Admin → Quotas
 2. Filter: "Cloud Run Admin API" + "us-central1"
 3. Find "Total CPU (all regions)" — request increase to 2000+ vCPUs
+
+---
+
+## SECURITY PATCH REDEPLOY — 61 CFs (already-live functions, code changed)
+
+These functions are **already deployed and live**. Security patches were applied
+to their source files — run this command to push the fixes to production.
+
+**Patches applied:**
+- `wallet.js` — Removed `process.env.INTASEND_PRIVATE_KEY ||` bypass (×2)
+- `pos-retail.js` — Migrated string literal secrets → `defineSecret` objects
+- `email-triggers.js` — Bound `SENDGRID_WEBHOOK_KEY` via `defineSecret`; HMAC now active
+- `release-readiness.js` — Fixed dead `process.env` secret reads; certification scores now correct
+- `payment-trust.js` — Added `enforceAppCheck: true` to shared `cfg` (4 onCall CFs)
+
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:getWalletBalance,functions:initiateWalletTopUp,functions:confirmWalletTopUp,functions:spendFromWallet,functions:getWalletTransactions,functions:requestSellerPayout,functions:getPayoutHistory,functions:adminProcessPayout,functions:adminGetPendingPayouts,functions:refundToWallet,functions:sweepStaleWalletTopUps,functions:posSyncToMarketplace,functions:sendPOSReceipt,functions:sendPurchaseOrder,functions:posLowStockAlert,functions:posMarketplaceOrderSync,functions:emailOnUserCreate,functions:emailOnSellerStatusChange,functions:emailOnProductStatusChange,functions:emailOnPaymentSuccess,functions:emailOnSellerPayout,functions:emailOnSubscriptionRenewal,functions:emailOnDisputeCreate,functions:emailOnDisputeResolved,functions:emailOnDeliveryCreate,functions:emailOnDriverAssigned,functions:emailOnDriverCreate,functions:emailOnDriverStatusChange,functions:emailOnTicketCreate,functions:emailOnPropertyEnquiry,functions:emailOnBookingCreate,functions:emailOnAppointmentCreate,functions:emailOnLegalConsultation,functions:emailOnOrderDelivered,functions:emailOnOrderCreated,functions:emailOnOrderShipped,functions:emailOnOrderCancelled,functions:processEmailQueue,functions:emailSubscriptionReminders,functions:emailDriverDocReminders,functions:emailUnassignedDeliveryAlert,functions:emailWebhook,functions:updateEmailPreferences,functions:sendBroadcastEmail,functions:resendEmail,functions:onLoginEvent,functions:runReleaseReadinessCheck,functions:checkInfrastructure,functions:checkSecurityReadiness,functions:checkPlatformModules,functions:checkPerformanceReadiness,functions:checkComplianceReadiness,functions:approveRelease,functions:getLatestReleaseReport,functions:runProductionCertification,functions:getCertificationHistory,functions:generateTrustReceipt,functions:emailTrustReceipt,functions:verifyTrustReceipt,functions:getPaymentSecurityAlerts,functions:detectPaymentAnomalies" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+> `financial-os.js` (fosInitiatePayment et al.) is in the main 135-CF queue below —
+> those are new CFs (not yet live) so `enforceAppCheck` is baked into their first deploy.
 
 ---
 
@@ -41,26 +66,42 @@ npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; f
 
 ---
 
-## Secrets required (set these first if not already set)
-```bash
-firebase functions:secrets:set INTASEND_PRIVATE_KEY       --project sokoni-aeb26
-firebase functions:secrets:set LOYALTY_HMAC_SECRET        --project sokoni-aeb26
-firebase functions:secrets:set PAYMENT_HMAC_SECRET        --project sokoni-aeb26
-firebase functions:secrets:set PAYROLL_ENCRYPTION_KEY     --project sokoni-aeb26
-firebase functions:secrets:set SOKONI_HMAC_KEY            --project sokoni-aeb26
-firebase functions:secrets:set SENDGRID_API_KEY           --project sokoni-aeb26
-```
+## Secret Manager — Complete Manifest (audited 2026-07-07)
+
+All secrets verified via `firebase functions:secrets:access`. Status as of this audit:
+
+| Secret | Category | Status | Source |
+|---|---|---|---|
+| `INTASEND_PRIVATE_KEY` | Third-party | ✅ SET | IntaSend dashboard |
+| `INTASEND_API_KEY` | Third-party | ✅ SET | IntaSend dashboard |
+| `SENDGRID_API_KEY` | Third-party | ✅ SET | SendGrid dashboard |
+| `SENDGRID_WEBHOOK_KEY` | Internal HMAC | ✅ SET | Generated 2026-07-07 |
+| `ALGOLIA_ADMIN_KEY` | Third-party | ✅ SET | Algolia dashboard |
+| `ALGOLIA_SEARCH_KEY` | Third-party | ✅ SET | Algolia dashboard |
+| `TYPESENSE_ADMIN_KEY` | Third-party | ✅ SET | Typesense cloud |
+| `TYPESENSE_SEARCH_KEY` | Third-party | ✅ SET | Typesense cloud |
+| `AT_API_KEY` | Third-party | ✅ SET | Africa's Talking dashboard |
+| `AT_USERNAME` | Third-party | ✅ SET | Africa's Talking dashboard |
+| `ANTHROPIC_API_KEY` | Third-party | ✅ SET | Anthropic console |
+| `FACEBOOK_APP_SECRET` | Third-party | ✅ SET | Meta developer console |
+| `MAIL_HOST` | Third-party | ✅ SET | SMTP provider |
+| `MAIL_USER` | Third-party | ✅ SET | SMTP provider |
+| `MAIL_PASS` | Third-party | ✅ SET | SMTP provider |
+| `PAYMENT_HMAC_SECRET` | Internal HMAC | ✅ SET | Generated (256-bit) |
+| `LOYALTY_HMAC_SECRET` | Internal HMAC | ✅ SET | Generated (256-bit) |
+| `SOKONI_HMAC_KEY` | Internal HMAC | ✅ SET | Generated (256-bit) |
+| `PAYROLL_ENCRYPTION_KEY` | Internal crypto | ✅ SET | Generated (AES-256) |
+| `SUB_OS_SIGNING_SECRET` | Internal HMAC | ✅ SET | Generated (256-bit) |
+| `QR_SIGNING_SECRET` | Internal HMAC | ✅ SET | Generated (256-bit) |
+| `ETIMS_MASTER_KEY` | Third-party | ✅ SET | KRA eTIMS |
+| `ETIMS_PLATFORM_PIN` | Third-party | ✅ SET | KRA eTIMS |
+| `ETIMS_PLATFORM_SECRET` | Third-party | ✅ SET | KRA eTIMS |
+
+**All 24 production secrets are SET. No missing secrets remain.**
 
 ### After quota clears: activate Redis rate limiting
-Set `REDIS_URL` in `functions/.env` (and Secret Manager) once your Redis instance is provisioned.
+Set `REDIS_URL` in `functions/.env` (and optionally Secret Manager) once your Redis instance is provisioned.
 Format: `rediss://:<password>@<host>:6379` (TLS required for production).
-
-### eTIMS secrets (3 pending — contact KRA for credentials)
-```bash
-firebase functions:secrets:set ETIMS_DEVICE_SERIAL        --project sokoni-aeb26
-firebase functions:secrets:set ETIMS_PIN                  --project sokoni-aeb26
-firebase functions:secrets:set ETIMS_AES_KEY              --project sokoni-aeb26
-```
 
 ---
 
@@ -360,6 +401,35 @@ npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; f
 
 ---
 
+### commission.js — Settlement & Withdrawals v1.0 (5) — added 2026-07-07
+| Function | Type | Auth |
+|---|---|---|
+| `processSettlement` | onCall | Admin only |
+| `requestWithdrawal` | onCall | Auth (seller) |
+| `approveWithdrawal` | onCall | Admin only |
+| `rejectWithdrawal` | onCall | Admin only |
+| `getWithdrawals` | onCall | Auth (seller sees own; admin sees all) |
+
+**Firestore paths written:**
+- `settlements/{orderId}` — settlement record (idempotent on orderId); status: `settled`
+- `wallets/{sellerId}` — created on first settlement; fields: `availableBalance`, `withdrawableBalance`, `pendingBalance`, `heldBalance`, `lifetimeEarnings`, `lifetimeWithdrawals`, `lifetimeRefunds`
+- `withdrawals/{withdrawalId}` — withdrawal request; status: `pending` → `approved` | `rejected`
+- `ledger/{id}` — double-entry entries: type `seller_earning` (on settlement), type `withdrawal` (on approval)
+
+**Transaction safety:**
+- `processSettlement` — idempotency pre-check on `settlements/{orderId}` + atomic wallet create/increment + ledger write
+- `requestWithdrawal` — race-condition guard: pre-check balance before transaction, re-validate inside transaction before deducting `withdrawableBalance`
+- `approveWithdrawal` / `rejectWithdrawal` — status guard (`pending` only) prevents double-processing
+
+**No new secrets required.** All amounts stored in cents (integer).
+
+**Spot deploy command (these 5 only):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:processSettlement,functions:requestWithdrawal,functions:approveWithdrawal,functions:rejectWithdrawal,functions:getWithdrawals" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
+
 ## Hosting (already deployed 2026-07-06)
 All HTML/CSS/JS pages are LIVE. CF features will activate when quota clears.
 New pages deployed:
@@ -368,3 +438,4 @@ New pages deployed:
 - `/my-subscriptions` — Universal subscription management portal
 - `/fos-admin` — Financial OS admin console
 - `/async-jobs` — Async Jobs Engine monitoring dashboard
+- `/messages-admin` — Business Communication admin console (moderation, policies, conversation search)
