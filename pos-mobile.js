@@ -189,7 +189,7 @@ const PosMobile = (() => {
       { icon: '🛒', label: 'Quick Sale',    color: 'var(--green)', fn: "PosMobile.tab('pos')" },
       { icon: '📷', label: 'Scan Product',  color: '#60a5fa',      fn: "PosScanner.open('barcode')" },
       { icon: '📦', label: 'Add Stock',     color: '#f59e0b',      fn: "PosMobile.openStockIn()" },
-      { icon: '➕', label: 'New Product',   color: '#a78bfa',      fn: "PosMobile.openCreateProduct()" },
+      { icon: '➕', label: 'New Product',   color: '#c8ff80',      fn: "PosMobile.openCreateProduct()" },
       { icon: '🏷️', label: 'Print Label',   color: '#f43f5e',      fn: "PosScanner.open('barcode',PosMobile._printLabelResult)" },
       { icon: '🧾', label: 'Scan Invoice',  color: '#34d399',      fn: "PosScanner.open('invoice')" },
       { icon: '🔐', label: 'Check Warranty',color: '#94a3b8',      fn: "PosScanner.open('serial')" },

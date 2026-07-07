@@ -1000,7 +1000,7 @@ body{
 .qlink-lime   { background: rgba(113,255,0,0.06);   border-color: rgba(113,255,0,0.16);   color: #71ff00; }
 .qlink-green  { background: rgba(0,200,120,0.06);   border-color: rgba(0,200,120,0.16);   color: #00c878; }
 .qlink-blue   { background: rgba(0,170,255,0.06);   border-color: rgba(0,170,255,0.16);   color: #00aaff; }
-.qlink-purple { background: rgba(124,58,237,0.06);  border-color: rgba(124,58,237,0.18);  color: #a78bfa; }
+.qlink-purple { background: rgba(113,255,0,0.06);  border-color: rgba(113,255,0,0.18);  color: #c8ff80; }
 .qlink-violet { background: rgba(168,85,247,0.06);  border-color: rgba(168,85,247,0.16);  color: #c084fc; }
 .qlink-amber  { background: rgba(245,158,11,0.06);  border-color: rgba(245,158,11,0.16);  color: #f59e0b; }
 .qlink-orange { background: rgba(249,115,22,0.06);  border-color: rgba(249,115,22,0.16);  color: #fb923c; }

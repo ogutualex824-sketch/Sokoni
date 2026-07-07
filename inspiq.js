@@ -1,4 +1,4 @@
-/**
+﻿/**
  * InspIQ v2 — Pinterest-style Infinite Personalized Feed
  * Tracks interest signals across the whole site and serves an
  * unlimited, weighted, interest-driven content stream.
@@ -21,7 +21,7 @@
     healthcare:    { label:'Healthcare',          emoji:'🏥', color:'#06b6d4' },
     entertainment: { label:'Entertainment',       emoji:'🎬', color:'#a855f7' },
     luxury:        { label:'Luxury & Premium',    emoji:'💎', color:'#f59e0b' },
-    books:         { label:'Books & Learning',    emoji:'📚', color:'#8b5cf6' },
+    books:         { label:'Books & Learning',    emoji:'📚', color:'#a8ff58' },
     agriculture:   { label:'Agriculture',         emoji:'🌾', color:'#65a30d' },
     construction:  { label:'Construction',        emoji:'🏗️', color:'#d97706' },
     property:      { label:'Property & Housing',  emoji:'🏘️', color:'#0ea5e9' },

@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI UNIVERSAL AI SUBSCRIPTION OPERATING SYSTEM
    sokoni-sasos.js — Client SDK v1.0.0  |  2026-06-21
 
@@ -337,7 +337,7 @@
     /* Inject a plan badge into any element (e.g. sidebar item) */
     renderPlanBadge(el, tier) {
       const colors = {
-        free:       '#6b7280', starter:  '#3b82f6', pro:       '#8b5cf6',
+        free:       '#6b7280', starter:  '#3b82f6', pro:       '#a8ff58',
         business:   '#f59e0b', enterprise: '#ef4444',
       };
       const badge = document.createElement('span');

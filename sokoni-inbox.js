@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    sokoni-inbox.js  — Universal Sokoni Inbox Integration Layer v1.0
    Used by all hubs to open/create conversations.
 
@@ -48,7 +48,7 @@ SokoniInbox.HUB_TYPES = {
 // ── Badge config per type ───────────────────────────────────────
 SokoniInbox.TYPE_CONFIG = {
   'buyer-seller':      { icon:'🛍️', label:'Buyer · Seller',       color:'#fb923c' },
-  'customer-provider': { icon:'🛠️', label:'Customer · Provider',  color:'#8b5cf6' },
+  'customer-provider': { icon:'🛠️', label:'Customer · Provider',  color:'#a8ff58' },
   'rider-passenger':   { icon:'🛵', label:'Rider · Passenger',    color:'#3b82f6' },
   'tenant-landlord':   { icon:'🏠', label:'Tenant · Landlord',    color:'#10b981' },
   'patient-doctor':    { icon:'🏥', label:'Patient · Doctor',     color:'#ef4444' },

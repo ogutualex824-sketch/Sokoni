@@ -1,4 +1,4 @@
-/* sokoni-marketing.js — Marketing Hub data + Firestore layer v1.0 */
+﻿/* sokoni-marketing.js — Marketing Hub data + Firestore layer v1.0 */
 (function(global){
 'use strict';
 
@@ -10,7 +10,7 @@ MKT.CATEGORIES = [
   { id:'all',           icon:'⚡', label:'All Services',   color:'#fb923c', desc:'Browse all marketing services' },
   { id:'advertising',   icon:'📢', label:'Advertising',    color:'#f97316', desc:'Sponsored listings, banners, featured placements',
     services:['Sponsored Listings','Featured Business','Banner Advertising','Homepage Promotions','Hub Promotions','Category Spotlight','Premium Placement','Retargeting Ads'] },
-  { id:'social',        icon:'📱', label:'Social Media',   color:'#8b5cf6', desc:'Facebook, Instagram, TikTok, YouTube, LinkedIn',
+  { id:'social',        icon:'📱', label:'Social Media',   color:'#a8ff58', desc:'Facebook, Instagram, TikTok, YouTube, LinkedIn',
     services:['Facebook Marketing','Instagram Marketing','TikTok Marketing','YouTube Marketing','LinkedIn Marketing','Twitter/X Marketing','Social Media Management','Community Building'] },
   { id:'creative',      icon:'🎨', label:'Creative',       color:'#ec4899', desc:'Design, photography, videography, branding',
     services:['Graphic Design','Logo Design','Branding & Identity','Product Photography','Videography','Video Editing','Content Creation','Flyer Design','Social Media Graphics'] },
@@ -38,7 +38,7 @@ MKT.PROVIDERS = [
     responseTime:'< 2 hrs', completedJobs:142,
   },
   {
-    id:'p002', name:'Social Wave KE', initials:'SW', color:'#8b5cf6',
+    id:'p002', name:'Social Wave KE', initials:'SW', color:'#a8ff58',
     category:'social', badge:'Top Rated',
     services:['Instagram Marketing','TikTok Marketing','Facebook Marketing','Social Media Management'],
     rating:4.8, reviews:63, priceFrom:3000, location:'Westlands, Nairobi',

@@ -1,4 +1,4 @@
-/* SOKONI SmartPOS — IndexedDB Offline Storage v1.0
+﻿/* SOKONI SmartPOS — IndexedDB Offline Storage v1.0
    Full offline-first architecture: all data written locally first,
    synced to Firestore when online. No transaction is ever lost. */
 
@@ -338,7 +338,7 @@ const PosDB = (function () {
         { id:'cat_electronics',name:'Electronics', icon:'💻', color:'#3b82f6' },
         { id:'cat_pharma',    name:'Pharmacy',     icon:'💊', color:'#ef4444' },
         { id:'cat_cleaning',  name:'Cleaning',     icon:'🧹', color:'#f59e0b' },
-        { id:'cat_personal',  name:'Personal Care',icon:'🪥', color:'#8b5cf6' },
+        { id:'cat_personal',  name:'Personal Care',icon:'🪥', color:'#a8ff58' },
         { id:'cat_stationery',name:'Stationery',   icon:'📝', color:'#06b6d4' },
         { id:'cat_clothing',  name:'Clothing',     icon:'👕', color:'#f43f5e' },
         { id:'cat_wholesale', name:'Wholesale',    icon:'🏭', color:'#d97706' },

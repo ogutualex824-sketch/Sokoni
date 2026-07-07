@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI SmartPOS Retail Cloud Functions v2.0
    – posSyncToMarketplace  (callable) — POS sale → marketplace stock
    – sendPOSReceipt        (callable) — SMS/email receipt to customer
@@ -138,7 +138,7 @@ exports.sendPOSReceipt = onCall(
 
       const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f5;padding:20px">
         <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden">
-          <div style="background:#7c3aed;padding:20px;text-align:center;color:#fff">
+          <div style="background:#71ff00;padding:20px;text-align:center;color:#000">
             <h2 style="margin:0">${shopName}</h2>
             <p style="margin:4px 0;opacity:.8">Receipt #${receiptNo}</p>
           </div>
@@ -149,11 +149,11 @@ exports.sendPOSReceipt = onCall(
               <tfoot>
                 ${sale.discountAmount>0?`<tr><td style="padding:6px 10px;color:#888">Discount</td><td style="padding:6px 10px;text-align:right;color:#ef4444">-${_kes(sale.discountAmount)}</td></tr>`:''}
                 ${sale.taxAmount>0?`<tr><td style="padding:6px 10px;color:#888">VAT</td><td style="padding:6px 10px;text-align:right">${_kes(sale.taxAmount)}</td></tr>`:''}
-                <tr style="border-top:2px solid #7c3aed"><td style="padding:8px 10px;font-weight:700">TOTAL</td><td style="padding:8px 10px;text-align:right;font-weight:700;color:#7c3aed">${total}</td></tr>
+                <tr style="border-top:2px solid #4db800"><td style="padding:8px 10px;font-weight:700">TOTAL</td><td style="padding:8px 10px;text-align:right;font-weight:700;color:#4db800">${total}</td></tr>
               </tfoot>
             </table>
             ${(sale.payments||[]).map(p=>`<p style="font-size:13px;color:#555;margin:4px 0">Payment: ${p.method} — ${_kes(p.amount)}</p>`).join('')}
-            ${sale.loyaltyEarned>0?`<p style="font-size:13px;color:#7c3aed">⭐ You earned ${sale.loyaltyEarned} loyalty points!</p>`:''}
+            ${sale.loyaltyEarned>0?`<p style="font-size:13px;color:#4db800">⭐ You earned ${sale.loyaltyEarned} loyalty points!</p>`:''}
             <p style="text-align:center;color:#888;font-size:12px;margin-top:20px">Thank you for shopping at ${shopName}!<br>Powered by SOKONI SmartPOS</p>
           </div>
         </div>
@@ -208,7 +208,7 @@ exports.sendPurchaseOrder = onCall(
 
     const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f5;padding:20px">
       <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden">
-        <div style="background:#7c3aed;padding:20px;color:#fff">
+        <div style="background:#71ff00;padding:20px;color:#000">
           <h2 style="margin:0">Purchase Order</h2>
           <p style="margin:4px 0;opacity:.8">PO #${_sanitize(po.poNumber)}</p>
         </div>
@@ -218,7 +218,7 @@ exports.sendPurchaseOrder = onCall(
           <table style="width:100%;border-collapse:collapse;margin:16px 0">
             <thead><tr style="background:#f5f5f5"><th style="padding:8px 10px;text-align:left">Item</th><th style="padding:8px 10px">Qty</th><th style="padding:8px 10px;text-align:right">Unit Cost</th><th style="padding:8px 10px;text-align:right">Total</th></tr></thead>
             <tbody>${itemRows}</tbody>
-            <tfoot><tr style="border-top:2px solid #7c3aed"><td colspan="3" style="padding:8px 10px;font-weight:700">TOTAL</td><td style="padding:8px 10px;text-align:right;font-weight:700;color:#7c3aed">${_kes(po.totalAmount)}</td></tr></tfoot>
+            <tfoot><tr style="border-top:2px solid #4db800"><td colspan="3" style="padding:8px 10px;font-weight:700">TOTAL</td><td style="padding:8px 10px;text-align:right;font-weight:700;color:#4db800">${_kes(po.totalAmount)}</td></tr></tfoot>
           </table>
           ${po.expectedDelivery?`<p><strong>Expected Delivery:</strong> ${new Date(po.expectedDelivery).toLocaleDateString('en-KE')}</p>`:''}
           ${po.notes?`<p><strong>Notes:</strong> ${_sanitize(po.notes)}</p>`:''}

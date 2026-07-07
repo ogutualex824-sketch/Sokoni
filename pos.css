@@ -1,4 +1,4 @@
-/* SOKONI SmartPOS — UI v1.0
+﻿/* SOKONI SmartPOS — UI v1.0
    Production-grade POS interface: dark theme, touch-first, enterprise-grade. */
 
 /* ═══════════════════════════════════════════════════════════
@@ -12,7 +12,7 @@
   --blue:     #2563eb;
   --amber:    #f59e0b;
   --red:      #ef4444;
-  --purple:   #8b5cf6;
+  --purple:   #a8ff58;
 
   --bg:       #080808;
   --surface:  #111118;
@@ -120,7 +120,7 @@ html, body {
 .wiz-orb-accent {
   position: absolute;
   width: 280px; height: 280px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(113,255,0,0.1) 0%, transparent 70%);
   filter: blur(60px);
   bottom: 10%; left: 20%;
   animation: wiz-orb-2 12s ease-in-out infinite reverse;

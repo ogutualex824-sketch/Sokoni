@@ -579,7 +579,7 @@ function buildProductCard(product, size = "normal"){
     const ratingHtml    = rating ? `<div class="product-rating-row"><span class="product-stars">${ratingStarsHtml(rating.avg)}</span><span class="product-rating-count">${rating.avg} (${rating.count})</span></div>` : "";
     const _srn = product.sellerName || '';
     const _sri = _srn ? _srn.split(' ').map(w=>w[0]||'').join('').substring(0,2).toUpperCase() : '';
-    const _src = _srn ? ['#6366f1','#f59e0b','#10b981','#e11d48','#8b5cf6','#0891b2','#dc2626','#059669'][_srn.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%8] : '';
+    const _src = _srn ? ['#6366f1','#f59e0b','#10b981','#e11d48','#a8ff58','#0891b2','#dc2626','#059669'][_srn.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%8] : '';
     /* data-stop-prop prevents the card's open-product handler from firing when clicking the seller ring */
     const shopRing = _srn ? `<a class="pcard-shop-ring" href="seller-public.html?seller=${encodeURIComponent(_srn)}" data-stop-prop="1" title="Visit ${_escHtml(_srn)}" style="background:${_src};">${_escHtml(_sri)}</a>` : '';
     const verified        = product.sellerName && isSellerVerified();

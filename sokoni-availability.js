@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SOKONI Universal Availability SDK v1.0
  * ───────────────────────────────────────────────────────────────────────────
  * Works on every SOKONI hub page. Provides:
@@ -119,7 +119,7 @@
     offline:           "#9ca3af",
     on_break:          "#f59e0b",
     closed:            "#ef4444",
-    vacation:          "#8b5cf6",
+    vacation:          "#a8ff58",
     emergency_closure: "#ef4444",
     do_not_disturb:    "#dc2626",
   };

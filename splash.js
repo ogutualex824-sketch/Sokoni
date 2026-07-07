@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SOKONI Splash Screen — page-aware premium entrance
  * Every page shows the same core brand tagline ("Kenya's Global Marketplace")
  * but with a unique colour theme, emoji badge, and hub subtitle per page.
@@ -16,7 +16,7 @@
     'category.html':      ['🛍️', 'Browse Every Category',                           '#06b6d4', 'rgba(6,182,212,0.15)',   '#001a22', '#020c12'],
     'product.html':       ['✨', 'Premium Product Showcase',                          '#fbbf24', 'rgba(251,191,36,0.15)',  '#1f1400', '#0d0900'],
     'cart.html':          ['🛒', 'Your Shopping Cart',                               '#10b981', 'rgba(16,185,129,0.15)',  '#001e14', '#030f09'],
-    'checkout.html':      ['💳', 'Secure Checkout · M-PESA & Cards',                 '#8b5cf6', 'rgba(139,92,246,0.15)',  '#0e0628', '#060312'],
+    'checkout.html':      ['💳', 'Secure Checkout · M-PESA & Cards',                 '#a8ff58', 'rgba(113,255,0,0.15)',  '#0e0628', '#060312'],
     'success.html':       ['🎉', 'Order Confirmed · Thank You!',                     '#4ade80', 'rgba(74,222,128,0.15)',  '#002610', '#030e06'],
     'invoice.html':       ['🧾', 'Invoice · Your Receipt',                           '#60a5fa', 'rgba(96,165,250,0.15)',  '#001226', '#020910'],
     'offer.html':         ['🏷️', 'Exclusive Offer · Just for You',                  '#f43f5e', 'rgba(244,63,94,0.15)',   '#28000c', '#100005'],
@@ -25,7 +25,7 @@
     /* ── ACCOUNT & AUTH ── */
     'login.html':         ['🔑', 'Sign In · Welcome Back',                           '#f472b6', 'rgba(244,114,182,0.15)', '#26001a', '#100009'],
     'signup.html':        ['🚀', 'Join Free · Start Buying & Selling',               '#34d399', 'rgba(52,211,153,0.15)',  '#001c12', '#030e08'],
-    'register.html':      ['✍️', 'Create Your Account',                              '#a78bfa', 'rgba(167,139,250,0.15)', '#0c0426', '#050212'],
+    'register.html':      ['✍️', 'Create Your Account',                              '#c8ff80', 'rgba(167,139,250,0.15)', '#0c0426', '#050212'],
     'profile.html':       ['👤', 'My Profile · Orders & Rewards',                    '#38bdf8', 'rgba(56,189,248,0.15)',  '#001626', '#020c12'],
     'wishlist.html':      ['❤️', 'Wishlist · Things You Love',                       '#ec4899', 'rgba(236,72,153,0.16)',  '#26001a', '#0d0009'],
 
@@ -48,7 +48,7 @@
     'plumbing.html':      ['🔧', 'Plumbing Services · Pipes & Water',                '#0891b2', 'rgba(8,145,178,0.15)',   '#001624', '#020b10'],
     'mechanics.html':     ['🔩', 'Auto Hub · Mechanics & Garages',                   '#94a3b8', 'rgba(148,163,184,0.15)', '#0a0c14', '#050608'],
     'marketing.html':     ['📣', 'Marketing Hub · Grow Your Business',               '#f97316', 'rgba(249,115,22,0.16)',  '#1f0e00', '#0a0500'],
-    'requests.html':      ['📋', 'Requests · Post & Get Seller Quotes',              '#7c3aed', 'rgba(124,58,237,0.16)',  '#0e0424', '#050210'],
+    'requests.html':      ['📋', 'Requests · Post & Get Seller Quotes',              '#71ff00', 'rgba(113,255,0,0.16)',  '#0e0424', '#050210'],
     'provider.html':      ['🛠️', 'Provider Hub · Manage Jobs & Earn',               '#9333ea', 'rgba(147,51,234,0.15)',  '#120430', '#060214'],
 
     /* ── TRANSPORT ── */
@@ -117,15 +117,15 @@
     'revenue.html':           ['💰', 'Revenue · Earnings & Payouts',                 '#f59e0b', 'rgba(245,158,11,0.16)',  '#1f1000', '#0a0600'],
     'business-analytics.html':['📈', 'Business Analytics · Track & Grow',            '#818cf8', 'rgba(129,140,248,0.15)', '#06062a', '#040412'],
     'customer-analytics.html':['👥', 'Customer Analytics · Know Your Buyers',        '#c084fc', 'rgba(192,132,252,0.15)', '#120430', '#07021a'],
-    'growth-dashboard.html':  ['🚀', 'Growth Dashboard · Scale Your Business',       '#8b5cf6', 'rgba(139,92,246,0.15)',  '#0e0628', '#060312'],
+    'growth-dashboard.html':  ['🚀', 'Growth Dashboard · Scale Your Business',       '#a8ff58', 'rgba(113,255,0,0.15)',  '#0e0628', '#060312'],
 
     /* ── OTHER PAGES ── */
     'search.html':        ['🔍', 'Search · Find Anything on SOKONI',                 '#38bdf8', 'rgba(56,189,248,0.15)',  '#001626', '#020c12'],
     'messages.html':      ['💬', 'Messages · Chat Buyers & Sellers',                 '#0369a1', 'rgba(3,105,161,0.16)',   '#001424', '#020a10'],
-    'payments.html':      ['💳', 'Payments · Transactions & History',                '#8b5cf6', 'rgba(139,92,246,0.15)',  '#0e0628', '#060312'],
+    'payments.html':      ['💳', 'Payments · Transactions & History',                '#a8ff58', 'rgba(113,255,0,0.15)',  '#0e0628', '#060312'],
     'pos.html':           ['🧾', 'POS · Point of Sale System',                       '#10b981', 'rgba(16,185,129,0.15)',  '#001e14', '#030f09'],
     'marketing-hub.html': ['📣', 'Marketing Hub · Run Campaigns',                    '#f97316', 'rgba(249,115,22,0.16)',  '#1f0e00', '#0a0500'],
-    'register.html':      ['✍️', 'Create Your Account',                              '#a78bfa', 'rgba(167,139,250,0.15)', '#0c0426', '#050212'],
+    'register.html':      ['✍️', 'Create Your Account',                              '#c8ff80', 'rgba(167,139,250,0.15)', '#0c0426', '#050212'],
 
     /* ── MANAGEMENT & ADMIN ── */
     'admin.html':              ['⚙️', 'Admin · Control Panel',                       '#64748b', 'rgba(100,116,139,0.16)', '#0a0c16', '#050608'],

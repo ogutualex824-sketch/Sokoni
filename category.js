@@ -1,4 +1,4 @@
-/* Active offers map: productId → offer (loaded once, checked per card) */
+﻿/* Active offers map: productId → offer (loaded once, checked per card) */
 var _activeOffers = new Map();
 (function () {
     function tryLoadOffers() {
@@ -180,7 +180,7 @@ function renderProducts(list){
         const rating = (()=>{ try{ const r=JSON.parse(localStorage.getItem("sokoniRatings")||"{}")[p.id]||[]; if(!r.length) return ""; const avg=(r.reduce((s,x)=>s+x.stars,0)/r.length).toFixed(1); return `<span style="font-size:9px;color:rgba(255,193,7,0.8);font-weight:700;">★ ${avg}</span>`; }catch(e){ return ""; } })();
         const _csn = p.sellerName || '';
         const _csi = _csn ? _csn.split(' ').map(w=>w[0]||'').join('').substring(0,2).toUpperCase() : '';
-        const _csc = _csn ? ['#6366f1','#f59e0b','#10b981','#e11d48','#8b5cf6','#0891b2','#dc2626','#059669'][_csn.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%8] : '';
+        const _csc = _csn ? ['#6366f1','#f59e0b','#10b981','#e11d48','#a8ff58','#0891b2','#dc2626','#059669'][_csn.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%8] : '';
         const cShopRing = _csn ? `<a class="pcard-shop-ring" href="seller-public.html?seller=${encodeURIComponent(_csn)}" onclick="event.stopPropagation()" title="Visit ${_csn.replace(/"/g,'&quot;').replace(/</g,'&lt;')}" style="background:${_csc};">${_csi}</a>` : '';
         const cardHtml = `
         <div class="product-card" style="position:relative;animation:cardFadeIn 0.35s ease;cursor:pointer;" onclick="openProductCat('${_esc(p.id)}')">

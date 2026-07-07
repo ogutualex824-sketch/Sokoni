@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    SOKONI SPORTS HUB — sokoni-sports.js
    window.SokoniSports IIFE module
    Teams · Players · Coaches · Venues · Tournaments · Marketplace · Community
@@ -39,7 +39,7 @@ const SPORT_CATEGORIES = [
   {id:'all',        label:'All Sports',    icon:'🏆', color:'#f59e0b'},
   {id:'football',   label:'Football',      icon:'⚽', color:'#22c55e'},
   {id:'basketball', label:'Basketball',    icon:'🏀', color:'#f97316'},
-  {id:'rugby',      label:'Rugby',         icon:'🏉', color:'#8b5cf6'},
+  {id:'rugby',      label:'Rugby',         icon:'🏉', color:'#a8ff58'},
   {id:'athletics',  label:'Athletics',     icon:'🏃', color:'#06b6d4'},
   {id:'swimming',   label:'Swimming',      icon:'🏊', color:'#3b82f6'},
   {id:'boxing',     label:'Boxing / MMA',  icon:'🥊', color:'#ef4444'},
@@ -55,7 +55,7 @@ const TEAMS = [
   {id:'tm001',name:'Nairobi Stars FC',sport:'football',league:'Nairobi Premier League',location:'Kasarani, Nairobi',county:'nairobi',founded:2008,members:25,icon:'⚽',color:'#ef4444',captain:'David Otieno',coach:'cch001',wins:18,losses:4,draws:6,goalsFor:54,goalsAgainst:22,description:'Top-flight football club based in Kasarani. Two-time Nairobi Premier League champions.',featured:true,rating:4.7,social:{whatsapp:'0712100001'},openToPlayers:true},
   {id:'tm002',name:'Coast United FC',sport:'football',league:'Mombasa Football League',location:'Mombasa CBD',county:'mombasa',founded:2011,members:22,icon:'⚽',color:'#3b82f6',captain:'Omar Hassan',coach:'cch002',wins:14,losses:7,draws:5,goalsFor:42,goalsAgainst:29,description:'Mombasa\'s most decorated football club. Known for fast attacking play.',featured:false,rating:4.4,openToPlayers:true},
   {id:'tm003',name:'Nairobi Suns Basketball',sport:'basketball',league:'KBF Premier League',location:'Westlands, Nairobi',county:'nairobi',founded:2014,members:15,icon:'🏀',color:'#f97316',captain:'Brian Kamau',coach:'cch004',wins:22,losses:8,draws:0,points:180,description:'Nairobi\'s premier basketball club. Multiple KBF championship finalists.',featured:true,rating:4.8,openToPlayers:false},
-  {id:'tm004',name:'Nairobi Bulls Rugby',sport:'rugby',league:'Kenya Cup',location:'Upper Hill, Nairobi',county:'nairobi',founded:2006,members:35,icon:'🏉',color:'#8b5cf6',captain:'Kevin Ochieng',coach:'cch005',wins:12,losses:3,draws:2,points:74,description:'Kenya Cup regulars. Strong forward pack with explosive backline.',featured:false,rating:4.5,openToPlayers:true},
+  {id:'tm004',name:'Nairobi Bulls Rugby',sport:'rugby',league:'Kenya Cup',location:'Upper Hill, Nairobi',county:'nairobi',founded:2006,members:35,icon:'🏉',color:'#a8ff58',captain:'Kevin Ochieng',coach:'cch005',wins:12,losses:3,draws:2,points:74,description:'Kenya Cup regulars. Strong forward pack with explosive backline.',featured:false,rating:4.5,openToPlayers:true},
   {id:'tm005',name:'Rift Valley Harriers',sport:'athletics',league:'Athletics Kenya',location:'Eldoret',county:'uasin_gishu',founded:2003,members:40,icon:'🏃',color:'#06b6d4',captain:'Faith Chepkemoi',coach:'cch006',wins:0,losses:0,draws:0,description:'Elite athletics club producing national and international runners.',featured:true,rating:4.9,openToPlayers:true},
   {id:'tm006',name:'Sharks Swimming Club',sport:'swimming',league:'Kenya Swimming Federation',location:'Karen, Nairobi',county:'nairobi',founded:2010,members:28,icon:'🏊',color:'#3b82f6',captain:'Grace Wanjiku',coach:'cch007',wins:8,losses:2,draws:0,description:'Leading swimming club with Olympic-standard pool facilities.',featured:false,rating:4.6,openToPlayers:true},
   {id:'tm007',name:'Mombasa Spikers Volleyball',sport:'volleyball',league:'KVF Premier League',location:'Mombasa',county:'mombasa',founded:2012,members:18,icon:'🏐',color:'#ec4899',captain:'Aisha Mohamed',coach:'cch003',wins:16,losses:5,draws:0,description:'Women\'s volleyball powerhouse from the coast. Five-time county champions.',featured:false,rating:4.5,openToPlayers:false},

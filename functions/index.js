@@ -6802,7 +6802,7 @@ exports.previewEmailTemplate = onCall({ cors: ["https://mysokoni.co.ke", "https:
         <p>Hi <strong>${esc(d.name)}</strong>,</p>
         <p>Please verify your email address to activate your SOKONI account.</p>
         <div class="box" style="text-align:center;">
-          <div style="font-size:36px;font-weight:900;color:#a78bfa;letter-spacing:.2em;">${esc(d.code)}</div>
+          <div style="font-size:36px;font-weight:900;color:#71ff00;letter-spacing:.2em;">${esc(d.code)}</div>
           <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:8px;">Enter this code in the app</div>
         </div>
         <a href="${esc(d.verifyUrl)}" class="cta">Or click to verify</a>

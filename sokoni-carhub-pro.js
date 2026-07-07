@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI CAR HUB PRO — Complete Automotive Ecosystem
    Mechanics · Spare Parts · Roadside Assistance · Financing
    Vehicle Inspection · Car Transport · Buyer Dashboard
@@ -863,7 +863,7 @@ window.CarHubPro = (function(){
           {val:carBookings.length,lbl:'Car Rentals',col:'#71ff00',icon:'🚗'},
           {val:savedCars.length,lbl:'Saved Vehicles',col:'#00aaff',icon:'❤️'},
           {val:mechBookings.length,lbl:'Mechanic Jobs',col:'#ff9800',icon:'🔧'},
-          {val:finApps.length,lbl:'Finance Apps',col:'#a78bfa',icon:'💰'},
+          {val:finApps.length,lbl:'Finance Apps',col:'#c8ff80',icon:'💰'},
           {val:inspBookings.length,lbl:'Inspections',col:'#34d399',icon:'🔍'},
           {val:roadsideReqs.length+transReqs.length,lbl:'Other Requests',col:'#f87171',icon:'📦'},
         ].map(d=>`<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px;text-align:center;">
@@ -915,7 +915,7 @@ window.CarHubPro = (function(){
         ${finApps.slice(0,3).map(a=>`<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:12px 14px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <div><div style="font-size:13px;font-weight:800;color:white;">${a.preferredPartner||''}</div>
           <div style="font-size:11px;color:rgba(255,255,255,0.4);">Vehicle: ${kes(a.vehiclePrice||0)}</div></div>
-          <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.25);color:#a78bfa;">Pending</span>
+          <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.25);color:#c8ff80;">Pending</span>
         </div>`).join('')}
       </div>`:''}
 
@@ -947,7 +947,7 @@ window.CarHubPro = (function(){
           {val:activeCount,lbl:'Active Rentals',col:'#00aaff'},
           {val:completedCount,lbl:'Completed',col:'#34d399'},
           {val:kes(avgRev),lbl:'Avg Per Booking',col:'#ffc107'},
-          {val:cars.length,lbl:'Total Listings',col:'#a78bfa'},
+          {val:cars.length,lbl:'Total Listings',col:'#c8ff80'},
           {val:cars.filter(c=>c.status==='available').length,lbl:'Available Now',col:'#71ff00'},
         ].map(d=>`<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:13px;padding:12px;text-align:center;">
           <div style="font-size:16px;font-weight:900;color:${d.col};margin-bottom:3px;">${d.val}</div>

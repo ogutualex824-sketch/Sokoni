@@ -1,4 +1,4 @@
-/* SOKONI SmartPOS — Business Analytics Engine v1.0
+﻿/* SOKONI SmartPOS — Business Analytics Engine v1.0
    Real-time KPIs, Inventory Forecasting (linear regression),
    Fraud/Theft Detection, Employee Performance, SVG charts. */
 
@@ -311,7 +311,7 @@ const PosAnalytics = (() => {
     const total = slices.reduce((s, sl) => s + (sl.value || 0), 0);
     if (!total) { el.innerHTML = '<div style="font-size:11px;color:var(--txt2);padding:10px">No data</div>'; return; }
 
-    const colors = ['#71ff00', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+    const colors = ['#71ff00', '#3b82f6', '#f59e0b', '#ef4444', '#a8ff58', '#06b6d4'];
     const R = 40, cx = 50, cy = 50;
     let angle = -Math.PI / 2;
     let paths = '';

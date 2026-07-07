@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI — Delivery Hub  (delivery-hub.js)
 
    Standalone logistics platform — direct sender-created deliveries.
@@ -43,7 +43,7 @@ const STATUS_LABELS = {
   pending:        { label:'Pending',        icon:'⏳', color:'#fbbf24' },
   rider_assigned: { label:'Rider Assigned', icon:'🏍️', color:'#00aaff' },
   rider_en_route: { label:'Rider En Route', icon:'🛵', color:'#00aaff' },
-  picked_up:      { label:'Picked Up',      icon:'📦', color:'#a78bfa' },
+  picked_up:      { label:'Picked Up',      icon:'📦', color:'#c8ff80' },
   in_transit:     { label:'In Transit',     icon:'🚗', color:'#00aaff' },
   delivered:      { label:'Delivered',      icon:'📬', color:'#71ff00' },
   completed:      { label:'Completed',      icon:'✅', color:'#71ff00' },

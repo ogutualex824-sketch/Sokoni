@@ -1,4 +1,4 @@
-/**
+﻿/**
  * type-classify.js
  * Central GOODS vs SERVICES classification for the SOKONI platform.
  * Injects type badges, filters, and navigation cues site-wide.
@@ -35,7 +35,7 @@ const PAGE_TYPES = {
   'services.html':      { type:'services', label:'All Services',         icon:'⚙️', color:'#00aaff', colorBg:'rgba(0,170,255,0.1)',  colorBorder:'rgba(0,170,255,0.25)'  },
   'provider.html':      { type:'services', label:'Provider Dashboard',   icon:'⚙️', color:'#00aaff', colorBg:'rgba(0,170,255,0.1)',  colorBorder:'rgba(0,170,255,0.25)'  },
   'healthcare.html':    { type:'services', label:'Healthcare Services',  icon:'🏥', color:'#00c878', colorBg:'rgba(0,200,120,0.1)',  colorBorder:'rgba(0,200,120,0.25)'  },
-  'legal-hub.html':     { type:'services', label:'Legal Services',       icon:'⚖️', color:'#a78bfa', colorBg:'rgba(167,139,250,0.1)',colorBorder:'rgba(167,139,250,0.25)' },
+  'legal-hub.html':     { type:'services', label:'Legal Services',       icon:'⚖️', color:'#c8ff80', colorBg:'rgba(167,139,250,0.1)',colorBorder:'rgba(167,139,250,0.25)' },
   'entertainment.html': { type:'services', label:'Entertainment',        icon:'🎧', color:'#c084fc', colorBg:'rgba(192,132,252,0.1)',colorBorder:'rgba(192,132,252,0.25)' },
   'sports-hub.html':    { type:'services', label:'Sports & Facilities',  icon:'⚽', color:'#39ff14', colorBg:'rgba(57,255,20,0.1)',  colorBorder:'rgba(57,255,20,0.25)'  },
   'mechanics.html':     { type:'services', label:'Mechanic Services',    icon:'🔧', color:'#f97316', colorBg:'rgba(249,115,22,0.1)', colorBorder:'rgba(249,115,22,0.25)' },

@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI POS Inventory Engine v2.0
    Real-time, offline-first, multi-branch inventory management
    IndexedDB (offline) → Firestore (cloud) dual-layer architecture
@@ -514,7 +514,7 @@ window.PosInventory = (() => {
   async function getCategories() { return _all(S.CATEGORIES); }
 
   async function addCategory(data) {
-    const cat = { id: data.id || uid(), name: data.name, color: data.color || '#7c3aed', icon: data.icon || '📦' };
+    const cat = { id: data.id || uid(), name: data.name, color: data.color || '#71ff00', icon: data.icon || '📦' };
     await _put(S.CATEGORIES, cat);
     _queueSync('categories', cat.id, cat);
     return cat;
