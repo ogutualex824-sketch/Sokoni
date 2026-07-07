@@ -533,27 +533,12 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true }, async
     const txRef = db.collection('walletTransactions').doc(txId);
 
     await db.runTransaction(async (t) => {
-      const [walletSnap, txSnap] = await Promise.all([t.get(walletRef), t.get(txRef)]);
+      const txSnap = await t.get(txRef);
 
       if (!txSnap.exists) {
-        const current = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
-        if (current < payout.amount) {
-          throw new HttpsError('failed-precondition', 'Insufficient wallet balance to complete payout');
-        }
-        const newBalance = current - payout.amount;
-
-        if (walletSnap.exists) {
-          t.update(walletRef, { balance: newBalance, pendingPayout: FieldValue.increment(-payout.amount) });
-        } else {
-          t.set(walletRef, {
-            uid: payout.sellerUid,
-            balance: 0,
-            currency: 'KES',
-            lastTopUp: null,
-            pendingTopUp: null,
-            createdAt: Timestamp.now(),
-          });
-        }
+        // Balance was already reserved at request time (requestSellerPayout deducted it).
+        // Only release pendingPayout — do NOT deduct balance again.
+        t.update(walletRef, { pendingPayout: FieldValue.increment(-payout.amount) });
 
         t.set(txRef, {
           uid: payout.sellerUid,
@@ -567,7 +552,22 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true }, async
 
       t.update(reqRef, update);
     });
+  } else if (status === 'rejected') {
+    const payout = reqSnap.data();
+    if (!['pending', 'approved'].includes(payout.status)) {
+      throw new HttpsError('failed-precondition', `Cannot reject payout with current status: ${payout.status}`);
+    }
+    const walletRef = db.collection('wallets').doc(payout.sellerUid);
+    await db.runTransaction(async (t) => {
+      // Restore the balance that was reserved when the payout was requested
+      t.update(walletRef, {
+        balance:       FieldValue.increment(payout.amount),
+        pendingPayout: FieldValue.increment(-payout.amount),
+      });
+      t.update(reqRef, update);
+    });
   } else {
+    // status === 'approved' — admin acknowledgement only, no wallet change needed
     await reqRef.update(update);
   }
 

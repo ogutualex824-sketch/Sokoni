@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Page Not Found — SOKONI</title>
+  <style>
+    body { margin: 0; min-height: 100vh; background: var(--sk-bg-base, #050505); color: var(--sk-text-primary, rgba(255,255,255,0.95)); font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
+    .sk-404 { text-align: center; max-width: 480px; }
+    .sk-404__code { font-size: 96px; font-weight: 800; line-height: 1; color: var(--sk-brand-green, #71ff00); margin: 0 0 8px; }
+    .sk-404__title { font-size: 24px; font-weight: 700; margin: 0 0 12px; }
+    .sk-404__body { font-size: 16px; color: var(--sk-text-secondary, rgba(255,255,255,0.6)); margin: 0 0 32px; line-height: 1.6; }
+    .sk-404__search { display: flex; gap: 8px; margin: 0 0 24px; }
+    .sk-404__search input { flex: 1; padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: inherit; font-size: 16px; outline: none; }
+    .sk-404__search input:focus { border-color: var(--sk-brand-green, #71ff00); }
+    .sk-404__search button { padding: 12px 20px; border-radius: 8px; border: none; background: var(--sk-brand-green, #71ff00); color: #000; font-weight: 700; font-size: 15px; cursor: pointer; white-space: nowrap; }
+    .sk-404__links { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .sk-404__link { padding: 8px 16px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.15); color: var(--sk-text-secondary, rgba(255,255,255,0.6)); text-decoration: none; font-size: 14px; transition: border-color 0.15s, color 0.15s; }
+    .sk-404__link:hover { border-color: var(--sk-brand-green, #71ff00); color: var(--sk-brand-green, #71ff00); }
+  </style>
+</head>
+<body>
+  <div class="sk-404">
+    <div class="sk-404__code" aria-hidden="true">404</div>
+    <h1 class="sk-404__title">Page not found</h1>
+    <p class="sk-404__body">The page you're looking for doesn't exist or may have moved. Try searching or browse popular sections below.</p>
+    <form class="sk-404__search" action="/search.html" method="get" onsubmit="handleSearch(event)">
+      <input type="search" name="q" id="sk404Search" placeholder="Search SOKONI…" aria-label="Search SOKONI" autocomplete="off">
+      <button type="submit">Search</button>
+    </form>
+    <nav class="sk-404__links" aria-label="Popular sections">
+      <a href="/" class="sk-404__link">Home</a>
+      <a href="/marketplace.html" class="sk-404__link">Marketplace</a>
+      <a href="/food-hub.html" class="sk-404__link">Food</a>
+      <a href="/events.html" class="sk-404__link">Events</a>
+      <a href="/property.html" class="sk-404__link">Property</a>
+      <a href="/jobs.html" class="sk-404__link">Jobs</a>
+      <a href="/seller.html" class="sk-404__link">Sell on SOKONI</a>
+    </nav>
+  </div>
+  <script>
+    function handleSearch(e) {
+      e.preventDefault();
+      const q = document.getElementById('sk404Search').value.trim();
+      if (q) window.location.href = '/search.html?q=' + encodeURIComponent(q);
+    }
+  </script>
+</body>
+</html>

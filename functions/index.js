@@ -183,7 +183,7 @@ exports.grantAdminClaim = onCall(
 );
 
 exports.revokeAdminClaim = onCall(
-  { timeoutSeconds: 30 },
+  { timeoutSeconds: 30, enforceAppCheck: true },
   async (request) => {
     if (!request.auth || request.auth.token?.admin !== true) {
       throw new HttpsError("permission-denied", "Admin access required.");
@@ -4832,14 +4832,22 @@ exports.intasendWebhook = onRequest(
     if (fsStatus === "COMPLETE") {
       const payData  = existing;
       const category = payData.meta?.category || "default";
-      /* Commission rate MUST come from server-side config — never trust client metadata */
-      const SERVER_COMMISSION_RATES = {
-        marketplace: 8, food: 10, property: 5, vehicle: 5, jobs: 12,
-        healthcare: 8, legal: 10, education: 8, entertainment: 10,
-        events: 8, logistics: 10, default: 10,
-      };
-      const commissionPct = SERVER_COMMISSION_RATES[category] || SERVER_COMMISSION_RATES.default;
-      const sokoniCut     = Math.round(amount * commissionPct / 100);
+      /* Commission MUST be calculated by finos-utils — single source of truth for all rates */
+      let sokoniCut = 0, commissionPct = 0;
+      try {
+        const { calculateCommission } = require('./finos-utils');
+        const commResult = await calculateCommission({
+          orderAmountCents: amount * 100,
+          category,
+          sellerId: payData.uid,
+        });
+        sokoniCut     = commResult.commissionCents ? Math.round(commResult.commissionCents / 100) : 0;
+        commissionPct = commResult.commissionPct || 0;
+      } catch (commErr) {
+        console.error('[webhook] Commission calc failed, applying 10% fallback', commErr.message);
+        commissionPct = 10;
+        sokoniCut = Math.round(amount * 0.10);
+      }
       await db.collection("commissionLedger").add({
         ref: apiRef, checkoutId, uid: payData.uid,
         providerName:  payData.meta?.providerName || "",

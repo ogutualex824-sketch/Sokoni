@@ -65,6 +65,15 @@ exports.generateTrustReceipt = onCall(cfg, async ({ data, auth }) => {
   if (!merchantId)  _e('merchantId required');
   if (!grandTotal)  _e('grandTotal required');
 
+  /* Verify caller owns or belongs to this merchant */
+  if (auth.uid !== merchantId) {
+    const sellerSnap = await db.collection('sellers').doc(merchantId).get();
+    const isOwnedByCaller = sellerSnap.exists && sellerSnap.data().uid === auth.uid;
+    const isAdmin = auth.token?.admin || auth.token?.superAdmin;
+    if (!isOwnedByCaller && !isAdmin)
+      _e('Not authorized to generate receipts for this merchant', 'permission-denied');
+  }
+
   const receiptNo   = existingNo || (
     'R' + Date.now().toString(36).toUpperCase().slice(-6) +
     Math.random().toString(36).slice(-3).toUpperCase()

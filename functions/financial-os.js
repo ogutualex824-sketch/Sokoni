@@ -266,6 +266,7 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
 
   /* Calculate commission via existing finos-utils */
   let commissionCents = 0;
+  let commissionFailed = false;
   try {
     const { calculateCommission } = require('./finos-utils');
     const result = await calculateCommission({
@@ -274,7 +275,10 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
       sellerId:         tx.sellerUid,
     });
     commissionCents = result.commissionCents || 0;
-  } catch (_) {}
+  } catch (commErr) {
+    commissionFailed = true;
+    console.error('[FOS] Commission calc failed — flagging for manual review', txId, commErr.message);
+  }
 
   const netCents = tx.amountCents - commissionCents;
 
@@ -316,6 +320,13 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
   await _audit('transaction_completed', tx.buyerUid, {
     fosTransactionId: txId, payRef, amountCents: tx.amountCents, commissionCents, netCents,
   });
+
+  if (commissionFailed) {
+    await db().collection('fosReviewQueue').add({
+      type: 'commission_calc_failure', txId, payRef,
+      amountCents: tx.amountCents, createdAt: now(), status: 'pending_review',
+    }).catch(() => {});
+  }
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -370,9 +381,27 @@ exports.fosSubmitRefund = onCall(
     if (!isAdmin && tx.buyerUid !== auth.uid)
       throw new HttpsError('permission-denied', 'Not authorized to refund this transaction');
 
-    /* All refunds require admin review — no auto-approval by amount.
-       Removing the KES 500 threshold prevents callers from exploiting
-       auto-approval with amounts not bounded by the original payment. */
+    /* Validate refund does not exceed the original payment amount */
+    const originalAmountKES = tx.amountKES || (tx.amountCents ? tx.amountCents / 100 : null);
+    if (originalAmountKES !== null && amountKES > originalAmountKES)
+      throw new HttpsError('invalid-argument',
+        `Refund (KES ${amountKES}) exceeds original payment (KES ${originalAmountKES})`);
+
+    /* Idempotency — reject if a non-failed refund already exists for this transaction */
+    const dupCheck = await db().collection('fosRefundQueue')
+      .where('fosTransactionId', '==', txId)
+      .where('status', 'in', ['pending', 'approved', 'processed'])
+      .limit(1).get();
+    if (!dupCheck.empty) {
+      const ex = dupCheck.docs[0];
+      return {
+        refundId: ex.id,
+        status:   ex.data().status,
+        existing: true,
+        message:  'A refund request for this transaction is already in progress.',
+      };
+    }
+
     const autoApprove = isAdmin;
     const status      = autoApprove ? 'approved' : 'pending';
 

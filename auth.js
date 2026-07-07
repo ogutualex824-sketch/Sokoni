@@ -148,26 +148,15 @@ async function loginUser(){
 
     try {
         /* ── Firebase Authentication ── */
-        // ⚠️ AUTH DEBUG — remove logs once auth confirmed working
-        console.group('[SOKONI AUTH DEBUG] loginUser()');
-        console.log('firebaseAuth :', window.firebaseAuth ? 'ready ✓' : 'NULL ✗ — firebase.js may not have loaded');
-        console.log('firebaseApp  :', window.firebaseApp?.name);
-        console.log('email        :', email);
-
         const { signInWithEmailAndPassword } = await import(
             "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"
         );
 
         if(!window.firebaseAuth){
-            console.error('[SOKONI AUTH DEBUG] window.firebaseAuth is null — aborting login');
-            console.groupEnd();
             throw new Error("Firebase not ready. Please refresh the page.");
         }
 
-        console.log('Calling signInWithEmailAndPassword...');
         const cred = await signInWithEmailAndPassword(window.firebaseAuth, email, password);
-        console.log('Sign-in SUCCESS:', cred.user?.uid);
-        console.groupEnd();
 
         /* Fetch full profile from Firestore users collection */
         let profile = {

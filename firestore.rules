@@ -476,7 +476,8 @@ service cloud.firestore {
     match /listings/{listingId} {
       allow read:   if true;
       allow create: if isAuthed()
-                    && request.resource.data.ownerId == request.auth.uid;
+                    && request.resource.data.ownerId == request.auth.uid
+                    && noAdminFields();
       allow update: if isAdmin()
                     || (isAuthed()
                         && resource.data.ownerId == request.auth.uid
@@ -980,8 +981,12 @@ service cloud.firestore {
                     && (request.auth.uid == uid
                         || resource.data.customerId == request.auth.uid
                         || isAdmin());
-        // Any signed-in user can place a C&C order (CF validates stock)
-        allow create: if isAuthed();
+        allow create: if isAuthed()
+                      && request.resource.data.customerId == request.auth.uid
+                      && request.resource.data.keys().hasAll(['customerId','items','total','status'])
+                      && request.resource.data.total is number
+                      && request.resource.data.total > 0
+                      && request.resource.data.status == 'pending';
         // Only seller / admin updates status (ready, collected, cancelled)
         allow update: if isAuthed() && (request.auth.uid == uid || isAdmin());
         allow delete: if false;
@@ -1356,7 +1361,7 @@ service cloud.firestore {
     }
 
     match /verifications/{sellerUid} {
-      allow read:   if isAuthed();
+      allow read:   if isAdmin() || (isAuthed() && request.auth.uid == sellerUid);
 
       allow create: if isAuthed()
                     && request.auth.uid == sellerUid
@@ -1438,10 +1443,7 @@ service cloud.firestore {
       allow create: if isAuthed() && request.auth.uid == walletUid
                     && request.resource.data.balance == 0;
 
-      allow update: if isAdmin()
-                    || (isAuthed() && request.auth.uid == walletUid
-                        && request.resource.data.balance >= 0
-                        && request.resource.data.balance <= resource.data.balance);
+      allow update: if isAdmin(); // Wallet mutations via Admin SDK (Cloud Functions) only
       allow delete: if isAdmin();
     }
 
@@ -1455,11 +1457,8 @@ service cloud.firestore {
     }
 
     match /walletTxns/{txId} {
-      allow create: if isAuthed()
-                    && request.resource.data.uid  == request.auth.uid
-                    && request.resource.data.type in ['debit','payment','withdrawal'];
-      allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
-      allow update, delete: if isAdmin();
+      allow read:             if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create, update, delete: if isAdmin(); // All writes via Admin SDK (Cloud Functions) only
     }
 
     match /escrows/{escrowId} {
@@ -1468,10 +1467,14 @@ service cloud.firestore {
                     || (isAuthed() && (resource.data.buyerUid  == request.auth.uid
                                     || resource.data.sellerUid == request.auth.uid));
       allow update: if isAdmin()
-                    || (isAuthed() && (resource.data.buyerUid  == request.auth.uid
-                                    || resource.data.sellerUid == request.auth.uid)
+                    || (isAuthed() && resource.data.buyerUid == request.auth.uid
                         && request.resource.data.diff(resource.data)
-                           .affectedKeys().hasOnly(['status','updatedAt']));
+                           .affectedKeys().hasOnly(['status','updatedAt'])
+                        && request.resource.data.status in ['disputed','cancelled'])
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid
+                        && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['status','updatedAt'])
+                        && request.resource.data.status in ['shipped','delivered']);
       allow delete: if isAdmin();
     }
 

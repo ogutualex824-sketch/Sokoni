@@ -61,7 +61,7 @@
     ],
     "cleanUrls": true,
     "trailingSlash": false,
-    "404": "/offline.html",
+    "404": "/404.html",
     "headers": [
 
       {
