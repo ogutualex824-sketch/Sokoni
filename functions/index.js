@@ -7862,11 +7862,14 @@ exports.adminSubExportBilling     = subBilling.adminSubExportBilling;
 exports.subProcessExpirations     = subBilling.subProcessExpirations;
 exports.subSendRenewalReminders   = subBilling.subSendRenewalReminders;
 
-/* ── Subscription Engine v2.0 — Automated Billing (3 CFs) ── */
+/* ── Subscription Engine v2.0 — Automated Billing (6 CFs) ── */
 const subEngine = require('./sub-engine');
 exports.subScheduleRenewals       = subEngine.subScheduleRenewals;
 exports.subAutoActivateOnPayment  = subEngine.subAutoActivateOnPayment;
 exports.subUpgradeWithProration   = subEngine.subUpgradeWithProration;
+exports.subCheckFeature           = subEngine.subCheckFeature;
+exports.subRetryFailedPayments    = subEngine.subRetryFailedPayments;
+exports.subDowngrade              = subEngine.subDowngrade;
 
 /* ══════════════════════════════════════════════════════════════════
    FinOS v2.0 — Universal Transaction Router + Escrow + Settlement

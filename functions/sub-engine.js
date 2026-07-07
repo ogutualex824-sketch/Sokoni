@@ -607,3 +607,296 @@ exports.subUpgradeWithProration = onCall(
     };
   }
 );
+
+/* ════════════════════════════════════════════════════════════
+   CF 4. subCheckFeature
+   onCall — called by any SOKONI module to verify a user has a
+   specific feature flag without loading the full subscription.
+   Returns { hasFeature, value, planId, hubType, status }.
+════════════════════════════════════════════════════════════ */
+exports.subCheckFeature = onCall(
+  { region: REGION, timeoutSeconds: 15, memory: '128MiB' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+    const { featureKey, hubType } = req.data || {};
+    if (!featureKey) throw new HttpsError('invalid-argument', 'featureKey required');
+
+    const fsdb = db();
+    const uid  = req.auth.uid;
+
+    /* 1. Fast-path: check users/{uid}.subscription.{hubType}.features */
+    const userSnap = await fsdb.collection('users').doc(uid).get();
+    if (userSnap.exists) {
+      const uData = userSnap.data();
+      if (hubType && uData.subscription?.[hubType]) {
+        const sub = uData.subscription[hubType];
+        const val = sub.features?.[featureKey];
+        if (val !== undefined) {
+          return {
+            hasFeature: val !== false && val !== 0,
+            value:  val,
+            planId: sub.planId   || null,
+            hubType,
+            status: sub.status   || 'unknown',
+            source: 'user_cache',
+          };
+        }
+      }
+    }
+
+    /* 2. Full lookup: subscriptions collection */
+    let q = fsdb.collection('subscriptions').where('uid', '==', uid);
+    if (hubType) q = q.where('hubType', '==', hubType);
+    const snaps = await q.orderBy('updatedAt', 'desc').limit(1).get();
+
+    if (snaps.empty) {
+      return { hasFeature: false, value: false, planId: null, hubType: hubType || null, status: 'none', source: 'firestore' };
+    }
+
+    const sub = snaps.docs[0].data();
+    const val = sub.features?.[featureKey];
+    const activeStatuses = new Set(['trialing', 'active', 'grace']);
+    const isActive = activeStatuses.has(sub.status);
+
+    return {
+      hasFeature: isActive && val !== false && val !== 0 && val !== undefined,
+      value:  isActive ? (val ?? false) : false,
+      planId: sub.planId   || null,
+      hubType: sub.hubType || null,
+      status: sub.status   || 'unknown',
+      source: 'firestore',
+    };
+  }
+);
+
+/* ════════════════════════════════════════════════════════════
+   CF 5. subRetryFailedPayments
+   Scheduled every 6 hours. Retries past_due subscriptions with
+   exponential backoff: 1h → 24h → 72h → expire.
+════════════════════════════════════════════════════════════ */
+exports.subRetryFailedPayments = onSchedule(
+  { schedule: 'every 6 hours', region: REGION, timeoutSeconds: 540, memory: '512MiB',
+    secrets: [INTASEND_PRIVATE_KEY] },
+  async () => {
+    const fsdb      = db();
+    const nowMs     = Date.now();
+    const retryGaps = [3_600_000, 86_400_000, 259_200_000]; /* 1h, 24h, 72h */
+
+    const snap = await fsdb.collection('subscriptions')
+      .where('status', '==', 'past_due')
+      .where('failedAttempts', '<', 3)
+      .limit(100)
+      .get();
+
+    if (snap.empty) { logger.info('[sub-retry] No past_due subscriptions'); return; }
+
+    let retried = 0, expired = 0;
+
+    for (const doc of snap.docs) {
+      const sub      = doc.data();
+      const attempts = sub.failedAttempts || 0;
+      const lastMs   = sub.lastRetryAt?.toMillis?.() || sub.updatedAt?.toMillis?.() || 0;
+      const gap      = retryGaps[attempts] || retryGaps[retryGaps.length - 1];
+
+      if (nowMs - lastMs < gap) continue;
+
+      const uid         = sub.uid;
+      const priceField  = sub.billingCycle === 'annual' ? 'priceAnnual' : 'priceMonthly';
+      const amountCents = sub[priceField] || 0;
+
+      if (amountCents <= 0) {
+        await doc.ref.update({ status: 'active', failedAttempts: 0, updatedAt: now() });
+        continue;
+      }
+
+      let phone = sub.billingPhone || null;
+      if (!phone) {
+        const uSnap = await fsdb.collection('users').doc(uid).get();
+        phone = uSnap.data()?.phone || uSnap.data()?.phoneNumber || null;
+      }
+
+      const attemptNum = attempts + 1;
+
+      if (!phone) {
+        logger.warn('[sub-retry] No phone for uid', { uid, subId: doc.id });
+        const newAttempts = attemptNum;
+        await doc.ref.update({ failedAttempts: newAttempts, lastRetryAt: now(), lastRetryError: 'no_phone', updatedAt: now() });
+        if (newAttempts >= 3) {
+          await doc.ref.update({ status: 'expired', expiredAt: now(), updatedAt: now() });
+          expired++;
+        }
+        continue;
+      }
+
+      try {
+        const key       = INTASEND_PRIVATE_KEY.value();
+        const amountKES = Math.round(amountCents / 100);
+        const payload   = JSON.stringify({
+          phone_number: phone.replace(/^\+/, ''),
+          amount:       amountKES,
+          currency:     'KES',
+          comment:      `SOKONI ${sub.planName || sub.planId} Renewal Retry ${attemptNum}/3`,
+          api_ref:      `sub_retry_${doc.id}_${attemptNum}_${nowMs}`,
+        });
+        const result = await new Promise((resolve, reject) => {
+          const options = {
+            hostname: 'sandbox.intasend.com',
+            path:     '/api/v1/payment/mpesa-stk-push/',
+            method:   'POST',
+            headers:  { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'Content-Length': Buffer.byteLength(payload) },
+          };
+          const r = require('https').request(options, res => {
+            let body = '';
+            res.on('data', d => body += d);
+            res.on('end', () => resolve({ status: res.statusCode, body }));
+          });
+          r.on('error', reject);
+          r.write(payload);
+          r.end();
+        });
+
+        if (result.status < 300) {
+          await doc.ref.update({ failedAttempts: attemptNum, lastRetryAt: now(), lastRetryStatus: 'stk_sent', updatedAt: now() });
+          await _notify(uid, 'subscription_payment_retry', {
+            title: `Payment Retry ${attemptNum} Sent`,
+            body:  `Complete the M-Pesa prompt to keep your ${sub.planName} subscription active.`,
+            planId: sub.planId,
+          });
+          retried++;
+        } else {
+          throw new Error(`STK HTTP ${result.status}`);
+        }
+      } catch (err) {
+        logger.error('[sub-retry] STK push failed', { uid, subId: doc.id, err: err.message });
+        const newAttempts = attemptNum;
+        if (newAttempts >= 3) {
+          await doc.ref.update({ status: 'expired', failedAttempts: newAttempts, expiredAt: now(), lastRetryError: err.message, updatedAt: now() });
+          await _notify(uid, 'subscription_expired', {
+            title: 'Subscription Expired',
+            body:  `Your ${sub.planName} plan has expired after 3 failed payment attempts. Reactivate anytime.`,
+            planId: sub.planId,
+          });
+          expired++;
+        } else {
+          await doc.ref.update({ failedAttempts: newAttempts, lastRetryAt: now(), lastRetryError: err.message, updatedAt: now() });
+        }
+      }
+    }
+
+    logger.info('[sub-retry] Done', { retried, expired, total: snap.size });
+  }
+);
+
+/* ════════════════════════════════════════════════════════════
+   CF 6. subDowngrade
+   onCall — schedule or immediately apply a plan downgrade.
+   Schedules by default (effective at period end). Immediate
+   downgrades archive excess listings to read-only status.
+════════════════════════════════════════════════════════════ */
+exports.subDowngrade = onCall(
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+    const uid = req.auth.uid;
+    const { newPlanId, billingCycle = 'monthly', immediate = false } = req.data || {};
+    if (!newPlanId) throw new HttpsError('invalid-argument', 'newPlanId required');
+
+    const fsdb = db();
+
+    const planSnap = await fsdb.collection('subscriptionPlans').doc(newPlanId).get();
+    if (!planSnap.exists) throw new HttpsError('not-found', `Plan ${newPlanId} not found`);
+    const newPlan  = { id: newPlanId, ...planSnap.data() };
+    if (!newPlan.isActive) throw new HttpsError('failed-precondition', 'Plan not active');
+
+    const curSnap = await fsdb.collection('subscriptions')
+      .where('uid', '==', uid)
+      .where('hubType', '==', newPlan.hubType)
+      .orderBy('updatedAt', 'desc').limit(1).get();
+
+    if (curSnap.empty) throw new HttpsError('not-found', 'No active subscription for this hub type');
+    const curDoc  = curSnap.docs[0];
+    const curSub  = curDoc.data();
+
+    const tierRank = { free: 0, basic: 1, starter: 1, premium: 2, pro: 2, business: 3, enterprise: 4 };
+    const curRank  = tierRank[curSub.tier]  ?? 2;
+    const newRank  = tierRank[newPlan.tier] ?? 2;
+    if (newRank >= curRank) throw new HttpsError('invalid-argument', 'Use subUpgradeWithProration for upgrades');
+
+    const update = {
+      pendingDowngradePlanId: newPlanId,
+      pendingDowngradeCycle:  billingCycle,
+      pendingDowngradeAt:     immediate ? 'immediate' : 'period_end',
+      updatedAt:              now(),
+    };
+
+    let archivedListings = 0;
+
+    if (immediate) {
+      const periodEnd = _periodEnd(new Date(), billingCycle);
+      const graceEnd  = _addDays(periodEnd, newPlan.grace?.days || 3);
+      Object.assign(update, {
+        planId:              newPlanId,
+        tier:                newPlan.tier,
+        planName:            newPlan.name || newPlanId,
+        billingCycle,
+        status:              'active',
+        currentPeriodStart:  admin.firestore.Timestamp.fromDate(new Date()),
+        currentPeriodEnd:    admin.firestore.Timestamp.fromDate(periodEnd),
+        graceEnd:            admin.firestore.Timestamp.fromDate(graceEnd),
+        nextBillingDate:     admin.firestore.Timestamp.fromDate(periodEnd),
+        features:            newPlan.features || {},
+        downgradedFromPlanId: curSub.planId,
+        downgradedAt:        now(),
+      });
+      delete update.pendingDowngradePlanId;
+
+      /* Archive excess listings if new limit is lower */
+      const oldLimit = curSub.features?.listings_limit ?? -1;
+      const newLimit = (newPlan.features || {}).listings_limit ?? -1;
+      if (newLimit !== -1 && (oldLimit === -1 || oldLimit > newLimit)) {
+        try {
+          const lstSnap = await fsdb.collection('listings')
+            .where('sellerId', '==', uid).where('status', '==', 'active')
+            .orderBy('createdAt', 'desc').get();
+          const toArchive = lstSnap.docs.slice(newLimit);
+          const batch = fsdb.batch();
+          toArchive.forEach(d => batch.update(d.ref, { status: 'archived', archivedReason: 'plan_downgrade', archivedAt: now() }));
+          if (toArchive.length) await batch.commit();
+          archivedListings = toArchive.length;
+        } catch (e) {
+          logger.warn('[subDowngrade] listing archive failed', { uid, err: e.message });
+        }
+      }
+
+      await fsdb.collection('users').doc(uid).update({
+        [`subscription.${newPlan.hubType}.planId`]:   newPlanId,
+        [`subscription.${newPlan.hubType}.tier`]:     newPlan.tier,
+        [`subscription.${newPlan.hubType}.features`]: newPlan.features || {},
+        [`subscription.${newPlan.hubType}.updatedAt`]: now(),
+      });
+    }
+
+    await curDoc.ref.update(update);
+
+    await fsdb.collection('subscriptionAuditLog').add({
+      action: immediate ? 'downgrade_immediate' : 'downgrade_scheduled',
+      uid, newPlanId, previousPlanId: curSub.planId,
+      hubType: newPlan.hubType, immediate, timestamp: now(),
+    });
+
+    await fsdb.collection('notifications').add({
+      uid,
+      type:  'subscription_downgraded',
+      title: immediate ? `Downgraded to ${newPlan.name}` : `Downgrade Scheduled`,
+      body:  immediate
+        ? `Your plan is now ${newPlan.name}. ${archivedListings ? archivedListings + ' listings archived.' : ''}`
+        : `Your current plan continues until period end, then changes to ${newPlan.name}.`,
+      planId: newPlanId, read: false, createdAt: now(),
+    });
+
+    logger.info('[subDowngrade] Done', { uid, newPlanId, immediate, archivedListings });
+
+    return { status: 'ok', immediate, newPlanId, effectiveAt: immediate ? 'now' : 'period_end', archivedListings };
+  }
+);
+

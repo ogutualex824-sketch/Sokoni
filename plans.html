@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plans & Pricing — SOKONI</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050505;--sur:#0d0d0d;--sur2:#141414;--bor:#1a1a1a;--bor2:#222;
+  --g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);
+  --txt:#e8e8e8;--sub:#6b7280;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;
+  --radius:12px;
+}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;min-height:100vh;font-size:14px;padding-bottom:80px}
+
+/* Hero */
+.hero{text-align:center;padding:48px 20px 32px}
+.hero h1{font-size:clamp(24px,5vw,40px);font-weight:800;color:var(--txt);line-height:1.2}
+.hero h1 span{color:var(--g)}
+.hero p{font-size:15px;color:var(--sub);margin-top:10px;max-width:520px;margin-inline:auto}
+
+/* Billing toggle */
+.billing-toggle{display:flex;align-items:center;justify-content:center;gap:12px;margin:24px 0 8px}
+.billing-toggle label{font-size:13px;color:var(--sub);cursor:pointer}
+.billing-toggle label.active{color:var(--txt);font-weight:600}
+.toggle-wrap{position:relative;width:44px;height:24px;cursor:pointer}
+.toggle-wrap input{opacity:0;width:0;height:0}
+.toggle-track{position:absolute;inset:0;background:var(--bor2);border-radius:12px;transition:background .2s}
+.toggle-wrap input:checked ~ .toggle-track{background:var(--g)}
+.toggle-thumb{position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle-wrap input:checked ~ .toggle-track .toggle-thumb{transform:translateX(20px)}
+.save-badge{background:var(--ga);border:1px solid var(--g);color:var(--g);font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
+
+/* Hub tabs */
+.hub-scroll{overflow-x:auto;padding:0 20px;border-bottom:1px solid var(--bor);background:var(--sur);position:sticky;top:0;z-index:10}
+.hub-tabs{display:flex;gap:2px;min-width:max-content}
+.hub-tab{padding:12px 16px;font-size:12px;font-weight:500;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
+.hub-tab:hover{color:var(--txt)}
+.hub-tab.active{color:var(--g);border-bottom-color:var(--g)}
+
+/* Plans grid */
+.plans-container{padding:28px 20px;max-width:1100px;margin:0 auto}
+.plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+
+/* Plan card */
+.plan-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:24px;display:flex;flex-direction:column;transition:border .25s,transform .25s}
+.plan-card:hover{border-color:rgba(113,255,0,.4);transform:translateY(-2px)}
+.plan-card.popular{border-color:var(--g);position:relative}
+.popular-badge{position:absolute;top:-1px;left:50%;transform:translateX(-50%);background:var(--g);color:#000;font-size:10px;font-weight:800;padding:3px 12px;border-radius:0 0 8px 8px;text-transform:uppercase;letter-spacing:.06em}
+.plan-tier{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.plan-name{font-size:18px;font-weight:800;margin-bottom:12px}
+.plan-price-wrap{margin-bottom:20px}
+.plan-price{font-size:32px;font-weight:800;color:var(--txt)}
+.plan-price .currency{font-size:18px;font-weight:600;vertical-align:top;margin-top:6px;display:inline-block}
+.plan-price .period{font-size:13px;color:var(--sub);font-weight:400}
+.plan-price.free-price{font-size:28px;color:var(--g)}
+.plan-annual-note{font-size:11px;color:var(--sub);margin-top:3px}
+.trial-badge{display:inline-block;background:var(--ga);border:1px solid var(--g);color:var(--g);font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;margin-bottom:14px}
+.plan-features{flex:1;display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.feature-row{display:flex;align-items:flex-start;gap:8px;font-size:13px}
+.feature-icon{width:16px;flex-shrink:0;margin-top:1px;font-style:normal}
+.feature-icon.check{color:var(--g)}
+.feature-icon.cross{color:var(--sub)}
+.feature-row.faded{opacity:.45}
+.plan-cta{margin-top:auto}
+.btn-plan{width:100%;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:none;transition:all .2s}
+.btn-plan-primary{background:var(--g);color:#000}
+.btn-plan-primary:hover{opacity:.85}
+.btn-plan-outline{background:transparent;border:1px solid var(--bor2);color:var(--txt)}
+.btn-plan-outline:hover{border-color:var(--g);color:var(--g)}
+.btn-plan-current{background:var(--sur2);border:1px solid var(--bor2);color:var(--sub);cursor:default}
+
+/* Spinner */
+.spinner-wrap{text-align:center;padding:60px;color:var(--sub)}
+.spinner{width:28px;height:28px;border:2px solid var(--bor2);border-top-color:var(--g);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Compare table */
+.compare-section{padding:20px;max-width:1100px;margin:0 auto}
+.compare-title{font-size:20px;font-weight:700;margin-bottom:16px;text-align:center}
+.compare-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--sur2);color:var(--sub);font-weight:600;padding:10px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:48px;z-index:5}
+td{padding:10px 14px;border-top:1px solid var(--bor)}
+td:first-child{color:var(--sub)}
+.td-check{color:var(--g);text-align:center}
+.td-cross{color:var(--sur2);text-align:center}
+
+/* Toast */
+#toast{position:fixed;bottom:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 18px;border-radius:8px;font-size:13px;font-weight:500;background:var(--sur2);border:1px solid var(--bor2);color:var(--txt);animation:fadeIn .2s;max-width:320px}
+.toast.success{background:var(--ga);border-color:var(--g);color:var(--g)}
+.toast.error{background:rgba(239,68,68,.12);border-color:var(--red);color:var(--red)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:28px;max-width:440px;width:100%}
+.modal h3{font-size:18px;font-weight:700;margin-bottom:6px}
+.modal p{color:var(--sub);font-size:13px;margin-bottom:20px}
+.modal-price{font-size:28px;font-weight:800;color:var(--g);margin-bottom:20px}
+.modal-actions{display:flex;gap:10px}
+.modal-actions button{flex:1;padding:12px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;border:none;transition:all .2s}
+.btn-confirm{background:var(--g);color:#000}
+.btn-cancel-m{background:transparent;border:1px solid var(--bor2);color:var(--txt)}
+.btn-confirm:hover{opacity:.85}
+.btn-cancel-m:hover{border-color:var(--red);color:var(--red)}
+
+@media(max-width:480px){
+  .hero{padding:32px 16px 20px}
+  .plans-container{padding:20px 14px}
+  .plans-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <h1>Simple, <span>transparent</span> pricing</h1>
+  <p>Unlock the full power of SOKONI. Every plan includes a free trial — no credit card required.</p>
+</div>
+
+<!-- Billing toggle -->
+<div class="billing-toggle">
+  <label id="lbl-monthly" class="active">Monthly</label>
+  <label class="toggle-wrap">
+    <input type="checkbox" id="billing-toggle-input" onchange="toggleBilling()">
+    <div class="toggle-track"><div class="toggle-thumb"></div></div>
+  </label>
+  <label id="lbl-annual" onclick="document.getElementById('billing-toggle-input').checked=true;toggleBilling()">Annual <span class="save-badge">Save 17%</span></label>
+</div>
+
+<!-- Hub type tabs -->
+<div class="hub-scroll">
+  <div class="hub-tabs" id="hub-tabs"></div>
+</div>
+
+<!-- Plans -->
+<div class="plans-container" id="plans-container">
+  <div class="spinner-wrap"><div class="spinner"></div><p>Loading plans…</p></div>
+</div>
+
+<!-- Confirm modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3 id="modal-title">Start your plan</h3>
+    <p id="modal-desc"></p>
+    <div class="modal-price" id="modal-price"></div>
+    <div id="modal-trial-note" style="font-size:12px;color:var(--g);margin-bottom:16px;display:none"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel-m" onclick="closeModal()">Cancel</button>
+      <button class="btn-confirm" id="modal-confirm-btn" onclick="confirmSubscribe()">Confirm &amp; Pay</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+firebase.initializeApp(window.SOKONI_CONFIG || {});
+const auth = firebase.auth();
+const fns  = firebase.app().functions('us-central1');
+
+function esc(s){const d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML}
+function fmtKES(c){return 'KES '+Math.round((c||0)/100).toLocaleString('en-KE')}
+function toast(msg,type='info'){
+  const el=document.createElement('div');
+  el.className='toast'+(type==='success'?' success':type==='error'?' error':'');
+  el.textContent=msg;
+  const container=document.getElementById('toast');
+  container.appendChild(el);
+  setTimeout(()=>el.remove(),3500);
+}
+
+const HUB_LABELS = {
+  seller:'Sellers', service_provider:'Service Providers', restaurant:'Restaurants',
+  hotel:'Hotels', pharmacy:'Pharmacies', driver:'Drivers',
+  property_agent:'Property', car_dealer:'Car Dealers', freelancer:'Freelancers',
+  recruiter:'Recruiters', buyer:'Buyers', enterprise:'Enterprise',
+};
+
+const POPULAR = {seller:'seller_pro', service_provider:'provider_pro', restaurant:'restaurant_pro',
+  hotel:'hotel_pro', pharmacy:'pharmacy_pro', property_agent:'property_pro',
+  car_dealer:'car_dealer_pro', freelancer:'freelancer_pro', recruiter:'recruiter_pro',
+  buyer:'buyer_premium', enterprise:'enterprise'};
+
+const FEATURE_LABELS = {
+  listings_limit:'Listings', photos_per_listing:'Photos/listing', featured_listings:'Featured listings',
+  analytics:'Analytics', bulk_import:'Bulk import', priority_support:'Priority support',
+  ai_assistant:'AI Assistant', team_members:'Team members', storage_gb:'Storage (GB)',
+  commission_discount_pct:'Commission discount (%)', badge_verified:'Verified badge',
+  api_access:'API access', custom_domain:'Custom domain', dedicated_account_manager:'Account manager',
+  online_booking:'Online booking', services_limit:'Services', calendar:'Booking calendar',
+  priority_listing:'Priority listing', menu_items:'Menu items', online_ordering:'Online ordering',
+  delivery_zones:'Delivery zones', table_reservations:'Table reservations',
+  kds_integration:'KDS integration', pos_integration:'POS integration',
+  room_types:'Room types', booking_calendar:'Booking calendar', channel_manager:'Channel manager',
+  multi_branch:'Multi-branch', products_limit:'Products', prescription_upload:'Prescription upload',
+  delivery:'Delivery', etims:'eTIMS integration', priority_dispatch:'Priority dispatch',
+  earnings_analytics:'Earnings analytics', bonus_multiplier:'Bonus multiplier',
+  portfolio_items:'Portfolio items', featured_listing:'Featured listing',
+  vehicle_history:'Vehicle history', virtual_tours:'Virtual tours',
+  cv_database_access:'CV database', featured_posts:'Featured posts', ai_screening:'AI screening',
+  job_posts:'Job posts', early_access:'Early access', exclusive_deals:'Exclusive deals',
+  free_delivery:'Free delivery', cashback_pct:'Cashback (%)',
+  white_label:'White label', sla:'SLA guarantee',
+};
+
+let allPlans = [], currentHub = 'seller', billingCycle = 'monthly', currentUser = null, currentSubs = {};
+let pendingPlan = null;
+
+auth.onAuthStateChanged(async user => {
+  currentUser = user;
+  if (user) {
+    try {
+      const res = await fns.httpsCallable('subGetStatus')({});
+      (res.data?.subscriptions || []).forEach(s => { currentSubs[s.hubType] = s; });
+    } catch(e) { /* not fatal */ }
+  }
+  await loadPlans();
+});
+
+async function loadPlans() {
+  try {
+    const res = await fns.httpsCallable('subGetPlans')({});
+    allPlans = res.data?.plans || [];
+    buildHubTabs();
+    renderPlans();
+  } catch(err) {
+    document.getElementById('plans-container').innerHTML =
+      `<p style="text-align:center;color:var(--red);padding:40px">${esc('Failed to load plans: '+err.message)}</p>`;
+  }
+}
+
+function buildHubTabs() {
+  const hubTypes = [...new Set(allPlans.map(p => p.hubType).filter(Boolean))];
+  const tabs = document.getElementById('hub-tabs');
+  tabs.innerHTML = hubTypes.map(h => `
+    <div class="hub-tab${h===currentHub?' active':''}" onclick="switchHub('${esc(h)}')">${esc(HUB_LABELS[h]||h)}</div>
+  `).join('');
+}
+
+function switchHub(hub) {
+  currentHub = hub;
+  document.querySelectorAll('.hub-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.hub-tab').forEach(t => { if(t.textContent.trim()===(HUB_LABELS[hub]||hub)) t.classList.add('active'); });
+  renderPlans();
+}
+
+function toggleBilling() {
+  billingCycle = document.getElementById('billing-toggle-input').checked ? 'annual' : 'monthly';
+  document.getElementById('lbl-monthly').classList.toggle('active', billingCycle==='monthly');
+  document.getElementById('lbl-annual').classList.toggle('active', billingCycle==='annual');
+  renderPlans();
+}
+
+function renderPlans() {
+  const hubPlans = allPlans.filter(p => p.hubType === currentHub);
+  if (!hubPlans.length) {
+    document.getElementById('plans-container').innerHTML =
+      '<p style="text-align:center;color:var(--sub);padding:40px">No plans available for this hub.</p>';
+    return;
+  }
+
+  const popularId = POPULAR[currentHub] || '';
+  const curSub    = currentSubs[currentHub];
+
+  const cards = hubPlans.map(plan => {
+    const price = billingCycle === 'annual' ? plan.priceAnnual : plan.priceMonthly;
+    const isFree = price === 0;
+    const isPopular = plan.id === popularId;
+    const isCurrent = curSub?.planId === plan.id && ['active','trialing','grace'].includes(curSub?.status);
+    const trialDays = plan.trial?.days || 0;
+    const features = plan.features || {};
+    const featureKeys = Object.keys(features).slice(0, 8);
+
+    const priceHtml = isFree
+      ? `<div class="plan-price free-price">Free</div>`
+      : `<div class="plan-price"><span class="currency">KES</span>${Math.round(price/100).toLocaleString('en-KE')}<span class="period">/${billingCycle==='annual'?'yr':'mo'}</span></div>
+         ${billingCycle==='annual'?`<div class="plan-annual-note">≈ KES ${Math.round(price/100/12).toLocaleString('en-KE')}/mo billed annually</div>`:''}`;
+
+    const trialHtml = trialDays > 0 && !isCurrent
+      ? `<div class="trial-badge">${esc(trialDays)}-day free trial</div>` : '';
+
+    const featuresHtml = featureKeys.map(k => {
+      const val = features[k];
+      const label = FEATURE_LABELS[k] || k.replace(/_/g,' ');
+      let display, enabled = true;
+      if (val === true)            { display = label; }
+      else if (val === false)      { display = label; enabled = false; }
+      else if (val === -1)         { display = `${label}: Unlimited`; }
+      else if (typeof val==='number'){ display = `${label}: ${val}`; }
+      else                         { display = `${label}: ${val}`; }
+      return `<div class="feature-row${enabled?'':' faded'}">
+        <i class="feature-icon ${enabled?'check':'cross'}">${enabled?'✓':'×'}</i>
+        <span>${esc(display)}</span>
+      </div>`;
+    }).join('');
+
+    let ctaHtml;
+    if (isCurrent) {
+      ctaHtml = `<button class="btn-plan btn-plan-current">Current Plan</button>`;
+    } else if (isFree) {
+      ctaHtml = `<button class="btn-plan btn-plan-outline" onclick="startFree('${esc(plan.id)}','${esc(plan.hubType)}','${esc(plan.name)}')">Get Started Free</button>`;
+    } else {
+      ctaHtml = `<button class="btn-plan btn-plan-primary" onclick="openModal(${JSON.stringify({id:plan.id,name:plan.name,hubType:plan.hubType,price,trialDays,tier:plan.tier}).replace(/"/g,'&quot;')})">
+        ${trialDays>0?`Start Free Trial`:`Subscribe Now`}
+      </button>`;
+    }
+
+    return `<div class="plan-card${isPopular?' popular':''}">
+      ${isPopular?`<div class="popular-badge">Most Popular</div>`:''}
+      <div class="plan-tier">${esc(plan.tier||'free')}</div>
+      <div class="plan-name">${esc(plan.name)}</div>
+      ${priceHtml}
+      ${trialHtml}
+      <div class="plan-features">${featuresHtml}</div>
+      <div class="plan-cta">${ctaHtml}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('plans-container').innerHTML = `<div class="plans-grid">${cards}</div>`;
+}
+
+function startFree(planId, hubType, planName) {
+  if (!currentUser) { location.href = 'login.html?redirect=plans'; return; }
+  fns.httpsCallable('subActivate')({ planId, billingCycle: 'monthly', paymentRef: 'free' })
+    .then(() => {
+      currentSubs[hubType] = { planId, status: 'active' };
+      renderPlans();
+      toast(`${planName} activated`, 'success');
+    })
+    .catch(e => toast('Error: '+e.message, 'error'));
+}
+
+let _pendingPlan = null;
+function openModal(plan) {
+  if (!currentUser) { location.href = 'login.html?redirect=plans'; return; }
+  _pendingPlan = plan;
+  const price = billingCycle === 'annual' ? plan.price : plan.price;
+  document.getElementById('modal-title').textContent = plan.name;
+  document.getElementById('modal-desc').textContent =
+    `${billingCycle === 'annual' ? 'Annual' : 'Monthly'} subscription for ${plan.hubType.replace(/_/g,' ')} hub`;
+  document.getElementById('modal-price').textContent = `KES ${Math.round(price/100).toLocaleString('en-KE')}/${billingCycle==='annual'?'year':'month'}`;
+  const trialNote = document.getElementById('modal-trial-note');
+  if (plan.trialDays > 0) {
+    trialNote.textContent = `Starts with a ${plan.trialDays}-day free trial`;
+    trialNote.style.display = 'block';
+  } else {
+    trialNote.style.display = 'none';
+  }
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+  _pendingPlan = null;
+}
+
+async function confirmSubscribe() {
+  if (!_pendingPlan) return;
+  const plan = _pendingPlan;
+  const btn  = document.getElementById('modal-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = 'Processing…';
+
+  try {
+    if (plan.trialDays > 0) {
+      /* Start trial — no payment needed */
+      await fns.httpsCallable('subActivate')({
+        planId: plan.id,
+        billingCycle,
+        paymentRef: `trial_${plan.id}_${Date.now()}`,
+        startTrial: true,
+      });
+      currentSubs[plan.hubType] = { planId: plan.id, status: 'trialing' };
+      toast(`${plan.name} trial started!`, 'success');
+      closeModal();
+      renderPlans();
+    } else {
+      /* Redirect to checkout with plan pre-selected */
+      closeModal();
+      const priceKES = Math.round(plan.price / 100);
+      location.href = `checkout.html?type=subscription&planId=${encodeURIComponent(plan.id)}&cycle=${billingCycle}&amount=${priceKES}&name=${encodeURIComponent(plan.name)}`;
+    }
+  } catch(err) {
+    toast('Error: '+err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Confirm & Pay';
+  }
+}
+
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+</script>
+</body>
+</html>
