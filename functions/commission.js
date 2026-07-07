@@ -477,3 +477,313 @@ exports.getAdminRevenueByHub = onCall(
     return { periodDays, generatedAt: now, totals, hubs, dailyTrend };
   }
 );
+
+/* ─────────────────────────────────────────────────────────────
+   8. processSettlement
+   Admin-only. Releases escrow, credits seller wallet, writes
+   double-entry ledger entry. Idempotent on orderId.
+──────────────────────────────────────────────────────────────*/
+exports.processSettlement = onCall(
+  { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
+  async (req) => {
+    _assertAdmin(req);
+    const uid = req.auth.uid;
+    const { orderId, sellerNetCents, commissionCents, category, sellerId, description } = req.data;
+
+    if (!orderId)  throw new HttpsError('invalid-argument', 'orderId required');
+    if (!sellerId) throw new HttpsError('invalid-argument', 'sellerId required');
+    if (typeof sellerNetCents !== 'number' || !Number.isInteger(sellerNetCents) || sellerNetCents < 0)
+      throw new HttpsError('invalid-argument', 'sellerNetCents must be a non-negative integer');
+    if (typeof commissionCents !== 'number' || !Number.isInteger(commissionCents) || commissionCents < 0)
+      throw new HttpsError('invalid-argument', 'commissionCents must be a non-negative integer');
+
+    const db            = _db();
+    const FieldValue    = admin.firestore.FieldValue;
+    const settlementRef = db.collection('settlements').doc(orderId);
+
+    /* Idempotency guard — fast pre-check before acquiring transaction */
+    const existing = await settlementRef.get();
+    if (existing.exists) {
+      logger.warn('[commission] processSettlement — duplicate blocked', { orderId });
+      throw new HttpsError('already-exists', `Settlement for order ${orderId} already processed`);
+    }
+
+    await db.runTransaction(async (txn) => {
+      const walletRef  = db.collection('wallets').doc(sellerId);
+      const walletSnap = await txn.get(walletRef);
+
+      /* Write settlement record */
+      txn.set(settlementRef, {
+        orderId,
+        sellerId,
+        sellerNetCents,
+        commissionCents,
+        category:    category    || null,
+        status:      'settled',
+        settledAt:   _now(),
+        settledBy:   uid,
+        description: description || '',
+      });
+
+      /* Create or update seller wallet */
+      if (!walletSnap.exists) {
+        txn.set(walletRef, {
+          sellerId,
+          availableBalance:    sellerNetCents,
+          withdrawableBalance: 0,
+          pendingBalance:      0,
+          heldBalance:         0,
+          lifetimeEarnings:    sellerNetCents,
+          lifetimeWithdrawals: 0,
+          lifetimeRefunds:     0,
+          createdAt:           _now(),
+          updatedAt:           _now(),
+        });
+      } else {
+        txn.update(walletRef, {
+          availableBalance: FieldValue.increment(sellerNetCents),
+          lifetimeEarnings: FieldValue.increment(sellerNetCents),
+          updatedAt:        _now(),
+        });
+      }
+
+      /* Double-entry ledger */
+      txn.set(db.collection('ledger').doc(), {
+        type:        'seller_earning',
+        sellerId,
+        orderId,
+        amountCents: sellerNetCents,
+        description: description || `Settlement for order ${orderId}`,
+        category:    category    || null,
+        createdAt:   _now(),
+      });
+    });
+
+    logger.info('[commission] processSettlement complete', { orderId, sellerId, sellerNetCents });
+    return { orderId, settled: true, sellerNetKES: sellerNetCents / 100 };
+  }
+);
+
+/* ─────────────────────────────────────────────────────────────
+   9. requestWithdrawal
+   Auth required (seller). Deducts withdrawableBalance and creates
+   a pending withdrawal record in a single atomic transaction.
+──────────────────────────────────────────────────────────────*/
+exports.requestWithdrawal = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+    const uid = req.auth.uid;
+    const { amountCents, method, accountDetails = {} } = req.data;
+
+    if (typeof amountCents !== 'number' || !Number.isInteger(amountCents) || amountCents < 10000)
+      throw new HttpsError('invalid-argument', 'amountCents must be an integer >= 10000 (KES 100 minimum)');
+    if (!['mpesa', 'bank'].includes(method))
+      throw new HttpsError('invalid-argument', "method must be 'mpesa' or 'bank'");
+
+    const db         = _db();
+    const FieldValue = admin.firestore.FieldValue;
+
+    /* Pre-check withdrawable balance (fast fail before transaction) */
+    const walletSnap = await db.collection('wallets').doc(uid).get();
+    if (!walletSnap.exists)
+      throw new HttpsError('failed-precondition', 'Wallet not found — no earnings available for withdrawal');
+    const withdrawable = walletSnap.data().withdrawableBalance || 0;
+    if (withdrawable < amountCents)
+      throw new HttpsError(
+        'failed-precondition',
+        `Insufficient withdrawable balance. Available: KES ${(withdrawable / 100).toFixed(2)}, Requested: KES ${(amountCents / 100).toFixed(2)}`
+      );
+
+    /* Pre-generate withdrawal ID so it can be returned to the caller */
+    const withdrawalRef = db.collection('withdrawals').doc();
+    const withdrawalId  = withdrawalRef.id;
+
+    await db.runTransaction(async (txn) => {
+      const walletRef     = db.collection('wallets').doc(uid);
+      const walletTxnSnap = await txn.get(walletRef);
+      const bal           = walletTxnSnap.data()?.withdrawableBalance || 0;
+
+      /* Re-validate inside transaction to guard against race conditions */
+      if (bal < amountCents)
+        throw new HttpsError('failed-precondition', 'Insufficient withdrawable balance — concurrent request detected');
+
+      txn.update(walletRef, {
+        withdrawableBalance: FieldValue.increment(-amountCents),
+        pendingBalance:      FieldValue.increment(amountCents),
+        updatedAt:           _now(),
+      });
+
+      txn.set(withdrawalRef, {
+        withdrawalId,
+        sellerId:       uid,
+        amountCents,
+        method,
+        accountDetails,
+        status:         'pending',
+        requestedAt:    _now(),
+      });
+    });
+
+    logger.info('[commission] requestWithdrawal', { withdrawalId, uid, amountCents, method });
+    return { withdrawalId, amountKES: amountCents / 100, status: 'pending' };
+  }
+);
+
+/* ─────────────────────────────────────────────────────────────
+   10. approveWithdrawal
+   Admin-only. Moves pendingBalance to lifetimeWithdrawals and
+   marks the withdrawal as approved. Writes a ledger entry.
+──────────────────────────────────────────────────────────────*/
+exports.approveWithdrawal = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  async (req) => {
+    _assertAdmin(req);
+    const uid = req.auth.uid;
+    const { withdrawalId, paymentReference = '' } = req.data;
+    if (!withdrawalId) throw new HttpsError('invalid-argument', 'withdrawalId required');
+
+    const db            = _db();
+    const FieldValue    = admin.firestore.FieldValue;
+    const withdrawalRef = db.collection('withdrawals').doc(withdrawalId);
+
+    const withdrawalSnap = await withdrawalRef.get();
+    if (!withdrawalSnap.exists) throw new HttpsError('not-found', 'Withdrawal not found');
+    const wd = withdrawalSnap.data();
+    if (wd.status !== 'pending')
+      throw new HttpsError('failed-precondition', `Withdrawal is not pending (current status: ${wd.status})`);
+
+    const { sellerId, amountCents } = wd;
+
+    await db.runTransaction(async (txn) => {
+      txn.update(withdrawalRef, {
+        status:           'approved',
+        approvedBy:       uid,
+        approvedAt:       _now(),
+        paymentReference: paymentReference || '',
+      });
+
+      txn.update(db.collection('wallets').doc(sellerId), {
+        pendingBalance:      FieldValue.increment(-amountCents),
+        lifetimeWithdrawals: FieldValue.increment(amountCents),
+        updatedAt:           _now(),
+      });
+
+      txn.set(db.collection('ledger').doc(), {
+        type:             'withdrawal',
+        sellerId,
+        amountCents,
+        description:      'Withdrawal approved',
+        withdrawalId,
+        paymentReference: paymentReference || '',
+        createdAt:        _now(),
+      });
+    });
+
+    logger.info('[commission] approveWithdrawal', { withdrawalId, sellerId, amountCents });
+    return { withdrawalId, approved: true };
+  }
+);
+
+/* ─────────────────────────────────────────────────────────────
+   11. rejectWithdrawal
+   Admin-only. Reverts the balance hold: restores withdrawableBalance
+   and clears pendingBalance. Does not write a ledger entry.
+──────────────────────────────────────────────────────────────*/
+exports.rejectWithdrawal = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  async (req) => {
+    _assertAdmin(req);
+    const uid = req.auth.uid;
+    const { withdrawalId, reason = '' } = req.data;
+    if (!withdrawalId) throw new HttpsError('invalid-argument', 'withdrawalId required');
+
+    const db            = _db();
+    const FieldValue    = admin.firestore.FieldValue;
+    const withdrawalRef = db.collection('withdrawals').doc(withdrawalId);
+
+    const withdrawalSnap = await withdrawalRef.get();
+    if (!withdrawalSnap.exists) throw new HttpsError('not-found', 'Withdrawal not found');
+    const wd = withdrawalSnap.data();
+    if (wd.status !== 'pending')
+      throw new HttpsError('failed-precondition', `Withdrawal is not pending (current status: ${wd.status})`);
+
+    const { sellerId, amountCents } = wd;
+
+    await db.runTransaction(async (txn) => {
+      txn.update(withdrawalRef, {
+        status:          'rejected',
+        rejectedBy:      uid,
+        rejectedAt:      _now(),
+        rejectionReason: reason || '',
+      });
+
+      txn.update(db.collection('wallets').doc(sellerId), {
+        withdrawableBalance: FieldValue.increment(amountCents),
+        pendingBalance:      FieldValue.increment(-amountCents),
+        updatedAt:           _now(),
+      });
+    });
+
+    logger.info('[commission] rejectWithdrawal', { withdrawalId, sellerId, reason });
+    return { withdrawalId, rejected: true };
+  }
+);
+
+/* ─────────────────────────────────────────────────────────────
+   12. getWithdrawals
+   Auth required. Sellers see only their own withdrawals; admins
+   see all. Supports status filter and cursor-based pagination.
+──────────────────────────────────────────────────────────────*/
+exports.getWithdrawals = onCall(
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+    const uid     = req.auth.uid;
+    const isAdmin = !!(req.auth.token?.admin || req.auth.token?.superAdmin);
+    const { status, pageSize = 20, cursor } = req.data || {};
+
+    const safePageSize = Math.min(Math.max(1, Number(pageSize) || 20), 100);
+
+    const db = _db();
+    let q    = db.collection('withdrawals');
+
+    /* Scope: sellers only see their own withdrawals */
+    if (!isAdmin) q = q.where('sellerId', '==', uid);
+    if (status)   q = q.where('status',   '==', status);
+
+    q = q.orderBy('requestedAt', 'desc').limit(safePageSize + 1);
+
+    if (cursor) q = q.startAfter(admin.firestore.Timestamp.fromMillis(cursor));
+
+    const snap    = await q.get();
+    const hasMore = snap.size > safePageSize;
+    const docs    = snap.docs.slice(0, safePageSize);
+
+    const withdrawals = docs.map(d => {
+      const data = d.data();
+      return {
+        id:               d.id,
+        withdrawalId:     data.withdrawalId     || d.id,
+        sellerId:         data.sellerId,
+        amountCents:      data.amountCents,
+        amountKES:        (data.amountCents || 0) / 100,
+        method:           data.method,
+        accountDetails:   data.accountDetails   || {},
+        status:           data.status,
+        paymentReference: data.paymentReference || null,
+        rejectionReason:  data.rejectionReason  || null,
+        requestedAt:      data.requestedAt?.toMillis?.()  || null,
+        approvedAt:       data.approvedAt?.toMillis?.()   || null,
+        rejectedAt:       data.rejectedAt?.toMillis?.()   || null,
+      };
+    });
+
+    const nextCursor = hasMore
+      ? docs[docs.length - 1].data().requestedAt?.toMillis?.() || null
+      : null;
+
+    logger.info('[commission] getWithdrawals', { uid, isAdmin, status, count: withdrawals.length });
+    return { withdrawals, hasMore, nextCursor };
+  }
+);

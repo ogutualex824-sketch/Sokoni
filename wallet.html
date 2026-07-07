@@ -15,7 +15,7 @@
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#00bcd4">
+  <meta name="theme-color" content="#050505">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="dns-prefetch" href="https://firestore.googleapis.com">
@@ -25,25 +25,27 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { -webkit-text-size-adjust: 100%; }
 
-    /* ── Design tokens ── */
+    /* ── Design tokens (premium dark) ── */
     :root {
-      --bg:      #f0f2ff;
-      --surface: #ffffff;
-      --border:  #e0e4f0;
-      --accent:  #00bcd4;
-      --green:   #4caf50;
-      --red:     #f44336;
-      --text:    #1a1a2e;
-      --muted:   #6b6b8a;
-      --card:    #ffffff;
-      --radius:  16px;
-      --shadow:  0 4px 20px rgba(0,0,0,.08);
+      --bg:     #050505;
+      --sur:    #0d0d0d;
+      --sur2:   #141414;
+      --bor:    #1a1a1a;
+      --bor2:   #222;
+      --g:      #71ff00;
+      --ga:     rgba(113,255,0,.12);
+      --txt:    #e8e8e8;
+      --sub:    #6b7280;
+      --red:    #ef4444;
+      --amber:  #f59e0b;
+      --blue:   #3b82f6;
+      --radius: 12px;
     }
 
     body {
       font-family: 'Segoe UI', Arial, sans-serif;
       background: var(--bg);
-      color: var(--text);
+      color: var(--txt);
       min-height: 100vh;
       padding-bottom: 40px;
     }
@@ -53,10 +55,10 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      background: rgba(255,255,255,.97);
+      background: rgba(5,5,5,.97);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--bor);
       display: flex;
       align-items: center;
       gap: 12px;
@@ -69,18 +71,18 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bg);
-      border: 1px solid var(--border);
+      background: var(--sur2);
+      border: 1px solid var(--bor);
       border-radius: 10px;
-      color: var(--text);
+      color: var(--txt);
       text-decoration: none;
       font-size: 15px;
       flex-shrink: 0;
       transition: background .15s, border-color .15s;
     }
-    .wal-nav-back:hover { background: #e0f7fa; border-color: var(--accent); color: var(--accent); }
+    .wal-nav-back:hover { background: var(--sur2); border-color: var(--g); color: var(--g); }
     .wal-nav-logo { height: 26px; object-fit: contain; }
-    .wal-nav-title { font-size: 16px; font-weight: 800; color: var(--text); flex: 1; }
+    .wal-nav-title { font-size: 16px; font-weight: 800; color: var(--txt); flex: 1; }
 
     /* ── Page wrapper ── */
     .wal-page {
@@ -91,12 +93,12 @@
 
     /* ── Balance Card ── */
     .wal-balance-card {
-      background: linear-gradient(135deg, #00bcd4, #7c4dff);
+      background: linear-gradient(135deg, #0d1a00, #0a0a0a);
       border-radius: 22px;
       padding: 28px 24px 22px;
       color: #fff;
       margin-bottom: 20px;
-      box-shadow: 0 8px 32px rgba(0,188,212,.28);
+      box-shadow: 0 8px 32px rgba(113,255,0,.12);
       position: relative;
       overflow: hidden;
     }
@@ -106,7 +108,7 @@
       top: -40px; right: -40px;
       width: 160px; height: 160px;
       border-radius: 50%;
-      background: rgba(255,255,255,.08);
+      background: rgba(113,255,0,.06);
       pointer-events: none;
     }
     .wal-balance-card::after {
@@ -115,7 +117,7 @@
       bottom: -60px; left: -30px;
       width: 200px; height: 200px;
       border-radius: 50%;
-      background: rgba(255,255,255,.05);
+      background: rgba(113,255,0,.03);
       pointer-events: none;
     }
     .wal-balance-brand {
@@ -161,9 +163,9 @@
     .wal-action-btn {
       flex: 1;
       padding: 12px 8px;
-      border: 1.5px solid rgba(255,255,255,.35);
+      border: 1.5px solid rgba(255,255,255,.2);
       border-radius: 12px;
-      background: rgba(255,255,255,.12);
+      background: rgba(255,255,255,.07);
       color: #fff;
       font-size: 13px;
       font-weight: 800;
@@ -177,15 +179,15 @@
       -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
     }
-    .wal-action-btn:hover { background: rgba(255,255,255,.22); }
+    .wal-action-btn:hover { background: rgba(113,255,0,.12); border-color: rgba(113,255,0,.4); }
     .wal-action-btn:active { transform: scale(.97); }
 
     /* ── Tabs ── */
     .wal-tabs {
       display: flex;
-      background: var(--surface);
+      background: var(--sur);
       border-radius: var(--radius) var(--radius) 0 0;
-      border: 1px solid var(--border);
+      border: 1px solid var(--bor);
       border-bottom: none;
       overflow: hidden;
     }
@@ -195,7 +197,7 @@
       background: none;
       border: none;
       border-bottom: 3px solid transparent;
-      color: var(--muted);
+      color: var(--sub);
       font-size: 12px;
       font-weight: 700;
       cursor: pointer;
@@ -208,17 +210,17 @@
       justify-content: center;
       gap: 5px;
     }
-    .wal-tab:hover { background: #f0f2ff; color: var(--accent); }
+    .wal-tab:hover { background: var(--sur2); color: var(--g); }
     .wal-tab.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-      background: rgba(0,188,212,.04);
+      color: var(--g);
+      border-bottom-color: var(--g);
+      background: var(--ga);
     }
 
     /* ── Tab panels ── */
     .wal-tab-content {
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: var(--sur);
+      border: 1px solid var(--bor);
       border-top: none;
       border-radius: 0 0 var(--radius) var(--radius);
     }
@@ -234,7 +236,7 @@
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 1px;
-      color: var(--muted);
+      color: var(--sub);
       margin-bottom: 12px;
     }
 
@@ -248,9 +250,9 @@
     .wal-amount-chip {
       padding: 8px 14px;
       border-radius: 50px;
-      border: 1.5px solid var(--border);
-      background: var(--bg);
-      color: var(--text);
+      border: 1.5px solid var(--bor);
+      background: var(--sur2);
+      color: var(--txt);
       font-size: 13px;
       font-weight: 700;
       cursor: pointer;
@@ -258,12 +260,12 @@
       transition: all .15s;
       -webkit-tap-highlight-color: transparent;
     }
-    .wal-amount-chip:hover { border-color: var(--accent); color: var(--accent); }
+    .wal-amount-chip:hover { border-color: var(--g); color: var(--g); }
     .wal-amount-chip.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-      box-shadow: 0 2px 10px rgba(0,188,212,.3);
+      background: var(--g);
+      border-color: var(--g);
+      color: #000;
+      box-shadow: 0 2px 10px rgba(113,255,0,.25);
     }
 
     /* ── Form elements ── */
@@ -272,17 +274,17 @@
       display: block;
       font-size: 12px;
       font-weight: 700;
-      color: var(--muted);
+      color: var(--sub);
       margin-bottom: 6px;
       letter-spacing: .3px;
     }
     .wal-input {
       width: 100%;
       padding: 14px 16px;
-      border: 1.5px solid var(--border);
+      border: 1px solid var(--bor);
       border-radius: 12px;
-      background: var(--bg);
-      color: var(--text);
+      background: var(--sur2);
+      color: var(--txt);
       font-size: 16px;
       font-family: inherit;
       outline: none;
@@ -291,11 +293,12 @@
       appearance: none;
     }
     .wal-input:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0,188,212,.12);
+      border-color: var(--g);
+      box-shadow: 0 0 0 3px rgba(113,255,0,.12);
     }
-    .wal-input::placeholder { color: #b0b8d0; }
+    .wal-input::placeholder { color: var(--sub); }
     select.wal-input { cursor: pointer; }
+    select.wal-input option { background: var(--sur2); color: var(--txt); }
 
     /* ── Buttons ── */
     .wal-btn {
@@ -319,25 +322,25 @@
     .wal-btn:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
     .wal-btn:active:not(:disabled) { transform: scale(.98); }
     .wal-btn-primary {
-      background: linear-gradient(135deg, #00bcd4, #7c4dff);
-      color: #fff;
-      box-shadow: 0 4px 18px rgba(0,188,212,.3);
+      background: var(--g);
+      color: #000;
+      box-shadow: 0 4px 18px rgba(113,255,0,.2);
     }
-    .wal-btn-primary:hover:not(:disabled) { opacity: .92; }
+    .wal-btn-primary:hover:not(:disabled) { opacity: .88; }
     .wal-btn-outline {
       background: transparent;
-      color: var(--accent);
-      border: 1.5px solid var(--accent);
+      color: var(--g);
+      border: 1.5px solid var(--g);
     }
-    .wal-btn-outline:hover:not(:disabled) { background: rgba(0,188,212,.06); }
+    .wal-btn-outline:hover:not(:disabled) { background: var(--ga); }
 
     /* ── Status area ── */
     .wal-status-area {
       display: none;
       margin-top: 16px;
       padding: 16px;
-      background: rgba(0,188,212,.05);
-      border: 1px solid rgba(0,188,212,.22);
+      background: var(--sur2);
+      border: 1px solid var(--bor);
       border-radius: 12px;
     }
     .wal-status-area.visible { display: block; }
@@ -345,8 +348,8 @@
       display: inline-block;
       width: 16px;
       height: 16px;
-      border: 2.5px solid rgba(0,188,212,.18);
-      border-top-color: var(--accent);
+      border: 2.5px solid var(--bor2);
+      border-top-color: var(--g);
       border-radius: 50%;
       animation: walSpin .75s linear infinite;
       flex-shrink: 0;
@@ -355,7 +358,7 @@
     .wal-status-text {
       font-size: 13px;
       font-weight: 600;
-      color: var(--text);
+      color: var(--txt);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -363,7 +366,7 @@
     }
     .wal-elapsed {
       font-size: 11px;
-      color: var(--muted);
+      color: var(--sub);
       font-weight: 600;
       margin-left: auto;
     }
@@ -382,14 +385,14 @@
     /* ── Note hint ── */
     .wal-note {
       font-size: 12px;
-      color: var(--muted);
+      color: var(--sub);
       margin-top: 14px;
       display: flex;
       align-items: flex-start;
       gap: 7px;
       line-height: 1.55;
     }
-    .wal-note i { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+    .wal-note i { color: var(--g); flex-shrink: 0; margin-top: 1px; }
 
     /* ── Filter buttons ── */
     .wal-filter-btns {
@@ -401,9 +404,9 @@
     .wal-filter-btn {
       padding: 7px 14px;
       border-radius: 50px;
-      border: 1.5px solid var(--border);
-      background: var(--bg);
-      color: var(--muted);
+      border: 1.5px solid var(--bor);
+      background: var(--sur2);
+      color: var(--sub);
       font-size: 12px;
       font-weight: 700;
       cursor: pointer;
@@ -411,11 +414,11 @@
       transition: all .15s;
       -webkit-tap-highlight-color: transparent;
     }
-    .wal-filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .wal-filter-btn:hover { border-color: var(--g); color: var(--g); }
     .wal-filter-btn.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
+      background: var(--g);
+      border-color: var(--g);
+      color: #000;
     }
 
     /* ── Transaction list ── */
@@ -425,7 +428,7 @@
       align-items: center;
       gap: 12px;
       padding: 14px 0;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--bor);
       animation: walFadeIn .2s ease;
     }
     .wal-tx-row:last-child { border-bottom: none; }
@@ -440,21 +443,21 @@
       font-size: 16px;
       flex-shrink: 0;
     }
-    .wal-tx-icon.credit { background: rgba(76,175,80,.1); color: var(--green); }
-    .wal-tx-icon.debit  { background: rgba(244,67,54,.1);  color: var(--red); }
+    .wal-tx-icon.credit { background: rgba(113,255,0,.1); color: var(--g); }
+    .wal-tx-icon.debit  { background: rgba(239,68,68,.1);  color: var(--red); }
     .wal-tx-body { flex: 1; min-width: 0; }
     .wal-tx-desc {
       font-size: 14px;
       font-weight: 600;
-      color: var(--text);
+      color: var(--txt);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .wal-tx-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .wal-tx-date { font-size: 11px; color: var(--sub); margin-top: 2px; }
     .wal-tx-right { text-align: right; flex-shrink: 0; }
     .wal-tx-amount { font-size: 15px; font-weight: 800; }
-    .wal-tx-amount.credit { color: var(--green); }
+    .wal-tx-amount.credit { color: var(--g); }
     .wal-tx-amount.debit  { color: var(--red); }
 
     /* ── Status badges ── */
@@ -467,13 +470,13 @@
       letter-spacing: .3px;
       margin-top: 3px;
     }
-    .wal-status-pending   { background: rgba(255,152,0,.1);  color: #e65100;       border: 1px solid rgba(255,152,0,.3); }
-    .wal-status-approved  { background: rgba(0,188,212,.1);  color: #006064;       border: 1px solid rgba(0,188,212,.3); }
-    .wal-status-rejected  { background: rgba(244,67,54,.1);  color: var(--red);    border: 1px solid rgba(244,67,54,.3); }
-    .wal-status-paid      { background: rgba(76,175,80,.1);  color: #1b5e20;       border: 1px solid rgba(76,175,80,.3); }
-    .wal-status-completed { background: rgba(76,175,80,.1);  color: #1b5e20;       border: 1px solid rgba(76,175,80,.3); }
-    .wal-status-failed    { background: rgba(244,67,54,.1);  color: var(--red);    border: 1px solid rgba(244,67,54,.3); }
-    .wal-status-cancelled { background: rgba(107,107,138,.1);color: var(--muted);  border: 1px solid rgba(107,107,138,.3); }
+    .wal-status-pending   { background: rgba(245,158,11,.1);  color: var(--amber);  border: 1px solid rgba(245,158,11,.3); }
+    .wal-status-approved  { background: var(--ga);            color: var(--g);      border: 1px solid rgba(113,255,0,.3); }
+    .wal-status-rejected  { background: rgba(239,68,68,.1);   color: var(--red);    border: 1px solid rgba(239,68,68,.3); }
+    .wal-status-paid      { background: rgba(113,255,0,.1);   color: var(--g);      border: 1px solid rgba(113,255,0,.3); }
+    .wal-status-completed { background: rgba(113,255,0,.1);   color: var(--g);      border: 1px solid rgba(113,255,0,.3); }
+    .wal-status-failed    { background: rgba(239,68,68,.1);   color: var(--red);    border: 1px solid rgba(239,68,68,.3); }
+    .wal-status-cancelled { background: rgba(107,114,128,.1); color: var(--sub);    border: 1px solid rgba(107,114,128,.3); }
 
     /* ── Load more ── */
     .wal-load-more { text-align: center; margin-top: 16px; }
@@ -482,7 +485,7 @@
     /* ── Payout section ── */
     .wal-payout-sub-tabs {
       display: flex;
-      border: 1.5px solid var(--border);
+      border: 1.5px solid var(--bor);
       border-radius: 10px;
       overflow: hidden;
       margin-bottom: 20px;
@@ -490,9 +493,9 @@
     .wal-payout-sub-tab {
       flex: 1;
       padding: 11px 8px;
-      background: var(--bg);
+      background: var(--sur2);
       border: none;
-      color: var(--muted);
+      color: var(--sub);
       font-size: 12px;
       font-weight: 700;
       cursor: pointer;
@@ -500,7 +503,7 @@
       transition: all .15s;
       -webkit-tap-highlight-color: transparent;
     }
-    .wal-payout-sub-tab.active { background: var(--accent); color: #fff; }
+    .wal-payout-sub-tab.active { background: var(--g); color: #000; }
     .wal-payout-sub-panel { display: none; }
     .wal-payout-sub-panel.active { display: block; }
 
@@ -513,10 +516,10 @@
     .wal-method-btn {
       flex: 1;
       padding: 14px 10px;
-      border: 2px solid var(--border);
+      border: 2px solid var(--bor);
       border-radius: 12px;
-      background: var(--bg);
-      color: var(--text);
+      background: var(--sur2);
+      color: var(--txt);
       font-size: 13px;
       font-weight: 700;
       cursor: pointer;
@@ -529,12 +532,12 @@
       -webkit-tap-highlight-color: transparent;
     }
     .wal-method-btn i { font-size: 22px; }
-    .wal-method-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .wal-method-btn:hover { border-color: var(--g); color: var(--g); }
     .wal-method-btn.active {
-      border-color: var(--accent);
-      background: rgba(0,188,212,.06);
-      color: var(--accent);
-      box-shadow: 0 2px 12px rgba(0,188,212,.16);
+      border-color: var(--g);
+      background: var(--ga);
+      color: var(--g);
+      box-shadow: 0 2px 12px rgba(113,255,0,.12);
     }
 
     .wal-bank-fields { display: none; }
@@ -547,15 +550,15 @@
       align-items: center;
       gap: 12px;
       padding: 14px 0;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--bor);
     }
     .wal-payout-row:last-child { border-bottom: none; }
     .wal-payout-icon {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: rgba(124,77,255,.1);
-      color: #7c4dff;
+      background: rgba(124,77,255,.12);
+      color: #9d6fff;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -566,17 +569,17 @@
     .wal-payout-desc {
       font-size: 14px;
       font-weight: 600;
-      color: var(--text);
+      color: var(--txt);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .wal-payout-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .wal-payout-meta { font-size: 11px; color: var(--sub); margin-top: 2px; }
     .wal-payout-right { text-align: right; flex-shrink: 0; }
     .wal-payout-amount {
       font-size: 15px;
       font-weight: 800;
-      color: #7c4dff;
+      color: #9d6fff;
     }
 
     /* ── Payout form ── */
@@ -590,19 +593,19 @@
     .wal-loading-spinner {
       width: 26px;
       height: 26px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
+      border: 3px solid var(--bor);
+      border-top-color: var(--g);
       border-radius: 50%;
       animation: walSpin .75s linear infinite;
       margin: 0 auto 10px;
     }
-    .wal-loading p { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .wal-loading p { font-size: 13px; color: var(--sub); font-weight: 600; }
     .wal-empty {
       text-align: center;
       padding: 40px 16px;
     }
     .wal-empty-icon { font-size: 38px; margin-bottom: 10px; opacity: .3; }
-    .wal-empty p { font-size: 14px; color: var(--muted); font-weight: 600; }
+    .wal-empty p { font-size: 14px; color: var(--sub); font-weight: 600; }
 
     /* ── Toast container ── */
     .wal-toast-container {
@@ -619,20 +622,21 @@
       width: min(92vw, 360px);
     }
     .wal-toast {
-      background: var(--text);
-      color: #fff;
+      background: var(--sur2);
+      color: var(--txt);
       padding: 12px 20px;
       border-radius: 50px;
       font-size: 13px;
       font-weight: 700;
-      box-shadow: 0 4px 20px rgba(0,0,0,.22);
+      box-shadow: 0 2px 12px rgba(0,0,0,.4);
       animation: walToastIn .25s ease, walToastOut .3s ease 2.7s forwards;
       text-align: center;
       max-width: 100%;
+      border: 1px solid var(--bor2);
     }
-    .wal-toast.success { background: var(--green); }
-    .wal-toast.error   { background: var(--red); }
-    .wal-toast.info    { background: var(--accent); }
+    .wal-toast.success { background: var(--g); color: #000; border-color: var(--g); }
+    .wal-toast.error   { background: var(--red); color: #fff; border-color: var(--red); }
+    .wal-toast.info    { background: var(--g); color: #000; border-color: var(--g); }
     @keyframes walToastIn  { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
     @keyframes walToastOut { to   { opacity: 0; transform: translateY(8px); } }
 
@@ -748,7 +752,7 @@
               <i class="fa-solid fa-rotate"></i> Check Status
             </button>
             <button class="wal-btn" id="walCancelPollBtn" type="button"
-              style="background:rgba(244,67,54,.07);color:var(--red);border:1.5px solid rgba(244,67,54,.25);">
+              style="background:rgba(239,68,68,.08);color:var(--red);border:1.5px solid rgba(239,68,68,.25);">
               <i class="fa-solid fa-xmark"></i> Cancel
             </button>
           </div>

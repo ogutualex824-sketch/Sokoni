@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Commission Admin — SOKONI</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="icon" href="assets/logosokoni.png">
+<style>
+/* ── Reset + Tokens ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050505;--sur:#0d0d0d;--sur2:#141414;--bor:#1a1a1a;
+  --g:#71ff00;--ga:rgba(113,255,0,.12);--txt:#e8e8e8;--sub:#6b7280;
+  --red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;
+  --rad:12px;--sidebar:220px;
+}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.5}
+body{background:var(--bg);color:var(--txt);display:flex;flex-direction:column;min-height:100vh}
+
+/* ── Shell ── */
+.shell{display:flex;flex:1;min-height:0}
+
+/* ── Sidebar ── */
+.sidebar{width:var(--sidebar);background:var(--sur);border-right:1px solid var(--bor);
+  display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;overflow-y:auto}
+.sidebar-logo{padding:20px 16px 16px;border-bottom:1px solid var(--bor);display:flex;align-items:center;gap:10px}
+.sidebar-logo-icon{width:34px;height:34px;background:var(--g);border-radius:9px;
+  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.sidebar-logo-text{font-size:13px;font-weight:800;color:var(--txt);line-height:1.2}
+.sidebar-logo-sub{font-size:10px;color:var(--sub);margin-top:1px}
+.nav-group-label{font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.08em;
+  text-transform:uppercase;padding:14px 16px 4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:13px;font-weight:500;
+  color:var(--sub);cursor:pointer;border:none;background:none;width:100%;text-align:left;
+  border-left:3px solid transparent;transition:all .15s;text-decoration:none}
+.nav-item:hover{background:var(--sur2);color:var(--txt)}
+.nav-item.active{background:var(--ga);color:var(--g);border-left-color:var(--g);font-weight:600}
+.nav-item-icon{font-size:15px;width:18px;text-align:center;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;
+  border-radius:10px;padding:1px 6px;font-weight:700;min-width:18px;text-align:center}
+.nav-sep{border-top:1px solid var(--bor);margin:8px 0}
+.sidebar-footer{margin-top:auto;padding:14px 16px;border-top:1px solid var(--bor)}
+.sidebar-user{display:flex;align-items:center;gap:8px}
+.sidebar-avatar{width:30px;height:30px;border-radius:50%;background:var(--g);
+  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;
+  color:#000;flex-shrink:0}
+.sidebar-user-text{font-size:12px;overflow:hidden}
+.sidebar-user-text strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.sidebar-user-text span{color:var(--sub);font-size:10px}
+.signout-btn{width:100%;margin-top:8px;padding:7px;border-radius:8px;border:1px solid var(--bor);
+  background:none;color:var(--sub);cursor:pointer;font-size:12px;font-family:inherit;
+  transition:all .15s}
+.signout-btn:hover{background:rgba(239,68,68,.08);color:var(--red);border-color:rgba(239,68,68,.3)}
+
+/* ── Mobile sidebar toggle ── */
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99}
+.mobile-topbar{display:none;background:var(--sur);border-bottom:1px solid var(--bor);
+  padding:12px 16px;align-items:center;gap:12px;position:sticky;top:0;z-index:80}
+.hamburger{width:36px;height:36px;border-radius:8px;background:var(--sur2);border:1px solid var(--bor);
+  color:var(--txt);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.mobile-title{font-size:15px;font-weight:800;color:var(--g)}
+
+/* ── Main ── */
+.main{margin-left:var(--sidebar);flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--sur);border-bottom:1px solid var(--bor);padding:12px 24px;
+  display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:17px;font-weight:800;color:var(--txt);flex:1}
+.topbar-period{display:flex;gap:6px;flex-wrap:wrap}
+.period-btn{padding:5px 12px;border-radius:6px;border:1px solid var(--bor);background:none;
+  color:var(--sub);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;transition:all .15s}
+.period-btn.active{background:var(--ga);color:var(--g);border-color:rgba(113,255,0,.3)}
+.content{flex:1;padding:24px;overflow-y:auto}
+.panel{display:none}.panel.active{display:block}
+
+/* ── KPI Strip ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;margin-bottom:24px}
+.kpi-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--rad);padding:16px;transition:border-color .2s}
+.kpi-card:hover{border-color:rgba(113,255,0,.25)}
+.kpi-card.accent{border-color:rgba(113,255,0,.2);background:rgba(113,255,0,.03)}
+.kpi-card.warn{border-color:rgba(245,158,11,.2);background:rgba(245,158,11,.03)}
+.kpi-card.danger{border-color:rgba(239,68,68,.2);background:rgba(239,68,68,.03)}
+.kpi-card.info{border-color:rgba(59,130,246,.2);background:rgba(59,130,246,.03)}
+.kpi-label{font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.kpi-value{font-size:24px;font-weight:900;line-height:1;color:var(--txt)}
+.kpi-card.accent .kpi-value{color:var(--g)}
+.kpi-card.warn .kpi-value{color:var(--amber)}
+.kpi-card.danger .kpi-value{color:var(--red)}
+.kpi-card.info .kpi-value{color:var(--blue)}
+.kpi-sub{font-size:11px;color:var(--sub);margin-top:5px}
+
+/* ── Section header ── */
+.section-hdr{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.section-hdr h3{font-size:13px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;flex:1}
+
+/* ── Card ── */
+.card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--rad);margin-bottom:20px}
+.card-header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--bor)}
+.card-title{font-size:14px;font-weight:700;flex:1}
+.card-body{padding:18px}
+
+/* ── Horizontal bar chart ── */
+.bar-chart{display:flex;flex-direction:column;gap:10px}
+.bar-row{display:flex;align-items:center;gap:10px}
+.bar-label{font-size:12px;color:var(--sub);width:100px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{flex:1;height:10px;background:var(--sur2);border-radius:5px;overflow:hidden}
+.bar-fill{height:100%;border-radius:5px;background:var(--g);transition:width .5s ease}
+.bar-val{font-size:12px;font-weight:700;color:var(--txt);min-width:90px;text-align:right;white-space:nowrap}
+
+/* ── Sparkline SVG ── */
+.sparkline-wrap{padding:8px 0;overflow-x:auto}
+.sparkline-wrap svg{display:block;width:100%;min-width:200px}
+
+/* ── Sub-tab bar ── */
+.sub-tabs{display:flex;gap:4px;border-bottom:1px solid var(--bor);margin-bottom:18px}
+.sub-tab{padding:8px 14px;border:none;background:none;color:var(--sub);cursor:pointer;
+  font-size:12px;font-weight:600;border-bottom:2px solid transparent;font-family:inherit;
+  margin-bottom:-1px;transition:all .15s}
+.sub-tab:hover{color:var(--txt)}
+.sub-tab.active{color:var(--g);border-bottom-color:var(--g)}
+
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-size:12px}
+table.tbl th{text-align:left;padding:9px 12px;font-size:10px;font-weight:700;color:var(--sub);
+  text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--bor);white-space:nowrap}
+table.tbl td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.03);vertical-align:middle}
+table.tbl tbody tr:hover td{background:var(--sur2)}
+.tbl-empty{text-align:center;padding:40px;color:var(--sub);font-size:13px}
+
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap}
+.badge-pct{background:rgba(113,255,0,.12);color:var(--g)}
+.badge-fixed{background:rgba(59,130,246,.12);color:var(--blue)}
+.badge-tiered{background:rgba(245,158,11,.12);color:var(--amber)}
+.badge-holiday{background:rgba(239,68,68,.12);color:var(--red)}
+.badge-hybrid{background:rgba(168,85,247,.12);color:#a855f7}
+.badge-on{background:rgba(113,255,0,.1);color:var(--g)}
+.badge-off{background:rgba(255,255,255,.05);color:var(--sub)}
+.badge-pending{background:rgba(245,158,11,.12);color:var(--amber)}
+.badge-approved{background:rgba(113,255,0,.12);color:var(--g)}
+.badge-rejected{background:rgba(239,68,68,.12);color:var(--red)}
+.badge-commission{background:rgba(113,255,0,.1);color:var(--g)}
+.badge-earning{background:rgba(59,130,246,.1);color:var(--blue)}
+.badge-withdrawal{background:rgba(168,85,247,.1);color:#a855f7}
+.badge-refund{background:rgba(239,68,68,.1);color:var(--red)}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;
+  font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.btn-primary{background:var(--g);color:#000}
+.btn-primary:hover{background:#5dcc00}
+.btn-outline{background:none;border:1.5px solid var(--bor);color:var(--txt)}
+.btn-outline:hover{background:var(--sur2)}
+.btn-danger{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.25)}
+.btn-danger:hover{background:rgba(239,68,68,.22)}
+.btn-success{background:rgba(113,255,0,.12);color:var(--g);border:1px solid rgba(113,255,0,.25)}
+.btn-success:hover{background:rgba(113,255,0,.22)}
+.btn-amber{background:rgba(245,158,11,.12);color:var(--amber);border:1px solid rgba(245,158,11,.25)}
+.btn-amber:hover{background:rgba(245,158,11,.22)}
+.btn-sm{padding:5px 10px;font-size:11px;border-radius:6px}
+
+/* ── Form elements ── */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group.full{grid-column:1/-1}
+.form-label{font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}
+.form-input,.form-select{width:100%;padding:9px 12px;background:var(--sur2);
+  border:1.5px solid var(--bor);border-radius:8px;color:var(--txt);
+  font-size:13px;font-family:inherit;outline:none;transition:.15s}
+.form-input:focus,.form-select:focus{border-color:rgba(113,255,0,.4)}
+.form-select{cursor:pointer}
+.form-hint{font-size:11px;color:var(--sub);margin-top:2px}
+textarea.form-input{resize:vertical;min-height:68px}
+
+/* ── Slide-in drawer ── */
+.drawer-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;
+  opacity:0;pointer-events:none;transition:opacity .25s}
+.drawer-backdrop.open{opacity:1;pointer-events:all}
+.drawer{position:fixed;right:0;top:0;bottom:0;width:min(520px,100vw);background:var(--sur);
+  border-left:1px solid var(--bor);z-index:201;display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);
+  overflow:hidden}
+.drawer.open{transform:translateX(0)}
+.drawer-header{display:flex;align-items:center;gap:10px;padding:16px 20px;
+  border-bottom:1px solid var(--bor);flex-shrink:0}
+.drawer-title{font-size:15px;font-weight:800;flex:1}
+.drawer-close{width:32px;height:32px;border-radius:8px;background:var(--sur2);
+  border:1px solid var(--bor);color:var(--sub);cursor:pointer;font-size:16px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.drawer-body{flex:1;overflow-y:auto;padding:20px}
+.drawer-footer{padding:14px 20px;border-top:1px solid var(--bor);display:flex;gap:10px;flex-shrink:0}
+
+/* ── Modal ── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-backdrop.open{opacity:1;pointer-events:all}
+.modal{background:var(--sur);border:1px solid var(--bor);border-radius:16px;
+  width:100%;max-width:420px;overflow:hidden;
+  transform:scale(.95);transition:transform .2s}
+.modal-backdrop.open .modal{transform:scale(1)}
+.modal-header{display:flex;align-items:center;gap:10px;padding:16px 20px;
+  border-bottom:1px solid var(--bor)}
+.modal-title{font-size:15px;font-weight:800;flex:1}
+.modal-close{width:30px;height:30px;border-radius:7px;background:var(--sur2);
+  border:1px solid var(--bor);color:var(--sub);cursor:pointer;font-size:15px;
+  display:flex;align-items:center;justify-content:center}
+.modal-body{padding:20px}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--bor);display:flex;gap:10px;justify-content:flex-end}
+
+/* ── Preview result ── */
+.preview-box{background:var(--sur2);border:1px solid var(--bor);border-radius:10px;
+  padding:14px;margin-top:12px;font-size:12px;color:var(--sub)}
+.preview-box strong{font-size:20px;font-weight:900;color:var(--g);display:block;margin-bottom:4px}
+
+/* ── Tier row ── */
+.tier-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px}
+
+/* ── Toast ── */
+.toast-wrap{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;
+  flex-direction:column;gap:8px;align-items:flex-end;pointer-events:none}
+.toast{background:var(--sur2);border:1px solid var(--bor);color:var(--txt);
+  padding:12px 18px;border-radius:12px;font-size:13px;font-weight:500;
+  max-width:340px;pointer-events:none;
+  animation:toastIn .25s ease forwards;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.toast.success{border-color:rgba(113,255,0,.3);background:rgba(113,255,0,.08);color:var(--g)}
+.toast.error{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:var(--red)}
+.toast.out{animation:toastOut .25s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(10px)}}
+
+/* ── Loading skeleton ── */
+.loading-msg{color:var(--sub);font-size:13px;padding:24px 0}
+.skel{background:linear-gradient(90deg,var(--sur2) 25%,var(--bor) 50%,var(--sur2) 75%);
+  background-size:200%;border-radius:6px;animation:skel 1.2s infinite;height:14px;margin-bottom:6px}
+@keyframes skel{0%{background-position:200%}100%{background-position:-200%}}
+
+/* ── Responsive ── */
+@media(max-width:900px){
+  .sidebar{transform:translateX(-100%);transition:transform .25s}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-overlay.open{display:block}
+  .main{margin-left:0}
+  .mobile-topbar{display:flex}
+  .topbar{display:none}
+  .topbar-period{flex-wrap:wrap}
+  .form-grid{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .tier-row{grid-template-columns:1fr 1fr;gap:6px}
+  .tier-row .tier-del{grid-column:1/-1;justify-self:end}
+  .content{padding:14px}
+}
+@media(max-width:600px){
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .bar-label{width:72px}
+  .bar-val{min-width:70px;font-size:11px}
+}
+
+/* ── Period strip inside content ── */
+.period-strip{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}
+.rev-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+@media(max-width:720px){.rev-grid{grid-template-columns:1fr}}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.toolbar h2{font-size:15px;font-weight:800;flex:1}
+.filter-select{padding:7px 10px;background:var(--sur);border:1px solid var(--bor);
+  border-radius:8px;color:var(--txt);font-size:12px;font-family:inherit;outline:none;cursor:pointer}
+.filter-select:focus{border-color:rgba(113,255,0,.4)}
+
+/* ── Aggr sub-tabs ── */
+.aggr-wrap{margin-top:4px}
+</style>
+</head>
+<body>
+<div id="sokoni-shared-header"></div>
+
+<!-- Mobile topbar -->
+<div class="mobile-topbar">
+  <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">&#9776;</button>
+  <span class="mobile-title">Commission Admin</span>
+</div>
+
+<!-- Sidebar overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<div class="shell">
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon" style="color:#000;font-weight:900;font-size:14px">SK</div>
+      <div>
+        <div class="sidebar-logo-text">Commission Admin</div>
+        <div class="sidebar-logo-sub">Revenue Control Panel</div>
+      </div>
+    </div>
+
+    <div class="nav-group-label">Analytics</div>
+    <button class="nav-item active" data-tab="revenue">
+      <span class="nav-item-icon">&#128200;</span> Revenue Dashboard
+    </button>
+    <button class="nav-item" data-tab="rules">
+      <span class="nav-item-icon">&#9965;</span> Commission Rules
+    </button>
+
+    <div class="nav-sep"></div>
+    <div class="nav-group-label">Operations</div>
+    <button class="nav-item" data-tab="withdrawals">
+      <span class="nav-item-icon">&#128176;</span> Withdrawals
+      <span class="nav-badge" id="pendingBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" data-tab="sellers">
+      <span class="nav-item-icon">&#128101;</span> Revenue by Seller
+    </button>
+
+    <div class="nav-sep"></div>
+    <div class="nav-group-label">Compliance</div>
+    <button class="nav-item" data-tab="audit">
+      <span class="nav-item-icon">&#128221;</span> Audit Log
+    </button>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="sidebar-avatar" id="avatarLetter">A</div>
+        <div class="sidebar-user-text">
+          <strong id="userEmail">Loading…</strong>
+          <span>Admin</span>
+        </div>
+      </div>
+      <button class="signout-btn" onclick="firebase.auth().signOut()">Sign out</button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbarTitle">Revenue Dashboard</div>
+      <div class="topbar-period" id="topbarPeriod" style="display:none">
+        <button class="period-btn active" data-days="1">Today</button>
+        <button class="period-btn" data-days="7">7 Days</button>
+        <button class="period-btn" data-days="30">30 Days</button>
+        <button class="period-btn" data-days="90">90 Days</button>
+        <button class="period-btn" data-days="365">1 Year</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ── Tab 1: Revenue Dashboard ── -->
+      <div class="panel active" id="tab-revenue">
+
+        <!-- Period strip (mobile) -->
+        <div class="period-strip" id="mobilePeriodStrip">
+          <button class="period-btn active" data-days="1">Today</button>
+          <button class="period-btn" data-days="7">7 Days</button>
+          <button class="period-btn" data-days="30">30 Days</button>
+          <button class="period-btn" data-days="90">90 Days</button>
+          <button class="period-btn" data-days="365">1 Year</button>
+        </div>
+
+        <!-- KPI Strip -->
+        <div class="kpi-grid" id="kpiGrid">
+          <div class="kpi-card accent">
+            <div class="kpi-label">Total Platform Revenue</div>
+            <div class="kpi-value" id="kpiRevenue">—</div>
+            <div class="kpi-sub">KES</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Commission Collected</div>
+            <div class="kpi-value" id="kpiCommission">—</div>
+            <div class="kpi-sub">KES</div>
+          </div>
+          <div class="kpi-card warn">
+            <div class="kpi-label">Outstanding Payouts</div>
+            <div class="kpi-value" id="kpiPayouts">—</div>
+            <div class="kpi-sub">KES</div>
+          </div>
+          <div class="kpi-card danger">
+            <div class="kpi-label">Total Refunds</div>
+            <div class="kpi-value" id="kpiRefunds">—</div>
+            <div class="kpi-sub">KES</div>
+          </div>
+          <div class="kpi-card info">
+            <div class="kpi-label">Active Sellers</div>
+            <div class="kpi-value" id="kpiSellers">—</div>
+            <div class="kpi-sub">unique</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Total Transactions</div>
+            <div class="kpi-value" id="kpiTxns">—</div>
+            <div class="kpi-sub">count</div>
+          </div>
+        </div>
+
+        <!-- Charts row -->
+        <div class="rev-grid">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Revenue by Hub</span>
+            </div>
+            <div class="card-body">
+              <div class="bar-chart" id="hubChart"><div class="loading-msg">Loading…</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Top 10 Categories</span>
+            </div>
+            <div class="card-body">
+              <div class="bar-chart" id="catChart"><div class="loading-msg">Loading…</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Growth trend + aggregation tabs -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Growth Trend</span>
+            <div class="sub-tabs" style="border:none;margin:0;gap:4px">
+              <button class="sub-tab active" data-aggr="daily">Daily</button>
+              <button class="sub-tab" data-aggr="weekly">Weekly</button>
+              <button class="sub-tab" data-aggr="monthly">Monthly</button>
+              <button class="sub-tab" data-aggr="annual">Annual</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="sparkline-wrap" id="sparklineWrap">
+              <div class="loading-msg">Loading…</div>
+            </div>
+            <div id="aggrTable" style="margin-top:14px"></div>
+          </div>
+        </div>
+      </div><!-- /tab-revenue -->
+
+      <!-- ── Tab 2: Commission Rules ── -->
+      <div class="panel" id="tab-rules">
+        <div class="toolbar">
+          <h2>Commission Rules</h2>
+          <select class="filter-select" id="ruleFilterCat">
+            <option value="">All Categories</option>
+          </select>
+          <select class="filter-select" id="ruleFilterType">
+            <option value="">All Types</option>
+            <option value="percentage">Percentage</option>
+            <option value="fixed">Fixed</option>
+            <option value="percentage_plus_fixed">Hybrid</option>
+            <option value="tiered">Tiered</option>
+            <option value="commission_holiday">Holiday</option>
+          </select>
+          <button class="btn btn-primary" onclick="openRuleDrawer(null)">&#43; New Rule</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Category</th><th>Type</th><th>Rate</th><th>Min</th><th>Max</th>
+                  <th>Entity</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="rulesTbody"><tr><td colspan="8" class="tbl-empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /tab-rules -->
+
+      <!-- ── Tab 3: Withdrawals ── -->
+      <div class="panel" id="tab-withdrawals">
+        <div class="toolbar">
+          <h2>Pending Withdrawals</h2>
+          <button class="btn btn-outline btn-sm" onclick="loadWithdrawals()">&#8635; Refresh</button>
+        </div>
+        <div class="card" style="margin-bottom:28px">
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead>
+                <tr><th>Seller</th><th>Amount (KES)</th><th>Method</th><th>Requested</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="pendingTbody"><tr><td colspan="5" class="tbl-empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <h2>All Withdrawals</h2>
+          <select class="filter-select" id="wdStatusFilter">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead>
+                <tr><th>Seller</th><th>Amount (KES)</th><th>Method</th><th>Status</th><th>Date</th></tr>
+              </thead>
+              <tbody id="allWdTbody"><tr><td colspan="5" class="tbl-empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /tab-withdrawals -->
+
+      <!-- ── Tab 4: Revenue by Seller ── -->
+      <div class="panel" id="tab-sellers">
+        <div class="toolbar">
+          <h2>Revenue by Seller</h2>
+          <select class="filter-select" id="sellerPeriod">
+            <option value="7">7 Days</option>
+            <option value="30" selected>30 Days</option>
+            <option value="90">90 Days</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="loadSellers()">&#8635; Refresh</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>#</th><th>Seller ID</th><th>Gross Revenue</th><th>Commission</th>
+                  <th>Net Paid</th><th>Transactions</th><th>Avg Order</th>
+                </tr>
+              </thead>
+              <tbody id="sellersTbody"><tr><td colspan="7" class="tbl-empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /tab-sellers -->
+
+      <!-- ── Tab 5: Audit Log ── -->
+      <div class="panel" id="tab-audit">
+        <div class="toolbar">
+          <h2>Audit Log</h2>
+          <select class="filter-select" id="auditTypeFilter">
+            <option value="">All Types</option>
+            <option value="commission">Commission</option>
+            <option value="seller_earning">Seller Earning</option>
+            <option value="withdrawal">Withdrawal</option>
+            <option value="refund_clawback">Refund Clawback</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="loadAudit()">&#8635; Refresh</button>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead>
+                <tr><th>Date</th><th>Type</th><th>Seller</th><th>Order</th><th>Amount (KES)</th><th>Category</th></tr>
+              </thead>
+              <tbody id="auditTbody"><tr><td colspan="6" class="tbl-empty">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /tab-audit -->
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<!-- Toast container -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- ── Rule Drawer ── -->
+<div class="drawer-backdrop" id="drawerBackdrop">
+  <div class="drawer" id="ruleDrawer">
+    <div class="drawer-header">
+      <span class="drawer-title" id="drawerTitle">New Commission Rule</span>
+      <button class="drawer-close" onclick="closeDrawer()">&#10005;</button>
+    </div>
+    <div class="drawer-body">
+      <input type="hidden" id="editRuleId">
+      <div class="form-grid">
+
+        <div class="form-group">
+          <label class="form-label">Rule Type *</label>
+          <select class="form-select" id="fType" onchange="onTypeChange()">
+            <option value="percentage">Percentage</option>
+            <option value="fixed">Fixed Amount</option>
+            <option value="percentage_plus_fixed">Hybrid (% + Fixed)</option>
+            <option value="tiered">Tiered Volume</option>
+            <option value="commission_holiday">Commission Holiday</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Category *</label>
+          <select class="form-select" id="fCategory">
+            <option value="all">All Categories</option>
+            <option value="marketplace">Marketplace</option>
+            <option value="food_delivery">Food Delivery</option>
+            <option value="services">Services</option>
+            <option value="property">Property</option>
+            <option value="vehicles">Vehicles</option>
+            <option value="jobs">Jobs</option>
+            <option value="events">Events</option>
+            <option value="healthcare">Healthcare</option>
+            <option value="education">Education</option>
+            <option value="legal">Legal</option>
+            <option value="digital_products">Digital Products</option>
+            <option value="pharmacy">Pharmacy</option>
+            <option value="freelancers">Freelancers</option>
+            <option value="hotels">Hotels &amp; BnBs</option>
+            <option value="insurance">Insurance</option>
+            <option value="logistics">Logistics</option>
+            <option value="financial_services">Financial Services</option>
+            <option value="bookings">Bookings</option>
+            <option value="classifieds">Classifieds</option>
+            <option value="subscriptions">Subscriptions</option>
+            <option value="advertising">Advertising</option>
+            <option value="hub">Hub (general)</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="fRateWrap">
+          <label class="form-label">Rate (%)</label>
+          <input type="number" class="form-input" id="fRate" min="0" max="100" step="0.01" placeholder="e.g. 10">
+        </div>
+
+        <div class="form-group" id="fAmountWrap" style="display:none">
+          <label class="form-label">Fixed Amount (KES)</label>
+          <input type="number" class="form-input" id="fAmount" min="0" step="1" placeholder="e.g. 50">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Min Commission (KES)</label>
+          <input type="number" class="form-input" id="fMin" min="0" step="1" placeholder="Optional">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Max Commission (KES)</label>
+          <input type="number" class="form-input" id="fMax" min="0" step="1" placeholder="Optional">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Entity Type</label>
+          <select class="form-select" id="fEntityType">
+            <option value="">— global —</option>
+            <option value="global">Global</option>
+            <option value="category">Category</option>
+            <option value="seller">Seller</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Entity ID</label>
+          <input type="text" class="form-input" id="fEntityId" placeholder="Seller UID or hub name">
+          <span class="form-hint">Leave blank for category-wide rule</span>
+        </div>
+
+        <div class="form-group" id="fFromWrap" style="display:none">
+          <label class="form-label">Active From *</label>
+          <input type="datetime-local" class="form-input" id="fFrom">
+        </div>
+
+        <div class="form-group" id="fToWrap" style="display:none">
+          <label class="form-label">Active To *</label>
+          <input type="datetime-local" class="form-input" id="fTo">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="fIsActive">
+            <option value="1">Active</option>
+            <option value="0">Inactive</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Priority (0 = lowest)</label>
+          <input type="number" class="form-input" id="fPriority" min="0" max="1000" value="0">
+        </div>
+
+        <div class="form-group full">
+          <label class="form-label">Description / Note</label>
+          <textarea class="form-input" id="fDesc" placeholder="Internal note about this rule…"></textarea>
+        </div>
+      </div>
+
+      <!-- Tiered brackets -->
+      <div id="tiersSection" style="display:none;margin-top:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label class="form-label" style="margin:0">Volume Tiers</label>
+          <button type="button" class="btn btn-outline btn-sm" onclick="addTier()">&#43; Add Tier</button>
+        </div>
+        <div style="font-size:11px;color:var(--sub);margin-bottom:10px">
+          Each tier applies a rate for orders within a KES range.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;margin-bottom:6px">
+          <span style="font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase">Min (KES)</span>
+          <span style="font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase">Max (KES)</span>
+          <span style="font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase">Rate (%)</span>
+          <span></span>
+        </div>
+        <div id="tiersList"></div>
+      </div>
+
+      <!-- Preview -->
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--bor)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <label class="form-label" style="margin:0">Preview on amount (KES)</label>
+          <input type="number" class="form-input" id="previewAmt" style="width:120px" placeholder="e.g. 1000" value="1000">
+          <button type="button" class="btn btn-outline btn-sm" onclick="runPreview()">Preview</button>
+        </div>
+        <div id="previewResult" style="display:none" class="preview-box">
+          <strong id="previewCommVal">—</strong>
+          <span id="previewMeta"></span>
+        </div>
+      </div>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn btn-outline" onclick="closeDrawer()">Cancel</button>
+      <button class="btn btn-primary" id="saveRuleBtn" onclick="saveRule()">Save Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Approve Withdrawal Modal ── -->
+<div class="modal-backdrop" id="approveModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Approve Withdrawal</span>
+      <button class="modal-close" onclick="closeModal('approveModal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Payment Reference *</label>
+        <input type="text" class="form-input" id="approveRef" placeholder="e.g. M-Pesa confirmation code">
+      </div>
+      <input type="hidden" id="approveWdId">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('approveModal')">Cancel</button>
+      <button class="btn btn-success" onclick="submitApprove()">Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Reject Withdrawal Modal ── -->
+<div class="modal-backdrop" id="rejectModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Reject Withdrawal</span>
+      <button class="modal-close" onclick="closeModal('rejectModal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Rejection Reason *</label>
+        <textarea class="form-input" id="rejectReason" placeholder="Explain why this withdrawal is rejected…"></textarea>
+      </div>
+      <input type="hidden" id="rejectWdId">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('rejectModal')">Cancel</button>
+      <button class="btn btn-danger" onclick="submitReject()">Reject</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Delete Confirm Modal ── -->
+<div class="modal-backdrop" id="deleteModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Delete Rule</span>
+      <button class="modal-close" onclick="closeModal('deleteModal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--sub);font-size:13px;line-height:1.6">
+        This will deactivate the rule permanently. This action cannot be undone.
+      </p>
+      <input type="hidden" id="deleteRuleId">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('deleteModal')">Cancel</button>
+      <button class="btn btn-danger" onclick="submitDeleteRule()">Delete Rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+
+<script>
+(function(){
+'use strict';
+
+/* ═══════════════════════════════════════════
+   INITIALISATION
+═══════════════════════════════════════════ */
+firebase.initializeApp(window.SOKONI_CONFIG || {});
+var db   = firebase.firestore();
+var fns  = firebase.app().functions('us-central1');
+var auth = firebase.auth();
+
+/* ── Auth guard ── */
+auth.onAuthStateChanged(function(user){
+  if(!user){ location.href='login.html?redirect=commission-admin.html'; return; }
+  user.getIdTokenResult().then(function(t){
+    if(!t.claims.admin && !t.claims.superAdmin){
+      location.href='index.html'; return;
+    }
+    document.getElementById('userEmail').textContent = user.email || user.uid;
+    document.getElementById('avatarLetter').textContent =
+      (user.displayName||user.email||'A')[0].toUpperCase();
+    boot();
+  });
+});
+
+/* ═══════════════════════════════════════════
+   SECURITY — XSS ESCAPE
+═══════════════════════════════════════════ */
+function esc(str){
+  if(str===null||str===undefined) return '';
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+function toast(msg, type){
+  var wrap = document.getElementById('toastWrap');
+  var el   = document.createElement('div');
+  el.className = 'toast' + (type?' '+type:'');
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(function(){
+    el.classList.add('out');
+    setTimeout(function(){ el.remove(); }, 260);
+  }, 3400);
+}
+
+/* ═══════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════ */
+function cf(name){ return fns.httpsCallable(name); }
+
+function fmt(cents){
+  if(cents===undefined||cents===null) return '—';
+  return 'KES '+Number(cents/100).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtN(n){
+  if(n===undefined||n===null) return '—';
+  return Number(n).toLocaleString('en-KE');
+}
+function fmtTs(ts){
+  if(!ts) return '—';
+  var d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('en-KE',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function shortId(id){
+  if(!id) return '—';
+  return esc(id.length>14 ? id.slice(0,6)+'…'+id.slice(-4) : id);
+}
+
+/* ═══════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════ */
+var _activePeriod = 1;
+var _allRules     = [];
+var _tiersCount   = 0;
+var _auditUnsub   = null;
+var _activeTab    = 'revenue';
+
+/* ═══════════════════════════════════════════
+   TAB NAVIGATION
+═══════════════════════════════════════════ */
+var tabTitles = {
+  revenue:'Revenue Dashboard', rules:'Commission Rules',
+  withdrawals:'Withdrawals', sellers:'Revenue by Seller', audit:'Audit Log'
+};
+
+function switchTab(tabId){
+  _activeTab = tabId;
+  document.querySelectorAll('.nav-item').forEach(function(b){ b.classList.remove('active'); });
+  var nav = document.querySelector('[data-tab="'+tabId+'"]');
+  if(nav) nav.classList.add('active');
+
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+  var panel = document.getElementById('tab-'+tabId);
+  if(panel) panel.classList.add('active');
+
+  document.getElementById('topbarTitle').textContent = tabTitles[tabId]||tabId;
+  var isPeriod = tabId==='revenue';
+  document.getElementById('topbarPeriod').style.display = isPeriod?'flex':'none';
+
+  closeSidebarMobile();
+  onTabLoad(tabId);
+}
+
+function onTabLoad(tabId){
+  if(tabId==='revenue')      loadRevenue();
+  else if(tabId==='rules')   loadRules();
+  else if(tabId==='withdrawals') loadWithdrawals();
+  else if(tabId==='sellers') loadSellers();
+  else if(tabId==='audit')   loadAudit();
+}
+
+document.querySelectorAll('.nav-item[data-tab]').forEach(function(btn){
+  btn.addEventListener('click', function(){ switchTab(this.dataset.tab); });
+});
+
+/* ═══════════════════════════════════════════
+   PERIOD SELECTOR (all period-btn elements)
+═══════════════════════════════════════════ */
+function bindPeriodButtons(){
+  document.querySelectorAll('.period-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      _activePeriod = parseInt(this.dataset.days, 10);
+      document.querySelectorAll('.period-btn').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.period-btn[data-days="'+_activePeriod+'"]').forEach(function(b){
+        b.classList.add('active');
+      });
+      loadRevenue();
+    });
+  });
+}
+
+/* ═══════════════════════════════════════════
+   MOBILE SIDEBAR
+═══════════════════════════════════════════ */
+document.getElementById('hamburgerBtn').addEventListener('click', function(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('open');
+});
+document.getElementById('sidebarOverlay').addEventListener('click', closeSidebarMobile);
+
+function closeSidebarMobile(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+/* ═══════════════════════════════════════════
+   TAB 1 — REVENUE DASHBOARD
+═══════════════════════════════════════════ */
+var _revData = null;
+
+function loadRevenue(){
+  setKpiLoading();
+  document.getElementById('hubChart').innerHTML   = '<div class="loading-msg">Loading…</div>';
+  document.getElementById('catChart').innerHTML   = '<div class="loading-msg">Loading…</div>';
+  document.getElementById('sparklineWrap').innerHTML = '<div class="loading-msg">Loading…</div>';
+  document.getElementById('aggrTable').innerHTML  = '';
+
+  cf('getAdminRevenueByHub')({ periodDays: _activePeriod })
+    .then(function(r){
+      var d = r.data || {};
+      _revData = d;
+      renderKpis(d);
+      renderHubChart(d.hubs || []);
+      renderCatChart(d.categories || []);
+      renderSparkline(d.dailyBreakdown || []);
+    })
+    .catch(function(e){
+      toast('Revenue load failed: '+e.message,'error');
+      setKpiError();
+    });
+}
+
+function setKpiLoading(){
+  ['kpiRevenue','kpiCommission','kpiPayouts','kpiRefunds','kpiSellers','kpiTxns'].forEach(function(id){
+    document.getElementById(id).textContent = '…';
+  });
+}
+function setKpiError(){
+  ['kpiRevenue','kpiCommission','kpiPayouts','kpiRefunds','kpiSellers','kpiTxns'].forEach(function(id){
+    document.getElementById(id).textContent = '—';
+  });
+}
+
+function renderKpis(d){
+  var fmt2 = function(c){ return c!=null ? 'KES '+Number(c/100).toLocaleString('en-KE',{minimumFractionDigits:0}) : '—'; };
+  document.getElementById('kpiRevenue').textContent    = fmt2(d.totalRevenueCents);
+  document.getElementById('kpiCommission').textContent = fmt2(d.totalCommissionCents);
+  document.getElementById('kpiPayouts').textContent    = fmt2(d.outstandingPayoutsCents);
+  document.getElementById('kpiRefunds').textContent    = fmt2(d.totalRefundsCents);
+  document.getElementById('kpiSellers').textContent    = fmtN(d.activeSellers);
+  document.getElementById('kpiTxns').textContent       = fmtN(d.totalTransactions);
+}
+
+function renderHubChart(hubs){
+  var wrap = document.getElementById('hubChart');
+  if(!hubs.length){ wrap.innerHTML='<div class="loading-msg">No data</div>'; return; }
+  var max = Math.max.apply(null, hubs.map(function(h){ return h.revenueCents||0; }));
+  wrap.innerHTML = hubs.map(function(h){
+    var pct = max>0 ? Math.round((h.revenueCents/max)*100) : 0;
+    return '<div class="bar-row">'+
+      '<span class="bar-label" title="'+esc(h.hub)+'">'+esc(h.hub)+'</span>'+
+      '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>'+
+      '<span class="bar-val">'+fmt(h.revenueCents)+'</span>'+
+    '</div>';
+  }).join('');
+}
+
+function renderCatChart(cats){
+  var wrap = document.getElementById('catChart');
+  if(!cats.length){ wrap.innerHTML='<div class="loading-msg">No data</div>'; return; }
+  var top10 = cats.slice(0,10);
+  var max   = Math.max.apply(null, top10.map(function(c){ return c.revenueCents||0; }));
+  var colors=['#71ff00','#3b82f6','#f59e0b','#a855f7','#ef4444','#10b981','#f97316','#06b6d4','#ec4899','#84cc16'];
+  wrap.innerHTML = top10.map(function(c,i){
+    var pct = max>0 ? Math.round((c.revenueCents/max)*100) : 0;
+    return '<div class="bar-row">'+
+      '<span class="bar-label" title="'+esc(c.category)+'">'+esc(c.category)+'</span>'+
+      '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+colors[i%colors.length]+'"></div></div>'+
+      '<span class="bar-val">'+fmt(c.revenueCents)+'</span>'+
+    '</div>';
+  }).join('');
+}
+
+/* ── Sparkline ── */
+var _aggrMode = 'daily';
+
+function renderSparkline(daily){
+  var wrap = document.getElementById('sparklineWrap');
+  if(!daily || !daily.length){
+    wrap.innerHTML='<div class="loading-msg">No trend data available</div>';
+    return;
+  }
+
+  // Aggregate based on mode
+  var points = aggregatePoints(daily, _aggrMode);
+  if(!points.length){ wrap.innerHTML='<div class="loading-msg">No data</div>'; return; }
+
+  var vals   = points.map(function(p){ return p.value; });
+  var maxV   = Math.max.apply(null,vals)||1;
+  var W=600, H=120, pad=20;
+  var xs = points.map(function(_,i){ return pad + i*(W-2*pad)/(Math.max(points.length-1,1)); });
+  var ys = vals.map(function(v){ return H-pad - (v/maxV)*(H-2*pad); });
+
+  var poly  = xs.map(function(x,i){ return x+','+ys[i]; }).join(' ');
+  var areaD = 'M'+xs[0]+','+H+' L'+xs.map(function(x,i){ return x+' '+ys[i]; }).join(' L')+
+    ' L'+xs[xs.length-1]+','+H+' Z';
+
+  var dots = xs.map(function(x,i){
+    return '<circle cx="'+x+'" cy="'+ys[i]+'" r="3" fill="#71ff00" opacity=".9">'+
+      '<title>'+esc(points[i].label)+': KES '+Number(vals[i]/100).toLocaleString('en-KE',{minimumFractionDigits:0})+'</title>'+
+    '</circle>';
+  }).join('');
+
+  // x-axis labels (up to 8)
+  var step = Math.max(1, Math.floor(points.length/8));
+  var labels = '';
+  for(var i=0;i<points.length;i+=step){
+    labels += '<text x="'+xs[i]+'" y="'+(H-3)+'" text-anchor="middle" font-size="9" fill="#6b7280">'+
+      esc(points[i].label.slice(-5))+'</text>';
+  }
+
+  wrap.innerHTML = '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="height:120px">'+
+    '<defs><linearGradient id="spGrad" x1="0" y1="0" x2="0" y2="1">'+
+      '<stop offset="0%" stop-color="#71ff00" stop-opacity=".25"/>'+
+      '<stop offset="100%" stop-color="#71ff00" stop-opacity="0"/>'+
+    '</linearGradient></defs>'+
+    '<path d="'+areaD+'" fill="url(#spGrad)"/>'+
+    '<polyline points="'+poly+'" fill="none" stroke="#71ff00" stroke-width="2.5" stroke-linejoin="round"/>'+
+    dots+labels+
+  '</svg>';
+
+  renderAggrTable(points);
+}
+
+function aggregatePoints(daily, mode){
+  if(mode==='daily') return daily.map(function(d){
+    return {label:d.date||d.label||'', value:d.revenueCents||d.value||0};
+  });
+
+  // weekly
+  if(mode==='weekly'){
+    var weeks={};
+    daily.forEach(function(d){
+      var dt=new Date(d.date||d.label||Date.now());
+      var y=dt.getFullYear();
+      var wk=Math.ceil((((dt - new Date(y,0,1))/86400000)+1+new Date(y,0,1).getDay())/7);
+      var k=y+'-W'+String(wk).padStart(2,'0');
+      weeks[k]=(weeks[k]||0)+(d.revenueCents||d.value||0);
+    });
+    return Object.keys(weeks).sort().map(function(k){ return {label:k,value:weeks[k]}; });
+  }
+
+  // monthly
+  if(mode==='monthly'){
+    var months={};
+    daily.forEach(function(d){
+      var dt=new Date(d.date||d.label||Date.now());
+      var k=dt.getFullYear()+'-'+(dt.toLocaleString('en',{month:'short'}));
+      months[k]=(months[k]||0)+(d.revenueCents||d.value||0);
+    });
+    return Object.keys(months).map(function(k){ return {label:k,value:months[k]}; });
+  }
+
+  // annual
+  if(mode==='annual'){
+    var years={};
+    daily.forEach(function(d){
+      var dt=new Date(d.date||d.label||Date.now());
+      var k=String(dt.getFullYear());
+      years[k]=(years[k]||0)+(d.revenueCents||d.value||0);
+    });
+    return Object.keys(years).sort().map(function(k){ return {label:k,value:years[k]}; });
+  }
+  return [];
+}
+
+function renderAggrTable(points){
+  var wrap=document.getElementById('aggrTable');
+  if(!points.length){ wrap.innerHTML=''; return; }
+  var rows=points.slice(-10).reverse().map(function(p){
+    return '<tr><td>'+esc(p.label)+'</td><td style="font-weight:700">'+fmt(p.value)+'</td></tr>';
+  }).join('');
+  wrap.innerHTML='<table class="tbl" style="font-size:12px">'+
+    '<thead><tr><th>Period</th><th>Revenue</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table>';
+}
+
+/* aggr sub-tabs */
+document.querySelectorAll('.sub-tab[data-aggr]').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    _aggrMode = this.dataset.aggr;
+    document.querySelectorAll('.sub-tab[data-aggr]').forEach(function(b){ b.classList.remove('active'); });
+    this.classList.add('active');
+    if(_revData) renderSparkline(_revData.dailyBreakdown||[]);
+  });
+});
+
+/* ═══════════════════════════════════════════
+   TAB 2 — COMMISSION RULES
+═══════════════════════════════════════════ */
+function loadRules(){
+  var tbody=document.getElementById('rulesTbody');
+  tbody.innerHTML='<tr><td colspan="8" class="tbl-empty">Loading…</td></tr>';
+  cf('listCommissionRules')({}).then(function(r){
+    _allRules = (r.data && r.data.rules) ? r.data.rules : (Array.isArray(r.data)?r.data:[]);
+    renderRulesTable(_allRules);
+  }).catch(function(e){
+    toast('Rules load failed: '+e.message,'error');
+    tbody.innerHTML='<tr><td colspan="8" class="tbl-empty">Failed to load rules</td></tr>';
+  });
+}
+
+function renderRulesTable(rules){
+  var catF  = document.getElementById('ruleFilterCat').value;
+  var typeF = document.getElementById('ruleFilterType').value;
+  var tbody = document.getElementById('rulesTbody');
+
+  var filtered = rules.filter(function(r){
+    return (!catF || r.category===catF) && (!typeF || r.type===typeF);
+  });
+
+  if(!filtered.length){
+    tbody.innerHTML='<tr><td colspan="8" class="tbl-empty">No rules found</td></tr>'; return;
+  }
+
+  tbody.innerHTML = filtered.map(function(r){
+    return '<tr>'+
+      '<td><strong>'+esc(r.category)+'</strong></td>'+
+      '<td>'+typeBadge(r.type)+'</td>'+
+      '<td>'+rateDisplay(r)+'</td>'+
+      '<td>'+(r.minCommissionCents!=null?fmt(r.minCommissionCents):'—')+'</td>'+
+      '<td>'+(r.maxCommissionCents!=null?fmt(r.maxCommissionCents):'—')+'</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+
+        (r.entityType?esc(r.entityType):'global')+
+        (r.entityId?' / '+shortId(r.entityId):'')+'</td>'+
+      '<td><span class="badge '+(r.isActive?'badge-on':'badge-off')+'">'+
+        (r.isActive?'Active':'Inactive')+'</span></td>'+
+      '<td style="white-space:nowrap">'+
+        '<button class="btn btn-outline btn-sm" style="margin-right:4px" onclick="openRuleDrawer('+
+          JSON.stringify(r).replace(/"/g,'&quot;')+')">Edit</button>'+
+        '<button class="btn btn-danger btn-sm" onclick="confirmDeleteRule(\''+esc(r.id)+'\')">Del</button>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+}
+
+function typeBadge(type){
+  var map={
+    percentage:'badge-pct',fixed:'badge-fixed',
+    percentage_plus_fixed:'badge-hybrid',tiered:'badge-tiered',
+    commission_holiday:'badge-holiday'
+  };
+  var labels={
+    percentage:'%',fixed:'Fixed',
+    percentage_plus_fixed:'Hybrid',tiered:'Tiered',
+    commission_holiday:'Holiday'
+  };
+  return '<span class="badge '+(map[type]||'badge-off')+'">'+(labels[type]||esc(type))+'</span>';
+}
+
+function rateDisplay(r){
+  if(r.type==='percentage')           return (r.rate||0)+'%';
+  if(r.type==='fixed')                return fmt(r.amountCents);
+  if(r.type==='percentage_plus_fixed') return (r.rate||0)+'% + '+fmt(r.amountCents);
+  if(r.type==='tiered')               return (r.tiers||[]).length+' tiers';
+  if(r.type==='commission_holiday')   return '0%';
+  return '—';
+}
+
+document.getElementById('ruleFilterCat').addEventListener('change', function(){ renderRulesTable(_allRules); });
+document.getElementById('ruleFilterType').addEventListener('change', function(){ renderRulesTable(_allRules); });
+
+/* ── Rule Drawer ── */
+var _editingRuleId = null;
+
+function openRuleDrawer(rule){
+  _editingRuleId = rule ? (rule.id||null) : null;
+  document.getElementById('drawerTitle').textContent = rule ? 'Edit Commission Rule' : 'New Commission Rule';
+
+  // Reset
+  ['fType','fCategory','fRate','fAmount','fMin','fMax','fEntityType','fEntityId',
+   'fFrom','fTo','fIsActive','fPriority','fDesc'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el) el.value='';
+  });
+  document.getElementById('fIsActive').value='1';
+  document.getElementById('fPriority').value='0';
+  document.getElementById('tiersList').innerHTML='';
+  _tiersCount=0;
+  document.getElementById('previewResult').style.display='none';
+
+  if(rule){
+    document.getElementById('fType').value       = rule.type||'percentage';
+    document.getElementById('fCategory').value   = rule.category||'all';
+    document.getElementById('fRate').value        = rule.rate!=null?rule.rate:'';
+    document.getElementById('fAmount').value      = rule.amountCents!=null?rule.amountCents/100:'';
+    document.getElementById('fMin').value         = rule.minCommissionCents!=null?rule.minCommissionCents/100:'';
+    document.getElementById('fMax').value         = rule.maxCommissionCents!=null?rule.maxCommissionCents/100:'';
+    document.getElementById('fEntityType').value  = rule.entityType||'';
+    document.getElementById('fEntityId').value    = rule.entityId||'';
+    document.getElementById('fIsActive').value    = rule.isActive?'1':'0';
+    document.getElementById('fPriority').value    = rule.priority||0;
+    document.getElementById('fDesc').value         = rule.description||'';
+    if(rule.activeFrom) document.getElementById('fFrom').value = toDatetimeLocal(rule.activeFrom);
+    if(rule.activeTo)   document.getElementById('fTo').value   = toDatetimeLocal(rule.activeTo);
+    if(rule.tiers && rule.tiers.length){
+      rule.tiers.forEach(function(t){ addTierRow(t.minCents/100, t.maxCents/100, t.rate); });
+    }
+  }
+  onTypeChange();
+
+  document.getElementById('drawerBackdrop').classList.add('open');
+  document.getElementById('ruleDrawer').classList.add('open');
+}
+
+function closeDrawer(){
+  document.getElementById('drawerBackdrop').classList.remove('open');
+  document.getElementById('ruleDrawer').classList.remove('open');
+}
+
+function toDatetimeLocal(ts){
+  var d = ts && ts.toDate ? ts.toDate() : new Date(ts);
+  if(isNaN(d)) return '';
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+}
+
+function onTypeChange(){
+  var t = document.getElementById('fType').value;
+  document.getElementById('fRateWrap').style.display   = (t==='percentage'||t==='percentage_plus_fixed'||t==='tiered')?'':'none';
+  document.getElementById('fAmountWrap').style.display  = (t==='fixed'||t==='percentage_plus_fixed')?'':'none';
+  document.getElementById('tiersSection').style.display = t==='tiered'?'':'none';
+  document.getElementById('fFromWrap').style.display    = t==='commission_holiday'?'':'none';
+  document.getElementById('fToWrap').style.display      = t==='commission_holiday'?'':'none';
+  if(t==='tiered'){ document.getElementById('fRateWrap').style.display='none'; }
+}
+
+/* Tiers */
+function addTier(){ addTierRow('','',''); }
+function addTierRow(minV, maxV, rateV){
+  _tiersCount++;
+  var i=_tiersCount;
+  var row=document.createElement('div');
+  row.className='tier-row';
+  row.id='tier-'+i;
+  row.innerHTML=
+    '<input type="number" class="form-input" id="tm'+i+'" placeholder="Min KES" value="'+esc(minV)+'" min="0">'+
+    '<input type="number" class="form-input" id="tx'+i+'" placeholder="Max KES" value="'+esc(maxV)+'" min="0">'+
+    '<input type="number" class="form-input" id="tr'+i+'" placeholder="Rate %" value="'+esc(rateV)+'" min="0" max="100" step="0.01">'+
+    '<button type="button" class="btn btn-danger btn-sm tier-del" onclick="document.getElementById(\'tier-'+i+'\').remove()">&#10005;</button>';
+  document.getElementById('tiersList').appendChild(row);
+}
+
+function collectTiers(){
+  var tiers=[];
+  document.querySelectorAll('#tiersList .tier-row').forEach(function(row){
+    var i=row.id.replace('tier-','');
+    var mn=parseFloat(document.getElementById('tm'+i).value)||0;
+    var mx=parseFloat(document.getElementById('tx'+i).value)||0;
+    var rt=parseFloat(document.getElementById('tr'+i).value)||0;
+    tiers.push({minCents:Math.round(mn*100),maxCents:Math.round(mx*100),rate:rt});
+  });
+  return tiers;
+}
+
+/* ── Preview ── */
+window.runPreview = function(){
+  var cat  = document.getElementById('fCategory').value;
+  var sid  = document.getElementById('fEntityId').value.trim();
+  var amt  = parseFloat(document.getElementById('previewAmt').value)||1000;
+  var hub  = cat;
+  document.getElementById('previewResult').style.display='none';
+
+  cf('previewCommission')({amountCents:Math.round(amt*100),category:cat,sellerId:sid||undefined,hub:hub})
+    .then(function(r){
+      var d=r.data||{};
+      document.getElementById('previewCommVal').textContent = fmt(d.commissionCents);
+      document.getElementById('previewMeta').textContent    =
+        'Rate: '+(d.effectiveRate!=null?d.effectiveRate+'%':'—')+
+        ' | Rule: '+(d.appliedRuleId||'default')+
+        ' | Net seller: '+fmt(d.netSellerCents);
+      document.getElementById('previewResult').style.display='';
+    })
+    .catch(function(e){ toast('Preview failed: '+e.message,'error'); });
+};
+
+/* ── Save rule ── */
+window.saveRule = function(){
+  var btn=document.getElementById('saveRuleBtn');
+  btn.textContent='Saving…'; btn.disabled=true;
+
+  var type = document.getElementById('fType').value;
+  var payload={
+    type:type,
+    category:document.getElementById('fCategory').value,
+    isActive:document.getElementById('fIsActive').value==='1',
+    priority:parseInt(document.getElementById('fPriority').value)||0,
+    description:document.getElementById('fDesc').value.trim(),
+    entityType:document.getElementById('fEntityType').value||undefined,
+    entityId:document.getElementById('fEntityId').value.trim()||undefined
+  };
+
+  var rate=parseFloat(document.getElementById('fRate').value);
+  if(!isNaN(rate) && rate!==0) payload.rate=rate;
+
+  var amount=parseFloat(document.getElementById('fAmount').value);
+  if(!isNaN(amount)) payload.amountCents=Math.round(amount*100);
+
+  var minV=parseFloat(document.getElementById('fMin').value);
+  if(!isNaN(minV) && document.getElementById('fMin').value!=='') payload.minCommissionCents=Math.round(minV*100);
+
+  var maxV=parseFloat(document.getElementById('fMax').value);
+  if(!isNaN(maxV) && document.getElementById('fMax').value!=='') payload.maxCommissionCents=Math.round(maxV*100);
+
+  if(type==='tiered') payload.tiers=collectTiers();
+
+  var fromV=document.getElementById('fFrom').value;
+  var toV  =document.getElementById('fTo').value;
+  if(fromV) payload.activeFrom=fromV;
+  if(toV)   payload.activeTo  =toV;
+
+  var callName, callPayload;
+  if(_editingRuleId){
+    callName    = 'updateCommissionRule';
+    callPayload = Object.assign({ruleId:_editingRuleId}, payload);
+  } else {
+    callName    = 'createCommissionRule';
+    callPayload = payload;
+  }
+
+  cf(callName)(callPayload)
+    .then(function(){
+      toast(_editingRuleId?'Rule updated':'Rule created','success');
+      closeDrawer();
+      loadRules();
+    })
+    .catch(function(e){
+      toast('Save failed: '+esc(e.message),'error');
+    })
+    .finally(function(){
+      btn.textContent='Save Rule'; btn.disabled=false;
+    });
+};
+
+/* ── Delete rule ── */
+window.confirmDeleteRule = function(ruleId){
+  document.getElementById('deleteRuleId').value = ruleId;
+  openModal('deleteModal');
+};
+window.submitDeleteRule = function(){
+  var ruleId=document.getElementById('deleteRuleId').value;
+  cf('deleteCommissionRule')({ruleId:ruleId})
+    .then(function(){
+      toast('Rule deleted','success');
+      closeModal('deleteModal');
+      loadRules();
+    })
+    .catch(function(e){ toast('Delete failed: '+e.message,'error'); });
+};
+
+/* ═══════════════════════════════════════════
+   TAB 3 — WITHDRAWALS
+═══════════════════════════════════════════ */
+window.loadWithdrawals = function(){
+  var pTbody=document.getElementById('pendingTbody');
+  var aTbody=document.getElementById('allWdTbody');
+  pTbody.innerHTML='<tr><td colspan="5" class="tbl-empty">Loading…</td></tr>';
+  aTbody.innerHTML='<tr><td colspan="5" class="tbl-empty">Loading…</td></tr>';
+
+  cf('getWithdrawals')({status:'pending'}).then(function(r){
+    var items=(r.data&&r.data.withdrawals)||r.data||[];
+    renderPendingWd(items);
+    document.getElementById('pendingBadge').textContent=items.length;
+    document.getElementById('pendingBadge').style.display=items.length?'inline':'none';
+  }).catch(function(e){
+    toast('Withdrawals load failed: '+e.message,'error');
+    pTbody.innerHTML='<tr><td colspan="5" class="tbl-empty">Failed to load</td></tr>';
+  });
+
+  var statusF=document.getElementById('wdStatusFilter').value;
+  cf('getWithdrawals')(statusF?{status:statusF}:{}).then(function(r){
+    var items=(r.data&&r.data.withdrawals)||r.data||[];
+    renderAllWd(items);
+  }).catch(function(e){
+    aTbody.innerHTML='<tr><td colspan="5" class="tbl-empty">Failed to load</td></tr>';
+  });
+};
+
+function renderPendingWd(items){
+  var tbody=document.getElementById('pendingTbody');
+  if(!items.length){
+    tbody.innerHTML='<tr><td colspan="5" class="tbl-empty">No pending withdrawals &#127881;</td></tr>'; return;
+  }
+  tbody.innerHTML = items.map(function(w){
+    return '<tr>'+
+      '<td style="font-size:11px;font-family:monospace">'+shortId(w.sellerId)+'</td>'+
+      '<td style="font-weight:700">'+fmt(w.amountCents)+'</td>'+
+      '<td>'+esc(w.method||'—')+'</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+fmtTs(w.createdAt)+'</td>'+
+      '<td style="white-space:nowrap">'+
+        '<button class="btn btn-success btn-sm" style="margin-right:4px" '+
+          'onclick="openApprove(\''+esc(w.id)+'\')">Approve</button>'+
+        '<button class="btn btn-danger btn-sm" '+
+          'onclick="openReject(\''+esc(w.id)+'\')">Reject</button>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+}
+
+function renderAllWd(items){
+  var tbody=document.getElementById('allWdTbody');
+  if(!items.length){
+    tbody.innerHTML='<tr><td colspan="5" class="tbl-empty">No withdrawals found</td></tr>'; return;
+  }
+  tbody.innerHTML = items.map(function(w){
+    var st=w.status||'pending';
+    return '<tr>'+
+      '<td style="font-size:11px;font-family:monospace">'+shortId(w.sellerId)+'</td>'+
+      '<td style="font-weight:700">'+fmt(w.amountCents)+'</td>'+
+      '<td>'+esc(w.method||'—')+'</td>'+
+      '<td><span class="badge badge-'+esc(st)+'">'+esc(st)+'</span></td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+fmtTs(w.createdAt)+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+document.getElementById('wdStatusFilter').addEventListener('change', loadWithdrawals);
+
+/* ── Approve ── */
+window.openApprove = function(wdId){
+  document.getElementById('approveWdId').value=wdId;
+  document.getElementById('approveRef').value='';
+  openModal('approveModal');
+};
+window.submitApprove = function(){
+  var wdId=document.getElementById('approveWdId').value;
+  var ref =document.getElementById('approveRef').value.trim();
+  if(!ref){ toast('Payment reference required','error'); return; }
+  cf('approveWithdrawal')({withdrawalId:wdId,paymentReference:ref})
+    .then(function(){
+      toast('Withdrawal approved','success');
+      closeModal('approveModal');
+      loadWithdrawals();
+    })
+    .catch(function(e){ toast('Approve failed: '+e.message,'error'); });
+};
+
+/* ── Reject ── */
+window.openReject = function(wdId){
+  document.getElementById('rejectWdId').value=wdId;
+  document.getElementById('rejectReason').value='';
+  openModal('rejectModal');
+};
+window.submitReject = function(){
+  var wdId  =document.getElementById('rejectWdId').value;
+  var reason=document.getElementById('rejectReason').value.trim();
+  if(!reason){ toast('Rejection reason required','error'); return; }
+  cf('rejectWithdrawal')({withdrawalId:wdId,reason:reason})
+    .then(function(){
+      toast('Withdrawal rejected','success');
+      closeModal('rejectModal');
+      loadWithdrawals();
+    })
+    .catch(function(e){ toast('Reject failed: '+e.message,'error'); });
+};
+
+/* ═══════════════════════════════════════════
+   TAB 4 — REVENUE BY SELLER
+═══════════════════════════════════════════ */
+window.loadSellers = function(){
+  var tbody=document.getElementById('sellersTbody');
+  tbody.innerHTML='<tr><td colspan="7" class="tbl-empty">Loading…</td></tr>';
+
+  db.collection('wallets').orderBy('commissionPaidCents','desc').limit(100).get()
+    .then(function(snap){
+      if(snap.empty){
+        tbody.innerHTML='<tr><td colspan="7" class="tbl-empty">No seller wallet data found</td></tr>';
+        return;
+      }
+      var sellers=[];
+      snap.forEach(function(doc){
+        var d=doc.data();
+        sellers.push({
+          id:doc.id,
+          gross:d.grossRevenueCents||d.revenueCents||0,
+          commission:d.commissionPaidCents||d.commissionCents||0,
+          net:d.netEarningsCents||d.balanceCents||0,
+          txns:d.transactionCount||d.totalTransactions||0,
+        });
+      });
+      // sort by gross
+      sellers.sort(function(a,b){ return b.gross-a.gross; });
+      tbody.innerHTML=sellers.map(function(s,i){
+        var avg=s.txns>0?Math.round(s.gross/s.txns):0;
+        return '<tr>'+
+          '<td style="color:var(--sub);font-size:12px">#'+(i+1)+'</td>'+
+          '<td style="font-size:11px;font-family:monospace">'+shortId(s.id)+'</td>'+
+          '<td style="font-weight:700">'+fmt(s.gross)+'</td>'+
+          '<td style="color:var(--g)">'+fmt(s.commission)+'</td>'+
+          '<td>'+fmt(s.net)+'</td>'+
+          '<td>'+fmtN(s.txns)+'</td>'+
+          '<td style="color:var(--sub)">'+fmt(avg)+'</td>'+
+        '</tr>';
+      }).join('');
+    })
+    .catch(function(e){
+      toast('Seller data failed: '+e.message,'error');
+      tbody.innerHTML='<tr><td colspan="7" class="tbl-empty">Failed to load seller data</td></tr>';
+    });
+};
+
+document.getElementById('sellerPeriod').addEventListener('change', loadSellers);
+
+/* ═══════════════════════════════════════════
+   TAB 5 — AUDIT LOG (live onSnapshot)
+═══════════════════════════════════════════ */
+window.loadAudit = function(){
+  if(_auditUnsub){ _auditUnsub(); _auditUnsub=null; }
+  var tbody=document.getElementById('auditTbody');
+  tbody.innerHTML='<tr><td colspan="6" class="tbl-empty">Loading…</td></tr>';
+
+  var typeF=document.getElementById('auditTypeFilter').value;
+  var query=db.collection('ledger').orderBy('createdAt','desc').limit(50);
+  if(typeF) query=query.where('type','==',typeF);
+
+  _auditUnsub=query.onSnapshot(function(snap){
+    if(snap.empty){
+      tbody.innerHTML='<tr><td colspan="6" class="tbl-empty">No ledger entries found</td></tr>'; return;
+    }
+    var rows=[];
+    snap.forEach(function(doc){
+      var d=doc.data();
+      var typeCls='badge-'+esc(d.type==='seller_earning'?'earning':d.type==='refund_clawback'?'refund':d.type||'commission');
+      rows.push(
+        '<tr>'+
+          '<td style="font-size:11px;color:var(--sub);white-space:nowrap">'+esc(fmtTs(d.createdAt))+'</td>'+
+          '<td><span class="badge '+typeCls+'">'+esc(d.type||'—')+'</span></td>'+
+          '<td style="font-size:11px;font-family:monospace">'+shortId(d.sellerId||d.uid)+'</td>'+
+          '<td style="font-size:11px;font-family:monospace">'+shortId(d.orderId||d.referenceId)+'</td>'+
+          '<td style="font-weight:700">'+fmt(d.amountCents)+'</td>'+
+          '<td style="font-size:11px;color:var(--sub)">'+esc(d.category||d.hub||'—')+'</td>'+
+        '</tr>'
+      );
+    });
+    tbody.innerHTML=rows.join('');
+  }, function(e){
+    toast('Audit log error: '+e.message,'error');
+    tbody.innerHTML='<tr><td colspan="6" class="tbl-empty">Failed to load audit log</td></tr>';
+  });
+};
+
+document.getElementById('auditTypeFilter').addEventListener('change', loadAudit);
+
+/* ═══════════════════════════════════════════
+   MODAL HELPERS
+═══════════════════════════════════════════ */
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+// Backdrop click
+document.querySelectorAll('.modal-backdrop').forEach(function(bd){
+  bd.addEventListener('click', function(e){
+    if(e.target===this) this.classList.remove('open');
+  });
+});
+document.getElementById('drawerBackdrop').addEventListener('click', function(e){
+  if(e.target===this) closeDrawer();
+});
+
+// ESC key
+document.addEventListener('keydown', function(e){
+  if(e.key==='Escape'){
+    closeDrawer();
+    document.querySelectorAll('.modal-backdrop.open').forEach(function(m){ m.classList.remove('open'); });
+  }
+});
+
+/* ── Expose inline-handler functions globally ──
+   Functions declared with `function foo(){}` inside the IIFE are local and must be
+   explicitly assigned to window. Functions already assigned as `window.foo = function(){}`
+   are self-assigned (no-ops) or already reachable — no extra step needed for those.
+─────────────────────────────────────────────── */
+window.closeModal     = closeModal;     // local function
+window.closeDrawer    = closeDrawer;    // local function
+window.onTypeChange   = onTypeChange;   // local function
+window.openRuleDrawer = openRuleDrawer; // local function
+window.addTier        = addTier;        // local function (addTier -> addTierRow)
+
+/* ═══════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════ */
+function boot(){
+  bindPeriodButtons();
+  // Populate rule filter category dropdown
+  var cats=['marketplace','food_delivery','services','property','vehicles','jobs','events',
+    'healthcare','education','legal','digital_products','pharmacy','freelancers','hotels',
+    'insurance','logistics','financial_services','bookings','classifieds','subscriptions',
+    'advertising','hub'];
+  var catSelect=document.getElementById('ruleFilterCat');
+  cats.forEach(function(c){
+    var opt=document.createElement('option');
+    opt.value=c; opt.textContent=c;
+    catSelect.appendChild(opt);
+  });
+  // Load initial tab
+  loadRevenue();
+}
+
+})();
+</script>
+</body>
+</html>

@@ -9140,3 +9140,10 @@ exports.installmentGetMyPlans     = installments.installmentGetMyPlans;
 exports.installmentGetSellerPlans = installments.installmentGetSellerPlans;
 exports.installmentMarkOverdue    = installments.installmentMarkOverdue;
 exports.installmentCancelPlan     = installments.installmentCancelPlan;
+
+/* ── Commission Engine — Settlement & Withdrawals v1.0 ── */
+exports.processSettlement   = commission.processSettlement;
+exports.requestWithdrawal   = commission.requestWithdrawal;
+exports.approveWithdrawal   = commission.approveWithdrawal;
+exports.rejectWithdrawal    = commission.rejectWithdrawal;
+exports.getWithdrawals      = commission.getWithdrawals;

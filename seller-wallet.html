@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Seller Wallet — SOKONI</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050505;--sur:#0d0d0d;--sur2:#141414;--bor:#1a1a1a;--bor2:#222;
+  --g:#71ff00;--ga:rgba(113,255,0,.12);--txt:#e8e8e8;--sub:#6b7280;
+  --red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;--radius:10px;
+}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;min-height:100vh;font-size:14px;padding-bottom:60px}
+#auth-gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:12px}
+#auth-gate p{color:var(--sub);font-size:13px}
+.spinner{width:28px;height:28px;border:2px solid var(--bor2);border-top-color:var(--g);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#page{display:none}
+
+/* Header */
+.sw-header{background:var(--sur);border-bottom:1px solid var(--bor);padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+.sw-header h1{font-size:18px;font-weight:700;color:var(--g)}
+.sw-header span{font-size:12px;color:var(--sub)}
+
+/* KPI strip */
+.kpi-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:16px 20px}
+@media(max-width:900px){.kpi-strip{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:500px){.kpi-strip{grid-template-columns:repeat(2,1fr)}}
+.kpi-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:4px}
+.kpi-label{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}
+.kpi-value{font-size:18px;font-weight:700;color:var(--txt)}
+.kpi-value.green{color:var(--g)}
+.kpi-value.amber{color:var(--amber)}
+.skeleton{background:linear-gradient(90deg,var(--sur2) 25%,var(--bor) 50%,var(--sur2) 75%);background-size:200% 100%;animation:skel 1.2s infinite;border-radius:4px;height:22px;width:80%}
+@keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* Tabs */
+.sw-tabs{display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--bor);background:var(--sur)}
+.sw-tab{padding:12px 18px;font-size:13px;font-weight:500;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.sw-tab:hover{color:var(--txt)}
+.sw-tab.active{color:var(--g);border-bottom-color:var(--g)}
+@media(max-width:600px){.sw-tab{padding:10px 12px;font-size:12px}}
+.sw-panel{display:none;padding:20px}
+.sw-panel.active{display:block}
+
+/* Period selector */
+.period-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px}
+.period-btn{padding:6px 14px;border-radius:20px;border:1px solid var(--bor);background:var(--sur2);color:var(--sub);font-size:12px;cursor:pointer;transition:all .2s}
+.period-btn:hover{border-color:var(--g);color:var(--txt)}
+.period-btn.active{background:var(--ga);border-color:var(--g);color:var(--g)}
+
+/* Tables */
+.sw-table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--bor)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--sur2);color:var(--sub);font-weight:600;padding:10px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+td{padding:10px 14px;border-top:1px solid var(--bor);color:var(--txt)}
+tr:hover td{background:var(--sur2)}
+
+/* Chips */
+.chip{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.chip-credit{background:rgba(113,255,0,.12);color:var(--g)}
+.chip-debit{background:rgba(239,68,68,.12);color:var(--red)}
+.chip-pending{background:rgba(245,158,11,.12);color:var(--amber)}
+.chip-approved{background:rgba(113,255,0,.12);color:var(--g)}
+.chip-rejected{background:rgba(239,68,68,.12);color:var(--red)}
+
+/* Bar charts */
+.bar-list{display:flex;flex-direction:column;gap:8px}
+.bar-row{display:flex;align-items:center;gap:10px;font-size:12px}
+.bar-label{width:130px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{flex:1;background:var(--sur2);border-radius:4px;height:8px;overflow:hidden}
+.bar-fill{height:100%;background:var(--g);border-radius:4px;transition:width .6s ease}
+.bar-val{width:80px;text-align:right;color:var(--txt);font-weight:600}
+
+/* Withdrawal panel */
+.wd-panel{position:fixed;top:0;right:-420px;width:min(420px,100vw);height:100vh;background:var(--sur);border-left:1px solid var(--bor);z-index:200;transition:right .3s ease;overflow-y:auto;padding:24px}
+.wd-panel.open{right:0}
+.wd-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:199;display:none}
+.wd-overlay.show{display:block}
+.wd-panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.wd-panel-header h3{font-size:16px;font-weight:700}
+.wd-close{background:none;border:none;color:var(--sub);font-size:20px;cursor:pointer;line-height:1}
+
+/* Form elements */
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:12px;color:var(--sub);margin-bottom:5px;font-weight:500}
+.form-control{width:100%;background:var(--sur2);border:1px solid var(--bor2);border-radius:8px;padding:10px 12px;color:var(--txt);font-size:14px;outline:none;transition:border .2s}
+.form-control:focus{border-color:var(--g)}
+.radio-row{display:flex;gap:16px;margin-top:6px}
+.radio-label{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--txt)}
+input[type=radio]{accent-color:var(--g)}
+.balance-display{background:var(--ga);border:1px solid var(--g);border-radius:var(--radius);padding:16px;margin-bottom:20px;text-align:center}
+.balance-display .amount{font-size:28px;font-weight:800;color:var(--g)}
+.balance-display .label{font-size:12px;color:var(--sub);margin-top:2px}
+
+/* Buttons */
+.btn{padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+.btn-primary{background:var(--g);color:#000}
+.btn-primary:hover{opacity:.85}
+.btn-outline{background:transparent;border:1px solid var(--bor2);color:var(--txt)}
+.btn-outline:hover{border-color:var(--g);color:var(--g)}
+.btn-sm{padding:6px 14px;font-size:12px}
+
+/* Section headers */
+.sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.sec-title{font-size:15px;font-weight:700}
+
+/* Statement */
+.stmt-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:20px}
+.stmt-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--bor);font-size:14px}
+.stmt-row:last-child{border-bottom:none;font-weight:700;font-size:15px;padding-top:14px;margin-top:6px}
+.stmt-row .amt-neg{color:var(--red)}
+.stmt-row .amt-pos{color:var(--g)}
+.month-select{background:var(--sur2);border:1px solid var(--bor2);border-radius:8px;padding:8px 12px;color:var(--txt);font-size:14px;cursor:pointer}
+
+/* Filter pills */
+.filter-pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.filter-pill{padding:5px 12px;border-radius:16px;border:1px solid var(--bor);background:var(--sur2);color:var(--sub);font-size:12px;cursor:pointer;transition:all .2s}
+.filter-pill:hover{border-color:var(--g);color:var(--txt)}
+.filter-pill.active{background:var(--ga);border-color:var(--g);color:var(--g)}
+
+/* Toast */
+#toast-container{position:fixed;bottom:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 18px;border-radius:8px;font-size:13px;font-weight:500;background:var(--sur2);border:1px solid var(--bor2);color:var(--txt);animation:fadeIn .2s ease;max-width:320px}
+.toast.success{background:var(--ga);border-color:var(--g);color:var(--g)}
+.toast.error{background:rgba(239,68,68,.12);border-color:var(--red);color:var(--red)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+@media print{
+  .sw-header,.sw-tabs,.period-row,.btn,.wd-panel,.wd-overlay{display:none!important}
+  .sw-panel{display:block!important;padding:0}
+  body{background:#fff;color:#000}
+  .stmt-card{border:1px solid #ccc}
+}
+</style>
+</head>
+<body>
+
+<div id="auth-gate"><div class="spinner"></div><p>Verifying access…</p></div>
+<div id="page">
+
+<div class="sw-header">
+  <h1>Seller Wallet</h1>
+  <span id="seller-name-lbl"></span>
+</div>
+
+<!-- KPI strip -->
+<div class="kpi-strip" id="kpi-strip">
+  <div class="kpi-card"><div class="kpi-label">Gross Sales</div><div class="kpi-value" id="kpi-gross"><div class="skeleton"></div></div></div>
+  <div class="kpi-card"><div class="kpi-label">Platform Fees</div><div class="kpi-value" id="kpi-fees"><div class="skeleton"></div></div></div>
+  <div class="kpi-card"><div class="kpi-label">Net Earnings</div><div class="kpi-value green" id="kpi-net"><div class="skeleton"></div></div></div>
+  <div class="kpi-card"><div class="kpi-label">Available Balance</div><div class="kpi-value green" id="kpi-avail"><div class="skeleton"></div></div></div>
+  <div class="kpi-card"><div class="kpi-label">Pending Balance</div><div class="kpi-value amber" id="kpi-pending"><div class="skeleton"></div></div></div>
+  <div class="kpi-card"><div class="kpi-label">Lifetime Earnings</div><div class="kpi-value" id="kpi-lifetime"><div class="skeleton"></div></div></div>
+</div>
+
+<!-- Tabs -->
+<div class="sw-tabs">
+  <div class="sw-tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="sw-tab" onclick="switchTab('history')">Commission History</div>
+  <div class="sw-tab" onclick="switchTab('withdrawals')">Withdrawals</div>
+  <div class="sw-tab" onclick="switchTab('statements')">Monthly Statements</div>
+</div>
+
+<!-- Tab: Overview -->
+<div class="sw-panel active" id="panel-overview">
+  <div class="period-row">
+    <button class="period-btn active" onclick="setPeriod('month',this)">This Month</button>
+    <button class="period-btn" onclick="setPeriod('last_month',this)">Last Month</button>
+    <button class="period-btn" onclick="setPeriod('3month',this)">Last 3 Months</button>
+  </div>
+  <div class="sec-header"><div class="sec-title">Top Categories</div></div>
+  <div class="bar-list" id="cat-bars" style="margin-bottom:24px"><p style="color:var(--sub);font-size:13px">Loading…</p></div>
+  <div class="sec-header"><div class="sec-title">Recent Transactions</div></div>
+  <div class="sw-table-wrap">
+    <table>
+      <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Direction</th></tr></thead>
+      <tbody id="recent-tbody"><tr><td colspan="5" style="text-align:center;color:var(--sub)">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Tab: Commission History -->
+<div class="sw-panel" id="panel-history">
+  <div class="filter-pills" id="type-filters">
+    <div class="filter-pill active" onclick="setTypeFilter('all',this)">All</div>
+    <div class="filter-pill" onclick="setTypeFilter('seller_earning',this)">Earnings</div>
+    <div class="filter-pill" onclick="setTypeFilter('commission',this)">Commission</div>
+    <div class="filter-pill" onclick="setTypeFilter('refund_clawback',this)">Refunds</div>
+    <div class="filter-pill" onclick="setTypeFilter('platform_fee',this)">Platform Fees</div>
+  </div>
+  <div class="sec-header">
+    <div class="sec-title">All Transactions</div>
+    <button class="btn btn-outline btn-sm" onclick="exportCSV()">Export CSV</button>
+  </div>
+  <div class="sw-table-wrap">
+    <table>
+      <thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Category</th><th>Amount (KES)</th><th>Dir.</th></tr></thead>
+      <tbody id="history-tbody"><tr><td colspan="6" style="text-align:center;color:var(--sub)">Loading…</td></tr></tbody>
+    </table>
+  </div>
+  <div style="margin-top:14px;text-align:center">
+    <button class="btn btn-outline" id="load-more-btn" onclick="loadMore()" style="display:none">Load More</button>
+  </div>
+</div>
+
+<!-- Tab: Withdrawals -->
+<div class="sw-panel" id="panel-withdrawals">
+  <div class="balance-display">
+    <div class="amount" id="wd-balance">—</div>
+    <div class="label">Available to Withdraw</div>
+  </div>
+  <div style="margin-bottom:20px">
+    <button class="btn btn-primary" onclick="openWdPanel()">Request Withdrawal</button>
+  </div>
+  <div class="sec-title" style="margin-bottom:14px">Withdrawal History</div>
+  <div class="sw-table-wrap">
+    <table>
+      <thead><tr><th>Date</th><th>Amount (KES)</th><th>Method</th><th>Status</th><th>Reference</th></tr></thead>
+      <tbody id="wd-tbody"><tr><td colspan="5" style="text-align:center;color:var(--sub)">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Tab: Monthly Statements -->
+<div class="sw-panel" id="panel-statements">
+  <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap">
+    <label class="form-label" style="margin:0">Statement for:</label>
+    <select class="month-select" id="stmt-month-select" onchange="loadStatement(this.value)"></select>
+    <button class="btn btn-outline btn-sm" onclick="window.print()">Print / PDF</button>
+  </div>
+  <div class="stmt-card" id="stmt-card">
+    <p style="color:var(--sub);text-align:center">Select a month above</p>
+  </div>
+</div>
+
+</div><!-- #page -->
+
+<!-- Withdrawal slide-in panel -->
+<div class="wd-overlay" id="wd-overlay" onclick="closeWdPanel()"></div>
+<div class="wd-panel" id="wd-panel">
+  <div class="wd-panel-header">
+    <h3>Request Withdrawal</h3>
+    <button class="wd-close" onclick="closeWdPanel()">✕</button>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Amount (KES) — minimum KES 100</label>
+    <input type="number" class="form-control" id="wd-amount" placeholder="0.00" min="100" step="0.01">
+  </div>
+  <div class="form-group">
+    <label class="form-label">Method</label>
+    <div class="radio-row">
+      <label class="radio-label"><input type="radio" name="wd-method" value="mpesa" checked onchange="toggleWdFields()"> M-Pesa</label>
+      <label class="radio-label"><input type="radio" name="wd-method" value="bank" onchange="toggleWdFields()"> Bank Transfer</label>
+    </div>
+  </div>
+  <div id="mpesa-fields">
+    <div class="form-group">
+      <label class="form-label">M-Pesa Phone Number</label>
+      <input type="tel" class="form-control" id="wd-phone" placeholder="07XXXXXXXX">
+    </div>
+  </div>
+  <div id="bank-fields" style="display:none">
+    <div class="form-group"><label class="form-label">Bank Name</label><input type="text" class="form-control" id="wd-bank-name" placeholder="e.g. Equity Bank"></div>
+    <div class="form-group"><label class="form-label">Account Number</label><input type="text" class="form-control" id="wd-account-num" placeholder="Account number"></div>
+    <div class="form-group"><label class="form-label">Account Name</label><input type="text" class="form-control" id="wd-account-name" placeholder="Name on account"></div>
+  </div>
+  <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="submitWithdrawal()">Submit Request</button>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+firebase.initializeApp(window.SOKONI_CONFIG || {});
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const fns  = firebase.app().functions('us-central1');
+
+// Helpers
+function esc(s){const d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML}
+function fmtKES(n){return 'KES '+Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmtDate(ms){return ms?new Date(ms).toLocaleDateString('en-KE',{day:'2-digit',month:'short',year:'numeric'}):'—'}
+function toast(msg,type='info'){
+  const el=document.createElement('div');
+  el.className='toast'+(type==='success'?' success':type==='error'?' error':'');
+  el.textContent=msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(()=>el.remove(),3500);
+}
+
+// State
+let currentEntries=[], currentFilter='all', nextCursor=null, hasMore=false;
+let walletData={};
+
+// Auth guard
+auth.onAuthStateChanged(async user=>{
+  if(!user){location.href='login.html?redirect=seller-wallet';return}
+  const token=await user.getIdTokenResult();
+  if(!token.claims.seller&&!token.claims.admin&&!token.claims.superAdmin){
+    document.getElementById('auth-gate').innerHTML='<p style="color:var(--red)">Access restricted to sellers.</p>';
+    return;
+  }
+  document.getElementById('auth-gate').style.display='none';
+  document.getElementById('page').style.display='block';
+  document.getElementById('seller-name-lbl').textContent=user.displayName||user.email||'';
+  populateMonthSelect();
+  loadPeriod('month');
+  loadWithdrawals();
+});
+
+// Period
+const PERIODS={
+  month:()=>{const n=new Date();return{s:new Date(n.getFullYear(),n.getMonth(),1).toISOString().slice(0,10),e:n.toISOString().slice(0,10)}},
+  last_month:()=>{const n=new Date();const m=new Date(n.getFullYear(),n.getMonth()-1,1);return{s:m.toISOString().slice(0,10),e:new Date(n.getFullYear(),n.getMonth(),0).toISOString().slice(0,10)}},
+  '3month':()=>{const n=new Date();const s=new Date(n.getFullYear(),n.getMonth()-2,1);return{s:s.toISOString().slice(0,10),e:n.toISOString().slice(0,10)}},
+};
+
+function setPeriod(key,btn){
+  document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  loadPeriod(key);
+}
+
+async function loadPeriod(key){
+  const {s,e}=PERIODS[key]();
+  const getReport=fns.httpsCallable('getSellerEarningsReport');
+  try{
+    const res=await getReport({periodStart:s,periodEnd:e});
+    const {summary,wallet,entries}=res.data;
+    walletData=wallet||{};
+    // KPIs
+    document.getElementById('kpi-gross').textContent=fmtKES(summary.grossKES);
+    document.getElementById('kpi-fees').textContent=fmtKES(summary.commissionKES);
+    document.getElementById('kpi-net').textContent=fmtKES(summary.netKES);
+    document.getElementById('kpi-avail').textContent=fmtKES(wallet.availableKES);
+    document.getElementById('kpi-pending').textContent=fmtKES(wallet.pendingKES);
+    document.getElementById('kpi-lifetime').textContent=fmtKES(wallet.lifetimeEarningsKES);
+    document.getElementById('wd-balance').textContent=fmtKES(wallet.withdrawableKES||wallet.availableKES||0);
+    currentEntries=entries||[];
+    renderOverview(entries);
+    renderHistory();
+    nextCursor=res.data.nextCursor;
+    hasMore=res.data.hasMore;
+    document.getElementById('load-more-btn').style.display=hasMore?'inline-block':'none';
+  }catch(err){
+    toast('Failed to load earnings: '+err.message,'error');
+  }
+}
+
+function renderOverview(entries){
+  // Top categories from entries
+  const cats={};
+  entries.forEach(e=>{
+    if(e.direction==='credit'&&e.category){cats[e.category]=(cats[e.category]||0)+e.amountKES}
+  });
+  const sorted=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const max=sorted[0]?sorted[0][1]:1;
+  const bars=document.getElementById('cat-bars');
+  if(!sorted.length){bars.innerHTML='<p style="color:var(--sub);font-size:13px">No category data for this period.</p>';return}
+  bars.innerHTML=sorted.map(([cat,val])=>`
+    <div class="bar-row">
+      <div class="bar-label">${esc(cat.replace(/_/g,' '))}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(val/max*100)}%"></div></div>
+      <div class="bar-val">${fmtKES(val)}</div>
+    </div>`).join('');
+
+  // Recent 10
+  const tbody=document.getElementById('recent-tbody');
+  const recent=entries.slice(0,10);
+  if(!recent.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--sub)">No transactions this period.</td></tr>';return}
+  tbody.innerHTML=recent.map(e=>`<tr>
+    <td>${esc(fmtDate(e.createdAt))}</td>
+    <td>${esc(e.description||'—')}</td>
+    <td>${esc(e.category||'—')}</td>
+    <td>${esc(fmtKES(e.amountKES))}</td>
+    <td><span class="chip chip-${esc(e.direction)}">${esc(e.direction)}</span></td>
+  </tr>`).join('');
+}
+
+function renderHistory(){
+  const filtered=currentFilter==='all'?currentEntries:currentEntries.filter(e=>e.type===currentFilter);
+  const tbody=document.getElementById('history-tbody');
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--sub)">No entries found.</td></tr>';return}
+  tbody.innerHTML=filtered.map(e=>`<tr>
+    <td>${esc(fmtDate(e.createdAt))}</td>
+    <td>${esc(e.type||'—')}</td>
+    <td>${esc(e.description||'—')}</td>
+    <td>${esc(e.category||'—')}</td>
+    <td>${esc(fmtKES(e.amountKES))}</td>
+    <td><span class="chip chip-${esc(e.direction)}">${esc(e.direction)}</span></td>
+  </tr>`).join('');
+}
+
+function setTypeFilter(type,btn){
+  document.querySelectorAll('#type-filters .filter-pill').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter=type;
+  renderHistory();
+}
+
+async function loadMore(){
+  if(!nextCursor||!hasMore)return;
+  try{
+    const res=await fns.httpsCallable('getSellerEarningsReport')({cursor:nextCursor});
+    const newEntries=res.data.entries||[];
+    currentEntries=[...currentEntries,...newEntries];
+    nextCursor=res.data.nextCursor;
+    hasMore=res.data.hasMore;
+    renderHistory();
+    document.getElementById('load-more-btn').style.display=hasMore?'inline-block':'none';
+  }catch(err){toast('Failed to load more: '+err.message,'error')}
+}
+
+function exportCSV(){
+  const header='Date,Type,Description,Category,Amount KES,Direction\n';
+  const rows=currentEntries.map(e=>[
+    fmtDate(e.createdAt),e.type||'',
+    '"'+(e.description||'').replace(/"/g,'""')+'"',
+    e.category||'',e.amountKES||0,e.direction||''
+  ].join(',')).join('\n');
+  const blob=new Blob(['﻿'+header+rows],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='earnings.csv';a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Withdrawals
+async function loadWithdrawals(){
+  try{
+    const res=await fns.httpsCallable('getWithdrawals')({pageSize:50});
+    const list=res.data.withdrawals||[];
+    const tbody=document.getElementById('wd-tbody');
+    if(!list.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--sub)">No withdrawals yet.</td></tr>';return}
+    tbody.innerHTML=list.map(w=>`<tr>
+      <td>${esc(fmtDate(w.requestedAt))}</td>
+      <td>${esc(fmtKES((w.amountCents||0)/100))}</td>
+      <td>${esc(w.method||'—')}</td>
+      <td><span class="chip chip-${esc(w.status)}">${esc(w.status)}</span></td>
+      <td>${esc(w.paymentReference||'—')}</td>
+    </tr>`).join('');
+  }catch(err){toast('Failed to load withdrawals','error')}
+}
+
+function openWdPanel(){document.getElementById('wd-panel').classList.add('open');document.getElementById('wd-overlay').classList.add('show')}
+function closeWdPanel(){document.getElementById('wd-panel').classList.remove('open');document.getElementById('wd-overlay').classList.remove('show')}
+function toggleWdFields(){
+  const m=document.querySelector('input[name="wd-method"]:checked').value;
+  document.getElementById('mpesa-fields').style.display=m==='mpesa'?'block':'none';
+  document.getElementById('bank-fields').style.display=m==='bank'?'block':'none';
+}
+
+async function submitWithdrawal(){
+  const amount=parseFloat(document.getElementById('wd-amount').value);
+  if(!amount||amount<100){toast('Minimum withdrawal is KES 100','error');return}
+  const method=document.querySelector('input[name="wd-method"]:checked').value;
+  const accountDetails={};
+  if(method==='mpesa'){
+    const ph=document.getElementById('wd-phone').value.trim();
+    if(!ph){toast('Enter M-Pesa phone number','error');return}
+    accountDetails.phone=ph;
+  }else{
+    accountDetails.bankName=document.getElementById('wd-bank-name').value.trim();
+    accountDetails.accountNumber=document.getElementById('wd-account-num').value.trim();
+    accountDetails.accountName=document.getElementById('wd-account-name').value.trim();
+    if(!accountDetails.bankName||!accountDetails.accountNumber||!accountDetails.accountName){
+      toast('Fill in all bank details','error');return;
+    }
+  }
+  try{
+    const res=await fns.httpsCallable('requestWithdrawal')({amountCents:Math.round(amount*100),method,accountDetails});
+    toast(`Withdrawal of KES ${amount.toFixed(2)} requested — pending approval`,'success');
+    closeWdPanel();
+    loadWithdrawals();
+    // Refresh wallet balance
+    const avail=parseFloat(document.getElementById('wd-balance').textContent.replace(/[^0-9.]/g,''))||0;
+    document.getElementById('wd-balance').textContent=fmtKES(Math.max(0,avail-amount));
+  }catch(err){toast('Withdrawal failed: '+err.message,'error')}
+}
+
+// Monthly statements
+function populateMonthSelect(){
+  const sel=document.getElementById('stmt-month-select');
+  const now=new Date();
+  for(let i=0;i<12;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const val=d.toISOString().slice(0,7);
+    const label=d.toLocaleDateString('en-KE',{month:'long',year:'numeric'});
+    const opt=document.createElement('option');opt.value=val;opt.textContent=label;
+    sel.appendChild(opt);
+  }
+}
+
+async function loadStatement(monthStr){
+  if(!monthStr)return;
+  const [y,m]=monthStr.split('-').map(Number);
+  const start=new Date(y,m-1,1).toISOString().slice(0,10);
+  const end=new Date(y,m,0).toISOString().slice(0,10);
+  const card=document.getElementById('stmt-card');
+  card.innerHTML='<div class="spinner" style="margin:20px auto"></div>';
+  try{
+    const res=await fns.httpsCallable('getSellerEarningsReport')({periodStart:start,periodEnd:end});
+    const {summary,wallet}=res.data;
+    const month=new Date(y,m-1,1).toLocaleDateString('en-KE',{month:'long',year:'numeric'});
+    card.innerHTML=`
+      <div style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--g)">${esc(month)} Statement</div>
+      <div class="stmt-row"><span>Gross Sales</span><span class="amt-pos">${esc(fmtKES(summary.grossKES))}</span></div>
+      <div class="stmt-row"><span>Platform Fees</span><span class="amt-neg">− ${esc(fmtKES(summary.commissionKES))}</span></div>
+      <div class="stmt-row"><span>Refunds Clawback</span><span class="amt-neg">− ${esc(fmtKES(summary.refundsKES||0))}</span></div>
+      <div class="stmt-row"><span>Net Earnings</span><span class="amt-pos">${esc(fmtKES(summary.netKES))}</span></div>
+      <div class="stmt-row"><span>Lifetime Withdrawals</span><span>${esc(fmtKES(wallet.lifetimeWithdrawalsKES||0))}</span></div>
+      <div class="stmt-row" style="border-top:1px solid var(--bor)"><span>Available Balance</span><span class="amt-pos">${esc(fmtKES(wallet.availableKES))}</span></div>
+    `;
+  }catch(err){
+    card.innerHTML=`<p style="color:var(--red)">${esc('Failed to load statement: '+err.message)}</p>`;
+  }
+}
+
+// Tab switching
+function switchTab(name){
+  document.querySelectorAll('.sw-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.sw-panel').forEach(p=>p.classList.remove('active'));
+  const idx=['overview','history','withdrawals','statements'].indexOf(name);
+  document.querySelectorAll('.sw-tab')[idx].classList.add('active');
+  document.getElementById('panel-'+name).classList.add('active');
+}
+
+// ESC closes withdrawal panel
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeWdPanel()});
+</script>
+</body>
+</html>
