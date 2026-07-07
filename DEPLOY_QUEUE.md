@@ -15,7 +15,7 @@ dry auto-retries returning 0 created; freeing 14 slots earlier let in exactly 14
 1:1 hard ceiling that does NOT reset on a timer.
 
 ### Pending by subsystem (187 total)
-- 31 — POS terminal / peripheral (`pos*`)
+- 38 — POS terminal / peripheral (`pos*`) — includes 7 new printer CFs
 - 17 — financial-os (`fos*`)
 - 13 — Firestore triggers (`on*` order/payment/delivery/user)
 - **11 — async job-engine (NEW) ⚠ PRIORITY (restores job processing — see gap note)**
@@ -76,9 +76,11 @@ then `firebase deploy --only functions --force` lands all 187.
 
 **Setup UI (pos-printer-setup.html):** logo URL field, auto-print toggle, preview toggle, encoding selector, density slider
 
-**Deployed:** `posLogPrint`, `getPrintHistory`, `getPrinterConfig`, `setPrinterConfig` + hosting
+**Hosting:** ✅ Deployed
 
-**Pending quota (new CFs):** `posGetPrintStats`, `posGetPrintTemplate`, `posSavePrintTemplate`
+**Pending quota (all 7 printer CFs are new — hit 429 on creation):**
+`posLogPrint`, `getPrintHistory`, `getPrinterConfig`, `setPrinterConfig`,
+`posGetPrintStats`, `posGetPrintTemplate`, `posSavePrintTemplate`
 
 ---
 
