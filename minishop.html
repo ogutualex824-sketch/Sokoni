@@ -44,21 +44,25 @@
        DESIGN TOKENS
     ───────────────────────────────────────────── */
     :root {
+      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
       --ms-accent:       #00bcd4;
       --ms-accent2:      #7c4dff;
-      --ms-bg:           #f0f2f5;
-      --ms-card:         #ffffff;
-      --ms-text:         #1a1a2e;
-      --ms-text2:        #4a4a6a;
-      --ms-muted:        #8888aa;
-      --ms-border:       #e8eaf0;
+      --ms-bg:           #050505;
+      --ms-card:         #0d0d0d;
+      --ms-text:         #e8e8e8;
+      --ms-text2:        #888;
+      --ms-muted:        #888;
+      --ms-border:       #1a1a1a;
       --ms-radius:       16px;
       --ms-radius-sm:    8px;
-      --ms-shadow:       0 2px 12px rgba(0,0,0,.08);
-      --ms-shadow-lg:    0 8px 32px rgba(0,0,0,.12);
-      --ms-font:         system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      --ms-shadow:       0 2px 16px rgba(0,0,0,.4);
+      --ms-shadow-lg:    0 8px 32px rgba(0,0,0,.6);
+      --ms-font:         'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
       --ms-transition:   0.2s ease;
     }
+    body { background:var(--bg); color:var(--txt); font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
 
     /* ── Accent Themes ── */
     body[data-accent="purple"]  { --ms-accent: #7c4dff; }
@@ -110,9 +114,9 @@
     .ms-sk-card {
       background: linear-gradient(
         90deg,
-        #e8eaf0 25%,
-        #f5f6fa 50%,
-        #e8eaf0 75%
+        #141414 25%,
+        #1e1e1e 50%,
+        #141414 75%
       );
       background-size: 200% auto;
       animation: shimmer 1.6s linear infinite;
@@ -174,7 +178,7 @@
        ANNOUNCEMENT BAR
     ───────────────────────────────────────────── */
     .ms-announcement {
-      background: #fff9e6;
+      background: rgba(255,152,0,.08);
       border-left: 4px solid #ff9800;
       padding: 10px 16px;
       font-size: 13px;
@@ -264,7 +268,7 @@
       position: absolute;
       bottom: -42px;
       left: 20px;
-      background: #e8eaf0;
+      background: #141414;
       z-index: 3;
     }
 
@@ -371,9 +375,9 @@
       letter-spacing: .02em;
     }
 
-    .ms-trust-verified  { background: #e0f7fa; color: #006064; }
-    .ms-trust-payment   { background: #e8f5e9; color: #1b5e20; }
-    .ms-trust-delivery  { background: #ede7f6; color: #4527a0; }
+    .ms-trust-verified  { background: rgba(0,188,212,.12); color: #00bcd4; }
+    .ms-trust-payment   { background: rgba(76,175,80,.12); color: #4caf50; }
+    .ms-trust-delivery  { background: rgba(124,77,255,.12); color: #9c7dff; }
 
     /* ── Smart CTA strip ── */
     .ms-smart-cta {
@@ -405,11 +409,11 @@
     .ms-cta-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
 
     .ms-cta-secondary {
-      background: #f5f5ff;
+      background: var(--ms-card);
       color: var(--ms-text);
       border: 1.5px solid var(--ms-border);
     }
-    .ms-cta-secondary:hover { background: #ede7ff; border-color: var(--ms-accent2); }
+    .ms-cta-secondary:hover { background: #1a1a2e; border-color: var(--ms-accent2); }
 
     /* ─────────────────────────────────────────────
        SHARE PANEL
@@ -950,7 +954,7 @@
       gap: 6px;
       padding: 6px 12px;
       border-radius: var(--ms-radius-sm);
-      background: #f5f5ff;
+      background: var(--ms-card);
       font-size: 12px;
       font-weight: 600;
       color: var(--ms-text2);
@@ -1121,7 +1125,7 @@
     .ms-status-mode {
       position: fixed;
       inset: 0;
-      background: #fff;
+      background: #050505;
       z-index: 9999;
       display: flex;
       flex-direction: column;
@@ -1326,12 +1330,12 @@
         50% 70%, 21% 91%,
         32% 57%, 2% 35%, 39% 35%
       );
-      background: #ddd;
+      background: #333;
       flex-shrink: 0;
     }
     .ms-star.full  { background: #f59e0b; }
     .ms-star.half  {
-      background: linear-gradient(to right, #f59e0b 50%, #ddd 50%);
+      background: linear-gradient(to right, #f59e0b 50%, #333 50%);
     }
 
     /* ─────────────────────────────────────────────

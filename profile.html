@@ -31,9 +31,15 @@
 <link rel="stylesheet" href="sokoni-desktop.css">
 
 <style>
+/* ── Dark Theme Tokens ── */
+:root {
+  --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+  --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+  --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
+}
 /* ── Reset & Base ── */
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',Arial,sans-serif;background:#080808;color:#fff;padding-bottom:90px;}
+body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--txt);padding-bottom:90px;}
 
 /* ── Top Nav ── */
 .upn{

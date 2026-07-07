@@ -12,25 +12,27 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
+      /* SOKONI premium dark standard */
+      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
+      /* page-specific tokens */
       --green:    #71ff00;
       --green-d:  #4db800;
       --blue:     #2563eb;
       --amber:    #f59e0b;
       --red:      #ef4444;
       --purple:   #71ff00;
-      --bg:       #080808;
-      --surface:  #111118;
-      --card:     #18181f;
-      --card2:    #1e1e28;
+      --surface:  #0d0d0d;
+      --card:     #141414;
+      --card2:    #1a1a1a;
       --border:   rgba(255,255,255,.08);
       --border2:  rgba(255,255,255,.13);
-      --txt:      #f0f0f6;
       --txt2:     #9898aa;
       --txt3:     #555566;
-      --radius:   14px;
       --radius-s: 8px;
     }
-    html, body { height: 100%; background: var(--bg); color: var(--txt); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; overscroll-behavior: none; }
+    html, body { height: 100%; background: var(--bg); color: var(--txt); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; overscroll-behavior: none; }
 
     /* ── Header ────────────────────────────────────────────── */
     .ps-header {

@@ -10,37 +10,41 @@
 /* ── Reset & Tokens ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
+  --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+  --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+  --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888;
   --blue:       #1565c0;
   --blue-dk:    #0d47a1;
-  --blue-lt:    #e3f2fd;
+  --blue-lt:    rgba(21,101,192,.15);
   --green:      #2e7d32;
-  --green-lt:   #e8f5e9;
+  --green-lt:   rgba(46,125,50,.15);
   --orange:     #e65100;
-  --orange-lt:  #fff3e0;
+  --orange-lt:  rgba(230,81,0,.12);
   --red:        #c62828;
-  --red-lt:     #ffebee;
+  --red-lt:     rgba(198,40,40,.12);
   --yellow:     #f9a825;
-  --gray:       #f5f5f5;
-  --gray-dk:    #e0e0e0;
-  --text:       #1a1a1a;
-  --muted:      #757575;
-  --white:      #ffffff;
-  --surface:    #ffffff;
-  --border:     #e0e0e0;
+  --gray:       #141414;
+  --gray-dk:    #222222;
+  --text:       #e8e8e8;
+  --muted:      #888888;
+  --white:      #0d0d0d;
+  --surface:    #0d0d0d;
+  --border:     #1a1a1a;
   --radius:     10px;
-  --shadow:     0 2px 8px rgba(0,0,0,.08);
-  --shadow-md:  0 4px 16px rgba(0,0,0,.12);
+  --shadow:     0 2px 8px rgba(0,0,0,.3);
+  --shadow-md:  0 4px 16px rgba(0,0,0,.4);
 }
 
 html, body { height: 100%; overflow: hidden; }
 body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter','Segoe UI', system-ui, -apple-system, sans-serif;
   font-size: 14px;
-  background: #eceff1;
-  color: var(--text);
+  background: var(--bg);
+  color: var(--txt);
   display: flex;
   flex-direction: column;
 }
+input, select, textarea { background: var(--sur2); color: var(--txt); border-color: var(--bor); }
 
 /* ── Top bar ── */
 .topbar {
@@ -143,7 +147,7 @@ body {
 .search-input:focus {
   border-color: var(--blue-dk);
   box-shadow: 0 0 0 3px rgba(21,101,192,.2);
-  background: white;
+  background: var(--sur);
 }
 .search-clear {
   position: absolute;
@@ -163,7 +167,7 @@ body {
   padding: 0 14px;
   border: 2px solid var(--border);
   border-radius: 8px;
-  background: white;
+  background: var(--sur);
   cursor: pointer;
   font-size: 18px;
   transition: background .15s;
@@ -185,7 +189,7 @@ body {
   padding: 4px 12px;
   border-radius: 20px;
   border: 1px solid var(--border);
-  background: white;
+  background: var(--sur);
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
@@ -211,7 +215,7 @@ body {
   padding: 10px 8px;
   cursor: pointer;
   text-align: center;
-  background: white;
+  background: var(--sur);
   transition: box-shadow .15s, transform .1s, border-color .15s;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -296,7 +300,7 @@ body {
   width: 26px; height: 26px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: white;
+  background: var(--sur);
   cursor: pointer;
   font-size: 16px;
   font-weight: 700;
@@ -379,7 +383,7 @@ body {
   height: 38px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: white;
+  background: var(--sur);
   cursor: pointer;
   font-size: 16px;
 }
@@ -640,7 +644,7 @@ body {
 }
 .overlay.visible { display: flex; }
 .modal {
-  background: white;
+  background: var(--sur);
   border-radius: var(--radius);
   padding: 24px;
   width: min(460px, 94vw);
@@ -704,7 +708,7 @@ body {
 .disc-options { display: flex; gap: 8px; margin-bottom: 12px; }
 .disc-opt {
   flex: 1; height: 40px; border-radius: 8px; border: 2px solid var(--border);
-  background: white; cursor: pointer; font-size: 13px; font-weight: 600; transition: .15s;
+  background: var(--sur); cursor: pointer; font-size: 13px; font-weight: 600; transition: .15s;
 }
 .disc-opt.active { border-color: var(--orange); background: var(--orange-lt); color: var(--orange); }
 .disc-input {
@@ -748,7 +752,7 @@ body {
 
 /* Loader overlay */
 .loader-overlay {
-  display: none; position: fixed; inset: 0; background: rgba(255,255,255,.85);
+  display: none; position: fixed; inset: 0; background: rgba(5,5,5,.88);
   z-index: 400; align-items: center; justify-content: center; flex-direction: column; gap: 16px;
 }
 .loader-overlay.visible { display: flex; }
@@ -874,7 +878,7 @@ body.queue-mode .cashier-strip { transition: none !important; }
 .mpesa-countdown-bar {
   width: 100%;
   height: 6px;
-  background: #e0e0e0;
+  background: var(--border);
   border-radius: 3px;
   overflow: hidden;
   display: none;

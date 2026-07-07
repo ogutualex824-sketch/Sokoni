@@ -12,16 +12,19 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --c-bg:#f7f8fa;--c-surface:#fff;--c-border:#e5e7eb;
-  --c-primary:#1a56db;--c-primary-light:#eff6ff;
-  --c-text:#111827;--c-sub:#6b7280;
-  --c-red:#dc2626;--c-red-light:#fef2f2;
-  --c-green:#16a34a;--c-green-light:#f0fdf4;
-  --c-yellow:#d97706;--c-yellow-light:#fffbeb;
-  --c-orange:#ea580c;--c-orange-light:#fff7ed;
-  --radius:12px;
+  --bg:#050505;--sur:#0d0d0d;--sur2:#141414;
+  --g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);
+  --bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px;
+  /* semantic aliases used throughout this page's CSS */
+  --c-bg:#0d0d0d;--c-surface:#141414;--c-border:#1a1a1a;
+  --c-primary:#71ff00;--c-primary-light:rgba(113,255,0,.08);
+  --c-text:#e8e8e8;--c-sub:#888;
+  --c-red:#ef4444;--c-red-light:rgba(239,68,68,.12);
+  --c-green:#22c55e;--c-green-light:rgba(34,197,94,.12);
+  --c-yellow:#f59e0b;--c-yellow-light:rgba(245,158,11,.12);
+  --c-orange:#f97316;--c-orange-light:rgba(249,115,22,.12);
 }
-body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);min-height:100vh}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
 a{color:inherit;text-decoration:none}
 
 /* ── Layout ── */
@@ -44,8 +47,8 @@ a{color:inherit;text-decoration:none}
 .icon-btn{width:36px;height:36px;border:none;background:none;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c-sub);transition:.12s}
 .icon-btn:hover{background:var(--c-bg)}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.12s}
-.btn-primary{background:var(--c-primary);color:#fff}
-.btn-primary:hover{background:#1648c8}
+.btn-primary{background:var(--c-primary);color:#000}
+.btn-primary:hover{opacity:.85}
 .btn-outline{background:none;border:1.5px solid var(--c-border);color:var(--c-text)}
 .btn-outline:hover{background:var(--c-bg)}
 .btn-danger{background:var(--c-red);color:#fff}
@@ -73,14 +76,14 @@ a{color:inherit;text-decoration:none}
 .card-header{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--c-border)}
 .card-header h2{font-size:15px;font-weight:700;flex:1}
 .card-body{padding:20px}
-.card-footer{padding:12px 20px;border-top:1px solid var(--c-border);background:#fafafa;border-radius:0 0 var(--radius) var(--radius);display:flex;gap:8px;align-items:center}
+.card-footer{padding:12px 20px;border-top:1px solid var(--c-border);background:var(--c-bg);border-radius:0 0 var(--radius) var(--radius);display:flex;gap:8px;align-items:center}
 
 /* ── Table ── */
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--c-sub);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--c-border)}
 .tbl td{padding:12px;border-bottom:1px solid var(--c-border);vertical-align:middle}
 .tbl tr:last-child td{border-bottom:none}
-.tbl tr:hover td{background:#f9fafb}
+.tbl tr:hover td{background:rgba(255,255,255,.03)}
 .tbl-empty{text-align:center;padding:40px;color:var(--c-sub);font-size:14px}
 
 /* ── Badges ── */
@@ -114,8 +117,8 @@ a{color:inherit;text-decoration:none}
 .field-label{font-size:11px;font-weight:700;color:var(--c-sub);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
 .field-value{font-size:14px;color:var(--c-text);line-height:1.5}
 .msg-preview{background:var(--c-bg);border:1px solid var(--c-border);border-radius:8px;padding:12px;font-size:13px;line-height:1.6;word-break:break-word;margin-top:8px}
-.action-row{display:flex;gap:8px;flex-wrap:wrap;padding:16px 20px;border-top:1px solid var(--c-border);background:#fafafa;position:sticky;bottom:0}
-textarea.field-input{width:100%;padding:10px;border:1.5px solid var(--c-border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:80px;outline:none}
+.action-row{display:flex;gap:8px;flex-wrap:wrap;padding:16px 20px;border-top:1px solid var(--c-border);background:var(--c-bg);position:sticky;bottom:0}
+textarea.field-input{width:100%;padding:10px;border:1.5px solid var(--c-border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:80px;outline:none;background:var(--c-surface);color:var(--c-text)}
 textarea.field-input:focus{border-color:var(--c-primary)}
 
 /* ── Policy form ── */
@@ -123,7 +126,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
 .form-group{display:flex;flex-direction:column;gap:6px}
 .form-label{font-size:13px;font-weight:600;color:var(--c-text)}
 .form-hint{font-size:11px;color:var(--c-sub)}
-.form-input{height:40px;border:1.5px solid var(--c-border);border-radius:8px;padding:0 12px;font-size:13px;font-family:inherit;outline:none;color:var(--c-text)}
+.form-input{height:40px;border:1.5px solid var(--c-border);border-radius:8px;padding:0 12px;font-size:13px;font-family:inherit;outline:none;background:var(--c-surface);color:var(--c-text)}
 .form-input:focus{border-color:var(--c-primary)}
 .checkbox-row{display:flex;align-items:center;gap:10px;padding:10px 0}
 .checkbox-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--c-primary);cursor:pointer}
@@ -150,7 +153,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
 /* ── Pagination ── */
 .pagination{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--c-sub)}
 .pagination-btn{width:32px;height:32px;border:1.5px solid var(--c-border);background:var(--c-surface);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:.12s}
-.pagination-btn:hover:not(:disabled){background:var(--c-primary);border-color:var(--c-primary);color:#fff}
+.pagination-btn:hover:not(:disabled){background:var(--c-primary);border-color:var(--c-primary);color:#000}
 .pagination-btn:disabled{opacity:.4;cursor:not-allowed}
 
 /* ── Audit log ── */

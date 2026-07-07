@@ -7,19 +7,24 @@
   <link rel="icon" href="icons/icon-32.png">
   <link rel="stylesheet" href="sokoni-tokens.css">
   <style>
+    :root{
+      --bg:#050505;--sur:#0d0d0d;--sur2:#141414;
+      --g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px;
+    }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:var(--font-sans,system-ui,sans-serif);background:var(--color-bg,#f6f7f9);color:var(--color-text,#1a1a2e);min-height:100vh}
+    body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
     .kpi-wrap{max-width:1280px;margin:0 auto;padding:24px 16px 80px}
     h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
-    .kpi-sub{color:#6b7280;font-size:.875rem;margin-bottom:24px}
-    .period-tabs{display:flex;gap:4px;background:#e5e7eb;border-radius:10px;padding:4px;width:fit-content;margin-bottom:24px}
-    .period-tab{padding:8px 18px;border:none;border-radius:8px;cursor:pointer;font-size:.875rem;font-weight:600;background:transparent;color:#6b7280;transition:all .15s}
-    .period-tab.active{background:#fff;color:var(--color-primary,#5b21b6);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .kpi-sub{color:var(--sub);font-size:.875rem;margin-bottom:24px}
+    .period-tabs{display:flex;gap:4px;background:var(--sur2);border-radius:10px;padding:4px;width:fit-content;margin-bottom:24px}
+    .period-tab{padding:8px 18px;border:none;border-radius:8px;cursor:pointer;font-size:.875rem;font-weight:600;background:transparent;color:var(--sub);transition:all .15s}
+    .period-tab.active{background:var(--sur);color:var(--g);box-shadow:0 1px 3px rgba(0,0,0,.4)}
     .grid-5{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
-    .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-    .card-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:10px}
+    .card{background:var(--sur);border-radius:12px;padding:20px;border:1px solid var(--bor)}
+    .card-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--sub);margin-bottom:10px}
     .card-val{font-size:1.875rem;font-weight:800;line-height:1.1}
-    .card-label{font-size:.75rem;color:#9ca3af;margin-top:4px}
+    .card-label{font-size:.75rem;color:var(--sub);margin-top:4px}
     .card-delta{font-size:.75rem;font-weight:600;margin-top:6px}
     .delta-pos{color:#059669}
     .delta-neg{color:#dc2626}
@@ -28,19 +33,19 @@
     .cat-list{display:flex;flex-direction:column;gap:10px}
     .cat-row{display:grid;grid-template-columns:160px 1fr 64px;align-items:center;gap:10px}
     .cat-name{font-size:.8rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .cat-bar-bg{background:#f3f4f6;border-radius:99px;height:8px;overflow:hidden}
-    .cat-bar{background:var(--color-primary,#5b21b6);height:8px;border-radius:99px;transition:width .5s ease}
-    .cat-count{font-size:.8rem;font-weight:700;text-align:right;color:#374151}
+    .cat-bar-bg{background:var(--sur2);border-radius:99px;height:8px;overflow:hidden}
+    .cat-bar{background:var(--g);height:8px;border-radius:99px;transition:width .5s ease}
+    .cat-count{font-size:.8rem;font-weight:700;text-align:right;color:var(--txt)}
     /* Trend chart */
     .trend-chart{display:flex;align-items:flex-end;gap:3px;height:120px;padding-bottom:4px}
     .trend-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%}
-    .trend-bar{width:100%;background:var(--color-primary,#5b21b6);border-radius:3px 3px 0 0;min-height:2px;transition:height .4s ease;opacity:.85}
+    .trend-bar{width:100%;background:var(--g);border-radius:3px 3px 0 0;min-height:2px;transition:height .4s ease;opacity:.85}
     .trend-bar:hover{opacity:1}
-    .trend-date{font-size:.6rem;color:#9ca3af;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);margin-top:4px;white-space:nowrap}
-    .trend-empty{display:flex;align-items:center;justify-content:center;height:120px;color:#9ca3af;font-size:.875rem}
-    .skeleton{background:linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px;height:2.5rem;width:70%}
+    .trend-date{font-size:.6rem;color:var(--sub);writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);margin-top:4px;white-space:nowrap}
+    .trend-empty{display:flex;align-items:center;justify-content:center;height:120px;color:var(--sub);font-size:.875rem}
+    .skeleton{background:linear-gradient(90deg,var(--sur2) 25%,var(--bor2) 50%,var(--sur2) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px;height:2.5rem;width:70%}
     @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-    .kpi-note{font-size:.75rem;color:#9ca3af;margin-top:8px}
+    .kpi-note{font-size:.75rem;color:var(--sub);margin-top:8px}
     @media(max-width:640px){.cat-row{grid-template-columns:120px 1fr 50px}.card-val{font-size:1.5rem}}
   </style>
 </head>

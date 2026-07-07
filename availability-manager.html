@@ -11,19 +11,23 @@
   <style>
     /* ── Base & Layout ──────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    :root {
+      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
+    }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f8fafc;
-      color: #0f172a;
+      font-family: 'Inter',-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--txt);
       min-height: 100vh;
       padding-bottom: 80px;
     }
 
     /* ── Top bar ──────────────────────────────────────────────────────── */
     .top-bar {
-      background: #fff;
-      border-bottom: 1px solid #e2e8f0;
+      background: var(--sur);
+      border-bottom: 1px solid var(--bor);
       padding: 0 20px;
       height: 60px;
       display: flex;
@@ -36,17 +40,17 @@
     .top-bar .back-btn {
       width: 36px; height: 36px; border-radius: 9px;
       display: flex; align-items: center; justify-content: center;
-      background: #f1f5f9; border: none; cursor: pointer; color: #374151;
+      background: var(--sur2); border: none; cursor: pointer; color: var(--txt);
       font-size: 18px; text-decoration: none;
     }
     .top-bar h1 { font-size: 17px; font-weight: 700; flex: 1; }
     .save-btn {
-      background: #2563eb; color: #fff; border: none; border-radius: 9px;
+      background: var(--g); color: #000; border: none; border-radius: 9px;
       padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
       transition: background .15s;
     }
-    .save-btn:hover { background: #1d4ed8; }
-    .save-btn:disabled { background: #93c5fd; cursor: wait; }
+    .save-btn:hover { background: #5acc00; }
+    .save-btn:disabled { background: rgba(113,255,0,.3); color: var(--sub); cursor: wait; }
 
     /* ── Live status hero ─────────────────────────────────────────────── */
     .status-hero {
@@ -54,7 +58,7 @@
       color: #fff;
       padding: 24px 20px;
     }
-    .status-hero .biz-name { font-size: 13px; color: #94a3b8; margin-bottom: 4px; }
+    .status-hero .biz-name { font-size: 13px; color: var(--sub); margin-bottom: 4px; }
     .status-hero .live-row {
       display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
     }
@@ -84,8 +88,8 @@
 
     /* ── Tabs ─────────────────────────────────────────────────────────── */
     .tabs-bar {
-      background: #fff;
-      border-bottom: 1px solid #e2e8f0;
+      background: var(--sur);
+      border-bottom: 1px solid var(--bor);
       display: flex;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
@@ -93,11 +97,11 @@
     }
     .tabs-bar::-webkit-scrollbar { display: none; }
     .tab-btn {
-      padding: 14px 18px; font-size: 13px; font-weight: 600; color: #6b7280;
+      padding: 14px 18px; font-size: 13px; font-weight: 600; color: var(--sub);
       border: none; background: none; cursor: pointer; white-space: nowrap;
       border-bottom: 2px solid transparent; transition: all .15s;
     }
-    .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+    .tab-btn.active { color: var(--g); border-bottom-color: var(--g); }
 
     /* ── Panel ────────────────────────────────────────────────────────── */
     .panel { display: none; padding: 20px; max-width: 700px; margin: 0 auto; }
@@ -105,15 +109,15 @@
 
     /* ── Cards ────────────────────────────────────────────────────────── */
     .card {
-      background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+      background: var(--sur); border: 1px solid var(--bor); border-radius: 14px;
       padding: 20px; margin-bottom: 16px;
     }
     .card-title {
-      font-size: 14px; font-weight: 700; margin-bottom: 14px; color: #0f172a;
+      font-size: 14px; font-weight: 700; margin-bottom: 14px; color: var(--txt);
       display: flex; align-items: center; gap: 8px;
     }
     .card-title .badge {
-      font-size: 10px; background: #eff6ff; color: #2563eb;
+      font-size: 10px; background: var(--ga); color: var(--g);
       padding: 2px 7px; border-radius: 20px; font-weight: 600;
     }
 
@@ -122,26 +126,26 @@
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
     }
     .mode-card {
-      border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 12px;
+      border: 1.5px solid var(--bor); border-radius: 10px; padding: 12px;
       cursor: pointer; transition: all .15s; position: relative;
     }
-    .mode-card:hover { border-color: #93c5fd; background: #f0f9ff; }
-    .mode-card.selected { border-color: #2563eb; background: #eff6ff; }
+    .mode-card:hover { border-color: var(--g); background: var(--ga2); }
+    .mode-card.selected { border-color: var(--g); background: var(--ga); }
     .mode-card .icon { font-size: 20px; margin-bottom: 4px; }
-    .mode-card .name { font-size: 12px; font-weight: 600; color: #1e40af; }
-    .mode-card .desc { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .mode-card .name { font-size: 12px; font-weight: 600; color: var(--g); }
+    .mode-card .desc { font-size: 11px; color: var(--sub); margin-top: 2px; }
     .mode-card input[type="checkbox"] {
       position: absolute; top: 10px; right: 10px;
-      width: 15px; height: 15px; accent-color: #2563eb;
+      width: 15px; height: 15px; accent-color: var(--g);
     }
 
     /* ── Day schedule ─────────────────────────────────────────────────── */
     .day-row {
-      border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 8px; overflow: hidden;
+      border: 1px solid var(--bor); border-radius: 10px; margin-bottom: 8px; overflow: hidden;
     }
     .day-header {
       display: flex; align-items: center; gap: 10px; padding: 12px 14px;
-      background: #f8fafc; cursor: pointer;
+      background: var(--sur2); cursor: pointer;
     }
     .day-toggle {
       position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0;
@@ -149,7 +153,7 @@
     .day-toggle input { opacity: 0; width: 0; height: 0; }
     .day-toggle .track {
       position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-      background: #d1d5db; border-radius: 10px; transition: background .2s;
+      background: #333; border-radius: 10px; transition: background .2s;
     }
     .day-toggle input:checked ~ .track { background: #10b981; }
     .day-toggle .thumb {
@@ -158,60 +162,60 @@
     }
     .day-toggle input:checked ~ .thumb { transform: translateX(16px); }
     .day-name { font-weight: 600; font-size: 13px; flex: 1; }
-    .day-summary { font-size: 12px; color: #6b7280; }
+    .day-summary { font-size: 12px; color: var(--sub); }
 
-    .day-body { padding: 12px 14px; display: none; border-top: 1px solid #f1f5f9; }
+    .day-body { padding: 12px 14px; display: none; border-top: 1px solid var(--bor); }
     .day-body.open { display: block; }
 
     .periods-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
     .period-row { display: flex; align-items: center; gap: 8px; }
     .period-row input[type="time"] {
-      flex: 1; padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px;
-      font-size: 13px; color: #0f172a; background: #fff;
+      flex: 1; padding: 7px 10px; border: 1.5px solid var(--bor); border-radius: 8px;
+      font-size: 13px; color: var(--txt); background: var(--sur2);
     }
-    .period-row .between { font-size: 11px; color: #6b7280; flex-shrink: 0; }
+    .period-row .between { font-size: 11px; color: var(--sub); flex-shrink: 0; }
     .period-row .del-btn {
       width: 28px; height: 28px; border-radius: 7px; border: none;
-      background: #fef2f2; color: #ef4444; cursor: pointer; font-size: 15px;
+      background: rgba(239,68,68,.12); color: #ef4444; cursor: pointer; font-size: 15px;
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
     .add-period-btn {
-      font-size: 12px; font-weight: 600; color: #2563eb; background: none; border: none;
+      font-size: 12px; font-weight: 600; color: var(--g); background: none; border: none;
       cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;
     }
 
     /* ── Form fields ──────────────────────────────────────────────────── */
     .field { margin-bottom: 14px; }
     .field label {
-      display: block; font-size: 12px; font-weight: 600; color: #374151;
+      display: block; font-size: 12px; font-weight: 600; color: var(--txt);
       margin-bottom: 5px;
     }
     .field input[type="number"], .field input[type="text"],
     .field input[type="date"], .field textarea, .field select {
-      width: 100%; padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 9px;
-      font-size: 13px; color: #0f172a; background: #fff; transition: border-color .15s;
+      width: 100%; padding: 9px 12px; border: 1.5px solid var(--bor); border-radius: 9px;
+      font-size: 13px; color: var(--txt); background: var(--sur2); transition: border-color .15s;
     }
     .field input:focus, .field textarea:focus, .field select:focus {
-      outline: none; border-color: #2563eb;
+      outline: none; border-color: var(--g);
     }
-    .field .hint { font-size: 11px; color: #6b7280; margin-top: 4px; }
+    .field .hint { font-size: 11px; color: var(--sub); margin-top: 4px; }
     .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
     /* ── Toggle switch (generic) ──────────────────────────────────────── */
     .toggle-row {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 0; border-bottom: 1px solid #f1f5f9;
+      padding: 10px 0; border-bottom: 1px solid var(--bor);
     }
     .toggle-row:last-child { border-bottom: none; }
     .toggle-row .label { font-size: 13px; font-weight: 500; }
-    .toggle-row .sublabel { font-size: 11px; color: #6b7280; margin-top: 1px; }
+    .toggle-row .sublabel { font-size: 11px; color: var(--sub); margin-top: 1px; }
     .sw { position: relative; display: inline-block; width: 44px; height: 24px; }
     .sw input { opacity: 0; width: 0; height: 0; }
     .sw .tr {
       position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-      background: #d1d5db; border-radius: 12px; transition: background .2s;
+      background: #333; border-radius: 12px; transition: background .2s;
     }
-    .sw input:checked ~ .tr { background: #2563eb; }
+    .sw input:checked ~ .tr { background: var(--g); }
     .sw .th {
       position: absolute; left: 3px; bottom: 3px; width: 18px; height: 18px;
       background: #fff; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 4px #0003;
@@ -224,47 +228,47 @@
       margin-bottom: 16px;
     }
     .cap-stat {
-      background: #f8fafc; border-radius: 10px; padding: 12px; text-align: center;
+      background: var(--sur2); border-radius: 10px; padding: 12px; text-align: center;
     }
-    .cap-stat .val { font-size: 22px; font-weight: 800; color: #1e40af; }
-    .cap-stat .lbl { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .cap-stat .val { font-size: 22px; font-weight: 800; color: var(--g); }
+    .cap-stat .lbl { font-size: 11px; color: var(--sub); margin-top: 2px; }
 
     /* ── Holiday list ─────────────────────────────────────────────────── */
     .holiday-list { display: flex; flex-direction: column; gap: 8px; }
     .holiday-item {
       display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-      border: 1px solid #e2e8f0; border-radius: 9px; background: #fff;
+      border: 1px solid var(--bor); border-radius: 9px; background: var(--sur);
     }
     .holiday-item .date-badge {
-      background: #f0fdf4; color: #166534; font-size: 11px; font-weight: 700;
+      background: rgba(16,185,129,.12); color: #10b981; font-size: 11px; font-weight: 700;
       padding: 3px 8px; border-radius: 6px; white-space: nowrap;
     }
     .holiday-item .name { font-size: 13px; font-weight: 500; flex: 1; }
     .holiday-item .closed-tag {
-      font-size: 11px; font-weight: 600; color: #ef4444; background: #fef2f2;
+      font-size: 11px; font-weight: 600; color: #ef4444; background: rgba(239,68,68,.12);
       padding: 2px 7px; border-radius: 5px;
     }
     .holiday-item .del-h {
-      width: 26px; height: 26px; border: none; background: #fef2f2;
+      width: 26px; height: 26px; border: none; background: rgba(239,68,68,.12);
       color: #ef4444; border-radius: 6px; cursor: pointer; font-size: 14px;
       display: flex; align-items: center; justify-content: center;
     }
     .add-holiday-btn {
-      width: 100%; padding: 10px; border: 1.5px dashed #cbd5e1; border-radius: 10px;
-      background: none; color: #2563eb; font-size: 13px; font-weight: 600;
+      width: 100%; padding: 10px; border: 1.5px dashed var(--bor2); border-radius: 10px;
+      background: none; color: var(--g); font-size: 13px; font-weight: 600;
       cursor: pointer; margin-top: 10px;
     }
-    .add-holiday-btn:hover { background: #eff6ff; }
+    .add-holiday-btn:hover { background: var(--ga2); }
 
     /* ── Vacation banner ──────────────────────────────────────────────── */
     .vac-active-banner {
-      background: #f5f3ff; border: 1.5px solid #c4b5fd; border-radius: 12px;
+      background: var(--ga2); border: 1.5px solid rgba(113,255,0,.2); border-radius: 12px;
       padding: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;
     }
     .vac-active-banner .icon { font-size: 28px; }
     .vac-active-banner .info { flex: 1; }
-    .vac-active-banner .title { font-size: 14px; font-weight: 700; color: #4c1d95; }
-    .vac-active-banner .sub   { font-size: 12px; color: #4db800; margin-top: 2px; }
+    .vac-active-banner .title { font-size: 14px; font-weight: 700; color: var(--txt); }
+    .vac-active-banner .sub   { font-size: 12px; color: #71ff00; margin-top: 2px; }
     .end-vac-btn {
       background: #71ff00; color:#000; border: none; border-radius: 9px;
       padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
@@ -283,14 +287,14 @@
     /* ── Bottom nav (shared) ──────────────────────────────────────────── */
     .bottom-nav {
       position: fixed; bottom: 0; left: 0; right: 0;
-      background: #fff; border-top: 1px solid #e2e8f0;
+      background: var(--sur); border-top: 1px solid var(--bor);
       display: flex; padding: 8px 0 12px; z-index: 200;
     }
     .bottom-nav a {
       flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
-      font-size: 10px; color: #6b7280; text-decoration: none;
+      font-size: 10px; color: var(--sub); text-decoration: none;
     }
-    .bottom-nav a.active { color: #2563eb; }
+    .bottom-nav a.active { color: var(--g); }
     .bottom-nav a svg { width: 22px; height: 22px; }
 
     @media (min-width: 769px) { .bottom-nav { display: none; } }
@@ -573,7 +577,7 @@
 
   <div class="card">
     <div class="card-title" style="margin-bottom:10px;">When Capacity Is Reached</div>
-    <p style="font-size:13px;color:#6b7280;line-height:1.6;">
+    <p style="font-size:13px;color:var(--sub);line-height:1.6;">
       SOKONI automatically stops accepting new bookings when your daily limit is reached.
       Customers will see your next available slot and can join a waitlist.
       Your limit resets at midnight Nairobi time.
@@ -633,7 +637,7 @@
 <div class="panel" id="panel-holidays">
   <div class="card">
     <div class="card-title">Kenyan Public Holidays <span class="badge">Auto-loaded</span></div>
-    <p style="font-size:12px;color:#6b7280;margin-bottom:12px;">
+    <p style="font-size:12px;color:var(--sub);margin-bottom:12px;">
       These are pre-configured for Kenya. Mark any as a closure day or set special hours.
     </p>
     <div class="holiday-list" id="publicHolidayList"></div>
@@ -642,7 +646,7 @@
   <div class="card">
     <div class="card-title">Custom Closures &amp; Special Days</div>
     <div class="holiday-list" id="customHolidayList">
-      <div style="color:#9ca3af;font-size:13px;text-align:center;padding:16px;">
+      <div style="color:var(--sub);font-size:13px;text-align:center;padding:16px;">
         No custom dates yet. Add one below.
       </div>
     </div>
@@ -674,8 +678,8 @@
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:12px;">
-      <button onclick="saveCustomHoliday()" style="flex:1;background:#2563eb;color:#fff;border:none;border-radius:9px;padding:10px;font-weight:600;cursor:pointer;">Save Date</button>
-      <button onclick="cancelHoliday()" style="flex:1;background:#f1f5f9;color:#374151;border:none;border-radius:9px;padding:10px;font-weight:600;cursor:pointer;">Cancel</button>
+      <button onclick="saveCustomHoliday()" style="flex:1;background:var(--g);color:#000;border:none;border-radius:9px;padding:10px;font-weight:600;cursor:pointer;">Save Date</button>
+      <button onclick="cancelHoliday()" style="flex:1;background:var(--sur2);color:var(--txt);border:none;border-radius:9px;padding:10px;font-weight:600;cursor:pointer;">Cancel</button>
     </div>
   </div>
 </div>

@@ -14,7 +14,9 @@
 <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:80px;}
+/* ── SOKONI Premium Dark Standard ─────────────────────────────────── */
+:root{--bg:#050505;--sur:#0d0d0d;--sur2:#141414;--g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);--bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px;}
+body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;padding-bottom:80px;}
 .fn{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
 .sd-body{max-width:900px;margin:0 auto;padding:14px 16px;}
 

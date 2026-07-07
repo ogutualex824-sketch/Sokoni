@@ -14,6 +14,13 @@
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
+    :root {
+      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
+    }
+    body { background:var(--bg); color:var(--txt); font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+
     @media print {
       .no-print { display:none !important; }
       body { background:#fff !important; color:#000 !important; }
@@ -21,7 +28,7 @@
     }
 
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:Arial,sans-serif; background:#0b0b0b; color:white; padding:20px; min-height:100vh; }
+    body { font-family:Arial,sans-serif; background:var(--bg); color:var(--txt); padding:20px; min-height:100vh; }
 
     .inv-topbar{
       display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
@@ -50,8 +57,8 @@
     .invoice-shell{
       max-width:800px;
       margin:0 auto;
-      background:#fff;
-      color:#111;
+      background:var(--sur);
+      color:var(--txt);
       border-radius:16px;
       overflow:hidden;
       box-shadow:0 20px 60px rgba(0,0,0,0.5);
@@ -98,7 +105,7 @@
       gap:30px;
       margin-bottom:28px;
       padding-bottom:24px;
-      border-bottom:2px solid #f0f0f0;
+      border-bottom:2px solid var(--bor);
     }
 
     .inv-party-label{
@@ -106,12 +113,12 @@
       font-weight:800;
       text-transform:uppercase;
       letter-spacing:1px;
-      color:#999;
+      color:var(--sub);
       margin-bottom:8px;
     }
 
-    .inv-party-name{ font-size:15px; font-weight:800; color:#111; margin-bottom:4px; }
-    .inv-party-detail{ font-size:13px; color:#555; line-height:1.6; }
+    .inv-party-name{ font-size:15px; font-weight:800; color:var(--txt); margin-bottom:4px; }
+    .inv-party-detail{ font-size:13px; color:var(--sub); line-height:1.6; }
 
     /* Items table */
     .inv-table{ width:100%; border-collapse:collapse; margin-bottom:24px; }
@@ -120,18 +127,18 @@
       text-align:left;
       font-size:11px;
       font-weight:800;
-      color:#999;
+      color:var(--sub);
       text-transform:uppercase;
       letter-spacing:0.5px;
-      border-bottom:2px solid #f0f0f0;
-      background:#fafafa;
+      border-bottom:2px solid var(--bor);
+      background:var(--sur2);
     }
     .inv-table th:last-child{ text-align:right; }
-    .inv-table td{ padding:12px 14px; font-size:13px; color:#333; border-bottom:1px solid #f5f5f5; }
+    .inv-table td{ padding:12px 14px; font-size:13px; color:var(--txt); border-bottom:1px solid var(--bor); }
     .inv-table td:last-child{ text-align:right; font-weight:700; }
     .inv-table tr:last-child td{ border-bottom:none; }
     .inv-item-img{ width:36px; height:36px; border-radius:8px; object-fit:cover; margin-right:10px; vertical-align:middle; }
-    .inv-item-name{ font-weight:700; color:#111; }
+    .inv-item-name{ font-weight:700; color:var(--txt); }
 
     /* Totals */
     .inv-totals{
@@ -141,7 +148,7 @@
 
     .inv-totals-box{
       width:280px;
-      background:#f9f9f9;
+      background:var(--sur2);
       border-radius:12px;
       padding:16px 20px;
     }
@@ -151,20 +158,20 @@
       justify-content:space-between;
       font-size:13px;
       padding:6px 0;
-      border-bottom:1px solid #eee;
+      border-bottom:1px solid var(--bor);
     }
 
     .inv-total-row:last-child{ border-bottom:none; }
-    .inv-total-row.grand{ font-size:16px; font-weight:900; color:#111; padding-top:10px; margin-top:4px; border-top:2px solid #ddd; border-bottom:none; }
-    .inv-total-label{ color:#666; }
+    .inv-total-row.grand{ font-size:16px; font-weight:900; color:var(--txt); padding-top:10px; margin-top:4px; border-top:2px solid var(--bor2); border-bottom:none; }
+    .inv-total-label{ color:var(--sub); }
     .inv-total-val{ font-weight:700; }
     .inv-grand-val{ color:#22a000; font-size:18px; font-weight:900; }
 
     /* Footer */
     .inv-footer{
       padding:20px 40px;
-      background:#fafafa;
-      border-top:1px solid #eee;
+      background:var(--sur2);
+      border-top:1px solid var(--bor);
       display:flex;
       justify-content:space-between;
       align-items:center;
@@ -172,14 +179,14 @@
       gap:12px;
     }
 
-    .inv-footer-note{ font-size:11px; color:#999; line-height:1.5; }
+    .inv-footer-note{ font-size:11px; color:var(--sub); line-height:1.5; }
     .inv-footer-brand{ font-size:13px; font-weight:800; color:#22a000; }
 
     /* QR placeholder */
     .inv-qr{
       width:60px;
       height:60px;
-      background:#f0f0f0;
+      background:var(--sur2);
       border-radius:8px;
       display:flex;
       align-items:center;
@@ -300,7 +307,7 @@
           info@sokoni.co.ke Â· +254 705 726 803<br>
           Nairobi, Kenya<br>
           KRA PIN: <span id="invSellerKraPin" style="font-weight:700;color:#22a000;">â€”</span><br>
-          <span style="font-size:10px;background:#e8ffe8;color:#2e7d32;padding:1px 6px;border-radius:4px;font-weight:700;">KRA TAX INVOICE</span>
+          <span style="font-size:10px;background:rgba(34,160,0,0.12);color:#22a000;padding:1px 6px;border-radius:4px;font-weight:700;border:1px solid rgba(34,160,0,0.25);">KRA TAX INVOICE</span>
         </div>
       </div>
     </div>
@@ -326,10 +333,10 @@
     </div>
 
     <!-- Payment -->
-    <div style="margin-top:20px;padding:14px;background:#f9f9f9;border-radius:10px;font-size:12px;color:#666;">
-      <strong style="color:#111;">Payment Method:</strong> <span id="invPayMethod">M-PESA</span> &nbsp;Â·&nbsp;
-      <strong style="color:#111;">Status:</strong> <span style="color:#22a000;font-weight:800;">PAID</span> &nbsp;Â·&nbsp;
-      <strong style="color:#111;">Reference:</strong> <span id="invRef"></span>
+    <div style="margin-top:20px;padding:14px;background:var(--sur2);border:1px solid var(--bor);border-radius:10px;font-size:12px;color:var(--sub);">
+      <strong style="color:var(--txt);">Payment Method:</strong> <span id="invPayMethod">M-PESA</span> &nbsp;Â·&nbsp;
+      <strong style="color:var(--txt);">Status:</strong> <span style="color:#22a000;font-weight:800;">PAID</span> &nbsp;Â·&nbsp;
+      <strong style="color:var(--txt);">Reference:</strong> <span id="invRef"></span>
     </div>
   </div>
 

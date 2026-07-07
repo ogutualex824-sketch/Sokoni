@@ -9,21 +9,24 @@
   <style>
     /* ─── Design Tokens ─────────────────────────────────────────────── */
     :root {
-      --bg:      #0f1117;
-      --surface: #1a1d2e;
-      --border:  #2a2d3e;
+      /* ── SOKONI Premium Dark Standard ─────────────────────────────── */
+      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
+      /* ── Legacy aliases (used throughout this file) ───────────────── */
+      --surface: #0d0d0d;
+      --border:  #1a1a1a;
       --accent:  #00bcd4;
       --accent2: #7c4dff;
       --green:   #4caf50;
       --orange:  #ff9800;
       --red:     #f44336;
       --gold:    #ffc107;
-      --text:    #e8eaf6;
-      --muted:   #8888aa;
-      --card:    #1e2132;
-      --radius:  12px;
-      --shadow:  0 4px 20px rgba(0,0,0,.3);
-      --font:    system-ui,-apple-system,'Segoe UI',sans-serif;
+      --text:    #e8e8e8;
+      --muted:   #888;
+      --card:    #141414;
+      --shadow:  0 4px 20px rgba(0,0,0,.5);
+      --font:    'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

@@ -13,18 +13,21 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:     #111118;
-      --card:   #18181f;
-      --card2:  #1e1e28;
-      --border: rgba(255,255,255,.07);
-      --txt:    #f0f0f6;
-      --txt2:   #9898aa;
+      /* ── SOKONI Premium Dark Standard ─────────────────────────────── */
+      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
+      /* ── Legacy aliases (used throughout this file) ───────────────── */
+      --card:   #0d0d0d;
+      --card2:  #141414;
+      --border: #1a1a1a;
+      --txt2:   #888;
       --green:  #71ff00;
       --red:    #ef4444;
       --amber:  #f59e0b;
       --blue:   #60a5fa;
     }
-    html, body { height: 100%; background: var(--bg); color: var(--txt); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    html, body { height: 100%; background: var(--bg); color: var(--txt); font-family: 'Inter',-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
     /* ── Header ── */
     .hdr {

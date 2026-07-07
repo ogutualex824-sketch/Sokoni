@@ -13,11 +13,12 @@
     *, *::before, *::after { box-sizing: border-box; }
 
     :root {
+      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
       --accent: #00bcd4;
-      --bg: #0f1117;
-      --text: #ffffff;
+      --text: #e8e8e8;
       --text2: rgba(255,255,255,0.7);
-      --radius: 16px;
     }
 
     body {
@@ -34,7 +35,7 @@
       flex-direction: column;
       gap: 16px;
       padding: 20px;
-      background: #0f1117;
+      background: #050505;
     }
 
     .sk-img {
@@ -209,7 +210,7 @@
 
     /* === Business Card Mode === */
     body.card-body {
-      background: #f0f2f5;
+      background: #050505;
       min-height: 100vh;
       padding: 20px;
       display: flex;
@@ -231,10 +232,10 @@
     }
 
     .bcard {
-      background: #fff;
+      background: #0d0d0d;
       border-radius: 20px;
       padding: 24px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
       position: relative;
       overflow: hidden;
     }
@@ -261,9 +262,9 @@
       height: 60px;
       border-radius: 50%;
       object-fit: cover;
-      background: #f0f2f5;
+      background: #141414;
       flex-shrink: 0;
-      border: 2px solid #e8eaf0;
+      border: 2px solid #1a1a1a;
     }
 
     .bcard-identity {
@@ -274,7 +275,7 @@
     .bcard-name {
       font-size: 20px;
       font-weight: 700;
-      color: #1a1a2e;
+      color: #e8e8e8;
       line-height: 1.2;
       white-space: nowrap;
       overflow: hidden;
@@ -283,13 +284,13 @@
 
     .bcard-category {
       font-size: 13px;
-      color: #6b7280;
+      color: #888;
       margin-top: 3px;
     }
 
     .bcard-divider {
       height: 1px;
-      background: #e8eaf0;
+      background: #1a1a1a;
       margin: 16px 0;
     }
 
@@ -301,7 +302,7 @@
 
     .bcard-contact {
       font-size: 14px;
-      color: #374151;
+      color: #e8e8e8;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -377,7 +378,7 @@
     }
 
     .bcard-btn-outline {
-      background: #fff;
+      background: #141414;
       border: 2px solid var(--accent);
       color: var(--accent);
     }
@@ -395,12 +396,12 @@
       align-items: center;
       gap: 5px;
       padding: 8px 14px;
-      background: #fff;
-      border: 1px solid #e8eaf0;
+      background: #141414;
+      border: 1px solid #1a1a1a;
       border-radius: 99px;
       font-size: 13px;
       font-weight: 600;
-      color: #374151;
+      color: #e8e8e8;
       text-decoration: none;
       transition: border-color 0.15s, color 0.15s;
     }
@@ -412,7 +413,7 @@
 
     .bcard-footer {
       font-size: 12px;
-      color: #9ca3af;
+      color: #888;
       text-align: center;
       padding: 8px 0 24px;
       max-width: 380px;
@@ -432,8 +433,8 @@
       justify-content: center;
       text-align: center;
       padding: 40px 20px;
-      background: #0f1117;
-      color: #fff;
+      background: #050505;
+      color: #e8e8e8;
     }
 
     .nf-icon {

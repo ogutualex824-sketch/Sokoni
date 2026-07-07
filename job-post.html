@@ -13,9 +13,19 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2196f3">
   <style>
-    :root{--bg:#f5f7ff;--surface:#fff;--border:#e4e8f5;--accent:#2196f3;--accent2:#1976d2;--green:#4caf50;--orange:#ff9800;--red:#f44336;--purple:#71ff00;--text:#1a1a2e;--muted:#6b7280;--card:#fff;--radius:12px;--shadow:0 2px 12px rgba(0,0,0,.06);}
+    :root{
+      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
+      /* legacy aliases used throughout this page */
+      --surface:#0d0d0d; --border:#1a1a1a;
+      --accent:#71ff00; --accent2:#4fff00;
+      --green:#22c55e; --orange:#f97316; --red:#ef4444; --purple:#71ff00;
+      --text:#e8e8e8; --muted:#888; --card:#0d0d0d;
+      --shadow:0 2px 12px rgba(0,0,0,.4);
+    }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Inter','Segoe UI',system-ui,sans-serif;font-size:15px;background:var(--bg);color:var(--text);min-height:100vh}
+    body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;background:var(--bg);color:var(--txt);min-height:100vh}
     input,select,textarea,button{font-family:inherit;font-size:16px}
     a{color:var(--accent);text-decoration:none}
     a:hover{text-decoration:underline}
@@ -36,7 +46,7 @@
     .btn-outline{background:none;border:1px solid var(--border);color:var(--text)}
     .btn-outline:hover{border-color:var(--accent);color:var(--accent);text-decoration:none}
     .btn-danger{background:none;border:1px solid var(--red);color:var(--red)}
-    .btn-danger:hover{background:#ffebee;text-decoration:none}
+    .btn-danger:hover{background:rgba(239,68,68,.12);text-decoration:none}
     .btn-ghost{background:none;border:none;color:var(--muted)}
     .btn-ghost:hover{color:var(--text);text-decoration:none}
     .btn-sm{padding:7px 14px;font-size:13px}
@@ -46,7 +56,7 @@
     /* Tabs */
     .tabs-bar{display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:4px;margin-bottom:28px}
     [data-tab]{flex:1;padding:10px 14px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:var(--muted);border-radius:9px;transition:all .15s;white-space:nowrap}
-    [data-tab]:hover{color:var(--text);background:rgba(0,0,0,.03)}
+    [data-tab]:hover{color:var(--txt);background:rgba(255,255,255,.05)}
     [data-tab].active{background:var(--surface);color:var(--accent);box-shadow:var(--shadow)}
     [data-tab-panel]{display:none}
     [data-tab-panel].active{display:block}
@@ -56,7 +66,7 @@
     .form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:18px}
     .form-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
     .form-input{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:11px 13px;color:var(--text);font-size:15px;outline:none;width:100%;transition:border-color .15s}
-    .form-input:focus{border-color:var(--accent);background:#fff}
+    .form-input:focus{border-color:var(--accent);background:var(--sur2)}
     select.form-input{cursor:pointer}
     textarea.form-input{resize:vertical;min-height:110px}
     .form-hint{font-size:12px;color:var(--muted);margin-top:3px}
@@ -75,12 +85,12 @@
     .employer-posted{font-size:12px;color:var(--muted)}
     .employer-loading{padding:40px;text-align:center;color:var(--muted)}
     .employer-error{padding:16px;color:var(--red);font-size:13px}
-    .job-type-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:#e3f2fd;color:var(--accent2)}
-    .job-type-full-time{background:#e8f5e9;color:#2e7d32}
-    .job-type-part-time{background:#fff3e0;color:#e65100}
-    .job-type-contract{background:#f3e5f5;color:#6a1b9a}
-    .job-type-internship{background:#e1f5fe;color:#0277bd}
-    .job-type-remote{background:#e8f5e9;color:#1b5e20}
+    .job-type-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:rgba(113,255,0,.1);color:var(--g)}
+    .job-type-full-time{background:rgba(34,197,94,.1);color:#22c55e}
+    .job-type-part-time{background:rgba(249,115,22,.1);color:#f97316}
+    .job-type-contract{background:rgba(168,85,247,.1);color:#c084fc}
+    .job-type-internship{background:rgba(59,130,246,.1);color:#60a5fa}
+    .job-type-remote{background:rgba(34,197,94,.1);color:#4ade80}
     .status-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
     /* Apps */
     .apps-selector-row{display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap}
@@ -88,7 +98,7 @@
     #jpAppJobSelector{flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:15px;outline:none;cursor:pointer}
     .app-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
     .app-card-header{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
-    .app-avatar{width:48px;height:48px;min-width:48px;border-radius:12px;background:linear-gradient(135deg,var(--purple),#9c27b0);color:#000;font-size:20px;font-weight:800;display:flex;align-items:center;justify-content:center}
+    .app-avatar{width:48px;height:48px;min-width:48px;border-radius:12px;background:linear-gradient(135deg,var(--purple),#9c27b0);color:#fff;font-size:20px;font-weight:800;display:flex;align-items:center;justify-content:center}
     .app-info{flex:1;min-width:0}
     .app-name{font-size:16px;font-weight:700;margin-bottom:2px}
     .app-headline{font-size:13px;color:var(--muted);margin-bottom:2px}
@@ -96,7 +106,7 @@
     .app-meta-right{flex-shrink:0}
     .app-date{font-size:12px;color:var(--muted);white-space:nowrap}
     .app-skills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
-    .skill-tag{background:#e8f0fe;color:#3949ab;font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px}
+    .skill-tag{background:var(--ga);color:var(--g);font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px}
     .app-cover{margin-bottom:14px}
     .app-cover-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
     .app-cover-text{font-size:13px;line-height:1.65;color:var(--text)}

@@ -1,4 +1,51 @@
-﻿## [2026-07-07] — Financial Idempotency & Webhook Security Hardening
+﻿## [2026-07-07] — Global enforceAppCheck Enforcement + N+1 Performance Sprint
+
+### Summary
+Completed enforcement of `enforceAppCheck: true` across all remaining Cloud Functions (92 previously unguarded CFs across 11 files), fixed `process.env` secret access in health/DR modules, and eliminated 12 N+1 Firestore read patterns across 10 files.
+
+### enforceAppCheck Fixes (Security)
+| File | Change |
+|---|---|
+| `commission.js` | Added `const OPT / OPT60`; applied `enforceAppCheck: true` to all 12 onCall exports |
+| `installments.js` | Added `const OPT`; applied `enforceAppCheck: true` to all 5 onCall exports |
+| `pos-zero-friction.js` | Added `enforceAppCheck: true` to `cfg` and `cfgHeavy` constants — 6 exports |
+| `pos-qr.js` | Added `OPT / OPT128` constants with `enforceAppCheck: true + secrets`; applied to all 7 QR payment exports |
+| `pos-intelligence.js` | Changed `enforceAppCheck: false` → `true` on `_CF` constant |
+| `trust-safety.js` | Added `OPT / OPT_REPORT` constants with `enforceAppCheck: true`; replaced all 9 inline options |
+| `loyalty.js` | Replaced 3 `{ region, cors: true }` inline objects with `OPT` (adds enforceAppCheck, removes wildcard CORS) |
+| `education.js` | Added `enforceAppCheck: true` to `CF_OPTS`; replaced inline `{ cors: true }` on `publishCourse` with `CF_OPTS` |
+| `admin-os.js` | Added `enforceAppCheck: true` to `adminCreateSupportTicket` (was the only export in the file without it) |
+
+### Secret Injection Fixes (Runtime Correctness)
+| File | Change |
+|---|---|
+| `disaster-recovery.js` | Added `defineSecret('SENDGRID_API_KEY')`; added to `CF_OPTS.secrets` — `process.env.SENDGRID_API_KEY` now reliably injected |
+| `enterprise-health.js` | Added `defineSecret('SENDGRID_API_KEY')`; added `HEALTH_SECRETS = [SENDGRID_API_KEY]`; applied to all 9 onCall/onSchedule exports — `_probeEmail()` email probe no longer always reports degraded |
+
+### N+1 Performance Fixes
+| File | Lines | Fix |
+|---|---|---|
+| `pos-zero-friction.js` | 91-102 | Cart validation: serial product reads → `Promise.all` batch fetch |
+| `messages.js` | 398-408 | FCM dispatch: serial per-participant user reads → `Promise.all` batch; FCM sends also parallelised |
+| `search-repair.js` | 435-436 | Monitor docs read on every loop iteration → hoisted outside loop with `Promise.all` |
+| `dispatch.js` | 263-276 | Rider + delivery reads serialised per notification → batched with `Promise.all`; FCM sends parallelised |
+| `sasos-fraud.js` | 436-453 | User reads serialised per trial subscription → `Promise.all` batch; writes converted to `batch.commit()` |
+| `wap.js` | 422-466 | Instance reads serialised per schedule item → `Promise.all` batch; updates parallelised |
+| `loyalty-enterprise.js` | 891 | Draw entries queries serialised per draw → `Promise.all` batch |
+| `loyalty-enterprise.js` | 1252-1280 | Ledger queries serialised per account → `Promise.all` batch; mismatch writes batched |
+| `loyalty.js` | 1324 | Merchant config fetched once per birthday account (same doc N times) → deduplicated + `Promise.all` |
+| `etims.js` | 1199-1201 | Queue checks serialised per stuck invoice → `Promise.all` batch; enqueue calls parallelised |
+| `inventory-ai.js` | 384-408 | Double-nested N+1: movement queries → `Promise.all` per tenant; forecast writes → `batch.commit()` |
+| `security-audit.js` | 768 | MFA checks serialised per admin user → `Promise.all` batch |
+| `async-job-handlers.js` | 288-302 | Inventory transaction queries serialised per product → `Promise.all` batch; stock writes → `batch.commit()` |
+| `typesense-backup.js` | 194 | Chunk-doc reads serialised per backup → `Promise.all` batch before delete loop |
+
+### Files Changed
+`commission.js`, `installments.js`, `pos-zero-friction.js`, `pos-qr.js`, `pos-intelligence.js`, `trust-safety.js`, `loyalty.js`, `loyalty-enterprise.js`, `education.js`, `admin-os.js`, `disaster-recovery.js`, `enterprise-health.js`, `messages.js`, `search-repair.js`, `dispatch.js`, `sasos-fraud.js`, `wap.js`, `etims.js`, `inventory-ai.js`, `security-audit.js`, `async-job-handlers.js`, `typesense-backup.js`
+
+---
+
+## [2026-07-07] — Financial Idempotency & Webhook Security Hardening
 
 ### Summary
 Three residual findings from the enterprise audit sprint: idempotency write atomicity in `finos-utils.js`, and unauthenticated POS terminal webhook (no HMAC, secret in URL query param).

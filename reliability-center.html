@@ -7,23 +7,29 @@
   <link rel="icon" href="icons/icon-32.png">
   <link rel="stylesheet" href="sokoni-tokens.css">
   <style>
+    :root{
+      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
+      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
+    }
+    body { background:var(--bg); color:var(--txt); font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:var(--font-sans,system-ui,sans-serif);background:var(--color-bg,#f6f7f9);color:var(--color-text,#1a1a2e);min-height:100vh}
+    body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
     .rc-wrap{max-width:1200px;margin:0 auto;padding:24px 16px 80px}
     h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
-    .rc-sub{color:#6b7280;font-size:.875rem;margin-bottom:24px}
+    .rc-sub{color:var(--sub);font-size:.875rem;margin-bottom:24px}
     .grid-4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
-    .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-    .card-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:10px}
+    .card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:20px}
+    .card-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--sub);margin-bottom:10px}
     .card-val{font-size:2.25rem;font-weight:800;line-height:1}
-    .card-label{font-size:.75rem;color:#9ca3af;margin-top:4px}
+    .card-label{font-size:.75rem;color:var(--sub);margin-top:4px}
     .uptime-great{color:#10b981}
     .uptime-warn{color:#f59e0b}
     .uptime-poor{color:#ef4444}
     .section-title{font-size:1rem;font-weight:700;margin:28px 0 12px;display:flex;align-items:center;gap:10px}
-    .period-tabs{display:flex;gap:4px;background:#e5e7eb;border-radius:8px;padding:3px;width:fit-content;margin-bottom:16px}
-    .period-tab{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;background:transparent;color:#6b7280;transition:all .15s}
-    .period-tab.active{background:#fff;color:var(--color-primary,#5b21b6);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+    .period-tabs{display:flex;gap:4px;background:var(--sur2);border-radius:8px;padding:3px;width:fit-content;margin-bottom:16px}
+    .period-tab{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600;background:transparent;color:var(--sub);transition:all .15s}
+    .period-tab.active{background:var(--sur);color:var(--g);box-shadow:0 1px 2px rgba(0,0,0,.4)}
     /* Status timeline */
     .timeline{display:flex;gap:3px;flex-wrap:nowrap;overflow-x:auto;padding:4px 0;margin-bottom:8px}
     .tl-block{width:14px;height:32px;border-radius:3px;flex-shrink:0;cursor:pointer;transition:transform .1s}
@@ -31,27 +37,27 @@
     .tl-healthy{background:#10b981}
     .tl-degraded{background:#f59e0b}
     .tl-unreachable{background:#ef4444}
-    .tl-unknown{background:#d1d5db}
-    .tl-legend{display:flex;gap:16px;font-size:.75rem;color:#6b7280;margin-bottom:12px;flex-wrap:wrap}
+    .tl-unknown{background:#2a2a2a}
+    .tl-legend{display:flex;gap:16px;font-size:.75rem;color:var(--sub);margin-bottom:12px;flex-wrap:wrap}
     .tl-legend-item{display:flex;align-items:center;gap:4px}
     .tl-dot{width:10px;height:10px;border-radius:2px;display:inline-block}
     /* Latency chart */
     .lat-chart{display:flex;align-items:flex-end;gap:2px;height:80px}
-    .lat-bar{flex:1;min-width:4px;border-radius:2px 2px 0 0;background:var(--color-primary,#5b21b6);opacity:.7;transition:opacity .1s}
+    .lat-bar{flex:1;min-width:4px;border-radius:2px 2px 0 0;background:var(--g);opacity:.7;transition:opacity .1s}
     .lat-bar:hover{opacity:1}
-    .lat-note{font-size:.75rem;color:#9ca3af;margin-top:6px}
-    .skeleton{background:linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px}
+    .lat-note{font-size:.75rem;color:var(--sub);margin-top:6px}
+    .skeleton{background:linear-gradient(90deg,var(--sur) 25%,var(--sur2) 50%,var(--sur) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px}
     @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
     .funnel-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
-    .funnel-card{background:#fff;border-radius:10px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);text-align:center;position:relative}
-    .funnel-step{font-size:.7rem;font-weight:700;text-transform:uppercase;color:#6b7280;letter-spacing:.05em;margin-bottom:6px}
+    .funnel-card{background:var(--sur);border:1px solid var(--bor);border-radius:10px;padding:16px;text-align:center;position:relative}
+    .funnel-step{font-size:.7rem;font-weight:700;text-transform:uppercase;color:var(--sub);letter-spacing:.05em;margin-bottom:6px}
     .funnel-count{font-size:1.75rem;font-weight:800;line-height:1}
-    .funnel-rate{font-size:.8rem;color:#6b7280;margin-top:4px}
-    .funnel-arrow{position:absolute;right:-10px;top:50%;transform:translateY(-50%);color:#d1d5db;font-size:1.125rem;z-index:1}
+    .funnel-rate{font-size:.8rem;color:var(--sub);margin-top:4px}
+    .funnel-arrow{position:absolute;right:-10px;top:50%;transform:translateY(-50%);color:var(--sub);font-size:1.125rem;z-index:1}
     .toolbar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
-    .btn-refresh{padding:8px 18px;border:none;border-radius:8px;background:var(--color-primary,#5b21b6);color:#fff;font-size:.875rem;font-weight:600;cursor:pointer}
-    .btn-refresh:hover{background:#4c1d95}
-    .ts-note{font-size:.75rem;color:#9ca3af;margin-left:auto}
+    .btn-refresh{padding:8px 18px;border:none;border-radius:8px;background:var(--g);color:#000;font-size:.875rem;font-weight:600;cursor:pointer}
+    .btn-refresh:hover{background:rgba(113,255,0,.8)}
+    .ts-note{font-size:.75rem;color:var(--sub);margin-left:auto}
     @media(max-width:640px){.card-val{font-size:1.75rem}}
   </style>
 </head>
@@ -109,10 +115,10 @@
   <!-- Quick Links -->
   <div class="section-title">External Consoles</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-    <div class="card"><a href="https://console.firebase.google.com/project/sokoni-aeb26/functions/logs" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Function Logs</div><div style="font-size:.8rem;color:#6b7280">Firebase Console →</div></a></div>
-    <div class="card"><a href="https://console.cloud.google.com/monitoring/dashboards?project=sokoni-aeb26" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Cloud Monitoring</div><div style="font-size:.8rem;color:#6b7280">Alert policies, uptime →</div></a></div>
-    <div class="card"><a href="https://console.cloud.google.com/errors?project=sokoni-aeb26" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Error Reporting</div><div style="font-size:.8rem;color:#6b7280">GCP Error Reporting →</div></a></div>
-    <div class="card"><a href="ops-dashboard.html" style="text-decoration:none;color:inherit"><div class="card-title">Ops Dashboard</div><div style="font-size:.8rem;color:#6b7280">Daily counters →</div></a></div>
+    <div class="card"><a href="https://console.firebase.google.com/project/sokoni-aeb26/functions/logs" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Function Logs</div><div style="font-size:.8rem;color:var(--sub)">Firebase Console →</div></a></div>
+    <div class="card"><a href="https://console.cloud.google.com/monitoring/dashboards?project=sokoni-aeb26" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Cloud Monitoring</div><div style="font-size:.8rem;color:var(--sub)">Alert policies, uptime →</div></a></div>
+    <div class="card"><a href="https://console.cloud.google.com/errors?project=sokoni-aeb26" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><div class="card-title">Error Reporting</div><div style="font-size:.8rem;color:var(--sub)">GCP Error Reporting →</div></a></div>
+    <div class="card"><a href="ops-dashboard.html" style="text-decoration:none;color:inherit"><div class="card-title">Ops Dashboard</div><div style="font-size:.8rem;color:var(--sub)">Daily counters →</div></a></div>
   </div>
 </div>
 

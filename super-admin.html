@@ -10,17 +10,20 @@
   <link rel="icon" href="favicon.ico">
   <style>
     :root{
-      --bg:#0a0c14;--surface:#12151f;--card:#1a1d2e;
+      --bg:#050505;--sur:#0d0d0d;--sur2:#141414;
+      --g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px;
+      --surface:#12151f;--card:#1a1d2e;
       --border:#252838;--accent:#e040fb;--accent2:#7c4dff;
       --green:#4caf50;--red:#f44336;--gold:#ffc107;--orange:#ff9800;
-      --text:#e8eaf6;--muted:#8888aa;--radius:12px;
+      --text:#e8eaf6;--muted:#8888aa;
       --shadow:0 4px 24px rgba(0,0,0,.4);
-      --font:system-ui,-apple-system,'Segoe UI',sans-serif;
+      --font:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
       --sidebar-w:220px;
     }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%;font-family:var(--font)}
-    body{background:var(--bg);color:var(--text);display:flex;font-size:14px;line-height:1.5}
+    body{background:var(--bg);color:var(--txt);display:flex;font-size:14px;line-height:1.5}
 
     /* ── Auth Gate ── */
     #authGate{position:fixed;inset:0;background:var(--bg);z-index:9000;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}

@@ -7,31 +7,36 @@
   <link rel="icon" href="icons/icon-32.png">
   <link rel="stylesheet" href="sokoni-tokens.css">
   <style>
+    :root{
+      --bg:#050505;--sur:#0d0d0d;--sur2:#141414;
+      --g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px;
+    }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:var(--font-sans,system-ui,sans-serif);background:var(--color-bg,#f6f7f9);color:var(--color-text,#1a1a2e);min-height:100vh}
+    body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
     .fb-wrap{max-width:600px;margin:0 auto;padding:32px 16px 80px}
     h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
-    .fb-sub{color:#6b7280;font-size:.875rem;margin-bottom:28px}
+    .fb-sub{color:var(--sub);font-size:.875rem;margin-bottom:28px}
     .type-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:24px}
-    .type-btn{padding:14px 10px;border:2px solid #e5e7eb;border-radius:12px;cursor:pointer;background:#fff;text-align:center;transition:all .15s;font-size:.875rem;font-weight:600;color:#374151}
-    .type-btn.active{border-color:var(--color-primary,#5b21b6);background:#f5f3ff;color:var(--color-primary,#5b21b6)}
+    .type-btn{padding:14px 10px;border:2px solid var(--bor);border-radius:12px;cursor:pointer;background:var(--sur);text-align:center;transition:all .15s;font-size:.875rem;font-weight:600;color:var(--txt)}
+    .type-btn.active{border-color:var(--g);background:var(--ga);color:var(--g)}
     .type-icon{font-size:1.5rem;display:block;margin-bottom:4px}
-    label{display:block;font-size:.8rem;font-weight:600;color:#374151;margin-bottom:6px}
-    textarea{width:100%;min-height:120px;padding:12px;border:1.5px solid #d1d5db;border-radius:10px;font-size:.9375rem;resize:vertical;transition:border .15s;font-family:inherit}
-    textarea:focus{outline:none;border-color:var(--color-primary,#5b21b6)}
+    label{display:block;font-size:.8rem;font-weight:600;color:var(--sub);margin-bottom:6px}
+    textarea{width:100%;min-height:120px;padding:12px;background:var(--sur2);border:1.5px solid var(--bor);border-radius:10px;color:var(--txt);font-size:.9375rem;resize:vertical;transition:border .15s;font-family:inherit}
+    textarea:focus{outline:none;border-color:var(--g)}
     .rating-row{display:flex;gap:10px;margin-bottom:20px}
-    .star{font-size:1.75rem;cursor:pointer;color:#d1d5db;transition:color .1s;user-select:none;line-height:1}
+    .star{font-size:1.75rem;cursor:pointer;color:var(--bor2);transition:color .1s;user-select:none;line-height:1}
     .star.active,.star.hover{color:#f59e0b}
     .field-group{margin-bottom:20px}
-    .submit-btn{width:100%;padding:14px;border:none;border-radius:10px;background:var(--color-primary,#5b21b6);color:#fff;font-size:1rem;font-weight:700;cursor:pointer;transition:background .15s}
-    .submit-btn:hover{background:#4c1d95}
-    .submit-btn:disabled{background:#9ca3af;cursor:not-allowed}
+    .submit-btn{width:100%;padding:14px;border:none;border-radius:10px;background:var(--g);color:#000;font-size:1rem;font-weight:700;cursor:pointer;transition:opacity .15s}
+    .submit-btn:hover{opacity:.88}
+    .submit-btn:disabled{opacity:.45;cursor:not-allowed}
     .success-state{text-align:center;padding:48px 24px;display:none}
     .success-icon{font-size:3rem;margin-bottom:12px}
     .success-title{font-size:1.25rem;font-weight:700;margin-bottom:8px}
-    .success-sub{color:#6b7280;font-size:.875rem}
-    .back-link{display:inline-block;margin-top:20px;color:var(--color-primary,#5b21b6);font-size:.875rem;font-weight:600;text-decoration:none}
-    .err-msg{color:#dc2626;font-size:.8rem;margin-top:6px;display:none}
+    .success-sub{color:var(--sub);font-size:.875rem}
+    .back-link{display:inline-block;margin-top:20px;color:var(--g);font-size:.875rem;font-weight:600;text-decoration:none}
+    .err-msg{color:#ef4444;font-size:.8rem;margin-top:6px;display:none}
     @media(max-width:400px){.type-grid{grid-template-columns:1fr}}
   </style>
 </head>

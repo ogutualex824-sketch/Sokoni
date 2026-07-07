@@ -24,23 +24,25 @@
   <style>
     /* ── DESIGN TOKENS ── */
     :root {
-      --bg:      #0f0f1a;
-      --surface: #1a1a2e;
-      --border:  rgba(255,255,255,.1);
+      --bg:#050505;--sur:#0d0d0d;--sur2:#141414;
+      --g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);
+      --bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px;
+      /* local semantic aliases */
+      --surface: #0d0d0d;
+      --border:  #1a1a1a;
       --accent:  #71ff00;
       --success: #22c55e;
       --warning: #f59e0b;
       --danger:  #ef4444;
-      --text:    #e8e8f0;
+      --text:    #e8e8e8;
       --muted:   #888;
-      --radius:  14px;
-      --shadow:  0 4px 24px rgba(0,0,0,.4);
+      --shadow:  0 4px 24px rgba(0,0,0,.6);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
       background: var(--bg);
-      color: var(--text);
+      color: var(--txt);
       min-height: 100vh;
       padding-bottom: 80px;
     }
@@ -89,7 +91,7 @@
     }
     .hr-btn:hover   { opacity: .85; }
     .hr-btn:disabled { opacity: .5; cursor: not-allowed; }
-    .hr-btn-primary  { background: var(--accent);  color: #fff; }
+    .hr-btn-primary  { background: var(--accent);  color: #000; }
     .hr-btn-success  { background: var(--success); color: #fff; }
     .hr-btn-warning  { background: var(--warning); color: #000; }
     .hr-btn-danger   { background: var(--danger);  color: #fff; }
