@@ -115,17 +115,26 @@ exports.navDispatchRider = onCall({ enforceAppCheck: true }, async request => {
     const pickupLat = stops[0]?.lat || stops[stops.length - 1].lat;
     const pickupLng = stops[0]?.lng || stops[stops.length - 1].lng;
 
-    const ridersSnap = await db.collection('riderLocations').where('status', '==', 'active').get();
+    const ridersSnap = await db.collection('riderLocations')
+      .where('status', '==', 'active')
+      .limit(100)
+      .get();
     let bestScore = -1, bestId = null, bestDist = 0;
 
-    for (const doc of ridersSnap.docs) {
-      const loc = doc.data();
-      // Fetch rider stats
-      const statsSnap = await db.collection('drivers').doc(doc.id).get().catch(() => null);
-      const stats = statsSnap && statsSnap.exists ? statsSnap.data() : {};
-      if (!stats.available) continue;
-      const { score, distKm } = _scoreRider(loc, stats, pickupLat, pickupLng, vehicleRequired);
-      if (score > bestScore) { bestScore = score; bestId = doc.id; bestDist = distKm; }
+    if (!ridersSnap.empty) {
+      // Batch-fetch all driver docs in a single Firestore call instead of N serial gets
+      const driverRefs = ridersSnap.docs.map(d => db.collection('drivers').doc(d.id));
+      const driverSnaps = await db.getAll(...driverRefs);
+      const driverMap = {};
+      for (const s of driverSnaps) { if (s.exists) driverMap[s.id] = s.data(); }
+
+      for (const doc of ridersSnap.docs) {
+        const loc   = doc.data();
+        const stats = driverMap[doc.id] || {};
+        if (!stats.available) continue;
+        const { score, distKm } = _scoreRider(loc, stats, pickupLat, pickupLng, vehicleRequired);
+        if (score > bestScore) { bestScore = score; bestId = doc.id; bestDist = distKm; }
+      }
     }
 
     if (!bestId) throw new HttpsError('not-found', 'No available riders at this time');

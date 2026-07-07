@@ -143,10 +143,27 @@ exports.finosRecordTransaction = onCall(
     const db       = _db();
     const caller   = _uid(request);
 
-    /* Idempotency */
-    const ikey = U.generateIdempotencyKey(['utr', transactionId, hub]);
-    const cached = await U.checkIdempotency(db, ikey);
-    if (cached) return { ...cached.result, duplicate: true };
+    /* Idempotency — lock FIRST before any financial work.
+       Using create() so only one concurrent request proceeds; all others detect the lock. */
+    const ikey    = U.generateIdempotencyKey(['utr', transactionId, hub]);
+    const idempRef = db.collection('finosIdempotency').doc(ikey);
+    let lockAcquired = false;
+    try {
+      await idempRef.create({
+        key: ikey, status: 'pending', result: null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        expireAt:  admin.firestore.Timestamp.fromMillis(Date.now() + 86400000 * 7),
+      });
+      lockAcquired = true;
+    } catch (lockErr) {
+      if (lockErr.code !== 6 && !lockErr.message?.includes('ALREADY_EXISTS')) throw lockErr;
+      /* Another request already holds or completed this key */
+      const snap = await idempRef.get();
+      if (snap.exists && snap.data().status === 'completed') {
+        return { ...snap.data().result, duplicate: true };
+      }
+      throw new HttpsError('aborted', 'Duplicate transaction — this payment is already being processed. Retry in a moment.');
+    }
 
     /* Payment verification (skip for system-initiated calls like subscriptions) */
     if (paymentRef) {
@@ -341,7 +358,8 @@ exports.finosRecordTransaction = onCall(
       vatCents: vat.taxCents, commissionRate: comm.effectiveRate,
       escrowId,
     };
-    await U.markIdempotency(db, ikey, result);
+    /* Update the idempotency lock record to 'completed' so concurrent retries can return the cached result */
+    await idempRef.update({ status: 'completed', result, completedAt: admin.firestore.FieldValue.serverTimestamp() });
     logger.info('[finos-router] Transaction recorded', { transactionId, hub, commissionCents: comm.commissionCents, escrow: shouldEscrow });
     return result;
   }

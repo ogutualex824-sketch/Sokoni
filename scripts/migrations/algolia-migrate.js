@@ -12,8 +12,13 @@
 
 const https = require('https');
 
-const APP_ID   = process.env.ALGOLIA_APP_ID    || 'FF2WSTR4YC';
-const ADMIN    = process.env.ALGOLIA_ADMIN_KEY  || 'bd13f746802dc709727d5d3161840a88';
+const APP_ID   = process.env.ALGOLIA_APP_ID   || 'FF2WSTR4YC';
+const ADMIN    = process.env.ALGOLIA_ADMIN_KEY;
+if (!ADMIN) {
+  console.error('ERROR: ALGOLIA_ADMIN_KEY environment variable is required — no fallback allowed.');
+  console.error('  Get it: firebase functions:secrets:access ALGOLIA_ADMIN_KEY');
+  process.exit(1);
+}
 
 const INDEXES  = ['products_index','stores_index','services_index','jobs_index',
                   'vehicles_index','property_index','events_index','global_search'];

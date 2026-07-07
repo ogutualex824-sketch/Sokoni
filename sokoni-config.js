@@ -24,13 +24,14 @@ window.SOKONI_CONFIG = {
 
   /* ── 4. Algolia search (OPTIONAL — enables typo tolerance + instant search) ─
      a) Sign up at https://algolia.com (free tier: 10k records, 10k ops/month)
-     b) Dashboard → API Keys → copy Application ID and Search-Only API Key
-     c) Admin key (NEVER paste here): firebase functions:secrets:set ALGOLIA_ADMIN_KEY
-     d) Search key: paste below. Engine falls back to Firestore when empty.
-     e) Set env var: firebase functions:config:set algolia.app_id="YOUR_APP_ID"
-        OR add ALGOLIA_APP_ID=your_app_id to functions/.env.sokoni-aeb26         */
+     b) Application ID is public — kept here.
+     c) Admin key: firebase functions:secrets:set ALGOLIA_ADMIN_KEY  (NEVER paste here)
+     d) Search key: stored in Secret Manager as ALGOLIA_SEARCH_KEY.
+        The client fetches a short-lived secured key at runtime via the
+        getAlgoliaSearchKey Cloud Function — no static key is kept in this file.
+     e) Set env var: add ALGOLIA_APP_ID=FF2WSTR4YC to functions/.env             */
   algoliaAppId:    "FF2WSTR4YC",
-  algoliaSearchKey: "255f672f4c10ef80bf9e8e0b5a79974b",
+  algoliaSearchKey: "",   // loaded at runtime via getAlgoliaSearchKey CF
 
   /* Primary index */
   algoliaIndex:    "products_index",

@@ -73,11 +73,16 @@ async function checkIdempotency(db, key) {
 }
 
 async function markIdempotency(db, key, result) {
-  await db.collection('finosIdempotency').doc(key).set({
-    key, result,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    expireAt:  admin.firestore.Timestamp.fromMillis(Date.now() + 86400000 * 7),
-  }, { merge: false });
+  try {
+    await db.collection('finosIdempotency').doc(key).create({
+      key, result,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expireAt:  admin.firestore.Timestamp.fromMillis(Date.now() + 86400000 * 7),
+    });
+  } catch (e) {
+    // ALREADY_EXISTS (code 6) means another concurrent request already wrote this key — safe to ignore.
+    if (e.code !== 6 && !e.message?.includes('ALREADY_EXISTS')) throw e;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────

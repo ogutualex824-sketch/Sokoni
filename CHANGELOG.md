@@ -1,4 +1,53 @@
-﻿## [2026-07-07] — Enterprise Security & Performance Audit Sprint
+﻿## [2026-07-07] — Financial Idempotency & Webhook Security Hardening
+
+### Summary
+Three residual findings from the enterprise audit sprint: idempotency write atomicity in `finos-utils.js`, and unauthenticated POS terminal webhook (no HMAC, secret in URL query param).
+
+### Fixes
+| File | Finding | Fix |
+|---|---|---|
+| `finos-utils.js` | L-4: `markIdempotency` used `set()` — concurrent threads could both mark the key as "done" | Changed to `create()`; `ALREADY_EXISTS` error silently swallowed — write-once guarantee enforced |
+| `finos-router.js` | H-1: `finosRecordTransaction` idempotency check was not atomic with wallet credits — two concurrent calls could both credit seller | Replaced post-work `markIdempotency` with lock-first pattern: `create()` a pending lock before financial work; update to `completed` after; concurrent requests detect the lock and either return cached result or throw `aborted` |
+| `pos-terminal-live.js` | HIGH: `posTerminalEventWebhook` accepted any POST with no authentication — full injection vector for fake payment confirmations | Added `_verifyWebhookSignature()` with vendor-dispatch: IntaSend uses `X-IntaSend-Signature` (HMAC-SHA256 with `INTASEND_PRIVATE_KEY`); all other vendors require `X-Webhook-Signature` using new `POS_WEBHOOK_SECRET` |
+| `pos-terminal-live.js` | HIGH: Comment documented `?secret=<webhook_secret>` in URL — secrets in URLs are logged and must never be used | Removed URL secret pattern; moved to request header authentication |
+
+### New Secret Required
+- `POS_WEBHOOK_SECRET` — run: `firebase functions:secrets:set POS_WEBHOOK_SECRET` (generate with `openssl rand -hex 32`)
+- Configure vendor webhook URL as: `https://us-central1-sokoni-aeb26.cloudfunctions.net/posTerminalEventWebhook?vendor=<name>`
+- Add header: `X-Webhook-Signature: <HMAC-SHA256 of body using POS_WEBHOOK_SECRET>` (non-IntaSend vendors)
+
+### Files Changed
+`functions/finos-utils.js`, `functions/pos-terminal-live.js`
+
+---
+
+## [2026-07-07] — Algolia Admin Key Rotation & Search Security Verification
+
+### Summary
+Full verification and remediation sprint following Algolia Admin API Key rotation. Confirmed zero hardcoded keys remain in source code. Fixed queue pause logic, orphan-detection collection mapping, and stale key in OPS_RUNBOOK documentation.
+
+### Fixes
+| File | Finding | Fix |
+|---|---|---|
+| `functions/scripts/algolia-setup.js` | Hardcoded admin key | Replaced with `process.env.ALGOLIA_ADMIN_KEY`; exits with error if not set |
+| `functions/scripts/algolia-backfill.js` | Hardcoded admin key | Same pattern — env var required; no fallback |
+| `scripts/migrations/algolia-migrate.js` | Hardcoded key with env fallback | Removed fallback; exits if `ALGOLIA_ADMIN_KEY` not set |
+| `sokoni-config.js` | Static `algoliaSearchKey` value | Cleared to `""`; key loaded at runtime via `getAlgoliaSearchKey` CF |
+| `functions/algolia-admin.js` | `algoliaDeleteOrphans` checked only ONE Firestore collection per multi-source index — `sokoni_vehicles` only checked `cars`; `sokoni_jobs` only checked `digitalJobs` | Updated `collectionMap` to arrays; orphan loop checks ALL source collections before marking as orphaned |
+| `functions/algolia-queue.js` | `processAlgoliaQueue` never checked the `algoliaPaused` flag — admin pause commands had no effect | Added `searchConfig/queueControl.algoliaPaused` check at start of scheduled run |
+| `docs/OPS_RUNBOOK.md` | Line 223 documented a static Algolia search key | Replaced with description of the runtime-fetch model; added key rotation instructions |
+
+### Security Implications
+- All Algolia admin key access now flows exclusively through Firebase Secret Manager (`defineSecret('ALGOLIA_ADMIN_KEY')`)
+- No key material in any source file, migration script, or documentation
+- Stale search key in `OPS_RUNBOOK.md` removed — it was a prior static key now superseded by the `getAlgoliaSearchKey` CF issuing short-lived scoped keys per session
+
+### Files Changed
+`functions/scripts/algolia-setup.js`, `functions/scripts/algolia-backfill.js`, `scripts/migrations/algolia-migrate.js`, `sokoni-config.js`, `functions/algolia-admin.js`, `functions/algolia-queue.js`, `docs/OPS_RUNBOOK.md`
+
+---
+
+## [2026-07-07] — Enterprise Security & Performance Audit Sprint
 
 ### Summary
 14-phase enterprise-wide audit (CTO/CISO/Architect) covering all 1,538 Cloud Functions across 183 source files, full payment engine, security stack, and performance patterns. Fixed 11 critical/high vulnerabilities and 3 critical performance N+1 patterns.

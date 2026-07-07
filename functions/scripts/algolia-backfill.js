@@ -13,9 +13,14 @@ const path    = require('path');
 /* ── Config ─────────────────────────────────────────────────────── */
 
 const PROJECT_ID = 'sokoni-aeb26';
-const APP_ID     = 'FF2WSTR4YC';
-const ADMIN_KEY  = 'bd13f746802dc709727d5d3161840a88';
+const APP_ID     = process.env.ALGOLIA_APP_ID  || 'FF2WSTR4YC';
+const ADMIN_KEY  = process.env.ALGOLIA_ADMIN_KEY;
 const BATCH_SIZE = 100;
+if (!ADMIN_KEY) {
+  console.error('ERROR: ALGOLIA_ADMIN_KEY environment variable is required.');
+  console.error('  Get it: firebase functions:secrets:access ALGOLIA_ADMIN_KEY');
+  process.exit(1);
+}
 
 /* Load Firebase CLI access token */
 const cfgPath    = path.join(os.homedir(), '.config', 'configstore', 'firebase-tools.json');

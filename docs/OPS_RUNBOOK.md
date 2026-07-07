@@ -220,9 +220,11 @@ Once inline scripts are gone, replace `'unsafe-inline'` with a `'nonce-{random}'
 
 ```
 App ID:     FF2WSTR4YC
-Search Key: 255f672f4c10ef80bf9e8e0b5a79974b  (frontend, read-only)
-Admin Key:  [set via Firebase Secret Manager]
+Search Key: issued at runtime by getAlgoliaSearchKey CF — NOT stored statically
+Admin Key:  stored in Firebase Secret Manager as ALGOLIA_ADMIN_KEY
 ```
+> **Key rotation:** If you rotate the Admin Key in the Algolia dashboard, run:
+> `firebase functions:secrets:set ALGOLIA_ADMIN_KEY` then redeploy algolia functions.
 
 ```bash
 # Set Algolia admin key (needed for index/sync Cloud Functions)

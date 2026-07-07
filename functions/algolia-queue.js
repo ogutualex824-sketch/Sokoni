@@ -168,6 +168,14 @@ const processAlgoliaQueue = onSchedule(
     }
 
     const db  = _db();
+
+    /* Honour the admin pause flag (set by pauseQueue({ engine: 'algolia' })) */
+    const ctrlSnap = await db.collection('searchConfig').doc('queueControl').get();
+    if (ctrlSnap.exists && ctrlSnap.data().algoliaPaused === true) {
+      console.log('[AlgoliaQueue] Queue is paused — skipping this run');
+      return;
+    }
+
     const now = admin.firestore.Timestamp.now();
 
     /* Fetch pending items whose nextAttemptAt has passed */

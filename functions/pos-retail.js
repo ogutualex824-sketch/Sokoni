@@ -252,19 +252,30 @@ exports.posLowStockAlert = functions.scheduler.onSchedule(
   { schedule: '0 5 * * *', timeZone: 'Africa/Nairobi', region: 'us-central1' },
   async () => {
     /* Get all products with stock at or below reorderLevel */
-    const invSnap = await db.collection('inventory').where('qty', '<=', 0).get();
+    const invSnap = await db.collection('inventory').where('qty', '<=', 0).limit(500).get();
     const outs    = invSnap.docs.map(d => ({ ...d.data(), id: d.id }));
 
-    const lowSnap = await db.collection('inventory').get();
+    // Query low-stock items (qty > 0 but at or below threshold) with a limit
+    // instead of a full collection scan. Batch all product lookups via getAll()
+    // to replace the previous O(n) serial read pattern.
+    const lowSnap = await db.collection('inventory').where('qty', '>', 0).limit(500).get();
     const lows    = [];
-    for (const doc of lowSnap.docs) {
-      const inv = doc.data();
-      if (!inv.productId) continue;
-      const prodSnap = await db.collection('products').doc(inv.productId).get();
-      if (!prodSnap.exists) continue;
-      const prod = prodSnap.data();
-      if (inv.qty <= (prod.minStockLevel || 5) && inv.qty > 0) {
-        lows.push({ productName: prod.name, qty: inv.qty, minLevel: prod.minStockLevel, branchId: inv.branchId });
+    if (!lowSnap.empty) {
+      const uniqueProductIds = [...new Set(
+        lowSnap.docs.map(d => d.data().productId).filter(Boolean)
+      )];
+      const productRefs  = uniqueProductIds.map(id => db.collection('products').doc(id));
+      const productSnaps = productRefs.length > 0 ? await db.getAll(...productRefs) : [];
+      const productMap   = {};
+      for (const s of productSnaps) { if (s.exists) productMap[s.id] = s.data(); }
+
+      for (const doc of lowSnap.docs) {
+        const inv  = doc.data();
+        const prod = inv.productId ? productMap[inv.productId] : null;
+        if (!prod) continue;
+        if (inv.qty <= (prod.minStockLevel || 5)) {
+          lows.push({ productName: prod.name, qty: inv.qty, minLevel: prod.minStockLevel, branchId: inv.branchId });
+        }
       }
     }
 

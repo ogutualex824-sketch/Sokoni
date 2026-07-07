@@ -7,8 +7,14 @@
 
 const https = require('https');
 
-const APP_ID    = 'FF2WSTR4YC';
-const ADMIN_KEY = 'bd13f746802dc709727d5d3161840a88';
+const APP_ID    = process.env.ALGOLIA_APP_ID  || 'FF2WSTR4YC';
+const ADMIN_KEY = process.env.ALGOLIA_ADMIN_KEY;
+if (!ADMIN_KEY) {
+  console.error('ERROR: ALGOLIA_ADMIN_KEY environment variable is required.');
+  console.error('  Set it: export ALGOLIA_ADMIN_KEY=<your-admin-key>');
+  console.error('  Get it from Firebase Secret Manager: firebase functions:secrets:access ALGOLIA_ADMIN_KEY');
+  process.exit(1);
+}
 
 const INDEXES = [
   'products_index',

@@ -990,19 +990,23 @@ const algoliaDeleteOrphans = onSchedule(
     if (!algolia) return;
 
     const db = _db();
+    // Maps Algolia index → ALL Firestore collection(s) that feed it.
+    // algolia-sync.js registers triggers for both 'cars' AND 'vehicles', and
+    // both 'digitalJobs' AND 'jobs'. Using only one collection would falsely
+    // identify records from the other as orphans and delete valid live data.
     const collectionMap = {
-      sokoni_products:    'products',
-      sokoni_shops:       'sellers',
-      sokoni_services:    'providers',
-      sokoni_events:      'events',
-      sokoni_properties:  'properties',
-      sokoni_vehicles:    'cars',
-      sokoni_jobs:        'digitalJobs',
+      sokoni_products:    ['products'],
+      sokoni_shops:       ['sellers'],
+      sokoni_services:    ['providers'],
+      sokoni_events:      ['events'],
+      sokoni_properties:  ['properties'],
+      sokoni_vehicles:    ['cars', 'vehicles'],
+      sokoni_jobs:        ['digitalJobs', 'jobs'],
     };
 
     let totalDeleted = 0;
 
-    for (const [indexName, fsCollection] of Object.entries(collectionMap)) {
+    for (const [indexName, fsCollections] of Object.entries(collectionMap)) {
       try {
         /* Browse Algolia index, batch-check existence in Firestore */
         let cursor;
@@ -1014,13 +1018,17 @@ const algoliaDeleteOrphans = onSchedule(
           const res = await algolia._request('POST', `/1/indexes/${indexName}/browse`, body);
           cursor = res.cursor;
 
-          /* Check each objectID against Firestore in batches of 30 (Firestore in limit) */
+          /* Check each objectID against ALL source Firestore collections for this index */
           for (const chunk of _chunk(res.hits.map(h => h.objectID), 30)) {
-            const fsSnap = await db.collection(fsCollection)
-              .where(admin.firestore.FieldPath.documentId(), 'in', chunk)
-              .select() // no fields — just ID check
-              .get();
-            const existingIds = new Set(fsSnap.docs.map(d => d.id));
+            // An ID is NOT an orphan if it exists in ANY of the source collections
+            let existingIds = new Set();
+            for (const fsCollection of fsCollections) {
+              const fsSnap = await db.collection(fsCollection)
+                .where(admin.firestore.FieldPath.documentId(), 'in', chunk)
+                .select()
+                .get();
+              fsSnap.docs.forEach(d => existingIds.add(d.id));
+            }
             chunk.forEach(id => { if (!existingIds.has(id)) orphans.push(id); });
           }
         } while (cursor);

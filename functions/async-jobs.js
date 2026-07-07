@@ -3,11 +3,15 @@
 const { onCall }          = require('firebase-functions/v2/https');
 const { onSchedule }      = require('firebase-functions/v2/scheduler');
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { defineSecret }    = require('firebase-functions/params');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { initializeApp, getApps } = require('firebase-admin/app');
 
 if (!getApps().length) initializeApp();
 const db = getFirestore();
+
+// Email secret needed by the EmailHandler inside async-job-handlers.js
+const SENDGRID_API_KEY = defineSecret('SENDGRID_API_KEY');
 
 const { handlers, JOB_TYPES } = require('./async-job-handlers');
 
@@ -254,7 +258,7 @@ exports.asyncEnqueue = onCall({ region: 'us-central1', timeoutSeconds: 30 }, asy
 // Immediate execution for critical/high priority non-scheduled jobs
 // ═════════════════════════════════════════════════════════════════════════════
 exports.asyncWorker = onDocumentCreated(
-  { document: `${JOBS_COL}/{jobId}`, region: 'us-central1', timeoutSeconds: 540 },
+  { document: `${JOBS_COL}/{jobId}`, region: 'us-central1', timeoutSeconds: 540, secrets: [SENDGRID_API_KEY] },
   async event => {
     const job = event.data?.data();
     if (!job) return;
@@ -269,7 +273,7 @@ exports.asyncWorker = onDocumentCreated(
 // Picks up all pending work: low priority, retries, scheduled, crashed workers
 // ═════════════════════════════════════════════════════════════════════════════
 exports.asyncSweeper = onSchedule(
-  { schedule: 'every 1 minutes', region: 'us-central1', timeoutSeconds: 540 },
+  { schedule: 'every 1 minutes', region: 'us-central1', timeoutSeconds: 540, secrets: [SENDGRID_API_KEY] },
   async () => {
     const now = Timestamp.now();
 

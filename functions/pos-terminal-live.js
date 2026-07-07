@@ -28,8 +28,10 @@
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret }                  = require('firebase-functions/params');
 const admin                             = require('firebase-admin');
+const crypto                            = require('crypto');
 
-const INTASEND_KEY = defineSecret('INTASEND_PRIVATE_KEY');
+const INTASEND_KEY      = defineSecret('INTASEND_PRIVATE_KEY');
+const POS_WEBHOOK_SECRET = defineSecret('POS_WEBHOOK_SECRET');
 
 if (!admin.apps.length) admin.initializeApp();
 const db      = () => admin.firestore();
@@ -37,6 +39,7 @@ const TS      = () => admin.firestore.FieldValue.serverTimestamp();
 const INCR    = (n) => admin.firestore.FieldValue.increment(n);
 const _CF     = { region: 'us-central1', enforceAppCheck: true };
 const _CF_PUB = { region: 'us-central1', cors: ['https://mysokoni.co.ke', 'https://www.mysokoni.co.ke'] };
+const _CF_WEBHOOK = { region: 'us-central1', cors: false, secrets: [INTASEND_KEY, POS_WEBHOOK_SECRET] };
 
 /* ── Auth helpers ──────────────────────────────────────────── */
 function _requireAuth(req) {
@@ -796,25 +799,57 @@ exports.posGetTerminalBatchReport = onCall(_CF, async (request) => {
 /* ================================================================
    posTerminalEventWebhook  (HTTP — vendor push notifications)
    Receives push callbacks from Stripe, IntaSend, PAX cloud etc.
-   POST /posTerminalEventWebhook?vendor=stripe&secret=<webhook_secret>
+   POST /posTerminalEventWebhook?vendor=intasend
+   Auth: X-Webhook-Signature: <HMAC-SHA256 of raw body using POS_WEBHOOK_SECRET>
+         OR vendor-native sig header (X-IntaSend-Signature for IntaSend)
 ================================================================ */
-exports.posTerminalEventWebhook = onRequest(_CF_PUB, async (req, res) => {
+exports.posTerminalEventWebhook = onRequest(_CF_WEBHOOK, async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
-  const vendor = _san(req.query.vendor || '', 30).toLowerCase();
-  const body   = req.body || {};
+  const vendor  = _san(req.query.vendor || '', 30).toLowerCase();
+  const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
 
   try {
-    await _handleVendorWebhook(vendor, body, req.headers);
+    _verifyWebhookSignature(vendor, rawBody, req.headers);
+    await _handleVendorWebhook(vendor, req.body || {}, req.headers);
     res.json({ ok: true });
   } catch (err) {
+    const code = err.message?.startsWith('Invalid') || err.message?.includes('signature') ? 401 : 400;
     console.error(JSON.stringify({ severity: 'ERROR', message: `Webhook error: ${err.message}`, vendor }));
-    res.status(400).json({ error: err.message });
+    res.status(code).json({ error: err.message });
   }
 });
+
+function _verifyWebhookSignature(vendor, rawBody, headers) {
+  /* IntaSend uses X-IntaSend-Signature: HMAC-SHA256(body, INTASEND_PRIVATE_KEY) */
+  if (vendor === 'intasend') {
+    const sig = headers['x-intasend-signature'];
+    if (!sig) throw new Error('Invalid signature: missing X-IntaSend-Signature header');
+    const key     = INTASEND_KEY.value();
+    const expected = crypto.createHmac('sha256', key).update(rawBody).digest('hex');
+    const buf1 = Buffer.from(sig, 'hex');
+    const buf2 = Buffer.from(expected, 'hex');
+    if (buf1.length !== buf2.length || !crypto.timingSafeEqual(buf1, buf2)) {
+      throw new Error('Invalid signature: IntaSend HMAC mismatch');
+    }
+    return;
+  }
+
+  /* All other vendors: require X-Webhook-Signature: HMAC-SHA256(body, POS_WEBHOOK_SECRET) */
+  const platformSig = headers['x-webhook-signature'];
+  if (!platformSig) throw new Error('Invalid signature: missing X-Webhook-Signature header');
+  const secret = POS_WEBHOOK_SECRET.value();
+  if (!secret) throw new Error('Webhook secret not configured');
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  const buf1 = Buffer.from(platformSig, 'hex');
+  const buf2 = Buffer.from(expected, 'hex');
+  if (buf1.length !== buf2.length || !crypto.timingSafeEqual(buf1, buf2)) {
+    throw new Error('Invalid signature: platform HMAC mismatch');
+  }
+}
 
 /* ══════════════════════════════════════════════════════════════
    VENDOR DRIVER DISPATCH LAYER
