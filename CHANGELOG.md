@@ -1,4 +1,34 @@
-﻿## [2026-07-07] — Global enforceAppCheck Enforcement + N+1 Performance Sprint
+﻿## [2026-07-07] — Algolia Admin Key Rotation Verification & Deployment Planning
+
+### Summary
+`ALGOLIA_ADMIN_KEY` was rotated in Firebase Secret Manager. A full codebase audit confirmed the rotation is safe to activate: all 18 Algolia source files correctly use `defineSecret('ALGOLIA_ADMIN_KEY')`, zero hardcoded key values exist anywhere in `functions/`, and `process.env.ALGOLIA_ADMIN_KEY` appears only in CLI scripts (correct pattern — not deployed CFs). No source code changes were required. A minimal redeployment plan targeting exactly the 79 affected live functions was documented in `DEPLOY_QUEUE.md` (pending quota).
+
+### Security Audit Results
+
+| Check | Result |
+|---|---|
+| `defineSecret('ALGOLIA_ADMIN_KEY')` in all CFs | ✅ 18/18 source files confirmed |
+| Hardcoded 32-char hex key values in `functions/` | ✅ Zero found |
+| `process.env.ALGOLIA_ADMIN_KEY` in deployed CFs | ✅ Zero — CLI scripts only (correct) |
+| `docs/OPS_RUNBOOK.md` previously had hardcoded search key | ✅ Fixed — replaced with runtime reference |
+| `system-health.js` uses `ALGOLIA_KEY` as variable name | ✅ Functionally correct — secret string is `"ALGOLIA_ADMIN_KEY"` |
+
+### Files Affected
+- `docs/OPS_RUNBOOK.md` — replaced static hardcoded search key with runtime reference; added key rotation instructions
+- `DEPLOY_QUEUE.md` — added "ALGOLIA KEY ROTATION REDEPLOY" section with 79-function deploy command and deployment priority order
+
+### Deployment Plan
+79 live functions require a revision bump to inject the new key. Documented in `DEPLOY_QUEUE.md` under "ALGOLIA KEY ROTATION REDEPLOY". No new Cloud Run services are created — this is a revision update to existing services. Priority: **deploy before disabling the old key version** in Secret Manager. Blocked by Cloud Run CPU quota until quota increase is approved.
+
+### Functions NOT Affected (unaffected by ALGOLIA_ADMIN_KEY rotation)
+`searchQuery`, `searchAutocomplete`, `searchNearby`, `searchPersonalized`, `searchIntent`, `getAlgoliaSearchKey`, `algoliaKeyStats`, `algoliaKeyCleanup` — these use `ALGOLIA_SEARCH_KEY` only and require no action.
+
+### Breaking Changes
+None. All live Algolia functions continue operating on the old key version until redeployed. The old key version must remain enabled until redeployment completes.
+
+---
+
+## [2026-07-07] — Global enforceAppCheck Enforcement + N+1 Performance Sprint
 
 ### Summary
 Completed enforcement of `enforceAppCheck: true` across all remaining Cloud Functions (92 previously unguarded CFs across 11 files), fixed `process.env` secret access in health/DR modules, and eliminated 12 N+1 Firestore read patterns across 10 files.

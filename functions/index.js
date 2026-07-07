@@ -9189,3 +9189,16 @@ exports.requestWithdrawal   = commission.requestWithdrawal;
 exports.approveWithdrawal   = commission.approveWithdrawal;
 exports.rejectWithdrawal    = commission.rejectWithdrawal;
 exports.getWithdrawals      = commission.getWithdrawals;
+
+/* ── Platform Hub Engine v1.0 — 10 CFs ── */
+const platformHub = require('./platform-hub');
+exports.wapProcessDelays                  = platformHub.wapProcessDelays;
+exports.wapGetInstances                   = platformHub.wapGetInstances;
+exports.wapRetryStep                      = platformHub.wapRetryStep;
+exports.pcGetPerHubFlags                  = platformHub.pcGetPerHubFlags;
+exports.pcSetPerHubFlag                   = platformHub.pcSetPerHubFlag;
+exports.pcGetHubDetails                   = platformHub.pcGetHubDetails;
+exports.pcGetCrossHubHealth               = platformHub.pcGetCrossHubHealth;
+exports.platformNotifyTransactionChange   = platformHub.platformNotifyTransactionChange;
+exports.pcActivateHub                     = platformHub.pcActivateHub;
+exports.pcDeactivateHub                   = platformHub.pcDeactivateHub;

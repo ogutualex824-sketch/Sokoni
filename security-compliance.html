@@ -1,15 +1,15 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Compliance Portal — SOKONI Security</title>
+<title>Compliance Portal â€” SOKONI Security</title>
 <script src="firebase.js"></script>
 <style>
 :root{
-  --bg:#080808;--surface:#0e0e12;--card:rgba(255,255,255,0.04);
+  --bg:#050505;--surface:#0e0e12;--card:rgba(255,255,255,0.04);
   --border:rgba(255,255,255,0.08);--accent:#71ff00;
   --text:rgba(255,255,255,0.9);--muted:rgba(255,255,255,0.45);
   --pass:#4ade80;--warn:#fbbf24;--fail:#f87171;
@@ -34,9 +34,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .card-body{font-size:13px;color:var(--muted);line-height:1.6}
 .check-list{list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .check-list li{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5}
-.check-list li::before{content:'✓';color:var(--pass);flex-shrink:0;font-weight:700;margin-top:1px}
-.check-list li.warn::before{content:'△';color:var(--warn)}
-.check-list li.plan::before{content:'○';color:var(--muted)}
+.check-list li::before{content:'âœ“';color:var(--pass);flex-shrink:0;font-weight:700;margin-top:1px}
+.check-list li.warn::before{content:'â–³';color:var(--warn)}
+.check-list li.plan::before{content:'â—‹';color:var(--muted)}
 .table-wrap{overflow-x:auto;margin-bottom:24px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)}
@@ -53,7 +53,7 @@ tr:hover td{background:rgba(255,255,255,0.02)}
 <header class="hdr">
   <span class="logo">SOKONI</span>
   <h1>Compliance &amp; Privacy Portal</h1>
-  <a href="security-center.html" class="back">← SOC</a>
+  <a href="security-center.html" class="back">â† SOC</a>
 </header>
 
 <div class="body">
@@ -61,7 +61,7 @@ tr:hover td{background:rgba(255,255,255,0.02)}
   <div class="score-banner">
     <div class="score-num">90</div>
     <div class="score-meta">
-      <h2>Enterprise Compliance Posture — Grade A−</h2>
+      <h2>Enterprise Compliance Posture â€” Grade Aâˆ’</h2>
       <p>Security 6.0 delivers financial-grade Zero Trust for SOKONI's marketplace, SmartPOS, payments, logistics, and AI services. All core controls are implemented and verified. Three items remain for A+ certification.</p>
     </div>
   </div>
@@ -73,20 +73,20 @@ tr:hover td{background:rgba(255,255,255,0.02)}
       <div class="card-body">Multi-factor authentication with TOTP, WebAuthn/Passkeys, and risk-based step-up challenges.</div>
       <ul class="check-list">
         <li>Firebase Auth + custom claims for role management</li>
-        <li>TOTP MFA (RFC 6238) — `securityMFA` collection</li>
-        <li>WebAuthn / FIDO2 Passkeys — `securityPasskeys` collection</li>
-        <li>Trusted device registry — trust scores 0–100</li>
+        <li>TOTP MFA (RFC 6238) â€” `securityMFA` collection</li>
+        <li>WebAuthn / FIDO2 Passkeys â€” `securityPasskeys` collection</li>
+        <li>Trusted device registry â€” trust scores 0â€“100</li>
         <li>Adaptive auth: step-up on high-value actions</li>
         <li>Remember-me with device binding</li>
       </ul>
     </div>
     <div class="card">
       <div class="card-head"><span class="card-title">Access Control</span><span class="chip chip-pass">Pass</span></div>
-      <div class="card-body">Attribute-Based Access Control (ABAC) via `evaluateAccessRequest` CF — role + device + session + risk + amount.</div>
+      <div class="card-body">Attribute-Based Access Control (ABAC) via `evaluateAccessRequest` CF â€” role + device + session + risk + amount.</div>
       <ul class="check-list">
-        <li>7-level role hierarchy: guest → super_admin</li>
+        <li>7-level role hierarchy: guest â†’ super_admin</li>
         <li>Firestore rules: owner-only, branch-isolated, CF-write-only</li>
-        <li>No wildcard grants — every collection explicit</li>
+        <li>No wildcard grants â€” every collection explicit</li>
         <li>Firestore v2 default-deny on unmatched paths</li>
         <li>Admin privileges enforced via Firebase custom claims only</li>
       </ul>
@@ -95,10 +95,10 @@ tr:hover td{background:rgba(255,255,255,0.02)}
       <div class="card-head"><span class="card-title">Session Management</span><span class="chip chip-pass">Pass</span></div>
       <div class="card-body">Enterprise session lifecycle: creation, rotation, anomaly detection, and remote revocation.</div>
       <ul class="check-list">
-        <li>Server-side session records — `securitySessions` collection</li>
+        <li>Server-side session records â€” `securitySessions` collection</li>
         <li>Session rotation to prevent fixation attacks</li>
         <li>Impossible travel detection (IP geo-anomaly)</li>
-        <li>Remote logout — terminateAllSessions CF</li>
+        <li>Remote logout â€” terminateAllSessions CF</li>
         <li>Device-level session revocation</li>
         <li>Scheduled cleanup of expired sessions (24h)</li>
       </ul>
@@ -112,7 +112,7 @@ tr:hover td{background:rgba(255,255,255,0.02)}
       <div class="card-body">All data encrypted in transit via Firebase's enforced TLS 1.2+ infrastructure.</div>
       <ul class="check-list">
         <li>HSTS: max-age=63072000; includeSubDomains; preload</li>
-        <li>Firebase Hosting enforces HTTPS — no HTTP fallback</li>
+        <li>Firebase Hosting enforces HTTPS â€” no HTTP fallback</li>
         <li>Redis TLS (when REDIS_URL configured)</li>
         <li>Cloud Functions HTTPS-only endpoints</li>
       </ul>
@@ -145,7 +145,7 @@ tr:hover td{background:rgba(255,255,255,0.02)}
   <div class="grid">
     <div class="card">
       <div class="card-head"><span class="card-title">Transaction Security</span><span class="chip chip-pass">Pass</span></div>
-      <div class="card-body">HMAC-signed transactions, idempotency keys, server-side verification — no client-side payment confirmation trusted.</div>
+      <div class="card-body">HMAC-signed transactions, idempotency keys, server-side verification â€” no client-side payment confirmation trusted.</div>
       <ul class="check-list">
         <li>PAYMENT_HMAC_SECRET via GCP Secret Manager</li>
         <li>crypto.timingSafeEqual on all HMAC comparisons</li>
@@ -157,7 +157,7 @@ tr:hover td{background:rgba(255,255,255,0.02)}
     </div>
     <div class="card">
       <div class="card-head"><span class="card-title">Fraud Prevention</span><span class="chip chip-pass">Pass</span></div>
-      <div class="card-body">SASOS fraud engine with 25+ weighted signals and 4 risk tiers (0–30 allow, 31–60 monitor, 61–80 challenge, 81–100 block).</div>
+      <div class="card-body">SASOS fraud engine with 25+ weighted signals and 4 risk tiers (0â€“30 allow, 31â€“60 monitor, 61â€“80 challenge, 81â€“100 block).</div>
       <ul class="check-list">
         <li>Payment velocity checks</li>
         <li>Impossible travel on payment events</li>
@@ -174,7 +174,7 @@ tr:hover td{background:rgba(255,255,255,0.02)}
         <li>SokoniZeroTrust.guard() called in placeOrder()</li>
         <li>Device trust score included in payment context</li>
         <li>Transaction amount in access decision context</li>
-        <li>Step-up modal for transactions ≥ KES 100,000</li>
+        <li>Step-up modal for transactions â‰¥ KES 100,000</li>
         <li>All payment events written to securityAuditLog</li>
       </ul>
     </div>
@@ -185,16 +185,16 @@ tr:hover td{background:rgba(255,255,255,0.02)}
     <table>
       <thead><tr><th>Vulnerability</th><th>Status</th><th>Controls in Place</th></tr></thead>
       <tbody>
-        <tr><td>A01 — Broken Access Control</td><td><span class="chip chip-pass">Pass</span></td><td>Firestore rules (4,098 lines), ABAC CF, owner-only collections, no wildcard grants</td></tr>
-        <tr><td>A02 — Cryptographic Failures</td><td><span class="chip chip-pass">Pass</span></td><td>HSTS preload, TLS enforced, AES-256-GCM at rest, HMAC-SHA256 signatures, Secret Manager</td></tr>
-        <tr><td>A03 — Injection</td><td><span class="chip chip-pass">Pass</span></td><td>Firestore SDK parameterized queries, server-side input sanitization, XSS escaping on all outputs</td></tr>
-        <tr><td>A04 — Insecure Design</td><td><span class="chip chip-pass">Pass</span></td><td>Zero Trust architecture, Defense in Depth, Least Privilege — by design</td></tr>
-        <tr><td>A05 — Security Misconfiguration</td><td><span class="chip chip-pass">Pass</span></td><td>firebase.json security headers (CSP, COOP, COEP, CORP, X-Frame-Options, HSTS)</td></tr>
-        <tr><td>A06 — Vulnerable Components</td><td><span class="chip chip-partial">Partial</span></td><td>npm audit integrated in pen test suite; manual review required quarterly</td></tr>
-        <tr><td>A07 — Auth &amp; Session Failures</td><td><span class="chip chip-pass">Pass</span></td><td>Server-side sessions, rotation, revocation, impossible travel, step-up auth</td></tr>
-        <tr><td>A08 — Data Integrity Failures</td><td><span class="chip chip-pass">Pass</span></td><td>SHA-256 hash chain audit log, HMAC-signed webhooks, SRI (CSP enforcement)</td></tr>
-        <tr><td>A09 — Logging &amp; Monitoring</td><td><span class="chip chip-pass">Pass</span></td><td>Immutable audit chain, 19 GCP alerts, SOC dashboard (security-center.html)</td></tr>
-        <tr><td>A10 — SSRF</td><td><span class="chip chip-pass">Pass</span></td><td>No server-side URL fetching from user input; all external API calls use hardcoded endpoints</td></tr>
+        <tr><td>A01 â€” Broken Access Control</td><td><span class="chip chip-pass">Pass</span></td><td>Firestore rules (4,098 lines), ABAC CF, owner-only collections, no wildcard grants</td></tr>
+        <tr><td>A02 â€” Cryptographic Failures</td><td><span class="chip chip-pass">Pass</span></td><td>HSTS preload, TLS enforced, AES-256-GCM at rest, HMAC-SHA256 signatures, Secret Manager</td></tr>
+        <tr><td>A03 â€” Injection</td><td><span class="chip chip-pass">Pass</span></td><td>Firestore SDK parameterized queries, server-side input sanitization, XSS escaping on all outputs</td></tr>
+        <tr><td>A04 â€” Insecure Design</td><td><span class="chip chip-pass">Pass</span></td><td>Zero Trust architecture, Defense in Depth, Least Privilege â€” by design</td></tr>
+        <tr><td>A05 â€” Security Misconfiguration</td><td><span class="chip chip-pass">Pass</span></td><td>firebase.json security headers (CSP, COOP, COEP, CORP, X-Frame-Options, HSTS)</td></tr>
+        <tr><td>A06 â€” Vulnerable Components</td><td><span class="chip chip-partial">Partial</span></td><td>npm audit integrated in pen test suite; manual review required quarterly</td></tr>
+        <tr><td>A07 â€” Auth &amp; Session Failures</td><td><span class="chip chip-pass">Pass</span></td><td>Server-side sessions, rotation, revocation, impossible travel, step-up auth</td></tr>
+        <tr><td>A08 â€” Data Integrity Failures</td><td><span class="chip chip-pass">Pass</span></td><td>SHA-256 hash chain audit log, HMAC-signed webhooks, SRI (CSP enforcement)</td></tr>
+        <tr><td>A09 â€” Logging &amp; Monitoring</td><td><span class="chip chip-pass">Pass</span></td><td>Immutable audit chain, 19 GCP alerts, SOC dashboard (security-center.html)</td></tr>
+        <tr><td>A10 â€” SSRF</td><td><span class="chip chip-pass">Pass</span></td><td>No server-side URL fetching from user input; all external API calls use hardcoded endpoints</td></tr>
       </tbody>
     </table>
   </div>
@@ -277,7 +277,7 @@ tr:hover td{background:rgba(255,255,255,0.02)}
   <div class="section-title">Audit Trail</div>
   <div class="card" style="margin-bottom:24px">
     <div class="card-head"><span class="card-title">Immutable Audit System</span><span class="chip chip-pass">Pass</span></div>
-    <div class="card-body">SHA-256 hash chain audit log. Every security event, payment, admin action, and configuration change is recorded. Audit entries cannot be deleted by normal administrators — only Super Admin with dual approval.</div>
+    <div class="card-body">SHA-256 hash chain audit log. Every security event, payment, admin action, and configuration change is recorded. Audit entries cannot be deleted by normal administrators â€” only Super Admin with dual approval.</div>
     <ul class="check-list" style="margin-top:12px">
       <li>securityAuditLog collection: tamper-evident hash chain</li>
       <li>Events: Authentication, Payments, Refunds, Inventory, Pricing, Role changes, Admin actions, Security events, Config changes</li>

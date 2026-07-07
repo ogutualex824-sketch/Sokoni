@@ -594,6 +594,41 @@ npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; f
 
 ---
 
+## Platform Hub Engine v1.0 — 10 CFs (NEW — 2026-07-07)
+
+Source: `functions/platform-hub.js`
+
+| CF | Type | Purpose |
+|---|---|---|
+| `wapProcessDelays` | onSchedule every 5 min | Advances WAP workflow instances with due delay steps |
+| `wapGetInstances` | onCall admin | Paginated workflow instance inspector |
+| `wapRetryStep` | onCall admin | Reset a failed step to pending + re-run |
+| `pcGetPerHubFlags` | onCall admin | Per-hub feature flag values (scoped, not global) |
+| `pcSetPerHubFlag` | onCall admin | Toggle a per-hub feature flag |
+| `pcGetHubDetails` | onCall admin | Full hub doc + flags + lifetime metrics in one call |
+| `pcGetCrossHubHealth` | onCall admin | Per-hub 24h health snapshot (orders, revenue, error rate) |
+| `platformNotifyTransactionChange` | onCall authenticated | Generic transaction status → chat system message (new hubs use this instead of custom Firestore triggers) |
+| `pcActivateHub` | onCall admin | Set hub status → live; emits hub.activated platform event |
+| `pcDeactivateHub` | onCall admin | Set hub status → maintenance; emits hub.deactivated event |
+
+**Firestore paths written:**
+- `workflowSchedule/{id}` — processed flag updated by wapProcessDelays
+- `workflowInstances/{id}` — steps updated by wapRetryStep
+- `platformConfig/hubFlags` — per-hub feature flags document
+- `platformHubs/{hubId}` — status + activatedAt/deactivatedAt
+- `platformEvents` — hub lifecycle events
+- `adminAuditLog` — all admin actions
+- `conversations/{id}/messages` — system messages from platformNotifyTransactionChange
+
+**Secrets required:** None (no external API calls).
+
+**Spot deploy command:**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:wapProcessDelays,functions:wapGetInstances,functions:wapRetryStep,functions:pcGetPerHubFlags,functions:pcSetPerHubFlag,functions:pcGetHubDetails,functions:pcGetCrossHubHealth,functions:platformNotifyTransactionChange,functions:pcActivateHub,functions:pcDeactivateHub" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
+
 ## Hosting (already deployed 2026-07-06)
 All HTML/CSS/JS pages are LIVE. CF features will activate when quota clears.
 New pages deployed:

@@ -1,17 +1,17 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>KASS — Developer Assistant</title>
+<title>KASS â€” Developer Assistant</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Round">
 <style>
 /* ============================================================
-   KASS DEVELOPER — Premium AI Assistant for Engineers
+   KASS DEVELOPER â€” Premium AI Assistant for Engineers
    Theme: --bg:#050505 --sur:#0d0d0d --bor:#1a1a1a
           --g:#71ff00 --acc:#c678dd --txt:#e8e8e8 --sub:#6b7280
 ============================================================ */
@@ -35,7 +35,7 @@ a{color:var(--acc);text-decoration:none}
   display:inline-block;line-height:1;letter-spacing:normal;text-transform:none;
   white-space:nowrap;vertical-align:middle;font-size:20px}
 
-/* ── Auth Overlays ── */
+/* â”€â”€ Auth Overlays â”€â”€ */
 .auth-overlay{
   position:fixed;inset:0;background:var(--bg);z-index:9000;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
@@ -59,7 +59,7 @@ a{color:var(--acc);text-decoration:none}
   background:var(--acc);color:#fff;font-size:13px;font-weight:700;
 }
 
-/* ── Toast ── */
+/* â”€â”€ Toast â”€â”€ */
 .toast{
   position:fixed;bottom:72px;left:50%;transform:translateX(-50%) translateY(12px);
   background:var(--sur2);border:1px solid var(--bor);border-radius:var(--rad-sm);
@@ -72,10 +72,10 @@ a{color:var(--acc);text-decoration:none}
 .toast.err{border-color:rgba(239,68,68,.4);color:#f87171}
 .toast.ok{border-color:rgba(198,120,221,.35);color:var(--acc)}
 
-/* ── Shell ── */
+/* â”€â”€ Shell â”€â”€ */
 .shell{display:flex;height:100vh;overflow:hidden}
 
-/* ── Sidebar ── */
+/* â”€â”€ Sidebar â”€â”€ */
 .sidebar{
   width:var(--sidebar);flex-shrink:0;
   background:var(--sur);border-right:1px solid var(--bor);
@@ -159,7 +159,7 @@ a{color:var(--acc);text-decoration:none}
 .new-chat-btn:hover{opacity:.84}
 .new-chat-btn .mir{font-size:18px}
 
-/* ── Main area ── */
+/* â”€â”€ Main area â”€â”€ */
 .main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;min-width:0}
 
 /* Topbar */
@@ -202,7 +202,7 @@ a{color:var(--acc);text-decoration:none}
 .err-banner span{flex:1}
 .err-dismiss{background:none;border:none;cursor:pointer;color:#f87171;padding:0;display:flex}
 
-/* ── Messages area ── */
+/* â”€â”€ Messages area â”€â”€ */
 .msgs-wrap{
   flex:1;overflow-y:auto;overflow-x:hidden;
   padding:16px 20px 12px;
@@ -268,9 +268,9 @@ a{color:var(--acc);text-decoration:none}
 .msg-time{font-size:10px;color:var(--sub);margin-top:4px;padding:0 2px}
 .msg-row.user .msg-time{text-align:right}
 
-/* ── Code blocks ─────────────────────────────────────────────── */
+/* â”€â”€ Code blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .code-block{
-  background:#0a0a0a;border:1px solid var(--bor);
+  background:#050505;border:1px solid var(--bor);
   border-radius:var(--rad);overflow:hidden;
   margin-top:8px;font-family:var(--mono);
 }
@@ -300,10 +300,10 @@ a{color:var(--acc);text-decoration:none}
 .code-pre::-webkit-scrollbar{height:4px}
 .code-pre::-webkit-scrollbar-thumb{background:var(--bor);border-radius:2px}
 /* Syntax tokens */
-.hl-kw{color:#c678dd}   /* keywords — accent purple */
-.hl-str{color:#98c379}  /* strings  — green */
-.hl-cmt{color:#5c6370;font-style:italic} /* comments — grey */
-.hl-num{color:#d19a66}  /* numbers  — amber */
+.hl-kw{color:#c678dd}   /* keywords â€” accent purple */
+.hl-str{color:#98c379}  /* strings  â€” green */
+.hl-cmt{color:#5c6370;font-style:italic} /* comments â€” grey */
+.hl-num{color:#d19a66}  /* numbers  â€” amber */
 
 /* Rich cards (shared) */
 .rich-card{
@@ -348,7 +348,7 @@ a{color:var(--acc);text-decoration:none}
 .t-dot:nth-child(3){animation-delay:.44s}
 @keyframes tdot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
 
-/* ── Input bar ── */
+/* â”€â”€ Input bar â”€â”€ */
 .input-bar{
   flex-shrink:0;background:var(--sur);border-top:1px solid var(--bor);
   padding:10px 12px;display:flex;align-items:flex-end;gap:6px;
@@ -385,14 +385,14 @@ a{color:var(--acc);text-decoration:none}
 .send-btn:disabled{opacity:.35;cursor:not-allowed}
 .send-btn .mir{font-size:20px}
 
-/* ── Mobile sidebar overlay ── */
+/* â”€â”€ Mobile sidebar overlay â”€â”€ */
 .sb-overlay{
   display:none;position:fixed;inset:0;
   background:rgba(0,0,0,.72);z-index:205;
 }
 .sb-overlay.show{display:block}
 
-/* ── Responsive ── */
+/* â”€â”€ Responsive â”€â”€ */
 @media(max-width:768px){
   .tb-menu-btn{display:flex}
   .sidebar{
@@ -413,7 +413,7 @@ a{color:var(--acc);text-decoration:none}
 <!-- Auth overlays -->
 <div class="auth-overlay" id="authOverlay">
   <div class="spinner"></div>
-  <p style="font-size:13px;color:var(--sub)">Verifying developer access…</p>
+  <p style="font-size:13px;color:var(--sub)">Verifying developer accessâ€¦</p>
 </div>
 <div class="auth-denied" id="authDenied">
   <span class="mir denied-ic">lock</span>
@@ -431,7 +431,7 @@ a{color:var(--acc);text-decoration:none}
 <!-- Shell -->
 <div class="shell">
 
-  <!-- ══ Sidebar ══ -->
+  <!-- â•â• Sidebar â•â• -->
   <aside class="sidebar" id="sidebar">
     <div class="sb-head">
       <div class="kass-av-wrap">
@@ -460,7 +460,7 @@ a{color:var(--acc);text-decoration:none}
 
     <div class="sb-label">Recent Conversations</div>
     <div class="sb-sessions" id="sessionsList">
-      <div class="sess-empty">Loading…</div>
+      <div class="sess-empty">Loadingâ€¦</div>
     </div>
 
     <button class="new-chat-btn" id="newChatBtn">
@@ -468,7 +468,7 @@ a{color:var(--acc);text-decoration:none}
     </button>
   </aside>
 
-  <!-- ══ Main ══ -->
+  <!-- â•â• Main â•â• -->
   <div class="main">
 
     <!-- Topbar -->
@@ -517,7 +517,7 @@ a{color:var(--acc);text-decoration:none}
         <span class="mir">attach_file</span>
       </button>
       <div class="input-pill">
-        <textarea id="msgInput" placeholder="Ask KASS anything… Ctrl+K to focus, Enter to send, Shift+Enter for new line" rows="1" disabled></textarea>
+        <textarea id="msgInput" placeholder="Ask KASS anythingâ€¦ Ctrl+K to focus, Enter to send, Shift+Enter for new line" rows="1" disabled></textarea>
       </div>
       <button class="ia-btn" title="Voice input (coming soon)" disabled>
         <span class="mir">mic</span>
@@ -538,21 +538,21 @@ a{color:var(--acc);text-decoration:none}
 <script>
 'use strict';
 /* ============================================================
-   KASS DEVELOPER — AI Concierge Engine
+   KASS DEVELOPER â€” AI Concierge Engine
    Role: developer | Auth: developer / admin / superAdmin claims
 ============================================================ */
 
-// ── Role Configuration ───────────────────────────────────────────────
+// â”€â”€ Role Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ROLE_CONTEXT = 'You are KASS, SOKONI\'s AI assistant for platform developers and engineers. Help with: Firebase Firestore queries, Cloud Functions architecture, security rules, API integration, debugging, code review, performance optimisation, and SOKONI\'s technical documentation. When providing code examples, format them as: ```json\n{"type":"code","lang":"js","code":"<code here>"}\n``` so they render with syntax highlighting.';
 const ROLE_ID      = 'developer';
 
-// ── Firebase ─────────────────────────────────────────────────────────
+// â”€â”€ Firebase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 firebase.initializeApp(window.SOKONI_CONFIG || {});
 const auth       = firebase.auth();
 const db         = firebase.firestore();
 const sokoniChat = firebase.app().functions('us-central1').httpsCallable('sokoniChat');
 
-// ── State ─────────────────────────────────────────────────────────────
+// â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let currentUser = null;
 let sessionId   = null;
 let msgsColl    = null;
@@ -560,7 +560,7 @@ let failCount   = 0;
 let isSending   = false;
 let sessUnsub   = null;
 
-// ── DOM refs ──────────────────────────────────────────────────────────
+// â”€â”€ DOM refs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const authOverlay  = document.getElementById('authOverlay');
 const authDenied   = document.getElementById('authDenied');
 const authMsg      = document.getElementById('authMsg');
@@ -577,7 +577,7 @@ const tbMenuBtn    = document.getElementById('tbMenuBtn');
 const newChatBtn   = document.getElementById('newChatBtn');
 const toastEl      = document.getElementById('toast');
 
-// ── Auth guard — developer / admin / superAdmin only ─────────────────
+// â”€â”€ Auth guard â€” developer / admin / superAdmin only â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 auth.onAuthStateChanged(async user => {
   authOverlay.style.display = 'none';
   if (!user) {
@@ -594,7 +594,7 @@ auth.onAuthStateChanged(async user => {
       return;
     }
   } catch (err) {
-    // Fail closed — unable to verify claims is treated as denied
+    // Fail closed â€” unable to verify claims is treated as denied
     console.error('[KASS-DEV] claim fetch failed:', err);
     authMsg.textContent = 'Unable to verify developer access. Please refresh and try again.';
     authDenied.classList.add('show');
@@ -604,7 +604,7 @@ auth.onAuthStateChanged(async user => {
   onReady();
 });
 
-// ── Init ──────────────────────────────────────────────────────────────
+// â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function onReady() {
   loadSessions();
   startNewSession();
@@ -612,7 +612,7 @@ function onReady() {
   msgInput.focus();
 }
 
-// ── Session management ────────────────────────────────────────────────
+// â”€â”€ Session management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function startNewSession() {
   sessionId = db.collection('_k').doc().id;
   msgsColl  = sessRef(sessionId).collection('messages');
@@ -642,7 +642,7 @@ function clearChat() {
   highlightSession(sessionId);
 }
 
-// ── Load a past session ───────────────────────────────────────────────
+// â”€â”€ Load a past session â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openSession(sid) {
   if (sid === sessionId) { closeSidebar(); return; }
   sessionId = sid;
@@ -665,7 +665,7 @@ function openSession(sid) {
   closeSidebar();
 }
 
-// ── Sessions list (sidebar) ───────────────────────────────────────────
+// â”€â”€ Sessions list (sidebar) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function loadSessions() {
   if (sessUnsub) sessUnsub();
   sessUnsub = db.collection('kassConversations')
@@ -711,7 +711,7 @@ function highlightSession(sid) {
   });
 }
 
-// ── Send message ──────────────────────────────────────────────────────
+// â”€â”€ Send message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text || isSending || !currentUser) return;
@@ -757,7 +757,7 @@ async function sendMessage() {
     removeEl(typingEl);
     failCount++;
     if (failCount >= 3) errBanner.classList.add('show');
-    showToast('KASS could not respond — please try again.', 'err');
+    showToast('KASS could not respond â€” please try again.', 'err');
     if (!msgInput.value) { msgInput.value = text; autoResize(); }
   } finally {
     isSending = false;
@@ -766,7 +766,7 @@ async function sendMessage() {
   }
 }
 
-// ── Bubble rendering (XSS-safe) ───────────────────────────────────────
+// â”€â”€ Bubble rendering (XSS-safe) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function appendBubble(who, text, date) {
   const row = document.createElement('div');
   row.className = 'msg-row ' + who;
@@ -782,7 +782,7 @@ function appendBubble(who, text, date) {
 
   const bubDiv = document.createElement('div');
   bubDiv.className = 'bub';
-  // Plain text rendered as text node — never innerHTML
+  // Plain text rendered as text node â€” never innerHTML
   if (plainText) {
     bubDiv.appendChild(document.createTextNode(plainText));
   }
@@ -804,7 +804,7 @@ function appendBubble(who, text, date) {
   msgsWrap.appendChild(row);
 }
 
-// ── Rich card extraction ──────────────────────────────────────────────
+// â”€â”€ Rich card extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function extractRichCards(text) {
   const re = /```json\s*(\{[\s\S]*?\})\s*```/g;
   const cards = [];
@@ -819,7 +819,7 @@ function extractRichCards(text) {
   return { plainText, cards };
 }
 
-// ── HTML escape ───────────────────────────────────────────────────────
+// â”€â”€ HTML escape â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function esc(s) {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -827,7 +827,7 @@ function esc(s) {
     .replace(/>/g, '&gt;');
 }
 
-// ── Syntax highlighter (tokeniser, XSS-safe) ─────────────────────────
+// â”€â”€ Syntax highlighter (tokeniser, XSS-safe) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 /*
   Tokenises JS/TS/JSX/TSX source into: block-comments, line-comments,
   template literals, double-quoted strings, single-quoted strings,
@@ -928,9 +928,9 @@ function syntaxHighlight(code, lang) {
   return out;
 }
 
-// ── Card builder ──────────────────────────────────────────────────────
+// â”€â”€ Card builder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function buildCard(obj) {
-  // ── Code block (developer feature) ──────────────────────────────
+  // â”€â”€ Code block (developer feature) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (obj.type === 'code') {
     const code = String(obj.code || '');
     const lang = String(obj.lang || 'text').toLowerCase();
@@ -970,7 +970,7 @@ function buildCard(obj) {
     const pre    = document.createElement('pre');
     pre.className = 'code-pre';
     const codeEl  = document.createElement('code');
-    // syntaxHighlight() calls esc() on every raw piece → innerHTML is safe
+    // syntaxHighlight() calls esc() on every raw piece â†’ innerHTML is safe
     codeEl.innerHTML = syntaxHighlight(code, lang);
     pre.appendChild(codeEl);
 
@@ -979,7 +979,7 @@ function buildCard(obj) {
     return wrap;
   }
 
-  // ── Table card ───────────────────────────────────────────────────
+  // â”€â”€ Table card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (obj.type === 'table' && Array.isArray(obj.headers) && Array.isArray(obj.rows)) {
     const wrap = document.createElement('div');
     wrap.className = 'rich-card';
@@ -1015,7 +1015,7 @@ function buildCard(obj) {
     return wrap;
   }
 
-  // ── Stat card ────────────────────────────────────────────────────
+  // â”€â”€ Stat card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (obj.type === 'stat') {
     const wrap = document.createElement('div');
     wrap.className = 'rich-card';
@@ -1045,14 +1045,14 @@ function buildCard(obj) {
     return wrap;
   }
 
-  // ── Link card ────────────────────────────────────────────────────
+  // â”€â”€ Link card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (obj.type === 'link') {
     const wrap = document.createElement('div');
     wrap.className = 'rich-card';
     const lc = document.createElement('div');
     lc.className = 'link-card';
 
-    // Only relative paths allowed — block external origins
+    // Only relative paths allowed â€” block external origins
     const url = String(obj.url || '#');
     const safeUrl = /^(https?:\/\/|\/\/)/i.test(url) ? '#' : url;
 
@@ -1073,7 +1073,7 @@ function buildCard(obj) {
   return null;
 }
 
-// ── Typing indicator ──────────────────────────────────────────────────
+// â”€â”€ Typing indicator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showTyping() {
   const row = document.createElement('div');
   row.className = 'typing-row';
@@ -1096,7 +1096,7 @@ function showTyping() {
   return row;
 }
 
-// ── Prefill textarea ──────────────────────────────────────────────────
+// â”€â”€ Prefill textarea â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function prefill(text) {
   msgInput.value = text;
   autoResize();
@@ -1106,11 +1106,11 @@ function prefill(text) {
   closeSidebar();
 }
 
-// ── Sidebar open/close ────────────────────────────────────────────────
+// â”€â”€ Sidebar open/close â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openSidebar()  { sidebar.classList.add('open');    sbOverlay.classList.add('show'); }
 function closeSidebar() { sidebar.classList.remove('open'); sbOverlay.classList.remove('show'); }
 
-// ── Helpers ───────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function removeEl(el)   { if (el && el.parentNode) el.parentNode.removeChild(el); }
 function scrollBottom() { msgsWrap.scrollTop = msgsWrap.scrollHeight; }
 function userInitial()  {
@@ -1125,7 +1125,7 @@ function autoResize() {
   msgInput.style.height = Math.min(msgInput.scrollHeight, 96) + 'px';
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────
+// â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _toastT;
 function showToast(msg, type) {
   toastEl.textContent = msg;
@@ -1134,7 +1134,7 @@ function showToast(msg, type) {
   _toastT = setTimeout(() => { toastEl.className = 'toast'; }, 3800);
 }
 
-// ── Event wiring ──────────────────────────────────────────────────────
+// â”€â”€ Event wiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 msgInput.addEventListener('input', () => {
   autoResize();
   sendBtn.disabled = !msgInput.value.trim() || isSending;
@@ -1157,7 +1157,7 @@ document.addEventListener('click', e => {
   if (el) prefill(el.dataset.prefill);
 });
 
-// Ctrl+K → focus input
+// Ctrl+K â†’ focus input
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.key === 'k') { e.preventDefault(); msgInput.focus(); }
 });

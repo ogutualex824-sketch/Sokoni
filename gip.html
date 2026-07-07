@@ -1,15 +1,15 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-no-header="true">
 <head>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SOKONI Geo Intelligence Platform</title>
-<meta name="description" content="SOKONI GIP — Real-time fleet command centre for drivers, deliveries, rides and field services.">
+<meta name="description" content="SOKONI GIP â€” Real-time fleet command centre for drivers, deliveries, rides and field services.">
 <link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="apple-touch-icon" href="assets/logosokoni.png">
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#080808">
+<meta name="theme-color" content="#050505">
 
 <!-- Leaflet core -->
 <link  rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css"
@@ -23,26 +23,26 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"
         onerror="var s=document.createElement('script');s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.min.js';document.head.appendChild(s);"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"
-        onerror="console.warn('[GIP] MarkerCluster CDN failed — markers will render individually');"></script>
+        onerror="console.warn('[GIP] MarkerCluster CDN failed â€” markers will render individually');"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"
-        onerror="console.warn('[GIP] Leaflet.heat CDN failed — heatmap disabled');"></script>
+        onerror="console.warn('[GIP] Leaflet.heat CDN failed â€” heatmap disabled');"></script>
 
 <style>
-/* ── Reset & base ─────────────────────────────────────────── */
+/* â”€â”€ Reset & base â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#080808;color:white;}
+html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#050505;color:white;}
 
-/* ── CSS variables ─────────────────────────────────────────── */
+/* â”€â”€ CSS variables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 :root{
   --green:#71ff00; --blue:#00aaff; --amber:#ffc107; --red:#ff4444;
   --card:rgba(255,255,255,0.04); --border:rgba(255,255,255,0.08);
   --sidebar:260px; --topbar:52px;
 }
 
-/* ── Layout ────────────────────────────────────────────────── */
+/* â”€â”€ Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #gipShell{display:flex;flex-direction:column;height:100vh;height:100dvh;}
 
-/* ── Top bar ───────────────────────────────────────────────── */
+/* â”€â”€ Top bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #gipTop{
   height:var(--topbar);flex-shrink:0;
   display:flex;align-items:center;gap:0;
@@ -93,10 +93,10 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
   font-family:inherit;
 }
 
-/* ── Body ──────────────────────────────────────────────────── */
+/* â”€â”€ Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #gipBody{display:flex;flex:1;min-height:0;}
 
-/* ── Sidebar ───────────────────────────────────────────────── */
+/* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #gipSidebar{
   width:var(--sidebar);flex-shrink:0;
   background:rgba(8,8,8,0.97);
@@ -179,7 +179,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
 .gip-dot.maintenance{background:var(--amber);}
 .gip-dot.emergency{background:var(--red);}
 
-/* ── Main map area ─────────────────────────────────────────── */
+/* â”€â”€ Main map area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #gipMain{flex:1;display:flex;flex-direction:column;position:relative;min-width:0;}
 #gipMap{flex:1;width:100%;height:100%;}
 
@@ -212,7 +212,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
 .leaflet-control-attribution a{color:rgba(113,255,0,0.5)!important;}
 .leaflet-container{touch-action:none!important;}
 
-/* ── Right panel ───────────────────────────────────────────── */
+/* â”€â”€ Right panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #gipRight{
   width:300px;flex-shrink:0;
   background:rgba(8,8,8,0.97);
@@ -279,10 +279,10 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
 .gip-anlt-val{font-size:22px;font-weight:900;color:var(--green);}
 .gip-anlt-lbl{font-size:9px;font-weight:700;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.05em;margin-top:3px;}
 
-/* ── Offline banner ────────────────────────────────────────── */
+/* â”€â”€ Offline banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #gipOfflineBanner{
   position:fixed;bottom:0;left:0;right:0;z-index:2000;
-  background:rgba(255,193,7,0.95);color:#080808;
+  background:rgba(255,193,7,0.95);color:#050505;
   padding:10px 20px;text-align:center;
   font-size:13px;font-weight:800;
   display:none;
@@ -290,11 +290,11 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
 }
 #gipOfflineBanner.show{display:block;}
 
-/* ── Animations ────────────────────────────────────────────── */
+/* â”€â”€ Animations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes gip-fade-in{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
 .gip-fade-in{animation:gip-fade-in .3s ease forwards;}
 
-/* ── Mobile responsive ─────────────────────────────────────── */
+/* â”€â”€ Mobile responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media (max-width: 900px) {
   :root{ --sidebar: 0px; }
   #gipSidebar{ position:absolute;left:0;top:var(--topbar);bottom:0;width:280px;display:none;z-index:1000;}
@@ -346,7 +346,7 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
 
 <div id="gipShell">
 
-  <!-- ── Top Bar ────────────────────────────────────────────── -->
+  <!-- â”€â”€ Top Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   <header id="gipTop">
     <img src="assets/logosokoni.png" class="gip-logo" alt="SOKONI" onerror="this.style.display='none'">
     <div class="gip-title"><span>GIP</span> Command</div>
@@ -354,20 +354,20 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
     <div class="gip-stats">
       <div class="gip-stat">
         <div class="gip-dot available"></div>
-        <span class="gip-stat-val" id="statAvail">—</span>
+        <span class="gip-stat-val" id="statAvail">â€”</span>
         <span class="gip-stat-lbl">Available</span>
       </div>
       <div class="gip-stat">
         <div class="gip-dot en_route"></div>
-        <span class="gip-stat-val" id="statBusy">—</span>
+        <span class="gip-stat-val" id="statBusy">â€”</span>
         <span class="gip-stat-lbl">On Job</span>
       </div>
       <div class="gip-stat">
-        <span class="gip-stat-val" id="statTotal">—</span>
+        <span class="gip-stat-val" id="statTotal">â€”</span>
         <span class="gip-stat-lbl">Total Online</span>
       </div>
       <div class="gip-stat">
-        <span class="gip-stat-val" id="statJobs">—</span>
+        <span class="gip-stat-val" id="statJobs">â€”</span>
         <span class="gip-stat-lbl">Active Jobs</span>
       </div>
       <div class="gip-stat">
@@ -386,18 +386,18 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
     </select>
 
     <button id="gipAlertBtn" onclick="gipShowAlertsPanel()" title="Alerts">
-      🔔
+      ðŸ””
       <span id="gipAlertBadge"></span>
     </button>
 
-    <button id="gipMobilePanelBtn" onclick="gipOpenRightPanel()" title="Jobs & Alerts">⊞</button>
-    <button id="gipMobileToggle" onclick="gipToggleSidebar()" title="Fleet">☰</button>
+    <button id="gipMobilePanelBtn" onclick="gipOpenRightPanel()" title="Jobs & Alerts">âŠž</button>
+    <button id="gipMobileToggle" onclick="gipToggleSidebar()" title="Fleet">â˜°</button>
   </header>
 
-  <!-- ── Body ───────────────────────────────────────────────── -->
+  <!-- â”€â”€ Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   <div id="gipBody">
 
-    <!-- ── Left Sidebar ───────────────────────────────────────── -->
+    <!-- â”€â”€ Left Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <aside id="gipSidebar">
       <!-- Tile layer switcher -->
       <div class="gip-layer-row">
@@ -412,12 +412,12 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
       <div class="gip-module-row">
         <div class="gip-module-lbl">Modules</div>
         <div class="gip-modules">
-          <button class="gip-module-chip active" data-mod="delivery"   onclick="gipToggleModule('delivery',this)">📦 Delivery</button>
-          <button class="gip-module-chip active" data-mod="food"       onclick="gipToggleModule('food',this)">🍔 Food</button>
-          <button class="gip-module-chip active" data-mod="rides"      onclick="gipToggleModule('rides',this)">🚗 Rides</button>
-          <button class="gip-module-chip active" data-mod="mechanics"  onclick="gipToggleModule('mechanics',this)">🔧 Mechanics</button>
-          <button class="gip-module-chip active" data-mod="healthcare" onclick="gipToggleModule('healthcare',this)">🏥 Health</button>
-          <button class="gip-module-chip"        data-mod="emergency"  onclick="gipToggleModule('emergency',this)">🚨 Emergency</button>
+          <button class="gip-module-chip active" data-mod="delivery"   onclick="gipToggleModule('delivery',this)">ðŸ“¦ Delivery</button>
+          <button class="gip-module-chip active" data-mod="food"       onclick="gipToggleModule('food',this)">ðŸ” Food</button>
+          <button class="gip-module-chip active" data-mod="rides"      onclick="gipToggleModule('rides',this)">ðŸš— Rides</button>
+          <button class="gip-module-chip active" data-mod="mechanics"  onclick="gipToggleModule('mechanics',this)">ðŸ”§ Mechanics</button>
+          <button class="gip-module-chip active" data-mod="healthcare" onclick="gipToggleModule('healthcare',this)">ðŸ¥ Health</button>
+          <button class="gip-module-chip"        data-mod="emergency"  onclick="gipToggleModule('emergency',this)">ðŸš¨ Emergency</button>
         </div>
       </div>
 
@@ -432,31 +432,31 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
       <div id="gipAssetList"></div>
     </aside>
 
-    <!-- ── Map ────────────────────────────────────────────────── -->
+    <!-- â”€â”€ Map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <main id="gipMain">
       <div id="gipMap"></div>
 
       <!-- Map overlay buttons -->
       <div id="gipMapControls">
-        <button class="gip-map-btn" id="btnHeatmap" onclick="gipToggleHeatmap()">🔥 Heatmap</button>
-        <button class="gip-map-btn" id="btnCluster" onclick="gipToggleCluster()">📍 Cluster</button>
-        <button class="gip-map-btn" onclick="gipLocateMe()">📍 Locate Me</button>
-        <button class="gip-map-btn" onclick="gipFitAll()">⊡ Fit All</button>
+        <button class="gip-map-btn" id="btnHeatmap" onclick="gipToggleHeatmap()">ðŸ”¥ Heatmap</button>
+        <button class="gip-map-btn" id="btnCluster" onclick="gipToggleCluster()">ðŸ“ Cluster</button>
+        <button class="gip-map-btn" onclick="gipLocateMe()">ðŸ“ Locate Me</button>
+        <button class="gip-map-btn" onclick="gipFitAll()">âŠ¡ Fit All</button>
       </div>
     </main>
 
-    <!-- ── Right Panel ──────────────────────────────────────── -->
+    <!-- â”€â”€ Right Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <aside id="gipRight">
       <div class="gip-panel-tabs">
         <button class="gip-panel-tab active" onclick="gipRightTab('jobs',this)">Jobs</button>
         <button class="gip-panel-tab"        onclick="gipRightTab('alerts',this)">Alerts</button>
         <button class="gip-panel-tab"        onclick="gipRightTab('dispatch',this)">Dispatch</button>
         <button class="gip-panel-tab"        onclick="gipRightTab('analytics',this)">Analytics</button>
-        <button id="gipRightClose" onclick="gipCloseRightPanel()" title="Close">✕</button>
+        <button id="gipRightClose" onclick="gipCloseRightPanel()" title="Close">âœ•</button>
       </div>
       <div class="gip-panel-body" id="gipRightBody">
         <!-- Populated dynamically -->
-        <div style="padding:20px;color:rgba(255,255,255,0.25);font-size:12px;text-align:center;">Loading jobs…</div>
+        <div style="padding:20px;color:rgba(255,255,255,0.25);font-size:12px;text-align:center;">Loading jobsâ€¦</div>
       </div>
     </aside>
 
@@ -464,34 +464,34 @@ html,body{height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,-apple-sy
 </div><!-- /#gipShell -->
 
 <!-- Offline banner -->
-<div id="gipOfflineBanner">⚠️ You're offline — GIP is operating in read-only cached mode. Data may be stale.</div>
+<div id="gipOfflineBanner">âš ï¸ You're offline â€” GIP is operating in read-only cached mode. Data may be stale.</div>
 
-<!-- ── Firebase & GIP modules ─────────────────────────────── -->
+<!-- â”€â”€ Firebase & GIP modules â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <script type="module">
 import { getFirestore, collection, onSnapshot, query, where, orderBy, limit }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
-/* ══════════════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    BOOT SEQUENCE
    1. Initialise Firebase (firebase.js sets window.firebaseApp)
-   2. Wait for auth state — never start Firestore subscriptions
+   2. Wait for auth state â€” never start Firestore subscriptions
       before we know who the user is. This eliminates permission-
       denied errors for unauthenticated visitors.
-   3. Verify admin custom claim — GIP is admin-only.
+   3. Verify admin custom claim â€” GIP is admin-only.
    4. Load GIP modules lazily (after auth is confirmed).
    5. Initialise map and wire all subscriptions.
-══════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 await import('./firebase.js');
 const db   = getFirestore(window.firebaseApp);
 const auth = getAuth(window.firebaseApp);
 
-/* ── Auth gate ── */
+/* â”€â”€ Auth gate â”€â”€ */
 function _showAuthError(msg) {
   document.getElementById('gipShell').innerHTML = `
-    <div style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#080808;">
-      <div style="font-size:40px;">🔒</div>
+    <div style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#050505;">
+      <div style="font-size:40px;">ðŸ”’</div>
       <div style="font-size:15px;font-weight:800;color:white;">${msg}</div>
       <a href="auth.html" style="padding:10px 24px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#71ff00;font-weight:700;text-decoration:none;font-size:13px;">Sign In</a>
     </div>`;
@@ -504,19 +504,19 @@ async function _isAdmin(user) {
   } catch { return false; }
 }
 
-/* Wait for Firebase Auth to resolve — Promise resolves with the user or null */
+/* Wait for Firebase Auth to resolve â€” Promise resolves with the user or null */
 const currentUser = await new Promise(resolve => {
   const unsub = onAuthStateChanged(auth, user => { unsub(); resolve(user); });
 });
 
-if (!currentUser) { _showAuthError('GIP Command — Sign in required'); }
-else if (!(await _isAdmin(currentUser))) { _showAuthError('GIP Command — Admin access required'); }
+if (!currentUser) { _showAuthError('GIP Command â€” Sign in required'); }
+else if (!(await _isAdmin(currentUser))) { _showAuthError('GIP Command â€” Admin access required'); }
 else { await _bootGIP(db, currentUser); }
 
-/* ── GIP boot (only reached when admin is confirmed) ── */
+/* â”€â”€ GIP boot (only reached when admin is confirmed) â”€â”€ */
 async function _bootGIP(db, user) {
 
-/* ── Import GIP modules (lazy — only after auth confirmed) ── */
+/* â”€â”€ Import GIP modules (lazy â€” only after auth confirmed) â”€â”€ */
 const [
   { default: GIPEngine },
   { default: DispatchEngine },
@@ -529,7 +529,7 @@ const [
   import('./sokoni-ai-policy.js'),
 ]);
 
-/* ── State ── */
+/* â”€â”€ State â”€â”€ */
 const gip        = new GIPEngine();
 const dispatch   = new DispatchEngine(gip);
 const analytics  = new GIPAnalytics({ region: 'nairobi' });
@@ -538,7 +538,7 @@ let   heatVisible   = false;
 let   rightTab      = 'jobs';
 let   unresolvedAlerts = 0;
 
-/* ── Init map ── */
+/* â”€â”€ Init map â”€â”€ */
 await gip.init({
   containerId: 'gipMap',
   region:      'nairobi',
@@ -553,7 +553,7 @@ window._dispatch = dispatch;
 window._analytics = analytics;
 window._gipUser   = user;
 
-/* ── Real-time asset updates → sidebar list ── */
+/* â”€â”€ Real-time asset updates â†’ sidebar list â”€â”€ */
 gip.on('gip:tick', () => _updateStats());
 gip.on('asset:updated', asset => _updateAssetCard(asset));
 gip.on('asset:removed', ({ assetId }) => {
@@ -573,13 +573,13 @@ gip.on('gip:alert', () => {
   if (rightTab === 'alerts') _renderAlerts();
 });
 
-/* ── Active jobs subscription ── */
+/* â”€â”€ Active jobs subscription â”€â”€ */
 const _unsubJobs = dispatch.watchActiveJobs('nairobi', jobs => {
   document.getElementById('statJobs').textContent = jobs.length;
   if (rightTab === 'jobs') _renderJobs(jobs);
 });
 
-/* ── Unresolved alerts subscription ── */
+/* â”€â”€ Unresolved alerts subscription â”€â”€ */
 const _unsubAlerts = onSnapshot(
   query(collection(db, 'gipAlerts'), where('resolved','==',false), orderBy('createdAt','desc'), limit(50)),
   snap => {
@@ -590,9 +590,9 @@ const _unsubAlerts = onSnapshot(
   err => console.warn('[GIP] Alerts listener:', err.code)
 );
 
-/* ──────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    RENDER HELPERS
-────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function _updateStats() {
   const s = gip.getStats();
@@ -609,20 +609,20 @@ function _updateAlertBadge() {
 }
 
 const STATUS_COLOR = { available:'#71ff00', busy:'#00aaff', en_route:'#ffc107', offline:'rgba(255,255,255,0.2)', maintenance:'#ff9800', emergency:'#ff4444' };
-const MODULE_EMOJI = { delivery:'📦', food:'🍔', rides:'🚗', mechanics:'🔧', healthcare:'🏥', emergency:'🚨', unknown:'📍' };
+const MODULE_EMOJI = { delivery:'ðŸ“¦', food:'ðŸ”', rides:'ðŸš—', mechanics:'ðŸ”§', healthcare:'ðŸ¥', emergency:'ðŸš¨', unknown:'ðŸ“' };
 
 function _updateAssetCard(asset) {
   const list = document.getElementById('gipAssetList');
   const existing = document.getElementById('assetCard-' + asset.assetId);
   const color = STATUS_COLOR[asset.status] ?? 'rgba(255,255,255,0.2)';
-  const emoji = MODULE_EMOJI[asset.module] ?? '📍';
+  const emoji = MODULE_EMOJI[asset.module] ?? 'ðŸ“';
   const html = `
     <div class="gip-asset-item gip-fade-in" id="assetCard-${asset.assetId}"
          onclick="window._gip.focusAsset('${asset.assetId}')">
       <div class="gip-asset-avatar" style="--status-color:${color};">${emoji}</div>
       <div style="flex:1;min-width:0;">
         <div class="gip-asset-name">${asset.name ?? asset.assetId}</div>
-        <div class="gip-asset-meta">${asset.module ?? '—'} · ${(asset.status ?? '').replace(/_/g,' ')}</div>
+        <div class="gip-asset-meta">${asset.module ?? 'â€”'} Â· ${(asset.status ?? '').replace(/_/g,' ')}</div>
       </div>
       <div class="gip-dot ${asset.status ?? 'offline'}"></div>
       ${asset.speed ? `<div class="gip-asset-speed">${asset.speed}km/h</div>` : ''}
@@ -643,25 +643,25 @@ function _renderJobs(jobs) {
         <span class="gip-job-id">${j.id}</span>
         <span class="gip-job-status ${j.status}">${j.status.replace(/_/g,' ')}</span>
       </div>
-      <div class="gip-job-row"><span class="gip-job-icon">📦</span><span class="gip-job-text">${j.module ?? '—'}</span></div>
-      <div class="gip-job-row"><span class="gip-job-icon">📍</span><span class="gip-job-text">${j.pickupAddress || '—'}</span></div>
-      <div class="gip-job-row"><span class="gip-job-icon">🏁</span><span class="gip-job-text">${j.dropoffAddress || '—'}</span></div>
-      ${j.estimatedETAMin ? `<div class="gip-job-row"><span class="gip-job-icon">⏱</span><span class="gip-job-text">ETA ~${j.estimatedETAMin} min · ${j.distanceKm ?? '—'} km ${aiPolicy ? aiPolicy.badge(aiPolicy.calculated(j.estimatedETAMin, {formula:'OSRM distance ÷ vehicle speed × traffic factor'})) : ''}</span></div>` : ''}
-      ${j.assignedAssetId ? `<div class="gip-job-row"><span class="gip-job-icon">🚗</span><span class="gip-job-text">${j.assignedAssetId}</span></div>` : ''}
+      <div class="gip-job-row"><span class="gip-job-icon">ðŸ“¦</span><span class="gip-job-text">${j.module ?? 'â€”'}</span></div>
+      <div class="gip-job-row"><span class="gip-job-icon">ðŸ“</span><span class="gip-job-text">${j.pickupAddress || 'â€”'}</span></div>
+      <div class="gip-job-row"><span class="gip-job-icon">ðŸ</span><span class="gip-job-text">${j.dropoffAddress || 'â€”'}</span></div>
+      ${j.estimatedETAMin ? `<div class="gip-job-row"><span class="gip-job-icon">â±</span><span class="gip-job-text">ETA ~${j.estimatedETAMin} min Â· ${j.distanceKm ?? 'â€”'} km ${aiPolicy ? aiPolicy.badge(aiPolicy.calculated(j.estimatedETAMin, {formula:'OSRM distance Ã· vehicle speed Ã— traffic factor'})) : ''}</span></div>` : ''}
+      ${j.assignedAssetId ? `<div class="gip-job-row"><span class="gip-job-icon">ðŸš—</span><span class="gip-job-text">${j.assignedAssetId}</span></div>` : ''}
     </div>`).join('');
 }
 
 function _renderAlerts(alertsArr = null) {
   const body = document.getElementById('gipRightBody');
-  if (!alertsArr) { body.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.2);font-size:12px;text-align:center;">Loading…</div>'; return; }
-  if (!alertsArr.length) { body.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.2);font-size:12px;text-align:center;">No active alerts. ✅</div>'; return; }
-  const ALERT_ICON = { speeding:'⚡', geofence_breach:'🚧', offline:'📴', low_battery:'🔋', breakdown:'🔧', sos:'🆘' };
+  if (!alertsArr) { body.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.2);font-size:12px;text-align:center;">Loadingâ€¦</div>'; return; }
+  if (!alertsArr.length) { body.innerHTML = '<div style="padding:20px;color:rgba(255,255,255,0.2);font-size:12px;text-align:center;">No active alerts. âœ…</div>'; return; }
+  const ALERT_ICON = { speeding:'âš¡', geofence_breach:'ðŸš§', offline:'ðŸ“´', low_battery:'ðŸ”‹', breakdown:'ðŸ”§', sos:'ðŸ†˜' };
   body.innerHTML = alertsArr.map(a => `
     <div class="gip-alert-card ${a.severity ?? ''}">
-      <div class="gip-alert-icon">${ALERT_ICON[a.type] ?? '⚠️'}</div>
+      <div class="gip-alert-icon">${ALERT_ICON[a.type] ?? 'âš ï¸'}</div>
       <div style="flex:1;min-width:0;">
         <div class="gip-alert-msg">${a.message ?? a.type}</div>
-        <div class="gip-alert-time">${a.assetId} · ${a.severity ?? '—'}</div>
+        <div class="gip-alert-time">${a.assetId} Â· ${a.severity ?? 'â€”'}</div>
       </div>
       <button class="gip-alert-resolve" onclick="gipResolveAlert('${a.id}')">Resolve</button>
     </div>`).join('');
@@ -673,8 +673,8 @@ function _renderDispatch() {
       <p style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;line-height:1.5;">
         Manually trigger a dispatch or cancel a pending job.
       </p>
-      <button class="gip-dispatch-btn" onclick="gipManualDispatch()">➕ New Test Dispatch</button>
-      <button class="gip-dispatch-btn danger" onclick="gipCancelPending()">✕ Cancel Oldest Pending</button>
+      <button class="gip-dispatch-btn" onclick="gipManualDispatch()">âž• New Test Dispatch</button>
+      <button class="gip-dispatch-btn danger" onclick="gipCancelPending()">âœ• Cancel Oldest Pending</button>
       <div style="margin-top:12px;font-size:10px;color:rgba(255,255,255,0.2);">
         Smart dispatch runs automatically. Manual controls are for overrides and testing only.
       </div>
@@ -682,11 +682,11 @@ function _renderDispatch() {
 }
 
 async function _renderAnalytics() {
-  document.getElementById('gipRightBody').innerHTML = '<div style="padding:16px;font-size:11px;color:rgba(255,255,255,0.3);">Computing…</div>';
+  document.getElementById('gipRightBody').innerHTML = '<div style="padding:16px;font-size:11px;color:rgba(255,255,255,0.3);">Computingâ€¦</div>';
   const summary = await analytics.getFleetSummary('nairobi').catch(() => null);
   if (!summary) { document.getElementById('gipRightBody').innerHTML = '<div style="padding:16px;font-size:11px;color:rgba(255,255,255,0.3);">Could not load analytics.</div>'; return; }
 
-  /* AI Policy badges — fleet counts are real-time VERIFIED reads from Firestore */
+  /* AI Policy badges â€” fleet counts are real-time VERIFIED reads from Firestore */
   const verifiedBdg   = aiPolicy ? aiPolicy.badge(aiPolicy.verified(summary.total, { source: 'gipAssets real-time Firestore query' })) : '';
   const calculatedBdg = aiPolicy ? aiPolicy.badge(aiPolicy.calculated(summary.available, { formula: 'count of assets where status = available' })) : '';
 
@@ -701,7 +701,7 @@ async function _renderAnalytics() {
       <div style="font-size:9px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">By Module ${calculatedBdg}</div>
       ${Object.entries(summary.byModule ?? {}).map(([m,c]) =>
         `<div style="display:flex;justify-content:space-between;font-size:11px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
-          <span>${MODULE_EMOJI[m]??'📍'} ${m}</span>
+          <span>${MODULE_EMOJI[m]??'ðŸ“'} ${m}</span>
           <span style="font-weight:700;color:#71ff00;">${c}</span>
         </div>`
       ).join('')}
@@ -709,13 +709,13 @@ async function _renderAnalytics() {
     <div class="sk-ai-disclosure" style="margin:0 12px 12px;">
       <strong>Data source</strong><br>
       Counts are live Firestore reads (Verified). ETA values are road-distance calculations (Calculated).
-      AI-generated insights are labelled with confidence levels — they are predictions, not measurements.
+      AI-generated insights are labelled with confidence levels â€” they are predictions, not measurements.
     </div>`;
 }
 
-/* ──────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    WINDOW-LEVEL HANDLERS (called by onclick attributes)
-────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 window.gipSetLayer = (layer, btn) => {
   gip.setLayer(layer);
@@ -744,16 +744,16 @@ window.gipSetView = (view, btn) => {
       <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);margin-bottom:8px;">HEAT MODULE</div>
       ${['delivery','food','rides','mechanics','healthcare'].map(m=>
         `<button onclick="gipHeatModule('${m}')" style="display:block;width:100%;text-align:left;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.7);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:6px;">
-          ${MODULE_EMOJI[m]??'📍'} ${m.charAt(0).toUpperCase()+m.slice(1)}
+          ${MODULE_EMOJI[m]??'ðŸ“'} ${m.charAt(0).toUpperCase()+m.slice(1)}
         </button>`
       ).join('')}
       <button onclick="gip.hideHeatmap();document.getElementById('btnHeatmap').classList.remove('active');" style="display:block;width:100%;text-align:left;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,68,68,0.2);background:rgba(255,68,68,0.05);color:#ff6b6b;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;">
-        ✕ Clear heatmap
+        âœ• Clear heatmap
       </button>
     </div>`;
   } else if (view === 'search') {
     list.innerHTML = `<div style="padding:12px;">
-      <input id="gipSearch" placeholder="Search asset ID, name…"
+      <input id="gipSearch" placeholder="Search asset ID, nameâ€¦"
         oninput="gipSearch(this.value)"
         style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:white;font-size:12px;font-family:inherit;outline:none;">
       <div id="gipSearchResults" style="margin-top:8px;"></div>
@@ -869,8 +869,8 @@ window.gipSearch = (term) => {
   if (!matches.length) { results.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,0.25);padding:8px 0;">No results.</div>'; return; }
   results.innerHTML = matches.map(a => `
     <div onclick="window._gip.focusAsset('${a.assetId}')" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''">
-      <span style="font-size:16px;">${MODULE_EMOJI[a.module]??'📍'}</span>
-      <div><div style="font-size:11px;font-weight:700;">${a.name ?? a.assetId}</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">${a.module ?? '—'} · ${a.status ?? '—'}</div></div>
+      <span style="font-size:16px;">${MODULE_EMOJI[a.module]??'ðŸ“'}</span>
+      <div><div style="font-size:11px;font-weight:700;">${a.name ?? a.assetId}</div><div style="font-size:10px;color:rgba(255,255,255,0.35);">${a.module ?? 'â€”'} Â· ${a.status ?? 'â€”'}</div></div>
     </div>`).join('');
 };
 
@@ -889,17 +889,17 @@ window.gipCancelPending = async () => {
   }
 };
 
-/* ── Cleanup on unload ── */
+/* â”€â”€ Cleanup on unload â”€â”€ */
 window.addEventListener('beforeunload', () => {
   _unsubJobs?.();
   _unsubAlerts?.();
   gip.destroy();
   dispatch.destroy?.();
-  /* analytics.destroy() flushes pending heat data — fire async, don't block unload */
+  /* analytics.destroy() flushes pending heat data â€” fire async, don't block unload */
   analytics.destroy?.().catch(() => {});
 });
 
-/* ── Connectivity banner ── */
+/* â”€â”€ Connectivity banner â”€â”€ */
 window.addEventListener('offline', () => document.getElementById('gipOfflineBanner').classList.add('show'));
 window.addEventListener('online',  () => document.getElementById('gipOfflineBanner').classList.remove('show'));
 if (!navigator.onLine) document.getElementById('gipOfflineBanner').classList.add('show');

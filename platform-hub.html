@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hub Operator Portal — SOKONI</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="sokoni-tokens.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
+<script src="/__/firebase/init.js"></script>
+<style>
+/* ── Reset ─────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+
+/* ── Design Tokens ─────────────────────────────────────────── */
+:root{
+  --bg:#050505;
+  --sur:#0d0d0d;
+  --sur2:#111;
+  --sur3:#161616;
+  --g:#71ff00;
+  --ga:rgba(113,255,0,.1);
+  --ga2:rgba(113,255,0,.05);
+  --bor:#1a1a1a;
+  --bor2:#222;
+  --txt:#e8e8e8;
+  --sub:#555;
+  --muted:#333;
+  --success:#4caf50;
+  --warn:#ff9500;
+  --danger:#ff4444;
+  --info:#3b82f6;
+  --sidebar-w:232px;
+  --header-h:56px;
+  --radius:10px;
+}
+
+/* ── Body shell ─────────────────────────────────────────────── */
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-size:13px;
+  line-height:1.5;
+  display:flex;
+  min-height:100vh;
+}
+
+/* ── Sidebar ────────────────────────────────────────────────── */
+.sidebar{
+  width:var(--sidebar-w);
+  height:100vh;
+  background:var(--sur);
+  border-right:1px solid var(--bor);
+  display:flex;
+  flex-direction:column;
+  position:fixed;
+  left:0;top:0;bottom:0;
+  z-index:200;
+  overflow-y:auto;
+  transition:transform .24s cubic-bezier(.4,0,.2,1);
+}
+
+.sidebar-logo{
+  padding:17px 15px 14px;
+  border-bottom:1px solid var(--bor);
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-shrink:0;
+}
+
+.logo-icon{
+  width:28px;height:28px;
+  background:var(--g);
+  border-radius:7px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:900;color:#000;
+  flex-shrink:0;
+  letter-spacing:-.02em;
+}
+
+.logo-text{font-size:12px;font-weight:700;letter-spacing:.04em;line-height:1.25;color:var(--txt)}
+.logo-sub{font-size:10px;color:var(--sub);margin-top:1px}
+
+.hub-nav{flex:1;padding:6px 0;overflow-y:auto}
+
+.hub-item{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  padding:8px 14px;
+  width:100%;
+  border:none;
+  background:none;
+  color:var(--sub);
+  font-size:13px;
+  font-family:inherit;
+  cursor:pointer;
+  text-align:left;
+  transition:background .12s,color .12s;
+  position:relative;
+}
+
+.hub-item:hover{background:rgba(255,255,255,.04);color:var(--txt)}
+
+.hub-item.active{
+  background:var(--ga);
+  color:var(--g);
+  font-weight:600;
+}
+
+.hub-item.active::before{
+  content:'';
+  position:absolute;
+  left:0;top:0;bottom:0;
+  width:3px;
+  background:var(--g);
+}
+
+.hub-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;line-height:1}
+.hub-label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.hub-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--muted);flex-shrink:0;
+  transition:background .2s;
+}
+.hub-dot.live{background:var(--success)}
+.hub-dot.maintenance{background:var(--warn)}
+.hub-dot.coming_soon{background:var(--info)}
+.hub-dot.disabled{background:var(--danger)}
+
+.sidebar-footer{
+  padding:12px 14px;
+  border-top:1px solid var(--bor);
+  flex-shrink:0;
+}
+
+.admin-email{
+  font-size:11px;color:var(--sub);
+  margin-bottom:8px;
+  text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+.signout-btn{
+  width:100%;
+  padding:8px;
+  border-radius:8px;
+  border:1px solid var(--bor);
+  background:none;
+  color:var(--sub);
+  font-size:12px;
+  font-family:inherit;
+  cursor:pointer;
+  transition:background .15s,color .15s,border-color .15s;
+}
+.signout-btn:hover{background:rgba(255,68,68,.07);color:#ff6b6b;border-color:rgba(255,68,68,.25)}
+
+/* ── Backdrop (mobile) ──────────────────────────────────────── */
+.backdrop{
+  display:none;
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.75);
+  z-index:190;
+}
+.backdrop.open{display:block}
+
+/* ── Main ───────────────────────────────────────────────────── */
+.main{
+  margin-left:var(--sidebar-w);
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  min-height:100vh;
+  min-width:0;
+}
+
+/* ── Desktop header ─────────────────────────────────────────── */
+.main-header{
+  height:var(--header-h);
+  background:var(--sur);
+  border-bottom:1px solid var(--bor);
+  display:flex;
+  align-items:center;
+  padding:0 22px;
+  gap:12px;
+  position:sticky;top:0;z-index:100;
+  flex-shrink:0;
+}
+
+.header-hub-icon{font-size:20px;line-height:1}
+.header-hub-name{font-size:16px;font-weight:700;flex:1}
+.header-hub-id{
+  font-size:10px;color:var(--sub);
+  background:var(--sur2);border:1px solid var(--bor);
+  border-radius:4px;padding:2px 8px;
+  font-family:monospace;letter-spacing:.02em;
+}
+
+.refresh-btn{
+  width:32px;height:32px;border-radius:50%;
+  background:none;border:1px solid var(--bor);
+  color:var(--sub);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;line-height:1;
+  transition:background .15s,color .15s,border-color .15s;
+  flex-shrink:0;
+}
+.refresh-btn:hover{background:var(--ga2);color:var(--g);border-color:rgba(113,255,0,.2)}
+
+/* ── Mobile header ──────────────────────────────────────────── */
+.mobile-header{
+  display:none;
+  height:52px;
+  background:var(--sur);
+  border-bottom:1px solid var(--bor);
+  align-items:center;
+  padding:0 16px;
+  gap:10px;
+  position:sticky;top:0;z-index:100;
+  flex-shrink:0;
+}
+.mobile-menu-btn{
+  background:none;border:none;
+  color:var(--txt);font-size:18px;cursor:pointer;padding:4px;
+  line-height:1;flex-shrink:0;
+}
+.mobile-title{font-size:14px;font-weight:700;flex:1}
+
+/* ── Content ────────────────────────────────────────────────── */
+.content{
+  flex:1;
+  padding:22px;
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+  overflow-y:auto;
+}
+
+/* ── Cards ──────────────────────────────────────────────────── */
+.card{
+  background:var(--sur);
+  border:1px solid var(--bor);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+
+.card-header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:13px 18px;
+  border-bottom:1px solid var(--bor);
+}
+
+.card-title{
+  font-size:13px;font-weight:600;
+  flex:1;
+}
+
+.card-body{padding:18px}
+
+/* ── Status badges ──────────────────────────────────────────── */
+.status-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 10px;border-radius:20px;
+  font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  white-space:nowrap;
+}
+.status-badge::before{
+  content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0;
+}
+.status-live{background:rgba(76,175,80,.1);color:#81c784;border:1px solid rgba(76,175,80,.28)}
+.status-live::before{background:#81c784}
+.status-maintenance{background:rgba(255,149,0,.1);color:#ffb347;border:1px solid rgba(255,149,0,.28)}
+.status-maintenance::before{background:#ffb347}
+.status-coming_soon{background:rgba(59,130,246,.1);color:#93c5fd;border:1px solid rgba(59,130,246,.28)}
+.status-coming_soon::before{background:#93c5fd}
+.status-disabled{background:rgba(255,68,68,.1);color:#ff9a9a;border:1px solid rgba(255,68,68,.25)}
+.status-disabled::before{background:#ff9a9a}
+.status-unknown{background:rgba(255,255,255,.05);color:var(--sub);border:1px solid var(--bor)}
+.status-unknown::before{background:var(--sub)}
+
+/* ── Overview section ───────────────────────────────────────── */
+.overview-hero{
+  display:flex;align-items:center;gap:14px;
+  margin-bottom:20px;flex-wrap:wrap;
+}
+.overview-big-icon{font-size:40px;line-height:1;flex-shrink:0}
+.overview-meta{flex:1}
+.overview-hub-name{font-size:20px;font-weight:700;line-height:1.2}
+.overview-hub-id{font-size:11px;color:var(--sub);font-family:monospace;margin-top:3px}
+
+/* ── Stats grid ─────────────────────────────────────────────── */
+.stats-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  margin-bottom:18px;
+}
+.stat-card{
+  background:var(--sur2);
+  border:1px solid var(--bor);
+  border-radius:8px;
+  padding:14px 16px;
+}
+.stat-label{
+  font-size:10px;color:var(--sub);
+  text-transform:uppercase;letter-spacing:.06em;
+  margin-bottom:6px;
+}
+.stat-value{
+  font-size:24px;font-weight:700;
+  color:var(--g);line-height:1;
+  font-variant-numeric:tabular-nums;
+}
+.stat-unit{font-size:10px;color:var(--sub);margin-top:3px}
+
+/* ── Action buttons ─────────────────────────────────────────── */
+.action-row{display:flex;gap:10px;flex-wrap:wrap}
+
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:9px 18px;border-radius:8px;
+  font-size:13px;font-weight:600;font-family:inherit;
+  cursor:pointer;border:1px solid;
+  transition:background .15s,border-color .15s;
+}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+.btn-activate{
+  background:rgba(113,255,0,.07);
+  border-color:rgba(113,255,0,.25);
+  color:var(--g);
+}
+.btn-activate:hover:not(:disabled){
+  background:rgba(113,255,0,.13);
+  border-color:rgba(113,255,0,.45);
+}
+
+.btn-pause{
+  background:rgba(255,149,0,.07);
+  border-color:rgba(255,149,0,.25);
+  color:#ffb347;
+}
+.btn-pause:hover:not(:disabled){
+  background:rgba(255,149,0,.13);
+  border-color:rgba(255,149,0,.45);
+}
+
+.btn-save{
+  background:rgba(113,255,0,.08);
+  border-color:rgba(113,255,0,.3);
+  color:var(--g);
+}
+.btn-save:hover:not(:disabled){
+  background:rgba(113,255,0,.15);
+}
+
+/* ── Feature flags ──────────────────────────────────────────── */
+.flag-list{display:flex;flex-direction:column}
+
+.flag-row{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 18px;
+  border-bottom:1px solid var(--bor);
+  transition:background .12s;
+}
+.flag-row:last-child{border-bottom:none}
+.flag-row:hover{background:rgba(255,255,255,.015)}
+
+.flag-info{flex:1}
+.flag-name{font-size:13px;font-weight:500}
+.flag-desc{font-size:11px;color:var(--sub);margin-top:2px}
+
+/* Toggle switch */
+.toggle-sw{
+  position:relative;display:inline-block;
+  width:40px;height:22px;flex-shrink:0;
+}
+.toggle-sw input{
+  opacity:0;width:0;height:0;position:absolute;
+}
+.toggle-sw .sl{
+  position:absolute;inset:0;
+  background:rgba(255,255,255,.07);
+  border:1px solid var(--bor2);
+  border-radius:22px;cursor:pointer;
+  transition:background .18s,border-color .18s;
+}
+.toggle-sw .sl::before{
+  content:'';position:absolute;
+  width:15px;height:15px;left:3px;top:3px;
+  background:#555;border-radius:50%;
+  transition:transform .18s,background .18s;
+}
+.toggle-sw input:checked+.sl{
+  background:rgba(113,255,0,.14);
+  border-color:rgba(113,255,0,.32);
+}
+.toggle-sw input:checked+.sl::before{
+  transform:translateX(18px);
+  background:var(--g);
+}
+.toggle-sw input:focus-visible+.sl{
+  outline:2px solid var(--g);
+  outline-offset:2px;
+}
+
+.flags-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 18px;
+  border-top:1px solid var(--bor);
+  gap:12px;flex-wrap:wrap;
+}
+.flags-changed-note{font-size:11px;color:var(--warn)}
+
+/* ── Cross-hub health grid ──────────────────────────────────── */
+.health-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(155px,1fr));
+  gap:10px;
+}
+
+.hmc{
+  background:var(--sur2);
+  border:1px solid var(--bor);
+  border-radius:8px;
+  padding:12px;
+  display:flex;flex-direction:column;gap:3px;
+  transition:border-color .15s;
+}
+.hmc:hover{border-color:#2a2a2a}
+.hmc.healthy{border-color:rgba(76,175,80,.18)}
+.hmc.degraded{border-color:rgba(255,149,0,.2)}
+.hmc.critical{border-color:rgba(255,68,68,.22)}
+
+.hmc-top{
+  display:flex;align-items:center;gap:6px;
+  margin-bottom:6px;
+}
+.hmc-emoji{font-size:13px;line-height:1}
+.hmc-name{
+  font-size:11px;font-weight:600;flex:1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.hmc-dot{
+  width:6px;height:6px;border-radius:50%;flex-shrink:0;
+}
+.hmc-dot.healthy{background:#81c784;box-shadow:0 0 5px rgba(76,175,80,.45)}
+.hmc-dot.degraded{background:#ffb347;box-shadow:0 0 5px rgba(255,149,0,.45)}
+.hmc-dot.critical{background:#ff9a9a;box-shadow:0 0 5px rgba(255,68,68,.4)}
+.hmc-dot.unknown{background:#333}
+
+.hmc-orders{
+  font-size:20px;font-weight:700;
+  color:var(--txt);line-height:1;
+  font-variant-numeric:tabular-nums;
+}
+.hmc-orders-label{font-size:10px;color:var(--sub);letter-spacing:.04em;margin-bottom:2px}
+.hmc-revenue{font-size:11px;color:var(--g);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ── Spinner ────────────────────────────────────────────────── */
+.spinner{
+  display:inline-block;
+  width:16px;height:16px;
+  border:2px solid rgba(113,255,0,.15);
+  border-top-color:var(--g);
+  border-radius:50%;
+  animation:spin .65s linear infinite;
+  flex-shrink:0;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.panel-loading{
+  display:flex;align-items:center;justify-content:center;
+  gap:10px;padding:40px 24px;
+  color:var(--sub);font-size:13px;
+}
+
+/* ── Toast ──────────────────────────────────────────────────── */
+.toast-tray{
+  position:fixed;bottom:24px;right:24px;
+  z-index:9999;
+  display:flex;flex-direction:column;gap:8px;
+  pointer-events:none;
+}
+.toast{
+  padding:11px 16px;border-radius:8px;
+  font-size:13px;font-weight:500;
+  max-width:300px;pointer-events:auto;
+  animation:toastIn .18s ease;
+}
+@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.toast.success{background:#0c180c;border:1px solid rgba(76,175,80,.35);color:#81c784}
+.toast.error{background:#1a0c0c;border:1px solid rgba(255,68,68,.35);color:#ff9a9a}
+.toast.info{background:var(--sur2);border:1px solid rgba(113,255,0,.25);color:var(--g)}
+
+/* ── Auth overlay ───────────────────────────────────────────── */
+.auth-overlay{
+  position:fixed;inset:0;
+  background:var(--bg);
+  z-index:10000;
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:14px;
+}
+.auth-overlay .spinner{width:28px;height:28px;border-width:3px}
+.auth-overlay p{font-size:12px;color:var(--sub)}
+
+/* ── Reduced motion ─────────────────────────────────────────── */
+@media(prefers-reduced-motion:reduce){
+  .spinner{animation:none}
+  .toast{animation:none}
+  .hub-item,.btn,.flag-row,.hmc,.refresh-btn,.signout-btn{transition:none}
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media(max-width:768px){
+  .sidebar{
+    transform:translateX(-100%);
+    width:260px;
+    box-shadow:none;
+  }
+  .sidebar.open{
+    transform:translateX(0);
+    box-shadow:4px 0 24px rgba(0,0,0,.6);
+  }
+  .main{margin-left:0}
+  .main-header{display:none}
+  .mobile-header{display:flex}
+  .content{padding:14px}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .health-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+}
+
+@media(max-width:420px){
+  .stats-grid{grid-template-columns:1fr}
+  .health-grid{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- Auth loading overlay -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="spinner"></div>
+  <p>Verifying access…</p>
+</div>
+
+<!-- Toast tray -->
+<div class="toast-tray" id="toastTray"></div>
+
+<!-- Mobile backdrop -->
+<div class="backdrop" id="backdrop"></div>
+
+<!-- ═══════════════════════════════════════════════
+     SIDEBAR
+════════════════════════════════════════════════ -->
+<nav class="sidebar" id="sidebar" aria-label="Hub navigation">
+  <div class="sidebar-logo">
+    <div class="logo-icon">S</div>
+    <div>
+      <div class="logo-text">SOKONI HUBS</div>
+      <div class="logo-sub">Hub Operator Portal</div>
+    </div>
+  </div>
+
+  <div class="hub-nav" id="hubNav" role="list">
+    <!-- Rendered by JS -->
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="admin-email" id="adminEmail">—</div>
+    <button class="signout-btn" id="signoutBtn">Sign Out</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════
+     MAIN AREA
+════════════════════════════════════════════════ -->
+<div class="main">
+
+  <!-- Mobile header -->
+  <header class="mobile-header">
+    <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open sidebar">☰</button>
+    <span class="mobile-title" id="mobileTitleText">SOKONI HUBS</span>
+    <button class="refresh-btn" id="mobileRefreshBtn" aria-label="Refresh">↻</button>
+  </header>
+
+  <!-- Desktop header -->
+  <header class="main-header" id="mainHeader">
+    <span class="header-hub-icon" id="hdrIcon">🛍️</span>
+    <span class="header-hub-name" id="hdrName">Marketplace</span>
+    <span class="header-hub-id" id="hdrId">marketplace</span>
+    <button class="refresh-btn" id="desktopRefreshBtn" aria-label="Refresh hub">↻</button>
+  </header>
+
+  <!-- Scrollable content -->
+  <div class="content">
+
+    <!-- ── 1. Hub Overview ─────────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Hub Overview</span>
+        <span id="overviewSpinner" class="spinner" style="display:none"></span>
+        <span id="statusBadge" class="status-badge status-unknown">—</span>
+      </div>
+      <div class="card-body">
+        <div class="overview-hero">
+          <div class="overview-big-icon" id="ovIcon">🛍️</div>
+          <div class="overview-meta">
+            <div class="overview-hub-name" id="ovName">Marketplace</div>
+            <div class="overview-hub-id" id="ovId">marketplace</div>
+          </div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Lifetime Revenue</div>
+            <div class="stat-value" id="statRevenue">—</div>
+            <div class="stat-unit">KES</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Lifetime Orders</div>
+            <div class="stat-value" id="statOrders">—</div>
+            <div class="stat-unit">total</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Cloud Functions</div>
+            <div class="stat-value" id="statCFs">—</div>
+            <div class="stat-unit">deployed</div>
+          </div>
+        </div>
+        <div class="action-row">
+          <button class="btn btn-activate" id="btnActivate">✓ Activate</button>
+          <button class="btn btn-pause" id="btnPause">⏸ Pause</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 2. Per-Hub Feature Flags ────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Feature Flags</span>
+        <span id="flagsSpinner" class="spinner" style="display:none"></span>
+      </div>
+      <div id="flagList">
+        <div class="panel-loading">
+          <span class="spinner"></span>
+          <span>Loading flags…</span>
+        </div>
+      </div>
+      <div class="flags-footer">
+        <span id="flagsNote" class="flags-changed-note"></span>
+        <button class="btn btn-save" id="btnSaveFlags">Save Flags</button>
+      </div>
+    </div>
+
+    <!-- ── 3. Cross-Hub Health ─────────────────────── -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Cross-Hub Health</span>
+        <span style="font-size:11px;color:var(--sub);margin-right:auto">All hubs · 24 h window</span>
+        <span id="healthSpinner" class="spinner" style="display:none"></span>
+      </div>
+      <div class="card-body">
+        <div class="health-grid" id="healthGrid">
+          <div class="panel-loading" style="grid-column:1/-1">
+            <span class="spinner"></span>
+            <span>Loading health data…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+'use strict';
+
+/* ────────────────────────────────────────────────────────────
+   HUB + FLAG DEFINITIONS
+──────────────────────────────────────────────────────────── */
+const HUBS = [
+  { id:'marketplace',        icon:'🛍️', name:'Marketplace' },
+  { id:'food',               icon:'🍔', name:'Food' },
+  { id:'events',             icon:'🎤', name:'Events' },
+  { id:'property',           icon:'🏠', name:'Property' },
+  { id:'vehicles',           icon:'🚗', name:'Vehicles' },
+  { id:'healthcare',         icon:'🏥', name:'Healthcare' },
+  { id:'legal',              icon:'⚖️', name:'Legal' },
+  { id:'jobs',               icon:'💼', name:'Jobs' },
+  { id:'hotels',             icon:'🏨', name:'Hotels' },
+  { id:'pharmacy',           icon:'💊', name:'Pharmacy' },
+  { id:'drivers',            icon:'🚗', name:'Drivers' },
+  { id:'logistics',          icon:'📦', name:'Logistics' },
+  { id:'freelancer',         icon:'💻', name:'Freelancer' },
+  { id:'education',          icon:'🎓', name:'Education' },
+  { id:'entertainment',      icon:'🎬', name:'Entertainment' },
+  { id:'digital_products',   icon:'📱', name:'Digital Products' },
+  { id:'smartpos',           icon:'🖨️', name:'SmartPOS' },
+  { id:'insurance',          icon:'🛡️', name:'Insurance' },
+  { id:'financial_services', icon:'🏦', name:'Financial Services' },
+];
+
+const FLAGS = [
+  { key:'enabled',                label:'Hub Enabled',          desc:'Master switch — hub is visible and accessible' },
+  { key:'chat_enabled',           label:'In-Hub Chat',           desc:'Buyer–seller messaging within this hub' },
+  { key:'search_indexed',         label:'Search Indexed',        desc:'Listings appear in platform-wide search results' },
+  { key:'ai_assistant',           label:'KASS AI Assistant',     desc:'AI concierge active and responding in this hub' },
+  { key:'notifications_enabled',  label:'Notifications',         desc:'Push and in-app notifications for hub events' },
+  { key:'reviews_enabled',        label:'Reviews & Ratings',     desc:'Buyers can submit reviews on hub listings' },
+  { key:'analytics_enabled',      label:'Analytics',             desc:'Hub-level analytics collected and surfaced' },
+  { key:'escrow_enabled',         label:'Escrow Payments',       desc:'Payments held in escrow until order confirmed' },
+  { key:'etims_enabled',          label:'eTIMS / KRA',           desc:'KRA eTIMS receipt generation on each order' },
+];
+
+/* ────────────────────────────────────────────────────────────
+   STATE
+──────────────────────────────────────────────────────────── */
+let activeHubId   = null;
+let currentFlags  = {};
+let savedFlags    = {};
+let inFlight      = false;
+let hubStatuses   = {};     // { hubId: 'live'|'maintenance'|'coming_soon'|'disabled' }
+
+/* ────────────────────────────────────────────────────────────
+   FIREBASE CALLABLE HELPER
+──────────────────────────────────────────────────────────── */
+let _fnInstance = null;
+function fn() {
+  if (!_fnInstance) _fnInstance = firebase.functions();
+  return _fnInstance;
+}
+
+async function _call(name, data) {
+  const result = await fn().httpsCallable(name)(data || {});
+  return result.data;
+}
+
+/* ────────────────────────────────────────────────────────────
+   TOAST
+──────────────────────────────────────────────────────────── */
+function toast(msg, type, ms) {
+  type = type || 'info';
+  ms   = ms   || 3500;
+  const tray = document.getElementById('toastTray');
+  const el   = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  tray.appendChild(el);
+  setTimeout(function() {
+    el.style.transition = 'opacity .18s';
+    el.style.opacity = '0';
+    setTimeout(function() { el.remove(); }, 200);
+  }, ms);
+}
+
+/* ────────────────────────────────────────────────────────────
+   FORMAT HELPERS
+──────────────────────────────────────────────────────────── */
+function fmtKES(n) {
+  if (n == null || isNaN(n)) return '—';
+  var v = Number(n);
+  if (v >= 1e9)  return (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6)  return (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e3)  return (v / 1e3).toFixed(0) + 'K';
+  return v.toLocaleString();
+}
+
+function fmtNum(n) {
+  if (n == null || isNaN(n)) return '—';
+  return Number(n).toLocaleString();
+}
+
+/* ────────────────────────────────────────────────────────────
+   SIDEBAR RENDER
+──────────────────────────────────────────────────────────── */
+function renderHubNav() {
+  var nav = document.getElementById('hubNav');
+  nav.innerHTML = HUBS.map(function(h) {
+    var st  = hubStatuses[h.id] || 'unknown';
+    var cls = h.id === activeHubId ? ' active' : '';
+    return '<button class="hub-item' + cls + '" role="listitem"' +
+           ' data-hub="' + h.id + '"' +
+           ' onclick="selectHub(\'' + h.id + '\')">' +
+           '<span class="hub-icon">' + h.icon + '</span>' +
+           '<span class="hub-label">' + h.name + '</span>' +
+           '<span class="hub-dot ' + st + '" title="' + st + '"></span>' +
+           '</button>';
+  }).join('');
+}
+
+function updateNavActive() {
+  document.querySelectorAll('.hub-item').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.hub === activeHubId);
+  });
+}
+
+/* ────────────────────────────────────────────────────────────
+   HUB SELECTION
+──────────────────────────────────────────────────────────── */
+function selectHub(hubId) {
+  if (hubId === activeHubId) { closeMobileSidebar(); return; }
+  activeHubId = hubId;
+
+  var hub = HUBS.find(function(h) { return h.id === hubId; });
+
+  // Update header fields
+  document.getElementById('hdrIcon').textContent  = hub.icon;
+  document.getElementById('hdrName').textContent  = hub.name;
+  document.getElementById('hdrId').textContent    = hubId;
+  document.getElementById('mobileTitleText').textContent = hub.name;
+
+  // Update sidebar
+  updateNavActive();
+
+  // Reset flag state
+  currentFlags = {};
+  savedFlags   = {};
+  document.getElementById('flagsNote').textContent = '';
+
+  // Load hub data
+  loadOverview(hub);
+  loadFlags(hubId);
+
+  closeMobileSidebar();
+}
+
+/* ────────────────────────────────────────────────────────────
+   OVERVIEW PANEL
+──────────────────────────────────────────────────────────── */
+async function loadOverview(hub) {
+  // Immediate UI update
+  document.getElementById('ovIcon').textContent = hub.icon;
+  document.getElementById('ovName').textContent = hub.name;
+  document.getElementById('ovId').textContent   = hub.id;
+  document.getElementById('statRevenue').textContent = '—';
+  document.getElementById('statOrders').textContent  = '—';
+  document.getElementById('statCFs').textContent     = '—';
+
+  var badge = document.getElementById('statusBadge');
+  badge.className = 'status-badge status-unknown';
+  badge.textContent = '…';
+
+  showSpin('overviewSpinner');
+
+  try {
+    var d = await _call('pcGetHubOverview', { hubId: hub.id });
+    var st = d.status || 'unknown';
+
+    badge.className   = 'status-badge status-' + st;
+    badge.textContent = st.replace(/_/g, ' ');
+
+    document.getElementById('statRevenue').textContent = fmtKES(d.lifetimeRevenue);
+    document.getElementById('statOrders').textContent  = fmtNum(d.lifetimeOrders);
+    document.getElementById('statCFs').textContent     = d.cfCount != null ? String(d.cfCount) : '—';
+
+    // Update cached status + sidebar dot
+    hubStatuses[hub.id] = st;
+    var dot = document.querySelector('.hub-item[data-hub="' + hub.id + '"] .hub-dot');
+    if (dot) { dot.className = 'hub-dot ' + st; dot.title = st; }
+
+  } catch (err) {
+    console.error('pcGetHubOverview', err);
+    badge.className   = 'status-badge status-disabled';
+    badge.textContent = 'error';
+    toast('Failed to load hub overview', 'error');
+  } finally {
+    hideSpin('overviewSpinner');
+  }
+}
+
+/* ── Activate ─────────────────────────────────────────────── */
+document.getElementById('btnActivate').addEventListener('click', async function() {
+  if (inFlight || !activeHubId) return;
+  inFlight = true;
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    await _call('pcActivateHub', { hubId: activeHubId });
+    toast(activeHubId + ' activated', 'success');
+    await loadOverview(HUBS.find(function(h) { return h.id === activeHubId; }));
+  } catch (err) {
+    toast('Activation failed: ' + (err.message || 'unknown error'), 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '✓ Activate';
+    inFlight        = false;
+  }
+});
+
+/* ── Pause ────────────────────────────────────────────────── */
+document.getElementById('btnPause').addEventListener('click', async function() {
+  if (inFlight || !activeHubId) return;
+  inFlight = true;
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    await _call('pcDeactivateHub', { hubId: activeHubId });
+    toast(activeHubId + ' paused', 'info');
+    await loadOverview(HUBS.find(function(h) { return h.id === activeHubId; }));
+  } catch (err) {
+    toast('Pause failed: ' + (err.message || 'unknown error'), 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '⏸ Pause';
+    inFlight        = false;
+  }
+});
+
+/* ────────────────────────────────────────────────────────────
+   FEATURE FLAGS PANEL
+──────────────────────────────────────────────────────────── */
+async function loadFlags(hubId) {
+  var list = document.getElementById('flagList');
+  list.innerHTML = '<div class="panel-loading"><span class="spinner"></span><span>Loading flags…</span></div>';
+  showSpin('flagsSpinner');
+
+  try {
+    var d = await _call('pcGetPerHubFlags', { hubId: hubId });
+    currentFlags = Object.assign({}, d.flags || {});
+    savedFlags   = Object.assign({}, currentFlags);
+    renderFlagList();
+  } catch (err) {
+    console.error('pcGetPerHubFlags', err);
+    list.innerHTML = '<div class="panel-loading" style="color:var(--danger)">Failed to load flags</div>';
+    toast('Could not load feature flags', 'error');
+  } finally {
+    hideSpin('flagsSpinner');
+  }
+}
+
+function renderFlagList() {
+  var list = document.getElementById('flagList');
+  list.innerHTML = FLAGS.map(function(f) {
+    var checked = currentFlags[f.key] === true ? ' checked' : '';
+    return '<div class="flag-row">' +
+      '<div class="flag-info">' +
+        '<div class="flag-name">' + f.label + '</div>' +
+        '<div class="flag-desc">' + f.desc + '</div>' +
+      '</div>' +
+      '<label class="toggle-sw" aria-label="' + f.label + '">' +
+        '<input type="checkbox"' + checked + ' data-flag="' + f.key + '" onchange="onFlagChange(this)">' +
+        '<span class="sl"></span>' +
+      '</label>' +
+    '</div>';
+  }).join('');
+}
+
+function onFlagChange(input) {
+  var key = input.dataset.flag;
+  currentFlags[key] = input.checked;
+  updateFlagsNote();
+}
+
+function updateFlagsNote() {
+  var changed = FLAGS.filter(function(f) {
+    return currentFlags[f.key] !== savedFlags[f.key];
+  }).length;
+  var note = document.getElementById('flagsNote');
+  note.textContent = changed > 0
+    ? changed + ' flag' + (changed > 1 ? 's' : '') + ' changed — unsaved'
+    : '';
+}
+
+/* ── Save flags ───────────────────────────────────────────── */
+document.getElementById('btnSaveFlags').addEventListener('click', async function() {
+  if (!activeHubId) return;
+  var btn      = this;
+  var changed  = FLAGS.filter(function(f) { return currentFlags[f.key] !== savedFlags[f.key]; });
+
+  if (!changed.length) {
+    toast('No changes to save', 'info');
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+  showSpin('flagsSpinner');
+
+  var errors = 0;
+  for (var i = 0; i < changed.length; i++) {
+    var f = changed[i];
+    try {
+      await _call('pcSetPerHubFlag', {
+        hubId: activeHubId,
+        flag:  f.key,
+        value: currentFlags[f.key],
+      });
+    } catch (err) {
+      console.error('pcSetPerHubFlag', f.key, err);
+      errors++;
+    }
+  }
+
+  hideSpin('flagsSpinner');
+  btn.disabled    = false;
+  btn.textContent = 'Save Flags';
+
+  if (errors === 0) {
+    savedFlags = Object.assign({}, currentFlags);
+    document.getElementById('flagsNote').textContent = '';
+    toast(changed.length + ' flag' + (changed.length > 1 ? 's' : '') + ' saved', 'success');
+  } else {
+    toast(errors + ' flag(s) failed to save', 'error');
+  }
+});
+
+/* ────────────────────────────────────────────────────────────
+   CROSS-HUB HEALTH
+──────────────────────────────────────────────────────────── */
+async function loadCrossHubHealth() {
+  showSpin('healthSpinner');
+  var grid = document.getElementById('healthGrid');
+  grid.innerHTML = '<div class="panel-loading" style="grid-column:1/-1">' +
+    '<span class="spinner"></span><span>Loading health data…</span></div>';
+
+  try {
+    var d    = await _call('pcGetCrossHubHealth', {});
+    var hubs = d.hubs || {};
+    renderHealthGrid(hubs);
+  } catch (err) {
+    console.error('pcGetCrossHubHealth', err);
+    grid.innerHTML = '<div class="panel-loading" style="grid-column:1/-1;color:var(--danger)">Health data unavailable</div>';
+    toast('Could not load cross-hub health', 'error');
+  } finally {
+    hideSpin('healthSpinner');
+  }
+}
+
+function renderHealthGrid(hubs) {
+  var grid = document.getElementById('healthGrid');
+  grid.innerHTML = HUBS.map(function(h) {
+    var d      = hubs[h.id] || {};
+    var status = d.status   || 'unknown';
+    var orders = d.orders24h  != null ? d.orders24h  : null;
+    var rev    = d.revenue24h != null ? d.revenue24h : null;
+    return '<div class="hmc ' + status + '">' +
+      '<div class="hmc-top">' +
+        '<span class="hmc-emoji">' + h.icon + '</span>' +
+        '<span class="hmc-name">' + h.name + '</span>' +
+        '<span class="hmc-dot ' + status + '" title="' + status + '"></span>' +
+      '</div>' +
+      '<div class="hmc-orders">' + fmtNum(orders) + '</div>' +
+      '<div class="hmc-orders-label">orders 24 h</div>' +
+      '<div class="hmc-revenue">KES ' + fmtKES(rev) + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+/* ────────────────────────────────────────────────────────────
+   MOBILE SIDEBAR
+──────────────────────────────────────────────────────────── */
+function openMobileSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('backdrop').classList.add('open');
+}
+
+function closeMobileSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('open');
+}
+
+document.getElementById('mobileMenuBtn').addEventListener('click', openMobileSidebar);
+document.getElementById('backdrop').addEventListener('click', closeMobileSidebar);
+
+/* ────────────────────────────────────────────────────────────
+   REFRESH
+──────────────────────────────────────────────────────────── */
+function refreshHub() {
+  if (!activeHubId) return;
+  var hub = HUBS.find(function(h) { return h.id === activeHubId; });
+  loadOverview(hub);
+  loadFlags(activeHubId);
+  toast('Refreshing…', 'info', 1400);
+}
+
+document.getElementById('desktopRefreshBtn').addEventListener('click', refreshHub);
+document.getElementById('mobileRefreshBtn').addEventListener('click', function() {
+  refreshHub();
+  loadCrossHubHealth();
+});
+
+/* ────────────────────────────────────────────────────────────
+   SIGN OUT
+──────────────────────────────────────────────────────────── */
+document.getElementById('signoutBtn').addEventListener('click', async function() {
+  try {
+    await firebase.auth().signOut();
+    window.location.href = 'login.html';
+  } catch (e) {
+    toast('Sign-out failed', 'error');
+  }
+});
+
+/* ────────────────────────────────────────────────────────────
+   SPINNER HELPERS
+──────────────────────────────────────────────────────────── */
+function showSpin(id) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = 'inline-block';
+}
+function hideSpin(id) {
+  var el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+}
+
+/* ────────────────────────────────────────────────────────────
+   AUTH GUARD + INIT
+──────────────────────────────────────────────────────────── */
+firebase.auth().onAuthStateChanged(async function(user) {
+  if (!user) {
+    window.location.href = 'login.html';
+    return;
+  }
+
+  try {
+    // Force-refresh to get latest custom claims
+    var token  = await user.getIdTokenResult(true);
+    var claims = token.claims || {};
+    var role   = claims.role  || '';
+    var ok     = (role === 'admin' || role === 'super_admin');
+
+    if (!ok) {
+      window.location.href = 'login.html';
+      return;
+    }
+
+    // Reveal page
+    document.getElementById('adminEmail').textContent = user.email || user.uid;
+    document.getElementById('authOverlay').style.display = 'none';
+
+    // Build nav and select first hub
+    renderHubNav();
+    selectHub(HUBS[0].id);
+
+    // Load cross-hub health once
+    loadCrossHubHealth();
+
+  } catch (err) {
+    console.error('Auth guard failed', err);
+    window.location.href = 'login.html';
+  }
+});
+</script>
+</body>
+</html>

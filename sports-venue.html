@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="mobile.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;min-height:100vh;padding-bottom:140px;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;min-height:100vh;padding-bottom:140px;}
 .vn-nav{display:flex;align-items:center;gap:10px;padding:12px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(16px);}
 .vn-back{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;text-decoration:none;color:white;font-size:16px;flex-shrink:0;}
 .vn-nav-title{font-size:14px;font-weight:800;flex:1;}
@@ -59,7 +59,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 .vn-book-bar{position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:rgba(8,8,8,0.98);border-top:1px solid rgba(255,255,255,0.08);z-index:50;backdrop-filter:blur(16px);}
 .vn-book-price{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:6px;}
 .vn-book-price span{font-size:20px;font-weight:900;color:#f59e0b;}
-.vn-book-btn{width:100%;padding:14px;background:#f59e0b;border:none;border-radius:12px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;}
+.vn-book-btn{width:100%;padding:14px;background:#f59e0b;border:none;border-radius:12px;color:#050505;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;}
 /* MODAL */
 .vn-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:none;align-items:flex-end;justify-content:center;}
 .vn-modal-overlay.open{display:flex;}
@@ -72,7 +72,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#080808;color:white;
 .vn-field input:focus,.vn-field select:focus,.vn-field textarea:focus{outline:none;border-color:rgba(245,158,11,0.4);}
 .vn-field select option{background:#111;}
 .vn-field textarea{resize:vertical;min-height:70px;}
-.vn-submit-btn{width:100%;padding:14px;background:#f59e0b;border:none;border-radius:12px;color:#080808;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:4px;}
+.vn-submit-btn{width:100%;padding:14px;background:#f59e0b;border:none;border-radius:12px;color:#050505;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;margin-top:4px;}
 .vn-cost-box{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px;text-align:center;margin-bottom:14px;}
 .vn-cost-total{font-size:22px;font-weight:900;color:#f59e0b;}
 .vn-cost-breakdown{font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;}
@@ -243,7 +243,7 @@ function renderBook(el) {
       ⏰ Opening Hours: ${venue.openTime||'06:00'} – ${venue.closeTime||'22:00'}<br>
       📋 Minimum booking: 1 hour · Payment on confirmation
     </div>
-    <button onclick="openBookingModal()" style="width:100%;padding:13px;background:${selectedSlots.length?'#f59e0b':'rgba(255,255,255,0.05)'};border:none;border-radius:11px;color:${selectedSlots.length?'#080808':'rgba(255,255,255,0.3)'};font-size:14px;font-weight:900;cursor:${selectedSlots.length?'pointer':'not-allowed'};font-family:inherit;">${selectedSlots.length?'🏟️ Confirm Booking — KES '+S.fmt(selectedSlots.length*venue.pricePerHour):'Select slots to continue'}</button>`;
+    <button onclick="openBookingModal()" style="width:100%;padding:13px;background:${selectedSlots.length?'#f59e0b':'rgba(255,255,255,0.05)'};border:none;border-radius:11px;color:${selectedSlots.length?'#050505':'rgba(255,255,255,0.3)'};font-size:14px;font-weight:900;cursor:${selectedSlots.length?'pointer':'not-allowed'};font-family:inherit;">${selectedSlots.length?'🏟️ Confirm Booking — KES '+S.fmt(selectedSlots.length*venue.pricePerHour):'Select slots to continue'}</button>`;
 }
 
 function selectDate(d) { selectedDate = d; selectedSlots = []; renderContent('book'); }

@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="premium.css">
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh;padding-bottom:80px;}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;min-height:100vh;padding-bottom:80px;}
 
     /* ── Access denied ── */
     #accessDenied{display:none;min-height:100vh;align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:32px;}
@@ -26,7 +26,7 @@
     .access-icon{font-size:64px;}
     .access-title{font-size:24px;font-weight:900;color:#ff6b6b;}
     .access-sub{color:rgba(255,255,255,0.45);font-size:14px;max-width:320px;}
-    .access-btn{padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4dcc00);border:none;border-radius:14px;color:#0a0a0a;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;margin-top:8px;}
+    .access-btn{padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4dcc00);border:none;border-radius:14px;color:#050505;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;margin-top:8px;}
 
     /* ── Full dashboard (hidden until auth check) ── */
     #dashboard{display:none;}
@@ -143,7 +143,7 @@
     @keyframes spin{to{transform:rotate(360deg)}}
 
     /* ── Toast ── */
-    #modToast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(113,255,0,0.95);color:#0a0a0a;padding:12px 22px;border-radius:14px;font-size:14px;font-weight:800;z-index:9999;display:none;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+    #modToast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(113,255,0,0.95);color:#050505;padding:12px 22px;border-radius:14px;font-size:14px;font-weight:800;z-index:9999;display:none;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
   </style>
 </head>
 <body>
@@ -320,7 +320,7 @@
       var t = document.getElementById('modToast');
       t.textContent = msg;
       t.style.background = isErr ? 'rgba(255,60,60,0.95)' : 'rgba(113,255,0,0.95)';
-      t.style.color      = isErr ? '#fff' : '#0a0a0a';
+      t.style.color      = isErr ? '#fff' : '#050505';
       t.style.display    = 'block';
       setTimeout(function(){ t.style.display='none'; }, 3200);
     }

@@ -1022,12 +1022,122 @@
     }).catch(function() { /* Firebase unavailable — skip live counts */ });
   }
 
+  /* ── Multi-role switcher ── */
+  /*
+   * Renders a compact "Switch role" dropdown in the header nav actions area
+   * when the signed-in user has more than one role. Clicking a role redirects
+   * the user to that role's primary workspace.
+   */
+  var ROLE_ROUTES = {
+    buyer:    'profile.html',
+    seller:   'seller.html',
+    provider: 'provider.html',
+    driver:   'rider-nav.html',
+    admin:    'admin-os.html',
+    moderator:'admin-os.html',
+  };
+  var ROLE_ICONS = {
+    buyer:'🛍️', seller:'🏪', provider:'🛠️', driver:'🚗', admin:'🛡️', moderator:'⚖️',
+  };
+
+  function _injectRoleSwitcher(roles, currentRole) {
+    if (!roles || roles.length < 2) return; /* Only show when user has multiple roles */
+    if (document.getElementById('sk-role-switcher')) return; /* Already injected */
+
+    var actionsEl = document.getElementById('sk-nav-actions');
+    if (!actionsEl) return;
+
+    var wrapper = document.createElement('div');
+    wrapper.id = 'sk-role-switcher';
+    wrapper.style.cssText = 'position:relative;display:flex;align-items:center;';
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sk-nav-icon-btn';
+    btn.title = 'Switch workspace';
+    btn.setAttribute('aria-label', 'Switch workspace');
+    btn.setAttribute('aria-haspopup', 'true');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<span style="font-size:11px;font-weight:700;letter-spacing:.3px;">' +
+      (ROLE_ICONS[currentRole] || '👤') + '</span>';
+
+    var menu = document.createElement('div');
+    menu.id = 'sk-role-menu';
+    menu.setAttribute('role', 'menu');
+    menu.style.cssText = [
+      'display:none;position:absolute;top:calc(100% + 6px);right:0;',
+      'background:#0d0d0d;border:1px solid #1a1a1a;border-radius:10px;',
+      'min-width:160px;z-index:9999;overflow:hidden;',
+      'box-shadow:0 8px 24px rgba(0,0,0,.6);',
+    ].join('');
+
+    var header = document.createElement('div');
+    header.style.cssText = 'padding:8px 12px 6px;font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid #1a1a1a;';
+    header.textContent = 'Your Workspaces';
+    menu.appendChild(header);
+
+    roles.forEach(function(role) {
+      var item = document.createElement('a');
+      item.href = ROLE_ROUTES[role] || 'profile.html';
+      item.setAttribute('role', 'menuitem');
+      item.style.cssText = [
+        'display:flex;align-items:center;gap:10px;padding:10px 14px;',
+        'color:#e8e8e8;text-decoration:none;font-size:13px;transition:background .15s;',
+        role === currentRole ? 'background:rgba(113,255,0,.08);color:#71ff00;font-weight:600;' : '',
+      ].join('');
+      item.innerHTML = '<span>' + (ROLE_ICONS[role] || '👤') + '</span>' +
+        '<span>' + role.charAt(0).toUpperCase() + role.slice(1) + '</span>' +
+        (role === currentRole ? '<span style="margin-left:auto;font-size:10px;opacity:.6;">current</span>' : '');
+      item.addEventListener('mouseenter', function() { this.style.background = 'rgba(255,255,255,.06)'; });
+      item.addEventListener('mouseleave', function() {
+        this.style.background = role === currentRole ? 'rgba(113,255,0,.08)' : '';
+      });
+      menu.appendChild(item);
+    });
+
+    var isOpen = false;
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      isOpen = !isOpen;
+      menu.style.display = isOpen ? 'block' : 'none';
+      btn.setAttribute('aria-expanded', String(isOpen));
+    });
+    document.addEventListener('click', function() {
+      if (isOpen) { isOpen = false; menu.style.display = 'none'; btn.setAttribute('aria-expanded','false'); }
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && isOpen) { isOpen = false; menu.style.display = 'none'; btn.setAttribute('aria-expanded','false'); }
+    });
+
+    wrapper.appendChild(btn);
+    wrapper.appendChild(menu);
+
+    /* Insert before avatar button */
+    var avatar = document.getElementById('sk-nav-avatar');
+    if (avatar) actionsEl.insertBefore(wrapper, avatar);
+    else actionsEl.insertBefore(wrapper, actionsEl.firstChild);
+  }
+
   /* Wait for auth to be ready before starting Firestore listeners */
   function _waitForAuth() {
     /* Prefer the sokoniAuthReady event fired by firebase.js */
     document.addEventListener('sokoniAuthReady', function(e) {
       const uid = e.detail && e.detail.uid;
       if (uid) _wireRealtime(uid);
+
+      /* Role switcher: read roles from event detail or from cached user */
+      var roles = (e.detail && e.detail.roles) || [];
+      var currentRole = (e.detail && e.detail.role) || '';
+      if (!roles.length) {
+        try {
+          var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+          if (u) {
+            roles = u.roles || (u.role ? [u.role] : []);
+            currentRole = currentRole || u.role || (roles[0] || '');
+          }
+        } catch (_) {}
+      }
+      _injectRoleSwitcher(roles, currentRole);
     }, { once: true });
 
     /* Fallback: poll localStorage for cached user (covers pages without firebase.js) */

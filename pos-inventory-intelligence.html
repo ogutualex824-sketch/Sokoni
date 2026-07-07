@@ -1,18 +1,18 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Inventory Intelligence — SOKONI SmartPOS</title>
+<title>Inventory Intelligence â€” SOKONI SmartPOS</title>
 <link rel="icon" href="favicon.ico">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Round">
 <style>
-/* ── Design tokens ──────────────────────────────────────────── */
+/* â”€â”€ Design tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 :root {
-  --bg:      #080808;
+  --bg:      #050505;
   --surface: #111115;
   --card:    rgba(255,255,255,0.04);
   --card2:   rgba(255,255,255,0.07);
@@ -45,7 +45,7 @@ body {
   line-height: 1.5;
 }
 
-/* ── Header ──────────────────────────────────────────────────── */
+/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .pos-header {
   position: sticky;
   top: 0;
@@ -95,14 +95,14 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Main layout ─────────────────────────────────────────────── */
+/* â”€â”€ Main layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .main {
   max-width: 1280px;
   margin: 0 auto;
   padding: 20px 16px 80px;
 }
 
-/* ── KPI bar ─────────────────────────────────────────────────── */
+/* â”€â”€ KPI bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .kpi-bar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -130,7 +130,7 @@ body {
 .kpi-card.ok      .kpi-value { color: var(--green); }
 .kpi-card.info    .kpi-value { color: var(--blue); }
 
-/* ── Recommendations ─────────────────────────────────────────── */
+/* â”€â”€ Recommendations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .section-title {
   font-size: 13px;
   font-weight: 600;
@@ -186,7 +186,7 @@ body {
 }
 .reco-action:hover { background: rgba(255,255,255,0.1); }
 
-/* ── Tab system ──────────────────────────────────────────────── */
+/* â”€â”€ Tab system â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .tabs {
   display: flex;
   gap: 4px;
@@ -227,7 +227,7 @@ body {
 .tab-btn.urgent-tab.active .count,
 .tab-btn.urgent-tab:hover  .count { background: var(--redDim); color: var(--red); }
 
-/* ── Product table ───────────────────────────────────────────── */
+/* â”€â”€ Product table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .table-wrap {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -284,19 +284,19 @@ body {
 }
 .action-btn:hover { background: var(--card2); color: var(--text); }
 
-/* ── Velocity bar ────────────────────────────────────────────── */
+/* â”€â”€ Velocity bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .vel-bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 120px; }
 .vel-bar-bg { flex: 1; height: 4px; background: var(--card2); border-radius: 4px; overflow: hidden; }
 .vel-bar-fill { height: 100%; border-radius: 4px; background: var(--green); transition: width 0.4s; }
 .vel-bar-label { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 28px; text-align: right; }
 
-/* ── Expiry badge ────────────────────────────────────────────── */
+/* â”€â”€ Expiry badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .days-left { font-variant-numeric: tabular-nums; }
 .days-left.expired { color: var(--red); font-weight: 700; }
 .days-left.critical { color: var(--red); }
 .days-left.warning  { color: var(--amber); }
 
-/* ── Empty state ─────────────────────────────────────────────── */
+/* â”€â”€ Empty state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .empty-state {
   text-align: center;
   padding: 48px 24px;
@@ -305,7 +305,7 @@ body {
 .empty-state .material-icons-round { font-size: 48px; opacity: 0.3; display: block; margin-bottom: 12px; }
 .empty-state p { font-size: 13px; }
 
-/* ── Skeleton loader ─────────────────────────────────────────── */
+/* â”€â”€ Skeleton loader â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .skeleton {
   background: linear-gradient(90deg, var(--surface) 25%, rgba(255,255,255,0.06) 50%, var(--surface) 75%);
   background-size: 200%;
@@ -315,11 +315,11 @@ body {
 }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
-/* ── Tab panels ──────────────────────────────────────────────── */
+/* â”€â”€ Tab panels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
-/* ── Mobile ──────────────────────────────────────────────────── */
+/* â”€â”€ Mobile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media (max-width: 600px) {
   .kpi-bar { grid-template-columns: repeat(2, 1fr); }
   .table-wrap { overflow-x: auto; }
@@ -331,7 +331,7 @@ body {
 </head>
 <body>
 
-<!-- ── Header ─────────────────────────────────────────────────────── -->
+<!-- â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <header class="pos-header">
   <a href="pos.html" class="back">
     <span class="material-icons-round" style="font-size:18px">arrow_back</span>
@@ -344,12 +344,12 @@ body {
   </button>
 </header>
 
-<!-- ── Main ───────────────────────────────────────────────────────── -->
+<!-- â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <main class="main">
 
   <!-- KPI bar -->
   <div class="kpi-bar" id="kpi-bar">
-    <div class="kpi-card"><span class="kpi-label">Loading…</span><span class="kpi-value"><div class="skeleton" style="width:60px"></div></span></div>
+    <div class="kpi-card"><span class="kpi-label">Loadingâ€¦</span><span class="kpi-value"><div class="skeleton" style="width:60px"></div></span></div>
   </div>
 
   <!-- Recommendations -->
@@ -366,37 +366,37 @@ body {
     <button class="tab-btn urgent-tab active" data-tab="low-stock">
       <span class="material-icons-round">warning</span>
       Low Stock
-      <span class="count" id="cnt-low">—</span>
+      <span class="count" id="cnt-low">â€”</span>
     </button>
     <button class="tab-btn" data-tab="expiry">
       <span class="material-icons-round">schedule</span>
       Expiry
-      <span class="count" id="cnt-expiry">—</span>
+      <span class="count" id="cnt-expiry">â€”</span>
     </button>
     <button class="tab-btn" data-tab="fast">
       <span class="material-icons-round">trending_up</span>
       Fast Movers
-      <span class="count" id="cnt-fast">—</span>
+      <span class="count" id="cnt-fast">â€”</span>
     </button>
     <button class="tab-btn" data-tab="slow">
       <span class="material-icons-round">trending_down</span>
       Slow Movers
-      <span class="count" id="cnt-slow">—</span>
+      <span class="count" id="cnt-slow">â€”</span>
     </button>
     <button class="tab-btn" data-tab="dead">
       <span class="material-icons-round">inventory_2</span>
       Dead Stock
-      <span class="count" id="cnt-dead">—</span>
+      <span class="count" id="cnt-dead">â€”</span>
     </button>
     <button class="tab-btn" data-tab="overstock">
       <span class="material-icons-round">warehouse</span>
       Overstock
-      <span class="count" id="cnt-overstock">—</span>
+      <span class="count" id="cnt-overstock">â€”</span>
     </button>
     <button class="tab-btn" data-tab="reorder">
       <span class="material-icons-round">shopping_cart</span>
       Reorder Queue
-      <span class="count" id="cnt-reorder">—</span>
+      <span class="count" id="cnt-reorder">â€”</span>
     </button>
   </div>
 
@@ -454,7 +454,7 @@ body {
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="tb-fast"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">trending_up</span><p>No fast movers detected yet — make more sales!</p></div></td></tr></tbody>
+        <tbody id="tb-fast"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">trending_up</span><p>No fast movers detected yet â€” make more sales!</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -494,7 +494,7 @@ body {
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="tb-dead"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>No dead stock — everything is selling</p></div></td></tr></tbody>
+        <tbody id="tb-dead"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>No dead stock â€” everything is selling</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -549,7 +549,7 @@ body {
 let _sellerId = null;
 let _maxVelocity = 1;
 
-/* ── Auth guard ────────────────────────────────────────────────── */
+/* â”€â”€ Auth guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 firebase.auth().onAuthStateChanged(async (user) => {
   if (!user) { window.location.href = 'login.html'; return; }
   try {
@@ -562,7 +562,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
   loadIntelligence();
 });
 
-/* ── Tab switching ─────────────────────────────────────────────── */
+/* â”€â”€ Tab switching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 document.getElementById('tabs').addEventListener('click', (e) => {
   const btn = e.target.closest('.tab-btn');
   if (!btn) return;
@@ -573,7 +573,7 @@ document.getElementById('tabs').addEventListener('click', (e) => {
   document.getElementById('panel-' + tab).classList.add('active');
 });
 
-/* ── Load intelligence data ────────────────────────────────────── */
+/* â”€â”€ Load intelligence data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 async function loadIntelligence() {
   if (!_sellerId) return;
 
@@ -592,14 +592,14 @@ async function loadIntelligence() {
   }
 }
 
-/* ── Render ────────────────────────────────────────────────────── */
+/* â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function renderIntelligence(data) {
   const s = data.summary;
 
   // Max velocity for bar scaling
   _maxVelocity = Math.max(1, ...data.fast.map(p => p.dailyVelocity));
 
-  // ── KPI bar ──────────────────────────────────────────────────
+  // â”€â”€ KPI bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   document.getElementById('kpi-bar').innerHTML = `
     <div class="kpi-card ${s.criticalLowStock > 0 ? 'urgent' : 'ok'}">
       <span class="kpi-label">Critical Low Stock</span>
@@ -607,7 +607,7 @@ function renderIntelligence(data) {
       <span class="kpi-sub">${s.lowStock} total low stock items</span>
     </div>
     <div class="kpi-card ${s.expiringCritical > 0 ? 'urgent' : 'ok'}">
-      <span class="kpi-label">Expiring ≤7 Days</span>
+      <span class="kpi-label">Expiring â‰¤7 Days</span>
       <span class="kpi-value">${s.expiringCritical}</span>
       <span class="kpi-sub">${s.expiringWarning} in 30 days</span>
     </div>
@@ -676,7 +676,7 @@ function renderIntelligence(data) {
     recoSec.style.display = 'none';
   }
 
-  // ── Tables ────────────────────────────────────────────────────
+  // â”€â”€ Tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   renderLowStock(data.lowStock);
   renderExpiry(data.expiringCritical, data.expiringWarning);
   renderFastSlow(data.fast, 'tb-fast');
@@ -689,7 +689,7 @@ function renderIntelligence(data) {
     'Last updated: ' + new Date(data.generatedAt).toLocaleString('en-KE');
 }
 
-/* ── Table renderers ───────────────────────────────────────────── */
+/* â”€â”€ Table renderers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function renderLowStock(items) {
   const tb = document.getElementById('tb-low-stock');
   if (!items.length) {
@@ -699,10 +699,10 @@ function renderLowStock(items) {
   tb.innerHTML = items.map(p => `
     <tr>
       <td class="name">${_e(p.name)}</td>
-      <td style="color:var(--muted)">${_e(p.sku || '—')}</td>
+      <td style="color:var(--muted)">${_e(p.sku || 'â€”')}</td>
       <td class="num">${p.stock}</td>
-      <td class="num">${p.daysOfStock !== null ? p.daysOfStock + 'd' : '—'}</td>
-      <td class="num">${p.dailyVelocity > 0 ? p.dailyVelocity.toFixed(1) + '/d' : '—'}</td>
+      <td class="num">${p.daysOfStock !== null ? p.daysOfStock + 'd' : 'â€”'}</td>
+      <td class="num">${p.dailyVelocity > 0 ? p.dailyVelocity.toFixed(1) + '/d' : 'â€”'}</td>
       <td><span class="pill ${p.urgency === 'critical' ? 'red' : 'amber'}">${p.urgency}</span></td>
       <td><button class="action-btn" onclick="handleAction('reorder_product','${_e(p.productId)}')">Reorder</button></td>
     </tr>
@@ -722,7 +722,7 @@ function renderExpiry(critical, warning) {
     return `
       <tr>
         <td class="name">${_e(b.productName)}</td>
-        <td style="color:var(--muted)">${_e(b.lotNumber || '—')}</td>
+        <td style="color:var(--muted)">${_e(b.lotNumber || 'â€”')}</td>
         <td class="num">${b.quantity}</td>
         <td>${new Date(b.expiryDate).toLocaleDateString('en-KE')}</td>
         <td><span class="days-left ${cls}">${daysLabel}</span></td>
@@ -740,7 +740,7 @@ function renderExpiry(critical, warning) {
 function renderFastSlow(items, tbId, isSlow) {
   const tb = document.getElementById(tbId);
   if (!items.length) {
-    tb.innerHTML = `<tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">${isSlow ? 'check_circle' : 'trending_up'}</span><p>${isSlow ? 'No slow movers detected' : 'No fast movers yet — make more sales!'}</p></div></td></tr>`;
+    tb.innerHTML = `<tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">${isSlow ? 'check_circle' : 'trending_up'}</span><p>${isSlow ? 'No slow movers detected' : 'No fast movers yet â€” make more sales!'}</p></div></td></tr>`;
     return;
   }
   tb.innerHTML = items.map(p => {
@@ -749,9 +749,9 @@ function renderFastSlow(items, tbId, isSlow) {
     return `
       <tr>
         <td class="name">${_e(p.name)}</td>
-        <td style="color:var(--muted)">${_e(p.category || '—')}</td>
+        <td style="color:var(--muted)">${_e(p.category || 'â€”')}</td>
         <td class="num">${p.stock}</td>
-        <td class="num" style="color:${daysColor}">${p.daysOfStock !== null ? p.daysOfStock + 'd' : '—'}</td>
+        <td class="num" style="color:${daysColor}">${p.daysOfStock !== null ? p.daysOfStock + 'd' : 'â€”'}</td>
         <td>
           <div class="vel-bar-wrap">
             <div class="vel-bar-bg"><div class="vel-bar-fill" style="width:${barPct}%;background:${isSlow ? 'var(--amber)' : 'var(--green)'}"></div></div>
@@ -779,11 +779,11 @@ function renderDead(items) {
   tb.innerHTML = items.map(p => `
     <tr>
       <td class="name">${_e(p.name)}</td>
-      <td style="color:var(--muted)">${_e(p.category || '—')}</td>
+      <td style="color:var(--muted)">${_e(p.category || 'â€”')}</td>
       <td class="num">${p.stock}</td>
       <td class="num">KES ${(p.unitCost || 0).toFixed(0)}</td>
       <td class="num" style="color:var(--amber)">KES ${((p.tiedUpValue || 0)).toLocaleString()}</td>
-      <td style="color:var(--muted)">${_e(p.supplierName || '—')}</td>
+      <td style="color:var(--muted)">${_e(p.supplierName || 'â€”')}</td>
       <td><button class="action-btn" onclick="handleAction('create_promotion','${_e(p.productId)}')">Promote</button></td>
     </tr>
   `).join('');
@@ -799,9 +799,9 @@ function renderOverstock(items) {
     <tr>
       <td class="name">${_e(p.name)}</td>
       <td class="num">${p.stock}</td>
-      <td class="num" style="color:var(--amber)">${p.daysOfStock !== null ? p.daysOfStock + 'd' : '—'}</td>
+      <td class="num" style="color:var(--amber)">${p.daysOfStock !== null ? p.daysOfStock + 'd' : 'â€”'}</td>
       <td class="num">${p.dailyVelocity > 0 ? p.dailyVelocity.toFixed(1) + '/d' : 'No sales'}</td>
-      <td style="color:var(--muted)">${_e(p.supplierName || '—')}</td>
+      <td style="color:var(--muted)">${_e(p.supplierName || 'â€”')}</td>
       <td><button class="action-btn" onclick="handleAction('bundle_offer','${_e(p.productId)}')">Bundle</button></td>
     </tr>
   `).join('');
@@ -818,7 +818,7 @@ function renderReorder(items) {
   tb.innerHTML = items.map(r => `
     <tr>
       <td class="name">${_e(r.productName)}</td>
-      <td style="color:var(--muted)">${_e(r.supplierName || '—')}</td>
+      <td style="color:var(--muted)">${_e(r.supplierName || 'â€”')}</td>
       <td class="num">${r.currentQty}</td>
       <td class="num">${r.reorderQty}</td>
       <td><span class="pill ${priorityColor(r.priority)}">${priorityLabel(r.priority)}</span></td>
@@ -827,7 +827,7 @@ function renderReorder(items) {
   `).join('');
 }
 
-/* ── Action handler ────────────────────────────────────────────── */
+/* â”€â”€ Action handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function handleAction(type, id) {
   const map = {
     create_po: 'pos-suppliers.html',
@@ -844,7 +844,7 @@ function handleAction(type, id) {
   if (url) window.location.href = url;
 }
 
-/* ── XSS-safe string ────────────────────────────────────────────── */
+/* â”€â”€ XSS-safe string â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _e(s) {
   if (s == null) return '';
   const d = document.createElement('div');

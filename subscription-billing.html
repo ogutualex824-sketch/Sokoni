@@ -1,17 +1,17 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Subscription & Billing — SOKONI Admin</title>
+<title>Subscription & Billing â€” SOKONI Admin</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0a0a0a;--sur:#111;--sur2:#161616;--brd:#1e1e1e;--brd2:#2a2a2a;
+  --bg:#050505;--sur:#111;--sur2:#161616;--brd:#1e1e1e;--brd2:#2a2a2a;
   --g:#71ff00;--b:#00d4ff;--o:#ff9500;--r:#ff4444;--p:#a855f7;
   --txt:#e5e7eb;--sub:#6b7280;--radius:12px;
 }
@@ -163,16 +163,16 @@ textarea.fi{resize:vertical;min-height:66px}
 
     <div class="content">
 
-      <!-- ══ DASHBOARD ══ -->
+      <!-- â•â• DASHBOARD â•â• -->
       <div id="panel-dashboard" class="panel active">
         <div class="stats">
-          <div class="stat"><div class="sv" id="d-active">…</div><div class="sl">Active</div></div>
-          <div class="stat"><div class="sv b" id="d-trial">…</div><div class="sl">Trialing</div></div>
-          <div class="stat"><div class="sv o" id="d-pastdue">…</div><div class="sl">Past Due</div></div>
-          <div class="stat"><div class="sv r" id="d-expired">…</div><div class="sl">Expired</div></div>
-          <div class="stat"><div class="sv p" id="d-mrr">…</div><div class="sl">MRR</div><div class="ss" id="d-arr"></div></div>
-          <div class="stat"><div class="sv wh" id="d-rev">…</div><div class="sl">Revenue This Month</div></div>
-          <div class="stat"><div class="sv r" id="d-churn">…</div><div class="sl">Churn This Month</div><div class="ss" id="d-churnrate"></div></div>
+          <div class="stat"><div class="sv" id="d-active">â€¦</div><div class="sl">Active</div></div>
+          <div class="stat"><div class="sv b" id="d-trial">â€¦</div><div class="sl">Trialing</div></div>
+          <div class="stat"><div class="sv o" id="d-pastdue">â€¦</div><div class="sl">Past Due</div></div>
+          <div class="stat"><div class="sv r" id="d-expired">â€¦</div><div class="sl">Expired</div></div>
+          <div class="stat"><div class="sv p" id="d-mrr">â€¦</div><div class="sl">MRR</div><div class="ss" id="d-arr"></div></div>
+          <div class="stat"><div class="sv wh" id="d-rev">â€¦</div><div class="sl">Revenue This Month</div></div>
+          <div class="stat"><div class="sv r" id="d-churn">â€¦</div><div class="sl">Churn This Month</div><div class="ss" id="d-churnrate"></div></div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
@@ -197,9 +197,9 @@ textarea.fi{resize:vertical;min-height:66px}
         </div>
       </div>
 
-      <!-- ══ PLANS ══ -->
+      <!-- â•â• PLANS â•â• -->
       <div id="panel-plans" class="panel">
-        <p style="font-size:12px;color:var(--sub);margin-bottom:14px">Built-in plans are defined in <code>sub-billing.js</code>. Override pricing or features using the edit button — changes apply instantly via Firestore. Custom plans live fully in Firestore.</p>
+        <p style="font-size:12px;color:var(--sub);margin-bottom:14px">Built-in plans are defined in <code>sub-billing.js</code>. Override pricing or features using the edit button â€” changes apply instantly via Firestore. Custom plans live fully in Firestore.</p>
         <div class="toolbar">
           <select class="fs" style="width:auto;height:34px" id="planHubFilter" onchange="_loadPlans()">
             <option value="">All hubs</option>
@@ -215,12 +215,12 @@ textarea.fi{resize:vertical;min-height:66px}
         <div class="plan-grid" id="planGrid"><div class="spin"></div></div>
       </div>
 
-      <!-- ══ SUBSCRIBERS ══ -->
+      <!-- â•â• SUBSCRIBERS â•â• -->
       <div id="panel-subscribers" class="panel">
         <div class="toolbar">
           <div class="search-box">
             <span class="material-icons">search</span>
-            <input type="text" id="subSearch" placeholder="Search by UID…" oninput="_filterSubs()">
+            <input type="text" id="subSearch" placeholder="Search by UIDâ€¦" oninput="_filterSubs()">
           </div>
           <select class="fs" style="width:auto;height:34px" id="subStatusFilter" onchange="_loadSubscribers()">
             <option value="">All statuses</option>
@@ -242,12 +242,12 @@ textarea.fi{resize:vertical;min-height:66px}
         </div>
       </div>
 
-      <!-- ══ BILLING ══ -->
+      <!-- â•â• BILLING â•â• -->
       <div id="panel-billing" class="panel">
         <div class="toolbar">
           <div class="search-box">
             <span class="material-icons">search</span>
-            <input type="text" id="billSearch" placeholder="Search UID or plan…" oninput="_filterBilling()">
+            <input type="text" id="billSearch" placeholder="Search UID or planâ€¦" oninput="_filterBilling()">
           </div>
           <select class="fs" style="width:auto;height:34px" id="billEventFilter" onchange="_loadBilling()">
             <option value="">All events</option>
@@ -266,13 +266,13 @@ textarea.fi{resize:vertical;min-height:66px}
         </div>
       </div>
 
-      <!-- ══ ANALYTICS ══ -->
+      <!-- â•â• ANALYTICS â•â• -->
       <div id="panel-analytics" class="panel">
         <div class="stats" id="analyticsStats">
-          <div class="stat"><div class="sv" id="a-mrr">…</div><div class="sl">MRR (KES)</div></div>
-          <div class="stat"><div class="sv b" id="a-arr">…</div><div class="sl">ARR (KES)</div></div>
-          <div class="stat"><div class="sv o" id="a-rev">…</div><div class="sl">Revenue This Month</div></div>
-          <div class="stat"><div class="sv r" id="a-churn">…</div><div class="sl">Churn Rate</div></div>
+          <div class="stat"><div class="sv" id="a-mrr">â€¦</div><div class="sl">MRR (KES)</div></div>
+          <div class="stat"><div class="sv b" id="a-arr">â€¦</div><div class="sl">ARR (KES)</div></div>
+          <div class="stat"><div class="sv o" id="a-rev">â€¦</div><div class="sl">Revenue This Month</div></div>
+          <div class="stat"><div class="sv r" id="a-churn">â€¦</div><div class="sl">Churn Rate</div></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
           <div class="card">
@@ -286,7 +286,7 @@ textarea.fi{resize:vertical;min-height:66px}
         </div>
       </div>
 
-      <!-- ══ EXPORT ══ -->
+      <!-- â•â• EXPORT â•â• -->
       <div id="panel-export" class="panel">
         <div class="card">
           <div class="card-hd"><span class="card-title">Export Billing Data</span></div>
@@ -396,8 +396,8 @@ textarea.fi{resize:vertical;min-height:66px}
     <div class="mbody">
       <input type="hidden" id="rf-billId"><input type="hidden" id="rf-subId">
       <div id="refundDetails" style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:14px;margin-bottom:16px;font-size:12px;line-height:1.8"></div>
-      <div class="fg"><label class="fl">Refund Reason *</label><textarea class="fi" id="rf-reason" placeholder="e.g. Customer request — duplicate charge"></textarea></div>
-      <p style="font-size:11px;color:var(--r);margin-top:8px">⚠ This will mark the payment as refunded and cancel the subscription. Ensure the actual M-PESA reversal is processed separately via IntaSend.</p>
+      <div class="fg"><label class="fl">Refund Reason *</label><textarea class="fi" id="rf-reason" placeholder="e.g. Customer request â€” duplicate charge"></textarea></div>
+      <p style="font-size:11px;color:var(--r);margin-top:8px">âš  This will mark the payment as refunded and cancel the subscription. Ensure the actual M-PESA reversal is processed separately via IntaSend.</p>
     </div>
     <div class="mfoot">
       <button class="btn btn-o" onclick="document.getElementById('refundModal').classList.remove('open')">Cancel</button>
@@ -418,7 +418,7 @@ textarea.fi{resize:vertical;min-height:66px}
 (function(){
 'use strict';
 
-/* ── Auth guard ── */
+/* â”€â”€ Auth guard â”€â”€ */
 firebase.auth().onAuthStateChanged(function(u){
   if(!u){location.href='login.html?redirect=subscription-billing.html';return;}
   u.getIdTokenResult().then(function(t){
@@ -484,7 +484,7 @@ function _loadPanel(p){
     billing:_loadBilling,analytics:_loadAnalytics,export:function(){}})[p]();
 }
 
-/* ── Dashboard ── */
+/* â”€â”€ Dashboard â”€â”€ */
 function _loadDashboard(){
   _cf('adminSubGetAnalytics')({}).then(function(r){
     var d=r.data;
@@ -509,7 +509,7 @@ function _loadDashboard(){
     tb.innerHTML=rows.length?rows.map(function(r){
       return '<tr>'+
         '<td>'+_esc(r.date)+'</td>'+
-        '<td style="font-size:11px;color:var(--sub)">'+_esc((r.uid||'').slice(0,14))+'…</td>'+
+        '<td style="font-size:11px;color:var(--sub)">'+_esc((r.uid||'').slice(0,14))+'â€¦</td>'+
         '<td>'+_esc(r.planId||'')+'</td>'+
         '<td>'+_evBadge(r.event)+'</td>'+
         '<td style="font-weight:700;color:var(--g)">'+_esc((r.amountKES||0).toLocaleString())+'</td>'+
@@ -533,7 +533,7 @@ function _renderBarChart(elId,data,total){
   }).join('');
 }
 
-/* ── Plans ── */
+/* â”€â”€ Plans â”€â”€ */
 window._loadPlans=function(){
   var hub=document.getElementById('planHubFilter').value;
   _cf('subGetPlans')({hubType:hub||undefined}).then(function(r){
@@ -554,14 +554,14 @@ window._loadPlans=function(){
         '</div>'+
         '<div class="plan-price">'+
           (monthly===0?'Free':'KES '+Math.round(monthly/100).toLocaleString()+'/mo')+
-          (annual>0?'<span class="cy"> · KES '+Math.round(annual/100).toLocaleString()+'/yr</span>':'')+
+          (annual>0?'<span class="cy"> Â· KES '+Math.round(annual/100).toLocaleString()+'/yr</span>':'')+
         '</div>'+
-        '<div style="font-size:10px;color:var(--sub);margin-bottom:8px">Trial: '+(p.trial&&p.trial.days||0)+'d · Grace: '+(p.grace&&p.grace.days||0)+'d</div>'+
+        '<div style="font-size:10px;color:var(--sub);margin-bottom:8px">Trial: '+(p.trial&&p.trial.days||0)+'d Â· Grace: '+(p.grace&&p.grace.days||0)+'d</div>'+
         '<div style="border-top:1px solid var(--brd);padding-top:8px">'+
           fKeys.map(function(k){
             var v=f[k];
             return '<div class="feat-row"><span style="color:var(--sub)">'+_esc(k.replace(/_/g,' '))+'</span><span style="font-weight:600;color:'+(v===true?'var(--g)':v===false?'var(--sub)':'var(--txt)')+'">'+
-              (v===true?'✓':v===false?'—':v===-1?'Unlimited':v)+'</span></div>';
+              (v===true?'âœ“':v===false?'â€”':v===-1?'Unlimited':v)+'</span></div>';
           }).join('')+
           (Object.keys(f).length>6?'<div style="font-size:10px;color:var(--sub);margin-top:5px">+'+(Object.keys(f).length-6)+' more features</div>':'')+
         '</div>'+
@@ -646,7 +646,7 @@ window._savePlan=function(){
     isActive:document.getElementById('pm-active').value==='1',
   };
   var btn=document.getElementById('savePlanBtn');
-  btn.disabled=true;btn.textContent='Saving…';
+  btn.disabled=true;btn.textContent='Savingâ€¦';
   var fn=origId?'adminSubUpdatePlan':'adminSubCreatePlan';
   if(origId)payload.planId=origId;
   _cf(fn)(payload).then(function(){
@@ -657,7 +657,7 @@ window._savePlan=function(){
   .finally(function(){btn.disabled=false;btn.textContent=origId?'Update Plan':'Create Plan';});
 };
 
-/* ── Subscribers ── */
+/* â”€â”€ Subscribers â”€â”€ */
 window._loadSubscribers=function(){
   var status=document.getElementById('subStatusFilter').value;
   var hub=document.getElementById('subHubFilter').value;
@@ -676,15 +676,15 @@ function _renderSubs(list){
   var tb=document.getElementById('subsTbody');
   if(!list.length){tb.innerHTML='<tr><td colspan="8" class="tbl-empty">No subscriptions found</td></tr>';return;}
   tb.innerHTML=list.map(function(s){
-    var exp=s.currentPeriodEnd?new Date(s.currentPeriodEnd).toLocaleDateString('en-KE'):'—';
+    var exp=s.currentPeriodEnd?new Date(s.currentPeriodEnd).toLocaleDateString('en-KE'):'â€”';
     return '<tr>'+
-      '<td style="font-size:11px;color:var(--sub)">'+_esc((s.uid||'').slice(0,14))+'…</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_esc((s.uid||'').slice(0,14))+'â€¦</td>'+
       '<td>'+_esc(s.hubType||'')+'</td>'+
       '<td style="font-size:11px">'+_esc(s.planId||'')+'</td>'+
       '<td>'+_tierBadge(s.tier)+'</td>'+
       '<td>'+_statusBadge(s.status)+'</td>'+
       '<td style="font-size:11px;color:var(--sub)">'+exp+'</td>'+
-      '<td style="font-size:11px">'+_esc(s.billingCycle||'—')+'</td>'+
+      '<td style="font-size:11px">'+_esc(s.billingCycle||'â€”')+'</td>'+
       '<td><button class="btn btn-o btn-sm" onclick="_openSubAction(\''+_esc(s.id)+'\')">Manage</button></td>'+
     '</tr>';
   }).join('');
@@ -697,7 +697,7 @@ window._openSubAction=function(subId){
     'UID: <strong>'+_esc(s.uid)+'</strong><br>'+
     'Plan: <strong>'+_esc(s.planId)+'</strong> ('+_esc(s.tier)+')<br>'+
     'Status: '+_statusBadge(s.status)+'<br>'+
-    'Expires: <strong>'+( s.currentPeriodEnd?new Date(s.currentPeriodEnd).toLocaleString('en-KE'):'—')+'</strong>';
+    'Expires: <strong>'+( s.currentPeriodEnd?new Date(s.currentPeriodEnd).toLocaleString('en-KE'):'â€”')+'</strong>';
   document.getElementById('sa-action').value='activate';
   _onActionChange();
   document.getElementById('subActionModal').classList.add('open');
@@ -713,7 +713,7 @@ window._submitSubAction=function(){
   var reason=document.getElementById('sa-reason').value.trim();
   if(!reason)return _toast('Reason required','red');
   var btn=document.getElementById('subActionBtn');
-  btn.disabled=true;btn.textContent='Applying…';
+  btn.disabled=true;btn.textContent='Applyingâ€¦';
   _cf('adminSubManualAction')({subscriptionId:subId,action,daysExtend:days||undefined,reason})
   .then(function(){
     _toast('Action applied: '+action,'green');
@@ -723,7 +723,7 @@ window._submitSubAction=function(){
   .finally(function(){btn.disabled=false;btn.textContent='Apply Action';});
 };
 
-/* ── Billing ── */
+/* â”€â”€ Billing â”€â”€ */
 window._loadBilling=function(){
   var ev=document.getElementById('billEventFilter').value;
   document.getElementById('billTbody').innerHTML='<tr><td colspan="8" class="tbl-empty"><div class="spin"></div></td></tr>';
@@ -748,7 +748,7 @@ function _renderBilling(list){
   tb.innerHTML=list.map(function(r){
     return '<tr>'+
       '<td style="font-size:11px;color:var(--sub)">'+_esc(r.date||'')+'</td>'+
-      '<td style="font-size:11px;color:var(--sub)">'+_esc((r.uid||'').slice(0,14))+'…</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_esc((r.uid||'').slice(0,14))+'â€¦</td>'+
       '<td style="font-size:11px">'+_esc(r.planId||'')+'</td>'+
       '<td>'+_evBadge(r.event)+'</td>'+
       '<td style="font-weight:700;color:var(--g)">'+_esc((r.amountKES||0).toLocaleString())+'</td>'+
@@ -771,7 +771,7 @@ window._submitRefund=function(){
   var reason=document.getElementById('rf-reason').value.trim();
   if(!reason)return _toast('Reason required','red');
   var btn=document.getElementById('refundBtn');
-  btn.disabled=true;btn.textContent='Processing…';
+  btn.disabled=true;btn.textContent='Processingâ€¦';
   _cf('adminSubProcessRefund')({billingHistoryId:billId,subscriptionId:subId||undefined,reason})
   .then(function(){
     _toast('Refund processed','green');
@@ -781,7 +781,7 @@ window._submitRefund=function(){
   .finally(function(){btn.disabled=false;btn.textContent='Process Refund';});
 };
 
-/* ── Analytics ── */
+/* â”€â”€ Analytics â”€â”€ */
 window._loadAnalytics=function(){
   _cf('adminSubGetAnalytics')({}).then(function(r){
     var d=r.data;
@@ -794,17 +794,17 @@ window._loadAnalytics=function(){
   }).catch(function(e){_toast('Error: '+e.message,'red');});
 };
 
-/* ── Export ── */
+/* â”€â”€ Export â”€â”€ */
 window._runExport=function(){
   var start=document.getElementById('exportStart').value;
   var end=document.getElementById('exportEnd').value;
   var btn=document.getElementById('exportBtn');
-  btn.disabled=true;btn.innerHTML='<div class="spin"></div> Exporting…';
+  btn.disabled=true;btn.innerHTML='<div class="spin"></div> Exportingâ€¦';
   _cf('adminSubExportBilling')({startDate:start||undefined,endDate:end||undefined})
   .then(function(r){
     var rows=r.data.rows||[];
     document.getElementById('exportResultCard').style.display='';
-    document.getElementById('exportCount').textContent=rows.length+' rows · Total KES '+r.data.totalRevenueKES.toLocaleString();
+    document.getElementById('exportCount').textContent=rows.length+' rows Â· Total KES '+r.data.totalRevenueKES.toLocaleString();
     document.getElementById('exportTbl').innerHTML=rows.map(function(r){
       return '<tr>'+
         '<td>'+_esc(r.date)+'</td><td style="font-size:11px">'+_esc((r.uid||'').slice(0,14))+'</td>'+
@@ -823,24 +823,24 @@ window._runExport=function(){
       a.download='sokoni-billing-'+new Date().toISOString().slice(0,10)+'.csv';
       a.click();
     }
-    _toast('Export ready — '+rows.length+' records','green');
+    _toast('Export ready â€” '+rows.length+' records','green');
   }).catch(function(e){_toast('Error: '+e.message,'red');})
   .finally(function(){btn.disabled=false;btn.innerHTML='<span class="material-icons" style="font-size:15px">download</span>Export CSV';});
 };
 
-/* ── helpers ── */
+/* â”€â”€ helpers â”€â”€ */
 function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function _statusBadge(s){
   var cls={active:'bg',trialing:'bb',grace:'bo',past_due:'bo',expired:'br',cancelled:'bs'}[s]||'bs';
-  return '<span class="badge '+cls+'">'+_esc(s||'—')+'</span>';
+  return '<span class="badge '+cls+'">'+_esc(s||'â€”')+'</span>';
 }
 function _tierBadge(t){
   var cls={free:'bs',basic:'bb',pro:'bg',premium:'bp',enterprise:'bo'}[t]||'bs';
-  return '<span class="badge '+cls+'">'+_esc(t||'—')+'</span>';
+  return '<span class="badge '+cls+'">'+_esc(t||'â€”')+'</span>';
 }
 function _evBadge(e){
   var cls={subscribe:'bg',upgrade:'bp',renewal:'bb',downgrade:'bo'}[e]||'bs';
-  return '<span class="badge '+cls+'">'+_esc(e||'—')+'</span>';
+  return '<span class="badge '+cls+'">'+_esc(e||'â€”')+'</span>';
 }
 function _toast(msg,c){
   var t=document.getElementById('toast');t.textContent=msg;

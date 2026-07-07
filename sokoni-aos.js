@@ -72,6 +72,8 @@ window.SokoniAOS = (() => {
       config:        () => _loadConfig(),
       audit:         () => _loadAudit(),
       security:      () => _loadSecurity(),
+      hubs:          () => _loadHubs(),
+      workflows:     () => _loadWorkflows(),
     };
     loaders[s]?.();
   }
@@ -1317,6 +1319,184 @@ window.SokoniAOS = (() => {
     setTimeout(() => { t.classList.remove("visible"); setTimeout(() => t.remove(), 300); }, 3000);
   }
 
+  // ── Hub Registry ─────────────────────────────────────────────────────────────
+  const HUB_STATUS_BADGE = {
+    live:         '<span class="status-badge st-active">live</span>',
+    coming_soon:  '<span class="status-badge st-pending">soon</span>',
+    maintenance:  '<span class="status-badge st-processing">maintenance</span>',
+    disabled:     '<span class="status-badge st-inactive">disabled</span>',
+  };
+  const HEALTH_BADGE = {
+    healthy:  '<span class="status-badge st-active">healthy</span>',
+    warning:  '<span class="status-badge st-pending">warning</span>',
+    degraded: '<span class="status-badge st-cancelled">degraded</span>',
+  };
+
+  async function _loadHubs() {
+    const body = document.getElementById("hubsBody");
+    if (!body) return;
+    body.innerHTML = _spinner();
+    try {
+      const r = await _call("pcGetHubRegistry", { status: "" });
+      const hubs = r.hubs || [];
+      if (!hubs.length) { body.innerHTML = _emptyMsg("No hubs registered"); return; }
+      body.innerHTML = `<div style="overflow-x:auto"><table class="aos-table">
+        <thead><tr><th>Hub</th><th>Status</th><th>CFs</th><th>Collections</th><th>Actions</th></tr></thead>
+        <tbody>${hubs.map(h => `<tr>
+          <td><span style="font-size:18px">${_esc(h.icon||'📦')}</span> <strong>${_esc(h.name)}</strong><div style="color:var(--aos-muted);font-size:11px">${_esc(h.hubId)}</div></td>
+          <td>${HUB_STATUS_BADGE[h.status] || h.status}</td>
+          <td>${h.cfCount || '—'}</td>
+          <td>${(h.collections||[]).length || '—'}</td>
+          <td style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="aos-btn-sm" onclick="SokoniAOS.viewHubDetails('${_esc(h.hubId)}')">&#x1F50D; Details</button>
+            ${h.status !== 'live'
+              ? `<button class="aos-btn-sm success" onclick="SokoniAOS.activateHub('${_esc(h.hubId)}')">&#x25B6;&#xFE0F; Activate</button>`
+              : `<button class="aos-btn-sm warning" onclick="SokoniAOS.deactivateHub('${_esc(h.hubId)}')">&#x23F8;&#xFE0F; Pause</button>`}
+          </td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+    } catch(e) { body.innerHTML = _emptyMsg("Failed to load hubs: " + e.message); }
+  }
+
+  async function _loadHubHealth() {
+    const row = document.getElementById("hubHealthRow");
+    if (!row) return;
+    row.innerHTML = `<div class="aos-spinner" style="width:100%;justify-content:flex-start;padding:0;"><div></div></div>`;
+    try {
+      const r = await _call("pcGetCrossHubHealth");
+      const hubs = (r.hubs || []).filter(h => h.orders24h > 0 || h.status === 'live');
+      if (!hubs.length) { row.innerHTML = '<span style="color:var(--aos-muted);font-size:12px">No hub activity in last 24h</span>'; return; }
+      row.innerHTML = hubs.map(h => `
+        <div class="health-chip" style="min-width:120px;cursor:default;">
+          <span>${_esc(h.icon||'📦')} ${_esc(h.name)}</span>
+          <strong>${h.orders24h}</strong>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:10px;margin-top:4px;">
+            <span style="color:var(--aos-muted)">KES ${_fmt(h.revenue24h)}</span>
+            ${HEALTH_BADGE[h.health] || ''}
+          </div>
+          <div class="health-bar" style="margin-top:6px;"><div style="width:${Math.min(h.errorRate*5,100)}%;background:${h.health==='healthy'?'var(--aos-accent)':h.health==='warning'?'var(--aos-warn)':'var(--aos-danger)'};"></div></div>
+        </div>`).join('');
+    } catch(e) { row.innerHTML = '<span style="color:var(--aos-muted);font-size:12px">Health unavailable</span>'; }
+  }
+
+  async function viewHubDetails(hubId) {
+    const panel = document.getElementById("hubDetailPanel");
+    const nameEl = document.getElementById("hubDetailName");
+    const body   = document.getElementById("hubDetailBody");
+    if (!panel || !body) return;
+    panel.style.display = 'block';
+    nameEl.textContent  = hubId;
+    body.innerHTML = _spinner();
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    try {
+      const [details, perFlags] = await Promise.all([
+        _call("pcGetHubDetails", { hubId }),
+        _call("pcGetPerHubFlags", { hubId }),
+      ]);
+      nameEl.textContent = `${details.icon || '📦'} ${details.name || hubId}`;
+      const flags = perFlags.flags || {};
+      body.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <h4 style="font-size:13px;margin-bottom:10px;color:var(--aos-muted)">HUB INFO</h4>
+            <div class="user-detail-grid">
+              <div><strong>Status</strong><span>${HUB_STATUS_BADGE[details.status] || details.status}</span></div>
+              <div><strong>Cloud Functions</strong><span>${details.cfCount || '—'}</span></div>
+              <div><strong>Lifetime Revenue</strong><span>KES ${_fmt(details.lifetimeRevenue)}</span></div>
+              <div><strong>Lifetime Orders</strong><span>${_fmt(details.lifetimeOrders)}</span></div>
+            </div>
+            <div style="margin-top:16px;">
+              <button class="aos-btn success" style="margin-right:8px;" onclick="SokoniAOS.activateHub('${_esc(hubId)}')">&#x25B6;&#xFE0F; Activate</button>
+              <button class="aos-btn danger" onclick="SokoniAOS.deactivateHub('${_esc(hubId)}')">&#x23F8;&#xFE0F; Pause</button>
+            </div>
+          </div>
+          <div>
+            <h4 style="font-size:13px;margin-bottom:10px;color:var(--aos-muted)">PER-HUB FLAGS</h4>
+            <div class="flag-list" id="hubFlagList-${_esc(hubId)}">
+              ${Object.entries(flags).map(([k,v]) => `
+                <div class="toggle-row">
+                  <div><strong style="font-size:13px">${_esc(k)}</strong></div>
+                  <label class="toggle-sw"><input type="checkbox" ${v?'checked':''} onchange="SokoniAOS.setHubFlag('${_esc(hubId)}','${_esc(k)}',this.checked)"><span></span></label>
+                </div>`).join('')}
+            </div>
+          </div>
+        </div>`;
+    } catch(e) { body.innerHTML = _emptyMsg("Failed to load hub details: " + e.message); }
+  }
+
+  async function activateHub(hubId) {
+    const reason = prompt("Activation reason (optional):");
+    if (reason === null) return;
+    try {
+      await _call("pcActivateHub", { hubId, reason });
+      _toast(`Hub '${hubId}' activated`, "success");
+      _panelCache.hubs = false;
+      _loadHubs();
+    } catch(e) { _toast("Activate failed: " + e.message, "error"); }
+  }
+
+  async function deactivateHub(hubId) {
+    const reason = prompt("Pause reason:");
+    if (!reason) { _toast("Reason required to pause a live hub", "error"); return; }
+    try {
+      await _call("pcDeactivateHub", { hubId, reason });
+      _toast(`Hub '${hubId}' paused`, "info");
+      _panelCache.hubs = false;
+      _loadHubs();
+    } catch(e) { _toast("Deactivate failed: " + e.message, "error"); }
+  }
+
+  async function setHubFlag(hubId, flagKey, enabled) {
+    try {
+      await _call("pcSetPerHubFlag", { hubId, flagKey, enabled });
+      _toast(`${flagKey} → ${enabled ? 'ON' : 'OFF'}`, "success");
+    } catch(e) { _toast("Flag update failed: " + e.message, "error"); }
+  }
+
+  // ── Workflow Center ───────────────────────────────────────────────────────────
+  async function _loadWorkflows() {
+    const body   = document.getElementById("workflowsBody");
+    const status = document.getElementById("wfStatusFilter")?.value || "";
+    const defId  = document.getElementById("wfDefFilter")?.value.trim() || "";
+    if (!body) return;
+    body.innerHTML = _spinner();
+    try {
+      const r = await _call("wapGetInstances", { status: status || undefined, definitionId: defId || undefined, limit: 30 });
+      const instances = r.instances || [];
+      if (!instances.length) { body.innerHTML = _emptyMsg("No workflow instances found"); return; }
+      body.innerHTML = `<div style="overflow-x:auto"><table class="aos-table">
+        <thead><tr><th>Instance ID</th><th>Definition</th><th>Status</th><th>Steps</th><th>Failed</th><th>Created</th><th>Actions</th></tr></thead>
+        <tbody>${instances.map(i => `<tr>
+          <td><span class="aos-mono">${_esc(i.id.slice(0,10))}…</span></td>
+          <td>${_esc(i.definitionId || '—')}</td>
+          <td>${_wfStatusBadge(i.status)}</td>
+          <td>${i.stepCount || 0}</td>
+          <td><span style="color:${i.failedSteps>0?'var(--aos-danger)':'var(--aos-muted)'}">${i.failedSteps}</span></td>
+          <td style="color:var(--aos-muted);font-size:11px;">${i.createdAt ? new Date(i.createdAt).toLocaleString('en-KE') : '—'}</td>
+          <td>
+            ${i.failedSteps > 0 ? `<button class="aos-btn-sm warning" onclick="SokoniAOS.retryWfStep('${_esc(i.id)}')">&#x21BA; Retry</button>` : ''}
+          </td>
+        </tr>`).join('')}</tbody>
+      </table>${r.hasMore ? `<p style="color:var(--aos-muted);font-size:12px;margin-top:12px;">Showing first 30 — refine filters to narrow results.</p>` : ''}</div>`;
+    } catch(e) { body.innerHTML = _emptyMsg("Failed to load workflows: " + e.message); }
+  }
+
+  function _wfStatusBadge(s) {
+    const map = { running:'st-processing', completed:'st-completed', failed:'st-cancelled', pending:'st-pending', paused:'st-inactive', cancelled:'st-cancelled' };
+    return `<span class="status-badge ${map[s]||'st-unknown'}">${_esc(s||'unknown')}</span>`;
+  }
+
+  async function retryWfStep(instanceId) {
+    const stepId = prompt("Step ID to retry:");
+    if (!stepId) return;
+    try {
+      await _call("wapRetryStep", { instanceId, stepId });
+      _toast("Step queued for retry", "success");
+      _panelCache.workflows = false;
+      _loadWorkflows();
+    } catch(e) { _toast("Retry failed: " + e.message, "error"); }
+  }
+
   function _viewBanned() { window.open("trust-safety.html#banned","_blank"); }
   function _viewRiskScores() { window.open("trust-safety.html#risk","_blank"); }
 
@@ -1389,6 +1569,16 @@ window.SokoniAOS = (() => {
     revokeSession,
     approveRequest,
     rejectRequest,
+    // Hubs
+    refreshHubs:         () => { _panelCache.hubs = false; _loadHubs(); },
+    loadHubHealth:       _loadHubHealth,
+    viewHubDetails,
+    activateHub,
+    deactivateHub,
+    setHubFlag,
+    // Workflows
+    loadWorkflows:       _loadWorkflows,
+    retryWfStep,
     // Utility
     closeModal:          _closeModal,
     signOut:             _signOut,

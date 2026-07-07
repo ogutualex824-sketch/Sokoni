@@ -136,7 +136,7 @@
     .dj-status-ring.seen::before{background:rgba(255,255,255,0.1);}
     .dj-status-inner{width:68px;height:68px;border-radius:50%;background:#141414;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;font-size:28px;overflow:hidden;}
     .dj-status-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.65);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:96px;}
-    .dj-live-dot{position:absolute;top:0;right:0;z-index:2;background:#ff3b3b;border:2px solid #0a0a0a;width:14px;height:14px;border-radius:50%;animation:pulse-live 1.5s infinite;}
+    .dj-live-dot{position:absolute;top:0;right:0;z-index:2;background:#ff3b3b;border:2px solid #050505;width:14px;height:14px;border-radius:50%;animation:pulse-live 1.5s infinite;}
     @keyframes pulse-live{0%,100%{box-shadow:0 0 0 2px rgba(255,60,60,0.4);}50%{box-shadow:0 0 0 5px rgba(255,60,60,0.15);}}
 
     /*  Waveform animation (DJ card banner)  */
@@ -1927,7 +1927,7 @@ function showQRModal(ticket) {
     <h2 style="color:#4ade80;margin-bottom:4px;">🎉 Ticket Confirmed!</h2>
     <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:16px;">${esc(ticket.eventTitle || 'Event')} · ${ticket.eventDate || ''}</p>
     <div id="qrCodeImg" style="margin:0 auto 16px;width:200px;height:200px;background:white;border-radius:14px;display:flex;align-items:center;justify-content:center;">
-      <div style="font-size:12px;color:#0a0a0a;">Generating QR…</div>
+      <div style="font-size:12px;color:#050505;">Generating QR…</div>
     </div>
     <div style="background:rgba(255,255,255,0.04);border-radius:12px;padding:12px;margin-bottom:16px;text-align:left;font-size:12px;">
       <div style="color:rgba(255,255,255,0.4);margin-bottom:4px;">Ticket Details</div>
@@ -1943,7 +1943,7 @@ function showQRModal(ticket) {
   /* Generate QR */
   if (window.QRCode && ticket.qrData) {
     const el = document.getElementById('qrCodeImg');
-    QRCode.toDataURL(ticket.qrData, { width: 196, margin: 1, color: { dark: '#0a0a0a', light: '#ffffff' } }, (err, url) => {
+    QRCode.toDataURL(ticket.qrData, { width: 196, margin: 1, color: { dark: '#050505', light: '#ffffff' } }, (err, url) => {
       if (!err && el) el.innerHTML = `<img src="${url}" style="width:196px;height:196px;border-radius:12px;" alt="QR Ticket">`;
     });
   }
@@ -2044,7 +2044,7 @@ function renderMyTickets() {
       tickets.forEach(t => {
         const qrContainer = document.querySelector(`#qr_${t._id} div:last-child`);
         if (t.qrData && qrContainer) {
-          QRCode.toDataURL(t.qrData, { width: 160, margin: 1, color: { dark: '#0a0a0a', light: '#ffffff' } }, (err, url) => {
+          QRCode.toDataURL(t.qrData, { width: 160, margin: 1, color: { dark: '#050505', light: '#ffffff' } }, (err, url) => {
             if (!err && qrContainer) qrContainer.innerHTML = `<img src="${url}" style="width:160px;height:160px;border-radius:8px;" alt="QR">`;
           });
         }

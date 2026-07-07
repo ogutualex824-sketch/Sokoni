@@ -1,22 +1,22 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <script src="security.js"></script>
   <script src="shared-header.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0a0a0a">
+  <meta name="theme-color" content="#050505">
   <meta name="robots" content="noindex, nofollow">
-  <title>Secure Payment — SOKONI</title>
+  <title>Secure Payment â€” SOKONI</title>
   <link rel="icon" type="image/png" href="/assets/Sokonilogo2.png">
 
-  <!-- Minimal inline CSS for fast FCP — no external CSS blocking render -->
+  <!-- Minimal inline CSS for fast FCP â€” no external CSS blocking render -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
       --sk-green:  #71ff00;
-      --sk-dark:   #0a0a0a;
+      --sk-dark:   #050505;
       --sk-card:   #141414;
       --sk-border: rgba(255,255,255,0.08);
       --sk-text:   #e8e8e8;
@@ -33,7 +33,7 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── Layout ── */
+    /* â”€â”€ Layout â”€â”€ */
     .pay-wrap {
       max-width: 480px;
       margin: 0 auto;
@@ -44,7 +44,7 @@
       gap: 16px;
     }
 
-    /* ── Top bar ── */
+    /* â”€â”€ Top bar â”€â”€ */
     .pay-topbar {
       display: flex;
       align-items: center;
@@ -77,7 +77,7 @@
     }
     .pay-secure-badge svg { flex-shrink: 0; }
 
-    /* ── State screens ── */
+    /* â”€â”€ State screens â”€â”€ */
     .pay-state {
       display: none;
       flex-direction: column;
@@ -102,7 +102,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Merchant card ── */
+    /* â”€â”€ Merchant card â”€â”€ */
     .pay-merchant {
       background: var(--sk-card);
       border: 1px solid var(--sk-border);
@@ -143,7 +143,7 @@
       margin-top: 2px;
     }
 
-    /* ── Items ── */
+    /* â”€â”€ Items â”€â”€ */
     .pay-section-label {
       font-size: 11px;
       font-weight: 600;
@@ -182,7 +182,7 @@
       white-space: nowrap;
     }
 
-    /* ── Totals ── */
+    /* â”€â”€ Totals â”€â”€ */
     .pay-totals {
       background: var(--sk-card);
       border: 1px solid var(--sk-border);
@@ -208,7 +208,7 @@
     .pay-total-row.grand .amount { color: var(--sk-green); }
     .pay-discount-amount { color: #ff6b6b; }
 
-    /* ── Payment methods ── */
+    /* â”€â”€ Payment methods â”€â”€ */
     .pay-methods {
       display: flex;
       flex-direction: column;
@@ -276,7 +276,7 @@
     }
     .pay-method-tab.selected .pay-method-body { display: block; }
 
-    /* ── Inputs ── */
+    /* â”€â”€ Inputs â”€â”€ */
     .pay-field { margin-bottom: 12px; }
     .pay-label {
       display: block;
@@ -337,7 +337,7 @@
       -webkit-appearance: none;
     }
 
-    /* ── Pay button ── */
+    /* â”€â”€ Pay button â”€â”€ */
     .pay-btn {
       width: 100%;
       padding: 16px;
@@ -374,7 +374,7 @@
     .pay-btn.loading .pay-btn-spinner { display: block; }
     .pay-btn.loading .pay-btn-text { opacity: 0; }
 
-    /* ── Timer ── */
+    /* â”€â”€ Timer â”€â”€ */
     .pay-timer {
       display: flex;
       align-items: center;
@@ -386,7 +386,7 @@
     .pay-timer-value { color: var(--sk-text); font-weight: 600; font-variant-numeric: tabular-nums; }
     .pay-timer.urgent .pay-timer-value { color: #ff6b6b; }
 
-    /* ── STK pending ── */
+    /* â”€â”€ STK pending â”€â”€ */
     .pay-stk-pending {
       display: none;
       flex-direction: column;
@@ -414,7 +414,7 @@
       color: #00c84f;
     }
 
-    /* ── Success ── */
+    /* â”€â”€ Success â”€â”€ */
     .pay-success-ring {
       width: 80px; height: 80px;
       background: rgba(113,255,0,.12);
@@ -444,7 +444,7 @@
     .pay-receipt-row .val { font-weight: 600; }
     .pay-receipt-total .val { color: var(--sk-green); font-size: 20px; font-weight: 800; }
 
-    /* ── Trust ── */
+    /* â”€â”€ Trust â”€â”€ */
     .pay-trust {
       display: flex;
       align-items: center;
@@ -459,7 +459,7 @@
       font-size: 11px; color: var(--sk-muted);
     }
 
-    /* ── Responsive ── */
+    /* â”€â”€ Responsive â”€â”€ */
     @media (min-width: 640px) {
       .pay-wrap { padding-top: 40px; }
     }
@@ -487,39 +487,39 @@
   <!-- Loading state -->
   <div class="pay-state active" id="stateLoading" aria-live="polite" aria-label="Loading payment">
     <div class="sk-spinner" role="status" aria-label="Loading"></div>
-    <p style="color:var(--sk-muted);font-size:14px;">Loading payment details…</p>
+    <p style="color:var(--sk-muted);font-size:14px;">Loading payment detailsâ€¦</p>
   </div>
 
   <!-- Error state -->
   <div class="pay-state" id="stateError" aria-live="assertive">
-    <div class="pay-state-icon" aria-hidden="true">⚠️</div>
+    <div class="pay-state-icon" aria-hidden="true">âš ï¸</div>
     <h2 id="errTitle">Payment Not Found</h2>
     <p id="errMsg">This payment link is invalid or has expired.</p>
-    <a href="/" style="color:var(--sk-green);font-size:14px;text-decoration:none;margin-top:8px;">← Back to SOKONI</a>
+    <a href="/" style="color:var(--sk-green);font-size:14px;text-decoration:none;margin-top:8px;">â† Back to SOKONI</a>
   </div>
 
   <!-- Expired state -->
   <div class="pay-state" id="stateExpired">
-    <div class="pay-state-icon" aria-hidden="true">⏰</div>
+    <div class="pay-state-icon" aria-hidden="true">â°</div>
     <h2>QR Code Expired</h2>
     <p>This payment QR has expired. Please ask the cashier to generate a new one.</p>
-    <a href="/" style="color:var(--sk-green);font-size:14px;text-decoration:none;margin-top:8px;">← Back to SOKONI</a>
+    <a href="/" style="color:var(--sk-green);font-size:14px;text-decoration:none;margin-top:8px;">â† Back to SOKONI</a>
   </div>
 
   <!-- Already paid state -->
   <div class="pay-state" id="stateAlreadyPaid">
-    <div class="pay-success-ring" aria-hidden="true">✓</div>
+    <div class="pay-success-ring" aria-hidden="true">âœ“</div>
     <h2>Already Paid</h2>
     <p>This transaction has already been completed.</p>
   </div>
 
   <!-- Success state -->
   <div class="pay-state" id="stateSuccess">
-    <div class="pay-success-ring" aria-hidden="true">✓</div>
+    <div class="pay-success-ring" aria-hidden="true">âœ“</div>
     <h2>Payment Successful!</h2>
     <p style="color:var(--sk-muted);">Your payment has been confirmed.</p>
     <div class="pay-receipt" id="successReceipt" aria-label="Payment receipt"></div>
-    <a href="/" style="color:var(--sk-green);font-size:14px;text-decoration:none;">← Continue Shopping</a>
+    <a href="/" style="color:var(--sk-green);font-size:14px;text-decoration:none;">â† Continue Shopping</a>
   </div>
 
   <!-- Main payment UI -->
@@ -527,10 +527,10 @@
 
     <!-- Merchant card -->
     <div class="pay-merchant" aria-label="Merchant information">
-      <div class="pay-merchant-avatar" id="merchantAvatar" aria-hidden="true">🏪</div>
+      <div class="pay-merchant-avatar" id="merchantAvatar" aria-hidden="true">ðŸª</div>
       <div>
         <div class="pay-merchant-name">
-          <span id="merchantName">Loading…</span>
+          <span id="merchantName">Loadingâ€¦</span>
           <span class="pay-verified" id="merchantVerifiedBadge" style="display:none;" aria-label="Verified merchant" title="Verified SOKONI merchant">
             <svg viewBox="0 0 10 10" fill="none" aria-hidden="true">
               <path d="M2 5l2 2 4-4" stroke="#000" stroke-width="1.6" stroke-linecap="round"/>
@@ -589,7 +589,7 @@
         <!-- M-Pesa -->
         <div class="pay-method-tab selected" id="tabMpesa" onclick="selectMethod('mpesa')" role="radio" aria-checked="true" tabindex="0" aria-label="Pay with M-Pesa">
           <div class="pay-method-header">
-            <div class="pay-method-icon mpesa" aria-hidden="true">📱</div>
+            <div class="pay-method-icon mpesa" aria-hidden="true">ðŸ“±</div>
             <div>
               <div class="pay-method-name">M-Pesa</div>
               <div class="pay-method-desc">STK Push to your phone</div>
@@ -616,11 +616,11 @@
 
             <!-- STK Pending UI -->
             <div class="pay-stk-pending" id="stkPending" aria-live="polite" aria-label="M-Pesa payment pending">
-              <div class="pay-stk-icon" aria-hidden="true">📲</div>
+              <div class="pay-stk-icon" aria-hidden="true">ðŸ“²</div>
               <div>Check your phone</div>
               <div class="pay-stk-phone" id="stkPhone"></div>
               <div class="pay-stk-hint">You'll receive an M-Pesa pop-up prompt. Enter your M-Pesa PIN to complete payment.</div>
-              <div class="pay-stk-pin-hint">🔒 Enter your PIN only on the official M-Pesa screen</div>
+              <div class="pay-stk-pin-hint">ðŸ”’ Enter your PIN only on the official M-Pesa screen</div>
             </div>
 
             <button class="pay-btn pay-btn-mpesa" id="btnPayMpesa" onclick="payMpesa()" aria-label="Pay with M-Pesa">
@@ -633,10 +633,10 @@
         <!-- Card -->
         <div class="pay-method-tab" id="tabCard" onclick="selectMethod('card')" role="radio" aria-checked="false" tabindex="0" aria-label="Pay with card">
           <div class="pay-method-header">
-            <div class="pay-method-icon card" aria-hidden="true">💳</div>
+            <div class="pay-method-icon card" aria-hidden="true">ðŸ’³</div>
             <div>
               <div class="pay-method-name">Card</div>
-              <div class="pay-method-desc">Visa · Mastercard</div>
+              <div class="pay-method-desc">Visa Â· Mastercard</div>
             </div>
             <div class="pay-method-selector"></div>
           </div>
@@ -654,23 +654,23 @@
 
     <!-- Trust -->
     <div class="pay-trust" aria-label="Security certifications">
-      <div class="pay-trust-item"><span aria-hidden="true">🔒</span> SSL Encrypted</div>
-      <div class="pay-trust-item"><span aria-hidden="true">🛡️</span> PCI DSS</div>
-      <div class="pay-trust-item"><span aria-hidden="true">✓</span> Buyer Protected</div>
+      <div class="pay-trust-item"><span aria-hidden="true">ðŸ”’</span> SSL Encrypted</div>
+      <div class="pay-trust-item"><span aria-hidden="true">ðŸ›¡ï¸</span> PCI DSS</div>
+      <div class="pay-trust-item"><span aria-hidden="true">âœ“</span> Buyer Protected</div>
     </div>
 
   </div>
 
 </div><!-- .pay-wrap -->
 
-<!-- Firebase SDK — loaded async, non-blocking -->
+<!-- Firebase SDK â€” loaded async, non-blocking -->
 <script type="module">
 'use strict';
-/* ── Firebase ── */
+/* â”€â”€ Firebase â”€â”€ */
 import { initializeApp }               from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.9.0/firebase-functions.js';
 
-/* ── Config (public keys only — private keys in Secret Manager) ── */
+/* â”€â”€ Config (public keys only â€” private keys in Secret Manager) â”€â”€ */
 const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyDfNnaCH1sHlsMnCFoNFW5sMeSFJTYYDok",
   authDomain:        "sokoni-aeb26.firebaseapp.com",
@@ -683,18 +683,18 @@ const FIREBASE_CONFIG = {
 const app = initializeApp(FIREBASE_CONFIG);
 const fn  = getFunctions(app, 'us-central1');
 
-/* ── State ── */
+/* â”€â”€ State â”€â”€ */
 let _txnId    = null;
 let _details  = null;
 let _timerInt = null;
 let _pollInt  = null;  // polling interval for payment confirmation
 
-/* ── Helpers ── */
+/* â”€â”€ Helpers â”€â”€ */
 const $  = (id) => document.getElementById(id);
 const fc = (name) => httpsCallable(fn, name);
 const fmt = (amt) => 'KES ' + Number(amt || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/* ── Show/hide states ── */
+/* â”€â”€ Show/hide states â”€â”€ */
 function showState(id) {
   ['stateLoading','stateError','stateExpired','stateAlreadyPaid','stateSuccess'].forEach(s => {
     const el = $(s);
@@ -712,7 +712,7 @@ function showState(id) {
   }
 }
 
-/* ── Parse transaction ID from URL ── */
+/* â”€â”€ Parse transaction ID from URL â”€â”€ */
 function _getTxnId() {
   // Support /pay/{id} path or ?ref={id} query
   const path  = window.location.pathname.replace('/pay/', '').replace('/pay', '');
@@ -720,7 +720,7 @@ function _getTxnId() {
   return (path && path.length === 32 ? path : null) || (query && query.length === 32 ? query : null);
 }
 
-/* ── Countdown timer ── */
+/* â”€â”€ Countdown timer â”€â”€ */
 function startTimer(expiresAt) {
   clearInterval(_timerInt);
   const el    = $('timerValue');
@@ -741,7 +741,7 @@ function startTimer(expiresAt) {
   _timerInt = setInterval(tick, 1000);
 }
 
-/* ── Render payment UI ── */
+/* â”€â”€ Render payment UI â”€â”€ */
 function renderPayment(d) {
   _details = d;
 
@@ -772,7 +772,7 @@ function renderPayment(d) {
     nameEl.textContent = item.name;
     const qtyEl = document.createElement('span');
     qtyEl.className = 'pay-item-qty';
-    qtyEl.textContent = `×${item.qty}`;
+    qtyEl.textContent = `Ã—${item.qty}`;
     const priceEl = document.createElement('span');
     priceEl.className = 'pay-item-price';
     priceEl.textContent = fmt(item.price * item.qty);
@@ -807,12 +807,12 @@ function renderPayment(d) {
   showState('main');
 }
 
-/* ── Show already-paid UI ── */
+/* â”€â”€ Show already-paid UI â”€â”€ */
 function showAlreadyPaid(d) {
   showState('stateAlreadyPaid');
 }
 
-/* ── Show success UI ── */
+/* â”€â”€ Show success UI â”€â”€ */
 function showSuccess(data) {
   clearInterval(_timerInt);
   clearInterval(_pollInt);
@@ -837,7 +837,7 @@ function showSuccess(data) {
   const merchant = (_details && _details.sellerName) || data.sellerName || 'Merchant';
   const total    = (_details && _details.total)      || data.total      || 0;
   const method   = data.paymentMethod || 'M-Pesa';
-  const receiptId = data.receiptId || '—';
+  const receiptId = data.receiptId || 'â€”';
   const now = new Date().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' });
 
   addRow('Merchant',    merchant);
@@ -849,7 +849,7 @@ function showSuccess(data) {
   showState('stateSuccess');
 }
 
-/* ── Poll for payment status (works for unauthenticated guests) ── */
+/* â”€â”€ Poll for payment status (works for unauthenticated guests) â”€â”€ */
 function startPolling(txnId) {
   clearInterval(_pollInt);
   let failCount = 0;
@@ -873,13 +873,13 @@ function startPolling(txnId) {
       failCount++;
       if (failCount >= 5) {
         clearInterval(_pollInt);
-        /* Don't show error — customer just won't auto-redirect; they can refresh */
+        /* Don't show error â€” customer just won't auto-redirect; they can refresh */
       }
     }
   }, 3000); /* Poll every 3 seconds */
 }
 
-/* ── Method selection ── */
+/* â”€â”€ Method selection â”€â”€ */
 window.selectMethod = function(method) {
   ['mpesa','card'].forEach(m => {
     const tab = $(m === 'mpesa' ? 'tabMpesa' : 'tabCard');
@@ -898,7 +898,7 @@ document.querySelectorAll('.pay-method-tab').forEach(tab => {
   });
 });
 
-/* ── Pay with M-Pesa ── */
+/* â”€â”€ Pay with M-Pesa â”€â”€ */
 window.payMpesa = async function() {
   const phoneInput = $('mpesaPhone');
   const errEl      = $('mpesaPhoneError');
@@ -935,7 +935,7 @@ window.payMpesa = async function() {
       const disp = fullPhone.replace(/(\d{3})(\d{3})(\d{3})(\d{3})/, '+$1 $2 $3 $4');
       $('stkPhone').textContent = disp;
       $('stkPending').classList.add('show');
-      btn.querySelector('.pay-btn-text').textContent = 'Waiting for confirmation…';
+      btn.querySelector('.pay-btn-text').textContent = 'Waiting for confirmationâ€¦';
       /* Start polling for payment confirmation */
       startPolling(_txnId);
     } else if (d.status === 'already_paid') {
@@ -951,7 +951,7 @@ window.payMpesa = async function() {
   }
 };
 
-/* ── Pay with Card ── */
+/* â”€â”€ Pay with Card â”€â”€ */
 window.payCard = async function() {
   const btn = $('btnPayCard');
   btn.disabled = true;
@@ -982,7 +982,7 @@ window.payCard = async function() {
   }
 };
 
-/* ── Bootstrap ── */
+/* â”€â”€ Bootstrap â”€â”€ */
 async function init() {
   _txnId = _getTxnId();
 

@@ -461,6 +461,72 @@
       return _callCF('sasosGetRecommendations', { product }).catch(() => ({ recommendations: [] }));
     },
 
+    /* ── Hub Registration ────────────────────────────────── */
+    /*
+     * registerHub(manifest) — call this once per hub page to declare the hub's
+     * capabilities to the platform SDK. Persists the manifest locally and emits
+     * a 'hub.registered' event on the platform event bus.
+     *
+     * manifest = {
+     *   hubId:           'healthcare',         // matches platformHubs/{hubId}
+     *   name:            'Healthcare Hub',
+     *   transactionType: 'healthcare_appointment',
+     *   features:        ['search','chat','payments','notifications','ai'],
+     *   workflows:       ['appointment_booking','appointment_reminder'],
+     *   navItems:        [{ label:'Book', href:'healthcare.html' }],
+     * }
+     */
+    registerHub(manifest = {}) {
+      if (!manifest.hubId) {
+        console.warn('[SokoniPlatform] registerHub: hubId is required');
+        return;
+      }
+      /* Store manifest locally for other SDK methods to reference */
+      if (!window._sokoniHubManifests) window._sokoniHubManifests = {};
+      window._sokoniHubManifests[manifest.hubId] = {
+        ...manifest,
+        registeredAt: Date.now(),
+      };
+
+      /* Declare the hub to the platform service mesh via init's publishesEvents */
+      if (_initialized) {
+        /* Emit to local + server event bus */
+        this.publish('hub.registered', {
+          hubId:           manifest.hubId,
+          name:            manifest.name,
+          transactionType: manifest.transactionType,
+          features:        manifest.features || [],
+        }).catch(() => {});
+
+        /* Record usage against SASOS quota for this hub product */
+        const hubProduct = manifest.product || manifest.hubId;
+        this.recordUsage(hubProduct, 'hub_init', 1).catch(() => {});
+      }
+
+      return manifest;
+    },
+
+    /*
+     * getHubManifest(hubId) — retrieve a previously registered hub manifest.
+     * Returns null if the hub has not been registered in this session.
+     */
+    getHubManifest(hubId) {
+      return (window._sokoniHubManifests || {})[hubId] || null;
+    },
+
+    /*
+     * notifyTransactionChange — convenience wrapper around the
+     * platformNotifyTransactionChange CF. New hubs call this instead of writing
+     * a custom Firestore trigger when their transaction status changes.
+     *
+     * Returns { ok, conversationId? } or { ok, noConversation: true }
+     */
+    async notifyTransactionChange({ transactionId, transactionType, newStatus, actorRole, statusMessage } = {}) {
+      return _callCF('platformNotifyTransactionChange', {
+        transactionId, transactionType, newStatus, actorRole, statusMessage,
+      });
+    },
+
     /* ── Feature Flags ───────────────────────────────────── */
     async getFlag(flagKey, defaultValue = false) {
       if (window.SokoniFeatureFlags?.isEnabled) {

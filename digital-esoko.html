@@ -1,12 +1,12 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-splash="1">
 <head>
 <script src="security.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Digital Esoko — Buy & Download Digital Products | SOKONI</title>
+<title>Digital Esoko â€” Buy & Download Digital Products | SOKONI</title>
 <meta name="description" content="Buy and download eBooks, templates, music, courses, software and design assets from Kenyan creators. Instant delivery after M-Pesa payment.">
-<meta property="og:title" content="Digital Esoko — Kenya's Digital Products Marketplace">
+<meta property="og:title" content="Digital Esoko â€” Kenya's Digital Products Marketplace">
 <meta property="og:description" content="eBooks, Templates, Music, Courses, Software & more from Kenyan creators. Pay with M-Pesa. Instant download.">
 <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
 <link rel="icon" type="image/png" href="assets/logosokoni.png">
@@ -25,7 +25,7 @@
 <script src="shared-header.js" defer></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;min-height:100vh}
 a{text-decoration:none;color:inherit}
 
 .de-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(10,10,10,.96);border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:200;backdrop-filter:blur(12px)}
@@ -116,23 +116,23 @@ a{text-decoration:none;color:inherit}
 <nav class="de-nav">
   <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="de-nav-logo" alt="SOKONI"></a>
   <div class="de-nav-right">
-    <button type="button" class="de-nb blue" onclick="showMyPurchases()">📥 My Downloads</button>
-    <a href="digital-esoko-seller.html" class="de-nb green">🚀 Sell Here</a>
+    <button type="button" class="de-nb blue" onclick="showMyPurchases()">ðŸ“¥ My Downloads</button>
+    <a href="digital-esoko-seller.html" class="de-nb green">ðŸš€ Sell Here</a>
   </div>
 </nav>
 
 <section class="de-hero">
-  <div class="de-hero-badge">🛒 KENYA'S DIGITAL MARKETPLACE</div>
-  <h1>📦 Digital Esoko</h1>
+  <div class="de-hero-badge">ðŸ›’ KENYA'S DIGITAL MARKETPLACE</div>
+  <h1>ðŸ“¦ Digital Esoko</h1>
   <p>Buy and download eBooks, templates, music, courses, software and design assets from Kenyan creators. Pay with M-Pesa, download instantly.</p>
   <div class="de-hero-stats">
-    <div class="de-stat"><strong id="deStatProducts">—</strong> Products</div>
-    <div class="de-stat"><strong id="deStatSellers">—</strong> Creators</div>
-    <div class="de-stat"><strong id="deStatDownloads">—</strong> Downloads</div>
+    <div class="de-stat"><strong id="deStatProducts">â€”</strong> Products</div>
+    <div class="de-stat"><strong id="deStatSellers">â€”</strong> Creators</div>
+    <div class="de-stat"><strong id="deStatDownloads">â€”</strong> Downloads</div>
   </div>
   <div class="de-search">
-    <input type="text" id="deSearch" placeholder="Search eBooks, templates, music…" oninput="searchProducts()">
-    <button type="button" class="de-search-btn" onclick="searchProducts()">🔍</button>
+    <input type="text" id="deSearch" placeholder="Search eBooks, templates, musicâ€¦" oninput="searchProducts()">
+    <button type="button" class="de-search-btn" onclick="searchProducts()">ðŸ”</button>
   </div>
 </section>
 
@@ -140,26 +140,26 @@ a{text-decoration:none;color:inherit}
 
 <div class="de-body">
   <div class="de-sort-row">
-    <div class="de-count" id="deCount">Loading…</div>
+    <div class="de-count" id="deCount">Loadingâ€¦</div>
     <select class="de-sort-sel" id="deSort" onchange="renderProducts(filterAndSort())">
       <option value="newest">Newest First</option>
-      <option value="price_asc">Price: Low → High</option>
-      <option value="price_desc">Price: High → Low</option>
+      <option value="price_asc">Price: Low â†’ High</option>
+      <option value="price_desc">Price: High â†’ Low</option>
       <option value="downloads">Most Downloaded</option>
     </select>
   </div>
   <div class="de-grid" id="deGrid"></div>
   <div class="de-empty" id="deEmpty" style="display:none">
-    <div class="de-empty-icon">📦</div>
+    <div class="de-empty-icon">ðŸ“¦</div>
     <h3>No products yet</h3>
     <p>Be the first to list your digital product on Sokoni Esoko.</p>
-    <a href="digital-esoko-seller.html" class="de-cta-btn">🚀 Start Selling</a>
+    <a href="digital-esoko-seller.html" class="de-cta-btn">ðŸš€ Start Selling</a>
   </div>
 
   <div class="de-sell-cta">
-    <h2>💡 Sell Your Digital Products</h2>
+    <h2>ðŸ’¡ Sell Your Digital Products</h2>
     <p>Turn your knowledge and creativity into income. List eBooks, templates, beats, courses, software and more. Keep up to 95% of every sale.</p>
-    <a href="digital-esoko-seller.html" class="de-cta-btn">🚀 Start Selling Today</a>
+    <a href="digital-esoko-seller.html" class="de-cta-btn">ðŸš€ Start Selling Today</a>
   </div>
 </div>
 
@@ -167,7 +167,7 @@ a{text-decoration:none;color:inherit}
 <div class="de-modal" id="deProductModal">
   <div class="de-modal-box">
     <div class="de-modal-close-row">
-      <button type="button" class="de-close-btn" onclick="closeProductModal()">✕</button>
+      <button type="button" class="de-close-btn" onclick="closeProductModal()">âœ•</button>
     </div>
     <div class="de-modal-inner" id="deProductBody"></div>
   </div>
@@ -175,11 +175,11 @@ a{text-decoration:none;color:inherit}
 
 <!-- BOTTOM NAV -->
 <nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
-  <a href="digital-esoko.html" class="bnav-item active-bnav"><span class="bnav-emoji">📦</span><span>Digital</span></a>
-  <a href="digital-esoko-seller.html" class="bnav-item"><span class="bnav-emoji">🚀</span><span>Sell</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">ðŸ </span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">ðŸ›ï¸</span><span>Shop</span></a>
+  <a href="digital-esoko.html" class="bnav-item active-bnav"><span class="bnav-emoji">ðŸ“¦</span><span>Digital</span></a>
+  <a href="digital-esoko-seller.html" class="bnav-item"><span class="bnav-emoji">ðŸš€</span><span>Sell</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">ðŸ‘¤</span><span>Profile</span></a>
 </nav>
 
 <div id="deNotifContainer"></div>
@@ -204,17 +204,17 @@ a{text-decoration:none;color:inherit}
 
 <script>
 const DE_CATS = [
-  {id:'all',       label:'All',           emoji:'🌍'},
-  {id:'ebook',     label:'eBooks',        emoji:'📚'},
-  {id:'template',  label:'Templates',     emoji:'🎨'},
-  {id:'music',     label:'Music & Audio', emoji:'🎵'},
-  {id:'photo',     label:'Photography',   emoji:'📷'},
-  {id:'course',    label:'Courses',       emoji:'🎓'},
-  {id:'software',  label:'Software',      emoji:'💻'},
-  {id:'tool',      label:'Business Tools',emoji:'🔧'},
-  {id:'marketing', label:'Marketing Kits',emoji:'📣'},
-  {id:'design',    label:'Design Assets', emoji:'✏️'},
-  {id:'data',      label:'Spreadsheets',  emoji:'📊'},
+  {id:'all',       label:'All',           emoji:'ðŸŒ'},
+  {id:'ebook',     label:'eBooks',        emoji:'ðŸ“š'},
+  {id:'template',  label:'Templates',     emoji:'ðŸŽ¨'},
+  {id:'music',     label:'Music & Audio', emoji:'ðŸŽµ'},
+  {id:'photo',     label:'Photography',   emoji:'ðŸ“·'},
+  {id:'course',    label:'Courses',       emoji:'ðŸŽ“'},
+  {id:'software',  label:'Software',      emoji:'ðŸ’»'},
+  {id:'tool',      label:'Business Tools',emoji:'ðŸ”§'},
+  {id:'marketing', label:'Marketing Kits',emoji:'ðŸ“£'},
+  {id:'design',    label:'Design Assets', emoji:'âœï¸'},
+  {id:'data',      label:'Spreadsheets',  emoji:'ðŸ“Š'},
 ];
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -222,7 +222,7 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
 let allProducts = [];
 let activeCat = 'all';
 
-function _catInfo(id){ return DE_CATS.find(c=>c.id===id) || {emoji:'📦',label:id||'Digital'}; }
+function _catInfo(id){ return DE_CATS.find(c=>c.id===id) || {emoji:'ðŸ“¦',label:id||'Digital'}; }
 
 function _lsGet(k,def){ try{ return JSON.parse(localStorage.getItem(k))||def; }catch(e){ return def; } }
 function _lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
@@ -274,15 +274,15 @@ function _productCard(p){
       <div class="de-card-cover">
         ${p.coverURL?`<img loading="lazy" src="${esc(p.coverURL)}" alt="${esc(p.title)}">`:`<div class="de-cover-ph">${ci.emoji}</div>`}
         <div class="de-cat-badge">${ci.emoji} ${esc(ci.label)}</div>
-        ${p.featured?`<div class="de-feat-badge" style="background:rgba(113,255,0,.9);color:#000">⭐ Featured</div>`:''}
-        ${bought?`<div class="de-feat-badge" style="background:rgba(0,170,255,.9);color:#fff;right:8px;top:${p.featured?'32':'8'}px">✓ Owned</div>`:''}
+        ${p.featured?`<div class="de-feat-badge" style="background:rgba(113,255,0,.9);color:#000">â­ Featured</div>`:''}
+        ${bought?`<div class="de-feat-badge" style="background:rgba(0,170,255,.9);color:#fff;right:8px;top:${p.featured?'32':'8'}px">âœ“ Owned</div>`:''}
       </div>
       <div class="de-card-body">
         <h3 class="de-card-title">${esc(p.title)}</h3>
         <p class="de-card-seller">by ${esc(p.sellerName||'Creator')}</p>
         <div class="de-card-meta">
-          <span>📥 ${Number(p.downloads||0).toLocaleString()}</span>
-          <span>${p.rating?'⭐ '+p.rating:'New'}</span>
+          <span>ðŸ“¥ ${Number(p.downloads||0).toLocaleString()}</span>
+          <span>${p.rating?'â­ '+p.rating:'New'}</span>
         </div>
         <div class="de-card-price${free?' free':''}">${free?'FREE':'KES '+Number(p.price||0).toLocaleString()}</div>
       </div>
@@ -312,17 +312,17 @@ function openProductModal(id){
     </div>
     <div style="margin-bottom:10px"><span style="font-size:11px;font-weight:800;padding:3px 10px;border-radius:6px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.2);color:#71ff00">${ci.emoji} ${esc(ci.label)}</span></div>
     <h2 style="font-size:19px;font-weight:900;margin-bottom:8px;line-height:1.3">${esc(p.title)}</h2>
-    <p style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:12px">by ${esc(p.sellerName||'Creator')} · 📥 ${Number(p.downloads||0).toLocaleString()} downloads${p.rating?' · ⭐ '+p.rating:''}</p>
+    <p style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:12px">by ${esc(p.sellerName||'Creator')} Â· ðŸ“¥ ${Number(p.downloads||0).toLocaleString()} downloads${p.rating?' Â· â­ '+p.rating:''}</p>
     <p style="font-size:13px;color:rgba(255,255,255,.65);line-height:1.65;margin-bottom:14px">${esc(p.description||'')}</p>
     ${p.tags&&p.tags.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${p.tags.map(t=>`<span style="font-size:11px;padding:3px 9px;border-radius:6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.45)">${esc(t)}</span>`).join('')}</div>`:''}
-    ${p.fileName||p.fileSize?`<div style="font-size:12px;color:rgba(255,255,255,.35);margin-bottom:12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">${p.fileName?`<span>📁 ${esc(p.fileName)}</span>`:''}${p.fileSize?`<span>💾 ${esc(p.fileSize)}</span>`:''}</div>`:''}
+    ${p.fileName||p.fileSize?`<div style="font-size:12px;color:rgba(255,255,255,.35);margin-bottom:12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center">${p.fileName?`<span>ðŸ“ ${esc(p.fileName)}</span>`:''}${p.fileSize?`<span>ðŸ’¾ ${esc(p.fileSize)}</span>`:''}</div>`:''}
     <div style="font-size:26px;font-weight:900;color:${free?'#00aaff':'#71ff00'};margin-bottom:4px">${free?'FREE':'KES '+Number(p.price||0).toLocaleString()}</div>
-    ${!free?`<p style="font-size:11px;color:rgba(255,255,255,.3);margin-bottom:12px">One-time payment · Unlimited downloads</p>`:''}
+    ${!free?`<p style="font-size:11px;color:rgba(255,255,255,.3);margin-bottom:12px">One-time payment Â· Unlimited downloads</p>`:''}
     ${canAccess
-      ? `<a href="${esc(p.fileURL||'#')}" download="${esc(p.fileName||'download')}" target="_blank" class="de-btn-download" onclick="trackDownload('${esc(p.id)}')">📥 Download Now</a>
+      ? `<a href="${esc(p.fileURL||'#')}" download="${esc(p.fileName||'download')}" target="_blank" class="de-btn-download" onclick="trackDownload('${esc(p.id)}')">ðŸ“¥ Download Now</a>
          <p style="font-size:11px;color:rgba(255,255,255,.3);text-align:center;margin-top:8px">Your file will download automatically</p>`
-      : `<button type="button" class="de-btn-buy" onclick="purchaseProduct('${esc(p.id)}')">💳 Buy Now — KES ${Number(p.price||0).toLocaleString()}</button>
-         <p style="font-size:11px;color:rgba(255,255,255,.3);text-align:center;margin-top:8px">📱 M-Pesa · Instant download after payment</p>`
+      : `<button type="button" class="de-btn-buy" onclick="purchaseProduct('${esc(p.id)}')">ðŸ’³ Buy Now â€” KES ${Number(p.price||0).toLocaleString()}</button>
+         <p style="font-size:11px;color:rgba(255,255,255,.3);text-align:center;margin-top:8px">ðŸ“± M-Pesa Â· Instant download after payment</p>`
     }`;
   document.getElementById('deProductModal').classList.add('open');
 }
@@ -334,7 +334,7 @@ function closeProductModal(){
 function purchaseProduct(id){
   const p = allProducts.find(x=>x.id===id);
   if(!p||hasPurchased(id)) return;
-  if(!window.SokoniPay?.platformBook){ deNotif('Payment module loading…','info'); return; }
+  if(!window.SokoniPay?.platformBook){ deNotif('Payment module loadingâ€¦','info'); return; }
   const user = _user();
   if(!user){ deNotif('Sign in to purchase','error'); window.location.href='auth.html'; return; }
   closeProductModal();
@@ -376,9 +376,9 @@ function purchaseProduct(id){
       }
       /* Invoice */
       if(window.SokoniInvoice){
-        SokoniInvoice.generate({type:'digital',buyerName:user.name||'Buyer',buyerPhone:user.phone||'',items:[{name:p.title,category:_catInfo(p.category).label,qty:1,price:p.price}],subtotal:p.price,total:p.price,paymentMethod:'M-Pesa · '+ref,paymentRef:ref,sellerName:p.sellerName||'Creator'});
+        SokoniInvoice.generate({type:'digital',buyerName:user.name||'Buyer',buyerPhone:user.phone||'',items:[{name:p.title,category:_catInfo(p.category).label,qty:1,price:p.price}],subtotal:p.price,total:p.price,paymentMethod:'M-Pesa Â· '+ref,paymentRef:ref,sellerName:p.sellerName||'Creator'});
       }
-      deNotif('✅ Payment confirmed! Downloading…','success');
+      deNotif('âœ… Payment confirmed! Downloadingâ€¦','success');
       /* Trigger download */
       if(p.fileURL){
         const a = document.createElement('a');
@@ -403,7 +403,7 @@ function showMyPurchases(){
   activeCat='all';
   document.querySelectorAll('.de-pill').forEach(b=>b.classList.remove('active-pill'));
   const purchases = getMyPurchases();
-  if(!purchases.length){ deNotif('No purchases yet — buy a product first!','info'); return; }
+  if(!purchases.length){ deNotif('No purchases yet â€” buy a product first!','info'); return; }
   const productIds = new Set(purchases.map(p=>p.productId));
   const list = allProducts.filter(p=>productIds.has(p.id));
   /* Include purchases whose product wasn't loaded yet */
@@ -434,7 +434,7 @@ function deNotif(msg, type){
   setTimeout(()=>n.remove(),4200);
 }
 
-/* ── Build filter bar ── */
+/* â”€â”€ Build filter bar â”€â”€ */
 (function buildFilterBar(){
   const bar = document.getElementById('deFilterBar'); if(!bar) return;
   bar.innerHTML = DE_CATS.map((c,i)=>
@@ -442,7 +442,7 @@ function deNotif(msg, type){
   ).join('');
 })();
 
-/* ── Merge Firestore live data ── */
+/* â”€â”€ Merge Firestore live data â”€â”€ */
 window._mergeDEProducts = function(live){
   const existing = new Map(allProducts.map(p=>[p.id,p]));
   live.forEach(p=>existing.set(p.id,p));
@@ -481,7 +481,7 @@ onAuthStateChanged(auth, async u => {
   }
 });
 
-/* ── Real-time product feed ── */
+/* â”€â”€ Real-time product feed â”€â”€ */
 try {
   onSnapshot(
     query(collection(db,'digitalProducts'), orderBy('createdAt','desc'), limit(200)),
@@ -492,12 +492,12 @@ try {
   );
 } catch(e) {}
 
-/* ── Save purchase after payment ── */
+/* â”€â”€ Save purchase after payment â”€â”€ */
 window._saveDEPurchaseFS = async function(purchase){
   try { await addDoc(collection(db,'digitalPurchases'), {...purchase, createdAt:serverTimestamp()}); } catch(e){}
 };
 
-/* ── Increment download counter ── */
+/* â”€â”€ Increment download counter â”€â”€ */
 window._incrementDEDownloadFS = async function(productId){
   try { await updateDoc(doc(db,'digitalProducts',productId), {downloads:increment(1)}); } catch(e){}
 };

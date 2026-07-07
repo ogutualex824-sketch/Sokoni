@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-require-auth="true">
 <head>
 <script src="security.js"></script>
 <script src="auth-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Digital Esoko — Seller Dashboard | SOKONI</title>
+<title>Digital Esoko â€” Seller Dashboard | SOKONI</title>
 <meta name="description" content="Sell your digital products on SOKONI. Upload eBooks, templates, music, courses and more.">
 <link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="apple-touch-icon" href="assets/logosokoni.png">
@@ -24,7 +24,7 @@
 <script src="shared-header.js" defer></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#0a0a0a;color:#fff;min-height:100vh}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;min-height:100vh}
 a{text-decoration:none;color:inherit}
 
 .des-topnav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(10,10,10,.96);border-bottom:1px solid rgba(255,255,255,.07);position:sticky;top:0;z-index:200;backdrop-filter:blur(12px)}
@@ -115,35 +115,35 @@ a{text-decoration:none;color:inherit}
 
 <nav class="des-topnav">
   <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="des-logo" alt="SOKONI"></a>
-  <div class="des-nav-title">📦 Digital Esoko — Seller</div>
+  <div class="des-nav-title">ðŸ“¦ Digital Esoko â€” Seller</div>
   <div class="des-nav-links">
-    <a href="digital-esoko.html" class="des-nav-link">👁️ View Store</a>
-    <a href="index.html" class="des-nav-link">← Home</a>
+    <a href="digital-esoko.html" class="des-nav-link">ðŸ‘ï¸ View Store</a>
+    <a href="index.html" class="des-nav-link">â† Home</a>
   </div>
 </nav>
 
 <div class="des-layout">
   <aside class="des-sidebar">
-    <button type="button" class="des-sb-btn active-ll-btn" onclick="showSection('products',this)">📦 My Products</button>
-    <button type="button" class="des-sb-btn" onclick="showSection('add',this)">➕ Add Product</button>
-    <button type="button" class="des-sb-btn" onclick="showSection('sales',this)">💳 My Sales <span id="desSalesBadge" style="display:none;background:rgba(113,255,0,.2);color:#71ff00;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px"></span></button>
-    <button type="button" class="des-sb-btn" onclick="showSection('earnings',this)">💰 Earnings</button>
-    <a href="digital-esoko.html" class="des-sb-btn" style="border:none">👁️ Preview Store</a>
+    <button type="button" class="des-sb-btn active-ll-btn" onclick="showSection('products',this)">ðŸ“¦ My Products</button>
+    <button type="button" class="des-sb-btn" onclick="showSection('add',this)">âž• Add Product</button>
+    <button type="button" class="des-sb-btn" onclick="showSection('sales',this)">ðŸ’³ My Sales <span id="desSalesBadge" style="display:none;background:rgba(113,255,0,.2);color:#71ff00;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px"></span></button>
+    <button type="button" class="des-sb-btn" onclick="showSection('earnings',this)">ðŸ’° Earnings</button>
+    <a href="digital-esoko.html" class="des-sb-btn" style="border:none">ðŸ‘ï¸ Preview Store</a>
   </aside>
 
   <main class="des-main">
     <!-- STATS -->
     <div class="des-stats-row">
-      <div class="des-stat-card"><div class="des-stat-icon">📦</div><div class="des-stat-val" id="statProds">0</div><p>Products Listed</p></div>
-      <div class="des-stat-card"><div class="des-stat-icon">💳</div><div class="des-stat-val" id="statSales">0</div><p>Total Sales</p></div>
-      <div class="des-stat-card"><div class="des-stat-icon">📥</div><div class="des-stat-val" id="statDLs">0</div><p>Downloads</p></div>
-      <div class="des-stat-card des-stat-green"><div class="des-stat-icon">💰</div><div class="des-stat-val" id="statEarnings">KES 0</div><p>Net Earnings</p></div>
+      <div class="des-stat-card"><div class="des-stat-icon">ðŸ“¦</div><div class="des-stat-val" id="statProds">0</div><p>Products Listed</p></div>
+      <div class="des-stat-card"><div class="des-stat-icon">ðŸ’³</div><div class="des-stat-val" id="statSales">0</div><p>Total Sales</p></div>
+      <div class="des-stat-card"><div class="des-stat-icon">ðŸ“¥</div><div class="des-stat-val" id="statDLs">0</div><p>Downloads</p></div>
+      <div class="des-stat-card des-stat-green"><div class="des-stat-icon">ðŸ’°</div><div class="des-stat-val" id="statEarnings">KES 0</div><p>Net Earnings</p></div>
     </div>
 
     <!-- MY PRODUCTS -->
     <section id="sec-products" class="des-section">
       <div class="des-section-header">
-        <h2>📦 My Products</h2>
+        <h2>ðŸ“¦ My Products</h2>
         <button type="button" class="des-add-btn" onclick="showSection('add',null)">+ Add New</button>
       </div>
       <div class="des-prod-grid" id="desProdGrid"></div>
@@ -151,7 +151,7 @@ a{text-decoration:none;color:inherit}
 
     <!-- ADD PRODUCT -->
     <section id="sec-add" class="des-section" style="display:none">
-      <div class="des-section-header"><h2>➕ Add New Digital Product</h2></div>
+      <div class="des-section-header"><h2>âž• Add New Digital Product</h2></div>
       <div class="des-form-grid">
         <div class="des-form-group des-span2">
           <label class="des-label">Product Title *</label>
@@ -161,16 +161,16 @@ a{text-decoration:none;color:inherit}
           <label class="des-label">Category *</label>
           <select id="desCategory" class="des-select">
             <option value="">Select category</option>
-            <option value="ebook">📚 eBook</option>
-            <option value="template">🎨 Template</option>
-            <option value="music">🎵 Music & Audio</option>
-            <option value="photo">📷 Photography</option>
-            <option value="course">🎓 Course</option>
-            <option value="software">💻 Software</option>
-            <option value="tool">🔧 Business Tool</option>
-            <option value="marketing">📣 Marketing Kit</option>
-            <option value="design">✏️ Design Asset</option>
-            <option value="data">📊 Spreadsheet</option>
+            <option value="ebook">ðŸ“š eBook</option>
+            <option value="template">ðŸŽ¨ Template</option>
+            <option value="music">ðŸŽµ Music & Audio</option>
+            <option value="photo">ðŸ“· Photography</option>
+            <option value="course">ðŸŽ“ Course</option>
+            <option value="software">ðŸ’» Software</option>
+            <option value="tool">ðŸ”§ Business Tool</option>
+            <option value="marketing">ðŸ“£ Marketing Kit</option>
+            <option value="design">âœï¸ Design Asset</option>
+            <option value="data">ðŸ“Š Spreadsheet</option>
           </select>
         </div>
         <div class="des-form-group">
@@ -179,7 +179,7 @@ a{text-decoration:none;color:inherit}
         </div>
         <div class="des-form-group des-span2">
           <label class="des-label">Description *</label>
-          <textarea id="desDesc" class="des-textarea" placeholder="Describe what buyers get, what it includes, who it's for…"></textarea>
+          <textarea id="desDesc" class="des-textarea" placeholder="Describe what buyers get, what it includes, who it's forâ€¦"></textarea>
         </div>
         <div class="des-form-group">
           <label class="des-label">Tags <span style="font-weight:400;color:rgba(255,255,255,.3)">(comma-separated)</span></label>
@@ -190,11 +190,11 @@ a{text-decoration:none;color:inherit}
           <input type="tel" id="desPhone" class="des-input" placeholder="07xxxxxxxx">
         </div>
         <div class="des-form-group des-span2">
-          <label class="des-label">Cover Image <span style="font-weight:400;color:rgba(255,255,255,.3)">(JPG/PNG — displayed in marketplace)</span></label>
+          <label class="des-label">Cover Image <span style="font-weight:400;color:rgba(255,255,255,.3)">(JPG/PNG â€” displayed in marketplace)</span></label>
           <div class="des-upload-drop" onclick="document.getElementById('desCoverInput').click()" id="desCoverDrop">
-            <div style="font-size:28px;margin-bottom:6px">🖼️</div>
+            <div style="font-size:28px;margin-bottom:6px">ðŸ–¼ï¸</div>
             <div style="font-size:12px;color:rgba(255,255,255,.5);font-weight:700">Tap to upload cover image</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:3px">Max 5MB · JPG, PNG, WEBP</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:3px">Max 5MB Â· JPG, PNG, WEBP</div>
           </div>
           <input type="file" id="desCoverInput" accept="image/*" style="display:none" onchange="previewCover(event)">
           <div id="desCoverPreview" style="margin-top:8px;display:none">
@@ -202,38 +202,38 @@ a{text-decoration:none;color:inherit}
           </div>
         </div>
         <div class="des-form-group des-span2">
-          <label class="des-label">Digital File <span style="font-weight:400;color:rgba(255,255,255,.3)">(PDF, ZIP, MP3, MP4, etc. — max 100MB)</span></label>
+          <label class="des-label">Digital File <span style="font-weight:400;color:rgba(255,255,255,.3)">(PDF, ZIP, MP3, MP4, etc. â€” max 100MB)</span></label>
           <div class="des-upload-drop" onclick="document.getElementById('desFileInput').click()" id="desFileDrop">
-            <div style="font-size:28px;margin-bottom:6px">📁</div>
+            <div style="font-size:28px;margin-bottom:6px">ðŸ“</div>
             <div style="font-size:12px;color:rgba(255,255,255,.5);font-weight:700">Tap to upload your digital file</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:3px">PDF, ZIP, MP3, MP4, PSD, DOCX, XLSX…</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:3px">PDF, ZIP, MP3, MP4, PSD, DOCX, XLSXâ€¦</div>
           </div>
           <input type="file" id="desFileInput" accept=".pdf,.zip,.mp3,.mp4,.wav,.mov,.psd,.ai,.fig,.sketch,.docx,.xlsx,.pptx,.epub,.apk,.exe,.dmg" style="display:none" onchange="previewFile(event)">
           <div id="desFileInfo" style="margin-top:8px;display:none;padding:10px 14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:12px;color:rgba(255,255,255,.6)"></div>
         </div>
       </div>
-      <button type="button" class="des-submit-btn" id="desSubmitBtn" onclick="addProduct()">⬆️ Publish Product</button>
+      <button type="button" class="des-submit-btn" id="desSubmitBtn" onclick="addProduct()">â¬†ï¸ Publish Product</button>
     </section>
 
     <!-- MY SALES -->
     <section id="sec-sales" class="des-section" style="display:none">
-      <div class="des-section-header"><h2>💳 My Sales</h2></div>
+      <div class="des-section-header"><h2>ðŸ’³ My Sales</h2></div>
       <div id="desSalesList"></div>
     </section>
 
     <!-- EARNINGS -->
     <section id="sec-earnings" class="des-section" style="display:none">
-      <div class="des-section-header"><h2>💰 Earnings Summary</h2></div>
+      <div class="des-section-header"><h2>ðŸ’° Earnings Summary</h2></div>
       <div id="desEarningsBody"></div>
     </section>
   </main>
 </div>
 
 <nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="digital-esoko.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Browse</span></a>
-  <a href="digital-esoko-seller.html" class="bnav-item active-bnav"><span class="bnav-emoji">🚀</span><span>Sell</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">ðŸ </span><span>Home</span></a>
+  <a href="digital-esoko.html" class="bnav-item"><span class="bnav-emoji">ðŸ“¦</span><span>Browse</span></a>
+  <a href="digital-esoko-seller.html" class="bnav-item active-bnav"><span class="bnav-emoji">ðŸš€</span><span>Sell</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">ðŸ‘¤</span><span>Profile</span></a>
 </nav>
 
 <div id="desNotifContainer"></div>
@@ -246,10 +246,10 @@ a{text-decoration:none;color:inherit}
 
 <script>
 const DES_CATS_MAP = {
-  ebook:'📚 eBook', template:'🎨 Template', music:'🎵 Music & Audio',
-  photo:'📷 Photography', course:'🎓 Course', software:'💻 Software',
-  tool:'🔧 Business Tool', marketing:'📣 Marketing Kit',
-  design:'✏️ Design Asset', data:'📊 Spreadsheet'
+  ebook:'ðŸ“š eBook', template:'ðŸŽ¨ Template', music:'ðŸŽµ Music & Audio',
+  photo:'ðŸ“· Photography', course:'ðŸŽ“ Course', software:'ðŸ’» Software',
+  tool:'ðŸ”§ Business Tool', marketing:'ðŸ“£ Marketing Kit',
+  design:'âœï¸ Design Asset', data:'ðŸ“Š Spreadsheet'
 };
 
 function _lsGet(k,def){ try{ return JSON.parse(localStorage.getItem(k))||def; }catch(e){ return def; } }
@@ -288,24 +288,24 @@ function loadStats(){
 function loadMyProducts(){
   const grid = document.getElementById('desProdGrid'); if(!grid) return;
   if(!_myProducts.length){
-    grid.innerHTML='<div class="des-empty"><div class="des-empty-icon">📦</div><p>No products yet.<br><button type="button" onclick="showSection(\'add\',null)" style="color:#71ff00;background:none;border:none;cursor:pointer;font-weight:800;font-family:inherit">Add your first product →</button></p></div>';
+    grid.innerHTML='<div class="des-empty"><div class="des-empty-icon">ðŸ“¦</div><p>No products yet.<br><button type="button" onclick="showSection(\'add\',null)" style="color:#71ff00;background:none;border:none;cursor:pointer;font-weight:800;font-family:inherit">Add your first product â†’</button></p></div>';
     return;
   }
   grid.innerHTML=_myProducts.map(p=>{
-    const cat=DES_CATS_MAP[p.category]||'📦 Digital';
+    const cat=DES_CATS_MAP[p.category]||'ðŸ“¦ Digital';
     return `
       <div class="des-prod-card">
         ${p.coverURL?`<img loading="lazy" class="des-prod-img" src="${esc(p.coverURL)}" alt="${esc(p.title)}">`:`<div class="des-prod-ph">${cat.split(' ')[0]}</div>`}
         <div class="des-prod-body">
           <div class="des-prod-title">${esc(p.title)}</div>
-          <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">${esc(cat)} · 📥 ${p.downloads||0}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:4px">${esc(cat)} Â· ðŸ“¥ ${p.downloads||0}</div>
           <div class="des-prod-price">${!p.price||p.price===0?'FREE':'KES '+Number(p.price).toLocaleString()}</div>
           <div class="des-prod-actions">
             <button type="button" class="des-prod-btn" style="background:rgba(0,170,255,.08);border-color:rgba(0,170,255,.25);color:#00aaff" onclick="toggleProductActive('${esc(p.id)}')">
-              ${p.active!==false?'⏸ Pause':'▶ Live'}
+              ${p.active!==false?'â¸ Pause':'â–¶ Live'}
             </button>
             <button type="button" class="des-prod-btn" style="background:rgba(255,80,80,.08);border-color:rgba(255,80,80,.2);color:#ff8080" onclick="deleteProduct('${esc(p.id)}')">
-              🗑️
+              ðŸ—‘ï¸
             </button>
           </div>
         </div>
@@ -316,7 +316,7 @@ function loadMyProducts(){
 function loadMySales(){
   const el = document.getElementById('desSalesList'); if(!el) return;
   if(!_mySales.length){
-    el.innerHTML='<div class="des-empty"><div class="des-empty-icon">💳</div><p>No sales yet. Share your products to get your first sale!</p></div>';
+    el.innerHTML='<div class="des-empty"><div class="des-empty-icon">ðŸ’³</div><p>No sales yet. Share your products to get your first sale!</p></div>';
     return;
   }
   el.innerHTML=_mySales.map(s=>`
@@ -324,10 +324,10 @@ function loadMySales(){
       <div>
         <div class="des-sale-title">${esc(s.productTitle||'Digital Product')}</div>
         <div class="des-sale-meta">
-          <span>👤 ${esc(s.buyerName||'Buyer')}</span>
-          <span>📞 ${esc(s.buyerPhone||'—')}</span>
-          <span>🔖 ${esc(s.ref||'—')}</span>
-          <span>📅 ${s.createdAt?new Date(s.createdAt).toLocaleDateString('en-KE'):'—'}</span>
+          <span>ðŸ‘¤ ${esc(s.buyerName||'Buyer')}</span>
+          <span>ðŸ“ž ${esc(s.buyerPhone||'â€”')}</span>
+          <span>ðŸ”– ${esc(s.ref||'â€”')}</span>
+          <span>ðŸ“… ${s.createdAt?new Date(s.createdAt).toLocaleDateString('en-KE'):'â€”'}</span>
         </div>
       </div>
       <div class="des-sale-amount">KES ${Number(s.amount||0).toLocaleString()}</div>
@@ -370,7 +370,7 @@ function deleteProduct(id){
 
 function _getUid(){ const u=_user(); return u?.uid||''; }
 
-/* ── File preview handlers ── */
+/* â”€â”€ File preview handlers â”€â”€ */
 function previewCover(e){
   const file = e.target.files[0]; if(!file) return;
   if(file.size>5*1024*1024){ desNotif('Cover must be under 5MB','error'); return; }
@@ -390,7 +390,7 @@ function previewFile(e){
   if(file.size>100*1024*1024){ desNotif('File must be under 100MB','error'); return; }
   _desFileObj = file;
   const info = document.getElementById('desFileInfo');
-  info.innerHTML = `📁 <strong>${esc(file.name)}</strong> · 💾 ${(file.size/1024/1024).toFixed(2)} MB`;
+  info.innerHTML = `ðŸ“ <strong>${esc(file.name)}</strong> Â· ðŸ’¾ ${(file.size/1024/1024).toFixed(2)} MB`;
   info.style.display = 'block';
   document.getElementById('desFileDrop').style.borderColor = 'rgba(113,255,0,.5)';
 }
@@ -409,7 +409,7 @@ async function addProduct(){
   if(!user||!user.uid){ desNotif('Sign in to publish','error'); return; }
 
   const btn = document.getElementById('desSubmitBtn');
-  btn.disabled = true; btn.textContent = 'Uploading…';
+  btn.disabled = true; btn.textContent = 'Uploadingâ€¦';
 
   let coverURL = '';
   let fileURL  = '';
@@ -417,22 +417,22 @@ async function addProduct(){
 
   try {
     if(_desCoverFile && window.SokoniUpload){
-      desNotif('Uploading cover image…','info');
+      desNotif('Uploading cover imageâ€¦','info');
       coverURL = await window.SokoniUpload.uploadToStorage(_desCoverFile,`digital-covers/${Date.now()}_${_desCoverFile.name}`,null);
     }
     if(window.SokoniUpload){
-      desNotif('Uploading product file…','info');
+      desNotif('Uploading product fileâ€¦','info');
       fileURL = await window.SokoniUpload.uploadToStorage(_desFileObj,`digital-products/${user.uid}/${Date.now()}_${_desFileObj.name}`,
-        pct => { btn.textContent = `Uploading… ${Math.round(pct)}%`; });
+        pct => { btn.textContent = `Uploadingâ€¦ ${Math.round(pct)}%`; });
     }
   } catch(err){
     console.warn('[DigitalEsoko] Upload failed:', err);
-    desNotif('File upload failed — check your connection and try again','error');
-    btn.disabled=false; btn.textContent='⬆️ Publish Product';
+    desNotif('File upload failed â€” check your connection and try again','error');
+    btn.disabled=false; btn.textContent='â¬†ï¸ Publish Product';
     return;
   }
 
-  if(!fileURL){ desNotif('File upload required — try again','error'); btn.disabled=false; btn.textContent='⬆️ Publish Product'; return; }
+  if(!fileURL){ desNotif('File upload required â€” try again','error'); btn.disabled=false; btn.textContent='â¬†ï¸ Publish Product'; return; }
 
   const tags = tagsRaw ? tagsRaw.split(',').map(t=>t.trim()).filter(Boolean) : [];
   const product = {
@@ -467,8 +467,8 @@ async function addProduct(){
   document.getElementById('desCoverInput').value='';
   document.getElementById('desFileInput').value='';
 
-  btn.disabled=false; btn.textContent='⬆️ Publish Product';
-  desNotif('🎉 Product published!','success');
+  btn.disabled=false; btn.textContent='â¬†ï¸ Publish Product';
+  desNotif('ðŸŽ‰ Product published!','success');
   loadStats();
   showSection('products', document.querySelector('.des-sb-btn'));
 }
@@ -503,7 +503,7 @@ onAuthStateChanged(auth, u => {
   if(_uid){ loadFSProducts(); loadFSSales(); }
 });
 
-/* ── Save product ── */
+/* â”€â”€ Save product â”€â”€ */
 window._saveDEProductFS = async function(product){
   if(!product) return;
   try {
@@ -511,17 +511,17 @@ window._saveDEProductFS = async function(product){
   } catch(e){ console.warn('[DigitalEsoko] Product save failed:',e); }
 };
 
-/* ── Update product fields ── */
+/* â”€â”€ Update product fields â”€â”€ */
 window._updateDEProductFS = async function(id, fields){
   try { await updateDoc(doc(db,'digitalProducts',id), {...fields, updatedAt:serverTimestamp()}); } catch(e){}
 };
 
-/* ── Delete product ── */
+/* â”€â”€ Delete product â”€â”€ */
 window._deleteDEProductFS = async function(id){
   try { await deleteDoc(doc(db,'digitalProducts',id)); } catch(e){}
 };
 
-/* ── Load seller's products ── */
+/* â”€â”€ Load seller's products â”€â”€ */
 function loadFSProducts(){
   if(!_uid) return;
   try {
@@ -541,7 +541,7 @@ function loadFSProducts(){
   } catch(e){ console.warn('[DigitalEsoko] loadFSProducts failed:',e); }
 }
 
-/* ── Load seller's sales ── */
+/* â”€â”€ Load seller's sales â”€â”€ */
 function loadFSSales(){
   if(!_uid) return;
   try {

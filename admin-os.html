@@ -274,11 +274,14 @@
       <button class="nav-item" data-section="smartpos" data-label="SmartPOS" onclick="SokoniAOS.navigate('smartpos');_closeSidebar()"><span class="nav-icon">&#x1F5A8;&#xFE0F;</span>SmartPOS</button>
       <button class="nav-item" data-section="fraud" data-label="Fraud &amp; Trust" onclick="SokoniAOS.navigate('fraud');_closeSidebar()"><span class="nav-icon">&#x1F6E1;&#xFE0F;</span>Fraud &amp; Trust</button>
       <button class="nav-item" data-section="config" data-label="Platform Config" onclick="SokoniAOS.navigate('config');_closeSidebar()"><span class="nav-icon">&#x2699;&#xFE0F;</span>Config</button>
+      <button class="nav-item" data-section="hubs" data-label="Hub Registry" onclick="SokoniAOS.navigate('hubs');_closeSidebar()"><span class="nav-icon">&#x1F3D7;&#xFE0F;</span>Hubs</button>
+      <button class="nav-item" data-section="workflows" data-label="Workflow Center" onclick="SokoniAOS.navigate('workflows');_closeSidebar()"><span class="nav-icon">&#x267B;&#xFE0F;</span>Workflows</button>
       <button class="nav-item" data-section="audit" data-label="Audit Center" onclick="SokoniAOS.navigate('audit');_closeSidebar()"><span class="nav-icon">&#x1F4CB;</span>Audit</button>
       <button class="nav-item" data-section="security" data-label="Security" onclick="SokoniAOS.navigate('security');_closeSidebar()"><span class="nav-icon">&#x1F510;</span>Security</button>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Tools</div>
+      <a class="nav-item" href="platform-hub.html" target="_blank"><span class="nav-icon">&#x1F310;</span>Hub Portal</a>
       <a class="nav-item" href="platform-health.html" target="_blank"><span class="nav-icon">&#x1F49A;</span>Platform Health</a>
       <a class="nav-item" href="finos.html" target="_blank"><span class="nav-icon">&#x1F3E6;</span>FinOS</a>
       <a class="nav-item" href="trust-safety.html" target="_blank"><span class="nav-icon">&#x1F512;</span>Trust &amp; Safety</a>
@@ -480,6 +483,43 @@
       <div class="aos-panel" id="panel-security" hidden>
         <div class="panel-toolbar"><h2>Security</h2></div>
         <div id="securityBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <!-- Hub Registry panel -->
+      <div class="aos-panel" id="panel-hubs" hidden>
+        <div class="panel-toolbar">
+          <h2>Hub Registry</h2>
+          <button class="aos-btn" onclick="SokoniAOS.refreshHubs()">&#x1F504; Refresh</button>
+          <button class="aos-btn" onclick="SokoniAOS.loadHubHealth()">&#x1F4CA; Health Snapshot</button>
+        </div>
+        <div id="hubHealthRow" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;"></div>
+        <div id="hubsBody"><div class="aos-spinner"><div></div></div></div>
+        <!-- Hub detail drawer -->
+        <div id="hubDetailPanel" style="display:none;margin-top:24px;background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h3 id="hubDetailName" style="font-size:15px;font-weight:600;"></h3>
+            <button class="aos-btn-sm" onclick="document.getElementById('hubDetailPanel').style.display='none'">&#x2715; Close</button>
+          </div>
+          <div id="hubDetailBody"></div>
+        </div>
+      </div>
+
+      <!-- Workflow Center panel -->
+      <div class="aos-panel" id="panel-workflows" hidden>
+        <div class="panel-toolbar">
+          <h2>Workflow Center</h2>
+          <select id="wfStatusFilter" onchange="SokoniAOS.loadWorkflows()">
+            <option value="">All Status</option>
+            <option value="running">Running</option>
+            <option value="pending">Pending</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="paused">Paused</option>
+          </select>
+          <input type="text" id="wfDefFilter" placeholder="Definition ID&#x2026;" style="width:180px;" oninput="SokoniAOS.loadWorkflows()">
+          <button class="aos-btn" onclick="SokoniAOS.loadWorkflows()">&#x1F504; Load</button>
+        </div>
+        <div id="workflowsBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
     </div>

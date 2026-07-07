@@ -1,17 +1,17 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>Merchant Pipeline — SOKONI Admin</title>
+  <title>Merchant Pipeline â€” SOKONI Admin</title>
   <link rel="icon" href="assets/logosokoni.png">
   <script src="security.js"></script>
 <script src="shared-header.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     :root{
-      --bg:#080808; --s1:#111; --s2:#181818; --s3:#1f1f1f;
+      --bg:#050505; --s1:#111; --s2:#181818; --s3:#1f1f1f;
       --b1:rgba(255,255,255,.09); --b2:rgba(255,255,255,.05);
       --green:#71ff00; --green2:#4fc800; --amber:#f59e0b;
       --red:#ef4444; --blue:#60a5fa; --purple:#71ff00;
@@ -20,7 +20,7 @@
     }
     body{background:var(--bg);color:var(--t1);font-family:system-ui,-apple-system,sans-serif;min-height:100vh;}
 
-    /* ── Auth gate ── */
+    /* â”€â”€ Auth gate â”€â”€ */
     #mp-gate{position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;}
     .mp-auth-box{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-xl);padding:32px 28px;width:100%;max-width:360px;text-align:center;}
     .mp-auth-logo{height:34px;margin-bottom:18px;}
@@ -30,7 +30,7 @@
     .mp-pin-btn{width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;border:none;border-radius:var(--r);font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;}
     .mp-auth-err{font-size:11px;color:var(--red);margin-top:8px;min-height:16px;}
 
-    /* ── Nav ── */
+    /* â”€â”€ Nav â”€â”€ */
     .mp-nav{background:rgba(8,8,8,.96);border-bottom:1px solid var(--b1);padding:12px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
     .mp-nav-logo{height:26px;}
     .mp-nav-title{font-size:14px;font-weight:900;flex:1;}
@@ -41,7 +41,7 @@
     .mp-btn:hover{color:var(--t1);border-color:rgba(255,255,255,.18);}
     .mp-btn-green{background:rgba(113,255,0,.1);border-color:rgba(113,255,0,.25);color:var(--green);}
 
-    /* ── Hero ── */
+    /* â”€â”€ Hero â”€â”€ */
     .mp-hero{padding:24px 20px 0;display:flex;gap:12px;flex-wrap:wrap;}
     .mp-kpi{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-lg);padding:18px 20px;flex:1;min-width:140px;}
     .mp-kpi-val{font-size:28px;font-weight:900;line-height:1;}
@@ -50,7 +50,7 @@
     .mp-progress-bar-wrap{background:rgba(255,255,255,.05);border-radius:4px;height:4px;margin-top:10px;}
     .mp-progress-bar{height:4px;border-radius:4px;background:linear-gradient(90deg,var(--green),var(--green2));transition:width .6s ease;}
 
-    /* ── Filters ── */
+    /* â”€â”€ Filters â”€â”€ */
     .mp-filters{padding:16px 20px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
     .mp-stage-btn{padding:7px 14px;border-radius:20px;font-size:11px;font-weight:800;cursor:pointer;border:1px solid var(--b1);background:rgba(255,255,255,.04);color:var(--t2);font-family:inherit;transition:all .12s;}
     .mp-stage-btn:hover{color:var(--t1);}
@@ -59,14 +59,14 @@
     .mp-search:focus{border-color:rgba(113,255,0,.4);}
     .mp-sort{padding:8px 14px;background:rgba(255,255,255,.06);border:1px solid var(--b1);border-radius:var(--r);color:var(--t1);font-size:12px;font-family:inherit;outline:none;cursor:pointer;}
 
-    /* ── Section header ── */
+    /* â”€â”€ Section header â”€â”€ */
     .mp-section-hdr{font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);padding:12px 20px 8px;display:flex;align-items:center;gap:8px;}
     .mp-section-hdr::after{content:'';flex:1;height:1px;background:var(--b2);}
 
-    /* ── Merchant grid ── */
+    /* â”€â”€ Merchant grid â”€â”€ */
     .mp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;padding:0 20px 60px;}
 
-    /* ── Merchant card ── */
+    /* â”€â”€ Merchant card â”€â”€ */
     .mp-card{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-lg);overflow:hidden;transition:border-color .12s;}
     .mp-card:hover{border-color:rgba(255,255,255,.18);}
     .mp-card-banner{height:64px;background:linear-gradient(135deg,rgba(113,255,0,.06),rgba(79,200,0,.03));position:relative;overflow:hidden;}
@@ -85,7 +85,7 @@
     .mp-chip-blue{background:rgba(96,165,250,.08);color:var(--blue);border-color:rgba(96,165,250,.2);}
     .mp-chip-grey{background:rgba(255,255,255,.04);color:var(--t3);border-color:var(--b2);}
 
-    /* ── Score ring ── */
+    /* â”€â”€ Score ring â”€â”€ */
     .mp-score-row{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px;background:rgba(255,255,255,.03);border-radius:var(--r);}
     .mp-score-ring{width:40px;height:40px;flex-shrink:0;position:relative;}
     .mp-score-ring svg{width:40px;height:40px;transform:rotate(-90deg);}
@@ -97,7 +97,7 @@
     .mp-score-checks{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;}
     .mp-check{font-size:10px;}
 
-    /* ── Actions ── */
+    /* â”€â”€ Actions â”€â”€ */
     .mp-card-actions{display:flex;gap:6px;padding:10px 14px;border-top:1px solid var(--b2);}
     .mp-action-btn{flex:1;padding:8px;border-radius:var(--r);font-size:11px;font-weight:800;cursor:pointer;border:1px solid;font-family:inherit;transition:all .12s;text-align:center;}
     .mp-action-approve{background:rgba(113,255,0,.08);border-color:rgba(113,255,0,.25);color:var(--green);}
@@ -107,7 +107,7 @@
     .mp-action-view{background:rgba(255,255,255,.04);border-color:var(--b1);color:var(--t2);}
     .mp-action-view:hover{color:var(--t1);}
 
-    /* ── Notes modal ── */
+    /* â”€â”€ Notes modal â”€â”€ */
     .mp-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(8px);z-index:500;display:flex;align-items:flex-end;justify-content:center;padding-bottom:env(safe-area-inset-bottom);}
     .mp-modal{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-xl) var(--r-xl) 0 0;width:100%;max-width:520px;padding:24px 20px;animation:mpSlideUp .2s ease;}
     @keyframes mpSlideUp{from{transform:translateY(40px);opacity:0;}to{transform:translateY(0);opacity:1;}}
@@ -120,17 +120,17 @@
     .mp-modal-send{background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;border-color:transparent;}
     .mp-modal-cancel{background:rgba(255,255,255,.05);border-color:var(--b1);color:var(--t2);}
 
-    /* ── Empty state ── */
+    /* â”€â”€ Empty state â”€â”€ */
     .mp-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 20px;text-align:center;grid-column:1/-1;}
     .mp-empty-icon{font-size:48px;opacity:.3;margin-bottom:14px;}
     .mp-empty-title{font-size:14px;font-weight:800;color:var(--t2);margin-bottom:6px;}
     .mp-empty-sub{font-size:12px;color:var(--t3);}
 
-    /* ── Skeleton ── */
+    /* â”€â”€ Skeleton â”€â”€ */
     @keyframes mpShimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
     .mp-skel{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.09) 50%,rgba(255,255,255,.04) 75%);background-size:800px 100%;animation:mpShimmer 1.4s infinite linear;border-radius:6px;}
 
-    /* ── Toast ── */
+    /* â”€â”€ Toast â”€â”€ */
     #mp-toast{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:999;pointer-events:none;}
     .mp-toast-pill{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:99px;font-size:13px;font-weight:700;box-shadow:0 8px 32px rgba(0,0,0,.5);backdrop-filter:blur(12px);white-space:nowrap;animation:mpToastIn .2s ease;}
     @keyframes mpToastIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
@@ -149,11 +149,11 @@
     <img src="assets/Sokonilogo2.png" class="mp-auth-logo" alt="SOKONI" onerror="this.style.display='none'">
     <div class="mp-auth-title">Merchant Pipeline</div>
     <div class="mp-auth-sub">Admin access required</div>
-    <input type="password" class="mp-pin-input" id="mp-pin" placeholder="· · · · ·" maxlength="8"
+    <input type="password" class="mp-pin-input" id="mp-pin" placeholder="Â· Â· Â· Â· Â·" maxlength="8"
       onkeydown="if(event.key==='Enter')_mpAuth()">
     <button class="mp-pin-btn" onclick="_mpAuth()">Enter Dashboard</button>
     <div class="mp-auth-err" id="mp-auth-err"></div>
-    <div style="margin-top:14px;"><a href="admin.html" style="font-size:11px;color:rgba(255,255,255,.3);">← Back to Admin</a></div>
+    <div style="margin-top:14px;"><a href="admin.html" style="font-size:11px;color:rgba(255,255,255,.3);">â† Back to Admin</a></div>
   </div>
 </div>
 
@@ -163,38 +163,38 @@
   <!-- NAV -->
   <nav class="mp-nav">
     <img src="assets/Sokonilogo2.png" class="mp-nav-logo" alt="SOKONI" onerror="this.style.display='none'">
-    <span class="mp-nav-title">🏪 Merchant Onboarding Pipeline</span>
+    <span class="mp-nav-title">ðŸª Merchant Onboarding Pipeline</span>
     <span class="mp-nav-badge">PHASE 0</span>
-    <button class="mp-btn" onclick="_mpLoad()">🔄 Refresh</button>
-    <a href="admin.html" class="mp-back">← Admin</a>
+    <button class="mp-btn" onclick="_mpLoad()">ðŸ”„ Refresh</button>
+    <a href="admin.html" class="mp-back">â† Admin</a>
   </nav>
 
   <!-- KPI STRIP -->
   <div class="mp-hero" id="mp-kpis">
     <div class="mp-kpi">
-      <div class="mp-kpi-val" id="kpi-total" style="color:var(--blue);">—</div>
+      <div class="mp-kpi-val" id="kpi-total" style="color:var(--blue);">â€”</div>
       <div class="mp-kpi-label">Total Sellers</div>
       <div class="mp-kpi-sub">in pipeline</div>
     </div>
     <div class="mp-kpi">
-      <div class="mp-kpi-val" id="kpi-approved" style="color:var(--green);">—</div>
+      <div class="mp-kpi-val" id="kpi-approved" style="color:var(--green);">â€”</div>
       <div class="mp-kpi-label">Approved</div>
       <div class="mp-kpi-sub">target: 25</div>
       <div class="mp-progress-bar-wrap"><div class="mp-progress-bar" id="kpi-approved-bar" style="width:0%"></div></div>
     </div>
     <div class="mp-kpi">
-      <div class="mp-kpi-val" id="kpi-listings" style="color:var(--amber);">—</div>
+      <div class="mp-kpi-val" id="kpi-listings" style="color:var(--amber);">â€”</div>
       <div class="mp-kpi-label">Live Listings</div>
       <div class="mp-kpi-sub">target: 500</div>
       <div class="mp-progress-bar-wrap"><div class="mp-progress-bar" id="kpi-listings-bar" style="width:0%"></div></div>
     </div>
     <div class="mp-kpi">
-      <div class="mp-kpi-val" id="kpi-ready-cat" style="color:var(--purple);">—</div>
+      <div class="mp-kpi-val" id="kpi-ready-cat" style="color:var(--purple);">â€”</div>
       <div class="mp-kpi-label">Ready Categories</div>
       <div class="mp-kpi-sub">target: 6</div>
     </div>
     <div class="mp-kpi">
-      <div class="mp-kpi-val" id="kpi-avg-score">—</div>
+      <div class="mp-kpi-val" id="kpi-avg-score">â€”</div>
       <div class="mp-kpi-label">Avg Completeness</div>
       <div class="mp-kpi-sub">target: 80%</div>
     </div>
@@ -203,18 +203,18 @@
   <!-- STAGE FILTER -->
   <div class="mp-filters">
     <button class="mp-stage-btn active" onclick="_mpSetStage('all',this)">All</button>
-    <button class="mp-stage-btn" onclick="_mpSetStage('submitted',this)">📋 Submitted</button>
-    <button class="mp-stage-btn" onclick="_mpSetStage('in_review',this)">🔍 In Review</button>
-    <button class="mp-stage-btn" onclick="_mpSetStage('needs_changes',this)">⚠️ Needs Changes</button>
-    <button class="mp-stage-btn" onclick="_mpSetStage('approved',this)">✅ Approved</button>
-    <button class="mp-stage-btn" onclick="_mpSetStage('live',this)">🟢 Live</button>
-    <input type="text" class="mp-search" id="mp-search" placeholder="Search by name or category…" oninput="_mpFilter()">
+    <button class="mp-stage-btn" onclick="_mpSetStage('submitted',this)">ðŸ“‹ Submitted</button>
+    <button class="mp-stage-btn" onclick="_mpSetStage('in_review',this)">ðŸ” In Review</button>
+    <button class="mp-stage-btn" onclick="_mpSetStage('needs_changes',this)">âš ï¸ Needs Changes</button>
+    <button class="mp-stage-btn" onclick="_mpSetStage('approved',this)">âœ… Approved</button>
+    <button class="mp-stage-btn" onclick="_mpSetStage('live',this)">ðŸŸ¢ Live</button>
+    <input type="text" class="mp-search" id="mp-search" placeholder="Search by name or categoryâ€¦" oninput="_mpFilter()">
     <select class="mp-sort" id="mp-sort" onchange="_mpFilter()">
       <option value="newest">Newest First</option>
       <option value="score_desc">Highest Score</option>
       <option value="score_asc">Needs Most Work</option>
       <option value="listings_desc">Most Listings</option>
-      <option value="name">Name A–Z</option>
+      <option value="name">Name Aâ€“Z</option>
     </select>
   </div>
 
@@ -246,7 +246,7 @@
   <div class="mp-modal">
     <div class="mp-modal-title" id="mp-modal-title">Request Changes</div>
     <div class="mp-modal-label">Message to Seller</div>
-    <textarea class="mp-modal-textarea" id="mp-modal-text" placeholder="List the specific improvements needed before approval…" rows="4"></textarea>
+    <textarea class="mp-modal-textarea" id="mp-modal-text" placeholder="List the specific improvements needed before approvalâ€¦" rows="4"></textarea>
     <div class="mp-modal-actions">
       <button class="mp-modal-btn mp-modal-cancel" onclick="_mpCloseModal()">Cancel</button>
       <button class="mp-modal-btn mp-modal-send" id="mp-modal-send-btn" onclick="_mpSendNote()">Send & Update</button>
@@ -258,12 +258,12 @@
 
 <script src="firebase.js"></script>
 <script>
-/* ══════════════════════════════════════════════════════════════
-   MERCHANT PIPELINE — v1.0
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   MERCHANT PIPELINE â€” v1.0
    Reads from: businesses, products (existing collections)
    Writes to:  businesses.onboardingStatus / businesses.adminNotes
    No new collections, no new Cloud Functions.
-══════════════════════════════════════════════════════════════ */
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 var SESS_KEY = 'sokoniAdminSess';
 var SESS_TS  = 'sokoniAdminSessTs';
@@ -274,7 +274,7 @@ var _productCounts = {};
 var _modalBizId = null;
 var _modalAction = null;
 
-/* ── Auth ─────────────────────────────────────────────────── */
+/* â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _mpCheckSession() {
   return sessionStorage.getItem(SESS_KEY) === '1' &&
     (Date.now() - parseInt(sessionStorage.getItem(SESS_TS)||'0')) < MAX_AGE;
@@ -289,7 +289,7 @@ async function _mpAuth() {
     var hash = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
     var stored = localStorage.getItem('sokoniAdminPin')||localStorage.getItem('sokoniAdminPass');
     var ok = !stored;
-    if (stored && hash !== stored) { err.textContent = '❌ Wrong PIN.'; return; }
+    if (stored && hash !== stored) { err.textContent = 'âŒ Wrong PIN.'; return; }
     var fbUser = window.firebaseAuth && window.firebaseAuth.currentUser;
     if (fbUser) {
       var tok = await fbUser.getIdTokenResult(true);
@@ -310,7 +310,7 @@ if (_mpCheckSession()) {
   document.getElementById('mp-app').style.display='block';
 }
 
-/* ── Completeness scoring ─────────────────────────────────── */
+/* â”€â”€ Completeness scoring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 var CRITERIA = [
   { key:'logo',        label:'Logo',        pts:15, check: function(b){ return !!(b.logoUrl||b.logo); } },
   { key:'banner',      label:'Banner',      pts:10, check: function(b){ return !!(b.coverUrl||b.banner); } },
@@ -326,7 +326,7 @@ function _calcScore(biz, count) {
   return pts;
 }
 
-/* ── Infer onboarding stage ───────────────────────────────── */
+/* â”€â”€ Infer onboarding stage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _inferStage(biz, score, count) {
   if (biz.onboardingStatus) return biz.onboardingStatus;
   if (biz.verified) return count >= 20 ? 'live' : 'approved';
@@ -335,7 +335,7 @@ function _inferStage(biz, score, count) {
   return 'invited';
 }
 
-/* ── Load data ────────────────────────────────────────────── */
+/* â”€â”€ Load data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 async function _mpLoad() {
   document.getElementById('mp-grid').innerHTML =
     ['','',''].map(function(){ return '<div class="mp-card" style="padding:16px;gap:10px;display:flex;flex-direction:column;"><div class="mp-skel" style="height:64px;border-radius:10px;"></div><div class="mp-skel" style="height:14px;width:60%;margin-top:8px;"></div><div class="mp-skel" style="height:10px;width:40%;"></div></div>'; }).join('');
@@ -364,11 +364,11 @@ async function _mpLoad() {
     _mpUpdateKPIs();
     _mpFilter();
   } catch(e) {
-    document.getElementById('mp-grid').innerHTML = '<div class="mp-empty"><div class="mp-empty-icon">⚠️</div><div class="mp-empty-title">Could not load merchants</div><div class="mp-empty-sub">'+e.message+'</div></div>';
+    document.getElementById('mp-grid').innerHTML = '<div class="mp-empty"><div class="mp-empty-icon">âš ï¸</div><div class="mp-empty-title">Could not load merchants</div><div class="mp-empty-sub">'+e.message+'</div></div>';
   }
 }
 
-/* ── KPIs ─────────────────────────────────────────────────── */
+/* â”€â”€ KPIs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _mpUpdateKPIs() {
   var total    = _all.length;
   var approved = _all.filter(function(b){ var s=_inferStage(b,_calcScore(b,_productCounts[b._id]||0),_productCounts[b._id]||0); return s==='approved'||s==='live'; }).length;
@@ -394,7 +394,7 @@ function _mpUpdateKPIs() {
   document.getElementById('kpi-listings-bar').style.width  = Math.min(100, Math.round(listings/500*100)) + '%';
 }
 
-/* ── Filter + render ──────────────────────────────────────── */
+/* â”€â”€ Filter + render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _mpSetStage(stage, btn) {
   _stage = stage;
   document.querySelectorAll('.mp-stage-btn').forEach(function(b){ b.classList.remove('active'); });
@@ -429,11 +429,11 @@ function _mpFilter() {
   _mpRenderGrid(list);
 }
 
-/* ── Render grid ──────────────────────────────────────────── */
+/* â”€â”€ Render grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _mpRenderGrid(list) {
   var grid = document.getElementById('mp-grid');
   if (!list.length) {
-    grid.innerHTML = '<div class="mp-empty"><div class="mp-empty-icon">🏪</div><div class="mp-empty-title">No merchants in this stage</div><div class="mp-empty-sub">Merchants move here as they progress through onboarding.</div></div>';
+    grid.innerHTML = '<div class="mp-empty"><div class="mp-empty-icon">ðŸª</div><div class="mp-empty-title">No merchants in this stage</div><div class="mp-empty-sub">Merchants move here as they progress through onboarding.</div></div>';
     return;
   }
   grid.innerHTML = list.map(_mpCard).join('');
@@ -447,12 +447,12 @@ function _mpCard(b) {
 
   /* Stage chip */
   var stageChips = {
-    invited:'<span class="mp-chip mp-chip-grey">💌 Invited</span>',
-    submitted:'<span class="mp-chip mp-chip-blue">📋 Submitted</span>',
-    in_review:'<span class="mp-chip mp-chip-amber">🔍 In Review</span>',
-    needs_changes:'<span class="mp-chip mp-chip-red">⚠️ Needs Changes</span>',
-    approved:'<span class="mp-chip mp-chip-green">✅ Approved</span>',
-    live:'<span class="mp-chip mp-chip-green">🟢 Live</span>',
+    invited:'<span class="mp-chip mp-chip-grey">ðŸ’Œ Invited</span>',
+    submitted:'<span class="mp-chip mp-chip-blue">ðŸ“‹ Submitted</span>',
+    in_review:'<span class="mp-chip mp-chip-amber">ðŸ” In Review</span>',
+    needs_changes:'<span class="mp-chip mp-chip-red">âš ï¸ Needs Changes</span>',
+    approved:'<span class="mp-chip mp-chip-green">âœ… Approved</span>',
+    live:'<span class="mp-chip mp-chip-green">ðŸŸ¢ Live</span>',
   };
   var stageChip = stageChips[stage] || '<span class="mp-chip mp-chip-grey">Unknown</span>';
 
@@ -464,7 +464,7 @@ function _mpCard(b) {
   /* Criteria checks */
   var checks = CRITERIA.map(function(c){
     var ok = c.check(b, count);
-    return '<span class="mp-check" title="'+(ok?'✅ ':'')+c.label+' ('+c.pts+'pts)">'+(ok?'✅':'⬜')+'</span>';
+    return '<span class="mp-check" title="'+(ok?'âœ… ':'')+c.label+' ('+c.pts+'pts)">'+(ok?'âœ…':'â¬œ')+'</span>';
   }).join('');
 
   /* Product count chip */
@@ -484,10 +484,10 @@ function _mpCard(b) {
   /* Action buttons */
   var canApprove = (stage === 'submitted' || stage === 'in_review') && score >= 60 && count >= 5;
   var actApprove = canApprove
-    ? '<button class="mp-action-btn mp-action-approve" onclick="_mpApprove(\''+esc(b._id)+'\')">✅ Approve</button>'
-    : '<button class="mp-action-btn mp-action-approve" style="opacity:.35;cursor:not-allowed;" title="Score ≥60% and ≥5 listings required" disabled>✅ Approve</button>';
-  var actRequest = '<button class="mp-action-btn mp-action-request" onclick="_mpOpenRequestModal(\''+esc(b._id)+'\',\''+esc(b.name||'')+'\')">⚠️ Request Changes</button>';
-  var actView    = '<button class="mp-action-btn mp-action-view" onclick="window.open(\'seller.html?uid='+esc(b._id)+'\',\'_blank\')">👁 View Store</button>';
+    ? '<button class="mp-action-btn mp-action-approve" onclick="_mpApprove(\''+esc(b._id)+'\')">âœ… Approve</button>'
+    : '<button class="mp-action-btn mp-action-approve" style="opacity:.35;cursor:not-allowed;" title="Score â‰¥60% and â‰¥5 listings required" disabled>âœ… Approve</button>';
+  var actRequest = '<button class="mp-action-btn mp-action-request" onclick="_mpOpenRequestModal(\''+esc(b._id)+'\',\''+esc(b.name||'')+'\')">âš ï¸ Request Changes</button>';
+  var actView    = '<button class="mp-action-btn mp-action-view" onclick="window.open(\'seller.html?uid='+esc(b._id)+'\',\'_blank\')">ðŸ‘ View Store</button>';
 
   return [
     '<div class="mp-card">',
@@ -497,7 +497,7 @@ function _mpCard(b) {
       '<div class="mp-card-body">',
         '<div style="font-size:10px;color:var(--t3);text-align:right;margin-bottom:4px;">#'+esc(b._id.slice(0,8))+'</div>',
         '<div class="mp-card-name">'+esc(b.name||'Unnamed Store')+'</div>',
-        '<div class="mp-card-cat">'+esc(b.category||'No category')+(b.email?' · '+esc(b.email):'')+'</div>',
+        '<div class="mp-card-cat">'+esc(b.category||'No category')+(b.email?' Â· '+esc(b.email):'')+'</div>',
         '<div class="mp-card-meta">',
           stageChip,
           prodChip,
@@ -513,7 +513,7 @@ function _mpCard(b) {
             '<div class="mp-score-checks">'+checks+'</div>',
           '</div>',
         '</div>',
-        (b.adminNotes ? '<div style="margin-top:8px;padding:8px 10px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:11px;color:var(--amber);">📝 '+esc(b.adminNotes)+'</div>' : ''),
+        (b.adminNotes ? '<div style="margin-top:8px;padding:8px 10px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:11px;color:var(--amber);">ðŸ“ '+esc(b.adminNotes)+'</div>' : ''),
       '</div>',
       '<div class="mp-card-actions">',
         actApprove, actRequest, actView,
@@ -522,13 +522,13 @@ function _mpCard(b) {
   ].join('');
 }
 
-/* ── Actions ──────────────────────────────────────────────── */
+/* â”€â”€ Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 async function _mpApprove(bizId) {
   var biz = _all.find(function(b){ return b._id === bizId; });
   if (!biz) return;
   var count = _productCounts[bizId]||0;
   var score = _calcScore(biz, count);
-  if (score < 60) { _mpToast('Store completeness is below 60% — cannot approve yet.','warn'); return; }
+  if (score < 60) { _mpToast('Store completeness is below 60% â€” cannot approve yet.','warn'); return; }
   if (!confirm('Approve "' + (biz.name||'this store') + '"?\n\nScore: ' + score + '% | Listings: ' + count + '\n\nThis will mark the store as verified.')) return;
 
   try {
@@ -545,14 +545,14 @@ async function _mpApprove(bizId) {
     if (idx !== -1) { _all[idx].verified = true; _all[idx].onboardingStatus = 'approved'; }
     _mpUpdateKPIs();
     _mpFilter();
-    _mpToast('✅ ' + (biz.name||'Store') + ' approved!','success');
+    _mpToast('âœ… ' + (biz.name||'Store') + ' approved!','success');
   } catch(e) { _mpToast('Error: ' + e.message,'warn'); }
 }
 
 function _mpOpenRequestModal(bizId, bizName) {
   _modalBizId  = bizId;
   _modalAction = 'request';
-  document.getElementById('mp-modal-title').textContent = '⚠️ Request Changes — ' + (bizName||'Store');
+  document.getElementById('mp-modal-title').textContent = 'âš ï¸ Request Changes â€” ' + (bizName||'Store');
   document.getElementById('mp-modal-text').value = '';
   document.getElementById('mp-modal-backdrop').style.display = 'flex';
   setTimeout(function(){ document.getElementById('mp-modal-text').focus(); }, 100);
@@ -567,7 +567,7 @@ async function _mpSendNote() {
   var note = (document.getElementById('mp-modal-text').value||'').trim();
   if (!note) { _mpToast('Enter a message for the seller.','warn'); return; }
   var btn = document.getElementById('mp-modal-send-btn');
-  btn.textContent = 'Saving…'; btn.disabled = true;
+  btn.textContent = 'Savingâ€¦'; btn.disabled = true;
   try {
     var fsModule = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
     var db = window.firebaseDB;
@@ -581,12 +581,12 @@ async function _mpSendNote() {
     if (idx !== -1) { _all[idx].onboardingStatus = 'needs_changes'; _all[idx].adminNotes = note; }
     _mpFilter();
     _mpCloseModal();
-    _mpToast('Note saved — seller will see this in their dashboard.','success');
+    _mpToast('Note saved â€” seller will see this in their dashboard.','success');
   } catch(e) { _mpToast('Error: '+e.message,'warn'); }
   btn.textContent = 'Send & Update'; btn.disabled = false;
 }
 
-/* ── Toast ────────────────────────────────────────────────── */
+/* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 var _toastTimer;
 function _mpToast(msg, type) {
   var el = document.getElementById('mp-toast');
@@ -595,12 +595,12 @@ function _mpToast(msg, type) {
   _toastTimer = setTimeout(function(){ el.innerHTML=''; }, 3200);
 }
 
-/* ── Close modal on backdrop click ── */
+/* â”€â”€ Close modal on backdrop click â”€â”€ */
 document.getElementById('mp-modal-backdrop').addEventListener('click', function(e){
   if (e.target === this) _mpCloseModal();
 });
 
-/* ── Init ─────────────────────────────────────────────────── */
+/* â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 document.addEventListener('sokoniFirebaseReady', function(){
   if (_mpCheckSession()) _mpLoad();
 });

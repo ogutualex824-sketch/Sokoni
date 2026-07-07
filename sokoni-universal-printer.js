@@ -1,22 +1,39 @@
 /* ════════════════════════════════════════════════════════════════════
-   SOKONI Universal Printer Engine v3.0
+   SOKONI Universal Printer Engine v4.0
    Vendor-neutral, standards-based receipt printing for SmartPOS
 
-   Transports: Bluetooth (Web Bluetooth) · USB (WebUSB) · Serial
-               (Web Serial) · Network (HTTP/WS) · Browser (fallback)
-   Protocol  : ESC/POS industry standard
-   Documents : Sales · Refund · Exchange · Kitchen · Packing ·
-               Delivery · Labels · Queue · Summary · Custom
+   Transports  : Bluetooth (Web Bluetooth) · USB (WebUSB) · Serial
+                 (Web Serial) · Network (HTTP/WS) · Browser (fallback)
+   Protocol    : ESC/POS industry standard
+   Documents   : Sales · Refund · Exchange · Kitchen · Packing ·
+                 Delivery · Shipping Label · Labels · Queue · Parking ·
+                 Picking Slip · Booking · Service Confirmation ·
+                 Daily Summary · Monthly Summary · Custom
 
-   Public API: window.SokoniPrinter.{discover, connect, print, …}
+   Public API  : window.SokoniPrinter.{discover,connect,print,printImage,…}
    ════════════════════════════════════════════════════════════════════ */
 'use strict';
 (function (root) {
 
 /* ─────────────────────────────────────────────────────────────────
+   PRINTER ERROR CODES
+───────────────────────────────────────────────────────────────── */
+const PRINTER_ERRORS = {
+  OFFLINE:           'PRINTER_OFFLINE',
+  PAPER_OUT:         'PAPER_OUT',
+  COVER_OPEN:        'COVER_OPEN',
+  LOW_BATTERY:       'LOW_BATTERY',
+  CONNECTION_LOST:   'CONNECTION_LOST',
+  TIMEOUT:           'PRINT_TIMEOUT',
+  UNSUPPORTED_CMD:   'UNSUPPORTED_CMD',
+  IMAGE_LOAD_FAILED: 'IMAGE_LOAD_FAILED',
+  UNKNOWN:           'UNKNOWN_ERROR',
+};
+
+/* ─────────────────────────────────────────────────────────────────
    ESC/POS CONSTANTS
 ───────────────────────────────────────────────────────────────── */
-const ESC = 0x1B, GS = 0x1D, LF = 0x0A;
+const ESC = 0x1B, GS = 0x1D, DLE = 0x10, LF = 0x0A, FS = 0x1C;
 
 const CMD = {
   INIT:          [ESC,0x40],
@@ -39,12 +56,15 @@ const CMD = {
   FONT_A:        [ESC,0x4D,0x00],
   FONT_B:        [ESC,0x4D,0x01],
   DRAWER:        [ESC,0x70,0x00,0x19,0x78],
+  STATUS_PROBE:  [DLE,0x04,0x01],  // Real-time status: paper/cover/drawer
+  CHARSET_PC437: [ESC,0x74,0x00],
+  CHARSET_PC850: [ESC,0x74,0x02],
 };
 
 const PAPER = {
   '58mm': { chars: 32, px: 384 },
+  '76mm': { chars: 42, px: 504 },
   '80mm': { chars: 48, px: 576 },
-  '76mm': { chars: 42, px: 512 },
 };
 
 /* ─────────────────────────────────────────────────────────────────
@@ -55,7 +75,7 @@ class ESCPOSEncoder {
 
   _a (d) {
     if (Array.isArray(d)) this._b.push(...d);
-    else if (d instanceof Uint8Array) this._b.push(...d);
+    else if (d instanceof Uint8Array) { for (let i = 0; i < d.length; i++) this._b.push(d[i]); }
     else this._b.push(d & 0xFF);
     return this;
   }
@@ -73,13 +93,14 @@ class ESCPOSEncoder {
     const m = { normal: CMD.SIZE_NORMAL, tall: CMD.SIZE_TALL, wide: CMD.SIZE_WIDE, big: CMD.SIZE_BIG };
     return this._a(m[s] || CMD.SIZE_NORMAL);
   }
-  drawer () { return this._a(CMD.DRAWER); }
+  drawer ()         { return this._a(CMD.DRAWER); }
+  statusProbe ()    { return this._a(CMD.STATUS_PROBE); }
 
   text (str) {
     const b = [];
     for (let i = 0; i < str.length; i++) {
       const c = str.charCodeAt(i);
-      b.push(c < 256 ? c : 0x3F);  // '?' for chars outside latin-1
+      b.push(c < 256 ? c : 0x3F);
     }
     return this._a(b);
   }
@@ -89,7 +110,6 @@ class ESCPOSEncoder {
     return this._a(ac).text(str).lf();
   }
 
-  // Two-column row padded to `w` chars
   row (left, right, w = 48) {
     const r = String(right);
     const l = String(left).slice(0, w - r.length - 1).padEnd(w - r.length - 1);
@@ -100,12 +120,12 @@ class ESCPOSEncoder {
 
   qr (data, size = 5) {
     const n = data.length + 3, pL = n & 0xFF, pH = (n >> 8) & 0xFF;
-    this._a([GS,0x28,0x6B,0x04,0x00,0x31,0x41,0x32,0x00]);  // model
-    this._a([GS,0x28,0x6B,0x03,0x00,0x31,0x43,size]);         // size
-    this._a([GS,0x28,0x6B,0x03,0x00,0x31,0x45,0x31]);         // ECC level M
-    this._a([GS,0x28,0x6B,pL,pH,0x31,0x50,0x30]);             // store
+    this._a([GS,0x28,0x6B,0x04,0x00,0x31,0x41,0x32,0x00]);
+    this._a([GS,0x28,0x6B,0x03,0x00,0x31,0x43,size]);
+    this._a([GS,0x28,0x6B,0x03,0x00,0x31,0x45,0x31]);
+    this._a([GS,0x28,0x6B,pL,pH,0x31,0x50,0x30]);
     for (let i = 0; i < data.length; i++) this._a(data.charCodeAt(i) & 0xFF);
-    this._a([GS,0x28,0x6B,0x03,0x00,0x31,0x51,0x30]);         // print
+    this._a([GS,0x28,0x6B,0x03,0x00,0x31,0x51,0x30]);
     return this;
   }
 
@@ -115,12 +135,64 @@ class ESCPOSEncoder {
     return this;
   }
 
+  /* Raster image — ESC/POS GS v 0 command
+     widthBytes = ceil(widthPx / 8), heightDots = pixel height
+     pixels = Uint8Array of packed 1-bit data (1=black, MSB first) */
+  raster (widthBytes, heightDots, pixels) {
+    const xL = widthBytes & 0xFF, xH = (widthBytes >> 8) & 0xFF;
+    const yL = heightDots & 0xFF, yH = (heightDots >> 8) & 0xFF;
+    this._a([GS, 0x76, 0x30, 0x00, xL, xH, yL, yH]);
+    for (let i = 0; i < pixels.length; i++) this._b.push(pixels[i]);
+    return this;
+  }
+
   build () { return new Uint8Array(this._b); }
   reset () { this._b = []; return this; }
 }
 
 /* ─────────────────────────────────────────────────────────────────
-   RECEIPT RENDERER  (adapts to 58mm / 80mm / future widths)
+   IMAGE → ESC/POS RASTER CONVERTER  (browser Canvas API)
+───────────────────────────────────────────────────────────────── */
+function _imgToRaster (src, maxWidthPx, threshold = 128) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const scale = Math.min(1, maxWidthPx / img.width);
+      const w = Math.floor(img.width  * scale);
+      const h = Math.floor(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      const data = ctx.getImageData(0, 0, w, h).data;
+      const bytesPerRow = Math.ceil(w / 8);
+      const pixels = new Uint8Array(bytesPerRow * h);
+      for (let y = 0; y < h; y++) {
+        for (let bx = 0; bx < bytesPerRow; bx++) {
+          let byte = 0;
+          for (let bit = 0; bit < 8; bit++) {
+            const px = bx * 8 + bit;
+            if (px < w) {
+              const idx = (y * w + px) * 4;
+              const gray = 0.299 * data[idx] + 0.587 * data[idx+1] + 0.114 * data[idx+2];
+              if (gray < threshold) byte |= (0x80 >> bit);
+            }
+          }
+          pixels[y * bytesPerRow + bx] = byte;
+        }
+      }
+      resolve({ pixels, widthBytes: bytesPerRow, heightDots: h });
+    };
+    img.onerror = () => reject(Object.assign(new Error('Image load failed: ' + src), { code: PRINTER_ERRORS.IMAGE_LOAD_FAILED }));
+    img.src = src;
+  });
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   RECEIPT RENDERER  (adapts to 58mm / 76mm / 80mm)
 ───────────────────────────────────────────────────────────────── */
 class ReceiptRenderer {
   constructor (paperWidth = '80mm', cfg = {}) {
@@ -128,6 +200,7 @@ class ReceiptRenderer {
     this._cfg = cfg;
   }
   get W () { return this._p.chars; }
+  get PX () { return this._p.px; }
   _sep (ch = '-') { return ch.repeat(this.W); }
   _mid (s) {
     const w = this.W, l = s.length;
@@ -144,17 +217,16 @@ class ReceiptRenderer {
     const e = new ESCPOSEncoder().init();
     const W = this.W, c = this._cfg;
 
-    // Header
     e.ac();
-    if (c.logoText) e.bold(true).sz('big').text(c.logoText || d.businessName || 'SOKONI').lf().sz('normal').bold(false);
-    if (d.businessName) e.bold(true).text(d.businessName).lf().bold(false);
+    if (c.logoText || d.businessName)
+      e.bold(true).sz('big').text((c.logoText || d.businessName).slice(0, Math.floor(W / 2))).lf().sz('normal').bold(false);
+    if (d.businessName && c.logoText) e.bold(true).text(d.businessName).lf().bold(false);
     if (d.businessAddress) e.text(d.businessAddress).lf();
     if (d.businessPhone)   e.text('Tel: ' + d.businessPhone).lf();
     if (d.businessPin)     e.text('PIN: ' + d.businessPin).lf();
     if (d.vatNumber)       e.text('VAT: ' + d.vatNumber).lf();
 
     e.al().text(this._sep()).lf();
-
     const now = new Date();
     e.text(this._cols('Date:', d.date || now.toLocaleDateString('en-KE'))).lf();
     e.text(this._cols('Time:', d.time || now.toLocaleTimeString('en-KE'))).lf();
@@ -169,8 +241,6 @@ class ReceiptRenderer {
     }
 
     e.text(this._sep()).lf();
-
-    // Items header
     const qW = 4, pW = 10, nW = W - qW - pW - 2;
     e.bold(true).text('Item'.padEnd(nW) + ' Qty'.padStart(qW) + 'Amount'.padStart(pW)).lf().bold(false);
     e.text(this._sep()).lf();
@@ -180,49 +250,44 @@ class ReceiptRenderer {
       const qty    = String(it.quantity || 1).padStart(qW);
       const amount = this._kes((it.unitPrice || 0) * (it.quantity || 1)).padStart(pW);
       e.text(name + qty + amount).lf();
-      if (it.variant)  e.text('  + ' + it.variant).lf();
-      if (it.notes)    e.text('  * ' + it.notes).lf();
+      if (it.variant)  e.text('  Variant: ' + it.variant).lf();
+      if (it.notes)    e.text('  Note: ' + it.notes).lf();
       if (it.discount) e.text(('  Disc: -' + this._kes(it.discount)).padEnd(W)).lf();
     }
 
     e.text(this._sep()).lf();
-
-    // Totals
     const t = d.totals || {};
-    if (t.subtotal  != null)  e.text(this._cols('Subtotal:',     this._kes(t.subtotal))).lf();
-    if (t.discount)           e.text(this._cols('Discount:',    '-' + this._kes(t.discount))).lf();
-    if (t.coupon)             e.text(this._cols('Coupon:',      '-' + this._kes(t.coupon))).lf();
-    if (t.vat)                e.text(this._cols('VAT (16%):',    this._kes(t.vat))).lf();
+    if (t.subtotal  != null)  e.text(this._cols('Subtotal:',      this._kes(t.subtotal))).lf();
+    if (t.discount)           e.text(this._cols('Discount:',     '-' + this._kes(t.discount))).lf();
+    if (t.coupon)             e.text(this._cols('Coupon:',       '-' + this._kes(t.coupon))).lf();
+    if (t.vat)                e.text(this._cols('VAT (16%):',     this._kes(t.vat))).lf();
     if (t.serviceCharge)      e.text(this._cols('Service Charge:', this._kes(t.serviceCharge))).lf();
-    if (t.deliveryFee)        e.text(this._cols('Delivery:',     this._kes(t.deliveryFee))).lf();
-    if (t.commission)         e.text(this._cols('Platform Fee:', this._kes(t.commission))).lf();
-
+    if (t.deliveryFee)        e.text(this._cols('Delivery:',      this._kes(t.deliveryFee))).lf();
+    if (t.commission && this._cfg.showCommission)
+                              e.text(this._cols('Platform Fee:',  this._kes(t.commission))).lf();
     e.text(this._sep()).lf();
     e.bold(true).sz('tall').text(this._cols('TOTAL:', this._kes(t.grandTotal))).lf().sz('normal').bold(false);
     e.text(this._sep()).lf();
 
-    // Payment
     const pay = d.payment || {};
-    if (pay.method) e.text(this._cols('Payment:', pay.method)).lf();
-    if (pay.amountTendered) e.text(this._cols('Tendered:', this._kes(pay.amountTendered))).lf();
-    if (pay.change != null) e.text(this._cols('Change:',   this._kes(pay.change))).lf();
-    if (pay.mpesaCode)      e.text('M-PESA: ' + pay.mpesaCode).lf();
-    if (pay.authCode)       e.text('Auth: ' + pay.authCode).lf();
+    if (pay.method)          e.text(this._cols('Payment:',  pay.method)).lf();
+    if (pay.amountTendered)  e.text(this._cols('Tendered:', this._kes(pay.amountTendered))).lf();
+    if (pay.change != null)  e.text(this._cols('Change:',   this._kes(pay.change))).lf();
+    if (pay.mpesaCode)       e.text('M-PESA: ' + pay.mpesaCode).lf();
+    if (pay.authCode)        e.text('Auth: ' + pay.authCode).lf();
 
-    // QR & barcode
     if (d.receiptUrl || d.digitalRef) {
       e.lf().ac().text('Scan for digital receipt').lf();
       e.qr(d.receiptUrl || d.digitalRef, 4);
     }
     if (d.barcode) e.ac().barcode(d.barcode);
 
-    // Footer
     e.lf().ac();
-    if (c.footer)           e.text(c.footer).lf();
-    if (d.returnPolicy)     e.text(d.returnPolicy).lf();
-    if (d.warrantyInfo)     e.text(d.warrantyInfo).lf();
-    if (d.promoMessage)     e.bold(true).text(d.promoMessage).lf().bold(false);
-    if (d.digitalRef)       e.text('Ref: ' + d.digitalRef).lf();
+    if (c.footer)            e.text(c.footer).lf();
+    if (d.returnPolicy)      e.text(d.returnPolicy).lf();
+    if (d.warrantyInfo)      e.text(d.warrantyInfo).lf();
+    if (d.promoMessage)      e.bold(true).text(d.promoMessage).lf().bold(false);
+    if (d.digitalRef)        e.text('Ref: ' + d.digitalRef).lf();
 
     e.lf(3).cut();
     return e.build();
@@ -230,14 +295,59 @@ class ReceiptRenderer {
 
   /* ── Refund receipt ────────────────────────────────────────── */
   refund (d) {
-    const e = new ESCPOSEncoder().init();
-    e.ac().bold(true).sz('big').text('** REFUND **').lf().sz('normal').bold(false);
+    const marker = new ESCPOSEncoder().init()
+      .ac().bold(true).sz('big').text('** REFUND **').lf().sz('normal').bold(false).build();
     const rest = this.sale({ ...d, receiptUrl: null });
-    // Prepend refund marker to sales receipt bytes
-    const marker = e.build();
-    const combined = new Uint8Array(marker.length + rest.length);
-    combined.set(marker); combined.set(rest, marker.length);
-    return combined;
+    const out = new Uint8Array(marker.length + rest.length);
+    out.set(marker); out.set(rest, marker.length);
+    return out;
+  }
+
+  /* ── Exchange receipt ──────────────────────────────────────── */
+  exchange (d) {
+    const e = new ESCPOSEncoder().init();
+    e.ac().bold(true).sz('big').text('** EXCHANGE **').lf().sz('normal').bold(false);
+    if (d.businessName) e.text(d.businessName).lf();
+    e.al().text(this._sep()).lf();
+    const now = new Date();
+    e.text(this._cols('Date:', d.date || now.toLocaleDateString('en-KE'))).lf();
+    e.text(this._cols('Time:', d.time || now.toLocaleTimeString('en-KE'))).lf();
+    if (d.exchangeRef)   e.text(this._cols('Exchange #:', d.exchangeRef)).lf();
+    if (d.originalRef)   e.text(this._cols('Original #:', d.originalRef)).lf();
+    if (d.cashierName)   e.text(this._cols('Cashier:',    d.cashierName)).lf();
+
+    // Returned items
+    e.text(this._sep()).lf();
+    e.bold(true).text('RETURNED:').lf().bold(false);
+    for (const it of (d.returnedItems || [])) {
+      e.text(String(it.quantity || 1) + 'x  ' + String(it.name || 'Item').slice(0, this.W - 6)).lf();
+      e.text('  Value: ' + this._kes((it.unitPrice || 0) * (it.quantity || 1))).lf();
+    }
+
+    // New items
+    e.text(this._sep()).lf();
+    e.bold(true).text('NEW ITEMS:').lf().bold(false);
+    for (const it of (d.newItems || [])) {
+      e.text(String(it.quantity || 1) + 'x  ' + String(it.name || 'Item').slice(0, this.W - 6)).lf();
+      e.text('  Price: ' + this._kes((it.unitPrice || 0) * (it.quantity || 1))).lf();
+    }
+
+    // Settlement
+    e.text(this._sep()).lf();
+    const returnVal = (d.returnedValue || 0);
+    const newVal    = (d.newValue || 0);
+    const diff      = newVal - returnVal;
+    e.text(this._cols('Returned Value:', this._kes(returnVal))).lf();
+    e.text(this._cols('New Items Value:', this._kes(newVal))).lf();
+    e.bold(true);
+    if (diff > 0)       e.text(this._cols('AMOUNT TO PAY:', this._kes(diff))).lf();
+    else if (diff < 0)  e.text(this._cols('REFUND DUE:',    this._kes(-diff))).lf();
+    else                e.text('NO ADDITIONAL PAYMENT REQUIRED').lf();
+    e.bold(false);
+
+    if (d.payment?.method) e.text(this._cols('Settled via:', d.payment.method)).lf();
+    e.lf(3).cut();
+    return e.build();
   }
 
   /* ── Kitchen ticket ────────────────────────────────────────── */
@@ -247,7 +357,8 @@ class ReceiptRenderer {
     e.text(this._cols('Order #:', d.orderNumber || '?')).lf();
     e.text(this._cols('Table:',   d.table || 'Takeaway')).lf();
     e.text(this._cols('Time:',    new Date().toLocaleTimeString('en-KE'))).lf();
-    e.bold(false).text(this._sep()).lf();
+    if (d.priority === 'urgent') e.inv(true).ac().text(' !! URGENT !! ').lf().inv(false);
+    e.al().text(this._sep()).lf();
     for (const it of (d.items || [])) {
       e.bold(true).sz('tall').text(String(it.quantity || 1) + 'x ' + (it.name || 'Item')).lf().sz('normal').bold(false);
       if (it.variant) e.text('   - ' + it.variant).lf();
@@ -281,6 +392,67 @@ class ReceiptRenderer {
     return e.build();
   }
 
+  /* ── Shipping label ────────────────────────────────────────── */
+  shippingLabel (d) {
+    const e = new ESCPOSEncoder().init();
+    e.ac().bold(true).sz('big').text('SHIP').lf().sz('normal').bold(false);
+    if (d.trackingNumber) {
+      e.lf().ac();
+      e.barcode(d.trackingNumber, 73, 80, 2);
+      e.text(d.trackingNumber).lf();
+    }
+    e.al().text(this._sep('=')).lf();
+    e.bold(true).text('TO:').lf().bold(false);
+    if (d.toName)    e.sz('tall').text(d.toName).lf().sz('normal');
+    if (d.toAddress) e.text(d.toAddress).lf();
+    if (d.toCity)    e.text(d.toCity).lf();
+    if (d.toPhone)   e.text('Tel: ' + d.toPhone).lf();
+    e.text(this._sep()).lf();
+    e.bold(true).text('FROM:').lf().bold(false);
+    if (d.fromName)    e.text(d.fromName).lf();
+    if (d.fromAddress) e.text(d.fromAddress).lf();
+    if (d.fromPhone)   e.text('Tel: ' + d.fromPhone).lf();
+    e.text(this._sep()).lf();
+    if (d.weight)    e.text(this._cols('Weight:', d.weight)).lf();
+    if (d.service)   e.text(this._cols('Service:', d.service)).lf();
+    if (d.contents)  e.text(this._cols('Contents:', d.contents)).lf();
+    if (d.fragile)   e.inv(true).ac().text(' FRAGILE — HANDLE WITH CARE ').lf().inv(false);
+    if (d.qr)        e.ac().lf().qr(d.qr, 4);
+    e.lf(3).cut();
+    return e.build();
+  }
+
+  /* ── Warehouse picking slip ────────────────────────────────── */
+  pickingSlip (d) {
+    const e = new ESCPOSEncoder().init();
+    e.ac().bold(true).text('PICKING SLIP').lf().bold(false);
+    e.al().text(this._sep()).lf();
+    e.text(this._cols('Order #:',    d.orderNumber  || '?')).lf();
+    e.text(this._cols('Picker:',     d.pickerName   || '?')).lf();
+    e.text(this._cols('Zone:',       d.zone         || '—')).lf();
+    e.text(this._cols('Date:',       d.date || new Date().toLocaleDateString('en-KE'))).lf();
+    e.text(this._cols('Time:',       d.time || new Date().toLocaleTimeString('en-KE'))).lf();
+    if (d.priority === 'urgent') e.inv(true).ac().text(' !! URGENT PICK !! ').lf().inv(false);
+    e.al().text(this._sep()).lf();
+    e.bold(true);
+    e.text('Bin'.padEnd(10) + 'SKU'.padEnd(14) + 'Qty'.padStart(4) + ' Picked').lf();
+    e.bold(false).text(this._sep()).lf();
+    for (const it of (d.items || [])) {
+      const bin = String(it.bin || '—').padEnd(10);
+      const sku = String(it.sku || it.name || '').slice(0, 13).padEnd(14);
+      const qty = String(it.quantity || 1).padStart(4);
+      e.text(bin + sku + qty + ' [   ]').lf();
+      if (it.variant) e.text('       Variant: ' + it.variant).lf();
+    }
+    e.text(this._sep()).lf();
+    e.text('Total Items: ' + (d.items || []).length + '   Total Units: ' +
+      (d.items || []).reduce((s, it) => s + (it.quantity || 1), 0)).lf();
+    if (d.notes) e.lf().text('Notes: ' + d.notes).lf();
+    if (d.qr) e.ac().lf().qr(d.qr, 3);
+    e.lf(3).cut();
+    return e.build();
+  }
+
   /* ── Label (product / barcode / QR) ───────────────────────── */
   label (d) {
     const e = new ESCPOSEncoder().init().ac();
@@ -288,22 +460,46 @@ class ReceiptRenderer {
     if (d.price != null) e.sz('tall').text(this._kes(d.price)).lf().sz('normal');
     if (d.sku)  e.text('SKU: ' + d.sku).lf();
     if (d.lot)  e.text('LOT: ' + d.lot).lf();
+    if (d.exp)  e.text('EXP: ' + d.exp).lf();
     if (d.barcode) e.barcode(d.barcode, 73, 60, 2);
     if (d.qr)  e.qr(d.qr, 3);
     e.lf(2).cut();
     return e.build();
   }
 
-  /* ── Queue / appointment ticket ────────────────────────────── */
+  /* ── Queue / parking ticket ────────────────────────────────── */
   queueTicket (d) {
     const e = new ESCPOSEncoder().init().ac();
     if (d.businessName) e.text(d.businessName).lf();
     e.lf().sz('big').bold(true).text(d.ticketNumber || '001').lf().sz('normal').bold(false);
-    if (d.service)   e.text(d.service).lf();
+    if (d.service)       e.text(d.service).lf();
     if (d.estimatedWait) e.text('Est. wait: ' + d.estimatedWait).lf();
-    if (d.time)      e.text(d.time).lf();
-    if (d.date)      e.text(d.date).lf();
-    if (d.qr)        e.lf().qr(d.qr, 4);
+    if (d.time)          e.text(d.time).lf();
+    if (d.date)          e.text(d.date).lf();
+    if (d.qr)            e.lf().qr(d.qr, 4);
+    e.lf(3).cut();
+    return e.build();
+  }
+
+  /* ── Parking ticket ────────────────────────────────────────── */
+  parkingTicket (d) {
+    const e = new ESCPOSEncoder().init().ac();
+    if (d.facilityName) e.bold(true).text(d.facilityName).lf().bold(false);
+    e.lf().sz('big').bold(true).text(d.ticketNumber || 'P-001').lf().sz('normal').bold(false);
+    e.al().text(this._sep()).lf();
+    if (d.plateNumber) e.text(this._cols('Plate:', d.plateNumber)).lf();
+    if (d.zone)        e.text(this._cols('Zone/Bay:', d.zone)).lf();
+    e.text(this._cols('Entry:', d.entryTime || new Date().toLocaleTimeString('en-KE'))).lf();
+    if (d.exitTime)    e.text(this._cols('Exit:', d.exitTime)).lf();
+    if (d.duration)    e.text(this._cols('Duration:', d.duration)).lf();
+    if (d.rate)        e.text(this._cols('Rate:', d.rate)).lf();
+    if (d.fee != null) {
+      e.text(this._sep()).lf();
+      e.bold(true).text(this._cols('TOTAL FEE:', this._kes(d.fee))).lf().bold(false);
+    }
+    if (d.paid)        e.text(this._cols('Status:', 'PAID')).lf();
+    if (d.barcode)     e.ac().lf().barcode(d.barcode, 73, 80, 2);
+    if (d.qr)          e.ac().lf().qr(d.qr, 4);
     e.lf(3).cut();
     return e.build();
   }
@@ -313,16 +509,52 @@ class ReceiptRenderer {
     const e = new ESCPOSEncoder().init();
     e.ac().bold(true).text('BOOKING CONFIRMATION').lf().bold(false);
     e.al().text(this._sep()).lf();
-    if (d.bookingRef)  e.text(this._cols('Ref:',     d.bookingRef)).lf();
-    if (d.service)     e.text(this._cols('Service:', d.service)).lf();
-    if (d.provider)    e.text(this._cols('With:',    d.provider)).lf();
-    if (d.date)        e.text(this._cols('Date:',    d.date)).lf();
-    if (d.time)        e.text(this._cols('Time:',    d.time)).lf();
-    if (d.location)    e.text(this._cols('Location:', d.location)).lf();
+    if (d.bookingRef)   e.text(this._cols('Ref:',      d.bookingRef)).lf();
+    if (d.service)      e.text(this._cols('Service:',  d.service)).lf();
+    if (d.provider)     e.text(this._cols('With:',     d.provider)).lf();
+    if (d.date)         e.text(this._cols('Date:',     d.date)).lf();
+    if (d.time)         e.text(this._cols('Time:',     d.time)).lf();
+    if (d.duration)     e.text(this._cols('Duration:', d.duration)).lf();
+    if (d.location)     e.text(this._cols('Location:', d.location)).lf();
     e.text(this._sep()).lf();
     if (d.customerName)  e.text('Name: ' + d.customerName).lf();
     if (d.customerPhone) e.text('Phone: ' + d.customerPhone).lf();
+    if (d.amount != null) {
+      e.text(this._sep()).lf();
+      e.text(this._cols('Amount:', this._kes(d.amount))).lf();
+      if (d.deposit) e.text(this._cols('Deposit Paid:', this._kes(d.deposit))).lf();
+    }
     if (d.notes) e.lf().text('Notes: ' + d.notes).lf();
+    if (d.qr) e.ac().lf().qr(d.qr, 4);
+    e.lf(3).cut();
+    return e.build();
+  }
+
+  /* ── Service / repair confirmation ────────────────────────── */
+  serviceConfirmation (d) {
+    const e = new ESCPOSEncoder().init();
+    e.ac().bold(true).text('SERVICE ORDER').lf().bold(false);
+    if (d.businessName) e.text(d.businessName).lf();
+    e.al().text(this._sep()).lf();
+    if (d.serviceRef)    e.text(this._cols('Job #:',       d.serviceRef)).lf();
+    if (d.customerName)  e.text(this._cols('Customer:',    d.customerName)).lf();
+    if (d.customerPhone) e.text(this._cols('Phone:',       d.customerPhone)).lf();
+    if (d.device)        e.text(this._cols('Device/Item:', d.device)).lf();
+    if (d.serial)        e.text(this._cols('Serial #:',    d.serial)).lf();
+    if (d.problem)       { e.text(this._sep()).lf(); e.bold(true).text('Issue:').lf().bold(false); e.text(d.problem).lf(); }
+    if (d.diagnosis)     { e.text(this._sep()).lf(); e.bold(true).text('Diagnosis:').lf().bold(false); e.text(d.diagnosis).lf(); }
+    if (d.parts && d.parts.length) {
+      e.text(this._sep()).lf();
+      e.bold(true).text('Parts:').lf().bold(false);
+      for (const p of d.parts) e.text((p.quantity || 1) + 'x ' + p.name + '  ' + this._kes(p.price)).lf();
+    }
+    e.text(this._sep()).lf();
+    if (d.labour)         e.text(this._cols('Labour:', this._kes(d.labour))).lf();
+    if (d.estimatedTotal) e.bold(true).text(this._cols('Est. Total:', this._kes(d.estimatedTotal))).lf().bold(false);
+    if (d.completionDate) e.text(this._cols('Est. Ready:', d.completionDate)).lf();
+    if (d.warranty)       e.text(this._cols('Warranty:', d.warranty)).lf();
+    e.text(this._sep()).lf();
+    if (d.terms) e.text(d.terms).lf();
     if (d.qr) e.ac().lf().qr(d.qr, 4);
     e.lf(3).cut();
     return e.build();
@@ -338,8 +570,9 @@ class ReceiptRenderer {
     e.al().text(this._sep()).lf();
     e.text(this._cols('Total Sales:',    this._kes(d.totalSales))).lf();
     e.text(this._cols('Transactions:',   String(d.transactionCount || 0))).lf();
-    e.text(this._cols('Refunds:',       this._kes(d.totalRefunds))).lf();
-    e.text(this._cols('Net Revenue:',   this._kes(d.netRevenue))).lf();
+    e.text(this._cols('Refunds:',        this._kes(d.totalRefunds))).lf();
+    e.text(this._cols('Exchanges:',      String(d.exchangeCount || 0))).lf();
+    e.text(this._cols('Net Revenue:',    this._kes(d.netRevenue))).lf();
     e.text(this._sep()).lf();
     if (d.paymentBreakdown) {
       for (const [m, v] of Object.entries(d.paymentBreakdown))
@@ -351,6 +584,46 @@ class ReceiptRenderer {
     e.text(this._cols('Actual Cash:',    this._kes(d.actualCash))).lf();
     const variance = (d.actualCash || 0) - (d.expectedCash || 0);
     e.bold(variance !== 0).text(this._cols('Variance:', this._kes(variance))).lf().bold(false);
+    if (d.topItem) e.text(this._cols('Best Seller:', d.topItem)).lf();
+    e.lf(3).cut();
+    return e.build();
+  }
+
+  /* ── Monthly summary ───────────────────────────────────────── */
+  monthlySummary (d) {
+    const e = new ESCPOSEncoder().init();
+    e.ac().bold(true).sz('tall').text('MONTHLY SUMMARY').lf().sz('normal').bold(false);
+    e.text(d.period || '').lf();
+    if (d.businessName) e.text(d.businessName).lf();
+    e.al().text(this._sep('=')).lf();
+    e.text(this._cols('Total Revenue:',    this._kes(d.totalRevenue))).lf();
+    e.text(this._cols('Transactions:',     String(d.transactionCount || 0))).lf();
+    e.text(this._cols('Avg Daily Sales:',  this._kes(d.avgDailySales))).lf();
+    e.text(this._cols('Best Day:',         d.bestDay || '—')).lf();
+    e.text(this._cols('Best Day Revenue:', this._kes(d.bestDayRevenue))).lf();
+    e.text(this._sep()).lf();
+    e.text(this._cols('Refunds:',          this._kes(d.totalRefunds))).lf();
+    e.text(this._cols('Net Revenue:',      this._kes(d.netRevenue))).lf();
+    if (d.prevMonthRevenue != null) {
+      const growth = d.totalRevenue > 0 && d.prevMonthRevenue > 0
+        ? (((d.totalRevenue - d.prevMonthRevenue) / d.prevMonthRevenue) * 100).toFixed(1)
+        : null;
+      if (growth) e.text(this._cols('vs Last Month:', (growth > 0 ? '+' : '') + growth + '%')).lf();
+    }
+    e.text(this._sep()).lf();
+    if (d.topProducts && d.topProducts.length) {
+      e.bold(true).text('TOP PRODUCTS:').lf().bold(false);
+      d.topProducts.slice(0, 5).forEach((p, i) =>
+        e.text(String(i+1) + '. ' + String(p.name).slice(0, this.W - 12) + ' ' + this._kes(p.revenue)).lf()
+      );
+      e.text(this._sep()).lf();
+    }
+    if (d.paymentBreakdown) {
+      e.bold(true).text('BY PAYMENT:').lf().bold(false);
+      for (const [m, v] of Object.entries(d.paymentBreakdown))
+        e.text(this._cols(m + ':', this._kes(v))).lf();
+      e.text(this._sep()).lf();
+    }
     e.lf(3).cut();
     return e.build();
   }
@@ -360,43 +633,48 @@ class ReceiptRenderer {
     const map = {
       sale: this.sale, receipt: this.sale, sales_receipt: this.sale,
       refund: this.refund, refund_receipt: this.refund,
-      exchange: this.refund,
+      exchange: this.exchange, exchange_receipt: this.exchange,
       kitchen: this.kitchen, kitchen_ticket: this.kitchen,
       delivery: this.delivery, packing_slip: this.delivery,
-      delivery_slip: this.delivery, shipping_label: this.delivery,
+      delivery_slip: this.delivery,
+      shipping_label: this.shippingLabel, ship: this.shippingLabel,
+      picking_slip: this.pickingSlip, warehouse_pick: this.pickingSlip,
       label: this.label, inventory_label: this.label,
       barcode_label: this.label, qr_label: this.label,
-      queue_ticket: this.queueTicket, parking_ticket: this.queueTicket,
+      queue_ticket: this.queueTicket,
+      parking_ticket: this.parkingTicket, parking: this.parkingTicket,
       booking: this.booking, appointment: this.booking,
-      service_confirmation: this.booking, booking_confirmation: this.booking,
+      booking_confirmation: this.booking, appointment_ticket: this.booking,
+      service_confirmation: this.serviceConfirmation, service_order: this.serviceConfirmation,
+      repair_ticket: this.serviceConfirmation,
       daily_summary: this.dailySummary, cash_report: this.dailySummary,
-      monthly_summary: this.dailySummary,
+      shift_report: this.dailySummary,
+      monthly_summary: this.monthlySummary, monthly_report: this.monthlySummary,
     };
     const fn = map[docType];
     if (!fn) return this.sale(data);
     return fn.call(this, data);
   }
 
-  /* ── HTML preview (browser fallback + on-screen) ──────────── */
+  /* ── HTML preview ──────────────────────────────────────────── */
   previewHTML (docType, data) {
-    const raw  = this.render(docType, data);
+    const raw = this.render(docType, data);
     let txt = '';
     let i = 0;
-    // Strip ESC/POS control sequences, keep printable chars + LF
     while (i < raw.length) {
       const b = raw[i];
-      if (b === 0x1B || b === 0x1D || b === 0x1C) { i += 2; while (i < raw.length && (raw[i] > 127 || raw[i] < 0x20)) i++; continue; }
-      if (b === 0x0A) { txt += '\n'; }
+      if (b === 0x1B || b === 0x1D || b === 0x10 || b === 0x1C) { i += 2; while (i < raw.length && (raw[i] > 127 || raw[i] < 0x20)) i++; continue; }
+      if (b === 0x0A) txt += '\n';
       else if (b >= 0x20 && b < 0x7F) txt += String.fromCharCode(b);
       i++;
     }
     const w = this._p.chars * 7.5;
-    return `<div style="width:${w}px;font-family:'Courier New',monospace;font-size:12px;line-height:1.5;white-space:pre;padding:12px 10px;border:1px solid #ddd;background:#fff;color:#111">${txt.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+    return `<div style="width:${w}px;font-family:'Courier New',monospace;font-size:12px;line-height:1.5;white-space:pre;padding:12px 10px;border:1px solid #333;background:#fff;color:#111">${txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
   }
 }
 
 /* ─────────────────────────────────────────────────────────────────
-   PRINT QUEUE  (persistent via localStorage)
+   PRINT QUEUE  (persistent via localStorage, priority-sorted)
 ───────────────────────────────────────────────────────────────── */
 class PrintQueue {
   constructor () {
@@ -413,15 +691,15 @@ class PrintQueue {
     try { localStorage.setItem('spp_history', JSON.stringify(this._hist.slice(0, 200))); } catch(e) {}
   }
   emit (ev, d) { (this._ev[ev] || []).forEach(fn => { try { fn(d); } catch(e) {} }); }
-  on  (ev, fn) { (this._ev[ev] = this._ev[ev] || []).push(fn); }
-  off (ev, fn) { this._ev[ev] = (this._ev[ev] || []).filter(f => f !== fn); }
+  on   (ev, fn) { (this._ev[ev] = this._ev[ev] || []).push(fn); }
+  off  (ev, fn) { this._ev[ev] = (this._ev[ev] || []).filter(f => f !== fn); }
 
   enqueue (docType, data, opts = {}) {
     const job = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
       docType, data,
       copies:      opts.copies || 1,
-      priority:    opts.priority || 0,
+      priority:    opts.priority || 0,   // higher = print first
       maxAttempts: opts.maxAttempts || 3,
       status:      'pending', attempts: 0, error: null,
       createdAt:   new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -431,7 +709,14 @@ class PrintQueue {
     return job.id;
   }
 
-  next ()   { return this._paused ? null : this._q.find(j => j.status === 'pending') || null; }
+  /* Return highest-priority pending job */
+  next () {
+    if (this._paused) return null;
+    const pending = this._q.filter(j => j.status === 'pending');
+    if (!pending.length) return null;
+    return pending.reduce((best, j) => j.priority > best.priority ? j : best, pending[0]);
+  }
+
   pause ()  { this._paused = true;  this.emit('paused', null); }
   resume () { this._paused = false; this.emit('resumed', null); this.emit('tick', null); }
 
@@ -478,45 +763,107 @@ class PrintQueue {
 ───────────────────────────────────────────────────────────────── */
 
 class BtAdapter {
-  constructor () { this.ok = false; this._char = null; this._dev = null; }
+  constructor () { this.ok = false; this._char = null; this._dev = null; this._srv = null; }
   get type () { return 'bluetooth'; }
   get avail () { return !!navigator.bluetooth; }
+
   async discover () {
     if (!this.avail) return [];
     const filters = [
       { services: ['000018f0-0000-1000-8000-00805f9b34fb'] },
       { services: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2'] },
-      { namePrefix: 'MTP' },{ namePrefix: 'Rongta' },{ namePrefix: 'Xprinter' },
-      { namePrefix: 'EPSON' },{ namePrefix: 'Star' },{ namePrefix: 'POS' },
-      { namePrefix: 'BP-' },{ namePrefix: 'RPP' },{ namePrefix: 'BTPT' },
+      { services: ['0000ffe0-0000-1000-8000-00805f9b34fb'] },
+      { namePrefix: 'MTP' }, { namePrefix: 'Rongta' }, { namePrefix: 'Xprinter' },
+      { namePrefix: 'EPSON' }, { namePrefix: 'Star' }, { namePrefix: 'POS' },
+      { namePrefix: 'BP-' }, { namePrefix: 'RPP' }, { namePrefix: 'BTPT' },
+      { namePrefix: 'Printer' }, { namePrefix: 'TM-' }, { namePrefix: 'iDPRT' },
     ];
     try {
       const d = await navigator.bluetooth.requestDevice({
         filters,
-        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb','e7810a71-73ae-499d-8c15-faa9aef0c3f2'],
+        optionalServices: [
+          '000018f0-0000-1000-8000-00805f9b34fb',
+          'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+          '0000ffe0-0000-1000-8000-00805f9b34fb',
+        ],
       });
       return [{ id: d.id, name: d.name || 'Bluetooth Printer', type: 'bluetooth', _dev: d }];
-    } catch(e) { return e.name === 'NotFoundError' ? [] : []; }
+    } catch(e) { return []; }
   }
+
   async connect (info) {
     const d = info._dev;
-    const srv = await d.gatt.connect();
-    const serviceUUIDs = ['000018f0-0000-1000-8000-00805f9b34fb','e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+    this._dev = d;
+    this._srv = await d.gatt.connect();
+    const serviceUUIDs = [
+      '000018f0-0000-1000-8000-00805f9b34fb',
+      'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+      '0000ffe0-0000-1000-8000-00805f9b34fb',
+    ];
     let svc = null;
-    for (const u of serviceUUIDs) { try { svc = await srv.getPrimaryService(u); break; } catch(e) {} }
+    for (const u of serviceUUIDs) { try { svc = await this._srv.getPrimaryService(u); break; } catch(e) {} }
     if (!svc) throw new Error('No print service on this Bluetooth device');
-    const charUUIDs = ['00002af1-0000-1000-8000-00805f9b34fb','bef8d6c9-9c21-4c9e-b632-bd58c1009f9f'];
+    const charUUIDs = [
+      '00002af1-0000-1000-8000-00805f9b34fb',
+      'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
+      '0000ffe1-0000-1000-8000-00805f9b34fb',
+    ];
     for (const u of charUUIDs) { try { this._char = await svc.getCharacteristic(u); break; } catch(e) {} }
+    if (!this._char) {
+      const chars = await svc.getCharacteristics().catch(() => []);
+      this._char = chars.find(c => c.properties.write || c.properties.writeWithoutResponse) || null;
+    }
     if (!this._char) throw new Error('No write characteristic found');
     this.ok = true; this._info = info;
-    d.addEventListener('gattserverdisconnected', () => { this.ok = false; });
+    d.addEventListener('gattserverdisconnected', () => {
+      this.ok = false;
+      this._reconnect(d);
+    });
   }
-  async disconnect () { this._info?._dev?.gatt?.connected && this._info._dev.gatt.disconnect(); this.ok = false; }
+
+  async _reconnect (device) {
+    let delay = 1000;
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      await new Promise(r => setTimeout(r, delay));
+      delay = Math.min(delay * 2, 30000);
+      try {
+        const srv = await device.gatt.connect();
+        this._srv = srv;
+        const serviceUUIDs = [
+          '000018f0-0000-1000-8000-00805f9b34fb',
+          'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+          '0000ffe0-0000-1000-8000-00805f9b34fb',
+        ];
+        let svc = null;
+        for (const u of serviceUUIDs) { try { svc = await srv.getPrimaryService(u); break; } catch(e) {} }
+        if (!svc) continue;
+        const charUUIDs = [
+          '00002af1-0000-1000-8000-00805f9b34fb',
+          'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
+          '0000ffe1-0000-1000-8000-00805f9b34fb',
+        ];
+        let ch = null;
+        for (const u of charUUIDs) { try { ch = await svc.getCharacteristic(u); if (ch) break; } catch(e) {} }
+        if (!ch) {
+          const chars = await svc.getCharacteristics().catch(() => []);
+          ch = chars.find(c => c.properties.write || c.properties.writeWithoutResponse) || null;
+        }
+        if (ch) { this._char = ch; this.ok = true; return; }
+      } catch(e) { /* retry */ }
+    }
+  }
+
+  async disconnect () { this._dev?.gatt?.connected && this._dev.gatt.disconnect(); this.ok = false; }
+
   async write (data) {
-    if (!this.ok || !this._char) throw new Error('BT printer not connected');
+    if (!this.ok || !this._char) throw Object.assign(new Error('BT printer not connected'), { code: PRINTER_ERRORS.OFFLINE });
     const CHUNK = 512;
     for (let i = 0; i < data.length; i += CHUNK) {
-      await this._char.writeValueWithoutResponse(data.slice(i, i + CHUNK));
+      if (this._char.properties.writeWithoutResponse) {
+        await this._char.writeValueWithoutResponse(data.slice(i, i + CHUNK));
+      } else {
+        await this._char.writeValue(data.slice(i, i + CHUNK));
+      }
       await new Promise(r => setTimeout(r, 20));
     }
   }
@@ -526,13 +873,15 @@ class UsbAdapter {
   constructor () { this.ok = false; this._ep = null; this._iface = null; this._dev = null; }
   get type () { return 'usb'; }
   get avail () { return !!navigator.usb; }
+
   async discover () {
     if (!this.avail) return [];
     try {
-      const d = await navigator.usb.requestDevice({ filters: [] });
-      return [{ id: d.serialNumber || 'usb-0', name: d.productName || 'USB Printer', type: 'usb', _dev: d }];
+      const d = await navigator.usb.requestDevice({ filters: [{ classCode: 0x07 }] });
+      return [{ id: d.serialNumber || 'usb-0', name: d.productName || 'USB Printer', type: 'usb', _dev: d, vendorId: d.vendorId }];
     } catch(e) { return []; }
   }
+
   async connect (info) {
     const d = info._dev;
     await d.open();
@@ -542,20 +891,22 @@ class UsbAdapter {
       for (const intf of cfg.interfaces)
         for (const alt of intf.alternates)
           if (alt.interfaceClass === 7) {
-            ep = alt.endpoints.find(e => e.direction === 'out');
+            ep = alt.endpoints.find(e => e.direction === 'out' && e.type === 'bulk');
             if (ep) { iface = intf; break outer; }
           }
     if (!ep) throw new Error('No printer interface on USB device (class 7)');
     await d.claimInterface(iface.interfaceNumber);
     this._iface = iface; this._ep = ep; this._dev = d; this.ok = true;
   }
+
   async disconnect () {
-    await this._iface && this._dev?.releaseInterface(this._iface.interfaceNumber).catch(()=>{});
+    if (this._iface && this._dev) await this._dev.releaseInterface(this._iface.interfaceNumber).catch(()=>{});
     await this._dev?.close().catch(()=>{});
     this.ok = false;
   }
+
   async write (data) {
-    if (!this.ok) throw new Error('USB printer not connected');
+    if (!this.ok) throw Object.assign(new Error('USB printer not connected'), { code: PRINTER_ERRORS.OFFLINE });
     const CHUNK = 16384;
     for (let i = 0; i < data.length; i += CHUNK)
       await this._dev.transferOut(this._ep.endpointNumber, data.slice(i, i + CHUNK));
@@ -566,6 +917,7 @@ class SerialAdapter {
   constructor () { this.ok = false; this._writer = null; this._port = null; }
   get type () { return 'serial'; }
   get avail () { return !!navigator.serial; }
+
   async discover () {
     if (!this.avail) return [];
     try {
@@ -574,29 +926,35 @@ class SerialAdapter {
       return [{ id: String(info.usbVendorId || 'serial'), name: 'Serial / COM Printer', type: 'serial', _port: p }];
     } catch(e) { return []; }
   }
+
   async connect (info) {
     const p = info._port;
     await p.open({ baudRate: 9600 });
     this._port = p; this._writer = p.writable.getWriter(); this.ok = true;
   }
+
   async disconnect () {
-    await this._writer?.releaseLock(); await this._port?.close().catch(()=>{});
+    try { await this._writer?.releaseLock(); } catch(e) {}
+    try { await this._port?.close(); } catch(e) {}
     this.ok = false;
   }
+
   async write (data) {
-    if (!this.ok || !this._writer) throw new Error('Serial printer not connected');
+    if (!this.ok || !this._writer) throw Object.assign(new Error('Serial printer not connected'), { code: PRINTER_ERRORS.OFFLINE });
     await this._writer.write(data);
   }
 }
 
 class NetworkAdapter {
-  constructor () { this.ok = false; this._ep = null; this._proto = null; this._ws = null; }
+  constructor () { this.ok = false; this._ep = null; this._proto = null; this._ws = null; this._ping = null; }
   get type () { return 'network'; }
   get avail () { return true; }
+
   async discover () {
     const saved = JSON.parse(localStorage.getItem('spp_net_printers') || '[]');
     return saved.map(p => ({ ...p, type: 'network' }));
   }
+
   static save (name, endpoint) {
     const list = JSON.parse(localStorage.getItem('spp_net_printers') || '[]');
     const idx  = list.findIndex(p => p.endpoint === endpoint);
@@ -604,10 +962,12 @@ class NetworkAdapter {
     if (idx >= 0) list[idx] = e; else list.push(e);
     localStorage.setItem('spp_net_printers', JSON.stringify(list));
   }
+
   static remove (endpoint) {
     const list = JSON.parse(localStorage.getItem('spp_net_printers') || '[]').filter(p => p.endpoint !== endpoint);
     localStorage.setItem('spp_net_printers', JSON.stringify(list));
   }
+
   async connect (info) {
     const ep = info.endpoint;
     this._ep = ep; this._proto = ep.startsWith('ws') ? 'ws' : 'http';
@@ -617,23 +977,25 @@ class NetworkAdapter {
         this._ws.binaryType = 'arraybuffer';
         this._ws.onopen  = () => { this.ok = true; res(); };
         this._ws.onerror = () => rej(new Error('WS connection failed: ' + ep));
-        this._ws.onclose = () => { this.ok = false; };
-        setTimeout(() => rej(new Error('Connection timeout')), 5000);
+        this._ws.onclose = () => { this.ok = false; clearInterval(this._ping); };
+        const t = setTimeout(() => rej(new Error('Connection timeout')), 5000);
+        this._ws.onopen = () => { clearTimeout(t); this.ok = true; res(); };
       });
+      this._ping = setInterval(() => { if (this._ws.readyState === WebSocket.OPEN) this._ws.send(new Uint8Array(0)); }, 25000);
     } else {
-      try {
-        const r = await fetch(ep + '/status', { method: 'GET', signal: AbortSignal.timeout(4000) });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        this.ok = true;
-      } catch(e) { throw new Error('Cannot reach printer at ' + ep + ': ' + e.message); }
+      const r = await fetch(ep + '/status', { method: 'GET', signal: AbortSignal.timeout(4000) }).catch(err => { throw new Error('Cannot reach printer at ' + ep + ': ' + err.message); });
+      if (!r.ok) throw new Error('Printer HTTP status error: ' + r.status);
+      this.ok = true;
     }
     this._info = info;
   }
-  async disconnect () { this._ws?.close(); this.ok = false; }
+
+  async disconnect () { clearInterval(this._ping); this._ws?.close(); this.ok = false; }
+
   async write (data) {
-    if (!this.ok) throw new Error('Network printer not connected');
+    if (!this.ok) throw Object.assign(new Error('Network printer not connected'), { code: PRINTER_ERRORS.OFFLINE });
     if (this._proto === 'ws') {
-      this._ws.send(data.buffer);
+      this._ws.send(data.buffer instanceof ArrayBuffer ? data.buffer : data);
     } else {
       const r = await fetch(this._ep + '/print', { method: 'POST', body: data, headers: { 'Content-Type': 'application/octet-stream' } });
       if (!r.ok) throw new Error('HTTP print failed: ' + r.status);
@@ -650,10 +1012,10 @@ class BrowserAdapter {
   async disconnect () {}
   async write (data, htmlFallback) {
     const win = window.open('', '_blank', 'width=420,height=680');
-    if (!win) throw new Error('Popup blocked — please allow pop-ups for this site');
-    win.document.write(`<!DOCTYPE html><html><head><style>@media print{body{margin:0;font-family:'Courier New',monospace;font-size:11px}}</style></head><body><pre id="r"></pre><script>window.onload=function(){window.print();window.close();}<\/script></html>`);
+    if (!win) throw new Error('Pop-up blocked — allow pop-ups for this site to print');
+    win.document.write(`<!DOCTYPE html><html><head><style>@media print{body{margin:0;font-family:'Courier New',monospace;font-size:11px;white-space:pre}}</style></head><body><pre id="r"></pre><script>window.onload=function(){window.print();window.close();}<\/script></html>`);
     win.document.close();
-    win.document.getElementById('r').textContent = htmlFallback || '';
+    if (win.document.getElementById('r')) win.document.getElementById('r').textContent = htmlFallback || '';
   }
 }
 
@@ -669,7 +1031,7 @@ class SPEngine {
       network:   new NetworkAdapter(),
       browser:   new BrowserAdapter(),
     };
-    this._active  = null;       // active adapter
+    this._active  = null;
     this._queue   = new PrintQueue();
     this._profile = this._loadProfile();
     this._cfg     = this._loadCfg();
@@ -679,6 +1041,18 @@ class SPEngine {
     this._queue.on('enqueued', () => this._tick());
     this._queue.on('tick',     () => this._tick());
     this._queue.on('resumed',  () => this._tick());
+
+    /* Multi-tab sync via BroadcastChannel */
+    if (typeof BroadcastChannel !== 'undefined') {
+      this._bc = new BroadcastChannel('sokoni_printer_v4');
+      this._bc.onmessage = (ev) => {
+        if (ev.data?.type === 'config_update') {
+          this._cfg = { ...this._cfg, ...ev.data.cfg };
+        } else if (ev.data?.type === 'queue_invalidate') {
+          this._queue._load();
+        }
+      };
+    }
   }
 
   /* ── Persistence ─────────────────────────────────────────── */
@@ -691,11 +1065,15 @@ class SPEngine {
       paperWidth: '80mm', autoCut: true, copies: 1,
       autoPrintOnSale: false, logoText: '', footer: '',
       promoMessage: '', returnPolicy: '', showCommission: false,
+      imageThreshold: 128,
     };
     try { return Object.assign({}, defaults, JSON.parse(localStorage.getItem('spp_config') || '{}')); }
     catch(e) { return defaults; }
   }
-  _saveCfg () { localStorage.setItem('spp_config', JSON.stringify(this._cfg)); }
+  _saveCfg () {
+    localStorage.setItem('spp_config', JSON.stringify(this._cfg));
+    this._bc?.postMessage({ type: 'config_update', cfg: this._cfg });
+  }
 
   /* ── Events ──────────────────────────────────────────────── */
   emit (ev, d) { (this._ev[ev] || []).forEach(fn => { try { fn(d); } catch(e) {} }); }
@@ -733,16 +1111,64 @@ class SPEngine {
     this.emit('connected', deviceInfo);
     this._tick();
   }
+
   async autoReconnect () {
     const last = this._profile.lastDevice;
-    if (!last || last.type !== 'network') return false;
+    if (!last) return false;
+    if (last.type !== 'network' && last.type !== 'browser') return false;
     try { await this.connect(last); return true; } catch(e) { return false; }
   }
+
   async disconnect () {
     if (this._active) { await this._active.disconnect().catch(()=>{}); this._active = null; }
     this.emit('disconnected', null);
   }
+
   get connected () { return !!(this._active?.ok); }
+
+  /* ── Capability detection ────────────────────────────────── */
+  async detectCapabilities () {
+    const caps = {
+      paperWidth:    this._cfg.paperWidth || '80mm',
+      connectionType: this._active?.type || 'unknown',
+      online:         this.connected,
+      qrSupport:      true,   // assume ESC/POS standard support
+      barcodeSupport: true,
+      imageSupport:   true,
+      cutterSupport:  true,
+      drawerSupport:  false,  // conservative default
+      batteryStatus:  null,
+      paperOut:       false,
+      coverOpen:      false,
+      detectedAt:     new Date().toISOString(),
+    };
+
+    /* For network printers, try to GET /capabilities */
+    if (this._active?.type === 'network' && this._active?._proto === 'http') {
+      try {
+        const r = await fetch(this._active._ep + '/capabilities', { signal: AbortSignal.timeout(2000) });
+        if (r.ok) {
+          const data = await r.json();
+          Object.assign(caps, data);
+        }
+      } catch(e) {}
+    }
+
+    /* For BT/USB, attempt DLE EOT status probe (many printers respond) */
+    if (this.connected && (this._active.type === 'bluetooth' || this._active.type === 'usb')) {
+      try {
+        const probe = new ESCPOSEncoder().init().statusProbe().build();
+        await this._active.write(probe);
+        /* Response parsing would require bidirectional reads (printer-specific) */
+        /* Mark as probed — actual response parsing left to hardware integration */
+        caps.probeAttempted = true;
+      } catch(e) {}
+    }
+
+    this.setCapabilities(caps);
+    this.emit('capabilities', caps);
+    return caps;
+  }
 
   /* ── Config / capabilities ───────────────────────────────── */
   setConfig (updates) { Object.assign(this._cfg, updates); this._saveCfg(); return this; }
@@ -755,19 +1181,17 @@ class SPEngine {
     if (!this._active) return { connected: false, online: false };
     try {
       const s = await (this._active.getStatus ? this._active.getStatus() : { online: this._active.ok });
-      return { ...s, connected: this._active.ok };
-    } catch(e) { return { connected: false, online: false, error: e.message }; }
+      return { ...s, connected: this._active.ok, transport: this._active.type };
+    } catch(e) { return { connected: false, online: false, error: e.message, code: e.code || PRINTER_ERRORS.UNKNOWN }; }
   }
 
   /* ── Printing ────────────────────────────────────────────── */
-  // Enqueue (non-blocking, returns jobId)
   async print (docType, data, options = {}) {
     return this._queue.enqueue(docType, data, { ...options, copies: options.copies || this._cfg.copies || 1 });
   }
 
-  // Print immediately (blocking, throws on error)
   async printNow (docType, data, options = {}) {
-    if (!this.connected) throw new Error('No printer connected');
+    if (!this.connected) throw Object.assign(new Error('No printer connected'), { code: PRINTER_ERRORS.OFFLINE });
     const renderer = new ReceiptRenderer(this._cfg.paperWidth || '80mm', this._cfg);
     const copies = options.copies || this._cfg.copies || 1;
     for (let c = 0; c < copies; c++) {
@@ -777,12 +1201,27 @@ class SPEngine {
   }
 
   async printRaw (bytes) {
-    if (!this.connected) throw new Error('No printer connected');
+    if (!this.connected) throw Object.assign(new Error('No printer connected'), { code: PRINTER_ERRORS.OFFLINE });
     await this._active.write(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
   }
 
+  /* ── Image printing ──────────────────────────────────────── */
+  async printImage (src, options = {}) {
+    if (!this.connected) throw Object.assign(new Error('No printer connected'), { code: PRINTER_ERRORS.OFFLINE });
+    if (typeof document === 'undefined') throw new Error('printImage requires a browser environment');
+    const paper = PAPER[this._cfg.paperWidth || '80mm'];
+    const maxPx  = options.maxWidthPx || paper.px;
+    const thresh = options.threshold  || this._cfg.imageThreshold || 128;
+    const { pixels, widthBytes, heightDots } = await _imgToRaster(src, maxPx, thresh);
+    const e = new ESCPOSEncoder().init().ac();
+    if (options.align === 'left') e.al();
+    e.raster(widthBytes, heightDots, pixels);
+    if (options.cut !== false && this._cfg.autoCut) e.cut();
+    await this._active.write(e.build());
+  }
+
   async openCashDrawer () {
-    if (!this.connected) throw new Error('No printer connected');
+    if (!this.connected) throw Object.assign(new Error('No printer connected'), { code: PRINTER_ERRORS.OFFLINE });
     await this._active.write(new ESCPOSEncoder().init().drawer().build());
   }
 
@@ -790,7 +1229,6 @@ class SPEngine {
     const commands = renderer.render(docType, data);
     if (this._active?.type === 'browser') {
       const preview = renderer.previewHTML(docType, data);
-      // Extract text from the HTML for browser print
       const tmp = document.createElement('div');
       tmp.innerHTML = preview;
       await this._active.write(null, tmp.textContent || '');
@@ -817,8 +1255,9 @@ class SPEngine {
       this.emit('printed', job);
     })()
     .catch(err => {
+      const code = err.code || PRINTER_ERRORS.UNKNOWN;
       this._queue.markFailed(job, err.message);
-      this.emit('error', { job, error: err.message });
+      this.emit('error', { job, error: err.message, code });
     })
     .finally(() => {
       this._busy = false;
@@ -834,25 +1273,27 @@ class SPEngine {
   pauseQueue ()   { this._queue.pause(); }
   resumeQueue ()  { this._queue.resume(); }
 
-  /* ── Preview ────────────────────────────────────────────── */
+  /* ── Preview ─────────────────────────────────────────────── */
   preview (docType, data) {
     const r = new ReceiptRenderer(this._cfg.paperWidth || '80mm', this._cfg);
     return r.previewHTML(docType, data);
   }
 
-  /* ── Test print ─────────────────────────────────────────── */
+  /* ── Test print ──────────────────────────────────────────── */
   async testPrint () {
     await this.printNow('receipt', {
       businessName: this._cfg.logoText || 'SOKONI SmartPOS',
-      businessAddress: 'Printer Test Print',
+      businessAddress: 'Printer Test — ' + (this._cfg.paperWidth || '80mm'),
       receiptNumber: 'TEST-001',
       cashierName: 'System',
       items: [
-        { name: 'Test Item A', quantity: 1, unitPrice: 1000 },
-        { name: 'Test Item B', quantity: 2, unitPrice: 500 },
+        { name: 'Test Item Alpha',      quantity: 1, unitPrice: 1000 },
+        { name: 'Test Item Beta',       quantity: 2, unitPrice: 500  },
+        { name: '58-Char Width Test ===', quantity: 1, unitPrice: 250  },
       ],
-      totals: { subtotal: 2000, grandTotal: 2000 },
-      payment: { method: 'Cash', amountTendered: 2000, change: 0 },
+      totals: { subtotal: 2250, vat: 360, grandTotal: 2610 },
+      payment: { method: 'Cash', amountTendered: 3000, change: 390 },
+      receiptUrl: 'https://mysokoni.co.ke/r/TEST',
     });
   }
 }
@@ -864,57 +1305,59 @@ let _inst = null;
 function getInstance () { if (!_inst) _inst = new SPEngine(); return _inst; }
 
 const api = {
-  // Instance
   getInstance,
 
-  // Discovery
-  discover:        (...a) => getInstance().discoverAll(...a),
-  discoverBy:      (...a) => getInstance().discoverBy(...a),
+  /* Discovery */
+  discover:           (...a) => getInstance().discoverAll(...a),
+  discoverBy:         (...a) => getInstance().discoverBy(...a),
 
-  // Connection
-  connect:         (...a) => getInstance().connect(...a),
-  disconnect:      (...a) => getInstance().disconnect(...a),
-  autoReconnect:   (...a) => getInstance().autoReconnect(...a),
-  get connected ()       { return getInstance().connected; },
+  /* Connection */
+  connect:            (...a) => getInstance().connect(...a),
+  disconnect:         (...a) => getInstance().disconnect(...a),
+  autoReconnect:      (...a) => getInstance().autoReconnect(...a),
+  get connected ()          { return getInstance().connected; },
 
-  // Status
-  getStatus:       (...a) => getInstance().getStatus(...a),
-  getCapabilities: (...a) => getInstance().getCapabilities(...a),
-  setCapabilities: (...a) => getInstance().setCapabilities(...a),
+  /* Status & capabilities */
+  getStatus:          (...a) => getInstance().getStatus(...a),
+  detectCapabilities: (...a) => getInstance().detectCapabilities(...a),
+  getCapabilities:    (...a) => getInstance().getCapabilities(...a),
+  setCapabilities:    (...a) => getInstance().setCapabilities(...a),
 
-  // Config
-  setConfig:       (...a) => getInstance().setConfig(...a),
-  getConfig:       (...a) => getInstance().getConfig(...a),
+  /* Config */
+  setConfig:          (...a) => getInstance().setConfig(...a),
+  getConfig:          (...a) => getInstance().getConfig(...a),
 
-  // Printing
-  print:           (...a) => getInstance().print(...a),
-  printNow:        (...a) => getInstance().printNow(...a),
-  printRaw:        (...a) => getInstance().printRaw(...a),
-  openCashDrawer:  (...a) => getInstance().openCashDrawer(...a),
-  testPrint:       (...a) => getInstance().testPrint(...a),
-  preview:         (...a) => getInstance().preview(...a),
+  /* Printing */
+  print:              (...a) => getInstance().print(...a),
+  printNow:           (...a) => getInstance().printNow(...a),
+  printRaw:           (...a) => getInstance().printRaw(...a),
+  printImage:         (...a) => getInstance().printImage(...a),
+  openCashDrawer:     (...a) => getInstance().openCashDrawer(...a),
+  testPrint:          (...a) => getInstance().testPrint(...a),
+  preview:            (...a) => getInstance().preview(...a),
 
-  // Queue
-  getQueue:        (...a) => getInstance().getQueue(...a),
-  getHistory:      (...a) => getInstance().getHistory(...a),
-  cancelJob:       (...a) => getInstance().cancelJob(...a),
-  retryJob:        (...a) => getInstance().retryJob(...a),
-  pauseQueue:      (...a) => getInstance().pauseQueue(...a),
-  resumeQueue:     (...a) => getInstance().resumeQueue(...a),
+  /* Queue */
+  getQueue:           (...a) => getInstance().getQueue(...a),
+  getHistory:         (...a) => getInstance().getHistory(...a),
+  cancelJob:          (...a) => getInstance().cancelJob(...a),
+  retryJob:           (...a) => getInstance().retryJob(...a),
+  pauseQueue:         (...a) => getInstance().pauseQueue(...a),
+  resumeQueue:        (...a) => getInstance().resumeQueue(...a),
 
-  // Events
-  on:              (...a) => getInstance().on(...a),
-  off:             (...a) => getInstance().off(...a),
+  /* Events */
+  on:                 (...a) => getInstance().on(...a),
+  off:                (...a) => getInstance().off(...a),
 
-  // Network printer helpers
-  saveNetworkPrinter:  NetworkAdapter.save,
-  removeNetworkPrinter:NetworkAdapter.remove,
+  /* Network printer helpers */
+  saveNetworkPrinter:   NetworkAdapter.save,
+  removeNetworkPrinter: NetworkAdapter.remove,
 
-  // Exposed classes for extension
+  /* Exposed for extension */
   ESCPOSEncoder,
   ReceiptRenderer,
   NetworkAdapter,
-  PAPER_WIDTHS: PAPER,
+  PAPER_WIDTHS:  PAPER,
+  ERRORS:        PRINTER_ERRORS,
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

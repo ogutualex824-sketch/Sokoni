@@ -1,17 +1,17 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>eTIMS Admin — SOKONI</title>
+<title>eTIMS Admin â€” SOKONI</title>
 <link rel="manifest" href="/manifest.json">
 <script src="firebase.js" defer></script>
 <script src="sokoni-ui.js" defer></script>
 <script src="sokoni-etims.js" defer></script>
 <style>
-:root{--bg:#0a0a0a;--card:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.07);--text:rgba(255,255,255,0.85);--muted:rgba(255,255,255,0.38);--lime:#71ff00;--red:#ff4444;--amber:#ffb400;--blue:#4488ff}
+:root{--bg:#050505;--card:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.07);--text:rgba(255,255,255,0.85);--muted:rgba(255,255,255,0.38);--lime:#71ff00;--red:#ff4444;--amber:#ffb400;--blue:#4488ff}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
 .page-wrap{max-width:1200px;margin:0 auto;padding:24px 16px 80px}
@@ -101,25 +101,25 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       <h1>eTIMS Admin &mdash; <span>KRA Dashboard</span></h1>
       <p style="font-size:13px;color:var(--muted);margin-top:3px">Platform-wide KRA eTIMS monitoring and compliance</p>
     </div>
-    <button class="btn btn-outline" onclick="loadAll()">↺ Refresh</button>
+    <button class="btn btn-outline" onclick="loadAll()">â†º Refresh</button>
   </div>
 
   <!-- API Health bar -->
   <div class="health-row" id="health-bar">
     <div class="health-dot ok" id="health-dot"></div>
-    <span class="health-label" id="health-label">KRA eTIMS API — Checking…</span>
+    <span class="health-label" id="health-label">KRA eTIMS API â€” Checkingâ€¦</span>
     <span class="health-desc" id="health-desc"></span>
   </div>
 
   <!-- KPIs -->
   <div class="kpi-grid">
-    <div class="kpi ok"><div class="val" id="k-total">—</div><div class="lbl">Total Invoices</div></div>
-    <div class="kpi ok"><div class="val" id="k-rev">—</div><div class="lbl">Total Revenue</div></div>
-    <div class="kpi ok"><div class="val" id="k-vat">—</div><div class="lbl">VAT Collected</div></div>
-    <div class="kpi blue"><div class="val" id="k-platrev">—</div><div class="lbl">Platform Revenue</div></div>
-    <div class="kpi warn"><div class="val" id="k-queue">—</div><div class="lbl">Queue Size</div></div>
-    <div class="kpi fail"><div class="val" id="k-failed">—</div><div class="lbl">Failed Invoices</div></div>
-    <div class="kpi ok"><div class="val" id="k-sellers">—</div><div class="lbl">Active Sellers</div></div>
+    <div class="kpi ok"><div class="val" id="k-total">â€”</div><div class="lbl">Total Invoices</div></div>
+    <div class="kpi ok"><div class="val" id="k-rev">â€”</div><div class="lbl">Total Revenue</div></div>
+    <div class="kpi ok"><div class="val" id="k-vat">â€”</div><div class="lbl">VAT Collected</div></div>
+    <div class="kpi blue"><div class="val" id="k-platrev">â€”</div><div class="lbl">Platform Revenue</div></div>
+    <div class="kpi warn"><div class="val" id="k-queue">â€”</div><div class="lbl">Queue Size</div></div>
+    <div class="kpi fail"><div class="val" id="k-failed">â€”</div><div class="lbl">Failed Invoices</div></div>
+    <div class="kpi ok"><div class="val" id="k-sellers">â€”</div><div class="lbl">Active Sellers</div></div>
   </div>
 
   <!-- Tabs -->
@@ -138,7 +138,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         Invoices that exhausted all 5 retry attempts. Investigate the error and resubmit manually.
       </p>
       <div class="table-wrap" id="failures-table">
-        <div class="empty">Loading…</div>
+        <div class="empty">Loadingâ€¦</div>
       </div>
     </div>
   </div>
@@ -151,7 +151,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
         Invoices awaiting submission to KRA. Queue is processed every 5 minutes automatically.
       </p>
       <div class="table-wrap" id="queue-table">
-        <div class="empty">Loading…</div>
+        <div class="empty">Loadingâ€¦</div>
       </div>
     </div>
   </div>
@@ -161,7 +161,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div class="card">
       <h3>Active Seller eTIMS Profiles</h3>
       <div class="table-wrap" id="sellers-table">
-        <div class="empty">Loading…</div>
+        <div class="empty">Loadingâ€¦</div>
       </div>
     </div>
   </div>
@@ -176,7 +176,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       </p>
 
       <div class="alert alert-warn">
-        ⚠ SOKONI must be registered on the KRA eTIMS portal as a VAT-registered taxpayer.
+        âš  SOKONI must be registered on the KRA eTIMS portal as a VAT-registered taxpayer.
         Set <code>ETIMS_PLATFORM_PIN</code> and <code>ETIMS_PLATFORM_SECRET</code> secrets before using this.
       </div>
 
@@ -228,7 +228,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </div><!-- /page-wrap -->
 
 <script>
-/* ── Auth guard (admin only) ─────────────────────────────── */
+/* â”€â”€ Auth guard (admin only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 document.addEventListener("DOMContentLoaded", () => {
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) { location.href = "/auth.html?next=/etims-admin.html"; return; }
@@ -262,9 +262,9 @@ async function loadAll() {
   const healthOk  = queueOk && failOk;
   setHealth(
     healthOk ? "ok" : failOk ? "warn" : "fail",
-    healthOk ? "KRA eTIMS API — Operational"
-             : failOk ? "KRA eTIMS — Elevated Queue"
-             : "KRA eTIMS — Attention Required",
+    healthOk ? "KRA eTIMS API â€” Operational"
+             : failOk ? "KRA eTIMS â€” Elevated Queue"
+             : "KRA eTIMS â€” Attention Required",
     `Queue: ${overview.queueSize||0} | Failed: ${overview.failedInvoices||0} | Active sellers: ${overview.activeSellers||0}`
   );
 
@@ -283,13 +283,13 @@ function setHealth(state, label, desc) {
   dsc.textContent = desc || "";
 }
 
-/* ── Failures ────────────────────────────────────────────── */
+/* â”€â”€ Failures â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function renderFailures(items) {
   const el = document.getElementById("failures-table");
-  if (!items.length) { el.innerHTML = '<div class="empty" style="color:var(--lime)">✓ No failed submissions.</div>'; return; }
+  if (!items.length) { el.innerHTML = '<div class="empty" style="color:var(--lime)">âœ“ No failed submissions.</div>'; return; }
   const rows = items.map(i => `<tr>
     <td>${esc(i.invoiceNumber||i.invoiceId?.slice(-8))}</td>
-    <td><code style="font-size:11px;opacity:.6">${esc(i.sellerUid?.slice(0,10))}…</code></td>
+    <td><code style="font-size:11px;opacity:.6">${esc(i.sellerUid?.slice(0,10))}â€¦</code></td>
     <td>${new Date(i.createdAt).toLocaleDateString("en-KE")}</td>
     <td style="color:var(--red);font-size:12px">${esc(i.error||"Unknown error")}</td>
     <td><button class="btn btn-sm btn-outline" onclick="adminRetry('${i.invoiceId}',this)">Retry</button></td>
@@ -300,28 +300,28 @@ function renderFailures(items) {
 }
 
 async function adminRetry(id, btn) {
-  btn.disabled = true; btn.textContent = "…";
+  btn.disabled = true; btn.textContent = "â€¦";
   const r = await SokoniETIMS.resubmitInvoice(id).catch(e => ({ error: e.message }));
-  btn.textContent = r.error ? "Failed" : "Queued ✓";
+  btn.textContent = r.error ? "Failed" : "Queued âœ“";
   if (!r.error) setTimeout(loadAll, 2000);
 }
 
-/* ── Queue ───────────────────────────────────────────────── */
+/* â”€â”€ Queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function renderQueue(items) {
   const el = document.getElementById("queue-table");
   if (!items.length) { el.innerHTML = '<div class="empty" style="color:var(--lime)">Queue is empty.</div>'; return; }
   const rows = items.map(i => `<tr>
     <td>${esc(i.invoiceId?.slice(-10))}</td>
-    <td><code style="font-size:11px;opacity:.6">${esc(i.sellerUid?.slice(0,10))}…</code></td>
+    <td><code style="font-size:11px;opacity:.6">${esc(i.sellerUid?.slice(0,10))}â€¦</code></td>
     <td>${i.retryCount||0}</td>
-    <td>${i.nextRetryAt ? new Date(i.nextRetryAt).toLocaleString("en-KE") : "—"}</td>
+    <td>${i.nextRetryAt ? new Date(i.nextRetryAt).toLocaleString("en-KE") : "â€”"}</td>
   </tr>`).join("");
   el.innerHTML = `<table class="data-table">
     <thead><tr><th>Invoice (last 10)</th><th>Seller</th><th>Attempts</th><th>Next Retry</th></tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
 
-/* ── Sellers ─────────────────────────────────────────────── */
+/* â”€â”€ Sellers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function renderSellers(items) {
   const el = document.getElementById("sellers-table");
   if (!items.length) { el.innerHTML = '<div class="empty">No sellers with active eTIMS.</div>'; return; }
@@ -332,14 +332,14 @@ function renderSellers(items) {
     <td>${s.failedInvoices
       ? `<span class="chip chip-fail">${s.failedInvoices} failed</span>`
       : `<span class="chip chip-ok">Clean</span>`}</td>
-    <td>${s.lastSubmission ? new Date(s.lastSubmission).toLocaleDateString("en-KE") : "—"}</td>
+    <td>${s.lastSubmission ? new Date(s.lastSubmission).toLocaleDateString("en-KE") : "â€”"}</td>
   </tr>`).join("");
   el.innerHTML = `<table class="data-table">
     <thead><tr><th>Business</th><th>KRA PIN</th><th class="r">Invoices</th><th>Health</th><th>Last Submission</th></tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
 
-/* ── Platform invoice ─────────────────────────────────────── */
+/* â”€â”€ Platform invoice â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 async function doplatInv() {
   const btn    = document.getElementById("p-btn");
   const res    = document.getElementById("plat-result");
@@ -348,7 +348,7 @@ async function doplatInv() {
 
   if (!amount || amount <= 0) { res.innerHTML = '<div class="alert alert-err">Enter a valid amount.</div>'; return; }
 
-  btn.disabled = true; btn.textContent = "Issuing…";
+  btn.disabled = true; btn.textContent = "Issuingâ€¦";
   res.innerHTML = "";
 
   const r = await SokoniETIMS.platformInvoice({
@@ -367,18 +367,18 @@ async function doplatInv() {
     res.innerHTML = `<div class="alert alert-warn">Invoice already exists (idempotency key matched). ID: <b>${esc(r.invoiceId)}</b></div>`;
   } else {
     res.innerHTML = `<div class="alert alert-ok">
-      ✓ Platform invoice <b>${esc(r.invoiceNumber||"")}</b> issued.<br>
+      âœ“ Platform invoice <b>${esc(r.invoiceNumber||"")}</b> issued.<br>
       Status: <b>${r.status}</b>
-      ${r.status === "accepted" ? " — Accepted by KRA." : " — Queued for submission."}
+      ${r.status === "accepted" ? " â€” Accepted by KRA." : " â€” Queued for submission."}
       ${r.invoiceId
-        ? `<br><button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="SokoniETIMS.downloadReceipt('${r.invoiceId}')">📄 Download Receipt</button>`
+        ? `<br><button class="btn btn-sm btn-outline" style="margin-top:8px" onclick="SokoniETIMS.downloadReceipt('${r.invoiceId}')">ðŸ“„ Download Receipt</button>`
         : ""}
     </div>`;
     loadAll();
   }
 }
 
-/* ── Tab switch ─────────────────────────────────────────── */
+/* â”€â”€ Tab switch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function switchTab(id, btn) {
   document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));

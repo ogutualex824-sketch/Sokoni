@@ -1,46 +1,46 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <script src="security.js"></script>
   <script src="shared-header.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Track your order — SOKONI</title>
+  <title>Track your order â€” SOKONI</title>
   <meta name="description" content="Track your SOKONI delivery in real time. See live rider location and estimated arrival.">
-  <meta name="theme-color" content="#0a0a0a">
+  <meta name="theme-color" content="#050505">
   <link rel="icon" href="favicon.ico">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
   <style>
-    :root{--bg:#0a0a0a;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.09);--border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ff9800;--danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.5)}
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.09);--border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ff9800;--danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.5)}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--txt)}
     #map{position:fixed;inset:0;z-index:0}
-    /* ── Header ── */
+    /* â”€â”€ Header â”€â”€ */
     #hdr{position:fixed;top:0;left:0;right:0;z-index:100;background:linear-gradient(180deg,rgba(0,0,0,.95) 0%,rgba(0,0,0,.7) 80%,transparent 100%);padding:max(14px,env(safe-area-inset-top)) 16px 24px;display:flex;align-items:center;gap:10px}
     #hdrLogo{font-size:20px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
     #hdrInfo{flex:1;min-width:0}
     #hdrStatus{font-size:14px;font-weight:800}
     #hdrOrder{font-size:11px;color:var(--muted);font-family:monospace}
     #shareBtn{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--txt);font-size:12px;cursor:pointer;flex-shrink:0}
-    /* ── Panel ── */
+    /* â”€â”€ Panel â”€â”€ */
     #panel{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(10,10,10,.97);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:14px 16px max(20px,env(safe-area-inset-bottom))}
     #panelHandle{width:40px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 14px}
-    /* ── ETA ── */
+    /* â”€â”€ ETA â”€â”€ */
     #etaRow{display:flex;gap:10px;margin-bottom:14px}
     .eta-card{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
     .eta-val{font-size:22px;font-weight:900;margin-bottom:2px}
     .eta-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
     #etaArrival .eta-val{color:var(--accent)}
     #etaDist .eta-val{color:var(--info)}
-    /* ── Rider card ── */
+    /* â”€â”€ Rider card â”€â”€ */
     #riderCard{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px}
     #riderAvatar{width:46px;height:46px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;overflow:hidden}
     #riderAvatar img{width:100%;height:100%;object-fit:cover}
     #riderName{font-size:15px;font-weight:800}
     #riderRating{font-size:12px;color:var(--warn)}
     #riderVehicle{font-size:11px;color:var(--muted);margin-top:2px}
-    /* ── Timeline ── */
+    /* â”€â”€ Timeline â”€â”€ */
     #timeline{display:flex;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
     #timeline::-webkit-scrollbar{display:none}
     .tl-step{display:flex;flex-direction:column;align-items:center;min-width:70px;flex:1;position:relative}
@@ -52,23 +52,23 @@
     @keyframes pls{0%,100%{box-shadow:0 0 0 0 rgba(113,255,0,.4)}50%{box-shadow:0 0 0 6px rgba(113,255,0,0)}}
     .tl-lbl{font-size:9px;color:var(--muted);text-align:center;margin-top:5px;line-height:1.3;max-width:62px}
     .tl-step.done .tl-lbl,.tl-step.active .tl-lbl{color:var(--accent)}
-    /* ── Loading ── */
+    /* â”€â”€ Loading â”€â”€ */
     #loadScreen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
     .spin{width:40px;height:40px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     #loadScreen p{color:var(--muted);font-size:14px}
-    /* ── Delivered overlay ── */
+    /* â”€â”€ Delivered overlay â”€â”€ */
     #doneOverlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.9);align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:24px}
     #doneOverlay.show{display:flex}
   </style>
 </head>
 <body>
 
-<div id="loadScreen"><div class="spin"></div><p>Loading tracking…</p></div>
+<div id="loadScreen"><div class="spin"></div><p>Loading trackingâ€¦</p></div>
 <div id="map"></div>
 
 <div id="doneOverlay">
-  <div style="font-size:72px">🎉</div>
+  <div style="font-size:72px">ðŸŽ‰</div>
   <h2 style="font-size:24px;font-weight:900">Delivered!</h2>
   <p style="color:var(--muted);font-size:14px;max-width:280px;line-height:1.6">Your order has been delivered successfully. Thank you for choosing SOKONI!</p>
   <a href="index.html" style="background:var(--accent);color:#000;padding:14px 28px;border-radius:12px;font-weight:800;font-size:15px;text-decoration:none;margin-top:8px">Back to Home</a>
@@ -77,32 +77,32 @@
 <div id="hdr">
   <div id="hdrLogo">SOKONI</div>
   <div id="hdrInfo">
-    <div id="hdrStatus">Loading…</div>
+    <div id="hdrStatus">Loadingâ€¦</div>
     <div id="hdrOrder"></div>
   </div>
-  <button id="shareBtn" onclick="_share()">📤 Share</button>
+  <button id="shareBtn" onclick="_share()">ðŸ“¤ Share</button>
 </div>
 
 <div id="panel">
   <div id="panelHandle"></div>
   <div id="etaRow">
-    <div class="eta-card" id="etaArrival"><div class="eta-val" id="etaArrVal">—</div><div class="eta-lbl">Arrives at</div></div>
-    <div class="eta-card" id="etaDist"><div class="eta-val" id="etaDistVal">—</div><div class="eta-lbl">Distance away</div></div>
+    <div class="eta-card" id="etaArrival"><div class="eta-val" id="etaArrVal">â€”</div><div class="eta-lbl">Arrives at</div></div>
+    <div class="eta-card" id="etaDist"><div class="eta-val" id="etaDistVal">â€”</div><div class="eta-lbl">Distance away</div></div>
   </div>
   <div id="riderCard">
-    <div id="riderAvatar">🏍</div>
+    <div id="riderAvatar">ðŸ</div>
     <div>
-      <div id="riderName">Finding your rider…</div>
+      <div id="riderName">Finding your riderâ€¦</div>
       <div id="riderRating"></div>
       <div id="riderVehicle"></div>
     </div>
   </div>
   <div id="timeline">
-    <div class="tl-step done" data-s="confirmed"><div class="tl-dot">✓</div><div class="tl-lbl">Confirmed</div></div>
-    <div class="tl-step"      data-s="assigned"> <div class="tl-dot">🏍</div><div class="tl-lbl">Rider assigned</div></div>
-    <div class="tl-step"      data-s="en_route"> <div class="tl-dot">🚦</div><div class="tl-lbl">On the way</div></div>
-    <div class="tl-step"      data-s="nearby">   <div class="tl-dot">📍</div><div class="tl-lbl">Nearby</div></div>
-    <div class="tl-step"      data-s="delivered"><div class="tl-dot">📦</div><div class="tl-lbl">Delivered</div></div>
+    <div class="tl-step done" data-s="confirmed"><div class="tl-dot">âœ“</div><div class="tl-lbl">Confirmed</div></div>
+    <div class="tl-step"      data-s="assigned"> <div class="tl-dot">ðŸ</div><div class="tl-lbl">Rider assigned</div></div>
+    <div class="tl-step"      data-s="en_route"> <div class="tl-dot">ðŸš¦</div><div class="tl-lbl">On the way</div></div>
+    <div class="tl-step"      data-s="nearby">   <div class="tl-dot">ðŸ“</div><div class="tl-lbl">Nearby</div></div>
+    <div class="tl-step"      data-s="delivered"><div class="tl-dot">ðŸ“¦</div><div class="tl-lbl">Delivered</div></div>
   </div>
 </div>
 
@@ -120,7 +120,7 @@ var HAV=function(a,b,c,d){var R=6371,dL=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180,x
 
 function _cf(n){return firebase.functions().httpsCallable(n);}
 
-/* ── Map ── */
+/* â”€â”€ Map â”€â”€ */
 _map=L.map('map',{zoomControl:false,attributionControl:false});
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(_map);
 L.control.zoom({position:'bottomright'}).addTo(_map);
@@ -129,23 +129,23 @@ _map.setView([1.2921,36.8219],13);
 function _riderMarker(){
   if(_riderM) return _riderM;
   _riderM=L.marker([1.2921,36.8219],{
-    icon:L.divIcon({className:'',html:'<div style="width:44px;height:44px;background:#71ff00;border:3px solid #000;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 3px 10px rgba(0,0,0,.4)">🏍</div>',iconSize:[44,44],iconAnchor:[22,22]}),
+    icon:L.divIcon({className:'',html:'<div style="width:44px;height:44px;background:#71ff00;border:3px solid #000;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 3px 10px rgba(0,0,0,.4)">ðŸ</div>',iconSize:[44,44],iconAnchor:[22,22]}),
     zIndexOffset:1000
   }).addTo(_map);
   return _riderM;
 }
 
-/* ── Poll ── */
+/* â”€â”€ Poll â”€â”€ */
 function _poll(){
   _cf('navGetCustomerTracking')({trackingCode:_code}).then(function(r){
     _render(r.data);
     document.getElementById('loadScreen').style.display='none';
   }).catch(function(e){
-    document.getElementById('loadScreen').innerHTML='<div style="text-align:center;padding:24px"><p style="font-size:18px;margin-bottom:8px">⚠ '+e.message+'</p><a href="profile.html" style="color:var(--accent);font-size:13px">My Orders</a></div>';
+    document.getElementById('loadScreen').innerHTML='<div style="text-align:center;padding:24px"><p style="font-size:18px;margin-bottom:8px">âš  '+e.message+'</p><a href="profile.html" style="color:var(--accent);font-size:13px">My Orders</a></div>';
   });
 }
 
-var STATUS_LABELS={pending:'🕐 Finding a rider',assigned:'🏍 Rider assigned',en_route_pickup:'🏍 Heading to pickup',arrived_pickup:'📦 Collecting your order',en_route_delivery:'🏍 On the way to you!',arrived_delivery:'📍 Rider at your door',completed:'✅ Delivered!',cancelled:'❌ Cancelled'};
+var STATUS_LABELS={pending:'ðŸ• Finding a rider',assigned:'ðŸ Rider assigned',en_route_pickup:'ðŸ Heading to pickup',arrived_pickup:'ðŸ“¦ Collecting your order',en_route_delivery:'ðŸ On the way to you!',arrived_delivery:'ðŸ“ Rider at your door',completed:'âœ… Delivered!',cancelled:'âŒ Cancelled'};
 var TL_MAP={pending:'confirmed',assigned:'assigned',en_route_pickup:'en_route',arrived_pickup:'en_route',en_route_delivery:'nearby',arrived_delivery:'nearby',completed:'delivered',cancelled:'confirmed'};
 
 function _render(d){
@@ -156,7 +156,7 @@ function _render(d){
   var rider=d.riderInfo;
   if(rider){
     document.getElementById('riderName').textContent=(rider.firstName||'Rider')+' (your rider)';
-    document.getElementById('riderRating').textContent=rider.rating?'★ '+parseFloat(rider.rating).toFixed(1):'';
+    document.getElementById('riderRating').textContent=rider.rating?'â˜… '+parseFloat(rider.rating).toFixed(1):'';
     document.getElementById('riderVehicle').textContent=rider.vehicle||'';
     if(rider.photo) document.getElementById('riderAvatar').innerHTML='<img src="'+rider.photo+'" alt="Rider">';
   }
@@ -196,12 +196,12 @@ function _share(){
   else prompt('Copy tracking link:',url);
 }
 
-/* ── Bootstrap ── */
+/* â”€â”€ Bootstrap â”€â”€ */
 (function(){
   var p=new URLSearchParams(location.search);
   _code=(p.get('code')||p.get('t')||'').toUpperCase().trim();
   if(!_code||_code.length!==8){
-    document.getElementById('loadScreen').innerHTML='<div style="text-align:center;padding:24px"><p style="font-size:18px;margin-bottom:8px">⚠ Invalid tracking link</p><p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:14px">Check the link in your confirmation message.</p><a href="profile.html" style="display:inline-block;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">My Orders</a></div>';
+    document.getElementById('loadScreen').innerHTML='<div style="text-align:center;padding:24px"><p style="font-size:18px;margin-bottom:8px">âš  Invalid tracking link</p><p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:14px">Check the link in your confirmation message.</p><a href="profile.html" style="display:inline-block;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">My Orders</a></div>';
     return;
   }
   _poll();

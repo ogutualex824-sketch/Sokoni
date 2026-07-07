@@ -1,18 +1,18 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Commission Engine — SOKONI Admin</title>
+<title>Commission Engine â€” SOKONI Admin</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 <link rel="stylesheet" href="sokoni-tokens.css">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0a0a0a;--surface:#111;--surface2:#161616;--border:#1e1e1e;--border2:#2a2a2a;
+  --bg:#050505;--surface:#111;--surface2:#161616;--border:#1e1e1e;--border2:#2a2a2a;
   --g:#71ff00;--b:#00d4ff;--o:#ff9500;--r:#ff4444;--p:#a855f7;
   --text:#e5e7eb;--sub:#6b7280;
   --radius:12px;
@@ -20,7 +20,7 @@
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 a{color:inherit;text-decoration:none}
 
-/* ── Layout ── */
+/* â”€â”€ Layout â”€â”€ */
 .shell{display:flex;min-height:100vh}
 .sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
 .sidebar-logo{padding:20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
@@ -36,11 +36,11 @@ a{color:inherit;text-decoration:none}
 .topbar h1{font-size:18px;font-weight:900;color:var(--g);flex:1}
 .content{padding:24px;flex:1}
 
-/* ── Panel system ── */
+/* â”€â”€ Panel system â”€â”€ */
 .panel{display:none}
 .panel.active{display:block}
 
-/* ── Stats ── */
+/* â”€â”€ Stats â”€â”€ */
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
 .stat-val{font-size:24px;font-weight:900;color:var(--g);line-height:1}
@@ -48,13 +48,13 @@ a{color:inherit;text-decoration:none}
 .stat-lbl{font-size:11px;color:var(--sub);margin-top:6px;text-transform:uppercase;letter-spacing:.05em}
 .stat-sub{font-size:11px;color:#444;margin-top:3px}
 
-/* ── Cards ── */
+/* â”€â”€ Cards â”€â”€ */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px}
 .card-header{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--border)}
 .card-title{font-size:14px;font-weight:700;color:var(--text);flex:1}
 .card-body{padding:20px}
 
-/* ── Buttons ── */
+/* â”€â”€ Buttons â”€â”€ */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.12s;font-family:inherit}
 .btn-primary{background:var(--g);color:#000}
 .btn-primary:hover{background:#5dcc00}
@@ -64,7 +64,7 @@ a{color:inherit;text-decoration:none}
 .btn-danger:hover{background:rgba(255,68,68,.25)}
 .btn-sm{padding:5px 10px;font-size:12px}
 
-/* ── Table ── */
+/* â”€â”€ Table â”€â”€ */
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th{text-align:left;padding:10px 12px;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border)}
 .tbl td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
@@ -72,7 +72,7 @@ a{color:inherit;text-decoration:none}
 .tbl tr:hover td{background:var(--surface2)}
 .tbl-empty{text-align:center;padding:40px;color:var(--sub)}
 
-/* ── Badges ── */
+/* â”€â”€ Badges â”€â”€ */
 .badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
 .badge-pct{background:rgba(113,255,0,.1);color:var(--g)}
 .badge-fixed{background:rgba(0,212,255,.1);color:var(--b)}
@@ -82,7 +82,7 @@ a{color:inherit;text-decoration:none}
 .badge-on{background:rgba(113,255,0,.1);color:var(--g)}
 .badge-off{background:rgba(255,255,255,.05);color:var(--sub)}
 
-/* ── Form ── */
+/* â”€â”€ Form â”€â”€ */
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .form-group{display:flex;flex-direction:column;gap:6px}
 .form-group.full{grid-column:1/-1}
@@ -95,11 +95,11 @@ a{color:inherit;text-decoration:none}
 textarea.form-input{resize:vertical;min-height:72px}
 .form-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
 
-/* ── Priority badge ── */
+/* â”€â”€ Priority badge â”€â”€ */
 .priority{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--surface2);border:1px solid var(--border2);font-size:11px;font-weight:700;color:var(--sub)}
 .priority.high{background:rgba(113,255,0,.1);border-color:rgba(113,255,0,.3);color:var(--g)}
 
-/* ── Preview panel ── */
+/* â”€â”€ Preview panel â”€â”€ */
 .preview-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
 .preview-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
 .preview-row:last-child{border-bottom:none}
@@ -109,25 +109,25 @@ textarea.form-input{resize:vertical;min-height:72px}
 .preview-value{font-weight:600;color:var(--text)}
 .preview-empty{text-align:center;padding:32px;color:var(--sub);font-size:13px}
 
-/* ── Tiers builder ── */
+/* â”€â”€ Tiers builder â”€â”€ */
 .tier-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
 .tier-row input{flex:1;min-width:80px}
 
-/* ── Toast ── */
+/* â”€â”€ Toast â”€â”€ */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid var(--border2);color:var(--text);padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap}
 .toast.show{opacity:1}
 
-/* ── Spinner ── */
+/* â”€â”€ Spinner â”€â”€ */
 .spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Toolbar ── */
+/* â”€â”€ Toolbar â”€â”€ */
 .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
 .search-box{display:flex;align-items:center;gap:6px;background:var(--surface);border:1.5px solid var(--border2);border-radius:8px;padding:0 10px;height:36px;flex:1;min-width:180px}
 .search-box input{flex:1;border:none;background:none;font-size:13px;color:var(--text);outline:none;font-family:inherit}
 .search-box .material-icons{font-size:18px;color:var(--sub)}
 
-/* ── Category grid ── */
+/* â”€â”€ Category grid â”€â”€ */
 .cat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
 .cat-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:.15s}
 .cat-card:hover{border-color:var(--border2)}
@@ -136,7 +136,7 @@ textarea.form-input{resize:vertical;min-height:72px}
 .cat-card-sub{font-size:11px;color:var(--sub);margin-top:2px}
 .cat-card-edit{font-size:11px;color:var(--b);margin-top:6px;cursor:pointer}
 
-/* ── Modal ── */
+/* â”€â”€ Modal â”€â”€ */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
 .modal{background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:min(560px,95vw);max-height:90vh;overflow-y:auto}
@@ -186,13 +186,13 @@ textarea.form-input{resize:vertical;min-height:72px}
 
     <div class="content">
 
-      <!-- ══ OVERVIEW ══ -->
+      <!-- â•â• OVERVIEW â•â• -->
       <div id="panel-overview" class="panel active">
         <div class="stats-row">
-          <div class="stat"><div class="stat-val" id="s-active">…</div><div class="stat-lbl">Active Rules</div></div>
-          <div class="stat"><div class="stat-val blue" id="s-cats">…</div><div class="stat-lbl">Categories Configured</div></div>
-          <div class="stat"><div class="stat-val orange" id="s-seller">…</div><div class="stat-lbl">Seller Overrides</div></div>
-          <div class="stat"><div class="stat-val purple" id="s-campaigns">…</div><div class="stat-lbl">Active Campaigns</div></div>
+          <div class="stat"><div class="stat-val" id="s-active">â€¦</div><div class="stat-lbl">Active Rules</div></div>
+          <div class="stat"><div class="stat-val blue" id="s-cats">â€¦</div><div class="stat-lbl">Categories Configured</div></div>
+          <div class="stat"><div class="stat-val orange" id="s-seller">â€¦</div><div class="stat-lbl">Seller Overrides</div></div>
+          <div class="stat"><div class="stat-val purple" id="s-campaigns">â€¦</div><div class="stat-lbl">Active Campaigns</div></div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
@@ -224,12 +224,12 @@ textarea.form-input{resize:vertical;min-height:72px}
         </div>
       </div>
 
-      <!-- ══ RULES ══ -->
+      <!-- â•â• RULES â•â• -->
       <div id="panel-rules" class="panel">
         <div class="toolbar">
           <div class="search-box">
             <span class="material-icons">search</span>
-            <input type="text" id="ruleSearch" placeholder="Search rules…" oninput="_filterRules()">
+            <input type="text" id="ruleSearch" placeholder="Search rulesâ€¦" oninput="_filterRules()">
           </div>
           <select class="form-select" style="width:auto;height:36px" id="ruleTypeFilter" onchange="_filterRules()">
             <option value="">All types</option>
@@ -257,13 +257,13 @@ textarea.form-input{resize:vertical;min-height:72px}
         </div>
       </div>
 
-      <!-- ══ CATEGORIES ══ -->
+      <!-- â•â• CATEGORIES â•â• -->
       <div id="panel-categories" class="panel">
         <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Each category shows its effective commission rate. Click to create or edit a category-level rule.</p>
         <div class="cat-grid" id="catGrid"><div style="text-align:center;padding:40px"><div class="spinner"></div></div></div>
       </div>
 
-      <!-- ══ PREVIEW ══ -->
+      <!-- â•â• PREVIEW â•â• -->
       <div id="panel-preview" class="panel">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
           <div class="card">
@@ -277,7 +277,7 @@ textarea.form-input{resize:vertical;min-height:72px}
                 <div class="form-group">
                   <label class="form-label">Category</label>
                   <select class="form-select" id="pvCategory" onchange="_previewCalc()">
-                    <option value="">Select…</option>
+                    <option value="">Selectâ€¦</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -296,7 +296,7 @@ textarea.form-input{resize:vertical;min-height:72px}
         </div>
       </div>
 
-      <!-- ══ CAMPAIGNS ══ -->
+      <!-- â•â• CAMPAIGNS â•â• -->
       <div id="panel-holidays" class="panel">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <p style="font-size:13px;color:var(--sub)">Commission holidays set the rate to 0% for a category or seller during a time window.</p>
@@ -349,7 +349,7 @@ textarea.form-input{resize:vertical;min-height:72px}
         <div class="form-group" id="fRate">
           <label class="form-label">Commission Rate (%)</label>
           <input type="number" class="form-input" id="ruleRate" min="0" max="100" step="0.1" placeholder="e.g. 10">
-          <span class="form-hint">0–100%</span>
+          <span class="form-hint">0â€“100%</span>
         </div>
 
         <!-- Fixed / Hybrid -->
@@ -373,7 +373,7 @@ textarea.form-input{resize:vertical;min-height:72px}
         <div class="form-group">
           <label class="form-label">Entity Type (optional)</label>
           <select class="form-select" id="ruleEntityType">
-            <option value="">— Platform-wide —</option>
+            <option value="">â€” Platform-wide â€”</option>
             <option value="seller">Seller</option>
             <option value="hub">Hub</option>
           </select>
@@ -411,7 +411,7 @@ textarea.form-input{resize:vertical;min-height:72px}
         <!-- Description -->
         <div class="form-group full">
           <label class="form-label">Description / Internal Note</label>
-          <textarea class="form-input" id="ruleDescription" placeholder="e.g. Negotiated rate for VIP seller Alex — agreed 2026-06-28"></textarea>
+          <textarea class="form-input" id="ruleDescription" placeholder="e.g. Negotiated rate for VIP seller Alex â€” agreed 2026-06-28"></textarea>
         </div>
       </div>
 
@@ -444,7 +444,7 @@ textarea.form-input{resize:vertical;min-height:72px}
 (function(){
 'use strict';
 
-/* ── Auth guard ── */
+/* â”€â”€ Auth guard â”€â”€ */
 firebase.auth().onAuthStateChanged(function(user){
   if(!user){location.href='login.html?redirect=commission-engine.html';return;}
   user.getIdTokenResult().then(function(t){
@@ -479,7 +479,7 @@ var CATEGORIES=[
 
 function _cf(name){if(!_fns)_fns=firebase.functions();return _fns.httpsCallable(name);}
 
-/* ── Nav ── */
+/* â”€â”€ Nav â”€â”€ */
 var _panelTitles={overview:'Commission Overview',rules:'Commission Rules',categories:'Category Rates',preview:'Rate Preview Calculator',holidays:'Zero-Commission Campaigns'};
 window._nav=function(el){
   document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
@@ -507,7 +507,7 @@ function _loadPanel(p){
     preview:function(){},holidays:_loadHolidays})[p]();
 }
 
-/* ── Category selects ── */
+/* â”€â”€ Category selects â”€â”€ */
 function _populateCategorySelects(){
   var opts=CATEGORIES.filter(function(c){return c.v!=='all';}).map(function(c){
     return '<option value="'+c.v+'">'+c.l+'</option>';
@@ -520,7 +520,7 @@ function _populateCategorySelects(){
   if(modalCat)modalCat.innerHTML=CATEGORIES.map(function(c){return '<option value="'+c.v+'">'+c.l+'</option>';}).join('');
 }
 
-/* ── Overview ── */
+/* â”€â”€ Overview â”€â”€ */
 function _loadOverview(){
   _cf('listCommissionRules')({}).then(function(r){
     var rules=r.data.rules||[];
@@ -534,7 +534,7 @@ function _loadOverview(){
     document.getElementById('s-seller').textContent=sellers.length;
     document.getElementById('s-campaigns').textContent=campaigns.length;
 
-    /* Hierarchy table — top 10 by priority */
+    /* Hierarchy table â€” top 10 by priority */
     var top=active.slice(0,10);
     var tbody=document.querySelector('#hierarchyTbl tbody');
     tbody.innerHTML=top.length?top.map(function(r){
@@ -545,7 +545,7 @@ function _loadOverview(){
         '<td>'+_rateStr(r)+'</td>'+
         '<td><span class="badge '+(r.isActive?'badge-on':'badge-off')+'">'+(r.isActive?'Active':'Off')+'</span></td>'+
       '</tr>';
-    }).join(''):'<tr><td colspan="5" class="tbl-empty">No rules — using default rate table</td></tr>';
+    }).join(''):'<tr><td colspan="5" class="tbl-empty">No rules â€” using default rate table</td></tr>';
 
     /* Effective rates */
     var catRates=document.getElementById('effectiveRates');
@@ -574,7 +574,7 @@ function _loadOverview(){
   }).catch(function(e){_toast('Error loading rules: '+e.message,'red');});
 }
 
-/* ── Rules ── */
+/* â”€â”€ Rules â”€â”€ */
 function _loadRules(){
   var incl=document.getElementById('showInactive')&&document.getElementById('showInactive').checked;
   document.getElementById('rulesTbody').innerHTML='<tr><td colspan="8" class="tbl-empty"><div class="spinner"></div></td></tr>';
@@ -590,15 +590,15 @@ function _renderRules(list){
   var tbody=document.getElementById('rulesTbody');
   if(!list.length){tbody.innerHTML='<tr><td colspan="8" class="tbl-empty">No rules found</td></tr>';return;}
   tbody.innerHTML=list.map(function(r){
-    var scope=r.entityId?'<span style="font-size:11px;color:var(--b)">'+_esc(r.entityType)+': '+_esc(r.entityId.slice(0,10))+'…</span>':'<span style="color:var(--sub)">platform-wide</span>';
+    var scope=r.entityId?'<span style="font-size:11px;color:var(--b)">'+_esc(r.entityType)+': '+_esc(r.entityId.slice(0,10))+'â€¦</span>':'<span style="color:var(--sub)">platform-wide</span>';
     var cap=(r.maxCommissionCents?'max '+_kes(r.maxCommissionCents):'')+(r.minCommissionCents?' min '+_kes(r.minCommissionCents):'');
     return '<tr>'+
       '<td><span class="priority'+(r.priority>0?' high':'')+'">'+r.priority+'</span></td>'+
       '<td>'+_typeBadge(r.type)+'</td>'+
-      '<td>'+_esc(r.category||'—')+'</td>'+
+      '<td>'+_esc(r.category||'â€”')+'</td>'+
       '<td>'+scope+'</td>'+
       '<td style="font-weight:700;color:var(--g)">'+_rateStr(r)+'</td>'+
-      '<td style="font-size:11px;color:var(--sub)">'+_esc(cap||'—')+'</td>'+
+      '<td style="font-size:11px;color:var(--sub)">'+_esc(cap||'â€”')+'</td>'+
       '<td><span class="badge '+(r.isActive?'badge-on':'badge-off')+'">'+(r.isActive?'Active':'Off')+'</span></td>'+
       '<td style="display:flex;gap:4px">'+
         '<button class="btn btn-outline btn-sm" onclick="_editRule(\''+_esc(r.id)+'\')">Edit</button>'+
@@ -620,7 +620,7 @@ window._filterRules=function(){
   }));
 };
 
-/* ── Categories ── */
+/* â”€â”€ Categories â”€â”€ */
 function _loadCategories(){
   _cf('listCommissionRules')({}).then(function(r){
     var active=r.data.rules||[];
@@ -632,14 +632,14 @@ function _loadCategories(){
       return '<div class="cat-card" onclick="_openRuleModal(null,\''+c.v+'\')">'+
         '<div class="cat-card-name">'+_esc(c.l)+'</div>'+
         '<div class="cat-card-rate">'+_esc(rate)+'</div>'+
-        '<div class="cat-card-sub">'+_esc(src)+(VAT_EXEMPT.has(c.v)?' · VAT exempt':'')+'</div>'+
-        '<div class="cat-card-edit">Click to add override →</div>'+
+        '<div class="cat-card-sub">'+_esc(src)+(VAT_EXEMPT.has(c.v)?' Â· VAT exempt':'')+'</div>'+
+        '<div class="cat-card-edit">Click to add override â†’</div>'+
       '</div>';
     }).join('');
   });
 }
 
-/* ── Holidays/campaigns ── */
+/* â”€â”€ Holidays/campaigns â”€â”€ */
 function _loadHolidays(){
   _cf('listCommissionRules')({type:'commission_holiday',includeInactive:true}).then(function(r){
     var rules=r.data.rules||[];
@@ -647,13 +647,13 @@ function _loadHolidays(){
     if(!rules.length){tbody.innerHTML='<tr><td colspan="7" class="tbl-empty">No campaigns yet</td></tr>';return;}
     var now=Date.now();
     tbody.innerHTML=rules.map(function(r){
-      var from=r.activeFrom?new Date(r.activeFrom).toLocaleDateString('en-KE'):'—';
-      var to=r.activeTo?new Date(r.activeTo).toLocaleDateString('en-KE'):'—';
+      var from=r.activeFrom?new Date(r.activeFrom).toLocaleDateString('en-KE'):'â€”';
+      var to=r.activeTo?new Date(r.activeTo).toLocaleDateString('en-KE'):'â€”';
       var live=r.isActive&&r.activeFrom&&r.activeTo&&now>=r.activeFrom&&now<=r.activeTo;
       return '<tr>'+
-        '<td>'+_esc(r.description||'—')+'</td>'+
+        '<td>'+_esc(r.description||'â€”')+'</td>'+
         '<td>'+_esc(r.category)+'</td>'+
-        '<td>'+(r.entityId?_esc(r.entityType)+': '+_esc(r.entityId.slice(0,12))+'…':'platform-wide')+'</td>'+
+        '<td>'+(r.entityId?_esc(r.entityType)+': '+_esc(r.entityId.slice(0,12))+'â€¦':'platform-wide')+'</td>'+
         '<td>'+_esc(from)+'</td>'+
         '<td>'+_esc(to)+'</td>'+
         '<td><span class="badge '+(live?'badge-on':r.isActive?'badge-pct':'badge-off')+'">'+(live?'LIVE':r.isActive?'Scheduled':'Off')+'</span></td>'+
@@ -663,7 +663,7 @@ function _loadHolidays(){
   }).catch(function(e){_toast('Error: '+e.message,'red');});
 }
 
-/* ── Preview ── */
+/* â”€â”€ Preview â”€â”€ */
 window._previewCalc=function(){
   var amt=parseFloat(document.getElementById('pvAmount').value);
   var cat=document.getElementById('pvCategory').value;
@@ -676,10 +676,10 @@ window._previewCalc=function(){
       '<div class="preview-box">'+
         '<div class="preview-row"><span class="preview-label">Order Amount</span><span class="preview-value">'+_kes2(d.orderAmountKES)+'</span></div>'+
         '<div class="preview-row"><span class="preview-label">Commission Rate</span><span class="preview-value" style="color:var(--o)">'+d.effectiveRate+'%</span></div>'+
-        '<div class="preview-row"><span class="preview-label">Platform Commission</span><span class="preview-value" style="color:var(--r)">−'+_kes2(d.commissionKES)+'</span></div>'+
-        '<div class="preview-row sub"><span class="preview-label">VAT on commission ('+d.vatRate+'%'+(d.vatExempt?' — exempt':'')+')</span><span class="preview-value">'+_kes2(d.vatKES)+'</span></div>'+
+        '<div class="preview-row"><span class="preview-label">Platform Commission</span><span class="preview-value" style="color:var(--r)">âˆ’'+_kes2(d.commissionKES)+'</span></div>'+
+        '<div class="preview-row sub"><span class="preview-label">VAT on commission ('+d.vatRate+'%'+(d.vatExempt?' â€” exempt':'')+')</span><span class="preview-value">'+_kes2(d.vatKES)+'</span></div>'+
         '<div class="preview-row"><span class="preview-label">Seller Net (before WHT)</span><span class="preview-value">'+_kes2(d.sellerNetKES)+'</span></div>'+
-        '<div class="preview-row sub"><span class="preview-label">WHT ('+d.whtRate+'%)</span><span class="preview-value">−'+_kes2(d.whtKES)+'</span></div>'+
+        '<div class="preview-row sub"><span class="preview-label">WHT ('+d.whtRate+'%)</span><span class="preview-value">âˆ’'+_kes2(d.whtKES)+'</span></div>'+
         '<div class="preview-row total"><span>Seller Receives</span><span>'+_kes2(d.sellerReceivesKES)+'</span></div>'+
         '<div style="margin-top:12px;font-size:11px;color:var(--sub)">Rule: '+_esc(d.ruleSource)+' ('+_esc(d.ruleId)+')</div>'+
       '</div>';
@@ -689,7 +689,7 @@ window._previewCalc=function(){
 };
 window._debouncedPreview=function(){clearTimeout(_debounceTimer);_debounceTimer=setTimeout(_previewCalc,500);};
 
-/* ── Modal ── */
+/* â”€â”€ Modal â”€â”€ */
 window._openRuleModal=function(type,category){
   document.getElementById('editRuleId').value='';
   document.getElementById('modalTitle').textContent='New Commission Rule';
@@ -753,7 +753,7 @@ window._addTier=function(t){
       '<input type="number" class="form-input" placeholder="Min (cents)" id="tier-min-'+i+'" value="'+min+'" style="flex:1">'+
       '<input type="number" class="form-input" placeholder="Max (cents)" id="tier-max-'+i+'" value="'+max+'" style="flex:1">'+
       '<input type="number" class="form-input" placeholder="Rate %" id="tier-rate-'+i+'" value="'+rate+'" min="0" max="100" style="flex:1">'+
-      '<button class="btn btn-danger btn-sm" onclick="this.closest(\'.tier-row\').remove()">×</button>'+
+      '<button class="btn btn-danger btn-sm" onclick="this.closest(\'.tier-row\').remove()">Ã—</button>'+
     '</div>'
   );
 };
@@ -798,7 +798,7 @@ window._saveRule=function(){
   };
 
   var btn=document.getElementById('saveRuleBtn');
-  btn.disabled=true;btn.textContent='Saving…';
+  btn.disabled=true;btn.textContent='Savingâ€¦';
 
   var fn=id?_cf('updateCommissionRule'):_cf('createCommissionRule');
   if(id)payload.ruleId=id;
@@ -826,7 +826,7 @@ window._closeModal=function(e){
     document.getElementById('ruleModal').classList.remove('open');
 };
 
-/* ── Toast ── */
+/* â”€â”€ Toast â”€â”€ */
 function _toast(msg,color){
   var t=document.getElementById('toast');
   t.textContent=msg;
@@ -836,7 +836,7 @@ function _toast(msg,color){
   setTimeout(function(){t.classList.remove('show');},2500);
 }
 
-/* ── Helpers ── */
+/* â”€â”€ Helpers â”€â”€ */
 function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function _kes(cents){return 'KES '+(cents/100).toLocaleString();}
 function _kes2(kes){return 'KES '+Number(kes||0).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -845,7 +845,7 @@ function _rateStr(r){
   if(r.type==='fixed')return _kes(r.amountCents||0);
   if(r.type==='percentage_plus_fixed')return(r.rate||0)+'% + '+_kes(r.amountCents||0);
   if(r.type==='tiered')return'Tiered ('+(r.tiers||[]).length+' brackets)';
-  return '—';
+  return 'â€”';
 }
 function _typeBadge(t){
   var cls={percentage:'badge-pct',fixed:'badge-fixed',percentage_plus_fixed:'badge-hybrid',tiered:'badge-tiered',commission_holiday:'badge-holiday'}[t]||'';

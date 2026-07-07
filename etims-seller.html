@@ -1,17 +1,17 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>eTIMS — SOKONI Seller</title>
+<title>eTIMS â€” SOKONI Seller</title>
 <link rel="manifest" href="/manifest.json">
 <script src="firebase.js" defer></script>
 <script src="sokoni-ui.js" defer></script>
 <script src="sokoni-etims.js" defer></script>
 <style>
-:root{--bg:#0a0a0a;--card:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.07);--text:rgba(255,255,255,0.85);--muted:rgba(255,255,255,0.38);--lime:#71ff00;--blue:#003366;--red:#ff4444;--amber:#ffb400}
+:root{--bg:#050505;--card:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.07);--text:rgba(255,255,255,0.85);--muted:rgba(255,255,255,0.38);--lime:#71ff00;--blue:#003366;--red:#ff4444;--amber:#ffb400}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh}
 .page-wrap{max-width:1100px;margin:0 auto;padding:24px 16px 80px}
@@ -109,11 +109,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
   <!-- Stats -->
   <div class="stats-row" id="stats-row">
-    <div class="stat-card ok"><div class="val" id="st-total">—</div><div class="lbl">Invoices Issued</div></div>
-    <div class="stat-card ok"><div class="val" id="st-rev">—</div><div class="lbl">Total Revenue</div></div>
-    <div class="stat-card ok"><div class="val" id="st-vat">—</div><div class="lbl">VAT Collected</div></div>
-    <div class="stat-card warn"><div class="val" id="st-pend">—</div><div class="lbl">Pending Submission</div></div>
-    <div class="stat-card fail"><div class="val" id="st-fail">—</div><div class="lbl">Failed</div></div>
+    <div class="stat-card ok"><div class="val" id="st-total">â€”</div><div class="lbl">Invoices Issued</div></div>
+    <div class="stat-card ok"><div class="val" id="st-rev">â€”</div><div class="lbl">Total Revenue</div></div>
+    <div class="stat-card ok"><div class="val" id="st-vat">â€”</div><div class="lbl">VAT Collected</div></div>
+    <div class="stat-card warn"><div class="val" id="st-pend">â€”</div><div class="lbl">Pending Submission</div></div>
+    <div class="stat-card fail"><div class="val" id="st-fail">â€”</div><div class="lbl">Failed</div></div>
   </div>
 
   <!-- Tabs -->
@@ -129,7 +129,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
         <h3 style="margin:0">Recent Invoices</h3>
-        <button class="btn btn-outline" onclick="loadStats()" style="font-size:12px">↺ Refresh</button>
+        <button class="btn btn-outline" onclick="loadStats()" style="font-size:12px">â†º Refresh</button>
       </div>
       <div class="table-wrap" id="invoices-table">
         <div class="empty">Loading&hellip;</div>
@@ -192,7 +192,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   <div id="tab-register" class="tab-pane">
     <div class="card">
       <h3 id="reg-title">Register eTIMS</h3>
-      <div id="reg-alert" style="display:none" class="alert alert-ok">✓ Your eTIMS profile is active.</div>
+      <div id="reg-alert" style="display:none" class="alert alert-ok">âœ“ Your eTIMS profile is active.</div>
 
       <div class="form-grid" id="reg-form">
         <div class="field">
@@ -239,10 +239,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
       </div>
 
       <div class="alert alert-warn" style="margin-bottom:16px">
-        ⚠ Your eTIMS device serial and taxpayer secret are obtained from the
+        âš  Your eTIMS device serial and taxpayer secret are obtained from the
         <a href="https://etims.kra.go.ke" target="_blank" rel="noopener" style="color:var(--amber)">KRA eTIMS portal</a>
         after registering your business as a Virtual VSCU taxpayer.
-        These credentials are encrypted at rest — SOKONI never displays them after saving.
+        These credentials are encrypted at rest â€” SOKONI never displays them after saving.
       </div>
 
       <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -255,7 +255,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </div><!-- /page-wrap -->
 
 <script>
-/* ─── Auth guard ─────────────────────────────────────────── */
+/* â”€â”€â”€ Auth guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 document.addEventListener("DOMContentLoaded", () => {
   firebase.auth().onAuthStateChanged(user => {
     if (!user) { location.href = "/auth.html?next=/etims-seller.html"; return; }
@@ -263,7 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-/* ─── Load stats + invoices ──────────────────────────────── */
+/* â”€â”€â”€ Load stats + invoices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 async function loadStats() {
   const res = await SokoniETIMS.getSellerStats().catch(() => null);
   if (!res || !res.profile) {
@@ -277,7 +277,7 @@ async function loadStats() {
   const pill = document.getElementById("etims-status-pill");
   pill.className = `status-pill ${profile.status === "active" ? "active" : "inactive"}`;
   pill.textContent = profile.status === "active"
-    ? `✓ Active — ${profile.kraPin}`
+    ? `âœ“ Active â€” ${profile.kraPin}`
     : "Not Active";
 
   /* Stats */
@@ -320,7 +320,7 @@ function showRegisterPrompt() {
   document.getElementById("failed-table").innerHTML   = '<div class="empty">No data.</div>';
 }
 
-/* ─── Render helpers ─────────────────────────────────────── */
+/* â”€â”€â”€ Render helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function renderInvoiceList(containerId, invoices) {
   const el = document.getElementById(containerId);
   if (!invoices || !invoices.length) {
@@ -335,7 +335,7 @@ function renderInvoiceList(containerId, invoices) {
       <td class="r">${SokoniETIMS.formatKES(inv.total)}</td>
       <td class="r">${SokoniETIMS.formatKES(inv.vat)}</td>
       <td>${SokoniETIMS.statusBadge(inv.status)}</td>
-      <td>${esc(inv.receiptNumber||"—")}</td>
+      <td>${esc(inv.receiptNumber||"â€”")}</td>
       <td>
         ${inv.pdfUrl ? `<a class="etims-link" href="${esc(inv.pdfUrl)}" target="_blank">View</a>` :
           inv.invoiceId ? `<button class="etims-link-btn" onclick="dlReceipt('${inv.invoiceId}')">Download</button>` : ""}
@@ -352,13 +352,13 @@ function renderInvoiceList(containerId, invoices) {
 function renderFailedList(containerId, invoices) {
   const el = document.getElementById(containerId);
   if (!invoices || !invoices.length) {
-    el.innerHTML = '<div class="empty" style="color:var(--lime)">✓ No failed submissions.</div>';
+    el.innerHTML = '<div class="empty" style="color:var(--lime)">âœ“ No failed submissions.</div>';
     return;
   }
   const rows = invoices.map(inv => `
     <tr>
       <td>${esc(inv.invoiceNumber||inv.invoiceId.slice(-8))}</td>
-      <td>${inv.orderId ? esc(inv.orderId.slice(-8)) : "—"}</td>
+      <td>${inv.orderId ? esc(inv.orderId.slice(-8)) : "â€”"}</td>
       <td>${new Date(inv.createdAt).toLocaleDateString("en-KE")}</td>
       <td style="color:var(--red)">${esc(inv.error||"Unknown")}</td>
       <td><button class="btn btn-outline" style="font-size:11px;padding:5px 10px" onclick="retryInv('${inv.invoiceId}',this)">Retry</button></td>
@@ -368,24 +368,24 @@ function renderFailedList(containerId, invoices) {
     <tbody>${rows}</tbody></table>`;
 }
 
-/* ─── Actions ────────────────────────────────────────────── */
+/* â”€â”€â”€ Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 async function dlReceipt(id) {
   await SokoniETIMS.downloadReceipt(id);
 }
 
 async function retryInv(id, btn) {
-  btn.disabled = true; btn.textContent = "Retrying…";
+  btn.disabled = true; btn.textContent = "Retryingâ€¦";
   const r = await SokoniETIMS.resubmitInvoice(id).catch(e => ({ error: e.message }));
   if (r.error) {
     btn.disabled = false; btn.textContent = "Retry";
     SokoniETIMS._toast(r.error, false);
   } else {
-    btn.textContent = "Queued ✓";
+    btn.textContent = "Queued âœ“";
     SokoniETIMS._toast("Invoice queued for resubmission", true);
   }
 }
 
-/* ─── Bulk invoice ───────────────────────────────────────── */
+/* â”€â”€â”€ Bulk invoice â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function setQuickPeriod(unit) {
   const now   = new Date();
   const end   = new Date(now);
@@ -407,7 +407,7 @@ async function doBulk() {
   if (!start || !end) { res.innerHTML = '<div class="alert alert-warn">Select a period start and end.</div>'; return; }
   if (new Date(start) >= new Date(end)) { res.innerHTML = '<div class="alert alert-warn">End must be after start.</div>'; return; }
 
-  btn.disabled = true; btn.textContent = "Generating…";
+  btn.disabled = true; btn.textContent = "Generatingâ€¦";
   res.innerHTML = "";
 
   const r = await SokoniETIMS.generateBulkInvoice(
@@ -422,22 +422,22 @@ async function doBulk() {
     res.innerHTML = '<div class="alert alert-warn">No completed orders found in that period.</div>';
   } else {
     res.innerHTML = `<div class="alert alert-ok">
-      ✓ Bulk invoice <b>${esc(r.invoiceNumber||"")}</b> generated for <b>${r.orderCount||"?"} orders</b>.<br>
+      âœ“ Bulk invoice <b>${esc(r.invoiceNumber||"")}</b> generated for <b>${r.orderCount||"?"} orders</b>.<br>
       Status: <b>${r.status}</b>
-      ${r.status === "accepted" ? " — KRA has accepted this submission." : " — Queued for submission."}
-      ${r.invoiceId ? `<br><button class="btn btn-outline" style="margin-top:10px;font-size:12px" onclick="dlReceipt('${r.invoiceId}')">📄 Download Invoice</button>` : ""}
+      ${r.status === "accepted" ? " â€” KRA has accepted this submission." : " â€” Queued for submission."}
+      ${r.invoiceId ? `<br><button class="btn btn-outline" style="margin-top:10px;font-size:12px" onclick="dlReceipt('${r.invoiceId}')">ðŸ“„ Download Invoice</button>` : ""}
     </div>`;
     loadStats();
   }
 }
 
-/* ─── Register / Update ──────────────────────────────────── */
+/* â”€â”€â”€ Register / Update â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function checkPin() {
   const v   = document.getElementById("f-pin").value.toUpperCase().trim();
   const ok  = SokoniETIMS.validatePinFormat(v);
   const hint= document.getElementById("pin-hint");
   hint.className = ok ? "pin-hint etims-pin-valid" : "pin-hint etims-pin-invalid";
-  hint.textContent = v.length ? (ok ? "✓ Format valid" : "Expected: P051234567T") : "";
+  hint.textContent = v.length ? (ok ? "âœ“ Format valid" : "Expected: P051234567T") : "";
 }
 
 async function doRegister() {
@@ -448,14 +448,14 @@ async function doRegister() {
   const sec  = document.getElementById("f-secret").value.trim();
 
   if (!SokoniETIMS.validatePinFormat(pin)) {
-    SokoniETIMS._toast("Invalid KRA PIN format — expected P051234567T", false); return;
+    SokoniETIMS._toast("Invalid KRA PIN format â€” expected P051234567T", false); return;
   }
   if (!biz) { SokoniETIMS._toast("Business name required", false); return; }
 
   /* On update: serial/secret optional if already set */
   const isUpdate = btn.textContent.includes("Update");
 
-  btn.disabled = true; btn.textContent = isUpdate ? "Updating…" : "Activating…";
+  btn.disabled = true; btn.textContent = isUpdate ? "Updatingâ€¦" : "Activatingâ€¦";
 
   const payload = {
     kraPin:         pin,
@@ -480,7 +480,7 @@ async function doRegister() {
   loadStats();
 }
 
-/* ─── Tab switch ─────────────────────────────────────────── */
+/* â”€â”€â”€ Tab switch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function switchTab(id, btn) {
   document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -488,7 +488,7 @@ function switchTab(id, btn) {
   if (btn) btn.classList.add("active");
 }
 
-/* ─── Escape helper ──────────────────────────────────────── */
+/* â”€â”€â”€ Escape helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function esc(s) { return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 </script>
 </body>

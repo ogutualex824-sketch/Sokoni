@@ -1,38 +1,38 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-require-auth="true">
 <head>
   <script src="security.js"></script>
   <script src="shared-header.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>My Disputes — SOKONI Buyer Protection</title>
+  <title>My Disputes â€” SOKONI Buyer Protection</title>
   <meta name="description" content="Raise and track disputes for your SOKONI orders. Buyer Protection guaranteed.">
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" href="favicon.ico">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#71ff00">
   <style>
-    :root{--bg:#0a0a0a;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.07);--border:rgba(255,255,255,.08);--accent:#71ff00;--danger:#ff4444;--warn:#ff9800;--info:#00bcd4;--txt:#fff;--muted:rgba(255,255,255,.5);--radius:12px}
+    :root{--bg:#050505;--surface:rgba(255,255,255,.04);--surface2:rgba(255,255,255,.07);--border:rgba(255,255,255,.08);--accent:#71ff00;--danger:#ff4444;--warn:#ff9800;--info:#00bcd4;--txt:#fff;--muted:rgba(255,255,255,.5);--radius:12px}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--txt);font-size:15px;line-height:1.5}
     body{padding-bottom:env(safe-area-inset-bottom)}
 
-    /* ── Nav ── */
+    /* â”€â”€ Nav â”€â”€ */
     .nav{position:sticky;top:0;z-index:100;background:rgba(10,10,10,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px}
     .nav-back{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--txt);font-size:13px;text-decoration:none;display:flex;align-items:center;gap:6px}
     .nav-title{font-size:16px;font-weight:700;flex:1}
     .nav-badge{background:rgba(255,68,68,.15);border:1px solid rgba(255,68,68,.3);color:#ff4444;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700}
 
-    /* ── Content ── */
+    /* â”€â”€ Content â”€â”€ */
     .container{max-width:640px;margin:0 auto;padding:16px 16px 100px}
 
-    /* ── Tabs ── */
+    /* â”€â”€ Tabs â”€â”€ */
     .tabs{display:flex;gap:6px;background:var(--surface);border-radius:10px;padding:4px;margin-bottom:20px}
     .tab{flex:1;padding:8px;border:none;background:none;color:var(--muted);border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;transition:.15s}
     .tab.active{background:var(--surface2);color:var(--txt)}
     .panel{display:block}.panel[hidden]{display:none!important}
 
-    /* ── Buttons ── */
+    /* â”€â”€ Buttons â”€â”€ */
     .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:11px 20px;border-radius:10px;border:none;cursor:pointer;font-size:14px;font-weight:700;transition:opacity .15s;min-height:44px}
     .btn:hover{opacity:.85}
     .btn:disabled{opacity:.4;cursor:default}
@@ -41,7 +41,7 @@
     .btn-ghost{background:var(--surface2);color:var(--txt);border:1px solid var(--border)}
     .btn-sm{padding:7px 14px;font-size:12px;min-height:36px}
 
-    /* ── Dispute cards ── */
+    /* â”€â”€ Dispute cards â”€â”€ */
     .dispute-list{display:flex;flex-direction:column;gap:12px}
     .dispute-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:border-color .2s}
     .dispute-card:hover{border-color:rgba(255,255,255,.15)}
@@ -60,7 +60,7 @@
     .b-resolved{background:rgba(113,255,0,.15);color:#71ff00;border:1px solid rgba(113,255,0,.3)}
     .b-closed{background:rgba(255,255,255,.08);color:var(--muted);border:1px solid var(--border)}
 
-    /* ── Dispute detail ── */
+    /* â”€â”€ Dispute detail â”€â”€ */
     .dc-body{border-top:1px solid var(--border);padding:14px 16px;display:none}
     .dc-body.open{display:block}
     .dc-desc{font-size:13px;color:rgba(255,255,255,.8);margin-bottom:14px;line-height:1.6}
@@ -73,7 +73,7 @@
     .ev-item .ev-role{color:var(--muted);font-size:10px}
     .dc-actions{display:flex;gap:8px;flex-wrap:wrap}
 
-    /* ── Timeline ── */
+    /* â”€â”€ Timeline â”€â”€ */
     .tl{display:flex;flex-direction:column;gap:0;margin-bottom:14px}
     .tl-row{display:flex;gap:10px;padding-bottom:10px;position:relative}
     .tl-row::before{content:'';position:absolute;left:9px;top:20px;bottom:0;width:1px;background:var(--border)}
@@ -86,7 +86,7 @@
     .tl-text{flex:1;font-size:12px;color:rgba(255,255,255,.7)}
     .tl-ts{font-size:10px;color:var(--muted)}
 
-    /* ── Create form ── */
+    /* â”€â”€ Create form â”€â”€ */
     .form-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px}
     .form-section h3{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
     .form-row{margin-bottom:14px}
@@ -97,33 +97,33 @@
     .char-count{font-size:10px;color:var(--muted);text-align:right;margin-top:3px}
     .hint{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5}
 
-    /* ── Evidence add form ── */
+    /* â”€â”€ Evidence add form â”€â”€ */
     .ev-add{background:rgba(255,255,255,.03);border:1px dashed var(--border);border-radius:8px;padding:12px;margin-bottom:10px}
     .ev-add h5{font-size:12px;font-weight:600;margin-bottom:8px;color:var(--muted)}
 
-    /* ── Empty state ── */
+    /* â”€â”€ Empty state â”€â”€ */
     .empty{text-align:center;padding:48px 20px}
     .empty .ico{font-size:48px;margin-bottom:12px;display:block;opacity:.5}
     .empty h3{font-size:18px;margin-bottom:6px}
     .empty p{color:var(--muted);font-size:14px;margin-bottom:20px}
 
-    /* ── Info box ── */
+    /* â”€â”€ Info box â”€â”€ */
     .info-box{background:rgba(0,188,212,.06);border:1px solid rgba(0,188,212,.2);border-radius:10px;padding:14px;margin-bottom:20px;font-size:13px;line-height:1.6}
     .info-box strong{color:var(--info);display:block;margin-bottom:4px}
 
-    /* ── Toast ── */
+    /* â”€â”€ Toast â”€â”€ */
     #toast{position:fixed;bottom:calc(80px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:9999;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:6px}
     .toast{background:rgba(20,20,30,.95);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;white-space:nowrap}
     .toast.green{border-color:rgba(113,255,0,.4);color:var(--accent)}
     .toast.red{border-color:rgba(255,68,68,.4);color:var(--danger)}
 
-    /* ── Bottom nav ── */
+    /* â”€â”€ Bottom nav â”€â”€ */
     .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(10,10,10,.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);display:flex;padding:8px 0 max(8px,env(safe-area-inset-bottom));z-index:200}
     .bn-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px;color:var(--muted);text-decoration:none;font-size:10px;font-weight:600}
     .bn-item.active{color:var(--accent)}
     .bn-icon{font-size:20px}
 
-    /* ── Spinner ── */
+    /* â”€â”€ Spinner â”€â”€ */
     .spin{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
     @keyframes spin{to{transform:rotate(360deg)}}
     .loading{text-align:center;padding:40px}
@@ -132,8 +132,8 @@
 <body>
 
 <nav class="nav">
-  <a href="profile.html" class="nav-back">← Back</a>
-  <div class="nav-title">🛡 Buyer Protection</div>
+  <a href="profile.html" class="nav-back">â† Back</a>
+  <div class="nav-title">ðŸ›¡ Buyer Protection</div>
   <div class="nav-badge" id="openCount" style="display:none"></div>
 </nav>
 
@@ -145,7 +145,7 @@
     <button class="tab" onclick="_tab(this,'policy')">Policy</button>
   </div>
 
-  <!-- ── My Disputes ───────────────────────────────────────────────────────── -->
+  <!-- â”€â”€ My Disputes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   <div class="panel" id="panel-disputes">
     <div class="info-box">
       <strong>SOKONI Buyer Protection</strong>
@@ -154,10 +154,10 @@
     <div id="disputeList" class="dispute-list"><div class="loading"><div class="spin"></div></div></div>
   </div>
 
-  <!-- ── Raise New Dispute ─────────────────────────────────────────────────── -->
+  <!-- â”€â”€ Raise New Dispute â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   <div class="panel" id="panel-new" hidden>
     <div class="form-section">
-      <h3>📋 Order Details</h3>
+      <h3>ðŸ“‹ Order Details</h3>
       <div class="form-row">
         <label>Order ID</label>
         <input type="text" id="orderId" placeholder="Paste your order ID from your receipt" autocomplete="off">
@@ -166,7 +166,7 @@
       <div class="form-row">
         <label>What went wrong?</label>
         <select id="reason">
-          <option value="">— Select a reason —</option>
+          <option value="">â€” Select a reason â€”</option>
           <option value="not_received">Item never arrived / not received</option>
           <option value="wrong_item">Wrong item was sent</option>
           <option value="not_as_described">Item significantly different from listing</option>
@@ -185,12 +185,12 @@
     </div>
 
     <div class="form-section">
-      <h3>📎 Add Evidence (optional)</h3>
+      <h3>ðŸ“Ž Add Evidence (optional)</h3>
       <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Strong evidence helps resolve your dispute faster. You can also add evidence after submitting.</p>
       <div class="form-row">
         <label>Evidence Type</label>
         <select id="evType">
-          <option value="">— Optional —</option>
+          <option value="">â€” Optional â€”</option>
           <option value="photo">Photo of item received</option>
           <option value="screenshot">Screenshot of listing/chat</option>
           <option value="video">Video evidence</option>
@@ -200,7 +200,7 @@
       </div>
       <div class="form-row">
         <label>Evidence Description</label>
-        <textarea id="evDesc" rows="2" placeholder="Describe what this evidence shows…" maxlength="500"></textarea>
+        <textarea id="evDesc" rows="2" placeholder="Describe what this evidence showsâ€¦" maxlength="500"></textarea>
       </div>
     </div>
 
@@ -208,49 +208,49 @@
     <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px">By submitting you agree to our <a href="/refund-policy" style="color:var(--accent)">Refund Policy</a>. False disputes may result in account suspension.</p>
   </div>
 
-  <!-- ── Policy ─────────────────────────────────────────────────────────────── -->
+  <!-- â”€â”€ Policy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   <div class="panel" id="panel-policy" hidden>
     <div class="form-section">
-      <h3>🛡 What's Covered</h3>
+      <h3>ðŸ›¡ What's Covered</h3>
       <div style="display:flex;flex-direction:column;gap:10px">
-        <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--accent);font-size:16px;flex-shrink:0">✓</span><div><strong>Item not received</strong><br><span style="font-size:13px;color:var(--muted)">Full refund if delivery is not confirmed and seller cannot provide proof.</span></div></div>
-        <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--accent);font-size:16px;flex-shrink:0">✓</span><div><strong>Wrong item</strong><br><span style="font-size:13px;color:var(--muted)">Full refund + return arranged at seller's cost.</span></div></div>
-        <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--accent);font-size:16px;flex-shrink:0">✓</span><div><strong>Not as described</strong><br><span style="font-size:13px;color:var(--muted)">Full or partial refund depending on the extent of difference.</span></div></div>
-        <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--accent);font-size:16px;flex-shrink:0">✓</span><div><strong>Counterfeit goods</strong><br><span style="font-size:13px;color:var(--muted)">Full refund and seller penalised or removed.</span></div></div>
-        <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--accent);font-size:16px;flex-shrink:0">✓</span><div><strong>Damaged / defective</strong><br><span style="font-size:13px;color:var(--muted)">Full refund or replacement. Provide photographic evidence.</span></div></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--accent);font-size:16px;flex-shrink:0">âœ“</span><div><strong>Item not received</strong><br><span style="font-size:13px;color:var(--muted)">Full refund if delivery is not confirmed and seller cannot provide proof.</span></div></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--accent);font-size:16px;flex-shrink:0">âœ“</span><div><strong>Wrong item</strong><br><span style="font-size:13px;color:var(--muted)">Full refund + return arranged at seller's cost.</span></div></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--accent);font-size:16px;flex-shrink:0">âœ“</span><div><strong>Not as described</strong><br><span style="font-size:13px;color:var(--muted)">Full or partial refund depending on the extent of difference.</span></div></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--accent);font-size:16px;flex-shrink:0">âœ“</span><div><strong>Counterfeit goods</strong><br><span style="font-size:13px;color:var(--muted)">Full refund and seller penalised or removed.</span></div></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--accent);font-size:16px;flex-shrink:0">âœ“</span><div><strong>Damaged / defective</strong><br><span style="font-size:13px;color:var(--muted)">Full refund or replacement. Provide photographic evidence.</span></div></div>
       </div>
     </div>
     <div class="form-section">
-      <h3>⏱ Timelines</h3>
+      <h3>â± Timelines</h3>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <tr><td style="padding:8px 0;border-bottom:1px solid var(--border);color:var(--muted)">Raise dispute within</td><td style="padding:8px 0;border-bottom:1px solid var(--border);text-align:right;font-weight:700">30 days of delivery</td></tr>
         <tr><td style="padding:8px 0;border-bottom:1px solid var(--border);color:var(--muted)">Seller response time</td><td style="padding:8px 0;border-bottom:1px solid var(--border);text-align:right;font-weight:700">3 business days</td></tr>
         <tr><td style="padding:8px 0;border-bottom:1px solid var(--border);color:var(--muted)">Admin review time</td><td style="padding:8px 0;border-bottom:1px solid var(--border);text-align:right;font-weight:700">5 business days</td></tr>
         <tr><td style="padding:8px 0;border-bottom:1px solid var(--border);color:var(--muted)">M-Pesa refund</td><td style="padding:8px 0;border-bottom:1px solid var(--border);text-align:right;font-weight:700">Within 24 hours</td></tr>
-        <tr><td style="padding:8px 0;color:var(--muted)">Card / wallet refund</td><td style="padding:8px 0;text-align:right;font-weight:700">3–7 business days</td></tr>
+        <tr><td style="padding:8px 0;color:var(--muted)">Card / wallet refund</td><td style="padding:8px 0;text-align:right;font-weight:700">3â€“7 business days</td></tr>
       </table>
     </div>
     <div class="form-section">
-      <h3>📞 Need Help?</h3>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Our support team is available Mon–Sat 8AM–8PM EAT.</p>
-      <a href="https://wa.me/254705726803" class="btn btn-ghost btn-sm" style="display:inline-flex;margin-bottom:8px">💬 WhatsApp Support</a>
-      <a href="mailto:support@mysokoni.co.ke" class="btn btn-ghost btn-sm" style="display:inline-flex">📧 support@mysokoni.co.ke</a>
+      <h3>ðŸ“ž Need Help?</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Our support team is available Monâ€“Sat 8AMâ€“8PM EAT.</p>
+      <a href="https://wa.me/254705726803" class="btn btn-ghost btn-sm" style="display:inline-flex;margin-bottom:8px">ðŸ’¬ WhatsApp Support</a>
+      <a href="mailto:support@mysokoni.co.ke" class="btn btn-ghost btn-sm" style="display:inline-flex">ðŸ“§ support@mysokoni.co.ke</a>
     </div>
   </div>
 
 </div>
 
-<!-- ── Bottom Nav ─────────────────────────────────────────────────────────── -->
+<!-- â”€â”€ Bottom Nav â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <nav class="bottom-nav">
-  <a href="index.html" class="bn-item"><span class="bn-icon">🏠</span>Home</a>
-  <a href="profile.html" class="bn-item"><span class="bn-icon">👤</span>Account</a>
-  <a href="dispute-portal.html" class="bn-item active"><span class="bn-icon">🛡</span>Disputes</a>
-  <a href="help.html" class="bn-item"><span class="bn-icon">💬</span>Help</a>
+  <a href="index.html" class="bn-item"><span class="bn-icon">ðŸ </span>Home</a>
+  <a href="profile.html" class="bn-item"><span class="bn-icon">ðŸ‘¤</span>Account</a>
+  <a href="dispute-portal.html" class="bn-item active"><span class="bn-icon">ðŸ›¡</span>Disputes</a>
+  <a href="help.html" class="bn-item"><span class="bn-icon">ðŸ’¬</span>Help</a>
 </nav>
 
 <div id="toast"></div>
 
-<!-- ── Firebase ──────────────────────────────────────────────────────────── -->
+<!-- â”€â”€ Firebase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
@@ -260,11 +260,11 @@
 <script>
 'use strict';
 
-/* ── Helpers ─────────────────────────────────────────────────────────────── */
+/* â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _cf(name){ return firebase.functions().httpsCallable(name); }
 function _esc(s){ return String(s||'').replace(/[<>"'&]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','&':'&amp;'}[c])); }
 function _ago(ts){
-  if(!ts) return '—';
+  if(!ts) return 'â€”';
   var s = ts.seconds||Math.floor((ts instanceof Date?ts:new Date(ts))/1000);
   var d = Math.floor(Date.now()/1000 - s);
   if(d<60) return d+'s ago';
@@ -286,15 +286,15 @@ var REASON_LABELS = {
   overcharged:'Wrong amount charged',other:'Other issue',
   buyer_cancelled:'Withdrawn by buyer'
 };
-var STATUS_ICONS = { open:'🔵',investigating:'🟡',seller_responded:'🟣',resolved:'✅',closed:'⚫' };
+var STATUS_ICONS = { open:'ðŸ”µ',investigating:'ðŸŸ¡',seller_responded:'ðŸŸ£',resolved:'âœ…',closed:'âš«' };
 
-/* ── Auth ────────────────────────────────────────────────────────────────── */
+/* â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 firebase.auth().onAuthStateChanged(function(user){
   if(!user){ location.href='login.html'; return; }
   _loadDisputes();
 });
 
-/* ── Tab navigation ─────────────────────────────────────────────────────── */
+/* â”€â”€ Tab navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _tab(el,p){
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
   el.classList.add('active');
@@ -303,7 +303,7 @@ function _tab(el,p){
   if(p==='disputes') _loadDisputes();
 }
 
-/* ── Load disputes list ──────────────────────────────────────────────────── */
+/* â”€â”€ Load disputes list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _loadDisputes(){
   var el=document.getElementById('disputeList');
   el.innerHTML='<div class="loading"><div class="spin"></div></div>';
@@ -313,7 +313,7 @@ function _loadDisputes(){
     var badge = document.getElementById('openCount');
     if(open>0){ badge.textContent=open+' open'; badge.style.display=''; }
     if(!disputes.length){
-      el.innerHTML='<div class="empty"><span class="ico">🛡</span><h3>No disputes</h3><p>All your orders look good!</p><button class="btn btn-ghost" onclick="_tab(document.querySelector(\'.tab\'),\'new\')">Raise a dispute</button></div>';
+      el.innerHTML='<div class="empty"><span class="ico">ðŸ›¡</span><h3>No disputes</h3><p>All your orders look good!</p><button class="btn btn-ghost" onclick="_tab(document.querySelector(\'.tab\'),\'new\')">Raise a dispute</button></div>';
       return;
     }
     el.innerHTML=disputes.map(function(d){
@@ -322,7 +322,7 @@ function _loadDisputes(){
       var tlCount=(d.timeline||[]).length;
       return '<div class="dispute-card">'
         +'<div class="dc-head" onclick="_toggleDetail(\''+d.id+'\')">'
-          +'<div class="dc-icon">'+( STATUS_ICONS[d.status]||'🔵' )+'</div>'
+          +'<div class="dc-icon">'+( STATUS_ICONS[d.status]||'ðŸ”µ' )+'</div>'
           +'<div class="dc-info">'
             +'<div class="dc-reason">'+_esc(REASON_LABELS[d.reason]||d.reason)+'</div>'
             +'<div class="dc-order">Order: '+_esc((d.orderId||'').slice(0,20))+'</div>'
@@ -338,20 +338,20 @@ function _loadDisputes(){
           // Timeline
           +(tlCount ? '<div class="tl">'+( d.timeline||[] ).map(function(t){
             var dotCls=t.event==='opened'?'opened':t.event==='resolved'?'resolved':t.event==='evidence_added'?'evidence':'responded';
-            return '<div class="tl-row"><div class="tl-dot '+dotCls+'">●</div><div class="tl-text">'+_esc(t.note||t.event)+'<div class="tl-ts">'+_esc(t.actorRole||'')+'  · '+_ago_str(t.ts)+'</div></div></div>';
+            return '<div class="tl-row"><div class="tl-dot '+dotCls+'">â—</div><div class="tl-text">'+_esc(t.note||t.event)+'<div class="tl-ts">'+_esc(t.actorRole||'')+'  Â· '+_ago_str(t.ts)+'</div></div></div>';
           }).join('')+'</div>' : '')
           // Evidence
           +(evCount ? '<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px">Evidence ('+evCount+')</div><div class="evidence-list">'+( d.evidence||[] ).map(function(e){
             return '<div class="ev-item">'
-              +'<strong>'+_esc(e.type)+' — '+_esc(e.addedByRole||'')+'</strong>'
+              +'<strong>'+_esc(e.type)+' â€” '+_esc(e.addedByRole||'')+'</strong>'
               +_esc(e.description||'')
-              +(e.fileUrl?'<br><a href="'+_esc(e.fileUrl)+'" target="_blank" style="color:var(--info);font-size:11px">View file ↗</a>':'')
+              +(e.fileUrl?'<br><a href="'+_esc(e.fileUrl)+'" target="_blank" style="color:var(--info);font-size:11px">View file â†—</a>':'')
             +'</div>';
           }).join('')+'</div>' : '')
           // Seller response
           +(d.sellerResponse ? '<div class="dc-seller-resp"><h5>Seller Response</h5><p>'+_esc(d.sellerResponse)+'</p></div>' : '')
           // Add evidence form
-          +((d.status==='open'||d.status==='investigating'||d.status==='seller_responded')?'<div class="ev-add"><h5>Add Evidence</h5><select id="aet-'+d.id+'" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--txt);padding:8px;font-size:13px;margin-bottom:6px"><option value="">Type…</option><option value="photo">Photo</option><option value="screenshot">Screenshot</option><option value="video">Video</option><option value="document">Document</option><option value="other">Other</option></select><input id="aed-'+d.id+'" type="text" placeholder="Describe what this shows…" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--txt);padding:8px;font-size:13px;margin-bottom:6px;font-family:inherit"><button class="btn btn-ghost btn-sm" onclick="_addEvidence(\''+d.id+'\')">Submit Evidence</button></div>' : '')
+          +((d.status==='open'||d.status==='investigating'||d.status==='seller_responded')?'<div class="ev-add"><h5>Add Evidence</h5><select id="aet-'+d.id+'" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--txt);padding:8px;font-size:13px;margin-bottom:6px"><option value="">Typeâ€¦</option><option value="photo">Photo</option><option value="screenshot">Screenshot</option><option value="video">Video</option><option value="document">Document</option><option value="other">Other</option></select><input id="aed-'+d.id+'" type="text" placeholder="Describe what this showsâ€¦" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--txt);padding:8px;font-size:13px;margin-bottom:6px;font-family:inherit"><button class="btn btn-ghost btn-sm" onclick="_addEvidence(\''+d.id+'\')">Submit Evidence</button></div>' : '')
           // Actions
           +'<div class="dc-actions">'
             +((d.status==='open'||d.status==='investigating') ? '<button class="btn btn-ghost btn-sm" style="color:var(--danger);border-color:rgba(255,68,68,.3)" onclick="_cancel(\''+d.id+'\')">Withdraw Dispute</button>' : '')
@@ -360,11 +360,11 @@ function _loadDisputes(){
         +'</div>'
         +'</div>';
     }).join('');
-  }).catch(function(e){ el.innerHTML='<div class="empty"><span class="ico">⚠️</span><h3>Error</h3><p>'+_esc(e.message)+'</p></div>'; });
+  }).catch(function(e){ el.innerHTML='<div class="empty"><span class="ico">âš ï¸</span><h3>Error</h3><p>'+_esc(e.message)+'</p></div>'; });
 }
 
 function _ago_str(iso){
-  if(!iso) return '—';
+  if(!iso) return 'â€”';
   var d=Math.floor((Date.now()-new Date(iso).getTime())/1000);
   if(d<60) return d+'s ago';
   if(d<3600) return Math.floor(d/60)+'m ago';
@@ -377,7 +377,7 @@ function _toggleDetail(id){
   body.classList.toggle('open');
 }
 
-/* ── Add evidence ─────────────────────────────────────────────────────────── */
+/* â”€â”€ Add evidence â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _addEvidence(id){
   var evType=document.getElementById('aet-'+id).value;
   var evDesc=document.getElementById('aed-'+id).value.trim();
@@ -388,7 +388,7 @@ function _addEvidence(id){
   }).catch(function(e){ _toast(e.message,'red'); });
 }
 
-/* ── Cancel dispute ──────────────────────────────────────────────────────── */
+/* â”€â”€ Cancel dispute â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _cancel(id){
   if(!confirm('Withdraw this dispute? This cannot be undone.')) return;
   _cf('cancelDispute')({ disputeId:id }).then(function(){
@@ -397,7 +397,7 @@ function _cancel(id){
   }).catch(function(e){ _toast(e.message,'red'); });
 }
 
-/* ── Submit new dispute ──────────────────────────────────────────────────── */
+/* â”€â”€ Submit new dispute â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function _submit(){
   var orderId=document.getElementById('orderId').value.trim();
   var reason=document.getElementById('reason').value;
@@ -407,7 +407,7 @@ function _submit(){
   if(!orderId||!reason||!description){ _toast('Please fill in all required fields','red'); return; }
   if(description.length<10){ _toast('Please describe the issue in more detail','red'); return; }
   var btn=document.getElementById('submitBtn');
-  btn.disabled=true; btn.textContent='Submitting…';
+  btn.disabled=true; btn.textContent='Submittingâ€¦';
   _cf('createDispute')({ orderId, reason, description }).then(function(r){
     var disputeId=r.data.disputeId;
     if(evType&&evDesc){
