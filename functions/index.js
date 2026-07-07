@@ -5530,6 +5530,25 @@ exports.webhookMpesa = onRequest(
 
 /* â”€â”€ Stripe â”€â”€ */
 exports.webhookStripe = onRequest(
+  { timeoutSeconds: 10, cors: false, invoker: "public" },
+  async (req, res) => {
+    // Stripe is not configured — reject all calls to prevent unauthenticated
+    // webhook injection (no HMAC secret defined; secretKey was missing from
+    // _processWebhook, bypassing the signature check entirely).
+    // Re-enable: define STRIPE_WEBHOOK_SECRET in Secret Manager, add it to
+    // secrets:[], and pass it as secretKey in _processWebhook opts below.
+    return res.status(501).json({ error: 'Stripe payments not configured on this platform.' });
+  }
+);
+/* DISABLED — reference implementation only; intentionally NOT exported so it is
+   never deployed. This original Stripe handler bypassed signature verification
+   (no secretKey passed to _processWebhook), allowing unauthenticated webhook
+   injection into `webhookPayments`. The active `webhookStripe` above returns 501.
+   To re-enable Stripe securely: define STRIPE_WEBHOOK_SECRET in Secret Manager,
+   add it to secrets:[], pass it as secretKey in the _processWebhook opts to
+   enforce signature checks, then expose it as `exports.webhookStripe`.
+
+const _webhookStripeReference = onRequest(
   { timeoutSeconds: 30, cors: false, invoker: "public" },
   async (req, res) => {
     if (req.method !== "POST") return res.status(405).end();
@@ -5559,6 +5578,7 @@ exports.webhookStripe = onRequest(
     });
   }
 );
+*/
 
 /* â”€â”€ SmartPOS â”€â”€ */
 exports.webhookSmartpos = onRequest(
