@@ -376,7 +376,7 @@ exports.redeemGiftCard = onCall(_CF, async (req) => {
  * checkGiftCardBalance
  * No auth required — cashier can scan QR to check balance.
  */
-exports.checkGiftCardBalance = onCall({ region: 'us-central1', enforceAppCheck: false }, async (req) => {
+exports.checkGiftCardBalance = onCall({ region: 'us-central1', enforceAppCheck: true }, async (req) => {
   const { code } = req.data;
   if (!code) throw new HttpsError('invalid-argument', 'Gift card code required');
 

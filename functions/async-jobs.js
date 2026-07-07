@@ -54,7 +54,7 @@ function _admin(req) {
 }
 
 // ── Core execution (distributed-locked) ──────────────────────────────────────
-async function _executeJob(jobId) {
+async function _executeJob(jobId, secrets = {}) {
   const jobRef = db.collection(JOBS_COL).doc(jobId);
 
   const claimed = await db.runTransaction(async tx => {
@@ -100,6 +100,7 @@ async function _executeJob(jobId) {
       await jobRef.update({ progress: { current, total, message } });
     },
     db,
+    secrets,
   };
 
   try {
@@ -264,7 +265,7 @@ exports.asyncWorker = onDocumentCreated(
     if (!job) return;
     // Sweeper handles lower priorities; skip scheduled jobs
     if (job.scheduledFor || job.priority > PRIORITY.NORMAL) return;
-    await _executeJob(event.params.jobId);
+    await _executeJob(event.params.jobId, { sendgridKey: SENDGRID_API_KEY.value() });
   }
 );
 
@@ -317,8 +318,9 @@ exports.asyncSweeper = onSchedule(
       }
     }
 
+    const _sweepSecrets = { sendgridKey: SENDGRID_API_KEY.value() };
     for (const jobId of toRun) {
-      await _executeJob(jobId).catch(e => console.error(`Sweeper: ${jobId}`, e.message));
+      await _executeJob(jobId, _sweepSecrets).catch(e => console.error(`Sweeper: ${jobId}`, e.message));
     }
   }
 );

@@ -438,7 +438,7 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     db.collection('users').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('orders').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('orders').where('status', 'in', ['pending', 'processing', 'confirmed']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('transactions').where('createdAt', '>=', todayTs).where('status', '==', 'completed').get().catch(() => ({ docs: [] })),
+    db.collection('transactions').where('createdAt', '>=', todayTs).where('status', '==', 'completed').limit(1000).get().catch(() => ({ docs: [] })),
     db.collection('supportTickets').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('disputes').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('subscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),

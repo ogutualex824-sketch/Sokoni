@@ -70,8 +70,7 @@ const db = admin.firestore();
 
 /* ── Runtime options ─────────────────────────────────────────────────────── */
 const _CF = { region: 'us-central1', enforceAppCheck: true };
-/** validateAPIKey is called by external systems without AppCheck context */
-const _CF_NOCHECK = { region: 'us-central1', enforceAppCheck: false };
+const _CF_NOCHECK = { region: 'us-central1', enforceAppCheck: true };
 
 /* ── Constants ───────────────────────────────────────────────────────────── */
 const SUPPORTED_EVENTS = [

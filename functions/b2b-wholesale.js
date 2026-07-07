@@ -868,7 +868,7 @@ const getWholesaleAnalytics = onCall(CF_OPTIONS, async (request) => {
   _requireAdmin(request);
 
   const now   = new Date();
-  const snap  = await db.collection('wholesaleOrders').orderBy('createdAt', 'desc').get();
+  const snap  = await db.collection('wholesaleOrders').orderBy('createdAt', 'desc').limit(500).get();
   const orders = snap.docs.map(d => d.data());
 
   let totalOrders    = 0;

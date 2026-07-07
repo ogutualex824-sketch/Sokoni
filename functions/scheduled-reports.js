@@ -175,11 +175,10 @@ exports.scheduledDailyOpsReport = onSchedule(
   </div>
 </div>`;
 
-    const sgKey = process.env.SENDGRID_API_KEY;
-    if (sgKey) {
-      await sendEmail(sgKey, OPS_EMAIL, `[SOKONI Ops] Daily Report — ${today}`, html);
-    } else {
-      console.warn("[DailyOps] SENDGRID_API_KEY not set — report saved but not emailed");
+    try {
+      await sendEmail(SENDGRID_API_KEY.value(), OPS_EMAIL, `[SOKONI Ops] Daily Report — ${today}`, html);
+    } catch (emailErr) {
+      console.error("[DailyOps] Email failed — report still saved to Firestore:", emailErr.message);
     }
 
     console.log(`[DailyOps] Report complete for ${today}. Orders: ${orders24h}, PaidRate: ${paymentSuccessRate}%`);
@@ -268,10 +267,11 @@ exports.scheduledWeeklySecurityReport = onSchedule(
   </div>
 </div>`;
 
-    const sgKey = process.env.SENDGRID_API_KEY;
-    if (sgKey) {
-      await sendEmail(sgKey, OPS_EMAIL,
+    try {
+      await sendEmail(SENDGRID_API_KEY.value(), OPS_EMAIL,
         `[SOKONI Security] Weekly Report — ${weekStart} to ${weekEnd}`, html);
+    } catch (emailErr) {
+      console.error("[WeeklySecurity] Email failed — report still saved to Firestore:", emailErr.message);
     }
 
     console.log(`[WeeklySecurity] Report sent ${weekStart}→${weekEnd}. CSP:${csp7d} FailPay:${failPay7d} Bugs:${openBugs}`);
@@ -280,7 +280,7 @@ exports.scheduledWeeklySecurityReport = onSchedule(
 
 /* ── getDailyReport ──────────────────────────────────────────────── */
 exports.getDailyReport = onCall(
-  { maxInstances: 5 },
+  { maxInstances: 5, enforceAppCheck: true },
   async (request) => {
     requireAdmin(request);
 
@@ -306,7 +306,7 @@ exports.getDailyReport = onCall(
 
 /* ── getWeeklyReports ────────────────────────────────────────────── */
 exports.getWeeklyReports = onCall(
-  { maxInstances: 5 },
+  { maxInstances: 5, enforceAppCheck: true },
   async (request) => {
     requireAdmin(request);
 

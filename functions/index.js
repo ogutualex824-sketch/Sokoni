@@ -6295,7 +6295,7 @@ const { EMAIL_SECRETS: _INV_SECRETS, FROM: _INV_FROM } = require("./email-servic
 const emailSvcInv = require("./email-service");
 
 exports.sendInvoiceEmail = onCall(
-  { secrets: _INV_SECRETS, enforceAppCheck: false },
+  { secrets: _INV_SECRETS, enforceAppCheck: true },
   async (req) => {
     if (!req.auth) throw new HttpsError("unauthenticated", "Sign in required.");
     const { toEmail, toName, invoice } = req.data || {};

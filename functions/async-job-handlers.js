@@ -16,13 +16,13 @@ const ts = () => admin.firestore.FieldValue.serverTimestamp();
 // ── EMAIL ─────────────────────────────────────────────────────────────────
 
 const EmailHandler = {
-  async execute(job) {
+  async execute(job, helpers = {}) {
     const { to, subject, html, text, templateId, templateData, from } = job.payload;
     if (!to)      throw new Error('EMAIL: missing recipient (to)');
     if (!subject) throw new Error('EMAIL: missing subject');
 
-    const apiKey = process.env.SENDGRID_API_KEY;
-    if (!apiKey)  throw new Error('SENDGRID_API_KEY not configured');
+    const apiKey = helpers?.secrets?.sendgridKey;
+    if (!apiKey)  throw new Error('SENDGRID_API_KEY not injected via secrets — ensure asyncWorker/asyncSweeper bind the secret');
 
     const body = templateId
       ? JSON.stringify({

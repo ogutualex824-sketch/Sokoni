@@ -52,7 +52,31 @@ then `firebase deploy --only functions --force` lands all 187.
 
 ---
 
-## DEPLOY ACTIVITY — 2026-07-07 (latest)
+## DEPLOY ACTIVITY — 2026-07-07 (security patch batch)
+
+### ✅ Security & Correctness Patches — 9 CFs + hosting
+**Code fixes applied (all files):**
+- `async-job-handlers.js` — EmailHandler now receives SendGrid key via `helpers.secrets.sendgridKey` (injected by asyncWorker/asyncSweeper at runtime) — eliminates `process.env` access
+- `async-jobs.js` — `_executeJob(jobId, secrets)` passes `{ sendgridKey: SENDGRID_API_KEY.value() }` from asyncWorker + asyncSweeper; `helpers.secrets` forwarded to handler
+- `scheduled-reports.js` — replaced `process.env.SENDGRID_API_KEY` with `SENDGRID_API_KEY.value()` (already `defineSecret`-bound); email failures no longer block Firestore save; `getDailyReport` + `getWeeklyReports` gained `enforceAppCheck: true`
+- `pos-crm-pro.js:379` — `checkGiftCardBalance` changed `enforceAppCheck: false` → `true`
+- `pos-integrations.js:74` — `_CF_NOCHECK` changed `enforceAppCheck: false` → `true`
+- `index.js:6298` — `sendInvoiceEmail` changed `enforceAppCheck: false` → `true`
+- `b2b-wholesale.js:871` — `getWholesaleAnalytics` adds `.limit(500)` to prevent full collection scan
+- `admin-os.js:441` — `adminGetExecutiveDashboard` transactions query adds `.limit(1000)`
+- `seller.html` + `profile.html` — removed `<script src="demo-seed.js">` (production data seeder leak)
+
+**Deployed:**
+`scheduledDailyOpsReport`, `scheduledWeeklySecurityReport`, `getDailyReport`, `getWeeklyReports`,
+`checkGiftCardBalance`, `validateAPIKey`, `sendInvoiceEmail`, `getWholesaleAnalytics`,
+`adminGetExecutiveDashboard` + hosting
+
+**Pending quota (code is patched, will pick up fixes when deployed):**
+`asyncWorker`, `asyncSweeper`, `asyncEnqueue` (and remaining 8 async-job-engine CFs)
+
+---
+
+## DEPLOY ACTIVITY — 2026-07-07 (earlier)
 
 ### ✅ 30 Redis Layer CFs — DEPLOYED WITH VPC CONNECTOR
 All 30 `redis-layer.js` functions updated with:
@@ -78,10 +102,18 @@ All successful. `algoliaReprocessDLQ` and `searchValidateIndexes` resolved on re
 Algolia key rotation is now 79/79 complete — safe to disable old Secret Manager version.
 enterprise-health and disaster-recovery CFs now have REDIS_URL_SECRET + VPC connector.
 
-### 🔄 9 prior-queue CFs — ATTEMPTING (test if quota cleared)
+### ⛔ 9 prior-queue CFs — STILL QUOTA-BLOCKED (confirmed 2026-07-07)
+All 9 hit HTTP 429 immediately. Quota ceiling is hard — does NOT reset on a timer.
+Requires GCP Cloud Run CPU quota increase before any new CF can be created.
+
 `fosSecureWebhook`, `fosExportReport`, `fosGetProviderHealth`, `fosGetAdminConsole`,
 `subScheduleRenewals`, `subAutoActivateOnPayment`, `getSellerEarningsReport`,
-`getAdminRevenueByHub`, `editMessage` — deploying now.
+`getAdminRevenueByHub`, `editMessage`
+
+**Action required (user):**
+GCP Console → IAM & Admin → Quotas → `run.googleapis.com` → `us-central1`
+→ "CPU allocation without committed use (Total, per region)" → Request increase.
+Once approved, run the master deploy command in the MASTER DEPLOY section below.
 
 ---
 
