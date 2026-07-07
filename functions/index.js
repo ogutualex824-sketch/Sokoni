@@ -7921,6 +7921,15 @@ exports.fosExportReport     = financialOS.fosExportReport;
 exports.fosGetProviderHealth = financialOS.fosGetProviderHealth;
 exports.fosGetAdminConsole  = financialOS.fosGetAdminConsole;
 
+/* ── Financial OS Admin v1.0 ─────────────────────────────────────────── */
+const finosAdmin = require('./finos-admin');
+exports.fosGetProviderConfig    = finosAdmin.fosGetProviderConfig;
+exports.fosConfigureProvider    = finosAdmin.fosConfigureProvider;
+exports.fosGetFraudQueue        = finosAdmin.fosGetFraudQueue;
+exports.fosReviewFraudAlert     = finosAdmin.fosReviewFraudAlert;
+exports.fosGetRevenueComparison = finosAdmin.fosGetRevenueComparison;
+exports.fosAdminSettleEscrow    = finosAdmin.fosAdminSettleEscrow;
+
 /* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
 const trustSafety = require('./trust-safety');
 exports.tsReportContent       = trustSafety.tsReportContent;

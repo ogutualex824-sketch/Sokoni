@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Financial Admin — SOKONI</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="sokoni-config.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050505;--sur:#0d0d0d;--sur2:#141414;--bor:#1a1a1a;--bor2:#222;
+  --g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);
+  --txt:#e8e8e8;--sub:#6b7280;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;
+  --cyan:#00d4ff;--radius:10px;
+}
+body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:14px;display:flex;height:100vh;overflow:hidden}
+
+/* Sidebar */
+.sidebar{width:210px;background:var(--sur);border-right:1px solid var(--bor);display:flex;flex-direction:column;flex-shrink:0;height:100vh;overflow-y:auto}
+.sb-logo{padding:16px;border-bottom:1px solid var(--bor);display:flex;align-items:center;gap:8px}
+.sb-logo-text{font-size:13px;font-weight:900;color:var(--g)}
+.sb-logo-sub{font-size:10px;color:var(--sub)}
+.sb-group{padding:10px 8px 3px 14px;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.08em}
+.sb-item{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;margin:1px 6px;font-size:13px;font-weight:500;color:var(--sub);cursor:pointer;transition:all .15s}
+.sb-item:hover{background:var(--sur2);color:var(--txt)}
+.sb-item.active{background:var(--ga);color:var(--g)}
+.sb-icon{font-size:16px;width:16px;text-align:center}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-header{background:var(--sur);border-bottom:1px solid var(--bor);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.main-header h1{font-size:16px;font-weight:700}
+.main-header .sub{font-size:12px;color:var(--sub);margin-top:2px}
+.main-body{flex:1;overflow-y:auto;padding:20px}
+
+/* Auth gate */
+#auth-gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:10px}
+#auth-gate p{color:var(--sub);font-size:13px}
+.spinner{width:26px;height:26px;border:2px solid var(--bor2);border-top-color:var(--g);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Panels */
+.panel{display:none}
+.panel.active{display:block}
+
+/* KPI strip */
+.kpi-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:16px}
+.kpi-label{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.kpi-val{font-size:22px;font-weight:800}
+.kpi-val.green{color:var(--g)}
+.kpi-val.red{color:var(--red)}
+.kpi-val.amber{color:var(--amber)}
+.kpi-delta{font-size:12px;margin-top:3px}
+.kpi-delta.up{color:var(--g)}
+.kpi-delta.down{color:var(--red)}
+
+/* Section */
+.sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.sec-title{font-size:15px;font-weight:700}
+
+/* Tables */
+.tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--bor)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--sur2);color:var(--sub);font-weight:600;padding:9px 13px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+td{padding:9px 13px;border-top:1px solid var(--bor)}
+tr:hover td{background:var(--sur2)}
+
+/* Chips */
+.chip{display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600}
+.chip-open{background:rgba(239,68,68,.12);color:var(--red)}
+.chip-reviewed{background:rgba(245,158,11,.12);color:var(--amber)}
+.chip-actioned,.chip-released,.chip-enabled,.chip-active{background:var(--ga);color:var(--g)}
+.chip-dismissed,.chip-disabled,.chip-held{background:rgba(107,114,128,.12);color:var(--sub)}
+.chip-disputed{background:rgba(239,68,68,.12);color:var(--red)}
+.chip-sandbox{background:rgba(0,212,255,.12);color:var(--cyan)}
+
+/* Buttons */
+.btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s}
+.btn-primary{background:var(--g);color:#000}
+.btn-primary:hover{opacity:.85}
+.btn-outline{background:transparent;border:1px solid var(--bor2);color:var(--txt)}
+.btn-outline:hover{border-color:var(--g);color:var(--g)}
+.btn-danger{background:rgba(239,68,68,.12);border:1px solid var(--red);color:var(--red)}
+.btn-sm{padding:5px 12px;font-size:12px}
+
+/* Period pills */
+.period-pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.pp{padding:5px 14px;border-radius:16px;border:1px solid var(--bor);background:var(--sur2);color:var(--sub);font-size:12px;cursor:pointer;transition:all .2s}
+.pp:hover{border-color:var(--g);color:var(--txt)}
+.pp.active{background:var(--ga);border-color:var(--g);color:var(--g)}
+
+/* Revenue comparison */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.compare-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:16px}
+.compare-card h3{font-size:13px;color:var(--sub);margin-bottom:10px}
+.compare-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bor);font-size:13px}
+.compare-row:last-child{border-bottom:none}
+@media(max-width:700px){.compare-grid{grid-template-columns:1fr}}
+
+/* Provider cards */
+.provider-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-bottom:20px}
+.provider-card{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:16px}
+.provider-name{font-size:15px;font-weight:700;margin-bottom:8px}
+.provider-status{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.provider-dot{width:8px;height:8px;border-radius:50%}
+.provider-dot.on{background:var(--g)}
+.provider-dot.off{background:var(--sub)}
+.provider-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Escrow / settle modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:none;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:24px;max-width:420px;width:100%}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:6px}
+.modal p{font-size:13px;color:var(--sub);margin-bottom:16px}
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:12px;color:var(--sub);margin-bottom:5px;font-weight:500}
+.form-control{width:100%;background:var(--sur2);border:1px solid var(--bor2);border-radius:8px;padding:9px 12px;color:var(--txt);font-size:14px;outline:none;transition:border .2s}
+.form-control:focus{border-color:var(--g)}
+.modal-actions{display:flex;gap:10px;margin-top:16px}
+.modal-actions button{flex:1;padding:11px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;border:none;transition:all .2s}
+.btn-confirm{background:var(--g);color:#000}
+.btn-cancel-m{background:transparent;border:1px solid var(--bor2);color:var(--txt)}
+
+/* Toast */
+#toast-c{position:fixed;bottom:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:11px 16px;border-radius:8px;font-size:13px;font-weight:500;background:var(--sur2);border:1px solid var(--bor2);color:var(--txt);animation:fadeIn .2s;max-width:300px}
+.toast.s{background:var(--ga);border-color:var(--g);color:var(--g)}
+.toast.e{background:rgba(239,68,68,.12);border-color:var(--red);color:var(--red)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* Hub breakdown bars */
+.bar-list{display:flex;flex-direction:column;gap:8px}
+.bar-row{display:flex;align-items:center;gap:10px;font-size:12px}
+.bar-label{width:140px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-track{flex:1;background:var(--sur2);border-radius:4px;height:8px;overflow:hidden}
+.bar-fill{height:100%;background:var(--g);border-radius:4px;transition:width .5s ease}
+.bar-val{width:90px;text-align:right;font-weight:600}
+
+/* Audit log */
+.audit-entry{background:var(--sur);border:1px solid var(--bor);border-radius:8px;padding:12px;margin-bottom:8px;font-size:13px}
+.audit-action{font-weight:700;color:var(--txt);margin-bottom:3px}
+.audit-meta{color:var(--sub);font-size:11px}
+
+@media(max-width:600px){
+  .sidebar{display:none}
+  .kpi-strip{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<div id="auth-gate"><div class="spinner"></div><p>Verifying admin access…</p></div>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sb-logo">
+    <div>
+      <div class="sb-logo-text">FinOS Admin</div>
+      <div class="sb-logo-sub">Financial Operating System</div>
+    </div>
+  </div>
+  <div class="sb-group">Revenue</div>
+  <div class="sb-item active" onclick="show('overview',this)"><span class="sb-icon">◈</span> Overview</div>
+  <div class="sb-item" onclick="show('comparison',this)"><span class="sb-icon">↕</span> Comparison</div>
+  <div class="sb-item" onclick="show('hubs',this)"><span class="sb-icon">▦</span> By Hub</div>
+  <div class="sb-group">Operations</div>
+  <div class="sb-item" onclick="show('providers',this)"><span class="sb-icon">⚡</span> Providers</div>
+  <div class="sb-item" onclick="show('fraud',this)"><span class="sb-icon">⚠</span> Fraud Queue</div>
+  <div class="sb-item" onclick="show('escrows',this)"><span class="sb-icon">🔒</span> Escrow</div>
+  <div class="sb-group">Finance</div>
+  <div class="sb-item" onclick="show('payouts',this)"><span class="sb-icon">→</span> Payouts</div>
+  <div class="sb-item" onclick="show('refunds',this)"><span class="sb-icon">↩</span> Refunds</div>
+  <div class="sb-item" onclick="show('audit',this)"><span class="sb-icon">≡</span> Audit Log</div>
+  <div class="sb-group">Links</div>
+  <div class="sb-item" onclick="location.href='commission-admin.html'"><span class="sb-icon">%</span> Commission Rules</div>
+  <div class="sb-item" onclick="location.href='financial-os.html'"><span class="sb-icon">◉</span> Financial OS</div>
+  <div class="sb-item" onclick="location.href='admin-subscriptions.html'"><span class="sb-icon">♻</span> Subscriptions</div>
+</nav>
+
+<!-- Main -->
+<div class="main">
+  <div class="main-header">
+    <div>
+      <h1 id="panel-title">Financial Overview</h1>
+      <div class="sub" id="panel-sub">Platform revenue at a glance</div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="refreshPanel()">Refresh</button>
+  </div>
+  <div class="main-body">
+
+    <!-- OVERVIEW -->
+    <div class="panel active" id="panel-overview">
+      <div class="kpi-strip" id="overview-kpis">
+        <div class="kpi"><div class="kpi-label">Total Revenue</div><div class="kpi-val green" id="kpi-rev">—</div><div class="kpi-delta" id="kpi-rev-d"></div></div>
+        <div class="kpi"><div class="kpi-label">Commission</div><div class="kpi-val" id="kpi-comm">—</div></div>
+        <div class="kpi"><div class="kpi-label">Refunds</div><div class="kpi-val red" id="kpi-ref">—</div></div>
+        <div class="kpi"><div class="kpi-label">Net Revenue</div><div class="kpi-val green" id="kpi-net">—</div></div>
+        <div class="kpi"><div class="kpi-label">Open Disputes</div><div class="kpi-val amber" id="kpi-disp">—</div></div>
+        <div class="kpi"><div class="kpi-label">Fraud Alerts</div><div class="kpi-val red" id="kpi-fraud">—</div></div>
+      </div>
+      <div class="sec-header"><div class="sec-title">Revenue by Hub (This Month)</div></div>
+      <div class="bar-list" id="hub-bars"><p style="color:var(--sub)">Loading…</p></div>
+    </div>
+
+    <!-- COMPARISON -->
+    <div class="panel" id="panel-comparison">
+      <div class="period-pills">
+        <div class="pp active" onclick="setPeriod('day',this)">Today</div>
+        <div class="pp" onclick="setPeriod('week',this)">This Week</div>
+        <div class="pp" onclick="setPeriod('month',this)">This Month</div>
+        <div class="pp" onclick="setPeriod('quarter',this)">Quarter</div>
+        <div class="pp" onclick="setPeriod('year',this)">Year</div>
+      </div>
+      <div class="compare-grid" id="compare-grid"><p style="color:var(--sub)">Select a period…</p></div>
+      <div class="sec-title" style="margin:20px 0 14px">By Transaction Type</div>
+      <div class="bar-list" id="type-bars"></div>
+    </div>
+
+    <!-- HUBS -->
+    <div class="panel" id="panel-hubs">
+      <div class="period-pills">
+        <div class="pp active" onclick="setHubPeriod('month',this)">Month</div>
+        <div class="pp" onclick="setHubPeriod('quarter',this)">Quarter</div>
+        <div class="pp" onclick="setHubPeriod('year',this)">Year</div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Hub</th><th>Revenue (KES)</th><th>Transactions</th><th>Share</th></tr></thead>
+          <tbody id="hubs-tbody"><tr><td colspan="4" style="text-align:center;color:var(--sub)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PROVIDERS -->
+    <div class="panel" id="panel-providers">
+      <div class="sec-header">
+        <div class="sec-title">Payment Providers</div>
+        <button class="btn btn-outline btn-sm" onclick="loadProviders()">Refresh</button>
+      </div>
+      <div class="provider-grid" id="provider-grid"><p style="color:var(--sub)">Loading…</p></div>
+    </div>
+
+    <!-- FRAUD -->
+    <div class="panel" id="panel-fraud">
+      <div class="sec-header">
+        <div class="sec-title">Fraud Alert Queue</div>
+        <div style="display:flex;gap:6px">
+          <select id="fraud-status-filter" class="form-control" style="width:auto;padding:5px 10px" onchange="loadFraud()">
+            <option value="open">Open</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="actioned">Actioned</option>
+            <option value="dismissed">Dismissed</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>User</th><th>Risk Score</th><th>Signal</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="fraud-tbody"><tr><td colspan="6" style="text-align:center;color:var(--sub)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div style="margin-top:14px;text-align:center">
+        <button class="btn btn-outline btn-sm" id="fraud-more-btn" onclick="loadMoreFraud()" style="display:none">Load More</button>
+      </div>
+    </div>
+
+    <!-- ESCROW -->
+    <div class="panel" id="panel-escrows">
+      <div class="sec-header">
+        <div class="sec-title">Escrow Management</div>
+        <div style="display:flex;gap:6px">
+          <select id="escrow-status-filter" class="form-control" style="width:auto;padding:5px 10px" onchange="loadEscrows()">
+            <option value="held">Held</option>
+            <option value="disputed">Disputed</option>
+            <option value="released">Released</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>ID</th><th>Seller</th><th>Amount</th><th>Status</th><th>Created</th><th>Action</th></tr></thead>
+          <tbody id="escrow-tbody"><tr><td colspan="6" style="text-align:center;color:var(--sub)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PAYOUTS -->
+    <div class="panel" id="panel-payouts">
+      <div class="sec-header"><div class="sec-title">Pending Payouts</div></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Seller</th><th>Amount</th><th>Method</th><th>Requested</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="payouts-tbody"><tr><td colspan="6" style="text-align:center;color:var(--sub)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- REFUNDS -->
+    <div class="panel" id="panel-refunds">
+      <div class="sec-header"><div class="sec-title">Refund Queue</div></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Order</th><th>Buyer</th><th>Amount</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="refunds-tbody"><tr><td colspan="6" style="text-align:center;color:var(--sub)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AUDIT -->
+    <div class="panel" id="panel-audit">
+      <div class="sec-header">
+        <div class="sec-title">Financial Audit Log</div>
+        <button class="btn btn-outline btn-sm" onclick="loadAudit()">Refresh</button>
+      </div>
+      <div id="audit-list"><p style="color:var(--sub)">Loading…</p></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modals -->
+<!-- Fraud review modal -->
+<div class="modal-overlay" id="fraud-modal">
+  <div class="modal">
+    <h3>Review Fraud Alert</h3>
+    <p id="fraud-modal-desc">User: <span id="fmd-user"></span></p>
+    <div class="form-group">
+      <label class="form-label">Action</label>
+      <select class="form-control" id="fraud-action">
+        <option value="reviewed">Mark Reviewed</option>
+        <option value="actioned">Action Taken</option>
+        <option value="dismissed">Dismiss</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <textarea class="form-control" id="fraud-notes" rows="3" placeholder="Add notes…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel-m" onclick="closeFraudModal()">Cancel</button>
+      <button class="btn-confirm" onclick="submitFraudReview()">Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settle escrow modal -->
+<div class="modal-overlay" id="settle-modal">
+  <div class="modal">
+    <h3>Force Settle Escrow</h3>
+    <p>Amount: <strong id="settle-amount"></strong> — Seller: <span id="settle-seller"></span></p>
+    <div class="form-group">
+      <label class="form-label">Reason (required)</label>
+      <textarea class="form-control" id="settle-reason" rows="3" placeholder="Why are you force-settling this escrow?"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel-m" onclick="closeSettleModal()">Cancel</button>
+      <button class="btn-confirm" onclick="submitSettle()">Release Funds</button>
+    </div>
+  </div>
+</div>
+
+<!-- Provider config modal -->
+<div class="modal-overlay" id="provider-modal">
+  <div class="modal">
+    <h3 id="prov-modal-title">Configure Provider</h3>
+    <p style="color:var(--sub);font-size:12px;margin-bottom:14px">Changes take effect immediately.</p>
+    <div class="form-group">
+      <label class="form-label">Status</label>
+      <select class="form-control" id="prov-enabled">
+        <option value="true">Enabled</option>
+        <option value="false">Disabled</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mode</label>
+      <select class="form-control" id="prov-sandbox">
+        <option value="false">Live</option>
+        <option value="true">Sandbox</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Webhook URL (optional)</label>
+      <input type="url" class="form-control" id="prov-webhook" placeholder="https://…">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <input type="text" class="form-control" id="prov-notes" placeholder="Internal notes…">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel-m" onclick="closeProviderModal()">Cancel</button>
+      <button class="btn-confirm" onclick="submitProvider()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-c"></div>
+
+<script>
+firebase.initializeApp(window.SOKONI_CONFIG || {});
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const fns  = firebase.app().functions('us-central1');
+
+function esc(s){const d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML}
+function fmtKES(c){return 'KES '+Number((c||0)/100).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmtDate(ms){return ms?new Date(ms).toLocaleDateString('en-KE',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—'}
+function toast(m,t='i'){
+  const el=document.createElement('div');
+  el.className='toast'+(t==='s'?' s':t==='e'?' e':'');
+  el.textContent=m;
+  document.getElementById('toast-c').appendChild(el);
+  setTimeout(()=>el.remove(),3500);
+}
+
+const PANEL_META = {
+  overview:   ['Financial Overview',        'Platform revenue at a glance'],
+  comparison: ['Revenue Comparison',        'Period-over-period performance'],
+  hubs:       ['Revenue by Hub',            'Breakdown across all SOKONI hubs'],
+  providers:  ['Payment Providers',         'Configure and monitor payment gateways'],
+  fraud:      ['Fraud Alert Queue',         'Review and action fraud signals'],
+  escrows:    ['Escrow Management',         'Manage held and disputed funds'],
+  payouts:    ['Payout Approvals',          'Pending seller and provider payouts'],
+  refunds:    ['Refund Queue',              'Pending refund approvals'],
+  audit:      ['Financial Audit Log',       'Immutable record of all financial actions'],
+};
+
+let _currentPanel = 'overview';
+let _fraudCursor = null, _fraudAlerts = [];
+let _settlePending = null, _fraudPending = null, _providerPending = null;
+let _comparePeriod = 'day', _hubPeriod = 'month';
+
+// Auth guard
+auth.onAuthStateChanged(async user => {
+  if (!user) { location.href = 'login.html?redirect=finos-admin'; return; }
+  const tok = await user.getIdTokenResult();
+  if (!tok.claims.admin && !tok.claims.superAdmin) {
+    document.getElementById('auth-gate').innerHTML = '<p style="color:var(--red)">Admin access required.</p>';
+    return;
+  }
+  document.getElementById('auth-gate').style.display = 'none';
+  loadOverview();
+});
+
+function show(panel, el) {
+  _currentPanel = panel;
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('active'));
+  document.getElementById('panel-' + panel).classList.add('active');
+  if (el) el.classList.add('active');
+  const meta = PANEL_META[panel];
+  if (meta) {
+    document.getElementById('panel-title').textContent = meta[0];
+    document.getElementById('panel-sub').textContent = meta[1];
+  }
+  // lazy load
+  if (panel === 'overview') loadOverview();
+  else if (panel === 'comparison') loadComparison();
+  else if (panel === 'hubs') loadHubs();
+  else if (panel === 'providers') loadProviders();
+  else if (panel === 'fraud') loadFraud();
+  else if (panel === 'escrows') loadEscrows();
+  else if (panel === 'payouts') loadPayouts();
+  else if (panel === 'refunds') loadRefunds();
+  else if (panel === 'audit') loadAudit();
+}
+
+function refreshPanel() { show(_currentPanel, null); }
+
+// ── OVERVIEW ──────────────────────────────────────────────────────
+async function loadOverview() {
+  try {
+    const [cmpRes, fraudRes, dispSnap] = await Promise.all([
+      fns.httpsCallable('fosGetRevenueComparison')({ period: 'month', comparison: true }),
+      fns.httpsCallable('fosGetFraudQueue')({ pageSize: 1 }),
+      db.collection('escrows').where('status', '==', 'disputed').get().catch(() => ({ size: 0 })),
+    ]);
+    const cur = cmpRes.data?.current || {};
+    const prev = cmpRes.data?.previous || {};
+    const delta = cmpRes.data?.deltaRevenuePct ?? 0;
+
+    document.getElementById('kpi-rev').textContent = fmtKES(cur.totalRevenueCents);
+    document.getElementById('kpi-comm').textContent = fmtKES(cur.commissionCents);
+    document.getElementById('kpi-ref').textContent = fmtKES(cur.refundsCents);
+    document.getElementById('kpi-net').textContent = fmtKES(cur.netCents);
+    document.getElementById('kpi-disp').textContent = dispSnap.size || 0;
+    document.getElementById('kpi-fraud').textContent = fraudRes.data?.total || 0;
+
+    const kd = document.getElementById('kpi-rev-d');
+    if (delta !== 0) {
+      kd.textContent = (delta > 0 ? '▲ ' : '▼ ') + Math.abs(delta).toFixed(1) + '% vs last month';
+      kd.className = 'kpi-delta ' + (delta > 0 ? 'up' : 'down');
+    }
+
+    // Hub bars
+    const byHub = cur.byHub || {};
+    const hubEntries = Object.entries(byHub).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const maxHub = hubEntries[0]?.[1] || 1;
+    const bars = document.getElementById('hub-bars');
+    bars.innerHTML = hubEntries.length ? hubEntries.map(([hub, cents]) => `
+      <div class="bar-row">
+        <div class="bar-label">${esc(hub.replace(/_/g, ' '))}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(cents/maxHub*100)}%"></div></div>
+        <div class="bar-val">${esc(fmtKES(cents))}</div>
+      </div>`).join('')
+      : '<p style="color:var(--sub);font-size:13px">No data for this period.</p>';
+  } catch(e) { toast('Overview error: '+e.message,'e'); }
+}
+
+// ── COMPARISON ────────────────────────────────────────────────────
+function setPeriod(p, el) {
+  _comparePeriod = p;
+  document.querySelectorAll('.period-pills .pp').forEach(x => x.classList.remove('active'));
+  el.classList.add('active');
+  loadComparison();
+}
+async function loadComparison() {
+  const grid = document.getElementById('compare-grid');
+  grid.innerHTML = '<div class="spinner" style="margin:20px auto"></div>';
+  try {
+    const res = await fns.httpsCallable('fosGetRevenueComparison')({ period: _comparePeriod, comparison: true });
+    const cur = res.data?.current || {}, prev = res.data?.previous || {};
+    const dPct = res.data?.deltaRevenuePct ?? 0;
+    const pLabel = { day:'Yesterday', week:'Previous Week', month:'Last Month', quarter:'Previous Quarter', year:'Last Year' };
+
+    grid.innerHTML = `
+      <div class="compare-card">
+        <h3>Current Period</h3>
+        <div class="compare-row"><span>Gross Revenue</span><span style="color:var(--g);font-weight:700">${esc(fmtKES(cur.totalRevenueCents))}</span></div>
+        <div class="compare-row"><span>Commission</span><span>${esc(fmtKES(cur.commissionCents))}</span></div>
+        <div class="compare-row"><span>Refunds</span><span style="color:var(--red)">${esc(fmtKES(cur.refundsCents))}</span></div>
+        <div class="compare-row" style="border:none;font-weight:700"><span>Net Revenue</span><span style="color:var(--g)">${esc(fmtKES(cur.netCents))}</span></div>
+      </div>
+      <div class="compare-card">
+        <h3>${esc(pLabel[_comparePeriod] || 'Previous')}</h3>
+        <div class="compare-row"><span>Gross Revenue</span><span>${esc(fmtKES(prev.totalRevenueCents))}</span></div>
+        <div class="compare-row"><span>Commission</span><span>${esc(fmtKES(prev.commissionCents))}</span></div>
+        <div class="compare-row"><span>Refunds</span><span style="color:var(--red)">${esc(fmtKES(prev.refundsCents))}</span></div>
+        <div class="compare-row" style="border:none;font-weight:700"><span>Net Revenue</span><span>${esc(fmtKES(prev.netCents))}</span></div>
+      </div>`;
+
+    const byType = cur.byType || {};
+    const typeEntries = Object.entries(byType).sort((a,b)=>b[1]-a[1]);
+    const maxT = typeEntries[0]?.[1] || 1;
+    document.getElementById('type-bars').innerHTML = typeEntries.map(([t,c])=>`
+      <div class="bar-row">
+        <div class="bar-label">${esc(t.replace(/_/g,' '))}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(c/maxT*100)}%"></div></div>
+        <div class="bar-val">${esc(fmtKES(c))}</div>
+      </div>`).join('') || '<p style="color:var(--sub);font-size:13px">No breakdown available.</p>';
+  } catch(e) { grid.innerHTML = `<p style="color:var(--red)">${esc(e.message)}</p>`; }
+}
+
+// ── HUBS TABLE ────────────────────────────────────────────────────
+function setHubPeriod(p, el) {
+  _hubPeriod = p;
+  document.querySelectorAll('#panel-hubs .pp').forEach(x => x.classList.remove('active'));
+  el.classList.add('active');
+  loadHubs();
+}
+async function loadHubs() {
+  try {
+    const res = await fns.httpsCallable('fosGetRevenueComparison')({ period: _hubPeriod, comparison: false });
+    const byHub = res.data?.current?.byHub || {};
+    const entries = Object.entries(byHub).sort((a,b)=>b[1]-a[1]);
+    const total = entries.reduce((s,[,c])=>s+c,0) || 1;
+    document.getElementById('hubs-tbody').innerHTML = entries.length
+      ? entries.map(([hub,cents])=>`<tr>
+          <td>${esc(hub.replace(/_/g,' '))}</td>
+          <td style="color:var(--g);font-weight:700">${esc(fmtKES(cents))}</td>
+          <td>—</td>
+          <td>${esc((cents/total*100).toFixed(1))}%</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--sub)">No data.</td></tr>';
+  } catch(e) { toast(e.message,'e'); }
+}
+
+// ── PROVIDERS ─────────────────────────────────────────────────────
+async function loadProviders() {
+  const grid = document.getElementById('provider-grid');
+  grid.innerHTML = '<div class="spinner" style="margin:20px auto"></div>';
+  try {
+    const res = await fns.httpsCallable('fosGetProviderConfig')({});
+    const providers = res.data?.providers || [];
+    grid.innerHTML = providers.map(p => `
+      <div class="provider-card">
+        <div class="provider-name">${esc(p.name || p.providerId)}</div>
+        <div class="provider-status">
+          <div class="provider-dot ${p.enabled ? 'on' : 'off'}"></div>
+          <span class="chip ${p.enabled ? 'chip-enabled' : 'chip-disabled'}">${p.enabled ? 'Enabled' : 'Disabled'}</span>
+          ${p.sandbox ? '<span class="chip chip-sandbox">Sandbox</span>' : ''}
+        </div>
+        ${p.lastHealthCheck ? `<div style="font-size:11px;color:var(--sub);margin-bottom:10px">Last check: ${esc(fmtDate(p.lastHealthCheck))}</div>` : ''}
+        <div class="provider-actions">
+          <button class="btn btn-outline btn-sm" onclick="openProviderModal(${JSON.stringify(p).replace(/"/g,'&quot;')})">Configure</button>
+          <button class="btn btn-outline btn-sm" onclick="testProvider('${esc(p.providerId)}')">Test</button>
+        </div>
+      </div>`).join('') || '<p style="color:var(--sub)">No providers configured.</p>';
+  } catch(e) { grid.innerHTML = `<p style="color:var(--red)">${esc(e.message)}</p>`; }
+}
+
+async function testProvider(providerId) {
+  try {
+    const res = await fns.httpsCallable('fosGetProviderHealth')({ provider: providerId });
+    toast(res.data?.healthy ? `${providerId}: healthy (${res.data.latencyMs}ms)` : `${providerId}: unhealthy`, res.data?.healthy ? 's' : 'e');
+  } catch(e) { toast('Test failed: '+e.message,'e'); }
+}
+
+function openProviderModal(p) {
+  _providerPending = p;
+  document.getElementById('prov-modal-title').textContent = 'Configure: ' + (p.name || p.providerId);
+  document.getElementById('prov-enabled').value = String(p.enabled !== false);
+  document.getElementById('prov-sandbox').value = String(!!p.sandbox);
+  document.getElementById('prov-webhook').value = p.webhookUrl || '';
+  document.getElementById('prov-notes').value = p.notes || '';
+  document.getElementById('provider-modal').classList.add('show');
+}
+function closeProviderModal() { document.getElementById('provider-modal').classList.remove('show'); _providerPending = null; }
+async function submitProvider() {
+  if (!_providerPending) return;
+  try {
+    await fns.httpsCallable('fosConfigureProvider')({
+      providerId: _providerPending.providerId,
+      enabled: document.getElementById('prov-enabled').value === 'true',
+      sandbox: document.getElementById('prov-sandbox').value === 'true',
+      webhookUrl: document.getElementById('prov-webhook').value.trim() || null,
+      notes: document.getElementById('prov-notes').value.trim() || null,
+    });
+    toast('Provider updated', 's');
+    closeProviderModal();
+    loadProviders();
+  } catch(e) { toast('Error: '+e.message,'e'); }
+}
+
+// ── FRAUD ─────────────────────────────────────────────────────────
+async function loadFraud() {
+  _fraudCursor = null; _fraudAlerts = [];
+  await _fetchFraud();
+}
+async function loadMoreFraud() { await _fetchFraud(); }
+async function _fetchFraud() {
+  const status = document.getElementById('fraud-status-filter').value;
+  try {
+    const res = await fns.httpsCallable('fosGetFraudQueue')({ status, pageSize: 20, cursor: _fraudCursor });
+    const alerts = res.data?.alerts || [];
+    _fraudAlerts = [..._fraudAlerts, ...alerts];
+    _fraudCursor = res.data?.nextCursor || null;
+    document.getElementById('fraud-more-btn').style.display = _fraudCursor ? 'inline-block' : 'none';
+    _renderFraud();
+  } catch(e) { toast(e.message,'e'); }
+}
+function _renderFraud() {
+  document.getElementById('fraud-tbody').innerHTML = _fraudAlerts.length
+    ? _fraudAlerts.map(a=>`<tr>
+        <td>${esc(fmtDate(a.createdAt))}</td>
+        <td>${esc(a.uid?.slice(0,12)||'—')}…</td>
+        <td style="color:${a.riskScore>0.7?'var(--red)':a.riskScore>0.4?'var(--amber)':'var(--g)'};font-weight:700">${esc(((a.riskScore||0)*100).toFixed(0))}%</td>
+        <td>${esc(a.signal||a.type||'—')}</td>
+        <td><span class="chip chip-${esc(a.status||'open')}">${esc(a.status||'open')}</span></td>
+        <td><button class="btn btn-outline btn-sm" onclick="openFraudModal(${JSON.stringify(a).replace(/"/g,'&quot;')})">Review</button></td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:var(--sub)">No alerts in this category.</td></tr>';
+}
+function openFraudModal(a) {
+  _fraudPending = a;
+  document.getElementById('fmd-user').textContent = a.uid || '—';
+  document.getElementById('fraud-notes').value = '';
+  document.getElementById('fraud-modal').classList.add('show');
+}
+function closeFraudModal() { document.getElementById('fraud-modal').classList.remove('show'); _fraudPending = null; }
+async function submitFraudReview() {
+  if (!_fraudPending) return;
+  try {
+    await fns.httpsCallable('fosReviewFraudAlert')({
+      alertId: _fraudPending.id,
+      action: document.getElementById('fraud-action').value,
+      notes: document.getElementById('fraud-notes').value.trim() || null,
+    });
+    toast('Alert updated','s');
+    closeFraudModal();
+    loadFraud();
+  } catch(e) { toast('Error: '+e.message,'e'); }
+}
+
+// ── ESCROWS ───────────────────────────────────────────────────────
+async function loadEscrows() {
+  const status = document.getElementById('escrow-status-filter').value;
+  try {
+    const snap = await db.collection('escrows').where('status','==',status).orderBy('createdAt','desc').limit(50).get();
+    const tbody = document.getElementById('escrow-tbody');
+    tbody.innerHTML = snap.empty
+      ? '<tr><td colspan="6" style="text-align:center;color:var(--sub)">No escrows in this state.</td></tr>'
+      : snap.docs.map(d=>{const e={id:d.id,...d.data()};return`<tr>
+          <td style="font-size:11px;color:var(--sub)">${esc(e.id.slice(0,10))}…</td>
+          <td>${esc(e.sellerId?.slice(0,10)||'—')}…</td>
+          <td style="font-weight:700;color:var(--g)">${esc(fmtKES(e.amountCents))}</td>
+          <td><span class="chip chip-${esc(e.status)}">${esc(e.status)}</span></td>
+          <td>${esc(fmtDate(e.createdAt?.toMillis?.()))}</td>
+          <td>${e.status==='held'||e.status==='disputed'?`<button class="btn btn-danger btn-sm" onclick="openSettle(${JSON.stringify({id:e.id,amountCents:e.amountCents,sellerId:e.sellerId||''}).replace(/"/g,'&quot;')})">Force Settle</button>`:'—'}</td>
+        </tr>`}).join('');
+  } catch(e) { toast(e.message,'e'); }
+}
+function openSettle(e) {
+  _settlePending = e;
+  document.getElementById('settle-amount').textContent = fmtKES(e.amountCents);
+  document.getElementById('settle-seller').textContent = (e.sellerId||'').slice(0,16)+'…';
+  document.getElementById('settle-reason').value = '';
+  document.getElementById('settle-modal').classList.add('show');
+}
+function closeSettleModal() { document.getElementById('settle-modal').classList.remove('show'); _settlePending = null; }
+async function submitSettle() {
+  if (!_settlePending) return;
+  const reason = document.getElementById('settle-reason').value.trim();
+  if (!reason) { toast('Reason required','e'); return; }
+  try {
+    await fns.httpsCallable('fosAdminSettleEscrow')({ escrowId: _settlePending.id, reason });
+    toast('Escrow settled — funds released','s');
+    closeSettleModal();
+    loadEscrows();
+  } catch(e) { toast('Error: '+e.message,'e'); }
+}
+
+// ── PAYOUTS ───────────────────────────────────────────────────────
+async function loadPayouts() {
+  try {
+    const snap = await db.collection('withdrawals').where('status','==','pending').orderBy('requestedAt','desc').limit(50).get();
+    document.getElementById('payouts-tbody').innerHTML = snap.empty
+      ? '<tr><td colspan="6" style="text-align:center;color:var(--sub)">No pending payouts.</td></tr>'
+      : snap.docs.map(d=>{const p={id:d.id,...d.data()};return`<tr>
+          <td>${esc(p.sellerId?.slice(0,12)||'—')}…</td>
+          <td style="font-weight:700;color:var(--g)">${esc(fmtKES(p.amountCents))}</td>
+          <td>${esc(p.method||'—')}</td>
+          <td>${esc(fmtDate(p.requestedAt?.toMillis?.()))}</td>
+          <td><span class="chip chip-reviewed">${esc(p.status)}</span></td>
+          <td style="display:flex;gap:6px">
+            <button class="btn btn-primary btn-sm" onclick="approvePayout('${esc(p.id)}')">Approve</button>
+            <button class="btn btn-danger btn-sm" onclick="rejectPayout('${esc(p.id)}')">Reject</button>
+          </td>
+        </tr>`}).join('');
+  } catch(e) { toast(e.message,'e'); }
+}
+async function approvePayout(id) {
+  try {
+    await fns.httpsCallable('approveWithdrawal')({ withdrawalId: id });
+    toast('Payout approved','s'); loadPayouts();
+  } catch(e) { toast('Error: '+e.message,'e'); }
+}
+async function rejectPayout(id) {
+  const reason = prompt('Reason for rejection:');
+  if (!reason) return;
+  try {
+    await fns.httpsCallable('rejectWithdrawal')({ withdrawalId: id, reason });
+    toast('Payout rejected','s'); loadPayouts();
+  } catch(e) { toast('Error: '+e.message,'e'); }
+}
+
+// ── REFUNDS ───────────────────────────────────────────────────────
+async function loadRefunds() {
+  try {
+    const snap = await db.collection('fosRefundQueue').where('status','==','pending').orderBy('createdAt','desc').limit(50).get();
+    document.getElementById('refunds-tbody').innerHTML = snap.empty
+      ? '<tr><td colspan="6" style="text-align:center;color:var(--sub)">No pending refunds.</td></tr>'
+      : snap.docs.map(d=>{const r={id:d.id,...d.data()};return`<tr>
+          <td style="font-size:11px">${esc(r.transactionId?.slice(0,12)||'—')}…</td>
+          <td>${esc(r.buyerUid?.slice(0,10)||'—')}…</td>
+          <td style="font-weight:700;color:var(--g)">${esc(fmtKES(r.amountCents))}</td>
+          <td>${esc(r.reason||'—')}</td>
+          <td><span class="chip chip-reviewed">pending</span></td>
+          <td><button class="btn btn-primary btn-sm" onclick="approveRefund('${esc(r.id)}')">Approve</button></td>
+        </tr>`}).join('');
+  } catch(e) { toast(e.message,'e'); }
+}
+async function approveRefund(id) {
+  try {
+    await fns.httpsCallable('fosApproveRefund')({ refundId: id });
+    toast('Refund approved','s'); loadRefunds();
+  } catch(e) { toast('Error: '+e.message,'e'); }
+}
+
+// ── AUDIT ─────────────────────────────────────────────────────────
+async function loadAudit() {
+  try {
+    const snap = await db.collection('subscriptionAuditLog').orderBy('timestamp','desc').limit(50).get();
+    const list = document.getElementById('audit-list');
+    list.innerHTML = snap.empty
+      ? '<p style="color:var(--sub)">No audit entries yet.</p>'
+      : snap.docs.map(d=>{const e=d.data();return`
+          <div class="audit-entry">
+            <div class="audit-action">${esc(e.action||'—')}</div>
+            <div class="audit-meta">${esc(fmtDate(e.timestamp?.toMillis?.()))}&nbsp;&nbsp;•&nbsp;&nbsp;uid: ${esc(e.uid||e.reviewedBy||'system')}&nbsp;&nbsp;•&nbsp;&nbsp;ref: ${esc(e.subscriptionId||e.transactionId||e.escrowId||'—')}</div>
+          </div>`}).join('');
+  } catch(e) { toast(e.message,'e'); }
+}
+
+// Close modals on overlay click or ESC
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) { closeProviderModal(); closeFraudModal(); closeSettleModal(); } });
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeProviderModal(); closeFraudModal(); closeSettleModal(); }
+});
+</script>
+</body>
+</html>
