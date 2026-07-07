@@ -9,6 +9,18 @@
 (function () {
   'use strict';
 
+  /* ── PREMIUM DARK THEME — enforce immediately, before first paint ─────
+     Sets data-theme="dark" on <html> so every @media(prefers-color-scheme:dark)
+     block activates, and dark-mode form controls / scrollbars kick in.
+     Also stamps the raw background on documentElement so no white flash
+     occurs even on pages that override body { background } in their CSS. */
+  (function _forceDark() {
+    const h = document.documentElement;
+    if (!h.getAttribute('data-theme')) h.setAttribute('data-theme', 'dark');
+    h.style.backgroundColor = 'var(--bg,#050505)';
+    h.style.color = 'var(--txt,#e8e8e8)';
+  }());
+
   /* ── PHASE 1: Infrastructure injection — runs on EVERY page ──────────
      All pages get tokens/UI/layout/notif regardless of nav exclusion.
      This gives every page: design tokens, toast system, layout manager,
