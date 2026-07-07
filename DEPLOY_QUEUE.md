@@ -52,6 +52,39 @@ then `firebase deploy --only functions --force` lands all 187.
 
 ---
 
+## DEPLOY ACTIVITY — 2026-07-07 (latest)
+
+### ✅ 30 Redis Layer CFs — DEPLOYED WITH VPC CONNECTOR
+All 30 `redis-layer.js` functions updated with:
+- `secrets: [REDIS_URL_SECRET]` (from Secret Manager, not .env)
+- `vpcConnector: 'sokoni-redis-connector'` + `PRIVATE_RANGES_ONLY` egress
+- Connector `sokoni-redis-connector` verified READY (10.8.0.0/28, default network)
+
+Redis CFs can now reach Memorystore at `10.127.36.43:6379` via private VPC.
+
+### ✅ 8 Release Readiness CFs — REDEPLOYED (REDIS_URL_SECRET rebind)
+`runReleaseReadinessCheck`, `checkInfrastructure`, `checkSecurityReadiness`,
+`checkPlatformModules`, `checkPerformanceReadiness`, `checkComplianceReadiness`,
+`approveRelease`, `getLatestReleaseReport` — all updated.
+
+### ✅ 77/79 Algolia CFs — DEPLOYED (key rotation rebind complete)
+`algoliaReprocessDLQ` and `searchValidateIndexes` had transient Cloud Run container
+healthcheck failures. Retrying in the next batch below.
+Safe to disable old `ALGOLIA_ADMIN_KEY` Secret Manager version — 77 CFs are on new key.
+Retry the 2 after they succeed below.
+
+### ✅ 20/20 CFs — DEPLOYED (enterprise-health + disaster-recovery + 2 Algolia retries)
+All successful. `algoliaReprocessDLQ` and `searchValidateIndexes` resolved on retry.
+Algolia key rotation is now 79/79 complete — safe to disable old Secret Manager version.
+enterprise-health and disaster-recovery CFs now have REDIS_URL_SECRET + VPC connector.
+
+### 🔄 9 prior-queue CFs — ATTEMPTING (test if quota cleared)
+`fosSecureWebhook`, `fosExportReport`, `fosGetProviderHealth`, `fosGetAdminConsole`,
+`subScheduleRenewals`, `subAutoActivateOnPayment`, `getSellerEarningsReport`,
+`getAdminRevenueByHub`, `editMessage` — deploying now.
+
+---
+
 ## STATUS — 2026-07-06 (partial deploy: 14 of 23 LIVE)
 Queue is 23 functions (not 24). After freeing 14 quota slots + setting
 `POS_WEBHOOK_SECRET`, the deploy created **14 of 23**; **9 remain** quota-blocked
@@ -223,7 +256,14 @@ Verified via `firebase functions:list` — none of the 119 appear in the live li
 
 ---
 
-## SECURITY PATCH REDEPLOY — 61 CFs (already-live functions, code changed)
+## SECURITY PATCH REDEPLOY — 61 CFs ✅ DEPLOYED 2026-07-07 (61/61 live)
+
+**DONE.** All 61 security-patched functions were redeployed successfully (57 on the
+first pass; the remaining 4 email triggers — `emailOnProductStatusChange`,
+`emailOnSellerPayout`, `emailOnDriverAssigned`, `emailOnOrderCreated` — had transient
+"Deadline Exceeded" CLI-polling timeouts and went green on a one-shot retry).
+Because these are updates to existing functions, they were NOT affected by the
+new-function Cloud Run quota ceiling. Command retained below for future reference.
 
 These functions are **already deployed and live**. Security patches were applied
 to their source files — run this command to push the fixes to production.
@@ -375,13 +415,14 @@ All secrets verified via `firebase functions:secrets:access`. Status as of this 
 
 **All 24 production secrets are SET. No missing secrets remain.**
 
-### After quota clears: activate Redis rate limiting
-Set `REDIS_URL` in `functions/.env` (and optionally Secret Manager) once your Redis instance is provisioned.
-Format: `rediss://:<password>@<host>:6379` (TLS required for production).
+### Redis rate limiting status
+`REDIS_URL` is stored in Firebase Secret Manager (version 2 — `redis://10.127.36.43:6379`).
+**VPC connector must be created before Redis is reachable.** See "Redis Integration" section above.
+Rate limiting activates automatically once the Redis CFs are redeployed with the VPC connector active.
 
 ---
 
-## All 114 functions by source file
+## All 163 functions by source file
 
 ### financial-os.js (8)
 | Function | Type |
@@ -395,18 +436,26 @@ Format: `rediss://:<password>@<host>:6379` (TLS required for production).
 | `fosGetProviderHealth` | onCall admin |
 | `fosGetAdminConsole` | onCall admin |
 
-### sub-engine.js (3)
+### sub-engine.js (6)
 | Function | Type |
 |---|---|
 | `subScheduleRenewals` | onSchedule |
 | `subAutoActivateOnPayment` | onDocumentUpdated |
 | `subUpgradeWithProration` | onCall auth |
+| `subCheckFeature` | onCall auth |
+| `subRetryFailedPayments` | onCall admin |
+| `subDowngrade` | onCall auth |
 
-### commission.js (2)
+### commission.js (7)
 | Function | Type |
 |---|---|
 | `getSellerEarningsReport` | onCall auth |
 | `getAdminRevenueByHub` | onCall admin |
+| `processSettlement` | onCall admin |
+| `requestWithdrawal` | onCall seller |
+| `approveWithdrawal` | onCall admin |
+| `rejectWithdrawal` | onCall admin |
+| `getWithdrawals` | onCall auth |
 
 ### messages.js (7)
 | Function | Type |
@@ -574,6 +623,39 @@ Format: `rediss://:<password>@<host>:6379` (TLS required for production).
 | `posReverseTerminalPayment` | onCall admin |
 | `posSettleTerminalBatch` | onCall admin |
 | `posTerminalEventWebhook` | onRequest webhook |
+
+### pos-printer.js (4) — added 2026-07-07
+| Function | Type |
+|---|---|
+| `posLogPrint` | onCall auth |
+| `getPrintHistory` | onCall auth |
+| `getPrinterConfig` | onCall auth |
+| `setPrinterConfig` | onCall auth |
+
+### finos-automation.js (7) — added 2026-07-07
+| Function | Type |
+|---|---|
+| `fosAutoSettlement` | onSchedule (0 */6 * * *) |
+| `fosAutoRefund` | onDocumentUpdated |
+| `fosReconcile` | onCall admin |
+| `fosGetForecast` | onCall admin |
+| `fosGetSettlementConfig` | onCall admin |
+| `fosSetSettlementConfig` | onCall admin |
+| `fosGetAuditTrail` | onCall admin |
+
+### platform-hub.js (10) — added 2026-07-07
+| Function | Type |
+|---|---|
+| `wapProcessDelays` | onSchedule (every 5 min) |
+| `wapGetInstances` | onCall admin |
+| `wapRetryStep` | onCall admin |
+| `pcGetPerHubFlags` | onCall admin |
+| `pcSetPerHubFlag` | onCall admin |
+| `pcGetHubDetails` | onCall admin |
+| `pcGetCrossHubHealth` | onCall admin |
+| `platformNotifyTransactionChange` | onCall auth |
+| `pcActivateHub` | onCall admin |
+| `pcDeactivateHub` | onCall admin |
 
 ---
 
@@ -768,6 +850,48 @@ Source: `functions/platform-hub.js`
 **Spot deploy command:**
 ```powershell
 npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:wapProcessDelays,functions:wapGetInstances,functions:wapRetryStep,functions:pcGetPerHubFlags,functions:pcSetPerHubFlag,functions:pcGetHubDetails,functions:pcGetCrossHubHealth,functions:platformNotifyTransactionChange,functions:pcActivateHub,functions:pcDeactivateHub" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
+
+### pos-printer.js (4) — added 2026-07-07
+| Function | Type | Auth |
+|---|---|---|
+| `posLogPrint` | onCall | Auth (seller) |
+| `getPrintHistory` | onCall | Auth (seller) |
+| `getPrinterConfig` | onCall | Auth (seller) |
+| `setPrinterConfig` | onCall | Auth (seller) |
+
+**Firestore paths written:**
+- `posPrintLog/{id}` — individual print job records (type, copies, timestamp, success flag)
+- `posPrintStats/{uid}/daily/{YYYY-MM-DD}` — daily print count rollup per seller
+- `posPrinterConfig/{uid}` — saved printer configuration document
+
+**No secrets required.** All operations are scoped to the authenticated seller's UID.
+
+**Spot deploy command (these 4 only):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:posLogPrint,functions:getPrintHistory,functions:getPrinterConfig,functions:setPrinterConfig" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
+
+### sub-engine.js — Subscription extras (3) — added 2026-07-07
+| Function | Type | Auth |
+|---|---|---|
+| `subCheckFeature` | onCall | Auth |
+| `subRetryFailedPayments` | onCall | Admin only |
+| `subDowngrade` | onCall | Auth |
+
+**Firestore paths written:**
+- `subscriptions/{subId}` — plan updated to lower tier on `subDowngrade`; status `payment_failed` → retry on `subRetryFailedPayments`
+- `subscriptionAudit/{id}` — downgrade and retry events
+
+**No new secrets required.** Builds on existing `SUB_OS_SIGNING_SECRET` from sub-engine.js.
+
+**Spot deploy command (these 3 only):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:subCheckFeature,functions:subRetryFailedPayments,functions:subDowngrade" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
 ```
 
 ---
