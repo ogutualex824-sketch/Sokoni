@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-no-header="true">
 <head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
@@ -162,7 +164,7 @@ body::before{
   content:'';position:absolute;top:0;left:0;right:0;height:2px;
   border-radius:var(--r) var(--r) 0 0;
 }
-.kpi.revenue::before{background:linear-gradient(90deg,var(--green),#0fa}
+.kpi.revenue::before{background:linear-gradient(90deg,var(--green),#0fa)}
 .kpi.transactions::before{background:linear-gradient(90deg,var(--blue),#818cf8)}
 .kpi.basket::before{background:linear-gradient(90deg,var(--yellow),var(--orange))}
 .kpi.shift::before{background:linear-gradient(90deg,var(--accent),var(--accent2))}
@@ -927,7 +929,14 @@ body::before{
 <!-- Toasts -->
 <div class="toast-wrap" id="toastWrap"></div>
 
-<script src="sokoni-firebase.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"})}
+</script>
 <script>
 /* ── Clock ── */
 function tick(){
@@ -1005,7 +1014,7 @@ function updateCardStatus(cardId,statusId){
   else{stat.className='scard-status done';stat.textContent='Complete ✓'}
 }
 function updateProgress(){
-  const all=document.querySelectorAll('.ck-item:not([data-optional])').length||1;
+  const all=document.querySelectorAll('.ck-item').length||1;
   const done=document.querySelectorAll('.ck-item.done').length;
   const pct=Math.round((done/Math.max(all,1))*100);
   document.getElementById('dayProg').style.width=pct+'%';
@@ -1027,7 +1036,7 @@ function fmt(n){return 'KES '+Number(n||0).toLocaleString('en-KE',{minimumFracti
 
 /* ── Firebase data loading ── */
 function loadDailyData(){
-  if(!window.firebase||!window.sokoniConfig)return;
+  if(typeof firebase==='undefined'||!firebase.apps.length)return;
   const db=firebase.firestore();
   const today=new Date().toISOString().slice(0,10);
 
@@ -1074,7 +1083,6 @@ function loadDailyData(){
         </div>`).join('');
       }
     }).catch(()=>{});
-});
 }
 
 /* ── Shift timer ── */

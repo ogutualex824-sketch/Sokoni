@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UAT Center — SOKONI</title>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════
+   SOKONI UAT CENTER — Tokens & Reset
+   ═══════════════════════════════════════════════ */
+:root {
+  --g:      #71ff00;
+  --bg:     #050505;
+  --sur:    #0d0d0d;
+  --bor:    #1a1a1a;
+  --txt:    #e8e8e8;
+  --muted:  #777;
+  --pass:   #71ff00;
+  --fail:   #f44336;
+  --info:   #2196f3;
+  --warn:   #ff9800;
+  --radius: 8px;
+  --hh:     60px;
+  --sans:   -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --mono:   'SF Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { color-scheme: dark; }
+
+body {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  padding-bottom: 60px;
+}
+
+/* ── Auth overlay ── */
+#auth-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9000; gap: 10px;
+  font-size: 0.85rem; color: var(--muted);
+}
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--bor); border-top-color: var(--g);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Page header ── */
+.pg-header {
+  background: var(--sur);
+  border-bottom: 1px solid var(--bor);
+  height: var(--hh);
+  display: flex; align-items: center;
+  padding: 0 24px; gap: 16px;
+  position: sticky; top: 0; z-index: 100;
+}
+.pg-header h1 { font-size: 0.95rem; font-weight: 700; letter-spacing: -.2px; }
+.pg-header .sub { font-size: 0.72rem; color: var(--muted); margin-left: 6px; }
+.pg-header-right { margin-left: auto; }
+
+.status-badge {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg); border: 1px solid var(--bor);
+  border-radius: 20px; padding: 4px 14px;
+  font-family: var(--mono); font-size: 0.7rem; color: var(--muted);
+}
+.status-badge b { color: var(--txt); font-weight: 600; }
+
+/* ── Main ── */
+.main { max-width: 1380px; margin: 0 auto; padding: 22px 24px; }
+
+/* ── KPI strip ── */
+.kpi-strip {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px; margin-bottom: 22px;
+}
+.kpi-card {
+  background: var(--sur); border: 1px solid var(--bor);
+  border-radius: var(--radius); padding: 16px 18px;
+  transition: border-color .2s;
+}
+.kpi-card:hover { border-color: #252525; }
+.kpi-val {
+  font-size: 1.9rem; font-weight: 800;
+  font-family: var(--mono); color: var(--g);
+  line-height: 1; letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-lbl {
+  font-size: 0.68rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .8px; margin-top: 5px;
+}
+
+/* ── Tabs ── */
+.tab-nav {
+  display: flex; border-bottom: 1px solid var(--bor);
+  margin-bottom: 22px;
+}
+.tab-btn {
+  background: none; border: none;
+  color: var(--muted); padding: 10px 20px;
+  font-size: 0.8rem; font-weight: 500; font-family: var(--sans);
+  cursor: pointer; white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color .14s, border-color .14s;
+}
+.tab-btn:hover { color: var(--txt); }
+.tab-btn.active { color: var(--g); border-bottom-color: var(--g); }
+.tab-btn:focus-visible { outline: 2px solid var(--g); outline-offset: 2px; border-radius: 4px 4px 0 0; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Layout grids ── */
+.layout-sc   { display: grid; grid-template-columns: 180px 1fr; gap: 18px; align-items: start; }
+.layout-2col { display: grid; grid-template-columns: 350px 1fr; gap: 18px; align-items: start; }
+.layout-sess { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+
+/* ── Sidebar ── */
+.sidebar {
+  background: var(--sur); border: 1px solid var(--bor);
+  border-radius: var(--radius); padding: 13px;
+  position: sticky; top: calc(var(--hh) + 14px);
+}
+.sidebar-label {
+  font-size: 0.63rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); padding: 0 6px; margin-bottom: 8px;
+}
+.filter-btn {
+  display: block; width: 100%;
+  background: none; border: none; text-align: left;
+  padding: 6px 8px; border-radius: 5px;
+  font-size: 0.78rem; color: var(--muted);
+  font-family: var(--sans); cursor: pointer;
+  transition: background .12s, color .12s; margin-bottom: 1px;
+}
+.filter-btn:hover { background: var(--bor); color: var(--txt); }
+.filter-btn.active { background: rgba(113,255,0,.08); color: var(--g); }
+.filter-btn:focus-visible { outline: 2px solid var(--g); outline-offset: 1px; }
+
+/* ── Scenario grid ── */
+.sc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 13px;
+}
+
+/* ── Scenario card ── */
+.sc-card {
+  background: var(--sur); border: 1px solid var(--bor);
+  border-left: 3px solid var(--bor);
+  border-radius: var(--radius); padding: 15px;
+  display: flex; flex-direction: column; gap: 9px;
+  transition: transform .12s, border-color .18s;
+}
+.sc-card:hover { transform: translateY(-1px); border-color: #242424; border-left-color: inherit; }
+.sc-card[data-s="PASS"]        { border-left-color: var(--pass); }
+.sc-card[data-s="FAIL"]        { border-left-color: var(--fail); }
+.sc-card[data-s="IN PROGRESS"] { border-left-color: var(--info); }
+
+.sc-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.sc-id  { font-family: var(--mono); font-size: .67rem; color: var(--muted); flex-shrink: 0; }
+.sc-title { font-size: .85rem; font-weight: 600; line-height: 1.35; }
+.sc-meta  { display: flex; flex-wrap: wrap; gap: 5px; }
+.sc-actions { display: flex; gap: 6px; margin-top: 2px; }
+
+/* ── Chips ── */
+.chip {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 20px;
+  font-size: .63rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .5px;
+  white-space: nowrap; line-height: 1.7;
+}
+/* status */
+.s-ns  { background: rgba(119,119,119,.11); color: #606060; }
+.s-ip  { background: rgba(33,150,243,.13);  color: #52a8f0; }
+.s-pass{ background: rgba(113,255,0,.12);   color: var(--g); }
+.s-fail{ background: rgba(244,67,54,.13);   color: #f07070; }
+/* priority */
+.p-critical { background: rgba(244,67,54,.12);  color: #f07070; }
+.p-high     { background: rgba(255,152,0,.12);   color: #ffa726; }
+.p-medium   { background: rgba(255,214,0,.10);   color: #ffd600; }
+.p-low      { background: rgba(119,119,119,.10); color: #888; }
+/* roles */
+.r-buyer          { background: rgba(74,144,217,.13);  color: #6aaee8; }
+.r-seller         { background: rgba(82,183,136,.13);  color: #6dc9a2; }
+.r-cashier        { background: rgba(232,168,56,.13);  color: #e8b84b; }
+.r-store-manager  { background: rgba(168,85,247,.13);  color: #c084fc; }
+.r-branch-manager { background: rgba(99,102,241,.13);  color: #848bf8; }
+.r-rider          { background: rgba(34,211,238,.13);  color: #22d3ee; }
+.r-driver         { background: rgba(45,212,191,.13);  color: #2dd4bf; }
+.r-admin          { background: rgba(248,113,113,.13); color: #f88080; }
+.r-super-admin    { background: rgba(251,191,36,.13);  color: #fbbf24; }
+/* categories */
+.c-onboarding { background: rgba(132,204,22,.12);  color: #a3e635; }
+.c-checkout   { background: rgba(16,185,129,.12);   color: #34d399; }
+.c-pos        { background: rgba(249,115,22,.12);   color: #fb923c; }
+.c-delivery   { background: rgba(59,130,246,.12);   color: #60a5fa; }
+.c-admin      { background: rgba(239,68,68,.10);    color: #fca5a5; }
+.c-payments   { background: rgba(139,92,246,.12);   color: #a78bfa; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 5px;
+  padding: 6px 12px; font-size: .74rem; font-weight: 600;
+  font-family: var(--sans); cursor: pointer; white-space: nowrap;
+  transition: opacity .13s, transform .1s; line-height: 1;
+}
+.btn:hover   { opacity: .8; }
+.btn:active  { transform: scale(.96); }
+.btn:focus-visible { outline: 2px solid var(--g); outline-offset: 2px; }
+.btn:disabled { opacity: .38; pointer-events: none; }
+.btn-sm { padding: 5px 10px; font-size: .7rem; }
+
+.btn-primary { background: var(--g);                          color: #000; }
+.btn-ghost   { background: var(--bor);                        color: var(--txt); }
+.btn-pass    { background: rgba(113,255,0,.11); border: 1px solid rgba(113,255,0,.25); color: var(--g); }
+.btn-fail    { background: rgba(244,67,54,.11); border: 1px solid rgba(244,67,54,.25); color: #f07070; }
+.btn-danger  { background: rgba(244,67,54,.11); border: 1px solid rgba(244,67,54,.25); color: #f07070; }
+.btn-resolve { background: rgba(113,255,0,.11); border: 1px solid rgba(113,255,0,.25); color: var(--g); }
+
+/* ── Panel ── */
+.panel {
+  background: var(--sur); border: 1px solid var(--bor);
+  border-radius: var(--radius); padding: 18px 20px;
+}
+.panel-title { font-size: .85rem; font-weight: 700; margin-bottom: 16px; }
+
+/* ── Form controls ── */
+.ff { margin-bottom: 13px; }
+.fl {
+  display: block; font-size: .65rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .7px;
+  color: var(--muted); margin-bottom: 5px;
+}
+.fc, .fs, .ft {
+  width: 100%; background: var(--bg); border: 1px solid var(--bor);
+  border-radius: 5px; padding: 7px 10px;
+  color: var(--txt); font-family: var(--sans);
+  font-size: .8rem; outline: none;
+  transition: border-color .15s;
+}
+.fc:focus, .fs:focus, .ft:focus { border-color: var(--g); }
+.fs {
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23777'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+  padding-right: 28px; cursor: pointer;
+}
+.fs option { background: #111; }
+.ft { resize: vertical; min-height: 70px; line-height: 1.5; }
+
+/* ── Table ── */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .77rem; }
+th {
+  text-align: left; padding: 8px 10px;
+  font-size: .63rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .8px;
+  color: var(--muted); border-bottom: 1px solid var(--bor);
+  white-space: nowrap;
+}
+td {
+  padding: 8px 10px; vertical-align: middle;
+  border-bottom: 1px solid rgba(26,26,26,.55);
+  font-variant-numeric: tabular-nums;
+}
+tr:hover td { background: rgba(255,255,255,.012); }
+.td-mono  { font-family: var(--mono); font-size: .68rem; color: var(--muted); }
+.td-title { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Session rows ── */
+.sess-row {
+  display: flex; justify-content: space-between;
+  align-items: center; gap: 10px;
+  padding: 11px 13px; background: var(--bg);
+  border: 1px solid var(--bor); border-radius: 6px;
+  margin-bottom: 7px;
+}
+.sess-name { font-weight: 600; font-size: .84rem; }
+.sess-meta { font-size: .7rem; color: var(--muted); margin-top: 2px; }
+.sess-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--g); flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(113,255,0,.55);
+  animation: glow 2s ease-in-out infinite;
+}
+@keyframes glow {
+  0%,100% { opacity:1; box-shadow: 0 0 6px rgba(113,255,0,.55); }
+  50%      { opacity:.45; box-shadow: 0 0 3px rgba(113,255,0,.3); }
+}
+
+/* ── Report ── */
+.report-stats {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  gap: 12px; margin-bottom: 18px;
+}
+.rstat {
+  background: var(--bg); border: 1px solid var(--bor);
+  border-radius: var(--radius); padding: 14px; text-align: center;
+}
+.rstat-val {
+  font-size: 1.8rem; font-weight: 800;
+  font-family: var(--mono); color: var(--g); line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.rstat-lbl { font-size: .65rem; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; margin-top: 5px; }
+
+.r-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+.sec-label {
+  font-size: .63rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--muted); margin-bottom: 13px;
+}
+
+/* Bar chart */
+.bar-row   { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.bar-lbl   { width: 128px; font-size: .76rem; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { flex: 1; height: 5px; background: var(--bor); border-radius: 3px; overflow: hidden; }
+.bar-fill  { height: 100%; background: var(--g); border-radius: 3px; width: 0; transition: width .75s cubic-bezier(.25,1,.5,1); }
+.bar-pct   { width: 36px; font-family: var(--mono); font-size: .7rem; color: var(--muted); text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+/* Open issues */
+.open-issue {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 11px; background: var(--bg);
+  border: 1px solid var(--bor); border-radius: 5px;
+  margin-bottom: 5px; font-size: .77rem;
+}
+.open-issue span:last-child { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Recommendation items */
+.rec-item {
+  display: flex; gap: 9px; align-items: flex-start;
+  padding: 7px 0; border-top: 1px solid var(--bor);
+  font-size: .78rem; color: var(--muted); line-height: 1.5;
+}
+.rec-item:first-child { border-top: none; }
+.rec-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); flex-shrink: 0; margin-top: 8px; }
+
+/* ── Empty / Loading ── */
+.empty {
+  text-align: center; padding: 36px 20px;
+  color: var(--muted); font-size: .8rem;
+  background: var(--sur); border-radius: var(--radius);
+  border: 1px dashed var(--bor);
+}
+.loading-msg { text-align: center; padding: 36px; color: var(--muted); font-size: .8rem; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: 22px; right: 22px;
+  background: var(--sur); border: 1px solid var(--bor);
+  border-radius: 7px; padding: 10px 15px;
+  font-size: .8rem; color: var(--txt);
+  transform: translateY(60px); opacity: 0;
+  transition: transform .24s, opacity .24s;
+  z-index: 9999; max-width: 280px; pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.t-ok  { border-left: 3px solid var(--g); }
+.toast.t-err { border-left: 3px solid var(--fail); }
+
+/* ── Responsive ── */
+@media (max-width: 960px) {
+  .layout-sc, .layout-2col, .layout-sess { grid-template-columns: 1fr; }
+  .sidebar { position: static; }
+  .r-2col  { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .kpi-strip   { grid-template-columns: 1fr 1fr; }
+  .report-stats{ grid-template-columns: 1fr 1fr; }
+  .main        { padding: 14px 16px; }
+  .pg-header   { padding: 0 16px; }
+  .tab-btn     { padding: 9px 12px; font-size: .75rem; }
+  .sc-grid     { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar-fill, .spinner, .sess-dot { animation: none; transition: none; }
+}
+</style>
+
+<body>
+
+<div id="auth-overlay"><div class="spinner"></div>Verifying access…</div>
+
+<!-- PAGE HEADER -->
+<header class="pg-header">
+  <h1>UAT Center<span class="sub">— User Acceptance Testing</span></h1>
+  <div class="pg-header-right">
+    <div class="status-badge">
+      <span><b id="b-total">—</b> scenarios</span>
+      <span>·</span>
+      <span><b id="b-done">—</b> completed</span>
+      <span>·</span>
+      <span><b id="b-issues">—</b> issues</span>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- KPI STRIP -->
+  <div class="kpi-strip">
+    <div class="kpi-card"><div class="kpi-val" id="k-total">—</div><div class="kpi-lbl">Total Scenarios</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="k-done">—</div><div class="kpi-lbl">Completed</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="k-issues">—</div><div class="kpi-lbl">Issues Found</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="k-rate">—</div><div class="kpi-lbl">Pass Rate</div></div>
+  </div>
+
+  <!-- TABS -->
+  <nav class="tab-nav" role="tablist">
+    <button class="tab-btn active" data-tab="scenarios" role="tab">Scenarios</button>
+    <button class="tab-btn" data-tab="issues" role="tab">Issues</button>
+    <button class="tab-btn" data-tab="sessions" role="tab">Sessions</button>
+    <button class="tab-btn" data-tab="report" role="tab">Report</button>
+  </nav>
+
+  <!-- ═══ TAB 1: SCENARIOS ═══ -->
+  <div class="tab-panel active" id="tab-scenarios">
+    <div class="layout-sc">
+
+      <nav class="sidebar">
+        <div class="sidebar-label">Filter by Role</div>
+        <button class="filter-btn active" data-role="All Roles">All Roles</button>
+        <button class="filter-btn" data-role="Buyer">Buyer</button>
+        <button class="filter-btn" data-role="Seller">Seller</button>
+        <button class="filter-btn" data-role="Cashier">Cashier</button>
+        <button class="filter-btn" data-role="Store Manager">Store Manager</button>
+        <button class="filter-btn" data-role="Branch Manager">Branch Manager</button>
+        <button class="filter-btn" data-role="Rider">Rider</button>
+        <button class="filter-btn" data-role="Driver">Driver</button>
+        <button class="filter-btn" data-role="Admin">Admin</button>
+        <button class="filter-btn" data-role="Super Admin">Super Admin</button>
+      </nav>
+
+      <div id="scenarios-grid" class="sc-grid">
+        <div class="loading-msg">Loading scenarios…</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ TAB 2: ISSUES ═══ -->
+  <div class="tab-panel" id="tab-issues">
+    <div class="layout-2col">
+
+      <div class="panel">
+        <div class="panel-title">Log New Issue</div>
+
+        <div class="ff"><label class="fl" for="i-sc">Scenario</label>
+          <select class="fs" id="i-sc"><option value="">Select scenario…</option></select></div>
+
+        <div class="ff"><label class="fl" for="i-sev">Severity</label>
+          <select class="fs" id="i-sev">
+            <option>Critical</option><option>High</option>
+            <option selected>Medium</option><option>Low</option>
+          </select></div>
+
+        <div class="ff"><label class="fl" for="i-title">Title</label>
+          <input class="fc" id="i-title" type="text" placeholder="Brief description" maxlength="200"></div>
+
+        <div class="ff"><label class="fl" for="i-steps">Steps to Reproduce</label>
+          <textarea class="ft" id="i-steps" placeholder="1. Navigate to…&#10;2. Click on…&#10;3. Observe that…"></textarea></div>
+
+        <div class="ff"><label class="fl" for="i-expect">Expected vs Actual</label>
+          <textarea class="ft" id="i-expect" placeholder="Expected: …&#10;Actual: …"></textarea></div>
+
+        <div class="ff"><label class="fl" for="i-stat">Status</label>
+          <select class="fs" id="i-stat">
+            <option>Open</option><option>In Progress</option><option>Resolved</option>
+          </select></div>
+
+        <button class="btn btn-primary" id="iss-btn" onclick="submitIssue()">Submit Issue</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Logged Issues</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Scenario</th><th>Severity</th>
+              <th>Title</th><th>Status</th><th>Reporter</th>
+              <th>Date</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="issues-tbody">
+              <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ TAB 3: SESSIONS ═══ -->
+  <div class="tab-panel" id="tab-sessions">
+    <div class="layout-sess">
+
+      <div class="panel">
+        <div class="panel-title">Start UAT Session</div>
+
+        <div class="ff"><label class="fl" for="s-name">Tester Name</label>
+          <input class="fc" id="s-name" type="text" placeholder="Full name" maxlength="100"></div>
+
+        <div class="ff"><label class="fl" for="s-role">Testing Role</label>
+          <select class="fs" id="s-role">
+            <option>Buyer</option><option>Seller</option><option>Cashier</option>
+            <option>Store Manager</option><option>Branch Manager</option>
+            <option>Rider</option><option>Driver</option>
+            <option>Admin</option><option>Super Admin</option>
+          </select></div>
+
+        <div class="ff"><label class="fl" for="s-notes">Notes (optional)</label>
+          <textarea class="ft" id="s-notes" placeholder="Device, environment, test focus…"></textarea></div>
+
+        <button class="btn btn-primary" onclick="startSession()">Start UAT Session</button>
+      </div>
+
+      <div>
+        <div class="panel" style="margin-bottom:14px">
+          <div class="panel-title">Active Sessions</div>
+          <div id="active-sessions"><div class="empty" style="margin:0">No active sessions</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Completed Sessions</div>
+          <div id="done-sessions"><div class="empty" style="margin:0">No completed sessions yet</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ TAB 4: REPORT ═══ -->
+  <div class="tab-panel" id="tab-report">
+
+    <div class="panel" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:18px">
+        <div class="panel-title" style="margin:0">UAT Summary Report</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="exportReport()">Export JSON</button>
+          <button class="btn btn-primary" onclick="markComplete()">Mark UAT Complete</button>
+        </div>
+      </div>
+      <div class="report-stats">
+        <div class="rstat"><div class="rstat-val" id="r-pass">—</div><div class="rstat-lbl">Scenarios Passed</div></div>
+        <div class="rstat"><div class="rstat-val" id="r-fail">—</div><div class="rstat-lbl">Scenarios Failed</div></div>
+        <div class="rstat"><div class="rstat-val" id="r-rate">—</div><div class="rstat-lbl">Pass Rate</div></div>
+      </div>
+    </div>
+
+    <div class="r-2col">
+      <div class="panel">
+        <div class="sec-label">Pass Rate by Role</div>
+        <div id="r-role-bars"><div class="loading-msg" style="padding:16px">Computing…</div></div>
+      </div>
+      <div class="panel">
+        <div class="sec-label">Pass Rate by Category</div>
+        <div id="r-cat-bars"><div class="loading-msg" style="padding:16px">Computing…</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="sec-label">Open Critical / High Issues (<span id="r-open-n">0</span>)</div>
+      <div id="r-open-list"></div>
+      <div style="margin-top:18px;padding-top:15px;border-top:1px solid var(--bor)">
+        <div class="sec-label">Recommendations</div>
+        <div id="r-recs"></div>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /.main -->
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+
+/* ── XSS safety ── */
+function esc(v) {
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(String(v == null ? '' : v)));
+  return d.innerHTML;
+}
+
+/* ── Scenario definitions (source of truth) ── */
+const SCENARIOS = [
+  { id:'UAT-001', title:'Account registration and profile setup',    role:'Buyer',         cat:'Onboarding', pri:'CRITICAL' },
+  { id:'UAT-002', title:'Browse marketplace and add to cart',         role:'Buyer',         cat:'Checkout',   pri:'HIGH'     },
+  { id:'UAT-003', title:'Complete M-PESA checkout',                   role:'Buyer',         cat:'Payments',   pri:'CRITICAL' },
+  { id:'UAT-004', title:'Track order delivery in real-time',          role:'Buyer',         cat:'Delivery',   pri:'HIGH'     },
+  { id:'UAT-005', title:'Submit product review',                      role:'Buyer',         cat:'Onboarding', pri:'MEDIUM'   },
+  { id:'UAT-006', title:'Create seller account and store',            role:'Seller',        cat:'Onboarding', pri:'CRITICAL' },
+  { id:'UAT-007', title:'Add product with images and pricing',        role:'Seller',        cat:'Onboarding', pri:'HIGH'     },
+  { id:'UAT-008', title:'Process incoming order',                     role:'Seller',        cat:'Checkout',   pri:'CRITICAL' },
+  { id:'UAT-009', title:'View earnings dashboard',                    role:'Seller',        cat:'Admin',      pri:'HIGH'     },
+  { id:'UAT-010', title:'Chat with buyer about order',                role:'Seller',        cat:'Onboarding', pri:'MEDIUM'   },
+  { id:'UAT-011', title:'Open POS session',                           role:'Cashier',       cat:'POS',        pri:'CRITICAL' },
+  { id:'UAT-012', title:'Process cash sale with receipt',             role:'Cashier',       cat:'POS',        pri:'CRITICAL' },
+  { id:'UAT-013', title:'Process M-PESA payment via POS',            role:'Cashier',       cat:'Payments',   pri:'CRITICAL' },
+  { id:'UAT-014', title:'Apply discount code',                        role:'Cashier',       cat:'POS',        pri:'HIGH'     },
+  { id:'UAT-015', title:'Process return and refund',                  role:'Cashier',       cat:'POS',        pri:'HIGH'     },
+  { id:'UAT-016', title:'View daily POS report',                      role:'Store Manager', cat:'Admin',      pri:'HIGH'     },
+  { id:'UAT-017', title:'Manage staff PINs and permissions',          role:'Store Manager', cat:'Admin',      pri:'HIGH'     },
+  { id:'UAT-018', title:'Check inventory levels and alerts',          role:'Store Manager', cat:'Admin',      pri:'MEDIUM'   },
+  { id:'UAT-019', title:'Accept delivery assignment',                 role:'Rider',         cat:'Delivery',   pri:'CRITICAL' },
+  { id:'UAT-020', title:'Complete delivery with signature',           role:'Rider',         cat:'Delivery',   pri:'CRITICAL' },
+  { id:'UAT-021', title:'Report delivery issue',                      role:'Rider',         cat:'Delivery',   pri:'HIGH'     },
+  { id:'UAT-022', title:'Approve seller account',                     role:'Admin',         cat:'Admin',      pri:'CRITICAL' },
+  { id:'UAT-023', title:'Handle customer dispute',                    role:'Admin',         cat:'Admin',      pri:'HIGH'     },
+  { id:'UAT-024', title:'View platform analytics dashboard',          role:'Admin',         cat:'Admin',      pri:'HIGH'     },
+];
+
+/* ── State ── */
+let db, auth, currentUser;
+let scenarios   = SCENARIOS.map(s => ({ ...s, status: 'NOT STARTED' }));
+let issueData   = [];
+let sessionData = [];
+let activeRole  = 'All Roles';
+let issueUnsub, sessUnsub;
+
+/* ── Firebase init ── */
+if (!firebase.apps.length) firebase.initializeApp(window.SOKONI_CONFIG || {});
+db   = firebase.firestore();
+auth = firebase.auth();
+
+/* ── Auth guard ── */
+auth.onAuthStateChanged(async user => {
+  if (!user) { location.href = '/login.html'; return; }
+  try {
+    const tok = await user.getIdTokenResult();
+    if (!tok.claims.admin && !tok.claims.superAdmin) { location.href = '/login.html'; return; }
+    currentUser = user;
+    document.getElementById('auth-overlay').style.display = 'none';
+    init();
+  } catch (e) {
+    console.error('[UAT] auth', e);
+    location.href = '/login.html';
+  }
+});
+
+/* ── Init ── */
+async function init() {
+  populateIssueSelect();
+  await loadScenarios();
+  listenIssues();
+  listenSessions();
+}
+
+/* ═══ TAB SYSTEM ══════════════════════════════ */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'report') renderReport();
+  });
+});
+
+/* ═══ SCENARIOS ═══════════════════════════════ */
+async function loadScenarios() {
+  try {
+    const snap = await db.collection('uatScenarios').get();
+    const map  = {};
+    snap.forEach(d => { map[d.id] = d.data(); });
+    scenarios = SCENARIOS.map(s => ({
+      ...s,
+      status: map[s.id]?.status || 'NOT STARTED',
+    }));
+  } catch (e) {
+    console.error('[UAT] loadScenarios', e);
+    toast('Could not load scenario data', 'err');
+  }
+  updateKPIs();
+  renderScenarios();
+}
+
+async function updateScenario(id, status) {
+  try {
+    await db.collection('uatScenarios').doc(id).set({
+      status,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.email,
+    }, { merge: true });
+    const idx = scenarios.findIndex(s => s.id === id);
+    if (idx !== -1) scenarios[idx].status = status;
+    updateKPIs();
+    renderScenarios();
+    toast(id + ' — ' + status, 'ok');
+  } catch (e) {
+    console.error('[UAT] updateScenario', e);
+    toast('Update failed', 'err');
+  }
+}
+
+function statusChipClass(status) {
+  return { 'NOT STARTED':'s-ns', 'IN PROGRESS':'s-ip', 'PASS':'s-pass', 'FAIL':'s-fail' }[status] || 's-ns';
+}
+function roleChipClass(role)   { return 'r-' + role.toLowerCase().replace(/ /g, '-'); }
+function catChipClass(cat)     { return 'c-' + cat.toLowerCase(); }
+function priChipClass(pri)     { return 'p-' + pri.toLowerCase(); }
+
+function renderScenarios() {
+  const grid     = document.getElementById('scenarios-grid');
+  const filtered = activeRole === 'All Roles'
+    ? scenarios
+    : scenarios.filter(s => s.role === activeRole);
+
+  if (!filtered.length) {
+    grid.innerHTML = '<div class="empty">No scenarios for this role.</div>';
+    return;
+  }
+
+  grid.innerHTML = filtered.map(s => {
+    let actions = '';
+    if (s.status === 'NOT STARTED') {
+      actions = `<button class="btn btn-ghost btn-sm" onclick="updateScenario('${esc(s.id)}','IN PROGRESS')">Start Test</button>`;
+    } else if (s.status === 'IN PROGRESS') {
+      actions = `<button class="btn btn-pass btn-sm" onclick="updateScenario('${esc(s.id)}','PASS')">Mark Pass</button>
+                 <button class="btn btn-fail btn-sm" onclick="updateScenario('${esc(s.id)}','FAIL')">Mark Fail</button>`;
+    } else {
+      actions = `<button class="btn btn-ghost btn-sm" onclick="updateScenario('${esc(s.id)}','IN PROGRESS')">Re-test</button>`;
+    }
+
+    return `<div class="sc-card" data-s="${esc(s.status)}">
+      <div class="sc-top">
+        <span class="sc-id">${esc(s.id)}</span>
+        <span class="chip ${statusChipClass(s.status)}">${esc(s.status)}</span>
+      </div>
+      <div class="sc-title">${esc(s.title)}</div>
+      <div class="sc-meta">
+        <span class="chip ${esc(roleChipClass(s.role))}">${esc(s.role)}</span>
+        <span class="chip ${esc(catChipClass(s.cat))}">${esc(s.cat)}</span>
+        <span class="chip ${esc(priChipClass(s.pri))}">${esc(s.pri)}</span>
+      </div>
+      <div class="sc-actions">${actions}</div>
+    </div>`;
+  }).join('');
+}
+
+/* Role filter */
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeRole = btn.dataset.role;
+    renderScenarios();
+  });
+});
+
+/* KPIs */
+function updateKPIs() {
+  const total  = scenarios.length;
+  const passed = scenarios.filter(s => s.status === 'PASS').length;
+  const done   = scenarios.filter(s => s.status === 'PASS' || s.status === 'FAIL').length;
+  const rate   = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+  set('k-total',  total);    set('b-total', total);
+  set('k-done',   done);     set('b-done',  done);
+  set('k-issues', issueData.length); set('b-issues', issueData.length);
+  set('k-rate',   rate + '%');
+}
+function set(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
+
+/* ═══ ISSUES ══════════════════════════════════ */
+function populateIssueSelect() {
+  const sel = document.getElementById('i-sc');
+  SCENARIOS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.id + ' — ' + s.title;
+    sel.appendChild(opt);
+  });
+}
+
+function listenIssues() {
+  if (issueUnsub) issueUnsub();
+  issueUnsub = db.collection('uatIssues')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snap => {
+      issueData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      updateKPIs();
+      renderIssues();
+    }, e => { console.error('[UAT] issues', e); toast('Issues feed error', 'err'); });
+}
+
+async function submitIssue() {
+  const scId   = document.getElementById('i-sc').value;
+  const sev    = document.getElementById('i-sev').value;
+  const title  = document.getElementById('i-title').value.trim();
+  const steps  = document.getElementById('i-steps').value.trim();
+  const expect = document.getElementById('i-expect').value.trim();
+  const stat   = document.getElementById('i-stat').value;
+
+  if (!scId)  { toast('Select a scenario', 'err'); return; }
+  if (!title) { toast('Title is required', 'err'); return; }
+
+  const btn = document.getElementById('iss-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
+  try {
+    await db.collection('uatIssues').add({
+      scenarioId: scId, severity: sev, title, steps,
+      expected: expect, status: stat,
+      reporter:  currentUser.email,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    document.getElementById('i-sc').value    = '';
+    document.getElementById('i-title').value = '';
+    document.getElementById('i-steps').value = '';
+    document.getElementById('i-expect').value= '';
+    toast('Issue logged', 'ok');
+  } catch (e) {
+    console.error('[UAT] submitIssue', e);
+    toast('Submit failed', 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit Issue';
+  }
+}
+
+function renderIssues() {
+  const tb = document.getElementById('issues-tbody');
+  if (!issueData.length) {
+    tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">No issues logged yet.</td></tr>';
+    return;
+  }
+  tb.innerHTML = issueData.map((issue, i) => {
+    const sevCls = priChipClass(issue.severity || 'medium');
+    const stCls  = issue.status === 'Resolved'    ? 's-pass'
+                 : issue.status === 'In Progress'  ? 's-ip'
+                 : 's-ns';
+    const dt = issue.createdAt?.toDate
+      ? issue.createdAt.toDate().toLocaleDateString('en-KE', { day:'2-digit', month:'short' })
+      : '—';
+    const reporter = (issue.reporter || '').split('@')[0];
+    const resolveBtn = issue.status !== 'Resolved'
+      ? `<button class="btn btn-resolve btn-sm" onclick="resolveIssue('${esc(issue.id)}')">Resolve</button>`
+      : '';
+    return `<tr>
+      <td class="td-mono">${String(i + 1).padStart(3, '0')}</td>
+      <td class="td-mono">${esc(issue.scenarioId || '—')}</td>
+      <td><span class="chip ${esc(sevCls)}">${esc(issue.severity || '—')}</span></td>
+      <td class="td-title" title="${esc(issue.title)}">${esc(issue.title || '—')}</td>
+      <td><span class="chip ${esc(stCls)}">${esc(issue.status || 'Open')}</span></td>
+      <td style="color:var(--muted)">${esc(reporter)}</td>
+      <td style="color:var(--muted)">${esc(dt)}</td>
+      <td><div style="display:flex;gap:5px">${resolveBtn}
+        <button class="btn btn-danger btn-sm" onclick="deleteIssue('${esc(issue.id)}')">Delete</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function resolveIssue(id) {
+  try {
+    await db.collection('uatIssues').doc(id).update({
+      status: 'Resolved',
+      resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      resolvedBy: currentUser.email,
+    });
+    toast('Issue resolved', 'ok');
+  } catch (e) { toast('Could not resolve issue', 'err'); }
+}
+
+async function deleteIssue(id) {
+  if (!confirm('Delete this issue permanently?')) return;
+  try {
+    await db.collection('uatIssues').doc(id).delete();
+    toast('Issue deleted', 'ok');
+  } catch (e) { toast('Could not delete issue', 'err'); }
+}
+
+/* ═══ SESSIONS ════════════════════════════════ */
+function listenSessions() {
+  if (sessUnsub) sessUnsub();
+  sessUnsub = db.collection('uatSessions')
+    .orderBy('startedAt', 'desc')
+    .onSnapshot(snap => {
+      sessionData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderSessions();
+    }, e => console.error('[UAT] sessions', e));
+}
+
+async function startSession() {
+  const name  = document.getElementById('s-name').value.trim();
+  const role  = document.getElementById('s-role').value;
+  const notes = document.getElementById('s-notes').value.trim();
+  if (!name) { toast('Tester name required', 'err'); return; }
+  try {
+    await db.collection('uatSessions').add({
+      testerName: name, testerRole: role, notes,
+      testerEmail: currentUser.email,
+      status: 'Active',
+      startedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      completedAt: null,
+    });
+    document.getElementById('s-name').value  = '';
+    document.getElementById('s-notes').value = '';
+    toast('Session started for ' + name, 'ok');
+  } catch (e) {
+    console.error('[UAT] startSession', e);
+    toast('Could not start session', 'err');
+  }
+}
+
+async function completeSession(id) {
+  try {
+    await db.collection('uatSessions').doc(id).update({
+      status: 'Completed',
+      completedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    toast('Session completed', 'ok');
+  } catch (e) { toast('Could not end session', 'err'); }
+}
+
+function renderSessions() {
+  const active = sessionData.filter(s => s.status === 'Active');
+  const done   = sessionData.filter(s => s.status === 'Completed' && s.type !== 'UAT_COMPLETION');
+
+  const activeEl = document.getElementById('active-sessions');
+  activeEl.innerHTML = active.length
+    ? active.map(s => `
+      <div class="sess-row">
+        <div>
+          <div class="sess-name">${esc(s.testerName)}</div>
+          <div class="sess-meta">${esc(s.testerRole)} · ${esc((s.testerEmail || '').split('@')[0])}</div>
+          ${s.notes ? `<div class="sess-meta" style="margin-top:3px">${esc(s.notes)}</div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:9px">
+          <div class="sess-dot"></div>
+          <button class="btn btn-ghost btn-sm" onclick="completeSession('${esc(s.id)}')">End</button>
+        </div>
+      </div>`).join('')
+    : '<div class="empty" style="margin:0;padding:20px">No active sessions</div>';
+
+  const doneEl = document.getElementById('done-sessions');
+  doneEl.innerHTML = done.length
+    ? done.map(s => {
+        const dt = s.completedAt?.toDate
+          ? s.completedAt.toDate().toLocaleString('en-KE', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+          : '—';
+        return `<div class="sess-row">
+          <div>
+            <div class="sess-name">${esc(s.testerName)}</div>
+            <div class="sess-meta">${esc(s.testerRole)}</div>
+          </div>
+          <div style="font-size:.7rem;color:var(--muted);font-family:var(--mono)">${esc(dt)}</div>
+        </div>`;
+      }).join('')
+    : '<div class="empty" style="margin:0;padding:20px">No completed sessions yet</div>';
+}
+
+/* ═══ REPORT ══════════════════════════════════ */
+function renderReport() {
+  const total  = scenarios.length;
+  const passed = scenarios.filter(s => s.status === 'PASS').length;
+  const failed = scenarios.filter(s => s.status === 'FAIL').length;
+  const rate   = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+  set('r-pass', passed);
+  set('r-fail', failed);
+  set('r-rate', rate + '%');
+
+  /* Role bars */
+  const roles = [...new Set(SCENARIOS.map(s => s.role))];
+  document.getElementById('r-role-bars').innerHTML = roles.map(role => {
+    const t = scenarios.filter(s => s.role === role).length;
+    const p = scenarios.filter(s => s.role === role && s.status === 'PASS').length;
+    return barRow(role, t > 0 ? Math.round((p / t) * 100) : 0);
+  }).join('');
+
+  /* Category bars */
+  const cats = [...new Set(SCENARIOS.map(s => s.cat))];
+  document.getElementById('r-cat-bars').innerHTML = cats.map(cat => {
+    const t = scenarios.filter(s => s.cat === cat).length;
+    const p = scenarios.filter(s => s.cat === cat && s.status === 'PASS').length;
+    return barRow(cat, t > 0 ? Math.round((p / t) * 100) : 0);
+  }).join('');
+
+  /* Animate bars */
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.bar-fill[data-pct]').forEach(el => {
+      el.style.width = el.dataset.pct + '%';
+    });
+  });
+
+  /* Open critical/high issues */
+  const open = issueData.filter(i => i.status !== 'Resolved' && (i.severity === 'Critical' || i.severity === 'High'));
+  set('r-open-n', open.length);
+  const openEl = document.getElementById('r-open-list');
+  openEl.innerHTML = open.length
+    ? open.map(i => `<div class="open-issue">
+        <span class="chip ${esc(priChipClass(i.severity || 'high'))}">${esc(i.severity)}</span>
+        <span class="td-mono">${esc(i.scenarioId || '—')}</span>
+        <span>${esc(i.title || '—')}</span>
+      </div>`).join('')
+    : '<div style="color:var(--g);font-size:.78rem;padding:8px 0">No open critical or high-severity issues.</div>';
+
+  /* Recommendations */
+  const recs = [];
+  const untested = scenarios.filter(s => s.status === 'NOT STARTED').length;
+  if (untested > 0) recs.push(`${untested} scenario(s) not yet started — full coverage required before sign-off.`);
+  if (failed > 0)   recs.push(`${failed} scenario(s) failed — investigate and retest before launch.`);
+  if (open.length)  recs.push(`${open.length} critical/high issue(s) remain open — resolve before release.`);
+  if (rate < 80 && total > 0) recs.push('Pass rate is below 80%. Additional testing cycles recommended.');
+  if (rate === 100 && total > 0 && !open.length) recs.push('All scenarios passed with no open critical issues. Ready for launch sign-off.');
+  if (!recs.length) recs.push('UAT is progressing. Continue testing until all scenarios are covered.');
+
+  document.getElementById('r-recs').innerHTML = recs
+    .map(r => `<div class="rec-item"><div class="rec-dot"></div><span>${esc(r)}</span></div>`)
+    .join('');
+}
+
+function barRow(label, pct) {
+  return `<div class="bar-row">
+    <span class="bar-lbl" title="${esc(label)}">${esc(label)}</span>
+    <div class="bar-track"><div class="bar-fill" data-pct="${pct}" style="width:0%"></div></div>
+    <span class="bar-pct">${pct}%</span>
+  </div>`;
+}
+
+/* ── Export ── */
+function exportReport() {
+  const data = {
+    generated:  new Date().toISOString(),
+    generatedBy: currentUser?.email,
+    summary: {
+      total:      scenarios.length,
+      passed:     scenarios.filter(s => s.status === 'PASS').length,
+      failed:     scenarios.filter(s => s.status === 'FAIL').length,
+      inProgress: scenarios.filter(s => s.status === 'IN PROGRESS').length,
+      notStarted: scenarios.filter(s => s.status === 'NOT STARTED').length,
+    },
+    scenarios,
+    issues:   issueData,
+    sessions: sessionData,
+  };
+  const a = Object.assign(document.createElement('a'), {
+    href:     URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })),
+    download: 'sokoni-uat-' + new Date().toISOString().slice(0, 10) + '.json',
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Report exported', 'ok');
+}
+
+async function markComplete() {
+  if (!confirm('Record this UAT cycle as complete? Cannot be undone.')) return;
+  try {
+    const passed = scenarios.filter(s => s.status === 'PASS').length;
+    const failed = scenarios.filter(s => s.status === 'FAIL').length;
+    await db.collection('uatSessions').add({
+      type: 'UAT_COMPLETION',
+      testerName:  currentUser.displayName || currentUser.email,
+      testerRole:  'Admin',
+      testerEmail: currentUser.email,
+      status: 'Completed',
+      summary: { total: scenarios.length, passed, failed, issues: issueData.length },
+      startedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+      completedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    toast('UAT cycle recorded as complete', 'ok');
+  } catch (e) {
+    console.error('[UAT] markComplete', e);
+    toast('Could not record completion', 'err');
+  }
+}
+
+/* ── Toast ── */
+let _tTimer;
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = 'toast t-' + (type || 'ok') + ' show';
+  clearTimeout(_tTimer);
+  _tTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
+</script>
+
+</body>
+</html>

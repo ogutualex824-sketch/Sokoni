@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Compliance Portal — SOKONI Security</title>
+<script src="firebase.js"></script>
+<style>
+:root{
+  --bg:#080808;--surface:#0e0e12;--card:rgba(255,255,255,0.04);
+  --border:rgba(255,255,255,0.08);--accent:#71ff00;
+  --text:rgba(255,255,255,0.9);--muted:rgba(255,255,255,0.45);
+  --pass:#4ade80;--warn:#fbbf24;--fail:#f87171;
+  --r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+.hdr{height:56px;background:rgba(8,8,8,0.95);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:14px;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+.hdr .logo{font-size:13px;font-weight:800;letter-spacing:0.08em;color:var(--accent)}
+.hdr h1{font-size:16px;font-weight:700}
+.hdr .back{font-size:13px;color:var(--muted);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:8px;margin-left:auto}
+.body{max-width:1100px;margin:0 auto;padding:28px 20px 80px}
+.section-title{font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin:32px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:24px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.card-title{font-size:14px;font-weight:700}
+.chip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;letter-spacing:0.06em;text-transform:uppercase}
+.chip-pass{background:rgba(74,222,128,0.12);color:var(--pass);border:1px solid rgba(74,222,128,0.2)}
+.chip-partial{background:rgba(251,191,36,0.12);color:var(--warn);border:1px solid rgba(251,191,36,0.2)}
+.chip-planned{background:rgba(255,255,255,0.06);color:var(--muted);border:1px solid var(--border)}
+.card-body{font-size:13px;color:var(--muted);line-height:1.6}
+.check-list{list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.check-list li{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5}
+.check-list li::before{content:'✓';color:var(--pass);flex-shrink:0;font-weight:700;margin-top:1px}
+.check-list li.warn::before{content:'△';color:var(--warn)}
+.check-list li.plan::before{content:'○';color:var(--muted)}
+.table-wrap{overflow-x:auto;margin-bottom:24px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle}
+tr:hover td{background:rgba(255,255,255,0.02)}
+.score-banner{background:linear-gradient(135deg,#0e0e12,rgba(113,255,0,0.06));border:1px solid rgba(113,255,0,0.2);border-radius:14px;padding:24px 28px;margin-bottom:24px;display:flex;align-items:center;gap:28px;flex-wrap:wrap}
+.score-num{font-size:56px;font-weight:800;color:var(--accent);line-height:1;font-family:ui-monospace,monospace}
+.score-meta h2{font-size:18px;font-weight:700;margin-bottom:4px}
+.score-meta p{font-size:13px;color:var(--muted);line-height:1.6}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <span class="logo">SOKONI</span>
+  <h1>Compliance &amp; Privacy Portal</h1>
+  <a href="security-center.html" class="back">← SOC</a>
+</header>
+
+<div class="body">
+
+  <div class="score-banner">
+    <div class="score-num">90</div>
+    <div class="score-meta">
+      <h2>Enterprise Compliance Posture — Grade A−</h2>
+      <p>Security 6.0 delivers financial-grade Zero Trust for SOKONI's marketplace, SmartPOS, payments, logistics, and AI services. All core controls are implemented and verified. Three items remain for A+ certification.</p>
+    </div>
+  </div>
+
+  <div class="section-title">Access Control &amp; Identity</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Authentication</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">Multi-factor authentication with TOTP, WebAuthn/Passkeys, and risk-based step-up challenges.</div>
+      <ul class="check-list">
+        <li>Firebase Auth + custom claims for role management</li>
+        <li>TOTP MFA (RFC 6238) — `securityMFA` collection</li>
+        <li>WebAuthn / FIDO2 Passkeys — `securityPasskeys` collection</li>
+        <li>Trusted device registry — trust scores 0–100</li>
+        <li>Adaptive auth: step-up on high-value actions</li>
+        <li>Remember-me with device binding</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Access Control</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">Attribute-Based Access Control (ABAC) via `evaluateAccessRequest` CF — role + device + session + risk + amount.</div>
+      <ul class="check-list">
+        <li>7-level role hierarchy: guest → super_admin</li>
+        <li>Firestore rules: owner-only, branch-isolated, CF-write-only</li>
+        <li>No wildcard grants — every collection explicit</li>
+        <li>Firestore v2 default-deny on unmatched paths</li>
+        <li>Admin privileges enforced via Firebase custom claims only</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Session Management</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">Enterprise session lifecycle: creation, rotation, anomaly detection, and remote revocation.</div>
+      <ul class="check-list">
+        <li>Server-side session records — `securitySessions` collection</li>
+        <li>Session rotation to prevent fixation attacks</li>
+        <li>Impossible travel detection (IP geo-anomaly)</li>
+        <li>Remote logout — terminateAllSessions CF</li>
+        <li>Device-level session revocation</li>
+        <li>Scheduled cleanup of expired sessions (24h)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title">Data Protection &amp; Privacy</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Data in Transit</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">All data encrypted in transit via Firebase's enforced TLS 1.2+ infrastructure.</div>
+      <ul class="check-list">
+        <li>HSTS: max-age=63072000; includeSubDomains; preload</li>
+        <li>Firebase Hosting enforces HTTPS — no HTTP fallback</li>
+        <li>Redis TLS (when REDIS_URL configured)</li>
+        <li>Cloud Functions HTTPS-only endpoints</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Data at Rest</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">Google Cloud managed encryption at rest for Firestore, Storage, and Cloud Functions environment.</div>
+      <ul class="check-list">
+        <li>Firestore: AES-256 encryption at rest (GCP managed)</li>
+        <li>Firebase Storage: AES-256 at rest</li>
+        <li>eTIMS credentials: AES-256-GCM application-layer encryption</li>
+        <li>Secrets stored in GCP Secret Manager (16 secrets)</li>
+        <li>No plaintext credentials in codebase</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Data Retention</span><span class="chip chip-partial">Partial</span></div>
+      <div class="card-body">Retention policies defined; automated enforcement partially implemented.</div>
+      <ul class="check-list">
+        <li>Firestore PITR enabled (point-in-time recovery)</li>
+        <li>Sessions auto-expire after 7 days inactivity</li>
+        <li>Audit logs: immutable, no deletion by normal admins</li>
+        <li class="warn">Formal data retention schedule: document pending</li>
+        <li class="plan">Automated PII deletion workflow: planned</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title">Payment Security (PCI-DSS Alignment)</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Transaction Security</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">HMAC-signed transactions, idempotency keys, server-side verification — no client-side payment confirmation trusted.</div>
+      <ul class="check-list">
+        <li>PAYMENT_HMAC_SECRET via GCP Secret Manager</li>
+        <li>crypto.timingSafeEqual on all HMAC comparisons</li>
+        <li>Idempotency keys on all payment mutations</li>
+        <li>Replay attack prevention via nonce tracking</li>
+        <li>Velocity checks: 5 STK pushes per user per minute</li>
+        <li>Transaction signing on all order creation</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Fraud Prevention</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">SASOS fraud engine with 25+ weighted signals and 4 risk tiers (0–30 allow, 31–60 monitor, 61–80 challenge, 81–100 block).</div>
+      <ul class="check-list">
+        <li>Payment velocity checks</li>
+        <li>Impossible travel on payment events</li>
+        <li>Merchant risk scoring</li>
+        <li>Customer risk scoring</li>
+        <li>Automatic review queue for suspicious txns</li>
+        <li>AI-assisted pattern recognition (Claude Haiku)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Zero Trust Checkout</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">Every checkout evaluated by ABAC engine before payment is processed. Step-up auth on high-value transactions.</div>
+      <ul class="check-list">
+        <li>SokoniZeroTrust.guard() called in placeOrder()</li>
+        <li>Device trust score included in payment context</li>
+        <li>Transaction amount in access decision context</li>
+        <li>Step-up modal for transactions ≥ KES 100,000</li>
+        <li>All payment events written to securityAuditLog</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title">Web Application Security (OWASP Top 10)</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Vulnerability</th><th>Status</th><th>Controls in Place</th></tr></thead>
+      <tbody>
+        <tr><td>A01 — Broken Access Control</td><td><span class="chip chip-pass">Pass</span></td><td>Firestore rules (4,098 lines), ABAC CF, owner-only collections, no wildcard grants</td></tr>
+        <tr><td>A02 — Cryptographic Failures</td><td><span class="chip chip-pass">Pass</span></td><td>HSTS preload, TLS enforced, AES-256-GCM at rest, HMAC-SHA256 signatures, Secret Manager</td></tr>
+        <tr><td>A03 — Injection</td><td><span class="chip chip-pass">Pass</span></td><td>Firestore SDK parameterized queries, server-side input sanitization, XSS escaping on all outputs</td></tr>
+        <tr><td>A04 — Insecure Design</td><td><span class="chip chip-pass">Pass</span></td><td>Zero Trust architecture, Defense in Depth, Least Privilege — by design</td></tr>
+        <tr><td>A05 — Security Misconfiguration</td><td><span class="chip chip-pass">Pass</span></td><td>firebase.json security headers (CSP, COOP, COEP, CORP, X-Frame-Options, HSTS)</td></tr>
+        <tr><td>A06 — Vulnerable Components</td><td><span class="chip chip-partial">Partial</span></td><td>npm audit integrated in pen test suite; manual review required quarterly</td></tr>
+        <tr><td>A07 — Auth &amp; Session Failures</td><td><span class="chip chip-pass">Pass</span></td><td>Server-side sessions, rotation, revocation, impossible travel, step-up auth</td></tr>
+        <tr><td>A08 — Data Integrity Failures</td><td><span class="chip chip-pass">Pass</span></td><td>SHA-256 hash chain audit log, HMAC-signed webhooks, SRI (CSP enforcement)</td></tr>
+        <tr><td>A09 — Logging &amp; Monitoring</td><td><span class="chip chip-pass">Pass</span></td><td>Immutable audit chain, 19 GCP alerts, SOC dashboard (security-center.html)</td></tr>
+        <tr><td>A10 — SSRF</td><td><span class="chip chip-pass">Pass</span></td><td>No server-side URL fetching from user input; all external API calls use hardcoded endpoints</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section-title">Privacy Obligations</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Kenya Data Protection Act 2019</span><span class="chip chip-partial">Partial</span></div>
+      <div class="card-body">Core controls aligned with KDPA requirements. Formal DPA registration and DPIA pending.</div>
+      <ul class="check-list">
+        <li>Privacy Policy published at /privacy.html</li>
+        <li>Cookie Policy at /cookie-policy.html</li>
+        <li>Data deletion endpoint (Facebook API compliant)</li>
+        <li>Users can request data deletion via platform</li>
+        <li class="warn">Data Protection Impact Assessment (DPIA): pending</li>
+        <li class="plan">ODPC registration: planned before public launch</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Financial Regulations</span><span class="chip chip-partial">Partial</span></div>
+      <div class="card-body">Aligned with CBK and CMA guidelines for digital payment platforms.</div>
+      <ul class="check-list">
+        <li>M-Pesa integration via licensed IntaSend aggregator</li>
+        <li>Transaction receipts generated for all payments</li>
+        <li>eTIMS integration for KRA compliance</li>
+        <li>WHT/VAT calculation engine</li>
+        <li class="warn">CBK Payment Services Provider license: planned</li>
+        <li class="plan">AML/KYC workflow: planned for v2.0</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">AI &amp; Data Ethics</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">AI systems guarded against prompt injection, unauthorized data exposure, and role bypass.</div>
+      <ul class="check-list">
+        <li>Prompt injection prevention in KASS AI concierge</li>
+        <li>AI responses filtered for sensitive data leakage</li>
+        <li>Rate limiting on all AI endpoints</li>
+        <li>AI activity logged to securityAuditLog</li>
+        <li>Model access controlled by subscription tier</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title">Disaster Recovery &amp; Business Continuity</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-head"><span class="card-title">Data Backup</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">Firestore PITR enabled with automatic managed backups via Google Cloud.</div>
+      <ul class="check-list">
+        <li>Firestore PITR: 7-day point-in-time recovery</li>
+        <li>Cloud Functions: source in version control (GitHub)</li>
+        <li>Firebase Hosting: versioned deploys (rollback available)</li>
+        <li>Secrets: GCP Secret Manager with version history</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Incident Response</span><span class="chip chip-pass">Pass</span></div>
+      <div class="card-body">One-click incident actions across 11 Cloud Functions.</div>
+      <ul class="check-list">
+        <li>Lock account / store / POS / payments</li>
+        <li>Block API key / revoke device / rotate secrets</li>
+        <li>Force logout / suspend seller / suspend rider</li>
+        <li>All actions audited in securityAuditLog</li>
+        <li>Security Operations Center (security-center.html)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">RTO / RPO Targets</span><span class="chip chip-partial">Partial</span></div>
+      <div class="card-body">Recovery targets defined; formal DR drills not yet scheduled.</div>
+      <ul class="check-list">
+        <li>RTO target: &lt;4 hours for full platform restore</li>
+        <li>RPO target: &lt;1 hour data loss (PITR)</li>
+        <li>Service Worker: 100+ pages cached for offline</li>
+        <li class="warn">Formal DR drill schedule: pending</li>
+        <li class="plan">Cross-region backup: planned with quota increase</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-title">Audit Trail</div>
+  <div class="card" style="margin-bottom:24px">
+    <div class="card-head"><span class="card-title">Immutable Audit System</span><span class="chip chip-pass">Pass</span></div>
+    <div class="card-body">SHA-256 hash chain audit log. Every security event, payment, admin action, and configuration change is recorded. Audit entries cannot be deleted by normal administrators — only Super Admin with dual approval.</div>
+    <ul class="check-list" style="margin-top:12px">
+      <li>securityAuditLog collection: tamper-evident hash chain</li>
+      <li>Events: Authentication, Payments, Refunds, Inventory, Pricing, Role changes, Admin actions, Security events, Config changes</li>
+      <li>Each entry: previousHash + SHA-256(content + previousHash) = currentHash</li>
+      <li>Chain integrity verifiable by getAuditLogIntegrity CF</li>
+      <li>CF-write-only: Firestore rules prevent direct client writes</li>
+      <li>Retention: indefinite (no TTL on audit collection)</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+firebase.auth().onAuthStateChanged(function(user) {
+  if (!user) { window.location.href = 'login.html?redirect=security-compliance.html'; return; }
+  user.getIdTokenResult().then(function(tok) {
+    var ok = tok.claims.admin === true || tok.claims.superAdmin === true
+          || tok.claims.role === 'admin' || tok.claims.role === 'super_admin'
+          || tok.claims.role === 4 || tok.claims.role === 5;
+    if (!ok) { window.location.href = 'index.html'; }
+  }).catch(function() { window.location.href = 'login.html'; });
+});
+</script>
+</body>
+</html>

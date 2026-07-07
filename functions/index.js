@@ -9036,3 +9036,48 @@ exports.recordPosEvent            = posPerf.recordPosEvent;
 exports.getPosPerfMetrics         = posPerf.getPosPerfMetrics;
 exports.getPosSpeedReport         = posPerf.getPosSpeedReport;
 exports.posScheduledPerfRollup    = posPerf.posScheduledPerfRollup;
+
+/* ── Security 6.0 — Session Management ─────────────────────────────────── */
+const secSession = require('./security-session');
+exports.createSession           = secSession.createSession;
+exports.validateSession         = secSession.validateSession;
+exports.rotateSession           = secSession.rotateSession;
+exports.terminateSession        = secSession.terminateSession;
+exports.terminateAllSessions    = secSession.terminateAllSessions;
+exports.getUserSessions         = secSession.getUserSessions;
+exports.revokeDeviceSessions    = secSession.revokeDeviceSessions;
+exports.updateSessionActivity   = secSession.updateSessionActivity;
+exports.detectSessionAnomaly    = secSession.detectSessionAnomaly;
+exports.scheduledSessionCleanup = secSession.scheduledSessionCleanup;
+
+/* ── Security 6.0: File Upload Security ──────────────────────────────────── */
+const secFile = require('./security-file');
+exports.validateUploadRequest   = secFile.validateUploadRequest;
+exports.generateSecureUploadUrl = secFile.generateSecureUploadUrl;
+exports.onFileUploaded          = secFile.onFileUploaded;
+exports.quarantineFile          = secFile.quarantineFile;
+exports.getFileAuditLog         = secFile.getFileAuditLog;
+
+/* ── Security 6.0: Automated Penetration Test Runner ─────────────────────── */
+const secPentest = require('./security-pentest');
+exports.runSecurityAudit            = secPentest.runSecurityAudit;
+exports.getLatestSecurityReport     = secPentest.getLatestSecurityReport;
+exports.scheduleWeeklySecurityAudit = secPentest.scheduleWeeklySecurityAudit;
+
+/* ── Platform Ops Dashboard v1.0 — unified ops metrics + alerting ─────────── */
+const platformOps = require('./platform-ops');
+exports.opsGetMasterDashboard     = platformOps.opsGetMasterDashboard;
+exports.opsGetAlerts              = platformOps.opsGetAlerts;
+exports.opsAcknowledgeAlert       = platformOps.opsAcknowledgeAlert;
+exports.opsCreateAlert            = platformOps.opsCreateAlert;
+exports.opsGetPostLaunchMetrics   = platformOps.opsGetPostLaunchMetrics;
+exports.opsScheduledHealthCheck   = platformOps.opsScheduledHealthCheck;
+
+/* ── Rollback System v1.0 — snapshot records, audit trail, daily auto-snap ── */
+const rollback = require('./rollback');
+exports.rollbackGetSnapshots        = rollback.rollbackGetSnapshots;
+exports.rollbackCreateSnapshot      = rollback.rollbackCreateSnapshot;
+exports.rollbackTrigger             = rollback.rollbackTrigger;
+exports.rollbackGetExecutions       = rollback.rollbackGetExecutions;
+exports.rollbackUpdateStatus        = rollback.rollbackUpdateStatus;
+exports.rollbackScheduledSnapshot   = rollback.rollbackScheduledSnapshot;

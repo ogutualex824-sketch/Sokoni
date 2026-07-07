@@ -93,6 +93,27 @@ npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; f
 | `asyncInspect` | `functions/async-jobs.js` | onCall admin |
 | `asyncCleanup` | `functions/async-jobs.js` | onSchedule (daily 03:30) |
 
+## Additional CFs — Platform Ops + Rollback System (2026-07-07)
+
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:opsGetMasterDashboard,functions:opsGetAlerts,functions:opsAcknowledgeAlert,functions:opsCreateAlert,functions:opsGetPostLaunchMetrics,functions:opsScheduledHealthCheck,functions:rollbackGetSnapshots,functions:rollbackCreateSnapshot,functions:rollbackTrigger,functions:rollbackGetExecutions,functions:rollbackUpdateStatus,functions:rollbackScheduledSnapshot" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+| Function | File | Type |
+|---|---|---|
+| `opsGetMasterDashboard` | `functions/platform-ops.js` | onCall admin |
+| `opsGetAlerts` | `functions/platform-ops.js` | onCall admin |
+| `opsAcknowledgeAlert` | `functions/platform-ops.js` | onCall admin |
+| `opsCreateAlert` | `functions/platform-ops.js` | onCall admin |
+| `opsGetPostLaunchMetrics` | `functions/platform-ops.js` | onCall admin |
+| `opsScheduledHealthCheck` | `functions/platform-ops.js` | onSchedule (every 5 min) |
+| `rollbackGetSnapshots` | `functions/rollback.js` | onCall admin |
+| `rollbackCreateSnapshot` | `functions/rollback.js` | onCall admin |
+| `rollbackTrigger` | `functions/rollback.js` | onCall admin |
+| `rollbackGetExecutions` | `functions/rollback.js` | onCall admin |
+| `rollbackUpdateStatus` | `functions/rollback.js` | onCall admin |
+| `rollbackScheduledSnapshot` | `functions/rollback.js` | onSchedule (daily 00:00) |
+
 ## Hosting (already deployed 2026-07-06)
 All HTML/CSS/JS pages are LIVE. CF features will activate when quota clears.
 New pages deployed today:

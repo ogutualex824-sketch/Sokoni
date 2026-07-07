@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
+<script src="shared-header.js"></script>
   <script src="/security.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,18 +10,18 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --eoc-bg:        #0d0d0d;
-      --eoc-surface:   #161616;
-      --eoc-surface2:  #1e1e1e;
-      --eoc-border:    #222;
-      --eoc-accent:    #7c3aed;
-      --eoc-accent2:   #a78bfa;
-      --eoc-success:   #34d399;
-      --eoc-warn:      #fbbf24;
-      --eoc-danger:    #f87171;
-      --eoc-info:      #60a5fa;
-      --eoc-text:      #e4e4e7;
-      --eoc-muted:     #71717a;
+      --eoc-bg:        #050505;
+      --eoc-surface:   #0d0d0d;
+      --eoc-surface2:  #111111;
+      --eoc-border:    #1a1a1a;
+      --eoc-accent:    #71ff00;
+      --eoc-accent2:   #a8ff58;
+      --eoc-success:   #71ff00;
+      --eoc-warn:      #ffaa00;
+      --eoc-danger:    #ff4d4d;
+      --eoc-info:      #5c9eff;
+      --eoc-text:      #e8e8e8;
+      --eoc-muted:     #777;
       --eoc-sidebar-w: 240px;
       --eoc-header-h:  56px;
       --eoc-radius:    8px;
@@ -364,7 +365,7 @@
     }
     .eoc-btn:hover { opacity: .85; }
     .eoc-btn:active { transform: scale(.97); }
-    .eoc-btn-primary { background: var(--eoc-accent); color: #fff; }
+    .eoc-btn-primary { background: var(--eoc-accent); color: #000; font-weight: 700; }
     .eoc-btn-secondary { background: var(--eoc-surface2); color: var(--eoc-text); border: 1px solid var(--eoc-border); }
     .eoc-btn-danger { background: #7f1d1d; color: #fca5a5; }
     .eoc-select {

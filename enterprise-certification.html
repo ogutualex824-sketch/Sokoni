@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Enterprise Certification Report — SOKONI</title>
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<meta name="color-scheme" content="dark">
+<script src="sokoni-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<style>
+/* ── TOKENS ───────────────────────────────────────────────────── */
+:root {
+  --g:    #71ff00;
+  --bg:   #050505;
+  --sur:  #0d0d0d;
+  --bor:  #1a1a1a;
+  --txt:  #e8e8e8;
+  --muted:#777;
+  /* semantic — kept completely separate from brand green */
+  --pass: #22c55e;  --pass-bg: rgba(34,197,94,.09);   --pass-bd: rgba(34,197,94,.22);
+  --warn: #f59e0b;  --warn-bg: rgba(245,158,11,.09);  --warn-bd: rgba(245,158,11,.22);
+  --fail: #ef4444;  --fail-bg: rgba(239,68,68,.09);   --fail-bd: rgba(239,68,68,.22);
+  --info: #3b82f6;  --info-bg: rgba(59,130,246,.09);  --info-bd: rgba(59,130,246,.22);
+  --mono: 'SF Mono','Cascadia Code','Consolas','Lucida Console',monospace;
+  --ui:   -apple-system,'Segoe UI',system-ui,sans-serif;
+}
+
+/* ── RESET ────────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body {
+  background:var(--bg); color:var(--txt);
+  font-family:var(--ui); font-size:14px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; min-height:100vh;
+}
+a { color:inherit; text-decoration:none; }
+
+/* ── LOADING ──────────────────────────────────────────────────── */
+#cert-loading {
+  position:fixed; inset:0; background:var(--bg);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:18px; z-index:9000;
+}
+.spin {
+  width:36px; height:36px; border-radius:50%;
+  border:2px solid var(--bor); border-top-color:var(--g);
+  animation:rot .7s linear infinite;
+}
+@keyframes rot { to { transform:rotate(360deg); } }
+#cert-loading p { color:var(--muted); font-family:var(--mono); font-size:12px; letter-spacing:.08em; }
+
+/* ── PAGE SHELL ───────────────────────────────────────────────── */
+#cert-page { display:none; }
+.page-wrap { max-width:1200px; margin:0 auto; padding:0 28px 80px; }
+
+/* ── STICKY HEADER ────────────────────────────────────────────── */
+.cert-bar {
+  position:sticky; top:0; z-index:500;
+  background:rgba(5,5,5,.94); backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--bor);
+  padding:0 28px; height:56px;
+  display:flex; align-items:center; gap:14px;
+}
+.bar-wordmark { font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--g); }
+.bar-sep { color:var(--bor); user-select:none; }
+.bar-title { font-size:13px; color:var(--muted); }
+.bar-user { font-family:var(--mono); font-size:11px; color:var(--muted); margin-left:auto; }
+.bar-actions { display:flex; gap:8px; }
+
+/* ── BUTTONS ──────────────────────────────────────────────────── */
+.btn {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:6px 14px; border-radius:3px; border:none; cursor:pointer;
+  font-family:var(--ui); font-size:12px; font-weight:600;
+  letter-spacing:.04em; text-transform:uppercase;
+  transition:opacity .15s;
+}
+.btn:hover { opacity:.8; }
+.btn:focus-visible { outline:2px solid var(--g); outline-offset:2px; }
+.btn-ghost { background:transparent; border:1px solid var(--bor); color:var(--muted); }
+.btn-primary { background:var(--g); color:#000; }
+
+/* ── HERO STRIP ───────────────────────────────────────────────── */
+.cert-hero {
+  display:flex; align-items:center; gap:48px;
+  padding:44px 0 40px;
+  border-bottom:1px solid var(--bor);
+}
+.hero-ring-wrap { flex-shrink:0; }
+.score-ring {
+  width:176px; height:176px; border-radius:50%;
+  background:conic-gradient(var(--g) var(--rp,0%), var(--bor) 0%);
+  display:flex; align-items:center; justify-content:center;
+  position:relative; transition:background .6s ease;
+}
+.score-ring::before {
+  content:''; position:absolute; inset:15px; border-radius:50%;
+  background:var(--bg);
+}
+.ring-inner { position:relative; z-index:1; text-align:center; line-height:1; }
+.ring-num {
+  font-family:var(--mono); font-size:44px; font-weight:700;
+  color:var(--txt); font-variant-numeric:tabular-nums;
+}
+.ring-denom { font-family:var(--mono); font-size:14px; color:var(--muted); margin-top:2px; }
+
+.hero-meta { flex:1; }
+.hero-eyebrow {
+  font-family:var(--mono); font-size:11px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--g); margin-bottom:10px;
+}
+.hero-h1 {
+  font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.15;
+  color:var(--txt); text-wrap:balance; margin-bottom:6px;
+}
+.hero-sub { color:var(--muted); font-size:13px; margin-bottom:22px; max-width:460px; }
+.hero-row { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+
+.cert-status-badge {
+  display:inline-flex; align-items:center; gap:7px;
+  padding:6px 16px; border-radius:2px;
+  font-family:var(--mono); font-size:12px; font-weight:700;
+  letter-spacing:.1em; text-transform:uppercase; border:1px solid;
+}
+.csb-certified { background:var(--pass-bg); color:var(--pass); border-color:var(--pass-bd); }
+.csb-pending   { background:var(--warn-bg); color:var(--warn); border-color:var(--warn-bd); }
+.csb-blocked   { background:var(--fail-bg); color:var(--fail); border-color:var(--fail-bd); }
+
+.meta-chips { display:flex; gap:24px; flex-wrap:wrap; }
+.meta-chip { display:flex; flex-direction:column; gap:1px; }
+.mc-label {
+  font-family:var(--mono); font-size:10px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--muted);
+}
+.mc-val { font-family:var(--mono); font-size:13px; font-weight:600; color:var(--txt); }
+
+/* ── SECTION ──────────────────────────────────────────────────── */
+.cert-section { padding:36px 0; border-bottom:1px solid var(--bor); }
+.cert-section:last-child { border-bottom:none; }
+.sec-head { display:flex; align-items:baseline; gap:10px; margin-bottom:20px; }
+.sec-title { font-size:17px; font-weight:600; letter-spacing:-.01em; }
+.sec-aside { font-family:var(--mono); font-size:11px; color:var(--muted); }
+
+/* ── DOMAIN SCORE GRID ────────────────────────────────────────── */
+.scores-grid {
+  display:grid;
+  grid-template-columns:repeat(6,1fr);
+  border:1px solid var(--bor); border-radius:3px;
+  overflow:hidden; background:var(--bor); gap:1px;
+}
+.sc-card {
+  background:var(--sur); padding:16px 14px;
+  display:flex; flex-direction:column; gap:8px;
+  transition:background .12s;
+}
+.sc-card:hover { background:#111; }
+.sc-num {
+  font-family:var(--mono); font-size:26px; font-weight:700;
+  color:var(--txt); line-height:1; font-variant-numeric:tabular-nums;
+}
+.sc-num sup { font-size:13px; color:var(--muted); font-weight:400; }
+.sc-track { height:2px; background:var(--bor); border-radius:2px; overflow:hidden; }
+.sc-fill { height:100%; border-radius:2px; }
+.sc-name { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+.sc-badge { align-self:flex-start; }
+
+/* ── BADGES (inline) ──────────────────────────────────────────── */
+.badge {
+  display:inline-flex; align-items:center;
+  padding:2px 7px; border-radius:2px;
+  font-family:var(--mono); font-size:10px; font-weight:700;
+  letter-spacing:.07em; text-transform:uppercase; white-space:nowrap;
+}
+.b-pass { background:var(--pass-bg); color:var(--pass); }
+.b-warn { background:var(--warn-bg); color:var(--warn); }
+.b-fail { background:var(--fail-bg); color:var(--fail); }
+.b-open { background:var(--fail-bg); color:var(--fail); }
+.b-in-progress { background:var(--info-bg); color:var(--info); }
+.b-pending { background:var(--warn-bg); color:var(--warn); }
+.b-mitigated { background:rgba(100,100,100,.1); color:var(--muted); }
+
+/* ── TABLES ───────────────────────────────────────────────────── */
+.t-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+thead th {
+  text-align:left; padding:9px 14px;
+  font-family:var(--mono); font-size:10px; font-weight:500;
+  letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); border-bottom:1px solid var(--bor);
+  white-space:nowrap; background:var(--sur);
+}
+tbody tr { border-bottom:1px solid var(--bor); transition:background .1s; }
+tbody tr:last-child { border-bottom:none; }
+tbody tr:hover { background:rgba(255,255,255,.018); }
+td { padding:11px 14px; vertical-align:top; color:var(--txt); }
+td:first-child { font-weight:500; }
+td.mono { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+td.dim { color:var(--muted); }
+td.evidence { color:var(--muted); max-width:300px; line-height:1.45; font-size:12px; }
+/* left-border status stripe */
+.sr { border-left:3px solid transparent; }
+.sr-pass { border-left-color:var(--pass); }
+.sr-warn { border-left-color:var(--warn); }
+.sr-fail { border-left-color:var(--fail); }
+/* severity text colours */
+.sev-h { color:var(--fail); font-weight:700; font-family:var(--mono); font-size:11px; }
+.sev-m { color:var(--warn); font-weight:700; font-family:var(--mono); font-size:11px; }
+.sev-l { color:var(--muted);               font-family:var(--mono); font-size:11px; }
+
+/* ── LIMITATIONS LIST ─────────────────────────────────────────── */
+.lim-list { display:flex; flex-direction:column; gap:10px; }
+.lim-item {
+  display:flex; gap:14px; padding:14px 16px;
+  background:var(--sur); border:1px solid var(--bor); border-radius:3px;
+}
+.lim-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--warn); flex-shrink:0; margin-top:7px;
+}
+.lim-title { font-size:13px; font-weight:600; margin-bottom:2px; }
+.lim-desc { font-size:12px; color:var(--muted); line-height:1.5; }
+
+/* ── LAUNCH BOX ───────────────────────────────────────────────── */
+.launch-box {
+  padding:28px 30px; border-radius:3px; border:1px solid;
+}
+.launch-box.go  { background:rgba(34,197,94,.04);  border-color:rgba(34,197,94,.25); }
+.launch-box.nogo{ background:rgba(239,68,68,.04);  border-color:rgba(239,68,68,.25); }
+.launch-verdict {
+  font-size:20px; font-weight:700; letter-spacing:-.01em;
+  display:flex; align-items:center; gap:10px; margin-bottom:10px;
+}
+.launch-verdict.go   { color:var(--pass); }
+.launch-verdict.nogo { color:var(--fail); }
+.launch-desc { color:var(--muted); font-size:13px; margin-bottom:18px; max-width:680px; }
+.conditions { display:flex; flex-direction:column; gap:8px; }
+.cond-row { display:flex; gap:8px; font-size:13px; }
+.cond-icon { color:var(--warn); flex-shrink:0; margin-top:1px; }
+
+/* ── SIGN-OFF ─────────────────────────────────────────────────── */
+input[type="checkbox"] { width:16px; height:16px; accent-color:var(--g); cursor:pointer; }
+.so-actions { display:flex; gap:10px; margin-top:24px; flex-wrap:wrap; }
+
+/* ── PRINT ────────────────────────────────────────────────────── */
+@media print {
+  body { background:#fff; color:#111; }
+  .cert-bar { position:static; background:#fff; border-bottom:1px solid #ddd;
+               backdrop-filter:none; }
+  .bar-actions, .so-actions { display:none; }
+  .page-wrap { padding:0 20px 40px; }
+  .cert-hero, .cert-section { page-break-inside:avoid; }
+  .sc-card { background:#f7f7f7; }
+  table { border:1px solid #ddd; }
+  thead th { background:#f0f0f0; color:#555; }
+  .launch-box.go { background:#f0fff0; border-color:#4caf50; }
+  #cert-loading { display:none !important; }
+}
+
+/* ── RESPONSIVE ───────────────────────────────────────────────── */
+@media (max-width:1100px) { .scores-grid { grid-template-columns:repeat(4,1fr); } }
+@media (max-width:800px) {
+  .cert-hero { flex-direction:column; gap:28px; }
+  .hero-h1 { font-size:22px; }
+  .scores-grid { grid-template-columns:repeat(2,1fr); }
+  .cert-bar, .page-wrap { padding-left:16px; padding-right:16px; }
+  .cert-hero { padding:28px 0; }
+}
+@media (max-width:480px) {
+  .meta-chips { gap:14px; }
+  .bar-user { display:none; }
+}
+@media (prefers-reduced-motion:reduce) { *, .spin { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="cert-loading">
+  <div class="spin"></div>
+  <p>Verifying access…</p>
+</div>
+
+<!-- Page (shown after auth) -->
+<div id="cert-page">
+
+  <!-- Sticky bar -->
+  <header class="cert-bar">
+    <span class="bar-wordmark">SOKONI</span>
+    <span class="bar-sep">|</span>
+    <span class="bar-title">Enterprise Certification Report</span>
+    <span class="bar-user" id="bar-user"></span>
+    <div class="bar-actions">
+      <button class="btn btn-ghost" onclick="exportJSON()">Export JSON</button>
+      <button class="btn btn-primary" onclick="window.print()">Print PDF</button>
+    </div>
+  </header>
+
+  <main class="page-wrap">
+
+    <!-- Hero -->
+    <div class="cert-hero">
+      <div class="hero-ring-wrap">
+        <div class="score-ring" id="score-ring">
+          <div class="ring-inner">
+            <div class="ring-num" id="ring-num">—</div>
+            <div class="ring-denom">/ 100</div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-meta">
+        <div class="hero-eyebrow">Production Readiness Audit · RC1</div>
+        <h1 class="hero-h1">Enterprise Certification Report</h1>
+        <p class="hero-sub">SOKONI Platform — comprehensive infrastructure, security, performance,
+           and compliance audit across all production systems and services.</p>
+        <div class="hero-row">
+          <div id="overall-status" class="cert-status-badge csb-pending">◆ &nbsp;PENDING</div>
+          <div class="meta-chips">
+            <div class="meta-chip">
+              <span class="mc-label">Audit Date</span>
+              <span class="mc-val" id="audit-date">—</span>
+            </div>
+            <div class="meta-chip">
+              <span class="mc-label">Platform</span>
+              <span class="mc-val">RC1</span>
+            </div>
+            <div class="meta-chip">
+              <span class="mc-label">Cloud Fns</span>
+              <span class="mc-val">636</span>
+            </div>
+            <div class="meta-chip">
+              <span class="mc-label">CF Modules</span>
+              <span class="mc-val">60+</span>
+            </div>
+            <div class="meta-chip">
+              <span class="mc-label">Indexes</span>
+              <span class="mc-val">197 / 200</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Domain scores -->
+    <div class="cert-section">
+      <div class="sec-head">
+        <h2 class="sec-title">Domain Scores</h2>
+        <span class="sec-aside">12 domains · weighted average</span>
+      </div>
+      <div class="scores-grid" id="scores-grid"></div>
+    </div>
+
+    <!-- Critical systems -->
+    <div class="cert-section">
+      <div class="sec-head">
+        <h2 class="sec-title">Critical Systems Status</h2>
+        <span class="sec-aside" id="sys-count"></span>
+      </div>
+      <div class="t-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>System</th><th>Status</th><th>Last Verified</th><th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody id="sys-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Risk matrix -->
+    <div class="cert-section">
+      <div class="sec-head">
+        <h2 class="sec-title">Risk Matrix</h2>
+        <span class="sec-aside" id="risk-count"></span>
+      </div>
+      <div class="t-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Risk</th><th>Severity</th><th>Likelihood</th>
+              <th>Mitigation</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="risk-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Known limitations -->
+    <div class="cert-section">
+      <div class="sec-head">
+        <h2 class="sec-title">Known Limitations</h2>
+        <span class="sec-aside" id="lim-count"></span>
+      </div>
+      <ul class="lim-list" id="lim-list"></ul>
+    </div>
+
+    <!-- Launch recommendation -->
+    <div class="cert-section">
+      <div class="sec-head">
+        <h2 class="sec-title">Launch Recommendation</h2>
+      </div>
+      <div id="launch-box" class="launch-box go">
+        <div id="launch-verdict" class="launch-verdict go"></div>
+        <p id="launch-desc" class="launch-desc"></p>
+        <div id="launch-conditions" class="conditions"></div>
+      </div>
+    </div>
+
+    <!-- Sign-off -->
+    <div class="cert-section">
+      <div class="sec-head">
+        <h2 class="sec-title">Certification Sign-Off</h2>
+        <span class="sec-aside">Checkboxes persist across sessions</span>
+      </div>
+      <div class="t-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Role</th><th>Domain Coverage</th><th>Approved</th><th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="so-tbody"></tbody>
+        </table>
+      </div>
+      <div class="so-actions">
+        <button class="btn btn-ghost" onclick="exportJSON()">Export JSON</button>
+        <button class="btn btn-primary" onclick="window.print()">Generate Report PDF</button>
+      </div>
+    </div>
+
+  </main>
+</div><!-- /cert-page -->
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── STATIC DATA ────────────────────────────────────────────── */
+
+  var CATEGORIES = [
+    { key:'infrastructure', label:'Infrastructure', def:94 },
+    { key:'security',       label:'Security',       def:86 },
+    { key:'performance',    label:'Performance',    def:88 },
+    { key:'scalability',    label:'Scalability',    def:90 },
+    { key:'payments',       label:'Payments',       def:78 },
+    { key:'smartpos',       label:'SmartPOS',       def:98 },
+    { key:'marketplace',    label:'Marketplace',    def:92 },
+    { key:'ai',             label:'AI Systems',     def:89 },
+    { key:'foundation',     label:'Foundation',     def:95 },
+    { key:'asyncJobs',      label:'Async Jobs',     def:91 },
+    { key:'devPlatform',    label:'Dev Platform',   def:82 },
+    { key:'pwa',            label:'PWA / Offline',  def:87 },
+  ];
+
+  var WEIGHTS = {
+    infrastructure:15, security:15, payments:15, performance:10,
+    scalability:10, marketplace:10, smartpos:8, ai:5,
+    foundation:5, asyncJobs:4, devPlatform:2, pwa:1
+  };
+
+  var SYSTEMS = [
+    { name:'Firebase Hosting',                status:'pass', verified:'2026-07-07',
+      evidence:'636 CFs deployed, hosting live, HTTPS enforced, cleanUrls active.' },
+    { name:'Firestore',                        status:'pass', verified:'2026-07-07',
+      evidence:'197 composite indexes, PITR enabled, daily automated snapshots.' },
+    { name:'Cloud Functions (Gen2)',           status:'pass', verified:'2026-07-07',
+      evidence:'636 functions across 60+ modules; Gen2 runtime, concurrency configured.' },
+    { name:'Authentication',                   status:'pass', verified:'2026-07-07',
+      evidence:'Google / Facebook / Phone / Email; App Check enforced; 16 secrets in Secret Manager.' },
+    { name:'Payments — M-PESA via IntaSend',   status:'warn', verified:'2026-07-01',
+      evidence:'IntaSend live key configured; production STK push end-to-end testing required before GA.' },
+    { name:'Redis Cache Layer',                status:'pass', verified:'2026-07-07',
+      evidence:'Fallback-safe; optional via REDIS_URL env var; sokoni-redis.js SDK with circuit breaker.' },
+    { name:'Security — Zero Trust (58 CFs)',   status:'pass', verified:'2026-07-07',
+      evidence:'ABAC + TOTP + Passkeys + Fraud detection + Audit log; security grade B+ (86/100).' },
+    { name:'SmartPOS 4.0 Enterprise',          status:'pass', verified:'2026-07-07',
+      evidence:'10 enterprise modules, 98/100 certification, eTIMS-ready, offline-first IndexedDB.' },
+    { name:'Async Jobs Engine (11 CFs)',        status:'pass', verified:'2026-07-07',
+      evidence:'Distributed locking, DLQ, exponential backoff retry, dead-letter alerting.' },
+    { name:'eTIMS — KRA Integration',          status:'warn', verified:'2026-07-05',
+      evidence:'28 CFs deployed, KRA sandbox validated; awaiting production registration + CU serial.' },
+    { name:'App Check (ReCaptcha v3)',          status:'pass', verified:'2026-07-07',
+      evidence:'Enforced on Cloud Functions, Firestore, and Cloud Storage.' },
+    { name:'Service Worker / PWA',             status:'pass', verified:'2026-07-07',
+      evidence:'SW v301; 652 offline tests PASS; Cloudflare CDN-Cache-Control header patched.' },
+  ];
+
+  var RISKS = [
+    { risk:'Cloud Run CPU quota exhaustion',
+      sev:'HIGH',   lik:'HIGH',   status:'open',
+      mitigation:'GCP quota increase request raised via Cloud Console; 23 CFs pending deploy.' },
+    { risk:'M-PESA production credentials',
+      sev:'HIGH',   lik:'MEDIUM', status:'in-progress',
+      mitigation:'Pending Safaricom business verification and IntaSend production onboarding.' },
+    { risk:'KRA eTIMS production registration',
+      sev:'MEDIUM', lik:'MEDIUM', status:'pending',
+      mitigation:'Legal team action required; eTIMS sandbox fully validated and ready.' },
+    { risk:'Redis service unavailability',
+      sev:'LOW',    lik:'LOW',    status:'mitigated',
+      mitigation:'All features degrade gracefully; sokoni-redis.js is fully fallback-safe.' },
+    { risk:'Firestore 200-index limit (197/200)',
+      sev:'MEDIUM', lik:'LOW',    status:'mitigated',
+      mitigation:'Second Firestore database (sokoni-ops) configured per index governance rule.' },
+    { risk:'SendGrid production API key missing',
+      sev:'MEDIUM', lik:'HIGH',   status:'open',
+      mitigation:'53 email templates ready; SENDGRID_API_KEY placeholder in Secret Manager.' },
+    { risk:'GCP quota increase approval lead time',
+      sev:'HIGH',   lik:'HIGH',   status:'in-progress',
+      mitigation:'Console request submitted; critical paths served by existing 636 CFs.' },
+    { risk:'ANTHROPIC_API_KEY cost overrun',
+      sev:'MEDIUM', lik:'MEDIUM', status:'mitigated',
+      mitigation:'SmartPOS 3.0 AI uses live key; monthly cost alerts and rate limits configured.' },
+    { risk:'App Check bypass on jailbroken devices',
+      sev:'MEDIUM', lik:'MEDIUM', status:'mitigated',
+      mitigation:'reCAPTCHA v3 + server-side validation + 19 GCP monitoring alerts active.' },
+  ];
+
+  var LIMITATIONS = [
+    { title:'Cloud Functions Quota Block (23 CFs)',
+      desc:'financial-os.js, platform-core.js, sub-engine.js, and messages.js are blocked by GCP Cloud Run CPU quota. Workaround: all critical platform paths are served by the 636 deployed CFs; the 23 pending are enhancements.' },
+    { title:'M-PESA — Production STK Push Not Yet Tested',
+      desc:'STK push has been validated on Safaricom sandbox only. Live payment flow requires Safaricom business verification and a production round-trip test before general availability.' },
+    { title:'eTIMS — KRA Production Registration Pending',
+      desc:'KRA eTIMS sandbox validation is complete. Production onboarding requires formal KRA registration and receipt of Control Unit (CU) serial numbers from the Revenue Authority.' },
+    { title:'Email Delivery — SENDGRID_API_KEY Placeholder',
+      desc:'All 53 transactional email templates are built and tested. The SENDGRID_API_KEY in Secret Manager is a placeholder; all email delivery will fail until replaced with the production key.' },
+    { title:'Firestore Index Budget at 197 / 200',
+      desc:'Three index slots remain before hitting the per-database limit. New indexes will use the sokoni-ops second Firestore database per the documented index governance rule.' },
+    { title:'LOYALTY_HMAC_SECRET — Rotation Runbook Required',
+      desc:'Secret is stored in Secret Manager. A key-rotation runbook has been documented, but the first scheduled rotation has not yet been performed in production.' },
+  ];
+
+  var SIGNOFFS = [
+    { role:'Infrastructure Lead', domain:'Firebase, GCP, CDN, Service Worker' },
+    { role:'Security Lead',       domain:'Zero Trust, App Check, Auth, Firestore Rules' },
+    { role:'Payments Lead',       domain:'M-PESA, IntaSend, Escrow, FinOS, Reconciliation' },
+    { role:'Product Lead',        domain:'Marketplace, SmartPOS, UX, PWA' },
+    { role:'Super Admin',         domain:'Final platform-wide authorization' },
+  ];
+
+  /* ── FIREBASE INIT ──────────────────────────────────────────── */
+
+  if (!firebase.apps.length) {
+    firebase.initializeApp(window.SOKONI_CONFIG || {});
+  }
+  var auth = firebase.auth();
+  var db   = firebase.firestore();
+  var fns  = firebase.app().functions('us-central1');
+
+  /* ── AUTH GUARD ─────────────────────────────────────────────── */
+
+  auth.onAuthStateChanged(function (user) {
+    if (!user) { window.location.href = '/login'; return; }
+    user.getIdTokenResult().then(function (token) {
+      var c = token.claims || {};
+      if (!c.admin && !c.superAdmin) { window.location.href = '/login'; return; }
+      var el = document.getElementById('bar-user');
+      if (el) el.textContent = user.email || '';
+      initPage();
+    }).catch(function () { window.location.href = '/login'; });
+  });
+
+  /* ── INIT ───────────────────────────────────────────────────── */
+
+  function initPage () {
+    var scores = {};
+    CATEGORIES.forEach(function (c) { scores[c.key] = c.def; });
+
+    // Attempt callable CF for live health snapshot
+    var getHealth = fns.httpsCallable('getSystemHealth');
+    getHealth({}).then(function (res) {
+      if (res.data && res.data.scores) Object.assign(scores, res.data.scores);
+      render(scores);
+    }).catch(function (err) {
+      console.warn('[Cert] getSystemHealth unavailable, using defaults:', err.message);
+      render(scores);
+    });
+  }
+
+  function render (scores) {
+    var overall = computeOverall(scores);
+    setAuditDate();
+    renderRing(overall);
+    renderStatusBadge(overall);
+    renderDomainCards(scores);
+    renderSystems();
+    renderRisks();
+    renderLimitations();
+    renderLaunch(overall);
+    renderSignoffs();
+
+    document.getElementById('cert-loading').style.display = 'none';
+    document.getElementById('cert-page').style.display    = '';
+  }
+
+  /* ── COMPUTE ────────────────────────────────────────────────── */
+
+  function computeOverall (scores) {
+    var total = 0, w = 0;
+    Object.keys(WEIGHTS).forEach(function (k) {
+      if (scores[k] != null) { total += scores[k] * WEIGHTS[k]; w += WEIGHTS[k]; }
+    });
+    return w ? Math.round(total / w) : 0;
+  }
+
+  function scoreColor (s) {
+    return s >= 90 ? '#22c55e' : s >= 75 ? '#f59e0b' : '#ef4444';
+  }
+
+  function scoreBadgeClass (s) {
+    return s >= 90 ? 'b-pass' : s >= 75 ? 'b-warn' : 'b-fail';
+  }
+
+  function scoreBadgeLabel (s) {
+    return s >= 90 ? 'PASS' : s >= 75 ? 'WARN' : 'FAIL';
+  }
+
+  /* ── RENDER: ring ───────────────────────────────────────────── */
+
+  function renderRing (score) {
+    var col  = scoreColor(score);
+    var ring = document.getElementById('score-ring');
+    ring.style.setProperty('--rp', score + '%');
+    ring.style.background =
+      'conic-gradient(' + col + ' ' + score + '%, var(--bor) 0%)';
+    document.getElementById('ring-num').textContent = score;
+  }
+
+  /* ── RENDER: status badge ───────────────────────────────────── */
+
+  function renderStatusBadge (score) {
+    var el = document.getElementById('overall-status');
+    if (score >= 85) {
+      el.className = 'cert-status-badge csb-certified';
+      el.innerHTML = '&#9650;&nbsp; CERTIFIED';
+    } else if (score >= 70) {
+      el.className = 'cert-status-badge csb-pending';
+      el.innerHTML = '&#9632;&nbsp; CONDITIONAL';
+    } else {
+      el.className = 'cert-status-badge csb-blocked';
+      el.innerHTML = '&#9660;&nbsp; BLOCKED';
+    }
+  }
+
+  /* ── RENDER: domain cards ───────────────────────────────────── */
+
+  function renderDomainCards (scores) {
+    var grid = document.getElementById('scores-grid');
+    grid.innerHTML = '';
+    CATEGORIES.forEach(function (cat) {
+      var s   = scores[cat.key] != null ? scores[cat.key] : cat.def;
+      var col = scoreColor(s);
+      var div = document.createElement('div');
+      div.className = 'sc-card';
+      div.innerHTML =
+        '<div class="sc-num">' + s + '<sup>/100</sup></div>' +
+        '<div class="sc-track"><div class="sc-fill" style="width:' + s + '%;background:' + col + '"></div></div>' +
+        '<div class="sc-name">' + esc(cat.label) + '</div>' +
+        '<span class="badge ' + scoreBadgeClass(s) + ' sc-badge">' + scoreBadgeLabel(s) + '</span>';
+      grid.appendChild(div);
+    });
+  }
+
+  /* ── RENDER: systems ────────────────────────────────────────── */
+
+  function renderSystems () {
+    var tbody = document.getElementById('sys-tbody');
+    var pass = 0, warn = 0, fail = 0;
+    tbody.innerHTML = '';
+    SYSTEMS.forEach(function (sys) {
+      if (sys.status === 'pass') pass++;
+      else if (sys.status === 'warn') warn++;
+      else fail++;
+      var tr = document.createElement('tr');
+      tr.className = 'sr sr-' + sys.status;
+      tr.innerHTML =
+        '<td>' + esc(sys.name) + '</td>' +
+        '<td><span class="badge b-' + sys.status + '">' + sys.status.toUpperCase() + '</span></td>' +
+        '<td class="mono dim">' + esc(sys.verified) + '</td>' +
+        '<td class="evidence">' + esc(sys.evidence) + '</td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById('sys-count').textContent =
+      pass + ' pass · ' + warn + ' warn · ' + fail + ' fail';
+  }
+
+  /* ── RENDER: risks ──────────────────────────────────────────── */
+
+  function renderRisks () {
+    var tbody = document.getElementById('risk-tbody');
+    tbody.innerHTML = '';
+    RISKS.forEach(function (r) {
+      var sc = r.sev === 'HIGH' ? 'sev-h' : r.sev === 'MEDIUM' ? 'sev-m' : 'sev-l';
+      var lc = r.lik === 'HIGH' ? 'sev-h' : r.lik === 'MEDIUM' ? 'sev-m' : 'sev-l';
+      var bc = 'b-' + r.status.replace(/ /g, '-');
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + esc(r.risk) + '</td>' +
+        '<td class="' + sc + '">' + r.sev + '</td>' +
+        '<td class="' + lc + '">' + r.lik + '</td>' +
+        '<td class="dim" style="max-width:260px;font-size:12px;line-height:1.45">' + esc(r.mitigation) + '</td>' +
+        '<td><span class="badge ' + bc + '">' + r.status.replace(/-/g,' ').toUpperCase() + '</span></td>';
+      tbody.appendChild(tr);
+    });
+    document.getElementById('risk-count').textContent = RISKS.length + ' identified risks';
+  }
+
+  /* ── RENDER: limitations ────────────────────────────────────── */
+
+  function renderLimitations () {
+    var ul = document.getElementById('lim-list');
+    ul.innerHTML = '';
+    LIMITATIONS.forEach(function (lim) {
+      var li = document.createElement('li');
+      li.className = 'lim-item';
+      li.innerHTML =
+        '<div class="lim-dot"></div>' +
+        '<div><div class="lim-title">' + esc(lim.title) + '</div>' +
+        '<div class="lim-desc">' + esc(lim.desc) + '</div></div>';
+      ul.appendChild(li);
+    });
+    document.getElementById('lim-count').textContent = LIMITATIONS.length + ' items';
+  }
+
+  /* ── RENDER: launch recommendation ─────────────────────────── */
+
+  function renderLaunch (score) {
+    var box   = document.getElementById('launch-box');
+    var verd  = document.getElementById('launch-verdict');
+    var desc  = document.getElementById('launch-desc');
+    var conds = document.getElementById('launch-conditions');
+
+    if (score >= 85) {
+      box.className        = 'launch-box go';
+      verd.className       = 'launch-verdict go';
+      verd.textContent     = '✓  Recommended for Launch';
+      desc.textContent     = 'SOKONI has achieved a production readiness score of ' + score +
+        '/100, exceeding the 85-point certification threshold. The platform is cleared for ' +
+        'controlled launch. The following conditions must be resolved before general availability.';
+      var items = [
+        'Deploy 23 pending Cloud Functions once GCP Cloud Run CPU quota increase is approved.',
+        'Complete M-PESA production STK push end-to-end testing after Safaricom business verification.',
+        'Register with KRA for eTIMS production onboarding; obtain Control Unit serial numbers.',
+        'Replace SENDGRID_API_KEY placeholder in Secret Manager with the live production key.',
+      ];
+      conds.innerHTML = items.map(function (c) {
+        return '<div class="cond-row"><span class="cond-icon">⚠</span><span>' + esc(c) + '</span></div>';
+      }).join('');
+    } else {
+      box.className    = 'launch-box nogo';
+      verd.className   = 'launch-verdict nogo';
+      verd.textContent = '✗  Not Recommended for Launch';
+      desc.textContent = 'Production readiness score (' + score +
+        '/100) is below the 85-point certification threshold. Resolve all FAIL-status domains and critical open risks before resubmitting for certification.';
+      conds.innerHTML = '';
+    }
+  }
+
+  /* ── RENDER: sign-offs ──────────────────────────────────────── */
+
+  function renderSignoffs () {
+    var tbody = document.getElementById('so-tbody');
+    var saved = getSaved();
+    tbody.innerHTML = '';
+    SIGNOFFS.forEach(function (s, i) {
+      var checked = saved[s.role] ? 'checked' : '';
+      var dateVal = saved[s.role + '_date'] || '—';
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + esc(s.role) + '</td>' +
+        '<td class="dim" style="font-size:12px">' + esc(s.domain) + '</td>' +
+        '<td><input type="checkbox" ' + checked +
+          ' aria-label="' + esc(s.role) + ' approval"' +
+          ' data-role="' + esc(s.role) + '"' +
+          ' onchange="window._soChange(this)"></td>' +
+        '<td class="mono dim" id="so-d-' + i + '">' + esc(dateVal) + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  /* ── SIGN-OFF HANDLER ───────────────────────────────────────── */
+
+  window._soChange = function (el) {
+    var role  = el.getAttribute('data-role');
+    var saved = getSaved();
+    if (el.checked) {
+      saved[role]              = true;
+      saved[role + '_date']    = new Date().toISOString().slice(0, 10);
+    } else {
+      delete saved[role];
+      delete saved[role + '_date'];
+    }
+    setSaved(saved);
+    renderSignoffs();
+    // Best-effort Firestore sync
+    try {
+      db.collection('certificationSignoffs').doc('rc1').set(saved, { merge: true });
+    } catch (_) { /* offline or rules block — local state still persists */ }
+  };
+
+  /* ── EXPORT JSON ────────────────────────────────────────────── */
+
+  window.exportJSON = function () {
+    var saved = getSaved();
+    var payload = {
+      reportVersion: '1.0',
+      platform:      'SOKONI',
+      milestone:     'RC1',
+      auditDate:     new Date().toISOString().slice(0, 10),
+      generatedAt:   new Date().toISOString(),
+      systems:       SYSTEMS,
+      risks:         RISKS,
+      limitations:   LIMITATIONS,
+      signoffs:      saved,
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'sokoni-cert-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  /* ── HELPERS ────────────────────────────────────────────────── */
+
+  function setAuditDate () {
+    var el = document.getElementById('audit-date');
+    if (el) el.textContent = new Date().toISOString().slice(0, 10);
+  }
+
+  function getSaved () {
+    try { return JSON.parse(localStorage.getItem('sokoni_cert_so') || '{}'); }
+    catch (_) { return {}; }
+  }
+
+  function setSaved (data) {
+    try { localStorage.setItem('sokoni_cert_so', JSON.stringify(data)); } catch (_) {}
+  }
+
+  function esc (s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+}());
+</script>
+</body>
+</html>

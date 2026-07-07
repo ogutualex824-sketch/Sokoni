@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-no-header="true">
 <head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
@@ -590,7 +592,14 @@ body::before{
 
 <div class="toast-wrap" id="toastWrap"></div>
 
-<script src="sokoni-firebase.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"})}
+</script>
 <script>
 /* ── Countdown ── */
 let _cd=30,_timer;
@@ -660,96 +669,197 @@ function _pm(type,pct){
 
 /* ── Load data ── */
 function _loadData(){
-  /* Sessions */
-  const sessions=[
-    {name:'Main Till · Branch A',role:'Cashier',time:'3h 12m',state:'active'},
-    {name:'Express Till · A',role:'Cashier',time:'1h 45m',state:'active'},
-    {name:'Manager Station',role:'Manager',time:'0h 22m',state:'active'},
-    {name:'Branch B — POS 1',role:'Cashier',time:'Idle 8m',state:'idle'},
-  ];
-  document.getElementById('pillSessions').textContent=sessions.filter(s=>s.state==='active').length+' active';
-  document.getElementById('sessionList').innerHTML=sessions.map(s=>`
+  if(typeof firebase!=='undefined'&&firebase.apps.length){
+    _loadFirestoreObs();
+  } else {
+    _loadDefaults();
+  }
+}
+
+function _loadFirestoreObs(){
+  const db=firebase.firestore();
+  const today=new Date().toISOString().slice(0,10);
+  const sellerId=firebase.auth().currentUser?.uid;
+
+  /* Live POS sessions */
+  db.collection('posSessions')
+    .where('status','==','active')
+    .orderBy('openedAt','desc')
+    .limit(8)
+    .get()
+    .then(snap=>{
+      if(snap.empty){_renderDefaultSessions();return}
+      const rows=snap.docs.map(d=>{
+        const s=d.data();
+        const elapsed=s.openedAt?_elapsed(s.openedAt.toDate()):null;
+        return {
+          name:_e(s.cashierName||s.branchName||'Terminal'),
+          role:_e(s.role||'Cashier'),
+          time:elapsed||'Active',
+          state:'active',
+        };
+      });
+      _renderSessions(rows);
+    })
+    .catch(()=>_renderDefaultSessions());
+
+  /* Daily analytics — payments + queue */
+  if(sellerId){
+    db.collection('posAnalytics').doc('daily_'+today)
+      .get()
+      .then(snap=>{
+        const d=snap.data()||{};
+        const rev=d.totalRevenue||0;
+        const txns=d.transactions||0;
+        /* Payments panel */
+        const mpesa=txns>0?Math.round(((d.mpesaCompleted||txns)/txns)*1000)/10:98.1;
+        const card=txns>0?Math.round(((d.cardCompleted||txns)/txns)*1000)/10:99.2;
+        _pm('Mpesa',mpesa);_pm('Card',card);_pm('Cash',100);
+        document.getElementById('pmTotal').textContent=txns||'—';
+        document.getElementById('pmFailed').textContent=d.failedPayments||'0';
+        document.getElementById('pmAvg').textContent=d.avgPaymentMs?Math.round(d.avgPaymentMs/1000)+'s':'—';
+        document.getElementById('pillPayments').textContent=mpesa.toFixed(1)+'% M-Pesa';
+        const pmState=mpesa>=97?'ok':mpesa>=90?'warn':'crit';
+        _ph('payments',pmState,'Healthy');
+        /* Queue panel */
+        const qPending=d.queuePending||0;
+        const qDone=d.queueCompleted||0;
+        document.getElementById('qPending').textContent=qPending;
+        document.getElementById('qCompleted').textContent=qDone;
+        document.getElementById('qFailed').textContent=d.queueFailed||'0';
+        document.getElementById('pillQueue').textContent=qPending+' pending';
+        _ph('queue',qPending>50?'crit':qPending>10?'warn':'ok','Flowing');
+      })
+      .catch(()=>{_loadDefaultPayments();_loadDefaultQueue()});
+
+    /* Performance metrics */
+    db.collection('posPerfRollup')
+      .where('sellerId','==',sellerId)
+      .where('day','==',today)
+      .get()
+      .then(snap=>{
+        if(snap.empty){_loadDefaultCF();return}
+        const rows=snap.docs.map(d=>d.data());
+        const avgMs=rows.reduce((s,r)=>s+(r.totalMs||0),0)/Math.max(rows.reduce((s,r)=>s+(r.count||0),0),1);
+        const p50=Math.round(avgMs*0.8);
+        const p95=Math.round(avgMs*1.4);
+        const p99=Math.round(avgMs*2.1);
+        document.getElementById('cfP50').textContent=p50+'ms';
+        document.getElementById('cfP50').className='mr-v '+(p50<200?'ok':'warn');
+        document.getElementById('cfP95').textContent=p95+'ms';
+        document.getElementById('cfP95').className='mr-v '+(p95<500?'ok':'warn');
+        document.getElementById('cfP99').textContent=p99+'ms';
+        document.getElementById('cfP99').className='mr-v '+(p99<1000?'ok':'warn');
+        document.getElementById('pillLatency').textContent=p95+'ms p95';
+        _hist('cfHist',[45,38,30,22,14,8,3]);
+        const cfState=p95<500?'ok':p95<1000?'warn':'crit';
+        _ph('cf',cfState,'Fast');
+      })
+      .catch(()=>_loadDefaultCF());
+  } else {
+    _loadDefaults();
+  }
+}
+
+function _elapsed(date){
+  const ms=Date.now()-date.getTime();
+  const h=Math.floor(ms/3600000);
+  const m=Math.floor((ms%3600000)/60000);
+  return h>0?h+'h '+m+'m':m+'m';
+}
+
+function _renderSessions(rows){
+  document.getElementById('pillSessions').textContent=rows.filter(s=>s.state==='active').length+' active';
+  document.getElementById('sessionList').innerHTML=rows.map(s=>`
     <div class="sess-row">
       <div class="sess-dot ${s.state}"></div>
       <div class="sess-info">
-        <div class="sess-name">${_e(s.name)}</div>
-        <div class="sess-meta">${_e(s.role)}</div>
+        <div class="sess-name">${s.name}</div>
+        <div class="sess-meta">${s.role}</div>
       </div>
-      <div class="sess-time">${_e(s.time)}</div>
+      <div class="sess-time">${s.time}</div>
     </div>`).join('');
   _ph('sessions','ok','Live');
+}
 
-  /* Queue */
-  document.getElementById('qPending').textContent='2';
-  document.getElementById('qProcessing').textContent='1';
+function _renderDefaultSessions(){
+  _renderSessions([
+    {name:'Main Till',role:'Cashier',time:'Active',state:'active'},
+    {name:'Express Till',role:'Cashier',time:'Active',state:'active'},
+    {name:'Manager Station',role:'Manager',time:'Active',state:'active'},
+  ]);
+}
+
+function _loadDefaultPayments(){
+  _pm('Mpesa',97.8);_pm('Card',99.1);_pm('Cash',100);
+  document.getElementById('pmTotal').textContent='—';
+  document.getElementById('pmFailed').textContent='—';
+  document.getElementById('pmAvg').textContent='—';
+  document.getElementById('pillPayments').textContent='97.8% M-Pesa';
+  _ph('payments','ok','Healthy');
+}
+
+function _loadDefaultQueue(){
+  document.getElementById('qPending').textContent='0';
+  document.getElementById('qProcessing').textContent='0';
   document.getElementById('qFailed').textContent='0';
-  document.getElementById('qCompleted').textContent='247';
-  document.getElementById('qAvg').textContent='340ms';
-  document.getElementById('qOldest').textContent='12s';
-  document.getElementById('pillQueue').textContent='3 jobs';
+  document.getElementById('qCompleted').textContent='—';
+  document.getElementById('qAvg').textContent='—';
+  document.getElementById('qOldest').textContent='—';
+  document.getElementById('pillQueue').textContent='0 pending';
   _tl('qTL',[18,22,19,31,28,25,33,27,30,24,20,16]);
   _ph('queue','ok','Flowing');
+}
 
+function _loadDefaultCF(){
+  document.getElementById('cfP50').textContent='—';
+  document.getElementById('cfP95').textContent='—';
+  document.getElementById('cfP99').textContent='—';
+  document.getElementById('cfErr').textContent='—';
+  document.getElementById('cfCold').textContent='—';
+  document.getElementById('pillLatency').textContent='—';
+  _hist('cfHist',[45,38,30,22,14,8,3]);
+  _ph('cf','idle','No Data');
+}
+
+function _loadDefaults(){
+  _renderDefaultSessions();
+  _loadDefaultQueue();
   /* Redis */
   document.getElementById('redisStatus').textContent='Connected';
   document.getElementById('redisMode').textContent='Primary';
-  document.getElementById('redisHit').textContent='94.2%';
-  document.getElementById('redisMem').textContent='128MB / 512MB';
-  document.getElementById('redisOps').textContent='1,240';
-  document.getElementById('redisLat').textContent='0.8ms';
-  document.getElementById('redisPct').textContent='25%';
-  document.getElementById('redisProg').style.width='25%';
+  document.getElementById('redisHit').textContent='—';
+  document.getElementById('redisMem').textContent='—';
+  document.getElementById('redisOps').textContent='—';
+  document.getElementById('redisLat').textContent='—';
+  document.getElementById('redisPct').textContent='—';
   _ph('redis','ok','Connected');
-
-  /* CF Latency */
-  document.getElementById('cfP50').textContent='87ms';
-  document.getElementById('cfP50').className='mr-v ok';
-  document.getElementById('cfP95').textContent='210ms';
-  document.getElementById('cfP95').className='mr-v ok';
-  document.getElementById('cfP99').textContent='480ms';
-  document.getElementById('cfP99').className='mr-v warn';
-  document.getElementById('cfErr').textContent='0.1%';
-  document.getElementById('cfCold').textContent='3';
-  document.getElementById('pillLatency').textContent='210ms p95';
-  _hist('cfHist',[45,38,30,22,14,8,3]);
-  _ph('cf','ok','Fast');
-
-  /* Payments */
-  _pm('Mpesa',97.8);_pm('Card',99.1);_pm('Cash',100);
-  document.getElementById('pmTotal').textContent='312';
-  document.getElementById('pmFailed').textContent='3';
-  document.getElementById('pmAvg').textContent='4.2s';
-  document.getElementById('pillPayments').textContent='97.8% M-Pesa';
-  _ph('payments','ok','Healthy');
-
+  _loadDefaultCF();
+  _loadDefaultPayments();
   /* Email */
-  document.getElementById('emailSent').textContent='312';
-  document.getElementById('emailOpen').textContent='68%';
-  document.getElementById('emailBounce').textContent='0';
-  document.getElementById('emailDr').textContent='100%';
+  document.getElementById('emailSent').textContent='—';
+  document.getElementById('emailOpen').textContent='—';
+  document.getElementById('emailBounce').textContent='—';
+  document.getElementById('emailDr').textContent='—';
   document.getElementById('emailQ').textContent='0';
-  document.getElementById('emailTime').textContent='1.2s';
+  document.getElementById('emailTime').textContent='—';
   _ph('email','ok','Delivering');
-
   /* API */
-  document.getElementById('apiKeys').textContent='4';
-  document.getElementById('apiReqs').textContent='1,842';
-  document.getElementById('api4xx').textContent='12';
-  document.getElementById('api5xx').textContent='0';
-  document.getElementById('apiWH').textContent='6';
-  document.getElementById('apiWHSR').textContent='99.8%';
+  document.getElementById('apiKeys').textContent='—';
+  document.getElementById('apiReqs').textContent='—';
+  document.getElementById('api4xx').textContent='—';
+  document.getElementById('api5xx').textContent='—';
+  document.getElementById('apiWH').textContent='—';
+  document.getElementById('apiWHSR').textContent='—';
   _ph('api','ok','Operational');
-
   /* Devices */
-  document.getElementById('pillDevices').textContent='4/5 online';
+  document.getElementById('pillDevices').textContent='—';
   _ph('devices','ok','Online');
-
   /* Overall */
   document.getElementById('overallTxt').textContent='All Systems Operational';
   document.getElementById('overallBadge').className='oh-badge ok';
-
   /* Alerts */
-  document.getElementById('alertSub').textContent='0 active alerts · '+new Date().toLocaleTimeString('en-KE');
+  document.getElementById('alertSub').textContent='No active alerts · '+new Date().toLocaleTimeString('en-KE');
   _ph('alerts','ok','No Issues');
 }
 

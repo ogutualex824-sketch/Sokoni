@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-no-header="true">
 <head>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
@@ -373,6 +375,8 @@ body::before{
 </main>
 
 <script>
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
 /* ── Score cards ── */
 const SCORES=[
   {icon:'✅',label:'Feature Completeness',score:10,max:10,color:'var(--green)'},
@@ -390,7 +394,7 @@ document.getElementById('scoreGrid').innerHTML=SCORES.map(s=>{
     <div class="sc-top-bar" style="background:${s.color}"></div>
     <div class="sc-icon">${s.icon}</div>
     <div class="sc-num" style="color:${s.color}">${s.score}/${s.max}</div>
-    <div class="sc-label">${s.label}</div>
+    <div class="sc-label">${_esc(s.label)}</div>
   </div>`;
 }).join('');
 
@@ -410,8 +414,8 @@ const BENCHES=[
 ];
 document.getElementById('benchGrid').innerHTML=BENCHES.map(b=>`
   <div class="bench-row">
-    <div class="bench-name">${b.name}</div>
-    <div class="bench-target">${b.target}</div>
+    <div class="bench-name">${_esc(b.name)}</div>
+    <div class="bench-target">${_esc(b.target)}</div>
     <div class="bench-pb"><div class="bench-fill ${b.cls}" style="width:${b.pct}%"></div></div>
     <div class="bench-grade ${b.grade}">${b.grade}</div>
   </div>`).join('');
@@ -438,8 +442,8 @@ document.getElementById('moduleGrid').innerHTML=MODULES.map(m=>`
   <div class="module-row">
     <div class="mod-status done"></div>
     <div class="mod-info">
-      <div class="mod-name">${m.name}</div>
-      <div class="mod-note">${m.note}</div>
+      <div class="mod-name">${_esc(m.name)}</div>
+      <div class="mod-note">${_esc(m.note)}</div>
     </div>
     <div class="mod-badge done">Complete</div>
   </div>`).join('');
@@ -462,8 +466,8 @@ const TERMINALS=[
 function cap(v){return `<span class="cap ${v?'yes':'no'}">${v?'✓':'—'}</span>`}
 document.getElementById('terminalMatrix').innerHTML=TERMINALS.map(t=>`
   <tr>
-    <td class="td-name">${t.name}</td>
-    <td class="td-vendor">${t.vendor}</td>
+    <td class="td-name">${_esc(t.name)}</td>
+    <td class="td-vendor">${_esc(t.vendor)}</td>
     <td>${cap(t.chip)}</td>
     <td>${cap(t.nfc)}</td>
     <td>${cap(t.mpesa)}</td>
@@ -487,8 +491,8 @@ document.getElementById('deployList').innerHTML=DEPLOY.map(d=>`
   <div class="deploy-item">
     <div class="di-icon">${d.icon}</div>
     <div class="di-body">
-      <div class="di-name">${d.name}</div>
-      <div class="di-desc">${d.desc}</div>
+      <div class="di-name">${_esc(d.name)}</div>
+      <div class="di-desc">${_esc(d.desc)}</div>
     </div>
     <div class="di-status ${d.sl}">${d.status==='ready'?'Ready':d.status==='needed'?'Required':'Pending'}</div>
   </div>`).join('');
@@ -504,8 +508,8 @@ document.getElementById('limList').innerHTML=LIMS.map((l,i)=>`
   <div class="lim-item">
     <div class="lim-num">${i+1}</div>
     <div class="lim-body">
-      <div class="lim-title">${l.title}</div>
-      <div class="lim-desc">${l.desc}</div>
+      <div class="lim-title">${_esc(l.title)}</div>
+      <div class="lim-desc">${_esc(l.desc)}</div>
     </div>
   </div>`).join('');
 

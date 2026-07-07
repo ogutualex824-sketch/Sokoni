@@ -74,19 +74,19 @@ exports.recordPosEvent = onCall({ region: REGION }, async (req) => {
     passCount: admin.firestore.FieldValue.increment(passed ? 1 : 0),
     failCount: admin.firestore.FieldValue.increment(passed ? 0 : 1),
     totalMs:   admin.firestore.FieldValue.increment(durationMs),
-    minMs:     admin.firestore.FieldValue.increment(0),  /* recalculated in report */
-    maxMs:     admin.firestore.FieldValue.increment(0),
     targetMs:  target,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  /* Update min/max separately (Firestore can't do conditional set in a single op) */
-  const snap = await rollupRef.get();
-  const cur  = snap.data() || {};
-  const updates = {};
-  if (!cur.minMs || durationMs < cur.minMs) updates.minMs = durationMs;
-  if (!cur.maxMs || durationMs > cur.maxMs) updates.maxMs = durationMs;
-  if (Object.keys(updates).length) await rollupRef.update(updates);
+  /* Update min/max inside a transaction to avoid race conditions */
+  await db().runTransaction(async tx => {
+    const doc = await tx.get(rollupRef);
+    const cur = doc.data() || {};
+    const updates = {};
+    if (cur.minMs === undefined || durationMs < cur.minMs) updates.minMs = durationMs;
+    if (cur.maxMs === undefined || durationMs > cur.maxMs) updates.maxMs = durationMs;
+    if (Object.keys(updates).length) tx.update(rollupRef, updates);
+  });
 
   return { recorded: true, passed, durationMs, targetMs: target, ratio };
 });
@@ -178,7 +178,7 @@ exports.getPosSpeedReport = onCall({ region: REGION }, async (req) => {
   const report = EVENT_TYPES.map(et => {
     const r   = rollupMap[et];
     const tgt = TARGETS_MS[et];
-    if (!r || r.totalCount === 0) {
+    if (!r || r.count === 0) {
       return { eventType: et, targetMs: tgt, count: 0, status: 'no_data', passRate: null, avgMs: null };
     }
     const passRate = Math.round((r.passCount / r.count) * 1000) / 10;
