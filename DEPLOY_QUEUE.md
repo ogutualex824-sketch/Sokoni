@@ -3,6 +3,26 @@
 All Cloud Functions below are code-complete and hosted. They are waiting for
 Cloud Run quota to clear (quota typically resets within 24 hours).
 
+## STATUS — 2026-07-06 (last deploy attempt)
+- ✅ **Code is 100% deploy-ready.** Deploy passes source analysis + upload and
+  reaches the function-creation step for all 24.
+- ✅ **Fixed a hard blocker:** `index.js` exported `_webhookStripe_disabled`
+  (invalid CF name — leading underscore) which aborted the whole deploy during
+  analysis. It's now commented out (kept as reference, not deployed). It had
+  also bypassed Stripe signature verification, so keeping it undeployed is the
+  correct security posture too.
+- ⛔ **Still blocked by Cloud Run quota.** Last attempt: all 24 creates returned
+  `HTTP 429 — insufficient quota` in `us-central1`. **0 of 24 created.**
+  `firebase functions:list` confirms none are live yet.
+
+### To unblock (pick one)
+1. **Wait** for the daily Cloud Run quota reset, then re-run the deploy command below.
+2. **Request a quota increase** (recommended — the project runs ~1000+ CFs):
+   GCP Console → IAM & Admin → Quotas → filter service `run.googleapis.com`,
+   region `us-central1`, raise **"CPU allocation without committed use (Total, per region)"**.
+   Also check the Cloud Functions API quotas (Function CPU / instances).
+3. **Free quota** by pruning unused/duplicate functions (`firebase functions:delete <name>`) before retrying.
+
 ## Required workaround before EVERY CF deploy
 The Firebase CLI's npm SDK version check times out on this machine.
 Set a short npm fetch timeout before deploying — restore it after:
