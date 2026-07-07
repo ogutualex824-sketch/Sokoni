@@ -1,4 +1,73 @@
-﻿## [2026-07-07] — KASS Developer Assistant + SokoniI18n Framework v1.0
+﻿## [2026-07-07] — Subscription & Billing Engine v2.0
+
+### Summary
+Extended the automated subscription platform with 3 new Cloud Functions, a universal plan selection page, and a complete seller wallet portal.
+
+### New Cloud Functions (sub-engine.js — now 6 CFs)
+| CF | Description |
+|---|---|
+| `subCheckFeature` | Centralized feature-flag resolver; fast-path via users cache, Firestore fallback; returns `hasFeature` + quota value for any hub type |
+| `subRetryFailedPayments` | Scheduled every 6h; exponential backoff 1h/24h/72h; M-Pesa STK push retry; auto-expires after 3 failed attempts with notification |
+| `subDowngrade` | Schedule or immediate plan downgrade; archives excess listings to `status=archived` read-only when new quota limit is lower; fast-read mirror update on `users/{uid}` |
+
+### New Pages
+| Page | Description |
+|---|---|
+| `plans.html` | Universal plan selection for all 12 hub types; billing toggle (monthly/annual, 17% savings badge); hub tabs; trial badges; confirm modal; current-plan detection |
+| `seller-wallet.html` | 4-tab seller earnings dashboard: Overview (category bars, recent transactions), Commission History (filterable, CSV export), Withdrawals (M-Pesa/Bank slide-in, request + history), Monthly Statements (print-ready) |
+| `commission-admin.html` | 5-tab admin revenue dashboard: Revenue (KPIs, hub/category bars, sparkline), Commission Rules, Withdrawals (approve/reject), Revenue by Seller, Audit Log |
+
+### Engine Coverage
+- 32 CFs across 3 files: sub-billing (15) + sub-engine (6) + subscription-os (11)
+- 26 plan types: sellers, providers, restaurants, hotels, pharmacies, drivers, property agents, car dealers, freelancers, recruiters, buyers, enterprise
+- Full lifecycle: trial → active → past_due (retry ×3) → expired → reactivate
+
+### Commission Engine v1.0 (commission.js — 5 new CFs)
+`processSettlement`, `requestWithdrawal`, `approveWithdrawal`, `rejectWithdrawal`, `getWithdrawals`
+
+### Security
+- All new CFs require Firebase Auth; admin-only CFs assert admin/superAdmin claim
+- Amounts stored in cents (integer) throughout; division by 100 only at display layer
+- Idempotency via `finosIdempotency` collection on all settlement operations
+
+---
+
+## [2026-07-07] — Security Hardening v2 — enforceAppCheck + REDIS_URL + Deploy Queue
+
+### Summary
+Applied remaining security audit findings. Added `enforceAppCheck: true` to all
+client-callable Cloud Functions in `payment-trust.js` and `financial-os.js`.
+Provisioned `REDIS_URL` placeholder in `functions/.env`. Added a 61-CF security
+patch redeploy command to `DEPLOY_QUEUE.md`.
+
+### Files Changed
+| File | Change |
+|---|---|
+| `functions/payment-trust.js` | Added `enforceAppCheck: true` to shared `cfg` — propagates to `generateTrustReceipt`, `emailTrustReceipt`, `verifyTrustReceipt`, `getPaymentSecurityAlerts` |
+| `functions/financial-os.js` | Added `enforceAppCheck: true` to all 7 `onCall` option objects (fosInitiatePayment, fosSubmitRefund, fosApproveRefund, fosGenerateInvoice, fosExportReport, fosGetProviderHealth, fosGetAdminConsole) |
+| `functions/.env` | Added `REDIS_URL=` placeholder with provisioning instructions (GCP Memorystore) |
+| `DEPLOY_QUEUE.md` | Added "SECURITY PATCH REDEPLOY — 61 CFs" section with single-command deploy for all patched live functions |
+
+### Security
+- `fosSecureWebhook` (`onRequest` webhook) deliberately excluded — uses HMAC verification, App Check not applicable
+- `finos-router.js` CFs deliberately excluded — all use `invoker: 'private'` (server-to-server only, stronger restriction than App Check)
+- `payment-adapters.js`, `finos-utils.js` — utility libraries, no CF exports, no action required
+
+### What's still pending (cannot fix in code)
+- **GCP Cloud Run CPU quota** — must request increase at GCP Console → IAM & Admin → Quotas → Cloud Run CPU → 2000+ vCPUs (us-central1)
+- **Redis provisioning** — fill `REDIS_URL` after creating GCP Memorystore instance
+- **CSP `unsafe-inline`** — 264 of 265 HTML pages have inline scripts; report-only CSP is already capturing violations; full fix requires phased per-file migration
+- **DPIA / ODPC** — legal team action (Kenya Data Protection Act)
+
+---
+
+## [2026-07-07] — wallet.html premium dark theme
+
+- `wallet.html` converted from light theme (`#f0f2ff`/`#00bcd4`) to SOKONI premium dark theme (`#050505` bg, `#71ff00` accent, dark surface tokens); meta theme-color updated; JS/functionality unchanged.
+
+---
+
+## [2026-07-07] — KASS Developer Assistant + SokoniI18n Framework v1.0
 
 ### Summary
 Two new client-side files: `kass-developer.html` — a premium dark-theme AI assistant tailored for SOKONI platform engineers — and `sokoni-i18n.js` — a lightweight, zero-dependency internationalisation framework supporting English and Swahili (Kenya dialect). No Cloud Function or Firestore index changes required.
