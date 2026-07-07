@@ -23,6 +23,28 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
    Also check the Cloud Functions API quotas (Function CPU / instances).
 3. **Free quota** by pruning unused/duplicate functions (`firebase functions:delete <name>`) before retrying.
 
+## Quota cleanup — 2026-07-06 (10 slots freed)
+Deleted 10 superseded functions from the OLD async-job system
+(`functions/async-jobs-engine.js`, replaced by `functions/async-jobs.js`).
+Verified at invocation level that each had **no live caller** (only the dead
+`sokoni-async-jobs.js` SDK, which no page loads):
+`submitEmailJob`, `submitWebhookJob`, `cancelJob`, `retryJob`, `getJobDashboard`,
+`getMyJobs`, `getWorkerStats`, `inspectJob`, `replayDLQJob`, `bulkCancelJobs`.
+
+**Held (NOT deleted) — need deeper review:**
+- `getQueueDepth` — still called live by `executive-dashboard.html` +
+  `enterprise-ops.html`. Migrate those to the new `asyncGetDashboard` first.
+- `onJobCreated`, `processJobQueue`, `jobCleanupScheduled`, `jobStuckRecovery` —
+  background workers entangled with the shared `asyncJobs` collection (the new
+  `asyncWorker` fires on the same `asyncJobs/{jobId}` path; 5 live functions —
+  disaster-recovery, enterprise-health, platform-ops, release-readiness,
+  async-job-handlers — write to it). Confirm no double-processing/schema
+  mismatch before removing.
+
+Follow-up hygiene: `sokoni-async-jobs.js` is a dead client SDK (only in the SW
+precache list, loaded by no page). Safe to remove from `service-worker.js`
+precache + delete the file once the above workers are resolved.
+
 ## Required workaround before EVERY CF deploy
 The Firebase CLI's npm SDK version check times out on this machine.
 Set a short npm fetch timeout before deploying — restore it after:
