@@ -190,7 +190,7 @@ exports.initiateWalletTopUp = onCall(
 // ─── 3. confirmWalletTopUp ─────────────────────────────────────────────────
 
 exports.confirmWalletTopUp = onCall(
-  { cors: true, secrets: [INTASEND_KEY] },
+  { cors: true, secrets: [INTASEND_KEY], enforceAppCheck: true },
   async (request) => {
     _requireAuth(request);
 

@@ -98,7 +98,7 @@ function assertMFA(decodedToken, role = "admin") {
 const BOOTSTRAP_EMAIL = "admin@mysokoni.co.ke";
 
 exports.bootstrapAdminClaim = onCall(
-  { timeoutSeconds: 30 },
+  { timeoutSeconds: 30, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
 
@@ -154,7 +154,7 @@ exports.bootstrapAdminClaim = onCall(
 );
 
 exports.grantAdminClaim = onCall(
-  { timeoutSeconds: 30 },
+  { timeoutSeconds: 30, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -4416,7 +4416,7 @@ exports.revokeShopInvite = onCall({}, async (request) => {
 ══════════════════════════════════════════════════════════════════════ */
 
 /* Initiate a card payment on a Cloud-connected terminal */
-exports.posInitiateTerminalPayment = onCall({ timeoutSeconds: 30 }, async (request) => {
+exports.posInitiateTerminalPaymentV1 = onCall({ timeoutSeconds: 30 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
   const { terminalId, bizId, amount, currency = "KES", reference } = request.data || {};
@@ -4491,8 +4491,8 @@ exports.posPollTerminalPayment = onCall({ timeoutSeconds: 15 }, async (request) 
   };
 });
 
-/* Cancel a pending terminal payment */
-exports.posCancelTerminalPayment = onCall({ timeoutSeconds: 15 }, async (request) => {
+/* Cancel a pending terminal payment (v1 legacy — superseded by posTerminalLive) */
+exports.posCancelTerminalPaymentV1 = onCall({ timeoutSeconds: 15 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
   const { paymentId, bizId } = request.data || {};
@@ -7253,7 +7253,7 @@ exports.platformGetEventLog        = platformEvents.platformGetEventLog;
 exports.platformRegisterSub        = platformEvents.platformRegisterSub;
 exports.platformGetSubscriptions   = platformEvents.platformGetSubscriptions;
 exports.platformReplayEvents       = platformEvents.platformReplayEvents;
-exports.onPlatformEventCreated     = platformEvents.onPlatformEventCreated;
+exports.onPlatformEventsDocCreated  = platformEvents.onPlatformEventCreated;
 
 /* ── Search Platform — Unified Orchestration Layer ────────────────────── */
 const searchAdmin = require('./search-admin');
@@ -7840,7 +7840,7 @@ const posRetail = require("./pos-retail");
 
 exports.posSyncToMarketplace       = posRetail.posSyncToMarketplace;
 exports.sendPOSReceipt             = posRetail.sendPOSReceipt;
-exports.sendPurchaseOrder          = posRetail.sendPurchaseOrder;
+exports.posSendPurchaseOrder       = posRetail.sendPurchaseOrder;
 exports.posLowStockAlert           = posRetail.posLowStockAlert;
 exports.posMarketplaceOrderSync    = posRetail.posMarketplaceOrderSync;
 
@@ -7974,7 +7974,7 @@ exports.adminGetProducts            = adminOs.adminGetProducts;
 exports.adminUpdateProductStatus    = adminOs.adminUpdateProductStatus;
 exports.adminGetBookings            = adminOs.adminGetBookings;
 exports.adminGetDeliveryStats       = adminOs.adminGetDeliveryStats;
-exports.adminGetPendingPayouts      = adminOs.adminGetPendingPayouts;
+exports.adminOsGetPendingPayouts    = adminOs.adminGetPendingPayouts;
 exports.adminApprovePayouts         = adminOs.adminApprovePayouts;
 exports.adminGetDisputes            = adminOs.adminGetDisputes;
 exports.adminGetReviews             = adminOs.adminGetReviews;
@@ -8154,7 +8154,7 @@ const merchantSuccess = require('./merchant-success');
 exports.getMerchantHealthScore    = merchantSuccess.getMerchantHealthScore;
 exports.getAICoachInsights        = merchantSuccess.getAICoachInsights;
 exports.getMerchantCRM            = merchantSuccess.getMerchantCRM;
-exports.getInventoryInsights      = merchantSuccess.getInventoryInsights;
+exports.getMerchantInventoryInsights = merchantSuccess.getInventoryInsights;
 exports.getMerchantFinancials     = merchantSuccess.getMerchantFinancials;
 exports.getMerchantBenchmarks     = merchantSuccess.getMerchantBenchmarks;
 exports.getMerchantOpportunities  = merchantSuccess.getMerchantOpportunities;
@@ -8371,7 +8371,7 @@ exports.getLivePOSMetrics          = posRetailEngine.getLivePOSMetrics;
 /* Staff Management */
 exports.getStaffPermissions        = posRetailEngine.getStaffPermissions;
 exports.recordAuditEvent           = posRetailEngine.recordAuditEvent;
-exports.getAuditLog                = posRetailEngine.getAuditLog;
+exports.getPosAuditLog             = posRetailEngine.getAuditLog;
 exports.getShiftSummary            = posRetailEngine.getShiftSummary;
 /* Multi-Branch */
 exports.getBranchComparison        = posRetailEngine.getBranchComparison;
@@ -8541,10 +8541,10 @@ exports.clearAIQueryHistory        = posAI.clearAIQueryHistory;
 
 /* ── SmartPOS 3.0 — Integrations & Observability ───────────── */
 const posIntegrations = require('./pos-integrations');
-exports.registerWebhook            = posIntegrations.registerWebhook;
-exports.deleteWebhook              = posIntegrations.deleteWebhook;
-exports.listWebhooks               = posIntegrations.listWebhooks;
-exports.testWebhook                = posIntegrations.testWebhook;
+exports.posSmartposRegisterWebhook = posIntegrations.registerWebhook;
+exports.posSmartposDeleteWebhook   = posIntegrations.deleteWebhook;
+exports.posSmartposListWebhooks    = posIntegrations.listWebhooks;
+exports.posSmartposTestWebhook     = posIntegrations.testWebhook;
 exports.deliverWebhookEvent        = posIntegrations.deliverWebhookEvent;
 exports.createAPIKey               = posIntegrations.createAPIKey;
 exports.revokeAPIKey               = posIntegrations.revokeAPIKey;
@@ -8569,8 +8569,8 @@ exports.getActivePOSPromotions      = posMarketplaceSync.getActivePOSPromotions;
 exports.getInventoryReserveStatus   = posMarketplaceSync.getInventoryReserveStatus;
 /* ── Platform Event Bus ─────────────────────────────────────── */
 const eventBus = require('./platform-event-bus');
-exports.publishEvent                = eventBus.publishEvent;
-exports.getEvent                    = eventBus.getEvent;
+exports.eventBusPublish             = eventBus.publishEvent;
+exports.eventBusGetEvent            = eventBus.getEvent;
 exports.queryEvents                 = eventBus.queryEvents;
 exports.replayEvent                 = eventBus.replayEvent;
 exports.getEventStats               = eventBus.getEventStats;
@@ -8687,7 +8687,7 @@ exports.initiatePasskeyRegistration   = secIdentity.initiatePasskeyRegistration;
 exports.verifyPasskeyRegistration     = secIdentity.verifyPasskeyRegistration;
 exports.initiatePasskeyAuthentication = secIdentity.initiatePasskeyAuthentication;
 exports.verifyPasskeyAuthentication   = secIdentity.verifyPasskeyAuthentication;
-exports.registerDevice                = secIdentity.registerDevice;
+exports.secRegisterDevice             = secIdentity.registerDevice;
 exports.getDevices                    = secIdentity.getDevices;
 exports.removeDevice                  = secIdentity.removeDevice;
 exports.updateDeviceTrustScore        = secIdentity.updateDeviceTrustScore;
@@ -9021,13 +9021,13 @@ exports.posCleanupPeripheralSignals = posPeripherals.posCleanupPeripheralSignals
 /* ── Redis Integrations v1.0 — Firestore → Redis event sync ────────────── */
 const redisIntegrations = require('./redis-integrations');
 exports.onOrderCreated          = redisIntegrations.onOrderCreated;
-exports.onOrderStatusChange     = redisIntegrations.onOrderStatusChange;
+exports.onOrderStatusChangeRedisSync = redisIntegrations.onOrderStatusChange;
 exports.onPaymentCreated        = redisIntegrations.onPaymentCreated;
 exports.onPaymentUpdated        = redisIntegrations.onPaymentUpdated;
 exports.onInventoryUpdated      = redisIntegrations.onInventoryUpdated;
 exports.onUserCreated           = redisIntegrations.onUserCreated;
 exports.onRiderStatusChange     = redisIntegrations.onRiderStatusChange;
-exports.onDeliveryStatusChange  = redisIntegrations.onDeliveryStatusChange;
+exports.onDeliveryStatusChangeRedisSync = redisIntegrations.onDeliveryStatusChange;
 
 /* ── SmartPOS 2.1 — Inventory Intelligence ──────────────────────────────── */
 const posIntelligence = require('./pos-intelligence');
@@ -9081,6 +9081,13 @@ exports.recordPosEvent            = posPerf.recordPosEvent;
 exports.getPosPerfMetrics         = posPerf.getPosPerfMetrics;
 exports.getPosSpeedReport         = posPerf.getPosSpeedReport;
 exports.posScheduledPerfRollup    = posPerf.posScheduledPerfRollup;
+
+/* ── Universal Printer Engine v4.0 — print log, history, config ────────── */
+const posPrinter = require('./pos-printer');
+exports.posLogPrint        = posPrinter.posLogPrint;
+exports.getPrintHistory    = posPrinter.getPrintHistory;
+exports.getPrinterConfig   = posPrinter.getPrinterConfig;
+exports.setPrinterConfig   = posPrinter.setPrinterConfig;
 
 /* ── Security 6.0 — Session Management ─────────────────────────────────── */
 const secSession = require('./security-session');

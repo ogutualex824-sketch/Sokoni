@@ -1367,70 +1367,6 @@
       ]
     },
     {
-      "collectionGroup": "gipLocations",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "region",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "isOnline",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "gipLocations",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "region",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "isOnline",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "gipAssets",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "uid",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "isOnline",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "gipAssets",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "region",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "module",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "gipDispatch",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1467,56 +1403,6 @@
       ]
     },
     {
-      "collectionGroup": "gipDispatch",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "module",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "gipAlerts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "resolved",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "gipAlerts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "assetId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "resolved",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "drivers",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
@@ -1526,20 +1412,6 @@
         },
         {
           "fieldPath": "computedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "gipRoutes",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "module",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
           "order": "DESCENDING"
         }
       ]
@@ -1708,34 +1580,6 @@
     },
     {
       "collectionGroup": "inventory_stockcounts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_requisitions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "inventory_shelf_scans",
       "queryScope": "COLLECTION",
       "fields": [
         {

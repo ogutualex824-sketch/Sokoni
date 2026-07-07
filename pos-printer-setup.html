@@ -3,618 +3,848 @@
 <head>
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Printer Setup — SOKONI SmartPOS</title>
-  <link rel="stylesheet" href="sokoni-quality.css">
-  <style>
-    :root {
-      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
-      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
-      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
-      --tok-primary:#1a73e8; --tok-green:#1e8e3e; --tok-red:#d32f2f; --tok-orange:#f57c00;
-      --tok-surface:#0d0d0d; --tok-bg:#050505; --tok-border:#1a1a1a;
-      --tok-text:#e8e8e8; --tok-muted:#888; --tok-radius:8px;
-    }
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;background:var(--bg);color:var(--txt)}
-    .app-header{background:var(--tok-primary);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px}
-    .app-header h1{font-size:18px;font-weight:600}
-    .app-header a{color:rgba(255,255,255,.85);text-decoration:none;font-size:13px;margin-left:auto}
-    .status-bar{background:var(--tok-surface);border-bottom:1px solid var(--tok-border);padding:10px 20px;display:flex;align-items:center;gap:12px}
-    .status-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-    .status-dot.connected{background:var(--tok-green)}
-    .status-dot.disconnected{background:var(--tok-red)}
-    .status-dot.scanning{background:var(--tok-orange);animation:pulse 1s infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-    .status-text{font-size:13px;color:var(--tok-muted);flex:1}
-    .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:var(--tok-radius);font-size:13px;font-weight:500;cursor:pointer;transition:opacity .15s}
-    .btn:hover{opacity:.88}
-    .btn:disabled{opacity:.45;cursor:not-allowed}
-    .btn-primary{background:var(--tok-primary);color:#fff}
-    .btn-outline{background:transparent;color:var(--tok-primary);border:1px solid var(--tok-primary)}
-    .btn-danger{background:var(--tok-red);color:#fff}
-    .btn-sm{padding:5px 10px;font-size:12px}
-    .btn-green{background:var(--tok-green);color:#fff}
-    .tabs{display:flex;border-bottom:2px solid var(--tok-border);background:var(--tok-surface);padding:0 20px;overflow-x:auto}
-    .tab{padding:12px 18px;font-size:13px;font-weight:500;color:var(--tok-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap}
-    .tab.active{color:var(--tok-primary);border-color:var(--tok-primary)}
-    .panel{display:none;padding:20px}
-    .panel.active{display:block}
-    .card{background:var(--tok-surface);border:1px solid var(--tok-border);border-radius:var(--tok-radius);padding:16px;margin-bottom:12px}
-    .card-title{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--tok-text)}
-    .device-list{display:flex;flex-direction:column;gap:8px}
-    .device-item{border:1px solid var(--tok-border);border-radius:var(--tok-radius);padding:12px 14px;display:flex;align-items:center;gap:12px;background:var(--tok-surface)}
-    .device-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-    .device-name{font-weight:500;font-size:13px}
-    .device-sub{font-size:11px;color:var(--tok-muted)}
-    .device-actions{margin-left:auto;display:flex;gap:6px}
-    .transport-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
-    .transport-btn{border:1px solid var(--tok-border);border-radius:var(--tok-radius);padding:14px 10px;text-align:center;cursor:pointer;background:var(--tok-surface);transition:all .15s}
-    .transport-btn:hover{border-color:var(--tok-primary);background:var(--sur2)}
-    .transport-btn .t-icon{font-size:24px;display:block;margin-bottom:6px}
-    .transport-btn .t-label{font-size:12px;font-weight:500;color:var(--tok-text)}
-    .transport-btn .t-sub{font-size:11px;color:var(--tok-muted)}
-    .transport-btn.unavail{opacity:.5;cursor:default}
-    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-    .form-row.single{grid-template-columns:1fr}
-    .form-group{display:flex;flex-direction:column;gap:4px}
-    label{font-size:12px;font-weight:500;color:var(--tok-muted)}
-    input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--tok-border);border-radius:var(--tok-radius);font-size:13px;font-family:inherit;color:var(--tok-text);background:var(--sur2)}
-    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--tok-primary)}
-    .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--tok-border)}
-    .toggle-row:last-child{border-bottom:none}
-    .toggle-row .t-label{font-size:13px}
-    .toggle-row .t-sub{font-size:11px;color:var(--tok-muted)}
-    .toggle{position:relative;display:inline-block;width:40px;height:22px}
-    .toggle input{opacity:0;width:0;height:0}
-    .slider{position:absolute;inset:0;background:#ccc;border-radius:22px;cursor:pointer;transition:.3s}
-    .slider:before{content:'';position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
-    input:checked+.slider{background:var(--tok-primary)}
-    input:checked+.slider:before{transform:translateX(18px)}
-    .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:rgba(26,115,232,.2);color:var(--tok-primary);border-radius:20px;font-size:11px;font-weight:500}
-    .chip.green{background:rgba(30,142,62,.2);color:var(--tok-green)}
-    .chip.red{background:rgba(211,47,47,.2);color:var(--tok-red)}
-    .chip.orange{background:rgba(245,124,0,.2);color:var(--tok-orange)}
-    .queue-table{width:100%;border-collapse:collapse}
-    .queue-table th{font-size:11px;font-weight:600;color:var(--tok-muted);text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--tok-border);text-align:left}
-    .queue-table td{padding:8px 10px;border-bottom:1px solid var(--tok-border);font-size:12px;vertical-align:middle}
-    .queue-table tr:last-child td{border-bottom:none}
-    .empty-state{text-align:center;padding:32px;color:var(--tok-muted)}
-    .empty-state .e-icon{font-size:40px;display:block;margin-bottom:8px}
-    .preview-box{border:1px solid var(--tok-border);border-radius:var(--tok-radius);background:var(--sur2);color:var(--txt);margin-top:8px;max-height:400px;overflow-y:auto;padding:10px;font-family:'Courier New',monospace;font-size:11px;white-space:pre}
-    .cap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:8px}
-    .cap-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--tok-border);border-radius:6px;background:var(--sur2);cursor:pointer}
-    .cap-item.yes{border-color:var(--tok-green);background:rgba(30,142,62,.12)}
-    .cap-label{font-size:12px}
-    .net-form{display:flex;gap:8px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap}
-    .net-form .form-group{flex:1;min-width:120px}
-    .net-form .form-group:first-child{flex:1.5}
-    .actions-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-    @media(max-width:600px){
-      .form-row{grid-template-columns:1fr}
-      .transport-grid{grid-template-columns:repeat(2,1fr)}
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Printer Setup — SOKONI SmartPOS</title>
+<style>
+:root {
+  --bg:    #07070f;
+  --bg2:   #0e0e1c;
+  --bg3:   #141428;
+  --bor:   #1e1e36;
+  --bor2:  #2a2a4a;
+  --txt:   #e8e8f0;
+  --sub:   #8888aa;
+  --acc:   #6d5cff;
+  --acc2:  #9d8fff;
+  --green: #00e676;
+  --red:   #ff4d4d;
+  --amber: #ffab40;
+  --r:     10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;background:var(--bg);color:var(--txt);min-height:100vh}
+body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse 60% 40% at 20% 0%,rgba(109,92,255,.07) 0%,transparent 60%),radial-gradient(ellipse 40% 30% at 80% 100%,rgba(0,230,118,.04) 0%,transparent 50%);pointer-events:none;z-index:0}
+
+/* ── Top bar ── */
+.pos-header{position:sticky;top:0;z-index:50;background:rgba(7,7,15,.9);backdrop-filter:blur(20px) saturate(1.5);border-bottom:1px solid var(--bor);padding:0 20px;height:56px;display:flex;align-items:center;gap:14px}
+.pos-header-icon{font-size:22px}
+.pos-header h1{font-size:16px;font-weight:700;letter-spacing:.3px;flex:1}
+.back-link{color:var(--acc2);text-decoration:none;font-size:12px;font-weight:500;padding:6px 12px;border:1px solid var(--bor2);border-radius:20px;transition:all .2s}
+.back-link:hover{background:rgba(109,92,255,.15);border-color:var(--acc)}
+
+/* ── Status bar ── */
+.status-bar{background:var(--bg2);border-bottom:1px solid var(--bor);padding:10px 20px;display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+.status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;transition:background .3s}
+.status-dot.connected{background:var(--green);box-shadow:0 0 8px var(--green)}
+.status-dot.disconnected{background:var(--red)}
+.status-dot.scanning{background:var(--amber);animation:pulse .9s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.status-text{font-size:12px;color:var(--sub);flex:1}
+.status-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px}
+.status-badge.bt{background:rgba(109,92,255,.2);color:var(--acc2)}
+.status-badge.usb{background:rgba(255,171,64,.2);color:var(--amber)}
+.status-badge.net{background:rgba(0,230,118,.2);color:var(--green)}
+.status-badge.ser{background:rgba(136,136,170,.2);color:var(--sub)}
+
+/* ── Tabs ── */
+.tabs{display:flex;border-bottom:1px solid var(--bor);background:var(--bg2);padding:0 20px;overflow-x:auto;position:relative;z-index:1}
+.tab{padding:12px 16px;font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;letter-spacing:.3px;transition:color .2s}
+.tab.active{color:var(--acc2);border-color:var(--acc)}
+.tab:hover:not(.active){color:var(--txt)}
+
+/* ── Panels ── */
+.panel{display:none;padding:20px;max-width:960px;margin:0 auto;position:relative;z-index:1}
+.panel.active{display:block}
+
+/* ── Cards ── */
+.card{background:var(--bg2);border:1px solid var(--bor);border-radius:var(--r);margin-bottom:14px;overflow:hidden}
+.card-top{height:3px;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+.card-body{padding:16px}
+.card-title{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--txt);letter-spacing:.2px}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.2px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:var(--acc);color:#fff}
+.btn-primary:hover:not(:disabled){background:var(--acc2)}
+.btn-outline{background:transparent;color:var(--acc2);border:1px solid var(--bor2)}
+.btn-outline:hover:not(:disabled){border-color:var(--acc);background:rgba(109,92,255,.1)}
+.btn-danger{background:rgba(255,77,77,.15);color:var(--red);border:1px solid rgba(255,77,77,.3)}
+.btn-danger:hover:not(:disabled){background:rgba(255,77,77,.25)}
+.btn-sm{padding:5px 10px;font-size:11px}
+.btn-green{background:rgba(0,230,118,.15);color:var(--green);border:1px solid rgba(0,230,118,.3)}
+.btn-green:hover:not(:disabled){background:rgba(0,230,118,.25)}
+.actions-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+/* ── Transport grid ── */
+.transport-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+.transport-btn{border:1px solid var(--bor);border-radius:var(--r);padding:14px 10px;text-align:center;cursor:pointer;background:var(--bg3);transition:all .2s}
+.transport-btn:hover:not(.unavail){border-color:var(--acc);background:rgba(109,92,255,.08);transform:translateY(-1px)}
+.transport-btn .t-icon{font-size:26px;display:block;margin-bottom:6px}
+.transport-btn .t-label{font-size:12px;font-weight:600;color:var(--txt)}
+.transport-btn .t-sub{font-size:10px;color:var(--sub);margin-top:2px}
+.transport-btn.unavail{opacity:.4;cursor:default}
+.transport-btn.active-transport{border-color:var(--acc);background:rgba(109,92,255,.15)}
+
+/* ── Device list ── */
+.device-list{display:flex;flex-direction:column;gap:8px}
+.device-item{border:1px solid var(--bor);border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;background:var(--bg3);transition:border-color .2s}
+.device-item:hover{border-color:var(--bor2)}
+.device-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;background:rgba(109,92,255,.15);flex-shrink:0}
+.device-name{font-weight:600;font-size:13px}
+.device-sub{font-size:11px;color:var(--sub);margin-top:2px}
+.device-actions{margin-left:auto;display:flex;gap:6px}
+
+/* ── Network form ── */
+.net-form{display:grid;grid-template-columns:2fr 1fr auto;gap:8px;align-items:flex-end;margin-bottom:12px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.form-row.single{grid-template-columns:1fr}
+label{font-size:11px;font-weight:600;color:var(--sub);letter-spacing:.3px;text-transform:uppercase}
+input,select,textarea{width:100%;padding:9px 12px;border:1px solid var(--bor2);border-radius:8px;font-size:13px;font-family:inherit;color:var(--txt);background:var(--bg3);min-height:40px;transition:border-color .2s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc)}
+select option{background:var(--bg3)}
+
+/* ── Toggle ── */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--bor)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-info .t-label{font-size:13px;font-weight:500}
+.toggle-info .t-sub{font-size:11px;color:var(--sub);margin-top:2px}
+.toggle{position:relative;display:inline-block;width:38px;height:20px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:var(--bor2);border-radius:20px;cursor:pointer;transition:.25s}
+.slider:before{content:'';position:absolute;height:14px;width:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s}
+input:checked+.slider{background:var(--acc)}
+input:checked+.slider:before{transform:translateX(18px)}
+
+/* ── Capability grid ── */
+.cap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:12px}
+.cap-item{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--bor);border-radius:8px;background:var(--bg3);font-size:12px}
+.cap-item.yes{border-color:rgba(0,230,118,.35);background:rgba(0,230,118,.08)}
+.cap-item.no{border-color:rgba(255,77,77,.25);background:rgba(255,77,77,.05)}
+.cap-item.unknown{border-color:var(--bor);color:var(--sub)}
+.cap-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.cap-dot.yes{background:var(--green)}
+.cap-dot.no{background:var(--red)}
+.cap-dot.unknown{background:var(--sub)}
+.cap-label{font-weight:500}
+
+/* ── Doc test grid ── */
+.doc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.doc-btn{border:1px solid var(--bor);border-radius:8px;padding:12px 8px;text-align:center;cursor:pointer;background:var(--bg3);transition:all .2s}
+.doc-btn:hover{border-color:var(--acc);background:rgba(109,92,255,.08)}
+.doc-btn .d-icon{font-size:20px;display:block;margin-bottom:5px}
+.doc-btn .d-label{font-size:11px;font-weight:600;color:var(--txt)}
+.doc-btn .d-type{font-size:10px;color:var(--sub);margin-top:2px}
+
+/* ── Queue / history table ── */
+.data-table{width:100%;border-collapse:collapse}
+.data-table th{font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;border-bottom:1px solid var(--bor);text-align:left}
+.data-table td{padding:9px 10px;border-bottom:1px solid var(--bor);font-size:12px;vertical-align:middle}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:rgba(255,255,255,.02)}
+.empty-state{text-align:center;padding:36px;color:var(--sub)}
+.empty-icon{font-size:40px;display:block;margin-bottom:10px}
+
+/* ── Chips ── */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.3px}
+.chip.done{background:rgba(0,230,118,.15);color:var(--green)}
+.chip.pending{background:rgba(109,92,255,.15);color:var(--acc2)}
+.chip.failed{background:rgba(255,77,77,.15);color:var(--red)}
+.chip.cancelled{background:rgba(136,136,170,.15);color:var(--sub)}
+
+/* ── Preview box ── */
+.preview-box{border:1px solid var(--bor2);border-radius:8px;background:#fff;color:#111;margin-top:10px;max-height:420px;overflow-y:auto;padding:10px;font-family:'Courier New',monospace;font-size:11px;white-space:pre}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--bg2);border:1px solid var(--acc);color:var(--txt);padding:10px 20px;border-radius:24px;font-size:13px;font-weight:500;z-index:200;transition:transform .3s;pointer-events:none}
+#toast.show{transform:translateX(-50%) translateY(0)}
+
+@media(max-width:600px){
+  .form-row,.net-form{grid-template-columns:1fr}
+  .transport-grid{grid-template-columns:repeat(2,1fr)}
+  .doc-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
 </head>
 <body>
-  <div class="app-header">
-    <span>&#128424;</span>
-    <h1>Printer Setup</h1>
-    <a href="pos.html">Back to POS</a>
-  </div>
 
-  <div class="status-bar">
-    <div class="status-dot disconnected" id="statusDot"></div>
-    <span class="status-text" id="statusText">No printer connected</span>
-    <button class="btn btn-sm btn-outline" id="btnDisconnect" style="display:none" onclick="disconnectPrinter()">Disconnect</button>
-    <button class="btn btn-sm btn-primary" onclick="testPrint()">Test Print</button>
-  </div>
+<div class="pos-header">
+  <span class="pos-header-icon">&#128424;</span>
+  <h1>Printer Setup — SmartPOS</h1>
+  <a href="pos.html" class="back-link">&#8592; Back to POS</a>
+</div>
 
-  <div class="tabs">
-    <div class="tab active" data-panel="discover" onclick="showPanel(this)">Discover</div>
-    <div class="tab" data-panel="setup" onclick="showPanel(this)">Setup &amp; Profile</div>
-    <div class="tab" data-panel="receipt" onclick="showPanel(this)">Receipt Config</div>
-    <div class="tab" data-panel="queue" onclick="showPanel(this)">Queue</div>
-    <div class="tab" data-panel="history" onclick="showPanel(this)">History</div>
-  </div>
+<div class="status-bar">
+  <div class="status-dot disconnected" id="statusDot"></div>
+  <span class="status-text" id="statusText">No printer connected</span>
+  <span class="status-badge" id="transportBadge" style="display:none"></span>
+  <button class="btn btn-sm btn-outline" id="btnDisconnect" style="display:none" onclick="disconnectPrinter()">Disconnect</button>
+  <button class="btn btn-sm btn-primary" onclick="runTestPrint()">Test Print</button>
+</div>
 
-  <!-- DISCOVER -->
-  <div class="panel active" id="panel-discover">
-    <div class="card">
-      <div class="card-title">Scan for Printers</div>
-      <p style="font-size:12px;color:var(--tok-muted);margin-bottom:14px">
-        Select a transport to scan. Bluetooth and USB require a one-time browser permission prompt.
+<div class="tabs">
+  <div class="tab active" data-panel="discover" onclick="showPanel(this)">Discover</div>
+  <div class="tab" data-panel="capabilities" onclick="showPanel(this)">Capabilities</div>
+  <div class="tab" data-panel="documents" onclick="showPanel(this)">Test Documents</div>
+  <div class="tab" data-panel="config" onclick="showPanel(this)">Configuration</div>
+  <div class="tab" data-panel="queue" onclick="showPanel(this)">Queue</div>
+  <div class="tab" data-panel="history" onclick="showPanel(this)">History</div>
+</div>
+
+<!-- ═══ DISCOVER ═══ -->
+<div class="panel active" id="panel-discover">
+
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">Select Transport</div>
+      <p style="font-size:12px;color:var(--sub);margin-bottom:14px">
+        Bluetooth and USB require a one-time browser permission prompt. Serial requires Web Serial support (Chrome/Edge 89+).
       </p>
       <div class="transport-grid" id="transportGrid"></div>
-      <div id="scanResult"></div>
     </div>
-    <div class="card">
-      <div class="card-title">Wi-Fi / LAN Printer</div>
+  </div>
+
+  <div class="card" id="scanResultCard" style="display:none">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title" id="scanResultTitle">Found Printers</div>
+      <div class="device-list" id="deviceList"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">Add Network / Wi-Fi Printer</div>
       <div class="net-form">
         <div class="form-group">
-          <label>Printer Name</label>
-          <input type="text" id="netName" placeholder="Counter Printer">
+          <label>Endpoint URL</label>
+          <input id="netEndpoint" placeholder="http://192.168.1.x or ws://192.168.1.x" value="">
         </div>
         <div class="form-group">
-          <label>Endpoint URL</label>
-          <input type="text" id="netEndpoint" placeholder="http://192.168.1.100:8080">
+          <label>Display Name</label>
+          <input id="netName" placeholder="Kitchen Printer" value="">
         </div>
-        <button class="btn btn-primary" onclick="addNetworkPrinter()">Add &amp; Connect</button>
+        <button class="btn btn-primary" onclick="addNetworkPrinter()" style="align-self:flex-end;height:40px">Add</button>
       </div>
-      <div id="savedNetPrinters" class="device-list"></div>
+      <div class="device-list" id="netPrinterList"></div>
     </div>
   </div>
 
-  <!-- SETUP & PROFILE -->
-  <div class="panel" id="panel-setup">
-    <div class="card">
-      <div class="card-title">Printer Profile</div>
+</div>
+
+<!-- ═══ CAPABILITIES ═══ -->
+<div class="panel" id="panel-capabilities">
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">Printer Capabilities</div>
+      <p style="font-size:12px;color:var(--sub);margin-bottom:12px">
+        Automatically detected when connected. Override manually if needed.
+      </p>
+      <button class="btn btn-primary" onclick="detectCaps()">Detect Capabilities</button>
+      <div class="cap-grid" id="capGrid">
+        <div style="color:var(--sub);font-size:12px;grid-column:1/-1;padding:20px 0">Connect a printer to detect capabilities.</div>
+      </div>
+      <div class="actions-row" style="margin-top:16px">
+        <div class="form-group" style="flex:1">
+          <label>Paper Width Override</label>
+          <select id="capWidth" onchange="savePaperWidth(this.value)">
+            <option value="58mm">58mm (32 chars)</option>
+            <option value="76mm">76mm (42 chars)</option>
+            <option value="80mm" selected>80mm (48 chars)</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>Image Dithering Threshold (50–250)</label>
+          <input type="number" id="imgThreshold" min="50" max="250" value="128" onchange="saveThreshold(this.value)">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TEST DOCUMENTS ═══ -->
+<div class="panel" id="panel-documents">
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">Print a Test Document</div>
+      <p style="font-size:12px;color:var(--sub);margin-bottom:14px">
+        All documents render with dummy data. A printer must be connected to print; otherwise a preview will be shown.
+      </p>
+      <div class="doc-grid" id="docGrid"></div>
+    </div>
+  </div>
+  <div class="card" id="previewCard" style="display:none">
+    <div class="card-top" style="background:linear-gradient(90deg,var(--acc2),var(--green))"></div>
+    <div class="card-body">
+      <div class="card-title">Receipt Preview</div>
+      <div class="preview-box" id="previewBox"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONFIGURATION ═══ -->
+<div class="panel" id="panel-config">
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">Receipt Template</div>
       <div class="form-row">
+        <div class="form-group">
+          <label>Business / Logo Name</label>
+          <input id="cfgLogoText" placeholder="SOKONI SmartPOS" maxlength="128">
+        </div>
         <div class="form-group">
           <label>Paper Width</label>
-          <select id="paperWidth" onchange="saveProfile()">
-            <option value="58mm">58mm — 32 chars</option>
-            <option value="80mm" selected>80mm — 48 chars (most common)</option>
-            <option value="76mm">76mm — 42 chars</option>
+          <select id="cfgPaperWidth">
+            <option value="58mm">58mm</option>
+            <option value="76mm">76mm</option>
+            <option value="80mm">80mm</option>
           </select>
-        </div>
-        <div class="form-group">
-          <label>DPI / Dot Density</label>
-          <select id="dotDensity" onchange="saveProfile()">
-            <option value="203" selected>203 dpi (standard)</option>
-            <option value="300">300 dpi (high quality)</option>
-          </select>
-        </div>
-      </div>
-      <div class="card-title" style="margin-top:8px">Capabilities</div>
-      <div class="cap-grid" id="capGrid"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Connection Info</div>
-      <div id="connInfo" style="color:var(--tok-muted);font-size:13px">Not connected</div>
-    </div>
-    <div class="actions-row">
-      <button class="btn btn-primary" onclick="testPrint()">Send Test Print</button>
-      <button class="btn btn-outline" onclick="openCashDrawer()">Open Cash Drawer</button>
-      <button class="btn btn-outline" onclick="refreshStatus()">Refresh Status</button>
-    </div>
-  </div>
-
-  <!-- RECEIPT CONFIG -->
-  <div class="panel" id="panel-receipt">
-    <div class="card">
-      <div class="card-title">Business Branding</div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Header / Logo Text</label>
-          <input type="text" id="cfgLogoText" placeholder="SOKONI" oninput="previewReceipt()">
-        </div>
-        <div class="form-group">
-          <label>Copies per Sale</label>
-          <input type="number" id="cfgCopies" value="1" min="1" max="5" oninput="saveConfig()">
         </div>
       </div>
       <div class="form-row single">
         <div class="form-group">
           <label>Footer Message</label>
-          <input type="text" id="cfgFooter" placeholder="Thank you for shopping with us!" oninput="previewReceipt()">
+          <input id="cfgFooter" placeholder="Thank you for shopping with us!" maxlength="256">
         </div>
       </div>
       <div class="form-row single">
         <div class="form-group">
           <label>Promotional Message</label>
-          <input type="text" id="cfgPromo" placeholder="Use code SAVE10 for 10% off next visit" oninput="previewReceipt()">
+          <input id="cfgPromo" placeholder="SAVE 10% on your next visit" maxlength="256">
         </div>
       </div>
       <div class="form-row single">
         <div class="form-group">
           <label>Return Policy</label>
-          <input type="text" id="cfgReturn" placeholder="Returns accepted within 7 days with receipt" oninput="previewReceipt()">
+          <input id="cfgReturn" placeholder="Returns accepted within 7 days with receipt" maxlength="256">
         </div>
       </div>
     </div>
-    <div class="card">
+  </div>
+
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
       <div class="card-title">Print Behaviour</div>
       <div class="toggle-row">
-        <div><div class="t-label">Auto-print on sale completion</div><div class="t-sub">Automatically send receipt when a sale is recorded</div></div>
-        <label class="toggle"><input type="checkbox" id="cfgAutoPrint" onchange="saveConfig()"><span class="slider"></span></label>
+        <div class="toggle-info"><div class="t-label">Auto-cut after each receipt</div><div class="t-sub">Requires printer with auto-cutter</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgAutoCut" checked><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
-        <div><div class="t-label">Show receipt preview before printing</div><div class="t-sub">Display preview dialog for confirmation</div></div>
-        <label class="toggle"><input type="checkbox" id="cfgPreview" onchange="saveConfig()"><span class="slider"></span></label>
+        <div class="toggle-info"><div class="t-label">Auto-print on sale completion</div><div class="t-sub">Automatically prints when a sale is confirmed</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgAutoPrint"><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
-        <div><div class="t-label">Include platform fee on receipt</div><div class="t-sub">Show SOKONI commission as a line item</div></div>
-        <label class="toggle"><input type="checkbox" id="cfgShowCommission" onchange="saveConfig()"><span class="slider"></span></label>
+        <div class="toggle-info"><div class="t-label">Show platform commission on receipt</div><div class="t-sub">Displays SOKONI platform fee row</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgCommission"><span class="slider"></span></label>
       </div>
-      <div class="toggle-row">
-        <div><div class="t-label">Auto-cut after each print</div><div class="t-sub">Send paper-cut command at end of receipt (requires cutter)</div></div>
-        <label class="toggle"><input type="checkbox" id="cfgAutoCut" checked onchange="saveConfig()"><span class="slider"></span></label>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-title">Receipt Preview</div>
-      <div id="receiptPreview" class="preview-box">Configure settings above to see preview...</div>
-    </div>
-    <div class="actions-row">
-      <button class="btn btn-primary" onclick="saveConfig();showToast('Config saved')">Save Settings</button>
-      <button class="btn btn-outline" onclick="previewReceipt()">Refresh Preview</button>
-    </div>
-  </div>
-
-  <!-- QUEUE -->
-  <div class="panel" id="panel-queue">
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="card-title" style="margin:0">Print Queue</div>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-sm btn-outline" id="btnPause" onclick="togglePause()">Pause</button>
-          <button class="btn btn-sm btn-danger" onclick="clearFailedJobs()">Clear Failed</button>
-          <button class="btn btn-sm btn-outline" onclick="renderQueue()">Refresh</button>
+      <div class="form-row" style="margin-top:14px">
+        <div class="form-group">
+          <label>Default Copies</label>
+          <select id="cfgCopies">
+            <option value="1">1 copy</option>
+            <option value="2">2 copies</option>
+            <option value="3">3 copies</option>
+          </select>
         </div>
       </div>
-      <div id="queueContainer"><div class="empty-state"><span class="e-icon">&#128203;</span>Queue is empty</div></div>
     </div>
   </div>
 
-  <!-- HISTORY -->
-  <div class="panel" id="panel-history">
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="card-title" style="margin:0">Print History</div>
-        <button class="btn btn-sm btn-outline" onclick="clearHistory()">Clear History</button>
+  <div class="actions-row">
+    <button class="btn btn-primary" onclick="saveConfig()">Save Configuration</button>
+    <button class="btn btn-outline" onclick="loadConfig()">Reset</button>
+    <button class="btn btn-outline" onclick="syncConfigToCloud()">Sync to Cloud</button>
+  </div>
+</div>
+
+<!-- ═══ QUEUE ═══ -->
+<div class="panel" id="panel-queue">
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">Print Queue</div>
+      <div class="actions-row" style="margin-bottom:12px">
+        <button class="btn btn-sm btn-outline" onclick="pauseQueue()" id="btnPause">Pause</button>
+        <button class="btn btn-sm btn-green" onclick="resumeQueue()" id="btnResume" style="display:none">Resume</button>
+        <button class="btn btn-sm btn-outline" onclick="renderQueue()">Refresh</button>
       </div>
-      <div id="historyContainer"><div class="empty-state"><span class="e-icon">&#128220;</span>No print history yet</div></div>
+      <div id="queueContent">
+        <div class="empty-state"><span class="empty-icon">&#128424;</span>Queue is empty</div>
+      </div>
     </div>
   </div>
+</div>
 
-  <!-- Toast -->
-  <div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:10px 18px;border-radius:6px;font-size:13px;display:none;z-index:9999;max-width:320px;text-align:center"></div>
+<!-- ═══ HISTORY ═══ -->
+<div class="panel" id="panel-history">
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">Print History</div>
+      <div id="historyContent">
+        <div class="empty-state"><span class="empty-icon">&#128196;</span>No print history yet</div>
+      </div>
+    </div>
+  </div>
+</div>
 
-  <script src="sokoni-universal-printer.js"></script>
-  <script>
-  'use strict';
-  const P = window.SokoniPrinter;
-  let queuePaused = false;
+<div id="toast">Ready</div>
 
-  const TRANSPORTS = [
-    { type:'bluetooth', label:'Bluetooth',  icon:'&#128246;', sub:'BLE / Classic', avail:() => !!navigator.bluetooth },
-    { type:'usb',       label:'USB',        icon:'&#128268;', sub:'WebUSB',        avail:() => !!navigator.usb },
-    { type:'serial',    label:'Serial',     icon:'&#128279;', sub:'COM / RS232',   avail:() => !!navigator.serial },
-    { type:'network',   label:'Wi-Fi/LAN',  icon:'&#127760;', sub:'Saved printers',avail:() => true },
-    { type:'browser',   label:'Browser',    icon:'&#128424;', sub:'System dialog', avail:() => true },
-  ];
+<!-- Firebase compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="sokoni-universal-printer.js"></script>
+<script>
+/* ── Firebase init ── */
+if (!firebase.apps.length) {
+  firebase.initializeApp({
+    apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
+    authDomain:        "sokoni-aeb26.firebaseapp.com",
+    projectId:         "sokoni-aeb26",
+    storageBucket:     "sokoni-aeb26.appspot.com",
+    messagingSenderId: "24799054989",
+    appId:             "1:24799054989:web:e1cf6ca8c281bf1abf26c4",
+  });
+}
+const fn = firebase.functions();
 
-  /* ── Tabs ──────────────────────────────────────────────────── */
-  function showPanel (tab) {
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    const id = tab.dataset.panel;
-    document.getElementById('panel-' + id).classList.add('active');
-    tab.classList.add('active');
-    if (id === 'queue')   renderQueue();
-    if (id === 'history') renderHistory();
+/* ── Panel routing ── */
+function showPanel (el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('panel-' + el.dataset.panel).classList.add('active');
+  if (el.dataset.panel === 'queue')       renderQueue();
+  if (el.dataset.panel === 'history')     renderHistory();
+  if (el.dataset.panel === 'capabilities') renderCapabilities();
+}
+
+/* ── Toast ── */
+let _toastT;
+function toast (msg, dur = 2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_toastT); _toastT = setTimeout(() => el.classList.remove('show'), dur);
+}
+
+/* ── Transport definitions ── */
+const TRANSPORTS = [
+  { id: 'bluetooth', icon: '&#128268;', label: 'Bluetooth',   sub: 'Web Bluetooth API', badge: 'bt' },
+  { id: 'usb',       icon: '&#128268;', label: 'USB / OTG',   sub: 'WebUSB API', badge: 'usb' },
+  { id: 'serial',    icon: '&#128268;', label: 'Serial / COM', sub: 'Web Serial API', badge: 'ser' },
+  { id: 'network',   icon: '&#127760;', label: 'Network / Wi-Fi', sub: 'HTTP · WebSocket', badge: 'net' },
+  { id: 'browser',   icon: '&#128196;', label: 'Browser / PDF', sub: 'System print dialog', badge: '' },
+];
+
+const AVAIL = {
+  bluetooth: !!navigator.bluetooth,
+  usb:       !!navigator.usb,
+  serial:    !!navigator.serial,
+  network:   true,
+  browser:   true,
+};
+
+/* ── Build transport grid ── */
+(function buildTransportGrid () {
+  const g = document.getElementById('transportGrid');
+  TRANSPORTS.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'transport-btn' + (AVAIL[t.id] ? '' : ' unavail');
+    el.dataset.transport = t.id;
+    el.innerHTML = `<span class="t-icon">${t.icon}</span><div class="t-label">${t.label}</div><div class="t-sub">${AVAIL[t.id] ? t.sub : 'Not supported'}</div>`;
+    if (AVAIL[t.id]) el.onclick = () => scan(t.id);
+    g.appendChild(el);
+  });
+})();
+
+/* ── Build test document grid ── */
+const DOC_TYPES = [
+  { type:'sale',                 icon:'&#128176;', label:'Sales Receipt' },
+  { type:'refund',               icon:'&#8617;',   label:'Refund Receipt' },
+  { type:'exchange',             icon:'&#128260;', label:'Exchange Receipt' },
+  { type:'kitchen',              icon:'&#127859;', label:'Kitchen Ticket' },
+  { type:'delivery',             icon:'&#128666;', label:'Delivery Slip' },
+  { type:'shipping_label',       icon:'&#128230;', label:'Shipping Label' },
+  { type:'picking_slip',         icon:'&#128203;', label:'Picking Slip' },
+  { type:'label',                icon:'&#127991;', label:'Product Label' },
+  { type:'queue_ticket',         icon:'&#127917;', label:'Queue Ticket' },
+  { type:'parking_ticket',       icon:'&#128663;', label:'Parking Ticket' },
+  { type:'booking',              icon:'&#128197;', label:'Booking Confirm' },
+  { type:'service_confirmation', icon:'&#128295;', label:'Service Order' },
+  { type:'daily_summary',        icon:'&#128202;', label:'Daily Summary' },
+  { type:'monthly_summary',      icon:'&#128198;', label:'Monthly Summary' },
+];
+
+(function buildDocGrid () {
+  const g = document.getElementById('docGrid');
+  DOC_TYPES.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'doc-btn';
+    el.innerHTML = `<span class="d-icon">${d.icon}</span><div class="d-label">${d.label}</div><div class="d-type">${d.type}</div>`;
+    el.onclick = () => testDoc(d.type);
+    g.appendChild(el);
+  });
+})();
+
+/* ── Printer state ── */
+let _connectedDevice = null;
+
+function updateStatusBar () {
+  const dot    = document.getElementById('statusDot');
+  const text   = document.getElementById('statusText');
+  const badge  = document.getElementById('transportBadge');
+  const discBtn= document.getElementById('btnDisconnect');
+  const ok = SokoniPrinter.connected;
+  dot.className = 'status-dot ' + (ok ? 'connected' : 'disconnected');
+  text.textContent = ok
+    ? 'Connected: ' + (_connectedDevice?.name || 'Printer')
+    : 'No printer connected';
+  if (ok && _connectedDevice) {
+    const t = TRANSPORTS.find(t => t.id === _connectedDevice.type);
+    badge.textContent = t?.label || _connectedDevice.type;
+    badge.className = 'status-badge ' + (t?.badge || '');
+    badge.style.display = '';
+    discBtn.style.display = '';
+  } else {
+    badge.style.display = 'none';
+    discBtn.style.display = 'none';
   }
+}
 
-  /* ── Transport grid ─────────────────────────────────────────── */
-  function buildTransportGrid () {
-    document.getElementById('transportGrid').innerHTML = TRANSPORTS.map(t =>
-      `<div class="transport-btn${t.avail() ? '' : ' unavail'}" ${t.avail() ? `onclick="scanTransport('${t.type}')"` : ''}>
-         <span class="t-icon">${t.icon}</span>
-         <div class="t-label">${esc(t.label)}</div>
-         <div class="t-sub">${t.avail() ? esc(t.sub) : 'Not supported'}</div>
-       </div>`
-    ).join('');
-  }
+/* ── Scan ── */
+async function scan (type) {
+  document.querySelectorAll('.transport-btn').forEach(b => b.classList.remove('active-transport'));
+  const btn = document.querySelector(`[data-transport="${type}"]`);
+  if (btn) btn.classList.add('active-transport');
 
-  async function scanTransport (type) {
-    setStatus('scanning', 'Scanning ' + type + ' printers...');
-    document.getElementById('scanResult').innerHTML = '';
-    try {
-      const devices = await P.discoverBy(type);
-      if (!devices.length) {
-        document.getElementById('scanResult').innerHTML = '<p style="color:var(--tok-muted);font-size:13px;padding:8px 0">No printers found via ' + esc(type) + '.</p>';
-        setStatus('disconnected', 'No printer connected');
-        return;
-      }
-      renderDeviceList(devices, 'scanResult');
-      setStatus('disconnected', devices.length + ' printer(s) found — click Connect');
-    } catch(e) {
-      document.getElementById('scanResult').innerHTML = '<p style="color:var(--tok-red);font-size:13px;padding:8px 0">Error: ' + esc(e.message) + '</p>';
-      setStatus('disconnected', 'Scan failed');
+  const card  = document.getElementById('scanResultCard');
+  const title = document.getElementById('scanResultTitle');
+  const list  = document.getElementById('deviceList');
+  card.style.display = '';
+  title.textContent  = 'Scanning ' + type + '…';
+  list.innerHTML = '<div style="color:var(--sub);font-size:12px;padding:8px 0">Searching…</div>';
+  document.getElementById('statusDot').className = 'status-dot scanning';
+
+  try {
+    const devices = await SokoniPrinter.discoverBy(type);
+    if (!devices.length) {
+      title.textContent = 'No printers found';
+      list.innerHTML = '<div style="color:var(--sub);font-size:12px;padding:8px 0">No devices detected. Make sure the printer is on and in pairing mode.</div>';
+    } else {
+      title.textContent = devices.length + ' printer' + (devices.length > 1 ? 's' : '') + ' found';
+      list.innerHTML = '';
+      devices.forEach(d => {
+        const el = document.createElement('div');
+        el.className = 'device-item';
+        el.innerHTML = `
+          <div class="device-icon">&#128268;</div>
+          <div>
+            <div class="device-name">${_esc(d.name || 'Printer')}</div>
+            <div class="device-sub">${_esc(d.type)} ${d.endpoint ? '· ' + _esc(d.endpoint) : ''}</div>
+          </div>
+          <div class="device-actions">
+            <button class="btn btn-sm btn-primary" onclick="connectDevice(${JSON.stringify(d).replace(/"/g,'&quot;')})">Connect</button>
+          </div>`;
+        list.appendChild(el);
+      });
     }
+  } catch (e) {
+    title.textContent = 'Scan failed';
+    list.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px 0">${_esc(e.message)}</div>`;
   }
+  updateStatusBar();
+}
 
-  function renderDeviceList (devices, containerId) {
-    document.getElementById(containerId).innerHTML = '<div class="device-list">' + devices.map(d => {
-      const serialized = esc(JSON.stringify(d));
-      return `<div class="device-item">
-        <div class="device-icon">${iconForType(d.type)}</div>
-        <div>
-          <div class="device-name">${esc(d.name)}</div>
-          <div class="device-sub">${esc(d.type)}${d.endpoint ? ' &middot; ' + esc(d.endpoint) : ''}</div>
-        </div>
-        <div class="device-actions">
-          <button class="btn btn-sm btn-primary" onclick='connectDevice(${JSON.stringify(JSON.stringify(d))})'>Connect</button>
-        </div>
+async function connectDevice (info) {
+  toast('Connecting…');
+  try {
+    await SokoniPrinter.connect(info);
+    _connectedDevice = info;
+    updateStatusBar();
+    toast('Connected to ' + (info.name || 'printer'));
+    await SokoniPrinter.detectCapabilities().then(renderCapabilities).catch(() => {});
+  } catch (e) {
+    toast('Connection failed: ' + e.message, 4000);
+  }
+}
+
+async function disconnectPrinter () {
+  await SokoniPrinter.disconnect();
+  _connectedDevice = null;
+  updateStatusBar();
+  toast('Disconnected');
+}
+
+/* ── Network printers ── */
+function addNetworkPrinter () {
+  const ep   = document.getElementById('netEndpoint').value.trim();
+  const name = document.getElementById('netName').value.trim() || 'Network Printer';
+  if (!ep) { toast('Enter an endpoint URL'); return; }
+  SokoniPrinter.saveNetworkPrinter(name, ep);
+  document.getElementById('netEndpoint').value = '';
+  document.getElementById('netName').value = '';
+  renderNetPrinters();
+  toast('Network printer saved');
+}
+
+function renderNetPrinters () {
+  const list = JSON.parse(localStorage.getItem('spp_net_printers') || '[]');
+  const el = document.getElementById('netPrinterList');
+  if (!list.length) { el.innerHTML = '<div style="color:var(--sub);font-size:12px;padding:6px 0">No network printers saved yet.</div>'; return; }
+  el.innerHTML = '';
+  list.forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'device-item';
+    d.innerHTML = `
+      <div class="device-icon">&#127760;</div>
+      <div>
+        <div class="device-name">${_esc(p.name)}</div>
+        <div class="device-sub">${_esc(p.endpoint)}</div>
+      </div>
+      <div class="device-actions">
+        <button class="btn btn-sm btn-primary" onclick="connectDevice(${JSON.stringify(p).replace(/"/g,'&quot;')})">Connect</button>
+        <button class="btn btn-sm btn-danger" onclick="removeNet('${_esc(p.endpoint)}')">Remove</button>
       </div>`;
-    }).join('') + '</div>';
+    el.appendChild(d);
+  });
+}
+function removeNet (ep) {
+  SokoniPrinter.removeNetworkPrinter(ep);
+  renderNetPrinters();
+}
+renderNetPrinters();
+
+/* ── Capabilities ── */
+async function detectCaps () {
+  if (!SokoniPrinter.connected) { toast('Connect a printer first'); return; }
+  toast('Detecting capabilities…');
+  try {
+    await SokoniPrinter.detectCapabilities();
+    renderCapabilities();
+    toast('Capabilities updated');
+  } catch (e) {
+    toast('Detection failed: ' + e.message, 3000);
   }
+}
 
-  function iconForType (t) {
-    return { bluetooth:'&#128246;', usb:'&#128268;', serial:'&#128279;', network:'&#127760;', browser:'&#128424;' }[t] || '&#128424;';
-  }
-
-  async function connectDevice (jsonStr) {
-    const info = JSON.parse(jsonStr);
-    setStatus('scanning', 'Connecting to ' + esc(info.name) + '...');
-    try {
-      await P.connect(info);
-    } catch(e) {
-      setStatus('disconnected', 'Connection failed');
-      showToast('Failed: ' + e.message, true);
-    }
-  }
-
-  async function addNetworkPrinter () {
-    const name = document.getElementById('netName').value.trim();
-    const ep   = document.getElementById('netEndpoint').value.trim();
-    if (!name || !ep) return showToast('Enter name and endpoint', true);
-    P.saveNetworkPrinter(name, ep);
-    await connectDevice(JSON.stringify({ id: 'net', name, endpoint: ep, type: 'network' }));
-    loadSavedNetPrinters();
-  }
-
-  function loadSavedNetPrinters () {
-    const saved = JSON.parse(localStorage.getItem('spp_net_printers') || '[]');
-    const el = document.getElementById('savedNetPrinters');
-    if (!saved.length) { el.innerHTML = ''; return; }
-    el.innerHTML = saved.map(p => `
-      <div class="device-item">
-        <div class="device-icon">&#127760;</div>
-        <div>
-          <div class="device-name">${esc(p.name)}</div>
-          <div class="device-sub">${esc(p.endpoint)}</div>
-        </div>
-        <div class="device-actions">
-          <button class="btn btn-sm btn-primary" onclick='connectDevice(${JSON.stringify(JSON.stringify(p))})'>Connect</button>
-          <button class="btn btn-sm btn-outline" onclick="removeNetPrinter('${esc(p.endpoint)}')">Remove</button>
-        </div>
-      </div>`).join('');
-  }
-
-  function removeNetPrinter (ep) { P.removeNetworkPrinter(ep); loadSavedNetPrinters(); }
-
-  /* ── Status ─────────────────────────────────────────────────── */
-  function setStatus (state, text) {
-    document.getElementById('statusDot').className = 'status-dot ' + state;
-    document.getElementById('statusText').textContent = text;
-    document.getElementById('btnDisconnect').style.display = state === 'connected' ? '' : 'none';
-  }
-
-  async function refreshStatus () {
-    const s = await P.getStatus();
-    setStatus(s.connected ? 'connected' : 'disconnected', s.connected ? 'Printer connected' : 'No printer connected');
-  }
-
-  async function disconnectPrinter () {
-    await P.disconnect();
-    showToast('Printer disconnected');
-  }
-
-  function updateConnInfo (info) {
-    const el = document.getElementById('connInfo');
-    if (!info) { el.innerHTML = '<span style="color:var(--tok-muted)">Not connected</span>'; return; }
-    el.innerHTML = `<strong>${esc(info.name)}</strong><br>Type: ${esc(info.type)}${info.endpoint ? '<br>Endpoint: ' + esc(info.endpoint) : ''}`;
-  }
-
-  /* ── Profile ─────────────────────────────────────────────────── */
-  const CAPS = [
-    { key:'hasQR',        label:'QR Codes',     icon:'&#x2B1B;' },
-    { key:'hasBarcode',   label:'Barcodes',      icon:'&#x2588;' },
-    { key:'hasCutter',    label:'Auto Cutter',   icon:'&#x2702;' },
-    { key:'hasCashDrawer',label:'Cash Drawer',   icon:'&#128179;' },
-    { key:'hasImage',     label:'Image Print',   icon:'&#128444;' },
+function renderCapabilities () {
+  const caps = SokoniPrinter.getCapabilities();
+  const g = document.getElementById('capGrid');
+  const fields = [
+    { key: 'qrSupport',      label: 'QR Code' },
+    { key: 'barcodeSupport', label: 'Barcode' },
+    { key: 'imageSupport',   label: 'Image Print' },
+    { key: 'cutterSupport',  label: 'Auto-cutter' },
+    { key: 'drawerSupport',  label: 'Cash Drawer' },
+    { key: 'online',         label: 'Online' },
   ];
-
-  function buildCapGrid (profile) {
-    document.getElementById('capGrid').innerHTML = CAPS.map(c => `
-      <div class="cap-item ${profile[c.key] ? 'yes' : ''}" onclick="toggleCap('${c.key}')">
-        <span>${c.icon}</span>
-        <span class="cap-label">${c.label}</span>
-        <label class="toggle" style="margin-left:auto">
-          <input type="checkbox" id="cap_${c.key}" ${profile[c.key] ? 'checked' : ''} onchange="saveProfile()">
-          <span class="slider"></span>
-        </label>
-      </div>`).join('');
+  if (!caps || !caps.connectionType) {
+    g.innerHTML = '<div style="color:var(--sub);font-size:12px;grid-column:1/-1;padding:20px 0">Connect a printer then click Detect Capabilities.</div>';
+    return;
   }
-
-  function toggleCap (key) {
-    const cb = document.getElementById('cap_' + key);
-    if (cb) { cb.checked = !cb.checked; saveProfile(); }
+  g.innerHTML = '';
+  fields.forEach(f => {
+    const val = caps[f.key];
+    const cls = val === true ? 'yes' : val === false ? 'no' : 'unknown';
+    const el = document.createElement('div');
+    el.className = 'cap-item ' + cls;
+    el.innerHTML = `<div class="cap-dot ${cls}"></div><span class="cap-label">${_esc(f.label)}</span>`;
+    g.appendChild(el);
+  });
+  if (caps.paperWidth) {
+    const sel = document.getElementById('capWidth');
+    if (sel) sel.value = caps.paperWidth;
   }
-
-  function saveProfile () {
-    const profile = {
-      paperWidth: document.getElementById('paperWidth').value,
-      dotDensity: parseInt(document.getElementById('dotDensity').value, 10),
-    };
-    CAPS.forEach(c => { const cb = document.getElementById('cap_' + c.key); if (cb) profile[c.key] = cb.checked; });
-    P.setCapabilities(profile);
-    P.setConfig({ paperWidth: profile.paperWidth });
-    buildCapGrid(profile);
-    previewReceipt();
+  if (caps.imageThreshold) {
+    const thr = document.getElementById('imgThreshold');
+    if (thr) thr.value = caps.imageThreshold;
   }
+}
 
-  function loadProfile () {
-    const p = P.getCapabilities();
-    if (p.paperWidth) document.getElementById('paperWidth').value = p.paperWidth;
-    if (p.dotDensity) document.getElementById('dotDensity').value = String(p.dotDensity);
-    buildCapGrid(p);
+function savePaperWidth (w) {
+  SokoniPrinter.setConfig({ paperWidth: w });
+  toast('Paper width set to ' + w);
+}
+function saveThreshold (v) {
+  const n = parseInt(v, 10);
+  if (isNaN(n) || n < 50 || n > 250) return;
+  SokoniPrinter.setConfig({ imageThreshold: n });
+}
+
+/* ── Test print ── */
+async function runTestPrint () {
+  if (!SokoniPrinter.connected) { toast('No printer connected — showing preview'); testDoc('sale'); return; }
+  try { await SokoniPrinter.testPrint(); toast('Test print sent'); } catch (e) { toast('Error: ' + e.message, 4000); }
+}
+
+async function testDoc (docType) {
+  const data = _dummyData(docType);
+  /* Show preview */
+  const html = SokoniPrinter.preview(docType, data);
+  document.getElementById('previewCard').style.display = '';
+  document.getElementById('previewBox').innerHTML = html;
+  /* Scroll to preview */
+  document.getElementById('previewCard').scrollIntoView({ behavior: 'smooth' });
+  /* Print if connected */
+  if (SokoniPrinter.connected) {
+    try {
+      await SokoniPrinter.printNow(docType, data);
+      toast('Printed: ' + docType);
+    } catch (e) { toast('Print error: ' + e.message, 4000); }
+  } else {
+    toast('Preview only — no printer connected');
   }
+}
 
-  /* ── Receipt config ─────────────────────────────────────────── */
-  function saveConfig () {
-    P.setConfig({
-      logoText:        document.getElementById('cfgLogoText').value,
-      footer:          document.getElementById('cfgFooter').value,
-      promoMessage:    document.getElementById('cfgPromo').value,
-      returnPolicy:    document.getElementById('cfgReturn').value,
-      copies:          parseInt(document.getElementById('cfgCopies').value, 10) || 1,
-      autoPrintOnSale: document.getElementById('cfgAutoPrint').checked,
-      showPreview:     document.getElementById('cfgPreview').checked,
-      showCommission:  document.getElementById('cfgShowCommission').checked,
-      autoCut:         document.getElementById('cfgAutoCut').checked,
-    });
+/* ── Configuration ── */
+function loadConfig () {
+  const c = SokoniPrinter.getConfig();
+  document.getElementById('cfgLogoText').value   = c.logoText || '';
+  document.getElementById('cfgFooter').value     = c.footer   || '';
+  document.getElementById('cfgPromo').value      = c.promoMessage || '';
+  document.getElementById('cfgReturn').value     = c.returnPolicy || '';
+  document.getElementById('cfgPaperWidth').value = c.paperWidth || '80mm';
+  document.getElementById('cfgCopies').value     = String(c.copies || 1);
+  document.getElementById('cfgAutoCut').checked  = !!c.autoCut;
+  document.getElementById('cfgAutoPrint').checked= !!c.autoPrintOnSale;
+  document.getElementById('cfgCommission').checked=!!c.showCommission;
+}
+
+function saveConfig () {
+  SokoniPrinter.setConfig({
+    logoText:       document.getElementById('cfgLogoText').value.trim(),
+    footer:         document.getElementById('cfgFooter').value.trim(),
+    promoMessage:   document.getElementById('cfgPromo').value.trim(),
+    returnPolicy:   document.getElementById('cfgReturn').value.trim(),
+    paperWidth:     document.getElementById('cfgPaperWidth').value,
+    copies:         parseInt(document.getElementById('cfgCopies').value, 10),
+    autoCut:        document.getElementById('cfgAutoCut').checked,
+    autoPrintOnSale:document.getElementById('cfgAutoPrint').checked,
+    showCommission: document.getElementById('cfgCommission').checked,
+  });
+  toast('Configuration saved');
+}
+
+async function syncConfigToCloud () {
+  const user = firebase.auth().currentUser;
+  if (!user) { toast('Sign in to sync to cloud'); return; }
+  try {
+    const setPrinterConfig = fn.httpsCallable('setPrinterConfig');
+    await setPrinterConfig({ config: SokoniPrinter.getConfig() });
+    toast('Synced to cloud');
+  } catch (e) { toast('Sync failed: ' + e.message, 4000); }
+}
+
+/* ── Queue ── */
+let _queuePaused = false;
+function pauseQueue () {
+  SokoniPrinter.pauseQueue(); _queuePaused = true;
+  document.getElementById('btnPause').style.display = 'none';
+  document.getElementById('btnResume').style.display = '';
+  toast('Queue paused');
+}
+function resumeQueue () {
+  SokoniPrinter.resumeQueue(); _queuePaused = false;
+  document.getElementById('btnResume').style.display = 'none';
+  document.getElementById('btnPause').style.display = '';
+  toast('Queue resumed');
+}
+
+function renderQueue () {
+  const jobs = SokoniPrinter.getQueue();
+  const el   = document.getElementById('queueContent');
+  if (!jobs.length) { el.innerHTML = '<div class="empty-state"><span class="empty-icon">&#128424;</span>Queue is empty</div>'; return; }
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Doc Type</th><th>Copies</th><th>Priority</th><th>Status</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+      ${jobs.map(j => `<tr>
+        <td>${_esc(j.docType)}</td>
+        <td>${_esc(j.copies)}</td>
+        <td>${_esc(j.priority)}</td>
+        <td><span class="chip ${_esc(j.status)}">${_esc(j.status.toUpperCase())}</span></td>
+        <td style="color:var(--sub)">${new Date(j.createdAt).toLocaleTimeString('en-KE')}</td>
+        <td style="text-align:right">
+          <button class="btn btn-sm btn-danger" onclick="SokoniPrinter.cancelJob('${_esc(j.id)}');renderQueue()">Cancel</button>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function renderHistory () {
+  const hist = SokoniPrinter.getHistory().slice(0, 100);
+  const el   = document.getElementById('historyContent');
+  if (!hist.length) { el.innerHTML = '<div class="empty-state"><span class="empty-icon">&#128196;</span>No print history yet</div>'; return; }
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Doc Type</th><th>Copies</th><th>Status</th><th>Attempts</th><th>Time</th><th></th></tr></thead>
+    <tbody>
+      ${hist.map(j => `<tr>
+        <td>${_esc(j.docType)}</td>
+        <td>${_esc(j.copies)}</td>
+        <td><span class="chip ${_esc(j.status)}">${_esc(j.status.toUpperCase())}</span></td>
+        <td>${_esc(j.attempts)}</td>
+        <td style="color:var(--sub)">${new Date(j.updatedAt).toLocaleString('en-KE')}</td>
+        <td style="text-align:right">
+          ${j.status === 'failed' ? `<button class="btn btn-sm btn-outline" onclick="SokoniPrinter.retryJob('${_esc(j.id)}');renderHistory()">Retry</button>` : ''}
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+/* ── Dummy data for test prints ── */
+function _dummyData (docType) {
+  const biz = { businessName: 'SOKONI Demo Store', businessAddress: 'Westlands, Nairobi', businessPhone: '+254700000000', businessPin: 'A123456789P', vatNumber: 'VAT-987654' };
+  const cust = { customerName: 'Jane Wanjiru', customerPhone: '+254711111111' };
+  const items = [
+    { name: 'Maize Flour 2kg',  quantity: 2, unitPrice: 220, variant: 'Jogoo brand' },
+    { name: 'Cooking Oil 1L',   quantity: 1, unitPrice: 350 },
+    { name: 'Sugar 1kg',        quantity: 3, unitPrice: 160, discount: 30 },
+  ];
+  const totals = { subtotal: 1400, discount: 30, vat: 219, grandTotal: 1589 };
+  const payment = { method: 'M-Pesa', amountTendered: 1600, change: 11, mpesaCode: 'SB1234XYZ' };
+  const base = { ...biz, ...cust, receiptNumber: 'RCP-20240701-001', orderNumber: 'ORD-9876', cashierName: 'John Kamau', items, totals, payment, receiptUrl: 'https://mysokoni.co.ke/r/TEST001', promoMessage: 'ENJOY FREE DELIVERY THIS WEEKEND!' };
+  switch (docType) {
+    case 'refund': return { ...base, receiptNumber: 'REF-001' };
+    case 'exchange': return { ...base, exchangeRef: 'EXC-001', originalRef: 'RCP-001', returnedItems: [{ name: 'Old Shoes Size 8', quantity: 1, unitPrice: 2500 }], newItems: [{ name: 'New Shoes Size 9', quantity: 1, unitPrice: 2800 }], returnedValue: 2500, newValue: 2800, payment: { method: 'Card' } };
+    case 'kitchen': return { orderNumber: 'ORD-042', table: 'Table 7', priority: 'urgent', items: [{ name: 'Nyama Choma', quantity: 1, notes: 'Well done, no bones' }, { name: 'Ugali', quantity: 2, variant: 'Large' }, { name: 'Sukuma Wiki', quantity: 1 }], notes: 'Customer is allergic to onions' };
+    case 'delivery': case 'packing_slip': return { orderNumber: 'ORD-9876', driverName: 'Mike Omondi', ...cust, deliveryAddress: 'Apartment 4B, Kilimani Road, Nairobi', items, qr: 'https://mysokoni.co.ke/track/ORD-9876' };
+    case 'shipping_label': return { toName: 'Jane Wanjiru', toAddress: 'P.O. Box 12345, Nairobi', toCity: 'Nairobi 00100', toPhone: '+254711111111', fromName: 'SOKONI Demo Store', fromAddress: 'Westlands, Nairobi', trackingNumber: 'TRK00123456KE', weight: '1.2kg', service: 'Standard Delivery', contents: 'Clothing items', fragile: false };
+    case 'picking_slip': return { orderNumber: 'ORD-9876', pickerName: 'Alice Achieng', zone: 'Zone A', priority: 'urgent', items: [{ name: 'Maize Flour 2kg', quantity: 2, sku: 'MF2KG', bin: 'A-12-3' }, { name: 'Cooking Oil 1L', quantity: 1, sku: 'CO1L', bin: 'B-04-7' }, { name: 'Sugar 1kg', quantity: 3, sku: 'SU1KG', bin: 'A-08-1' }] };
+    case 'label': return { productName: 'Maize Flour 2kg — Jogoo', price: 220, sku: 'MF2KG-001', lot: 'LOT2024A', barcode: '1234567890123', qr: 'https://mysokoni.co.ke/p/MF2KG' };
+    case 'queue_ticket': return { businessName: 'SOKONI Health Clinic', ticketNumber: 'Q-047', service: 'General Consultation', estimatedWait: '15 min', time: new Date().toLocaleTimeString('en-KE'), qr: 'https://mysokoni.co.ke/q/047' };
+    case 'parking_ticket': return { facilityName: 'SOKONI Mall Parking', ticketNumber: 'P-1089', plateNumber: 'KBZ 123A', zone: 'Level 2 / Bay 34', entryTime: new Date().toLocaleTimeString('en-KE'), rate: 'KES 100 / hr', fee: 300, paid: true };
+    case 'booking': return { bookingRef: 'BK-2024-0887', service: 'Deep Tissue Massage', provider: 'Mary Njoki', date: '2024-07-15', time: '10:00 AM', duration: '60 min', location: 'Wellness Centre, Kilimani', ...cust, amount: 3500, deposit: 1000, notes: 'No strong scents please', qr: 'https://mysokoni.co.ke/b/BK-2024-0887' };
+    case 'service_confirmation': return { businessName: 'TechFix Nairobi', serviceRef: 'SVC-2024-0123', ...cust, device: 'Samsung Galaxy A53', serial: 'SN987654321', problem: 'Screen cracked — touchscreen unresponsive in lower third', diagnosis: 'LCD assembly replacement required', parts: [{ name: 'LCD Assembly', quantity: 1, price: 8500 }], labour: 1500, estimatedTotal: 10000, completionDate: '2024-07-12', warranty: '90 days on parts', terms: 'Data not guaranteed. Back up before repair.' };
+    case 'daily_summary': return { ...biz, cashierName: 'John Kamau', date: new Date().toLocaleDateString('en-KE'), totalSales: 48750, transactionCount: 34, totalRefunds: 1200, exchangeCount: 2, netRevenue: 47550, paymentBreakdown: { 'M-Pesa': 32000, 'Cash': 12500, 'Card': 4250 }, openingFloat: 5000, expectedCash: 17500, actualCash: 17350, topItem: 'Maize Flour 2kg' };
+    case 'monthly_summary': return { ...biz, period: 'June 2024', totalRevenue: 1250000, transactionCount: 842, avgDailySales: 41667, bestDay: '2024-06-28', bestDayRevenue: 87500, totalRefunds: 15200, netRevenue: 1234800, prevMonthRevenue: 1180000, topProducts: [{ name: 'Maize Flour 2kg', revenue: 185000 }, { name: 'Cooking Oil 1L', revenue: 142000 }, { name: 'Sugar 1kg', revenue: 118000 }, { name: 'Bread Loaf', revenue: 95000 }, { name: 'Milk 500ml', revenue: 82000 }], paymentBreakdown: { 'M-Pesa': 875000, 'Cash': 280000, 'Card': 95000 } };
+    default: return base;
   }
+}
 
-  function loadConfig () {
-    const c = P.getConfig();
-    document.getElementById('cfgLogoText').value         = c.logoText || '';
-    document.getElementById('cfgFooter').value           = c.footer || '';
-    document.getElementById('cfgPromo').value            = c.promoMessage || '';
-    document.getElementById('cfgReturn').value           = c.returnPolicy || '';
-    document.getElementById('cfgCopies').value           = String(c.copies || 1);
-    document.getElementById('cfgAutoPrint').checked      = !!c.autoPrintOnSale;
-    document.getElementById('cfgPreview').checked        = !!c.showPreview;
-    document.getElementById('cfgShowCommission').checked = !!c.showCommission;
-    document.getElementById('cfgAutoCut').checked        = c.autoCut !== false;
-  }
+/* ── XSS helper ── */
+function _esc (s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-  function previewReceipt () {
-    saveConfig();
-    const html = P.preview('receipt', {
-      businessName: document.getElementById('cfgLogoText').value || 'SOKONI SmartPOS',
-      businessAddress: 'Nairobi, Kenya', businessPhone: '+254 700 000 000', businessPin: 'P051234567A',
-      receiptNumber: 'RCP-0001', cashierName: 'Jane Mwangi', customerName: 'John Kamau',
-      items: [
-        { name: 'Chapati Flour 2kg', quantity: 2, unitPrice: 220 },
-        { name: 'Cooking Oil 1L',    quantity: 1, unitPrice: 350 },
-        { name: 'Sugar 1kg',         quantity: 3, unitPrice: 120 },
-      ],
-      totals: { subtotal: 1150, vat: 184, grandTotal: 1334 },
-      payment: { method: 'M-Pesa', mpesaCode: 'SBK123XYZ' },
-      receiptUrl: 'https://sokoni.co.ke/r/0001',
-      returnPolicy:  document.getElementById('cfgReturn').value,
-      promoMessage:  document.getElementById('cfgPromo').value,
-    });
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    document.getElementById('receiptPreview').textContent = tmp.textContent || '';
-  }
+/* ── Printer events ── */
+SokoniPrinter.on('connected',    () => { updateStatusBar(); toast('Printer connected'); });
+SokoniPrinter.on('disconnected', () => { updateStatusBar(); toast('Printer disconnected'); });
+SokoniPrinter.on('printed',      j  => { toast('Printed: ' + j.docType); renderQueue(); });
+SokoniPrinter.on('error',        ev => { toast('Print error: ' + ev.error, 4000); renderQueue(); });
 
-  /* ── Queue ─────────────────────────────────────────────────── */
-  function renderQueue () {
-    const jobs = P.getQueue();
-    const el = document.getElementById('queueContainer');
-    if (!jobs.length) { el.innerHTML = '<div class="empty-state"><span class="e-icon">&#128203;</span>Queue is empty</div>'; return; }
-    el.innerHTML = `<table class="queue-table">
-      <thead><tr><th>Job ID</th><th>Type</th><th>Status</th><th>Attempts</th><th>Copies</th><th>Age</th><th>Actions</th></tr></thead>
-      <tbody>${jobs.map(j => `<tr>
-        <td style="font-family:monospace">${esc(j.id)}</td>
-        <td>${esc(j.docType)}</td><td>${statusChip(j.status)}</td>
-        <td>${j.attempts}/${j.maxAttempts}</td><td>${j.copies}</td>
-        <td style="color:var(--tok-muted)">${relTime(j.createdAt)}</td>
-        <td style="display:flex;gap:4px">
-          <button class="btn btn-sm btn-outline" onclick="P.retryJob('${esc(j.id)}');setTimeout(renderQueue,200)">Retry</button>
-          <button class="btn btn-sm btn-danger"  onclick="P.cancelJob('${esc(j.id)}');setTimeout(renderQueue,200)">Cancel</button>
-        </td></tr>
-        ${j.error ? `<tr><td colspan="7" style="color:var(--tok-red);font-size:11px;padding:2px 10px 8px">${esc(j.error)}</td></tr>` : ''}`
-      ).join('')}</tbody></table>`;
-  }
-
-  function clearFailedJobs () {
-    P.getQueue().filter(j => j.status === 'failed').forEach(j => P.cancelJob(j.id));
-    renderQueue();
-  }
-
-  function togglePause () {
-    queuePaused = !queuePaused;
-    if (queuePaused) P.pauseQueue(); else P.resumeQueue();
-    const btn = document.getElementById('btnPause');
-    btn.textContent = queuePaused ? 'Resume' : 'Pause';
-    btn.className = queuePaused ? 'btn btn-sm btn-green' : 'btn btn-sm btn-outline';
-  }
-
-  /* ── History ─────────────────────────────────────────────────── */
-  function renderHistory () {
-    const hist = P.getHistory();
-    const el = document.getElementById('historyContainer');
-    if (!hist.length) { el.innerHTML = '<div class="empty-state"><span class="e-icon">&#128220;</span>No print history yet</div>'; return; }
-    el.innerHTML = `<table class="queue-table">
-      <thead><tr><th>Job ID</th><th>Type</th><th>Status</th><th>Copies</th><th>Time</th><th></th></tr></thead>
-      <tbody>${hist.map(j => `<tr>
-        <td style="font-family:monospace">${esc(j.id)}</td>
-        <td>${esc(j.docType)}</td><td>${statusChip(j.status)}</td>
-        <td>${j.copies}</td><td style="color:var(--tok-muted)">${relTime(j.updatedAt)}</td>
-        <td><button class="btn btn-sm btn-outline" onclick="P.retryJob('${esc(j.id)}');showToast('Requeued')">Reprint</button></td>
-      </tr>`).join('')}</tbody></table>`;
-  }
-
-  function clearHistory () { localStorage.removeItem('spp_history'); renderHistory(); }
-
-  /* ── Print actions ─────────────────────────────────────────── */
-  async function testPrint () {
-    if (!P.connected) return showToast('No printer connected', true);
-    try { await P.testPrint(); showToast('Test print sent'); } catch(e) { showToast(e.message, true); }
-  }
-
-  async function openCashDrawer () {
-    if (!P.connected) return showToast('No printer connected', true);
-    try { await P.openCashDrawer(); showToast('Cash drawer signal sent'); } catch(e) { showToast(e.message, true); }
-  }
-
-  /* ── Helpers ─────────────────────────────────────────────────── */
-  function esc (s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  function statusChip (s) {
-    const col = { done:'green', failed:'red', cancelled:'', pending:'orange', processing:'', error:'red' }[s] || '';
-    return `<span class="chip ${col}">${esc(s)}</span>`;
-  }
-
-  function relTime (iso) {
-    if (!iso) return '-';
-    const d = Math.floor((Date.now() - new Date(iso)) / 1000);
-    if (d < 60)   return d + 's ago';
-    if (d < 3600) return Math.floor(d / 60) + 'm ago';
-    return Math.floor(d / 3600) + 'h ago';
-  }
-
-  function showToast (msg, err) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.background = err ? '#c62828' : '#323232';
-    t.style.display = 'block';
-    clearTimeout(t._tid);
-    t._tid = setTimeout(() => { t.style.display = 'none'; }, 3000);
-  }
-
-  /* ── Printer events ─────────────────────────────────────────── */
-  P.on('connected',    d  => { setStatus('connected', 'Connected: ' + d.name + ' (' + d.type + ')'); updateConnInfo(d); });
-  P.on('disconnected', () => { setStatus('disconnected', 'No printer connected'); updateConnInfo(null); });
-  P.on('printed',      () => { renderQueue(); });
-  P.on('error',        ev => showToast(ev.error, true));
-  P.on('failed',       () => renderQueue());
-
-  /* ── Init ─────────────────────────────────────────────────── */
-  async function init () {
-    buildTransportGrid();
-    loadProfile();
-    loadConfig();
-    loadSavedNetPrinters();
-    previewReceipt();
-    const reconnected = await P.autoReconnect();
-    if (!reconnected) setStatus('disconnected', 'No printer connected — select a transport above to scan');
-    setInterval(() => {
-      if (document.getElementById('panel-queue').classList.contains('active')) renderQueue();
-    }, 5000);
-  }
-
-  document.addEventListener('DOMContentLoaded', init);
-  </script>
+/* ── Init ── */
+loadConfig();
+updateStatusBar();
+SokoniPrinter.autoReconnect().then(ok => { if (ok) updateStatusBar(); });
+</script>
 </body>
 </html>

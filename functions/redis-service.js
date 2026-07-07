@@ -23,10 +23,22 @@
  * @module redis-service
  */
 
-/* REDIS_URL is read from process.env — set via Firebase Functions environment:
-   firebase functions:secrets:set REDIS_URL  OR  via .env file: REDIS_URL=redis://...
-   Redis gracefully degrades to Firestore fallback when REDIS_URL is absent. */
+/* REDIS_URL is set via functions/.env: REDIS_URL=redis://<host>:6379
+   Provision GCP Memorystore (Basic, 1 GB, Redis 7.x, us-central1) then set the value.
+   Redis gracefully degrades to no-op mode when REDIS_URL is absent — rate limiting
+   is disabled in that state. A startup warning is emitted to Cloud Logging. */
 const REDIS_URL = { value: () => process.env.REDIS_URL || '' };
+
+// Emit a prominent warning on every cold start when Redis is unconfigured.
+// This makes the missing infrastructure immediately visible in Cloud Logging.
+if (!process.env.REDIS_URL) {
+  console.error(JSON.stringify({
+    severity: 'WARNING',
+    message: '[redis-service] REDIS_URL is not set — all rate limiting is DISABLED. ' +
+             'Provision GCP Memorystore and set REDIS_URL in functions/.env.',
+    action: 'SET_REDIS_URL_REQUIRED',
+  }));
+}
 
 // ─── TTL Constants ────────────────────────────────────────────────────────────
 /**

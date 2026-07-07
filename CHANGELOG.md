@@ -1,4 +1,76 @@
-﻿## [2026-07-07] — Algolia Admin Key Rotation Verification & Deployment Planning
+﻿## [2026-07-07] — Universal Printer Engine v4.0 + Printer Setup Portal Rebuild
+
+### Summary
+Full rewrite of the SOKONI SmartPOS printing stack to v4.0. Introduced image printing via canvas-to-ESC/POS rasterisation, automatic printer capability detection, cross-tab sync via BroadcastChannel, exponential-backoff Bluetooth reconnection, a 30+ document type renderer (including exchange, shipping label, picking slip, parking ticket, service confirmation, and monthly summary), a priority-ordered offline print queue, and 4 Cloud Function backend services for cloud-sync print logging, history, and configuration. The printer setup portal (`pos-printer-setup.html`) was fully rebuilt on the POS premium dark theme.
+
+### Files Affected
+| File | Change |
+|---|---|
+| `sokoni-universal-printer.js` | Full rewrite v3.0 → v4.0 (see below) |
+| `functions/pos-printer.js` | New file — 4 Cloud Functions |
+| `pos-printer-setup.html` | Full rebuild — premium POS dark theme |
+| `functions/index.js` | Wired 4 new pos-printer CFs (line ~9085) |
+| `DEPLOY_QUEUE.md` | Added 4 pos-printer CFs to master deploy command |
+
+### `sokoni-universal-printer.js` v4.0 Changes
+- **Image printing** — `SokoniPrinter.printImage(src, opts)`: canvas-based greyscale → 1-bit threshold dithering → ESC/POS GS v 0 raster command
+- **Capability detection** — `SokoniPrinter.detectCapabilities()`: HTTP `/capabilities` probe for network printers; DLE EOT status probe for BT/USB; stored in adapter profile; emits `'capabilities'` event
+- **Cross-tab sync** — `BroadcastChannel('sokoni_printer_v4')`: config updates and queue invalidation sync across tabs
+- **BT auto-reconnect** — exponential backoff: 1s → 2s → 4s → 8s → 16s → 30s (cap), 6 attempts
+- **Priority queue** — `PrintQueue.next()` selects the highest-priority pending job
+- **New ESCPOSEncoder commands** — `raster()`, `statusProbe()`, `charset(pc437|pc850)`
+- **New error codes** — `PRINTER_ERRORS`: OFFLINE, PAPER_OUT, COVER_OPEN, LOW_BATTERY, CONNECTION_LOST, TIMEOUT, UNSUPPORTED_CMD, IMAGE_LOAD_FAILED, UNKNOWN
+- **Extended Bluetooth UUIDs** — 7 additional GATT service UUIDs for wider printer brand coverage
+- **6 new document types** — exchange, shipping_label, picking_slip, parking_ticket, service_confirmation, monthly_summary (joins existing 8)
+- **Total document types: 14** across sale, refund, exchange, kitchen, delivery, shipping label, picking slip, product label, queue ticket, parking ticket, booking, service confirmation, daily summary, monthly summary
+- **API additions** — `detectCapabilities()`, `printImage()`, `getCapabilities()`, `ERRORS` public constant
+
+### Cloud Functions (functions/pos-printer.js)
+| CF | Type | Description |
+|---|---|---|
+| `posLogPrint` | onCall | Logs print job to `posPrintLog`; atomically updates `posPrintStats/{uid}_{day}` rollup |
+| `getPrintHistory` | onCall | Paginated print history (limit 1–200) + 7-day stats for authenticated seller |
+| `getPrinterConfig` | onCall | Reads `posPrinterConfig/{uid}`; returns default config if not found |
+| `setPrinterConfig` | onCall | Full-overwrite validated config: paperWidth (58/76/80mm), autoCut, copies (1–10), logoText (128c), footer/promo/return (256c each), showCommission, imageThreshold (50–250) |
+
+### New Firestore Collections
+| Collection | Purpose | Key fields |
+|---|---|---|
+| `posPrintLog` | Per-job audit trail | uid, docType, transport, success, errorCode, copies, paperWidth, durationMs, day, ts |
+| `posPrintStats/{uid}_{day}` | Daily rollup (increment-safe) | totalJobs, successJobs, failedJobs, totalCopies |
+| `posPrinterConfig/{uid}` | Seller printer config | config{}, updatedAt |
+
+### `pos-printer-setup.html` Rebuild
+- Premium POS dark theme: `#07070f` base, `#6d5cff` accent, `#00e676` status green, `#ff4d4d` error
+- 6 tabs: Discover · Capabilities · Test Documents · Configuration · Queue · History
+- Transport selector with browser API availability detection (Bluetooth/USB/Serial/Network/Browser)
+- Network printer manager with add/remove and localStorage persistence
+- Capability detection panel with per-feature status indicators (QR, barcode, image, cutter, drawer, online)
+- Test document grid — 14 doc types with dummy data, inline ESC/POS text preview, live print if connected
+- Printer configuration form with cloud sync via `setPrinterConfig` CF
+- Live queue table with pause/resume/cancel-per-job controls
+- Print history table (last 100 jobs) with retry support
+
+### Security Notes
+- All CF inputs validated server-side: docType (Set of 30 valid values), transport (6 valid values), copies (1–20), string lengths enforced, numeric ranges enforced
+- No secret dependencies — printer CFs use Firestore only
+- `enforceAppCheck` inherited from the base `onCall` pattern (to be activated at deploy)
+
+### Performance Notes
+- Image rasterisation is client-side (canvas) — no server round-trip
+- Daily stats use `FieldValue.increment()` — atomic, no read-before-write
+- Queue stored in localStorage — offline-capable with zero Firestore reads
+- BroadcastChannel invalidates queue across tabs without polling
+
+### Deployment
+4 new CFs queued in `DEPLOY_QUEUE.md` master command. No new secrets required. No index changes (queries against `posPrintLog` use composite index on `uid + ts DESC` — add if Firestore prompts).
+
+### Breaking Changes
+None. v4.0 is fully backwards-compatible. `SokoniPrinter` public API is additive.
+
+---
+
+## [2026-07-07] — Algolia Admin Key Rotation Verification & Deployment Planning
 
 ### Summary
 `ALGOLIA_ADMIN_KEY` was rotated in Firebase Secret Manager. A full codebase audit confirmed the rotation is safe to activate: all 18 Algolia source files correctly use `defineSecret('ALGOLIA_ADMIN_KEY')`, zero hardcoded key values exist anywhere in `functions/`, and `process.env.ALGOLIA_ADMIN_KEY` appears only in CLI scripts (correct pattern — not deployed CFs). No source code changes were required. A minimal redeployment plan targeting exactly the 79 affected live functions was documented in `DEPLOY_QUEUE.md` (pending quota).
