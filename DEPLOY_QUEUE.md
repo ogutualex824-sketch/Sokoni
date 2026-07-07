@@ -52,6 +52,36 @@ then `firebase deploy --only functions --force` lands all 187.
 
 ---
 
+## DEPLOY ACTIVITY — 2026-07-07 (Universal Printer Engine v5.0)
+
+### ✅ Printer Engine v5.0 — 4 CFs (enforceAppCheck) + hosting
+**Files changed:** `functions/pos-printer.js`, `sokoni-universal-printer.js`, `pos-printer-setup.html`, `functions/index.js` (commit c34accf)
+
+**Engine upgrades (sokoni-universal-printer.js):**
+- Logo image raster support: `_imgToRasterCached()` with `_imgRasterCache` (Map)
+- New doc types: `invoice` (formal tax invoice with VAT/WHT/bank details) and `custom` (free-form via `d.build(encoder, W, PX)`)
+- `registerDocType(type, fn)` extensibility API — no core edits needed for new types
+- New APIs: `printQR()`, `printBarcode()`, `waitForJob(id, ms)`, `cancelAllJobs()`, `clearHistory()`, `getJob(id)`
+- Lazy `ReceiptRenderer` cache (`_getRenderer()`); invalidated on `setConfig()`
+- Config: added `logoUrl`, `autoPrintAfterPayment`, `showPreview`, `encoding`, `printDensity`
+- BroadcastChannel upgraded: `sokoni_printer_v4` → `sokoni_printer_v5`
+
+**CF upgrades (pos-printer.js):**
+- `enforceAppCheck: true` added to all 4 existing CFs (was missing — critical security fix)
+- Config sanitiser: `logoUrl` must be `https://`; `encoding` whitelist; `printDensity` -3 to +3
+- 3 new CFs (QUOTA-BLOCKED — code complete, not yet deployed):
+  - `posGetPrintStats` — admin aggregate stats with daily breakdown
+  - `posGetPrintTemplate` — get saved template with ownership guard
+  - `posSavePrintTemplate` — save template with ownership validation
+
+**Setup UI (pos-printer-setup.html):** logo URL field, auto-print toggle, preview toggle, encoding selector, density slider
+
+**Deployed:** `posLogPrint`, `getPrintHistory`, `getPrinterConfig`, `setPrinterConfig` + hosting
+
+**Pending quota (new CFs):** `posGetPrintStats`, `posGetPrintTemplate`, `posSavePrintTemplate`
+
+---
+
 ## DEPLOY ACTIVITY — 2026-07-07 (security patch batch)
 
 ### ✅ Security & Correctness Patches — 9 CFs + hosting
