@@ -419,13 +419,17 @@ exports.wapScheduledResume = onSchedule("every 5 minutes", async () => {
   });
   await batch.commit();
 
-  for (const sched of toProcess) {
+  /* Batch-read all instance docs in parallel, then process */
+  const instRefs  = toProcess.map(s => db.collection(COLL.INSTANCES).doc(s.instanceId));
+  const instSnaps = await Promise.all(instRefs.map(r => r.get().catch(() => null)));
+
+  await Promise.all(toProcess.map(async (sched, i) => {
     try {
-      const instRef  = db.collection(COLL.INSTANCES).doc(sched.instanceId);
-      const instSnap = await instRef.get();
-      if (!instSnap.exists) {
+      const instRef  = instRefs[i];
+      const instSnap = instSnaps[i];
+      if (!instSnap?.exists) {
         await db.collection(COLL.SCHEDULE).doc(sched._docId).update({ status: "done" });
-        continue;
+        return;
       }
 
       if (sched.type === "retry") {
@@ -459,7 +463,7 @@ exports.wapScheduledResume = onSchedule("every 5 minutes", async () => {
       console.error(`[WAP] Scheduler: failed to process ${sched.instanceId}/${sched.stepId}:`, e.message);
       await db.collection(COLL.SCHEDULE).doc(sched._docId).update({ status: "pending" });
     }
-  }
+  }));
 });
 
 /* ================================================================

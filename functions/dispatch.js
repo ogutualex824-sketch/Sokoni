@@ -260,19 +260,28 @@ exports.processCascadeTimeouts = onSchedule(
     }
     await batch.commit();
 
-    for (const n of notifications) {
-      if (n.action === 'next_rider' && n.nextRider) {
+    /* Batch read all rider FCM tokens and delivery docs in parallel */
+    const nextRiderNotifs = notifications.filter(n => n.action === 'next_rider' && n.nextRider);
+    if (nextRiderNotifs.length > 0) {
+      const [riderDocs, deliveryDocs] = await Promise.all([
+        Promise.all(nextRiderNotifs.map(n =>
+          firestore.collection('rideDrivers').doc(n.nextRider.riderId).get().catch(() => null)
+        )),
+        Promise.all(nextRiderNotifs.map(n =>
+          firestore.collection('packageRequests').doc(n.deliveryRef).get().catch(() => null)
+        )),
+      ]);
+      await Promise.all(nextRiderNotifs.map(async (n, i) => {
         try {
-          const riderDoc = await firestore.collection('rideDrivers').doc(n.nextRider.riderId).get();
-          const fcm = (riderDoc.data() || {}).fcmToken;
+          const fcm      = (riderDocs[i]?.data()   || {}).fcmToken;
+          const delivery = (deliveryDocs[i]?.data() || {});
           if (fcm) {
-            const delivery = (await firestore.collection('packageRequests').doc(n.deliveryRef).get()).data() || {};
             await _sendPush(fcm, 'New Delivery Request',
               `Pickup: ${delivery.pickupAddress || 'Seller'}. Fee: KES ${delivery.deliveryFee || 0}.`,
               { deliveryRef: n.deliveryRef, action: 'dispatch_offer' });
           }
         } catch(e) { console.warn('[dispatch] Timeout notification error', e.message); }
-      }
+      }));
     }
     logger.info('[dispatch] Processed cascade timeouts', { count: snap.size });
   }

@@ -18,6 +18,9 @@ const crypto                  = require('crypto');
 
 const QR_SIGNING_SECRET = defineSecret('QR_SIGNING_SECRET');
 
+const OPT    = { region: 'us-central1', enforceAppCheck: true, memory: '256MiB', secrets: [QR_SIGNING_SECRET] };
+const OPT128 = { region: 'us-central1', enforceAppCheck: true, memory: '128MiB', secrets: [QR_SIGNING_SECRET] };
+
 /* ── helpers ─────────────────────────────────────────────── */
 const fdb   = () => admin.firestore();
 const _now  = () => admin.firestore.FieldValue.serverTimestamp();
@@ -82,7 +85,7 @@ async function _rateLimit(key, max, windowMs) {
    Returns: { transactionId, qrUrl, expiresAt, signature }
 ════════════════════════════════════════════════════════════ */
 exports.generatePOSPaymentQR = onCall(
-  { secrets: [QR_SIGNING_SECRET], region: 'us-central1', memory: '256MiB' },
+  OPT,
   async (request) => {
     const auth = request.auth;
     if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Login required');
@@ -161,7 +164,7 @@ exports.generatePOSPaymentQR = onCall(
    Returns payment details WITHOUT exposing internal data.
 ════════════════════════════════════════════════════════════ */
 exports.getPOSPaymentDetails = onCall(
-  { secrets: [QR_SIGNING_SECRET], region: 'us-central1', memory: '128MiB' },
+  OPT128,
   async (request) => {
     const { transactionId } = request.data;
     if (!transactionId || typeof transactionId !== 'string' || transactionId.length !== 32) {
@@ -226,7 +229,7 @@ exports.getPOSPaymentDetails = onCall(
    Duplicate/replay safe.
 ════════════════════════════════════════════════════════════ */
 exports.initiatePOSQRPayment = onCall(
-  { secrets: [QR_SIGNING_SECRET], region: 'us-central1', memory: '256MiB' },
+  OPT,
   async (request) => {
     const { transactionId, method, phone } = request.data;
 
@@ -311,7 +314,7 @@ exports.initiatePOSQRPayment = onCall(
    Idempotent.
 ════════════════════════════════════════════════════════════ */
 exports.completePOSQRPayment = onCall(
-  { secrets: [QR_SIGNING_SECRET], region: 'us-central1', memory: '256MiB' },
+  OPT,
   async (request) => {
     const auth = request.auth;
     if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Login required');
@@ -391,7 +394,7 @@ exports.completePOSQRPayment = onCall(
    Seller cancels a pending QR before it's paid.
 ════════════════════════════════════════════════════════════ */
 exports.cancelPOSPaymentQR = onCall(
-  { region: 'us-central1', memory: '128MiB' },
+  OPT128,
   async (request) => {
     const auth = request.auth;
     if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Login required');
@@ -422,7 +425,7 @@ exports.cancelPOSPaymentQR = onCall(
    Partial or full refund for a completed POS QR payment.
 ════════════════════════════════════════════════════════════ */
 exports.refundPOSPayment = onCall(
-  { region: 'us-central1', memory: '256MiB' },
+  OPT,
   async (request) => {
     const auth = request.auth;
     if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Login required');
@@ -480,7 +483,7 @@ exports.refundPOSPayment = onCall(
    Seller views their POS QR payment history.
 ════════════════════════════════════════════════════════════ */
 exports.getPOSPaymentHistory = onCall(
-  { region: 'us-central1', memory: '128MiB' },
+  OPT128,
   async (request) => {
     const auth = request.auth;
     if (!_isAuthed(auth)) throw new HttpsError('unauthenticated', 'Login required');

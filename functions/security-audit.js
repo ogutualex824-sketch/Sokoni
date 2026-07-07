@@ -762,11 +762,15 @@ exports.runSecurityScan = onCall(
         u => u.customClaims && (u.customClaims.admin || u.customClaims.super_admin || u.customClaims.role >= 4),
       );
 
-      /* Check MFA enrollment for admin users */
+      /* Check MFA enrollment for admin users — batch all reads */
       let noMFAAdminCount = 0;
-      for (const u of adminUsers) {
-        const mfaDoc = await db.collection('securityMFA').doc(u.uid).get();
-        if (!mfaDoc.exists || mfaDoc.data().enrolled !== true) noMFAAdminCount++;
+      if (adminUsers.length > 0) {
+        const mfaDocs = await Promise.all(
+          adminUsers.map(u => db.collection('securityMFA').doc(u.uid).get())
+        );
+        for (const mfaDoc of mfaDocs) {
+          if (!mfaDoc.exists || mfaDoc.data().enrolled !== true) noMFAAdminCount++;
+        }
       }
 
       authResult = {

@@ -18,13 +18,17 @@
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
+const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
+
 const REGION = "us-central1";
 const APP_CHECK = true;
+const HEALTH_SECRETS = [SENDGRID_API_KEY];
 
 // Failure-rate threshold (%) above which payments are considered degraded/down
 const PAYMENT_FAIL_RATE_DEGRADED = 10;
@@ -416,7 +420,7 @@ async function _runAllProbes() {
  * Returns { status, score, subsystems, probeTimeMs, checkedAt }
  */
 exports.getSystemHealth = onCall(
-  { region: REGION, enforceAppCheck: APP_CHECK },
+  { region: REGION, enforceAppCheck: APP_CHECK, secrets: HEALTH_SECRETS },
   async (request) => {
     _requireAdmin(request.auth);
 
@@ -444,7 +448,7 @@ exports.getSystemHealth = onCall(
  * hosting / functions / storage / scheduler / appCheck services.
  */
 exports.getInfrastructureStatus = onCall(
-  { region: REGION, enforceAppCheck: APP_CHECK },
+  { region: REGION, enforceAppCheck: APP_CHECK, secrets: HEALTH_SECRETS },
   async (request) => {
     _requireAdmin(request.auth);
 
@@ -480,7 +484,7 @@ exports.getInfrastructureStatus = onCall(
  * Counts orders last 1 hour, active sellers, open disputes, and refunds.
  */
 exports.getMarketplaceHealth = onCall(
-  { region: REGION, enforceAppCheck: APP_CHECK },
+  { region: REGION, enforceAppCheck: APP_CHECK, secrets: HEALTH_SECRETS },
   async (request) => {
     _requireAdmin(request.auth);
 
@@ -531,7 +535,7 @@ exports.getMarketplaceHealth = onCall(
  * Counts active posSessions, registered posTerminals, stale sessions (inactive >1hr).
  */
 exports.getPOSSystemStatus = onCall(
-  { region: REGION, enforceAppCheck: APP_CHECK },
+  { region: REGION, enforceAppCheck: APP_CHECK, secrets: HEALTH_SECRETS },
   async (request) => {
     _requireAdmin(request.auth);
 
@@ -572,7 +576,7 @@ exports.getPOSSystemStatus = onCall(
  * Status: healthy if failRate < 10%, degraded if 10-20%, down if >=20%.
  */
 exports.getPaymentSystemHealth = onCall(
-  { region: REGION, enforceAppCheck: APP_CHECK },
+  { region: REGION, enforceAppCheck: APP_CHECK, secrets: HEALTH_SECRETS },
   async (request) => {
     _requireAdmin(request.auth);
 
@@ -618,7 +622,7 @@ exports.getPaymentSystemHealth = onCall(
  * Checks ANTHROPIC_API_KEY presence; counts aiTaskLog errors last 1hr.
  */
 exports.getAISystemHealth = onCall(
-  { region: REGION, enforceAppCheck: APP_CHECK },
+  { region: REGION, enforceAppCheck: APP_CHECK, secrets: HEALTH_SECRETS },
   async (request) => {
     _requireAdmin(request.auth);
 
@@ -655,7 +659,7 @@ exports.getAISystemHealth = onCall(
  * blockedIPs last 24hr.
  */
 exports.getSecuritySystemHealth = onCall(
-  { region: REGION, enforceAppCheck: APP_CHECK },
+  { region: REGION, enforceAppCheck: APP_CHECK, secrets: HEALTH_SECRETS },
   async (request) => {
     _requireAdmin(request.auth);
 
@@ -714,7 +718,7 @@ exports.getSecuritySystemHealth = onCall(
  * Returns array of { status, score, healthyCount, recordedAt (millis) }.
  */
 exports.getHealthHistory = onCall(
-  { region: REGION, enforceAppCheck: APP_CHECK },
+  { region: REGION, enforceAppCheck: APP_CHECK, secrets: HEALTH_SECRETS },
   async (request) => {
     _requireAdmin(request.auth);
 

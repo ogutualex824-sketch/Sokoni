@@ -433,24 +433,36 @@ const sasosFraudScan = onSchedule(
     const trialSnap = await db().collection('sasosSubscriptions')
       .where('products.ai.status', '==', 'trial').limit(500).get();
 
-    for (const doc of trialSnap.docs) {
-      const uid  = doc.id;
-      const aiSub = doc.data().products?.ai;
+    /* Batch-fetch all user docs for the trial accounts to avoid N+1 */
+    const trialDocs = trialSnap.docs;
+    const userSnaps = await Promise.all(
+      trialDocs.map(d => db().collection('users').doc(d.id).get().catch(() => null))
+    );
+
+    /* Collect risk writes and commit as a batch */
+    const riskBatch = db().batch();
+    let riskWrites  = 0;
+    for (let i = 0; i < trialDocs.length; i++) {
+      const doc     = trialDocs[i];
+      const uid     = doc.id;
+      const aiSub   = doc.data().products?.ai;
+      const userSnap = userSnaps[i];
       /* Flag if trial started within 24h of account creation (disposable account pattern) */
-      const userSnap = await db().collection('users').doc(uid).get().catch(() => null);
       if (userSnap?.exists) {
-        const createdAt = userSnap.data().createdAt || 0;
+        const createdAt  = userSnap.data().createdAt || 0;
         const trialStart = aiSub?.periodStart || 0;
         if (trialStart - createdAt < 3600000 && trialStart > 0) {
-          await db().collection('sasosRiskProfiles').doc(uid).set({
+          riskBatch.set(db().collection('sasosRiskProfiles').doc(uid), {
             uid, riskScore: FieldValue.increment(SIGNAL_WEIGHTS.trial_abuse),
             lastSignalAt: now, signalCount: FieldValue.increment(1),
             updatedAt: FieldValue.serverTimestamp(),
           }, { merge: true });
+          riskWrites++;
           signals++;
         }
       }
     }
+    if (riskWrites > 0) await riskBatch.commit();
 
     /* Pattern 2: Rapid plan cycling (>3 plan changes in 7 days) */
     const week = now - 7 * 86400000;

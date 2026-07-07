@@ -14,7 +14,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
 const db = admin.firestore();
-const _CF = { region: 'us-central1', enforceAppCheck: false };
+const _CF = { region: 'us-central1', enforceAppCheck: true };
 
 function _requireAuth(req) {
   if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Authentication required');

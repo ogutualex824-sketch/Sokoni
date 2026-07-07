@@ -186,14 +186,20 @@ exports.typesenseBackupCleanup = onSchedule(
 
     let deleted = 0;
     for (const chunk of _chunk(oldDailies.docs, 100)) {
+      /* Batch all chunk-doc reads in parallel before building the delete batch */
+      const chunkSnaps = await Promise.all(
+        chunk.map(metaDoc =>
+          db.collection(BACKUP_DOCS_COL)
+            .where('backupId', '==', metaDoc.data().backupId).limit(200).get()
+        )
+      );
+
       const batch = db.batch();
-      for (const metaDoc of chunk) {
+      for (let ci = 0; ci < chunk.length; ci++) {
+        const metaDoc = chunk[ci];
         const d = metaDoc.data();
         batch.delete(metaDoc.ref);
-        /* Delete associated chunk docs */
-        const chunks = await db.collection(BACKUP_DOCS_COL)
-          .where('backupId', '==', d.backupId).limit(200).get();
-        chunks.docs.forEach(c => batch.delete(c.ref));
+        chunkSnaps[ci].docs.forEach(c => batch.delete(c.ref));
         /* Delete from Storage if applicable */
         if (d.storeLoc?.startsWith('gs://') && STORAGE_BUCKET) {
           const path = d.storeLoc.replace(`gs://${STORAGE_BUCKET}/`, '');

@@ -888,12 +888,17 @@ exports.runLuckyDraw = onSchedule({ schedule: '0 6 * * *', region: REGION }, asy
     .where('endsAt', '<=', now)
     .get();
 
-  for (const drawDoc of snap.docs) {
+  /* Fetch all draw entries in parallel instead of serially */
+  const drawEntrySnaps = await Promise.all(
+    snap.docs.map(d => db.collection('loyaltyDrawEntries').where('drawId', '==', d.id).get())
+  );
+
+  for (let di = 0; di < snap.docs.length; di++) {
+    const drawDoc     = snap.docs[di];
+    const entriesSnap = drawEntrySnaps[di];
     const draw = drawDoc.data();
     try {
-      // Collect all entries
-      const entriesSnap = await db.collection('loyaltyDrawEntries')
-        .where('drawId', '==', drawDoc.id).get();
+      // Entries already fetched above
       if (entriesSnap.empty) {
         await drawDoc.ref.update({ status: 'drawn_no_entries', drawnAt: F.serverTimestamp() });
         continue;
@@ -1244,15 +1249,26 @@ exports.reconcileLoyaltyLedger = onSchedule({ schedule: '0 0 * * *', region: REG
   let checked    = 0;
   let mismatches = 0;
 
-  for (const accDoc of accSnap.docs) {
-    const uid     = accDoc.id;
-    const account = accDoc.data();
+  /* Batch all per-account ledger queries in parallel */
+  const ledgerSnaps = await Promise.all(
+    accSnap.docs.map(d => db.collection('loyaltyLedger').where('uid', '==', d.id).get().catch(() => null))
+  );
+
+  /* Collect mismatch writes into batches */
+  const reconcBatch = db.batch();
+  const alertBatch  = db.batch();
+  let batchWrites = 0;
+
+  for (let i = 0; i < accSnap.docs.length; i++) {
+    const accDoc   = accSnap.docs[i];
+    const uid      = accDoc.id;
+    const account  = accDoc.data();
+    const ledger   = ledgerSnaps[i];
     try {
-      const ledger = await db.collection('loyaltyLedger').where('uid', '==', uid).get();
       let computedBalance  = 0;
       let computedCashback = 0;
 
-      for (const entry of ledger.docs) {
+      for (const entry of (ledger?.docs || [])) {
         const d = entry.data();
         computedBalance  += (d.pointsEarned || 0) - (d.pointsRedeemed || 0);
         computedCashback += d.cashbackEarned || 0;
@@ -1263,7 +1279,8 @@ exports.reconcileLoyaltyLedger = onSchedule({ schedule: '0 0 * * *', region: REG
 
       if (balanceDrift > 1 || cashbackDrift > 0.01) {
         mismatches++;
-        await db.collection('loyaltyReconciliation').add({
+        batchWrites++;
+        reconcBatch.set(db.collection('loyaltyReconciliation').doc(), {
           uid,
           computedBalance,
           storedBalance:   account.balance        || 0,
@@ -1274,8 +1291,7 @@ exports.reconcileLoyaltyLedger = onSchedule({ schedule: '0 0 * * *', region: REG
           detectedAt:      F.serverTimestamp(),
           status:          'flagged',
         });
-        // Alert admin via Firestore alert
-        await db.collection('adminAlerts').add({
+        alertBatch.set(db.collection('adminAlerts').doc(), {
           type:      'loyalty_reconciliation_mismatch',
           uid,
           balanceDrift,
@@ -1290,6 +1306,7 @@ exports.reconcileLoyaltyLedger = onSchedule({ schedule: '0 0 * * *', region: REG
     }
   }
 
+  if (batchWrites > 0) await Promise.all([reconcBatch.commit(), alertBatch.commit()]);
   console.log(`reconcileLoyaltyLedger: checked=${checked}, mismatches=${mismatches}`);
 });
 

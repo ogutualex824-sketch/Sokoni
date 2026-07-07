@@ -381,31 +381,41 @@ exports.inventoryDailyForecasts = onSchedule(
         const levelsSnap = await tenantCol(tenantId, 'inventory_levels')
           .where('available', '<=', 15).limit(20).get();
 
-        for (const levelDoc of levelsSnap.docs) {
-          const level = levelDoc.data();
-          if (!level.productId) continue;
+        const levelDocs = levelsSnap.docs.filter(d => d.data().productId);
+        if (levelDocs.length === 0) continue;
 
-          const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
-          const mvSnap = await tenantCol(tenantId, 'inventory_movements')
-            .where('productId', '==', level.productId)
+        /* Batch all movement queries in parallel — one per product within this tenant */
+        const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
+        const mvSnaps = await Promise.all(
+          levelDocs.map(d => tenantCol(tenantId, 'inventory_movements')
+            .where('productId', '==', d.data().productId)
             .where('type', '==', 'sale')
-            .where('timestamp', '>=', cutoff.toISOString()).get();
+            .where('timestamp', '>=', cutoff.toISOString()).get())
+        );
 
-          const totalSold = mvSnap.docs.reduce((s, d) => s + Math.abs(d.data().quantity || 0), 0);
+        /* Batch all forecast writes */
+        const forecastBatch = db.batch();
+        for (let li = 0; li < levelDocs.length; li++) {
+          const level    = levelDocs[li].data();
+          const totalSold = mvSnaps[li].docs.reduce((s, d) => s + Math.abs(d.data().quantity || 0), 0);
           const avgDaily  = totalSold / 30;
           const daysLeft  = avgDaily > 0 ? Math.floor(level.available / avgDaily) : null;
 
-          await tenantCol(tenantId, 'inventory_forecasts')
-            .doc(`${level.productId}_auto`).set({
-              productId:   level.productId,
-              avgDailySales: avgDaily,
-              currentQty:  level.available,
+          forecastBatch.set(
+            tenantCol(tenantId, 'inventory_forecasts').doc(`${level.productId}_auto`),
+            {
+              productId:      level.productId,
+              avgDailySales:  avgDaily,
+              currentQty:     level.available,
               daysOfStockLeft: daysLeft,
               criticalIn3Days: daysLeft !== null && daysLeft <= 3,
-              updatedAt:   nowISO(),
+              updatedAt:      nowISO(),
               tenantId,
-            }, { merge: true });
+            },
+            { merge: true }
+          );
         }
+        await forecastBatch.commit();
       } catch (e) {
         console.error(`Daily forecasts failed for ${tenantId}:`, e.message);
       }

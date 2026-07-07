@@ -592,7 +592,7 @@ exports.confirmLoyaltyRedemption = onCall({ ...OPT, timeoutSeconds: 20 }, async 
 // Returns caller's loyalty account, creating one on first call.
 // ═════════════════════════════════════════════════════════════════════════════
 
-exports.getLoyaltyAccount = onCall({ region: REGION, cors: true }, async (req) => {
+exports.getLoyaltyAccount = onCall(OPT, async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required');
   const uid = req.auth.uid;
   const db  = _db();
@@ -687,7 +687,7 @@ exports.getLoyaltyHistory = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) =
 // Public tier definitions + current merchant earn rates.
 // ═════════════════════════════════════════════════════════════════════════════
 
-exports.getLoyaltyTiers = onCall({ region: REGION, cors: true }, async (req) => {
+exports.getLoyaltyTiers = onCall(OPT, async (req) => {
   const { merchantId } = req.data || {};
   let config = _defaultConfig(merchantId || 'sokoni');
   if (merchantId) {
@@ -754,7 +754,7 @@ exports.adminAdjustPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) =
 // Top 10 earners — fully anonymised.
 // ═════════════════════════════════════════════════════════════════════════════
 
-exports.getLoyaltyLeaderboard = onCall({ region: REGION, cors: true }, async () => {
+exports.getLoyaltyLeaderboard = onCall(OPT, async () => {
   const snap = await _db().collection('loyaltyAccounts').orderBy('lifetimePoints', 'desc').limit(10).get();
   return {
     leaderboard: snap.docs.map((d, i) => ({
@@ -1315,14 +1315,23 @@ exports.processLoyaltyMilestones = onSchedule(
       .where('status', '==', 'active')
       .limit(100).get();
 
+    /* Deduplicate merchant IDs and batch-fetch all configs before the loop */
+    const uniqueMerchantIds = [...new Set(snap.docs.map(d => d.data().lastMerchantId || 'sokoni'))];
+    const cfgSnaps = await Promise.all(
+      uniqueMerchantIds.map(mid => db.collection('loyaltyMerchantConfigs').doc(mid).get())
+    );
+    const cfgMap = {};
+    for (let ci = 0; ci < uniqueMerchantIds.length; ci++) {
+      cfgMap[uniqueMerchantIds[ci]] = cfgSnaps[ci].exists ? cfgSnaps[ci].data() : _defaultConfig(uniqueMerchantIds[ci]);
+    }
+
     let awarded = 0;
     for (const doc of snap.docs) {
       const acc = doc.data();
       if (acc.birthdayRewardYear === year) continue;
 
       try {
-        const cfgSnap = await db.collection('loyaltyMerchantConfigs').doc(acc.lastMerchantId || 'sokoni').get();
-        const config  = cfgSnap.exists ? cfgSnap.data() : _defaultConfig('sokoni');
+        const config = cfgMap[acc.lastMerchantId || 'sokoni'] || _defaultConfig('sokoni');
         const bonus   = config.birthdayBonus || 500;
         const idKey   = _ledgerKey(['birthday', acc.uid, String(year)]);
 

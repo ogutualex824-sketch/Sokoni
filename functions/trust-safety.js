@@ -17,6 +17,9 @@ function _inferSeverity(reason) {
   return 'low';
 }
 
+const OPT        = { region: 'us-central1', enforceAppCheck: true, maxInstances: 10 };
+const OPT_REPORT = { region: 'us-central1', enforceAppCheck: true, maxInstances: 30 };
+
 function _requireAdmin(req) {
   if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) throw new Error('admin required');
 }
@@ -27,7 +30,7 @@ function _requireSuperAdmin(req) {
 /* ─────────────────────────────────────────────────────────────────────────
    1. tsReportContent — any authenticated user files a report
 ──────────────────────────────────────────────────────────────────────────── */
-exports.tsReportContent = onCall({ region: 'us-central1', maxInstances: 30 }, async (req) => {
+exports.tsReportContent = onCall(OPT_REPORT, async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new Error('auth/unauthenticated');
   const { entityId, entityType, reason, detail } = req.data;
@@ -76,7 +79,7 @@ exports.tsReportContent = onCall({ region: 'us-central1', maxInstances: 30 }, as
 /* ─────────────────────────────────────────────────────────────────────────
    2. tsGetReports — admin: list reports with status filter
 ──────────────────────────────────────────────────────────────────────────── */
-exports.tsGetReports = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+exports.tsGetReports = onCall(OPT, async (req) => {
   _requireAdmin(req);
   const { status, entityType, severity, limit: lim } = req.data;
 
@@ -99,7 +102,7 @@ exports.tsGetReports = onCall({ region: 'us-central1', maxInstances: 10 }, async
 /* ─────────────────────────────────────────────────────────────────────────
    3. tsReviewReport — admin: approve | dismiss | escalate
 ──────────────────────────────────────────────────────────────────────────── */
-exports.tsReviewReport = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+exports.tsReviewReport = onCall(OPT, async (req) => {
   _requireAdmin(req);
   const { reportId, action, resolution, banUser } = req.data;
   if (!reportId || !action) throw new Error('reportId, action required');
@@ -147,7 +150,7 @@ exports.tsReviewReport = onCall({ region: 'us-central1', maxInstances: 10 }, asy
 /* ─────────────────────────────────────────────────────────────────────────
    4. tsBanUser — superAdmin: ban | suspend | restore user
 ──────────────────────────────────────────────────────────────────────────── */
-exports.tsBanUser = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+exports.tsBanUser = onCall(OPT, async (req) => {
   _requireSuperAdmin(req);
   const { uid: targetUid, action, reason, durationDays } = req.data;
   if (!targetUid || !action || !reason) throw new Error('uid, action, reason required');
@@ -200,7 +203,7 @@ exports.tsBanUser = onCall({ region: 'us-central1', maxInstances: 10 }, async (r
 /* ─────────────────────────────────────────────────────────────────────────
    5. tsCalculateRiskScore — admin: compute composite risk score for entity
 ──────────────────────────────────────────────────────────────────────────── */
-exports.tsCalculateRiskScore = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+exports.tsCalculateRiskScore = onCall(OPT, async (req) => {
   _requireAdmin(req);
   const { entityId, entityType } = req.data;
   if (!entityId || !entityType) throw new Error('entityId, entityType required');
@@ -261,7 +264,7 @@ exports.tsCalculateRiskScore = onCall({ region: 'us-central1', maxInstances: 10 
 /* ─────────────────────────────────────────────────────────────────────────
    6. tsGetRiskScores — admin: list high-risk entities
 ──────────────────────────────────────────────────────────────────────────── */
-exports.tsGetRiskScores = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+exports.tsGetRiskScores = onCall(OPT, async (req) => {
   _requireAdmin(req);
   const { riskLevel, entityType, limit: lim } = req.data;
 
@@ -279,7 +282,7 @@ exports.tsGetRiskScores = onCall({ region: 'us-central1', maxInstances: 10 }, as
 /* ─────────────────────────────────────────────────────────────────────────
    7. tsGetBannedTerms — admin: list all banned terms
 ──────────────────────────────────────────────────────────────────────────── */
-exports.tsGetBannedTerms = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+exports.tsGetBannedTerms = onCall(OPT, async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
   const snap = await db.collection('bannedTerms').limit(500).get();
@@ -289,7 +292,7 @@ exports.tsGetBannedTerms = onCall({ region: 'us-central1', maxInstances: 10 }, a
 /* ─────────────────────────────────────────────────────────────────────────
    8. tsManageBannedTerm — admin: add | delete a banned term
 ──────────────────────────────────────────────────────────────────────────── */
-exports.tsManageBannedTerm = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+exports.tsManageBannedTerm = onCall(OPT, async (req) => {
   _requireAdmin(req);
   const { action, termId, term } = req.data;
   const db = getFirestore();
@@ -315,7 +318,7 @@ exports.tsManageBannedTerm = onCall({ region: 'us-central1', maxInstances: 10 },
 /* ─────────────────────────────────────────────────────────────────────────
    9. tsGetTrustDashboard — admin: aggregate stats
 ──────────────────────────────────────────────────────────────────────────── */
-exports.tsGetTrustDashboard = onCall({ region: 'us-central1', maxInstances: 10 }, async (req) => {
+exports.tsGetTrustDashboard = onCall(OPT, async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
 

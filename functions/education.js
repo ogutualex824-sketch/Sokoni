@@ -42,7 +42,7 @@ const VALID_CATEGORIES = [
 const VALID_LEVELS = ['beginner', 'intermediate', 'advanced'];
 
 const PAGE_SIZE    = 12;
-const CF_OPTS      = { region: 'us-central1', maxInstances: 80, cors: true };
+const CF_OPTS      = { region: 'us-central1', enforceAppCheck: true, maxInstances: 80 };
 
 /* ─── Utility helpers ─────────────────────────────────────────── */
 
@@ -671,7 +671,7 @@ exports.getMyEnrollments = onCall(CF_OPTS, async (request) => {
   return { enrollments };
 });
 
-exports.publishCourse = onCall({ cors: true }, async (request) => {
+exports.publishCourse = onCall(CF_OPTS, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Login required');
   const { courseId, action } = request.data;
   if (!courseId || !action) throw new HttpsError('invalid-argument','courseId and action required');

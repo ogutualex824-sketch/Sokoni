@@ -302,7 +302,7 @@ exports.adminUpdateFeatureFlag = onCall({ region: 'us-central1', maxInstances: 1
 /* ─────────────────────────────────────────────────────────────────────────
    Support Tickets
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminCreateSupportTicket = onCall({ region: 'us-central1', maxInstances: 30 }, async (req) => {
+exports.adminCreateSupportTicket = onCall({ region: 'us-central1', enforceAppCheck: true, maxInstances: 30 }, async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new Error('auth/unauthenticated');
   const { category, subject, message, priority } = req.data;

@@ -285,24 +285,32 @@ const InventoryRecalcHandler = {
     const ids     = productIds.slice(0, 100);
     let recalculated = 0;
 
-    for (const productId of ids) {
-      const txSnap = await db().collection('inventoryTransactions')
+    /* Batch all inventory transaction queries in parallel */
+    const txSnaps = await Promise.all(
+      ids.map(productId => db().collection('inventoryTransactions')
         .where('sellerId',  '==', sellerId)
         .where('productId', '==', productId)
-        .get();
+        .get()
+      )
+    );
 
+    /* Batch all stock writes */
+    const stockBatch = db().batch();
+    for (let pi = 0; pi < ids.length; pi++) {
+      const productId = ids[pi];
+      const txSnap    = txSnaps[pi];
       const stock = txSnap.docs.reduce((sum, d) => {
         const t = d.data();
         return sum + (t.type === 'in' ? (t.qty || 0) : -(t.qty || 0));
       }, 0);
-
-      await db().collection('sellers').doc(sellerId)
-        .collection('inventory').doc(productId)
-        .update({ stockCount: Math.max(0, stock), recalcAt: ts() })
-        .catch(() => {});
+      stockBatch.update(
+        db().collection('sellers').doc(sellerId).collection('inventory').doc(productId),
+        { stockCount: Math.max(0, stock), recalcAt: ts() }
+      );
 
       recalculated++;
     }
+    await stockBatch.commit().catch(() => {});
 
     return { recalculated, productCount: ids.length };
   }

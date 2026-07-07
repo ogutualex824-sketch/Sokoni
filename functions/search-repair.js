@@ -417,6 +417,18 @@ exports.searchScheduledReconcile = onSchedule(
     const results     = {};
     const collections = Object.keys(COLLECTION_REGISTRY);
 
+    /* Hoist monitor doc reads — same two docs on every iteration; fetch once before the loop */
+    const [algoliaMonitorSnap, typesenseMonitorSnap] = await Promise.all([
+      db.doc('platformMetrics/algoliaMonitor').get(),
+      db.doc('platformMetrics/typesenseMonitor').get(),
+    ]);
+    const algoliaIndexCounts   = algoliaMonitorSnap.exists
+      ? (algoliaMonitorSnap.data().indexEntryCounts   || {})
+      : {};
+    const typesenseIndexCounts = typesenseMonitorSnap.exists
+      ? (typesenseMonitorSnap.data().collectionEntryCounts || {})
+      : {};
+
     for (const collectionKey of collections) {
       const entry = COLLECTION_REGISTRY[collectionKey];
       const col   = entry.firestoreCollection;
@@ -429,18 +441,6 @@ exports.searchScheduledReconcile = onSchedule(
           .count()
           .get();
         const fsCount = fsCountSnap.data().count;
-
-        // Read cached engine counts from monitor documents (avoids search API calls)
-        // Engine monitors write per-index entry counts to their monitor docs nightly.
-        const algoliaMonitorSnap   = await db.doc('platformMetrics/algoliaMonitor').get();
-        const typesenseMonitorSnap = await db.doc('platformMetrics/typesenseMonitor').get();
-
-        const algoliaIndexCounts   = algoliaMonitorSnap.exists
-          ? (algoliaMonitorSnap.data().indexEntryCounts   || {})
-          : {};
-        const typesenseIndexCounts = typesenseMonitorSnap.exists
-          ? (typesenseMonitorSnap.data().collectionEntryCounts || {})
-          : {};
 
         const algoliaCount = entry.algoliaIndex
           ? (algoliaIndexCounts[entry.algoliaIndex]         || null)

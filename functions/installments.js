@@ -28,6 +28,7 @@ const { getApps, initializeApp } = require('firebase-admin/app');
 if (!getApps().length) initializeApp();
 
 const REGION = 'us-central1';
+const OPT    = { region: REGION, enforceAppCheck: true, timeoutSeconds: 30, memory: '256MiB' };
 
 /* Lazy accessors — avoids holding a stale db reference at module load */
 const db   = () => admin.firestore();
@@ -162,7 +163,7 @@ function _buildSchedule(totalAmount, planType) {
    Validates order ownership and ensures no duplicate active plan.
 ═══════════════════════════════════════════════════════════════ */
 exports.installmentCreatePlan = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     const auth = _requireAuth(req);
     const uid  = auth.uid;
@@ -257,7 +258,7 @@ exports.installmentCreatePlan = onCall(
    atomically update remainingBalance and plan status.
 ═══════════════════════════════════════════════════════════════ */
 exports.installmentRecordPayment = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     const auth = _requireAuth(req);
     const uid  = auth.uid;
@@ -381,7 +382,7 @@ exports.installmentRecordPayment = onCall(
    Returns the 20 most recent plans for the authenticated buyer.
 ═══════════════════════════════════════════════════════════════ */
 exports.installmentGetMyPlans = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     const auth = _requireAuth(req);
     const uid  = auth.uid;
@@ -411,7 +412,7 @@ exports.installmentGetMyPlans = onCall(
    Optional status filter. Limit 100.
 ═══════════════════════════════════════════════════════════════ */
 exports.installmentGetSellerPlans = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     const auth = _requireSellerOrAdmin(req);
     const uid  = auth.uid;
@@ -550,7 +551,7 @@ exports.installmentMarkOverdue = onSchedule(
      • If any installment has been paid → only admin can cancel.
 ═══════════════════════════════════════════════════════════════ */
 exports.installmentCancelPlan = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     const auth   = _requireAuth(req);
     const uid    = auth.uid;

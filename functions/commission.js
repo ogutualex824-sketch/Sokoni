@@ -16,6 +16,8 @@ const logger                 = require('firebase-functions/logger');
 const admin                  = require('firebase-admin');
 
 const REGION = 'us-central1';
+const OPT    = { region: REGION, enforceAppCheck: true, timeoutSeconds: 30, memory: '256MiB' };
+const OPT60  = { region: REGION, enforceAppCheck: true, timeoutSeconds: 60, memory: '256MiB' };
 
 function _db()  { return admin.firestore(); }
 function _now() { return admin.firestore.FieldValue.serverTimestamp(); }
@@ -116,7 +118,7 @@ function _buildRuleDoc(data, adminUid) {
    1. createCommissionRule
 ──────────────────────────────────────────────────────────────*/
 exports.createCommissionRule = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     _assertAdmin(req);
     _validateRule(req.data);
@@ -144,7 +146,7 @@ exports.createCommissionRule = onCall(
    2. updateCommissionRule
 ──────────────────────────────────────────────────────────────*/
 exports.updateCommissionRule = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     _assertAdmin(req);
     const { ruleId, ...rest } = req.data;
@@ -182,7 +184,7 @@ exports.updateCommissionRule = onCall(
    3. deleteCommissionRule  (soft delete)
 ──────────────────────────────────────────────────────────────*/
 exports.deleteCommissionRule = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     _assertAdmin(req);
     const { ruleId } = req.data;
@@ -211,7 +213,7 @@ exports.deleteCommissionRule = onCall(
    4. listCommissionRules
 ──────────────────────────────────────────────────────────────*/
 exports.listCommissionRules = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     _assertAdmin(req);
     const { includeInactive, category, type, entityId } = req.data || {};
@@ -242,7 +244,7 @@ exports.listCommissionRules = onCall(
    5. previewCommission — live calc for admin + sellers
 ──────────────────────────────────────────────────────────────*/
 exports.previewCommission = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
 
@@ -289,7 +291,7 @@ exports.previewCommission = onCall(
    ledger for the calling seller. No admin access to other sellers.
 ──────────────────────────────────────────────────────────────*/
 exports.getSellerEarningsReport = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
     const uid = req.auth.uid;
@@ -390,7 +392,7 @@ exports.getSellerEarningsReport = onCall(
    the finosHubCounters collection + finosSnapshots for trend data.
 ──────────────────────────────────────────────────────────────*/
 exports.getAdminRevenueByHub = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin)
       throw new HttpsError('permission-denied', 'Admin access required');
@@ -484,7 +486,7 @@ exports.getAdminRevenueByHub = onCall(
    double-entry ledger entry. Idempotent on orderId.
 ──────────────────────────────────────────────────────────────*/
 exports.processSettlement = onCall(
-  { region: REGION, timeoutSeconds: 60, memory: '256MiB' },
+  OPT60,
   async (req) => {
     _assertAdmin(req);
     const uid = req.auth.uid;
@@ -570,7 +572,7 @@ exports.processSettlement = onCall(
    a pending withdrawal record in a single atomic transaction.
 ──────────────────────────────────────────────────────────────*/
 exports.requestWithdrawal = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
     const uid = req.auth.uid;
@@ -636,7 +638,7 @@ exports.requestWithdrawal = onCall(
    marks the withdrawal as approved. Writes a ledger entry.
 ──────────────────────────────────────────────────────────────*/
 exports.approveWithdrawal = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     _assertAdmin(req);
     const uid = req.auth.uid;
@@ -691,7 +693,7 @@ exports.approveWithdrawal = onCall(
    and clears pendingBalance. Does not write a ledger entry.
 ──────────────────────────────────────────────────────────────*/
 exports.rejectWithdrawal = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     _assertAdmin(req);
     const uid = req.auth.uid;
@@ -736,7 +738,7 @@ exports.rejectWithdrawal = onCall(
    see all. Supports status filter and cursor-based pagination.
 ──────────────────────────────────────────────────────────────*/
 exports.getWithdrawals = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
+  OPT,
   async (req) => {
     if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
     const uid     = req.auth.uid;

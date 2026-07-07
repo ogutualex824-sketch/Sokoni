@@ -19,15 +19,18 @@
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule }         = require("firebase-functions/v2/scheduler");
+const { defineSecret }       = require("firebase-functions/params");
 const { FieldValue }         = require("firebase-admin/firestore");
 const admin                  = require("firebase-admin");
 
 /* Admin SDK is already initialized elsewhere; guard against double-init */
 if (!admin.apps.length) admin.initializeApp();
 
+const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
+
 const db      = () => admin.firestore();
 const REGION  = "us-central1";
-const CF_OPTS = { region: REGION, enforceAppCheck: true };
+const CF_OPTS = { region: REGION, enforceAppCheck: true, secrets: [SENDGRID_API_KEY] };
 
 /* ────────────────────────────────────────────────────────────
    Helpers

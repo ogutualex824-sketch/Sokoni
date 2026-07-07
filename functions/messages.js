@@ -393,19 +393,23 @@ exports.onMessageCreated = onDocumentCreated(
 
     await batch.commit();
 
-    /* Send FCM to non-senders */
+    /* Send FCM to non-senders — batch all user reads then fire pushes in parallel */
     const senderName = conv.participantNames?.[msg.senderId] || 'New message';
-    for (const puid of others) {
-      const tokenSnap = await db.collection('users').doc(puid).get().catch(() => null);
-      const token = tokenSnap?.data()?.fcmToken;
-      await _sendFcm(token, senderName, preview, {
-        type:            'new_message',
-        conversationId:  convId,
-        messageId:       msgId,
-        transactionType: conv.transactionType || '',
-        transactionId:   conv.transactionId   || '',
-      });
-    }
+    const tokenSnaps = await Promise.all(
+      others.map(puid => db.collection('users').doc(puid).get().catch(() => null))
+    );
+    await Promise.all(
+      tokenSnaps.map((tokenSnap) => {
+        const token = tokenSnap?.data()?.fcmToken;
+        return _sendFcm(token, senderName, preview, {
+          type:            'new_message',
+          conversationId:  convId,
+          messageId:       msgId,
+          transactionType: conv.transactionType || '',
+          transactionId:   conv.transactionId   || '',
+        });
+      })
+    );
 
     logger.info('[messages] Conversation index updated', { convId, msgId });
     return null;

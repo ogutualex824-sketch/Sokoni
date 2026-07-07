@@ -1193,13 +1193,23 @@ const etimsReconcileDaily = onSchedule(
       .where("status","==","pending_submission")
       .where("updatedAt","<=",cutoff).limit(200).get();
 
+    /* Batch all queue-presence checks in parallel, then enqueue the missing ones */
     let requeued = 0;
-    for (const doc of stuckSnap.docs) {
-      const inv  = doc.data();
-      const qSnap = await db.collection("etimsQueue")
-        .where("invoiceId","==",inv.invoiceId).where("status","==","pending").limit(1).get();
-      if (qSnap.empty) { await enqueue({ invoiceId:inv.invoiceId, sellerUid:inv.sellerUid, priority:3 }); requeued++; }
-    }
+    const queueChecks = await Promise.all(
+      stuckSnap.docs.map(doc =>
+        db.collection("etimsQueue")
+          .where("invoiceId","==",doc.data().invoiceId).where("status","==","pending").limit(1).get()
+      )
+    );
+    await Promise.all(
+      stuckSnap.docs.map(async (doc, i) => {
+        if (queueChecks[i].empty) {
+          const inv = doc.data();
+          await enqueue({ invoiceId: inv.invoiceId, sellerUid: inv.sellerUid, priority: 3 });
+          requeued++;
+        }
+      })
+    );
 
     await db.collection("etimsReconciliations").add({
       date: new Date().toISOString().slice(0,10),

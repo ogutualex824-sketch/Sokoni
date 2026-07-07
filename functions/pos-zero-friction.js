@@ -11,8 +11,8 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 const db      = getFirestore();
 const REGION  = 'us-central1';
-const cfg     = { region: REGION, memory: '256MiB', timeoutSeconds: 60 };
-const cfgHeavy= { region: REGION, memory: '512MiB', timeoutSeconds: 120 };
+const cfg     = { region: REGION, enforceAppCheck: true, memory: '256MiB', timeoutSeconds: 60 };
+const cfgHeavy= { region: REGION, enforceAppCheck: true, memory: '512MiB', timeoutSeconds: 120 };
 
 /* ── Helpers ── */
 const uid = () => db.collection('_').doc().id;
@@ -85,12 +85,15 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   await idemRef.set({ status: 'processing', startedAt: Date.now(), cashierId, merchantId });
 
   try {
-    /* ── 2. Validate cart totals server-side ── */
+    /* ── 2. Validate cart totals server-side — batch fetch all products ── */
+    const productRefs  = items.map(item => db.collection('posProducts').doc(item.productId));
+    const productSnaps = await Promise.all(productRefs.map(r => r.get()));
+
     let serverSubtotal = 0;
     const enrichedItems = [];
-    for (const item of items) {
-      const prodRef  = db.collection('posProducts').doc(item.productId);
-      const prodSnap = await prodRef.get();
+    for (let i = 0; i < items.length; i++) {
+      const item     = items[i];
+      const prodSnap = productSnaps[i];
       if (!prodSnap.exists) _e(`Product ${item.productId} not found`, 'not-found');
       const prod = prodSnap.data();
       /* Price tolerance: allow minor rounding diff (≤1 KES per item) */
