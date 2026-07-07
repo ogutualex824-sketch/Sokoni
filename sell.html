@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="security.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sell on SOKONI — Kenya's #1 Marketplace</title>
+<meta name="description" content="Start selling on SOKONI — reach millions of Kenyan buyers. List products, services, food, events and more. Free to start. Get paid via M-Pesa.">
+<meta name="keywords" content="sell online Kenya, sell on SOKONI, online marketplace Kenya, M-Pesa payments, start selling Kenya">
+<meta property="og:title" content="Sell on SOKONI — Kenya's #1 Marketplace">
+<meta property="og:description" content="Reach millions of buyers across Kenya. Sell products, services, food, events and more. Get paid instantly via M-Pesa.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<meta property="og:url" content="https://mysokoni.co.ke/sell">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#71ff00">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOKONI">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-tokens.css">
+<link rel="stylesheet" href="sokoni-desktop.css">
+<link rel="canonical" href="https://mysokoni.co.ke/sell">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#050505;color:#fff;min-height:100vh;overflow-x:hidden;padding-bottom:max(80px,env(safe-area-inset-bottom,0px));}
+
+/* ── NAV ── */
+.sl-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:rgba(5,5,5,0.97);border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;z-index:100;backdrop-filter:blur(20px);}
+.sl-nav-logo{height:28px;display:block;}
+.sl-nav-right{display:flex;align-items:center;gap:10px;}
+.sl-nav-login{color:rgba(255,255,255,0.5);font-size:13px;font-weight:700;text-decoration:none;padding:8px 14px;transition:color .2s;}
+.sl-nav-login:hover{color:#fff;}
+.sl-nav-cta{background:linear-gradient(135deg,#71ff00,#5ccc00);color:#050505;font-size:13px;font-weight:900;padding:9px 18px;border-radius:10px;text-decoration:none;transition:opacity .2s;white-space:nowrap;}
+.sl-nav-cta:hover{opacity:.88;}
+
+/* ── HERO ── */
+.sl-hero{padding:60px 24px 48px;text-align:center;max-width:680px;margin:0 auto;position:relative;}
+.sl-hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:999px;padding:5px 16px;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:20px;text-transform:uppercase;letter-spacing:.06em;}
+.sl-hero h1{font-size:clamp(32px,8vw,56px);font-weight:900;line-height:1.08;letter-spacing:-1.5px;margin-bottom:16px;}
+.sl-hero h1 .accent{background:linear-gradient(135deg,#71ff00,#9fff4c);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.sl-hero-sub{font-size:clamp(14px,3.5vw,17px);color:rgba(255,255,255,0.5);line-height:1.7;max-width:500px;margin:0 auto 32px;}
+.sl-hero-actions{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;}
+.sl-btn-primary{background:linear-gradient(135deg,#71ff00,#5ccc00);color:#050505;font-size:15px;font-weight:900;padding:15px 32px;border-radius:13px;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:transform .2s,opacity .2s;border:none;cursor:pointer;font-family:inherit;}
+.sl-btn-primary:hover{transform:translateY(-2px);opacity:.92;}
+.sl-btn-secondary{color:rgba(255,255,255,0.6);font-size:14px;font-weight:700;padding:15px 24px;border-radius:13px;text-decoration:none;border:1px solid rgba(255,255,255,0.12);display:inline-flex;align-items:center;gap:6px;transition:all .2s;}
+.sl-btn-secondary:hover{color:#fff;border-color:rgba(255,255,255,0.3);}
+.sl-hero-note{font-size:11px;color:rgba(255,255,255,0.25);margin-top:16px;font-weight:600;}
+
+/* ── STATS BAR ── */
+.sl-stats{display:flex;justify-content:center;gap:0;border-top:1px solid rgba(255,255,255,0.06);border-bottom:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.015);overflow-x:auto;scrollbar-width:none;}
+.sl-stats::-webkit-scrollbar{display:none;}
+.sl-stat{flex:1;min-width:120px;text-align:center;padding:20px 16px;border-right:1px solid rgba(255,255,255,0.06);}
+.sl-stat:last-child{border-right:none;}
+.sl-stat-num{font-size:24px;font-weight:900;color:#71ff00;letter-spacing:-1px;line-height:1;}
+.sl-stat-label{font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px;}
+
+/* ── WHAT CAN YOU SELL ── */
+.sl-section{padding:56px 24px;max-width:760px;margin:0 auto;}
+.sl-section-label{font-size:10px;font-weight:800;color:rgba(113,255,0,0.7);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;}
+.sl-section-title{font-size:clamp(24px,5vw,34px);font-weight:900;letter-spacing:-0.8px;margin-bottom:8px;line-height:1.15;}
+.sl-section-sub{font-size:14px;color:rgba(255,255,255,0.4);line-height:1.7;max-width:520px;}
+.sl-cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:28px;}
+.sl-cat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px 14px;cursor:pointer;text-decoration:none;display:block;transition:all .25s;text-align:center;}
+.sl-cat:hover{transform:translateY(-3px);}
+.sl-cat.c-green:hover{border-color:rgba(113,255,0,0.35);background:rgba(113,255,0,0.06);box-shadow:0 8px 30px rgba(113,255,0,0.08);}
+.sl-cat.c-blue:hover{border-color:rgba(0,170,255,0.35);background:rgba(0,170,255,0.06);box-shadow:0 8px 30px rgba(0,170,255,0.08);}
+.sl-cat.c-purple:hover{border-color:rgba(168,85,247,0.35);background:rgba(168,85,247,0.06);box-shadow:0 8px 30px rgba(168,85,247,0.08);}
+.sl-cat.c-orange:hover{border-color:rgba(255,160,0,0.35);background:rgba(255,160,0,0.06);box-shadow:0 8px 30px rgba(255,160,0,0.08);}
+.sl-cat.c-red:hover{border-color:rgba(255,80,80,0.35);background:rgba(255,80,80,0.06);box-shadow:0 8px 30px rgba(255,80,80,0.08);}
+.sl-cat.c-teal:hover{border-color:rgba(0,220,180,0.35);background:rgba(0,220,180,0.06);box-shadow:0 8px 30px rgba(0,220,180,0.08);}
+.sl-cat-icon{font-size:30px;margin-bottom:10px;display:block;}
+.sl-cat-name{font-size:12px;font-weight:800;color:#fff;margin-bottom:3px;}
+.sl-cat-sub{font-size:10px;color:rgba(255,255,255,0.3);line-height:1.4;}
+
+/* ── WHY SOKONI ── */
+.sl-why{background:rgba(255,255,255,0.015);border-top:1px solid rgba(255,255,255,0.06);border-bottom:1px solid rgba(255,255,255,0.06);padding:56px 24px;}
+.sl-why-inner{max-width:760px;margin:0 auto;}
+.sl-benefits{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:36px;}
+.sl-benefit{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:24px 20px;}
+.sl-benefit-icon{font-size:32px;margin-bottom:12px;display:block;}
+.sl-benefit-title{font-size:15px;font-weight:900;margin-bottom:6px;}
+.sl-benefit-desc{font-size:13px;color:rgba(255,255,255,0.4);line-height:1.6;}
+
+/* ── HOW IT WORKS ── */
+.sl-how{padding:56px 24px;max-width:760px;margin:0 auto;}
+.sl-steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0;margin-top:36px;position:relative;}
+.sl-steps::before{content:'';position:absolute;top:28px;left:28px;right:28px;height:2px;background:linear-gradient(90deg,rgba(113,255,0,0.3),rgba(113,255,0,0.05));z-index:0;border-radius:2px;}
+.sl-step{text-align:center;padding:0 16px;position:relative;z-index:1;}
+.sl-step-num{width:56px;height:56px;background:rgba(113,255,0,0.1);border:2px solid rgba(113,255,0,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#71ff00;margin:0 auto 16px;font-variant-numeric:tabular-nums;}
+.sl-step-title{font-size:14px;font-weight:900;margin-bottom:6px;}
+.sl-step-desc{font-size:12px;color:rgba(255,255,255,0.38);line-height:1.6;}
+
+/* ── PAYMENT SECTION ── */
+.sl-pay{background:rgba(113,255,0,0.04);border-top:1px solid rgba(113,255,0,0.1);border-bottom:1px solid rgba(113,255,0,0.1);padding:56px 24px;}
+.sl-pay-inner{max-width:760px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;}
+.sl-pay-text .sl-section-label{color:#71ff00;}
+.sl-pay-methods{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.sl-pay-method{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px 14px;display:flex;align-items:center;gap:10px;}
+.sl-pay-method-icon{font-size:22px;flex-shrink:0;}
+.sl-pay-method-name{font-size:12px;font-weight:800;color:#fff;}
+.sl-pay-method-sub{font-size:10px;color:rgba(255,255,255,0.35);margin-top:1px;}
+
+/* ── FAQ ── */
+.sl-faq{padding:56px 24px;max-width:680px;margin:0 auto;}
+.sl-faq-list{margin-top:28px;display:flex;flex-direction:column;gap:8px;}
+.sl-faq-item{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;overflow:hidden;}
+.sl-faq-q{width:100%;background:none;border:none;color:#fff;font-family:inherit;font-size:14px;font-weight:700;padding:18px 20px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;transition:color .2s;}
+.sl-faq-q:hover{color:#71ff00;}
+.sl-faq-q .sl-faq-icon{flex-shrink:0;font-size:16px;color:rgba(255,255,255,0.3);transition:transform .25s,color .2s;}
+.sl-faq-item.open .sl-faq-icon{transform:rotate(45deg);color:#71ff00;}
+.sl-faq-a{max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s ease;}
+.sl-faq-item.open .sl-faq-a{max-height:200px;}
+.sl-faq-a-inner{padding:0 20px 18px;font-size:13px;color:rgba(255,255,255,0.45);line-height:1.7;}
+
+/* ── FINAL CTA ── */
+.sl-cta{text-align:center;padding:72px 24px;background:radial-gradient(ellipse at 50% 0%,rgba(113,255,0,0.08),transparent 70%);}
+.sl-cta h2{font-size:clamp(28px,6vw,42px);font-weight:900;letter-spacing:-1px;margin-bottom:12px;line-height:1.1;}
+.sl-cta h2 span{background:linear-gradient(135deg,#71ff00,#9fff4c);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.sl-cta p{font-size:14px;color:rgba(255,255,255,0.4);margin-bottom:28px;line-height:1.6;}
+.sl-cta-note{font-size:11px;color:rgba(255,255,255,0.2);margin-top:14px;font-weight:600;}
+
+/* ── FOOTER ── */
+.sl-footer{border-top:1px solid rgba(255,255,255,0.06);padding:28px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;max-width:900px;margin:0 auto;}
+.sl-footer-logo{font-size:16px;font-weight:900;color:#71ff00;letter-spacing:-0.5px;}
+.sl-footer-links{display:flex;gap:20px;flex-wrap:wrap;}
+.sl-footer-links a{font-size:12px;color:rgba(255,255,255,0.3);text-decoration:none;font-weight:600;transition:color .2s;}
+.sl-footer-links a:hover{color:rgba(255,255,255,0.7);}
+
+/* ── RESPONSIVE ── */
+@media(max-width:600px){
+  .sl-pay-inner{grid-template-columns:1fr;}
+  .sl-steps::before{display:none;}
+  .sl-steps{gap:20px;}
+  .sl-hero-actions{flex-direction:column;width:100%;}
+  .sl-btn-primary,.sl-btn-secondary{width:100%;justify-content:center;}
+  .sl-stat{min-width:100px;}
+  .sl-stat-num{font-size:20px;}
+}
+@media(max-width:420px){
+  .sl-cat-grid{grid-template-columns:repeat(3,1fr);}
+  .sl-cat{padding:14px 8px;}
+  .sl-cat-icon{font-size:24px;}
+  .sl-pay-methods{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<script src="splash.js"></script>
+<script src="shared-header.js" defer></script>
+
+<!-- NAV -->
+<nav class="sl-nav">
+  <a href="/" class="sl-nav-logo"><img src="assets/Sokonilogo2.png" height="28" alt="SOKONI" loading="eager"></a>
+  <div class="sl-nav-right">
+    <a href="/seller" class="sl-nav-login">My Dashboard</a>
+    <a href="/offer" class="sl-nav-cta">Start Selling →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="sl-hero">
+  <div class="sl-hero-badge">🇰🇪 Kenya's #1 Marketplace</div>
+  <h1>Sell More.<br>Grow <span class="accent">Faster.</span><br>Get Paid Instantly.</h1>
+  <p class="sl-hero-sub">Join thousands of Kenyan sellers earning daily on SOKONI. List products, services, food, events and more — get paid via M-Pesa the same day.</p>
+  <div class="sl-hero-actions">
+    <a href="/offer" class="sl-btn-primary">🚀 Start Selling — Free</a>
+    <a href="#how-it-works" class="sl-btn-secondary">See how it works →</a>
+  </div>
+  <p class="sl-hero-note">Free to list · No monthly fees · Get paid via M-Pesa</p>
+</section>
+
+<!-- STATS -->
+<div class="sl-stats">
+  <div class="sl-stat">
+    <div class="sl-stat-num">50K+</div>
+    <div class="sl-stat-label">Active Buyers</div>
+  </div>
+  <div class="sl-stat">
+    <div class="sl-stat-num">10K+</div>
+    <div class="sl-stat-label">Sellers Earning</div>
+  </div>
+  <div class="sl-stat">
+    <div class="sl-stat-label" style="font-size:12px;color:#71ff00;font-weight:900;margin-top:0;">M-Pesa</div>
+    <div class="sl-stat-label">Instant Payouts</div>
+  </div>
+  <div class="sl-stat">
+    <div class="sl-stat-num">47</div>
+    <div class="sl-stat-label">Counties Covered</div>
+  </div>
+  <div class="sl-stat">
+    <div class="sl-stat-num">0%</div>
+    <div class="sl-stat-label">Monthly Fee</div>
+  </div>
+</div>
+
+<!-- WHAT YOU CAN SELL -->
+<section class="sl-section">
+  <div class="sl-section-label">What can you sell?</div>
+  <h2 class="sl-section-title">One Platform.<br>Every Category.</h2>
+  <p class="sl-section-sub">From fresh produce to tech gadgets, from haircuts to legal advice — SOKONI has the right channel for what you sell.</p>
+
+  <div class="sl-cat-grid">
+    <a href="/offer" class="sl-cat c-green">
+      <span class="sl-cat-icon">🛒</span>
+      <div class="sl-cat-name">Products</div>
+      <div class="sl-cat-sub">Electronics, fashion, home goods, groceries</div>
+    </a>
+    <a href="/services" class="sl-cat c-blue">
+      <span class="sl-cat-icon">⚙️</span>
+      <div class="sl-cat-name">Services</div>
+      <div class="sl-cat-sub">Repairs, cleaning, plumbing, tutoring</div>
+    </a>
+    <a href="/food" class="sl-cat c-orange">
+      <span class="sl-cat-icon">🍽️</span>
+      <div class="sl-cat-name">Food & Drinks</div>
+      <div class="sl-cat-sub">Restaurants, home cooks, catering</div>
+    </a>
+    <a href="/event-hub" class="sl-cat c-purple">
+      <span class="sl-cat-icon">🎟️</span>
+      <div class="sl-cat-name">Events</div>
+      <div class="sl-cat-sub">Concerts, workshops, conferences</div>
+    </a>
+    <a href="/digital" class="sl-cat c-teal">
+      <span class="sl-cat-icon">💾</span>
+      <div class="sl-cat-name">Digital</div>
+      <div class="sl-cat-sub">Software, templates, ebooks, art</div>
+    </a>
+    <a href="/property" class="sl-cat c-red">
+      <span class="sl-cat-icon">🏠</span>
+      <div class="sl-cat-name">Property</div>
+      <div class="sl-cat-sub">Rentals, sales, short stays, BnB</div>
+    </a>
+    <a href="/car-hub" class="sl-cat c-orange">
+      <span class="sl-cat-icon">🚗</span>
+      <div class="sl-cat-name">Vehicles</div>
+      <div class="sl-cat-sub">Cars, bikes, spare parts</div>
+    </a>
+    <a href="/b2b" class="sl-cat c-blue">
+      <span class="sl-cat-icon">🏭</span>
+      <div class="sl-cat-name">B2B / Wholesale</div>
+      <div class="sl-cat-sub">Bulk orders, supplier listings</div>
+    </a>
+    <a href="/healthcare" class="sl-cat c-teal">
+      <span class="sl-cat-icon">🏥</span>
+      <div class="sl-cat-name">Healthcare</div>
+      <div class="sl-cat-sub">Clinics, pharmacy, wellness</div>
+    </a>
+  </div>
+</section>
+
+<!-- WHY SOKONI -->
+<section class="sl-why">
+  <div class="sl-why-inner">
+    <div class="sl-section-label">Why sell here?</div>
+    <h2 class="sl-section-title">Built for Kenyan Sellers.</h2>
+    <p class="sl-section-sub">We built SOKONI around how Kenyans actually do business — fast, mobile-first, and M-Pesa powered.</p>
+
+    <div class="sl-benefits">
+      <div class="sl-benefit">
+        <span class="sl-benefit-icon">📱</span>
+        <div class="sl-benefit-title">Manage from your phone</div>
+        <div class="sl-benefit-desc">List, track orders, respond to buyers, and withdraw earnings — all from the SOKONI app, anywhere.</div>
+      </div>
+      <div class="sl-benefit">
+        <span class="sl-benefit-icon">💚</span>
+        <div class="sl-benefit-title">M-Pesa Payments</div>
+        <div class="sl-benefit-desc">Buyers pay via M-Pesa STK push. Funds land in your SOKONI wallet and withdraw to M-Pesa anytime.</div>
+      </div>
+      <div class="sl-benefit">
+        <span class="sl-benefit-icon">🚚</span>
+        <div class="sl-benefit-title">Built-in Delivery</div>
+        <div class="sl-benefit-desc">Connect to SOKONI riders for same-day delivery across Kenya. No logistics headache for you.</div>
+      </div>
+      <div class="sl-benefit">
+        <span class="sl-benefit-icon">🤖</span>
+        <div class="sl-benefit-title">AI-Powered Tools</div>
+        <div class="sl-benefit-desc">KASS AI helps write listings, suggests prices, and gives business insights to grow your sales faster.</div>
+      </div>
+      <div class="sl-benefit">
+        <span class="sl-benefit-icon">📊</span>
+        <div class="sl-benefit-title">Real-Time Analytics</div>
+        <div class="sl-benefit-desc">See your sales, top products, customer trends, and revenue — live on your seller dashboard.</div>
+      </div>
+      <div class="sl-benefit">
+        <span class="sl-benefit-icon">🛡️</span>
+        <div class="sl-benefit-title">Seller Protection</div>
+        <div class="sl-benefit-desc">Funds are held securely until delivery is confirmed. Dispute resolution keeps you protected.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="sl-how" id="how-it-works">
+  <div class="sl-section-label">How it works</div>
+  <h2 class="sl-section-title">Start selling in minutes.</h2>
+  <p class="sl-section-sub">No upfront costs. No complicated setup. Just list and start earning.</p>
+
+  <div class="sl-steps">
+    <div class="sl-step">
+      <div class="sl-step-num">1</div>
+      <div class="sl-step-title">Create your account</div>
+      <div class="sl-step-desc">Sign up free with your phone number or Google account. Takes under 60 seconds.</div>
+    </div>
+    <div class="sl-step">
+      <div class="sl-step-num">2</div>
+      <div class="sl-step-title">List what you sell</div>
+      <div class="sl-step-desc">Add photos, set your price, and publish. Your listing goes live immediately.</div>
+    </div>
+    <div class="sl-step">
+      <div class="sl-step-num">3</div>
+      <div class="sl-step-title">Receive orders</div>
+      <div class="sl-step-desc">Buyers find and order from you. You get notified instantly on your phone.</div>
+    </div>
+    <div class="sl-step">
+      <div class="sl-step-num">4</div>
+      <div class="sl-step-title">Get paid via M-Pesa</div>
+      <div class="sl-step-desc">Payment is released after delivery. Withdraw to your M-Pesa at any time.</div>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin-top:40px;">
+    <a href="/offer" class="sl-btn-primary">🚀 Start Now — It's Free</a>
+  </div>
+</section>
+
+<!-- PAYMENT -->
+<section class="sl-pay">
+  <div class="sl-pay-inner">
+    <div class="sl-pay-text">
+      <div class="sl-section-label">Payments</div>
+      <h2 class="sl-section-title" style="font-size:clamp(22px,4vw,30px);">Multiple ways<br>for buyers to pay.</h2>
+      <p class="sl-section-sub" style="font-size:13px;margin-top:10px;">All payment methods you'd expect — and all funds flow to your SOKONI wallet, ready to withdraw via M-Pesa.</p>
+    </div>
+    <div class="sl-pay-methods">
+      <div class="sl-pay-method">
+        <span class="sl-pay-method-icon">💚</span>
+        <div>
+          <div class="sl-pay-method-name">M-Pesa STK</div>
+          <div class="sl-pay-method-sub">Pay by SIM prompt</div>
+        </div>
+      </div>
+      <div class="sl-pay-method">
+        <span class="sl-pay-method-icon">💳</span>
+        <div>
+          <div class="sl-pay-method-name">Card</div>
+          <div class="sl-pay-method-sub">Visa & Mastercard</div>
+        </div>
+      </div>
+      <div class="sl-pay-method">
+        <span class="sl-pay-method-icon">💼</span>
+        <div>
+          <div class="sl-pay-method-name">Wallet Balance</div>
+          <div class="sl-pay-method-sub">SOKONI wallet</div>
+        </div>
+      </div>
+      <div class="sl-pay-method">
+        <span class="sl-pay-method-icon">🏦</span>
+        <div>
+          <div class="sl-pay-method-name">Bank Transfer</div>
+          <div class="sl-pay-method-sub">Direct bank pay</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="sl-faq">
+  <div class="sl-section-label">FAQ</div>
+  <h2 class="sl-section-title">Common questions.</h2>
+
+  <div class="sl-faq-list">
+    <div class="sl-faq-item">
+      <button class="sl-faq-q" onclick="toggleFaq(this)">
+        Is it free to sell on SOKONI?
+        <span class="sl-faq-icon">+</span>
+      </button>
+      <div class="sl-faq-a"><div class="sl-faq-a-inner">Yes — listing on SOKONI is completely free. We only charge a small commission when you make a sale. There are no monthly fees, setup fees, or hidden charges.</div></div>
+    </div>
+    <div class="sl-faq-item">
+      <button class="sl-faq-q" onclick="toggleFaq(this)">
+        How do I get paid?
+        <span class="sl-faq-icon">+</span>
+      </button>
+      <div class="sl-faq-a"><div class="sl-faq-a-inner">When a buyer pays, the money is held securely in your SOKONI wallet. Once the order is delivered and confirmed, funds are released. You can withdraw to your M-Pesa or bank account anytime from your seller dashboard.</div></div>
+    </div>
+    <div class="sl-faq-item">
+      <button class="sl-faq-q" onclick="toggleFaq(this)">
+        What commission does SOKONI charge?
+        <span class="sl-faq-icon">+</span>
+      </button>
+      <div class="sl-faq-a"><div class="sl-faq-a-inner">Commission rates vary by category, typically between 5% and 15% per completed sale. You can see the exact rate for your category when you set up your listing. No surprises.</div></div>
+    </div>
+    <div class="sl-faq-item">
+      <button class="sl-faq-q" onclick="toggleFaq(this)">
+        Do I need to handle delivery?
+        <span class="sl-faq-icon">+</span>
+      </button>
+      <div class="sl-faq-a"><div class="sl-faq-a-inner">No — SOKONI has a built-in network of riders for same-day delivery. You can also choose to deliver yourself or use your own courier. Delivery tracking is built into every order.</div></div>
+    </div>
+    <div class="sl-faq-item">
+      <button class="sl-faq-q" onclick="toggleFaq(this)">
+        Can I sell services, not just products?
+        <span class="sl-faq-icon">+</span>
+      </button>
+      <div class="sl-faq-a"><div class="sl-faq-a-inner">Absolutely. SOKONI supports services like cleaning, plumbing, tutoring, legal advice, medical consultations, event planning, and more. When you start, choose "A Service" to get the right dashboard.</div></div>
+    </div>
+    <div class="sl-faq-item">
+      <button class="sl-faq-q" onclick="toggleFaq(this)">
+        How quickly can I start getting orders?
+        <span class="sl-faq-icon">+</span>
+      </button>
+      <div class="sl-faq-a"><div class="sl-faq-a-inner">Most sellers receive their first order within 24–48 hours of listing. Complete your seller profile, add clear photos, and set competitive prices to attract buyers faster.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="sl-cta">
+  <h2>Ready to start<br><span>earning on SOKONI?</span></h2>
+  <p>Join thousands of Kenyan sellers growing their business every day.<br>Free to start. No contracts. Cancel anytime.</p>
+  <a href="/offer" class="sl-btn-primary" style="font-size:16px;padding:18px 40px;">🚀 Start Selling Now</a>
+  <p class="sl-cta-note">Already selling? <a href="/seller" style="color:rgba(113,255,0,0.5);">Go to your dashboard →</a></p>
+</section>
+
+<!-- FOOTER -->
+<footer class="sl-footer">
+  <div class="sl-footer-logo">SOKONI</div>
+  <div class="sl-footer-links">
+    <a href="/terms">Terms</a>
+    <a href="/privacy">Privacy</a>
+    <a href="/help">Help Centre</a>
+    <a href="/seller-terms">Seller Terms</a>
+    <a href="/contact">Contact</a>
+  </div>
+</footer>
+
+<script>
+function toggleFaq(btn) {
+  const item = btn.closest('.sl-faq-item');
+  const isOpen = item.classList.contains('open');
+  document.querySelectorAll('.sl-faq-item.open').forEach(i => i.classList.remove('open'));
+  if (!isOpen) item.classList.add('open');
+}
+
+/* Smooth scroll for anchor links */
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+});
+</script>
+</body>
+</html>

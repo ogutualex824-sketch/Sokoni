@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260707-biz-comms-v13";
+const CACHE_VERSION = "sokoni-20260707-biz-comms-v14";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -108,6 +108,48 @@ const PRECACHE_PAGES = [
   "/my-subscriptions",
   /* Financial OS admin console (2026-07-06) */
   "/fos-admin",
+  /* Seller acquisition landing page (2026-07-07) */
+  "/sell",
+  /* ── Comprehensive page sweep (2026-07-07) ── */
+  /* Public / informational */
+  "/about", "/careers", "/contact", "/faq", "/feedback", "/press",
+  "/cookie-policy", "/refund-policy", "/returns-policy", "/returns",
+  "/community-guidelines", "/provider-terms", "/seller-terms", "/privacy",
+  "/plans", "/launch",
+  /* Commerce & Finance */
+  "/commerce-os", "/procurement", "/general-ledger", "/hr-payroll",
+  "/expense-management", "/franchise", "/warehouse-scanner",
+  "/finos", "/finos-admin", "/payment-receipt", "/payment-security",
+  /* Admin portals */
+  "/admin-feedback", "/commission-admin", "/crm", "/hub-dashboard",
+  "/minishop-admin", "/ops-center", "/ops-dashboard", "/qr-center",
+  "/reliability-center", "/security-compliance", "/security-zero-trust-dashboard",
+  "/sokoni-cert", "/uat-center", "/super-admin", "/partner-portal",
+  /* SmartPOS extended */
+  "/pos-certification", "/pos-customers", "/pos-inventory",
+  "/pos-inventory-intelligence", "/pos-launch-report", "/pos-reports",
+  "/pos-setup", "/pos-suppliers", "/kitchen-display",
+  /* Seller tools */
+  "/merchant-success", "/loyalty-merchant", "/seller-delivery",
+  "/seller-wallet", "/dispatch", "/coupon-manager", "/feeds",
+  /* KASS AI portals */
+  "/kass-developer", "/kass-executive", "/kass-finance",
+  "/kass-manager", "/kass-seller", "/kass-support",
+  /* Customer-facing */
+  "/customer-display", "/payment-receipt",
+  /* Platform & Enterprise */
+  "/automation-engine", "/enterprise-certification", "/enterprise-ops",
+  "/platform-health", "/platform-hub", "/vision-2030",
+  "/business-health", "/business-kpi",
+  /* Listings & Digital marketplace */
+  "/digital-esoko", "/digital-esoko-seller",
+  "/minishop", "/minishop-status",
+  /* Venue & Booking */
+  "/venue-booking", "/venue-manager",
+  /* Finance & inventory */
+  "/inv-ai", "/tenant-portal",
+  /* Messaging admin */
+  "/messages-admin",
 ];
 
 const PRECACHE_STATIC = [
