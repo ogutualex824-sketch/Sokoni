@@ -15,9 +15,19 @@ const { dispatch }            = require('./redis-jobs');
 const { defineSecret } = require('firebase-functions/params');
 const REDIS_URL_SECRET = defineSecret('REDIS_URL');
 
-const _CF_OPTS    = { enforceAppCheck: true, secrets: [REDIS_URL_SECRET] };
-const _ADMIN_OPTS = { enforceAppCheck: true, secrets: [REDIS_URL_SECRET] };
-const _SCHED_OPTS = { timeZone: 'Africa/Nairobi', secrets: [REDIS_URL_SECRET] };
+// VPC connector routes private-IP traffic (10.127.36.43 Memorystore) through the project VPC.
+// Create first:  GCP Console → VPC Access → Create connector → name: sokoni-redis-connector,
+//                region: us-central1, network: default, IP range: 10.8.0.0/28
+// Or Cloud Shell: gcloud compute networks vpc-access connectors create sokoni-redis-connector \
+//                   --network default --region us-central1 --range 10.8.0.0/28
+const _VPC = {
+  vpcConnector:              'sokoni-redis-connector',
+  vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
+};
+
+const _CF_OPTS    = { enforceAppCheck: true, secrets: [REDIS_URL_SECRET], ..._VPC };
+const _ADMIN_OPTS = { enforceAppCheck: true, secrets: [REDIS_URL_SECRET], ..._VPC };
+const _SCHED_OPTS = { timeZone: 'Africa/Nairobi', secrets: [REDIS_URL_SECRET], ..._VPC };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

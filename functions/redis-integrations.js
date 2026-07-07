@@ -31,7 +31,12 @@ const TS = () => admin.firestore.Timestamp.now();
 const REDIS_URL_SECRET = defineSecret('REDIS_URL');
 
 const REGION = 'us-central1';
-const OPTS   = { region: REGION, secrets: [REDIS_URL_SECRET] };
+const OPTS   = {
+  region:                    REGION,
+  secrets:                   [REDIS_URL_SECRET],
+  vpcConnector:              'sokoni-redis-connector',
+  vpcConnectorEgressSettings: 'PRIVATE_RANGES_ONLY',
+};
 
 function _log(sev, msg, extra = {}) {
   console[sev === 'ERROR' ? 'error' : 'log'](
