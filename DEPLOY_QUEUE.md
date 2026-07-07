@@ -3,25 +3,39 @@
 All Cloud Functions below are code-complete and hosted. They are waiting for
 Cloud Run quota to clear (quota typically resets within 24 hours).
 
-## STATUS — 2026-07-06 (last deploy attempt)
-- ✅ **Code is 100% deploy-ready.** Deploy passes source analysis + upload and
-  reaches the function-creation step for all 24.
-- ✅ **Fixed a hard blocker:** `index.js` exported `_webhookStripe_disabled`
-  (invalid CF name — leading underscore) which aborted the whole deploy during
-  analysis. It's now commented out (kept as reference, not deployed). It had
-  also bypassed Stripe signature verification, so keeping it undeployed is the
-  correct security posture too.
-- ⛔ **Still blocked by Cloud Run quota.** Last attempt: all 24 creates returned
-  `HTTP 429 — insufficient quota` in `us-central1`. **0 of 24 created.**
-  `firebase functions:list` confirms none are live yet.
+## STATUS — 2026-07-06 (partial deploy: 14 of 23 LIVE)
+Queue is 23 functions (not 24). After freeing 14 quota slots + setting
+`POS_WEBHOOK_SECRET`, the deploy created **14 of 23**; **9 remain** quota-blocked
+(HTTP 429). Blockers cleared this session:
+- ✅ Fixed invalid/insecure `_webhookStripe_disabled` export (was aborting analysis).
+- ✅ Set `POS_WEBHOOK_SECRET` (new `pos-terminal-live.js` dependency) — strong
+  random value; **configure POS webhook senders to sign with the same value, or
+  rotate to the vendor value.**
+- ✅ Freed 14 Cloud Run slots (deleted redundant old async-job CFs — see below).
 
-### To unblock (pick one)
-1. **Wait** for the daily Cloud Run quota reset, then re-run the deploy command below.
-2. **Request a quota increase** (recommended — the project runs ~1000+ CFs):
+### ✅ DEPLOYED (14 live)
+`fosInitiatePayment`, `fosSubmitRefund`, `fosApproveRefund`, `fosGenerateInvoice`,
+`subUpgradeWithProration`, `getConversationContext`, `searchConversations`,
+`updateConversationStatus`, `pcGetHubRegistry`, `pcRegisterHub`,
+`pcUpdateHubConfig`, `pcGetFeatureFlags`, `pcSetFeatureFlag`, `pcGetCrossHubMetrics`
+
+### ⛔ STILL QUOTA-BLOCKED (9 — retry after quota reset/increase)
+`fosSecureWebhook`, `fosExportReport`, `fosGetProviderHealth`, `fosGetAdminConsole`,
+`subScheduleRenewals`, `subAutoActivateOnPayment`, `getSellerEarningsReport`,
+`getAdminRevenueByHub`, `editMessage`
+
+Retry command for just the remaining 9:
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:fosSecureWebhook,functions:fosExportReport,functions:fosGetProviderHealth,functions:fosGetAdminConsole,functions:subScheduleRenewals,functions:subAutoActivateOnPayment,functions:getSellerEarningsReport,functions:getAdminRevenueByHub,functions:editMessage" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+### To land the last 9 (pick one)
+1. **Wait** for the daily Cloud Run quota reset, then run the retry command above.
+2. **Request a quota increase** (recommended — the project runs ~1500 CFs):
    GCP Console → IAM & Admin → Quotas → filter service `run.googleapis.com`,
    region `us-central1`, raise **"CPU allocation without committed use (Total, per region)"**.
    Also check the Cloud Functions API quotas (Function CPU / instances).
-3. **Free quota** by pruning unused/duplicate functions (`firebase functions:delete <name>`) before retrying.
+3. **Free more quota** by pruning unused/duplicate functions before retrying.
 
 ## Quota cleanup — 2026-07-06 (10 slots freed)
 Deleted 10 superseded functions from the OLD async-job system
