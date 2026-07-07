@@ -71,12 +71,24 @@ npm config delete fetch-timeout
 npm config delete fetch-retry-mintimeout
 ```
 
-## Status — 2026-07-07
+## Status — 2026-07-07 (updated)
 
-**0/143 LIVE — All blocked by Cloud Run CPU quota (confirmed 2026-07-07)**
-_(135 from previous queue + 5 Commission Engine CFs + 3 Subscription Engine v2 CFs)_
+**61/61 Security Patch CFs REDEPLOYED ✅ — 2026-07-07**
+Wallet, email-triggers, release-readiness, payment-trust, pos-retail patches live.
 
-New CFs added 2026-07-07:
+**0/156 NEW CFs LIVE — Blocked by Cloud Run CPU quota**
+_(135 original + 5 commission + 3 sub-engine + 6 finos-admin + 7 finos-automation)_
+
+New CFs added 2026-07-07 (finos-automation.js — 7 CFs):
+- `fosAutoSettlement` — onSchedule 0/6h; auto-releases held escrow past settlement window
+- `fosAutoRefund` — onDocumentUpdated orders/{orderId}; policy-based auto-refund on cancellation
+- `fosReconcile` — onCall admin; IntaSend transaction reconciliation
+- `fosGetForecast` — onCall admin; 7–90 day AI revenue forecasting (Claude Haiku)
+- `fosGetSettlementConfig` — onCall admin; read per-hub settlement rules
+- `fosSetSettlementConfig` — onCall admin; write per-hub settlement rules
+- `fosGetAuditTrail` — onCall admin; filtered paginated ledger query
+
+New CFs added 2026-07-07 (legacy record):
 - `commission.js`: processSettlement, requestWithdrawal, approveWithdrawal, rejectWithdrawal, getWithdrawals
 - `sub-engine.js`: subCheckFeature, subRetryFailedPayments, subDowngrade
 
@@ -109,6 +121,71 @@ npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; f
 
 > `financial-os.js` (fosInitiatePayment et al.) is in the main 135-CF queue below —
 > those are new CFs (not yet live) so `enforceAppCheck` is baked into their first deploy.
+
+---
+
+## ALGOLIA KEY ROTATION REDEPLOY — 79 CFs (already live, key rotated 2026-07-07)
+
+`ALGOLIA_ADMIN_KEY` was rotated in Firebase Secret Manager on 2026-07-07.
+Firebase injects the **latest enabled version** of a secret at deploy time, so these
+79 live functions need a redeploy (revision bump) to pick up the new key. No source
+code changes are required — the codebase was fully verified clean before this entry
+was written.
+
+**Live functions continue working until the old key version is disabled** in Secret
+Manager. Do not disable the old version until after this redeploy completes.
+
+**Verification summary (2026-07-07):**
+- ✅ All 18 Algolia source files use `defineSecret('ALGOLIA_ADMIN_KEY')` — no exceptions
+- ✅ Zero hardcoded Algolia Admin Key values anywhere in `functions/`
+- ✅ `process.env.ALGOLIA_APP_ID` — public App ID only; correct, not a secret
+- ✅ CLI scripts (`algolia-backfill.js`, `algolia-setup.js`) use `process.env` correctly — not deployed CFs
+- ✅ `system-health.js` uses `const ALGOLIA_KEY = defineSecret("ALGOLIA_ADMIN_KEY")` — different local variable name, same secret string — functionally correct
+
+### 79 Algolia Admin Key dependent functions by source
+
+| Source file | Count | Functions |
+|---|---|---|
+| `algolia-queue.js` | 3 | `processAlgoliaQueue`, `algoliaReprocessDLQ`, `algoliaQueueMonitor` |
+| `algolia-admin.js` | 12 | `algoliaSetupIndexes`, `algoliaBackfill`, `algoliaReindex`, `algoliaHealthCheck`, `algoliaGetQueueStats`, `algoliaDeleteOrphans`, `algoliaSetupRules`, `algoliaSetupPersonalization`, `algoliaSetupDynamicReranking`, `algoliaCreateABTest`, `algoliaGetABTestResults`, `algoliaStopABTest` |
+| `algolia-settings.js` | 4 | `searchApplyIndexSettings`, `searchValidateIndexes`, `searchApplySynonyms`, `searchApplyRules` |
+| `algolia-analytics.js` | 6 | `recordSearchEvent`, `algoliaEventAggregator`, `aggregateSearchAnalytics`, `getSearchAnalytics`, `getTrendingSearches`, `algoliaAnalyticsCleanup` |
+| `algolia-recommend.js` | 9 | `getAlgoliaFBT`, `getAlgoliaRelated`, `getAlgoliaTrendingItems`, `getAlgoliaTrendingFacets`, `getAlgoliaLookingSimilar`, `getAlgoliaMultiRecommend`, `algoliaRecommendEvent`, `algoliaRecommendStatus`, `algoliaRecommendAnalyticsCleanup` |
+| `algolia-query-suggestions.js` | 4 | `algoliaSetupQuerySuggestions`, `algoliaGetQuerySuggestions`, `algoliaQSRebuildStatus`, `algoliaSetupQSIndexSettings` |
+| `algolia-personalization.js` | 5 | `setAlgoliaPersonalizationStrategy`, `getAlgoliaPersonalizationStrategy`, `getAlgoliaUserProfile`, `deleteAlgoliaUserProfile`, `algoliaPersonalizationStatus` |
+| `algolia-reconcile.js` | 4 | `algoliaReconcile`, `algoliaVerifyDoc`, `algoliaGetReconcileHistory`, `algoliaReconcileStats` |
+| `algolia-monitor.js` | 6 | `algoliaMonitorHealth`, `algoliaMonitorEntries`, `algoliaGetMonitorDashboard`, `algoliaGetLatencyHistory`, `algoliaResolveMonitorAlert`, `algoliaMonitorCleanup` |
+| `search-queue.js` | 5 | `getQueueStats`, `purgeCompleted`, `pauseQueue`, `resumeQueue`, `redriveFromDLQ` |
+| `search-admin.js` | 6 | `searchSetup`, `searchBackfillAll`, `searchSystemReport`, `searchGetSecuredKeys`, `searchConfigUpdate`, `searchGetStats` |
+| `search-service.js` | 1 of 6 | `searchSimilar` only — `searchQuery`, `searchAutocomplete`, `searchNearby`, `searchPersonalized`, `searchIntent` are unaffected (use `ALGOLIA_SEARCH_KEY` only) |
+| `search-monitor.js` | 4 | `searchGetUnifiedDashboard`, `searchSystemHealth`, `searchGetHealthHistory`, `searchResolveAlert` |
+| `search-repair.js` | 5 | `searchRepairAll`, `searchVerifyDocument`, `searchFullReindex`, `searchRepairOrphanedDocs`, `searchScheduledReconcile` |
+| `search-worker.js` | 3 | `searchQueueCoordinator`, `searchDLQSweep`, `searchQueueRecovery` |
+| `search-health.js` | 1 | `searchHealth` |
+| `system-health.js` | 1 | `systemHealthCheck` |
+
+**Functions NOT affected by ALGOLIA_ADMIN_KEY rotation (same source files):**
+`searchQuery`, `searchAutocomplete`, `searchNearby`, `searchPersonalized`, `searchIntent`,
+`getAlgoliaSearchKey`, `algoliaKeyStats`, `algoliaKeyCleanup`
+
+### Full redeploy command (79 functions — run once after quota clears)
+
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:processAlgoliaQueue,functions:algoliaReprocessDLQ,functions:algoliaQueueMonitor,functions:algoliaSetupIndexes,functions:algoliaBackfill,functions:algoliaReindex,functions:algoliaHealthCheck,functions:algoliaGetQueueStats,functions:algoliaDeleteOrphans,functions:algoliaSetupRules,functions:algoliaSetupPersonalization,functions:algoliaSetupDynamicReranking,functions:algoliaCreateABTest,functions:algoliaGetABTestResults,functions:algoliaStopABTest,functions:searchApplyIndexSettings,functions:searchValidateIndexes,functions:searchApplySynonyms,functions:searchApplyRules,functions:recordSearchEvent,functions:algoliaEventAggregator,functions:aggregateSearchAnalytics,functions:getSearchAnalytics,functions:getTrendingSearches,functions:algoliaAnalyticsCleanup,functions:getAlgoliaFBT,functions:getAlgoliaRelated,functions:getAlgoliaTrendingItems,functions:getAlgoliaTrendingFacets,functions:getAlgoliaLookingSimilar,functions:getAlgoliaMultiRecommend,functions:algoliaRecommendEvent,functions:algoliaRecommendStatus,functions:algoliaRecommendAnalyticsCleanup,functions:algoliaSetupQuerySuggestions,functions:algoliaGetQuerySuggestions,functions:algoliaQSRebuildStatus,functions:algoliaSetupQSIndexSettings,functions:setAlgoliaPersonalizationStrategy,functions:getAlgoliaPersonalizationStrategy,functions:getAlgoliaUserProfile,functions:deleteAlgoliaUserProfile,functions:algoliaPersonalizationStatus,functions:algoliaReconcile,functions:algoliaVerifyDoc,functions:algoliaGetReconcileHistory,functions:algoliaReconcileStats,functions:algoliaMonitorHealth,functions:algoliaMonitorEntries,functions:algoliaGetMonitorDashboard,functions:algoliaGetLatencyHistory,functions:algoliaResolveMonitorAlert,functions:algoliaMonitorCleanup,functions:getQueueStats,functions:purgeCompleted,functions:pauseQueue,functions:resumeQueue,functions:redriveFromDLQ,functions:searchSetup,functions:searchBackfillAll,functions:searchSystemReport,functions:searchGetSecuredKeys,functions:searchConfigUpdate,functions:searchGetStats,functions:searchSimilar,functions:searchGetUnifiedDashboard,functions:searchSystemHealth,functions:searchGetHealthHistory,functions:searchResolveAlert,functions:searchRepairAll,functions:searchVerifyDocument,functions:searchFullReindex,functions:searchRepairOrphanedDocs,functions:searchScheduledReconcile,functions:searchQueueCoordinator,functions:searchDLQSweep,functions:searchQueueRecovery,functions:searchHealth,functions:systemHealthCheck" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+### Minimum viable subset (5 — if quota is critically low)
+Covers the functions users interact with most directly. Run only if a full 79-function
+redeploy isn't feasible immediately:
+
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:searchSimilar,functions:searchHealth,functions:processAlgoliaQueue,functions:algoliaHealthCheck,functions:systemHealthCheck" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+### Deployment order priority (when quota partially available)
+1. **Security Patch Redeploy** (61 CFs) — security bugs in live functions
+2. **Algolia Key Rotation** (79 CFs) — pick up rotated key before old version is disabled
+3. **Master Deploy** (143 new CFs) — new features, not yet live
 
 ---
 
@@ -482,6 +559,37 @@ npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; f
 **Spot deploy command (these 5 only):**
 ```powershell
 npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:processSettlement,functions:requestWithdrawal,functions:approveWithdrawal,functions:rejectWithdrawal,functions:getWithdrawals" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
+
+### finos-automation.js (7) — added 2026-07-07
+| Function | Type | Auth |
+|---|---|---|
+| `fosAutoSettlement` | onSchedule (0 */6 * * *) | — |
+| `fosAutoRefund` | onDocumentUpdated orders/{orderId} | — |
+| `fosReconcile` | onCall | Admin only |
+| `fosGetForecast` | onCall | Admin only |
+| `fosGetSettlementConfig` | onCall | Admin only |
+| `fosSetSettlementConfig` | onCall | Admin only |
+| `fosGetAuditTrail` | onCall | Admin only |
+
+**Firestore paths written:**
+- `finosConfig/settlementRules` — per-hub settlement days + refund policy (read/write)
+- `escrows/{id}` — status updated to 'released' by auto-settlement
+- `wallets/{sellerId}` — wallet balances incremented on auto-settlement
+- `ledger/{id}` — escrow_auto_release + auto_refund entries
+- `refunds/{id}` — auto-approved refund records
+- `pendingRefunds/{orderId}` — refunds flagged for admin review
+- `notifications/{id}` — buyer refund notifications
+- `adminAuditLog/{id}` — settlement config change audit
+
+**Secrets required:** `ANTHROPIC_API_KEY` (fosGetForecast AI insight), `INTASEND_API_KEY` (fosReconcile provider fetch).
+Both secrets already set in Secret Manager.
+
+**Spot deploy command (these 7 only):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:fosAutoSettlement,functions:fosAutoRefund,functions:fosReconcile,functions:fosGetForecast,functions:fosGetSettlementConfig,functions:fosSetSettlementConfig,functions:fosGetAuditTrail" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
 ```
 
 ---

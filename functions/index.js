@@ -7930,6 +7930,16 @@ exports.fosReviewFraudAlert     = finosAdmin.fosReviewFraudAlert;
 exports.fosGetRevenueComparison = finosAdmin.fosGetRevenueComparison;
 exports.fosAdminSettleEscrow    = finosAdmin.fosAdminSettleEscrow;
 
+/* ── FinOS Automation Engine v1.0 — 7 CFs ───────────────────────────── */
+const finosAutomation = require('./finos-automation');
+exports.fosAutoSettlement      = finosAutomation.fosAutoSettlement;
+exports.fosAutoRefund          = finosAutomation.fosAutoRefund;
+exports.fosReconcile           = finosAutomation.fosReconcile;
+exports.fosGetForecast         = finosAutomation.fosGetForecast;
+exports.fosGetSettlementConfig = finosAutomation.fosGetSettlementConfig;
+exports.fosSetSettlementConfig = finosAutomation.fosSetSettlementConfig;
+exports.fosGetAuditTrail       = finosAutomation.fosGetAuditTrail;
+
 /* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
 const trustSafety = require('./trust-safety');
 exports.tsReportContent       = trustSafety.tsReportContent;

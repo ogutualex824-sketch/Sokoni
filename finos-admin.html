@@ -155,6 +155,41 @@ tr:hover td{background:var(--sur2)}
   .sidebar{display:none}
   .kpi-strip{grid-template-columns:repeat(2,1fr)}
 }
+
+/* Settlement — toggle switch */
+.tog{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0}
+.tog input{opacity:0;width:0;height:0;position:absolute}
+.tog-sl{position:absolute;cursor:pointer;inset:0;background:var(--sur2);border:1px solid var(--bor2);border-radius:20px;transition:.2s}
+.tog-sl:before{content:'';position:absolute;height:14px;width:14px;left:2px;bottom:2px;background:var(--sub);border-radius:50%;transition:.2s}
+.tog input:checked+.tog-sl{background:var(--ga);border-color:var(--g)}
+.tog input:checked+.tog-sl:before{transform:translateX(16px);background:var(--g)}
+.num-inp{background:var(--sur2);border:1px solid var(--bor2);border-radius:6px;color:var(--txt);font-size:13px;padding:4px 8px;width:68px;text-align:center;outline:none}
+.num-inp:focus{border-color:var(--g)}
+
+/* Horizon button group */
+.btn-group{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px}
+.hbtn{padding:7px 16px;border-radius:8px;border:1px solid var(--bor2);background:var(--sur2);color:var(--sub);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.hbtn:hover{border-color:var(--g);color:var(--txt)}
+.hbtn.sel{background:var(--ga);border-color:var(--g);color:var(--g)}
+
+/* AI insight card */
+.insight-card{background:var(--sur);border:1px solid var(--bor);border-left:3px solid var(--g);border-radius:var(--radius);padding:16px;margin-top:16px}
+.insight-label{font-size:11px;color:var(--g);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.insight-text{font-size:13px;color:var(--txt);line-height:1.6}
+
+/* Warn banner */
+.warn-banner{background:rgba(245,158,11,.08);border:1px solid var(--amber);border-radius:8px;padding:12px 16px;font-size:13px;color:var(--amber);margin-bottom:16px}
+
+/* Reconciliation section badges */
+.recon-sec{margin-bottom:20px}
+.recon-hd{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:14px;font-weight:700}
+.badge-red{display:inline-flex;align-items:center;justify-content:center;background:rgba(239,68,68,.15);color:var(--red);border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;min-width:28px}
+.badge-amber{display:inline-flex;align-items:center;justify-content:center;background:rgba(245,158,11,.15);color:var(--amber);border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;min-width:28px}
+.badge-yellow{display:inline-flex;align-items:center;justify-content:center;background:rgba(250,204,21,.15);color:#facc15;border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;min-width:28px}
+
+/* Forecast trend colours */
+.trend-up{color:var(--g)}
+.trend-dn{color:var(--red)}
 </style>
 </head>
 <body>
@@ -181,6 +216,10 @@ tr:hover td{background:var(--sur2)}
   <div class="sb-item" onclick="show('payouts',this)"><span class="sb-icon">→</span> Payouts</div>
   <div class="sb-item" onclick="show('refunds',this)"><span class="sb-icon">↩</span> Refunds</div>
   <div class="sb-item" onclick="show('audit',this)"><span class="sb-icon">≡</span> Audit Log</div>
+  <div class="sb-group">Config</div>
+  <div class="sb-item" onclick="show('settlement',this)"><span class="sb-icon">⚙️</span> Settlement</div>
+  <div class="sb-item" onclick="show('reconcile',this)"><span class="sb-icon">🔍</span> Reconcile</div>
+  <div class="sb-item" onclick="show('forecast',this)"><span class="sb-icon">📈</span> Forecast</div>
   <div class="sb-group">Links</div>
   <div class="sb-item" onclick="location.href='commission-admin.html'"><span class="sb-icon">%</span> Commission Rules</div>
   <div class="sb-item" onclick="location.href='financial-os.html'"><span class="sb-icon">◉</span> Financial OS</div>
@@ -325,6 +364,187 @@ tr:hover td{background:var(--sur2)}
       <div id="audit-list"><p style="color:var(--sub)">Loading…</p></div>
     </div>
 
+    <!-- SETTLEMENT CONFIG -->
+    <div class="panel" id="panel-settlement">
+      <div id="settle-loading" style="text-align:center;padding:40px">
+        <div class="spinner" style="margin:0 auto 12px"></div>
+        <p style="color:var(--sub)">Loading configuration…</p>
+      </div>
+      <div id="settle-body" style="display:none">
+        <!-- Default settlement days -->
+        <div class="sec-header" style="margin-bottom:14px">
+          <div class="sec-title">Global Default</div>
+        </div>
+        <div style="background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:16px;margin-bottom:20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+          <div>
+            <label class="form-label">Default Settlement Days</label>
+            <input type="number" id="sc-default-days" class="form-control" style="width:120px;margin-top:4px" min="1" max="60" value="7">
+          </div>
+          <div style="color:var(--sub);font-size:12px;max-width:420px">Applies to all hubs without a custom override. Funds are auto-released to sellers after this many days post-delivery confirmation.</div>
+        </div>
+
+        <!-- Hub table -->
+        <div class="sec-header" style="margin-bottom:10px">
+          <div class="sec-title">Hub-Level Overrides (18 Hubs)</div>
+        </div>
+        <div class="tbl-wrap" style="margin-bottom:20px;max-height:420px;overflow-y:auto">
+          <table>
+            <thead><tr><th>Hub</th><th>Settlement Days</th><th>Auto-Release</th></tr></thead>
+            <tbody id="settle-hub-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Refund policy -->
+        <div class="sec-header" style="margin-bottom:14px">
+          <div class="sec-title">Refund Policy</div>
+        </div>
+        <div style="background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:16px;margin-bottom:24px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Cancellation Window (hours)</label>
+            <input type="number" id="sc-cancel-hours" class="form-control" style="margin-top:4px" min="0" max="168" value="24">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Auto-Refund Threshold (KES)</label>
+            <input type="number" id="sc-refund-threshold" class="form-control" style="margin-top:4px" min="0" value="500">
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="saveSettlementConfig()">Save Configuration</button>
+      </div>
+    </div>
+
+    <!-- RECONCILIATION -->
+    <div class="panel" id="panel-reconcile">
+      <div style="background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:16px;margin-bottom:20px">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Date From</label>
+            <input type="date" id="recon-from" class="form-control" style="width:168px;margin-top:4px">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Date To</label>
+            <input type="date" id="recon-to" class="form-control" style="width:168px;margin-top:4px">
+          </div>
+          <button class="btn btn-primary" id="recon-run-btn" onclick="runReconciliation()">Run Reconciliation</button>
+        </div>
+        <p style="font-size:11px;color:var(--sub);margin-top:10px">Max range: 32 days. Compares payment provider records against Firestore transactions.</p>
+      </div>
+
+      <div id="recon-loading" style="display:none;text-align:center;padding:40px">
+        <div class="spinner" style="margin:0 auto 12px"></div>
+        <p style="color:var(--sub)">Running reconciliation… this may take a moment.</p>
+      </div>
+
+      <div id="recon-results" style="display:none">
+        <div id="recon-warn" class="warn-banner" style="display:none">
+          ⚠ <span id="recon-warn-msg"></span>
+        </div>
+
+        <!-- Missing -->
+        <div class="recon-sec">
+          <div class="recon-hd">
+            <span>Missing</span>
+            <span class="badge-red" id="recon-missing-count">0</span>
+            <span style="color:var(--sub);font-size:12px;font-weight:400">In provider, not in Firestore</span>
+          </div>
+          <div class="tbl-wrap" style="max-height:220px;overflow-y:auto">
+            <table>
+              <thead><tr><th>Provider Ref</th><th>Amount</th><th>Date</th><th>Type</th></tr></thead>
+              <tbody id="recon-missing-tbody"><tr><td colspan="4" style="text-align:center;color:var(--sub)">None</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Mismatched -->
+        <div class="recon-sec">
+          <div class="recon-hd">
+            <span>Mismatched</span>
+            <span class="badge-amber" id="recon-mismatch-count">0</span>
+            <span style="color:var(--sub);font-size:12px;font-weight:400">Amount or status discrepancy</span>
+          </div>
+          <div class="tbl-wrap" style="max-height:220px;overflow-y:auto">
+            <table>
+              <thead><tr><th>Transaction ID</th><th>Provider Amount</th><th>Firestore Amount</th><th>Discrepancy</th></tr></thead>
+              <tbody id="recon-mismatch-tbody"><tr><td colspan="4" style="text-align:center;color:var(--sub)">None</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Orphaned -->
+        <div class="recon-sec">
+          <div class="recon-hd">
+            <span>Orphaned</span>
+            <span class="badge-yellow" id="recon-orphan-count">0</span>
+            <span style="color:var(--sub);font-size:12px;font-weight:400">In Firestore, not in provider</span>
+          </div>
+          <div class="tbl-wrap" style="max-height:220px;overflow-y:auto">
+            <table>
+              <thead><tr><th>Transaction ID</th><th>Amount</th><th>Date</th><th>Status</th></tr></thead>
+              <tbody id="recon-orphan-tbody"><tr><td colspan="4" style="text-align:center;color:var(--sub)">None</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORECAST -->
+    <div class="panel" id="panel-forecast">
+      <div style="background:var(--sur);border:1px solid var(--bor);border-radius:var(--radius);padding:16px;margin-bottom:20px">
+        <div style="margin-bottom:14px">
+          <div class="form-label" style="margin-bottom:8px">Forecast Horizon</div>
+          <div class="btn-group" id="horizon-group">
+            <button class="hbtn sel" onclick="setHorizon(7,this)">7 days</button>
+            <button class="hbtn" onclick="setHorizon(14,this)">14 days</button>
+            <button class="hbtn" onclick="setHorizon(30,this)">30 days</button>
+            <button class="hbtn" onclick="setHorizon(60,this)">60 days</button>
+            <button class="hbtn" onclick="setHorizon(90,this)">90 days</button>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="forecast-run-btn" onclick="generateForecast()">Generate Forecast</button>
+      </div>
+
+      <div id="forecast-loading" style="display:none;text-align:center;padding:40px">
+        <div class="spinner" style="margin:0 auto 12px"></div>
+        <p style="color:var(--sub)">Generating forecast…</p>
+      </div>
+
+      <div id="forecast-results" style="display:none">
+        <!-- KPI row -->
+        <div class="kpi-strip" style="margin-bottom:20px">
+          <div class="kpi">
+            <div class="kpi-label">Avg Daily Revenue</div>
+            <div class="kpi-val green" id="fc-avg-daily">—</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Trend</div>
+            <div class="kpi-val" id="fc-trend">—</div>
+            <div class="kpi-delta" id="fc-trend-detail"></div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Total Forecast</div>
+            <div class="kpi-val green" id="fc-total">—</div>
+          </div>
+        </div>
+
+        <!-- Projection table -->
+        <div class="sec-title" style="margin-bottom:12px">Daily Projections</div>
+        <div class="tbl-wrap" style="margin-bottom:16px;max-height:380px;overflow-y:auto">
+          <table>
+            <thead><tr><th>Date</th><th>Projected (KES)</th><th>Low Band</th><th>High Band</th></tr></thead>
+            <tbody id="forecast-tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- AI insight -->
+        <div id="fc-insight-wrap" style="display:none">
+          <div class="insight-card">
+            <div class="insight-label">AI Insight</div>
+            <div class="insight-text" id="fc-insight-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -432,6 +652,9 @@ const PANEL_META = {
   payouts:    ['Payout Approvals',          'Pending seller and provider payouts'],
   refunds:    ['Refund Queue',              'Pending refund approvals'],
   audit:      ['Financial Audit Log',       'Immutable record of all financial actions'],
+  settlement: ['Settlement Config',         'Configure hub settlement windows and refund policy'],
+  reconcile:  ['Reconciliation',            'Reconcile transactions between providers and Firestore'],
+  forecast:   ['Revenue Forecast',          'AI-powered revenue forecast and trend analysis'],
 };
 
 let _currentPanel = 'overview';
@@ -472,6 +695,9 @@ function show(panel, el) {
   else if (panel === 'payouts') loadPayouts();
   else if (panel === 'refunds') loadRefunds();
   else if (panel === 'audit') loadAudit();
+  else if (panel === 'settlement') loadSettlementConfig();
+  else if (panel === 'reconcile') { /* user triggers via button */ }
+  else if (panel === 'forecast')  { /* user triggers via button */ }
 }
 
 function refreshPanel() { show(_currentPanel, null); }
@@ -808,6 +1034,243 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeProviderModal(); closeFraudModal(); closeSettleModal(); }
 });
+
+// ── SETTLEMENT CONFIG ─────────────────────────────────────────────
+const SOKONI_HUBS = [
+  {id:'marketplace',   label:'Marketplace'},
+  {id:'food',          label:'Food Hub'},
+  {id:'events',        label:'Event Hub'},
+  {id:'property',      label:'Property'},
+  {id:'vehicles',      label:'Vehicles'},
+  {id:'jobs',          label:'Jobs'},
+  {id:'healthcare',    label:'Healthcare'},
+  {id:'legal',         label:'Legal Services'},
+  {id:'education',     label:'Education'},
+  {id:'entertainment', label:'Entertainment'},
+  {id:'digital',       label:'Digital Products'},
+  {id:'smartpos',      label:'SmartPOS'},
+  {id:'logistics',     label:'Logistics'},
+  {id:'drivers',       label:'Drivers'},
+  {id:'delivery',      label:'Delivery'},
+  {id:'wholesale',     label:'B2B Wholesale'},
+  {id:'bookings',      label:'Venue & Bookings'},
+  {id:'loyalty',       label:'Loyalty & Rewards'},
+];
+
+async function loadSettlementConfig() {
+  const loading = document.getElementById('settle-loading');
+  const body    = document.getElementById('settle-body');
+  loading.innerHTML = '<div class="spinner" style="margin:0 auto 12px"></div><p style="color:var(--sub)">Loading configuration…</p>';
+  loading.style.display = '';
+  body.style.display = 'none';
+  try {
+    const res = await fns.httpsCallable('fosGetSettlementConfig')({});
+    const cfg = res.data || {};
+    document.getElementById('sc-default-days').value      = cfg.defaultSettlementDays || 7;
+    document.getElementById('sc-cancel-hours').value      = cfg.refundPolicy?.cancellationWindowHours || 24;
+    document.getElementById('sc-refund-threshold').value  = cfg.refundPolicy?.autoRefundThresholdKES  || 500;
+    const hubCfg = cfg.hubs || {};
+    const defaultDays = cfg.defaultSettlementDays || 7;
+    document.getElementById('settle-hub-tbody').innerHTML = SOKONI_HUBS.map(h => {
+      const hc    = hubCfg[h.id] || {};
+      const days  = hc.settlementDays != null ? hc.settlementDays : '';
+      const auto  = hc.autoRelease !== false;
+      const hId   = esc(h.id);
+      return `<tr>
+        <td>${esc(h.label)}</td>
+        <td><input type="number" class="num-inp" id="sc-hub-days-${hId}" min="1" max="60" value="${esc(String(days))}" placeholder="${esc(String(defaultDays))}"></td>
+        <td>
+          <label class="tog">
+            <input type="checkbox" id="sc-hub-auto-${hId}"${auto ? ' checked' : ''}>
+            <span class="tog-sl"></span>
+          </label>
+        </td>
+      </tr>`;
+    }).join('');
+    loading.style.display = 'none';
+    body.style.display = '';
+  } catch(e) {
+    loading.innerHTML = `<p style="color:var(--red)">Error loading config: ${esc(e.message)}</p>`;
+  }
+}
+
+async function saveSettlementConfig() {
+  const defaultDays = parseInt(document.getElementById('sc-default-days').value, 10);
+  if (!defaultDays || defaultDays < 1 || defaultDays > 365) {
+    toast('Default settlement days must be between 1 and 365', 'e');
+    return;
+  }
+  const hubs = {};
+  SOKONI_HUBS.forEach(h => {
+    const rawDays    = document.getElementById('sc-hub-days-' + h.id)?.value;
+    const days       = rawDays ? parseInt(rawDays, 10) : null;
+    const autoRelease = document.getElementById('sc-hub-auto-' + h.id)?.checked !== false;
+    hubs[h.id] = { autoRelease };
+    if (days && days >= 1) hubs[h.id].settlementDays = days;
+  });
+  const cancellationWindowHours = parseInt(document.getElementById('sc-cancel-hours').value, 10)     || 24;
+  const autoRefundThresholdKES  = parseInt(document.getElementById('sc-refund-threshold').value, 10) || 500;
+  try {
+    await fns.httpsCallable('fosSetSettlementConfig')({
+      defaultSettlementDays: defaultDays,
+      hubs,
+      refundPolicy: { cancellationWindowHours, autoRefundThresholdKES },
+    });
+    toast('Settlement configuration saved', 's');
+  } catch(e) {
+    toast('Save failed: ' + e.message, 'e');
+  }
+}
+
+// ── RECONCILIATION ────────────────────────────────────────────────
+// Initialise date pickers to the last 7 days
+(function initReconDates() {
+  const today    = new Date();
+  const toStr    = today.toISOString().slice(0, 10);
+  const fromDate = new Date(today.getTime() - 7 * 864e5);
+  const fromStr  = fromDate.toISOString().slice(0, 10);
+  const df = document.getElementById('recon-from');
+  const dt = document.getElementById('recon-to');
+  if (df) df.value = fromStr;
+  if (dt) dt.value = toStr;
+})();
+
+async function runReconciliation() {
+  const dateFrom = document.getElementById('recon-from').value;
+  const dateTo   = document.getElementById('recon-to').value;
+  if (!dateFrom || !dateTo) { toast('Please select both dates', 'e'); return; }
+  const diff = (new Date(dateTo) - new Date(dateFrom)) / 864e5;
+  if (diff < 0)  { toast('Date From must be before Date To', 'e'); return; }
+  if (diff > 32) { toast('Maximum date range is 32 days', 'e'); return; }
+
+  const runBtn = document.getElementById('recon-run-btn');
+  runBtn.disabled = true;
+  document.getElementById('recon-loading').style.display  = '';
+  document.getElementById('recon-results').style.display  = 'none';
+
+  try {
+    const res = await fns.httpsCallable('fosReconcile')({ dateFrom, dateTo });
+    const d   = res.data || {};
+
+    // Provider warning
+    const warn = document.getElementById('recon-warn');
+    if (d.providerError) {
+      document.getElementById('recon-warn-msg').textContent = 'Provider warning: ' + d.providerError;
+      warn.style.display = '';
+    } else {
+      warn.style.display = 'none';
+    }
+
+    // Missing — in provider, not in Firestore
+    const missing = d.missing || [];
+    document.getElementById('recon-missing-count').textContent = missing.length;
+    document.getElementById('recon-missing-tbody').innerHTML = missing.length
+      ? missing.map(r => `<tr>
+          <td style="font-size:12px;color:var(--sub)">${esc(r.providerRef || r.id || '—')}</td>
+          <td style="color:var(--red);font-weight:700">${esc(fmtKES(r.amountCents))}</td>
+          <td>${esc(r.date || '—')}</td>
+          <td>${esc(r.type || '—')}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--sub)">None found</td></tr>';
+
+    // Mismatched — amount / status discrepancy
+    const mismatch = d.mismatched || [];
+    document.getElementById('recon-mismatch-count').textContent = mismatch.length;
+    document.getElementById('recon-mismatch-tbody').innerHTML = mismatch.length
+      ? mismatch.map(r => `<tr>
+          <td style="font-size:12px;color:var(--sub)">${esc(r.transactionId || r.id || '—')}</td>
+          <td>${esc(fmtKES(r.providerAmountCents))}</td>
+          <td>${esc(fmtKES(r.firestoreAmountCents))}</td>
+          <td style="color:var(--amber);font-weight:700">${esc(r.discrepancy || '—')}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--sub)">None found</td></tr>';
+
+    // Orphaned — in Firestore, not in provider
+    const orphaned = d.orphaned || [];
+    document.getElementById('recon-orphan-count').textContent = orphaned.length;
+    document.getElementById('recon-orphan-tbody').innerHTML = orphaned.length
+      ? orphaned.map(r => `<tr>
+          <td style="font-size:12px;color:var(--sub)">${esc(r.transactionId || r.id || '—')}</td>
+          <td style="color:#facc15;font-weight:700">${esc(fmtKES(r.amountCents))}</td>
+          <td>${esc(r.date || '—')}</td>
+          <td>${esc(r.status || '—')}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--sub)">None found</td></tr>';
+
+    document.getElementById('recon-results').style.display = '';
+  } catch(e) {
+    toast('Reconciliation error: ' + e.message, 'e');
+  } finally {
+    document.getElementById('recon-loading').style.display = 'none';
+    runBtn.disabled = false;
+  }
+}
+
+// ── FORECAST ──────────────────────────────────────────────────────
+let _fcHorizon = 7;
+
+function setHorizon(days, el) {
+  _fcHorizon = days;
+  document.querySelectorAll('#horizon-group .hbtn').forEach(b => b.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+async function generateForecast() {
+  const runBtn = document.getElementById('forecast-run-btn');
+  runBtn.disabled = true;
+  document.getElementById('forecast-loading').style.display  = '';
+  document.getElementById('forecast-results').style.display  = 'none';
+  try {
+    const res  = await fns.httpsCallable('fosGetForecast')({ horizon: _fcHorizon });
+    const d    = res.data || {};
+    const days = d.forecast || [];
+    const totalCents = days.reduce((s, r) => s + (r.projectedCents || 0), 0);
+    const avgCents   = days.length ? Math.round(totalCents / days.length) : 0;
+    const trend      = d.trend || 0;   // percentage, e.g. 12.4 or -5.1
+
+    document.getElementById('fc-avg-daily').textContent = fmtKES(avgCents);
+    document.getElementById('fc-total').textContent     = fmtKES(totalCents);
+
+    const trendEl  = document.getElementById('fc-trend');
+    const trendDEl = document.getElementById('fc-trend-detail');
+    if (trend > 0) {
+      trendEl.className   = 'kpi-val trend-up';
+      trendEl.textContent = '▲ ' + trend.toFixed(1) + '%';
+    } else if (trend < 0) {
+      trendEl.className   = 'kpi-val trend-dn';
+      trendEl.textContent = '▼ ' + Math.abs(trend).toFixed(1) + '%';
+    } else {
+      trendEl.className   = 'kpi-val';
+      trendEl.textContent = '→ Flat';
+    }
+    trendDEl.textContent = 'vs previous period';
+
+    document.getElementById('forecast-tbody').innerHTML = days.length
+      ? days.map(r => `<tr>
+          <td>${esc(r.date || '—')}</td>
+          <td style="font-weight:700;color:var(--g)">${esc(fmtKES(r.projectedCents))}</td>
+          <td style="color:var(--sub)">${esc(fmtKES(r.lowCents))}</td>
+          <td style="color:var(--sub)">${esc(fmtKES(r.highCents))}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:var(--sub)">No forecast data returned.</td></tr>';
+
+    // AI insight card
+    const insightWrap = document.getElementById('fc-insight-wrap');
+    if (d.aiInsight) {
+      document.getElementById('fc-insight-text').textContent = d.aiInsight;
+      insightWrap.style.display = '';
+    } else {
+      insightWrap.style.display = 'none';
+    }
+
+    document.getElementById('forecast-results').style.display = '';
+  } catch(e) {
+    toast('Forecast error: ' + e.message, 'e');
+  } finally {
+    document.getElementById('forecast-loading').style.display = 'none';
+    runBtn.disabled = false;
+  }
+}
 </script>
 </body>
 </html>
