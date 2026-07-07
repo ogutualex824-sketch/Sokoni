@@ -12,11 +12,12 @@ const admin                   = require('firebase-admin');
 const R                       = require('./redis-service');
 const { dispatch }            = require('./redis-jobs');
 
-/* REDIS_URL read from process.env — set via: firebase functions:secrets:set REDIS_URL
-   or via .env file. Redis service gracefully degrades when REDIS_URL is absent. */
-const _CF_OPTS    = { enforceAppCheck: true };
-const _ADMIN_OPTS = { enforceAppCheck: true };
-const _SCHED_OPTS = { timeZone: 'Africa/Nairobi' };
+const { defineSecret } = require('firebase-functions/params');
+const REDIS_URL_SECRET = defineSecret('REDIS_URL');
+
+const _CF_OPTS    = { enforceAppCheck: true, secrets: [REDIS_URL_SECRET] };
+const _ADMIN_OPTS = { enforceAppCheck: true, secrets: [REDIS_URL_SECRET] };
+const _SCHED_OPTS = { timeZone: 'Africa/Nairobi', secrets: [REDIS_URL_SECRET] };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

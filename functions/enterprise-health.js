@@ -25,10 +25,11 @@ const admin = require("firebase-admin");
 // Constants
 // ---------------------------------------------------------------------------
 const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
+const REDIS_URL_SECRET = defineSecret("REDIS_URL");
 
 const REGION = "us-central1";
 const APP_CHECK = true;
-const HEALTH_SECRETS = [SENDGRID_API_KEY];
+const HEALTH_SECRETS = [SENDGRID_API_KEY, REDIS_URL_SECRET];
 
 // Failure-rate threshold (%) above which payments are considered degraded/down
 const PAYMENT_FAIL_RATE_DEGRADED = 10;

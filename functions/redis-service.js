@@ -23,22 +23,15 @@
  * @module redis-service
  */
 
-/* REDIS_URL is set via functions/.env: REDIS_URL=redis://<host>:6379
-   Provision GCP Memorystore (Basic, 1 GB, Redis 7.x, us-central1) then set the value.
-   Redis gracefully degrades to no-op mode when REDIS_URL is absent — rate limiting
-   is disabled in that state. A startup warning is emitted to Cloud Logging. */
-const REDIS_URL = { value: () => process.env.REDIS_URL || '' };
+const { defineSecret } = require('firebase-functions/params');
 
-// Emit a prominent warning on every cold start when Redis is unconfigured.
-// This makes the missing infrastructure immediately visible in Cloud Logging.
-if (!process.env.REDIS_URL) {
-  console.error(JSON.stringify({
-    severity: 'WARNING',
-    message: '[redis-service] REDIS_URL is not set — all rate limiting is DISABLED. ' +
-             'Provision GCP Memorystore and set REDIS_URL in functions/.env.',
-    action: 'SET_REDIS_URL_REQUIRED',
-  }));
-}
+// Secret ref — every CF that imports this module MUST include REDIS_URL_SECRET in its secrets array.
+// GCP Memorystore instance: sokoni-redis  |  us-central1  |  10.127.36.43:6379
+// Manage: firebase functions:secrets:set REDIS_URL
+const REDIS_URL_SECRET = defineSecret('REDIS_URL');
+
+// Runtime accessor — safe to call inside any handler once the secret is injected.
+const REDIS_URL = { value: () => REDIS_URL_SECRET.value() || '' };
 
 // ─── TTL Constants ────────────────────────────────────────────────────────────
 /**
@@ -127,13 +120,16 @@ function _getClient() {
   const Redis = require('ioredis');
   _client = new Redis(url, {
     tls: url.startsWith('rediss://') ? { rejectUnauthorized: true } : undefined,
-    lazyConnect:    true,
-    connectTimeout: 5_000,
-    commandTimeout: 3_000,
+    lazyConnect:          true,
+    connectTimeout:       5_000,
+    commandTimeout:       3_000,
     maxRetriesPerRequest: 2,
+    enableAutoPipelining: true,  // batch multi-command round-trips — critical for CF concurrency
+    keepAlive:            10_000, // TCP keepalive avoids Memorystore idle-timeout disconnects
+    enableOfflineQueue:   false,  // fail fast on disconnect — safer in serverless than infinite queue
     retryStrategy(attempts) {
       if (attempts > 5) { _fallback = true; return null; }
-      return Math.min(attempts * 300, 3_000);
+      return Math.min(attempts * 300, 3_000); // exponential backoff, cap at 3 s
     },
     reconnectOnError: err => err.message.includes('READONLY'),
   });
@@ -760,6 +756,7 @@ module.exports = {
   // Utilities
   isFallback,
   adminInfo,
+  REDIS_URL_SECRET, // re-exported so CF modules can include it in their secrets arrays
 
   // Flat exports for backward compatibility with redis-layer.js
   cacheGet, cacheSet, cacheDel, cacheGetOrSet, aiCacheGet, aiCacheSet, searchCacheGet, searchCacheSet,

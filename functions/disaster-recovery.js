@@ -27,10 +27,11 @@ const admin                  = require("firebase-admin");
 if (!admin.apps.length) admin.initializeApp();
 
 const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
+const REDIS_URL_SECRET = defineSecret("REDIS_URL");
 
 const db      = () => admin.firestore();
 const REGION  = "us-central1";
-const CF_OPTS = { region: REGION, enforceAppCheck: true, secrets: [SENDGRID_API_KEY] };
+const CF_OPTS = { region: REGION, enforceAppCheck: true, secrets: [SENDGRID_API_KEY, REDIS_URL_SECRET] };
 
 /* ────────────────────────────────────────────────────────────
    Helpers

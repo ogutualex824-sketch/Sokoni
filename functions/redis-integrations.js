@@ -20,6 +20,7 @@
  */
 
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 
 const R = require('./redis-service');
@@ -27,8 +28,10 @@ const R = require('./redis-service');
 const db = () => admin.firestore();
 const TS = () => admin.firestore.Timestamp.now();
 
+const REDIS_URL_SECRET = defineSecret('REDIS_URL');
+
 const REGION = 'us-central1';
-const OPTS   = { region: REGION };
+const OPTS   = { region: REGION, secrets: [REDIS_URL_SECRET] };
 
 function _log(sev, msg, extra = {}) {
   console[sev === 'ERROR' ? 'error' : 'log'](

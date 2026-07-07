@@ -47,6 +47,7 @@ const FieldValue = admin.firestore.FieldValue;
 const _SOKONI_HMAC    = defineSecret('SOKONI_HMAC_KEY');
 const _ANTHROPIC_KEY  = defineSecret('ANTHROPIC_API_KEY');
 const _SENDGRID_KEY   = defineSecret('SENDGRID_API_KEY');
+const _REDIS_URL      = defineSecret('REDIS_URL');
 
 /* ── CF Options ─────────────────────────────────────────────── */
 const CF_OPTIONS = {
@@ -54,7 +55,7 @@ const CF_OPTIONS = {
   enforceAppCheck: true,
   timeoutSeconds: 120,
   memory:         '256MiB',
-  secrets:        [_SOKONI_HMAC, _ANTHROPIC_KEY, _SENDGRID_KEY],
+  secrets:        [_SOKONI_HMAC, _ANTHROPIC_KEY, _SENDGRID_KEY, _REDIS_URL],
 };
 
 /* ── Role levels (matches platform convention) ───────────────── */

@@ -71,6 +71,47 @@ npm config delete fetch-timeout
 npm config delete fetch-retry-mintimeout
 ```
 
+## Redis Integration — 2026-07-07 ✅ CODE COMPLETE / DEPLOYING
+
+**Secret**: `REDIS_URL=redis://10.127.36.43:6379` stored in Firebase Secret Manager (version 2).  
+**Secret removed from**: `functions/.env` — no longer a plain env var.
+
+### Files updated (defineSecret migration + connection pooling)
+| File | Change |
+|---|---|
+| `redis-service.js` | `defineSecret('REDIS_URL')`, `enableAutoPipelining`, `keepAlive 10s`, `enableOfflineQueue:false` |
+| `redis-layer.js` | `secrets:[REDIS_URL_SECRET]` on all 3 CF option sets |
+| `redis-integrations.js` | `secrets:[REDIS_URL_SECRET]` on trigger OPTS |
+| `release-readiness.js` | `_REDIS_URL` added to `CF_OPTIONS.secrets` |
+| `enterprise-health.js` | `REDIS_URL_SECRET` added to `HEALTH_SECRETS` |
+| `disaster-recovery.js` | `REDIS_URL_SECRET` added to `CF_OPTS` |
+| `functions/.env` | REDIS_URL line removed — see Secret Manager |
+
+### ⚠️ VPC CONNECTOR REQUIRED (Redis not reachable without this)
+GCP Memorystore uses a private IP (10.127.36.43). Cloud Functions Gen2 cannot reach
+private VPC IPs without a Serverless VPC Access connector or Direct VPC Egress.
+
+**Create the connector (one-time, run in Cloud Shell or local gcloud):**
+```bash
+gcloud compute networks vpc-access connectors create sokoni-redis-connector \
+  --network default \
+  --region us-central1 \
+  --range 10.8.0.0/28
+```
+
+**Then add to firebase.json (inside the `"functions"` block):**
+```json
+"vpcConnector": "sokoni-redis-connector",
+"vpcConnectorEgressSettings": "PRIVATE_RANGES_ONLY"
+```
+
+**Then redeploy all Redis CFs** (see deploy command in the Redis CFs section below).
+
+Without the VPC connector, all Redis operations fail with ETIMEDOUT. The platform
+degrades gracefully (no-op mode) but rate limiting is disabled.
+
+---
+
 ## Status — 2026-07-07 (updated)
 
 **61/61 Security Patch CFs REDEPLOYED ✅ — 2026-07-07**
