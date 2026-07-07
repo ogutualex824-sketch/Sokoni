@@ -427,17 +427,29 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
     throw new HttpsError('invalid-argument', 'bankCode is required for bank payouts');
   }
 
-  /* Atomically check balance and reserve the payout amount to prevent concurrent overdraw */
-  const reqId     = _genId('pout');
-  const walletRef = db.collection('wallets').doc(uid);
-  const reqRef    = db.collection('payoutRequests').doc(reqId);
+  /* Atomically check velocity + balance, reserve amount, and create request */
+  const reqId       = _genId('pout');
+  const walletRef   = db.collection('wallets').doc(uid);
+  const reqRef      = db.collection('payoutRequests').doc(reqId);
+  const velocityRef = db.collection('payoutVelocity').doc(uid);
+  const today       = new Date().toISOString().slice(0, 10);
 
   await db.runTransaction(async (t) => {
-    const walletSnap = await t.get(walletRef);
+    const [walletSnap, velocitySnap] = await Promise.all([t.get(walletRef), t.get(velocityRef)]);
+
+    /* FRD-1: velocity gate — max 3 payout requests per seller per calendar day */
+    const vel = velocitySnap.exists ? velocitySnap.data() : null;
+    const todayCount = (vel && vel.date === today) ? (vel.count || 0) : 0;
+    if (todayCount >= 3) {
+      throw new HttpsError('resource-exhausted', 'Maximum 3 payout requests per day. Please try again tomorrow.');
+    }
+
     const balance = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
     if (balance < amt) {
       throw new HttpsError('failed-precondition', 'Insufficient wallet balance for this payout');
     }
+
+    t.set(velocityRef, { date: today, count: todayCount + 1, updatedAt: Timestamp.now() }, { merge: true });
     t.update(walletRef, { balance: balance - amt, pendingPayout: FieldValue.increment(amt) });
     t.set(reqRef, {
       sellerUid:     uid,

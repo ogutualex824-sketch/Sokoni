@@ -1321,20 +1321,11 @@ function handleAction(action) {
     window.open(action.url + '?txId=' + encodeURIComponent(CONV.transactionId || ''), '_blank');
   }
 
-  /* Post system message to show action was used */
-  firebase.firestore()
-    .collection('conversations').doc(CONV_ID)
-    .collection('messages').add({
-      senderId:   'system',
-      senderName: 'SOKONI',
-      timestamp:  firebase.firestore.FieldValue.serverTimestamp(),
-      type:       'system',
-      text:       UID_NAME + ' used action: ' + action.label,
-      status:     'delivered',
-      deleted:    false,
-      edited:     false,
-      flagged:    false,
-    }).catch(function (e) { console.warn('[chat] system msg:', e.message); });
+  /* Post user-attributed message noting the action taken */
+  SokoniChat.sendMessage(CONV_ID, {
+    type: 'text',
+    text: '📌 ' + action.label + ' requested.',
+  }).catch(function (e) { console.warn('[chat] action msg:', e.message); });
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

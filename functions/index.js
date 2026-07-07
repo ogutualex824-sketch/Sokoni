@@ -160,8 +160,8 @@ exports.grantAdminClaim = onCall(
       throw new HttpsError("unauthenticated", "Must be signed in.");
     }
 
-    if (request.auth.token?.admin !== true) {
-      throw new HttpsError("permission-denied", "Admin access required.");
+    if (request.auth.token?.superAdmin !== true) {
+      throw new HttpsError("permission-denied", "Super-admin access required.");
     }
 
     const { targetUid } = request.data;
@@ -171,6 +171,7 @@ exports.grantAdminClaim = onCall(
 
     const existClaims = await admin.auth().getUser(targetUid).then(u => u.customClaims || {}).catch(() => ({}));
     await admin.auth().setCustomUserClaims(targetUid, { ...existClaims, admin: true });
+    await admin.auth().revokeRefreshTokens(targetUid);
 
     await db.collection("users").doc(targetUid).set(
       { role: "admin", roles: admin.firestore.FieldValue.arrayUnion("admin"), adminGrantedAt: admin.firestore.FieldValue.serverTimestamp() },
@@ -185,8 +186,8 @@ exports.grantAdminClaim = onCall(
 exports.revokeAdminClaim = onCall(
   { timeoutSeconds: 30, enforceAppCheck: true },
   async (request) => {
-    if (!request.auth || request.auth.token?.admin !== true) {
-      throw new HttpsError("permission-denied", "Admin access required.");
+    if (!request.auth || request.auth.token?.superAdmin !== true) {
+      throw new HttpsError("permission-denied", "Super-admin access required.");
     }
 
     const { targetUid } = request.data;
@@ -202,6 +203,7 @@ exports.revokeAdminClaim = onCall(
     const existClaims = await admin.auth().getUser(targetUid).then(u => u.customClaims || {}).catch(() => ({}));
     delete existClaims.admin;
     await admin.auth().setCustomUserClaims(targetUid, existClaims);
+    await admin.auth().revokeRefreshTokens(targetUid);
     await db.collection("users").doc(targetUid).set(
       { roles: admin.firestore.FieldValue.arrayRemove("admin") },
       { merge: true }
@@ -2346,16 +2348,33 @@ exports.verifyIntasendPayment = onRequest(
         );
       }
 
-      /* Decrement stock for each purchased item — prevents overselling */
-      (resolvedItems || []).forEach(item => {
-        if (item.productId) {
-          batch.update(db.collection("products").doc(String(item.productId)), {
-            stock: admin.firestore.FieldValue.increment(-(Number(item.qty) || 1)),
-          });
-        }
-      });
-
       await batch.commit();
+
+      /* Decrement stock per-product in individual transactions (TOCTOU-safe).
+         Payment is already confirmed so oversold items are flagged, not rejected. */
+      const stockResults = await Promise.allSettled(
+        (resolvedItems || [])
+          .filter(item => item.productId)
+          .map(item => db.runTransaction(async (t) => {
+            const qty     = Number(item.qty) || 1;
+            const prodRef = db.collection('products').doc(String(item.productId));
+            const snap    = await t.get(prodRef);
+            if (!snap.exists) return;
+            const cur = snap.data().stock;
+            if (typeof cur === 'number' && cur < qty) {
+              t.set(db.collection('oversoldAlerts').doc(), {
+                orderId, productId: item.productId,
+                requested: qty, available: cur,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+            }
+            t.update(prodRef, { stock: admin.firestore.FieldValue.increment(-qty) });
+          }))
+      );
+      const stockFailed = stockResults.filter(r => r.status === 'rejected');
+      if (stockFailed.length) {
+        console.warn('[webhook] stock decrement partial failure', stockFailed.map(r => r.reason?.message));
+      }
 
       /* Order event written after batch (subcollections cannot be in a batch) */
       await db.collection("orderEvents").doc(orderId).collection("events").add({

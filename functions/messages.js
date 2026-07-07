@@ -107,13 +107,15 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, asyn
 
   const db = _db();
 
-  /* Idempotency — return existing conversation */
-  const existing = await db.collection('conversations')
-    .where('transactionType', '==', transactionType)
-    .where('transactionId',   '==', transactionId)
-    .limit(1).get();
-  if (!existing.empty) {
-    return { conversationId: existing.docs[0].id, existing: true };
+  /* Deterministic ID prevents duplicate docs for the same transaction.
+     Legacy random-ID conversations remain unaffected. */
+  const conversationId = `${transactionType}_${transactionId}`;
+  const convRef        = db.collection('conversations').doc(conversationId);
+
+  /* Fast path: already exists */
+  const existingSnap = await convRef.get();
+  if (existingSnap.exists) {
+    return { conversationId, existing: true };
   }
 
   /* Verify transaction exists */
@@ -133,56 +135,59 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, asyn
     participantAvatars[p] = data.photoURL || data.avatar || null;
   });
 
-  const convRef        = db.collection('conversations').doc();
-  const conversationId = convRef.id;
-  const title          = metadata?.title || _titleFor(transactionType, transactionId);
-  const batch          = db.batch();
+  const title = metadata?.title || _titleFor(transactionType, transactionId);
 
-  /* Conversation doc */
-  batch.set(convRef, {
-    transactionType,
-    transactionId,
-    transactionTitle: title,
-    participants:      participantUids,
-    participantNames,
-    participantAvatars,
-    status:            'active',
-    lastMessage:       null,
-    lastMessageAt:     null,
-    unreadCounts:      Object.fromEntries(participantUids.map(p => [p, 0])),
-    metadata:          metadata || {},
-    moderationFlags:   [],
-    reportCount:       0,
-    readOnlyAt:        null,
-    createdAt:         _now(),
-    updatedAt:         _now(),
-  });
+  /* Atomic create — transaction reads convRef inside; concurrent calls are serialised. */
+  let isNew = false;
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(convRef);
+    if (snap.exists) { return; } /* Race lost — another concurrent call won */
+    isNew = true;
 
-  /* User conversation index */
-  for (const puid of participantUids) {
-    const others      = participantUids.filter(p => p !== puid);
-    const otherName   = others.map(o => participantNames[o]).join(', ');
-    const otherAvatar = others.length === 1 ? (participantAvatars[others[0]] || null) : null;
-    batch.set(db.collection('userConversations').doc(puid).collection('items').doc(conversationId), {
-      conversationId,
+    t.set(convRef, {
       transactionType,
       transactionId,
-      title,
-      participantName:       otherName,
-      participantAvatar:     otherAvatar,
-      lastMessageAt:         null,
-      lastMessageText:       null,
-      lastMessageSenderId:   null,
-      unreadCount:           0,
-      status:                'active',
-      createdAt:             _now(),
-      updatedAt:             _now(),
+      transactionTitle: title,
+      participants:      participantUids,
+      participantNames,
+      participantAvatars,
+      status:            'active',
+      lastMessage:       null,
+      lastMessageAt:     null,
+      unreadCounts:      Object.fromEntries(participantUids.map(p => [p, 0])),
+      metadata:          metadata || {},
+      moderationFlags:   [],
+      reportCount:       0,
+      readOnlyAt:        null,
+      createdAt:         _now(),
+      updatedAt:         _now(),
     });
-  }
 
-  await batch.commit();
-  logger.info('[messages] Conversation created', { conversationId, transactionType, transactionId });
-  return { conversationId, existing: false };
+    /* User conversation index (inside transaction — consistent with conv doc) */
+    for (const puid of participantUids) {
+      const others      = participantUids.filter(p => p !== puid);
+      const otherName   = others.map(o => participantNames[o]).join(', ');
+      const otherAvatar = others.length === 1 ? (participantAvatars[others[0]] || null) : null;
+      t.set(db.collection('userConversations').doc(puid).collection('items').doc(conversationId), {
+        conversationId,
+        transactionType,
+        transactionId,
+        title,
+        participantName:       otherName,
+        participantAvatar:     otherAvatar,
+        lastMessageAt:         null,
+        lastMessageText:       null,
+        lastMessageSenderId:   null,
+        unreadCount:           0,
+        status:                'active',
+        createdAt:             _now(),
+        updatedAt:             _now(),
+      });
+    }
+  });
+
+  if (isNew) logger.info('[messages] Conversation created', { conversationId, transactionType, transactionId });
+  return { conversationId, existing: !isNew };
 });
 
 /* ═══════════════════════════════════════════════════════════════
@@ -621,6 +626,13 @@ exports.editMessage = onCall({ region: REGION, timeoutSeconds: 15 }, async (req)
   return { edited: true };
 });
 
+/* ── Allowlist for updateConversationStatus — mirrors STATUS_MSGS keys ── */
+const VALID_STATUSES = new Set([
+  'pending','confirmed','processing','ready','shipped','out_for_delivery','delivered',
+  'cancelled','refunded','disputed','completed','accepted','en_route','in_progress',
+  'awaiting_provider','awaiting_pickup','closed',
+]);
+
 /* ═══════════════════════════════════════════════════════════════
    15. updateConversationStatus
    Called by order / booking Cloud Functions when a transaction
@@ -631,6 +643,17 @@ exports.updateConversationStatus = onCall({ region: REGION, timeoutSeconds: 20 }
   const { conversationId, newStatus, systemMessage } = req.data;
   if (!conversationId || !newStatus) {
     throw new HttpsError('invalid-argument', 'conversationId and newStatus required');
+  }
+
+  /* MSG-3: validate status against known allowlist */
+  if (!VALID_STATUSES.has(String(newStatus))) {
+    throw new HttpsError('invalid-argument', `Invalid status '${String(newStatus)}'`);
+  }
+
+  /* MSG-3: system message injection is admin-only to prevent participant forgery */
+  const callerIsAdmin = req.auth.token?.admin === true || req.auth.token?.superAdmin === true;
+  if (systemMessage && !callerIsAdmin) {
+    throw new HttpsError('permission-denied', 'Only admins may post system messages');
   }
 
   const db       = _db();
@@ -682,6 +705,120 @@ const STATUS_MSGS = {
   awaiting_pickup:    'Package is ready for pickup.',
   closed:             'This conversation has been closed.',
 };
+
+/* ═══════════════════════════════════════════════════════════════
+   CF. sendMessage  (MSG-1 fix)
+   Replaces direct Firestore client writes. Hard-codes senderId to
+   req.auth.uid and server-resolves senderName so neither can be
+   spoofed. For file messages, clients upload to chatAttachments/
+   in Storage first, then pass the storageRef here.
+═══════════════════════════════════════════════════════════════ */
+const _ALLOWED_MSG_TYPES = new Set(['text','image','video','voice','audio','file','location']);
+
+exports.sendMessage = onCall(
+  { region: REGION, timeoutSeconds: 30, enforceAppCheck: true },
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+
+    const {
+      conversationId, type = 'text',
+      text, storageRef, thumbnailRef, fileName, fileSize, mimeType, duration,
+      lat, lng, address,
+      replyToId, replyToText, replyToSenderId,
+    } = req.data || {};
+
+    if (!conversationId || typeof conversationId !== 'string') {
+      throw new HttpsError('invalid-argument', 'conversationId (string) is required');
+    }
+    if (!_ALLOWED_MSG_TYPES.has(type)) {
+      throw new HttpsError('invalid-argument', `type must be one of: ${[..._ALLOWED_MSG_TYPES].join(', ')}`);
+    }
+
+    if (type === 'text') {
+      if (!text || typeof text !== 'string' || text.trim().length === 0) {
+        throw new HttpsError('invalid-argument', 'text is required for text messages');
+      }
+      if (text.length > 4000) throw new HttpsError('invalid-argument', 'text must be ≤ 4000 characters');
+    } else if (type === 'location') {
+      if (typeof lat !== 'number' || typeof lng !== 'number') {
+        throw new HttpsError('invalid-argument', 'lat and lng (numbers) are required for location messages');
+      }
+    } else {
+      if (!storageRef || typeof storageRef !== 'string') {
+        throw new HttpsError('invalid-argument', 'storageRef is required for file messages');
+      }
+      /* Verify storageRef is under caller's chatAttachments directory */
+      if (!storageRef.startsWith(`chatAttachments/${req.auth.uid}/`)) {
+        throw new HttpsError('permission-denied', 'storageRef must be owned by the caller');
+      }
+    }
+
+    const db       = _db();
+    const convRef  = db.collection('conversations').doc(String(conversationId));
+    const convSnap = await convRef.get();
+    if (!convSnap.exists) throw new HttpsError('not-found', 'Conversation not found');
+
+    const conv = convSnap.data();
+    if (!Array.isArray(conv.participants) || !conv.participants.includes(req.auth.uid)) {
+      throw new HttpsError('permission-denied', 'Not a participant in this conversation');
+    }
+    if (['closed', 'suspended', 'read_only'].includes(conv.status)) {
+      throw new HttpsError('failed-precondition', `Conversation is ${conv.status}`);
+    }
+
+    /* Server-resolve senderName so it cannot be forged by the client */
+    const userSnap   = await db.collection('users').doc(req.auth.uid).get();
+    const ud         = userSnap.exists ? userSnap.data() : {};
+    const senderName = String(ud.displayName || ud.name || ud.email || 'User').slice(0, 100);
+
+    const msgRef = convRef.collection('messages').doc();
+    const now    = _now();
+
+    const msgData = {
+      senderId:   req.auth.uid,  // hard-coded — cannot be spoofed
+      senderName,                 // server-resolved — cannot be spoofed
+      timestamp:  now,
+      type,
+      status:     'sent',
+      deleted:    false,
+      edited:     false,
+      flagged:    false,
+    };
+
+    if (replyToId)       msgData.replyToId       = String(replyToId).slice(0, 128);
+    if (replyToText)     msgData.replyToText     = String(replyToText).slice(0, 100);
+    if (replyToSenderId) msgData.replyToSenderId = String(replyToSenderId).slice(0, 128);
+
+    if (type === 'text') {
+      msgData.text = text.trim().slice(0, 4000);
+    } else if (type === 'location') {
+      msgData.lat     = Number(lat);
+      msgData.lng     = Number(lng);
+      msgData.address = address ? String(address).slice(0, 300) : null;
+    } else {
+      msgData.storageRef   = String(storageRef).slice(0, 500);
+      msgData.thumbnailRef = thumbnailRef ? String(thumbnailRef).slice(0, 500) : null;
+      msgData.fileName     = fileName  ? String(fileName).slice(0, 255)  : null;
+      msgData.fileSize     = fileSize  ? Number(fileSize)                 : null;
+      msgData.mimeType     = mimeType  ? String(mimeType).slice(0, 100)  : null;
+      msgData.mediaType    = type;
+      if (type === 'voice') msgData.duration = duration ? Number(duration) : 0;
+    }
+
+    const batch = db.batch();
+    batch.set(msgRef, msgData);
+    batch.update(convRef, {
+      lastMessage:   type === 'text' ? (msgData.text || '') : `📎 ${type}`,
+      lastMessageAt: now,
+      lastSenderId:  req.auth.uid,
+      unread:        _inc(1),
+      updatedAt:     now,
+    });
+    await batch.commit();
+
+    return { messageId: msgRef.id };
+  }
+);
 
 async function _postStatusMessage(db, transactionType, transactionId, newStatus) {
   const snap = await db.collection('conversations')

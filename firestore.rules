@@ -46,7 +46,8 @@ service cloud.firestore {
       return !request.resource.data.keys()
                .hasAny(['isAdmin','suspended','banned','adminApproved',
                         'featured','verified','flagged','adminNote',
-                        'role','approved','approvedAt','approvedBy']);
+                        'role','approved','approvedAt','approvedBy',
+                        'commissionRate']);
     }
 
     function noPrivilegeEscalation() {
@@ -234,9 +235,10 @@ service cloud.firestore {
 
                     || ((isAuthed() && (resource.data.uid == request.auth.uid
                                        || resource.data.buyerUid == request.auth.uid))
-                        && uidUnchanged() && validOrderStatus()
+                        && uidUnchanged()
+                        && request.resource.data.status in ['cancelled']
                         && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['status','cancelReason','confirmedAt','updatedAt','review']))
+                             .hasOnly(['status','cancelReason','updatedAt','review']))
 
                     || (isAuthed() && resource.data.sellerUid == request.auth.uid
                         && uidUnchanged() && validOrderStatus()
@@ -509,10 +511,9 @@ service cloud.firestore {
                  .data.participants.hasAny([request.auth.uid]);
         }
         allow read: if inConvo();
-        allow create: if inConvo()
-                      && request.resource.data.senderId == request.auth.uid
-                      && request.resource.data.keys().hasAll(['senderId','text','sentAt'])
-                      && request.resource.data.text.size() <= 4000;
+        // MSG-1: all writes go through the sendMessage CF (admin SDK, bypasses rules).
+        // Direct client writes are blocked to prevent senderId/senderName spoofing.
+        allow create: if false;
         allow update, delete: if isAdmin();
       }
     }
@@ -855,7 +856,8 @@ service cloud.firestore {
       allow create: if isAuthed()
                     && request.resource.data.uid    == request.auth.uid
                     && request.resource.data.amount is  number
-                    && request.resource.data.amount >   0;
+                    && request.resource.data.amount >   0
+                    && request.resource.data.status == 'pending';
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid == request.auth.uid);
       allow update: if isAdmin();
@@ -1303,7 +1305,9 @@ service cloud.firestore {
     }
     match /communityEvents/{eventId} {
       allow read: if true;
-      allow create: if isAuthed() && request.resource.data.organizerUid == request.auth.uid;
+      allow create: if isAuthed()
+                    && request.resource.data.organizerUid == request.auth.uid
+                    && noAdminFields();
       allow update: if isAdmin() || (isAuthed() && resource.data.organizerUid == request.auth.uid && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin();
     }
@@ -1809,12 +1813,9 @@ service cloud.firestore {
     }
 
     match /posRefunds/{refundId} {
-      allow create: if claimsPosOwner()
-                    && request.resource.data.originalTxnId is string
-                    && request.resource.data.amount is number
-                    && request.resource.data.amount > 0;
+      /* CF-only writes — client cannot verify txn ownership server-side */
       allow read:   if isPosOwner() || isAdmin();
-      allow update: if isAdmin();
+      allow write:  if false;
     }
 
     match /posVoids/{voidId} {

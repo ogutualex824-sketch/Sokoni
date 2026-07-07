@@ -2104,7 +2104,7 @@ function renderStockList(levels) {
     const pct = sl.maxStock ? Math.min((sl.available / sl.maxStock) * 100, 100) : 50;
     const cls = sl.available <= 0 ? 'danger' : sl.available <= (sl.reorderPoint||5) ? 'warn' : 'ok';
     return `
-    <div class="card" onclick="openAdjustModal('${sl.productId}')">
+    <div class="card" data-product-id="${escHtml(sl.productId)}" onclick="openAdjustModal(this.dataset.productId)">
       <div class="card-row">
         <div class="card-icon">&#128230;</div>
         <div class="card-body">

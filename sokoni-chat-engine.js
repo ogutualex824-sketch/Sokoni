@@ -325,64 +325,60 @@ function getAttachmentUrl(storageRef) {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   SEND MESSAGE (direct Firestore write)
+   SEND MESSAGE — routed through sendMessage CF (MSG-1 fix)
+   The CF hard-codes senderId = req.auth.uid and server-resolves
+   senderName, preventing client-side spoofing of either field.
+   File messages: upload to Storage first, then call CF with the
+   storageRef — the CF validates the path belongs to the caller.
 ──────────────────────────────────────────────────────────────*/
 function sendMessage(conversationId, payload) {
-  var uid  = _uid();
-  var user = _auth().currentUser;
+  var uid = _uid();
   if (!uid) return Promise.reject(new Error('Not authenticated'));
   if (!conversationId) return Promise.reject(new Error('conversationId required'));
 
-  var db = _db();
-  return db.collection('conversations').doc(conversationId).get().then(function(snap) {
-    if (!snap.exists) throw new Error('Conversation not found');
-    var conv = snap.data();
-    if (!conv.participants.includes(uid)) throw new Error('Not a participant');
-    if (conv.status === 'read_only')  throw new Error('This conversation is now read-only');
-    if (conv.status === 'suspended')  throw new Error('This conversation has been suspended');
-    if (conv.status === 'closed')     throw new Error('This conversation is closed');
+  var type = payload.type || 'text';
+  var callSendMessage = _fns().httpsCallable('sendMessage');
 
-    var msgRef    = db.collection('conversations').doc(conversationId).collection('messages').doc();
-    var messageId = msgRef.id;
-
-    var msgData = {
-      senderId:   uid,
-      senderName: (user && (user.displayName || user.email)) || 'User',
-      timestamp:  _FS().serverTimestamp(),
-      type:       payload.type || 'text',
-      status:     'sent',
-      deleted:    false,
-      edited:     false,
-      flagged:    false,
+  /* Text and location go directly to the CF */
+  if (type === 'text' || type === 'location') {
+    var callData = {
+      conversationId:  conversationId,
+      type:            type,
+      replyToId:       payload.replyToId       || null,
+      replyToText:     payload.replyToText      ? String(payload.replyToText).slice(0, 100) : null,
+      replyToSenderId: payload.replyToSenderId  || null,
     };
-
-    if (payload.replyToId) {
-      msgData.replyToId       = payload.replyToId;
-      msgData.replyToText     = (payload.replyToText  || '').slice(0, 100);
-      msgData.replyToSenderId = payload.replyToSenderId || null;
-    }
-
-    if (payload.type === 'text') {
+    if (type === 'text') {
       var text = (payload.text || '').trim().slice(0, 4000);
-      if (!text) throw new Error('Message cannot be empty');
-      msgData.text = text;
-      return msgRef.set(msgData).then(function() { return { messageId: messageId }; });
+      if (!text) return Promise.reject(new Error('Message cannot be empty'));
+      callData.text = text;
+    } else {
+      callData.lat     = payload.lat;
+      callData.lng     = payload.lng;
+      callData.address = payload.address || null;
     }
+    return callSendMessage(callData).then(function(r) { return r.data; });
+  }
 
-    /* File-based message: upload first, then write doc */
-    if (!payload.file) throw new Error('File is required for ' + payload.type);
-    return _uploadFile(conversationId, messageId, payload.file, payload.type, payload.onProgress)
-      .then(function(uploaded) {
-        msgData.storageRef   = uploaded.storageRef;
-        msgData.thumbnailRef = uploaded.thumbnailRef;
-        msgData.fileName     = uploaded.fileName;
-        msgData.fileSize     = uploaded.fileSize;
-        msgData.mimeType     = payload.file.type || '';
-        msgData.mediaType    = payload.type;
-        if (payload.type === 'voice') msgData.duration = payload.duration || 0;
-        return msgRef.set(msgData);
-      }).then(function() { return { messageId: messageId }; });
-  });
+  /* File-based: upload to chatAttachments first, then call CF */
+  if (!payload.file) return Promise.reject(new Error('File is required for ' + type));
+  var placeholderId = _db().collection('_tmp').doc().id; // random ID for upload path only
+  return _uploadFile(conversationId, placeholderId, payload.file, type, payload.onProgress)
+    .then(function(uploaded) {
+      return callSendMessage({
+        conversationId:  conversationId,
+        type:            type,
+        storageRef:      uploaded.storageRef,
+        thumbnailRef:    uploaded.thumbnailRef || null,
+        fileName:        uploaded.fileName,
+        fileSize:        uploaded.fileSize,
+        mimeType:        payload.file.type || '',
+        duration:        type === 'voice' ? (payload.duration || 0) : undefined,
+        replyToId:       payload.replyToId       || null,
+        replyToText:     payload.replyToText      ? String(payload.replyToText).slice(0, 100) : null,
+        replyToSenderId: payload.replyToSenderId  || null,
+      });
+    }).then(function(r) { return r.data; });
 }
 
 /* ─────────────────────────────────────────────────────────────

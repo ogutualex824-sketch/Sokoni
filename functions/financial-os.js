@@ -338,9 +338,10 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
 exports.fosSubmitRefund = onCall(
   {
     region:          REGION,
-    timeoutSeconds:  30,
+    timeoutSeconds:  60,
     memory:          '256MiB',
     enforceAppCheck: true,
+    secrets:         [INTASEND_PRIVATE_KEY],
   },
   async (req) => {
     const auth = _requireAuth(req);
@@ -430,8 +431,54 @@ exports.fosSubmitRefund = onCall(
       return { refundId: refundRef.id, status: 'pending', message: 'Refund submitted for admin review.' };
     }
 
-    /* Auto-approve flow: return refundId for fosApproveRefund to process */
-    return { refundId: refundRef.id, status: 'approved', autoApprove: true };
+    /* Auto-approve: admin submitted — process gateway immediately so refund is not stuck */
+    try {
+      const privateKey = INTASEND_PRIVATE_KEY.value();
+      const adapter    = getAdapter(tx.provider || 'intasend', { key: privateKey });
+      const result     = await adapter.initiateRefund({
+        originalRef: tx.payRef || payRef,
+        amountKES,
+        reason,
+      });
+
+      if (!result.success) {
+        logger.error('[FOS/refund] Auto-approve gateway failed', { refundId: refundRef.id, error: result.error });
+        await refundRef.update({ status: 'approved', gatewayError: result.error, updatedAt: now() });
+        return { refundId: refundRef.id, status: 'approved', message: 'Gateway error — queued for manual processing.', gatewayError: result.error };
+      }
+
+      const fsdb = db();
+      await fsdb.runTransaction(async (txn) => {
+        txn.update(refundRef, { status: 'processed', refundId: result.refundId, processedAt: now(), updatedAt: now() });
+        if (tx.sellerUid) {
+          txn.set(fsdb.collection('wallets').doc(tx.sellerUid), {
+            availableCents: admin.firestore.FieldValue.increment(-amountCents),
+            refundedCents:  admin.firestore.FieldValue.increment(amountCents),
+            updatedAt:      now(),
+          }, { merge: true });
+        }
+        if (txId) {
+          txn.update(fsdb.collection('fosTransactions').doc(txId), {
+            status:        refundType === 'full' ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
+            refundedCents: admin.firestore.FieldValue.increment(amountCents),
+            refundedAt:    now(),
+            updatedAt:     now(),
+          });
+        }
+      });
+
+      await _notify(tx.buyerUid || auth.uid, 'refund_processed', {
+        title: 'Refund processed ✓',
+        body:  `KES ${amountKES.toLocaleString()} refund has been initiated back to your M-PESA.`,
+        amountKES,
+      });
+      await _audit('refund_auto_processed', auth.uid, { refundId: refundRef.id, amountKES, fosTransactionId: txId });
+      return { refundId: refundRef.id, status: 'processed', providerRefundId: result.refundId };
+    } catch (gatewayErr) {
+      logger.error('[FOS/refund] Auto-approve exception', { error: gatewayErr.message });
+      await refundRef.update({ status: 'approved', gatewayError: gatewayErr.message, updatedAt: now() });
+      return { refundId: refundRef.id, status: 'approved', message: 'Queued for manual processing.', error: gatewayErr.message };
+    }
   }
 );
 
@@ -452,23 +499,44 @@ exports.fosApproveRefund = onCall(
     const { refundId, reject: doReject = false, rejectReason } = req.data || {};
     if (!refundId) throw new HttpsError('invalid-argument', 'refundId required');
 
-    const refSnap = await db().collection('fosRefundQueue').doc(refundId).get();
-    if (!refSnap.exists) throw new HttpsError('not-found', 'Refund request not found');
-    const refund = refSnap.data();
-
-    if (refund.status === 'processed' || refund.status === 'rejected')
-      throw new HttpsError('failed-precondition', `Refund already ${refund.status}`);
+    /* PAY-1 fix: atomically lock with status='processing' so concurrent admin calls
+       cannot both pass the status check and fire the payment gateway twice. */
+    let refund;
+    const fsdb = db();
 
     if (doReject) {
+      const refSnap = await fsdb.collection('fosRefundQueue').doc(refundId).get();
+      if (!refSnap.exists) throw new HttpsError('not-found', 'Refund request not found');
+      const rd = refSnap.data();
+      if (rd.status === 'processed' || rd.status === 'rejected' || rd.status === 'processing') {
+        throw new HttpsError('failed-precondition', `Refund already ${rd.status}`);
+      }
       await refSnap.ref.update({ status: 'rejected', rejectReason, updatedAt: now() });
-      await _notify(refund.buyerUid, 'refund_rejected', {
+      await _notify(rd.buyerUid, 'refund_rejected', {
         title: 'Refund request declined',
         body:  rejectReason || 'Your refund request was reviewed and declined.',
       });
       return { status: 'rejected' };
     }
 
-    /* Process via adapter */
+    /* Atomically transition pending→processing; only one concurrent call can win */
+    try {
+      await fsdb.runTransaction(async (txn) => {
+        const snap = await txn.get(fsdb.collection('fosRefundQueue').doc(refundId));
+        if (!snap.exists) throw new HttpsError('not-found', 'Refund request not found');
+        const rd = snap.data();
+        if (rd.status === 'processed' || rd.status === 'rejected' || rd.status === 'processing') {
+          throw new HttpsError('failed-precondition', `Refund already ${rd.status}`);
+        }
+        refund = rd;
+        txn.update(snap.ref, { status: 'processing', approvedBy: req.auth.uid, updatedAt: now() });
+      });
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;
+      throw new HttpsError('internal', 'Concurrency conflict — please retry');
+    }
+
+    /* Call gateway outside transaction — network I/O cannot run inside Firestore txn */
     const privateKey = INTASEND_PRIVATE_KEY.value();
     const adapter    = getAdapter(refund.provider || 'intasend', { key: privateKey });
     const result     = await adapter.initiateRefund({
@@ -479,22 +547,21 @@ exports.fosApproveRefund = onCall(
 
     if (!result.success) {
       logger.error('[FOS/refund] Adapter refund failed', { refundId, error: result.error });
-      await refSnap.ref.update({ status: 'failed', error: result.error, updatedAt: now() });
+      await fsdb.collection('fosRefundQueue').doc(refundId).update({ status: 'failed', error: result.error, updatedAt: now() });
       throw new HttpsError('internal', `Refund failed: ${result.error}`);
     }
 
-    const fsdb = db();
+    /* Finalize: atomically update refund record + seller wallet + linked transaction */
+    const refundRef = fsdb.collection('fosRefundQueue').doc(refundId);
     await fsdb.runTransaction(async (txn) => {
-      /* Update refund queue record */
-      txn.update(refSnap.ref, {
-        status:     'processed',
-        refundId:   result.refundId,
+      txn.update(refundRef, {
+        status:      'processed',
+        refundId:    result.refundId,
         processedAt: now(),
-        updatedAt:  now(),
-        approvedBy: req.auth.uid,
+        updatedAt:   now(),
+        approvedBy:  req.auth.uid,
       });
 
-      /* Clawback from seller wallet */
       if (refund.sellerUid) {
         const walletRef = fsdb.collection('wallets').doc(refund.sellerUid);
         txn.set(walletRef, {
@@ -504,7 +571,6 @@ exports.fosApproveRefund = onCall(
         }, { merge: true });
       }
 
-      /* Update fosTransaction if linked */
       if (refund.fosTransactionId) {
         const txRef = fsdb.collection('fosTransactions').doc(refund.fosTransactionId);
         txn.update(txRef, {
