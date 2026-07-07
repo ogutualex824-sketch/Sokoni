@@ -1,4 +1,144 @@
-﻿## [2026-07-07] — KASS Role-Specific AI Assistants v1.0
+﻿## [2026-07-07] — KASS Developer Assistant + SokoniI18n Framework v1.0
+
+### Summary
+Two new client-side files: `kass-developer.html` — a premium dark-theme AI assistant tailored for SOKONI platform engineers — and `sokoni-i18n.js` — a lightweight, zero-dependency internationalisation framework supporting English and Swahili (Kenya dialect). No Cloud Function or Firestore index changes required.
+
+### New Files
+
+| File | Description |
+|---|---|
+| `kass-developer.html` | KASS AI assistant for developers — purple-lavender accent, code block rendering with syntax highlighting, auth gate (developer/admin/superAdmin claims) |
+| `sokoni-i18n.js` | Lightweight i18n framework — `en`/`sw` translations, `data-i18n` DOM wiring, `SokoniI18n.t()` JS API, language switcher widget |
+
+### kass-developer.html — Features
+- **Auth guard**: requires `developer`, `admin`, or `superAdmin` custom claim; fail-closed on token fetch error
+- **Accent colour**: `#c678dd` (purple-lavender) — differentiates the developer role from seller (green), finance (cyan), and executive (gold)
+- **Split-pane layout**: 280px sidebar + main chat; collapses to mobile overlay on ≤768px
+- **Quick actions** (sidebar): Debug CF error, Write Firestore rules, API integration help, Performance review — each pre-fills the textarea with a structured prompt
+- **Empty state chips**: 6 developer-oriented starter questions (Firestore pagination, CF rate limiting, auth claim structure, security rules, Gen 2 best practices, M-Pesa CF architecture)
+- **Code block rendering**: parses ` ```json {"type":"code","lang":"js","code":"..."} ``` ` from AI responses into styled code blocks with:
+  - Dark background `#0a0a0a`, system monospace font stack
+  - Syntax tokeniser covering JS/TS/JSX/TSX: block comments, line comments, template literals, double/single-quoted strings, keywords, numbers
+  - Copy button — copies raw code to clipboard, shows "Copied!" for 2 s then resets
+  - Language badge (e.g. `js`, `ts`, `bash`)
+- **Rich cards** (inherited): `table`, `stat`, `link` card types from base KASS pattern
+- **XSS safety**: plain AI text via `document.createTextNode()`; code blocks via `syntaxHighlight()` which calls `esc()` on every raw token before DOM insertion — `innerHTML` is safe because every piece was escaped first; never `eval()`
+- **Session persistence**: `kassConversations/{uid}/sessions/{sessionId}/messages` (role = 'developer')
+- **Keyboard shortcut**: Ctrl+K focuses the input textarea
+
+### sokoni-i18n.js — Features
+- **Zero dependencies**: pure IIFE, no Firebase, no external libraries
+- **Languages**: `en` (English), `sw` (Swahili — Kenya dialect)
+- **Auto-detection**: reads `sokoni_lang` from `localStorage` → browser `navigator.language` → default `en`
+- **DOM wiring**: `data-i18n` → `textContent`, `data-i18n-placeholder` → `placeholder`, `data-i18n-title` → `title`
+- **JS API**: `SokoniI18n.t('key', { name: 'Alex' })` with `{{placeholder}}` interpolation
+- **Language switcher**: `SokoniI18n.renderSwitcher(containerId)` injects 🇬🇧 EN | 🇰🇪 SW toggle buttons; emits `sokoni:langchange` CustomEvent for reactive updates
+- **Translation keys** (37 keys × 2 languages): nav (7), common (11), product (7), cart (4), order (6), auth (7), payment (7), seller (5)
+- **Swahili accuracy**: real Kenyan Swahili — Kikapu (cart), Maagizo (orders), Barua Pepe (email), Nywila (password), Hifadhi (save), Ghairi (cancel), etc.; inline comments explain each term's literal meaning
+
+### Files Affected
+| File | Status |
+|---|---|
+| `kass-developer.html` | New |
+| `sokoni-i18n.js` | New |
+
+### Security Notes
+- Auth guard fails closed (denies access) if `getIdTokenResult()` throws — no token = no access
+- Syntax highlighter never calls `eval()` or `Function()` — code strings are escaped and inserted as HTML entities
+- `renderSwitcher()` builds DOM elements with `textContent` / `dataset` — no `innerHTML` on user data
+
+### Deployment Notes
+- Static hosting: deploy 2 new files — no Cloud Functions or Firestore index changes needed
+- `sokoniChat` CF must be deployed (confirmed live from KASS v2.0)
+- For `sokoni-i18n.js`: add `<script src="sokoni-i18n.js"></script>` before closing `</body>` on any page, then call `SokoniI18n.init()` after `DOMContentLoaded`
+
+---
+
+## [2026-07-07] — KASS Role-Specific AI Assistants v1.1 — Manager & Support
+
+### Summary
+Two additional KASS (SOKONI AI Concierge) assistant pages, extending the v1.0 suite with dedicated tools for store/branch managers and customer support agents. Both follow the established split-pane dark-theme architecture with role-specific context, auth guards, quick actions, and accent colours.
+
+### New Pages
+
+| Page | Role | Auth Guard | Accent |
+|---|---|---|---|
+| `kass-manager.html` | Store & Branch Manager AI | `manager`, `admin`, or `superAdmin` claim; unauthenticated → redirect to `login.html` | Amber `#ff9500` |
+| `kass-support.html` | Customer Support AI | `support`, `admin`, `superAdmin`, or `seller` claim; unauthenticated → redirect to `login.html` | Teal `#00bcd4` |
+
+### Features
+- **Split-pane layout**: 280px sidebar + main chat; collapses to slide-in drawer on mobile (≤768px)
+- **KASS avatar**: animated dual-ring pulse in role accent colour; dark gradient background matching the accent
+- **Quick actions** (4 per role): pre-fill textarea with role-specific operational prompts
+- **AI backend**: `sokoniChat` CF via `firebase.app().functions('us-central1').httpsCallable('sokoniChat')` with `{ message, context, sessionId }`
+- **Message persistence**: `kassConversations/{uid}/sessions/{sessionId}/messages` subcollection
+- **Session history**: sidebar loads last 10 sessions with `onSnapshot`, filtered by `role`; click to resume
+- **New Chat**: session ID via `db.collection('_').doc().id` (no network call)
+- **XSS safety**: all AI text via `document.createTextNode()` — never `innerHTML`; rich cards built from parsed JSON with all fields assigned via `textContent`
+- **Typing indicator**: 3-dot bounce animation while awaiting AI response
+- **Error banner**: shown after 3 consecutive `sokoniChat` failures; manually dismissible
+- **Toast notifications** and **Ctrl+K** input focus; **ESC** closes mobile sidebar
+- **Accent-on-black rule**: all accent-coloured backgrounds use `color:#000`
+
+### Files Affected
+| File | Status |
+|---|---|
+| `kass-manager.html` | New |
+| `kass-support.html` | New |
+| `CHANGELOG.md` | Updated |
+
+### Security Notes
+- Both pages redirect unauthenticated users to `login.html` (fail-closed for anonymous access)
+- Role claim check uses `getIdTokenResult()` — conservative fail-closed on token fetch error for both pages
+- Support page allows `seller` claim to access support tooling for their own customer interactions
+- Link rich-cards block `https://`, `http://`, and `//` prefixes — only relative paths are navigated
+
+### Deployment Notes
+- Static hosting deploy of 2 new HTML files — no Cloud Function changes required
+- `sokoniChat` CF must already be deployed (confirmed live from KASS v2.0)
+- No new Firestore indexes required (uses same `role` + `lastAt desc` composite pattern as existing KASS pages)
+
+---
+
+## [2026-07-07] — Security Audit & Secret Manager Hardening v1.0
+
+### Summary
+Full production security audit covering all 24 Firebase Secret Manager secrets, four Cloud Function security vulnerabilities fixed, and the complete `release-readiness.js` secret check pipeline corrected to use Secret Manager bindings instead of dead `process.env` references.
+
+### Security Issues Fixed
+
+| Severity | File | Issue | Fix |
+|---|---|---|---|
+| HIGH | `functions/wallet.js` | `process.env.INTASEND_PRIVATE_KEY \|\|` fallback bypassed Secret Manager | Removed fallback — only `INTASEND_KEY.value()` |
+| HIGH | `functions/pos-retail.js` | String-literal secrets + `process.env` reads | Migrated to `defineSecret()` objects + `.value()` |
+| MEDIUM | `functions/email-triggers.js` | `SENDGRID_WEBHOOK_KEY` not bound to function — webhook signature never verified | Added `defineSecret()` + `secrets: [SENDGRID_WEBHOOK_KEY]` to `emailWebhook` |
+| MEDIUM | `functions/release-readiness.js` | All readiness checks used `process.env` for Secret Manager values — always returned false | Added `defineSecret()` bindings + `CF_OPTIONS.secrets` |
+
+### Secrets Audit
+
+- **24 production secrets** audited via `firebase functions:secrets:access`
+- **23/24 already set** — only `SENDGRID_WEBHOOK_KEY` was missing
+- `SENDGRID_WEBHOOK_KEY` generated (256-bit CSPRNG) and set in Secret Manager
+- Full manifest documented in `DEPLOY_QUEUE.md`
+
+### Files Changed
+- `functions/wallet.js` — remove `process.env.INTASEND_PRIVATE_KEY` fallback (×2)
+- `functions/pos-retail.js` — `defineSecret` + `.value()` for SENDGRID and AFRICASTALKING
+- `functions/email-triggers.js` — `defineSecret('SENDGRID_WEBHOOK_KEY')` + wire to `emailWebhook`
+- `functions/release-readiness.js` — `defineSecret` bindings; `CF_OPTIONS.secrets`; fix 3 checks
+- `DEPLOY_QUEUE.md` — full 24-secret manifest with status
+
+### Security Changes
+- No API keys, passwords, or encryption keys in source code
+- All Firebase web API keys (`AIzaSy...`) are intentionally public client identifiers — not secrets
+- Firebase Security Rules enforce access control; web API keys have no privileged access
+
+### No Breaking Changes
+No Firestore schema changes. No API contract changes.
+
+---
+
+## [2026-07-07] — KASS Role-Specific AI Assistants v1.0
 
 ### Summary
 Three dedicated KASS (SOKONI AI Concierge) assistant pages, each tailored to a specific platform role. All three share the same premium dark-theme split-pane interface (sidebar + chat + input bar) and AI engine architecture, with role-specific context, quick actions, auth guards, and visual accent colors.
