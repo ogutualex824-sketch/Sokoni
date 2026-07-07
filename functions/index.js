@@ -9082,12 +9082,15 @@ exports.getPosPerfMetrics         = posPerf.getPosPerfMetrics;
 exports.getPosSpeedReport         = posPerf.getPosSpeedReport;
 exports.posScheduledPerfRollup    = posPerf.posScheduledPerfRollup;
 
-/* ── Universal Printer Engine v4.0 — print log, history, config ────────── */
+/* ── Universal Printer Engine v5.0 — print log, history, config, templates ── */
 const posPrinter = require('./pos-printer');
-exports.posLogPrint        = posPrinter.posLogPrint;
-exports.getPrintHistory    = posPrinter.getPrintHistory;
-exports.getPrinterConfig   = posPrinter.getPrinterConfig;
-exports.setPrinterConfig   = posPrinter.setPrinterConfig;
+exports.posLogPrint          = posPrinter.posLogPrint;
+exports.getPrintHistory      = posPrinter.getPrintHistory;
+exports.getPrinterConfig     = posPrinter.getPrinterConfig;
+exports.setPrinterConfig     = posPrinter.setPrinterConfig;
+exports.posGetPrintStats     = posPrinter.posGetPrintStats;
+exports.posGetPrintTemplate  = posPrinter.posGetPrintTemplate;
+exports.posSavePrintTemplate = posPrinter.posSavePrintTemplate;
 
 /* ── Security 6.0 — Session Management ─────────────────────────────────── */
 const secSession = require('./security-session');

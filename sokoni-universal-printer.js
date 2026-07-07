@@ -1,16 +1,17 @@
 /* ════════════════════════════════════════════════════════════════════
-   SOKONI Universal Printer Engine v4.0
+   SOKONI Universal Printer Engine v5.0
    Vendor-neutral, standards-based receipt printing for SmartPOS
 
-   Transports  : Bluetooth (Web Bluetooth) · USB (WebUSB) · Serial
-                 (Web Serial) · Network (HTTP/WS) · Browser (fallback)
+   Transports  : Bluetooth (Web Bluetooth) · USB / USB-OTG (WebUSB) ·
+                 Serial (Web Serial) · Network (HTTP/WS) · Browser (fallback)
    Protocol    : ESC/POS industry standard
-   Documents   : Sales · Refund · Exchange · Kitchen · Packing ·
+   Documents   : Sales · Invoice · Refund · Exchange · Kitchen · Packing ·
                  Delivery · Shipping Label · Labels · Queue · Parking ·
-                 Picking Slip · Booking · Service Confirmation ·
-                 Daily Summary · Monthly Summary · Custom
+                 Picking Slip · Booking · Appointment · Service Order ·
+                 Daily Summary · Monthly Summary · Custom (free-form)
 
-   Public API  : window.SokoniPrinter.{discover,connect,print,printImage,…}
+   Public API  : window.SokoniPrinter.{discover,connect,print,printQR,
+                 printBarcode,printImage,registerDocType,waitForJob,…}
    ════════════════════════════════════════════════════════════════════ */
 'use strict';
 (function (root) {
@@ -153,6 +154,8 @@ class ESCPOSEncoder {
 /* ─────────────────────────────────────────────────────────────────
    IMAGE → ESC/POS RASTER CONVERTER  (browser Canvas API)
 ───────────────────────────────────────────────────────────────── */
+const _imgRasterCache = new Map();  // url → { pixels, widthBytes, heightDots }
+
 function _imgToRaster (src, maxWidthPx, threshold = 128) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -191,6 +194,14 @@ function _imgToRaster (src, maxWidthPx, threshold = 128) {
   });
 }
 
+async function _imgToRasterCached (src, maxWidthPx, threshold = 128) {
+  const key = src + '_' + maxWidthPx + '_' + threshold;
+  if (_imgRasterCache.has(key)) return _imgRasterCache.get(key);
+  const result = await _imgToRaster(src, maxWidthPx, threshold);
+  _imgRasterCache.set(key, result);
+  return result;
+}
+
 /* ─────────────────────────────────────────────────────────────────
    RECEIPT RENDERER  (adapts to 58mm / 76mm / 80mm)
 ───────────────────────────────────────────────────────────────── */
@@ -198,7 +209,13 @@ class ReceiptRenderer {
   constructor (paperWidth = '80mm', cfg = {}) {
     this._p = PAPER[paperWidth] || PAPER['80mm'];
     this._cfg = cfg;
+    this._custom = {}; /* extensible doc type registry */
   }
+
+  /* Register a custom document type renderer.
+     fn(data, encoder, W, PX) should return void (mutates encoder).
+     Or fn(data) may return a new Uint8Array directly. */
+  register (docType, fn) { this._custom[String(docType)] = fn; return this; }
   get W () { return this._p.chars; }
   get PX () { return this._p.px; }
   _sep (ch = '-') { return ch.repeat(this.W); }
@@ -217,10 +234,15 @@ class ReceiptRenderer {
     const e = new ESCPOSEncoder().init();
     const W = this.W, c = this._cfg;
 
+    /* Logo: raster image takes priority over text logo */
     e.ac();
-    if (c.logoText || d.businessName)
+    if (d._logoRaster) {
+      const { pixels, widthBytes, heightDots } = d._logoRaster;
+      e.raster(widthBytes, heightDots, pixels).lf();
+    } else if (c.logoText || d.businessName) {
       e.bold(true).sz('big').text((c.logoText || d.businessName).slice(0, Math.floor(W / 2))).lf().sz('normal').bold(false);
-    if (d.businessName && c.logoText) e.bold(true).text(d.businessName).lf().bold(false);
+    }
+    if (d.businessName && (c.logoText || d._logoRaster)) e.bold(true).text(d.businessName).lf().bold(false);
     if (d.businessAddress) e.text(d.businessAddress).lf();
     if (d.businessPhone)   e.text('Tel: ' + d.businessPhone).lf();
     if (d.businessPin)     e.text('PIN: ' + d.businessPin).lf();
@@ -628,6 +650,96 @@ class ReceiptRenderer {
     return e.build();
   }
 
+  /* ── Formal invoice ───────────────────────────────────────── */
+  invoice (d) {
+    const e = new ESCPOSEncoder().init();
+    const W = this.W, c = this._cfg;
+
+    e.ac();
+    if (d._logoRaster) {
+      e.raster(d._logoRaster.widthBytes, d._logoRaster.heightDots, d._logoRaster.pixels).lf();
+    } else if (c.logoText || d.businessName) {
+      e.bold(true).sz('big').text((c.logoText || d.businessName).slice(0, Math.floor(W / 2))).lf().sz('normal').bold(false);
+    }
+    e.bold(true).sz('tall').text('TAX INVOICE').lf().sz('normal').bold(false);
+    if (d.businessAddress) e.text(d.businessAddress).lf();
+    if (d.businessPhone)   e.text('Tel: ' + d.businessPhone).lf();
+    if (d.businessPin)     e.text('PIN: ' + d.businessPin).lf();
+    if (d.vatNumber)       e.text('VAT: ' + d.vatNumber).lf();
+
+    e.al().text(this._sep('=')).lf();
+    if (d.invoiceNumber) e.bold(true).text(this._cols('Invoice #:', d.invoiceNumber)).lf().bold(false);
+    e.text(this._cols('Invoice Date:', d.invoiceDate || new Date().toLocaleDateString('en-KE'))).lf();
+    if (d.dueDate)       e.text(this._cols('Due Date:', d.dueDate)).lf();
+    if (d.paymentTerms)  e.text(this._cols('Terms:', d.paymentTerms)).lf();
+
+    e.text(this._sep()).lf();
+    e.bold(true).text('BILL TO:').lf().bold(false);
+    if (d.customerName)    e.text(d.customerName).lf();
+    if (d.customerCompany) e.text(d.customerCompany).lf();
+    if (d.customerAddress) e.text(d.customerAddress).lf();
+    if (d.customerPhone)   e.text('Tel: ' + d.customerPhone).lf();
+    if (d.customerPin)     e.text('PIN: ' + d.customerPin).lf();
+
+    e.text(this._sep()).lf();
+    const qW = 4, pW = 11, nW = W - qW - pW - 2;
+    e.bold(true).text('Item'.padEnd(nW) + ' Qty'.padStart(qW) + 'Amount'.padStart(pW)).lf().bold(false);
+    e.text(this._sep()).lf();
+
+    for (const it of (d.items || [])) {
+      const name   = String(it.name || 'Item').slice(0, nW).padEnd(nW);
+      const qty    = String(it.quantity || 1).padStart(qW);
+      const amount = this._kes((it.unitPrice || 0) * (it.quantity || 1)).padStart(pW);
+      e.text(name + qty + amount).lf();
+      if (it.description) e.text('  ' + it.description.slice(0, W - 2)).lf();
+      if (it.discount)    e.text(('  Disc: -' + this._kes(it.discount)).padEnd(W)).lf();
+    }
+
+    e.text(this._sep()).lf();
+    const t = d.totals || {};
+    if (t.subtotal  != null)  e.text(this._cols('Subtotal:',       this._kes(t.subtotal))).lf();
+    if (t.discount)           e.text(this._cols('Discount:',      '-' + this._kes(t.discount))).lf();
+    if (t.vat != null)        e.text(this._cols('VAT (16%):',      this._kes(t.vat))).lf();
+    if (t.withholdingTax)     e.text(this._cols('WHT (5%):',      '-' + this._kes(t.withholdingTax))).lf();
+    if (t.serviceCharge)      e.text(this._cols('Service Charge:', this._kes(t.serviceCharge))).lf();
+    e.text(this._sep()).lf();
+    e.bold(true).sz('tall').text(this._cols('AMOUNT DUE:', this._kes(t.grandTotal))).lf().sz('normal').bold(false);
+    e.text(this._sep()).lf();
+
+    if (d.bankDetails) {
+      e.bold(true).text('PAYMENT DETAILS:').lf().bold(false);
+      e.text(d.bankDetails).lf();
+    }
+    if (d.mpesaTill)   e.text('M-PESA Till: ' + d.mpesaTill).lf();
+    if (d.notes)       e.lf().text(d.notes).lf();
+    if (d.receiptUrl)  e.lf().ac().text('View invoice online:').lf().qr(d.receiptUrl, 4);
+    if (d.barcode)     e.ac().barcode(d.barcode);
+    e.lf().ac();
+    if (c.footer)       e.text(c.footer).lf();
+    if (d.terms)        e.text(d.terms).lf();
+    e.lf(3).cut();
+    return e.build();
+  }
+
+  /* ── Custom / free-form ────────────────────────────────────── */
+  custom (d) {
+    /* d.build must be a function that receives an ESCPOSEncoder and the W/PX values,
+       then returns void (mutates the encoder).
+       Allows any printable content without modifying this file. */
+    const e = new ESCPOSEncoder().init();
+    if (typeof d.build === 'function') {
+      try { d.build(e, this.W, this.PX); } catch(err) { e.text('Custom render error: ' + err.message).lf(); }
+    } else if (typeof d.lines === 'string') {
+      e.text(d.lines).lf();
+    } else if (Array.isArray(d.lines)) {
+      for (const line of d.lines) e.text(String(line)).lf();
+    } else {
+      e.text('(empty custom document)').lf();
+    }
+    e.lf(3).cut();
+    return e.build();
+  }
+
   /* ── Generic dispatcher ────────────────────────────────────── */
   render (docType, data) {
     const map = {
@@ -650,6 +762,9 @@ class ReceiptRenderer {
       daily_summary: this.dailySummary, cash_report: this.dailySummary,
       shift_report: this.dailySummary,
       monthly_summary: this.monthlySummary, monthly_report: this.monthlySummary,
+      invoice: this.invoice, tax_invoice: this.invoice,
+      custom: this.custom, freeform: this.custom,
+      ...this._custom,
     };
     const fn = map[docType];
     if (!fn) return this.sale(data);
@@ -754,8 +869,19 @@ class PrintQueue {
     if (!this._q.find(j => j.id === id)) this._q.unshift(j);
     this._save(); this.emit('tick', null);
   }
+  cancelAll () {
+    const now = new Date().toISOString();
+    const cancelled = this._q.map(j => ({ ...j, status: 'cancelled', updatedAt: now }));
+    this._hist.unshift(...cancelled);
+    this._q = [];
+    this._save();
+    this.emit('cancelled_all', cancelled);
+  }
+  clearHistory () { this._hist = []; this._save(); this.emit('history_cleared', null); }
+
   jobs    () { return [...this._q]; }
   history () { return [...this._hist]; }
+  getJob  (id) { return [...this._q, ...this._hist].find(j => j.id === id) || null; }
 }
 
 /* ─────────────────────────────────────────────────────────────────
@@ -1031,12 +1157,15 @@ class SPEngine {
       network:   new NetworkAdapter(),
       browser:   new BrowserAdapter(),
     };
-    this._active  = null;
-    this._queue   = new PrintQueue();
-    this._profile = this._loadProfile();
-    this._cfg     = this._loadCfg();
-    this._ev      = {};
-    this._busy    = false;
+    this._active   = null;
+    this._queue    = new PrintQueue();
+    this._profile  = this._loadProfile();
+    this._cfg      = this._loadCfg();
+    this._ev       = {};
+    this._busy     = false;
+    this._waiters  = {};           /* jobId → { resolve, reject } */
+    this._customDocTypes = {};     /* extra doc type renderers */
+    this._renderer = null;         /* shared renderer — rebuilt on config change */
 
     this._queue.on('enqueued', () => this._tick());
     this._queue.on('tick',     () => this._tick());
@@ -1044,7 +1173,7 @@ class SPEngine {
 
     /* Multi-tab sync via BroadcastChannel */
     if (typeof BroadcastChannel !== 'undefined') {
-      this._bc = new BroadcastChannel('sokoni_printer_v4');
+      this._bc = new BroadcastChannel('sokoni_printer_v5');
       this._bc.onmessage = (ev) => {
         if (ev.data?.type === 'config_update') {
           this._cfg = { ...this._cfg, ...ev.data.cfg };
@@ -1063,9 +1192,10 @@ class SPEngine {
   _loadCfg () {
     const defaults = {
       paperWidth: '80mm', autoCut: true, copies: 1,
-      autoPrintOnSale: false, logoText: '', footer: '',
-      promoMessage: '', returnPolicy: '', showCommission: false,
-      imageThreshold: 128,
+      autoPrintOnSale: false, autoPrintAfterPayment: false,
+      logoText: '', logoUrl: '', footer: '', promoMessage: '',
+      returnPolicy: '', showCommission: false, showPreview: false,
+      encoding: 'PC437', printDensity: 0, imageThreshold: 128,
     };
     try { return Object.assign({}, defaults, JSON.parse(localStorage.getItem('spp_config') || '{}')); }
     catch(e) { return defaults; }
@@ -1171,8 +1301,29 @@ class SPEngine {
   }
 
   /* ── Config / capabilities ───────────────────────────────── */
-  setConfig (updates) { Object.assign(this._cfg, updates); this._saveCfg(); return this; }
+  setConfig (updates) {
+    Object.assign(this._cfg, updates);
+    this._renderer = null; /* invalidate cached renderer */
+    this._saveCfg();
+    return this;
+  }
   getConfig ()        { return { ...this._cfg }; }
+
+  _getRenderer () {
+    if (!this._renderer) {
+      this._renderer = new ReceiptRenderer(this._cfg.paperWidth || '80mm', this._cfg);
+      for (const [t, fn] of Object.entries(this._customDocTypes))
+        this._renderer.register(t, fn);
+    }
+    return this._renderer;
+  }
+
+  /* ── Custom doc type registration ───────────────────────── */
+  registerDocType (docType, renderFn) {
+    this._customDocTypes[String(docType)] = renderFn;
+    this._renderer = null;
+    return this;
+  }
   setCapabilities (u) { Object.assign(this._profile, u); this._saveProfile(); return this; }
   getCapabilities ()  { return { ...this._profile }; }
 
@@ -1192,7 +1343,7 @@ class SPEngine {
 
   async printNow (docType, data, options = {}) {
     if (!this.connected) throw Object.assign(new Error('No printer connected'), { code: PRINTER_ERRORS.OFFLINE });
-    const renderer = new ReceiptRenderer(this._cfg.paperWidth || '80mm', this._cfg);
+    const renderer = this._getRenderer();
     const copies = options.copies || this._cfg.copies || 1;
     for (let c = 0; c < copies; c++) {
       await this._writeRender(renderer, docType, data);
@@ -1226,6 +1377,15 @@ class SPEngine {
   }
 
   async _writeRender (renderer, docType, data) {
+    /* Pre-load logo raster if configured and not already in data */
+    const logoUrl = data.logoUrl || this._cfg.logoUrl;
+    if (logoUrl && !data._logoRaster && typeof document !== 'undefined') {
+      try {
+        const paper = PAPER[this._cfg.paperWidth || '80mm'];
+        data = { ...data, _logoRaster: await _imgToRasterCached(logoUrl, paper.px, this._cfg.imageThreshold || 128) };
+      } catch(e) { /* logo load failed — fall back to text logo */ }
+    }
+
     const commands = renderer.render(docType, data);
     if (this._active?.type === 'browser') {
       const preview = renderer.previewHTML(docType, data);
@@ -1245,7 +1405,7 @@ class SPEngine {
     this._busy = true;
     this._queue.markProcessing(job);
     job.attempts++;
-    const renderer = new ReceiptRenderer(this._cfg.paperWidth || '80mm', this._cfg);
+    const renderer = this._getRenderer();
     (async () => {
       for (let c = 0; c < job.copies; c++) {
         await this._writeRender(renderer, job.docType, job.data);
@@ -1253,11 +1413,16 @@ class SPEngine {
       }
       this._queue.markDone(job);
       this.emit('printed', job);
+      this._waiters[job.id]?.resolve(job); delete this._waiters[job.id];
     })()
     .catch(err => {
       const code = err.code || PRINTER_ERRORS.UNKNOWN;
       this._queue.markFailed(job, err.message);
       this.emit('error', { job, error: err.message, code });
+      if (job.status === 'failed') {
+        this._waiters[job.id]?.reject(Object.assign(new Error(err.message), { code }));
+        delete this._waiters[job.id];
+      }
     })
     .finally(() => {
       this._busy = false;
@@ -1265,18 +1430,60 @@ class SPEngine {
     });
   }
 
+  /* ── Dedicated QR / barcode printing ────────────────────── */
+  async printQR (data, options = {}) {
+    if (!this.connected) throw Object.assign(new Error('No printer connected'), { code: PRINTER_ERRORS.OFFLINE });
+    const size = options.size || 5;
+    const e = new ESCPOSEncoder().init().ac().lf();
+    if (options.label) e.text(options.label).lf();
+    e.qr(String(data), size).lf(2);
+    if (this._cfg.autoCut) e.cut();
+    await this._active.write(e.build());
+  }
+
+  async printBarcode (data, options = {}) {
+    if (!this.connected) throw Object.assign(new Error('No printer connected'), { code: PRINTER_ERRORS.OFFLINE });
+    const type   = options.type   || 73;
+    const height = options.height || 80;
+    const width  = options.width  || 2;
+    const e = new ESCPOSEncoder().init().ac().lf();
+    if (options.label) e.text(options.label).lf();
+    e.barcode(String(data), type, height, width).lf().text(String(data)).lf(2);
+    if (this._cfg.autoCut) e.cut();
+    await this._active.write(e.build());
+  }
+
+  /* ── waitForJob ──────────────────────────────────────────── */
+  waitForJob (id, timeoutMs = 30_000) {
+    const existing = this._queue.getJob(id);
+    if (existing?.status === 'done')      return Promise.resolve(existing);
+    if (existing?.status === 'failed')    return Promise.reject(new Error(existing.error || 'Job failed'));
+    if (existing?.status === 'cancelled') return Promise.reject(new Error('Job cancelled'));
+    return new Promise((resolve, reject) => {
+      this._waiters[id] = { resolve, reject };
+      setTimeout(() => {
+        if (this._waiters[id]) {
+          delete this._waiters[id];
+          reject(new Error('Print job timeout after ' + timeoutMs + 'ms'));
+        }
+      }, timeoutMs);
+    });
+  }
+
   /* ── Queue management ────────────────────────────────────── */
-  getQueue   () { return this._queue.jobs(); }
-  getHistory () { return this._queue.history(); }
-  cancelJob  (id) { this._queue.cancel(id); }
-  retryJob   (id) { this._queue.retry(id); }
-  pauseQueue ()   { this._queue.pause(); }
-  resumeQueue ()  { this._queue.resume(); }
+  getQueue    () { return this._queue.jobs(); }
+  getHistory  () { return this._queue.history(); }
+  getJob      (id) { return this._queue.getJob(id); }
+  cancelJob   (id) { this._queue.cancel(id); }
+  cancelAllJobs () { this._queue.cancelAll(); }
+  clearHistory ()  { this._queue.clearHistory(); }
+  retryJob    (id) { this._queue.retry(id); }
+  pauseQueue  ()   { this._queue.pause(); }
+  resumeQueue ()   { this._queue.resume(); }
 
   /* ── Preview ─────────────────────────────────────────────── */
   preview (docType, data) {
-    const r = new ReceiptRenderer(this._cfg.paperWidth || '80mm', this._cfg);
-    return r.previewHTML(docType, data);
+    return this._getRenderer().previewHTML(docType, data);
   }
 
   /* ── Test print ──────────────────────────────────────────── */
@@ -1332,14 +1539,23 @@ const api = {
   printNow:           (...a) => getInstance().printNow(...a),
   printRaw:           (...a) => getInstance().printRaw(...a),
   printImage:         (...a) => getInstance().printImage(...a),
+  printQR:            (...a) => getInstance().printQR(...a),
+  printBarcode:       (...a) => getInstance().printBarcode(...a),
   openCashDrawer:     (...a) => getInstance().openCashDrawer(...a),
   testPrint:          (...a) => getInstance().testPrint(...a),
   preview:            (...a) => getInstance().preview(...a),
 
+  /* Extensibility */
+  registerDocType:    (...a) => getInstance().registerDocType(...a),
+
   /* Queue */
   getQueue:           (...a) => getInstance().getQueue(...a),
   getHistory:         (...a) => getInstance().getHistory(...a),
+  getJob:             (...a) => getInstance().getJob(...a),
+  waitForJob:         (...a) => getInstance().waitForJob(...a),
   cancelJob:          (...a) => getInstance().cancelJob(...a),
+  cancelAllJobs:      (...a) => getInstance().cancelAllJobs(...a),
+  clearHistory:       (...a) => getInstance().clearHistory(...a),
   retryJob:           (...a) => getInstance().retryJob(...a),
   pauseQueue:         (...a) => getInstance().pauseQueue(...a),
   resumeQueue:        (...a) => getInstance().resumeQueue(...a),

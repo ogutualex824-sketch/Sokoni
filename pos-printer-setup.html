@@ -302,10 +302,16 @@ input:checked+.slider:before{transform:translateX(18px)}
         <div class="form-group">
           <label>Paper Width</label>
           <select id="cfgPaperWidth">
-            <option value="58mm">58mm</option>
-            <option value="76mm">76mm</option>
-            <option value="80mm">80mm</option>
+            <option value="58mm">58mm (32 chars)</option>
+            <option value="76mm">76mm (42 chars)</option>
+            <option value="80mm">80mm (48 chars)</option>
           </select>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group">
+          <label>Logo Image URL <span style="font-size:10px;color:var(--sub)">(https:// — raster-printed above business name)</span></label>
+          <input id="cfgLogoUrl" type="url" placeholder="https://cdn.example.com/logo.png" maxlength="512">
         </div>
       </div>
       <div class="form-row single">
@@ -342,6 +348,14 @@ input:checked+.slider:before{transform:translateX(18px)}
         <label class="toggle"><input type="checkbox" id="cfgAutoPrint"><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Auto-print after payment confirmation</div><div class="t-sub">Fires when M-PESA or card payment is verified</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgAutoPrintPayment"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Show receipt preview before printing</div><div class="t-sub">Display on-screen preview for merchant to review</div></div>
+        <label class="toggle"><input type="checkbox" id="cfgShowPreview"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
         <div class="toggle-info"><div class="t-label">Show platform commission on receipt</div><div class="t-sub">Displays SOKONI platform fee row</div></div>
         <label class="toggle"><input type="checkbox" id="cfgCommission"><span class="slider"></span></label>
       </div>
@@ -354,6 +368,22 @@ input:checked+.slider:before{transform:translateX(18px)}
             <option value="3">3 copies</option>
           </select>
         </div>
+        <div class="form-group">
+          <label>Character Encoding</label>
+          <select id="cfgEncoding">
+            <option value="PC437">PC437 (Default / Latin)</option>
+            <option value="PC850">PC850 (Western Europe)</option>
+            <option value="PC858">PC858 (Euro symbol)</option>
+            <option value="UTF8">UTF-8 (Unicode — if supported)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:4px">
+        <div class="form-group">
+          <label>Print Density <span id="densityVal" style="color:var(--acc2);font-weight:700">0</span></label>
+          <input type="range" id="cfgDensity" min="-3" max="3" step="1" value="0" style="width:100%;accent-color:var(--acc)" oninput="document.getElementById('densityVal').textContent=this.value">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--sub);margin-top:2px"><span>Lighter</span><span>Default</span><span>Darker</span></div>
+        </div>
       </div>
     </div>
   </div>
@@ -361,7 +391,7 @@ input:checked+.slider:before{transform:translateX(18px)}
   <div class="actions-row">
     <button class="btn btn-primary" onclick="saveConfig()">Save Configuration</button>
     <button class="btn btn-outline" onclick="loadConfig()">Reset</button>
-    <button class="btn btn-outline" onclick="syncConfigToCloud()">Sync to Cloud</button>
+    <button class="btn btn-outline" onclick="syncConfigToCloud()">&#9729; Sync to Cloud</button>
   </div>
 </div>
 
@@ -709,28 +739,39 @@ async function testDoc (docType) {
 /* ── Configuration ── */
 function loadConfig () {
   const c = SokoniPrinter.getConfig();
-  document.getElementById('cfgLogoText').value   = c.logoText || '';
-  document.getElementById('cfgFooter').value     = c.footer   || '';
-  document.getElementById('cfgPromo').value      = c.promoMessage || '';
-  document.getElementById('cfgReturn').value     = c.returnPolicy || '';
-  document.getElementById('cfgPaperWidth').value = c.paperWidth || '80mm';
-  document.getElementById('cfgCopies').value     = String(c.copies || 1);
-  document.getElementById('cfgAutoCut').checked  = !!c.autoCut;
-  document.getElementById('cfgAutoPrint').checked= !!c.autoPrintOnSale;
-  document.getElementById('cfgCommission').checked=!!c.showCommission;
+  document.getElementById('cfgLogoText').value          = c.logoText || '';
+  document.getElementById('cfgLogoUrl').value           = c.logoUrl  || '';
+  document.getElementById('cfgFooter').value            = c.footer   || '';
+  document.getElementById('cfgPromo').value             = c.promoMessage || '';
+  document.getElementById('cfgReturn').value            = c.returnPolicy || '';
+  document.getElementById('cfgPaperWidth').value        = c.paperWidth || '80mm';
+  document.getElementById('cfgCopies').value            = String(c.copies || 1);
+  document.getElementById('cfgEncoding').value          = c.encoding  || 'PC437';
+  document.getElementById('cfgDensity').value           = String(c.printDensity ?? 0);
+  document.getElementById('densityVal').textContent     = String(c.printDensity ?? 0);
+  document.getElementById('cfgAutoCut').checked         = !!c.autoCut;
+  document.getElementById('cfgAutoPrint').checked       = !!c.autoPrintOnSale;
+  document.getElementById('cfgAutoPrintPayment').checked= !!c.autoPrintAfterPayment;
+  document.getElementById('cfgShowPreview').checked     = !!c.showPreview;
+  document.getElementById('cfgCommission').checked      = !!c.showCommission;
 }
 
 function saveConfig () {
   SokoniPrinter.setConfig({
-    logoText:       document.getElementById('cfgLogoText').value.trim(),
-    footer:         document.getElementById('cfgFooter').value.trim(),
-    promoMessage:   document.getElementById('cfgPromo').value.trim(),
-    returnPolicy:   document.getElementById('cfgReturn').value.trim(),
-    paperWidth:     document.getElementById('cfgPaperWidth').value,
-    copies:         parseInt(document.getElementById('cfgCopies').value, 10),
-    autoCut:        document.getElementById('cfgAutoCut').checked,
-    autoPrintOnSale:document.getElementById('cfgAutoPrint').checked,
-    showCommission: document.getElementById('cfgCommission').checked,
+    logoText:              document.getElementById('cfgLogoText').value.trim(),
+    logoUrl:               document.getElementById('cfgLogoUrl').value.trim(),
+    footer:                document.getElementById('cfgFooter').value.trim(),
+    promoMessage:          document.getElementById('cfgPromo').value.trim(),
+    returnPolicy:          document.getElementById('cfgReturn').value.trim(),
+    paperWidth:            document.getElementById('cfgPaperWidth').value,
+    copies:                parseInt(document.getElementById('cfgCopies').value, 10),
+    encoding:              document.getElementById('cfgEncoding').value,
+    printDensity:          parseInt(document.getElementById('cfgDensity').value, 10),
+    autoCut:               document.getElementById('cfgAutoCut').checked,
+    autoPrintOnSale:       document.getElementById('cfgAutoPrint').checked,
+    autoPrintAfterPayment: document.getElementById('cfgAutoPrintPayment').checked,
+    showPreview:           document.getElementById('cfgShowPreview').checked,
+    showCommission:        document.getElementById('cfgCommission').checked,
   });
   toast('Configuration saved');
 }
