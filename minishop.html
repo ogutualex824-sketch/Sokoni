@@ -1,23 +1,23 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
   <script src="security.js"></script>
-  <script src="shared-header.js"></script>
+  <script src="shared-header.js" data-no-header="true"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Primary meta -->
-  <title>SOKONI MiniShop</title>
+  <title>Shop on SOKONI</title>
   <meta name="description" content="Shop directly from verified sellers on SOKONI — Kenya's #1 marketplace.">
   <meta name="robots" content="index, follow">
 
   <!-- Canonical (updated by JS) -->
   <link rel="canonical" href="https://mysokoni.co.ke">
 
-  <!-- Open Graph -->
+  <!-- Open Graph (static placeholders — CF edge overrides per shop) -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="SOKONI">
-  <meta property="og:title" content="SOKONI MiniShop">
+  <meta property="og:title" content="Shop on SOKONI">
   <meta property="og:description" content="Shop directly from verified sellers on SOKONI — Kenya's #1 marketplace.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
   <meta property="og:image:width" content="1200">
@@ -27,14 +27,14 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@mysokoni">
-  <meta name="twitter:title" content="SOKONI MiniShop">
+  <meta name="twitter:title" content="Shop on SOKONI">
   <meta name="twitter:description" content="Shop directly from verified sellers on SOKONI — Kenya's #1 marketplace.">
   <meta name="twitter:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
 
   <!-- PWA / Icons -->
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
-  <meta name="theme-color" content="#00bcd4">
+  <meta name="theme-color" content="#71ff00">
 
   <!-- Schema.org structured data placeholder — populated by sokoni-minishop.js -->
   <script type="application/ld+json" id="ms-schema">{}</script>
@@ -43,88 +43,112 @@
 </head>
 <body class="ms-body">
 
-<!-- Campaign banner (hidden until data loads) -->
-<div id="ms-campaign-banner" class="ms-campaign-banner" hidden></div>
-
-<!-- Announcement -->
-<div id="ms-announcement" class="ms-announcement" hidden></div>
-
-<!-- Skeleton (visible immediately) -->
+<!-- ═══════════════════════════════════════════
+     SKELETON LOADER  (visible immediately)
+     Three blocks: cover · identity · products
+═══════════════════════════════════════════ -->
 <div id="ms-skeleton" class="ms-skeleton">
-  <div class="ms-sk-cover"></div>
-  <div class="ms-sk-header"></div>
-  <div class="ms-sk-grid">
-    <div class="ms-sk-card"></div>
-    <div class="ms-sk-card"></div>
-    <div class="ms-sk-card"></div>
-    <div class="ms-sk-card"></div>
-  </div>
+  <div class="ms-skel-block ms-skel-cover ms-skel-anim"></div>
+  <div class="ms-skel-block ms-skel-identity ms-skel-anim"></div>
+  <div class="ms-skel-block ms-skel-products ms-skel-anim"></div>
 </div>
 
-<!-- Main app (hidden until loaded) -->
+<!-- ═══════════════════════════════════════════
+     MAIN APP  (hidden until load, then revealed)
+═══════════════════════════════════════════ -->
 <div id="ms-app" class="ms-app" hidden>
 
-  <!-- HERO -->
-  <div class="ms-hero">
-    <div class="ms-cover" id="msCover">
+  <!-- ── Announcement banner ─────────────────── -->
+  <div id="ms-announcement" class="ms-announcement" hidden></div>
+
+  <!-- ── Campaign banner ─────────────────────── -->
+  <div id="ms-campaign-banner" class="ms-campaign-banner" hidden></div>
+
+  <!-- ══ HERO SECTION ══════════════════════════ -->
+  <section class="ms-hero">
+
+    <!-- Cover image (JS sets background-image) -->
+    <div id="msCover" class="ms-cover">
       <div class="ms-cover-gradient"></div>
-      <div class="ms-hero-actions">
-        <button class="ms-share-trigger" onclick="SokoniMiniShop.toggleSharePanel()" aria-label="Share">&#x21a1; Share</button>
-        <button class="ms-follow-btn ms-follow-hero" id="msFollowBtn" onclick="SokoniMiniShop.toggleFollow()">+ Follow</button>
-      </div>
-    </div>
-    <img class="ms-avatar" id="msLogo" src="" alt="" loading="lazy">
-  </div>
-
-  <!-- SHOP IDENTITY CARD -->
-  <div class="ms-identity-card">
-    <div class="ms-identity-top">
-      <div class="ms-name-row">
-        <h1 id="msShopName" class="ms-shop-name">Shop Name</h1>
-        <span class="ms-verified-badge" id="msVerified" hidden>&#x2713; Verified</span>
-      </div>
-      <p id="msTagline" class="ms-tagline"></p>
-      <div class="ms-stats-bar" id="msStatsBar">
-        <span id="msRating" class="ms-stat-rating"></span>
-        <span class="ms-stat-div">&#xB7;</span>
-        <span id="msCategory" class="ms-stat-cat"></span>
-        <span class="ms-stat-div">&#xB7;</span>
-        <span id="msLocation" class="ms-stat-loc"></span>
-        <span class="ms-stat-div">&#xB7;</span>
-        <span id="msStatus" class="ms-stat-status"></span>
-      </div>
-      <div class="ms-trust-bar" id="msTrustBar"></div>
     </div>
 
-    <!-- Smart CTA strip -->
-    <div class="ms-smart-cta" id="msSmartCta"></div>
+    <!-- Identity card -->
+    <div class="ms-identity-card">
+
+      <!-- Logo frame -->
+      <div class="ms-logo-frame">
+        <img id="msLogo" class="ms-logo-img" src="" alt="" loading="lazy">
+        <div id="msLogoPlaceholder" class="ms-logo-placeholder"></div>
+        <span id="msVerified" class="ms-verified-badge" hidden>&#x2713;</span>
+      </div>
+
+      <!-- Shop text info -->
+      <div class="ms-shop-info">
+        <h1 id="msShopName" class="ms-shop-name"></h1>
+        <div id="msShopCategory" class="ms-shop-cat"></div>
+        <div id="msShopTagline" class="ms-shop-tagline"></div>
+      </div>
+
+    </div><!-- /.ms-identity-card -->
+  </section><!-- /.ms-hero -->
+
+  <!-- ══ TRUST STRIP ════════════════════════════ -->
+  <div class="ms-trust-strip">
+    <div class="ms-trust-rating">
+      <span id="msRating">&#x2014;</span>
+      <span class="ms-stars-label">stars</span>
+      <div id="msRatingStars" class="ms-rating-stars"></div>
+      <span id="msReviewCount" class="ms-review-count"></span>
+    </div>
+    <div class="ms-trust-div" aria-hidden="true"></div>
+    <div id="msOpenStatus" class="ms-open-status" hidden></div>
+    <div class="ms-trust-div" aria-hidden="true"></div>
+    <div id="msResponseBadge" class="ms-response-badge" hidden></div>
   </div>
 
-  <!-- SHARE PANEL (slide-up) -->
-  <div class="ms-share-panel" id="msSharePanel" hidden>
-    <div class="ms-share-panel-inner">
-      <div class="ms-share-header">
-        <span>Share This Shop</span>
-        <button onclick="SokoniMiniShop.toggleSharePanel()">&#x2715;</button>
-      </div>
-      <div class="ms-share-grid" id="msShareGrid"></div>
-      <div class="ms-share-url-row">
-        <input type="text" id="msShareUrl" readonly>
-        <button onclick="SokoniMiniShop.copyLink()">Copy</button>
-      </div>
+  <!-- ══ STATS BAR ══════════════════════════════ -->
+  <div class="ms-stats-bar">
+    <div class="ms-stat-item">
+      <span id="msFollowerCount" class="ms-stat-num">0</span>
+      <span class="ms-stat-label">Followers</span>
+    </div>
+    <div class="ms-stat-item">
+      <span id="msProductCount" class="ms-stat-num">0</span>
+      <span class="ms-stat-label">Products</span>
+    </div>
+    <div id="msYearsStat" class="ms-stat-item" hidden>
+      <span id="msYearsActive" class="ms-stat-num">0</span>
+      <span class="ms-stat-label">Yrs Active</span>
     </div>
   </div>
 
-  <!-- TABS -->
-  <div class="ms-tabs" id="msTabs">
-    <button class="ms-tab active" data-tab="store">Store</button>
-    <button class="ms-tab" data-tab="services">Services</button>
-    <button class="ms-tab" data-tab="reviews">Reviews</button>
-    <button class="ms-tab" data-tab="about">About</button>
+  <!-- ══ SMART CTA ══════════════════════════════ -->
+  <div id="msSmartCta" class="ms-smart-cta"></div>
+
+  <!-- ══ ACTION ROW ═════════════════════════════ -->
+  <div class="ms-action-row">
+    <button id="msFollowBtn" class="ms-follow-btn" onclick="SokoniMiniShop.toggleFollow()" aria-label="Follow this shop">
+      <span id="msFollowIcon">+</span>
+      <span id="msFollowLabel">Follow</span>
+    </button>
+    <button class="ms-action-btn" onclick="SokoniMiniShop.share()" aria-label="Share shop">
+      &#x21a1; Share
+    </button>
+    <button class="ms-action-btn" onclick="SokoniMiniShop.showQR()" aria-label="Show QR code">
+      &#x25A6; QR
+    </button>
   </div>
 
-  <!-- CATALOG TYPE FILTER -->
-  <div class="ms-catalog-filter" id="msCatalogFilter" hidden>
+  <!-- ══ TABS ═══════════════════════════════════ -->
+  <nav id="msTabs" class="ms-tabs" role="tablist" aria-label="Shop sections">
+    <button class="ms-tab active" data-tab="store" role="tab" aria-selected="true">Store</button>
+    <button class="ms-tab" data-tab="services" role="tab" aria-selected="false">Services</button>
+    <button class="ms-tab" data-tab="reviews" role="tab" aria-selected="false">Reviews</button>
+    <button class="ms-tab" data-tab="about" role="tab" aria-selected="false">About</button>
+  </nav>
+
+  <!-- ── Catalog type filter ─────────────────── -->
+  <div id="msCatalogFilter" class="ms-catalog-filter" hidden>
     <button class="ms-cat-btn active" data-cat="all">All</button>
     <button class="ms-cat-btn" data-cat="product">Products</button>
     <button class="ms-cat-btn" data-cat="service">Services</button>
@@ -133,139 +157,207 @@
     <button class="ms-cat-btn" data-cat="digital">Digital</button>
   </div>
 
-  <!-- STORE TAB -->
-  <div id="msStore" class="ms-tab-content active">
+  <!-- ══ STORE TAB ══════════════════════════════ -->
+  <div id="msStore" class="ms-tab-content active" role="tabpanel">
 
-    <!-- Announcements section -->
-    <div class="ms-section" id="msAnnouncementsSection" hidden>
+    <!-- Announcements -->
+    <section id="msAnnouncementsSection" class="ms-section" hidden>
       <div class="ms-section-header">
         <span>&#x1F4E2; Announcements</span>
       </div>
-      <div class="ms-announce-list" id="msAnnounceList"></div>
-    </div>
+      <div id="msAnnounceList" class="ms-announce-list"></div>
+    </section>
 
-    <!-- Promotions section -->
-    <div class="ms-section" id="msPromotionsSection" hidden>
+    <!-- Promotions -->
+    <section id="msPromotionsSection" class="ms-section" hidden>
       <div class="ms-section-header">
-        <span>&#x1F525; Promotions</span>
+        <span>&#x1F525; Active Promotions</span>
       </div>
-      <div class="ms-promo-grid" id="msPromosGrid"></div>
-    </div>
+      <div id="msPromosGrid" class="ms-promo-grid"></div>
+    </section>
 
-    <!-- Best Sellers section -->
-    <div class="ms-section" id="msBestSellersSection" hidden>
+    <!-- Best Sellers -->
+    <section id="msBestSellersSection" class="ms-section" hidden>
       <div class="ms-section-header">
-        <span>&#x1F525; Best Sellers</span>
-        <a href="#" class="ms-see-all" id="msBestSellersAll" hidden>See all &#x2192;</a>
+        <span>&#x1F3C6; Best Sellers</span>
+        <a id="msBestSellersAll" class="ms-see-all" hidden>See all &#x2192;</a>
       </div>
-      <div class="ms-product-grid" id="msBestSellers"></div>
-    </div>
+      <div id="msBestSellers" class="ms-product-grid"></div>
+    </section>
 
-    <!-- New Arrivals section -->
-    <div class="ms-section" id="msNewArrivalsSection" hidden>
+    <!-- New Arrivals -->
+    <section id="msNewArrivalsSection" class="ms-section" hidden>
       <div class="ms-section-header">
         <span>&#x2728; New Arrivals</span>
-        <a href="#" class="ms-see-all" id="msNewArrivalsAll" hidden>See all &#x2192;</a>
+        <a id="msNewArrivalsAll" class="ms-see-all" hidden>See all &#x2192;</a>
       </div>
-      <div class="ms-product-grid" id="msNewArrivals"></div>
-    </div>
+      <div id="msNewArrivals" class="ms-product-grid"></div>
+    </section>
 
-    <!-- Today's Deals section -->
-    <div class="ms-section" id="msTodaysDealsSection" hidden>
+    <!-- Today's Deals -->
+    <section id="msTodaysDealsSection" class="ms-section" hidden>
       <div class="ms-section-header">
         <span>&#x26A1; Today's Deals</span>
       </div>
-      <div class="ms-product-grid ms-deals-grid" id="msTodaysDeals"></div>
-    </div>
+      <div id="msTodaysDeals" class="ms-product-grid ms-deals-grid"></div>
+    </section>
 
-    <!-- All Products / Trending section -->
-    <div class="ms-section" id="msAllProductsSection">
+    <!-- All Products -->
+    <section id="msAllProductsSection" class="ms-section">
       <div class="ms-section-header">
         <span id="msAllProductsTitle">&#x1F6CD; All Products</span>
-        <a href="#" class="ms-see-all" id="msAllProductsAll" hidden>See all &#x2192;</a>
+        <a id="msAllProductsAll" class="ms-see-all" hidden>See all &#x2192;</a>
       </div>
-      <div class="ms-product-grid" id="msProductGrid"></div>
+      <div id="msProductGrid" class="ms-product-grid"></div>
+    </section>
+
+  </div><!-- /#msStore -->
+
+  <!-- ══ SERVICES TAB ═══════════════════════════ -->
+  <div id="msServices" class="ms-tab-content" hidden role="tabpanel">
+    <section id="msServicesSection" class="ms-section">
+      <div id="msServicesList" class="ms-services-list"></div>
+    </section>
+  </div>
+
+  <!-- ══ REVIEWS TAB ════════════════════════════ -->
+  <div id="msReviews" class="ms-tab-content" hidden role="tabpanel">
+    <div id="msReviewSummary" class="ms-review-summary"></div>
+    <div id="msReviewList" class="ms-review-list"></div>
+  </div>
+
+  <!-- ══ ABOUT TAB (scaffolded — populated by JS) ══ -->
+  <div id="msAbout" class="ms-tab-content" hidden role="tabpanel">
+    <div id="msLocation" class="ms-about-block" hidden></div>
+    <div id="msHours" class="ms-about-block" hidden></div>
+    <div id="msDeliveryInfo" class="ms-about-block" hidden>
+      <div id="msDeliveryAreas"></div>
+      <div id="msDeliveryPolicy"></div>
     </div>
-
+    <div id="msPaymentMethods" class="ms-about-block ms-pm-row" hidden></div>
+    <div id="msSocialLinks" class="ms-about-block" hidden></div>
+    <div id="msTrustBar" class="ms-about-block" hidden></div>
   </div>
 
-  <!-- SERVICES TAB -->
-  <div id="msServices" class="ms-tab-content" hidden>
-    <div class="ms-section">
-      <div class="ms-services-list" id="msServicesList"></div>
-    </div>
-  </div>
-
-  <!-- REVIEWS TAB -->
-  <div id="msReviews" class="ms-tab-content" hidden>
-    <div class="ms-review-summary" id="msReviewSummary"></div>
-    <div class="ms-review-list" id="msReviewList"></div>
-  </div>
-
-  <!-- ABOUT TAB -->
-  <div id="msAbout" class="ms-tab-content" hidden>
-    <!-- populated by JS -->
-  </div>
-
-  <!-- BUSINESS CARD section -->
-  <div id="msBusinessCard" class="ms-business-card-section" hidden></div>
-
-  <!-- SIMILAR SHOPS section -->
-  <div class="ms-section" id="msSimilarSection" hidden>
+  <!-- ── Similar Shops ───────────────────────── -->
+  <section id="msSimilarSection" class="ms-section" hidden>
     <div class="ms-section-header">
       <span>&#x2728; Similar Businesses</span>
     </div>
-    <div class="ms-similar-grid" id="msSimilarGrid"></div>
-  </div>
+    <div id="msSimilarGrid" class="ms-similar-grid"></div>
+  </section>
 
-</div>
+  <!-- ── Digital Business Card ──────────────── -->
+  <div id="msBusinessCard" class="ms-bcard-section" hidden></div>
 
-<!-- NOT FOUND state -->
+</div><!-- /#ms-app -->
+
+<!-- ═══════════════════════════════════════════
+     NOT FOUND STATE
+═══════════════════════════════════════════ -->
 <div id="ms-not-found" class="ms-not-found" hidden>
   <div class="ms-nf-wrap">
     <div class="ms-nf-icon">&#x1F3EA;</div>
     <h2>Shop Not Found</h2>
     <p>This MiniShop doesn't exist yet on SOKONI.</p>
-    <a href="/" class="ms-btn-primary">Discover SOKONI</a>
+    <a href="/" class="ms-btn-primary">Back to SOKONI</a>
   </div>
 </div>
 
-<!-- QR MODAL -->
-<div class="ms-modal-overlay" id="msQrModal" hidden onclick="if(event.target===this)this.hidden=true">
-  <div class="ms-modal-box">
+<!-- ═══════════════════════════════════════════
+     SHARE PANEL OVERLAY
+═══════════════════════════════════════════ -->
+<div id="msSharePanel" class="ms-share-panel-overlay" hidden>
+  <div class="ms-share-panel-box" role="dialog" aria-label="Share this shop" aria-modal="true">
+
+    <div class="ms-share-panel-header">
+      <span class="ms-share-panel-title">Share This Shop</span>
+      <button class="ms-share-close" onclick="document.getElementById('msSharePanel').hidden=true" aria-label="Close share panel">&#x2715;</button>
+    </div>
+
+    <div class="ms-share-url-row">
+      <span id="msShareUrl" class="ms-share-url-text"></span>
+      <button class="ms-share-copy-btn" onclick="SokoniMiniShop.copyLink()">Copy</button>
+    </div>
+
+    <div class="ms-share-platforms">
+      <button class="ms-share-platform-btn" onclick="SokoniMiniShop.shareVia('whatsapp')" aria-label="Share on WhatsApp">
+        <span class="ms-share-icon">&#x1F4AC;</span>
+        <span class="ms-share-label">WhatsApp</span>
+      </button>
+      <button class="ms-share-platform-btn" onclick="SokoniMiniShop.shareVia('facebook')" aria-label="Share on Facebook">
+        <span class="ms-share-icon">&#x1F4D8;</span>
+        <span class="ms-share-label">Facebook</span>
+      </button>
+      <button class="ms-share-platform-btn" onclick="SokoniMiniShop.shareVia('twitter')" aria-label="Share on X">
+        <span class="ms-share-icon">&#x1F426;</span>
+        <span class="ms-share-label">X</span>
+      </button>
+      <button class="ms-share-platform-btn" onclick="SokoniMiniShop.shareVia('telegram')" aria-label="Share on Telegram">
+        <span class="ms-share-icon">&#x2708;&#xFE0F;</span>
+        <span class="ms-share-label">Telegram</span>
+      </button>
+      <button class="ms-share-platform-btn" onclick="SokoniMiniShop.copyLink()" aria-label="Copy link">
+        <span class="ms-share-icon">&#x1F4CB;</span>
+        <span class="ms-share-label">Copy</span>
+      </button>
+    </div>
+
+    <div class="ms-share-extra-actions">
+      <button class="ms-btn-outline" onclick="SokoniMiniShop.downloadQR()">&#x2B07; Download QR</button>
+      <button class="ms-btn-outline" onclick="SokoniMiniShop.printPoster()">&#x1F5A8; Print Poster</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     QR CODE MODAL
+═══════════════════════════════════════════ -->
+<div id="msQrModal" class="ms-modal-overlay" hidden onclick="if(event.target===this)this.hidden=true">
+  <div class="ms-modal-box" role="dialog" aria-label="QR Code" aria-modal="true">
+
     <div class="ms-modal-header">
       <h3>Scan to Visit</h3>
-      <button class="ms-modal-close" onclick="document.getElementById('msQrModal').hidden=true">&#x2715;</button>
+      <button class="ms-modal-close" onclick="document.getElementById('msQrModal').hidden=true" aria-label="Close QR modal">&#x2715;</button>
     </div>
+
     <div id="msQrCode" class="ms-qr-display"></div>
     <p id="msQrUrl" class="ms-qr-url"></p>
+
     <div class="ms-modal-actions">
-      <button onclick="SokoniMiniShop.downloadQR()" class="ms-btn-outline">&#x2B07; Download</button>
-      <button onclick="SokoniMiniShop.printPoster()" class="ms-btn-outline">&#x1F5A8; Print Poster</button>
+      <button class="ms-btn-outline" onclick="SokoniMiniShop.downloadQR()">&#x2B07; Download</button>
+      <button class="ms-btn-outline" onclick="SokoniMiniShop.printPoster()">&#x1F5A8; Print Poster</button>
     </div>
+
   </div>
 </div>
 
-<!-- WHATSAPP STATUS MODE OVERLAY (activated by ?mode=status URL param) -->
+<!-- ═══════════════════════════════════════════
+     WHATSAPP STATUS MODE OVERLAY
+     Activated by ?mode=status URL param
+═══════════════════════════════════════════ -->
 <div id="ms-status-mode" class="ms-status-mode" hidden>
-  <div class="ms-status-product" id="msStatusProduct"></div>
-  <div class="ms-status-actions" id="msStatusActions"></div>
+  <div id="msStatusProduct" class="ms-status-product"></div>
+  <div id="msStatusActions" class="ms-status-actions"></div>
   <div class="ms-status-footer">
     <span>Shop on <strong>SOKONI</strong></span>
   </div>
 </div>
 
-<!-- Toast container -->
-<div id="msToasts" class="ms-toast-container" aria-live="polite"></div>
+<!-- ═══════════════════════════════════════════
+     TOAST CONTAINER
+═══════════════════════════════════════════ -->
+<div id="msToasts" class="ms-toast-container" aria-live="polite" aria-atomic="false"></div>
 
-<!-- Firebase + MiniShop Engine -->
+<!-- ═══════════════════════════════════════════
+     SCRIPTS
+═══════════════════════════════════════════ -->
 <script src="/__/firebase/init.js"></script>
 <script src="sokoni-minishop.js"></script>
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
-    if (typeof SokoniMiniShop !== 'undefined') {
-      SokoniMiniShop.initPublic();
-    }
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof SokoniMiniShop !== 'undefined') SokoniMiniShop.initPublic();
   });
 </script>
 </body>

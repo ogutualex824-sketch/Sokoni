@@ -124,18 +124,39 @@ window.SokoniMiniShop = (() => {
   function _updateFollowBtn() {
     const btn = document.getElementById('msFollowBtn');
     if (!btn) return;
-    btn.textContent = _state.following ? '✓ Following' : '+ Follow';
+    const icon = document.getElementById('msFollowIcon');
+    const label = document.getElementById('msFollowLabel');
+    if (icon) icon.textContent = _state.following ? '✓' : '+';
+    if (label) label.textContent = _state.following ? 'Following' : 'Follow';
     btn.classList.toggle('ms-following', _state.following);
   }
 
   // ─── Trust Signals ───────────────────────────────────────────────────────────
   function _renderTrustSignals(shop, config) {
-    const pills = [];
-    if (shop.verified) pills.push({ cls: 'ms-trust-verified', text: '✓ Verified Business' });
-    if (shop.responseRate >= 80) pills.push({ cls: 'ms-trust-response', text: shop.responseRate + '% Response Rate' });
-    if (shop.rating >= 4) pills.push({ cls: 'ms-trust-rating', text: shop.rating + '★ Rated' });
-    pills.push({ cls: 'ms-trust-payment', text: '🔒 Secure Payments' });
-    return pills.map(p => '<span class="ms-trust-pill ' + p.cls + '">' + _esc(p.text) + '</span>').join('');
+    const items = [];
+    if (shop.verified) items.push('✅ Verified Business');
+    if (shop.responseRate >= 80) items.push('⚡ ' + shop.responseRate + '% Response Rate');
+    if (shop.rating >= 4) items.push('⭐ ' + Number(shop.rating).toFixed(1) + ' Star Rating');
+    if (shop.completionRate) items.push('✓ ' + shop.completionRate + '% Order Completion');
+    items.push('🔒 Secure Payments via IntaSend');
+    return items.map(t => '<div class="ms-trust-item">' + _esc(t) + '</div>').join('');
+  }
+
+  // ─── Open Status ─────────────────────────────────────────────────────────────
+  function _getOpenStatus(config) {
+    if (!config.hours) return null;
+    const now = new Date();
+    const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const day = days[now.getDay()];
+    const h = config.hours[day];
+    if (!h || h.closed) return { open: false, label: 'Closed' };
+    const [oh, om] = (h.open || '00:00').split(':').map(Number);
+    const [ch, cm] = (h.close || '23:59').split(':').map(Number);
+    const current = now.getHours() * 60 + now.getMinutes();
+    const openMin = oh * 60 + (om || 0);
+    const closeMin = ch * 60 + (cm || 0);
+    const isOpen = current >= openMin && current < closeMin;
+    return { open: isOpen, label: isOpen ? 'Open' : 'Closed', closeAt: h.close };
   }
 
   // ─── Smart CTA ───────────────────────────────────────────────────────────────
@@ -164,19 +185,21 @@ window.SokoniMiniShop = (() => {
     const sid = _state.shopId;
     const h = _state.handle;
     switch (action) {
-      case 'store':
-        const storeTab = document.getElementById('msTabStore');
+      case 'store': {
+        const storeTab = document.querySelector('#msTabs .ms-tab[data-tab="store"]');
         if (storeTab) storeTab.click();
-        else { const el = document.getElementById('msProductsSection'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }
+        else { const el = document.getElementById('msAllProductsSection'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }
         break;
+      }
       case 'order': location.href = 'checkout.html?shopId=' + sid; break;
       case 'book': location.href = 'venue-booking.html?shopId=' + sid; break;
       case 'chat': location.href = 'messages.html?shopId=' + sid; break;
       case 'call': location.href = 'tel:' + (_state.config.contactPhone || ''); break;
-      case 'menu':
-        const menuTab = document.getElementById('msTabStore');
+      case 'menu': {
+        const menuTab = document.querySelector('#msTabs .ms-tab[data-tab="store"]');
         if (menuTab) menuTab.click();
         break;
+      }
       default: break;
     }
   }
@@ -480,38 +503,85 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     const cover = document.getElementById('msCover');
     if (cover && config.coverUrl) cover.style.backgroundImage = 'url(' + _esc(config.coverUrl) + ')';
 
-    // Logo
-    const logo = document.getElementById('msLogo');
-    if (logo && (shop.logoUrl || config.logoUrl)) logo.src = _esc(shop.logoUrl || config.logoUrl);
+    // Logo + placeholder
+    const logoEl = document.getElementById('msLogo');
+    const logoPlaceholder = document.getElementById('msLogoPlaceholder');
+    const logoUrl = shop.logoUrl || config.logoUrl || '';
+    if (logoEl) { logoEl.src = logoUrl ? _esc(logoUrl) : ''; logoEl.hidden = !logoUrl; }
+    if (logoPlaceholder) { logoPlaceholder.textContent = (shop.name || 'S')[0].toUpperCase(); logoPlaceholder.hidden = !!logoUrl; }
 
     // Identity
     _setEl('msShopName', shop.name || '');
     _setEl('msShopCategory', shop.category || '');
     _setEl('msShopTagline', config.tagline || shop.description || '');
 
-    // Announcement
+    // Verified badge
+    if (shop.verified) {
+      const vbadge = document.getElementById('msVerified');
+      if (vbadge) vbadge.hidden = false;
+    }
+
+    // Open/closed status
+    const openStatus = _getOpenStatus(config);
+    if (openStatus) {
+      const osEl = document.getElementById('msOpenStatus');
+      if (osEl) {
+        osEl.textContent = openStatus.label;
+        osEl.className = 'ms-open-status ' + (openStatus.open ? 'open' : 'closed');
+        osEl.hidden = false;
+      }
+    }
+
+    // Response time badge
+    if (config.responseTime) {
+      const rbEl = document.getElementById('msResponseBadge');
+      if (rbEl) { rbEl.textContent = 'Replies in ' + config.responseTime; rbEl.hidden = false; }
+    }
+
+    // Rating stars
+    const rStarsEl = document.getElementById('msRatingStars');
+    if (rStarsEl && shop.rating) rStarsEl.textContent = _stars(shop.rating);
+
+    // Announcement banner
     if (config.announcement) {
-      const ann = document.getElementById('msAnnouncement');
+      const ann = document.getElementById('ms-announcement');
       if (ann) { ann.textContent = config.announcement; ann.hidden = false; }
     }
 
     // Stats bar
     _setEl('msFollowerCount', Number(shop.followerCount || 0).toLocaleString());
     _setEl('msProductCount', Number(totalProducts || products.length).toLocaleString());
-    _setEl('msRating', shop.rating ? shop.rating.toFixed(1) : '—');
-    _setEl('msReviewCount', Number(shop.reviewCount || (reviews && reviews.length) || 0).toLocaleString());
+    _setEl('msRating', shop.rating ? Number(shop.rating).toFixed(1) : '—');
+    _setEl('msReviewCount', '(' + Number(shop.reviewCount || (reviews && reviews.length) || 0).toLocaleString() + ' reviews)');
     _state.followerCount = shop.followerCount || 0;
 
-    // Trust signals
+    // Years active
+    const createdTs = shop.createdAt?._seconds || shop.createdAt?.seconds;
+    if (createdTs) {
+      const yrs = Math.floor((Date.now() / 1000 - createdTs) / (365.25 * 86400));
+      if (yrs >= 1) {
+        _setEl('msYearsActive', yrs);
+        const yStat = document.getElementById('msYearsStat');
+        if (yStat) yStat.hidden = false;
+      }
+    }
+
+    // Trust signals (in about tab)
     const trustBar = document.getElementById('msTrustBar');
-    if (trustBar) trustBar.innerHTML = _renderTrustSignals(shop, config);
+    if (trustBar) {
+      const trustHtml = _renderTrustSignals(shop, config);
+      if (trustHtml) {
+        trustBar.innerHTML = '<div class="ms-about-label">Trust &amp; Safety</div>' + trustHtml;
+        trustBar.hidden = false;
+      }
+    }
 
     // Smart CTA
     const ctaEl = document.getElementById('msSmartCta');
     if (ctaEl) {
       const ctas = _getSmartCta(shop.category || config.category || '');
-      ctaEl.innerHTML = ctas.map(c =>
-        '<button class="ms-cta-btn" onclick="SokoniMiniShop._ctaAction('' + c.action + '')">' + _esc(c.label) + '</button>'
+      ctaEl.innerHTML = ctas.map((c, i) =>
+        '<button class="' + (i === 0 ? 'ms-cta-primary' : 'ms-cta-secondary') + '" onclick="SokoniMiniShop._ctaAction(\'' + c.action + '\')">' + _esc(c.label) + '</button>'
       ).join('');
     }
 
@@ -528,15 +598,18 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
 
     // Services section
     if (services && services.length) {
-      const svcWrap = document.getElementById('msServicesSection');
-      if (svcWrap) {
-        svcWrap.hidden = false;
-        const grid = svcWrap.querySelector('.ms-svc-grid');
-        if (grid) grid.innerHTML = services.map(s => `<div class="ms-svc-card">
-  ${s.imageUrl ? '<img class="ms-svc-img" src="' + _esc(s.imageUrl) + '" alt="' + _esc(s.name) + '">' : ''}
-  <div class="ms-svc-name">${_esc(s.name)}</div>
-  <div class="ms-svc-price">KES ${Number(s.price || 0).toLocaleString()}</div>
-  <button class="ms-svc-book" onclick="location.href='venue-booking.html?shopId=${_esc(_state.shopId)}&serviceId=${_esc(s.id)}'">Book</button>
+      const svcList = document.getElementById('msServicesList');
+      if (svcList) {
+        const svcSection = document.getElementById('msServicesSection');
+        if (svcSection) svcSection.hidden = false;
+        svcList.innerHTML = services.map(s => `<div class="ms-service-card" onclick="location.href='venue-booking.html?shopId=${_esc(_state.shopId)}&serviceId=${_esc(s.id)}'">
+  ${s.imageUrl ? '<img class="ms-service-img" src="' + _esc(s.imageUrl) + '" alt="' + _esc(s.name) + '" loading="lazy">' : '<div class="ms-service-img" style="background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:28px;">⚡</div>'}
+  <div class="ms-service-body">
+    <div class="ms-service-name">${_esc(s.name)}</div>
+    <div class="ms-service-desc">${_esc(s.description || '')}</div>
+    <div class="ms-service-price">KES ${Number(s.price || 0).toLocaleString()}</div>
+  </div>
+  <button class="ms-service-book" onclick="event.stopPropagation();location.href='venue-booking.html?shopId=${_esc(_state.shopId)}&serviceId=${_esc(s.id)}'">Book</button>
 </div>`).join('');
       }
     }
@@ -545,42 +618,63 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     _renderReviewSummary(reviews, shop);
 
     // Hours
-    if (config.hours) {
-      const hoursEl = document.getElementById('msHours');
-      if (hoursEl) {
-        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        hoursEl.innerHTML = days.map(d => {
-          const h = config.hours[d.toLowerCase()] || config.hours[d];
-          if (!h || h.closed) return '<div class="ms-hour-row"><span>' + d + '</span><span>Closed</span></div>';
-          return '<div class="ms-hour-row"><span>' + d + '</span><span>' + _esc(h.open || '') + ' – ' + _esc(h.close || '') + '</span></div>';
-        }).join('');
+    // Location
+    if (shop.location || config.location) {
+      const locEl = document.getElementById('msLocation');
+      if (locEl) {
+        locEl.innerHTML = '<div class="ms-about-label">Location</div><div class="ms-about-value">📍 ' + _esc(shop.location || config.location) + '</div>';
+        locEl.hidden = false;
       }
     }
 
-    // Social links
+    // Business hours
+    if (config.hours) {
+      const hoursEl = document.getElementById('msHours');
+      if (hoursEl) {
+        const days = [
+          { key: 'mon', label: 'Mon' }, { key: 'tue', label: 'Tue' },
+          { key: 'wed', label: 'Wed' }, { key: 'thu', label: 'Thu' },
+          { key: 'fri', label: 'Fri' }, { key: 'sat', label: 'Sat' },
+          { key: 'sun', label: 'Sun' }
+        ];
+        hoursEl.innerHTML = '<div class="ms-about-label">Business Hours</div>' + days.map(d => {
+          const h = config.hours[d.key] || config.hours[d.label];
+          if (!h || h.closed) return '<div class="ms-hour-row"><span>' + d.label + '</span><span style="color:#555">Closed</span></div>';
+          return '<div class="ms-hour-row"><span>' + d.label + '</span><span>' + _esc(h.open || '') + ' – ' + _esc(h.close || '') + '</span></div>';
+        }).join('');
+        hoursEl.hidden = false;
+      }
+    }
+
+    // Social & contact links
     const socials = config.socialLinks || {};
     const socialItems = [
-      { key: 'whatsapp', icon: '📱', base: 'https://wa.me/' },
-      { key: 'instagram', icon: '📸', base: 'https://instagram.com/' },
-      { key: 'facebook', icon: '👤', base: 'https://facebook.com/' },
-      { key: 'tiktok', icon: '🎵', base: 'https://tiktok.com/@' },
-      { key: 'twitter', icon: '🐦', base: 'https://x.com/' },
-      { key: 'youtube', icon: '▶', base: 'https://youtube.com/' },
-      { key: 'website', icon: '🌐', base: '' }
+      { key: 'whatsapp', icon: '💬', label: 'WhatsApp', base: 'https://wa.me/' },
+      { key: 'instagram', icon: '📸', label: 'Instagram', base: 'https://instagram.com/' },
+      { key: 'facebook', icon: '👍', label: 'Facebook', base: 'https://facebook.com/' },
+      { key: 'tiktok', icon: '🎵', label: 'TikTok', base: 'https://tiktok.com/@' },
+      { key: 'twitter', icon: '🐦', label: 'X', base: 'https://x.com/' },
+      { key: 'youtube', icon: '▶', label: 'YouTube', base: 'https://youtube.com/' },
+      { key: 'website', icon: '🌐', label: 'Website', base: '' }
     ];
-    const socEl = document.getElementById('msSocials');
+    const socEl = document.getElementById('msSocialLinks');
     if (socEl) {
       const links = socialItems.filter(s => socials[s.key]).map(s =>
-        '<a href="' + _esc(s.base + socials[s.key]) + '" target="_blank" rel="noopener" class="ms-social-link">' + s.icon + ' ' + _esc(s.key) + '</a>'
+        '<a href="' + _esc(s.base + socials[s.key]) + '" target="_blank" rel="noopener" class="ms-social-link">' + s.icon + ' ' + _esc(s.label) + '</a>'
       ).join('');
-      socEl.innerHTML = links || '';
-      socEl.hidden = !links;
+      if (links) {
+        socEl.innerHTML = '<div class="ms-about-label">Social &amp; Contact</div><div class="ms-social-links-row">' + links + '</div>';
+        socEl.hidden = false;
+      }
     }
 
     // Payment methods
     if (config.paymentMethods && config.paymentMethods.length) {
       const pmEl = document.getElementById('msPaymentMethods');
-      if (pmEl) pmEl.innerHTML = config.paymentMethods.map(m => '<span class="ms-pm-badge">' + _esc(m) + '</span>').join('');
+      if (pmEl) {
+        pmEl.innerHTML = '<div class="ms-about-label">Payment Methods</div>' + config.paymentMethods.map(m => '<span class="ms-pm-badge">' + _esc(m) + '</span>').join('');
+        pmEl.hidden = false;
+      }
     }
 
     // Delivery info
@@ -588,8 +682,10 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
       const dlEl = document.getElementById('msDeliveryInfo');
       if (dlEl) {
         dlEl.hidden = false;
-        if (config.deliveryAreas) _setEl('msDeliveryAreas', config.deliveryAreas);
-        if (config.deliveryPolicy) _setEl('msDeliveryPolicy', config.deliveryPolicy);
+        const areasEl = document.getElementById('msDeliveryAreas');
+        if (areasEl && config.deliveryAreas) areasEl.innerHTML = '<div class="ms-about-label">Delivery Areas</div><div class="ms-about-value">' + _esc(config.deliveryAreas) + '</div>';
+        const policyEl = document.getElementById('msDeliveryPolicy');
+        if (policyEl && config.deliveryPolicy) policyEl.innerHTML = '<div class="ms-about-label">Delivery Policy</div><div class="ms-about-value">' + _esc(config.deliveryPolicy) + '</div>';
       }
     }
 
@@ -900,22 +996,31 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
       '<span class="ms-share-label">' + p.label + '</span></a>'
     ).join('');
   }
-  function share(platform) {
+  function share() {
+    const panel = document.getElementById('msSharePanel');
+    if (!panel) { copyLink(); return; }
+    const shareUrlEl = document.getElementById('msShareUrl');
+    if (shareUrlEl) shareUrlEl.textContent = _state.shopUrl || location.href;
+    panel.hidden = false;
+  }
+  function shareVia(platform) {
     const url = _state.shopUrl || location.href;
     const text = encodeURIComponent((_state.shop.name || 'Check this out') + ' on SOKONI');
     const enc = encodeURIComponent(url);
     const targets = {
       whatsapp: 'https://wa.me/?text=' + text + '%20' + enc,
       facebook: 'https://www.facebook.com/sharer/sharer.php?u=' + enc,
-      x: 'https://x.com/intent/tweet?url=' + enc + '&text=' + text,
+      twitter: 'https://x.com/intent/tweet?url=' + enc + '&text=' + text,
       telegram: 'https://t.me/share/url?url=' + enc + '&text=' + text,
-      linkedin: 'https://www.linkedin.com/sharing/share-offsite/?url=' + enc,
-      instagram: null
+      linkedin: 'https://www.linkedin.com/sharing/share-offsite/?url=' + enc
     };
-    if (platform === 'instagram' || platform === 'qr') { if (platform === 'qr') showQR(); else { copyLink(); _toast('Link copied — paste in Instagram bio', 'info'); } return; }
+    if (platform === 'instagram') { copyLink(); _toast('Link copied — paste in Instagram bio', 'info'); return; }
+    if (platform === 'qr') { showQR(); return; }
     const target = targets[platform];
     if (target) window.open(target, '_blank', 'width=600,height=450');
     else { copyLink(); }
+    const panel = document.getElementById('msSharePanel');
+    if (panel) panel.hidden = true;
   }
   function copyLink() {
     const url = _state.shopUrl || location.href;
@@ -950,9 +1055,13 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
   function showQR() {
     const modal = document.getElementById('msQrModal');
     const url = _state.shopUrl || location.href;
-    const qrImg = document.getElementById('msQrImg');
-    if (qrImg) qrImg.src = _qrUrl(url);
+    const qrDisplay = document.getElementById('msQrCode');
+    if (qrDisplay) qrDisplay.innerHTML = '<img src="' + _qrUrl(url) + '" alt="QR Code" style="width:100%;height:100%;object-fit:contain;border-radius:8px;">';
+    const qrUrlEl = document.getElementById('msQrUrl');
+    if (qrUrlEl) qrUrlEl.textContent = url;
     if (modal) modal.hidden = false;
+    const sharePanel = document.getElementById('msSharePanel');
+    if (sharePanel) sharePanel.hidden = true;
   }
   function downloadQR() {
     const url = _state.shopUrl || location.href;
@@ -1241,6 +1350,7 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
     initPublic,
     initAdmin,
     share,
+    shareVia,
     copyLink,
     toggleSharePanel,
     showQR,
