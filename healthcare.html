@@ -767,6 +767,7 @@ const PROVIDERS = [
 
 let activeCat = '';
 let apptTarget = null;
+let _apptId = null;
 
 /* healthcare.html manages its own provider access via the page UI */
 
@@ -863,11 +864,13 @@ function _showApptForm(id, name){
   const today = new Date().toISOString().split("T")[0];
   document.getElementById("apptDate").min = today;
   document.getElementById("apptDate").value = today;
+  _apptId = "APT" + Date.now();
   document.getElementById("apptModal").style.display="flex";
 }
-function closeAppt(){ document.getElementById("apptModal").style.display="none"; }
+function closeAppt(){ _apptId=null; const _cb=document.querySelector('#apptModal .modal-btn'); if(_cb){_cb.disabled=false;_cb.textContent='📅 Confirm Booking';} document.getElementById("apptModal").style.display="none"; }
 
 function submitAppt(){
+  if(!_apptId) _apptId = "APT" + Date.now();
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('hc_appt', 10, 300000)){
     (window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.'); return;
   }
@@ -878,7 +881,9 @@ function submitAppt(){
   const time  = document.getElementById("apptTime").value;
   if(!name||!phone||!svc||!date){ (window._skToast||alert)("Please fill all required fields."); return; }
 
-  const apptId = "APT"+Date.now();
+  const btn = document.querySelector('#apptModal .modal-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Booking...'; }
+  const apptId = _apptId || ("APT" + Date.now());
   const appt = { id:apptId, providerId:apptTarget?.id, providerName:apptTarget?.name, patientName:name, phone, service:svc, date, time, notes:document.getElementById("apptNotes").value, status:"confirmed", createdAt:new Date().toLocaleDateString() };
 
   function _finalise(method){
@@ -903,7 +908,7 @@ function submitAppt(){
       sellerName: apptTarget.name,
       description: svc + ' Consultation',
       onSuccess: r => _finalise('M-Pesa · '+(r.mpesaCode||'')),
-      onFailure: reason => { if(reason !== 'cancelled' && reason !== 'timeout') _finalise('Pending Payment'); }
+      onFailure: reason => { if(btn){ btn.disabled = false; btn.textContent = '📅 Confirm Booking'; } if(reason !== 'cancelled' && reason !== 'timeout') _finalise('Pending Payment'); }
     });
     return;
   }
@@ -1256,6 +1261,7 @@ const SPECIALISTS = [
 ];
 
 let _activeSpecType = 'all';
+let _tcRef = null;
 function filterSpecialists(type, btn){
   _activeSpecType = type;
   document.querySelectorAll('#specTypeFilter .hc-tab-btn').forEach(b=>b.classList.remove('active'));
@@ -1337,6 +1343,7 @@ function startTCWith(name, fee){
 }
 
 function bookTeleconsult(){
+  if(!_tcRef) _tcRef = 'TC' + Date.now();
   if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('hc_tc',5,300000)){(window._skToast||alert)('Too many attempts.');return;}
   const name=document.getElementById('tcName')?.value.trim();
   const phone=document.getElementById('tcPhone')?.value.trim();
@@ -1344,11 +1351,15 @@ function bookTeleconsult(){
   const date=document.getElementById('tcDate')?.value;
   const msgEl=document.getElementById('tcMsg');
   if(!name||!phone||!type||!date){if(msgEl){msgEl.textContent='⚠️ Fill all required fields';msgEl.style.color='#ff9800';}return;}
-  const ref='TC'+Date.now();
+  const tcBtn=document.querySelector('#hctabpanel-teleconsult .modal-btn');
+  if(tcBtn){tcBtn.disabled=true;tcBtn.textContent='⏳ Connecting...';}
+  const ref=_tcRef||('TC'+Date.now());
   const tc={ref,id:ref,patientName:name,phone,type,date,time:document.getElementById('tcTime')?.value,mode:document.getElementById('tcMode')?.value,symptoms:document.getElementById('tcSymptoms')?.value.trim(),createdAt:Date.now()};
   let tcs=[]; try{tcs=JSON.parse(localStorage.getItem('sokoniTeleconsults'))||[];}catch(e){}
   tcs.unshift(tc); localStorage.setItem('sokoniTeleconsults',JSON.stringify(tcs));
   if(window.SokoniHealth) SokoniHealth.saveAppointment({...tc,providerName:'Sokoni Teleconsult'}).catch(e=>console.warn('[HC] tc:',e.message));
+  _tcRef=null;
+  if(tcBtn){tcBtn.disabled=false;tcBtn.textContent='📱 Book Teleconsult & Pay via M-Pesa';}
   if(msgEl){msgEl.innerHTML=`✅ Booked! Ref: <strong style="color:#00c878;">${ref}</strong><br>A doctor will call ${phone} at your chosen time.`;msgEl.style.color='#00c878';}
 }
 

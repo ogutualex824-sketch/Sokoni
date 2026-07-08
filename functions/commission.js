@@ -503,14 +503,14 @@ exports.processSettlement = onCall(
     const FieldValue    = admin.firestore.FieldValue;
     const settlementRef = db.collection('settlements').doc(orderId);
 
-    /* Idempotency guard — fast pre-check before acquiring transaction */
-    const existing = await settlementRef.get();
-    if (existing.exists) {
-      logger.warn('[commission] processSettlement — duplicate blocked', { orderId });
-      throw new HttpsError('already-exists', `Settlement for order ${orderId} already processed`);
-    }
-
     await db.runTransaction(async (txn) => {
+      /* Idempotency guard inside transaction — prevents double-settlement under concurrency */
+      const existingSnap = await txn.get(settlementRef);
+      if (existingSnap.exists) {
+        logger.warn('[commission] processSettlement — duplicate blocked', { orderId });
+        throw new HttpsError('already-exists', 'Settlement already processed');
+      }
+
       const walletRef  = db.collection('wallets').doc(sellerId);
       const walletSnap = await txn.get(walletRef);
 
@@ -658,6 +658,11 @@ exports.approveWithdrawal = onCall(
     const { sellerId, amountCents } = wd;
 
     await db.runTransaction(async (txn) => {
+      /* Re-check status inside transaction — prevents double-approval under concurrency */
+      const wdSnap = await txn.get(withdrawalRef);
+      if (!wdSnap.exists || wdSnap.data().status !== 'pending') {
+        throw new HttpsError('failed-precondition', 'Withdrawal is no longer pending');
+      }
       txn.update(withdrawalRef, {
         status:           'approved',
         approvedBy:       uid,
@@ -713,6 +718,11 @@ exports.rejectWithdrawal = onCall(
     const { sellerId, amountCents } = wd;
 
     await db.runTransaction(async (txn) => {
+      /* Re-check status inside transaction — prevents double-rejection / double-balance-restore under concurrency */
+      const wdSnap = await txn.get(withdrawalRef);
+      if (!wdSnap.exists || wdSnap.data().status !== 'pending') {
+        throw new HttpsError('failed-precondition', 'Withdrawal is no longer pending');
+      }
       txn.update(withdrawalRef, {
         status:          'rejected',
         rejectedBy:      uid,

@@ -59,39 +59,50 @@ exports.createDispute = onCall({ enforceAppCheck: true }, async request => {
       throw new HttpsError('failed-precondition', 'Dispute window has closed (30 days)');
   }
 
-  // No duplicate open dispute
-  const existing = await db.collection('disputes').where('orderId', '==', orderId).get();
-  const hasDup = existing.docs.some(d => OPEN_STATUSES.includes(d.data().status));
-  if (hasDup) throw new HttpsError('already-exists', 'An open dispute already exists for this order');
+  // Deterministic doc ID prevents concurrent duplicates; check + create are atomic
+  const disputeRef = db.collection('disputes').doc('dp_' + orderId);
+  let isReplay = false;
+  let replayData = null;
 
-  const ref = await db.collection('disputes').add({
-    orderId,
-    buyerId:  uid,
-    sellerId: order.sellerId || order.vendorId || null,
-    reason,
-    description: _san(description.trim()),
-    amount:   order.total || order.amount || 0,
-    status:   'open',
-    resolution:       null,
-    resolutionAmount: null,
-    evidence:         [],
-    timeline:         [{ event: 'opened', actor: uid, actorRole: 'buyer', note: 'Dispute opened by buyer', ts: new Date().toISOString() }],
-    sellerResponse:   null,
-    sellerRespondedAt:null,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    resolvedAt:  null,
-    resolvedBy:  null,
-    adminNotes:  null,
-    orderSnapshot: {
-      status:         order.status,
-      deliveryStatus: order.deliveryStatus,
-      amount:         order.total || order.amount,
-      itemCount:      (order.items || []).length,
-    },
+  await db.runTransaction(async (txn) => {
+    const snap = await txn.get(disputeRef);
+    if (snap.exists) { isReplay = true; replayData = snap.data(); return; }
+
+    txn.set(disputeRef, {
+      orderId,
+      buyerId:  uid,
+      sellerId: order.sellerId || order.vendorId || null,
+      reason,
+      description: _san(description.trim()),
+      amount:   order.total || order.amount || 0,
+      status:   'open',
+      resolution:       null,
+      resolutionAmount: null,
+      evidence:         [],
+      timeline:         [{ event: 'opened', actor: uid, actorRole: 'buyer', note: 'Dispute opened by buyer', ts: new Date().toISOString() }],
+      sellerResponse:   null,
+      sellerRespondedAt:null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      resolvedAt:  null,
+      resolvedBy:  null,
+      adminNotes:  null,
+      orderSnapshot: {
+        status:         order.status,
+        deliveryStatus: order.deliveryStatus,
+        amount:         order.total || order.amount,
+        itemCount:      (order.items || []).length,
+      },
+    });
   });
 
-  return { disputeId: ref.id };
+  if (isReplay) {
+    if (OPEN_STATUSES.includes(replayData.status))
+      throw new HttpsError('already-exists', 'An open dispute already exists for this order');
+    return { disputeId: disputeRef.id, idempotent: true };
+  }
+
+  return { disputeId: disputeRef.id };
 });
 
 // ─── getMyDisputes — buyer's full dispute history ────────────────────────────

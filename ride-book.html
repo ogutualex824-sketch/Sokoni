@@ -188,6 +188,7 @@ async function _rbEstimate(){
 }
 
 async function _rbBook(){
+  if(!_rbRef) _rbRef = 'RIDE' + Date.now().toString(36).toUpperCase();
   var pickup  = document.getElementById('rbPickup').value.trim();
   var dropoff = document.getElementById('rbDropoff').value.trim();
   var phone   = document.getElementById('rbPhone').value.trim();
@@ -207,7 +208,6 @@ async function _rbBook(){
       if(route.error){ _rbMsg('Route error: '+route.error); btn.disabled=false; btn.textContent='ðŸ›µ Book Ride Now'; return; }
       _rbRouteData = route;
     }
-    _rbRef = 'RIDE' + Date.now().toString(36).toUpperCase();
     var u = null; try{ u = JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){}
     await SokoniDB.saveRideRequest({
       ref:           _rbRef,

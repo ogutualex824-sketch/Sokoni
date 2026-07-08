@@ -331,6 +331,7 @@
 
 <script>
 let selectedIssue = "";
+let _dspRef = null;
 
 /* Load orders into select */
 (function(){
@@ -356,55 +357,66 @@ function selectIssue(btn, type){
 }
 
 async function submitDispute(){
+  if (!_dspRef) _dspRef = "DSP" + Date.now().toString().slice(-6);
+  const btn = document.querySelector('.d-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Submitting...'; }
   /* Auth gate — uid must come from Firebase, not localStorage */
   var auth = window.firebaseAuth;
   if(!auth || !auth.currentUser){
+    if (btn) { btn.disabled = false; btn.textContent = '📨 Submit Dispute'; }
     (window._skToast||alert)('Please sign in to open a dispute.');
     window.location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
     return;
   }
 
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('dispute_submit', 5, 300000)){
+    if (btn) { btn.disabled = false; btn.textContent = '📨 Submit Dispute'; }
     (window._skToast||alert)('Too many dispute submissions. Please wait 5 minutes.'); return;
   }
   const orderId  = document.getElementById("disputeOrder").value;
   const desc     = document.getElementById("disputeDesc").value.trim();
   const contact  = document.getElementById("disputeContact").value.trim();
 
-  if(!orderId){ (window._skToast||alert)("Please select an order."); return; }
-  if(!selectedIssue){ (window._skToast||alert)("Please select an issue type."); return; }
-  if(!desc){ (window._skToast||alert)("Please describe the issue."); return; }
+  if(!orderId){ if (btn) { btn.disabled = false; btn.textContent = '📨 Submit Dispute'; } (window._skToast||alert)("Please select an order."); return; }
+  if(!selectedIssue){ if (btn) { btn.disabled = false; btn.textContent = '📨 Submit Dispute'; } (window._skToast||alert)("Please select an issue type."); return; }
+  if(!desc){ if (btn) { btn.disabled = false; btn.textContent = '📨 Submit Dispute'; } (window._skToast||alert)("Please describe the issue."); return; }
 
-  const ref = "DSP" + Date.now().toString().slice(-6);
+  const ref = _dspRef || ("DSP" + Date.now().toString().slice(-6));
 
-  /* Persist locally so history renders instantly */
-  const localEntry = {
-    id: ref, orderId, issue: selectedIssue,
-    description: desc.slice(0, 1000), contact: contact.slice(0, 100),
-    status: "open",
-    date: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
-    timestamp: Date.now(), response: null
-  };
-  let disputes = [];
-  try { disputes = JSON.parse(localStorage.getItem("sokoniDisputes"))||[]; } catch(e){}
-  disputes.unshift(localEntry);
-  localStorage.setItem("sokoniDisputes", JSON.stringify(disputes));
+  try {
+    /* Persist locally so history renders instantly */
+    const localEntry = {
+      id: ref, orderId, issue: selectedIssue,
+      description: desc.slice(0, 1000), contact: contact.slice(0, 100),
+      status: "open",
+      date: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
+      timestamp: Date.now(), response: null
+    };
+    let disputes = [];
+    try { disputes = JSON.parse(localStorage.getItem("sokoniDisputes"))||[]; } catch(e){}
+    disputes.unshift(localEntry);
+    localStorage.setItem("sokoniDisputes", JSON.stringify(disputes));
 
-  /* Write to Firestore via hardened SokoniDispute.open() */
-  if(window.SokoniDispute){
-    await window.SokoniDispute.open({
-      orderId:     orderId,
-      reason:      selectedIssue,
-      details:     desc.slice(0, 1000),
-      contact:     contact.slice(0, 100),
-      referenceId: ref
-    });
+    /* Write to Firestore via hardened SokoniDispute.open() */
+    if(window.SokoniDispute){
+      await window.SokoniDispute.open({
+        orderId:     orderId,
+        reason:      selectedIssue,
+        details:     desc.slice(0, 1000),
+        contact:     contact.slice(0, 100),
+        referenceId: ref
+      });
+    }
+
+    _dspRef = null;
+    document.getElementById("disputeForm").style.display = "none";
+    document.getElementById("disputeSuccess").style.display = "block";
+    document.getElementById("disputeRef").textContent = ref;
+    renderDisputeHistory();
+  } catch(err) {
+    if (btn) { btn.disabled = false; btn.textContent = '📨 Submit Dispute'; }
+    throw err;
   }
-
-  document.getElementById("disputeForm").style.display = "none";
-  document.getElementById("disputeSuccess").style.display = "block";
-  document.getElementById("disputeRef").textContent = ref;
-  renderDisputeHistory();
 }
 
 function resetForm(){

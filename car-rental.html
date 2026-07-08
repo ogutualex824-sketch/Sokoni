@@ -271,7 +271,7 @@ const CARS = [
   {id:'CR06',name:'Isuzu NPR Bus (33-Seater)',emoji:'🚌',type:['van'],location:'mombasa',locationLabel:'Mombasa (Nyali)',rate:'KES 28,000',rateType:'per day',rating:4.7,trips:29,phone:'0766300606',available:true,seats:33,trans:'Manual',fuel:'Diesel',specs:['33 Seats','AC','Church/School','Events','Insurance'],owner:'CoastBus Hire',bio:'Large bus for school trips, church events & corporate outings. Experienced driver included.'},
   {id:'CR07',name:'Suzuki Alto (Budget)',emoji:'🚗',type:['economy'],location:'kisumu',locationLabel:'Kisumu (Milimani)',rate:'KES 3,500',rateType:'per day',rating:4.6,trips:88,phone:'0777300707',available:false,seats:4,trans:'Automatic',fuel:'Petrol',specs:['4 Seats','Fuel Saver','Auto','City Drive','Insurance'],owner:'LakeCity Cars',bio:'Most affordable self-drive in Kisumu. Perfect for city errands & short trips.'},
 ];
-let activeType='',activeLoc='',selectedCar=null;
+let activeType='',activeLoc='',selectedCar=null,_carBkgId=null;
 
 function renderCars(){
   const q=(document.getElementById('pgSearch')?.value||'').toLowerCase();
@@ -334,12 +334,14 @@ function clearFilters(){
 }
 function openBooking(){
   selectedCar=null;
+  _carBkgId="CAR"+Date.now().toString().slice(-8);
   document.getElementById('pgModalSub').textContent='Fill in your details and a vehicle owner will confirm within 30 minutes.';
   document.getElementById('pgModalOverlay').classList.add('open');
   document.body.style.overflow='hidden';
 }
 function openBookingFor(id,name){
   selectedCar=CARS.find(c=>c.id===id);
+  _carBkgId="CAR"+Date.now().toString().slice(-8);
   document.getElementById('pgModalSub').textContent=`Booking: ${selectedCar?.emoji||''} ${name}`;
   document.getElementById('pgModalOverlay').classList.add('open');
   document.body.style.overflow='hidden';
@@ -350,7 +352,9 @@ function closeBooking(){
   document.getElementById('pgModalMsg').textContent='';
 }
 async function submitBooking(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('car_rental_book',10,300000)){(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
+  const _sbtn=document.querySelector('.pg-submit-btn');
+  if(_sbtn){_sbtn.disabled=true;_sbtn.textContent='⏳ Processing...';}
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('car_rental_book',10,300000)){if(_sbtn){_sbtn.disabled=false;_sbtn.textContent='📅 Confirm via WhatsApp →';}(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
   const name=document.getElementById('pgName')?.value.trim();
   const phone=document.getElementById('pgPhone')?.value.trim();
   const pickup=document.getElementById('pgPickup')?.value.trim();
@@ -360,7 +364,7 @@ async function submitBooking(){
   const notes=document.getElementById('pgNotes')?.value.trim();
   const msgEl=document.getElementById('pgModalMsg');
   const types=[...document.querySelectorAll('#pgChips .pg-chip.sel')].map(c=>c.textContent.trim()).join(', ');
-  if(!name||!phone||!pickup){if(msgEl){msgEl.textContent='⚠️ Please fill name, phone and pickup location.';msgEl.style.color='#ff6b6b';}return;}
+  if(!name||!phone||!pickup){if(_sbtn){_sbtn.disabled=false;_sbtn.textContent='📅 Confirm via WhatsApp →';}if(msgEl){msgEl.textContent='⚠️ Please fill name, phone and pickup location.';msgEl.style.color='#ff6b6b';}return;}
   /* If car has sellerUid and a daily rate — pay with M-Pesa */
   if(selectedCar?.sellerUid && window.SokoniMpesa && days && selectedCar.rateNum){
     const total = selectedCar.rateNum * Number(days);
@@ -368,14 +372,14 @@ async function submitBooking(){
       sellerUid:   selectedCar.sellerUid,
       amount:      total,
       phone:       phone,
-      orderId:     'CAR'+Date.now().toString().slice(-8),
+      orderId:     _carBkgId,
       hub:         'car',
       description: selectedCar.name + ' · ' + days + ' day(s)',
       sellerName:  selectedCar.owner,
     });
-    if(outcome !== 'success') return;
+    if(outcome !== 'success'){if(_sbtn){_sbtn.disabled=false;_sbtn.textContent='📅 Confirm via WhatsApp →';}return;}
   }
-  const id='CAR'+Date.now().toString().slice(-7);
+  const id=_carBkgId||('CAR'+Date.now().toString().slice(-8));
   const msg=`Hi${selectedCar?' '+selectedCar.owner:''}! I found you on SOKONI and need a car rental.\n\n📋 Booking ID: ${id}\n👤 Name: ${name}\n📞 Phone: ${phone}\n🚗 Vehicle Type: ${types||'Not specified'}\n📍 Pickup: ${pickup}\n🏁 Drop-off: ${drop||'Not specified'}\n📅 Date: ${date||'Flexible'}\n🗓️ Duration: ${days||'TBD'} day(s)\n${notes?'📝 Notes: '+notes+'\n':''}\nPlease confirm availability & price. Thank you!`;
   const _crWA = (selectedCar?.phone||'0705726803').replace(/^0/,'254').replace(/\D/g,'');
   if(typeof SokoniPay !== 'undefined' && SokoniPay.waConnect){
@@ -394,6 +398,7 @@ async function submitBooking(){
     await addDoc(collection(getFirestore(_a),'carRentals'),{id,hub:'car-rental',vehicle:selectedCar?.name||types||'Car Rental',vehicleId:selectedCar?.id||null,ownerName:selectedCar?.owner||null,ownerPhone:selectedCar?.phone||null,clientName:name,phone,pickup,dropoff:drop,date,days:Number(days)||1,notes,status:'pending',createdAt:serverTimestamp()});
   }catch(e){}})();
   if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:(selectedCar?.name||types||'Car Rental')+(days?' — '+days+' day(s)':''),category:'Car Rental',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'WhatsApp Booking',paymentRef:id,sellerName:selectedCar?.owner||'SOKONI Car Rental',date:new Date().toISOString(),notes:pickup});},700);
+  _carBkgId=null;
   if(msgEl){msgEl.innerHTML=`✅ Booking <strong style="color:#0ea5e9;">${id}</strong> sent via WhatsApp!`;msgEl.style.color='#22c55e';}
   setTimeout(closeBooking,3000);
 }

@@ -113,6 +113,7 @@
 <script>
   let allBnBs = [];
   let filtered = [];
+  let _bnbRef  = null;
 
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
@@ -217,23 +218,27 @@
         }
       });
     });
+    _bnbRef = "BNB" + Date.now().toString().slice(-6);
     document.getElementById("bnbBookModal").style.display = "flex";
   }
 
   function confirmBooking(bnbId){
+    const _btn = document.querySelector('.modal-confirm-btn');
+    if(_btn){ _btn.disabled = true; _btn.textContent = '⏳ Processing...'; }
     const name     = document.getElementById("bookName").value.trim();
     const phone    = document.getElementById("bookPhone").value.trim();
     const checkIn  = document.getElementById("bookIn").value;
     const checkOut = document.getElementById("bookOut").value;
-    if(!name || !phone || !checkIn || !checkOut){ showNotif("⚠️ Fill all booking details","error"); return; }
-    if(new Date(checkOut) <= new Date(checkIn)){ showNotif("⚠️ Check-out must be after check-in","error"); return; }
+    if(!name || !phone || !checkIn || !checkOut){ if(_btn){ _btn.disabled = false; _btn.textContent = 'Confirm Booking'; } showNotif("⚠️ Fill all booking details","error"); return; }
+    if(new Date(checkOut) <= new Date(checkIn)){ if(_btn){ _btn.disabled = false; _btn.textContent = 'Confirm Booking'; } showNotif("⚠️ Check-out must be after check-in","error"); return; }
 
     const b      = allBnBs.find(b => b.id === bnbId);
     const nights = Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000));
     const total  = nights * Number(b?.pricePerNight || 0);
-    const ref    = "BNB" + Date.now().toString().slice(-6);
+    const ref    = _bnbRef || ("BNB" + Date.now().toString().slice(-6));
 
     function _finalise(mpesaCode){
+      _bnbRef = null;
       /* Save booking */
       let bookings = [];
       try { bookings = JSON.parse(localStorage.getItem("sokoniBnBBookings")) || []; } catch(e) {}
@@ -294,7 +299,7 @@
         sellerName: b?.hostName || b?.name || 'BnB Host',
         description: (b?.name||'BnB Stay') + ' · '+nights+' night'+(nights>1?'s':''),
         onSuccess: r => _finalise(r.mpesaCode),
-        onFailure: reason => { if(reason !== 'cancelled') _finalise(null); }
+        onFailure: reason => { if(reason !== 'cancelled') _finalise(null); else if(_btn){ _btn.disabled = false; _btn.textContent = 'Confirm Booking'; } }
       });
       return;
     }

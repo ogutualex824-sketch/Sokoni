@@ -1372,8 +1372,12 @@ function filterBankCards(){ renderLoanBanks(_activeLoanType); }
 
 /* ══ APPLICATION MODAL ══ */
 let _applyProduct = "", _applyBank = "";
+let _bankAppId = null;
 function openApplyModal(product, bank){
+  _bankAppId = "BNK" + Date.now().toString(36).toUpperCase().slice(-8);
   _applyProduct = product; _applyBank = bank;
+  const submitBtn = document.querySelector('.modal-submit');
+  if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🚀 Submit Application'; }
   const el = document.getElementById("applyModalTitle");
   if(el) el.textContent = `Product: ${product} · Provider: ${bank}`;
   const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
@@ -1383,7 +1387,11 @@ function openApplyModal(product, bank){
 }
 
 function submitApplication(){
+  if (!_bankAppId) _bankAppId = "BNK" + Date.now().toString(36).toUpperCase().slice(-8);
+  const btn = document.querySelector('.modal-submit');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Processing...'; }
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('bank_apply', 3, 300000)){
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Submit Application'; }
     (window._skToast||alert)('Too many applications. Please wait 5 minutes.'); return;
   }
   const name    = document.getElementById("applyName")?.value.trim();
@@ -1396,11 +1404,12 @@ function submitApplication(){
   const msgEl   = document.getElementById("applyMsg");
 
   if(!name||!phone||!amount||!purpose){
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Submit Application'; }
     if(msgEl){msgEl.textContent="⚠️ Fill all required fields";msgEl.style.color="#ff9800";}
     return;
   }
 
-  const appId = "BNK"+Date.now();
+  const appId = _bankAppId;
   const applications = JSON.parse(localStorage.getItem("sokoniBankApplications")||"[]");
   applications.unshift({
     id:appId, product:_applyProduct, bank:_applyBank,
@@ -1417,7 +1426,7 @@ function submitApplication(){
   }catch(e){}})();
   if(typeof SokoniPay !== 'undefined'){
     SokoniPay.saveFee({
-      ref: 'BNK' + Date.now().toString(36).toUpperCase(),
+      ref: _bankAppId + '_fee',
       providerName: _applyBank || 'Bank',
       category: 'banking',
       depositAmount: 0,
@@ -1432,18 +1441,19 @@ function submitApplication(){
   /* Add to messages inbox */
   const msgs = JSON.parse(localStorage.getItem("sokoniMessages")||"[]");
   msgs.unshift({
-    id:"conv_bank_"+Date.now(),
+    id:"conv_bank_"+_bankAppId,
     productName: _applyProduct,
     sellerName: _applyBank + " via Sokoni",
     messages:[{
       sender:"seller",
-      text:`Hi ${name}! 👋 Thank you for applying for ${_applyProduct} with ${_applyBank}.\n\n✅ Application received\n📞 Our team will call you on ${phone} within 24 hours\n💰 Amount requested: KES ${Number(amount).toLocaleString()}\n📋 Purpose: ${purpose}${business?" · Business: "+business:""}\n\nFor fastest processing, have these ready:\n• KRA PIN certificate\n• ID / Passport\n• Last 3 months M-Pesa statements\n• Business registration (if applicable)\n\nApplication ID: BNK${Date.now()}`,
+      text:`Hi ${name}! 👋 Thank you for applying for ${_applyProduct} with ${_applyBank}.\n\n✅ Application received\n📞 Our team will call you on ${phone} within 24 hours\n💰 Amount requested: KES ${Number(amount).toLocaleString()}\n📋 Purpose: ${purpose}${business?" · Business: "+business:""}\n\nFor fastest processing, have these ready:\n• KRA PIN certificate\n• ID / Passport\n• Last 3 months M-Pesa statements\n• Business registration (if applicable)\n\nApplication ID: ${_bankAppId}`,
       time: new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})
     }],
     unread:1, spam:false, createdAt:Date.now()
   });
   localStorage.setItem("sokoniMessages", JSON.stringify(msgs));
 
+  _bankAppId = null;
   if(msgEl){msgEl.innerHTML='✅ Application submitted! <a href="messages.html" style="color:#f59e0b;">Check inbox for confirmation →</a>';msgEl.style.color="#10b981";}
   setTimeout(()=>{document.getElementById("applyModal").style.display="none";},3000);
 }

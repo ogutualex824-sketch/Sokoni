@@ -48,40 +48,41 @@ exports.submitReturn = onCall({ region: REGION, timeoutSeconds: 30 }, async (req
     throw new Error('PERMISSION_DENIED: order does not belong to you');
   }
 
-  // Check for duplicate return on same order
-  const existing = await db.collection('returns')
-    .where('orderId', '==', orderId)
-    .where('buyerId', '==', uid)
-    .where('status', 'in', ['submitted', 'under_review', 'approved'])
-    .limit(1).get();
-  if (!existing.empty) throw new Error('ALREADY_EXISTS: an open return already exists for this order');
-
-  const returnRef = db.collection('returns').doc();
+  // Deterministic doc ID prevents concurrent duplicates; check + create are atomic
+  const returnRef = db.collection('returns').doc('ret_' + orderId + '_' + uid);
   const now = Timestamp.now();
+  let isReplay = false;
 
-  await returnRef.set({
-    returnId:    returnRef.id,
-    orderId,
-    buyerId:     uid,
-    sellerId:    order.sellerId || order.vendorId || null,
-    items:       items.map(it => ({
-      productId: it.productId || null,
-      name:      String(it.name || '').slice(0, 200),
-      qty:       Math.max(1, Number(it.qty) || 1),
-      price:     Number(it.price) || 0,
-    })),
-    reason,
-    description: String(description).slice(0, 1000),
-    resolution,
-    status:      'submitted',
-    refundAmount: null,
-    submittedAt: now,
-    reviewedAt:  null,
-    reviewedBy:  null,
-    rejectionReason: null,
-    timeline:    [{ ts: now, event: 'submitted', by: uid }],
-    createdAt:   now,
+  await db.runTransaction(async (txn) => {
+    const snap = await txn.get(returnRef);
+    if (snap.exists) { isReplay = true; return; }
+
+    txn.set(returnRef, {
+      returnId:    returnRef.id,
+      orderId,
+      buyerId:     uid,
+      sellerId:    order.sellerId || order.vendorId || null,
+      items:       items.map(it => ({
+        productId: it.productId || null,
+        name:      String(it.name || '').slice(0, 200),
+        qty:       Math.max(1, Number(it.qty) || 1),
+        price:     Number(it.price) || 0,
+      })),
+      reason,
+      description: String(description).slice(0, 1000),
+      resolution,
+      status:      'submitted',
+      refundAmount: null,
+      submittedAt: now,
+      reviewedAt:  null,
+      reviewedBy:  null,
+      rejectionReason: null,
+      timeline:    [{ ts: now, event: 'submitted', by: uid }],
+      createdAt:   now,
+    });
   });
+
+  if (isReplay) throw new Error('ALREADY_EXISTS: an open return already exists for this order');
 
   return { returnId: returnRef.id, status: 'submitted' };
 });

@@ -197,24 +197,12 @@ exports.installmentCreatePlan = onCall(
     if (!isOwner)
       throw new HttpsError('permission-denied', 'You do not own this order.');
 
-    /* ── Check no existing active plan for this order ── */
-    const existing = await firestore
-      .collection('installmentPlans')
-      .where('orderId', '==', orderId)
-      .where('status', 'in', ['active'])
-      .limit(1)
-      .get();
-
-    if (!existing.empty)
-      throw new HttpsError('already-exists',
-        'An active installment plan already exists for this order.');
-
-    /* ── Build schedule ── */
+    /* ── Build schedule (computed before transaction — pure function, no I/O) ── */
     const { schedule, upfrontAmount, installmentAmount } = _buildSchedule(totalAmount, planType);
     const remainingBalance = totalAmount; // nothing paid yet
 
-    /* ── Persist plan ── */
-    const planRef = firestore.collection('installmentPlans').doc();
+    /* ── Deterministic doc ID + transaction prevents concurrent duplicates ── */
+    const planRef = firestore.collection('installmentPlans').doc('ip_' + orderId);
     const planId  = planRef.id;
 
     const planData = {
@@ -237,7 +225,17 @@ exports.installmentCreatePlan = onCall(
       updatedAt:         now(),
     };
 
-    await planRef.set(planData);
+    let isReplay = false;
+
+    await firestore.runTransaction(async (txn) => {
+      const snap = await txn.get(planRef);
+      if (snap.exists) { isReplay = true; return; }
+      txn.set(planRef, planData);
+    });
+
+    if (isReplay)
+      throw new HttpsError('already-exists',
+        'An active installment plan already exists for this order.');
 
     await _audit('installmentCreatePlan', uid, {
       planId, orderId, totalAmount, planType, currency,

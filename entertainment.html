@@ -1223,6 +1223,7 @@ const PERFORMERS = [
 
 let activeCat = "";
 let bookTarget = null;
+let _entBkgId = null;
 let _fsArtists = [];  /* approved artists from Firestore */
 
 const TYPE_LABEL   = { dj:"DJ / Disc Jockey", mc:"MC / Emcee", band:"Live Band", comedian:"Comedian", photographer:"Photographer", videographer:"Videographer", dancer:"Dancer", singer:"Singer / Vocalist", soundeng:"Sound Engineer", lighting:"Lighting Tech", voiceover:"Voice Artist", producer:"Music Producer", musician:"Musician", planner:"Event Planner", makeup:"Makeup Artist", magician:"Magician" };
@@ -1405,20 +1406,25 @@ function _proceedOpenBooking(id, type, ref){
 
   const today = new Date().toISOString().split("T")[0];
   document.getElementById("bookDate").min = today;
+  _entBkgId = "BKG" + Date.now();
+  const _bookBtn = document.querySelector('#bookModal .modal-btn');
+  if(_bookBtn){ _bookBtn.disabled = false; _bookBtn.textContent = '✓ Confirm Booking (50% M-PESA Deposit)'; }
   document.getElementById("bookModal").style.display = "flex";
 }
 function closeBooking(){ document.getElementById("bookModal").style.display="none"; }
 
 function submitBooking(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('ent_book',10,300000)){(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
+  const btn = document.querySelector('#bookModal .modal-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Booking...'; }
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('ent_book',10,300000)){ if(btn){ btn.disabled = false; btn.textContent = '✓ Confirm Booking (50% M-PESA Deposit)'; } (window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
   const name  = document.getElementById("bookClientName").value.trim();
   const phone = document.getElementById("bookPhone").value.trim();
   const date  = document.getElementById("bookDate").value;
   const event = document.getElementById("bookEventType").value;
   const venue = document.getElementById("bookVenue").value.trim();
-  if(!name||!phone||!date||!event){ (window._skToast||alert)("Please fill all required fields."); return; }
+  if(!name||!phone||!date||!event){ if(btn){ btn.disabled = false; btn.textContent = '✓ Confirm Booking (50% M-PESA Deposit)'; } (window._skToast||alert)("Please fill all required fields."); return; }
 
-  const bookingId = "BKG"+Date.now();
+  const bookingId = _entBkgId || ("BKG" + Date.now());
   const booking = { id:bookingId, performerId:bookTarget?.id, performerName:bookTarget?.name, type:bookTarget?.type, clientName:name, phone, date, time:document.getElementById("bookTime").value, eventType:event, venue, notes:document.getElementById("bookNotes").value, status:"pending", createdAt:new Date().toLocaleDateString() };
   let bookings = [];
   try { bookings = JSON.parse(localStorage.getItem("sokoniBookings"))||[]; } catch(e){}
@@ -1444,6 +1450,7 @@ function submitBooking(){
   }
 
   closeBooking();
+  _entBkgId = null;
   if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'booking',buyerName:name,buyerPhone:phone,items:[{name:(bookTarget?.name||'Performer')+' — '+event,category:bookTarget?.type||'Entertainment',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'Pending M-Pesa Confirmation',paymentRef:booking.id,sellerName:bookTarget?.name||'SOKONI Entertainment',date:new Date().toISOString(),notes:date+' · '+venue});},500);
   else (window._skToast||alert)(`🎉 Booking Request Sent!\n\n ${bookTarget?.name}\n📅 ${date}\n📍 ${venue}\n🎤 ${event}\n\nRef: ${booking.id}\nWe'll confirm availability and send M-PESA payment details to ${phone} within 2 hours.`);
 }

@@ -328,35 +328,38 @@ exports.applyForJob = onCall({ cors: true }, async (req) => {
   // Idempotency via deterministic doc ID
   const applicationId = `${jobId}_${uid}`;
   const appRef        = db.collection('jobApplications').doc(applicationId);
-  const existing      = await appRef.get();
+  const jobRef        = db.collection('jobs').doc(jobId);
 
-  if (existing.exists) return { alreadyApplied: true, applicationId };
+  let isReplay = false;
+  let jobData  = null;
 
-  // Fetch job to validate it is still active
-  const jobRef  = db.collection('jobs').doc(jobId);
-  const jobSnap = await jobRef.get();
-  if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
+  await db.runTransaction(async (txn) => {
+    // Idempotency check must be the first read in the transaction
+    const existing = await txn.get(appRef);
+    if (existing.exists) { isReplay = true; return; }
 
-  const jobData = jobSnap.data();
-  if (!_isActive(jobData)) throw new HttpsError('failed-precondition', 'This job is no longer accepting applications');
+    const jobSnap = await txn.get(jobRef);
+    if (!jobSnap.exists) throw new HttpsError('not-found', 'Job not found');
+    jobData = jobSnap.data();
+    if (!_isActive(jobData)) throw new HttpsError('failed-precondition', 'This job is no longer accepting applications');
 
-  const now = Timestamp.now();
-  const application = {
-    jobId,
-    seekerUid:   uid,
-    employerUid: jobData.employerUid,
-    coverLetter: cleanCover,
-    cvUrl:       cvUrl ? _san(cvUrl, 500) : null,
-    status:      'pending',
-    appliedAt:   now,
-    updatedAt:   now,
-  };
+    const now = Timestamp.now();
+    const application = {
+      jobId,
+      seekerUid:   uid,
+      employerUid: jobData.employerUid,
+      coverLetter: cleanCover,
+      cvUrl:       cvUrl ? _san(cvUrl, 500) : null,
+      status:      'pending',
+      appliedAt:   now,
+      updatedAt:   now,
+    };
 
-  // Atomic write: create application + increment counter
-  const batch = db.batch();
-  batch.set(appRef, application);
-  batch.update(jobRef, { applicationCount: FieldValue.increment(1) });
-  await batch.commit();
+    txn.set(appRef, application);
+    txn.update(jobRef, { applicationCount: FieldValue.increment(1) });
+  });
+
+  if (isReplay) return { alreadyApplied: true, applicationId };
 
   return { success: true, applicationId };
 });

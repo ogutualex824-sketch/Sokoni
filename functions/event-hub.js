@@ -446,10 +446,8 @@ exports.purchaseTickets = onCall(CF_OPTS, async (req) => {
   const qty = parseInt(quantity, 10);
   if (qty < 1 || qty > 20) throw new HttpsError('invalid-argument', 'Quantity 1-20');
 
-  // Idempotency check
+  // Idempotency ref — checked INSIDE the transaction (see below) to prevent TOCTOU races
   const idemRef = db().collection('eventOrderIdempotency').doc(idempotencyKey);
-  const idemSnap = await idemRef.get();
-  if (idemSnap.exists) return { orderId: idemSnap.data().orderId, idempotent: true };
 
   const tierRef = db().collection('eventTicketTiers').doc(tierId);
   const tierSnap = await tierRef.get();
@@ -497,9 +495,15 @@ exports.purchaseTickets = onCall(CF_OPTS, async (req) => {
   const totalAmount = Math.max(0, subtotal - discountAmount);
   const organizerAmount = totalAmount - platformFee;
 
+  // Generate orderId once, before the transaction — stable across Firestore retries
   const orderId = db().collection('eventOrders').doc().id;
 
+  let isReplay = false; let replayData = null;
   await db().runTransaction(async t => {
+    // Idempotency — FIRST read inside the transaction so concurrent retries cannot both win
+    const idemSnap = await t.get(idemRef);
+    if (idemSnap.exists) { isReplay = true; replayData = idemSnap.data(); return; }
+
     const freshTier = await t.get(tierRef);
     if (!freshTier.exists) throw new HttpsError('not-found', 'Tier not found');
     const td = freshTier.data();
@@ -550,6 +554,9 @@ exports.purchaseTickets = onCall(CF_OPTS, async (req) => {
       });
     }
   });
+
+  // Return early if this was an idempotent replay (transaction found existing idemRef)
+  if (isReplay) return { orderId: replayData.orderId, idempotent: true };
 
   // Generate individual ticket documents
   const ticketBatch = db().batch();

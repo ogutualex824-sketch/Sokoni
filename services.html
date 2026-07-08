@@ -1152,6 +1152,7 @@ function renderProviders(){
 /* ── Open booking modal ── */
 let _currentBookingProviderId = null;
 let _currentBookingRef = null;
+let _svcBkgId = null;
 
 function openBookingModal(providerId){
   const p = getProviders().find(x=>x.id===providerId);
@@ -1196,12 +1197,17 @@ function _openBookingDetails(providerId){
   if(dateEl) dateEl.value = tomorrow.toISOString().slice(0,10);
 
   document.getElementById("bkMsg").textContent = "";
+  _svcBkgId = "BK" + Date.now();
+  const _bkBtn = document.querySelector('#bookingModal button[onclick="submitBooking()"]');
+  if(_bkBtn){ _bkBtn.disabled = false; _bkBtn.textContent = '📩 Submit Booking Request'; }
   document.getElementById("bookingModal").style.display = "flex";
 }
 
 /* ── Submit booking ── */
 function submitBooking(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('svc_book',10,300000)){(window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
+  const btn = document.querySelector('#bookingModal button[onclick="submitBooking()"]');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Booking...'; }
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('svc_book',10,300000)){ if(btn){ btn.disabled = false; btn.textContent = '📩 Submit Booking Request'; } (window._skToast||alert)('Too many booking attempts. Please wait 5 minutes.');return;}
   const name    = document.getElementById("bkClientName")?.value.trim();
   const phone   = document.getElementById("bkClientPhone")?.value.trim();
   const jobDesc = document.getElementById("bkJobDesc")?.value.trim();
@@ -1211,6 +1217,7 @@ function submitBooking(){
   const msgEl   = document.getElementById("bkMsg");
 
   if(!name||!phone||!jobDesc||!loc||!date){
+    if(btn){ btn.disabled = false; btn.textContent = '📩 Submit Booking Request'; }
     if(msgEl){ msgEl.textContent="⚠️ Please fill all required fields"; msgEl.style.color="#ff9800"; }
     return;
   }
@@ -1219,7 +1226,7 @@ function submitBooking(){
   if(!p) return;
 
   const booking = {
-    id:           "BK"+Date.now(),
+    id:           _svcBkgId || ("BK" + Date.now()),
     providerId:   p.id,
     providerName: p.name,
     providerPhone:p.phone,
@@ -1273,6 +1280,7 @@ function submitBooking(){
   });
   localStorage.setItem("sokoniMessages", JSON.stringify(msgs));
 
+  _svcBkgId = null;
   if(msgEl){ msgEl.innerHTML = '✅ Booking submitted! <a href="messages.html" style="color:#71ff00;">Check Messages →</a>'; msgEl.style.color="#71ff00"; }
   if(window.SokoniInvoice) setTimeout(function(){SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:(CAT_LABEL[p.category]||p.category)+' Service',category:CAT_LABEL[p.category]||'Service',qty:1,price:p.rate||0}],subtotal:p.rate||0,total:p.rate||0,paymentMethod:'Pending — Provider Confirms',paymentRef:booking.id,sellerName:p.name,date:new Date().toISOString(),notes:loc+' · '+date+' '+time});},700);
   setTimeout(()=>{ document.getElementById("bookingModal").style.display="none"; }, 2500);

@@ -477,13 +477,8 @@ exports.subUpgradeWithProration = onCall(
     /* Phase 2 — Apply upgrade after payment */
     if (!paymentRef) throw new HttpsError('invalid-argument', 'paymentRef required to apply upgrade');
 
-    /* Idempotency */
-    const idKey   = `subupg_${uid}_${newPlanId}_${paymentRef}`;
-    const idSnap  = await fsdb.collection('finosIdempotency').doc(idKey).get();
-    if (idSnap.exists) {
-      const existing = idSnap.data();
-      return { subscriptionId: existing.subscriptionId, status: 'active', duplicate: true };
-    }
+    /* Idempotency key (check is performed inside the transaction) */
+    const idKey = `subupg_${uid}_${newPlanId}_${paymentRef}`;
 
     /* Verify payment */
     const paySnap = await fsdb.collection('payments').doc(paymentRef).get();
@@ -538,7 +533,14 @@ exports.subUpgradeWithProration = onCall(
 
     if (!currentSub) newSubDoc.createdAt = now();
 
+    let isReplay = false;
+    let replayData = null;
+
     await fsdb.runTransaction(async (txn) => {
+      /* Idempotency — must be the first read inside the transaction */
+      const idSnap = await txn.get(fsdb.collection('finosIdempotency').doc(idKey));
+      if (idSnap.exists) { isReplay = true; replayData = idSnap.data(); return; }
+
       if (currentSub) txn.update(subRef, newSubDoc);
       else            txn.set(subRef, newSubDoc);
 
@@ -552,25 +554,27 @@ exports.subUpgradeWithProration = onCall(
         [`subscription.${newPlan.hubType}.updatedAt`]: now(),
       });
 
-      /* Idempotency */
+      /* Idempotency record */
       txn.set(fsdb.collection('finosIdempotency').doc(idKey), {
         idKey, uid, newPlanId, paymentRef, subscriptionId: subRef.id, createdAt: now(),
       });
+
+      /* Billing history — inside transaction to prevent double-write on concurrent calls */
+      txn.set(fsdb.collection('billingHistory').doc(), {
+        uid, subscriptionId: subRef.id, planId: newPlanId,
+        hubType:        newPlan.hubType,
+        event:          'upgrade',
+        amountCents:    proration.chargeCents,
+        fullPriceCents: newPrice,
+        creditCents:    proration.creditCents,
+        billingCycle,
+        paymentRef,
+        previousPlanId: currentSub?.planId || null,
+        createdAt:      now(),
+      });
     });
 
-    /* Billing history */
-    await fsdb.collection('billingHistory').add({
-      uid, subscriptionId: subRef.id, planId: newPlanId,
-      hubType:       newPlan.hubType,
-      event:         'upgrade',
-      amountCents:   proration.chargeCents,
-      fullPriceCents: newPrice,
-      creditCents:   proration.creditCents,
-      billingCycle,
-      paymentRef,
-      previousPlanId: currentSub?.planId || null,
-      createdAt:      now(),
-    });
+    if (isReplay) return { subscriptionId: replayData.subscriptionId, status: 'active', duplicate: true };
 
     /* Notification */
     await _notify(uid, 'subscription_upgraded', {

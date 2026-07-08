@@ -214,11 +214,9 @@ exports.createLoyaltyAccount = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeout
 
   const db = _db();
 
-  // Idempotency — one account per UID
-  const existing = await db.collection('loyaltyAccounts').doc(auth.uid).get();
-  if (existing.exists) return { ...existing.data(), already_exists: true };
-
-  // One account per phone
+  // One account per phone — best-effort guard (collection query cannot be atomic inside a
+  // Firestore transaction; the UID doc check inside runTransaction below is the authoritative
+  // idempotency guard for concurrent calls on the same UID).
   const phoneCheck = await db.collection('loyaltyAccounts')
     .where('phone', '==', _san(phone, 20)).limit(1).get();
   if (!phoneCheck.empty) throw new HttpsError('already-exists', 'An account already exists for this phone number');
@@ -250,38 +248,55 @@ exports.createLoyaltyAccount = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeout
     birthdayRewardYear: null, referredBy: referredBy ? _san(referredBy, 64) : null,
   };
 
-  const batch = db.batch();
-  batch.set(db.collection('loyaltyAccounts').doc(auth.uid), account);
-
-  // Welcome ledger entry
-  const wKey = _ledgerKey(['welcome', auth.uid]);
-  batch.set(db.collection('loyaltyLedger').doc(wKey), {
-    uid: auth.uid, loyaltyId, type: 'welcome', merchantId: mid,
-    points: welcome, bonusPoints: 0, amountKES: 0,
-    balanceBefore: 0, balanceAfter: welcome,
-    description: 'Welcome bonus', idempotencyKey: wKey, createdAt: _now(),
-  });
-
-  // Referral bonus to referrer
+  // Pre-fetch referrer reference OUTSIDE the transaction — collection queries are not supported
+  // inside Firestore transactions. The referrer doc is re-read inside the txn via txn.get() to
+  // obtain a consistent balance snapshot before writing.
+  let referrerRef = null;
   if (referredBy) {
     const refSnap = await db.collection('loyaltyAccounts')
       .where('loyaltyId', '==', _san(referredBy, 24)).limit(1).get();
-    if (!refSnap.empty) {
-      const rd = refSnap.docs[0];
+    if (!refSnap.empty) referrerRef = refSnap.docs[0].ref;
+  }
+
+  let isReplay = false; let replayData = null;
+  await db.runTransaction(async (txn) => {
+    // Idempotency — atomic UID-account guard; FIRST read inside tx so every retry also checks.
+    // Two concurrent createLoyaltyAccount calls for the same UID will both enter the transaction
+    // but only one will commit; the second retry will see the document and short-circuit.
+    const uidSnap = await txn.get(db.collection('loyaltyAccounts').doc(auth.uid));
+    if (uidSnap.exists) { isReplay = true; replayData = uidSnap.data(); return; }
+
+    // Re-read referrer inside the transaction to get a consistent balance snapshot for the write.
+    let referrerSnap = null;
+    if (referrerRef) referrerSnap = await txn.get(referrerRef);
+
+    txn.set(db.collection('loyaltyAccounts').doc(auth.uid), account);
+
+    // Welcome ledger entry
+    const wKey = _ledgerKey(['welcome', auth.uid]);
+    txn.set(db.collection('loyaltyLedger').doc(wKey), {
+      uid: auth.uid, loyaltyId, type: 'welcome', merchantId: mid,
+      points: welcome, bonusPoints: 0, amountKES: 0,
+      balanceBefore: 0, balanceAfter: welcome,
+      description: 'Welcome bonus', idempotencyKey: wKey, createdAt: _now(),
+    });
+
+    // Referral bonus to referrer
+    if (referrerSnap && referrerSnap.exists) {
       const refBonus = config.referralPoints || 200;
-      batch.update(rd.ref, { balance: _INC(refBonus), lifetimePoints: _INC(refBonus), totalEarned: _INC(refBonus), lastUpdated: _now() });
-      const rKey = _ledgerKey(['referral', rd.id, auth.uid]);
-      batch.set(db.collection('loyaltyLedger').doc(rKey), {
-        uid: rd.id, type: 'referral', merchantId: mid,
+      txn.update(referrerRef, { balance: _INC(refBonus), lifetimePoints: _INC(refBonus), totalEarned: _INC(refBonus), lastUpdated: _now() });
+      const rKey = _ledgerKey(['referral', referrerSnap.id, auth.uid]);
+      txn.set(db.collection('loyaltyLedger').doc(rKey), {
+        uid: referrerSnap.id, type: 'referral', merchantId: mid,
         points: refBonus, bonusPoints: 0, amountKES: 0,
-        balanceBefore: rd.data().balance || 0, balanceAfter: (rd.data().balance || 0) + refBonus,
+        balanceBefore: referrerSnap.data().balance || 0, balanceAfter: (referrerSnap.data().balance || 0) + refBonus,
         description: `Referral: ${_san(name || phone, 40)} joined`,
         idempotencyKey: rKey, createdAt: _now(),
       });
     }
-  }
+  });
 
-  await batch.commit();
+  if (isReplay) return { ...replayData, already_exists: true };
   _notify(auth.uid, 'Welcome to SOKONI Rewards! 🎉',
     `You earned ${welcome} welcome points. Show your QR code at any checkout.`,
     { type: 'loyalty_welcome', points: welcome }).catch(() => {});
@@ -379,11 +394,8 @@ exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) 
   const mid = _san(merchantId, 64);
   const idKey = _ledgerKey(['earn', customerUid, orderId, mid]);
 
-  // Idempotency check
-  const already = await db.collection('loyaltyLedger').doc(idKey).get();
-  if (already.exists) return { ...already.data(), idempotent: true };
-
-  // Load config + campaigns in parallel
+  // Load config + campaigns in parallel (non-critical config reads; idempotency is enforced
+  // atomically inside the transaction below — no outer pre-check needed).
   const [cfgSnap, ...cSnaps] = await Promise.all([
     db.collection('loyaltyMerchantConfigs').doc(mid).get(),
     ...campaignIds.slice(0, 5).map(id => db.collection('loyaltyCampaigns').doc(id).get()),
@@ -398,7 +410,14 @@ exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) 
     .map(s => s.data());
 
   let result;
+  let isReplay = false; let replayData = null;
   await db.runTransaction(async (txn) => {
+    // Idempotency — FIRST read inside tx so every retry (including contended retries) also
+    // checks. Two concurrent awardLoyaltyPoints calls for the same idKey will both enter the
+    // transaction but only one will commit the ledger write; the second retry sees the doc.
+    const idemSnap = await txn.get(db.collection('loyaltyLedger').doc(idKey));
+    if (idemSnap.exists) { isReplay = true; replayData = idemSnap.data(); return; }
+
     const accRef  = db.collection('loyaltyAccounts').doc(customerUid);
     const accSnap = await txn.get(accRef);
     if (!accSnap.exists) throw new HttpsError('not-found', 'Loyalty account not found');
@@ -473,6 +492,8 @@ exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) 
     };
   });
 
+  if (isReplay) return { ...replayData, idempotent: true };
+
   _notify(customerUid, `+${result.pointsAwarded} Points Earned!`,
     `Balance: ${result.newBalance.toLocaleString()} pts${result.tierChanged ? ' · Tier upgraded!' : ''}`,
     { type: 'loyalty_earned', points: result.pointsAwarded, balance: result.newBalance }).catch(() => {});
@@ -501,14 +522,18 @@ exports.redeemLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req)
   const mid   = _san(merchantId, 64);
   const idKey = _ledgerKey(['redeem', auth.uid, orderId, mid]);
 
-  const already = await db.collection('loyaltyLedger').doc(idKey).get();
-  if (already.exists) return { ...already.data(), idempotent: true };
-
   const cfgSnap = await db.collection('loyaltyMerchantConfigs').doc(mid).get();
   const config  = cfgSnap.exists ? cfgSnap.data() : _defaultConfig(mid);
 
   let result;
+  let isReplay = false; let replayData = null;
   await db.runTransaction(async (txn) => {
+    // Idempotency — FIRST read inside tx so every retry (including contended retries) also
+    // checks. Two concurrent redeemLoyaltyPoints calls with the same idKey will both enter
+    // the transaction but only one will commit; the second retry sees the existing ledger doc.
+    const idemSnap = await txn.get(db.collection('loyaltyLedger').doc(idKey));
+    if (idemSnap.exists) { isReplay = true; replayData = idemSnap.data(); return; }
+
     const accRef  = db.collection('loyaltyAccounts').doc(auth.uid);
     const accSnap = await txn.get(accRef);
     if (!accSnap.exists) throw new HttpsError('not-found', 'Loyalty account not found');
@@ -540,6 +565,8 @@ exports.redeemLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req)
     });
     result = { pointsRedeemed: approvedPts, cashbackKES: approvedKES, newBalance: balAfter };
   });
+
+  if (isReplay) return { ...replayData, idempotent: true };
 
   logger.info('[loyalty] Points redeemed', { uid: auth.uid, orderId, ...result });
   return result;
@@ -1095,6 +1122,12 @@ exports.syncOfflineLoyaltyTransactions = onCall({ ...OPT, secrets: [LOYALTY_HMAC
       let awarded   = 0;
 
       await db.runTransaction(async (txn) => {
+        // Idempotency — FIRST read inside tx. The outer exists-check above is a fast-path
+        // optimisation only; two overlapping sync calls can both pass that check, so this
+        // inner check is the authoritative atomic guard that prevents double-awarding.
+        const idemSnap = await txn.get(db.collection('loyaltyLedger').doc(idKey));
+        if (idemSnap.exists) { awarded = idemSnap.data().points || 0; return; }
+
         const accRef  = db.collection('loyaltyAccounts').doc(customerUid);
         const accSnap = await txn.get(accRef);
         if (!accSnap.exists) throw new Error('Account not found');

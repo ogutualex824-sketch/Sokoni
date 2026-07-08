@@ -94,19 +94,38 @@ exports.fosInitiatePayment = onCall(
     if (!phone)      throw new HttpsError('invalid-argument', 'phone required');
     if (amountKES > 500000) throw new HttpsError('invalid-argument', 'Amount exceeds KES 500,000 limit');
 
-    /* Rate limit: max 3 payment initiations per user per minute */
+    /* Generate stable payRef before any async work — avoids re-generation on transaction retries */
+    const payRef    = ref || `fos_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    /* Rate limit + optional idempotency — both inside a transaction to prevent TOCTOU races */
     const rateLimitRef = db().collection('fosRateLimits').doc(`pay_init_${uid}`);
-    const rlSnap = await rateLimitRef.get();
-    const rlData = rlSnap.data() || {};
-    const windowMs = 60000;
-    if (rlData.count >= 3 && rlData.windowStart && (Date.now() - rlData.windowStart) < windowMs)
-      throw new HttpsError('resource-exhausted', 'Too many payment requests. Wait a moment.');
-    await rateLimitRef.set({
-      count:       rlData.count && (Date.now() - (rlData.windowStart || 0)) < windowMs ? rlData.count + 1 : 1,
-      windowStart: rlData.windowStart && (Date.now() - rlData.windowStart) < windowMs ? rlData.windowStart : Date.now(),
+    const idemRef      = ref ? db().collection('fosPaymentIdempotency').doc(payRef) : null;
+    let isReplay = false; let replayData = null;
+
+    await db().runTransaction(async (txn) => {
+      /* 1. Idempotency check — only when caller supplied an explicit ref */
+      if (idemRef) {
+        const idemSnap = await txn.get(idemRef);
+        if (idemSnap.exists) { isReplay = true; replayData = idemSnap.data(); return; }
+      }
+      /* 2. Rate-limit check (read inside tx prevents concurrent bypass) */
+      const rlSnap = await txn.get(rateLimitRef);
+      const rlData = rlSnap.data() || {};
+      const windowMs = 60000;
+      const nowMs    = Date.now();
+      const inWindow = rlData.windowStart && (nowMs - rlData.windowStart) < windowMs;
+      if (rlData.count >= 3 && inWindow)
+        throw new HttpsError('resource-exhausted', 'Too many payment requests. Wait a moment.');
+      /* 3. Increment rate-limit counter atomically */
+      txn.set(rateLimitRef, {
+        count:       inWindow ? rlData.count + 1 : 1,
+        windowStart: inWindow ? rlData.windowStart : nowMs,
+      });
+      /* 4. Mark idempotency key consumed */
+      if (idemRef) txn.set(idemRef, { payRef, uid, createdAt: now() });
     });
 
-    const payRef    = ref || `fos_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    if (isReplay) return { payRef: replayData.payRef, idempotent: true };
     const amountCents = Math.round(amountKES * 100);
 
     /* Create pending transaction record */
@@ -388,40 +407,43 @@ exports.fosSubmitRefund = onCall(
       throw new HttpsError('invalid-argument',
         `Refund (KES ${amountKES}) exceeds original payment (KES ${originalAmountKES})`);
 
-    /* Idempotency — reject if a non-failed refund already exists for this transaction */
-    const dupCheck = await db().collection('fosRefundQueue')
-      .where('fosTransactionId', '==', txId)
-      .where('status', 'in', ['pending', 'approved', 'processed'])
-      .limit(1).get();
-    if (!dupCheck.empty) {
-      const ex = dupCheck.docs[0];
+    const autoApprove = isAdmin;
+    const status      = autoApprove ? 'approved' : 'pending';
+
+    /* Idempotency — deterministic doc ID (one per txId) prevents duplicate refunds under race conditions.
+       The transaction guarantees the check-and-set is atomic; a collection query outside a tx cannot. */
+    let isReplayRefund = false; let replayRefundData = null;
+    const refundRef = db().collection('fosRefundQueue').doc('ref_' + txId);
+
+    await db().runTransaction(async (txn) => {
+      const snap = await txn.get(refundRef);
+      if (snap.exists) { isReplayRefund = true; replayRefundData = snap.data(); return; }
+      txn.set(refundRef, {
+        fosTransactionId: txId,
+        payRef:           tx.payRef || payRef,
+        buyerUid:         tx.buyerUid || auth.uid,
+        sellerUid:        tx.sellerUid || tx.uid || null,
+        amountKES,
+        amountCents,
+        reason,
+        refundType,
+        provider:         tx.provider || 'intasend',
+        status,
+        requestedBy:      auth.uid,
+        approvedBy:       autoApprove ? auth.uid : null,
+        createdAt:        now(),
+        updatedAt:        now(),
+      });
+    });
+
+    if (isReplayRefund) {
       return {
-        refundId: ex.id,
-        status:   ex.data().status,
+        refundId: refundRef.id,
+        status:   replayRefundData.status,
         existing: true,
         message:  'A refund request for this transaction is already in progress.',
       };
     }
-
-    const autoApprove = isAdmin;
-    const status      = autoApprove ? 'approved' : 'pending';
-
-    const refundRef = await db().collection('fosRefundQueue').add({
-      fosTransactionId: txId,
-      payRef:           tx.payRef || payRef,
-      buyerUid:         tx.buyerUid || auth.uid,
-      sellerUid:        tx.sellerUid || tx.uid || null,
-      amountKES,
-      amountCents,
-      reason,
-      refundType,
-      provider:         tx.provider || 'intasend',
-      status,
-      requestedBy:      auth.uid,
-      approvedBy:       autoApprove ? auth.uid : null,
-      createdAt:        now(),
-      updatedAt:        now(),
-    });
 
     await _audit('refund_submitted', auth.uid, {
       refundId: refundRef.id, fosTransactionId: txId, amountKES, reason, autoApprove,

@@ -939,6 +939,7 @@ function computeAIMarketPrices(){
 
 /* ————————————————— STATE ————————————————— */
 let _activeCat = "", _activeLoc = "", _orderTarget = null;
+let _constrRef = null;
 
 /* ————————————————— RENDER ————————————————— */
 function filterProducts(){
@@ -1069,6 +1070,9 @@ function openOrder(id){
   document.getElementById("cnOrderQty").value = 1;
   document.getElementById("cnOrderMsg").textContent = "";
   updateOrderTotal();
+  _constrRef = "BM" + Date.now().toString().slice(-8);
+  const _cnBtn = document.querySelector('#cnModal .cn-modal-btn');
+  if(_cnBtn){ _cnBtn.disabled = false; _cnBtn.textContent = '💳 Place Order via M-PESA'; }
   document.getElementById("cnModal").style.display = "flex";
 }
 function closeCnModal(){ document.getElementById("cnModal").style.display="none"; }
@@ -1081,21 +1085,24 @@ function updateOrderTotal(){
 }
 
 function submitOrder(){
-  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('const_order',10,300000)){(window._skToast||alert)('Too many order attempts. Please wait 5 minutes.');return;}
+  const btn = document.querySelector('#cnModal .cn-modal-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Processing...'; }
+  if(typeof SokoniSecurity!=='undefined'&&!SokoniSecurity.persistentRateLimit('const_order',10,300000)){ if(btn){ btn.disabled = false; btn.textContent = '💳 Place Order via M-PESA'; } (window._skToast||alert)('Too many order attempts. Please wait 5 minutes.');return;}
   const name = document.getElementById("cnOrderName").value.trim();
   const phone = document.getElementById("cnOrderPhone").value.trim();
   const qty = Number(document.getElementById("cnOrderQty").value||0);
   const addr = document.getElementById("cnOrderAddr").value.trim();
   const msgEl = document.getElementById("cnOrderMsg");
-  if(!name||!phone||qty<1){ msgEl.textContent="⚠️ Fill all required fields"; msgEl.style.color="#ff9800"; return; }
-  const ref = "BM"+Date.now();
-  const order = { ref, product:_orderTarget.name, supplier:_orderTarget.supplier, qty, unit:_orderTarget.unit, unitPrice:_orderTarget.price, total:_orderTarget.price*qty, clientName:name, phone, addr, delivery:document.getElementById("cnOrderDelivery").value, createdAt:Date.now() };
+  if(!name||!phone||qty<1){ if(btn){ btn.disabled = false; btn.textContent = '💳 Place Order via M-PESA'; } msgEl.textContent="⚠️ Fill all required fields"; msgEl.style.color="#ff9800"; return; }
+  const ref = _constrRef || ("BM" + Date.now().toString().slice(-8));
+  const order = { ref, product:_orderTarget.name, supplier:_orderTarget.supplier, qty, unit:_orderTarget.unit, unitPrice:_orderTarget.price, total:_orderTarget.price*qty, clientName:name, phone, addr, delivery:document.getElementById("cnOrderDelivery").value, createdAt:_constrRef };
   let orders=[]; try{orders=JSON.parse(localStorage.getItem("sokoniBuildOrders"))||[];}catch(e){}
   orders.unshift(order); localStorage.setItem("sokoniBuildOrders",JSON.stringify(orders));
   if(window.SokoniConstruct) SokoniConstruct.saveOrder({...order, orderType:'material', id:ref}).catch(e=>console.warn('[CN] order:',e.message));
   if(window.SokoniInvoice)setTimeout(function(){SokoniInvoice.generate({type:'order',buyerName:name,buyerPhone:phone,items:[{name:_orderTarget.name,category:'Building Materials',qty:qty,price:_orderTarget.price}],subtotal:order.total,total:order.total,paymentMethod:'M-Pesa (Pending Confirmation)',paymentRef:ref,sellerName:_orderTarget.supplier,date:new Date().toISOString(),notes:addr});},700);
   msgEl.innerHTML=`✅ Order placed! Ref: <strong style="color:#f59e0b;">${ref}</strong><br>The supplier will confirm &amp; send M-PESA payment details to ${phone} within 1 hour.`;
   msgEl.style.color="#00c878";
+  _constrRef = null;
   setTimeout(closeCnModal, 3500);
 }
 
