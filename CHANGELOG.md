@@ -1,4 +1,29 @@
-﻿## [2026-07-08] — Phase 3: Enterprise Scalability & Distributed Systems
+﻿## [2026-07-08] — Sprint 4.6: Platform Shell — Command Palette + Observability Dashboard
+
+### Summary
+Platform Shell sprint: adds a global command palette (Ctrl+K / Cmd+K) available on every page, and a new admin-only Observability Dashboard with 5 tabs (Overview, Errors, Performance, Audit Log, Alerts). The command palette requires no backend and is injected via `shared-header.js` across all 291+ pages.
+
+### New Files
+- `sokoni-command-palette.js` — command palette; 47 pages + 6 quick actions; fuzzy search; recent history via localStorage; keyboard-navigable (↑↓ Enter Esc); exposed as `window.SokoniCP`
+- `observability.html` — admin-only platform health dashboard; 5 tabs; wired to Phase 3 observability-engine CFs
+
+### Modified Files
+- `shared-header.js` — injects `sokoni-command-palette.js` (deferred) on all pages; adds 🔍 command palette trigger button in nav actions bar
+
+### Security
+- `observability.html` protected by admin/super_admin role claim check at page load
+- No new secrets required
+
+### Performance
+- Command palette is pure client-side; zero backend calls for navigation
+- Deferred script load — does not block first paint
+
+### No New Cloud Functions
+All observability CFs already deployed in Phase 3 (`obsGetRealTimeMetrics`, `obsGetErrorReport`, `obsGetPerformanceReport`, `obsGetAuditLog`, `obsCreateAlert`, `obsCheckAlerts`, `obsHealthProbe`).
+
+---
+
+## [2026-07-08] — Phase 3: Enterprise Scalability & Distributed Systems
 
 ### Summary
 Full enterprise architecture upgrade across 14 new files (~10,500 lines). Adds observability, resilience, API gateway, webhook delivery, distributed task queue, client performance SDK, and comprehensive architecture documentation. Platform is now instrumented end-to-end, protected by circuit breakers and dead-letter queues, and ready to scale to millions of users.

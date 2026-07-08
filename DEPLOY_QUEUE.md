@@ -5,6 +5,21 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Sprint 4.6 — Platform Shell — 2026-07-08
+
+**No new Cloud Functions.** All observability CFs were deployed in Phase 3.
+
+**New client-side files (hosting deploy required):**
+- `sokoni-command-palette.js` — global command palette; auto-injected via shared-header.js
+- `observability.html` — admin observability dashboard
+
+**Hosting deploy command:**
+```bash
+npx firebase-tools@latest deploy --only hosting
+```
+
+---
+
 ## Phase 3 — Enterprise Scalability — 2026-07-08
 
 **Files:**

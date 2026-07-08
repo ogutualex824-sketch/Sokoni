@@ -204,6 +204,8 @@
   _injectAsset('script', { src: 'sokoni-resilience.js', defer: true }, 'sk-resilience-script');
   /* Phase 3 — Observability SDK: error tracking, Core Web Vitals, user journey */
   _injectAsset('script', { src: 'sokoni-observability.js', defer: true }, 'sk-observability-script');
+  /* Command palette — Ctrl+K / Cmd+K global launcher */
+  _injectAsset('script', { src: 'sokoni-command-palette.js', defer: true }, 'sk-command-palette-script');
 
   /* Initialize Observability after page load */
   (function () {
@@ -774,6 +776,12 @@
 
       /* Actions */
       '<div id="sk-nav-actions">' +
+
+        /* Command palette trigger */
+        '<button type="button" class="sk-nav-icon-btn sk-cp-trigger" aria-label="Command palette (Ctrl+K)" title="Search & navigate (Ctrl+K)" onclick="window.SokoniCP&&window.SokoniCP.open()" id="sk-cp-btn">' +
+          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:middle"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>' +
+          '<span style="font-size:9px;color:#444;margin-left:4px;font-family:monospace;display:none" class="sk-cp-shortcut">⌘K</span>' +
+        '</button>' +
 
         /* Notifications */
         '<button type="button" class="sk-nav-icon-btn" aria-label="Notifications" aria-expanded="false" aria-haspopup="dialog" id="sk-notif-btn">' +

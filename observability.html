@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Observability — SOKONI</title>
+  <meta name="description" content="Platform health, errors, performance and audit log">
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="assets/favicon.png">
+  <script src="sokoni-config.js"></script>
+  <script src="shared-header.js"></script>
+  <style>
+    :root {
+      --bg: #050505;
+      --surface: #0e0e0e;
+      --card: #111;
+      --border: #1a1a1a;
+      --muted: #2a2a2a;
+      --text: #e8e8e8;
+      --sub: #666;
+      --accent: #71ff00;
+      --danger: #ff4d6d;
+      --warn: #ffb300;
+      --info: #00bcd4;
+      --ok: #71ff00;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;padding-top:max(64px,var(--sk-header-h,64px))}
+
+    /* ── Page header ── */
+    .obs-hero{padding:28px 20px 16px;max-width:1400px;margin:0 auto}
+    .obs-hero h1{font-size:clamp(20px,3vw,28px);font-weight:700;letter-spacing:-.02em}
+    .obs-hero h1 span{color:var(--accent)}
+    .obs-hero p{color:var(--sub);font-size:13px;margin-top:4px}
+
+    /* ── Tabs ── */
+    .obs-tabs{display:flex;gap:4px;padding:0 20px 0;max-width:1400px;margin:0 auto;
+      border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+    .obs-tabs::-webkit-scrollbar{display:none}
+    .obs-tab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--sub);
+      background:0;border:0;border-bottom:2px solid transparent;cursor:pointer;
+      white-space:nowrap;transition:color .15s,border-color .15s}
+    .obs-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .obs-tab:hover:not(.active){color:var(--text)}
+
+    /* ── Content ── */
+    .obs-pane{display:none;padding:20px;max-width:1400px;margin:0 auto}
+    .obs-pane.active{display:block}
+
+    /* ── Grid ── */
+    .obs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:24px}
+    .obs-kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;position:relative}
+    .obs-kpi-lbl{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .obs-kpi-val{font-size:clamp(22px,3vw,30px);font-weight:700;font-variant-numeric:tabular-nums}
+    .obs-kpi-sub{font-size:11px;color:var(--sub);margin-top:4px}
+    .obs-kpi-dot{width:8px;height:8px;border-radius:50%;position:absolute;top:14px;right:14px}
+    .dot-ok{background:var(--ok)}
+    .dot-warn{background:var(--warn)}
+    .dot-err{background:var(--danger)}
+    .dot-info{background:var(--info)}
+
+    /* ── Tables ── */
+    .obs-table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{background:var(--surface);padding:10px 14px;text-align:left;color:var(--sub);
+      font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+    td{padding:11px 14px;border-top:1px solid var(--border);color:var(--text);vertical-align:middle}
+    tr:hover td{background:var(--surface)}
+    .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;
+      font-size:11px;font-weight:600;white-space:nowrap}
+    .badge-ok{background:rgba(113,255,0,.12);color:var(--ok)}
+    .badge-err{background:rgba(255,77,109,.12);color:var(--danger)}
+    .badge-warn{background:rgba(255,179,0,.12);color:var(--warn)}
+    .badge-info{background:rgba(0,188,212,.12);color:var(--info)}
+    code{font-family:monospace;font-size:12px;color:var(--info);background:rgba(0,188,212,.08);
+      padding:2px 6px;border-radius:4px}
+
+    /* ── Section title ── */
+    .obs-section{font-size:13px;font-weight:700;color:var(--sub);text-transform:uppercase;
+      letter-spacing:.08em;margin:24px 0 10px}
+
+    /* ── Alert form ── */
+    .obs-form{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:20px}
+    .obs-form-row{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+    @media(max-width:600px){.obs-form-row{grid-template-columns:1fr}}
+    label{font-size:12px;color:var(--sub);display:block;margin-bottom:4px}
+    input,select,textarea{width:100%;background:var(--surface);border:1px solid var(--muted);
+      border-radius:7px;color:var(--text);padding:9px 12px;font-size:13px;outline:none}
+    input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+    select option{background:var(--surface)}
+    .btn{padding:9px 20px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;
+      border:none;transition:opacity .15s,transform .1s;white-space:nowrap}
+    .btn:active{transform:scale(.97)}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn-primary{background:var(--accent);color:#000}
+    .btn-sm{padding:6px 14px;font-size:12px}
+    .btn-danger{background:rgba(255,77,109,.15);color:var(--danger);border:1px solid rgba(255,77,109,.25)}
+
+    /* ── Health grid ── */
+    .obs-health-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:24px}
+    .obs-svc{background:var(--card);border:1px solid var(--border);border-radius:8px;
+      padding:12px 14px;display:flex;align-items:center;gap:10px}
+    .obs-svc-icon{font-size:18px}
+    .obs-svc-name{font-size:12px;font-weight:600;color:var(--text)}
+    .obs-svc-status{font-size:11px;margin-top:2px}
+
+    /* ── Latency bars ── */
+    .obs-lat-row{margin-bottom:12px}
+    .obs-lat-lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px}
+    .obs-lat-lbl span:last-child{color:var(--sub);font-variant-numeric:tabular-nums}
+    .obs-lat-track{height:8px;background:var(--muted);border-radius:4px;overflow:hidden}
+    .obs-lat-fill{height:100%;border-radius:4px;transition:width .6s ease}
+
+    /* ── Empty / loading ── */
+    .obs-empty{padding:40px 0;text-align:center;color:var(--muted);font-size:13px}
+    .obs-spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--muted);
+      border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;
+      vertical-align:middle;margin-right:6px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .obs-loading{display:flex;align-items:center;justify-content:center;padding:36px 0;
+      color:var(--sub);font-size:13px}
+
+    /* ── Auto-refresh toggle ── */
+    .obs-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+    .obs-toolbar-spacer{flex:1}
+    .obs-refresh-info{font-size:11px;color:var(--sub)}
+    .toggle-wrap{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);cursor:pointer}
+    .toggle-wrap input[type=checkbox]{accent-color:var(--accent);width:16px;height:16px;cursor:pointer}
+  </style>
+</head>
+<body>
+<div class="obs-hero">
+  <h1>Platform <span>Observability</span></h1>
+  <p>Real-time health, error tracking, performance metrics and audit trail — admin view.</p>
+</div>
+
+<div class="obs-tabs" role="tablist" aria-label="Observability sections">
+  <button class="obs-tab active" role="tab" aria-selected="true"  aria-controls="pane-overview"  data-tab="overview">Overview</button>
+  <button class="obs-tab"        role="tab" aria-selected="false" aria-controls="pane-errors"    data-tab="errors">Errors</button>
+  <button class="obs-tab"        role="tab" aria-selected="false" aria-controls="pane-perf"      data-tab="perf">Performance</button>
+  <button class="obs-tab"        role="tab" aria-selected="false" aria-controls="pane-audit"     data-tab="audit">Audit Log</button>
+  <button class="obs-tab"        role="tab" aria-selected="false" aria-controls="pane-alerts"    data-tab="alerts">Alerts</button>
+</div>
+
+<!-- ═══════════════════════════════ OVERVIEW ═══════════════════════════════ -->
+<section class="obs-pane active" id="pane-overview" role="tabpanel" aria-labelledby="tab-overview">
+  <div class="obs-toolbar">
+    <label class="toggle-wrap">
+      <input type="checkbox" id="auto-refresh-chk" checked>
+      Auto-refresh (30s)
+    </label>
+    <span class="obs-refresh-info" id="refresh-label">—</span>
+    <div class="obs-toolbar-spacer"></div>
+    <button class="btn btn-primary btn-sm" onclick="loadOverview()">Refresh now</button>
+  </div>
+
+  <!-- KPI cards -->
+  <div class="obs-grid" id="kpi-grid">
+    <div class="obs-loading"><span class="obs-spinner"></span>Loading metrics…</div>
+  </div>
+
+  <!-- Service health -->
+  <div class="obs-section">Service Health</div>
+  <div class="obs-health-grid" id="health-grid">
+    <div class="obs-loading"><span class="obs-spinner"></span></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ ERRORS ════════════════════════════════ -->
+<section class="obs-pane" id="pane-errors" role="tabpanel" aria-labelledby="tab-errors">
+  <div class="obs-toolbar">
+    <div>
+      <label style="display:inline-block;margin-right:10px">
+        Severity
+        <select id="err-severity" style="width:auto;margin-left:6px" onchange="loadErrors()">
+          <option value="">All</option>
+          <option value="critical">Critical</option>
+          <option value="error">Error</option>
+          <option value="warning">Warning</option>
+        </select>
+      </label>
+      <label style="display:inline-block">
+        Period
+        <select id="err-period" style="width:auto;margin-left:6px" onchange="loadErrors()">
+          <option value="1h">Last 1 hour</option>
+          <option value="24h" selected>Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+        </select>
+      </label>
+    </div>
+    <div class="obs-toolbar-spacer"></div>
+    <button class="btn btn-primary btn-sm" onclick="loadErrors()">Refresh</button>
+  </div>
+
+  <div class="obs-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Severity</th>
+          <th>Service</th>
+          <th>Message</th>
+          <th>Count</th>
+        </tr>
+      </thead>
+      <tbody id="errors-tbody">
+        <tr><td colspan="5" class="obs-empty">Select a period and refresh.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ PERFORMANCE ═══════════════════════════ -->
+<section class="obs-pane" id="pane-perf" role="tabpanel" aria-labelledby="tab-perf">
+  <div class="obs-toolbar">
+    <label style="display:inline-block">
+      Period
+      <select id="perf-period" style="width:auto;margin-left:6px" onchange="loadPerf()">
+        <option value="1h">Last 1 hour</option>
+        <option value="24h" selected>Last 24 hours</option>
+        <option value="7d">Last 7 days</option>
+      </select>
+    </label>
+    <div class="obs-toolbar-spacer"></div>
+    <button class="btn btn-primary btn-sm" onclick="loadPerf()">Refresh</button>
+  </div>
+
+  <div class="obs-grid" id="perf-kpis"></div>
+
+  <div class="obs-section">Endpoint Latency (P95)</div>
+  <div id="lat-bars"></div>
+
+  <div class="obs-section">Slowest Endpoints</div>
+  <div class="obs-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Endpoint</th>
+          <th>P50 (ms)</th>
+          <th>P95 (ms)</th>
+          <th>P99 (ms)</th>
+          <th>Requests</th>
+          <th>Error Rate</th>
+        </tr>
+      </thead>
+      <tbody id="perf-tbody">
+        <tr><td colspan="6" class="obs-empty">Select a period and refresh.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════ AUDIT LOG ══════════════════════════════ -->
+<section class="obs-pane" id="pane-audit" role="tabpanel" aria-labelledby="tab-audit">
+  <div class="obs-toolbar">
+    <label style="display:inline-block;margin-right:10px">
+      Action
+      <input id="audit-action" type="text" placeholder="e.g. payment.complete" style="width:200px;margin-left:6px">
+    </label>
+    <label style="display:inline-block">
+      Period
+      <select id="audit-period" style="width:auto;margin-left:6px">
+        <option value="24h" selected>Last 24 hours</option>
+        <option value="7d">Last 7 days</option>
+        <option value="30d">Last 30 days</option>
+      </select>
+    </label>
+    <button class="btn btn-primary btn-sm" onclick="loadAudit()" style="margin-left:10px">Search</button>
+    <div class="obs-toolbar-spacer"></div>
+    <button class="btn btn-sm" onclick="exportAudit()" style="background:var(--surface);color:var(--text)">Export CSV</button>
+  </div>
+
+  <div class="obs-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Actor</th>
+          <th>Action</th>
+          <th>Resource</th>
+          <th>Status</th>
+          <th>IP</th>
+        </tr>
+      </thead>
+      <tbody id="audit-tbody">
+        <tr><td colspan="6" class="obs-empty">Set filters and click Search.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="audit-pagination" style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"></div>
+</section>
+
+<!-- ═══════════════════════════════ ALERTS ════════════════════════════════ -->
+<section class="obs-pane" id="pane-alerts" role="tabpanel" aria-labelledby="tab-alerts">
+
+  <div class="obs-section" style="margin-top:0">Create Alert</div>
+  <div class="obs-form">
+    <div class="obs-form-row">
+      <div>
+        <label for="al-name">Alert Name</label>
+        <input type="text" id="al-name" placeholder="e.g. High Error Rate">
+      </div>
+      <div>
+        <label for="al-metric">Metric</label>
+        <select id="al-metric">
+          <option value="error_rate">Error Rate (%)</option>
+          <option value="p95_latency_ms">P95 Latency (ms)</option>
+          <option value="active_users">Active Users</option>
+          <option value="orders_per_minute">Orders / min</option>
+          <option value="payment_failures">Payment Failures</option>
+          <option value="api_errors">API Errors / min</option>
+        </select>
+      </div>
+      <div>
+        <label for="al-threshold">Threshold</label>
+        <input type="number" id="al-threshold" placeholder="e.g. 5">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-top:10px">
+      <div>
+        <label for="al-op">Condition</label>
+        <select id="al-op">
+          <option value="gt">Greater than (&gt;)</option>
+          <option value="lt">Less than (&lt;)</option>
+          <option value="gte">Greater than or equal (&ge;)</option>
+          <option value="lte">Less than or equal (&le;)</option>
+        </select>
+      </div>
+      <div>
+        <label for="al-channel">Channel</label>
+        <select id="al-channel">
+          <option value="in_app">In-app notification</option>
+          <option value="email">Email</option>
+          <option value="sms">SMS</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="al-save-btn" onclick="createAlert()">Create Alert</button>
+    </div>
+  </div>
+
+  <div class="obs-section">Active Alerts</div>
+  <div class="obs-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Metric</th>
+          <th>Condition</th>
+          <th>Threshold</th>
+          <th>Status</th>
+          <th>Last Fired</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="alerts-tbody">
+        <tr><td colspan="7" class="obs-loading"><span class="obs-spinner"></span>Loading alerts…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<script type="module">
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+
+const auth = getAuth(getApp());
+const fn   = getFunctions(getApp(), 'us-central1');
+
+// ── Auth guard — admin only ───────────────────────────────────────────────
+let _uid = null;
+onAuthStateChanged(auth, async user => {
+  if (!user) { location.replace('login.html?redirect=' + encodeURIComponent(location.href)); return; }
+  const t = await user.getIdTokenResult();
+  if (!t.claims.role || !['admin','super_admin'].includes(t.claims.role)) {
+    document.body.innerHTML = '<div style="padding:60px;text-align:center;color:#ff4d6d;font-size:16px">🔒 Admin access required.</div>';
+    return;
+  }
+  _uid = user.uid;
+  loadOverview();
+  loadAlerts();
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function _call(name, data = {}) { return httpsCallable(fn, name)(data).then(r => r.data); }
+function _ts(ms) {
+  if (!ms) return '—';
+  return new Date(ms).toLocaleString('en-KE', { timeZone:'Africa/Nairobi', hour12:false,
+    month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+function _fmt(n, unit = '') {
+  if (n == null) return '—';
+  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M' + unit;
+  if (n >= 1000)    return (n/1000).toFixed(1)    + 'K' + unit;
+  return String(n) + unit;
+}
+function _pct(n) { return n == null ? '—' : n.toFixed(1) + '%'; }
+function _latColor(ms) { return ms < 100 ? '#71ff00' : ms < 500 ? '#ffb300' : '#ff4d6d'; }
+
+// ── Auto-refresh ──────────────────────────────────────────────────────────
+let _autoTimer = null;
+const _chk = document.getElementById('auto-refresh-chk');
+const _lbl = document.getElementById('refresh-label');
+let _lastRefresh = null;
+
+function _scheduleRefresh() {
+  clearTimeout(_autoTimer);
+  if (!_chk.checked) return;
+  _autoTimer = setTimeout(() => { loadOverview(); _scheduleRefresh(); }, 30000);
+  _lastRefresh = Date.now();
+  _lbl.textContent = 'Refreshed ' + new Date(_lastRefresh).toLocaleTimeString('en-KE', { timeZone:'Africa/Nairobi' });
+}
+_chk.addEventListener('change', () => { if (_chk.checked && _uid) { loadOverview(); } _scheduleRefresh(); });
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+const _tabs  = document.querySelectorAll('.obs-tab');
+const _panes = document.querySelectorAll('.obs-pane');
+_tabs.forEach(btn => {
+  btn.addEventListener('click', () => {
+    _tabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+    _panes.forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected','true');
+    document.getElementById('pane-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'errors') loadErrors();
+    if (btn.dataset.tab === 'perf')   loadPerf();
+    if (btn.dataset.tab === 'audit')  {}
+    if (btn.dataset.tab === 'alerts') loadAlerts();
+  });
+});
+
+// ══════════════════════════════ OVERVIEW ══════════════════════════════════
+window.loadOverview = async function() {
+  document.getElementById('kpi-grid').innerHTML = '<div class="obs-loading"><span class="obs-spinner"></span>Loading…</div>';
+  document.getElementById('health-grid').innerHTML = '<div class="obs-loading"><span class="obs-spinner"></span></div>';
+  try {
+    const [metrics, health] = await Promise.all([
+      _call('obsGetRealTimeMetrics'),
+      _call('obsHealthProbe'),
+    ]);
+    _renderKPIs(metrics);
+    _renderHealth(health);
+    _scheduleRefresh();
+  } catch (e) {
+    document.getElementById('kpi-grid').innerHTML = '<div class="obs-empty">Failed to load metrics: ' + e.message + '</div>';
+  }
+};
+
+function _renderKPIs(d) {
+  const m = d || {};
+  const kpis = [
+    { lbl:'Active Users',     val: _fmt(m.activeUsers),       sub:'right now',          dot: m.activeUsers > 0 ? 'ok' : 'warn' },
+    { lbl:'Error Rate',       val: _pct(m.errorRate),          sub:'last 5 minutes',     dot: (m.errorRate||0) < 2 ? 'ok' : (m.errorRate||0) < 10 ? 'warn' : 'err' },
+    { lbl:'P95 Latency',      val: (m.p95LatencyMs||'—') + (m.p95LatencyMs?'ms':''),    sub:'API response',       dot: (m.p95LatencyMs||0) < 300 ? 'ok' : 'warn' },
+    { lbl:'Orders / hr',      val: _fmt(m.ordersPerHour),     sub:'last hour',           dot: 'info' },
+    { lbl:'Payments / hr',    val: _fmt(m.paymentsPerHour),   sub:'last hour',           dot: 'ok' },
+    { lbl:'Platform Uptime',  val: m.uptimePct != null ? m.uptimePct.toFixed(2)+'%' : '—', sub:'30-day rolling',  dot: (m.uptimePct||0) >= 99.9 ? 'ok' : 'warn' },
+    { lbl:'DB Reads / min',   val: _fmt(m.firestoreReadsPerMin), sub:'Firestore',        dot: 'info' },
+    { lbl:'Functions Invoked',val: _fmt(m.functionInvocations), sub:'last minute',       dot: 'info' },
+  ];
+  document.getElementById('kpi-grid').innerHTML = kpis.map(k =>
+    '<div class="obs-kpi">' +
+      '<div class="obs-kpi-dot dot-' + k.dot + '"></div>' +
+      '<div class="obs-kpi-lbl">' + k.lbl + '</div>' +
+      '<div class="obs-kpi-val">' + k.val + '</div>' +
+      '<div class="obs-kpi-sub">' + k.sub + '</div>' +
+    '</div>'
+  ).join('');
+}
+
+function _renderHealth(d) {
+  const svcs = [
+    { name:'Firestore',   key:'firestore',   icon:'🗄️' },
+    { name:'Auth',        key:'auth',         icon:'🔐' },
+    { name:'Functions',   key:'functions',    icon:'⚡' },
+    { name:'Storage',     key:'storage',      icon:'📦' },
+    { name:'IntaSend',    key:'intasend',     icon:'💳' },
+    { name:'Redis',       key:'redis',        icon:'🔴' },
+    { name:'Typesense',   key:'typesense',    icon:'🔍' },
+    { name:'SendGrid',    key:'sendgrid',     icon:'📧' },
+  ];
+  const h = (d && d.services) || {};
+  document.getElementById('health-grid').innerHTML = svcs.map(s => {
+    const status = h[s.key] || 'unknown';
+    const color = status === 'healthy' ? 'var(--ok)' : status === 'degraded' ? 'var(--warn)' : status === 'down' ? 'var(--danger)' : 'var(--sub)';
+    return '<div class="obs-svc">' +
+      '<span class="obs-svc-icon">' + s.icon + '</span>' +
+      '<div><div class="obs-svc-name">' + s.name + '</div>' +
+        '<div class="obs-svc-status" style="color:' + color + '">' + status + '</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+// ══════════════════════════════ ERRORS ════════════════════════════════════
+window.loadErrors = async function() {
+  const tbody = document.getElementById('errors-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="obs-loading"><span class="obs-spinner"></span>Loading…</td></tr>';
+  try {
+    const sev    = document.getElementById('err-severity').value;
+    const period = document.getElementById('err-period').value;
+    const d = await _call('obsGetErrorReport', { period, severity: sev || undefined });
+    const rows = (d && d.errors) || [];
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="obs-empty">No errors in this period.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map(r => {
+      const sevClass = r.severity === 'critical' ? 'badge-err' : r.severity === 'error' ? 'badge-err' : 'badge-warn';
+      return '<tr>' +
+        '<td style="white-space:nowrap;font-size:11px">' + _ts(r.ts) + '</td>' +
+        '<td><span class="badge ' + sevClass + '">' + (r.severity||'error') + '</span></td>' +
+        '<td><code>' + _esc(r.service||'') + '</code></td>' +
+        '<td style="max-width:400px;font-size:12px">' + _esc(r.message||'') + '</td>' +
+        '<td style="font-variant-numeric:tabular-nums">' + (r.count||1) + '</td>' +
+      '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="obs-empty">Error: ' + e.message + '</td></tr>';
+  }
+};
+
+// ══════════════════════════════ PERFORMANCE ═══════════════════════════════
+window.loadPerf = async function() {
+  document.getElementById('perf-kpis').innerHTML = '<div class="obs-loading"><span class="obs-spinner"></span>Loading…</div>';
+  document.getElementById('lat-bars').innerHTML = '';
+  const tbody = document.getElementById('perf-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="obs-loading"><span class="obs-spinner"></span></td></tr>';
+  try {
+    const period = document.getElementById('perf-period').value;
+    const d = await _call('obsGetPerformanceReport', { period });
+    const m = (d && d.summary) || {};
+    const eps = (d && d.endpoints) || [];
+
+    // Summary KPIs
+    const kpis = [
+      { lbl:'Avg Response',   val: (m.avgMs||'—') + (m.avgMs?'ms':'') },
+      { lbl:'P50 Latency',    val: (m.p50Ms||'—') + (m.p50Ms?'ms':'') },
+      { lbl:'P95 Latency',    val: (m.p95Ms||'—') + (m.p95Ms?'ms':'') },
+      { lbl:'P99 Latency',    val: (m.p99Ms||'—') + (m.p99Ms?'ms':'') },
+      { lbl:'Total Requests', val: _fmt(m.totalRequests) },
+      { lbl:'Error Rate',     val: _pct(m.errorRate) },
+    ];
+    document.getElementById('perf-kpis').innerHTML = kpis.map(k =>
+      '<div class="obs-kpi"><div class="obs-kpi-lbl">' + k.lbl + '</div>' +
+      '<div class="obs-kpi-val">' + k.val + '</div></div>'
+    ).join('');
+
+    // Latency bars
+    const maxP95 = Math.max(...eps.map(e => e.p95Ms || 0), 1);
+    document.getElementById('lat-bars').innerHTML = eps.slice(0, 10).map(e => {
+      const pct = Math.min(100, ((e.p95Ms||0) / maxP95) * 100);
+      const col = _latColor(e.p95Ms||0);
+      return '<div class="obs-lat-row">' +
+        '<div class="obs-lat-lbl"><span>' + _esc(e.endpoint||'') + '</span><span>' + (e.p95Ms||0) + 'ms</span></div>' +
+        '<div class="obs-lat-track"><div class="obs-lat-fill" style="width:' + pct + '%;background:' + col + '"></div></div>' +
+      '</div>';
+    }).join('');
+
+    // Table
+    if (!eps.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="obs-empty">No performance data.</td></tr>';
+    } else {
+      tbody.innerHTML = eps.map(e => {
+        const errCol = (e.errorRate||0) > 5 ? 'var(--danger)' : (e.errorRate||0) > 1 ? 'var(--warn)' : 'var(--ok)';
+        return '<tr>' +
+          '<td><code>' + _esc(e.endpoint||'') + '</code></td>' +
+          '<td>' + (e.p50Ms||'—') + '</td>' +
+          '<td>' + (e.p95Ms||'—') + '</td>' +
+          '<td>' + (e.p99Ms||'—') + '</td>' +
+          '<td>' + _fmt(e.requests) + '</td>' +
+          '<td style="color:' + errCol + '">' + _pct(e.errorRate) + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+  } catch (e) {
+    document.getElementById('perf-kpis').innerHTML = '';
+    tbody.innerHTML = '<tr><td colspan="6" class="obs-empty">Error: ' + e.message + '</td></tr>';
+  }
+};
+
+// ══════════════════════════════ AUDIT LOG ═════════════════════════════════
+let _auditCursor = null;
+window.loadAudit = async function(cursor = null) {
+  const tbody = document.getElementById('audit-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="obs-loading"><span class="obs-spinner"></span>Loading…</td></tr>';
+  try {
+    const action = document.getElementById('audit-action').value.trim();
+    const period = document.getElementById('audit-period').value;
+    const d = await _call('obsGetAuditLog', { action: action||undefined, period, cursor });
+    const rows = (d && d.entries) || [];
+    _auditCursor = (d && d.nextCursor) || null;
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="obs-empty">No audit entries found.</td></tr>';
+    } else {
+      tbody.innerHTML = rows.map(r => {
+        const sc = r.status === 'success' ? 'badge-ok' : 'badge-err';
+        return '<tr>' +
+          '<td style="white-space:nowrap;font-size:11px">' + _ts(r.ts) + '</td>' +
+          '<td style="font-size:12px">' + _esc(r.actorUid ? r.actorUid.slice(0,8)+'…' : 'system') + '</td>' +
+          '<td><code>' + _esc(r.action||'') + '</code></td>' +
+          '<td style="font-size:12px">' + _esc(r.resource||'') + '</td>' +
+          '<td><span class="badge ' + sc + '">' + (r.status||'ok') + '</span></td>' +
+          '<td style="font-size:11px;color:var(--sub)">' + _esc(r.ip||'—') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    // Pagination
+    const pg = document.getElementById('audit-pagination');
+    pg.innerHTML = _auditCursor
+      ? '<button class="btn btn-sm" style="background:var(--surface);color:var(--text)" onclick="window.loadAudit(\''+_auditCursor+'\')">Load more →</button>'
+      : '';
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" class="obs-empty">Error: ' + e.message + '</td></tr>';
+  }
+};
+
+window.exportAudit = async function() {
+  try {
+    const action = document.getElementById('audit-action').value.trim();
+    const period = document.getElementById('audit-period').value;
+    const d = await _call('obsGetAuditLog', { action: action||undefined, period, limit: 2000 });
+    const rows = (d && d.entries) || [];
+    if (!rows.length) { alert('No data to export.'); return; }
+    const csv = ['timestamp,actor,action,resource,status,ip']
+      .concat(rows.map(r => [
+        _ts(r.ts), r.actorUid||'system', r.action||'', r.resource||'', r.status||'', r.ip||''
+      ].map(v => '"'+String(v).replace(/"/g,'""')+'"').join(','))).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv' }));
+    a.download = 'audit-log-' + period + '.csv';
+    a.click();
+  } catch (e) { alert('Export failed: ' + e.message); }
+};
+
+// ══════════════════════════════ ALERTS ════════════════════════════════════
+window.loadAlerts = async function() {
+  const tbody = document.getElementById('alerts-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" class="obs-loading"><span class="obs-spinner"></span>Loading…</td></tr>';
+  try {
+    const d = await _call('obsCheckAlerts');
+    const items = (d && d.alerts) || [];
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="obs-empty">No alerts configured yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map(a => {
+      const firing = a.status === 'firing';
+      return '<tr>' +
+        '<td style="font-weight:600">' + _esc(a.name||'') + '</td>' +
+        '<td><code>' + _esc(a.metric||'') + '</code></td>' +
+        '<td>' + _esc(a.operator||'') + '</td>' +
+        '<td style="font-variant-numeric:tabular-nums">' + (a.threshold??'—') + '</td>' +
+        '<td><span class="badge ' + (firing ? 'badge-err' : 'badge-ok') + '">' + (firing ? '🔴 Firing' : '✅ OK') + '</span></td>' +
+        '<td style="font-size:11px;color:var(--sub)">' + _ts(a.lastFiredAt) + '</td>' +
+        '<td><button class="btn btn-sm btn-danger" onclick="deleteAlert(\'' + _esc(a.id) + '\')">Delete</button></td>' +
+      '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="7" class="obs-empty">Error: ' + e.message + '</td></tr>';
+  }
+};
+
+window.createAlert = async function() {
+  const btn = document.getElementById('al-save-btn');
+  const name      = document.getElementById('al-name').value.trim();
+  const metric    = document.getElementById('al-metric').value;
+  const threshold = parseFloat(document.getElementById('al-threshold').value);
+  const operator  = document.getElementById('al-op').value;
+  const channel   = document.getElementById('al-channel').value;
+  if (!name || isNaN(threshold)) { alert('Name and threshold are required.'); return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await _call('obsCreateAlert', { name, metric, threshold, operator, channel });
+    document.getElementById('al-name').value = '';
+    document.getElementById('al-threshold').value = '';
+    await loadAlerts();
+  } catch (e) { alert('Failed: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Create Alert'; }
+};
+
+window.deleteAlert = async function(id) {
+  if (!confirm('Delete this alert?')) return;
+  try {
+    await _call('obsCreateAlert', { delete: true, id });
+    await loadAlerts();
+  } catch (e) { alert('Delete failed: ' + e.message); }
+};
+
+// ── Utility exposed to inline handlers ───────────────────────────────────
+function _esc(s) { return String(s||'').replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c])); }
+window._esc = _esc;
+</script>
+</body>
+</html>
