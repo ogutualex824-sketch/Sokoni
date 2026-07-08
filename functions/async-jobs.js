@@ -168,6 +168,19 @@ const EVENT_ROUTES = {
   'image.uploaded':        [{ type: 'IMAGE_OPT', priority: PRIORITY.BACKGROUND }],
 };
 
+/* P1-2: aliases for the canonical bus types whose normalized (domain.verb) form
+   differs from the 2-part route key above (verb also renamed). Keeps both working. */
+EVENT_ROUTES['pos.completed']   = EVENT_ROUTES['pos.sale_completed'];
+EVENT_ROUTES['inventory.low']   = EVENT_ROUTES['inventory.low_stock'];
+
+/* domain.noun.verb (platform-event-bus) → domain.verb (route key). e.g.
+   order.order.created → order.created ; payment.transaction.completed → payment.completed */
+function _normalizeEventType(t) {
+  if (!t) return t;
+  const parts = String(t).split('.');
+  return parts.length === 3 ? `${parts[0]}.${parts[2]}` : t;
+}
+
 function _buildJobFromEvent(event, route) {
   const typeConfig = JOB_TYPES[route.type] || {};
   return {
@@ -335,8 +348,14 @@ exports.asyncEventRouter = onDocumentCreated(
     const data  = event.data?.data();
     if (!data) return;
 
-    const eventType = data.type || data.eventType;
-    const routes    = EVENT_ROUTES[eventType];
+    /* P1-2 (Phase 4 audit): platform-event-bus.js emits canonical 3-part types
+       (domain.noun.verb, e.g. "order.order.created"/"payment.transaction.completed")
+       but EVENT_ROUTES is keyed 2-part (domain.verb). Without normalization the bus's
+       events never matched a route → event→job fan-out silently produced nothing.
+       Try the raw type, then the normalized 2-part form (domain.verb). */
+    const rawType   = data.type || data.eventType;
+    const eventType = rawType;
+    const routes    = EVENT_ROUTES[rawType] || EVENT_ROUTES[_normalizeEventType(rawType)];
     if (!routes?.length) return;
 
     const enriched = { id: event.params.eventId, ...data };
