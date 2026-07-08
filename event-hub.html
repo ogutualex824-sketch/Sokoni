@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <script src="security.js"></script>
@@ -205,6 +205,7 @@
   let promoDiscount = 0;
   let promoCodeApplied = null;
   let myTicketsVisible = false;
+  let _ticketIkey = null; /* stable per tier-selection; reused on retry */
 
   function esc(s){ return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3000); }
@@ -319,7 +320,7 @@
   async function openEvent(eventId) {
     document.getElementById('overlay').classList.add('open');
     document.getElementById('modal-content').innerHTML = '<div style="padding:60px;text-align:center"><span class="spinner"></span></div>';
-    selectedTierId = null; selectedQty = 1; promoDiscount = 0; promoCodeApplied = null;
+    selectedTierId = null; selectedQty = 1; promoDiscount = 0; promoCodeApplied = null; _ticketIkey = null;
 
     try {
       const ev = await callCF('getEvent', { eventId });
@@ -395,6 +396,10 @@
     const el = document.getElementById('tier-' + tierId);
     if (el) el.style.borderColor = 'var(--blue)';
     document.getElementById('qty-section').style.display = 'block';
+    /* Generate idempotency key HERE — once per tier selection.
+       If the user retries after a network error, buyTickets reuses this
+       same key so the CF can return the cached result without a dup. */
+    _ticketIkey = (currentUser ? currentUser.uid : 'anon') + '-' + tierId + '-' + Date.now();
     document.getElementById('buy-btn').disabled = false;
     document.getElementById('buy-btn').textContent = 'Buy Tickets';
     updateTotal(price);
@@ -444,7 +449,8 @@
     const btn = document.getElementById('buy-btn');
     btn.disabled = true; btn.textContent = 'Processing…';
 
-    const idempotencyKey = currentUser.uid + '-' + selectedTierId + '-' + Date.now();
+    /* Use key generated at tier-selection time — stable across retries within the same modal session */
+    const idempotencyKey = _ticketIkey || (currentUser.uid + '-' + selectedTierId + '-' + Date.now());
     try {
       const res = await callCF('purchaseTickets', {
         tierId: selectedTierId,

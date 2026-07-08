@@ -1,4 +1,92 @@
-﻿## [2026-07-08] — MiniShop Social Commerce Engine v3.0
+﻿## [2026-07-08] — MiniShop 2.0 — Premium Social Commerce Storefront
+
+### Summary
+Complete redesign of the public MiniShop experience. The storefront now feels like a premium, mobile-first business website — helping merchants grow through effortless social sharing — while remaining fully integrated with SOKONI commerce, payments, loyalty, and analytics.
+
+### Files Affected
+| File | Change |
+|---|---|
+| `minishop.html` | Complete rewrite — 71 required element IDs, semantic HTML5, premium hero/trust/stats/CTA/tabs/about layout |
+| `minishop.css` | Full design system — 22 CSS token variables, skeleton shimmer, product grid, service cards, review summary, share panel, QR modal, WA Status overlay |
+| `sokoni-minishop.js` | `_getOpenStatus()` helper; `_renderShop` populates 10 new elements (open status, response badge, rating stars, logo placeholder, years active, verified badge, announcement); `shareVia()` added; `showQR()` fixed; CTA classes updated |
+
+### Key Features Added
+- **Hero**: full-bleed cover, floating logo frame, verified badge overlay
+- **Trust strip**: live rating stars, open/closed status pill (day-of-week aware), response time badge
+- **Stats bar**: Followers / Products / Years Active from real Firestore data
+- **Smart CTA**: primary + secondary buttons by business category
+- **About tab**: location, hours, delivery areas/policy, payment methods, social links, trust signals — all auto-populated + auto-shown
+- **Share panel**: platform buttons (WhatsApp/Facebook/X/Telegram/Copy) + Download QR + Print Poster
+- **Logo placeholder**: first-letter fallback when no logo is set
+- **`shareVia(platform)`**: new public function called by share panel buttons
+
+### Security Notes
+- No new secrets required
+- All data from existing `getMinishopPublic` CF — no new attack surface
+- Green backgrounds (#71ff00) use `color:#000` throughout
+
+---
+
+## [2026-07-08] — Duplicate Order & Booking Race-Condition Hardening
+
+### Summary
+Platform-wide fix for duplicate order creation and booking double-submission. Five separate race conditions were resolved across the payment, booking, and checkout flows. The changes guarantee that a same client retrying after a network timeout, or two concurrent clients submitting at the same millisecond, cannot produce ghost orders, duplicate bookings, or split inventory.
+
+### Root Causes Fixed
+| Flow | Root Cause | Fix |
+|---|---|---|
+| `verifyIntasendPayment` | Idempotency check was a plain Firestore `.get()` outside any transaction; the write was a non-atomic `batch.commit()` — two concurrent callbacks both passed the check before either wrote | Replaced with `db.runTransaction()`: check and all writes (order, verification record, session) are a single atomic unit |
+| `bookingCreate` | Idempotency check used `where('idempotencyKey','==',key)` — a collection query that cannot be made transactional; capacity/overlap checks were also outside the transaction | Full restructure: dedicated `_bookingIdempotency/{key}` collection uses the key as the document ID so `tx.get(docRef)` is atomic; added `venues/{id}/slotLocks/{date_start_end}` CAS document as a mutex; all checks moved inside `runTransaction` |
+| `venueCreateBooking` | Same pattern — pre-transaction idempotency query was a collection query, not a document read | Added `_venueBkgIdempotency/{key}` collection; idempotency read + slot-lock read happen inside the transaction; idempotency record written atomically with the booking |
+| `checkout.html` | `orderId` was `Date.now()`-based — every retry generated a different ID; Place Order button had no disable-on-click guard | Added `_ckikey` (generated once per page session via `sessionStorage`); `_ckOrderId()` derives a deterministic orderId from the key; Place Order button disabled immediately on click and re-enabled only on validation failure; `idempotencyKey` stored on every order doc; key cleared after order success |
+| `event-hub.html` | Idempotency key was `uid + tierId + Date.now()` generated fresh inside `buyTickets()` on every click — a retry always produced a new key | Key moved to `selectTier()` — generated once per tier selection and stored in `_ticketIkey`; `buyTickets()` reuses the stored key; key resets on each `openEvent()` call |
+
+### Files Affected
+| File | Change |
+|---|---|
+| `functions/index.js` | `verifyIntasendPayment`: replaced non-atomic batch pattern with `db.runTransaction()`; idempotency check is now inside the transaction |
+| `functions/booking.js` | `bookingCreate`: full restructure — new `_bookingIdempotency` collection, slot-lock CAS document, all checks inside transaction |
+| `functions/venue-booking.js` | `venueCreateBooking`: new `_venueBkgIdempotency` collection, idempotency read + write inside transaction |
+| `checkout.html` | Session key + `_ckOrderId()` + `_resetPlaceBtn()` helpers added; Place Order button disabled on click; stable orderId; `idempotencyKey` on order doc; key cleared on success |
+| `event-hub.html` | `_ticketIkey` module variable; key generated in `selectTier`, reset in `openEvent`, used in `buyTickets` |
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `_bookingIdempotency/{key}` | Atomic idempotency record for `bookingCreate` |
+| `_venueBkgIdempotency/{key}` | Atomic idempotency record for `venueCreateBooking` |
+| `venues/{id}/slotLocks/{date_start_end}` | CAS mutex — prevents two bookings from claiming the same time window |
+
+### Security Notes
+- Idempotency keys are server-side document IDs; client cannot forge a replay of another user's key because the booking also validates `uid` ownership inside the transaction
+- `orderId` on non-M-Pesa paths is now deterministic from a client-generated session key — still validated server-side via `merge: true` and order ownership checks
+
+### Performance Notes
+- Firestore transactions use optimistic concurrency; on conflict one party retries with negligible latency (< 1 round-trip)
+- Pre-fetch of `existingBookings` outside the transaction is preserved for efficiency; the slot-lock document (not a collection query) is the definitive atomic guard
+
+### Breaking Changes
+- None — all changes are additive or internal; API surface unchanged; replayed calls return cached `{ ..., replayed: true }` or `{ ..., idempotent: true }` flags
+
+---
+
+## [2026-07-08] — Product Card Buy Button Layout Fix
+
+### Summary
+On mobile screens (≤767 px) the "Buy" button was pushed to the far right edge of product cards because the action strip used `justify-content: space-between` in a single row. The strip now uses a column layout: social-proof text on the top row, the buy button full-width on the bottom row.
+
+### Files Affected
+| File | Change |
+|---|---|
+| `compact-grid.css` | `.pcard-mobile-strip` changed to `flex-direction: column` at ≤600 px; `.pcard-m-buy` given `flex: 1` to fill the button row; same column layout applied in the 601–767 px breakpoint for `#productsContainer` and `.ptrend-grid` |
+| `CHANGELOG.md` | This entry |
+
+### Breaking Changes
+- None — layout change is visual only; no JS or API changes
+
+---
+
+## [2026-07-08] — MiniShop Social Commerce Engine v3.0
 
 ### Summary
 Full v3.0 upgrade of the SOKONI MiniShop system. Every seller, business, and service provider now gets a premium, socially shareable digital storefront at `mysokoni.co.ke/shop/{handle}` and `mysokoni.co.ke/@{handle}`. Firebase Hosting rewrites now route both URL patterns through a new `miniShopOGMeta` Cloud Function that serves dynamic Open Graph metadata to social crawlers (WhatsApp, Facebook, Twitter, LinkedIn, Telegram) and a complete shell page to real users — enabling rich link previews everywhere. Added promotions (flash sales, bundles, coupons, BOGO), wishlist, per-product sharing, seller-to-follower announcements, AI marketing intelligence, and similar-shop recommendations.

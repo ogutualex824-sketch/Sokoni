@@ -1735,10 +1735,14 @@ const SOKONI_FUNCTIONS_URL = "https://us-central1-sokoni-aeb26.cloudfunctions.ne
 
 /* Place order — open the right modal */
 function placeOrder(){
+  /* Prevent double-tap: capture original label then lock the button */
+  const _placeBtn = document.querySelector('.co-place-btn');
+  if (_placeBtn) { window._placeBtnOrigHTML = _placeBtn.innerHTML; _placeBtn.disabled = true; _placeBtn.innerHTML = '⏳ Processing...'; }
+
   /* Rate-limit order attempts: max 5 per minute per device */
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('place_order', 5, 60000)){
     showPushToast("⚠️ Slow Down", "Too many attempts. Please wait a moment.", "orange");
-    return;
+    _resetPlaceBtn(); return;
   }
 
   /* Zero Trust: evaluate access before processing payment */
@@ -1751,7 +1755,7 @@ function placeOrder(){
           showPushToast('🔒 Access Denied', decision.reason === 'step_up_cancelled'
             ? 'Verification is required to complete this purchase.'
             : 'Checkout blocked. Please contact support.', 'red');
-          return;
+          _resetPlaceBtn(); return;
         }
         _placeOrderCore();
       })
@@ -1767,12 +1771,12 @@ function _placeOrderCore(){
   const addr = document.getElementById("coAddress").value.trim();
   if(!name || !phone || !addr){
     showPushToast("⚠️ Missing Info", "Please fill in all delivery details", "orange");
-    return;
+    _resetPlaceBtn(); return;
   }
   /* Validate phone format */
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.validateKenyanPhone(phone)){
     showPushToast("⚠️ Invalid Phone", "Enter a valid Kenyan phone number", "orange");
-    return;
+    _resetPlaceBtn(); return;
   }
   /* Sanitize inputs before use */
   if(typeof SokoniSecurity !== 'undefined'){
@@ -1783,7 +1787,7 @@ function _placeOrderCore(){
   }
   if(cart.length === 0){
     showPushToast("🛒 Empty Cart", "Add products before checking out", "orange");
-    return;
+    _resetPlaceBtn(); return;
   }
   /* Funnel: payment attempted */
   (async () => {
@@ -2223,8 +2227,11 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
   const total = (typeof orderTotal === "number" && orderTotal > 0)
     ? orderTotal
     : currentCart.reduce((s,p) => s + Number(p.price||0), 0);
-  /* Use the server-generated orderId when provided — prevents client-side order ID forgery */
-  const orderId = serverOrderId || ("SKN" + Date.now().toString().slice(-6).toUpperCase());
+  /* Use the server-generated orderId when provided — prevents client-side order ID forgery.
+     For non-M-Pesa paths use _ckOrderId() which is deterministic from the stable session
+     key, so a retry or double-submit resolves to the same orderId and the Firestore
+     { merge: true } write becomes idempotent. */
+  const orderId = serverOrderId || _ckOrderId();
   const timeNow = new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
 
   const _authUser = JSON.parse(localStorage.getItem("sokoniUser")||"null");
@@ -2262,6 +2269,7 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
     location: window.deliveryLocation || null,
     serverVerified: !!serverOrderId,
     verificationToken: verificationToken || null,
+    idempotencyKey: sessionStorage.getItem('_ckikey') || null,
     steps:[
       {label:"Order Placed", done:true, time:timeNow},
       {label:"Processing",   done:true, time:timeNow},
@@ -2468,6 +2476,9 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
       }).catch(() => {}); /* fire and forget — order is already saved */
     }
   } catch(_) {}
+
+  /* Consume the session idempotency key — next order gets a fresh one */
+  sessionStorage.removeItem('_ckikey');
 
   /* Show in-page success overlay instead of redirect */
   const overlay = document.getElementById("orderSuccessOverlay");
