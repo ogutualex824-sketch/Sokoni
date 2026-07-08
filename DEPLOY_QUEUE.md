@@ -5,6 +5,31 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Sprint 4.8 — Phase 3 Portal Completion — 2026-07-08
+
+**No new Cloud Functions.** All backing CFs were deployed in Phase 3.
+
+**New pages (hosting deploy required):**
+- `webhooks.html` — Webhook Management portal
+- `task-queue.html` — Task Queue monitor
+- `api-gateway.html` — API Gateway metrics
+
+**Screenshots generated:**
+- `assets/screenshots/screen-{1..4}.png` — 1080×1920 Play Store screenshots
+
+**Hosting deploy:**
+```bash
+npx firebase-tools@latest deploy --only hosting
+```
+
+**Android build (manual — requires Android SDK):**
+1. Install Android Studio: https://developer.android.com/studio
+2. Update `~/.bubblewrap/config.json` with Android SDK path
+3. `bubblewrap build --skipPwaValidation`
+4. Upload `app-release.aab` to Play Console
+
+---
+
 ## Sprint 4.7 — Native Android TWA — 2026-07-08
 
 **No new Cloud Functions.**

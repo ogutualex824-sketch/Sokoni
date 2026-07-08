@@ -1,4 +1,36 @@
-﻿## [2026-07-08] — Sprint 4.7: Native Android — TWA / Play Store Packaging
+﻿## [2026-07-08] — Sprint 4.8: Phase 3 Portal Completion + Play Store Assets
+
+### Summary
+Completes the three missing Phase 3 admin portals: Webhook Management, Task Queue Monitor, and API Gateway Dashboard. Generates all four required Play Store screenshots (1080×1920 portrait). Wires all three portals into the command palette and splash system.
+
+### New Files
+- `webhooks.html` — webhook registration, delivery log, and stats; wired to 6 CF endpoints (`webhookRegister`, `webhookList`, `webhookDelete`, `webhookGetDeliveries`, `webhookTestEndpoint`, `webhookGetStats`)
+- `task-queue.html` — background job monitor; live queue stats, job status checker, single + bulk enqueue; wired to 5 CFs (`tqEnqueue`, `tqGetStatus`, `tqCancelTask`, `tqGetQueueStats`, `tqBulkEnqueue`); 30s auto-refresh
+- `api-gateway.html` — API traffic metrics, endpoint latency table, error log, rate-limit CRUD, top-client ranking; wired to `gwGetMetrics` + `gwManageRateLimit`
+- `assets/screenshots/screen-{1..4}.png` — Play Store screenshots (1080×1920) generated via Playwright
+
+### Modified Files
+- `shared-header.js` — added splash taglines for all three new portals
+- `sokoni-command-palette.js` — added Webhooks, Task Queue, API Gateway entries under Admin category
+
+### Security
+- All three portals use `onAuthStateChanged` + `getIdTokenResult()` admin/super_admin role check
+- XSS: all dynamic values go through `_esc()` before innerHTML insertion
+- No new secrets required; all backing CFs already deployed (Phase 3)
+
+### Deployment
+Hosting-only deploy: `npx firebase-tools@latest deploy --only hosting`
+
+### Play Store Build (Manual — requires local Android SDK)
+```bash
+# Install Android Studio or command-line tools first, then:
+bubblewrap build --skipPwaValidation
+# → app-release-signed.aab ready for Play Console upload
+```
+
+---
+
+## [2026-07-08] — Sprint 4.7: Native Android — TWA / Play Store Packaging
 
 ### Summary
 SOKONI is now Play Store-ready as a Trusted Web Activity (TWA). The PWA is wrapped in a native Android shell using Bubblewrap. Digital Asset Links are wired via a Firebase Hosting rewrite (works around the `.well-known/` dot-directory ignore rule). The web app manifest is upgraded with Play Store screenshots metadata.

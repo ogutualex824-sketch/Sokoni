@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Webhooks — SOKONI</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="assets/favicon.png">
+  <script src="sokoni-config.js"></script>
+  <script src="shared-header.js"></script>
+  <style>
+    :root{--bg:#050505;--surface:#0e0e0e;--card:#111;--border:#1a1a1a;--muted:#2a2a2a;
+      --text:#e8e8e8;--sub:#666;--accent:#71ff00;--danger:#ff4d6d;--warn:#ffb300;--info:#00bcd4}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;
+      padding-top:max(64px,var(--sk-header-h,64px))}
+    .hero{padding:28px 20px 16px;max-width:1200px;margin:0 auto}
+    .hero h1{font-size:clamp(20px,3vw,28px);font-weight:700;letter-spacing:-.02em}
+    .hero h1 span{color:var(--accent)}
+    .hero p{color:var(--sub);font-size:13px;margin-top:4px}
+    .tabs{display:flex;gap:4px;padding:0 20px;max-width:1200px;margin:0 auto;
+      border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--sub);background:0;
+      border:0;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;
+      transition:color .15s,border-color .15s}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .tab:hover:not(.active){color:var(--text)}
+    .pane{display:none;padding:20px;max-width:1200px;margin:0 auto}
+    .pane.active{display:block}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+    .section-title{font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;
+      letter-spacing:.08em;margin:20px 0 10px}
+    label{font-size:12px;color:var(--sub);display:block;margin-bottom:4px}
+    input,select,textarea{width:100%;background:var(--surface);border:1px solid var(--muted);
+      border-radius:7px;color:var(--text);padding:9px 12px;font-size:13px;outline:none;
+      font-family:inherit}
+    input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+    select option{background:var(--surface)}
+    .form-grid{display:grid;gap:12px}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:600px){.form-row{grid-template-columns:1fr}}
+    .btn{padding:9px 20px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;
+      border:none;transition:opacity .15s,transform .1s;white-space:nowrap}
+    .btn:active{transform:scale(.97)}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn-primary{background:var(--accent);color:#000}
+    .btn-sm{padding:6px 14px;font-size:12px}
+    .btn-danger{background:rgba(255,77,109,.12);color:var(--danger);border:1px solid rgba(255,77,109,.2)}
+    .btn-ghost{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+    .tbl-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{background:var(--surface);padding:10px 14px;text-align:left;color:var(--sub);
+      font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+    td{padding:11px 14px;border-top:1px solid var(--border);vertical-align:middle}
+    tr:hover td{background:var(--surface)}
+    .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;
+      font-size:11px;font-weight:600}
+    .badge-ok{background:rgba(113,255,0,.12);color:var(--accent)}
+    .badge-err{background:rgba(255,77,109,.12);color:var(--danger)}
+    .badge-warn{background:rgba(255,179,0,.12);color:var(--warn)}
+    .badge-info{background:rgba(0,188,212,.12);color:var(--info)}
+    code{font-family:monospace;font-size:11px;color:var(--info);background:rgba(0,188,212,.08);
+      padding:2px 6px;border-radius:4px;word-break:break-all}
+    .empty{padding:36px 0;text-align:center;color:var(--muted);font-size:13px}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--muted);
+      border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:32px;
+      color:var(--sub);font-size:13px}
+    .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+    .spacer{flex:1}
+    .events-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:8px}
+    .event-chk{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--sub);cursor:pointer}
+    .event-chk input{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+    .secret-hint{font-size:11px;color:var(--sub);margin-top:4px}
+    .delivery-meta{font-size:11px;color:var(--sub);margin-top:2px}
+    .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:20px}
+    .stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px}
+    .stat-lbl{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+    .stat-val{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+  </style>
+</head>
+<body>
+<div class="hero">
+  <h1>Webhook <span>Management</span></h1>
+  <p>Register endpoints, monitor deliveries, and test integrations.</p>
+</div>
+
+<div class="tabs" role="tablist">
+  <button class="tab active" role="tab" data-tab="register">Register</button>
+  <button class="tab" role="tab" data-tab="webhooks">My Webhooks</button>
+  <button class="tab" role="tab" data-tab="deliveries">Delivery Log</button>
+  <button class="tab" role="tab" data-tab="stats">Stats</button>
+</div>
+
+<!-- ═══ REGISTER ═══ -->
+<section class="pane active" id="pane-register">
+  <div class="card">
+    <div class="form-grid">
+      <div>
+        <label for="wh-url">Endpoint URL *</label>
+        <input type="url" id="wh-url" placeholder="https://your-server.com/webhook">
+      </div>
+      <div class="form-row">
+        <div>
+          <label for="wh-secret">Signing Secret (optional)</label>
+          <input type="text" id="wh-secret" placeholder="Auto-generated if blank">
+          <div class="secret-hint">Sent as X-Sokoni-Signature (HMAC-SHA256)</div>
+        </div>
+        <div>
+          <label for="wh-desc">Description</label>
+          <input type="text" id="wh-desc" placeholder="e.g. Order notifications">
+        </div>
+      </div>
+      <div>
+        <label>Subscribe to Events *</label>
+        <div class="events-grid" id="events-grid">
+          <!-- populated by JS -->
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-ghost btn-sm" onclick="clearForm()">Clear</button>
+        <button class="btn btn-primary" id="reg-btn" onclick="registerWebhook()">Register Webhook</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ WEBHOOKS LIST ═══ -->
+<section class="pane" id="pane-webhooks">
+  <div class="toolbar">
+    <span id="wh-count" style="font-size:13px;color:var(--sub)">—</span>
+    <div class="spacer"></div>
+    <button class="btn btn-primary btn-sm" onclick="loadWebhooks()">Refresh</button>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>Endpoint</th><th>Events</th><th>Status</th><th>Created</th><th></th></tr>
+      </thead>
+      <tbody id="wh-tbody"><tr><td colspan="5" class="loading"><span class="spinner"></span>Loading…</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══ DELIVERY LOG ═══ -->
+<section class="pane" id="pane-deliveries">
+  <div class="toolbar">
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px">
+      Webhook
+      <select id="dl-wh-select" style="width:auto;margin-left:4px" onchange="loadDeliveries()">
+        <option value="">All</option>
+      </select>
+    </label>
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin-left:10px">
+      Status
+      <select id="dl-status" style="width:auto;margin-left:4px" onchange="loadDeliveries()">
+        <option value="">All</option>
+        <option value="delivered">Delivered</option>
+        <option value="failed">Failed</option>
+        <option value="retrying">Retrying</option>
+      </select>
+    </label>
+    <div class="spacer"></div>
+    <button class="btn btn-primary btn-sm" onclick="loadDeliveries()">Refresh</button>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Event</th><th>Endpoint</th><th>Status</th><th>HTTP</th><th>Duration</th><th></th></tr>
+      </thead>
+      <tbody id="dl-tbody"><tr><td colspan="7" class="loading"><span class="spinner"></span>Loading…</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══ STATS ═══ -->
+<section class="pane" id="pane-stats">
+  <div class="toolbar">
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px">
+      Webhook
+      <select id="st-wh-select" style="width:auto;margin-left:4px" onchange="loadStats()">
+        <option value="">All</option>
+      </select>
+    </label>
+    <div class="spacer"></div>
+    <button class="btn btn-primary btn-sm" onclick="loadStats()">Refresh</button>
+  </div>
+  <div class="stat-grid" id="stat-grid">
+    <div class="loading"><span class="spinner"></span></div>
+  </div>
+  <div class="section-title">Event Breakdown</div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Event Type</th><th>Delivered</th><th>Failed</th><th>Success Rate</th></tr></thead>
+      <tbody id="st-tbody"><tr><td colspan="4" class="empty">Select a webhook and refresh.</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<script type="module">
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+
+const auth = getAuth(getApp());
+const fn   = getFunctions(getApp(), 'us-central1');
+let _uid = null, _webhooks = [];
+
+const EVENTS = [
+  'order.created','order.confirmed','order.completed','order.cancelled',
+  'payment.initiated','payment.completed','payment.failed','payment.refunded',
+  'delivery.assigned','delivery.picked_up','delivery.delivered','delivery.failed',
+  'product.created','product.updated','product.deleted',
+  'user.registered','user.verified',
+  'review.submitted','dispute.opened','dispute.resolved',
+  'subscription.started','subscription.cancelled','subscription.renewed',
+];
+
+// Populate events grid
+document.getElementById('events-grid').innerHTML = EVENTS.map(e =>
+  `<label class="event-chk"><input type="checkbox" value="${e}" class="evt-chk"><span>${e}</span></label>`
+).join('');
+
+onAuthStateChanged(auth, async user => {
+  if (!user) { location.replace('login.html?redirect=' + encodeURIComponent(location.href)); return; }
+  _uid = user.uid;
+  loadWebhooks();
+  loadStats();
+});
+
+function _call(name, data={}) { return httpsCallable(fn, name)(data).then(r => r.data); }
+function _ts(ms){ return ms ? new Date(ms).toLocaleString('en-KE',{timeZone:'Africa/Nairobi',hour12:false,month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'; }
+function _esc(s){ return String(s||'').replace(/[<>"'&]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c])); }
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('pane-' + t.dataset.tab).classList.add('active');
+  if (t.dataset.tab === 'webhooks')  loadWebhooks();
+  if (t.dataset.tab === 'deliveries') loadDeliveries();
+  if (t.dataset.tab === 'stats')     loadStats();
+}));
+
+// ── Register ──────────────────────────────────────────────────────────────
+window.registerWebhook = async function() {
+  const url    = document.getElementById('wh-url').value.trim();
+  const secret = document.getElementById('wh-secret').value.trim();
+  const desc   = document.getElementById('wh-desc').value.trim();
+  const events = [...document.querySelectorAll('.evt-chk:checked')].map(c => c.value);
+  if (!url) { alert('Endpoint URL is required.'); return; }
+  if (!events.length) { alert('Select at least one event.'); return; }
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true; btn.textContent = 'Registering…';
+  try {
+    await _call('webhookRegister', { url, secret: secret||undefined, description: desc||undefined, events });
+    clearForm();
+    alert('Webhook registered successfully.');
+    loadWebhooks();
+  } catch(e) { alert('Error: ' + e.message); }
+  finally { btn.disabled = false; btn.textContent = 'Register Webhook'; }
+};
+
+window.clearForm = function() {
+  document.getElementById('wh-url').value = '';
+  document.getElementById('wh-secret').value = '';
+  document.getElementById('wh-desc').value = '';
+  document.querySelectorAll('.evt-chk').forEach(c => c.checked = false);
+};
+
+// ── Webhooks list ─────────────────────────────────────────────────────────
+window.loadWebhooks = async function() {
+  const tb = document.getElementById('wh-tbody');
+  tb.innerHTML = '<tr><td colspan="5" class="loading"><span class="spinner"></span>Loading…</td></tr>';
+  try {
+    const d = await _call('webhookList');
+    _webhooks = (d && d.webhooks) || [];
+    document.getElementById('wh-count').textContent = _webhooks.length + ' webhook' + (_webhooks.length !== 1 ? 's' : '');
+    _syncSelects();
+    if (!_webhooks.length) { tb.innerHTML = '<tr><td colspan="5" class="empty">No webhooks yet. Register one above.</td></tr>'; return; }
+    tb.innerHTML = _webhooks.map(w => `
+      <tr>
+        <td><div style="font-size:12px;font-weight:600">${_esc(w.url||'')}</div><div style="font-size:11px;color:var(--sub)">${_esc(w.description||'')}</div></td>
+        <td style="font-size:11px;max-width:260px">${(w.events||[]).slice(0,3).map(e=>`<code>${_esc(e)}</code>`).join(' ')}<span style="color:var(--sub)">${w.events?.length>3?' +'+( w.events.length-3)+' more':''}</span></td>
+        <td><span class="badge ${w.active===false?'badge-err':'badge-ok'}">${w.active===false?'Disabled':'Active'}</span></td>
+        <td style="font-size:11px;color:var(--sub);white-space:nowrap">${_ts(w.createdAt)}</td>
+        <td style="display:flex;gap:6px">
+          <button class="btn btn-sm btn-ghost" onclick="testWebhook('${_esc(w.id)}')">Test</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteWebhook('${_esc(w.id)}','${_esc(w.url||'')}')">Delete</button>
+        </td>
+      </tr>`).join('');
+  } catch(e) { tb.innerHTML = `<tr><td colspan="5" class="empty">Error: ${e.message}</td></tr>`; }
+};
+
+window.deleteWebhook = async function(id, url) {
+  if (!confirm(`Delete webhook for ${url}?`)) return;
+  try { await _call('webhookDelete', { webhookId: id }); loadWebhooks(); }
+  catch(e) { alert('Delete failed: ' + e.message); }
+};
+
+window.testWebhook = async function(id) {
+  try {
+    const d = await _call('webhookTestEndpoint', { webhookId: id });
+    alert('Test sent. Status: ' + (d && d.status || 'unknown') + (d && d.httpStatus ? ' (HTTP '+d.httpStatus+')' : ''));
+  } catch(e) { alert('Test failed: ' + e.message); }
+};
+
+// ── Deliveries ────────────────────────────────────────────────────────────
+window.loadDeliveries = async function() {
+  const tb = document.getElementById('dl-tbody');
+  tb.innerHTML = '<tr><td colspan="7" class="loading"><span class="spinner"></span>Loading…</td></tr>';
+  const whId  = document.getElementById('dl-wh-select').value;
+  const status= document.getElementById('dl-status').value;
+  try {
+    const d = await _call('webhookGetDeliveries', { webhookId: whId||undefined, status: status||undefined, limit: 50 });
+    const rows = (d && d.deliveries) || [];
+    if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">No deliveries found.</td></tr>'; return; }
+    tb.innerHTML = rows.map(r => {
+      const sc = r.status === 'delivered' ? 'badge-ok' : r.status === 'retrying' ? 'badge-warn' : 'badge-err';
+      const httpCol = r.httpStatus >= 200 && r.httpStatus < 300 ? 'var(--accent)' : 'var(--danger)';
+      return `<tr>
+        <td style="white-space:nowrap;font-size:11px">${_ts(r.ts)}</td>
+        <td><code>${_esc(r.event||'')}</code></td>
+        <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(r.url||'')}</td>
+        <td><span class="badge ${sc}">${r.status||'—'}</span></td>
+        <td style="color:${httpCol};font-variant-numeric:tabular-nums">${r.httpStatus||'—'}</td>
+        <td style="font-size:11px;color:var(--sub)">${r.durationMs ? r.durationMs+'ms' : '—'}</td>
+        <td>${r.status === 'failed' ? `<button class="btn btn-sm btn-ghost" onclick="retryDelivery('${_esc(r.id)}')">Retry</button>` : ''}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) { tb.innerHTML = `<tr><td colspan="7" class="empty">Error: ${e.message}</td></tr>`; }
+};
+
+window.retryDelivery = async function(id) {
+  try { await _call('webhookDeliver', { deliveryId: id, retry: true }); loadDeliveries(); }
+  catch(e) { alert('Retry failed: ' + e.message); }
+};
+
+// ── Stats ─────────────────────────────────────────────────────────────────
+window.loadStats = async function() {
+  const whId = document.getElementById('st-wh-select').value;
+  const sg = document.getElementById('stat-grid');
+  const tb = document.getElementById('st-tbody');
+  sg.innerHTML = '<div class="loading"><span class="spinner"></span></div>';
+  try {
+    const d = await _call('webhookGetStats', { webhookId: whId||undefined });
+    const s = (d && d.summary) || {};
+    sg.innerHTML = [
+      { lbl:'Total Delivered', val: s.delivered ?? '—' },
+      { lbl:'Failed',          val: s.failed     ?? '—' },
+      { lbl:'Retrying',        val: s.retrying   ?? '—' },
+      { lbl:'Success Rate',    val: s.successRate != null ? s.successRate.toFixed(1)+'%' : '—' },
+      { lbl:'Avg Latency',     val: s.avgLatencyMs ? s.avgLatencyMs+'ms' : '—' },
+      { lbl:'Active Webhooks', val: s.activeWebhooks ?? '—' },
+    ].map(k => `<div class="stat"><div class="stat-lbl">${k.lbl}</div><div class="stat-val">${k.val}</div></div>`).join('');
+    const ev = (d && d.byEvent) || [];
+    if (!ev.length) { tb.innerHTML = '<tr><td colspan="4" class="empty">No event data yet.</td></tr>'; return; }
+    tb.innerHTML = ev.map(e => {
+      const rate = e.delivered + e.failed > 0 ? ((e.delivered/(e.delivered+e.failed))*100).toFixed(1)+'%' : '—';
+      const rateCol = parseFloat(rate) >= 95 ? 'var(--accent)' : parseFloat(rate) >= 80 ? 'var(--warn)' : 'var(--danger)';
+      return `<tr><td><code>${_esc(e.event)}</code></td><td>${e.delivered??0}</td><td>${e.failed??0}</td><td style="color:${rateCol}">${rate}</td></tr>`;
+    }).join('');
+  } catch(e) { sg.innerHTML = `<div class="empty">Error: ${e.message}</div>`; }
+};
+
+function _syncSelects() {
+  ['dl-wh-select','st-wh-select'].forEach(id => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All</option>' +
+      _webhooks.map(w => `<option value="${_esc(w.id)}" ${w.id===cur?'selected':''}>${_esc(w.url||w.id)}</option>`).join('');
+  });
+}
+</script>
+</body>
+</html>

@@ -105,9 +105,27 @@ Also fill in the signing credentials (these are used by Bubblewrap at build time
 
 ---
 
-## Step 5 — Initialise the Bubblewrap Project
+## Step 5 — Install Android SDK and Configure Bubblewrap
 
-Run from the project root:
+**Important:** Bubblewrap requires Android SDK on first run. Install one of:
+
+- **Android Studio** (easiest): https://developer.android.com/studio — includes SDK
+- **Command-line tools only**: https://developer.android.com/tools/sdkmanager
+
+After Android Studio installs, the SDK is at:
+```
+C:\Users\USER1\AppData\Local\Android\Sdk
+```
+
+Configure Bubblewrap with both paths in `~/.bubblewrap/config.json`:
+```json
+{
+  "jdkPath": "C:\\Program Files\\Microsoft\\jdk-17.0.19.10-hotspot",
+  "androidSdkPath": "C:\\Users\\USER1\\AppData\\Local\\Android\\Sdk"
+}
+```
+
+Then initialise the Bubblewrap project from the project root:
 
 ```bash
 bubblewrap init --manifest=https://mysokoni.co.ke/manifest.json
@@ -195,7 +213,7 @@ Online validator: https://developers.google.com/digital-asset-links/tools/genera
 - [ ] App icon: 512×512 PNG, no alpha, exported from `assets/icons/icon-512.png`
 - [ ] Feature graphic: 1024×500 PNG
 - [ ] Phone screenshots: at least 2, max 8 (1080×1920 portrait recommended)
-  - Use `assets/screenshots/screen-*.png` — generate these with Playwright or a physical device
+  - `assets/screenshots/screen-{1..4}.png` — already generated (1080×1920 via Playwright); capture more on a physical device if needed
 
 ### Release
 - [ ] Upload `app-release.aab` to Internal Testing track first

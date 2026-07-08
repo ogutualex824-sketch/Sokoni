@@ -60,6 +60,9 @@
       /* Analytics & Observability */
       'analytics.html':               { line: 'Insights That Drive Growth',     bar: '#71ff00' },
       'observability.html':           { line: 'Platform Health at a Glance.',   bar: '#00bcd4' },
+      'webhooks.html':                { line: 'Connect. Integrate. Automate.',  bar: '#71ff00' },
+      'task-queue.html':              { line: 'Background Jobs, Under Control.', bar: '#00bcd4' },
+      'api-gateway.html':             { line: 'Traffic. Metrics. Control.',      bar: '#71ff00' },
       /* SmartPOS */
       'pos.html':                     { line: 'Point of Sale. Powered by AI.',  bar: '#71ff00' },
       'pos-checkout.html':            { line: 'Fast Checkout. Every Time.',     bar: '#71ff00' },

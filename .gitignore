@@ -103,6 +103,7 @@ firestore.indexes.json.new-only
 
 # Playwright screenshots and test artifacts
 screenshots/
+!assets/screenshots/
 test-results/
 playwright-report/
 
