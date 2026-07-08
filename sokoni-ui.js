@@ -687,9 +687,10 @@
        and installed PWAs report offline while the network is actually up, which
        used to leave this banner stuck on-screen with working internet. The probe
        always runs so recovery is guaranteed.
-       1. no-cors GET https://www.gstatic.com/generate_204 (SW never intercepts it)
-       2. HEAD /manifest.json?_nc=<ts> fallback (corporate firewalls that block gstatic)
-    ─────────────────────────────────────────────────────────────────────── */
+       Signal: no-cors GET https://www.gstatic.com/generate_204 (SW never caches it,
+       so it fails iff the network is truly down). If gstatic itself is unreachable
+       (e.g. a corporate firewall), fall back to navigator.onLine rather than an
+       own-origin request the service worker would serve from cache offline. */
     function _doProbe() {
       var c1 = new AbortController();
       var t1 = setTimeout(function() { c1.abort(); }, 4000);
