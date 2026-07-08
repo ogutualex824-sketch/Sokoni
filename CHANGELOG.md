@@ -1,4 +1,171 @@
-﻿## [2026-07-08] — MiniShop 2.0 — Premium Social Commerce Storefront
+﻿## [2026-07-08] — Merchant Success & Growth Engine v2.0
+
+### Summary
+Complete rebuild of the Merchant Success platform — replaces the 11-CF v1.0 shell with a full 17-CF business intelligence engine and a premium 10-section dashboard. Merchants can now track a live health score, get AI coaching, run CRM campaigns, monitor inventory, benchmark against peers, automate workflows, and access a full financial analytics suite — all from one page.
+
+### Files Affected
+| File | Change |
+|---|---|
+| `functions/merchant-success.js` | REPLACED — v1.0 (11 CFs) → v2.0 (17 CFs, 1,340 lines) |
+| `merchant-success.html` | REPLACED — full premium redesign, 10 sections, ~1,800 lines |
+| `functions/index.js` | Updated exports (stale v1 names replaced with v2 names) |
+| `DEPLOY_QUEUE.md` | Added v2.0 spot deploy + cleanup command |
+
+### New Cloud Functions (17)
+| Function | Purpose |
+|---|---|
+| `getMerchantDashboard` | Health + stats + alerts in one call — page load data |
+| `getMerchantHealthScore` | 8-factor score (profile, products, ratings, orders, response, sales, inventory, cancellation) |
+| `getMerchantAICoach` | Claude Haiku recommendations + question answering (rate limited: 10/day per shop) |
+| `getMerchantOpportunities` | Low stock, top sellers, returning customers, missed sales signals |
+| `getMerchantCRM` | Customer aggregation with LTV, segments (champion/loyal/at_risk/lost/new) |
+| `updateCustomerNote` | Save CRM note for a specific customer |
+| `getMerchantInventoryIntelligence` | Sales velocity analysis: fast/slow/dead/low/out/overstock |
+| `getMerchantFinancials` | Revenue trend, AOV, CLV, repeat rate, peak hours, top products |
+| `getMerchantBenchmark` | Anonymous comparison with similar-category businesses |
+| `getMerchantAutomations` | List merchant automation rules |
+| `saveMerchantAutomation` | Create/update automation rule (10 supported types) |
+| `toggleMerchantAutomation` | Enable/disable a rule |
+| `createMerchantCampaign` | Create campaign (WhatsApp, email, push, coupon, flash sale, win-back) with optional AI copy |
+| `getMerchantCampaigns` | List campaigns with stats |
+| `getMerchantAcademy` | 5 modules, 22 lessons, XP + level progression |
+| `updateAcademyProgress` | Mark lesson complete, award XP, badge on module completion |
+| `generateMerchantContent` | AI content gen (6 types: bio, description, status, campaign, template, flash sale) — rate limited: 20/day per user |
+
+### Dashboard Sections
+1. **Overview** — Health score ring (SVG animated), 6 KPI cards, action-required alerts, quick-action tiles
+2. **AI Coach** — Daily recommendations, ask-a-question, AI content generator with copy button
+3. **Sales Opportunities** — Low stock, out of stock, top sellers, returning/inactive customer counts
+4. **CRM** — Segment tabs, customer cards with LTV + segment badge, CRM note
+5. **Inventory Intelligence** — 6 category tabs, stock level bars, per-product recommendations
+6. **Marketing** — Campaign create form (type + segment + discount + AI message), campaign list
+7. **Benchmarks** — 3-bar comparison (you / average / top 25%) per metric
+8. **Automation** — 8 template tiles (click to enable), active automations with toggle switch
+9. **Financial Insights** — Period selector (7/30/90d), CSS bar chart, top products, peak hours
+10. **Merchant Academy** — XP progress bar, 5 expandable modules, lesson checkboxes, level badges
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `merchantHealth/{shopId}` | Cached health score (TTL 1 hour) |
+| `merchantAutomations/{id}` | Automation rules (single-field `shopId` query) |
+| `merchantCampaigns/{id}` | Campaigns (single-field `shopId` query) |
+| `crmNotes/{shopId}/customers/{customerId}` | CRM notes per customer |
+| `academyProgress/{uid}` | Lesson completion + XP + badges |
+| `aiCoachRL/{shopId_YYYYMMDD}` | Coach rate limiter (max 10/day) |
+| `aiContentRL/{uid_YYYYMMDD}` | Content gen rate limiter (max 20/day) |
+
+### Security
+- `enforceAppCheck: true` on all 17 CFs
+- `_assertSellerAccess()` validates ownership on every shop-scoped write
+- All secrets via `ANTHROPIC_KEY.value()` at runtime — no `process.env` fallbacks
+- Benchmark CF never returns individual shop IDs — anonymous aggregate only
+- XSS escaped via `_esc()` on all user-generated content rendered into innerHTML
+- CRM notes write validated: seller must own the shop (`shopId` in note path)
+- Rate limits on all AI calls prevent cost runaway
+
+### Performance
+- Section lazy-loading — data fetched only when section first visited
+- Health score cached in Firestore with 1-hour TTL (avoids repeated order aggregation)
+- All queries single-field `where()` — no new composite Firestore indexes
+- All Claude Haiku calls have 20s AbortController timeout
+
+### Breaking Changes
+Five v1 function names were renamed. Old CFs remain deployed until quota allows deletion:
+- `getAICoachInsights` → `getMerchantAICoach`
+- `getMerchantInventoryInsights` → `getMerchantInventoryIntelligence`
+- `getMerchantBenchmarks` → `getMerchantBenchmark`
+- `createMerchantAutomation` → `saveMerchantAutomation`
+- `completeMerchantLesson` → `updateAcademyProgress`
+
+### Deployment
+CFs are quota-blocked. Spot deploy command in `DEPLOY_QUEUE.md`.
+Hosting deploy: `firebase deploy --only hosting --project sokoni-aeb26`
+
+---
+
+## [2026-07-08] — Platform-Wide Idempotency & Race-Condition Hardening
+
+### Summary
+Full-project audit and fix for duplicate submissions, write-only transaction race conditions, and missing button-disable guards. 24 findings across 19 files — covering Cloud Functions for payments, bookings, loyalty, jobs, disputes, returns, installments, and subscriptions, plus 9 frontend HTML pages. Every transactional boundary that could accept two concurrent identical requests and produce two financial records has been hardened.
+
+### Backend Cloud Functions Fixed
+
+| File | Function | Finding | Risk |
+|---|---|---|---|
+| `functions/commission.js` | `processSettlement` | 13 | Seller wallet double-credited via write-only tx |
+| `functions/commission.js` | `approveWithdrawal` | 14 | `pendingBalance` double-debited; two ledger entries |
+| `functions/commission.js` | `rejectWithdrawal` | 15 | `withdrawableBalance` double-restored |
+| `functions/financial-os.js` | `fosInitiatePayment` | 1 | Two M-Pesa STK pushes; rate-limit bypass |
+| `functions/financial-os.js` | `fosSubmitRefund` | 2 | Two refund records for one transaction |
+| `functions/event-hub.js` | `purchaseTickets` | 12 | Two orders + two ticket sets issued |
+| `functions/loyalty.js` | `awardLoyaltyPoints` | 7 | Double loyalty points awarded |
+| `functions/loyalty.js` | `redeemLoyaltyPoints` | 8 | Double redemption / phantom cashback |
+| `functions/loyalty.js` | `createLoyaltyAccount` | 9 | Referral bonus credited twice |
+| `functions/loyalty.js` | `syncOfflineLoyaltyTransactions` | 10 | Offline tx processed twice |
+| `functions/sub-engine.js` | `subUpgradeWithProration` | 11 | Double billing history entry |
+| `functions/disputes.js` | `createDispute` | 4 | Two open disputes for one order |
+| `functions/returns-engine.js` | `submitReturn` | 5 | Two return records / double refund |
+| `functions/installments.js` | `installmentCreatePlan` | 3 | Two active installment plans per order |
+| `functions/jobs.js` | `applyForJob` | 6 | `applicationCount` incremented twice |
+
+### Fix applied to all backend findings
+**Pattern A — idempotency doc read outside transaction:** Moved `txn.get(idemDocRef)` to be the first read inside `runTransaction`. If the doc exists, set `isReplay = true; replayData = snap.data(); return`. After the transaction: `if (isReplay) return { ...replayData, idempotent: true }`.
+
+**Pattern B — write-only transaction (no reads → no conflict detection):** Added `txn.get(statusDoc)` as the first read inside the transaction; re-validated the status condition and threw an error if it no longer holds. This gives Firestore the read set it needs to detect concurrent writes.
+
+**Pattern C — collection query as duplicate guard:** Replaced with a deterministic document ID (e.g., `disputes/dp_{orderId}`, `returns/ret_{orderId}_{uid}`, `installmentPlans/ip_{orderId}`, `fosRefundQueue/ref_{txId}`) so the check becomes `txn.get(docRef)` — atomically readable inside a transaction.
+
+**Pattern D — `billingHistory.add()` outside transaction:** Moved inside the transaction as `txn.set(collection.doc(), {...})`.
+
+### Frontend HTML Pages Fixed
+
+| File | Handler | Finding | Fix |
+|---|---|---|---|
+| `bnb.html` | `confirmBooking` | 16 | `_bnbRef` generated on modal open; button disabled on click |
+| `car-rental.html` | `submitBooking` | 17 | Single `_carBkgId` used for both M-Pesa `orderId` and booking `id`; button disabled |
+| `dispute.html` | `submitDispute` | 18 | `_dspRef` generated on form show; button disabled; all early-exit paths re-enable |
+| `banking.html` | `submitApplication` | 19 | All four `Date.now()` calls replaced by `_bankAppId` + derivatives; button disabled |
+| `entertainment.html` | `submitBooking` | 20 | `_entBkgId` generated in `_proceedOpenBooking`; button disabled |
+| `services.html` | `submitBooking` | 21 | `_svcBkgId` generated in `_openBookingDetails`; button disabled |
+| `construction.html` | `submitOrder` | 22 | `_constrRef` generated in `openOrder`; button disabled; both `Date.now()` calls replaced |
+| `healthcare.html` | `submitAppt` / `bookTeleconsult` | 23 | `_apptId` and `_tcRef` generated on modal open; buttons disabled in both handlers |
+| `ride-book.html` | click handler | 24 | `_rbRef` generated once on first click (not overwritten on retry); existing button guard retained |
+
+### Fix pattern for all frontend findings
+1. Declare a module-level `let _xxxId = null` variable.
+2. Generate the ID **once** when the modal/form opens (not inside the click handler) — so a retry reuses the same ID.
+3. Disable the submit button at the very start of the handler; re-enable it only on error paths.
+4. Clear the ID (`= null`) after a successful submission or modal close; the next open generates a fresh one.
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `disputes/dp_{orderId}` | Deterministic dispute document — prevents two concurrent dispute submissions |
+| `returns/ret_{orderId}_{uid}` | Deterministic return document |
+| `installmentPlans/ip_{orderId}` | Deterministic installment plan document |
+| `fosRefundQueue/ref_{txId}` | Deterministic refund record per financial transaction |
+
+### Security Notes
+- All server-side idempotency checks are inside `runTransaction` — no TOCTOU window remains
+- Client-generated stable IDs are never trusted as sole authorization; server-side ownership checks (uid, orderId ownership) still apply
+- Deterministic doc IDs expose no new information; the `dp_`, `ret_`, `ip_`, `ref_` prefixes prevent collisions across collections
+
+### Performance Notes
+- Firestore optimistic concurrency: on contention, one transaction retries with < 1 round-trip overhead
+- Pre-fetches preserved where they exist (e.g., loyalty account reads outside the transaction for non-critical data); the atomic guard is always the in-transaction read
+- `billingHistory` entries now written atomically inside the subscription upgrade transaction — eliminates the post-transaction async add that could fail silently
+
+### Breaking Changes
+- `disputes/{auto-id}` → `disputes/dp_{orderId}` — dispute documents now have predictable IDs. Any code that lists disputes by `orderId` query still works; code that stores and then fetches by document ID will need updating if it was storing the old auto-ID.
+- `returns/{auto-id}` → `returns/ret_{orderId}_{uid}` — same consideration.
+- `installmentPlans/{auto-id}` → `installmentPlans/ip_{orderId}` — same consideration.
+- `fosRefundQueue/{auto-id}` → `fosRefundQueue/ref_{txId}` — same consideration.
+- All other changes are non-breaking: API shapes unchanged, replay responses add `idempotent: true` flag.
+
+---
+
+## [2026-07-08] — MiniShop 2.0 — Premium Social Commerce Storefront
 
 ### Summary
 Complete redesign of the public MiniShop experience. The storefront now feels like a premium, mobile-first business website — helping merchants grow through effortless social sharing — while remaining fully integrated with SOKONI commerce, payments, loyalty, and analytics.

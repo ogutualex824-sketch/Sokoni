@@ -8209,19 +8209,25 @@ exports.getSellerDisputes       = disputes.getSellerDisputes;
 exports.adminGetAllDisputes     = disputes.adminGetAllDisputes;
 exports.adminResolveDispute     = disputes.adminResolveDispute;
 
-/* ── Merchant Success & Growth Engine v1.0 ──────────────────────────────── */
+/* ── Merchant Success & Growth Engine v2.0 ──────────────────────────────── */
 const merchantSuccess = require('./merchant-success');
-exports.getMerchantHealthScore    = merchantSuccess.getMerchantHealthScore;
-exports.getAICoachInsights        = merchantSuccess.getAICoachInsights;
-exports.getMerchantCRM            = merchantSuccess.getMerchantCRM;
-exports.getMerchantInventoryInsights = merchantSuccess.getInventoryInsights;
-exports.getMerchantFinancials     = merchantSuccess.getMerchantFinancials;
-exports.getMerchantBenchmarks     = merchantSuccess.getMerchantBenchmarks;
-exports.getMerchantOpportunities  = merchantSuccess.getMerchantOpportunities;
-exports.createMerchantAutomation  = merchantSuccess.createMerchantAutomation;
-exports.getMerchantAutomations    = merchantSuccess.getMerchantAutomations;
-exports.getMerchantAcademy        = merchantSuccess.getMerchantAcademy;
-exports.completeMerchantLesson    = merchantSuccess.completeMerchantLesson;
+exports.getMerchantDashboard          = merchantSuccess.getMerchantDashboard;
+exports.getMerchantHealthScore        = merchantSuccess.getMerchantHealthScore;
+exports.getMerchantAICoach            = merchantSuccess.getMerchantAICoach;
+exports.getMerchantOpportunities      = merchantSuccess.getMerchantOpportunities;
+exports.getMerchantCRM                = merchantSuccess.getMerchantCRM;
+exports.updateCustomerNote            = merchantSuccess.updateCustomerNote;
+exports.getMerchantInventoryIntelligence = merchantSuccess.getMerchantInventoryIntelligence;
+exports.getMerchantFinancials         = merchantSuccess.getMerchantFinancials;
+exports.getMerchantBenchmark          = merchantSuccess.getMerchantBenchmark;
+exports.getMerchantAutomations        = merchantSuccess.getMerchantAutomations;
+exports.saveMerchantAutomation        = merchantSuccess.saveMerchantAutomation;
+exports.toggleMerchantAutomation      = merchantSuccess.toggleMerchantAutomation;
+exports.createMerchantCampaign        = merchantSuccess.createMerchantCampaign;
+exports.getMerchantCampaigns          = merchantSuccess.getMerchantCampaigns;
+exports.getMerchantAcademy            = merchantSuccess.getMerchantAcademy;
+exports.updateAcademyProgress         = merchantSuccess.updateAcademyProgress;
+exports.generateMerchantContent       = merchantSuccess.generateMerchantContent;
 
 /* ── Navigation & Intelligent Dispatch v1.0 ────────────────────────────── */
 const navigation = require('./navigation');

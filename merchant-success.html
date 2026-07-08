@@ -2,1359 +2,1795 @@
 <html lang="en" data-no-header="true">
 <head>
   <script src="security.js"></script>
-<script src="shared-header.js"></script>
+  <script src="shared-header.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Merchant Success — SOKONI</title>
+  <title>Merchant Success | SOKONI</title>
   <style>
-    /* ─── Design Tokens ─────────────────────────────────────────────── */
     :root {
-      /* ── SOKONI Premium Dark Standard ─────────────────────────────── */
-      --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
-      --g:#71ff00; --ga:rgba(113,255,0,.12); --ga2:rgba(113,255,0,.06);
-      --bor:#1a1a1a; --bor2:#222; --txt:#e8e8e8; --sub:#888; --radius:12px;
-      /* ── Legacy aliases (used throughout this file) ───────────────── */
-      --surface: #0d0d0d;
-      --border:  #1a1a1a;
-      --accent:  #00bcd4;
-      --accent2: #7c4dff;
-      --green:   #4caf50;
-      --orange:  #ff9800;
-      --red:     #f44336;
-      --gold:    #ffc107;
-      --text:    #e8e8e8;
-      --muted:   #888;
-      --card:    #141414;
-      --shadow:  0 4px 20px rgba(0,0,0,.5);
-      --font:    'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      --bg:#050505; --surface:#0d0d0d; --card:#111;
+      --border:#1e1e1e; --accent:#71ff00; --accent-10:rgba(113,255,0,.10);
+      --text:#f0f0f0; --muted:#888; --dim:#555;
+      --danger:#ef5350; --warning:#f59e0b; --success:#22c55e; --info:#3b82f6;
+      --radius:14px; --trans:0.2s ease;
+      --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+    a{color:inherit;text-decoration:none;}
+    button{font-family:var(--font);cursor:pointer;}
+
+    /* ── Layout ── */
+    .ms-layout{display:grid;grid-template-columns:220px 1fr;min-height:100vh;}
+
+    /* ── Sidebar ── */
+    .ms-sidebar{
+      position:sticky;top:0;height:100vh;overflow-y:auto;
+      background:var(--surface);border-right:1px solid var(--border);
+      display:flex;flex-direction:column;z-index:100;
+    }
+    .ms-sidebar-brand{
+      padding:18px 16px;font-size:12px;font-weight:800;letter-spacing:1px;
+      text-transform:uppercase;color:var(--accent);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:8px;
+    }
+    .ms-nav{display:flex;flex-direction:column;padding:10px 8px;gap:2px;flex:1;}
+    .ms-nav-item{
+      display:flex;align-items:center;gap:10px;
+      padding:11px 14px;border-radius:10px;border:none;
+      background:none;color:var(--muted);font-size:13.5px;
+      cursor:pointer;text-align:left;width:100%;
+      transition:background var(--trans),color var(--trans);
+    }
+    .ms-nav-item:hover{background:rgba(255,255,255,.04);color:var(--text);}
+    .ms-nav-item.active{background:var(--accent-10);color:var(--accent);font-weight:600;}
+    .ms-nav-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0;}
+    .ms-sidebar-footer{
+      padding:14px 12px;border-top:1px solid var(--border);
+      display:flex;flex-direction:column;gap:6px;
+    }
+    .ms-sidebar-shop{font-size:12px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .ms-sidebar-handle{font-size:11px;color:var(--muted);}
+    .ms-health-mini{
+      display:inline-flex;align-items:center;gap:5px;
+      background:var(--accent-10);color:var(--accent);
+      border-radius:20px;padding:3px 9px;font-size:11px;font-weight:700;
     }
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* ── Main ── */
+    .ms-main{display:flex;flex-direction:column;min-height:100vh;background:var(--bg);}
 
-    body {
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
+    /* ── Topbar ── */
+    .ms-topbar{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:14px 24px;border-bottom:1px solid var(--border);
+      background:var(--surface);position:sticky;top:0;z-index:90;gap:12px;
     }
-
-    /* ─── Topbar ─────────────────────────────────────────────────────── */
-    .mgs-topbar {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      height: 56px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 16px 0 236px;
-      z-index: 100;
-      box-shadow: var(--shadow);
+    .ms-page-title{font-size:18px;font-weight:700;color:var(--text);}
+    .ms-topbar-right{display:flex;align-items:center;gap:10px;}
+    .ms-health-badge{
+      display:inline-flex;align-items:center;gap:5px;
+      background:var(--accent-10);color:var(--accent);
+      border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;
     }
-    .mgs-topbar-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    .ms-topbar-link{
+      font-size:13px;color:var(--accent);padding:6px 14px;
+      border:1px solid var(--accent);border-radius:8px;
+      transition:background var(--trans);
     }
-    .mgs-topbar-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .mgs-brand {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .mgs-shop-name {
-      font-size: 13px;
-      color: var(--muted);
-      max-width: 160px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .mgs-sidebar-toggle {
-      display: none;
-      background: none;
-      border: none;
-      color: var(--text);
-      font-size: 20px;
-      cursor: pointer;
-      padding: 4px 8px;
-      border-radius: 6px;
-    }
-    .mgs-sidebar-toggle:hover { background: var(--border); }
-
-    /* ─── Sidebar ────────────────────────────────────────────────────── */
-    .mgs-sidebar {
-      position: fixed;
-      top: 0; left: 0; bottom: 0;
-      width: 220px;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      z-index: 200;
-      overflow-y: auto;
-      transition: transform .25s ease;
-    }
-    .mgs-sidebar-logo {
-      padding: 18px 16px 12px;
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--accent);
-      border-bottom: 1px solid var(--border);
-      letter-spacing: .5px;
-      text-transform: uppercase;
-      flex-shrink: 0;
-    }
-    .mgs-nav {
-      display: flex;
-      flex-direction: column;
-      padding: 10px 8px;
-      gap: 2px;
-      flex: 1;
-    }
-    .mgs-nav-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      height: 40px;
-      padding: 0 16px 0 10px;
-      border-radius: 8px;
-      border: none;
-      background: none;
-      color: var(--muted);
-      font-size: 14px;
-      cursor: pointer;
-      text-align: left;
-      width: 100%;
-      transition: background .15s, color .15s;
-      border-left: 3px solid transparent;
-    }
-    .mgs-nav-item:hover {
-      background: rgba(255,255,255,.05);
-      color: var(--text);
-    }
-    .mgs-nav-item.active {
-      background: rgba(0,188,212,.15);
-      color: var(--accent);
-      border-left: 3px solid var(--accent);
-    }
-    .mgs-nav-icon {
-      font-size: 16px;
-      width: 20px;
-      text-align: center;
-      flex-shrink: 0;
-    }
-    .mgs-nav-back {
-      margin-top: auto;
-      padding: 12px 8px;
-      border-top: 1px solid var(--border);
-    }
-    .mgs-nav-back a {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      height: 38px;
-      padding: 0 12px;
-      border-radius: 8px;
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 13px;
-      transition: background .15s, color .15s;
-    }
-    .mgs-nav-back a:hover { background: rgba(255,255,255,.05); color: var(--text); }
-
-    /* Sidebar overlay (mobile) */
-    .mgs-sidebar-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.6);
-      z-index: 199;
-    }
-    .mgs-sidebar-overlay.visible { display: block; }
-
-    /* ─── Main content ────────────────────────────────────────────────── */
-    .mgs-main {
-      margin-left: 220px;
-      padding: 80px 24px 40px;
-      min-height: 100vh;
-      background: var(--bg);
+    .ms-topbar-link:hover{background:var(--accent-10);}
+    .ms-hamburger{
+      display:none;background:none;border:none;color:var(--text);
+      font-size:20px;padding:4px;border-radius:6px;
     }
 
-    /* ─── Panels ─────────────────────────────────────────────────────── */
-    .mgs-panel { display: none; }
-    .mgs-panel.active { display: block; }
-    .mgs-panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 20px;
+    /* ── Loading ── */
+    .ms-loading-overlay{
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:80px 20px;gap:16px;color:var(--muted);font-size:14px;
     }
-    .mgs-panel-header h2 {
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--text);
+    .ms-loading-overlay[hidden]{display:none!important;}
+    .ms-loading-spinner{
+      width:36px;height:36px;border-radius:50%;
+      border:3px solid var(--border);border-top-color:var(--accent);
+      animation:ms-spin .8s linear infinite;
+    }
+    .ms-spinner-sm{
+      display:inline-block;width:16px;height:16px;border-radius:50%;
+      border:2px solid var(--border);border-top-color:var(--accent);
+      animation:ms-spin .7s linear infinite;vertical-align:middle;margin-right:6px;
+    }
+    @keyframes ms-spin{to{transform:rotate(360deg);}}
+
+    /* ── Sections ── */
+    .ms-section{padding:20px 24px 40px;display:none;}
+    .ms-section.active{display:block;}
+    .ms-section-header{margin-bottom:20px;}
+    .ms-section-header h2{font-size:20px;font-weight:700;margin-bottom:4px;}
+    .ms-section-header p{font-size:13px;color:var(--muted);}
+
+    /* ── Cards ── */
+    .ms-card{
+      background:var(--card);border:1px solid var(--border);
+      border-radius:var(--radius);padding:18px;
+      margin-bottom:14px;
+    }
+    .ms-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;}
+    .ms-card-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;}
+
+    /* ── Health Card ── */
+    .ms-health-card{
+      display:flex;align-items:center;gap:24px;
+      background:linear-gradient(135deg,var(--card),rgba(113,255,0,.04));
+    }
+    @media(max-width:600px){.ms-health-card{flex-direction:column;text-align:center;}}
+    .ms-health-ring-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .ms-health-ring{display:block;}
+    .ms-ring-track{stroke:#1e1e1e;stroke-width:8;fill:none;}
+    .ms-ring-fill{
+      stroke:#71ff00;stroke-width:8;fill:none;stroke-linecap:round;
+      transition:stroke-dashoffset 1.2s ease,stroke .4s;
+      transform-origin:center;transform:rotate(-90deg);
+    }
+    .ms-health-center{
+      position:absolute;inset:0;display:flex;
+      flex-direction:column;align-items:center;justify-content:center;
+    }
+    .ms-health-score{font-size:36px;font-weight:900;color:var(--text);line-height:1;}
+    .ms-health-grade{font-size:13px;font-weight:700;color:var(--accent);margin-top:2px;}
+    .ms-health-body{flex:1;}
+    .ms-health-body h2{font-size:17px;font-weight:700;margin-bottom:4px;}
+    .ms-health-subtitle{font-size:13px;color:var(--muted);margin-bottom:12px;}
+    .ms-health-factors{display:flex;flex-direction:column;gap:8px;}
+    .ms-factor-row{display:grid;grid-template-columns:110px 1fr 40px;align-items:center;gap:8px;font-size:12px;}
+    .ms-factor-name{color:var(--muted);}
+    .ms-factor-bar{background:var(--border);border-radius:4px;height:6px;overflow:hidden;}
+    .ms-factor-fill{height:100%;border-radius:4px;transition:width .8s ease;}
+    .ms-factor-pct{color:var(--muted);text-align:right;}
+
+    /* ── Stats Row ── */
+    .ms-stats-row{
+      display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;
+    }
+    .ms-stat-card{
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:12px;padding:14px;text-align:center;
+    }
+    .ms-stat-value{font-size:22px;font-weight:900;color:var(--text);}
+    .ms-stat-label{font-size:11px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.4px;}
+    .ms-stat-delta{font-size:11px;font-weight:600;margin-top:3px;}
+    .ms-stat-delta.up{color:var(--success);}
+    .ms-stat-delta.down{color:var(--danger);}
+
+    /* ── Two column ── */
+    .ms-two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+
+    /* ── Alerts list ── */
+    .ms-alerts-list{display:flex;flex-direction:column;gap:8px;}
+    .ms-alert-row{
+      display:flex;align-items:flex-start;gap:10px;
+      padding:10px 12px;background:var(--surface);border-radius:10px;
+      border-left:3px solid var(--warning);font-size:13px;
+    }
+    .ms-alert-row.danger{border-left-color:var(--danger);}
+    .ms-alert-row.success{border-left-color:var(--success);}
+    .ms-alert-icon{font-size:16px;flex-shrink:0;margin-top:1px;}
+    .ms-alert-body{flex:1;}
+    .ms-alert-title{font-weight:600;color:var(--text);}
+    .ms-alert-desc{font-size:12px;color:var(--muted);margin-top:2px;}
+
+    /* ── Quick actions ── */
+    .ms-quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .ms-action-tile{
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:6px;padding:16px 8px;background:var(--surface);border:1px solid var(--border);
+      border-radius:10px;color:var(--text);font-size:12px;font-weight:600;
+      transition:border-color var(--trans),background var(--trans);cursor:pointer;
+    }
+    .ms-action-tile:hover{border-color:var(--accent);background:var(--accent-10);color:var(--accent);}
+    .ms-tile-icon{font-size:22px;}
+
+    /* ── Buttons ── */
+    .ms-btn-primary{
+      background:var(--accent);color:#000;border:none;
+      padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;
+      cursor:pointer;transition:opacity var(--trans);display:inline-flex;align-items:center;gap:6px;
+    }
+    .ms-btn-primary:hover{opacity:.88;}
+    .ms-btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+    .ms-btn-accent{
+      background:var(--accent-10);color:var(--accent);border:1px solid var(--accent);
+      padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;
+      cursor:pointer;transition:background var(--trans);
+    }
+    .ms-btn-accent:hover{background:rgba(113,255,0,.2);}
+    .ms-btn-outline{
+      background:transparent;color:var(--text);border:1px solid var(--border);
+      padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;
+      cursor:pointer;transition:border-color var(--trans);
+    }
+    .ms-btn-outline:hover{border-color:var(--text);}
+    .ms-btn-outline-sm{
+      background:transparent;color:var(--accent);border:1px solid var(--accent);
+      padding:5px 10px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;
+    }
+    .ms-btn-sm{padding:6px 12px;font-size:12px;}
+    .ms-btn-danger{background:var(--danger);color:#fff;border:none;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+
+    /* ── Forms ── */
+    .ms-input,.ms-select,.ms-textarea{
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:9px;padding:9px 13px;color:var(--text);
+      font-family:var(--font);font-size:16px;outline:none;
+      transition:border-color var(--trans);width:100%;
+    }
+    .ms-input:focus,.ms-select:focus,.ms-textarea:focus{border-color:var(--accent);}
+    .ms-textarea{resize:vertical;min-height:72px;}
+    .ms-form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;}
+    .ms-form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;}
+    .ms-form-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+
+    /* ── Coach ── */
+    .ms-coach-output{font-size:14px;line-height:1.65;color:var(--text);}
+    .ms-coach-output ol{padding-left:18px;display:flex;flex-direction:column;gap:10px;}
+    .ms-coach-output li{padding:8px 10px;background:var(--surface);border-radius:8px;border-left:3px solid var(--accent);}
+    .ms-coach-input-wrap{display:flex;flex-direction:column;gap:10px;}
+    .ms-coach-answer{
+      margin-top:14px;padding:14px;background:var(--surface);
+      border-radius:10px;border-left:3px solid var(--accent);
+      font-size:14px;line-height:1.65;white-space:pre-wrap;
     }
 
-    /* ─── Cards ──────────────────────────────────────────────────────── */
-    .mgs-card {
-      background: var(--card);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      padding: 20px;
-      box-shadow: var(--shadow);
+    /* ── Opportunities ── */
+    .ms-opp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+    .ms-opp-card{
+      background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+      padding:18px;display:flex;flex-direction:column;gap:8px;
     }
-    .mgs-card-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      margin-bottom: 16px;
+    .ms-opp-card.urgent{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.04);}
+    .ms-opp-icon{font-size:26px;}
+    .ms-opp-count{font-size:22px;font-weight:900;color:var(--accent);}
+    .ms-opp-title{font-size:14px;font-weight:700;}
+    .ms-opp-desc{font-size:12px;color:var(--muted);line-height:1.5;flex:1;}
+
+    /* ── CRM ── */
+    .ms-segment-tabs{
+      display:flex;gap:4px;overflow-x:auto;padding-bottom:2px;
+      border-bottom:1px solid var(--border);margin-bottom:14px;
+    }
+    .ms-segment-tabs::-webkit-scrollbar{height:0;}
+    .ms-seg-btn{
+      padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;
+      color:var(--muted);font-size:13px;cursor:pointer;white-space:nowrap;
+      font-family:var(--font);transition:color var(--trans),border-color var(--trans);
+    }
+    .ms-seg-btn:hover{color:var(--text);}
+    .ms-seg-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:700;}
+    .ms-segment-summary{
+      display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;
+    }
+    .ms-seg-stat{
+      background:var(--surface);border:1px solid var(--border);
+      border-radius:10px;padding:10px 14px;text-align:center;flex:1;min-width:80px;
+    }
+    .ms-seg-stat-val{font-size:18px;font-weight:900;color:var(--text);}
+    .ms-seg-stat-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:2px;}
+    .ms-crm-list{display:flex;flex-direction:column;gap:6px;}
+    .ms-crm-row{
+      display:flex;align-items:center;gap:12px;
+      padding:10px 12px;background:var(--surface);border:1px solid var(--border);
+      border-radius:10px;transition:border-color var(--trans);
+    }
+    .ms-crm-row:hover{border-color:var(--dim);}
+    .ms-crm-avatar{
+      width:38px;height:38px;border-radius:50%;background:var(--accent-10);
+      color:var(--accent);display:flex;align-items:center;justify-content:center;
+      font-weight:800;font-size:13px;flex-shrink:0;
+    }
+    .ms-crm-info{flex:1;min-width:0;}
+    .ms-crm-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .ms-crm-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+    .ms-crm-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+    .ms-crm-ltv{font-size:13px;font-weight:700;color:var(--success);}
+    .ms-seg-badge{
+      padding:2px 8px;border-radius:20px;font-size:9px;font-weight:800;
+      text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;
+    }
+    .ms-seg-champion{background:rgba(113,255,0,.15);color:#71ff00;}
+    .ms-seg-loyal{background:rgba(59,130,246,.15);color:#3b82f6;}
+    .ms-seg-at_risk{background:rgba(245,158,11,.15);color:#f59e0b;}
+    .ms-seg-lost{background:rgba(239,83,80,.15);color:#ef5350;}
+    .ms-seg-new{background:rgba(34,197,94,.15);color:#22c55e;}
+    .ms-seg-regular{background:rgba(136,136,136,.15);color:#888;}
+
+    /* ── Inventory ── */
+    .ms-inv-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
+    .ms-inv-tab{
+      padding:7px 14px;background:var(--surface);border:1px solid var(--border);
+      border-radius:8px;color:var(--muted);font-size:12px;font-weight:600;
+      cursor:pointer;transition:background var(--trans),border-color var(--trans),color var(--trans);
+    }
+    .ms-inv-tab.active{background:var(--accent-10);border-color:var(--accent);color:var(--accent);}
+    .ms-inv-content{display:flex;flex-direction:column;gap:8px;}
+    .ms-inv-row{
+      display:flex;align-items:center;gap:12px;
+      padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    }
+    .ms-inv-name{flex:1;font-size:13px;font-weight:600;}
+    .ms-inv-bar-wrap{width:80px;}
+    .ms-inv-bar{background:var(--border);border-radius:4px;height:5px;overflow:hidden;}
+    .ms-inv-fill{height:100%;border-radius:4px;}
+    .ms-inv-stock{font-size:12px;color:var(--muted);text-align:right;width:50px;}
+    .ms-inv-rec{font-size:11px;color:var(--warning);font-style:italic;width:120px;text-align:right;}
+
+    /* ── Marketing ── */
+    .ms-campaign-form{display:flex;flex-direction:column;gap:10px;}
+    .ms-campaign-list{display:flex;flex-direction:column;gap:8px;}
+    .ms-camp-card{
+      display:flex;align-items:center;gap:12px;
+      padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    }
+    .ms-camp-icon{font-size:22px;flex-shrink:0;}
+    .ms-camp-info{flex:1;min-width:0;}
+    .ms-camp-name{font-size:14px;font-weight:600;}
+    .ms-camp-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+    .ms-camp-badge{
+      padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;
+    }
+    .ms-camp-active{background:rgba(34,197,94,.15);color:var(--success);}
+    .ms-camp-draft{background:rgba(136,136,136,.15);color:var(--muted);}
+    .ms-camp-sent{background:rgba(59,130,246,.15);color:var(--info);}
+
+    /* ── Benchmarks ── */
+    .ms-benchmark-content{display:flex;flex-direction:column;gap:10px;}
+    .ms-bench-card{
+      background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;
+    }
+    .ms-bench-label{font-size:13px;font-weight:600;margin-bottom:8px;}
+    .ms-bench-bars{display:flex;flex-direction:column;gap:6px;}
+    .ms-bench-row{display:flex;align-items:center;gap:10px;font-size:12px;}
+    .ms-bench-who{width:65px;color:var(--muted);}
+    .ms-bench-bar-wrap{flex:1;background:var(--border);border-radius:4px;height:10px;overflow:hidden;}
+    .ms-bench-fill{height:100%;border-radius:4px;transition:width .8s ease;}
+    .ms-bench-val{width:60px;text-align:right;font-weight:700;}
+
+    /* ── Automation ── */
+    .ms-auto-templates{
+      display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:14px;
+    }
+    .ms-auto-tile{
+      background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+      padding:16px;display:flex;flex-direction:column;gap:6px;
+      cursor:pointer;transition:border-color var(--trans);
+    }
+    .ms-auto-tile:hover{border-color:var(--accent);}
+    .ms-auto-tile-icon{font-size:24px;}
+    .ms-auto-tile-title{font-size:13px;font-weight:700;}
+    .ms-auto-tile-desc{font-size:11px;color:var(--muted);line-height:1.45;flex:1;}
+    .ms-auto-list{display:flex;flex-direction:column;gap:8px;}
+    .ms-auto-row{
+      display:flex;align-items:center;gap:12px;
+      padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    }
+    .ms-auto-icon{font-size:20px;flex-shrink:0;}
+    .ms-auto-body{flex:1;}
+    .ms-auto-title{font-size:14px;font-weight:600;}
+    .ms-auto-desc{font-size:11px;color:var(--muted);margin-top:2px;}
+    .ms-toggle{
+      position:relative;width:44px;height:24px;flex-shrink:0;cursor:pointer;
+    }
+    .ms-toggle input{opacity:0;width:0;height:0;position:absolute;}
+    .ms-toggle-track{
+      position:absolute;inset:0;background:var(--dim);border-radius:24px;transition:background .2s;
+    }
+    .ms-toggle-thumb{
+      position:absolute;top:3px;left:3px;width:18px;height:18px;
+      background:#fff;border-radius:50%;transition:transform .2s;pointer-events:none;
+    }
+    .ms-toggle input:checked~.ms-toggle-track{background:var(--accent);}
+    .ms-toggle input:checked~.ms-toggle-thumb{transform:translateX(20px);}
+
+    /* ── Financials ── */
+    .ms-period-row{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+    .ms-period-btn{
+      padding:7px 16px;background:var(--surface);border:1px solid var(--border);
+      border-radius:8px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;
+      transition:background var(--trans),border-color var(--trans),color var(--trans);
+    }
+    .ms-period-btn.active{background:var(--accent);color:#000;border-color:var(--accent);}
+    .ms-fin-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;}
+    .ms-fin-kpi{
+      background:var(--card);border:1px solid var(--border);border-radius:12px;
+      padding:14px;text-align:center;
+    }
+    .ms-fin-kpi-val{font-size:20px;font-weight:900;color:var(--text);}
+    .ms-fin-kpi-lbl{font-size:11px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.4px;}
+    .ms-chart-wrap{overflow-x:auto;}
+    .ms-chart{display:flex;align-items:flex-end;gap:4px;height:120px;padding-bottom:20px;position:relative;min-width:100%;}
+    .ms-bar{
+      flex:1;min-width:18px;max-width:48px;
+      background:var(--accent-10);border-radius:4px 4px 0 0;
+      position:relative;cursor:pointer;transition:background var(--trans);
+      display:flex;flex-direction:column;justify-content:flex-end;
+    }
+    .ms-bar:hover{background:rgba(113,255,0,.25);}
+    .ms-bar-label{
+      position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);
+      font-size:9px;color:var(--muted);white-space:nowrap;
+    }
+    .ms-bar-top{
+      position:absolute;top:-20px;left:50%;transform:translateX(-50%);
+      font-size:10px;color:var(--accent);white-space:nowrap;display:none;
+    }
+    .ms-bar:hover .ms-bar-top{display:block;}
+    .ms-top-list{display:flex;flex-direction:column;gap:8px;}
+    .ms-top-item{
+      display:flex;align-items:center;gap:8px;font-size:13px;
+      padding:6px 0;border-bottom:1px solid var(--border);
+    }
+    .ms-top-item:last-child{border-bottom:none;}
+    .ms-top-rank{
+      width:22px;height:22px;border-radius:50%;background:var(--accent-10);
+      color:var(--accent);display:flex;align-items:center;justify-content:center;
+      font-size:10px;font-weight:800;flex-shrink:0;
+    }
+    .ms-top-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .ms-top-val{font-weight:700;color:var(--success);}
+    .ms-peak-hours{display:flex;flex-direction:column;gap:6px;}
+    .ms-peak-row{display:flex;align-items:center;gap:8px;font-size:12px;}
+    .ms-peak-label{width:60px;color:var(--muted);}
+    .ms-peak-bar-wrap{flex:1;background:var(--border);border-radius:4px;height:8px;overflow:hidden;}
+    .ms-peak-fill{height:100%;border-radius:4px;background:var(--info);transition:width .8s ease;}
+    .ms-peak-val{width:30px;text-align:right;color:var(--muted);}
+
+    /* ── Academy ── */
+    .ms-xp-card{display:flex;align-items:center;gap:20px;}
+    .ms-xp-left{flex:1;}
+    .ms-level-badge{
+      display:inline-block;background:var(--accent);color:#000;
+      padding:4px 12px;border-radius:20px;font-size:12px;font-weight:800;margin-bottom:8px;
+    }
+    .ms-xp-bar-wrap{background:var(--border);border-radius:20px;height:8px;overflow:hidden;margin-bottom:4px;}
+    .ms-xp-bar{height:100%;border-radius:20px;background:var(--accent);transition:width .8s ease;}
+    .ms-xp-right{display:flex;flex-direction:column;align-items:center;}
+    .ms-xp-num{font-size:32px;font-weight:900;color:var(--accent);}
+    .ms-module-list{display:flex;flex-direction:column;gap:10px;}
+    .ms-module-card{
+      background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;
+    }
+    .ms-module-header{
+      display:flex;align-items:center;gap:12px;padding:16px;cursor:pointer;
+      transition:background var(--trans);
+    }
+    .ms-module-header:hover{background:rgba(255,255,255,.03);}
+    .ms-module-icon{font-size:22px;flex-shrink:0;}
+    .ms-module-info{flex:1;}
+    .ms-module-title{font-size:14px;font-weight:700;}
+    .ms-module-progress{font-size:12px;color:var(--muted);margin-top:2px;}
+    .ms-module-pct{
+      width:36px;height:36px;border-radius:50%;
+      background:var(--accent-10);color:var(--accent);
+      display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;
+      flex-shrink:0;
+    }
+    .ms-module-chevron{color:var(--muted);transition:transform .2s;flex-shrink:0;}
+    .ms-module-card.open .ms-module-chevron{transform:rotate(180deg);}
+    .ms-module-lessons{display:none;border-top:1px solid var(--border);padding:10px 16px;}
+    .ms-module-card.open .ms-module-lessons{display:block;}
+    .ms-lesson-row{
+      display:flex;align-items:center;gap:10px;padding:8px 4px;
+      border-bottom:1px solid var(--border);font-size:13px;
+    }
+    .ms-lesson-row:last-child{border-bottom:none;}
+    .ms-lesson-cb{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
+    .ms-lesson-name{flex:1;}
+    .ms-lesson-dur{font-size:11px;color:var(--muted);}
+
+    /* ── Mobile bottom nav ── */
+    .ms-mobile-nav{
+      display:none;position:fixed;bottom:0;left:0;right:0;
+      background:var(--surface);border-top:1px solid var(--border);
+      z-index:200;padding:6px 0 env(safe-area-inset-bottom,4px);
+      justify-content:space-around;
+    }
+    .ms-mob-btn{
+      flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+      background:none;border:none;color:var(--muted);font-size:9px;font-weight:600;
+      cursor:pointer;padding:4px 2px;font-family:var(--font);
+      transition:color var(--trans);
+    }
+    .ms-mob-btn > span:first-child{font-size:18px;}
+    .ms-mob-btn.active{color:var(--accent);}
+
+    /* ── Toast ── */
+    .ms-toast-wrap{
+      position:fixed;bottom:24px;right:20px;
+      display:flex;flex-direction:column;gap:8px;z-index:9999;
+    }
+    .ms-toast{
+      background:var(--surface);border:1px solid var(--border);border-radius:10px;
+      padding:12px 18px;font-size:13px;min-width:220px;max-width:320px;
+      box-shadow:0 8px 30px rgba(0,0,0,.6);animation:ms-slide-in .25s ease;
+    }
+    .ms-toast.success{border-left:4px solid var(--success);}
+    .ms-toast.error{border-left:4px solid var(--danger);}
+    .ms-toast.info{border-left:4px solid var(--info);}
+    @keyframes ms-slide-in{from{transform:translateX(30px);opacity:0;}}
+
+    /* ── Empty / error states ── */
+    .ms-empty{
+      padding:40px 20px;text-align:center;color:var(--muted);font-size:14px;
+    }
+    .ms-empty-icon{font-size:36px;display:block;margin-bottom:10px;}
+    .ms-error-box{
+      padding:16px;background:rgba(239,83,80,.08);border:1px solid rgba(239,83,80,.2);
+      border-radius:10px;color:var(--danger);font-size:13px;text-align:center;
+    }
+    .ms-muted{color:var(--muted);font-size:13px;}
+    .ms-shimmer{
+      background:linear-gradient(90deg,var(--border) 25%,var(--surface) 50%,var(--border) 75%);
+      background-size:200% 100%;animation:ms-shimmer 1.4s infinite;
+      border-radius:6px;
+    }
+    @keyframes ms-shimmer{to{background-position:-200% 0;}}
+
+    /* ── Responsive ── */
+    @media(max-width:768px){
+      .ms-layout{grid-template-columns:1fr;}
+      .ms-sidebar{display:none;position:fixed;top:0;left:0;height:100vh;z-index:300;width:240px;}
+      .ms-sidebar.open{display:flex;}
+      .ms-hamburger{display:block;}
+      .ms-mobile-nav{display:flex;}
+      .ms-section{padding:16px 14px 80px;}
+      .ms-two-col{grid-template-columns:1fr;}
+      .ms-stats-row{grid-template-columns:repeat(2,1fr);}
+      .ms-fin-metrics{grid-template-columns:repeat(2,1fr);}
+      .ms-form-row{grid-template-columns:1fr;}
+      .ms-toast-wrap{right:10px;bottom:72px;}
+      .ms-auto-templates{grid-template-columns:1fr 1fr;}
+      .ms-topbar{padding:12px 14px;}
+    }
+    @media(max-width:480px){
+      .ms-stats-row{grid-template-columns:repeat(2,1fr);}
+      .ms-fin-metrics{grid-template-columns:1fr 1fr;}
+      .ms-auto-templates{grid-template-columns:1fr;}
+      .ms-opp-grid{grid-template-columns:1fr;}
     }
 
-    /* ─── Dashboard Top ──────────────────────────────────────────────── */
-    .mgs-dashboard-top {
-      display: grid;
-      grid-template-columns: 220px 1fr;
-      gap: 16px;
-      align-items: start;
-    }
-    .mgs-health-card {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-      text-align: center;
-    }
-    .mgs-health-ring-wrap {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .mgs-health-ring {
-      display: block;
-    }
-    .mgs-ring-track {
-      stroke: var(--border);
-    }
-    .mgs-ring-fill {
-      stroke: var(--accent);
-      transition: stroke-dashoffset 1s ease, stroke .4s;
-    }
-    .mgs-health-center {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    .mgs-health-score-text {
-      font-size: 36px;
-      font-weight: 900;
-      color: var(--text);
-      line-height: 1;
-    }
-    .mgs-health-grade {
-      font-size: 13px;
-      font-weight: 700;
-      margin-top: 4px;
-    }
-    .mgs-kpi-section { flex: 1; }
-
-    /* ─── KPI Grid ───────────────────────────────────────────────────── */
-    .mgs-kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-    }
-    .mgs-kpi-card {
-      background: var(--surface);
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      padding: 16px 14px;
-      text-align: center;
-    }
-    .mgs-kpi-value {
-      font-size: 22px;
-      font-weight: 900;
-      color: var(--text);
-      line-height: 1.1;
-    }
-    .mgs-kpi-label {
-      font-size: 11px;
-      color: var(--muted);
-      margin-top: 4px;
-      text-transform: uppercase;
-      letter-spacing: .4px;
-    }
-    .mgs-kpi-delta {
-      font-size: 12px;
-      font-weight: 600;
-      margin-top: 4px;
-    }
-    .mgs-kpi-delta.up   { color: var(--green); }
-    .mgs-kpi-delta.down { color: var(--red); }
-
-    /* ─── Health Dimensions ──────────────────────────────────────────── */
-    .mgs-health-dims { display: flex; flex-direction: column; gap: 12px; }
-    .mgs-dim-row {
-      display: grid;
-      grid-template-columns: 160px 1fr 40px;
-      align-items: center;
-      gap: 12px;
-    }
-    .mgs-dim-label { font-size: 13px; color: var(--text); }
-    .mgs-dim-bar-wrap {
-      background: var(--border);
-      border-radius: 4px;
-      height: 8px;
-      overflow: hidden;
-    }
-    .mgs-dim-bar {
-      height: 100%;
-      border-radius: 4px;
-      background: var(--accent);
-      transition: width .8s ease;
-    }
-    .mgs-dim-score { font-size: 12px; font-weight: 700; color: var(--muted); text-align: right; }
-
-    /* ─── Recommendations ────────────────────────────────────────────── */
-    .mgs-rec-list { display: flex; flex-direction: column; gap: 10px; }
-    .mgs-rec-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 12px 14px;
-      background: var(--surface);
-      border-radius: 10px;
-      border: 1px solid var(--border);
-    }
-    .mgs-rec-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
-    .mgs-rec-content { flex: 1; }
-    .mgs-rec-title { font-size: 14px; font-weight: 600; color: var(--text); }
-    .mgs-rec-desc  { font-size: 12px; color: var(--muted); margin-top: 3px; }
-
-    /* ─── AI Coach / Insight cards ───────────────────────────────────── */
-    .mgs-insights-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-    .mgs-insight-card {
-      background: var(--card);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      padding: 18px;
-      box-shadow: var(--shadow);
-    }
-    .mgs-insight-priority {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      margin-bottom: 10px;
-    }
-    .mgs-insight-priority.high   { background: rgba(244,67,54,.15);  color: var(--red); }
-    .mgs-insight-priority.medium { background: rgba(255,152,0,.15);  color: var(--orange); }
-    .mgs-insight-priority.low    { background: rgba(76,175,80,.15);  color: var(--green); }
-    .mgs-insight-title  { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
-    .mgs-insight-body   { font-size: 13px; color: var(--muted); line-height: 1.55; }
-    .mgs-insight-action { margin-top: 12px; }
-
-    /* ─── Opportunity cards ──────────────────────────────────────────── */
-    .mgs-opps-list { display: flex; flex-direction: column; gap: 14px; }
-    .mgs-opportunity-card {
-      background: var(--card);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      padding: 18px 20px;
-      box-shadow: var(--shadow);
-      display: flex;
-      align-items: flex-start;
-      gap: 16px;
-    }
-    .mgs-opp-urgent { border-color: var(--orange); background: rgba(255,152,0,.04); }
-    .mgs-opp-icon   { font-size: 28px; flex-shrink: 0; }
-    .mgs-opp-body   { flex: 1; }
-    .mgs-opp-title  { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-    .mgs-opp-desc   { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
-    .mgs-opp-value  { font-size: 12px; font-weight: 600; color: var(--green); }
-
-    /* ─── Customer CRM ───────────────────────────────────────────────── */
-    .mgs-customer-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
-    .mgs-customer-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-    }
-    .mgs-customer-avatar {
-      width: 36px; height: 36px;
-      border-radius: 50%;
-      background: var(--accent2);
-      color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 13px;
-      flex-shrink: 0;
-    }
-    .mgs-customer-info { flex: 1; min-width: 0; }
-    .mgs-customer-name  { font-size: 14px; font-weight: 600; }
-    .mgs-customer-meta  { font-size: 12px; color: var(--muted); margin-top: 1px; }
-    .mgs-customer-spend { font-size: 13px; font-weight: 700; color: var(--green); white-space: nowrap; }
-    .mgs-segment-badge {
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .4px;
-      white-space: nowrap;
-    }
-    .mgs-segment-loyal    { background: rgba(0,188,212,.15); color: var(--accent); }
-    .mgs-segment-regular  { background: rgba(76,175,80,.15); color: var(--green); }
-    .mgs-segment-new      { background: rgba(124,77,255,.15); color: var(--accent2); }
-    .mgs-segment-at_risk  { background: rgba(255,152,0,.15); color: var(--orange); }
-    .mgs-segment-inactive { background: rgba(244,67,54,.15); color: var(--red); }
-
-    /* ─── Inventory ──────────────────────────────────────────────────── */
-    .mgs-inv-summary { margin-bottom: 16px; }
-    .mgs-inv-alert-list { display: flex; flex-direction: column; gap: 8px; }
-    .mgs-inv-alert {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 12px 14px;
-      border-radius: 8px;
-      border-left: 4px solid transparent;
-      background: var(--surface);
-      border: 1px solid var(--border);
-    }
-    .mgs-alert-high   { border-left: 4px solid var(--red);    background: rgba(244,67,54,.05); }
-    .mgs-alert-medium { border-left: 4px solid var(--orange); background: rgba(255,152,0,.05); }
-    .mgs-alert-low    { border-left: 4px solid var(--accent); background: rgba(0,188,212,.05); }
-    .mgs-inv-alert-icon  { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-    .mgs-inv-alert-body  { flex: 1; }
-    .mgs-inv-alert-title { font-size: 13px; font-weight: 600; }
-    .mgs-inv-alert-desc  { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .mgs-inv-product-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
-    .mgs-inv-product-row {
-      display: grid;
-      grid-template-columns: 1fr 80px 80px 80px;
-      gap: 8px;
-      align-items: center;
-      padding: 10px 12px;
-      background: var(--surface);
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      font-size: 13px;
-    }
-    .mgs-inv-product-name { font-weight: 600; }
-    .mgs-inv-product-cell { text-align: center; color: var(--muted); }
-
-    /* ─── Marketing / Campaigns ──────────────────────────────────────── */
-    .mgs-campaign-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
-    .mgs-campaign-card {
-      background: var(--surface);
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      padding: 16px 18px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-    .mgs-campaign-icon { font-size: 22px; flex-shrink: 0; }
-    .mgs-campaign-info { flex: 1; min-width: 0; }
-    .mgs-campaign-name  { font-size: 14px; font-weight: 600; }
-    .mgs-campaign-dates { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .mgs-campaign-form { display: flex; flex-direction: column; gap: 16px; }
-
-    /* ─── Subtabs ────────────────────────────────────────────────────── */
-    .mgs-subtabs {
-      display: flex;
-      gap: 4px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 20px;
-    }
-    .mgs-subtab {
-      padding: 8px 18px;
-      background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--muted);
-      font-size: 14px;
-      cursor: pointer;
-      font-family: var(--font);
-      transition: color .15s, border-color .15s;
-    }
-    .mgs-subtab:hover { color: var(--text); }
-    .mgs-subtab.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-      font-weight: 600;
-    }
-    .mgs-subtab-content        { display: none; }
-    .mgs-subtab-content.active { display: block; }
-
-    /* ─── Analytics ──────────────────────────────────────────────────── */
-    .mgs-period-btns { display: flex; gap: 6px; flex-wrap: wrap; }
-    .mgs-analytics-charts { margin-top: 16px; display: flex; flex-direction: column; gap: 16px; }
-    .mgs-bar-chart { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-    .mgs-bar-row {
-      display: grid;
-      grid-template-columns: 90px 1fr 70px;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-    }
-    .mgs-bar-label { color: var(--muted); }
-    .mgs-bar-track {
-      background: var(--border);
-      border-radius: 4px;
-      height: 22px;
-      overflow: hidden;
-    }
-    .mgs-bar-fill {
-      height: 100%;
-      border-radius: 4px;
-      background: var(--accent);
-      transition: width .8s ease;
-      display: flex;
-      align-items: center;
-      padding-left: 8px;
-      font-size: 11px;
-      color: #000;
-      font-weight: 600;
-      min-width: 2px;
-    }
-    .mgs-bar-value { font-size: 13px; font-weight: 600; text-align: right; }
-
-    /* ─── Automations ────────────────────────────────────────────────── */
-    .mgs-automation-list { display: flex; flex-direction: column; gap: 10px; }
-    .mgs-automation-card {
-      background: var(--surface);
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      padding: 14px 16px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-    .mgs-auto-icon  { font-size: 22px; flex-shrink: 0; }
-    .mgs-auto-body  { flex: 1; min-width: 0; }
-    .mgs-auto-title { font-size: 14px; font-weight: 600; }
-    .mgs-auto-desc  { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .mgs-toggle-switch {
-      position: relative;
-      width: 42px;
-      height: 24px;
-      flex-shrink: 0;
-    }
-    .mgs-toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-    .mgs-toggle-switch .mgs-toggle-track {
-      position: absolute;
-      inset: 0;
-      background: var(--border);
-      border-radius: 24px;
-      cursor: pointer;
-      transition: background .2s;
-    }
-    .mgs-toggle-switch .mgs-toggle-thumb {
-      position: absolute;
-      top: 3px; left: 3px;
-      width: 18px; height: 18px;
-      background: #fff;
-      border-radius: 50%;
-      cursor: pointer;
-      transition: transform .2s;
-      pointer-events: none;
-    }
-    .mgs-toggle-switch input:checked ~ .mgs-toggle-track { background: var(--accent); }
-    .mgs-toggle-switch input:checked ~ .mgs-toggle-thumb { transform: translateX(18px); }
-    .mgs-auto-config { display: flex; flex-direction: column; gap: 12px; }
-
-    /* ─── Academy ────────────────────────────────────────────────────── */
-    .mgs-academy-modules {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 16px;
-    }
-    .mgs-module-card {
-      background: var(--card);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      padding: 20px;
-      box-shadow: var(--shadow);
-    }
-    .mgs-module-icon  { font-size: 28px; margin-bottom: 10px; }
-    .mgs-module-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-    .mgs-module-meta  { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
-    .mgs-lesson-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
-    .mgs-lesson-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      padding: 6px 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background .1s;
-    }
-    .mgs-lesson-row:hover { background: var(--border); }
-    .mgs-lesson-done .mgs-lesson-check { color: var(--green); }
-    .mgs-lesson-check { font-size: 14px; }
-    .mgs-lesson-title { flex: 1; }
-
-    /* ─── Progress bar ───────────────────────────────────────────────── */
-    .mgs-progress-bar {
-      background: var(--border);
-      border-radius: 20px;
-      height: 8px;
-      overflow: hidden;
-    }
-    .mgs-progress-fill {
-      height: 100%;
-      border-radius: 20px;
-      background: var(--accent);
-      transition: width .8s ease;
-    }
-
-    /* ─── Benchmarks ─────────────────────────────────────────────────── */
-    .mgs-benchmark-list { display: flex; flex-direction: column; gap: 16px; }
-    .mgs-benchmark-row {
-      display: grid;
-      grid-template-columns: 180px 1fr 80px 80px;
-      align-items: center;
-      gap: 12px;
-      font-size: 13px;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .mgs-benchmark-label { font-weight: 600; }
-    .mgs-percentile-bar-wrap { background: var(--border); border-radius: 4px; height: 12px; overflow: hidden; position: relative; }
-    .mgs-percentile-bar {
-      height: 100%;
-      border-radius: 4px;
-      background: var(--accent2);
-      transition: width .8s ease;
-    }
-    .mgs-benchmark-you  { font-weight: 700; text-align: center; }
-    .mgs-benchmark-avg  { color: var(--muted); text-align: center; }
-
-    /* ─── Misc UI ────────────────────────────────────────────────────── */
-    .mgs-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    .mgs-table th {
-      text-align: left;
-      padding: 8px 12px;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      color: var(--muted);
-      border-bottom: 1px solid var(--border);
-    }
-    .mgs-table td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: middle;
-    }
-    .mgs-table tr:last-child td { border-bottom: none; }
-    .mgs-table tr:hover td { background: rgba(255,255,255,.02); }
-
-    .mgs-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .4px;
-    }
-    .mgs-badge-success { background: rgba(76,175,80,.15);  color: var(--green); }
-    .mgs-badge-warn    { background: rgba(255,152,0,.15);  color: var(--orange); }
-    .mgs-badge-danger  { background: rgba(244,67,54,.15);  color: var(--red); }
-    .mgs-badge-info    { background: rgba(0,188,212,.15);  color: var(--accent); }
-
-    .mgs-btn {
-      padding: 8px 16px;
-      border-radius: 8px;
-      border: none;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 600;
-      font-family: var(--font);
-      transition: opacity .15s, background .15s;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .mgs-btn:hover { opacity: .85; }
-    .mgs-btn-primary { background: var(--accent); color: #000; }
-    .mgs-btn-sm      { padding: 6px 12px; font-size: 12px; }
-    .mgs-btn-outline {
-      background: transparent;
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-    .mgs-btn-danger { background: var(--red); color: #fff; }
-
-    .mgs-loading {
-      padding: 32px;
-      text-align: center;
-      color: var(--muted);
-      font-size: 14px;
-    }
-    .mgs-loading::before {
-      content: '';
-      display: block;
-      width: 28px; height: 28px;
-      margin: 0 auto 12px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: mgs-spin .8s linear infinite;
-    }
-    .mgs-empty {
-      padding: 40px;
-      text-align: center;
-      color: var(--muted);
-      font-size: 14px;
-    }
-    .mgs-empty::before {
-      content: attr(data-icon);
-      display: block;
-      font-size: 36px;
-      margin-bottom: 10px;
-    }
-    .mgs-error {
-      padding: 20px;
-      text-align: center;
-      color: var(--red);
-      font-size: 13px;
-      background: rgba(244,67,54,.07);
-      border-radius: 8px;
-    }
-
-    /* ─── Search ─────────────────────────────────────────────────────── */
-    .mgs-search {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 14px;
-      color: var(--text);
-      font-family: var(--font);
-      outline: none;
-      font-size: 16px;
-    }
-    .mgs-search:focus { border-color: var(--accent); }
-
-    /* ─── Forms ──────────────────────────────────────────────────────── */
-    .mgs-form-group { display: flex; flex-direction: column; gap: 6px; }
-    .mgs-form-group label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
-    .mgs-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    input[type="text"], input[type="email"], input[type="number"],
-    input[type="datetime-local"], select, textarea {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 14px;
-      color: var(--text);
-      font-family: var(--font);
-      font-size: 16px;
-      outline: none;
-      width: 100%;
-    }
-    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
-    textarea { resize: vertical; min-height: 72px; }
-
-    /* ─── Toast ──────────────────────────────────────────────────────── */
-    .mgs-toast-container {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      z-index: 9999;
-    }
-    .mgs-toast {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px 18px;
-      font-size: 14px;
-      min-width: 240px;
-      max-width: 340px;
-      box-shadow: var(--shadow);
-      animation: mgs-slide-in .25s ease;
-    }
-    .mgs-toast.success { border-left: 4px solid var(--green); }
-    .mgs-toast.error   { border-left: 4px solid var(--red); }
-    .mgs-toast.info    { border-left: 4px solid var(--accent); }
-
-    /* ─── Mobile nav ─────────────────────────────────────────────────── */
-    .mgs-mobile-nav {
-      display: none;
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      z-index: 300;
-      padding: 8px 0 env(safe-area-inset-bottom, 0);
-    }
-    .mgs-mobile-nav { flex-direction: row; }
-    .mgs-mobile-nav-btn {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      padding: 6px 4px;
-      background: none;
-      border: none;
-      color: var(--muted);
-      font-size: 10px;
-      cursor: pointer;
-      font-family: var(--font);
-      transition: color .15s;
-    }
-    .mgs-mobile-nav-btn span { font-size: 10px; }
-    .mgs-mobile-nav-btn:first-child { font-size: 18px; }
-    .mgs-mobile-nav-btn > :first-child { font-size: 20px; }
-    .mgs-mobile-nav-btn.active { color: var(--accent); }
-
-    /* ─── Animations ─────────────────────────────────────────────────── */
-    @keyframes mgs-spin     { to { transform: rotate(360deg); } }
-    @keyframes mgs-slide-in { from { transform: translateX(30px); opacity: 0; } }
-
-    /* ─── Responsive ─────────────────────────────────────────────────── */
-    @media (max-width: 900px) {
-      .mgs-dashboard-top { grid-template-columns: 1fr; }
-      .mgs-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-      .mgs-benchmark-row { grid-template-columns: 140px 1fr 60px; }
-      .mgs-benchmark-avg { display: none; }
-    }
-    @media (max-width: 768px) {
-      .mgs-topbar { padding-left: 16px; }
-      .mgs-sidebar {
-        transform: translateX(-100%);
-        z-index: 201;
-      }
-      .mgs-sidebar.open { transform: translateX(0); }
-      .mgs-sidebar-toggle { display: block; }
-      .mgs-main {
-        margin-left: 0;
-        padding: 72px 16px 90px;
-      }
-      .mgs-mobile-nav { display: flex; }
-      .mgs-toast-container { right: 12px; bottom: 80px; }
-      .mgs-inv-product-row { grid-template-columns: 1fr 60px 60px; }
-      .mgs-inv-product-row .mgs-inv-product-cell:last-child { display: none; }
-      .mgs-form-row { grid-template-columns: 1fr; }
-      .mgs-dim-row { grid-template-columns: 120px 1fr 36px; }
-    }
-    @media (max-width: 480px) {
-      .mgs-kpi-grid { grid-template-columns: repeat(2, 1fr); }
-      .mgs-insights-grid { grid-template-columns: 1fr; }
-      .mgs-academy-modules { grid-template-columns: 1fr; }
-    }
+    /* ── Sidebar overlay ── */
+    .ms-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:299;}
+    .ms-overlay.open{display:block;}
   </style>
 </head>
-<body class="mgs-body">
+<body>
 
-<!-- ── Topbar ──────────────────────────────────────────────────────── -->
-<div class="mgs-topbar">
-  <div class="mgs-topbar-left">
-    <button class="mgs-sidebar-toggle" id="mgsSidebarToggle" aria-label="Menu">☰</button>
-    <span class="mgs-brand">📊 Merchant Success</span>
-  </div>
-  <div class="mgs-topbar-right">
-    <span id="mgsShopName" class="mgs-shop-name"></span>
-    <a href="seller.html" class="mgs-btn mgs-btn-sm mgs-btn-outline">← Seller Hub</a>
-  </div>
-</div>
+<div class="ms-overlay" id="msOverlay"></div>
 
-<!-- ── Sidebar overlay (mobile) ───────────────────────────────────── -->
-<div class="mgs-sidebar-overlay" id="mgsSidebarOverlay"></div>
+<div class="ms-layout">
 
-<!-- ── Sidebar ────────────────────────────────────────────────────── -->
-<nav class="mgs-sidebar" id="mgsSidebar">
-  <div class="mgs-sidebar-logo">Merchant Success</div>
-  <nav class="mgs-nav">
-    <button class="mgs-nav-item active" data-section="dashboard"><span class="mgs-nav-icon">📊</span> Dashboard</button>
-    <button class="mgs-nav-item" data-section="coach"><span class="mgs-nav-icon">🤖</span> AI Coach</button>
-    <button class="mgs-nav-item" data-section="opportunities"><span class="mgs-nav-icon">💡</span> Opportunities</button>
-    <button class="mgs-nav-item" data-section="customers"><span class="mgs-nav-icon">👥</span> Customers</button>
-    <button class="mgs-nav-item" data-section="inventory"><span class="mgs-nav-icon">📦</span> Inventory</button>
-    <button class="mgs-nav-item" data-section="marketing"><span class="mgs-nav-icon">📣</span> Marketing</button>
-    <button class="mgs-nav-item" data-section="analytics"><span class="mgs-nav-icon">📈</span> Analytics</button>
-    <button class="mgs-nav-item" data-section="automations"><span class="mgs-nav-icon">⚙</span> Automations</button>
-    <button class="mgs-nav-item" data-section="academy"><span class="mgs-nav-icon">🎓</span> Academy</button>
-    <button class="mgs-nav-item" data-section="benchmarks"><span class="mgs-nav-icon">🏆</span> Benchmarks</button>
-  </nav>
-  <div class="mgs-nav-back">
-    <a href="seller.html">← Back to Seller Hub</a>
-  </div>
-</nav>
+  <!-- SIDEBAR -->
+  <aside class="ms-sidebar" id="msSidebar">
+    <div class="ms-sidebar-brand">
+      <span>✦</span> SOKONI
+    </div>
+    <nav class="ms-nav">
+      <button class="ms-nav-item active" data-sec="overview"><span class="ms-nav-icon">📊</span>Overview</button>
+      <button class="ms-nav-item" data-sec="coach"><span class="ms-nav-icon">🤖</span>AI Coach</button>
+      <button class="ms-nav-item" data-sec="opportunities"><span class="ms-nav-icon">💡</span>Opportunities</button>
+      <button class="ms-nav-item" data-sec="crm"><span class="ms-nav-icon">👥</span>CRM</button>
+      <button class="ms-nav-item" data-sec="inventory"><span class="ms-nav-icon">📦</span>Inventory</button>
+      <button class="ms-nav-item" data-sec="marketing"><span class="ms-nav-icon">📢</span>Marketing</button>
+      <button class="ms-nav-item" data-sec="benchmarks"><span class="ms-nav-icon">📈</span>Benchmarks</button>
+      <button class="ms-nav-item" data-sec="automation"><span class="ms-nav-icon">⚡</span>Automation</button>
+      <button class="ms-nav-item" data-sec="financials"><span class="ms-nav-icon">💰</span>Financials</button>
+      <button class="ms-nav-item" data-sec="academy"><span class="ms-nav-icon">🎓</span>Academy</button>
+    </nav>
+    <div class="ms-sidebar-footer">
+      <div class="ms-sidebar-shop" id="sidebarShopName">Loading…</div>
+      <div class="ms-sidebar-handle" id="sidebarShopHandle"></div>
+      <div class="ms-health-mini" id="sidebarHealthBadge">⬤ —</div>
+    </div>
+  </aside>
 
-<!-- ── Main content ───────────────────────────────────────────────── -->
-<main class="mgs-main">
+  <!-- MAIN -->
+  <main class="ms-main">
 
-  <!-- ════════════ DASHBOARD ════════════ -->
-  <div class="mgs-panel active" id="panel-dashboard">
-    <div class="mgs-panel-header">
-      <h2>Business Dashboard</h2>
-      <button class="mgs-btn mgs-btn-sm" onclick="SokoniMerchantSuccess.refreshHealth()">↻ Refresh Score</button>
+    <header class="ms-topbar">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="ms-hamburger" id="msHamburger" aria-label="Menu">☰</button>
+        <h1 class="ms-page-title">Merchant Success</h1>
+      </div>
+      <div class="ms-topbar-right">
+        <span id="msHealthBadge" class="ms-health-badge" style="display:none"></span>
+        <a href="minishop-admin.html" class="ms-topbar-link">My MiniShop →</a>
+      </div>
+    </header>
+
+    <!-- LOADING OVERLAY -->
+    <div id="msLoading" class="ms-loading-overlay">
+      <div class="ms-loading-spinner"></div>
+      <p>Loading your dashboard…</p>
     </div>
 
-    <div class="mgs-dashboard-top">
-      <!-- Health ring -->
-      <div class="mgs-card mgs-health-card">
-        <div class="mgs-card-title">Health Score</div>
-        <div class="mgs-health-ring-wrap">
-          <svg class="mgs-health-ring" width="160" height="160" viewBox="0 0 160 160" aria-hidden="true">
-            <circle class="mgs-ring-track" cx="80" cy="80" r="70" fill="none" stroke-width="12"/>
-            <circle class="mgs-ring-fill" id="mgsHealthRing" cx="80" cy="80" r="70" fill="none"
-              stroke-width="12" stroke-dasharray="439.8" stroke-dashoffset="439.8"
-              stroke-linecap="round" transform="rotate(-90 80 80)"/>
+    <!-- ══ OVERVIEW ══ -->
+    <section id="sec-overview" class="ms-section active" style="display:none">
+      <div class="ms-card ms-health-card">
+        <div class="ms-health-ring-wrap">
+          <svg class="ms-health-ring" width="110" height="110" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="ms-ring-track" cx="60" cy="60" r="52" stroke-width="8" fill="none"/>
+            <circle class="ms-ring-fill" id="msHealthRingFill" cx="60" cy="60" r="52"
+              stroke-width="8" fill="none" stroke-linecap="round"
+              stroke-dasharray="326.7" stroke-dashoffset="326.7"
+              transform="rotate(-90 60 60)"/>
           </svg>
-          <div class="mgs-health-center">
-            <div class="mgs-health-score-text" id="mgsHealthScore">—</div>
-            <div class="mgs-health-grade" id="mgsHealthGrade"></div>
+          <div class="ms-health-center">
+            <span id="msHealthScore" class="ms-health-score">—</span>
+            <span id="msHealthGrade" class="ms-health-grade">—</span>
           </div>
         </div>
-        <button class="mgs-btn mgs-btn-sm mgs-btn-primary" onclick="SokoniMerchantSuccess.refreshHealth(true)">Recalculate</button>
-      </div>
-
-      <!-- KPI grid -->
-      <div class="mgs-card mgs-kpi-section">
-        <div class="mgs-card-title">Key Metrics</div>
-        <div class="mgs-kpi-grid" id="mgsKpiGrid">
-          <div class="mgs-kpi-card">
-            <div class="mgs-kpi-value" id="kpiRevenue30">—</div>
-            <div class="mgs-kpi-label">Revenue (30d)</div>
-          </div>
-          <div class="mgs-kpi-card">
-            <div class="mgs-kpi-value" id="kpiOrders30">—</div>
-            <div class="mgs-kpi-label">Orders (30d)</div>
-          </div>
-          <div class="mgs-kpi-card">
-            <div class="mgs-kpi-value" id="kpiAOV">—</div>
-            <div class="mgs-kpi-label">Avg Order Value</div>
-          </div>
-          <div class="mgs-kpi-card">
-            <div class="mgs-kpi-value" id="kpiCustomers">—</div>
-            <div class="mgs-kpi-label">Total Customers</div>
+        <div class="ms-health-body">
+          <h2>Health Score</h2>
+          <p class="ms-health-subtitle">Your business performance index</p>
+          <div id="msHealthFactors" class="ms-health-factors">
+            <div class="ms-shimmer" style="height:6px;margin-bottom:8px;"></div>
+            <div class="ms-shimmer" style="height:6px;margin-bottom:8px;width:80%;"></div>
+            <div class="ms-shimmer" style="height:6px;width:60%;"></div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Health dimensions breakdown -->
-    <div class="mgs-card" style="margin-top:16px">
-      <div class="mgs-card-title">Score Breakdown</div>
-      <div id="mgsHealthDims" class="mgs-health-dims">
-        <div class="mgs-loading">Loading health score...</div>
+      <div class="ms-stats-row" id="msQuickStats">
+        <div class="ms-stat-card"><div class="ms-stat-value ms-shimmer" style="height:28px;border-radius:4px;"></div><div class="ms-stat-label" style="margin-top:8px;">Revenue</div></div>
+        <div class="ms-stat-card"><div class="ms-stat-value ms-shimmer" style="height:28px;border-radius:4px;"></div><div class="ms-stat-label" style="margin-top:8px;">Orders</div></div>
+        <div class="ms-stat-card"><div class="ms-stat-value ms-shimmer" style="height:28px;border-radius:4px;"></div><div class="ms-stat-label" style="margin-top:8px;">Avg Order</div></div>
+        <div class="ms-stat-card"><div class="ms-stat-value ms-shimmer" style="height:28px;border-radius:4px;"></div><div class="ms-stat-label" style="margin-top:8px;">Rating</div></div>
+        <div class="ms-stat-card"><div class="ms-stat-value ms-shimmer" style="height:28px;border-radius:4px;"></div><div class="ms-stat-label" style="margin-top:8px;">Products</div></div>
+        <div class="ms-stat-card"><div class="ms-stat-value ms-shimmer" style="height:28px;border-radius:4px;"></div><div class="ms-stat-label" style="margin-top:8px;">Followers</div></div>
       </div>
-    </div>
 
-    <!-- Recommendations -->
-    <div class="mgs-card" style="margin-top:16px">
-      <div class="mgs-card-title">🎯 Top Recommendations</div>
-      <div id="mgsHealthRecs" class="mgs-rec-list">
-        <div class="mgs-loading">Loading recommendations...</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ════════════ AI COACH ════════════ -->
-  <div class="mgs-panel" id="panel-coach" hidden>
-    <div class="mgs-panel-header">
-      <h2>🤖 AI Business Coach</h2>
-      <button class="mgs-btn mgs-btn-primary" id="mgsCoachRefreshBtn" onclick="SokoniMerchantSuccess.loadCoach(true)">✨ Get New Insights</button>
-    </div>
-    <div class="mgs-card" style="margin-bottom:16px;background:linear-gradient(135deg,rgba(0,188,212,.08),rgba(124,77,255,.08));border-color:rgba(0,188,212,.3)">
-      <p style="color:var(--muted);font-size:13px">Your AI coach analyses your business data and generates personalised recommendations. Refreshes up to 5× per day.</p>
-    </div>
-    <div id="mgsCoachInsights" class="mgs-insights-grid">
-      <div class="mgs-loading">Loading AI insights...</div>
-    </div>
-  </div>
-
-  <!-- ════════════ OPPORTUNITIES ════════════ -->
-  <div class="mgs-panel" id="panel-opportunities" hidden>
-    <div class="mgs-panel-header">
-      <h2>💡 Sales Opportunities</h2>
-      <button class="mgs-btn mgs-btn-sm" onclick="SokoniMerchantSuccess.loadOpportunities()">↻ Refresh</button>
-    </div>
-    <div id="mgsOppsList" class="mgs-opps-list">
-      <div class="mgs-loading">Scanning for opportunities...</div>
-    </div>
-  </div>
-
-  <!-- ════════════ CUSTOMERS (CRM) ════════════ -->
-  <div class="mgs-panel" id="panel-customers" hidden>
-    <div class="mgs-panel-header">
-      <h2>👥 Customer Relationships</h2>
-    </div>
-    <div class="mgs-card" style="margin-bottom:16px">
-      <div class="mgs-kpi-grid" id="mgsCrmStats">
-        <div class="mgs-kpi-card">
-          <div class="mgs-kpi-value" id="crmTotal">—</div>
-          <div class="mgs-kpi-label">Total Customers</div>
-        </div>
-        <div class="mgs-kpi-card">
-          <div class="mgs-kpi-value" id="crmLoyal">—</div>
-          <div class="mgs-kpi-label">Loyal</div>
-        </div>
-        <div class="mgs-kpi-card">
-          <div class="mgs-kpi-value" id="crmAtRisk">—</div>
-          <div class="mgs-kpi-label">At Risk</div>
-        </div>
-        <div class="mgs-kpi-card">
-          <div class="mgs-kpi-value" id="crmCLV">—</div>
-          <div class="mgs-kpi-label">Avg Lifetime Value</div>
-        </div>
-      </div>
-    </div>
-    <div class="mgs-card">
-      <div class="mgs-card-title">All Customers</div>
-      <input type="text" class="mgs-search" id="mgsCrmSearch"
-        placeholder="Search customers..." oninput="SokoniMerchantSuccess.filterCrm(this.value)">
-      <div id="mgsCrmList" class="mgs-customer-list">
-        <div class="mgs-loading">Loading customers...</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ════════════ INVENTORY ════════════ -->
-  <div class="mgs-panel" id="panel-inventory" hidden>
-    <div class="mgs-panel-header">
-      <h2>📦 Inventory Intelligence</h2>
-      <button class="mgs-btn mgs-btn-sm" onclick="SokoniMerchantSuccess.loadInventory()">↻ Refresh</button>
-    </div>
-    <div class="mgs-kpi-grid mgs-inv-summary" id="mgsInvSummary"></div>
-    <div class="mgs-card">
-      <div class="mgs-card-title">⚠ Alerts &amp; Actions</div>
-      <div id="mgsInvAlerts" class="mgs-inv-alert-list">
-        <div class="mgs-loading">Analysing inventory...</div>
-      </div>
-    </div>
-    <div class="mgs-card" style="margin-top:16px">
-      <div class="mgs-card-title">All Products</div>
-      <div class="mgs-inv-product-row" style="font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;padding:6px 12px">
-        <span>Product</span><span class="mgs-inv-product-cell">Stock</span>
-        <span class="mgs-inv-product-cell">Sold (30d)</span>
-        <span class="mgs-inv-product-cell">Status</span>
-      </div>
-      <div id="mgsInvList" class="mgs-inv-product-list"></div>
-    </div>
-  </div>
-
-  <!-- ════════════ MARKETING ════════════ -->
-  <div class="mgs-panel" id="panel-marketing" hidden>
-    <div class="mgs-panel-header">
-      <h2>📣 Smart Marketing</h2>
-    </div>
-    <div class="mgs-subtabs" id="mgsMarketingSubtabs">
-      <button class="mgs-subtab active" data-subtab="campaigns">Campaigns</button>
-      <button class="mgs-subtab" data-subtab="create">Create Campaign</button>
-    </div>
-    <div id="mgs-subtab-campaigns" class="mgs-subtab-content active">
-      <div id="mgsCampaignList" class="mgs-campaign-list">
-        <div class="mgs-loading">Loading campaigns...</div>
-      </div>
-    </div>
-    <div id="mgs-subtab-create" class="mgs-subtab-content" hidden>
-      <div class="mgs-card">
-        <div class="mgs-card-title">New Campaign</div>
-        <div style="display:flex;flex-direction:column;gap:16px">
-          <div class="mgs-form-group">
-            <label>Campaign Name</label>
-            <input type="text" id="mgsCampaignName" placeholder="e.g. Weekend Sale">
+      <div class="ms-two-col">
+        <div class="ms-card">
+          <div class="ms-card-header"><span class="ms-card-title">🔔 Action Required</span></div>
+          <div id="msAlertsList" class="ms-alerts-list">
+            <div class="ms-empty"><span class="ms-empty-icon">✅</span>No actions required</div>
           </div>
-          <div class="mgs-form-group">
-            <label>Type</label>
-            <select id="mgsCampaignType">
-              <option value="flash-sale">Flash Sale</option>
-              <option value="weekend-sale">Weekend Sale</option>
-              <option value="holiday">Holiday Promotion</option>
-              <option value="new-arrivals">New Arrivals</option>
-              <option value="referral">Referral Campaign</option>
-              <option value="back-to-school">Back to School</option>
-              <option value="custom">Custom</option>
+        </div>
+        <div class="ms-card">
+          <div class="ms-card-header"><span class="ms-card-title">⚡ Quick Actions</span></div>
+          <div class="ms-quick-actions">
+            <button class="ms-action-tile" onclick="MSEngine.navTo('coach')">
+              <span class="ms-tile-icon">🤖</span><span>Ask AI Coach</span>
+            </button>
+            <button class="ms-action-tile" onclick="MSEngine.navTo('marketing')">
+              <span class="ms-tile-icon">📢</span><span>Create Campaign</span>
+            </button>
+            <button class="ms-action-tile" onclick="MSEngine.navTo('inventory')">
+              <span class="ms-tile-icon">📦</span><span>Check Inventory</span>
+            </button>
+            <button class="ms-action-tile" onclick="MSEngine.navTo('crm')">
+              <span class="ms-tile-icon">👥</span><span>View Customers</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ AI COACH ══ -->
+    <section id="sec-coach" class="ms-section" style="display:none">
+      <div class="ms-section-header">
+        <h2>🤖 AI Business Coach</h2>
+        <p>Personalised recommendations powered by AI</p>
+      </div>
+      <div class="ms-card">
+        <div class="ms-card-header">
+          <span class="ms-card-title">Today's Recommendations</span>
+          <button class="ms-btn-accent" onclick="MSEngine.refreshCoach()" id="msCoachRefresh">✨ Refresh</button>
+        </div>
+        <div id="msCoachOutput" class="ms-coach-output">
+          <div class="ms-empty"><span class="ms-empty-icon">🤖</span>Click Refresh to get AI-powered recommendations for your business.</div>
+        </div>
+      </div>
+      <div class="ms-card">
+        <div class="ms-card-header"><span class="ms-card-title">💬 Ask Your Coach</span></div>
+        <div class="ms-coach-input-wrap">
+          <textarea id="msCoachQuestion" class="ms-textarea" placeholder="Ask anything about your business… e.g. 'How do I get more repeat customers?'" rows="3"></textarea>
+          <button class="ms-btn-primary" onclick="MSEngine.askCoach()">Ask Coach</button>
+        </div>
+        <div id="msCoachAnswer" class="ms-coach-answer" hidden></div>
+      </div>
+      <div class="ms-card">
+        <div class="ms-card-header"><span class="ms-card-title">✍️ AI Content Generator</span></div>
+        <div class="ms-form-row">
+          <select id="msContentType" class="ms-select">
+            <option value="product_description">Product Description</option>
+            <option value="shop_bio">Shop Bio</option>
+            <option value="whatsapp_status">WhatsApp Status</option>
+            <option value="campaign_message">Campaign Message</option>
+            <option value="response_template">Customer Response Template</option>
+            <option value="flash_sale_text">Flash Sale Announcement</option>
+          </select>
+          <button class="ms-btn-accent" onclick="MSEngine.generateContent()">Generate</button>
+        </div>
+        <textarea id="msContentContext" class="ms-textarea" placeholder="Add context (optional)… e.g. 'We sell fresh vegetables daily'" rows="2" style="margin-top:8px;"></textarea>
+        <div id="msContentOutput" class="ms-coach-answer" hidden></div>
+      </div>
+    </section>
+
+    <!-- ══ OPPORTUNITIES ══ -->
+    <section id="sec-opportunities" class="ms-section" style="display:none">
+      <div class="ms-section-header">
+        <h2>💡 Sales Opportunities</h2>
+        <p>Insights to help you grow sales today</p>
+      </div>
+      <div class="ms-opp-grid" id="msOppGrid">
+        <div class="ms-empty" style="grid-column:1/-1"><span class="ms-empty-icon">💡</span>Loading opportunities…</div>
+      </div>
+    </section>
+
+    <!-- ══ CRM ══ -->
+    <section id="sec-crm" class="ms-section" style="display:none">
+      <div class="ms-section-header">
+        <h2>👥 Customer Relationships</h2>
+        <p>Know your customers, grow your business</p>
+      </div>
+      <div class="ms-segment-tabs">
+        <button class="ms-seg-btn active" data-seg="all" onclick="MSEngine.loadCRM('all',this)">All</button>
+        <button class="ms-seg-btn" data-seg="champion" onclick="MSEngine.loadCRM('champion',this)">Champions</button>
+        <button class="ms-seg-btn" data-seg="loyal" onclick="MSEngine.loadCRM('loyal',this)">Loyal</button>
+        <button class="ms-seg-btn" data-seg="at_risk" onclick="MSEngine.loadCRM('at_risk',this)">At Risk</button>
+        <button class="ms-seg-btn" data-seg="lost" onclick="MSEngine.loadCRM('lost',this)">Lost</button>
+        <button class="ms-seg-btn" data-seg="new" onclick="MSEngine.loadCRM('new',this)">New</button>
+      </div>
+      <div id="msCRMSummary" class="ms-segment-summary"></div>
+      <div id="msCRMList" class="ms-crm-list">
+        <div class="ms-empty"><span class="ms-empty-icon">👥</span>Loading customers…</div>
+      </div>
+    </section>
+
+    <!-- ══ INVENTORY ══ -->
+    <section id="sec-inventory" class="ms-section" style="display:none">
+      <div class="ms-section-header">
+        <h2>📦 Inventory Intelligence</h2>
+        <p>Stay ahead of stock issues</p>
+      </div>
+      <div class="ms-inv-tabs">
+        <button class="ms-inv-tab active" data-inv="lowStock" onclick="MSEngine.showInvTab('lowStock',this)">⚠️ Low Stock</button>
+        <button class="ms-inv-tab" data-inv="outOfStock" onclick="MSEngine.showInvTab('outOfStock',this)">🚫 Out of Stock</button>
+        <button class="ms-inv-tab" data-inv="slowMoving" onclick="MSEngine.showInvTab('slowMoving',this)">🐌 Slow Moving</button>
+        <button class="ms-inv-tab" data-inv="deadStock" onclick="MSEngine.showInvTab('deadStock',this)">💀 Dead Stock</button>
+        <button class="ms-inv-tab" data-inv="fastMoving" onclick="MSEngine.showInvTab('fastMoving',this)">🔥 Fast Moving</button>
+        <button class="ms-inv-tab" data-inv="overstocked" onclick="MSEngine.showInvTab('overstocked',this)">📈 Overstocked</button>
+      </div>
+      <div id="msInvContent" class="ms-inv-content">
+        <div class="ms-empty"><span class="ms-empty-icon">📦</span>Loading inventory…</div>
+      </div>
+    </section>
+
+    <!-- ══ MARKETING ══ -->
+    <section id="sec-marketing" class="ms-section" style="display:none">
+      <div class="ms-section-header">
+        <h2>📢 Smart Marketing</h2>
+        <p>Campaigns that grow your business automatically</p>
+      </div>
+      <div class="ms-card">
+        <div class="ms-card-header"><span class="ms-card-title">➕ New Campaign</span></div>
+        <div class="ms-campaign-form">
+          <div class="ms-form-row">
+            <input id="msCampName" class="ms-input" placeholder="Campaign name…" type="text">
+            <select id="msCampType" class="ms-select">
+              <option value="whatsapp_blast">📱 WhatsApp Blast</option>
+              <option value="email_campaign">📧 Email Campaign</option>
+              <option value="push_notification">🔔 Push Notification</option>
+              <option value="coupon">🏷️ Coupon</option>
+              <option value="flash_sale">⚡ Flash Sale</option>
+              <option value="win_back">🏆 Win-Back</option>
             </select>
           </div>
-          <div class="mgs-form-group">
-            <label>Description</label>
-            <textarea id="mgsCampaignDesc" rows="3" placeholder="Describe your campaign offer..."></textarea>
+          <div class="ms-form-row">
+            <select id="msCampSegment" class="ms-select">
+              <option value="">All Customers</option>
+              <option value="champion">Champions</option>
+              <option value="loyal">Loyal</option>
+              <option value="at_risk">At Risk</option>
+              <option value="lost">Lost Customers</option>
+              <option value="new">New Customers</option>
+            </select>
+            <input id="msCampDiscount" class="ms-input" type="number" placeholder="Discount % (optional)" min="0" max="90">
           </div>
-          <div class="mgs-form-row">
-            <div class="mgs-form-group">
-              <label>Start Date</label>
-              <input type="datetime-local" id="mgsCampaignStart">
-            </div>
-            <div class="mgs-form-group">
-              <label>End Date</label>
-              <input type="datetime-local" id="mgsCampaignEnd">
-            </div>
-          </div>
-          <button class="mgs-btn mgs-btn-primary" onclick="SokoniMerchantSuccess.createCampaign()">Create &amp; Generate Link</button>
+          <textarea id="msCampMessage" class="ms-textarea" placeholder="Message (leave blank for AI-generated)…" rows="3"></textarea>
+          <button class="ms-btn-primary" onclick="MSEngine.createCampaign()">Create Campaign</button>
         </div>
       </div>
-    </div>
-  </div>
-
-  <!-- ════════════ ANALYTICS ════════════ -->
-  <div class="mgs-panel" id="panel-analytics" hidden>
-    <div class="mgs-panel-header">
-      <h2>📈 Financial Analytics</h2>
-      <div class="mgs-period-btns" id="mgsPeriodBtns">
-        <button class="mgs-btn mgs-btn-sm active" data-period="30d"
-          onclick="SokoniMerchantSuccess.loadAnalytics('30d',this)">30 Days</button>
-        <button class="mgs-btn mgs-btn-sm" data-period="7d"
-          onclick="SokoniMerchantSuccess.loadAnalytics('7d',this)">7 Days</button>
-        <button class="mgs-btn mgs-btn-sm" data-period="90d"
-          onclick="SokoniMerchantSuccess.loadAnalytics('90d',this)">90 Days</button>
-        <button class="mgs-btn mgs-btn-sm" data-period="365d"
-          onclick="SokoniMerchantSuccess.loadAnalytics('365d',this)">Year</button>
-      </div>
-    </div>
-    <div id="mgsAnalyticsBody">
-      <div class="mgs-loading">Loading analytics...</div>
-    </div>
-  </div>
-
-  <!-- ════════════ AUTOMATIONS ════════════ -->
-  <div class="mgs-panel" id="panel-automations" hidden>
-    <div class="mgs-panel-header">
-      <h2>⚙ Automations</h2>
-    </div>
-    <div class="mgs-card" style="margin-bottom:16px;border-color:rgba(0,188,212,.3);background:rgba(0,188,212,.05)">
-      <p style="color:var(--muted);font-size:13px">Automations run in the background and handle routine tasks for you. Enable only what fits your business.</p>
-    </div>
-    <div id="mgsAutoList" class="mgs-automation-list">
-      <div class="mgs-loading">Loading automations...</div>
-    </div>
-    <button class="mgs-btn mgs-btn-primary" style="margin-top:16px"
-      onclick="SokoniMerchantSuccess.showNewAutomation()">+ Add Automation</button>
-
-    <!-- New automation form -->
-    <div id="mgsAutoForm" class="mgs-card" style="margin-top:16px" hidden>
-      <div class="mgs-card-title">New Automation</div>
-      <div style="display:flex;flex-direction:column;gap:14px">
-        <div class="mgs-form-group">
-          <label>Type</label>
-          <select id="mgsAutoType" onchange="SokoniMerchantSuccess.updateAutoForm(this.value)">
-            <option value="low_stock_alert">Low Stock Alert</option>
-            <option value="review_request">Review Request</option>
-            <option value="win_back">Win-Back Campaign</option>
-            <option value="reorder_reminder">Reorder Reminder</option>
-            <option value="flash_sale">Flash Sale</option>
-          </select>
-        </div>
-        <div id="mgsAutoConfigFields" class="mgs-auto-config"></div>
-        <div class="mgs-form-group">
-          <label>Custom Message (optional)</label>
-          <textarea id="mgsAutoMessage" rows="2" placeholder="Personalise the message sent to customers..."></textarea>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="mgs-btn mgs-btn-primary" onclick="SokoniMerchantSuccess.saveAutomation()">Save Automation</button>
-          <button class="mgs-btn mgs-btn-outline" onclick="document.getElementById('mgsAutoForm').hidden=true">Cancel</button>
+      <div class="ms-card">
+        <div class="ms-card-header"><span class="ms-card-title">📋 My Campaigns</span></div>
+        <div id="msCampaignList" class="ms-campaign-list">
+          <div class="ms-empty"><span class="ms-empty-icon">📢</span>No campaigns yet. Create your first one above.</div>
         </div>
       </div>
-    </div>
-  </div>
+    </section>
 
-  <!-- ════════════ ACADEMY ════════════ -->
-  <div class="mgs-panel" id="panel-academy" hidden>
-    <div class="mgs-panel-header">
-      <h2>🎓 Merchant Academy</h2>
-    </div>
-    <div class="mgs-card" id="mgsAcademyProgress" style="margin-bottom:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div class="mgs-card-title" style="margin-bottom:4px">Your Progress</div>
-          <div id="mgsAcademyProgressText" style="color:var(--muted);font-size:13px">Loading...</div>
+    <!-- ══ BENCHMARKS ══ -->
+    <section id="sec-benchmarks" class="ms-section" style="display:none">
+      <div class="ms-section-header">
+        <h2>📈 Benchmarking</h2>
+        <p>See how you compare to similar businesses (anonymous)</p>
+      </div>
+      <div id="msBenchmarkContent" class="ms-benchmark-content">
+        <div class="ms-empty"><span class="ms-empty-icon">📈</span>Loading benchmark data…</div>
+      </div>
+    </section>
+
+    <!-- ══ AUTOMATION ══ -->
+    <section id="sec-automation" class="ms-section" style="display:none">
+      <div class="ms-section-header">
+        <h2>⚡ Automation</h2>
+        <p>Let your business run on autopilot</p>
+      </div>
+      <div class="ms-auto-templates" id="msAutoTemplates"></div>
+      <div class="ms-card">
+        <div class="ms-card-header"><span class="ms-card-title">⚙️ Active Automations</span></div>
+        <div id="msAutoList" class="ms-auto-list">
+          <div class="ms-empty"><span class="ms-empty-icon">⚡</span>No automations enabled. Pick a template above.</div>
         </div>
-        <div id="mgsAcademyPct" style="font-size:28px;font-weight:900;color:var(--accent)">0%</div>
       </div>
-      <div class="mgs-progress-bar" style="margin-top:12px">
-        <div class="mgs-progress-fill" id="mgsAcademyBar" style="width:0%"></div>
+    </section>
+
+    <!-- ══ FINANCIALS ══ -->
+    <section id="sec-financials" class="ms-section" style="display:none">
+      <div class="ms-section-header">
+        <h2>💰 Financial Insights</h2>
+        <p>Understand your business performance</p>
       </div>
-    </div>
-    <div id="mgsAcademyModules" class="mgs-academy-modules">
-      <div class="mgs-loading">Loading academy...</div>
-    </div>
-  </div>
+      <div class="ms-period-row">
+        <button class="ms-period-btn active" data-days="7" onclick="MSEngine.loadFinancials(7,this)">7 days</button>
+        <button class="ms-period-btn" data-days="30" onclick="MSEngine.loadFinancials(30,this)">30 days</button>
+        <button class="ms-period-btn" data-days="90" onclick="MSEngine.loadFinancials(90,this)">90 days</button>
+      </div>
+      <div id="msFinMetrics" class="ms-fin-metrics"></div>
+      <div class="ms-card">
+        <div class="ms-card-header"><span class="ms-card-title">📊 Revenue Trend</span></div>
+        <div id="msRevenueChart" class="ms-chart-wrap"></div>
+      </div>
+      <div class="ms-two-col">
+        <div class="ms-card">
+          <div class="ms-card-header"><span class="ms-card-title">🏆 Top Products</span></div>
+          <div id="msTopProducts" class="ms-top-list"></div>
+        </div>
+        <div class="ms-card">
+          <div class="ms-card-header"><span class="ms-card-title">⏰ Peak Hours</span></div>
+          <div id="msPeakHours" class="ms-peak-hours"></div>
+        </div>
+      </div>
+    </section>
 
-  <!-- ════════════ BENCHMARKS ════════════ -->
-  <div class="mgs-panel" id="panel-benchmarks" hidden>
-    <div class="mgs-panel-header">
-      <h2>🏆 Industry Benchmarks</h2>
-    </div>
-    <div class="mgs-card" style="margin-bottom:16px;border-color:rgba(124,77,255,.3)">
-      <p style="color:var(--muted);font-size:13px">Anonymous comparison with similar businesses on SOKONI. No competitor data is exposed.</p>
-    </div>
-    <div id="mgsBenchmarkBody">
-      <div class="mgs-loading">Loading benchmarks...</div>
-    </div>
-  </div>
+    <!-- ══ ACADEMY ══ -->
+    <section id="sec-academy" class="ms-section" style="display:none">
+      <div class="ms-section-header">
+        <h2>🎓 Merchant Academy</h2>
+        <p>Learn, grow, and level up your business skills</p>
+      </div>
+      <div class="ms-card ms-xp-card">
+        <div class="ms-xp-left">
+          <div id="msAcademyLevel" class="ms-level-badge">Beginner</div>
+          <div class="ms-xp-bar-wrap"><div id="msXpBar" class="ms-xp-bar" style="width:0%"></div></div>
+          <p id="msXpText" class="ms-muted" style="margin-top:4px;"></p>
+        </div>
+        <div class="ms-xp-right">
+          <span id="msTotalXp" class="ms-xp-num">0</span>
+          <span class="ms-muted">XP</span>
+        </div>
+      </div>
+      <div id="msModuleList" class="ms-module-list">
+        <div class="ms-empty"><span class="ms-empty-icon">🎓</span>Loading academy…</div>
+      </div>
+    </section>
 
-</main>
+  </main>
 
-<!-- ── Toast container ─────────────────────────────────────────────── -->
-<div class="mgs-toast-container" id="mgsToasts"></div>
+  <!-- MOBILE BOTTOM NAV -->
+  <nav class="ms-mobile-nav">
+    <button class="ms-mob-btn active" data-sec="overview"><span>📊</span><span>Overview</span></button>
+    <button class="ms-mob-btn" data-sec="coach"><span>🤖</span><span>AI Coach</span></button>
+    <button class="ms-mob-btn" data-sec="crm"><span>👥</span><span>CRM</span></button>
+    <button class="ms-mob-btn" data-sec="inventory"><span>📦</span><span>Stock</span></button>
+    <button class="ms-mob-btn" data-sec="marketing"><span>📢</span><span>Market</span></button>
+    <button class="ms-mob-btn" data-sec="financials"><span>💰</span><span>Finance</span></button>
+    <button class="ms-mob-btn" data-sec="automation"><span>⚡</span><span>Auto</span></button>
+    <button class="ms-mob-btn" data-sec="benchmarks"><span>📈</span><span>Bench</span></button>
+    <button class="ms-mob-btn" data-sec="academy"><span>🎓</span><span>Learn</span></button>
+    <button class="ms-mob-btn" data-sec="opportunities"><span>💡</span><span>Opps</span></button>
+  </nav>
 
-<!-- ── Mobile bottom nav ───────────────────────────────────────────── -->
-<nav class="mgs-mobile-nav">
-  <button class="mgs-mobile-nav-btn active" data-section="dashboard">📊<span>Dashboard</span></button>
-  <button class="mgs-mobile-nav-btn" data-section="customers">👥<span>Customers</span></button>
-  <button class="mgs-mobile-nav-btn" data-section="inventory">📦<span>Stock</span></button>
-  <button class="mgs-mobile-nav-btn" data-section="marketing">📣<span>Marketing</span></button>
-  <button class="mgs-mobile-nav-btn" data-section="academy">🎓<span>Learn</span></button>
-</nav>
+</div>
+
+<div id="msToast" class="ms-toast-wrap" aria-live="polite"></div>
 
 <script src="/__/firebase/init.js"></script>
-<script src="sokoni-merchant-success.js"></script>
 <script>
-(function () {
-  'use strict';
+'use strict';
+window.MSEngine = (function () {
 
-  /* ── Navigation ──────────────────────────────────────────────── */
-  function navigate(section) {
-    // Deactivate all panels
-    document.querySelectorAll('.mgs-panel').forEach(function (p) {
-      p.classList.remove('active');
-      p.hidden = true;
+  /* ── State ── */
+  var S = {
+    shopId: null, uid: null, user: null,
+    shopName: '', shopHandle: '',
+    dashboard: null, inventory: null, crm: null,
+    financials: null, academy: null, campaigns: null, automations: null,
+    currentSection: 'overview',
+    sectionLoaded: {}
+  };
+
+  /* ── XSS escape ── */
+  function _esc(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
+  /* ── KES format ── */
+  function _kes(n) {
+    var num = Number(n) || 0;
+    if (num >= 1000000) return 'KES ' + (num/1000000).toFixed(1) + 'M';
+    if (num >= 1000) return 'KES ' + (num/1000).toFixed(1) + 'K';
+    return 'KES ' + Math.round(num).toLocaleString('en-KE');
+  }
+
+  /* ── Toast ── */
+  function _toast(msg, type) {
+    type = type || 'info';
+    var wrap = document.getElementById('msToast');
+    var t = document.createElement('div');
+    t.className = 'ms-toast ' + type;
+    t.textContent = msg;
+    wrap.appendChild(t);
+    setTimeout(function () { t.remove(); }, 3800);
+  }
+
+  /* ── Firebase callable ── */
+  async function _call(name, data) {
+    var fn = firebase.functions().httpsCallable(name);
+    var r = await fn(data || {});
+    return r.data;
+  }
+
+  /* ── Navigation ── */
+  function navTo(key) {
+    document.querySelectorAll('.ms-section').forEach(function (s) { s.style.display = 'none'; });
+    var sec = document.getElementById('sec-' + key);
+    if (sec) sec.style.display = 'block';
+
+    document.querySelectorAll('.ms-nav-item').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.sec === key);
     });
-    // Activate target
-    var panel = document.getElementById('panel-' + section);
-    if (panel) { panel.classList.add('active'); panel.hidden = false; }
-
-    // Update sidebar nav items
-    document.querySelectorAll('.mgs-nav-item').forEach(function (btn) {
-      btn.classList.toggle('active', btn.dataset.section === section);
+    document.querySelectorAll('.ms-mob-btn').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.sec === key);
     });
 
-    // Update mobile nav
-    document.querySelectorAll('.mgs-mobile-nav-btn').forEach(function (btn) {
-      btn.classList.toggle('active', btn.dataset.section === section);
-    });
+    S.currentSection = key;
 
-    // Notify JS module
-    if (typeof SokoniMerchantSuccess !== 'undefined' && SokoniMerchantSuccess.onNavigate) {
-      SokoniMerchantSuccess.onNavigate(section);
+    // Close mobile sidebar
+    document.getElementById('msSidebar').classList.remove('open');
+    document.getElementById('msOverlay').classList.remove('open');
+
+    // Lazy load
+    if (!S.sectionLoaded[key] && S.shopId) {
+      S.sectionLoaded[key] = true;
+      switch (key) {
+        case 'overview':     loadDashboard(); break;
+        case 'opportunities':loadOpportunities(); break;
+        case 'crm':          loadCRM('all', document.querySelector('.ms-seg-btn')); break;
+        case 'inventory':    loadInventory(); break;
+        case 'marketing':    loadCampaigns(); break;
+        case 'benchmarks':   loadBenchmarks(); break;
+        case 'automation':   _renderAutoTemplates(); loadAutomations(); break;
+        case 'financials':   loadFinancials(7, document.querySelector('.ms-period-btn')); break;
+        case 'academy':      loadAcademy(); break;
+      }
+    }
+  }
+
+  /* ── Health ring ── */
+  function _setHealthRing(score) {
+    var C = 326.7;
+    var fill = document.getElementById('msHealthRingFill');
+    var offset = C - (Math.min(100, Math.max(0, score)) / 100) * C;
+    fill.style.strokeDasharray = C;
+    fill.style.strokeDashoffset = offset;
+    var color = score >= 80 ? '#71ff00' : score >= 60 ? '#f59e0b' : '#ef5350';
+    fill.style.stroke = color;
+    document.getElementById('msHealthScore').textContent = score;
+    var grade = score >= 90 ? 'A+' : score >= 80 ? 'A' : score >= 70 ? 'B' : score >= 60 ? 'C' : 'D';
+    document.getElementById('msHealthGrade').textContent = grade;
+    document.getElementById('msHealthGrade').style.color = color;
+    // Topbar + sidebar badge
+    var tb = document.getElementById('msHealthBadge');
+    tb.textContent = '⬤ ' + score + ' / 100';
+    tb.style.display = 'inline-flex';
+    document.getElementById('sidebarHealthBadge').textContent = '⬤ ' + score;
+  }
+
+  /* ── Factor color ── */
+  function _factorColor(score, max) {
+    var pct = score / max;
+    return pct < 0.4 ? '#ef5350' : pct < 0.7 ? '#f59e0b' : '#71ff00';
+  }
+
+  /* ── OVERVIEW / DASHBOARD ── */
+  async function loadDashboard() {
+    try {
+      var data = await _call('getMerchantDashboard', { shopId: S.shopId });
+      S.dashboard = data;
+      _renderDashboard(data);
+    } catch (e) {
+      _renderDashboardFallback();
+    }
+  }
+
+  function _renderDashboard(d) {
+    // Health ring
+    var score = (d && d.healthScore) ? d.healthScore : 0;
+    _setHealthRing(score);
+
+    // Factors
+    var factors = (d && d.factors) ? d.factors : [
+      { name: 'Profile', score: 0, max: 15 },
+      { name: 'Orders', score: 0, max: 20 },
+      { name: 'Reviews', score: 0, max: 20 },
+      { name: 'Response', score: 0, max: 15 },
+      { name: 'Inventory', score: 0, max: 15 },
+      { name: 'Marketing', score: 0, max: 15 }
+    ];
+    var fh = document.getElementById('msHealthFactors');
+    fh.innerHTML = factors.map(function (f) {
+      var pct = Math.round((f.score / f.max) * 100);
+      var col = _factorColor(f.score, f.max);
+      return '<div class="ms-factor-row">' +
+        '<span class="ms-factor-name">' + _esc(f.name) + '</span>' +
+        '<div class="ms-factor-bar"><div class="ms-factor-fill" style="width:' + pct + '%;background:' + col + '"></div></div>' +
+        '<span class="ms-factor-pct" style="color:' + col + '">' + f.score + '/' + f.max + '</span>' +
+        '</div>';
+    }).join('');
+
+    // Quick stats
+    var stats = (d && d.stats) ? d.stats : {};
+    var qs = document.getElementById('msQuickStats');
+    var defs = [
+      { key: 'revenue30', label: 'Revenue (30d)', fmt: _kes, delta: true },
+      { key: 'orders30', label: 'Orders (30d)', fmt: function(v){return v||0;}, delta: true },
+      { key: 'aov', label: 'Avg Order', fmt: _kes, delta: false },
+      { key: 'rating', label: 'Rating', fmt: function(v){return v?Number(v).toFixed(1)+'★':'—';}, delta: false },
+      { key: 'products', label: 'Products', fmt: function(v){return v||0;}, delta: false },
+      { key: 'followers', label: 'Followers', fmt: function(v){return v||0;}, delta: false }
+    ];
+    qs.innerHTML = defs.map(function (def) {
+      var val = stats[def.key] !== undefined ? stats[def.key] : 0;
+      var deltaHtml = '';
+      if (def.delta && stats[def.key + 'Delta'] !== undefined) {
+        var d2 = stats[def.key + 'Delta'];
+        var cls = d2 >= 0 ? 'up' : 'down';
+        var sign = d2 >= 0 ? '▲' : '▼';
+        deltaHtml = '<div class="ms-stat-delta ' + cls + '">' + sign + ' ' + Math.abs(d2) + '% vs last period</div>';
+      }
+      return '<div class="ms-stat-card">' +
+        '<div class="ms-stat-value">' + def.fmt(val) + '</div>' +
+        '<div class="ms-stat-label">' + def.label + '</div>' +
+        deltaHtml +
+        '</div>';
+    }).join('');
+
+    // Alerts
+    var alerts = (d && d.alerts) ? d.alerts : [];
+    var al = document.getElementById('msAlertsList');
+    if (!alerts.length) {
+      al.innerHTML = '<div class="ms-empty"><span class="ms-empty-icon">✅</span>No actions required</div>';
+    } else {
+      al.innerHTML = alerts.map(function (a) {
+        return '<div class="ms-alert-row ' + (a.level || '') + '">' +
+          '<span class="ms-alert-icon">' + (a.icon || '🔔') + '</span>' +
+          '<div class="ms-alert-body">' +
+            '<div class="ms-alert-title">' + _esc(a.title) + '</div>' +
+            '<div class="ms-alert-desc">' + _esc(a.desc) + '</div>' +
+          '</div></div>';
+      }).join('');
     }
 
-    closeSidebar();
+    // Sidebar shop name
+    if (d && d.shopName) {
+      S.shopName = d.shopName;
+      document.getElementById('sidebarShopName').textContent = d.shopName;
+    }
+    if (d && d.shopHandle) {
+      S.shopHandle = d.shopHandle;
+      document.getElementById('sidebarShopHandle').textContent = '@' + d.shopHandle;
+    }
   }
 
-  /* ── Sidebar toggle (mobile) ─────────────────────────────────── */
-  function openSidebar() {
-    document.getElementById('mgsSidebar').classList.add('open');
-    document.getElementById('mgsSidebarOverlay').classList.add('visible');
-  }
-  function closeSidebar() {
-    document.getElementById('mgsSidebar').classList.remove('open');
-    document.getElementById('mgsSidebarOverlay').classList.remove('visible');
+  function _renderDashboardFallback() {
+    _setHealthRing(0);
+    var fh = document.getElementById('msHealthFactors');
+    fh.innerHTML = '<p class="ms-muted">Dashboard data unavailable — check connection.</p>';
+    document.getElementById('msQuickStats').innerHTML = '<div class="ms-error-box" style="grid-column:1/-1">Failed to load stats. <button class="ms-btn-accent ms-btn-sm" onclick="MSEngine.retryDashboard()" style="margin-left:8px;">Retry</button></div>';
   }
 
-  /* ── Sidebar nav click ───────────────────────────────────────── */
-  document.querySelectorAll('.mgs-nav-item').forEach(function (btn) {
-    btn.addEventListener('click', function () { navigate(btn.dataset.section); });
-  });
+  function retryDashboard() {
+    S.sectionLoaded['overview'] = false;
+    S.sectionLoaded['overview'] = true;
+    loadDashboard();
+  }
 
-  /* ── Mobile nav click ────────────────────────────────────────── */
-  document.querySelectorAll('.mgs-mobile-nav-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () { navigate(btn.dataset.section); });
-  });
+  /* ── AI COACH ── */
+  async function refreshCoach() {
+    var btn = document.getElementById('msCoachRefresh');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="ms-spinner-sm"></span> Loading…';
+    var out = document.getElementById('msCoachOutput');
+    out.innerHTML = '<div class="ms-empty"><span class="ms-empty-icon">🤖</span>Generating recommendations…</div>';
+    try {
+      var data = await _call('getMerchantAICoach', { shopId: S.shopId });
+      var recs = (data && data.recommendations) ? data.recommendations : [];
+      if (!recs.length) {
+        out.innerHTML = '<div class="ms-empty"><span class="ms-empty-icon">🤖</span>No recommendations available right now.</div>';
+      } else {
+        out.innerHTML = '<ol>' + recs.map(function (r) {
+          return '<li><strong>' + _esc(r.title || r) + '</strong>' +
+            (r.desc ? '<br><span style="color:var(--muted);font-size:12px">' + _esc(r.desc) + '</span>' : '') +
+            '</li>';
+        }).join('') + '</ol>';
+      }
+    } catch (e) {
+      out.innerHTML = '<div class="ms-error-box">Failed to load AI coach: ' + _esc(e.message) + '</div>';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '✨ Refresh';
+    }
+  }
 
-  /* ── Sidebar toggle button ───────────────────────────────────── */
-  document.getElementById('mgsSidebarToggle').addEventListener('click', function () {
-    var sidebar = document.getElementById('mgsSidebar');
-    if (sidebar.classList.contains('open')) { closeSidebar(); } else { openSidebar(); }
-  });
+  async function askCoach() {
+    var q = (document.getElementById('msCoachQuestion').value || '').trim();
+    if (!q) { _toast('Please enter a question', 'error'); return; }
+    var ans = document.getElementById('msCoachAnswer');
+    ans.hidden = false;
+    ans.textContent = 'Thinking…';
+    try {
+      var data = await _call('getMerchantAICoach', { shopId: S.shopId, question: q });
+      ans.textContent = (data && data.answer) ? data.answer : 'No response received.';
+    } catch (e) {
+      ans.textContent = 'Error: ' + e.message;
+    }
+  }
 
-  /* ── Sidebar overlay click ───────────────────────────────────── */
-  document.getElementById('mgsSidebarOverlay').addEventListener('click', closeSidebar);
+  async function generateContent() {
+    var type = document.getElementById('msContentType').value;
+    var ctx = document.getElementById('msContentContext').value;
+    var out = document.getElementById('msContentOutput');
+    out.hidden = false;
+    out.textContent = 'Generating…';
+    try {
+      var data = await _call('generateMerchantContent', { shopId: S.shopId, contentType: type, context: ctx });
+      var text = (data && data.content) ? data.content : 'No content generated.';
+      out.innerHTML = _esc(text).replace(/\n/g,'<br>') +
+        '<br><button class="ms-btn-accent ms-btn-sm" style="margin-top:10px;" onclick="navigator.clipboard.writeText(this.parentElement.textContent.replace(\'Copy\',\'\').trim()).then(()=>MSEngine._toast(\'Copied!\',\'success\'))">Copy</button>';
+    } catch (e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
 
-  /* ── Marketing subtabs ───────────────────────────────────────── */
-  document.querySelectorAll('#mgsMarketingSubtabs .mgs-subtab').forEach(function (tab) {
-    tab.addEventListener('click', function () {
-      var key = tab.dataset.subtab;
-      // Toggle tab buttons
-      document.querySelectorAll('#mgsMarketingSubtabs .mgs-subtab').forEach(function (t) {
-        t.classList.toggle('active', t.dataset.subtab === key);
+  /* ── OPPORTUNITIES ── */
+  async function loadOpportunities() {
+    var grid = document.getElementById('msOppGrid');
+    grid.innerHTML = '<div class="ms-empty" style="grid-column:1/-1"><span class="ms-spinner-sm"></span> Scanning…</div>';
+    try {
+      var data = await _call('getMerchantOpportunities', { shopId: S.shopId });
+      var opps = (data && data.opportunities) ? data.opportunities : [];
+      if (!opps.length) {
+        grid.innerHTML = '<div class="ms-empty" style="grid-column:1/-1"><span class="ms-empty-icon">✅</span>No major opportunities identified right now.</div>';
+        return;
+      }
+      grid.innerHTML = opps.map(function (o) {
+        return '<div class="ms-opp-card ' + (o.urgent ? 'urgent' : '') + '">' +
+          '<span class="ms-opp-icon">' + (o.icon || '💡') + '</span>' +
+          '<span class="ms-opp-count">' + (o.count || '') + '</span>' +
+          '<div class="ms-opp-title">' + _esc(o.title) + '</div>' +
+          '<div class="ms-opp-desc">' + _esc(o.description) + '</div>' +
+          (o.action ? '<button class="ms-btn-accent ms-btn-sm" onclick="MSEngine.navTo(\'' + _esc(o.actionNav || 'inventory') + '\')">' + _esc(o.action) + '</button>' : '') +
+          '</div>';
+      }).join('');
+    } catch (e) {
+      grid.innerHTML = '<div class="ms-error-box" style="grid-column:1/-1">Failed to load: ' + _esc(e.message) +
+        '<button class="ms-btn-accent ms-btn-sm" style="margin-left:10px;" onclick="MSEngine.loadOpportunities()">Retry</button></div>';
+    }
+  }
+
+  /* ── CRM ── */
+  async function loadCRM(seg, btn) {
+    document.querySelectorAll('.ms-seg-btn').forEach(function (b) { b.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+    var list = document.getElementById('msCRMList');
+    list.innerHTML = '<div class="ms-empty"><span class="ms-spinner-sm"></span> Loading…</div>';
+    try {
+      var data = await _call('getMerchantCRM', { shopId: S.shopId, segment: seg });
+      var customers = (data && data.customers) ? data.customers : [];
+      var summary = data && data.summary;
+
+      // Summary stats
+      var sm = document.getElementById('msCRMSummary');
+      if (summary) {
+        sm.innerHTML = [
+          { label: 'Total', val: summary.total || 0 },
+          { label: 'Champions', val: summary.champion || 0 },
+          { label: 'At Risk', val: summary.atRisk || 0 },
+          { label: 'Avg LTV', val: _kes(summary.avgLtv || 0) }
+        ].map(function (s) {
+          return '<div class="ms-seg-stat"><div class="ms-seg-stat-val">' + _esc(String(s.val)) + '</div><div class="ms-seg-stat-lbl">' + s.label + '</div></div>';
+        }).join('');
+      }
+
+      if (!customers.length) {
+        list.innerHTML = '<div class="ms-empty"><span class="ms-empty-icon">👥</span>No customers in this segment yet.</div>';
+        return;
+      }
+      list.innerHTML = customers.map(function (c) {
+        var initial = (c.name || 'U')[0].toUpperCase();
+        var segCls = 'ms-seg-' + (c.segment || 'regular');
+        return '<div class="ms-crm-row">' +
+          '<div class="ms-crm-avatar">' + _esc(initial) + '</div>' +
+          '<div class="ms-crm-info">' +
+            '<div class="ms-crm-name">' + _esc(c.name || 'Unknown') + '</div>' +
+            '<div class="ms-crm-meta">' + (c.orders || 0) + ' orders · Last: ' + _esc(c.lastPurchase || 'N/A') + '</div>' +
+          '</div>' +
+          '<div class="ms-crm-right">' +
+            '<div class="ms-crm-ltv">' + _kes(c.ltv || 0) + '</div>' +
+            '<span class="ms-seg-badge ' + segCls + '">' + _esc(c.segment || 'regular') + '</span>' +
+          '</div>' +
+          '<button class="ms-btn-outline ms-btn-sm" onclick="MSEngine.addNote(\'' + _esc(c.id) + '\',\'' + _esc(c.name) + '\')" style="margin-left:4px;">📝</button>' +
+          '</div>';
+      }).join('');
+    } catch (e) {
+      list.innerHTML = '<div class="ms-error-box">Failed: ' + _esc(e.message) + '</div>';
+    }
+  }
+
+  async function addNote(customerId, name) {
+    var note = window.prompt('Add note for ' + name + ':');
+    if (!note) return;
+    try {
+      await _call('updateCustomerNote', { shopId: S.shopId, customerId: customerId, note: note });
+      _toast('Note saved for ' + name, 'success');
+    } catch (e) {
+      _toast('Failed to save note: ' + e.message, 'error');
+    }
+  }
+
+  /* ── INVENTORY ── */
+  async function loadInventory() {
+    document.getElementById('msInvContent').innerHTML = '<div class="ms-empty"><span class="ms-spinner-sm"></span> Analysing inventory…</div>';
+    try {
+      var data = await _call('getMerchantInventoryIntelligence', { shopId: S.shopId });
+      S.inventory = data;
+      showInvTab('lowStock', document.querySelector('.ms-inv-tab'));
+    } catch (e) {
+      document.getElementById('msInvContent').innerHTML = '<div class="ms-error-box">Failed: ' + _esc(e.message) + '</div>';
+    }
+  }
+
+  function showInvTab(tab, btn) {
+    document.querySelectorAll('.ms-inv-tab').forEach(function (b) { b.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+    var content = document.getElementById('msInvContent');
+    var inv = S.inventory || {};
+    var products = inv[tab] || [];
+    if (!products.length) {
+      content.innerHTML = '<div class="ms-empty"><span class="ms-empty-icon">📦</span>No products in this category.</div>';
+      return;
+    }
+    var maxStock = Math.max.apply(null, products.map(function (p) { return p.stock || 0; })) || 1;
+    var tabColors = {
+      lowStock: '#f59e0b', outOfStock: '#ef5350', slowMoving: '#888',
+      deadStock: '#555', fastMoving: '#71ff00', overstocked: '#3b82f6'
+    };
+    var barColor = tabColors[tab] || 'var(--accent)';
+    content.innerHTML = products.map(function (p) {
+      var pct = Math.round(((p.stock || 0) / maxStock) * 100);
+      return '<div class="ms-inv-row">' +
+        '<div class="ms-inv-name">' + _esc(p.name) + '</div>' +
+        '<div class="ms-inv-bar-wrap">' +
+          '<div class="ms-inv-bar"><div class="ms-inv-fill" style="width:' + pct + '%;background:' + barColor + '"></div></div>' +
+        '</div>' +
+        '<div class="ms-inv-stock">' + (p.stock || 0) + ' left</div>' +
+        '<div class="ms-inv-rec">' + _esc(p.recommendation || '') + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  /* ── MARKETING ── */
+  async function loadCampaigns() {
+    var list = document.getElementById('msCampaignList');
+    list.innerHTML = '<div class="ms-empty"><span class="ms-spinner-sm"></span> Loading…</div>';
+    try {
+      var data = await _call('getMerchantCampaigns', { shopId: S.shopId });
+      S.campaigns = (data && data.campaigns) ? data.campaigns : [];
+      _renderCampaigns();
+    } catch (e) {
+      list.innerHTML = '<div class="ms-error-box">Failed: ' + _esc(e.message) + '</div>';
+    }
+  }
+
+  function _renderCampaigns() {
+    var list = document.getElementById('msCampaignList');
+    var camps = S.campaigns || [];
+    var icons = { whatsapp_blast:'📱', email_campaign:'📧', push_notification:'🔔', coupon:'🏷️', flash_sale:'⚡', win_back:'🏆' };
+    if (!camps.length) {
+      list.innerHTML = '<div class="ms-empty"><span class="ms-empty-icon">📢</span>No campaigns yet. Create your first one above.</div>';
+      return;
+    }
+    list.innerHTML = camps.map(function (c) {
+      var statusCls = c.status === 'active' ? 'ms-camp-active' : c.status === 'sent' ? 'ms-camp-sent' : 'ms-camp-draft';
+      return '<div class="ms-camp-card">' +
+        '<span class="ms-camp-icon">' + (icons[c.type] || '📢') + '</span>' +
+        '<div class="ms-camp-info">' +
+          '<div class="ms-camp-name">' + _esc(c.name) + '</div>' +
+          '<div class="ms-camp-meta">' + _esc(c.type || '') + (c.createdAt ? ' · ' + new Date(c.createdAt._seconds ? c.createdAt._seconds * 1000 : c.createdAt).toLocaleDateString('en-KE') : '') + '</div>' +
+        '</div>' +
+        '<span class="ms-camp-badge ' + statusCls + '">' + _esc(c.status || 'draft') + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  async function createCampaign() {
+    var name = document.getElementById('msCampName').value.trim();
+    var type = document.getElementById('msCampType').value;
+    var seg = document.getElementById('msCampSegment').value;
+    var disc = Number(document.getElementById('msCampDiscount').value) || 0;
+    var msg = document.getElementById('msCampMessage').value.trim();
+    if (!name) { _toast('Campaign name is required', 'error'); return; }
+    try {
+      await _call('createMerchantCampaign', {
+        shopId: S.shopId, type: type, name: name,
+        targetSegment: seg, message: msg, discountPercent: disc
       });
-      // Toggle content panes
-      ['campaigns', 'create'].forEach(function (k) {
-        var el = document.getElementById('mgs-subtab-' + k);
-        if (el) {
-          el.classList.toggle('active', k === key);
-          el.hidden = k !== key;
+      _toast('Campaign created!', 'success');
+      document.getElementById('msCampName').value = '';
+      document.getElementById('msCampMessage').value = '';
+      document.getElementById('msCampDiscount').value = '';
+      loadCampaigns();
+    } catch (e) {
+      _toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  /* ── BENCHMARKS ── */
+  async function loadBenchmarks() {
+    var cont = document.getElementById('msBenchmarkContent');
+    cont.innerHTML = '<div class="ms-empty"><span class="ms-spinner-sm"></span> Fetching benchmarks…</div>';
+    try {
+      var data = await _call('getMerchantBenchmark', { shopId: S.shopId });
+      var metrics = (data && data.metrics) ? data.metrics : [];
+      if (!metrics.length) {
+        cont.innerHTML = '<div class="ms-empty"><span class="ms-empty-icon">📈</span>Benchmark data not yet available.</div>';
+        return;
+      }
+      cont.innerHTML = metrics.map(function (m) {
+        var youPct = Math.min(100, Math.round((m.you / m.top25) * 100));
+        var avgPct = Math.min(100, Math.round((m.avg / m.top25) * 100));
+        var topPct = 100;
+        return '<div class="ms-bench-card">' +
+          '<div class="ms-bench-label">' + _esc(m.label) + '</div>' +
+          '<div class="ms-bench-bars">' +
+            '<div class="ms-bench-row">' +
+              '<span class="ms-bench-who" style="color:var(--accent)">You</span>' +
+              '<div class="ms-bench-bar-wrap"><div class="ms-bench-fill" style="width:' + youPct + '%;background:var(--accent)"></div></div>' +
+              '<span class="ms-bench-val" style="color:var(--accent)">' + _esc(String(m.youDisplay || m.you)) + '</span>' +
+            '</div>' +
+            '<div class="ms-bench-row">' +
+              '<span class="ms-bench-who">Average</span>' +
+              '<div class="ms-bench-bar-wrap"><div class="ms-bench-fill" style="width:' + avgPct + '%;background:var(--dim)"></div></div>' +
+              '<span class="ms-bench-val" style="color:var(--muted)">' + _esc(String(m.avgDisplay || m.avg)) + '</span>' +
+            '</div>' +
+            '<div class="ms-bench-row">' +
+              '<span class="ms-bench-who" style="color:var(--info)">Top 25%</span>' +
+              '<div class="ms-bench-bar-wrap"><div class="ms-bench-fill" style="width:' + topPct + '%;background:var(--info)"></div></div>' +
+              '<span class="ms-bench-val" style="color:var(--info)">' + _esc(String(m.top25Display || m.top25)) + '</span>' +
+            '</div>' +
+          '</div></div>';
+      }).join('');
+    } catch (e) {
+      cont.innerHTML = '<div class="ms-error-box">Failed: ' + _esc(e.message) + '</div>';
+    }
+  }
+
+  /* ── AUTOMATION ── */
+  var AUTO_TEMPLATES = [
+    { type: 'low_stock_alert', icon: '⚠️', title: 'Low Stock Alert', desc: 'Get notified when products are running low', trigger: { type: 'stock_threshold', threshold: 5 }, action: { type: 'notify_merchant' } },
+    { type: 'review_request', icon: '⭐', title: 'Review Request', desc: 'Ask customers for a review 2 days after delivery', trigger: { type: 'order_delivered', delayHours: 48 }, action: { type: 'send_message', template: 'review_request' } },
+    { type: 'win_back', icon: '🏆', title: 'Win-Back (60 days)', desc: 'Re-engage customers who haven\'t ordered in 60 days', trigger: { type: 'inactive', days: 60 }, action: { type: 'send_campaign', campaign: 'win_back' } },
+    { type: 'birthday_offer', icon: '🎂', title: 'Birthday Offer', desc: 'Send a special discount on customer birthdays', trigger: { type: 'birthday' }, action: { type: 'send_coupon', discount: 15 } },
+    { type: 'flash_sale', icon: '⚡', title: 'Flash Sale', desc: 'Auto-schedule a 24-hour flash sale weekly', trigger: { type: 'schedule', cron: '0 8 * * 5' }, action: { type: 'create_campaign', campaign: 'flash_sale' } },
+    { type: 'reorder_reminder', icon: '🔄', title: 'Reorder Reminder', desc: 'Remind repeat buyers when it\'s time to reorder', trigger: { type: 'reorder_window' }, action: { type: 'send_message', template: 'reorder' } },
+    { type: 'follow_up', icon: '💬', title: 'Follow-Up Message', desc: 'Check in with buyers 7 days after purchase', trigger: { type: 'order_delivered', delayHours: 168 }, action: { type: 'send_message', template: 'follow_up' } },
+    { type: 'loyalty_reward', icon: '🎁', title: 'Loyalty Reward', desc: 'Automatically reward customers hitting 10 orders', trigger: { type: 'order_milestone', milestone: 10 }, action: { type: 'send_reward' } }
+  ];
+
+  function _renderAutoTemplates() {
+    var wrap = document.getElementById('msAutoTemplates');
+    wrap.innerHTML = AUTO_TEMPLATES.map(function (t, i) {
+      var ti = JSON.stringify(t.trigger).replace(/'/g, '&#39;');
+      var ai = JSON.stringify(t.action).replace(/'/g, '&#39;');
+      return '<div class="ms-auto-tile">' +
+        '<div class="ms-auto-tile-icon">' + t.icon + '</div>' +
+        '<div class="ms-auto-tile-title">' + _esc(t.title) + '</div>' +
+        '<div class="ms-auto-tile-desc">' + _esc(t.desc) + '</div>' +
+        '<button class="ms-btn-outline-sm" onclick="MSEngine.enableAutomation(\'' + _esc(t.type) + '\',\'' + _esc(t.title) + '\',' + i + ')">Enable →</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  async function loadAutomations() {
+    var list = document.getElementById('msAutoList');
+    list.innerHTML = '<div class="ms-empty"><span class="ms-spinner-sm"></span> Loading…</div>';
+    try {
+      var data = await _call('getMerchantAutomations', { shopId: S.shopId });
+      S.automations = (data && data.automations) ? data.automations : [];
+      _renderAutomations();
+    } catch (e) {
+      list.innerHTML = '<div class="ms-error-box">Failed: ' + _esc(e.message) + '</div>';
+    }
+  }
+
+  function _renderAutomations() {
+    var list = document.getElementById('msAutoList');
+    var autos = S.automations || [];
+    if (!autos.length) {
+      list.innerHTML = '<div class="ms-empty"><span class="ms-empty-icon">⚡</span>No automations enabled. Pick a template above.</div>';
+      return;
+    }
+    list.innerHTML = autos.map(function (a) {
+      var checked = a.active ? 'checked' : '';
+      var tmpl = AUTO_TEMPLATES.find(function (t) { return t.type === a.type; }) || {};
+      return '<div class="ms-auto-row">' +
+        '<span class="ms-auto-icon">' + (tmpl.icon || '⚙️') + '</span>' +
+        '<div class="ms-auto-body">' +
+          '<div class="ms-auto-title">' + _esc(a.name) + '</div>' +
+          '<div class="ms-auto-desc">' + (a.lastRun ? 'Last run: ' + new Date(a.lastRun._seconds ? a.lastRun._seconds * 1000 : a.lastRun).toLocaleDateString('en-KE') : 'Never run') + '</div>' +
+        '</div>' +
+        '<label class="ms-toggle" title="Toggle automation">' +
+          '<input type="checkbox" ' + checked + ' onchange="MSEngine.toggleAuto(\'' + _esc(a.id) + '\',this.checked)">' +
+          '<span class="ms-toggle-track"></span>' +
+          '<span class="ms-toggle-thumb"></span>' +
+        '</label>' +
+        '</div>';
+    }).join('');
+  }
+
+  async function enableAutomation(type, name, tplIdx) {
+    var tpl = AUTO_TEMPLATES[tplIdx] || AUTO_TEMPLATES[0];
+    try {
+      await _call('saveMerchantAutomation', {
+        shopId: S.shopId, name: name, type: type,
+        trigger: tpl.trigger, action: tpl.action, active: true
+      });
+      _toast(name + ' enabled!', 'success');
+      S.sectionLoaded['automation'] = false;
+      await loadAutomations();
+    } catch (e) {
+      _toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  async function toggleAuto(ruleId, active) {
+    try {
+      await _call('toggleMerchantAutomation', { shopId: S.shopId, ruleId: ruleId, active: active });
+      _toast(active ? 'Automation enabled' : 'Automation paused', 'success');
+    } catch (e) {
+      _toast('Failed: ' + e.message, 'error');
+    }
+  }
+
+  /* ── FINANCIALS ── */
+  async function loadFinancials(days, btn) {
+    document.querySelectorAll('.ms-period-btn').forEach(function (b) { b.classList.remove('active'); });
+    if (btn) btn.classList.add('active');
+    document.getElementById('msFinMetrics').innerHTML = '<div class="ms-shimmer" style="height:70px;border-radius:12px;grid-column:1/-1;"></div>';
+    document.getElementById('msRevenueChart').innerHTML = '<div class="ms-empty"><span class="ms-spinner-sm"></span> Loading…</div>';
+    document.getElementById('msTopProducts').innerHTML = '';
+    document.getElementById('msPeakHours').innerHTML = '';
+    try {
+      var data = await _call('getMerchantFinancials', { shopId: S.shopId, days: days });
+      S.financials = data;
+      _renderFinancials(data, days);
+    } catch (e) {
+      document.getElementById('msFinMetrics').innerHTML = '<div class="ms-error-box" style="grid-column:1/-1">Failed: ' + _esc(e.message) + '</div>';
+    }
+  }
+
+  function _renderFinancials(d, days) {
+    var kpis = [
+      { label: 'Revenue', val: _kes(d.revenue || 0) },
+      { label: 'Orders', val: d.orders || 0 },
+      { label: 'Avg Order', val: _kes(d.avgOrder || 0) },
+      { label: 'New Customers', val: d.newCustomers || 0 },
+      { label: 'Refunds', val: _kes(d.refunds || 0) },
+      { label: 'Net Revenue', val: _kes((d.revenue || 0) - (d.refunds || 0)) }
+    ];
+    document.getElementById('msFinMetrics').innerHTML = kpis.map(function (k) {
+      return '<div class="ms-fin-kpi"><div class="ms-fin-kpi-val">' + _esc(String(k.val)) + '</div><div class="ms-fin-kpi-lbl">' + k.label + '</div></div>';
+    }).join('');
+
+    // Chart
+    var daily = (d && d.daily) ? d.daily : [];
+    _renderChart(daily);
+
+    // Top products
+    var tops = (d && d.topProducts) ? d.topProducts : [];
+    document.getElementById('msTopProducts').innerHTML = tops.length
+      ? tops.map(function (p, i) {
+          return '<div class="ms-top-item">' +
+            '<div class="ms-top-rank">' + (i + 1) + '</div>' +
+            '<div class="ms-top-name">' + _esc(p.name) + '</div>' +
+            '<div class="ms-top-val">' + _kes(p.revenue || 0) + '</div>' +
+            '</div>';
+        }).join('')
+      : '<div class="ms-empty"><span class="ms-empty-icon">🏆</span>No data</div>';
+
+    // Peak hours
+    var peaks = (d && d.peakHours) ? d.peakHours : [];
+    var maxOrds = Math.max.apply(null, peaks.map(function (p) { return p.orders || 0; })) || 1;
+    document.getElementById('msPeakHours').innerHTML = peaks.length
+      ? peaks.map(function (p) {
+          var pct = Math.round(((p.orders || 0) / maxOrds) * 100);
+          return '<div class="ms-peak-row">' +
+            '<span class="ms-peak-label">' + _esc(p.hour || '') + '</span>' +
+            '<div class="ms-peak-bar-wrap"><div class="ms-peak-fill" style="width:' + pct + '%"></div></div>' +
+            '<span class="ms-peak-val">' + (p.orders || 0) + '</span>' +
+            '</div>';
+        }).join('')
+      : '<div class="ms-empty"><span class="ms-empty-icon">⏰</span>No data</div>';
+  }
+
+  function _renderChart(daily) {
+    var wrap = document.getElementById('msRevenueChart');
+    if (!daily || !daily.length) {
+      wrap.innerHTML = '<div class="ms-empty"><span class="ms-empty-icon">📊</span>No revenue data for this period.</div>';
+      return;
+    }
+    var maxRev = Math.max.apply(null, daily.map(function (d) { return d.revenue || 0; })) || 1;
+    wrap.innerHTML = '<div class="ms-chart">' +
+      daily.map(function (d) {
+        var pct = Math.max(2, Math.round(((d.revenue || 0) / maxRev) * 100));
+        return '<div class="ms-bar" style="height:' + pct + '%;" title="' + (d.date || '') + ': ' + _kes(d.revenue) + '">' +
+          '<span class="ms-bar-top">' + _kes(d.revenue) + '</span>' +
+          '<span class="ms-bar-label">' + _esc(d.label || d.date || '') + '</span>' +
+          '</div>';
+      }).join('') +
+      '</div>';
+  }
+
+  /* ── ACADEMY ── */
+  var ACADEMY_MODULES = [
+    { id: 'setup', icon: '🏪', title: 'Setting Up Your Store', lessons: [
+      { id: 'bio', title: 'Writing a Great Shop Description', dur: '5 min' },
+      { id: 'photos', title: 'Product Photography Tips', dur: '8 min' },
+      { id: 'pricing', title: 'Pricing Strategy Basics', dur: '10 min' },
+      { id: 'categories', title: 'Organising Your Categories', dur: '5 min' },
+      { id: 'policies', title: 'Setting Return & Shipping Policies', dur: '7 min' }
+    ]},
+    { id: 'marketing', icon: '📢', title: 'Marketing & Growth', lessons: [
+      { id: 'whatsapp', title: 'Using WhatsApp Status to Drive Sales', dur: '12 min' },
+      { id: 'campaigns', title: 'Running Effective Campaigns', dur: '10 min' },
+      { id: 'loyalty', title: 'Building a Loyalty Programme', dur: '8 min' }
+    ]},
+    { id: 'customers', icon: '👥', title: 'Customer Success', lessons: [
+      { id: 'communication', title: 'Responding to Customers Fast', dur: '6 min' },
+      { id: 'reviews', title: 'Getting 5-Star Reviews', dur: '8 min' },
+      { id: 'retention', title: 'Turning First-Time Buyers into Regulars', dur: '12 min' }
+    ]},
+    { id: 'finance', icon: '💰', title: 'Financial Management', lessons: [
+      { id: 'cashflow', title: 'Understanding Your Cash Flow', dur: '10 min' },
+      { id: 'margins', title: 'Calculating Profit Margins', dur: '8 min' },
+      { id: 'tax', title: 'Tax Basics for Kenya SMEs', dur: '15 min' }
+    ]},
+    { id: 'ops', icon: '⚙️', title: 'Operations & Logistics', lessons: [
+      { id: 'inventory', title: 'Managing Stock Effectively', dur: '10 min' },
+      { id: 'dispatch', title: 'Order Fulfilment Best Practices', dur: '8 min' }
+    ]}
+  ];
+
+  var LEVELS = [
+    { name: 'Beginner', min: 0 }, { name: 'Learner', min: 100 },
+    { name: 'Practitioner', min: 300 }, { name: 'Expert', min: 600 },
+    { name: 'Master', min: 1000 }
+  ];
+
+  async function loadAcademy() {
+    var ml = document.getElementById('msModuleList');
+    ml.innerHTML = '<div class="ms-empty"><span class="ms-spinner-sm"></span> Loading academy…</div>';
+    var progress = {};
+    try {
+      var data = await _call('getMerchantAcademy', { uid: S.uid });
+      S.academy = data;
+      progress = (data && data.progress) ? data.progress : {};
+      var xp = data && data.xp ? data.xp : 0;
+      _renderAcademyXP(xp, progress);
+    } catch (e) {
+      // Render with empty progress
+    }
+    _renderAcademyModules(progress);
+  }
+
+  function _renderAcademyXP(xp, progress) {
+    var level = LEVELS[0];
+    var nextLevel = null;
+    for (var i = 0; i < LEVELS.length; i++) {
+      if (xp >= LEVELS[i].min) { level = LEVELS[i]; nextLevel = LEVELS[i + 1] || null; }
+    }
+    document.getElementById('msAcademyLevel').textContent = level.name;
+    document.getElementById('msTotalXp').textContent = xp;
+    var barPct = nextLevel ? Math.min(100, Math.round(((xp - level.min) / (nextLevel.min - level.min)) * 100)) : 100;
+    document.getElementById('msXpBar').style.width = barPct + '%';
+    document.getElementById('msXpText').textContent = nextLevel
+      ? (nextLevel.min - xp) + ' XP to ' + nextLevel.name
+      : 'Maximum level reached!';
+  }
+
+  function _renderAcademyModules(progress) {
+    var ml = document.getElementById('msModuleList');
+    ml.innerHTML = ACADEMY_MODULES.map(function (mod) {
+      var done = mod.lessons.filter(function (l) { return progress[l.id]; }).length;
+      var total = mod.lessons.length;
+      var pct = total ? Math.round((done / total) * 100) : 0;
+      var lessons = mod.lessons.map(function (l) {
+        var checked = progress[l.id] ? 'checked' : '';
+        return '<div class="ms-lesson-row">' +
+          '<input type="checkbox" class="ms-lesson-cb" ' + checked + ' onchange="MSEngine.completeLesson(\'' + _esc(l.id) + '\',\'' + _esc(mod.id) + '\',this)">' +
+          '<span class="ms-lesson-name">' + _esc(l.title) + '</span>' +
+          '<span class="ms-lesson-dur">' + _esc(l.dur) + '</span>' +
+          '</div>';
+      }).join('');
+      return '<div class="ms-module-card">' +
+        '<div class="ms-module-header" onclick="this.parentElement.classList.toggle(\'open\')">' +
+          '<span class="ms-module-icon">' + mod.icon + '</span>' +
+          '<div class="ms-module-info">' +
+            '<div class="ms-module-title">' + _esc(mod.title) + '</div>' +
+            '<div class="ms-module-progress">' + done + '/' + total + ' lessons · ' + pct + '%</div>' +
+          '</div>' +
+          '<div class="ms-module-pct">' + pct + '%</div>' +
+          '<span class="ms-module-chevron">▼</span>' +
+        '</div>' +
+        '<div class="ms-module-lessons">' + lessons + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  async function completeLesson(lessonId, moduleId, cbEl) {
+    var completed = cbEl ? cbEl.checked : true;
+    // Optimistic UI: update progress text
+    var row = cbEl ? cbEl.closest('.ms-module-card') : null;
+    try {
+      var data = await _call('updateAcademyProgress', { uid: S.uid, lessonId: lessonId, moduleId: moduleId, completed: completed });
+      if (completed) _toast('+20 XP — lesson complete!', 'success');
+      if (data && data.xp !== undefined) {
+        var prog = (S.academy && S.academy.progress) ? S.academy.progress : {};
+        if (completed) prog[lessonId] = true; else delete prog[lessonId];
+        if (!S.academy) S.academy = {};
+        S.academy.progress = prog;
+        S.academy.xp = data.xp;
+        _renderAcademyXP(data.xp, prog);
+      }
+    } catch (e) {
+      _toast('Failed to save progress: ' + e.message, 'error');
+      if (cbEl) cbEl.checked = !cbEl.checked; // revert
+    }
+  }
+
+  /* ── INIT ── */
+  async function init() {
+    firebase.auth().onAuthStateChanged(async function (user) {
+      if (!user) {
+        location.href = 'login.html?redirect=' + encodeURIComponent(location.href);
+        return;
+      }
+      S.user = user;
+      S.uid = user.uid;
+
+      // Resolve shopId
+      try {
+        var db = firebase.firestore();
+        var profileSnap = await db.collection('sellerProfiles').where('uid', '==', user.uid).limit(1).get();
+        if (!profileSnap.empty) {
+          var pd = profileSnap.docs[0].data();
+          S.shopId = pd.shopId || profileSnap.docs[0].id;
+          S.shopName = pd.shopName || pd.name || '';
+          S.shopHandle = pd.handle || '';
+        } else {
+          var sellerSnap = await db.collection('sellers').where('uid', '==', user.uid).limit(1).get();
+          if (!sellerSnap.empty) {
+            var sd = sellerSnap.docs[0].data();
+            S.shopId = sd.shopId || sellerSnap.docs[0].id;
+            S.shopName = sd.shopName || sd.name || '';
+            S.shopHandle = sd.handle || '';
+          } else {
+            document.getElementById('msLoading').innerHTML =
+              '<div class="ms-error-box">Seller profile not found. <a href="seller-onboarding.html" class="ms-btn-accent ms-btn-sm" style="margin-left:8px;">Set up your store →</a></div>';
+            return;
+          }
         }
-      });
-      // Lazy-load campaigns when switching to that tab
-      if (key === 'campaigns' && typeof SokoniMerchantSuccess !== 'undefined') {
-        SokoniMerchantSuccess.loadCampaigns && SokoniMerchantSuccess.loadCampaigns();
+
+        // Update sidebar
+        if (S.shopName) document.getElementById('sidebarShopName').textContent = S.shopName;
+        if (S.shopHandle) document.getElementById('sidebarShopHandle').textContent = '@' + S.shopHandle;
+
+        document.getElementById('msLoading').hidden = true;
+
+        // Show overview section and load data
+        navTo('overview');
+        S.sectionLoaded['overview'] = true;
+        loadDashboard();
+
+      } catch (e) {
+        document.getElementById('msLoading').innerHTML =
+          '<div class="ms-error-box">Failed to load: ' + _esc(e.message) + ' <button class="ms-btn-accent ms-btn-sm" onclick="location.reload()" style="margin-left:8px;">Retry</button></div>';
       }
     });
-  });
+  }
 
-  /* ── Analytics period button highlight ──────────────────────── */
-  document.querySelectorAll('#mgsPeriodBtns .mgs-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      document.querySelectorAll('#mgsPeriodBtns .mgs-btn').forEach(function (b) {
-        b.classList.remove('active');
-        b.style.background = '';
-        b.style.color = '';
-      });
-      btn.classList.add('active');
-      btn.style.background = 'var(--accent)';
-      btn.style.color = '#000';
+  /* ── Setup nav ── */
+  function _setupNav() {
+    // Sidebar buttons
+    document.querySelectorAll('.ms-nav-item').forEach(function (btn) {
+      btn.addEventListener('click', function () { navTo(btn.dataset.sec); });
     });
-  });
-  // Highlight default active period button on load
-  var defaultPeriodBtn = document.querySelector('#mgsPeriodBtns .mgs-btn.active');
-  if (defaultPeriodBtn) {
-    defaultPeriodBtn.style.background = 'var(--accent)';
-    defaultPeriodBtn.style.color = '#000';
+    // Mobile bottom nav buttons
+    document.querySelectorAll('.ms-mob-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { navTo(btn.dataset.sec); });
+    });
+    // Hamburger
+    document.getElementById('msHamburger').addEventListener('click', function () {
+      var sb = document.getElementById('msSidebar');
+      var ov = document.getElementById('msOverlay');
+      if (sb.classList.contains('open')) {
+        sb.classList.remove('open'); ov.classList.remove('open');
+      } else {
+        sb.classList.add('open'); ov.classList.add('open');
+      }
+    });
+    // Overlay click → close sidebar
+    document.getElementById('msOverlay').addEventListener('click', function () {
+      document.getElementById('msSidebar').classList.remove('open');
+      document.getElementById('msOverlay').classList.remove('open');
+    });
   }
 
-  /* ── Expose closeSidebar so inline onclick can call it ─────── */
-  if (typeof window.SokoniMerchantSuccess === 'undefined') {
-    window.SokoniMerchantSuccess = {};
-  }
-  window.SokoniMerchantSuccess.closeSidebar = closeSidebar;
-
-  /* ── DOMContentLoaded bootstrap ─────────────────────────────── */
   document.addEventListener('DOMContentLoaded', function () {
-    if (typeof SokoniMerchantSuccess !== 'undefined' && SokoniMerchantSuccess.init) {
-      SokoniMerchantSuccess.init();
-    }
-    // Ensure all panels start hidden except dashboard
-    document.querySelectorAll('.mgs-panel').forEach(function (p) {
-      if (!p.classList.contains('active')) { p.hidden = true; }
-    });
+    _setupNav();
+    // Render automation templates immediately (no auth needed for layout)
+    _renderAutoTemplates();
+    init();
   });
+
+  // Expose _toast for inline usage
+  return {
+    navTo: navTo,
+    refreshCoach: refreshCoach,
+    askCoach: askCoach,
+    generateContent: generateContent,
+    loadOpportunities: loadOpportunities,
+    loadCRM: loadCRM,
+    addNote: addNote,
+    loadInventory: loadInventory,
+    showInvTab: showInvTab,
+    loadCampaigns: loadCampaigns,
+    createCampaign: createCampaign,
+    loadBenchmarks: loadBenchmarks,
+    loadAutomations: loadAutomations,
+    enableAutomation: enableAutomation,
+    toggleAuto: toggleAuto,
+    loadFinancials: loadFinancials,
+    loadAcademy: loadAcademy,
+    completeLesson: completeLesson,
+    retryDashboard: retryDashboard,
+    _toast: _toast
+  };
 })();
 </script>
 </body>

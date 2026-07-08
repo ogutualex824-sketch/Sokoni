@@ -5,6 +5,70 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Merchant Success & Growth Engine v2.0 — 2026-07-08
+
+**Files:**
+- `functions/merchant-success.js` — REPLACED (v1.0 11 CFs → v2.0 17 CFs)
+- `merchant-success.html` — REPLACED (full premium redesign, 10 sections)
+- `functions/index.js` — updated exports (stale v1 names replaced with v2 names)
+
+**New CFs (17 — add to pending count — quota-blocked):**
+
+| Export name | Type | Auth | Purpose |
+|---|---|---|---|
+| `getMerchantDashboard` | onCall | Seller | Combined health + stats + alerts on page load |
+| `getMerchantHealthScore` | onCall | Seller | Detailed health score (8 factors, grade, tips) |
+| `getMerchantAICoach` | onCall | Seller | Claude Haiku recommendations + Q&A |
+| `getMerchantOpportunities` | onCall | Seller | Trending, low stock, returning customer signals |
+| `getMerchantCRM` | onCall | Seller | Customer list with LTV, segments, history |
+| `updateCustomerNote` | onCall | Seller | Add/update CRM note for a customer |
+| `getMerchantInventoryIntelligence` | onCall | Seller | Slow/fast/dead/overstock analysis |
+| `getMerchantFinancials` | onCall | Seller | P&L, revenue trend, AOV, CLV, peak hours |
+| `getMerchantBenchmark` | onCall | Seller | Anonymous comparison with similar businesses |
+| `getMerchantAutomations` | onCall | Seller | List automation rules |
+| `saveMerchantAutomation` | onCall | Seller | Create/update automation rule |
+| `toggleMerchantAutomation` | onCall | Seller | Enable/disable automation rule |
+| `createMerchantCampaign` | onCall | Seller | AI-generated or manual marketing campaign |
+| `getMerchantCampaigns` | onCall | Seller | Campaign list + stats |
+| `getMerchantAcademy` | onCall | Seller | Learning modules + progress (22 lessons, 5 modules) |
+| `updateAcademyProgress` | onCall | Seller | Mark lesson complete + award XP |
+| `generateMerchantContent` | onCall | Seller | AI content: descriptions, bios, campaigns, status |
+
+**Renamed from v1.0 (old live CFs to delete after v2 deploy):**
+- `getAICoachInsights` → `getMerchantAICoach` *(old CF stays live until deleted)*
+- `getMerchantInventoryInsights` → `getMerchantInventoryIntelligence`
+- `getMerchantBenchmarks` → `getMerchantBenchmark`
+- `createMerchantAutomation` → `saveMerchantAutomation`
+- `completeMerchantLesson` → `updateAcademyProgress`
+
+**New Firestore collections:**
+- `merchantHealth/{shopId}` — cached health score (TTL 1h)
+- `merchantAutomations/{id}` — automation rules (`shopId` single-field query)
+- `merchantCampaigns/{id}` — campaign records (`shopId` single-field query)
+- `crmNotes/{shopId}/customers/{customerId}` — CRM notes per customer
+- `academyProgress/{uid}` — lesson completion + XP
+- `aiCoachRL/{shopId_YYYYMMDD}` — coach rate-limit counter (max 10/day)
+- `aiContentRL/{uid_YYYYMMDD}` — content gen rate-limit counter (max 20/day)
+
+**Secrets required:** `ANTHROPIC_API_KEY` (already in Secret Manager)
+
+**Spot deploy command (all 17 — run when quota available):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:getMerchantDashboard,functions:getMerchantHealthScore,functions:getMerchantAICoach,functions:getMerchantOpportunities,functions:getMerchantCRM,functions:updateCustomerNote,functions:getMerchantInventoryIntelligence,functions:getMerchantFinancials,functions:getMerchantBenchmark,functions:getMerchantAutomations,functions:saveMerchantAutomation,functions:toggleMerchantAutomation,functions:createMerchantCampaign,functions:getMerchantCampaigns,functions:getMerchantAcademy,functions:updateAcademyProgress,functions:generateMerchantContent" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+**Cleanup command (delete stale v1 CFs after v2 deploy succeeds):**
+```powershell
+firebase functions:delete getAICoachInsights getMerchantInventoryInsights getMerchantBenchmarks createMerchantAutomation completeMerchantLesson --project sokoni-aeb26 --force
+```
+
+**Hosting deploy (merchant-success.html page):**
+```powershell
+firebase deploy --only hosting --project sokoni-aeb26
+```
+
+---
+
 ## BUG FIX — 2026-07-08 (earnLoyaltyPoints export mismatch)
 
 **File:** `functions/index.js` line 8224

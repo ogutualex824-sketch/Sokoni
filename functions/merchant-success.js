@@ -1,69 +1,63 @@
 /* ============================================================
-   SOKONI Merchant Success & Growth Engine  v1.0
+   SOKONI — Merchant Success & Growth Engine  v2.0
+   17 Cloud Functions | Firebase Gen2 | Node 22 | us-central1
 
-   Exports (11 Cloud Functions):
-     getMerchantHealthScore      onCall — 12-dimension business health score
-     getAICoachInsights          onCall — AI-powered growth coaching (Anthropic)
-     getMerchantCRM              onCall — customer segmentation & lifetime value
-     getInventoryInsights        onCall — stock health, dead stock, fast/slow movers
-     getMerchantFinancials       onCall — P&L, revenue trends, peak hours
-     getMerchantBenchmarks       onCall — anonymised peer comparison
-     getMerchantOpportunities    onCall — revenue opportunities from existing data
-     createMerchantAutomation    onCall — save automation rules
-     getMerchantAutomations      onCall — list automation rules
-     getMerchantAcademy          onCall — 6-module growth curriculum + progress
-     completeMerchantLesson      onCall — mark lesson as complete
+   Exports:
+     getMerchantDashboard             onCall — full merchant overview
+     getMerchantHealthScore           onCall — 8-factor health score (cached 1h)
+     getMerchantAICoach               onCall — AI growth coaching (Haiku)
+     getMerchantOpportunities         onCall — revenue opportunity detection
+     getMerchantCRM                   onCall — customer segmentation + notes
+     updateCustomerNote               onCall — save CRM note for a customer
+     getMerchantInventoryIntelligence onCall — velocity + dead stock + reorder
+     getMerchantFinancials            onCall — P&L, peaks, retention metrics
+     getMerchantBenchmark             onCall — anonymised peer comparison
+     getMerchantAutomations           onCall — list automation rules
+     saveMerchantAutomation           onCall — create / update rule
+     toggleMerchantAutomation         onCall — activate / deactivate rule
+     createMerchantCampaign           onCall — AI-assisted campaign creation
+     getMerchantCampaigns             onCall — list campaigns
+     getMerchantAcademy               onCall — curriculum + XP progress
+     updateAcademyProgress            onCall — mark lesson complete + award XP
+     generateMerchantContent          onCall — AI content generation
 
-   Index policy: 200/200 limit reached.
-     ALL queries are single-field where() or doc-ID lookups ONLY.
-     No new composite indexes. JS-side filtering where multi-field
-     logic is needed.
+   Index policy: NO composite indexes.
+     All Firestore queries are single-field where() or doc-ID lookups.
+     Multi-field filtering is performed in-memory after the query.
 ============================================================ */
 "use strict";
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
-const { defineSecret } = require("firebase-functions/params");
-const admin = require("firebase-admin");
+const { defineSecret }       = require("firebase-functions/params");
+const admin                  = require("firebase-admin");
+
 if (!admin.apps.length) admin.initializeApp();
 
 const ANTHROPIC_KEY = defineSecret("ANTHROPIC_API_KEY");
+const db            = admin.firestore();
 
-/* ── Base CF options ─────────────────────────────────────── */
-const CF_OPTS    = { region: "us-central1", memory: "256MiB", timeoutSeconds: 60,  cors: true };
-const CF_AI_OPTS = { region: "us-central1", memory: "512MiB", timeoutSeconds: 120, cors: true, secrets: [ANTHROPIC_KEY] };
+/* ── CF option sets ──────────────────────────────────────── */
+const CF_OPTS = {
+  region:          "us-central1",
+  memory:          "256MiB",
+  timeoutSeconds:  60,
+  cors:            true,
+  enforceAppCheck: true,
+};
+const CF_AI_OPTS = {
+  region:          "us-central1",
+  memory:          "512MiB",
+  timeoutSeconds:  120,
+  cors:            true,
+  enforceAppCheck: true,
+  secrets:         [ANTHROPIC_KEY],
+};
 
-/* ── Helpers ─────────────────────────────────────────────── */
-function _requireAuth(ctx) {
-  if (!ctx.auth) throw new HttpsError("unauthenticated", "Login required");
-}
+/* ═══════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════ */
 
-/** Sanitise a string: strip HTML, trim, cap length */
-function _san(s, max = 300) {
-  if (s === null || s === undefined) return "";
-  return String(s).replace(/<[^>]*>/g, "").trim().slice(0, max);
-}
-
-/** Sanitise a shopId — alphanumeric + hyphen/underscore only */
-function _sanId(id) {
-  if (!id) throw new HttpsError("invalid-argument", "shopId is required");
-  const clean = String(id).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 128);
-  if (!clean) throw new HttpsError("invalid-argument", "Invalid shopId");
-  return clean;
-}
-
-/** Verify the calling uid owns the shop */
-async function _requireOwnership(db, shopId, uid) {
-  const shopSnap = await db.collection("shops").doc(shopId).get();
-  if (!shopSnap.exists) throw new HttpsError("not-found", "Shop not found");
-  const shop = shopSnap.data();
-  if (shop.sellerUid !== uid && shop.uid !== uid && shop.ownerId !== uid) {
-    throw new HttpsError("permission-denied", "You do not own this shop");
-  }
-  return shop;
-}
-
-/** Convert a Firestore doc timestamp or JS Date to epoch ms */
+/** Convert any Firestore / Date / number timestamp to epoch ms */
 function _toMs(val) {
   if (!val) return 0;
   if (typeof val.toMillis === "function") return val.toMillis();
@@ -73,1042 +67,1274 @@ function _toMs(val) {
   return new Date(val).getTime() || 0;
 }
 
-/** Return midnight UTC date string YYYY-MM-DD from epoch ms */
+/** YYYY-MM-DD string from epoch ms */
 function _dateStr(ms) {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-/** Grade from numeric score 0-100 */
-function _grade(score) {
-  if (score >= 90) return "A+";
-  if (score >= 80) return "A";
-  if (score >= 70) return "B";
-  if (score >= 60) return "C";
-  if (score >= 50) return "D";
-  return "F";
+/** Today's date string */
+function _todayStr() {
+  return _dateStr(Date.now());
+}
+
+/** Strip HTML, trim, cap length */
+function _san(s, max = 300) {
+  if (s == null) return "";
+  return String(s).replace(/<[^>]*>/g, "").trim().slice(0, max);
+}
+
+/** Validate and sanitise a shopId */
+function _sanId(id) {
+  if (!id) throw new HttpsError("invalid-argument", "shopId is required");
+  const clean = String(id).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 128);
+  if (!clean) throw new HttpsError("invalid-argument", "Invalid shopId format");
+  return clean;
+}
+
+/** Throw if request has no auth token */
+function _requireAuth(req) {
+  if (!req.auth) throw new HttpsError("unauthenticated", "Authentication required");
+}
+
+/**
+ * Verify the calling uid owns / manages the shop.
+ * Checks: shops/{shopId} document, then sellerProfiles (single-field query, filtered in-memory).
+ * Returns the shop data object on success.
+ */
+async function _assertSellerAccess(shopId, uid) {
+  const shopSnap = await db.collection("shops").doc(shopId).get();
+  if (shopSnap.exists) {
+    const shop = shopSnap.data();
+    if (shop.sellerUid === uid || shop.ownerId === uid || shop.adminUid === uid) {
+      return shop;
+    }
+  }
+  // Fallback: single-field query on uid, filter shopId in memory
+  const profileSnap = await db.collection("sellerProfiles")
+    .where("uid", "==", uid)
+    .limit(10)
+    .get();
+  const hasProfile = profileSnap.docs.some(d => d.data().shopId === shopId);
+  if (!hasProfile) {
+    throw new HttpsError("permission-denied", "You do not have access to this shop");
+  }
+  return shopSnap.exists ? shopSnap.data() : {};
+}
+
+/**
+ * Call Claude Haiku with a 20-second AbortController timeout.
+ * Uses Node 22 native fetch — no SDK dependency.
+ */
+async function _callClaude(prompt, maxTokens) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key":         ANTHROPIC_KEY.value(),
+        "anthropic-version": "2023-06-01",
+        "content-type":      "application/json",
+      },
+      body: JSON.stringify({
+        model:     "claude-haiku-4-5-20251001",
+        max_tokens: maxTokens || 800,
+        messages:  [{ role: "user", content: prompt }],
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await res.text().catch(() => "");
+      throw new Error(`Anthropic ${res.status}: ${err.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    return data.content[0].text;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Calculate an 8-factor health score (0–100).
+ * Returns { score, grade, factors[] }
+ * Each factor: { name, score, maxScore, status, tip }
+ */
+function _calcHealthScore(shop, config, products, orders) {
+  const now   = Date.now();
+  const now30 = now - 30 * 864e5;
+  const now60 = now - 60 * 864e5;
+  const factors = [];
+
+  /* 1. Profile Completeness — 15 pts */
+  let ps = 0;
+  if (_san(shop.name || shop.shopName || config.name || "", 5)) ps += 3;
+  if (_san(shop.description || config.description || "", 500).length > 10) ps += 3;
+  if (shop.logoUrl  || shop.logo     || config.logoUrl)  ps += 2;
+  if (shop.coverUrl || shop.cover    || config.coverUrl) ps += 2;
+  if (shop.phone    || shop.contactPhone || config.phone) ps += 2;
+  if (shop.category || config.category)                  ps += 1;
+  const soc = shop.socialLinks || config.socialLinks || {};
+  if (soc.whatsapp || soc.wa)                            ps += 1;
+  if ((shop.paymentMethods || config.paymentMethods || []).length > 0) ps += 1;
+  factors.push({
+    name: "Profile Completeness", score: ps, maxScore: 15,
+    status: ps >= 12 ? "good" : ps >= 8 ? "fair" : "poor",
+    tip: ps < 15
+      ? "Add logo, cover photo, phone, WhatsApp link, and accepted payment methods to build buyer trust."
+      : null,
+  });
+
+  /* 2. Product Quality — 15 pts */
+  let qs = 0;
+  const pc = products.length;
+  if (pc >= 5) qs += 2;
+  const withImg   = products.filter(p => (Array.isArray(p.images) && p.images.length > 0) || p.image || p.imageUrl).length;
+  const withDesc  = products.filter(p => _san(p.description || "", 2000).length > 30).length;
+  const withPrice = products.filter(p => parseFloat(p.price || 0) > 0).length;
+  if (pc > 0) {
+    if (withImg   / pc >= 0.7) qs += 5; else if (withImg  / pc >= 0.4) qs += 2;
+    if (withDesc  / pc >= 0.7) qs += 5; else if (withDesc / pc >= 0.4) qs += 2;
+    if (withPrice / pc >= 0.9) qs += 3; else if (withPrice / pc >= 0.6) qs += 1;
+  }
+  factors.push({
+    name: "Product Quality", score: qs, maxScore: 15,
+    status: qs >= 12 ? "good" : qs >= 8 ? "fair" : "poor",
+    tip: qs < 15
+      ? `Ensure ≥70% of products have images and descriptions longer than 30 characters (currently ${pc} products).`
+      : null,
+  });
+
+  /* 3. Customer Rating — 15 pts */
+  let rs = 0;
+  const rating      = parseFloat(shop.rating || shop.averageRating || 0);
+  const reviewCount = parseInt(shop.reviewCount || shop.totalReviews || 0);
+  if      (rating >= 4.5) rs = 15;
+  else if (rating >= 4.0) rs = 12;
+  else if (rating >= 3.5) rs = 8;
+  else if (rating >= 3.0) rs = 4;
+  if (reviewCount < 5 && rs > 8) rs = 8; // cap until enough reviews
+  factors.push({
+    name: "Customer Rating", score: rs, maxScore: 15,
+    status: rs >= 12 ? "good" : rs >= 8 ? "fair" : "poor",
+    tip: rs < 15
+      ? `Rating: ${rating.toFixed(1)}/5 (${reviewCount} reviews). Encourage buyers to leave reviews and respond promptly.`
+      : null,
+  });
+
+  /* 4. Order Performance — 15 pts */
+  let os = 0;
+  const completedOrders = orders.filter(o => ["completed", "delivered", "paid"].includes(o.status)).length;
+  const totalOrders     = orders.length;
+  const completionRate  = totalOrders > 0 ? completedOrders / totalOrders : 1;
+  if      (completionRate >= 1.00) os = 15;
+  else if (completionRate >= 0.90) os = 12;
+  else if (completionRate >= 0.75) os = 8;
+  else if (completionRate >= 0.60) os = 4;
+  factors.push({
+    name: "Order Performance", score: os, maxScore: 15,
+    status: os >= 12 ? "good" : os >= 8 ? "fair" : "poor",
+    tip: os < 15
+      ? `Completion rate: ${Math.round(completionRate * 100)}%. Fulfil orders promptly and communicate delays to reduce failures.`
+      : null,
+  });
+
+  /* 5. Response Time — 10 pts */
+  let rt_s = 0;
+  const rt = _san(config.responseTime || shop.responseTime || "", 50);
+  if      (rt === "< 1 hour"  || rt.includes("1 hour"))  rt_s = 10;
+  else if (rt === "< 3 hours" || rt.includes("3 hour"))  rt_s = 7;
+  else if (rt === "< 24 hours"|| rt.includes("24 hour")) rt_s = 4;
+  factors.push({
+    name: "Response Time", score: rt_s, maxScore: 10,
+    status: rt_s >= 8 ? "good" : rt_s >= 4 ? "fair" : "poor",
+    tip: rt_s < 10
+      ? 'Set response time to "< 1 hour" in shop settings — fast replies win more sales.'
+      : null,
+  });
+
+  /* 6. Sales Growth — 10 pts */
+  let gs = 2;
+  const rev30 = orders
+    .filter(o => _toMs(o.createdAt) >= now30)
+    .reduce((s, o) => s + parseFloat(o.totalAmount || o.amount || o.total || 0), 0);
+  const revPrior = orders
+    .filter(o => { const t = _toMs(o.createdAt); return t >= now60 && t < now30; })
+    .reduce((s, o) => s + parseFloat(o.totalAmount || o.amount || o.total || 0), 0);
+  if (revPrior === 0 && rev30 > 0) {
+    gs = 10;
+  } else if (revPrior > 0) {
+    const g = (rev30 - revPrior) / revPrior;
+    if      (g >= 0.5) gs = 10;
+    else if (g >= 0.2) gs = 8;
+    else if (g >= 0)   gs = 5;
+  }
+  factors.push({
+    name: "Sales Growth", score: gs, maxScore: 10,
+    status: gs >= 8 ? "good" : gs >= 5 ? "fair" : "poor",
+    tip: gs < 8
+      ? "Run a WhatsApp promotion or flash sale to grow this month's revenue vs last month."
+      : null,
+  });
+
+  /* 7. Inventory Health — 10 pts */
+  let is = 7; // neutral when stockCount field not used
+  const withStock = products.filter(p => p.stockCount !== undefined || p.quantity !== undefined || p.stock !== undefined);
+  if (withStock.length > 0) {
+    const inStock    = withStock.filter(p => parseInt(p.stockCount ?? p.quantity ?? p.stock ?? 0) > 0).length;
+    const stockRatio = inStock / withStock.length;
+    if      (stockRatio >= 1.0) is = 10;
+    else if (stockRatio >= 0.8) is = 8;
+    else if (stockRatio >= 0.6) is = 5;
+    else                        is = 2;
+  }
+  factors.push({
+    name: "Inventory Health", score: is, maxScore: 10,
+    status: is >= 8 ? "good" : is >= 5 ? "fair" : "poor",
+    tip: is < 8
+      ? "Keep stock counts updated — out-of-stock products miss sales and hurt your search ranking."
+      : null,
+  });
+
+  /* 8. Cancellation Rate — 10 pts */
+  let cs = 0;
+  const cancelledOrders = orders.filter(o => o.status === "cancelled").length;
+  const cancelRate      = totalOrders > 0 ? cancelledOrders / totalOrders : 0;
+  if      (cancelRate <= 0.02) cs = 10;
+  else if (cancelRate <= 0.05) cs = 8;
+  else if (cancelRate <= 0.10) cs = 5;
+  else if (cancelRate <= 0.20) cs = 2;
+  factors.push({
+    name: "Cancellation Rate", score: cs, maxScore: 10,
+    status: cs >= 8 ? "good" : cs >= 5 ? "fair" : "poor",
+    tip: cs < 8
+      ? `Cancellation rate: ${Math.round(cancelRate * 100)}%. Communicate availability and fulfilment timelines clearly.`
+      : null,
+  });
+
+  /* Total + grade */
+  const score = Math.min(100, factors.reduce((s, f) => s + f.score, 0));
+  let grade;
+  if      (score >= 90) grade = "A+";
+  else if (score >= 80) grade = "A";
+  else if (score >= 70) grade = "B";
+  else if (score >= 60) grade = "C";
+  else                  grade = "D";
+
+  return { score, grade, factors };
 }
 
 /* ═══════════════════════════════════════════════════════════
-   1. getMerchantHealthScore
-   12-dimension scoring; results cached 1 hour.
+   STATIC CONTENT — Academy modules
 ═══════════════════════════════════════════════════════════ */
-exports.getMerchantHealthScore = onCall(CF_OPTS, async (req) => {
+const ACADEMY_MODULES = [
+  { id: "setup", title: "Setting Up Your Store", icon: "🏪", lessons: [
+    { id: "s1", title: "Writing a Great Shop Description",  duration: "5 min" },
+    { id: "s2", title: "Choosing the Right Category",       duration: "3 min" },
+    { id: "s3", title: "Setting Your Business Hours",       duration: "3 min" },
+    { id: "s4", title: "Adding Contact Information",        duration: "4 min" },
+    { id: "s5", title: "Setting Up Payment Methods",        duration: "5 min" },
+  ]},
+  { id: "products", title: "Product Excellence", icon: "📦", lessons: [
+    { id: "p1", title: "Writing Product Descriptions That Sell", duration: "8 min" },
+    { id: "p2", title: "Product Photography on a Budget",        duration: "10 min" },
+    { id: "p3", title: "Pricing Strategy for Kenya",             duration: "7 min" },
+    { id: "p4", title: "Managing Inventory Effectively",         duration: "6 min" },
+  ]},
+  { id: "customers", title: "Customer Service Excellence", icon: "⭐", lessons: [
+    { id: "c1", title: "Responding Quickly to Inquiries",    duration: "5 min" },
+    { id: "c2", title: "Handling Complaints Professionally", duration: "8 min" },
+    { id: "c3", title: "Building Customer Loyalty",          duration: "7 min" },
+    { id: "c4", title: "Getting More 5-Star Reviews",        duration: "6 min" },
+  ]},
+  { id: "marketing", title: "Marketing Your Business", icon: "📢", lessons: [
+    { id: "m1", title: "WhatsApp Marketing That Works",           duration: "9 min" },
+    { id: "m2", title: "Instagram for Business",                  duration: "8 min" },
+    { id: "m3", title: "Creating Promotions That Drive Sales",    duration: "7 min" },
+    { id: "m4", title: "Understanding Your Analytics",            duration: "6 min" },
+    { id: "m5", title: "Building Your Brand Story",               duration: "8 min" },
+  ]},
+  { id: "growth", title: "Growth Strategies", icon: "🚀", lessons: [
+    { id: "g1", title: "Expanding Your Product Range",       duration: "8 min" },
+    { id: "g2", title: "Cross-Selling and Upselling",        duration: "7 min" },
+    { id: "g3", title: "Seasonal Sales Planning",            duration: "9 min" },
+    { id: "g4", title: "Building a Repeat Customer Base",    duration: "10 min" },
+  ]},
+];
+
+const ALL_LESSON_IDS = new Set(ACADEMY_MODULES.flatMap(m => m.lessons.map(l => l.id)));
+
+/** Map moduleId → Set of its lessonIds */
+const MODULE_LESSON_MAP = Object.fromEntries(
+  ACADEMY_MODULES.map(m => [m.id, new Set(m.lessons.map(l => l.id))])
+);
+
+/* ── Automation valid types ──────────────────────────────── */
+const VALID_AUTOMATION_TYPES = new Set([
+  "low_stock_alert", "review_request", "win_back", "birthday_offer",
+  "flash_sale", "reorder_reminder", "follow_up", "loyalty_reward",
+  "appointment_reminder", "booking_confirmation",
+]);
+
+/* ── Campaign valid types ────────────────────────────────── */
+const VALID_CAMPAIGN_TYPES = new Set([
+  "whatsapp_blast", "email_campaign", "push_notification",
+  "coupon", "flash_sale", "win_back",
+]);
+
+/* ── Content valid types ─────────────────────────────────── */
+const VALID_CONTENT_TYPES = new Set([
+  "product_description", "shop_bio", "whatsapp_status",
+  "campaign_message", "response_template", "flash_sale_text",
+]);
+
+/* ═══════════════════════════════════════════════════════════
+   1. getMerchantDashboard
+═══════════════════════════════════════════════════════════ */
+const getMerchantDashboard = onCall(CF_OPTS, async (req) => {
   _requireAuth(req);
-  const uid      = req.auth.uid;
-  const shopId   = _sanId(req.data?.shopId);
-  const force    = Boolean(req.data?.forceRefresh);
-  const db       = getFirestore();
+  const uid    = req.auth.uid;
+  const shopId = _sanId(req.data?.shopId);
 
-  /* ownership check */
-  const shop = await _requireOwnership(db, shopId, uid);
+  const shop = await _assertSellerAccess(shopId, uid);
 
-  /* cache check */
-  if (!force) {
-    const cacheSnap = await db.collection("merchantHealthScores").doc(shopId).get();
-    if (cacheSnap.exists) {
-      const cached = cacheSnap.data();
-      const age    = Date.now() - _toMs(cached.cachedAt);
-      if (age < 3600 * 1000) return cached;
+  const [configSnap, productsSnap, ordersSnap, reviewsSnap] = await Promise.all([
+    db.collection("minishopConfig").doc(shopId).get(),
+    db.collection("products").where("shopId", "==", shopId).limit(20).get(),
+    db.collection("orders").where("shopId", "==", shopId).limit(50).get(),
+    db.collection("shopReviews").where("shopId", "==", shopId).limit(10).get(),
+  ]);
+
+  const config   = configSnap.exists ? configSnap.data() : {};
+  const products = productsSnap.docs.map(d => d.data());
+  const orders   = ordersSnap.docs.map(d => d.data());
+  const reviews  = reviewsSnap.docs.map(d => d.data());
+
+  const health = _calcHealthScore(shop, config, products, orders);
+
+  // Quick stats
+  const completedOrders = orders.filter(o => ["completed", "delivered", "paid"].includes(o.status));
+  const totalRevenue    = completedOrders.reduce((s, o) => s + parseFloat(o.totalAmount || o.amount || o.total || 0), 0);
+  const avgRating       = reviews.length > 0
+    ? reviews.reduce((s, r) => s + parseFloat(r.rating || 0), 0) / reviews.length
+    : parseFloat(shop.rating || 0);
+
+  const quickStats = {
+    totalOrders:   orders.length,
+    totalRevenue:  Math.round(totalRevenue),
+    avgOrderValue: completedOrders.length > 0 ? Math.round(totalRevenue / completedOrders.length) : 0,
+    reviewCount:   parseInt(shop.reviewCount || reviews.length || 0),
+    avgRating:     parseFloat(avgRating.toFixed(1)),
+    followerCount: parseInt(shop.followerCount || shop.followers || 0),
+    productCount:  parseInt(shop.productCount || products.length || 0),
+  };
+
+  // Alerts derived from factors scoring below 50% of max
+  const recentAlerts = health.factors
+    .filter(f => f.score < f.maxScore * 0.5)
+    .slice(0, 5)
+    .map(f => ({
+      type:     f.name.toLowerCase().replace(/\s+/g, "_"),
+      severity: f.score < f.maxScore * 0.25 ? "critical" : "warning",
+      message:  f.tip || `${f.name} needs attention (${f.score}/${f.maxScore})`,
+      action:   `Improve ${f.name}`,
+    }));
+
+  return { health, quickStats, recentAlerts };
+});
+
+/* ═══════════════════════════════════════════════════════════
+   2. getMerchantHealthScore
+═══════════════════════════════════════════════════════════ */
+const getMerchantHealthScore = onCall(CF_OPTS, async (req) => {
+  _requireAuth(req);
+  const uid    = req.auth.uid;
+  const shopId = _sanId(req.data?.shopId);
+
+  // 1-hour cache check
+  const cacheSnap = await db.collection("merchantHealth").doc(shopId).get();
+  if (cacheSnap.exists) {
+    const cached = cacheSnap.data();
+    if (Date.now() - _toMs(cached.lastUpdated) < 3_600_000) {
+      return { ...cached, trend: cached.trend || "stable" };
     }
   }
 
-  /* ── Fetch raw data ──────────────────────────────────────── */
-  const [productsSnap, ordersSnap, subsSnap, configSnap] = await Promise.all([
-    db.collection("products").where("shopId", "==", shopId).limit(200).get(),
-    db.collection("orders").where("shopId",  "==", shopId).limit(200).get(),
-    db.collection("subscriptions").where("uid", "==", uid).limit(1).get(),
+  const shop = await _assertSellerAccess(shopId, uid);
+
+  const [configSnap, productsSnap, ordersSnap] = await Promise.all([
     db.collection("minishopConfig").doc(shopId).get(),
+    db.collection("products").where("shopId", "==", shopId).limit(20).get(),
+    db.collection("orders").where("shopId", "==", shopId).limit(50).get(),
   ]);
 
-  const products  = productsSnap.docs.map(d => d.data());
-  const orders    = ordersSnap.docs.map(d => d.data());
-  const config    = configSnap.exists ? configSnap.data() : {};
+  const config   = configSnap.exists ? configSnap.data() : {};
+  const products = productsSnap.docs.map(d => d.data());
+  const orders   = ordersSnap.docs.map(d => d.data());
 
-  /* ── Dimension 1 — Profile Completeness (20 pts) ──────── */
-  let profileScore = 0;
-  if (config.logoUrl  || shop.logoUrl)            profileScore += 3;
-  if (config.coverUrl || shop.coverUrl)            profileScore += 3;
-  const desc = _san(config.description || shop.description || "", 10000);
-  if (desc.length > 50)                            profileScore += 4;
-  if (config.businessHours || shop.businessHours)  profileScore += 3;
-  if (config.phone || shop.phone || shop.contactPhone) profileScore += 3;
-  const socials = config.socialLinks || shop.socialLinks || {};
-  if (Object.keys(socials).some(k => socials[k]))  profileScore += 2;
-  if (config.deliveryAreas || shop.deliveryAreas)  profileScore += 2;
+  const { score, grade, factors } = _calcHealthScore(shop, config, products, orders);
 
-  /* ── Dimension 2 — Product Quality (20 pts) ─────────────── */
-  let productScore = 0;
-  if (products.length >= 5) productScore += 5;
-
-  const withImage = products.filter(p =>
-    (Array.isArray(p.images) && p.images.length > 0) || p.image
-  ).length;
-  const withDesc  = products.filter(p => (_san(p.description || "", 10000).length > 30)).length;
-
-  if (products.length > 0) {
-    if (withImage / products.length >= 0.7) productScore += 5;
-    if (withDesc  / products.length >= 0.7) productScore += 5;
+  let trend = "stable";
+  if (cacheSnap.exists) {
+    const prev = cacheSnap.data().score || 0;
+    if      (score > prev + 3) trend = "improving";
+    else if (score < prev - 3) trend = "declining";
   }
-  const validPriced = products.filter(p => parseFloat(p.price) > 0).length;
-  if (products.length > 0 && validPriced / products.length >= 0.9) productScore += 5;
-
-  /* ── Dimension 3 — Customer Rating (15 pts) ─────────────── */
-  let ratingScore = 0;
-  const rating    = parseFloat(shop.rating || shop.averageRating || 0);
-  if      (rating >= 4.5) ratingScore = 15;
-  else if (rating >= 4.0) ratingScore = 12;
-  else if (rating >= 3.5) ratingScore = 8;
-  else if (rating >= 3.0) ratingScore = 4;
-
-  /* ── Dimension 4 — Response Time (10 pts) ───────────────── */
-  let responseScore = 3; /* default */
-  const rt = _san(shop.responseTime || config.responseTime || "");
-  if      (rt.includes("1 hour")  || rt.includes("1hr"))  responseScore = 10;
-  else if (rt.includes("4 hour")  || rt.includes("4hr"))  responseScore = 8;
-  else if (rt.includes("24 hour") || rt.includes("24hr")) responseScore = 5;
-
-  /* ── Dimensions 5 & 6 — Order Completion & Cancellation ─── */
-  const now30     = Date.now() - 30 * 864e5;
-  const now60     = Date.now() - 60 * 864e5;
-
-  const completed   = orders.filter(o => ["completed", "delivered", "paid"].includes(o.status));
-  const cancelled   = orders.filter(o => o.status === "cancelled");
-  const total       = orders.length;
-
-  const completionRate   = total > 0 ? completed.length / total : 1;
-  const cancellationRate = total > 0 ? cancelled.length / total : 0;
-
-  let orderCompletion   = 4;
-  if      (completionRate >= 0.95) orderCompletion = 15;
-  else if (completionRate >= 0.90) orderCompletion = 12;
-  else if (completionRate >= 0.80) orderCompletion = 8;
-
-  let cancellationScore = 1;
-  if      (cancellationRate <= 0.02) cancellationScore = 5;
-  else if (cancellationRate <= 0.05) cancellationScore = 3;
-
-  /* ── Dimension 7 — Sales Growth (5 pts) ─────────────────── */
-  const recentOrders = orders.filter(o => _toMs(o.createdAt) > now30);
-  const prevOrders   = orders.filter(o => {
-    const t = _toMs(o.createdAt);
-    return t > now60 && t <= now30;
-  });
-  let salesGrowthScore = 1;
-  if (prevOrders.length === 0 && recentOrders.length > 0) {
-    salesGrowthScore = 5; /* new shop with sales */
-  } else if (prevOrders.length > 0) {
-    const ratio = recentOrders.length / prevOrders.length;
-    if      (ratio >= 1.1) salesGrowthScore = 5;
-    else if (ratio >= 0.9) salesGrowthScore = 3;
-  }
-
-  /* ── Dimension 8 — Subscription Status (5 pts) ──────────── */
-  let subScore = 0;
-  if (!subsSnap.empty) {
-    const sub = subsSnap.docs[0].data();
-    if (sub.status === "active" || sub.status === "trialing") subScore = 5;
-  }
-
-  /* ── Dimension 9 — Inventory Health (5 pts) ─────────────── */
-  const inStock    = products.filter(p => (parseInt(p.quantity) || 0) > 0).length;
-  const invRatio   = products.length > 0 ? inStock / products.length : 1;
-  let inventoryScore = 1;
-  if      (invRatio >= 0.8) inventoryScore = 5;
-  else if (invRatio >= 0.6) inventoryScore = 3;
-
-  /* ── Total ───────────────────────────────────────────────── */
-  const totalScore = Math.min(100, Math.round(
-    profileScore + productScore + ratingScore + responseScore +
-    orderCompletion + cancellationScore + salesGrowthScore +
-    subScore + inventoryScore
-  ));
-
-  /* ── Dimensions manifest ─────────────────────────────────── */
-  const dimensions = [
-    { name: "Profile Completeness", score: profileScore,    max: 20, status: profileScore    >= 15 ? "good" : profileScore    >= 10 ? "fair" : "poor" },
-    { name: "Product Quality",      score: productScore,    max: 20, status: productScore    >= 15 ? "good" : productScore    >= 10 ? "fair" : "poor" },
-    { name: "Customer Rating",      score: ratingScore,     max: 15, status: ratingScore     >= 12 ? "good" : ratingScore     >= 8  ? "fair" : "poor" },
-    { name: "Response Time",        score: responseScore,   max: 10, status: responseScore   >= 8  ? "good" : responseScore   >= 5  ? "fair" : "poor" },
-    { name: "Order Completion",     score: orderCompletion, max: 15, status: orderCompletion >= 12 ? "good" : orderCompletion >= 8  ? "fair" : "poor" },
-    { name: "Cancellation Rate",    score: cancellationScore,max: 5, status: cancellationScore >= 5 ? "good" : cancellationScore >= 3 ? "fair" : "poor" },
-    { name: "Sales Growth",         score: salesGrowthScore, max: 5, status: salesGrowthScore >= 5 ? "good" : salesGrowthScore >= 3 ? "fair" : "poor" },
-    { name: "Subscription Status",  score: subScore,        max: 5,  status: subScore        >= 5  ? "good" : "poor" },
-    { name: "Inventory Health",     score: inventoryScore,  max: 5,  status: inventoryScore  >= 5  ? "good" : inventoryScore  >= 3  ? "fair" : "poor" },
-  ];
-
-  /* ── Recommendations ─────────────────────────────────────── */
-  const recommendations = [];
-  if (profileScore    < 15) recommendations.push("Add your business logo and cover photo to increase buyer trust");
-  if (profileScore    < 10) recommendations.push("Complete your business profile: add hours, contact number and social links");
-  if (productScore    < 15) recommendations.push("Add descriptions and images to at least 70% of your products");
-  if (productScore    < 10) recommendations.push("List at least 5 products to unlock full product quality score");
-  if (ratingScore     < 12) recommendations.push("Respond to customer reviews promptly to improve your rating");
-  if (responseScore   < 8)  recommendations.push("Set a faster response time in your shop settings to attract more customers");
-  if (orderCompletion < 12) recommendations.push("Work to fulfil more orders — cancellations hurt your search ranking");
-  if (salesGrowthScore < 3) recommendations.push("Try a flash sale or WhatsApp promotion to boost this month's sales");
-  if (subScore        < 5)  recommendations.push("Upgrade your subscription to unlock premium placement and features");
-  if (inventoryScore  < 3)  recommendations.push("Keep your inventory updated — out-of-stock products miss sales opportunities");
 
   const result = {
     shopId,
-    score:           totalScore,
-    grade:           _grade(totalScore),
-    dimensions,
-    recommendations: recommendations.slice(0, 5),
-    stats: {
-      totalProducts:  products.length,
-      totalOrders:    total,
-      completionRate: Math.round(completionRate  * 100),
-      cancellationPct: Math.round(cancellationRate * 100),
-      rating,
-      recentOrders30d: recentOrders.length,
-    },
-    cachedAt: Timestamp.now(),
+    score,
+    grade,
+    factors,
+    trend,
+    lastUpdated: admin.firestore.Timestamp.now(),
   };
 
-  /* write to cache */
-  try {
-    await db.collection("merchantHealthScores").doc(shopId).set(result, { merge: false });
-  } catch (_) { /* non-blocking */ }
+  // Write cache (non-blocking)
+  db.collection("merchantHealth").doc(shopId).set(result, { merge: false }).catch(() => {});
 
   return result;
 });
 
 /* ═══════════════════════════════════════════════════════════
-   2. getAICoachInsights
-   Anthropic claude-haiku-4-5 coaching insights — 5 per call,
-   rate-limited to 5 calls per uid per day.
+   3. getMerchantAICoach
 ═══════════════════════════════════════════════════════════ */
-exports.getAICoachInsights = onCall(CF_AI_OPTS, async (req) => {
+const getMerchantAICoach = onCall(CF_AI_OPTS, async (req) => {
   _requireAuth(req);
-  const uid    = req.auth.uid;
-  const shopId = _sanId(req.data?.shopId);
-  const db     = getFirestore();
+  const uid      = req.auth.uid;
+  const shopId   = _sanId(req.data?.shopId);
+  const question = req.data?.question ? _san(req.data.question, 500) : null;
 
-  const shop = await _requireOwnership(db, shopId, uid);
+  const shop = await _assertSellerAccess(shopId, uid);
 
-  /* rate limit — 5 per day per uid */
-  const today  = _dateStr(Date.now());
-  const rlKey  = `${uid}_${today}`;
-  const rlRef  = db.collection("aiCoachRL").doc(rlKey);
-
-  await db.runTransaction(async (tx) => {
+  // Rate-limit: 10 AI coach calls per shopId per day
+  const rlKey = `${shopId}_${_todayStr()}`;
+  await db.runTransaction(async tx => {
+    const rlRef  = db.collection("aiCoachRL").doc(rlKey);
     const rlSnap = await tx.get(rlRef);
     const count  = rlSnap.exists ? (rlSnap.data().count || 0) : 0;
-    if (count >= 5) {
-      throw new HttpsError("resource-exhausted", "AI coach limit: 5 requests per day. Try again tomorrow.");
-    }
-    tx.set(rlRef, { count: count + 1, uid, updatedAt: Timestamp.now() }, { merge: true });
+    if (count >= 10) throw new HttpsError("resource-exhausted", "AI coach limit: 10 calls per day per shop. Try again tomorrow.");
+    tx.set(rlRef, { count: count + 1, shopId, updatedAt: admin.firestore.Timestamp.now() }, { merge: true });
   });
 
-  /* gather context */
-  const [productsSnap, ordersSnap, healthSnap] = await Promise.all([
-    db.collection("products").where("shopId", "==", shopId).limit(100).get(),
-    db.collection("orders").where("shopId",   "==", shopId).limit(200).get(),
-    db.collection("merchantHealthScores").doc(shopId).get(),
+  const [ordersSnap, healthSnap] = await Promise.all([
+    db.collection("orders").where("shopId", "==", shopId).limit(20).get(),
+    db.collection("merchantHealth").doc(shopId).get(),
   ]);
 
-  const products       = productsSnap.docs.map(d => d.data());
-  const orders         = ordersSnap.docs.map(d => d.data());
-  const now30          = Date.now() - 30 * 864e5;
-  const recentOrders   = orders.filter(o => _toMs(o.createdAt) > now30);
-  const healthData     = healthSnap.exists ? healthSnap.data() : null;
-  const healthScore    = healthData?.score ?? "unknown";
-  const recommendations = (healthData?.recommendations || []).join("; ") || "None identified";
+  const orders    = ordersSnap.docs.map(d => d.data());
+  const health    = healthSnap.exists ? healthSnap.data() : null;
+  const revenue   = orders.reduce((s, o) => s + parseFloat(o.totalAmount || o.amount || o.total || 0), 0);
+  const lowAreas  = health?.factors
+    ? health.factors.filter(f => f.score < f.maxScore * 0.5).map(f => f.name).join(", ")
+    : "Not yet assessed";
 
-  /* top 5 products by name */
-  const topProducts = products.slice(0, 5).map(p =>
-    `${_san(p.name || p.title || "Untitled", 60)} (KES ${parseFloat(p.price || 0).toLocaleString()})`
-  ).join(", ");
+  const prompt = `You are a business coach for a Kenyan merchant on SOKONI marketplace.
 
-  const prompt = `You are a business growth coach for SOKONI, Kenya's leading digital marketplace.
+Shop: ${_san(shop.name || shop.shopName || "Unknown", 80)}, Category: ${_san(shop.category || "General", 60)}
+Health Score: ${health?.score ?? "N/A"}/100 (Grade ${health?.grade ?? "N/A"})
+Recent Orders: ${orders.length} orders, Revenue: KES ${Math.round(revenue).toLocaleString()}
+Average Rating: ${parseFloat(shop.rating || 0).toFixed(1)} (${parseInt(shop.reviewCount || 0)} reviews)
+Low scoring areas: ${lowAreas}
 
-Business: ${_san(shop.name || shop.shopName || "Unknown Shop", 100)}
-Category: ${_san(shop.category || "General", 60)}
-Location: ${_san(shop.location || shop.town || "Kenya", 80)}
-Health Score: ${healthScore}/100
-Rating: ${parseFloat(shop.rating || 0).toFixed(1)}/5 (${parseInt(shop.reviewCount || 0)} reviews)
-Products Listed: ${products.length}
-Orders in last 30 days: ${recentOrders.length}
-Top Products: ${topProducts || "None listed yet"}
-Key Issues: ${recommendations}
+${question ? `The merchant asks: ${question}` : "Provide 5 specific, actionable business growth recommendations."}
 
-Provide 5 specific, actionable business growth recommendations for this Kenyan merchant.
-Focus on: increasing sales, improving customer satisfaction, and growing their customer base.
-Consider local Kenyan market context (M-Pesa payments, WhatsApp marketing, local delivery networks, mobile-first customers).
+Keep advice practical, Kenya-specific, and focused on immediate wins.
+Each recommendation: one sentence action + expected outcome.
+Format: numbered list. Be specific, not generic.`;
 
-Respond ONLY with valid JSON in this exact format — no markdown fences, no extra text:
-{"insights":[{"title":"...","description":"...","priority":"high|medium|low","category":"sales|marketing|operations|products|customers"}]}`;
+  const recommendations = await _callClaude(prompt, 800);
 
-  let insights;
-  try {
-    const Anthropic = require("@anthropic-ai/sdk");
-    const client    = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
-    const msg = await client.messages.create({
-      model:      "claude-haiku-4-5-20251001",
-      max_tokens: 800,
-      messages:   [{ role: "user", content: prompt }],
-    });
-    const raw  = (msg.content?.[0]?.text || "").trim();
-    const parsed = JSON.parse(raw);
-    insights = Array.isArray(parsed.insights) ? parsed.insights : [];
-  } catch (err) {
-    console.error(JSON.stringify({ severity: "ERROR", message: "AI coach parse error", shopId, err: err.message }));
-    /* graceful fallback */
-    insights = [
-      { title: "Complete your product listings",    description: "Add high-quality photos and detailed descriptions to every product to increase buyer confidence.", priority: "high",   category: "products"   },
-      { title: "Respond faster to customers",       description: "Aim to reply within 1 hour. Buyers in Kenya often choose the first responsive seller.",            priority: "high",   category: "customers"  },
-      { title: "Use WhatsApp for marketing",        description: "Share your SOKONI MiniShop link on WhatsApp groups and status — it's free and highly effective.",  priority: "medium", category: "marketing"  },
-      { title: "Accept M-Pesa payments clearly",    description: "Make sure your till number or Paybill is visible. M-Pesa is the preferred payment method.",        priority: "medium", category: "operations" },
-      { title: "Run a weekly flash sale",           description: "Discount 2–3 slow-moving items by 15–20% each week to generate orders and reviews.",              priority: "low",    category: "sales"      },
-    ];
-  }
-
-  return { insights: insights.slice(0, 5), generatedAt: Date.now(), shopId };
+  return { recommendations, question: question || null, timestamp: Date.now() };
 });
 
 /* ═══════════════════════════════════════════════════════════
-   3. getMerchantCRM
-   Customer segments derived from order history.
+   4. getMerchantOpportunities
 ═══════════════════════════════════════════════════════════ */
-exports.getMerchantCRM = onCall(CF_OPTS, async (req) => {
-  _requireAuth(req);
-  const uid     = req.auth.uid;
-  const shopId  = _sanId(req.data?.shopId);
-  const page    = Math.max(0, parseInt(req.data?.page || 0));
-  const segment = _san(req.data?.segment || "all", 30);
-  const db      = getFirestore();
-
-  await _requireOwnership(db, shopId, uid);
-
-  const ordersSnap = await db.collection("orders").where("shopId", "==", shopId).limit(500).get();
-  const orders     = ordersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  const now        = Date.now();
-  const now30      = now - 30 * 864e5;
-  const now60      = now - 60 * 864e5;
-
-  /* group by customer */
-  const customerMap = {};
-  for (const o of orders) {
-    const cid = _san(o.customerId || o.buyerUid || o.userId || "", 128);
-    if (!cid) continue;
-
-    if (!customerMap[cid]) {
-      customerMap[cid] = {
-        customerId:   cid,
-        name:         _san(o.buyerName || o.customerName || "Unknown", 100),
-        phone:        null, /* never log PII in server logs */
-        orderCount:   0,
-        totalSpent:   0,
-        lastOrderDate: 0,
-        firstOrderDate: Infinity,
-        products:     {},
-      };
-    }
-
-    const c   = customerMap[cid];
-    const amt = parseFloat(o.amount || o.total || 0);
-    const ts  = _toMs(o.createdAt);
-
-    c.orderCount++;
-    c.totalSpent     += amt;
-    if (ts > c.lastOrderDate)  c.lastOrderDate  = ts;
-    if (ts < c.firstOrderDate) c.firstOrderDate = ts;
-
-    /* track favourite products */
-    const items = Array.isArray(o.items) ? o.items : (o.productId ? [{ name: o.productName || o.productId }] : []);
-    for (const item of items) {
-      const pname = _san(item.name || item.productId || "", 80);
-      if (pname) c.products[pname] = (c.products[pname] || 0) + 1;
-    }
-  }
-
-  /* build customer array with segments */
-  let customers = Object.values(customerMap).map(c => {
-    const lastOrder  = c.lastOrderDate;
-    const firstOrder = c.firstOrderDate === Infinity ? now : c.firstOrderDate;
-    const aov        = c.orderCount > 0 ? Math.round(c.totalSpent / c.orderCount) : 0;
-
-    let seg;
-    if      (c.orderCount >= 5)                                      seg = "loyal";
-    else if (c.orderCount >= 2)                                      seg = "regular";
-    else if (c.orderCount === 1 && firstOrder > now30)               seg = "new";
-    else if (lastOrder > now60 && lastOrder <= now30)                 seg = "at_risk";
-    else                                                              seg = "inactive";
-
-    /* top 3 favourite products */
-    const favouriteProducts = Object.entries(c.products)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([name]) => name);
-
-    return {
-      customerId:         c.customerId,
-      name:               c.name,
-      orderCount:         c.orderCount,
-      totalSpent:         Math.round(c.totalSpent),
-      lastOrderDate:      lastOrder,
-      firstOrderDate:     firstOrder,
-      averageOrderValue:  aov,
-      favouriteProducts,
-      segment:            seg,
-    };
-  });
-
-  /* apply segment filter */
-  if (segment !== "all") {
-    customers = customers.filter(c => c.segment === segment);
-  }
-
-  customers.sort((a, b) => b.totalSpent - a.totalSpent);
-
-  /* stats */
-  const all    = Object.values(customerMap);
-  const loyal    = all.filter(c => c.orderCount >= 5).length;
-  const regular  = all.filter(c => c.orderCount >= 2 && c.orderCount < 5).length;
-  const newC     = all.filter(c => c.orderCount === 1 && (c.firstOrderDate === Infinity ? now : c.firstOrderDate) > now30).length;
-  const atRisk   = all.filter(c => c.lastOrderDate > now60 && c.lastOrderDate <= now30).length;
-  const inactive = all.filter(c => c.lastOrderDate <= now60 && c.lastOrderDate > 0).length;
-  const totalRev = all.reduce((s, c) => s + c.totalSpent, 0);
-  const avgLTV   = all.length > 0 ? Math.round(totalRev / all.length) : 0;
-
-  /* paginate */
-  const PAGE_SIZE = 20;
-  const start     = page * PAGE_SIZE;
-  const paginated = customers.slice(start, start + PAGE_SIZE);
-
-  return {
-    customers: paginated,
-    stats:     { total: customers.length, loyal, regular, new: newC, atRisk, inactive, totalRevenue: Math.round(totalRev), avgLifetimeValue: avgLTV },
-    page,
-    totalPages: Math.ceil(customers.length / PAGE_SIZE),
-  };
-});
-
-/* ═══════════════════════════════════════════════════════════
-   4. getInventoryInsights
-   Stock health, dead stock, fast/slow movers.
-═══════════════════════════════════════════════════════════ */
-exports.getInventoryInsights = onCall(CF_OPTS, async (req) => {
+const getMerchantOpportunities = onCall(CF_OPTS, async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
-  const db     = getFirestore();
 
-  await _requireOwnership(db, shopId, uid);
-
-  const productsSnap = await db.collection("products").where("shopId", "==", shopId).limit(200).get();
-  const products     = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  const now90  = Date.now() - 90 * 864e5;
-  const alerts = [];
-
-  const enriched = products.map(p => {
-    const qty        = parseInt(p.quantity || p.stock || 0);
-    const salesCount = parseInt(p.salesCount || p.sold || 0);
-    const viewCount  = parseInt(p.viewCount  || p.views || 0);
-    const lastSoldMs = _toMs(p.lastSoldAt || p.lastOrderAt);
-
-    let status;
-    if (qty === 0) {
-      status = "out_of_stock";
-    } else if (qty > 0 && qty <= 5) {
-      status = "low_stock";
-    } else if (qty > 100) {
-      status = "overstock";
-    } else if (salesCount > 20 || p.isBestseller === true) {
-      status = "fast_seller";
-    } else if (qty > 10 && salesCount < 2) {
-      status = "slow_mover";
-    } else if (qty > 0 && (lastSoldMs < now90 || viewCount < 5)) {
-      status = "dead_stock";
-    } else {
-      status = "healthy";
-    }
-
-    /* days of stock estimate */
-    const dailySalesRate = salesCount > 0 ? salesCount / 90 : 0;
-    const daysOfStock    = dailySalesRate > 0 ? Math.round(qty / dailySalesRate) : (qty > 0 ? 999 : 0);
-
-    /* generate alert */
-    const name = _san(p.name || p.title || "Untitled", 80);
-    if (status === "out_of_stock") {
-      alerts.push({ productId: p.id, name, issue: "Out of stock", recommendation: "Restock immediately — buyers cannot order this item", urgency: "high" });
-    } else if (status === "low_stock") {
-      alerts.push({ productId: p.id, name, issue: `Low stock (${qty} left)`, recommendation: "Reorder soon to avoid stockouts", urgency: qty <= 2 ? "high" : "medium" });
-    } else if (status === "dead_stock") {
-      alerts.push({ productId: p.id, name, issue: "Dead stock — no recent sales or views", recommendation: "Consider a discount, bundle deal, or move to clearance to recover margin", urgency: "medium" });
-    } else if (status === "overstock") {
-      alerts.push({ productId: p.id, name, issue: `Overstock (${qty} units)`, recommendation: "Run a promotion or offer bulk-buy discounts to clear excess inventory", urgency: "low" });
-    } else if (status === "slow_mover") {
-      alerts.push({ productId: p.id, name, issue: "Slow mover — high stock, low sales", recommendation: "Improve listing photos/description, or lower price to stimulate demand", urgency: "low" });
-    }
-
-    return {
-      id:          p.id,
-      name,
-      quantity:    qty,
-      price:       parseFloat(p.price || 0),
-      salesCount,
-      viewCount,
-      status,
-      daysOfStock: daysOfStock > 998 ? null : daysOfStock,
-      image:       Array.isArray(p.images) ? p.images[0] : (p.image || null),
-    };
-  });
-
-  const summary = {
-    total:       enriched.length,
-    outOfStock:  enriched.filter(p => p.status === "out_of_stock").length,
-    lowStock:    enriched.filter(p => p.status === "low_stock").length,
-    deadStock:   enriched.filter(p => p.status === "dead_stock").length,
-    overstock:   enriched.filter(p => p.status === "overstock").length,
-    fastSellers: enriched.filter(p => p.status === "fast_seller").length,
-    slowMovers:  enriched.filter(p => p.status === "slow_mover").length,
-    healthy:     enriched.filter(p => p.status === "healthy").length,
-  };
-
-  /* sort: highest urgency first */
-  const urgencyOrder = { high: 0, medium: 1, low: 2 };
-  alerts.sort((a, b) => (urgencyOrder[a.urgency] || 2) - (urgencyOrder[b.urgency] || 2));
-
-  return { summary, alerts: alerts.slice(0, 50), products: enriched };
-});
-
-/* ═══════════════════════════════════════════════════════════
-   5. getMerchantFinancials
-   Revenue, order metrics, peak hours, retention.
-═══════════════════════════════════════════════════════════ */
-exports.getMerchantFinancials = onCall(CF_OPTS, async (req) => {
-  _requireAuth(req);
-  const uid    = req.auth.uid;
-  const shopId = _sanId(req.data?.shopId);
-  const db     = getFirestore();
-
-  await _requireOwnership(db, shopId, uid);
-
-  const periodMap = { "7d": 7, "30d": 30, "90d": 90, "365d": 365 };
-  const period    = periodMap[req.data?.period] ? req.data.period : "30d";
-  const days      = periodMap[period];
-  const cutoff    = Date.now() - days * 864e5;
-
-  const ordersSnap = await db.collection("orders").where("shopId", "==", shopId).limit(1000).get();
-  const allOrders  = ordersSnap.docs.map(d => d.data());
-  const orders     = allOrders.filter(o => _toMs(o.createdAt) >= cutoff);
-
-  const refunded  = orders.filter(o => o.status === "refunded");
-  const cancelled = orders.filter(o => o.status === "cancelled");
-  const valid     = orders.filter(o => !["refunded", "cancelled"].includes(o.status));
-
-  const revenue    = valid.reduce((s, o) => s + parseFloat(o.amount || o.total || 0), 0);
-  const refundAmt  = refunded.reduce((s, o) => s + parseFloat(o.amount || o.total || 0), 0);
-  const netRevenue = revenue - refundAmt;
-
-  /* top products by revenue */
-  const productRev = {};
-  for (const o of valid) {
-    const items = Array.isArray(o.items) ? o.items
-      : (o.productId ? [{ productId: o.productId, name: o.productName || o.productId, price: o.amount, qty: 1 }] : []);
-    for (const item of items) {
-      const pid  = _san(item.productId || item.name || "unknown", 100);
-      const pamt = parseFloat(item.price || 0) * (parseInt(item.qty || item.quantity || 1));
-      if (!productRev[pid]) productRev[pid] = { name: _san(item.name || pid, 80), revenue: 0, units: 0 };
-      productRev[pid].revenue += pamt;
-      productRev[pid].units   += parseInt(item.qty || item.quantity || 1);
-    }
-  }
-  const topProducts = Object.entries(productRev)
-    .map(([id, v]) => ({ id, ...v, revenue: Math.round(v.revenue) }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5);
-
-  /* daily revenue */
-  const dailyRevenue = {};
-  for (const o of valid) {
-    const d   = _dateStr(_toMs(o.createdAt));
-    const amt = parseFloat(o.amount || o.total || 0);
-    dailyRevenue[d] = (dailyRevenue[d] || 0) + amt;
-  }
-
-  /* peak hours */
-  const peakHours = {};
-  for (const o of orders) {
-    const hr = new Date(_toMs(o.createdAt)).getUTCHours();
-    peakHours[hr] = (peakHours[hr] || 0) + 1;
-  }
-
-  /* customer retention */
-  const customerCounts = {};
-  for (const o of allOrders) {
-    const cid = _san(o.customerId || o.buyerUid || "", 128);
-    if (cid) customerCounts[cid] = (customerCounts[cid] || 0) + 1;
-  }
-  const uniqueAllTime  = Object.keys(customerCounts).length;
-  const repeatCustomers = Object.values(customerCounts).filter(c => c > 1).length;
-  const retentionRate  = uniqueAllTime > 0 ? Math.round((repeatCustomers / uniqueAllTime) * 100) : 0;
-  const totalRevAllTime = allOrders.reduce((s, o) => s + parseFloat(o.amount || o.total || 0), 0);
-  const clv = uniqueAllTime > 0 ? Math.round(totalRevAllTime / uniqueAllTime) : 0;
-
-  return {
-    period,
-    orderCount:          orders.length,
-    revenue:             Math.round(revenue),
-    refundAmount:        Math.round(refundAmt),
-    netRevenue:          Math.round(netRevenue),
-    averageOrderValue:   orders.length > 0 ? Math.round(revenue / orders.length) : 0,
-    refundCount:         refunded.length,
-    cancellationCount:   cancelled.length,
-    topProducts,
-    dailyRevenue,
-    peakHours,
-    customerRetentionRate: retentionRate,
-    customerLifetimeValue: clv,
-    uniqueCustomers:     uniqueAllTime,
-  };
-});
-
-/* ═══════════════════════════════════════════════════════════
-   6. getMerchantBenchmarks
-   Anonymised peer comparison using cached health scores.
-═══════════════════════════════════════════════════════════ */
-exports.getMerchantBenchmarks = onCall(CF_OPTS, async (req) => {
-  _requireAuth(req);
-  const uid    = req.auth.uid;
-  const shopId = _sanId(req.data?.shopId);
-  const db     = getFirestore();
-
-  /* ownership check */
-  const shop = await _requireOwnership(db, shopId, uid);
-
-  /* caller's own health score */
-  const [myScoreSnap, allScoresSnap] = await Promise.all([
-    db.collection("merchantHealthScores").doc(shopId).get(),
-    db.collection("merchantHealthScores").limit(1000).get(),
-  ]);
-
-  const myData     = myScoreSnap.exists ? myScoreSnap.data() : null;
-  const myScore    = myData?.score ?? 0;
-  const myCategory = _san(shop.category || "General", 80);
-
-  /* extract peer scores in same category */
-  const allScores  = allScoresSnap.docs.map(d => d.data());
-  const peers      = allScores.filter(s => {
-    /* we stored shopId in the doc but not category — use a broad comparison */
-    return s.shopId !== shopId; /* exclude self; category filter done below */
-  });
-
-  /* try to narrow by category if most peers have category stored */
-  const withCategory = peers.filter(s => s.category);
-  const categoryPeers = withCategory.length > 0
-    ? withCategory.filter(s => _san(s.category || "", 80).toLowerCase() === myCategory.toLowerCase())
-    : peers;
-
-  const peerScores = (categoryPeers.length >= 3 ? categoryPeers : peers).map(s => s.score || 0);
-
-  const avgScore = peerScores.length > 0
-    ? Math.round(peerScores.reduce((a, b) => a + b, 0) / peerScores.length)
-    : 0;
-
-  const sorted        = [...peerScores].sort((a, b) => a - b);
-  const medianScore   = sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : 0;
-  const topQuartile   = sorted.length > 0 ? sorted[Math.floor(sorted.length * 0.75)] : 0;
-
-  /* percentile rank */
-  const below = peerScores.filter(s => s < myScore).length;
-  const percentile = peerScores.length > 0 ? Math.round((below / peerScores.length) * 100) : 50;
-
-  /* gaps */
-  const gaps = [];
-  if (myScore < avgScore) {
-    gaps.push({ metric: "Health Score", merchantValue: myScore, benchmarkValue: avgScore, gap: avgScore - myScore, recommendation: `Your score is ${avgScore - myScore} points below the category average. Focus on the lowest-scoring dimensions.` });
-  }
-  const myRating   = parseFloat(shop.rating || 0);
-  const avgRating  = 4.2; /* platform default if not available */
-  if (myRating > 0 && myRating < avgRating) {
-    gaps.push({ metric: "Rating", merchantValue: myRating, benchmarkValue: avgRating, gap: +(avgRating - myRating).toFixed(1), recommendation: "Deliver excellent service and follow up with buyers to improve your rating" });
-  }
-
-  return {
-    merchant:  { shopId, score: myScore, rating: myRating, category: myCategory },
-    benchmark: { avgScore, medianScore, topQuartileScore: topQuartile, peerCount: peerScores.length },
-    percentile,
-    gaps,
-  };
-});
-
-/* ═══════════════════════════════════════════════════════════
-   7. getMerchantOpportunities
-   Revenue opportunities from existing data patterns.
-═══════════════════════════════════════════════════════════ */
-exports.getMerchantOpportunities = onCall(CF_OPTS, async (req) => {
-  _requireAuth(req);
-  const uid    = req.auth.uid;
-  const shopId = _sanId(req.data?.shopId);
-  const db     = getFirestore();
-
-  await _requireOwnership(db, shopId, uid);
+  await _assertSellerAccess(shopId, uid);
 
   const [productsSnap, ordersSnap] = await Promise.all([
-    db.collection("products").where("shopId", "==", shopId).limit(200).get(),
-    db.collection("orders").where("shopId",   "==", shopId).limit(300).get(),
+    db.collection("products").where("shopId", "==", shopId).limit(100).get(),
+    db.collection("orders").where("shopId",   "==", shopId).limit(200).get(),
   ]);
 
   const products = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
   const orders   = ordersSnap.docs.map(d => d.data());
+  const now  = Date.now();
+  const now7  = now -  7 * 864e5;
+  const now30 = now - 30 * 864e5;
+  const now60 = now - 60 * 864e5;
 
-  const now    = Date.now();
-  const now7   = now - 7  * 864e5;
-  const now30  = now - 30 * 864e5;
-  const now45  = now - 45 * 864e5;
-
-  const opportunities = [];
-
-  /* 1. Critical low-stock on selling products */
-  const criticalStock = products.filter(p => {
-    const qty   = parseInt(p.quantity || p.stock || 0);
-    const sales = parseInt(p.salesCount || 0);
-    return qty > 0 && qty <= 3 && sales > 0;
-  });
-  if (criticalStock.length > 0) {
-    const names = criticalStock.slice(0, 3).map(p => _san(p.name || p.title || "product", 50)).join(", ");
-    const potentialRevenue = criticalStock.reduce((s, p) => s + parseFloat(p.price || 0) * parseInt(p.quantity || 0), 0);
-    opportunities.push({
-      type:             "low_stock",
-      title:            `${criticalStock.length} top-selling product${criticalStock.length > 1 ? "s" : ""} nearly sold out`,
-      description:      `${names} — reorder now to avoid lost sales and disappointed customers.`,
-      action:           "restock",
-      urgency:          "high",
-      potentialRevenue: Math.round(potentialRevenue),
-    });
+  // Build per-product order frequency map
+  const pMap = {};
+  for (const o of orders) {
+    const ts    = _toMs(o.createdAt);
+    const items = Array.isArray(o.items) ? o.items : (o.productId ? [{ productId: o.productId }] : []);
+    for (const item of items) {
+      const pid = item.productId || item.id;
+      if (!pid) continue;
+      if (!pMap[pid]) pMap[pid] = { total: 0, last7: 0, last30: 0 };
+      pMap[pid].total++;
+      if (ts >= now7)  pMap[pid].last7++;
+      if (ts >= now30) pMap[pid].last30++;
+    }
   }
 
-  /* 2. Returning customers this week */
-  const recentCustomers = {};
-  const prevCustomers   = {};
+  // Customer maps
+  const custLast  = {};
+  const custCount = {};
   for (const o of orders) {
-    const cid = _san(o.customerId || o.buyerUid || "", 128);
-    const ts  = _toMs(o.createdAt);
+    const cid = o.buyerId || o.buyerUid || o.customerId;
     if (!cid) continue;
-    if (ts > now7)          recentCustomers[cid] = true;
-    else if (ts > now30)    prevCustomers[cid]   = true;
+    const ts = _toMs(o.createdAt);
+    if (ts > (custLast[cid] || 0)) custLast[cid] = ts;
+    custCount[cid] = (custCount[cid] || 0) + 1;
   }
-  const returning = Object.keys(recentCustomers).filter(c => prevCustomers[c]).length;
-  if (returning > 0) {
-    opportunities.push({
-      type:        "returning_customers",
-      title:       `${returning} customers returned this week`,
-      description: "These loyal buyers are ready to purchase again. Send them a personalised thank-you via WhatsApp or offer a loyalty discount.",
-      action:      "engage_loyalty",
-      urgency:     "medium",
+
+  const lowStock = products
+    .filter(p => {
+      const sc = parseInt(p.stockCount ?? p.quantity ?? p.stock ?? -1);
+      return sc > 0 && sc <= 5;
+    })
+    .map(p => ({
+      productId:   p.id,
+      name:        _san(p.name || p.title || "Product", 80),
+      stockCount:  parseInt(p.stockCount ?? p.quantity ?? p.stock ?? 0),
+      estDaysLeft: null,
+    }));
+
+  const outOfStock = products
+    .filter(p => parseInt(p.stockCount ?? p.quantity ?? p.stock ?? 1) === 0)
+    .map(p => ({ productId: p.id, name: _san(p.name || p.title || "Product", 80) }));
+
+  const slowMovers = products
+    .filter(p => { const pm = pMap[p.id]; return !pm || pm.last30 === 0; })
+    .map(p => ({ productId: p.id, name: _san(p.name || p.title || "Product", 80) }));
+
+  const topSellers = Object.entries(pMap)
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 5)
+    .map(([pid, stats]) => {
+      const prod = products.find(p => p.id === pid);
+      return { productId: pid, name: _san(prod?.name || prod?.title || pid, 80), orders: stats.total };
     });
-  }
 
-  /* 3. Inactive customers — win-back */
-  const customerLastOrder = {};
-  for (const o of orders) {
-    const cid = _san(o.customerId || o.buyerUid || "", 128);
-    const ts  = _toMs(o.createdAt);
-    if (cid && ts > (customerLastOrder[cid] || 0)) customerLastOrder[cid] = ts;
-  }
-  const inactiveCount = Object.values(customerLastOrder).filter(t => t > 0 && t < now45).length;
-  if (inactiveCount > 0) {
-    opportunities.push({
-      type:        "inactive_customers",
-      title:       `${inactiveCount} customer${inactiveCount > 1 ? "s" : ""} haven't ordered in 45+ days`,
-      description: "A win-back message with a 10–15% discount can re-activate lapsed buyers at low cost.",
-      action:      "send_winback",
-      urgency:     "medium",
-    });
-  }
+  const returningCustomersCount = Object.values(custCount).filter(c => c >= 2).length;
+  const inactiveCustomersCount  = Object.values(custLast).filter(t => t > 0 && t < now60).length;
 
-  /* 4. Products with no discount but slow movement */
-  const slowUndiscounted = products.filter(p => {
-    const qty        = parseInt(p.quantity || 0);
-    const sales      = parseInt(p.salesCount || 0);
-    const hasDiscount = parseFloat(p.discountPrice || p.salePrice || 0) > 0 || p.onSale === true;
-    return qty > 5 && sales < 2 && !hasDiscount;
-  });
-  if (slowUndiscounted.length > 0) {
-    const sample = slowUndiscounted.slice(0, 2).map(p => _san(p.name || p.title || "product", 50)).join(", ");
-    opportunities.push({
-      type:        "pricing_opportunity",
-      title:       `${slowUndiscounted.length} products with no discount and low sales`,
-      description: `${sample} — consider a flash sale (10–20% off) to generate first orders and reviews.`,
-      action:      "create_promotion",
-      urgency:     "low",
-    });
-  }
+  const missedSalesCount = products.filter(p => {
+    const sc = parseInt(p.stockCount ?? p.quantity ?? p.stock ?? -1);
+    if (sc !== 0) return false;
+    const pm = pMap[p.id];
+    return pm && pm.last7 > 0;
+  }).length;
 
-  /* 5. Upsell — out of stock products that had demand */
-  const outOfStockWithSales = products.filter(p =>
-    parseInt(p.quantity || 0) === 0 && parseInt(p.salesCount || 0) > 0
-  );
-  if (outOfStockWithSales.length > 0) {
-    const revRecovery = outOfStockWithSales.reduce((s, p) => s + parseFloat(p.price || 0), 0);
-    opportunities.push({
-      type:             "restock_demand",
-      title:            `${outOfStockWithSales.length} previously popular item${outOfStockWithSales.length > 1 ? "s" : ""} out of stock`,
-      description:      "These products had real buyer demand. Restocking them could recover lost revenue immediately.",
-      action:           "restock",
-      urgency:          "high",
-      potentialRevenue: Math.round(revRecovery),
-    });
-  }
-
-  /* sort by urgency */
-  const urgencyOrder = { high: 0, medium: 1, low: 2 };
-  opportunities.sort((a, b) => (urgencyOrder[a.urgency] || 2) - (urgencyOrder[b.urgency] || 2));
-
-  return { opportunities, generatedAt: Date.now(), shopId };
+  return {
+    lowStock,
+    outOfStock,
+    slowMovers,
+    topSellers,
+    returningCustomersCount,
+    inactiveCustomersCount,
+    missedSalesCount,
+  };
 });
 
 /* ═══════════════════════════════════════════════════════════
-   8. createMerchantAutomation
-   Save an automation rule for a shop.
+   5. getMerchantCRM
 ═══════════════════════════════════════════════════════════ */
-const VALID_AUTOMATION_TYPES = new Set([
-  "low_stock_alert", "review_request", "win_back",
-  "birthday_offer",  "reorder_reminder", "flash_sale", "appointment_reminder",
-]);
-
-exports.createMerchantAutomation = onCall(CF_OPTS, async (req) => {
+const getMerchantCRM = onCall(CF_OPTS, async (req) => {
   _requireAuth(req);
-  const uid    = req.auth.uid;
-  const shopId = _sanId(req.data?.shopId);
-  const type   = _san(req.data?.type || "", 60);
-  const db     = getFirestore();
+  const uid     = req.auth.uid;
+  const shopId  = _sanId(req.data?.shopId);
+  const limit   = Math.min(50, Math.max(5, parseInt(req.data?.limit || 20)));
+  const segment = _san(req.data?.segment || "", 30);
 
-  if (!VALID_AUTOMATION_TYPES.has(type)) {
-    throw new HttpsError("invalid-argument", `Invalid automation type. Allowed: ${[...VALID_AUTOMATION_TYPES].join(", ")}`);
+  await _assertSellerAccess(shopId, uid);
+
+  const ordersSnap = await db.collection("orders").where("shopId", "==", shopId).limit(500).get();
+  const orders     = ordersSnap.docs.map(d => d.data());
+  const now  = Date.now();
+  const now30 = now - 30 * 864e5;
+  const now45 = now - 45 * 864e5;
+  const now90 = now - 90 * 864e5;
+
+  // Aggregate per customer
+  const cMap = {};
+  for (const o of orders) {
+    const cid = o.buyerId || o.buyerUid || o.customerId;
+    if (!cid) continue;
+    if (!cMap[cid]) {
+      cMap[cid] = {
+        customerId:     cid,
+        name:           _san(o.buyerName || o.customerName || "Customer", 80),
+        phone:          o.buyerPhone || null,
+        totalOrders:    0,
+        totalSpent:     0,
+        lastOrderDate:  0,
+        firstOrderDate: Infinity,
+        pFreq:          {},
+      };
+    }
+    const c   = cMap[cid];
+    const amt = parseFloat(o.totalAmount || o.amount || o.total || 0);
+    const ts  = _toMs(o.createdAt);
+    c.totalOrders++;
+    c.totalSpent += amt;
+    if (ts > c.lastOrderDate)  c.lastOrderDate  = ts;
+    if (ts < c.firstOrderDate) c.firstOrderDate = ts;
+    const items = Array.isArray(o.items) ? o.items : (o.productId ? [{ productId: o.productId, name: o.productName || o.productId }] : []);
+    for (const item of items) {
+      const pid = item.productId || item.name || "";
+      if (pid) c.pFreq[pid] = (c.pFreq[pid] || 0) + 1;
+    }
   }
 
-  await _requireOwnership(db, shopId, uid);
+  const allCustomers = Object.values(cMap).map(c => {
+    const last  = c.lastOrderDate;
+    const first = c.firstOrderDate === Infinity ? now : c.firstOrderDate;
+    const aov   = c.totalOrders > 0 ? Math.round(c.totalSpent / c.totalOrders) : 0;
+    const favProd = Object.entries(c.pFreq).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 
-  const rawConfig = req.data?.config || {};
-  if (typeof rawConfig !== "object" || Array.isArray(rawConfig)) {
-    throw new HttpsError("invalid-argument", "config must be an object");
-  }
+    let seg;
+    if      (c.totalOrders >= 5 && last >= now30) seg = "champion";
+    else if (c.totalOrders >= 3)                  seg = "loyal";
+    else if (last < now90)                        seg = "lost";
+    else if (last < now45)                        seg = "at_risk";
+    else                                          seg = "new";
 
-  /* validate per type */
-  const config = { active: Boolean(rawConfig.active !== false) };
+    return {
+      customerId:    c.customerId,
+      name:          c.name,
+      phone:         c.phone,
+      totalOrders:   c.totalOrders,
+      totalSpent:    Math.round(c.totalSpent),
+      lastOrderDate: last,
+      firstOrderDate: first,
+      avgOrderValue: aov,
+      favoriteProduct: favProd,
+      segment:       seg,
+      note:          null,
+    };
+  });
 
-  if (type === "low_stock_alert") {
-    config.threshold = Math.max(1, Math.min(100, parseInt(rawConfig.threshold || 5)));
-  } else if (type === "review_request") {
-    config.delayHours = Math.max(1, Math.min(168, parseInt(rawConfig.delayHours || 24)));
-    config.message    = _san(rawConfig.message || "Thank you for your order! Please leave a review.", 500);
-  } else if (type === "win_back") {
-    config.daysInactive = Math.max(7, Math.min(180, parseInt(rawConfig.daysInactive || 45)));
-    config.discount     = Math.max(0, Math.min(50, parseInt(rawConfig.discount || 10)));
-    config.message      = _san(rawConfig.message || "We miss you! Here's a special discount just for you.", 500);
-  } else if (type === "birthday_offer") {
-    config.discount = Math.max(0, Math.min(50, parseInt(rawConfig.discount || 15)));
-    config.message  = _san(rawConfig.message || "Happy Birthday! Enjoy a special gift from us.", 500);
-  } else if (type === "reorder_reminder") {
-    config.delayHours = Math.max(24, Math.min(8760, parseInt(rawConfig.delayHours || 720)));
-    config.message    = _san(rawConfig.message || "Time to restock? Your favourite items are waiting.", 500);
-  } else if (type === "flash_sale") {
-    config.discount    = Math.max(1, Math.min(80, parseInt(rawConfig.discount || 20)));
-    config.durationHrs = Math.max(1, Math.min(72, parseInt(rawConfig.durationHrs || 24)));
-    config.message     = _san(rawConfig.message || "Flash Sale! Limited time offer.", 500);
-  } else if (type === "appointment_reminder") {
-    config.delayHours = Math.max(1, Math.min(72, parseInt(rawConfig.delayHours || 24)));
-    config.message    = _san(rawConfig.message || "Reminder: your appointment is coming up soon.", 500);
-  }
-
-  const automationId = `${shopId}_${type}`;
-  const automation   = {
-    automationId,
-    shopId,
-    uid,
-    type,
-    config,
-    createdAt:  Timestamp.now(),
-    updatedAt:  Timestamp.now(),
+  const segments = {
+    champion: allCustomers.filter(c => c.segment === "champion").length,
+    loyal:    allCustomers.filter(c => c.segment === "loyal").length,
+    at_risk:  allCustomers.filter(c => c.segment === "at_risk").length,
+    new:      allCustomers.filter(c => c.segment === "new").length,
+    lost:     allCustomers.filter(c => c.segment === "lost").length,
   };
 
-  await db.collection("merchantAutomations").doc(automationId).set(automation, { merge: false });
+  let filtered = segment ? allCustomers.filter(c => c.segment === segment) : allCustomers;
+  filtered.sort((a, b) => b.totalSpent - a.totalSpent);
+  const page = filtered.slice(0, limit);
 
-  return { success: true, automationId, automation };
+  // Fetch CRM notes for this page (doc-ID lookups)
+  const noteSnaps = await Promise.all(
+    page.map(c =>
+      db.collection("crmNotes").doc(shopId).collection("customers").doc(c.customerId).get()
+    )
+  );
+  noteSnaps.forEach((snap, i) => {
+    if (snap.exists) page[i].note = snap.data().note || null;
+  });
+
+  return { customers: page, totalCustomers: filtered.length, segments };
 });
 
 /* ═══════════════════════════════════════════════════════════
-   9. getMerchantAutomations
-   List all automation rules for a shop.
+   6. updateCustomerNote
 ═══════════════════════════════════════════════════════════ */
-exports.getMerchantAutomations = onCall(CF_OPTS, async (req) => {
+const updateCustomerNote = onCall(CF_OPTS, async (req) => {
+  _requireAuth(req);
+  const uid        = req.auth.uid;
+  const shopId     = _sanId(req.data?.shopId);
+  const customerId = _san(req.data?.customerId || "", 128);
+  const note       = _san(req.data?.note || "", 1000);
+
+  if (!customerId) throw new HttpsError("invalid-argument", "customerId is required");
+
+  await _assertSellerAccess(shopId, uid);
+
+  await db.collection("crmNotes").doc(shopId).collection("customers").doc(customerId).set({
+    note,
+    updatedAt: admin.firestore.Timestamp.now(),
+    updatedBy: uid,
+  }, { merge: true });
+
+  return { success: true };
+});
+
+/* ═══════════════════════════════════════════════════════════
+   7. getMerchantInventoryIntelligence
+═══════════════════════════════════════════════════════════ */
+const getMerchantInventoryIntelligence = onCall(CF_OPTS, async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
-  const db     = getFirestore();
 
-  await _requireOwnership(db, shopId, uid);
+  await _assertSellerAccess(shopId, uid);
+
+  const [productsSnap, ordersSnap] = await Promise.all([
+    db.collection("products").where("shopId", "==", shopId).limit(200).get(),
+    db.collection("orders").where("shopId",   "==", shopId).limit(100).get(),
+  ]);
+
+  const products = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const orders   = ordersSnap.docs.map(d => d.data());
+  const now  = Date.now();
+  const now7  = now -  7 * 864e5;
+  const now30 = now - 30 * 864e5;
+  const now90 = now - 90 * 864e5;
+
+  // Build per-product sales velocity
+  const vel = {};
+  for (const o of orders) {
+    const ts    = _toMs(o.createdAt);
+    const items = Array.isArray(o.items) ? o.items : (o.productId ? [{ productId: o.productId }] : []);
+    for (const item of items) {
+      const pid = item.productId || item.id;
+      if (!pid) continue;
+      if (!vel[pid]) vel[pid] = { last7: 0, last30: 0, last90: 0 };
+      if (ts >= now7)  vel[pid].last7++;
+      if (ts >= now30) vel[pid].last30++;
+      if (ts >= now90) vel[pid].last90++;
+    }
+  }
+
+  const fastMoving  = [];
+  const slowMoving  = [];
+  const deadStock   = [];
+  const lowStock    = [];
+  const outOfStock  = [];
+  const overstocked = [];
+  let healthyCount  = 0;
+
+  for (const p of products) {
+    const v      = vel[p.id] || { last7: 0, last30: 0, last90: 0 };
+    const stock  = parseInt(p.stockCount ?? p.quantity ?? p.stock ?? -1);
+    const name   = _san(p.name || p.title || "Product", 80);
+    const price  = parseFloat(p.price || 0);
+
+    if (stock === 0) {
+      outOfStock.push({ productId: p.id, name, price, monthlyVelocity: v.last30, recommendation: "Restock immediately — buyers cannot place orders." });
+      continue;
+    }
+    if (stock !== -1 && stock <= 5 && v.last30 > 0) {
+      const estDaysLeft = Math.round(stock / (v.last30 / 30));
+      lowStock.push({ productId: p.id, name, price, stockCount: stock, monthlyVelocity: v.last30, estDaysLeft, recommendation: "Reorder before you run out." });
+    }
+    if (v.last7 > 3) {
+      fastMoving.push({ productId: p.id, name, price, stockCount: stock === -1 ? null : stock, weeklyVelocity: v.last7, recommendation: "Best seller — keep well stocked and consider a slight price increase." });
+    } else if (v.last90 === 0) {
+      deadStock.push({ productId: p.id, name, price, stockCount: stock === -1 ? null : stock, recommendation: "No sales in 90 days — discount, bundle, or remove the listing." });
+    } else if (v.last30 < 1) {
+      slowMoving.push({ productId: p.id, name, price, stockCount: stock === -1 ? null : stock, monthlyVelocity: v.last30, recommendation: "Improve photos and description, or run a flash sale to stimulate demand." });
+    } else if (stock !== -1 && stock > 50 && v.last30 < 1) {
+      overstocked.push({ productId: p.id, name, price, stockCount: stock, monthlyVelocity: v.last30, recommendation: "Overstock risk — offer bulk-buy deals or a clearance discount." });
+    } else {
+      healthyCount++;
+    }
+  }
+
+  const actionNeeded = fastMoving.length + slowMoving.length + deadStock.length +
+    lowStock.length + outOfStock.length + overstocked.length;
+
+  return {
+    fastMoving,
+    slowMoving,
+    deadStock,
+    lowStock,
+    outOfStock,
+    overstocked,
+    summary: { totalProducts: products.length, healthyCount, actionNeeded },
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════
+   8. getMerchantFinancials
+═══════════════════════════════════════════════════════════ */
+const getMerchantFinancials = onCall(CF_OPTS, async (req) => {
+  _requireAuth(req);
+  const uid    = req.auth.uid;
+  const shopId = _sanId(req.data?.shopId);
+  const days   = Math.min(90, Math.max(7, parseInt(req.data?.days || 30)));
+
+  await _assertSellerAccess(shopId, uid);
+
+  const cutoff = Date.now() - days * 864e5;
+
+  const [ordersSnap, commissionsSnap] = await Promise.all([
+    db.collection("orders").where("shopId", "==", shopId).limit(500).get(),
+    db.collection("commissions").where("sellerId", "==", shopId).limit(50).get(),
+  ]);
+
+  const allOrders      = ordersSnap.docs.map(d => d.data());
+  const periodOrders   = allOrders.filter(o => _toMs(o.createdAt) >= cutoff);
+  const completedOrders = periodOrders.filter(o => ["completed", "delivered", "paid"].includes(o.status));
+
+  const totalRevenue  = completedOrders.reduce((s, o) => s + parseFloat(o.totalAmount || o.amount || o.total || 0), 0);
+  const platformFees  = completedOrders.reduce((s, o) => s + parseFloat(o.commissionAmount || o.platformFee || 0), 0);
+  const commTotal     = commissionsSnap.docs.reduce((s, d) => s + parseFloat(d.data().amount || 0), 0);
+  const netRevenue    = totalRevenue - (platformFees || commTotal);
+
+  // Daily revenue — fill all days in the period
+  const dailyMap = {};
+  for (const o of completedOrders) {
+    const d = _dateStr(_toMs(o.createdAt));
+    if (!dailyMap[d]) dailyMap[d] = { revenue: 0, orders: 0 };
+    dailyMap[d].revenue += parseFloat(o.totalAmount || o.amount || o.total || 0);
+    dailyMap[d].orders++;
+  }
+  const dailyRevenue = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = _dateStr(Date.now() - i * 864e5);
+    dailyRevenue.push({ date: d, revenue: Math.round(dailyMap[d]?.revenue || 0), orders: dailyMap[d]?.orders || 0 });
+  }
+
+  // Top 10 products by revenue
+  const prodRev = {};
+  for (const o of completedOrders) {
+    const items = Array.isArray(o.items)
+      ? o.items
+      : (o.productId ? [{ productId: o.productId, name: o.productName || o.productId, price: o.totalAmount || o.amount || 0, quantity: 1 }] : []);
+    for (const item of items) {
+      const pid = item.productId || item.name || "unknown";
+      const amt = parseFloat(item.price || 0) * parseInt(item.quantity || item.qty || 1);
+      if (!prodRev[pid]) prodRev[pid] = { name: _san(item.name || pid, 80), revenue: 0, units: 0 };
+      prodRev[pid].revenue += amt;
+      prodRev[pid].units   += parseInt(item.quantity || item.qty || 1);
+    }
+  }
+  const topProducts = Object.entries(prodRev)
+    .map(([id, v]) => ({ id, name: v.name, revenue: Math.round(v.revenue), units: v.units }))
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 10);
+
+  // Peak hours
+  const hourCounts = Array(24).fill(0);
+  for (const o of periodOrders) hourCounts[new Date(_toMs(o.createdAt)).getUTCHours()]++;
+  const peakHours = hourCounts
+    .map((count, hour) => ({ hour, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  // Peak days
+  const dayNames  = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const dayCounts = Array(7).fill(0);
+  for (const o of periodOrders) dayCounts[new Date(_toMs(o.createdAt)).getUTCDay()]++;
+  const peakDays = dayCounts
+    .map((count, day) => ({ day: dayNames[day], count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+
+  // Repeat purchase rate + CLV (all-time)
+  const custAll = {};
+  for (const o of allOrders) {
+    const cid = o.buyerId || o.buyerUid || o.customerId;
+    if (cid) custAll[cid] = (custAll[cid] || 0) + 1;
+  }
+  const uniqueCustomers      = Object.keys(custAll).length;
+  const repeatCustomers      = Object.values(custAll).filter(c => c > 1).length;
+  const repeatPurchaseRate   = uniqueCustomers > 0 ? Math.round((repeatCustomers / uniqueCustomers) * 100) : 0;
+  const allTimeRevenue       = allOrders.reduce((s, o) => s + parseFloat(o.totalAmount || o.amount || o.total || 0), 0);
+  const customerLifetimeValue = uniqueCustomers > 0 ? Math.round(allTimeRevenue / uniqueCustomers) : 0;
+
+  return {
+    period:               `${days}d`,
+    totalRevenue:         Math.round(totalRevenue),
+    totalOrders:          periodOrders.length,
+    avgOrderValue:        completedOrders.length > 0 ? Math.round(totalRevenue / completedOrders.length) : 0,
+    dailyRevenue,
+    topProducts,
+    peakHours,
+    peakDays,
+    repeatPurchaseRate,
+    customerLifetimeValue,
+    platformFees:         Math.round(platformFees || commTotal),
+    netRevenue:           Math.round(netRevenue),
+    uniqueCustomers,
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════
+   9. getMerchantBenchmark
+═══════════════════════════════════════════════════════════ */
+const getMerchantBenchmark = onCall(CF_OPTS, async (req) => {
+  _requireAuth(req);
+  const uid    = req.auth.uid;
+  const shopId = _sanId(req.data?.shopId);
+
+  const shop       = await _assertSellerAccess(shopId, uid);
+  const myCategory = _san(shop.category || "General", 80);
+
+  const [myOrdersSnap, peersSnap] = await Promise.all([
+    db.collection("orders").where("shopId",   "==", shopId).limit(200).get(),
+    db.collection("shops").where("category",  "==", myCategory).limit(20).get(),
+  ]);
+
+  const myOrders    = myOrdersSnap.docs.map(d => d.data());
+  const myCompleted = myOrders.filter(o => ["completed", "delivered", "paid"].includes(o.status)).length;
+  const myCompletionRate = myOrders.length > 0
+    ? Math.round((myCompleted / myOrders.length) * 100)
+    : 100;
+  const myRating = parseFloat(shop.rating || shop.averageRating || 0);
+
+  const myMetrics = {
+    rating:          myRating,
+    productCount:    parseInt(shop.productCount || 0),
+    completionRate:  myCompletionRate,
+    avgResponseTime: _san(shop.responseTime || "", 50) || "Not set",
+  };
+
+  // Aggregate peers — never expose individual shop IDs
+  const peers       = peersSnap.docs.filter(d => d.id !== shopId).map(d => d.data());
+  const peerRatings = peers.map(p => parseFloat(p.rating || p.averageRating || 0)).filter(r => r > 0);
+  const peerProdCounts = peers.map(p => parseInt(p.productCount || 0));
+
+  const avgRating    = peerRatings.length > 0
+    ? peerRatings.reduce((s, r) => s + r, 0) / peerRatings.length
+    : 4.2;
+  const avgProductCount = peerProdCounts.length > 0
+    ? Math.round(peerProdCounts.reduce((s, c) => s + c, 0) / peerProdCounts.length)
+    : 10;
+
+  const below      = peerRatings.filter(r => r < myRating).length;
+  const percentile = peerRatings.length > 0 ? Math.round((below / peerRatings.length) * 100) : 50;
+
+  const message = percentile >= 75
+    ? "You are in the top 25% of shops in your category. Keep it up!"
+    : percentile >= 50
+      ? "You are above average. Small improvements can push you to the top quartile."
+      : "There is room to improve. Focus on your health score factors to move up.";
+
+  return {
+    myMetrics,
+    benchmarks: {
+      avgRating:         parseFloat(avgRating.toFixed(1)),
+      avgProductCount,
+      avgCompletionRate: 85, // platform-wide default
+      topQuartileRevenue: null,
+    },
+    rank: { percentile, message },
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════
+   10. getMerchantAutomations
+═══════════════════════════════════════════════════════════ */
+const getMerchantAutomations = onCall(CF_OPTS, async (req) => {
+  _requireAuth(req);
+  const uid    = req.auth.uid;
+  const shopId = _sanId(req.data?.shopId);
+
+  await _assertSellerAccess(shopId, uid);
 
   const snap = await db.collection("merchantAutomations")
     .where("shopId", "==", shopId)
     .limit(20)
     .get();
 
-  const automations = snap.docs.map(d => d.data());
-  return { automations, shopId };
+  const automations = snap.docs.map(d => ({
+    id:       d.id,
+    name:     d.data().name || d.data().type,
+    type:     d.data().type,
+    trigger:  d.data().trigger  || {},
+    action:   d.data().action   || {},
+    active:   d.data().active  !== false,
+    lastRun:  d.data().lastRun  || null,
+    runCount: d.data().runCount || 0,
+  }));
+
+  return { automations };
 });
 
 /* ═══════════════════════════════════════════════════════════
-   10. getMerchantAcademy
-   6-module growth curriculum + user progress.
-   Static content only — no Firestore reads for curriculum.
+   11. saveMerchantAutomation
 ═══════════════════════════════════════════════════════════ */
-const ACADEMY_CURRICULUM = [
-  {
-    moduleId: "module_1",
-    title:    "Getting Started",
-    icon:     "🏪",
-    description: "Set up your shop for success from day one.",
-    lessons: [
-      { lessonId: "m1_l1", title: "Setting up your SOKONI shop",   duration: "5 min",  description: "Complete your shop profile, add your logo, and set your trading hours." },
-      { lessonId: "m1_l2", title: "Claiming your custom handle",   duration: "3 min",  description: "Secure your unique MiniShop URL (e.g. sokoni.co.ke/@yourshop)." },
-      { lessonId: "m1_l3", title: "Adding your first 5 products",  duration: "10 min", description: "Step-by-step guide to listing products with photos, prices, and stock." },
-      { lessonId: "m1_l4", title: "Completing your seller profile", duration: "5 min", description: "Add your business story, contact details, and delivery areas." },
-    ],
-  },
-  {
-    moduleId: "module_2",
-    title:    "Product Listings",
-    icon:     "📦",
-    description: "Create listings that attract buyers and drive sales.",
-    lessons: [
-      { lessonId: "m2_l1", title: "Product photography tips for mobile", duration: "8 min",  description: "Take great product photos with any smartphone — lighting, angles, and backgrounds." },
-      { lessonId: "m2_l2", title: "Writing descriptions that sell",      duration: "7 min",  description: "Use the AIDA formula to write compelling product descriptions buyers trust." },
-      { lessonId: "m2_l3", title: "Pricing strategy for the Kenyan market", duration: "6 min", description: "How to price competitively, use anchoring, and plan markdowns." },
-      { lessonId: "m2_l4", title: "Categories and tags",                duration: "4 min",  description: "Get found in search by choosing the right category and relevant keywords." },
-    ],
-  },
-  {
-    moduleId: "module_3",
-    title:    "Customer Service",
-    icon:     "🤝",
-    description: "Build trust, earn loyalty, and turn buyers into fans.",
-    lessons: [
-      { lessonId: "m3_l1", title: "Setting and meeting response-time expectations", duration: "5 min",  description: "Why a fast reply wins the sale — and how to manage your inbox efficiently." },
-      { lessonId: "m3_l2", title: "Handling complaints and returns",                duration: "8 min",  description: "Turn unhappy buyers into loyal customers with a professional complaints process." },
-      { lessonId: "m3_l3", title: "Building buyer trust on SOKONI",                duration: "6 min",  description: "Verified badges, consistent branding, and transparent policies." },
-      { lessonId: "m3_l4", title: "Getting and responding to reviews",              duration: "5 min",  description: "How to encourage honest reviews and reply professionally to all feedback." },
-    ],
-  },
-  {
-    moduleId: "module_4",
-    title:    "Marketing & Promotions",
-    icon:     "📣",
-    description: "Reach more buyers without spending a fortune.",
-    lessons: [
-      { lessonId: "m4_l1", title: "WhatsApp marketing for Kenyan sellers", duration: "10 min", description: "Use WhatsApp Status, groups, and broadcast lists to promote for free." },
-      { lessonId: "m4_l2", title: "Sharing your MiniShop link effectively", duration: "5 min", description: "Where and how to share your SOKONI shop link for maximum reach." },
-      { lessonId: "m4_l3", title: "Creating coupons and discount codes",    duration: "6 min", description: "Set up time-limited promotions that create urgency and drive orders." },
-      { lessonId: "m4_l4", title: "Running a successful flash sale",        duration: "7 min", description: "Plan, announce, execute, and follow up on a flash sale for maximum impact." },
-    ],
-  },
-  {
-    moduleId: "module_5",
-    title:    "Inventory Management",
-    icon:     "📊",
-    description: "Never run out of stock — and never over-invest in slow movers.",
-    lessons: [
-      { lessonId: "m5_l1", title: "Tracking stock in SOKONI",            duration: "5 min",  description: "Use the inventory dashboard to monitor stock levels across all products." },
-      { lessonId: "m5_l2", title: "Identifying fast and slow movers",    duration: "6 min",  description: "Use your sales data to spot winners and cut dead stock early." },
-      { lessonId: "m5_l3", title: "Setting reorder points",              duration: "4 min",  description: "Calculate your minimum stock level and never miss a sale." },
-      { lessonId: "m5_l4", title: "Clearing dead stock profitably",      duration: "7 min",  description: "Bundle deals, clearance sales, and trade-ins — strategies to recover margin." },
-    ],
-  },
-  {
-    moduleId: "module_6",
-    title:    "Growing Your Business",
-    icon:     "🚀",
-    description: "Scale sustainably with data, loyalty, and referrals.",
-    lessons: [
-      { lessonId: "m6_l1", title: "Setting up a loyalty programme",      duration: "7 min",  description: "Reward repeat buyers with points, discounts, or early access to new stock." },
-      { lessonId: "m6_l2", title: "Referral marketing on SOKONI",        duration: "5 min",  description: "How the SOKONI referral system works and how to maximise it." },
-      { lessonId: "m6_l3", title: "Reading your analytics dashboard",    duration: "8 min",  description: "Understand your revenue trends, peak hours, and customer lifetime value." },
-      { lessonId: "m6_l4", title: "Scaling from 1 shop to a brand",      duration: "10 min", description: "Multi-product strategy, supplier relationships, and building a team." },
-    ],
-  },
-];
-
-exports.getMerchantAcademy = onCall(CF_OPTS, async (req) => {
+const saveMerchantAutomation = onCall(CF_OPTS, async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
-  const db     = getFirestore();
+  const ruleId = req.data?.ruleId ? _san(req.data.ruleId, 128) : null;
+  const name   = _san(req.data?.name || "", 200);
+  const type   = _san(req.data?.type || "", 60);
+  const active = req.data?.active !== false;
 
-  /* ownership check (light) */
-  await _requireOwnership(db, shopId, uid);
+  if (!name)                            throw new HttpsError("invalid-argument", "Automation name is required");
+  if (!VALID_AUTOMATION_TYPES.has(type)) throw new HttpsError("invalid-argument", `Invalid type. Allowed: ${[...VALID_AUTOMATION_TYPES].join(", ")}`);
 
-  /* fetch progress from Firestore — single doc lookup */
-  const progressSnap = await db.collection("merchantAcademyProgress").doc(shopId).get();
-  const progressData  = progressSnap.exists ? progressSnap.data() : {};
-  const completed     = Array.isArray(progressData.completedLessons) ? progressData.completedLessons : [];
-  const completedSet  = new Set(completed);
+  await _assertSellerAccess(shopId, uid);
 
-  const totalLessons    = ACADEMY_CURRICULUM.reduce((s, m) => s + m.lessons.length, 0);
-  const completedCount  = completed.filter(lid => {
-    return ACADEMY_CURRICULUM.some(m => m.lessons.some(l => l.lessonId === lid));
-  }).length;
+  const trigger = (typeof req.data?.trigger === "object" && !Array.isArray(req.data.trigger)) ? req.data.trigger : {};
+  const action  = (typeof req.data?.action  === "object" && !Array.isArray(req.data.action))  ? req.data.action  : {};
 
-  /* enrich curriculum with completion status */
-  const modules = ACADEMY_CURRICULUM.map(mod => ({
-    ...mod,
-    completed:   mod.lessons.every(l => completedSet.has(l.lessonId)),
-    completedCount: mod.lessons.filter(l => completedSet.has(l.lessonId)).length,
-    lessons: mod.lessons.map(l => ({
-      ...l,
-      completed: completedSet.has(l.lessonId),
-    })),
-  }));
+  const ts  = admin.firestore.Timestamp.now();
+  const ref = ruleId
+    ? db.collection("merchantAutomations").doc(ruleId)
+    : db.collection("merchantAutomations").doc();
 
-  return {
-    modules,
-    progress: {
-      completed:        completedCount,
-      total:            totalLessons,
-      percentage:       Math.round((completedCount / totalLessons) * 100),
-      completedLessons: completed,
-      lastAccessedAt:   _toMs(progressData.lastAccessedAt) || null,
-    },
-    shopId,
-  };
+  const data = { shopId, name, type, trigger, action, active, updatedAt: ts, updatedBy: uid };
+  if (!ruleId) { data.createdAt = ts; data.createdBy = uid; data.runCount = 0; }
+
+  await ref.set(data, { merge: !!ruleId });
+
+  return { id: ref.id, success: true };
 });
 
 /* ═══════════════════════════════════════════════════════════
-   11. completeMerchantLesson
-   Mark a lesson as complete; idempotent.
+   12. toggleMerchantAutomation
 ═══════════════════════════════════════════════════════════ */
-
-/** Set of valid lesson IDs derived from curriculum */
-const ALL_LESSON_IDS = new Set(
-  ACADEMY_CURRICULUM.flatMap(m => m.lessons.map(l => l.lessonId))
-);
-
-exports.completeMerchantLesson = onCall(CF_OPTS, async (req) => {
+const toggleMerchantAutomation = onCall(CF_OPTS, async (req) => {
   _requireAuth(req);
-  const uid      = req.auth.uid;
-  const shopId   = _sanId(req.data?.shopId);
-  const lessonId = _san(req.data?.lessonId || "", 60);
-  const db       = getFirestore();
+  const uid    = req.auth.uid;
+  const shopId = _sanId(req.data?.shopId);
+  const ruleId = _san(req.data?.ruleId || "", 128);
+  const active = Boolean(req.data?.active);
 
-  if (!ALL_LESSON_IDS.has(lessonId)) {
-    throw new HttpsError("invalid-argument", "Invalid lessonId");
+  if (!ruleId) throw new HttpsError("invalid-argument", "ruleId is required");
+
+  await _assertSellerAccess(shopId, uid);
+
+  const ruleRef  = db.collection("merchantAutomations").doc(ruleId);
+  const ruleSnap = await ruleRef.get();
+  if (!ruleSnap.exists)                    throw new HttpsError("not-found", "Automation rule not found");
+  if (ruleSnap.data().shopId !== shopId)   throw new HttpsError("permission-denied", "Rule does not belong to this shop");
+
+  await ruleRef.update({ active, updatedAt: admin.firestore.Timestamp.now() });
+
+  return { success: true, active };
+});
+
+/* ═══════════════════════════════════════════════════════════
+   13. createMerchantCampaign
+═══════════════════════════════════════════════════════════ */
+const createMerchantCampaign = onCall(CF_AI_OPTS, async (req) => {
+  _requireAuth(req);
+  const uid             = req.auth.uid;
+  const shopId          = _sanId(req.data?.shopId);
+  const type            = _san(req.data?.type || "", 60);
+  const name            = _san(req.data?.name || "", 200);
+  const targetSegment   = _san(req.data?.targetSegment || "all", 50);
+  const discountPercent = Math.min(80, Math.max(0, parseInt(req.data?.discountPercent || 0)));
+  let   message         = _san(req.data?.message || "", 1600);
+
+  if (!VALID_CAMPAIGN_TYPES.has(type)) throw new HttpsError("invalid-argument", `Invalid campaign type. Allowed: ${[...VALID_CAMPAIGN_TYPES].join(", ")}`);
+  if (!name)                           throw new HttpsError("invalid-argument", "Campaign name is required");
+
+  const shop = await _assertSellerAccess(shopId, uid);
+
+  // Generate message with Haiku if not provided
+  if (!message) {
+    const prompt = `Write a ${type.replace(/_/g, " ")} marketing message for a ${_san(shop.category || "retail", 60)} business called "${_san(shop.name || shop.shopName || "our shop", 80)}" in Kenya. Keep it under 160 characters. Be warm, specific, and action-oriented. Include a call to action.`;
+    try {
+      message = (await _callClaude(prompt, 200)).trim().slice(0, 1600);
+    } catch (_e) {
+      message = `Special offer from ${_san(shop.name || "our shop", 50)}! Shop now at sokoni.co.ke`;
+    }
   }
 
-  await _requireOwnership(db, shopId, uid);
-
-  const ref = db.collection("merchantAcademyProgress").doc(shopId);
-
-  await ref.set({
+  const campaignRef = db.collection("merchantCampaigns").doc();
+  await campaignRef.set({
     shopId,
-    uid,
-    completedLessons: FieldValue.arrayUnion(lessonId),
-    lastAccessedAt:   Timestamp.now(),
-  }, { merge: true });
+    type,
+    name,
+    targetSegment,
+    message,
+    discountPercent,
+    status:    "draft",
+    createdAt: admin.firestore.Timestamp.now(),
+    createdBy: uid,
+    stats:     { sent: 0, opens: 0, clicks: 0, orders: 0, revenue: 0 },
+  });
 
-  return { success: true, lessonId, shopId };
+  return { campaignId: campaignRef.id, message, success: true };
 });
+
+/* ═══════════════════════════════════════════════════════════
+   14. getMerchantCampaigns
+═══════════════════════════════════════════════════════════ */
+const getMerchantCampaigns = onCall(CF_OPTS, async (req) => {
+  _requireAuth(req);
+  const uid    = req.auth.uid;
+  const shopId = _sanId(req.data?.shopId);
+
+  await _assertSellerAccess(shopId, uid);
+
+  const snap = await db.collection("merchantCampaigns")
+    .where("shopId", "==", shopId)
+    .limit(20)
+    .get();
+
+  return { campaigns: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
+});
+
+/* ═══════════════════════════════════════════════════════════
+   15. getMerchantAcademy
+═══════════════════════════════════════════════════════════ */
+const getMerchantAcademy = onCall(CF_OPTS, async (req) => {
+  _requireAuth(req);
+  const uid = req.auth.uid;
+
+  // Progress keyed by uid (single doc-ID lookup)
+  const progressSnap = await db.collection("academyProgress").doc(uid).get();
+  const pData        = progressSnap.exists ? progressSnap.data() : { completedLessons: [], totalXP: 0 };
+  const completedSet = new Set(Array.isArray(pData.completedLessons) ? pData.completedLessons : []);
+  const totalXP      = parseInt(pData.totalXP || 0);
+
+  const totalLessons = ACADEMY_MODULES.reduce((s, m) => s + m.lessons.length, 0);
+  const completedCount = [...completedSet].filter(id => ALL_LESSON_IDS.has(id)).length;
+
+  const modules = ACADEMY_MODULES.map(mod => {
+    const doneInMod = mod.lessons.filter(l => completedSet.has(l.id)).length;
+    return {
+      ...mod,
+      completedCount: doneInMod,
+      progress:       Math.round((doneInMod / mod.lessons.length) * 100),
+      completed:      doneInMod === mod.lessons.length,
+      lessons:        mod.lessons.map(l => ({ ...l, completed: completedSet.has(l.id) })),
+    };
+  });
+
+  let level;
+  if      (completedCount >= totalLessons)           level = "Expert";
+  else if (completedCount >= totalLessons * 0.6)     level = "Advanced";
+  else if (completedCount >= totalLessons * 0.3)     level = "Intermediate";
+  else                                               level = "Beginner";
+
+  let nextLesson = null;
+  outer: for (const mod of ACADEMY_MODULES) {
+    for (const l of mod.lessons) {
+      if (!completedSet.has(l.id)) {
+        nextLesson = { moduleId: mod.id, moduleTitle: mod.title, ...l };
+        break outer;
+      }
+    }
+  }
+
+  return { modules, totalLessons, completedLessons: completedCount, totalXP, level, nextLesson };
+});
+
+/* ═══════════════════════════════════════════════════════════
+   16. updateAcademyProgress
+═══════════════════════════════════════════════════════════ */
+const updateAcademyProgress = onCall(CF_OPTS, async (req) => {
+  _requireAuth(req);
+  const uid      = req.auth.uid;
+  const lessonId = _san(req.data?.lessonId || "", 20);
+  const moduleId = _san(req.data?.moduleId || "", 20);
+
+  if (!ALL_LESSON_IDS.has(lessonId)) throw new HttpsError("invalid-argument", "Invalid lessonId");
+
+  const ref = db.collection("academyProgress").doc(uid);
+
+  return db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const data = snap.exists ? snap.data() : { completedLessons: [], totalXP: 0 };
+    const completedArr = Array.isArray(data.completedLessons) ? data.completedLessons : [];
+    const completedSet = new Set(completedArr);
+
+    const isNew     = !completedSet.has(lessonId);
+    let xpEarned    = 0;
+    let newBadge    = null;
+
+    if (isNew) {
+      completedSet.add(lessonId);
+      xpEarned += 10;
+
+      // Module completion bonus
+      if (moduleId && MODULE_LESSON_MAP[moduleId]) {
+        const modDone = [...MODULE_LESSON_MAP[moduleId]].every(id => completedSet.has(id));
+        if (modDone) { xpEarned += 50; newBadge = `${moduleId}_complete`; }
+      }
+
+      // All-modules completion bonus
+      if ([...ALL_LESSON_IDS].every(id => completedSet.has(id))) {
+        xpEarned += 200;
+        newBadge  = "all_modules_complete";
+      }
+    }
+
+    const totalXP = parseInt(data.totalXP || 0) + xpEarned;
+
+    tx.set(ref, {
+      uid,
+      completedLessons: admin.firestore.FieldValue.arrayUnion(lessonId),
+      totalXP,
+      updatedAt: admin.firestore.Timestamp.now(),
+    }, { merge: true });
+
+    return { success: true, xpEarned, totalXP, newBadge };
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   17. generateMerchantContent
+═══════════════════════════════════════════════════════════ */
+const generateMerchantContent = onCall(CF_AI_OPTS, async (req) => {
+  _requireAuth(req);
+  const uid         = req.auth.uid;
+  const shopId      = _sanId(req.data?.shopId);
+  const contentType = _san(req.data?.contentType || "", 50);
+  const context     = _san(req.data?.context || "", 1000);
+
+  if (!VALID_CONTENT_TYPES.has(contentType)) {
+    throw new HttpsError("invalid-argument", `Invalid contentType. Allowed: ${[...VALID_CONTENT_TYPES].join(", ")}`);
+  }
+
+  const shop = await _assertSellerAccess(shopId, uid);
+
+  // Rate-limit: 20 AI content calls per uid per day
+  const rlKey = `${uid}_${_todayStr()}`;
+  await db.runTransaction(async tx => {
+    const rlRef  = db.collection("aiContentRL").doc(rlKey);
+    const rlSnap = await tx.get(rlRef);
+    const count  = rlSnap.exists ? (rlSnap.data().count || 0) : 0;
+    if (count >= 20) throw new HttpsError("resource-exhausted", "Content generation limit: 20 per day. Try again tomorrow.");
+    tx.set(rlRef, { count: count + 1, uid, updatedAt: admin.firestore.Timestamp.now() }, { merge: true });
+  });
+
+  const shopName = _san(shop.name || shop.shopName || "our shop", 80);
+  const category = _san(shop.category || "retail", 60);
+
+  const prompts = {
+    product_description: `Write a compelling product description for a ${category} business in Kenya called "${shopName}". Product details: ${context || "a quality item"}. Under 200 words. Focus on benefits, local context, and end with a call to action.`,
+    shop_bio:            `Write a professional shop bio for "${shopName}", a ${category} business in Kenya. Context: ${context || "a trusted local business"}. Under 150 words. Warm, professional, trust-building.`,
+    whatsapp_status:     `Write 3 WhatsApp status update options for "${shopName}" (${category}) in Kenya. Context: ${context || "general promotion"}. Each under 100 characters. Engaging and action-oriented.`,
+    campaign_message:    `Write a marketing campaign message for "${shopName}" (${category}) in Kenya. Campaign: ${context || "general promotion"}. Under 160 characters. Warm, specific, clear call to action.`,
+    response_template:   `Write a professional customer service response template for "${shopName}" (${category}) in Kenya. Situation: ${context || "general inquiry"}. Under 100 words. Friendly, include [Customer Name] placeholder.`,
+    flash_sale_text:     `Write an exciting flash sale announcement for "${shopName}" (${category}) in Kenya. Sale details: ${context || "up to 30% off selected items, today only"}. Under 150 characters. Urgency and excitement.`,
+  };
+
+  const content = await _callClaude(prompts[contentType], 400);
+
+  return { content, contentType };
+});
+
+/* ═══════════════════════════════════════════════════════════
+   EXPORTS
+═══════════════════════════════════════════════════════════ */
+module.exports = {
+  getMerchantDashboard,
+  getMerchantHealthScore,
+  getMerchantAICoach,
+  getMerchantOpportunities,
+  getMerchantCRM,
+  updateCustomerNote,
+  getMerchantInventoryIntelligence,
+  getMerchantFinancials,
+  getMerchantBenchmark,
+  getMerchantAutomations,
+  saveMerchantAutomation,
+  toggleMerchantAutomation,
+  createMerchantCampaign,
+  getMerchantCampaigns,
+  getMerchantAcademy,
+  updateAcademyProgress,
+  generateMerchantContent,
+};
