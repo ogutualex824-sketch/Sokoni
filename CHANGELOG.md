@@ -1,4 +1,177 @@
-﻿## [2026-07-08] — Logistics+ (Sprint 4.4)
+﻿## [2026-07-08] — Phase 3: Enterprise Scalability & Distributed Systems
+
+### Summary
+Full enterprise architecture upgrade across 14 new files (~10,500 lines). Adds observability, resilience, API gateway, webhook delivery, distributed task queue, client performance SDK, and comprehensive architecture documentation. Platform is now instrumented end-to-end, protected by circuit breakers and dead-letter queues, and ready to scale to millions of users.
+
+### New Cloud Functions (71 CFs)
+
+#### Analytics Engine (`functions/analytics-engine.js`) — 34 CFs
+| Function | Type | Purpose |
+|---|---|---|
+| `salesGetSummary` | onCall | Revenue KPIs: GMV, orders, AOV, conversion rate |
+| `salesGetTimeSeries` | onCall | Revenue trend by day/week/month |
+| `salesGetByCategory` | onCall | Revenue breakdown by product category |
+| `salesGetByChannel` | onCall | Revenue by channel (online/POS/wholesale) |
+| `salesGetPaymentMethodBreakdown` | onCall | M-Pesa vs card vs wallet split |
+| `salesGetTopProducts` | onCall | Top products by revenue/quantity |
+| `salesGetHourlyHeatmap` | onCall | Orders by hour-of-day × day-of-week |
+| `analyticsTrackEvent` | onCall | Client-side event ingestion (page_view, add_to_cart, etc.) |
+| `analyticsGetFunnel` | onCall | Checkout funnel drop-off analysis |
+| `analyticsGetTopPages` | onCall | Most-visited pages by sessions |
+| `analyticsGetSearchTerms` | onCall | Search queries, zero-results rate |
+| `analyticsGetCartAbandonment` | onCall | Cart abandonment rate + abandoned revenue |
+| `analyticsGetTrafficSources` | onCall | Acquisition channel analysis |
+| `cohortGetRetention` | onCall | Weekly cohort retention grid |
+| `cohortGetLTV` | onCall | Customer lifetime value by cohort |
+| `cohortGetNewVsReturning` | onCall | New vs returning customer revenue split |
+| `cohortGetChurn` | onCall | Churn rate and at-risk customers |
+| `cohortGetTopBuyers` | onCall | Top buyers by spend/frequency |
+| `productGetSalesVelocity` | onCall | Sales velocity (units/day) per product |
+| `productGetReturnRate` | onCall | Return/refund rate by product |
+| `productGetReviewSentiment` | onCall | AI sentiment score from product reviews |
+| `productGetMarginAnalysis` | onCall | Gross margin per product (requires cost data) |
+| `productGetInventoryTurnover` | onCall | Stock turn ratio by category |
+| `productGetSlowMovers` | onCall | Slow-moving inventory (no sale in 30 days) |
+| `analyticsGetRealtimeSnapshot` | onCall | Live: active sessions, events/min, revenue today |
+| `analyticsGetPlatformSnapshot` | onCall | Platform-wide: error rates, CF p95 latency |
+| `analyticsGetOrderStatusBreakdown` | onCall | Order status distribution |
+| `analyticsGetAverageDeliveryTime` | onCall | Mean delivery time by zone/rider |
+| `analyticsGetStaffPerformance` | onCall | Staff KPIs: sales/shift, cashier accuracy |
+| `reportCreate` | onCall | Save custom report definition |
+| `reportList` | onCall | List saved reports |
+| `reportDelete` | onCall | Delete saved report |
+| `analyticsExport` | onCall | CSV/JSON export of any metric |
+| `analyticsSnapshotDaily` | onSchedule (24h) | Materialise daily analytics to Firestore |
+
+#### Observability Engine (`functions/observability-engine.js`) — 10 CFs
+| Function | Type | Purpose |
+|---|---|---|
+| `obsIngestTelemetry` | onCall | Batch ingest of client telemetry (errors, perf, events) |
+| `obsGetErrorReport` | onCall | Aggregated error report with frequency, trend, affected users |
+| `obsGetPerformanceReport` | onCall | P50/P75/P95/P99 for LCP, FCP, TTFB by page |
+| `obsGetRealTimeMetrics` | onCall | Last-5-minute active sessions, error rate, top pages |
+| `obsScheduledAggregation` | onSchedule (1h) | Hourly metric rollup + raw event cleanup (30-day retention) |
+| `obsGetAuditLog` | onCall | Search audit log by user, action, date range |
+| `obsCreateAlert` | onCall | Configure metric threshold alert |
+| `obsCheckAlerts` | onSchedule (5min) | Evaluate alerts, fire notifications on breach |
+| `obsDistributedTrace` | onCall | Record a distributed trace span (7-day retention) |
+| `obsHealthProbe` | onRequest | Public health check endpoint for uptime monitors |
+
+#### Reliability Engine (`functions/reliability-engine.js`) — 9 CFs
+| Function | Type | Purpose |
+|---|---|---|
+| `relEnqueueTask` | onCall | Add task to dead-letter / retry queue |
+| `relGetDeadLetterQueue` | onCall | List failed tasks (admin) |
+| `relRetryDeadLetter` | onCall | Requeue a dead-letter task (admin) |
+| `relPurgeDeadLetter` | onCall | Delete resolved dead-letter tasks (admin) |
+| `relCircuitBreakerState` | onCall | Read/force-open/force-close circuit breakers (admin) |
+| `relHealthProbeAll` | onCall | Check Firestore, Redis, IntaSend, Anthropic health |
+| `relScheduledHealthCheck` | onSchedule (5min) | Automated health check — alert on 3 consecutive failures |
+| `relScheduledRetryProcessor` | onSchedule (1min) | Process pending retries with exponential backoff |
+| `relGetSystemMetrics` | onCall | Queue depth, dead-letter count, CB states, health history |
+
+#### API Gateway (`functions/api-gateway.js`) — 3 CFs
+| Function | Type | Purpose |
+|---|---|---|
+| `sokoniAPIGateway` | onRequest | Central gateway: CORS, rate limiting, auth, versioning, routing, logging |
+| `gwGetMetrics` | onCall | Gateway analytics: requests by route/version/status, P95 latency |
+| `gwManageRateLimit` | onCall | Whitelist/blacklist/reset rate limit keys (admin) |
+
+#### Webhook Engine (`functions/webhook-engine.js`) — 8 CFs
+| Function | Type | Purpose |
+|---|---|---|
+| `webhookRegister` | onCall | Register endpoint; verify with ping; return HMAC secret |
+| `webhookList` | onCall | List caller's subscriptions |
+| `webhookDelete` | onCall | Soft-delete a subscription |
+| `webhookDeliver` | onCall | Trigger HMAC-signed delivery for an event |
+| `webhookRetryProcessor` | onSchedule (1min) | Process pending retries (exponential: 1min → 5min → 30min → 2h → 24h) |
+| `webhookGetDeliveries` | onCall | Paginated delivery history |
+| `webhookTestEndpoint` | onCall | Send test ping, return latency |
+| `webhookGetStats` | onCall | Platform-wide delivery success rate, avg latency, top failures |
+
+#### Task Queue (`functions/task-queue.js`) — 7 CFs
+| Function | Type | Purpose |
+|---|---|---|
+| `tqEnqueue` | onCall | Add task (type, payload, priority: critical/high/normal/low) |
+| `tqGetStatus` | onCall | Get task status |
+| `tqCancelTask` | onCall | Cancel a pending task (admin) |
+| `tqGetQueueStats` | onCall | Queue health: depth by status/priority, throughput, wait time |
+| `tqWorkerProcessor` | onSchedule (1min) | Claim + process tasks with distributed locking via runTransaction |
+| `tqScheduledCleanup` | onSchedule (24h) | Delete completed tasks >7 days, cancelled >1 day |
+| `tqBulkEnqueue` | onCall | Enqueue up to 100 tasks in one batch (admin) |
+
+### New Client SDKs (3 files)
+
+| File | Size | Purpose |
+|---|---|---|
+| `sokoni-observability.js` | 1,056 lines | Error tracking, Core Web Vitals, user journey, structured logging, remote reporting |
+| `sokoni-resilience.js` | 808 lines | Circuit breakers (3-state), exponential backoff + jitter, offline queue (IndexedDB), graceful degradation, client-side rate limiter |
+| `sokoni-performance.js` | 945 lines | Lazy loading (IntersectionObserver), WebP auto-wrapping, smart prefetch, code splitting on interaction, optimistic UI, stale-while-revalidate, background sync |
+
+All three SDKs are auto-injected via `shared-header.js` on every page.
+
+### New Documentation (3 files, 2,789 lines)
+
+| File | Purpose |
+|---|---|
+| `docs/ARCHITECTURE.md` | Enterprise architecture: 15 service domains, data model, sharding, security, observability, scaling gates, known bottlenecks |
+| `docs/SCALABILITY.md` | Scaling playbook: targets, horizontal scaling patterns, traffic projections, growth gate actions |
+| `ROADMAP.md` | Phases 1–6 with status, technical debt tracker, infrastructure checklist |
+
+### Supported Webhook Events
+`payment.completed`, `payment.failed`, `order.created`, `order.status_changed`, `delivery.updated`, `delivery.completed`, `booking.confirmed`, `booking.cancelled`, `ticket.purchased`, `refund.processed`, `dispute.opened`, `dispute.resolved`
+
+### Supported Task Types
+`SEND_NOTIFICATION`, `PROCESS_IMAGE`, `GENERATE_REPORT`, `SYNC_ANALYTICS`, `WARM_CACHE`, `CLEANUP_OLD_DATA`, `SEND_BULK_EMAIL`, `INDEX_PRODUCTS`, `COMPUTE_RECOMMENDATIONS`, `PROCESS_PAYOUT`
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `analyticsEvents` | Client event stream (page_view, add_to_cart, purchase, etc.) |
+| `analyticsDaily/{YYYY-MM-DD}` | Pre-aggregated daily analytics snapshots |
+| `savedReports/{id}` | Custom report definitions (owner-scoped) |
+| `_sokoniTelemetry` | Raw client telemetry events (30-day retention) |
+| `_sokoniErrors` | Structured error reports |
+| `_sokoniPerf` | Performance measurements |
+| `_sokoniEvents` | User journey events |
+| `_sokoniMetricsHourly/{YYYY-MM-DD-HH}` | Pre-aggregated hourly metric rollups |
+| `_sokoniAlerts` | Alert configurations |
+| `_sokoniAlertFired` | Alert trigger history |
+| `_sokoniTraces/{traceId}/spans/{spanId}` | Distributed trace spans (7-day) |
+| `_sokoniHealth` | Health check results (per probe run) |
+| `_sokoniTaskQueue` | Distributed task queue |
+| `_sokoniCircuitBreakers` | Circuit breaker state store (admin-controlled) |
+| `_gwRateLimit` | API gateway rate limit counters |
+| `_gwRequestLog` | Gateway request audit log |
+| `_gwRateLimitConfig` | Whitelist/blacklist configuration |
+| `webhookSubscriptions` | Registered webhook endpoints |
+| `webhookDeliveries` | Webhook delivery history and retry state |
+
+### Security Notes
+- Webhook deliveries signed with HMAC-SHA256; receivers can verify `X-Sokoni-Signature` header
+- API gateway enforces per-IP (100/15min) and per-UID (1000/15min) rate limits with `Retry-After` header
+- All admin-only CFs validate `auth.token.admin === true` before proceeding
+- Observability SDK never throws — fail-silent design ensures telemetry never breaks the app
+- Circuit breaker state persisted to sessionStorage — survives page reloads within same tab
+
+### Performance Notes
+- Observability batches events every 10s or 20-event threshold — minimal network overhead
+- Performance SDK uses IntersectionObserver (rootMargin: 200px) for lazy loading — images load before they scroll into view
+- Stale-while-revalidate pattern in `sokoni-performance.js` eliminates loading states for catalog pages
+- Task queue worker claims tasks inside `runTransaction` — no double-claiming under concurrent scheduler invocations
+
+### Deployment
+See DEPLOY_QUEUE.md for the 71-CF deploy command. All CFs use the existing nodejs22 runtime, 512MiB memory, 80 concurrency.
+
+### Infrastructure Actions Required (post-deploy)
+1. Enable Firestore multi-region (`nam5`) in GCP Console for disaster recovery
+2. Set `minInstances: 1` on `verifyIntasendPayment`, `sokoniAPIGateway`, `obsHealthProbe` in `firebase.json`
+3. Configure Cloud Monitoring uptime check on `obsHealthProbe` endpoint
+4. Set alert thresholds via `obsCreateAlert` CF for: error rate > 1%, P95 LCP > 3s
+
+---
+
+## [2026-07-08] — Logistics+ (Sprint 4.4)
 
 ### Summary
 SOKONI 4.0 Sprint 4.4 — full logistics operations layer. Adds fleet vehicle registry with maintenance and fuel log tracking, nearest-neighbor TSP route optimization (no external API), warehouse stock receive/putaway/pick/ship workflow with FEFO-aware inventory, delivery zone management (radius via Haversine + polygon via ray-casting), Kenya-tier cargo freight rate calculation with volumetric weight, and a 4-report analytics suite (delivery KPIs, rider leaderboard, zone performance, on-time trend).

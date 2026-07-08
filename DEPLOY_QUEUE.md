@@ -5,6 +5,80 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Phase 3 — Enterprise Scalability — 2026-07-08
+
+**Files:**
+- `functions/analytics-engine.js` — NEW (34 CFs)
+- `functions/observability-engine.js` — NEW (10 CFs)
+- `functions/reliability-engine.js` — NEW (9 CFs)
+- `functions/api-gateway.js` — NEW (3 CFs)
+- `functions/webhook-engine.js` — NEW (8 CFs)
+- `functions/task-queue.js` — NEW (7 CFs)
+- `sokoni-observability.js` — NEW (client SDK, auto-injected)
+- `sokoni-resilience.js` — NEW (client SDK, auto-injected)
+- `sokoni-performance.js` — NEW (client SDK, auto-injected)
+- `shared-header.js` — 3 new SDK injections added
+- `functions/index.js` — 71 new exports added
+- `docs/ARCHITECTURE.md` — updated to v4.0
+- `docs/SCALABILITY.md` — NEW (Enterprise Scalability reference doc)
+
+**Analytics Engine CFs (34 — analytics-engine.js):**
+
+| Export | Purpose |
+|---|---|
+| `salesGetSummary` | Revenue KPIs: GMV, orders, AOV, conversion |
+| `salesGetTimeSeries` | Revenue trend by day/week/month |
+| `salesGetByCategory` | Revenue breakdown by product category |
+| `salesGetByChannel` | Revenue by sales channel (online/POS/wholesale) |
+| `salesGetPaymentMethodBreakdown` | M-Pesa vs card vs wallet split |
+| `salesGetTopProducts` | Top products by revenue/quantity |
+| `salesGetHourlyHeatmap` | Orders by hour-of-day × day-of-week |
+| `analyticsTrackEvent` | Client-side event ingestion (page_view, add_to_cart, etc.) |
+| `analyticsGetFunnel` | Checkout funnel drop-off analysis |
+| `analyticsGetTopPages` | Most-visited pages by sessions |
+| `analyticsGetSearchTerms` | Search queries, zero-results rate |
+| `analyticsGetCartAbandonment` | Cart abandonment rate + abandoned revenue |
+| `analyticsGetTrafficSources` | Acquisition channel analysis |
+| `cohortGetRetention` | Weekly cohort retention grid |
+| `cohortGetLTV` | Customer lifetime value by cohort |
+| `cohortGetNewVsReturning` | New vs returning customer revenue split |
+| `cohortGetChurn` | Churn rate and at-risk customers |
+| `cohortGetTopBuyers` | Top buyers by spend/frequency |
+| `productGetSalesVelocity` | Sales velocity (units/day) per product |
+| `productGetReturnRate` | Return/refund rate by product |
+| `productGetReviewSentiment` | AI sentiment score from product reviews |
+| `productGetMarginAnalysis` | Gross margin per product (requires cost data) |
+| `productGetInventoryTurnover` | Stock turn ratio by category |
+| `productGetSlowMovers` | Slow-moving inventory (no sale in 30d) |
+| `analyticsGetRealtimeSnapshot` | Live: active sessions, events/min, revenue today |
+| `analyticsGetPlatformSnapshot` | Platform-wide health: error rates, p95 latency |
+| `analyticsGetOrderStatusBreakdown` | Order status distribution (pending/processing/shipped/etc.) |
+| `analyticsGetAverageDeliveryTime` | Mean delivery time by zone/rider |
+| `analyticsGetStaffPerformance` | Staff KPIs: sales/shift, cashier accuracy |
+| `reportCreate` | Save custom report definition |
+| `reportList` | List saved reports |
+| `reportDelete` | Delete saved report |
+| `analyticsExport` | CSV/JSON export of any metric |
+| `analyticsSnapshotDaily` | Scheduled: materialise daily analytics to Firestore |
+
+**Spot-deploy command (71 new CFs):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:salesGetSummary,functions:salesGetTimeSeries,functions:salesGetByCategory,functions:salesGetByChannel,functions:salesGetPaymentMethodBreakdown,functions:salesGetTopProducts,functions:salesGetHourlyHeatmap,functions:analyticsTrackEvent,functions:analyticsGetFunnel,functions:analyticsGetTopPages,functions:analyticsGetSearchTerms,functions:analyticsGetCartAbandonment,functions:analyticsGetTrafficSources,functions:cohortGetRetention,functions:cohortGetLTV,functions:cohortGetNewVsReturning,functions:cohortGetChurn,functions:cohortGetTopBuyers,functions:productGetSalesVelocity,functions:productGetReturnRate,functions:productGetReviewSentiment,functions:productGetMarginAnalysis,functions:productGetInventoryTurnover,functions:productGetSlowMovers,functions:analyticsGetRealtimeSnapshot,functions:analyticsGetPlatformSnapshot,functions:analyticsGetOrderStatusBreakdown,functions:analyticsGetAverageDeliveryTime,functions:analyticsGetStaffPerformance,functions:reportCreate,functions:reportList,functions:reportDelete,functions:analyticsExport,functions:analyticsSnapshotDaily,functions:obsIngestTelemetry,functions:obsGetErrorReport,functions:obsGetPerformanceReport,functions:obsGetRealTimeMetrics,functions:obsScheduledAggregation,functions:obsGetAuditLog,functions:obsCreateAlert,functions:obsCheckAlerts,functions:obsDistributedTrace,functions:obsHealthProbe,functions:relEnqueueTask,functions:relGetDeadLetterQueue,functions:relRetryDeadLetter,functions:relPurgeDeadLetter,functions:relCircuitBreakerState,functions:relHealthProbeAll,functions:relScheduledHealthCheck,functions:relScheduledRetryProcessor,functions:relGetSystemMetrics,functions:sokoniAPIGateway,functions:gwGetMetrics,functions:gwManageRateLimit,functions:webhookRegister,functions:webhookList,functions:webhookDelete,functions:webhookDeliver,functions:webhookRetryProcessor,functions:webhookGetDeliveries,functions:webhookTestEndpoint,functions:webhookGetStats,functions:tqEnqueue,functions:tqGetStatus,functions:tqCancelTask,functions:tqGetQueueStats,functions:tqWorkerProcessor,functions:tqScheduledCleanup,functions:tqBulkEnqueue" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+**Hosting deploy (new client SDKs):**
+```bash
+firebase deploy --only hosting
+```
+
+**Post-deploy steps:**
+1. Set `minInstances: 1` in `firebase.json` for `sokoniAPIGateway` and `obsHealthProbe`
+2. Configure Cloud Monitoring uptime check on `https://us-central1-sokoni-aeb26.cloudfunctions.net/obsHealthProbe`
+3. Create initial alerts via `obsCreateAlert` CF: error_rate > 0.01, p95_lcp > 3000
+4. Enable Firestore multi-region in GCP Console (Settings → Multi-region: nam5)
+
+---
+
 ## Logistics+ (Sprint 4.4) — 2026-07-08
 
 **Files:**

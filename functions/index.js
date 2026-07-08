@@ -9471,3 +9471,103 @@ exports.logisticsGetDeliveryReport  = logPlus.logisticsGetDeliveryReport;
 exports.logisticsGetRiderLeaderboard = logPlus.logisticsGetRiderLeaderboard;
 exports.logisticsGetZonePerformance = logPlus.logisticsGetZonePerformance;
 exports.logisticsGetOnTimeRate      = logPlus.logisticsGetOnTimeRate;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PHASE 3 — Enterprise Scalability & Distributed Systems
+   ─────────────────────────────────────────────────────────────────────────
+   All new exports are namespaced to prevent collisions:
+     obs*  — Observability Engine
+     rel*  — Reliability Engine
+     sokoniAPIGateway / gw* — API Gateway
+     webhook* — Webhook Engine
+     tq*   — Task Queue
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Observability Engine (10 CFs) ─────────────────────────────────────── */
+const obsEng = require('./observability-engine');
+exports.obsIngestTelemetry      = obsEng.obsIngestTelemetry;
+exports.obsGetErrorReport       = obsEng.obsGetErrorReport;
+exports.obsGetPerformanceReport = obsEng.obsGetPerformanceReport;
+exports.obsGetRealTimeMetrics   = obsEng.obsGetRealTimeMetrics;
+exports.obsScheduledAggregation = obsEng.obsScheduledAggregation;
+exports.obsGetAuditLog          = obsEng.obsGetAuditLog;
+exports.obsCreateAlert          = obsEng.obsCreateAlert;
+exports.obsCheckAlerts          = obsEng.obsCheckAlerts;
+exports.obsDistributedTrace     = obsEng.obsDistributedTrace;
+exports.obsHealthProbe          = obsEng.obsHealthProbe;
+
+/* ── Reliability Engine (9 CFs) ─────────────────────────────────────────── */
+const rel = require('./reliability-engine');
+exports.relEnqueueTask              = rel.relEnqueueTask;
+exports.relGetDeadLetterQueue       = rel.relGetDeadLetterQueue;
+exports.relRetryDeadLetter          = rel.relRetryDeadLetter;
+exports.relPurgeDeadLetter          = rel.relPurgeDeadLetter;
+exports.relCircuitBreakerState      = rel.relCircuitBreakerState;
+exports.relHealthProbeAll           = rel.relHealthProbeAll;
+exports.relScheduledHealthCheck     = rel.relScheduledHealthCheck;
+exports.relScheduledRetryProcessor  = rel.relScheduledRetryProcessor;
+exports.relGetSystemMetrics         = rel.relGetSystemMetrics;
+
+/* ── API Gateway (3 CFs) ─────────────────────────────────────────────────── */
+const gw = require('./api-gateway');
+exports.sokoniAPIGateway  = gw.sokoniAPIGateway;
+exports.gwGetMetrics      = gw.gwGetMetrics;
+exports.gwManageRateLimit = gw.gwManageRateLimit;
+
+/* ── Webhook Engine (8 CFs) ─────────────────────────────────────────────── */
+const wh = require('./webhook-engine');
+exports.webhookRegister      = wh.webhookRegister;
+exports.webhookList          = wh.webhookList;
+exports.webhookDelete        = wh.webhookDelete;
+exports.webhookDeliver       = wh.webhookDeliver;
+exports.webhookRetryProcessor = wh.webhookRetryProcessor;
+exports.webhookGetDeliveries = wh.webhookGetDeliveries;
+exports.webhookTestEndpoint  = wh.webhookTestEndpoint;
+exports.webhookGetStats      = wh.webhookGetStats;
+
+/* ── Task Queue (7 CFs) ──────────────────────────────────────────────────── */
+const tq = require('./task-queue');
+exports.tqEnqueue           = tq.tqEnqueue;
+exports.tqGetStatus         = tq.tqGetStatus;
+exports.tqCancelTask        = tq.tqCancelTask;
+exports.tqGetQueueStats     = tq.tqGetQueueStats;
+exports.tqWorkerProcessor   = tq.tqWorkerProcessor;
+exports.tqScheduledCleanup  = tq.tqScheduledCleanup;
+exports.tqBulkEnqueue       = tq.tqBulkEnqueue;
+
+/* ── Analytics Engine (34 CFs) ───────────────────────────────────────────── */
+const ae = require('./analytics-engine');
+exports.salesGetSummary                  = ae.salesGetSummary;
+exports.salesGetTimeSeries               = ae.salesGetTimeSeries;
+exports.salesGetByCategory               = ae.salesGetByCategory;
+exports.salesGetByChannel                = ae.salesGetByChannel;
+exports.salesGetPaymentMethodBreakdown   = ae.salesGetPaymentMethodBreakdown;
+exports.salesGetTopProducts              = ae.salesGetTopProducts;
+exports.salesGetHourlyHeatmap            = ae.salesGetHourlyHeatmap;
+exports.analyticsTrackEvent              = ae.analyticsTrackEvent;
+exports.analyticsGetFunnel               = ae.analyticsGetFunnel;
+exports.analyticsGetTopPages             = ae.analyticsGetTopPages;
+exports.analyticsGetSearchTerms          = ae.analyticsGetSearchTerms;
+exports.analyticsGetCartAbandonment      = ae.analyticsGetCartAbandonment;
+exports.analyticsGetTrafficSources       = ae.analyticsGetTrafficSources;
+exports.cohortGetRetention               = ae.cohortGetRetention;
+exports.cohortGetLTV                     = ae.cohortGetLTV;
+exports.cohortGetNewVsReturning          = ae.cohortGetNewVsReturning;
+exports.cohortGetChurn                   = ae.cohortGetChurn;
+exports.cohortGetTopBuyers               = ae.cohortGetTopBuyers;
+exports.productGetSalesVelocity          = ae.productGetSalesVelocity;
+exports.productGetReturnRate             = ae.productGetReturnRate;
+exports.productGetReviewSentiment        = ae.productGetReviewSentiment;
+exports.productGetMarginAnalysis         = ae.productGetMarginAnalysis;
+exports.productGetInventoryTurnover      = ae.productGetInventoryTurnover;
+exports.productGetSlowMovers             = ae.productGetSlowMovers;
+exports.analyticsGetRealtimeSnapshot     = ae.analyticsGetRealtimeSnapshot;
+exports.analyticsGetPlatformSnapshot     = ae.analyticsGetPlatformSnapshot;
+exports.analyticsGetOrderStatusBreakdown = ae.analyticsGetOrderStatusBreakdown;
+exports.analyticsGetAverageDeliveryTime  = ae.analyticsGetAverageDeliveryTime;
+exports.analyticsGetStaffPerformance     = ae.analyticsGetStaffPerformance;
+exports.reportCreate                     = ae.reportCreate;
+exports.reportList                       = ae.reportList;
+exports.reportDelete                     = ae.reportDelete;
+exports.analyticsExport                  = ae.analyticsExport;
+exports.analyticsSnapshotDaily           = ae.analyticsSnapshotDaily;

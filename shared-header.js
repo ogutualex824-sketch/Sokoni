@@ -21,6 +21,154 @@
     h.style.color = 'var(--txt,#e8e8e8)';
   }());
 
+  /* ── SPLASH SCREEN — unique per page, runs on every page load ────────
+     Injects a full-screen branded splash overlay immediately, before any
+     content paints, then fades out once the page is ready (min 1.8 s).
+     Opt out on a page with: <html data-no-splash="true">
+     Each page gets a unique tagline derived from its filename.        */
+  (function _splash() {
+    if (document.documentElement.dataset.noSplash === 'true') return;
+    if (window.self !== window.top) return; // no splash inside iframes
+
+    const _pg = (location.pathname.split('/').pop().split('?')[0] || 'index.html').toLowerCase();
+
+    /* ── Per-page taglines — unique identity for every section ── */
+    const _T = {
+      /* Core */
+      'index.html':                   { line: "Kenya's Digital Marketplace",   bar: '#71ff00' },
+      'search.html':                  { line: 'Find Anything, Instantly',       bar: '#71ff00' },
+      'cart.html':                    { line: 'Your Cart Awaits',               bar: '#71ff00' },
+      'checkout.html':                { line: 'Almost There — Secure Checkout', bar: '#00bcd4' },
+      'profile.html':                 { line: 'Your SOKONI Account',            bar: '#71ff00' },
+      /* Marketplace */
+      'marketplace.html':             { line: 'Thousands of Sellers. One Home.',bar: '#71ff00' },
+      'auction.html':                 { line: 'Bid Smart. Win Big.',            bar: '#ffb300' },
+      'auction-manager.html':         { line: 'Manage Your Auctions',           bar: '#ffb300' },
+      'rental.html':                  { line: 'Rent Anything, Anytime.',        bar: '#00bcd4' },
+      'digital-store.html':           { line: 'Download the Future.',           bar: '#71ff00' },
+      /* Finance */
+      'finance-budget.html':          { line: 'Every Shilling, Accounted For', bar: '#71ff00' },
+      'finance-expenses.html':        { line: 'Expenses Under Control',         bar: '#ffb300' },
+      'finance-invoices.html':        { line: 'Invoice. Send. Get Paid.',       bar: '#71ff00' },
+      'finance-reconcile.html':       { line: 'Books Always Balanced.',         bar: '#00bcd4' },
+      /* Logistics */
+      'fleet-manager.html':           { line: 'Your Fleet. Always Moving.',     bar: '#71ff00' },
+      'route-planner.html':           { line: 'Smarter Routes. Faster Delivery.',bar:'#00bcd4'},
+      'warehouse.html':               { line: 'Stock In. Orders Out.',          bar: '#71ff00' },
+      'logistics-reports.html':       { line: 'Logistics Performance. Visualised.',bar:'#71ff00'},
+      'delivery-zones.html':          { line: 'Coverage That Reaches Further',  bar: '#00bcd4' },
+      /* Analytics */
+      'analytics.html':               { line: 'Insights That Drive Growth',     bar: '#71ff00' },
+      /* SmartPOS */
+      'pos.html':                     { line: 'Point of Sale. Powered by AI.',  bar: '#71ff00' },
+      'pos-checkout.html':            { line: 'Fast Checkout. Every Time.',     bar: '#71ff00' },
+      'pos-daily.html':               { line: 'Start Strong. Close Stronger.',  bar: '#ffb300' },
+      'pos-observability.html':       { line: 'Real-Time Store Intelligence',   bar: '#00bcd4' },
+      'pos-marketplace.html':         { line: 'Your Store Meets the Marketplace',bar:'#71ff00'},
+      /* Merchant & Seller */
+      'merchant-success.html':        { line: 'Built to Help You Grow',         bar: '#71ff00' },
+      'seller.html':                  { line: 'Your Business Dashboard',        bar: '#71ff00' },
+      'seller-success.html':          { line: 'Success Starts Here',            bar: '#71ff00' },
+      'minishop.html':                { line: 'Your Shop, Your Brand.',         bar: '#71ff00' },
+      /* Community & Social */
+      'events.html':                  { line: 'Life Is Better Live.',           bar: '#ffb300' },
+      'event-hub.html':               { line: 'Discover What\'s Happening',     bar: '#ffb300' },
+      'messages.html':                { line: 'Your Conversations. Secured.',   bar: '#00bcd4' },
+      /* People */
+      'jobs.html':                    { line: 'Find Your Next Opportunity.',    bar: '#71ff00' },
+      'healthcare.html':              { line: 'Health, Closer to Home.',        bar: '#00bcd4' },
+      'education.html':               { line: 'Learn Without Limits.',          bar: '#71ff00' },
+      'entertainment.html':           { line: 'Your Next Favourite Thing.',     bar: '#ffb300' },
+      /* Loyalty & Wallet */
+      'loyalty.html':                 { line: 'Earn. Redeem. Repeat.',          bar: '#ffb300' },
+      'wallet.html':                  { line: 'Your Digital Wallet.',           bar: '#71ff00' },
+      /* Property & Assets */
+      'property.html':                { line: 'Find Your Space.',               bar: '#71ff00' },
+      'bnb.html':                     { line: 'Stay Anywhere in Kenya.',        bar: '#ffb300' },
+      'car-rental.html':              { line: 'Drive on Demand.',               bar: '#71ff00' },
+      /* Hubs */
+      'food.html':                    { line: 'Hungry? We\'ve Got You.',        bar: '#ffb300' },
+      'services.html':                { line: 'Every Service, One Place.',      bar: '#71ff00' },
+      'banking.html':                 { line: 'Financial Freedom. Simplified.', bar: '#00bcd4' },
+      'construction.html':            { line: 'Build Something Lasting.',       bar: '#71ff00' },
+      /* Customer */
+      'track.html':                   { line: 'Your Order, Every Step.',        bar: '#00bcd4' },
+      'dispute.html':                 { line: 'We\'ve Got You Covered.',        bar: '#ffb300' },
+      'reviews.html':                 { line: 'Your Voice Matters.',            bar: '#71ff00' },
+      /* Admin */
+      'admin-os.html':                { line: 'Platform Command Centre.',       bar: '#71ff00' },
+      'super-admin.html':             { line: 'Superadmin Dashboard.',          bar: '#71ff00' },
+      'automation-center.html':       { line: 'Intelligence. Automated.',       bar: '#00bcd4' },
+      'security-center.html':         { line: 'Zero Trust. Total Control.',     bar: '#f44336' },
+      /* Driver */
+      'driver.html':                  { line: 'Delivering Joy, Every Day.',     bar: '#71ff00' },
+      'rider-nav.html':               { line: 'Navigate. Deliver. Earn.',       bar: '#71ff00' },
+      /* Onboarding */
+      'login.html':                   { line: 'Welcome Back.',                  bar: '#71ff00' },
+      'signup.html':                  { line: 'Join SOKONI Today.',             bar: '#71ff00' },
+      /* Trust & Legal */
+      'trust-and-safety.html':        { line: 'Safe. Fair. Trusted.',           bar: '#00bcd4' },
+      'help.html':                    { line: 'We\'re Here to Help.',           bar: '#71ff00' },
+    };
+
+    const cfg = _T[_pg] || { line: 'One Platform. Endless Possibilities.', bar: '#71ff00' };
+
+    /* ── Inject blocking CSS before body renders ── */
+    const style = document.createElement('style');
+    style.id = 'sk-splash-css';
+    style.textContent = [
+      '#sk-splash{position:fixed;inset:0;z-index:2147483647;background:#050505;',
+        'display:flex;align-items:center;justify-content:center;',
+        'transition:opacity .55s cubic-bezier(.4,0,.2,1);will-change:opacity}',
+      '#sk-splash.out{opacity:0;pointer-events:none}',
+      '.sk-sp-inner{text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px}',
+      '.sk-sp-logo{width:min(260px,68vw);height:auto;object-fit:contain;',
+        'animation:skSplashUp .65s cubic-bezier(.22,1,.36,1) both}',
+      '.sk-sp-line{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;',
+        'font-size:clamp(12px,2.8vw,15px);font-weight:600;color:rgba(255,255,255,.5);',
+        'letter-spacing:.05em;animation:skSplashUp .7s .18s cubic-bezier(.22,1,.36,1) both}',
+      '.sk-sp-bar{width:min(140px,36vw);height:2px;background:rgba(255,255,255,.07);',
+        'border-radius:2px;overflow:hidden;animation:skSplashUp .6s .08s cubic-bezier(.22,1,.36,1) both}',
+      '.sk-sp-fill{height:100%;border-radius:2px;width:0%;',
+        'animation:skFill 1.7s .1s cubic-bezier(.4,0,.2,1) forwards}',
+      '@keyframes skSplashUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}',
+      '@keyframes skFill{to{width:100%}}',
+    ].join('');
+    (document.head || document.documentElement).appendChild(style);
+
+    /* ── Build the overlay ── */
+    const el = document.createElement('div');
+    el.id = 'sk-splash';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML =
+      '<div class="sk-sp-inner">' +
+        '<img class="sk-sp-logo" src="assets/Sokoni Logo.png" alt="SOKONI">' +
+        '<div class="sk-sp-line">' + cfg.line + '</div>' +
+        '<div class="sk-sp-bar"><div class="sk-sp-fill" style="background:' + cfg.bar + '"></div></div>' +
+      '</div>';
+
+    /* Insert as first child of body, or body-substitute if body not yet parsed */
+    function _mount() {
+      const target = document.body || document.documentElement;
+      target.insertBefore(el, target.firstChild);
+    }
+    if (document.body) { _mount(); }
+    else { document.addEventListener('DOMContentLoaded', _mount, { once: true }); }
+
+    /* ── Dismiss: wait for page load + minimum display time ── */
+    const _MIN = 1900;
+    const _start = Date.now();
+    function _dismiss() {
+      const wait = Math.max(0, _MIN - (Date.now() - _start));
+      setTimeout(function () {
+        el.classList.add('out');
+        setTimeout(function () { el.remove(); style.remove(); }, 600);
+      }, wait);
+    }
+    if (document.readyState === 'complete') { _dismiss(); }
+    else { window.addEventListener('load', _dismiss, { once: true }); }
+  }());
+
   /* ── PHASE 1: Infrastructure injection — runs on EVERY page ──────────
      All pages get tokens/UI/layout/notif regardless of nav exclusion.
      This gives every page: design tokens, toast system, layout manager,
@@ -50,6 +198,19 @@
   _injectAsset('script', { src: 'sokoni-notif-center.js', defer: true }, 'sk-notif-center-script');
   /* Zero Trust client SDK — device fingerprint, risk cache, step-up auth guard */
   _injectAsset('script', { src: 'sokoni-zero-trust.js', defer: true }, 'sk-zero-trust-script');
+  /* Phase 3 — Performance SDK: lazy loading, WebP, prefetch, optimistic UI */
+  _injectAsset('script', { src: 'sokoni-performance.js', defer: true }, 'sk-performance-script');
+  /* Phase 3 — Resilience SDK: circuit breakers, retry, offline queue */
+  _injectAsset('script', { src: 'sokoni-resilience.js', defer: true }, 'sk-resilience-script');
+  /* Phase 3 — Observability SDK: error tracking, Core Web Vitals, user journey */
+  _injectAsset('script', { src: 'sokoni-observability.js', defer: true }, 'sk-observability-script');
+
+  /* Initialize Observability after page load */
+  (function () {
+    window.addEventListener('load', function () {
+      if (window.SokoniObservability) { window.SokoniObservability.init(); }
+    }, { once: true });
+  }());
 
   /* Initialize Zero Trust after Firebase auth is available */
   (function () {
@@ -292,12 +453,15 @@
       display: flex; align-items: center; flex-shrink: 0; text-decoration: none;
     }
     #sk-nav-logo img {
-      height: 52px; width: auto; object-fit: contain; display: block;
-      filter: drop-shadow(0 0 14px rgba(113,255,0,0.32));
-      transition: filter .25s;
+      height: 44px; width: auto; object-fit: contain; display: block;
+      /* mix-blend-mode:screen makes the black PNG background transparent on dark surfaces */
+      mix-blend-mode: screen;
+      filter: drop-shadow(0 0 10px rgba(113,255,0,0.28));
+      transition: filter .25s, transform .2s;
     }
     #sk-nav-logo:hover img {
-      filter: drop-shadow(0 0 16px rgba(113,255,0,0.42));
+      filter: drop-shadow(0 0 16px rgba(113,255,0,0.48));
+      transform: scale(1.04);
     }
     #sk-nav-logo-text {
       font-size: 20px; font-weight: 900; color: #71ff00; letter-spacing: .03em;
@@ -590,7 +754,7 @@
     nav.innerHTML =
       /* Logo */
       '<a href="/" id="sk-nav-logo" aria-label="SOKONI Home">' +
-        '<img src="assets/Sokonilogo2.png" alt="SOKONI" ' +
+        '<img src="assets/Sokoni Logo.png" alt="SOKONI" ' +
           'onerror="this.style.display=\'none\';document.getElementById(\'sk-nav-logo-text\').style.display=\'block\'">' +
         '<span id="sk-nav-logo-text" style="display:none;">SOKONI</span>' +
       '</a>' +

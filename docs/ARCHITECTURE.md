@@ -1,1185 +1,1182 @@
-# SOKONI Next-Generation Enterprise Platform Architecture
+# SOKONI Enterprise Architecture Reference
 
+**Version:** 4.0  
 **Status:** Production  
-**Version:** 3.0  
-**Date:** 2026-07-07  
-**Previous:** v2.0 (2026-06-28)
+**Date:** 2026-07-08  
+**Previous:** v3.0 (2026-07-07)  
+**Authors:** SOKONI Engineering Team  
+**Scope:** Full platform — ~600 Cloud Functions, all service domains, all data layers
 
 ---
 
 ## Table of Contents
 
-1. [Vision and Guiding Principles](#1-vision-and-guiding-principles)
-2. [Platform Overview](#2-platform-overview)
-3. [Layered Architecture](#3-layered-architecture)
-4. [Application Layer — Core Engines](#4-application-layer--core-engines)
-5. [Event-Driven Architecture](#5-event-driven-architecture)
-6. [SmartPOS Ecosystem](#6-smartpos-ecosystem)
-7. [Payment Orchestration](#7-payment-orchestration)
-8. [Redis Operational Layer](#8-redis-operational-layer)
-9. [Observability and Operations Center](#9-observability-and-operations-center)
-10. [Self-Healing Architecture](#10-self-healing-architecture)
-11. [Data Architecture](#11-data-architecture)
-12. [Security Architecture](#12-security-architecture)
-13. [API Design Patterns](#13-api-design-patterns)
-14. [Scalability Design](#14-scalability-design)
-15. [Developer Experience Standards](#15-developer-experience-standards)
-16. [Infrastructure Map](#16-infrastructure-map)
-17. [Performance Targets](#17-performance-targets)
-18. [Module Catalog](#18-module-catalog)
-19. [Deployment Architecture](#19-deployment-architecture)
-20. [Architecture Decision Records](#20-architecture-decision-records)
+1. [Architecture Overview](#1-architecture-overview)
+2. [Service Boundaries — Modular Microservices on Cloud Functions](#2-service-boundaries--modular-microservices-on-cloud-functions)
+3. [Data Architecture](#3-data-architecture)
+4. [Performance Architecture](#4-performance-architecture)
+5. [Resilience Architecture](#5-resilience-architecture)
+6. [Security Architecture](#6-security-architecture)
+7. [Observability Architecture](#7-observability-architecture)
+8. [Known Bottlenecks and Mitigations](#8-known-bottlenecks-and-mitigations)
+9. [Module Catalog](#9-module-catalog)
+10. [Architecture Decision Records](#10-architecture-decision-records)
 
 ---
 
-## 1. Vision and Guiding Principles
+## 1. Architecture Overview
 
-### Vision
+### 1.1 System Diagram
 
-SOKONI is a unified digital commerce ecosystem for Kenya and East Africa. The architecture must support the full spectrum of business scale — from a single-person hawker using SmartPOS to a 200-branch retail chain — without requiring a rewrite at any scale transition. Every architectural decision is tested against the question: _does this hold at 10x current scale?_
-
-### Guiding Principles
-
-**1. Firestore is the truth.** Every business record, financial transaction, and audit event is written to Firestore first and lives there permanently. Redis, Algolia, and any other secondary store are caches and coordination layers — not records.
-
-**2. Failure is assumed.** Every module is written assuming that its dependencies (Redis, Search, third-party APIs) can fail at any time. Graceful degradation is not an edge case — it is the default execution path.
-
-**3. Events, not calls.** Modules communicate via a platform event bus. A payment completion triggers downstream effects (inventory release, notification, commission calculation, loyalty points) by publishing one event. Subscribing modules react independently. No module calls another module's functions directly.
-
-**4. One contract per engine.** Each engine exposes a stable typed interface. Internal implementation can change freely. External callers depend only on the contract.
-
-**5. Operational transparency.** Every significant action — every order, every payment, every delivery state change, every admin action — is observable in real time from the Operations Center. Nothing is invisible.
-
-**6. Security by default.** Authentication, authorisation, rate limiting, input sanitisation, and audit logging are applied at the perimeter (API layer) before business logic executes. No engine assumes a clean input without validation.
-
-**7. Build for maintenance.** Code that is written once but read a thousand times must be clear. Reuse over repetition. Named services over scattered inline logic. Documentation is part of the deliverable.
-
----
-
-## 2. Platform Overview
-
-SOKONI is composed of nine platform verticals, all sharing a common infrastructure:
-
-| Vertical | Description | Key Modules |
-|---|---|---|
-| **Marketplace** | Multi-vendor e-commerce | Product catalog, orders, reviews, seller management |
-| **SmartPOS** | Cloud-connected point of sale | POS engine, peripheral hub, payment terminals, customer display |
-| **Logistics** | Delivery management | Rider dispatch, tracking, GPS, delivery pricing |
-| **Services** | Professional service bookings | Venue/resource booking, job board, healthcare, legal, education |
-| **Foundation** | Social impact vertical | Donation engine, disbursements, impact reporting |
-| **AI** | AI-powered assistance | KASS concierge, AI subscriptions, creative studio |
-| **SmartFinance** | Financial management | Commission engine, FinOS, payroll, eTIMS, reconciliation |
-| **Commerce OS** | Business operations suite | HR, procurement, marketing engine, business health |
-| **Enterprise** | Platform administration | Admin OS, Super Admin, analytics, CRM, B2B wholesale |
-
----
-
-## 3. Layered Architecture
+SOKONI is a five-tier progressive web platform deployed entirely on Google Cloud Platform. Traffic flows from the global CDN edge through a Firebase-enforced API gateway into a modular service layer that reads and writes a Firestore system of record, with Redis providing sub-second operational state.
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  PRESENTATION LAYER                                                          ║
+║  TIER 1 — EDGE (CDN)                                                         ║
 ║                                                                              ║
-║  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐  ║
-║  │  Web PWA │ │  Mobile  │ │ SmartPOS │ │  Admin   │ │   Super Admin    │  ║
-║  │(Chromium)│ │(Responsive│ │(pos.html)│ │(admin-os)│ │(super-admin.html)│  ║
-║  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────────┬─────────┘  ║
-╚═══════╪══════════════╪══════════════╪══════════════╪═══════════════╪══════════╝
-        │              │              │              │               │
-        │  Firebase SDK (Firestore listener, Auth, Functions, Storage)
-        │              │              │              │               │
-╔═══════╪══════════════╪══════════════╪══════════════╪═══════════════╪══════════╗
-║  API LAYER                                                                   ║
+║  Firebase Hosting CDN (global PoPs) + Cloudflare (WAF, DDoS, canary)        ║
+║  Static assets: HTML, CSS, JS, fonts, images — Cache-Control: immutable      ║
+║  Service Worker (sokoni-vN) — offline-first, cache-then-network for shell    ║
+╚══════════════════════════════════╤═══════════════════════════════════════════╝
+                                   │ HTTPS / Firebase SDK
+╔══════════════════════════════════▼═══════════════════════════════════════════╗
+║  TIER 2 — API GATEWAY                                                        ║
 ║                                                                              ║
-║  ┌─────────────────────┐  ┌─────────────────┐  ┌──────────────────────────┐ ║
-║  │  Callable Functions │  │   HTTP Functions │  │   Firestore Triggers     │ ║
-║  │  (enforceAppCheck)  │  │   (Webhooks,     │  │   (onCreated/Updated)    │ ║
-║  │  Auth-gated         │  │    Public APIs)  │  │   event-driven reactions │ ║
-║  └──────────┬──────────┘  └────────┬─────────┘  └───────────┬──────────────┘ ║
-║             │                      │                         │               ║
-║  ┌──────────▼──────────────────────▼─────────────────────────▼─────────────┐ ║
-║  │  MIDDLEWARE: Auth guard │ Rate limiter │ Input validation │ App Check    │ ║
+║  ┌──────────────────────────┐  ┌─────────────────────┐  ┌─────────────────┐ ║
+║  │  Callable Functions       │  │  HTTP Functions      │  │ Firestore Trig. │ ║
+║  │  enforceAppCheck: true    │  │  Webhooks / Public   │  │ onCreated etc.  │ ║
+║  │  Auth-gated + RBAC        │  │  HMAC verified       │  │ Event reactions │ ║
+║  └──────────┬───────────────┘  └──────────┬──────────┘  └────────┬────────┘ ║
+║             │                             │                       │          ║
+║  ┌──────────▼─────────────────────────────▼───────────────────────▼────────┐ ║
+║  │  MIDDLEWARE CHAIN                                                        │ ║
+║  │  App Check attestation → Firebase Auth → Custom claims (RBAC)           │ ║
+║  │  → Rate limiter (Redis INCR / Firestore fallback)                       │ ║
+║  │  → Input sanitisation + amount validation                                │ ║
+║  │  → Audit log pre-write                                                   │ ║
 ║  └──────────────────────────────────────────────────────────────────────────┘ ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-        │
-╔═══════▼═══════════════════════════════════════════════════════════════════════╗
-║  APPLICATION LAYER — Business Engines                                        ║
+╚══════════════════════════════════╤═══════════════════════════════════════════╝
+                                   │
+╔══════════════════════════════════▼═══════════════════════════════════════════╗
+║  TIER 3 — SERVICE LAYER (~600 Cloud Functions, Gen2, Node.js 22)             ║
 ║                                                                              ║
-║  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐ ║
-║  │ Order Engine │  │Payment Engine│  │Delivery Engine│  │Inventory Engine  │ ║
-║  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────────┘ ║
-║  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐ ║
-║  │   AI Engine  │  │ Notif Engine │  │   POS Engine │  │Foundation Engine │ ║
-║  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────────┘ ║
+║  Auth     Marketplace  Commerce  Delivery  Booking   Financial   Loyalty     ║
+║  Service   Service     Service   Service   Service   Service     Service     ║
 ║                                                                              ║
-║  ┌──────────────────────────────────────────────────────────────────────────┐ ║
-║  │  PLATFORM EVENT BUS  (platform-event-bus.js)                             │ ║
-║  │  Publish → Fan-out → Subscribe → Deliver → Dead-letter → Retry          │ ║
-║  └──────────────────────────────────────────────────────────────────────────┘ ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-        │                            │
-╔═══════▼════════════╗    ╔══════════▼═══════════════════════════════════════╗
-║  REDIS — FAST LAYER ║    ║  INFRASTRUCTURE LAYER                           ║
-║  (operational state) ║    ║                                                 ║
-║  • Live POS sync    ║    ║  ┌─────────────────────────────────────────┐    ║
-║  • Active sessions  ║    ║  │  Firestore (source of truth)             │    ║
-║  • Presence/locks   ║    ║  │  Cloud Storage  │  Firebase Auth          │    ║
-║  • Rate limiting    ║    ║  │  Algolia        │  Typesense               │    ║
-║  • Job queues       ║    ║  │  Secret Manager │  Cloud Scheduler         │    ║
-║  • Dashboard counters║   ║  │  Cloud Logging  │  Cloud Monitoring        │    ║
-║  • Search/AI cache  ║    ║  └─────────────────────────────────────────┘    ║
-║  Graceful fallback  ║    ╚══════════════════════════════════════════════════╝
-╚═════════════════════╝
+║  Notification  Messaging  AI      SmartPOS  Analytics  Admin   Media  Hubs  ║
+║  Service       Service    Service Service   Service    Service  Service      ║
+║                                                                              ║
+║  ┌──────────────────────────────────────────────────────────────────────────┐║
+║  │  PLATFORM EVENT BUS (platform-event-bus.js)                              ║
+║  │  Publish → Firestore platformEvents → Fan-out → Dead-letter → Replay    │║
+║  └──────────────────────────────────────────────────────────────────────────┘║
+╚════════════════════╤═════════════════════════════╤════════════════════════════╝
+                     │                             │
+╔════════════════════▼══════════╗  ╔══════════════▼══════════════════════════╗
+║  TIER 4a — REDIS FAST LAYER   ║  ║  TIER 4b — FIRESTORE (SOURCE OF TRUTH)  ║
+║  (operational / ephemeral)    ║  ║  (durable / permanent)                  ║
+║                               ║  ║                                         ║
+║  • Rate limiting (INCR)       ║  ║  • All business records                 ║
+║  • Payment locks (NX, 30s)    ║  ║  • All financial transactions           ║
+║  • Inventory locks (NX, 2m)   ║  ║  • All audit trails                     ║
+║  • POS cart sync (500ms)      ║  ║  • All user profiles                    ║
+║  • Dashboard counters         ║  ║  • PITR enabled                         ║
+║  • Job queues (8 channels)    ║  ║  • 197+ composite indexes               ║
+║  • Search / AI response cache ║  ║  • Second DB: sokoni-ops (overflow)     ║
+║  • Rider/terminal presence    ║  ║                                         ║
+║  Fallback: Firestore on miss  ║  ║                                         ║
+╚═══════════════════════════════╝  ╚═════════════════════════════════════════╝
+                     │
+╔════════════════════▼═══════════════════════════════════════════════════════╗
+║  TIER 5 — EXTERNAL APIS                                                    ║
+║                                                                            ║
+║  IntaSend (M-Pesa STK + Cards)  │  Anthropic (Claude claude-haiku-4-5, claude-sonnet-4-6)   ║
+║  Africa's Talking (SMS)         │  SendGrid (Email, 53 templates)         ║
+║  Typesense (Search, Swahili NLP)│  Algolia (Search fallback / analytics)  ║
+║  OSRM (Route calculation)       │  Firebase Storage (Media, Receipts)     ║
+╚════════════════════════════════════════════════════════════════════════════╝
 ```
 
-### Layer Responsibilities
+### 1.2 Platform Tiers Summary
 
-| Layer | Owns | Does Not Own |
+| Tier | Component | Responsibility |
 |---|---|---|
-| Presentation | UI state, local form validation, UX flow | Business rules, data persistence |
-| API | Authentication, authorisation, rate limiting, input validation, routing | Business logic |
-| Application | Business rules, state transitions, event publishing | Data storage, presentation |
-| Event Bus | Event routing, fan-out, delivery guarantees, dead-letter | Business logic of subscribers |
-| Redis | Ephemeral operational state, coordination | Permanent records |
-| Infrastructure | Durable storage, auth, compute | Application concerns |
+| Edge | Firebase Hosting CDN + Cloudflare | Global static asset delivery, DDoS protection, cache |
+| API Gateway | Cloud Functions middleware chain | Auth, rate limiting, input validation, routing |
+| Service Layer | ~600 Cloud Functions (Gen2, Node 22) | All business logic, event publishing |
+| Data Layer | Firestore + Redis + Cloud Storage | Durable records + operational state + media |
+| External APIs | IntaSend, Anthropic, SendGrid, Typesense | Payments, AI, email, search |
+
+### 1.3 Current Tech Stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| Frontend | HTML5 PWA, vanilla JS | All 130+ pages, mobile-first |
+| Hosting | Firebase Hosting | CDN, clean URLs, SSL, CORS |
+| Functions | Cloud Functions Gen2, Node.js 22 | All backend logic (~600 CFs) |
+| Database | Google Cloud Firestore | System of record, real-time listeners |
+| Cache | Google Cloud Memorystore (Redis 7) | Operational state, queues, rate limiting |
+| Storage | Firebase Cloud Storage | Images, PDFs, receipts, backups |
+| Auth | Firebase Authentication | Email, Google, Phone, Facebook OAuth |
+| AI | Anthropic (claude-haiku-4-5 + claude-sonnet-4-6) | KASS concierge, insights, creative studio |
+| Payments | IntaSend (M-Pesa STK + Cards) | All payment processing |
+| Search | Typesense (primary) + Algolia (analytics) | Full-text search, Swahili NLP |
+| SMS | Africa's Talking | SMS delivery for Kenya |
+| Email | SendGrid | Transactional email (53 templates) |
+| Routing | OSRM | Delivery route calculation |
+| Monitoring | Cloud Monitoring + Cloud Logging | 19 alert policies, structured logs |
+| Secrets | GCP Secret Manager | All credentials (never in code) |
 
 ---
 
-## 4. Application Layer — Core Engines
+## 2. Service Boundaries — Modular Microservices on Cloud Functions
 
-Each engine is a self-contained set of Cloud Functions with a stable external interface. Engines communicate exclusively via the event bus or direct CF calls — never by sharing Firestore collections directly without a defined contract.
+Each service domain owns its Cloud Function modules and its Firestore collections. Cross-domain data access must go through the owning service's API (a Cloud Function), never by reading another domain's collection directly from client code.
 
-### 4.1 Order Engine
+### 2.1 Auth Service
 
-**Files:** `functions/orders.js`, `functions/order-lifecycle.js`  
-**Collections:** `orders`, `orderItems`, `orderHistory`
+**Responsibility:** Identity, attestation, role assignment, session management, Zero Trust evaluation.
 
-Responsibilities:
-- Accept new orders from marketplace, POS, and B2B channels
-- Validate: product existence, stock availability, pricing integrity, seller status
-- Assign order numbers (sequential, human-readable: `ORD-240706-00123`)
-- Manage order status lifecycle: `draft → confirmed → processing → packed → shipped → delivered → completed`
-- Publish `order.*` events on every state transition
-- Support multi-seller orders (split into sub-orders per seller)
-- Calculate and record applicable commissions via Commission Engine
+**CF Modules:**
+- `functions/auth.js` — register, login, logout, custom claims assignment
+- `functions/security.js` — Zero Trust evaluation, session validation, brute-force lockout
+- `sokoni-appcheck.js` — App Check bootstrap (client SDK)
+- `sokoni-zero-trust.js` — Zero Trust client SDK (injected globally via shared-header.js)
 
-Order state machine:
+**Collections Owned:**
 ```
-draft
-  └─► confirmed ──► processing ──► packed ──► shipped ──► delivered ──► completed
-  │       │             │            │
-  └───────┴─────────────┴────────────┴──────────────────────────────► cancelled
-                                                                           │
-                                                                        refunded
+users/{uid}
+  └─ fcmTokens/{tokenId}
+userSessions/{sessionId}
+securityAuditLog/{entryId}
+authAttempts/{uid}
+trustedDevices/{deviceId}
 ```
 
-### 4.2 Payment Engine
+**Key Behaviours:**
+- All custom claims (`seller`, `admin`, `rider`, `owner`, etc.) set server-side via `admin.auth().setCustomUserClaims()` — never client-side
+- App Check enforced on all Cloud Functions (ReCaptchaV3 for web)
+- Zero Trust: every request evaluated regardless of network origin; device posture + IP reputation + behaviour signals combined into trust score
+- Brute-force: 5 failed login attempts → 15-minute lockout (Firestore-backed, not Redis, so it survives Redis unavailability)
+- Session idle timeout: configurable (default 2 hours)
 
-**Files:** `functions/payment-orchestrator.js`  
-**Collections:** `payments`, `paymentHistory`, `paymentIdempotency`
+---
 
-Responsibilities:
-- Provide a single entry point for all payment methods
-- Enforce idempotency: reject duplicate payment attempts for the same order
-- Manage the payment state machine with validated transitions
-- Support: M-Pesa (IntaSend STK), Cards (IntaSend), Wallet (internal), Bank Transfer (future), QR (SmartPOS)
-- Publish `payment.*` events on every state transition
-- Never trust client-side payment confirmation
-- Timeout detection: auto-fail payments stuck in `processing` for >30 minutes
+### 2.2 Marketplace Service
 
-Payment state machine:
+**Responsibility:** Product catalog, listings, categories, seller management, reviews, search indexing.
+
+**CF Modules:**
+- `functions/products.js` — CRUD for product listings, variant management
+- `functions/sellers.js` — seller onboarding, KYC, approval workflow
+- `functions/reviews.js` — review submission, moderation, aggregate scoring
+- `functions/search-index.js` — Typesense + Algolia sync on product write
+- `functions/sokoni-search-pro.js` — enterprise search engine (25 CFs, Swahili NLP)
+
+**Collections Owned:**
 ```
-created ──► pending ──► processing ──► succeeded
-                │             │
-                └─────────────┴──────────────────► failed ──► refunded
-                              │
-                              └──────────────────► cancelled
-```
-
-Every state transition:
-1. Validated against `ALLOWED_TRANSITIONS` map (illegal jumps throw `FailedPrecondition`)
-2. Appends to `history[]` with `actor`, `timestamp`, `reason`
-3. Publishes `payment.transaction.{state}` platform event
-4. Is idempotent: same transition twice is a no-op, not an error
-
-### 4.3 Delivery Engine
-
-**Files:** `functions/delivery.js`, `functions/sokoni-navigation.js`  
-**Collections:** `deliveries`, `riders`, `dispatchQueue`
-
-Responsibilities:
-- Accept delivery requests from orders
-- Match orders to available, nearby riders (8-factor dispatch scoring)
-- Track delivery state: `queued → assigned → picked_up → in_transit → delivered`
-- GPS tracking with spoofing detection
-- Automated driver suspension on excessive cancellations (≥10 auto-suspend)
-- QR code verification on pickup and delivery
-- Customer signature capture
-- CSAT (customer satisfaction) collection on delivery completion
-- Publish `delivery.*` events on state changes
-
-### 4.4 Inventory Engine
-
-**Files:** `functions/inventory.js`, `functions/pos-inventory.js`  
-**Collections:** `products`, `inventory`, `inventoryHistory`, `stockAlerts`
-
-Responsibilities:
-- Maintain authoritative stock counts in Firestore
-- Redis provides real-time reservation locks (15-minute TTL per order, 2-minute TTL per checkout)
-- FEFO (First Expired, First Out) batch tracking for perishables
-- AVCO (Average Cost) inventory valuation
-- Low-stock alerts (threshold-based, published as `inventory.stock.low` events)
-- Automatic sync between Marketplace and SmartPOS inventory
-- Audit trail for every stock movement
-
-Inventory reservation pattern:
-```
-Checkout begins
-  └─► Redis InventoryService.lock(productId, variantId, qty, lockId, 120_000ms)
-         │
-         ▼
-   Payment succeeds
-         │
-         ├─► Firestore: decrement product.stockQty (authoritative)
-         └─► Redis: release lock (cleanup)
-
-   Payment fails / timeout
-         └─► Redis: lock expires automatically (no cleanup needed)
+products/{productId}
+  └─ variants/{variantId}
+sellers/{sellerId}
+reviews/{reviewId}
+searchAnalytics/{queryId}
+recentlyViewed/{uid}/items/{productId}
+savedSearches/{uid}/searches/{searchId}
+priceAlerts/{alertId}
+productStats/{productId}
 ```
 
-### 4.5 AI Engine
+**Key Behaviours:**
+- All product writes trigger `search-index.js` to sync Typesense and Algolia
+- Seller onboarding: hub-register.js → review queue → admin approval → claim grant
+- Reviews: transaction-gated (buyer must have completed order for product)
+- Search: 3-tier fallback: Typesense → Algolia → Firestore native query
+- Swahili NLP: tokenisation + stopword removal + Kiswahili synonym expansion
+- Listing quality scoring: 7-dimension score (images, description length, pricing, category, stock, reviews, responsiveness)
 
-**Files:** `functions/ai-engine.js`, `sokoni-creative.js`  
-**Collections:** `aiJobs`, `aiSessions`, `mediaAssets`, `brandKits`
+---
 
-Responsibilities:
-- KASS AI Concierge: contextual commerce assistance using Claude claude-haiku-4-5-20251001 with Firestore tool use
-- AI Subscriptions: 4 tiers (Free → Enterprise) with credit/boost system
-- Creative Studio: AI-generated product descriptions, marketing copy, image captions
-- AI response caching: expensive Anthropic calls cached in Redis for 1 hour
-- PII redaction before caching (KRA PIN, phone, email, card numbers)
-- Queue-backed AI jobs via `QueueService.push('ai', job)` for background processing
+### 2.3 Commerce Service
 
-Model selection:
-| Use case | Model | Rationale |
-|---|---|---|
-| KASS conversational | `claude-haiku-4-5-20251001` | Fast, low-cost for real-time chat |
-| Business insights | `claude-sonnet-4-6` | Better reasoning for analytics summaries |
-| Document generation | `claude-sonnet-4-6` | Long-form quality |
+**Responsibility:** Cart management, checkout orchestration, order lifecycle, payment initiation, commission calculation.
 
-### 4.6 Notification Engine
+**CF Modules:**
+- `functions/orders.js` — order creation, status transitions, cancellation
+- `functions/checkout.js` — cart validation, price lock, checkout session
+- `functions/payment-orchestrator.js` — payment state machine, provider dispatch
+- `functions/commission.js` — commission calculation, double-entry ledger
+- `functions/cart.js` — shared cart operations for marketplace and POS
 
-**Files:** `functions/notifications.js`, `sokoni-notif-engine.js`  
-**Collections:** `notifications`, `notificationQueue`, `notificationPreferences`
+**Collections Owned:**
+```
+orders/{orderId}
+  └─ items/{itemId}
+checkoutSessions/{sessionId}
+payments/{paymentId}
+  └─ history/{txId}
+paymentIdempotency/{key}
+commissionRules/{ruleId}
+commissionLedger/{entryId}
+sellerEarnings/{sellerId}
+```
 
-Responsibilities:
+**Order State Machine:**
+```
+draft → confirmed → processing → packed → shipped → delivered → completed
+  └──────────────────────────────────────────────────────────► cancelled
+                                                                    └─► refunded
+```
+
+**Payment State Machine:**
+```
+created → pending → processing → succeeded
+                       └──────────────────► failed → (refunded)
+                       └──────────────────► cancelled
+```
+
+**Key Behaviours:**
+- Payment idempotency: `paymentIdempotency/{orderId_method_amount_hash}` — 24h TTL, duplicate attempts return existing `paymentId`
+- Redis payment lock (NX, 30s TTL) prevents double-charge race conditions
+- Client-side payment confirmation never trusted; server-side provider API verification always required
+- Payments stuck in `processing` > 30 minutes auto-failed by `paymentTimeoutSweep` scheduler
+- Commission: 6 rule types — `percentage`, `fixed`, `percentage_plus_fixed`, `tiered`, `commission_holiday`, `custom`
+- Multi-seller orders: single buyer order split into per-seller sub-orders at checkout
+
+---
+
+### 2.4 Delivery Service
+
+**Responsibility:** Rider dispatch, delivery lifecycle, GPS tracking, fleet management, route optimisation.
+
+**CF Modules:**
+- `functions/delivery.js` — delivery creation, assignment, status lifecycle
+- `functions/sokoni-navigation.js` — GPS tracking, OSRM routing, spoofing detection
+- `functions/dispatch.js` — 8-factor rider scoring and assignment
+- `functions/fleet-monitor.js` — fleet-wide visibility, performance dashboards
+
+**Collections Owned:**
+```
+deliveries/{deliveryId}
+  └─ trackingPoints/{pointId}
+riders/{riderId}
+riderStats/{riderId}
+dispatchQueue/{queueId}
+fleetAlerts/{alertId}
+```
+
+**Key Behaviours:**
+- 8-factor dispatch scoring: distance, rating, cancellation rate, online time, vehicle type, load capacity, zone familiarity, current load
+- GPS spoofing detection: speed > 150 km/h between consecutive points → flag + alert
+- Auto-suspend: rider with ≥10 cancellations in rolling 30 days → automatically suspended pending review
+- QR verification: signed QR scanned at pickup and delivery (HMAC-protected)
+- Customer signature capture at delivery
+- CSAT collected post-delivery; fed to rider score
+
+---
+
+### 2.5 Booking Service
+
+**Responsibility:** Venue reservations, BnB listings, car rental, event ticketing, slot management.
+
+**CF Modules:**
+- `functions/booking.js` — atomic slot locking, reservation lifecycle, cancellation
+- `functions/events.js` — event creation, ticketing, gate check-in
+- `functions/venue-manager.js` — venue profiles, availability calendar, pricing modifiers
+
+**Collections Owned:**
+```
+venues/{venueId}
+  └─ availability/{slotId}
+bookings/{bookingId}
+events/{eventId}
+  └─ tickets/{ticketId}
+gateCheckins/{checkinId}
+```
+
+**Key Behaviours:**
+- Atomic slot locking: Firestore transaction; 2-minute hold while payment completes
+- Pricing modifiers: 8 types (peak hour, weekend, advance booking, minimum stay, cleaning fee, damage deposit, group discount, member rate)
+- Event tickets: QR-based; HMAC-signed; single-use scan flag set on check-in
+- Cancellation: rule-based refund percentages (e.g. 100% if > 48h before, 50% if > 24h, 0% if < 12h)
+
+---
+
+### 2.6 Financial Service
+
+**Responsibility:** Financial OS, wallet, settlement, reconciliation, eTIMS, payroll, business health.
+
+**CF Modules:**
+- `functions/financial-os.js` — 12 CFs: escrow, settlement, dispute resolution, 7-day forecast
+- `functions/finos-automation.js` — 7 CFs: auto-settlement (6h schedule), auto-refund trigger, IntaSend reconcile, AI forecast, settlement config CRUD, audit trail
+- `functions/etims.js` — 28 CFs: KRA eTIMS electronic receipting, AES-256-GCM credentials
+- `functions/hr-payroll.js` — Kenya PAYE, NHIF, NSSF computation and payslip generation
+- `functions/wallet.js` — wallet top-up, balance queries, internal transfers
+
+**Collections Owned:**
+```
+wallets/{uid}
+  └─ transactions/{txId}
+settlements/{settlementId}
+settlementQueue/{itemId}
+reconciliationRecords/{recordId}
+etimsRecords/{receiptId}
+etimsCredentials/{merchantId}      (AES-256-GCM encrypted at rest)
+payrollRecords/{payrollId}
+businessHealth/{merchantId}
+foundationLedger/{entryId}
+```
+
+**Key Behaviours:**
+- Double-entry ledger: every financial movement creates matching debit + credit entries; total always balances to zero
+- Settlement: automated every 6 hours via Cloud Scheduler; holds released after delivery confirmation
+- eTIMS: integrated with KRA's electronic receipting system; receipts generated on every completed sale
+- Payroll: PAYE tax brackets (2026 Kenya Finance Act), NHIF/NSSF statutory deductions
+- Business Health Score: 5-dimension composite (revenue trend, order velocity, return rate, stock health, customer retention)
+- WHT (5%), VAT (16%), DST (1.5%) compliance computed at checkout
+
+---
+
+### 2.7 Loyalty Service
+
+**Responsibility:** Points ledger, tier management, cashback, gift cards, lucky draws, QR loyalty cards.
+
+**CF Modules:**
+- `functions/loyalty.js` — 26 CFs: points earn/burn, tier promotion, campaign engine
+- `functions/loyalty-enterprise.js` — 16 CFs: cashback, gift cards, lucky draws, AI personalisation, fraud dashboard, cross-merchant network
+
+**Collections Owned:**
+```
+loyaltyAccounts/{uid}
+loyaltyTransactions/{txId}
+loyaltyTiers/{tierId}
+loyaltyCampaigns/{campaignId}
+giftCards/{cardId}
+luckyDraws/{drawId}
+loyaltyQRCodes/{codeId}
+crossMerchantNetwork/{networkId}
+```
+
+**Key Behaviours:**
+- Tiers: Bronze → Silver → Gold → Platinum (spend-based, rolling 12 months)
+- Points earn: triggered by `payment.transaction.completed` event; rate configurable per category
+- Points burn: at checkout as partial payment discount
+- QR loyalty cards: SKN-XXXX format, HMAC-signed, offline sync via `LOYALTY_HMAC_SECRET`
+- AI personalisation: Claude claude-haiku-4-5 generates per-user offer recommendations
+- Cross-merchant network: customers earn/burn across enrolled merchant partners
+- Fraud: velocity detection on redemption (>3 burns in 60 minutes flagged)
+
+---
+
+### 2.8 Notification Service
+
+**Responsibility:** Multi-channel notification delivery — push, SMS, email, in-app.
+
+**CF Modules:**
+- `functions/notifications.js` — notification CRUD, delivery dispatch, token lifecycle
+- `sokoni-notif-engine.js` — client-side notification SDK (5 priorities, 20 categories, DND)
+
+**Collections Owned:**
+```
+notifications/{notifId}
+notificationPreferences/{uid}
+notificationQueue/{queueId}
+notificationTemplates/{templateId}
+```
+
+**Key Behaviours:**
 - 5 priority tiers: `urgent`, `high`, `normal`, `low`, `silent`
-- 20 notification categories with per-category DND settings
-- Multi-channel dispatch: FCM push, SMS (Africa's Talking), email (SendGrid)
-- Redis queue with batch processing: `QueueService.push('notification', job)`
-- Token lifecycle: invalid FCM tokens auto-removed on send failure
-- Template system: 53 email templates, dynamic variable substitution
-
-Queue architecture:
-```
-Event published (e.g. order.order.created)
-        │
-        ▼
-Notification Engine subscribes to event
-        │
-        ▼
-Creates notification records in Firestore
-        │
-        ▼
-Pushes to Redis notification queue (priority-aware)
-        │
-        ▼
-redisScheduledQueueWorker dispatches every minute
-        │
-        ├─► FCM (admin.messaging) for push
-        ├─► Africa's Talking for SMS
-        └─► SendGrid for email
-```
-
-### 4.7 POS Engine
-
-**Files:** `functions/pos.js`, `functions/pos-peripherals.js`, `pos.html`  
-**Collections:** `posSessions`, `posTransactions`, `merchants/posPeripherals`
-
-See [[#6-smartpos-ecosystem]] for full specification.
-
-### 4.8 Foundation Engine
-
-**Files:** `functions/foundation.js`  
-**Collections:** `foundationCampaigns`, `donations`, `foundationDisbursements`, `foundationLedger`
-
-Responsibilities:
-- Accept donations with optional anonymity
-- Three-tier disbursement model: immediate, scheduled, campaign-end
-- Separate ledger (never commingled with marketplace revenue)
-- Impact reporting and transparency dashboard
-- Foundation donation receipts for donors
-- Publish `foundation.donation.received` events
-
-### 4.9 Commission Engine
-
-**Files:** `functions/commission.js`  
-**Collections:** `commissionRules`, `commissionLedger`, `sellerEarnings`
-
-Responsibilities:
-- 6 rule types: `percentage`, `fixed`, `percentage_plus_fixed`, `tiered`, `commission_holiday`, `custom`
-- Live preview before rule activation
-- Per-seller, per-category, per-product rule scoping
-- Double-entry ledger: every commission creates matching debit/credit entries
-- Automatic calculation triggered by `payment.transaction.completed` events
-- Seller earnings reports with hub-level breakdown
+- 20 categories with per-category DND settings per user
+- Multi-channel: FCM push → Africa's Talking SMS → SendGrid email (priority cascade)
+- Invalid FCM tokens auto-removed on first delivery failure
+- 53 email templates with Handlebars variable substitution
+- Redis-queued: notifications pushed to Redis queue, worker dispatches every minute
+- Rate limiting: max 50 notifications per user per 24 hours (non-urgent)
 
 ---
 
-## 5. Event-Driven Architecture
+### 2.9 Messaging Service
 
-### 5.1 Why Events
+**Responsibility:** Business communications, transaction-gated chat, order-linked threads.
 
-Tight coupling is the primary cause of platform brittleness. If the Order Engine calls the Notification Engine directly, then:
-- Notification failures abort order creation
-- Orders cannot be processed if Notifications is deployed
-- Adding a new subscriber (e.g. Loyalty Engine) requires modifying Orders
+**CF Modules:**
+- `functions/messages.js` — message CRUD, thread management, media attachments
+- `sokoni-chat-engine.js` — client-side chat SDK
 
-The event bus inverts this: Order Engine publishes one event. Any number of modules subscribe independently. Adding a new subscriber requires zero changes to Order Engine.
-
-### 5.2 Platform Event Bus
-
-**File:** `functions/platform-event-bus.js`  
-**Collection:** `platformEvents/{eventId}`
-
-#### Event Schema
-
-```javascript
-{
-  id:            string,   // auto-generated
-  type:          string,   // domain.noun.verb (lowercase, past tense)
-  version:       string,   // '1.0' (semver for schema evolution)
-  payload:       object,   // event-specific data
-  publishedAt:   Timestamp,
-  publishedBy:   string,   // uid or service identifier
-  correlationId: string,   // business flow trace ID (e.g. orderId)
-  status:        'pending' | 'processing' | 'delivered' | 'dead_letter',
-  retries:       number,   // 0–3
-  subscribers:   string[], // [subscriberId, ...]
-  deliveredTo:   string[], // subscribers that have processed
-}
+**Collections Owned:**
+```
+conversations/{conversationId}
+  └─ messages/{messageId}
+messageMedia/{mediaId}
 ```
 
-#### Naming Convention
-
-```
-domain.noun.verb   (all lowercase, past tense)
-
-order.order.created
-order.order.completed
-order.order.cancelled
-
-payment.transaction.completed
-payment.transaction.failed
-payment.transaction.refunded
-
-delivery.rider.assigned
-delivery.delivery.started
-delivery.delivery.completed
-
-inventory.stock.updated
-inventory.stock.depleted
-inventory.stock.replenished
-
-pos.session.opened
-pos.session.closed
-pos.cart.updated
-pos.payment.completed
-
-foundation.donation.received
-foundation.disbursement.completed
-
-product.product.published
-product.product.delisted
-product.review.added
-
-user.user.registered
-user.seller.approved
-
-notification.notification.sent
-notification.notification.failed
-```
-
-#### Event Lifecycle
-
-```
-publishEvent(type, payload, correlationId)
-      │
-      ▼
-Stored in platformEvents/{id}  (status: pending)
-      │
-      ▼
-deliverEvent(eventId)  — looks up eventSubscribers
-      │
-      ├─► forEach subscriber: HTTP POST to subscriber endpoint
-      │   │
-      │   ├─► 200 OK → mark subscriber delivered
-      │   │
-      │   └─► Error → increment retries
-      │         │
-      │         ├─► retries < 3 → re-queue with backoff
-      │         └─► retries ≥ 3 → status = dead_letter
-      │
-      ▼
-All subscribers delivered → status = delivered
-```
-
-#### Dead Letter Recovery
-
-Dead-letter events are visible in the Operations Center. Recovery options:
-1. **Auto-replay**: `selfHeal.replayDeadEvents()` — resets status to `pending`
-2. **Manual replay**: Admin triggers `replay_dead_events` action from ops-center.html
-3. **Threshold trigger**: If `dead_letter > 100`, `snapshotPlatformMetrics` (5-min scheduler) auto-replays
-
-### 5.3 Canonical Event Catalog
-
-| Event | Published By | Key Subscribers |
-|---|---|---|
-| `order.order.created` | Order Engine | Notification, Inventory (lock), Payment |
-| `order.order.completed` | Order Engine | Commission, Loyalty, Notification, Foundation |
-| `order.order.cancelled` | Order Engine | Inventory (release), Notification, Payment (refund trigger) |
-| `payment.transaction.completed` | Payment Engine | Order (status update), Commission, Loyalty, Notification, Redis (state sync) |
-| `payment.transaction.failed` | Payment Engine | Order (status update), Notification |
-| `delivery.rider.assigned` | Delivery Engine | Notification (buyer + rider), POS (update) |
-| `delivery.delivery.completed` | Delivery Engine | Order (complete), Payment (release escrow), Notification, CSAT |
-| `inventory.stock.depleted` | Inventory Engine | Notification (seller), Search (mark unavailable) |
-| `pos.session.opened` | POS Engine | Presence (Redis), Notification (manager) |
-| `pos.payment.completed` | POS Engine | Inventory (deduct), Commission, Loyalty, Receipt queue |
-| `foundation.donation.received` | Foundation Engine | Notification, Foundation ledger, eTIMS |
-| `user.seller.approved` | Auth/Admin Engine | Notification (welcome), Subscription (start trial) |
-
-### 5.4 Event Bus vs Redis Streams
-
-Both systems handle events; they serve different purposes:
-
-| Dimension | Platform Event Bus (Firestore) | Redis Streams |
-|---|---|---|
-| Durability | Permanent (Firestore) | Ephemeral (TTL ring buffer) |
-| Purpose | Business event audit trail | Operational real-time feed |
-| Subscriber model | Registered subscribers | Polling-based |
-| Recovery | Manual/auto replay | Not expected to replay |
-| Examples | Order created, payment completed | POS cart updated, rider location |
-| Retention | Forever | Max 10,000 entries |
-
-Use Firestore event bus for business events that must not be lost. Use Redis streams for real-time operational signals where a missed event is acceptable.
+**Key Behaviours:**
+- Transaction-gated: buyer can only message a seller once they have a completed or active order
+- Order-linked threads: conversation tied to orderId for dispute resolution context
+- Media: images and documents stored in Cloud Storage, references in Firestore
+- Typing indicators: Firestore real-time listeners (no Redis needed for this volume)
+- Message read receipts: Firestore write on message open
 
 ---
 
-## 6. SmartPOS Ecosystem
+### 2.10 AI Service
 
-### 6.1 Architecture Principles
+**Responsibility:** KASS AI concierge, search intelligence, business insights, fraud detection, creative studio.
 
-SmartPOS is a real-time distributed system, not a local application. Every device (cashier terminal, manager tablet, employee phone, customer display) connects to the same session state stored in Firestore, with Redis providing sub-second synchronisation between polling intervals.
+**CF Modules:**
+- `functions/kass.js` — sokoniChat CF; 6 Firestore tools; Claude claude-haiku-4-5 with contextual tool use
+- `functions/ai-engine.js` — AI job queue, 4 subscription tiers, credits/boosts
+- `sokoni-creative.js` — AI creative studio (product descriptions, marketing copy)
+- `functions/fraud.js` — ML-pattern fraud detection integrated into payment flow
 
-**Key constraint:** Every POS operation that affects money or stock must go through a Cloud Function, never client-side only. Client devices are input surfaces; Cloud Functions are the source of truth.
+**Collections Owned:**
+```
+aiSessions/{sessionId}
+aiJobs/{jobId}
+mediaAssets/{assetId}
+brandKits/{kitId}
+aiSubscriptions/{uid}
+aiUsageLogs/{logId}
+```
 
-### 6.2 Session Model
+**AI Model Assignment:**
+| Use Case | Model | Reason |
+|---|---|---|
+| KASS chat (real-time) | `claude-haiku-4-5-20251001` | Low latency, low cost |
+| Business insights | `claude-sonnet-4-6` | Better reasoning for analytics |
+| Long-form content | `claude-sonnet-4-6` | Document-quality output |
 
+**Key Behaviours:**
+- Response caching: Redis, 1-hour TTL; key = SHA-256(model + sanitised prompt)
+- PII redaction before caching: KRA PIN, phone, email, card numbers stripped from cache keys
+- AI subscription tiers: `ai_free` → `ai_basic` → `ai_pro` → `ai_enterprise`; credits + boosts system
+- AI Policy Engine: `Verified` / `Calculated` / `Predicted` wrappers; confidence badges on all AI output
+- Background AI jobs: `QueueService.push('ai', job)` for non-real-time generation
+- Fraud detection: velocity + amount pattern + network analysis; integrated into payment-orchestrator.js
+
+---
+
+### 2.11 SmartPOS Service
+
+**Responsibility:** Point-of-sale checkout, inventory, receipts, peripheral hardware, shift management, multi-device sync.
+
+**CF Modules:**
+- `functions/pos.js` — POS session CRUD, cart mutations, payment processing
+- `functions/pos-peripherals.js` — peripheral registration, heartbeat, customer display
+- `functions/pos-analytics.js` — shift reports, daily summaries, performance dashboards
+- `functions/pos-inventory.js` — FEFO/AVCO inventory, reorder alerts
+- `sokoni-device-hub.js` — USB/BT/Serial/Network peripheral adapters (client SDK)
+- `sokoni-payment-terminal.js` — 12 terminal drivers behind unified interface (client SDK)
+- `sokoni-customer-display.js` — multi-channel display sync (client SDK)
+- `pos-manager-auth.js` — PIN/QR/NFC/Mobile/Biometric manager authorisation
+
+**Collections Owned:**
 ```
 posSessions/{sessionId}
-│
-├─ devices: { [deviceId]: { uid, name, role, lastSeen } }
-│
-├─ cart: { [productId:variantId]: { name, price, qty, discount } }
-│
-├─ memberUids: string[]          ← Firestore rules use this for access control
-│
-├─ cartTotal, cartTax, cartSubtotal, cartDiscount
-│
-├─ status: 'open' | 'payment' | 'closed'
-│
-├─ sessionCode: '123456'         ← 6-digit easy-join code
-│
-└─ shiftId, cashierId, merchantId, branchId
+posTransactions/{txId}
+merchants/{merchantId}
+  └─ posPeripherals/{deviceId}
+  └─ posAudit/{entryId}
+  └─ shifts/{shiftId}
+posCustomerDisplays/{sessionId}
 ```
 
-All cart mutations go through `updatePosCart` — a transactional CF that prevents concurrent-write conflicts.
-
-### 6.3 Multi-Device Synchronisation
-
+**Sync Architecture (3 layers):**
 ```
-┌─────────────────────────────────────────────────────────────┐
-│              Synchronisation Stack                           │
-│                                                              │
-│  Layer 1: Firestore onSnapshot (< 100ms, push)              │
-│  ─────────────────────────────────────────────              │
-│  Firestore listener on posSessions/{id} fires on every      │
-│  change. All connected devices receive updates              │
-│  simultaneously without polling.                            │
-│                                                              │
-│  Layer 2: Redis POSService (< 10ms, pull 500ms)             │
-│  ─────────────────────────────────────────────              │
-│  Redis stores a denormalised copy of cart state.            │
-│  Customer display polls at 500ms interval.                  │
-│  Manager tablet polls shop-wide at 1000ms.                  │
-│  JSON hash diff suppresses no-op callbacks.                 │
-│                                                              │
-│  Layer 3: BroadcastChannel (< 1ms, same-device tabs)        │
-│  ─────────────────────────────────────────────              │
-│  When multiple tabs open on the same device, the            │
-│  customer display SDK uses BroadcastChannel for             │
-│  zero-latency same-origin messaging.                        │
-│                                                              │
-│  Layer 4: Offline IndexedDB queue                           │
-│  ─────────────────────────────────────────────              │
-│  When offline: cart ops queue in IndexedDB.                 │
-│  On reconnect: flush queue through auth'd CF calls.         │
-└─────────────────────────────────────────────────────────────┘
+Layer 1: Firestore onSnapshot (<100ms) — all connected devices
+Layer 2: Redis POSService (500ms poll) — customer display, manager tablet
+Layer 3: IndexedDB offline queue — when device is disconnected
 ```
 
-### 6.4 Universal Peripheral Hub
-
-**File:** `sokoni-device-hub.js`  
-**Singleton:** `window.SokoniDeviceHub`
-
-The peripheral hub provides a unified API across four transport protocols. Application code calls `hub.connect(deviceId)` without knowing whether the device is USB, Bluetooth, Serial, or network-attached.
-
-```
-SokoniDeviceHub
-  │
-  ├─ UsbAdapter     (WebUSB API)
-  │    └─ USB_VID_MAP: 20+ vendor/device-type pairs
-  │
-  ├─ BluetoothAdapter (Web Bluetooth API)
-  │    └─ BT_SERVICE_MAP: 6 GATT service UUIDs → device type
-  │
-  ├─ SerialAdapter   (Web Serial API)
-  │    └─ Baud rate negotiation, flow control
-  │
-  └─ NetworkAdapter  (TCP/HTTP)
-       └─ Persisted in localStorage; auto-reconnect on startup
-
-Device types: printer | scanner | payment_terminal | cash_drawer |
-              customer_display | weight_scale | label_printer | card_reader
-
-Events: connected | disconnected | discovered | error | health_change
-```
-
-Reconnect strategy: exponential backoff — `Math.min(3000 × 2^attempt, 60000)ms`, max 8 attempts.
-
-### 6.5 Universal Payment Terminal
-
-**File:** `sokoni-payment-terminal.js`  
-**Singleton:** `window.SokoniTerminal`
-
-Twelve terminal drivers behind one interface:
-
-```
-SokoniTerminalManager.charge(request)
-  │
-  ├─ IntaSendDriver     M-Pesa STK push; polls /api/payments/mpesa/status 3s×30 (90s timeout)
-  ├─ StripeDriver       Stripe Terminal SDK; collectPaymentMethod → processPayment
-  ├─ PaxDriver          POSLINK HTTP; GET ?command=T00&TransType=01&Amount=…
-  ├─ IngenicoDriver     HTTP + JSON; vendor-specific auth header
-  ├─ VerifoneDriver     VHQ protocol over TCP
-  ├─ CastlesDriver      USB HID + network dual-mode
-  ├─ NewlandDriver      Network API
-  ├─ SunmiDriver        Network API (Sunmi Cloud)
-  ├─ NexgoDriver        NexGo cloud + network
-  ├─ BBPOSDriver        Bluetooth GATT
-  ├─ MiuraDriver        Bluetooth + USB
-  └─ VirtualDriver      Configurable auto-approve (demo / testing)
-```
-
-Adding a new vendor: implement the `BaseTerminalDriver` interface (`connect`, `charge`, `refund`, `status`, `disconnect`) and call `SokoniTerminal.register(name, vendorId, config)`. Zero changes to any existing code.
-
-### 6.6 Customer Display
-
-**Files:** `sokoni-customer-display.js`, `customer-display.html`
-
-The customer display is a separate browser window (or second screen) that mirrors the active cart in real time.
-
-Communication channels (priority order):
-1. `BroadcastChannel` — same-device tabs, < 1ms
-2. `window.postMessage` — cross-origin iframes
-3. Firestore `posCustomerDisplays` — cross-device
-
-Display screens: `idle` | `cart` | `payment` | `approved` | `declined` | `promo` | `branding`
-
-60-second idle timer returns to branding screen automatically.
-
-### 6.7 Peripheral Cloud Functions
-
-**File:** `functions/pos-peripherals.js`
-
-| Function | Purpose |
-|---|---|
-| `posRegisterPeripheral` | Register a device to a merchant with ownership validation |
-| `posUpdatePeripheralStatus` | Heartbeat / health report from device |
-| `posRemovePeripheral` | Remove device; emits TTL-gated `force_disconnect` signal |
-| `posGetPeripherals` | List devices; strips `apiKey`, `token`, `secret`, `password` from config |
-| `posCreateCustomerDisplay` | Create/reset display session document |
-| `posUpdateCustomerDisplay` | Update display state; 32 KB payload guard |
-| `posCleanupPeripheralSignals` | TTL cleanup trigger (auto-fires on write) |
+**Key Behaviours:**
+- Multi-device session: cashier terminal + manager tablet + customer display all share same `posSessions/{id}`
+- Session access controlled by `memberUids[]` field (Firestore rules enforce this)
+- Cart mutations go through `updatePosCart` CF (transactional, prevents concurrent-write conflicts)
+- Hardware adapters: 12 payment terminal drivers, USB/BT/Serial/Network printer protocols, WebUSB/Web Bluetooth scanner support
+- Manager authorisation: 5 methods; 8 guarded operations; immutable audit log
+- Offline: cart ops queued in IndexedDB (sokoni_offline DB); flushed on reconnect via `SokoniRedis.offline.flush()`
 
 ---
 
-## 7. Payment Orchestration
+### 2.12 Analytics Service
 
-### 7.1 Design Goals
+**Responsibility:** Merchant analytics, platform-wide BI, funnel tracking, search insights, executive reporting.
 
-One payment function. One state machine. One audit trail. No payment method should have a private flow that bypasses the orchestrator.
+**CF Modules:**
+- `functions/bi-advanced.js` — enterprise BI (6 KPI categories, export, drill-down)
+- `functions/analytics.js` — funnel event recording, daily/weekly aggregation
+- `functions/crm.js` — CRM data, customer lifetime value, cohort analysis
+- `functions/platform-analytics.js` — platform-level revenue, GMV, active merchants
 
-**Anti-patterns this architecture eliminates:**
-- Payment confirmed client-side before server-side verification
-- Duplicate STK pushes (idempotency key enforced per order)
-- Silent payment failures (every terminal state emits an event)
-- Orphaned pending payments (timeout sweep auto-fails after 30 minutes)
-
-### 7.2 Full Lifecycle
-
+**Collections Owned:**
 ```
-Client: initiateCheckout(cart, paymentMethod)
-        │
-        ▼
-CF: createPayment(orderId, amount, method)
-    ├─ Validate: amount, currency, ownership, duplicate guard
-    ├─ Acquire Redis payment lock (prevents race condition)
-    ├─ Create payments/{paymentId} with status: 'created'
-    ├─ Publish payment.transaction.created event
-    └─ Return paymentId
-
-CF: initiatePayment(paymentId, phone?)
-    ├─ Validate state transition: created → pending
-    ├─ Dispatch to provider driver (M-Pesa, Card, Wallet)
-    ├─ Update status: pending → processing
-    ├─ Publish payment.transaction.processing event
-    └─ Return provider reference (checkoutUrl, stkRef, etc.)
-
-Provider callback / polling:
-    ├─ IntaSend webhook / client poll → confirmPayment(paymentId, ref)
-    ├─ CF validates provider response (HMAC / direct API verification)
-    ├─ Update: processing → succeeded | failed
-    └─ Publish payment.transaction.completed | .failed event
-
-Background: paymentTimeoutSweep (every 5 min)
-    └─ Payments stuck in processing > 30 min → failed
-       └─ Publish payment.transaction.failed event
+funnelStats/{date}
+analyticsEvents/{eventId}
+merchantAnalytics/{merchantId}
+  └─ daily/{date}
+platformMetrics/{timestamp}
+searchAnalytics/{queryId}
+conversionFunnels/{funnelId}
 ```
 
-### 7.3 Provider Drivers
-
-Each provider is encapsulated in `payment-orchestrator.js`:
-
-| Provider | Mechanism | Verification |
-|---|---|---|
-| M-Pesa (IntaSend STK) | STK push to phone | Poll IntaSend API; verify status=COMPLETE |
-| Cards (IntaSend) | Hosted checkout URL | IntaSend webhook callback + HMAC |
-| Wallet | Internal Firestore transaction | Atomic balance check + deduction |
-| QR (POS) | Generate payment QR | Firestore listener; signed QR (HMAC) |
-
-### 7.4 Idempotency
-
-The `paymentIdempotency` collection prevents duplicate charges:
-```
-paymentIdempotency/{orderId_method_amount_hash}
-  └─ createdAt: Timestamp (TTL: 24h)
-```
-
-If a create request arrives with a matching key, the existing `paymentId` is returned — no new payment is created.
+**Key Behaviours:**
+- Funnel events: `productViewed → searchPerformed → cartAdded → checkoutStarted → paymentAttempted → orderCompleted`
+- Daily rollups: Cloud Scheduler aggregates raw events into daily summaries; raw events pruned at 30 days
+- Merchant-facing: seller dashboard shows real-time GMV, order count, return rate, top products
+- Executive dashboard: platform GMV, category breakdown, geographic heatmap, growth rate
+- Search insights: no-result query terms, top queries by volume, conversion rates per query
 
 ---
 
-## 8. Redis Operational Layer
+### 2.13 Admin Service
 
-Redis accelerates SOKONI but is not required for correctness. See [[REDIS_ARCHITECTURE]] for full specification.
+**Responsibility:** Admin OS, operations centre, platform hub, super-admin portal, self-healing, hub registry.
 
-### Summary: What Redis Manages
+**CF Modules:**
+- `functions/admin.js` — admin actions, seller approval, dispute resolution, content moderation
+- `functions/operations-center.js` — ops dashboard data, metric snapshots, self-heal triggers
+- `functions/platform-hub.js` — 10 CFs: hub registry, WAP delay scheduler, per-hub feature flags
+- `functions/automation-center.js` — 15 CFs: account lifecycle, intelligent dispatch, AI dispute resolution
 
-| Category | Examples | TTL |
-|---|---|---|
-| **Coordination** | Payment locks, inventory reservations, distributed locks | 15–120 seconds |
-| **Sessions** | Active user sessions (complement Firebase Auth) | 24 hours |
-| **Presence** | Online POS terminals, active riders, online users | 90 seconds |
-| **POS sync** | Live cart state per terminal | 1 hour |
-| **Dashboards** | Revenue today, orders today, payments today | 60 seconds |
-| **Queues** | Email, notification, SMS, AI, receipt, report, bulk | Processed within 1 minute |
-| **Event streams** | orders, payments, inventory, users, riders, delivery | Max 10,000 entries |
-| **Cache** | Search results, AI responses, session data | 5 min – 1 hour |
-| **Rate limits** | Per-UID and per-IP counters per action | 60s – 1 hour |
+**Collections Owned:**
+```
+adminActions/{actionId}
+opsMetrics/{timestamp}
+selfHealLog/{logId}
+platformHubs/{hubId}
+hubFlags/{hubId}
+automationRules/{ruleId}
+disputeQueue/{disputeId}
+```
 
-### Summary: What Redis Never Manages
-
-Orders, payments, inventory history, customer data, seller profiles, financial records, audit logs, product catalogs. These live exclusively in Firestore.
-
-### Fallback Guarantee
-
-When Redis is unavailable, `isFallback()` returns `true` and every service returns a safe default. Critical flows (orders, payments, checkouts) continue via Firestore. The platform degrades in speed — never in correctness.
+**Key Behaviours:**
+- Admin OS: 19 panels, 19 KPI cards, tabbed comms/analytics/config/SmartPOS/financial
+- Self-healing scheduler (every 15 min): retries stuck payments, replays dead-letter events, closes stale POS sessions, reconciles inventory orphans
+- Hub registry: `registerHub()` SDK; per-hub feature flags; WAP delay scheduler for staged rollout
+- Role switcher: injected in shared-header.js for multi-role users
+- Automation engine: configurable rules for account lifecycle (seller trial → active → suspended → reinstated)
 
 ---
 
-## 9. Observability and Operations Center
+### 2.14 Media Service
 
-### 9.1 Operations Center
+**Responsibility:** Image processing, creative studio, brand kit management, asset library.
 
-**File:** `functions/operations-center.js`  
-**UI:** `ops-center.html`
+**CF Modules:**
+- `functions/media-engine.js` — image resize, WebP conversion, thumbnail generation
+- `sokoni-creative.js` — AI creative studio client SDK
+- `functions/storage-triggers.js` — Firestore triggers on Cloud Storage events
 
-The Operations Center is the single pane of glass for the SOKONI platform. It surfaces the health of every major subsystem in real time.
-
+**Collections Owned:**
 ```
-ops-center.html
-│
-├─ Orders          active / pending / stuck
-├─ Payments        today total / failed 24h / stuck >5m
-├─ POS Sessions    open count / device count / recent transactions
-├─ Event Bus       pending / dead-letter count / delivery rate
-├─ Redis           connection / memory / hit rate / queue depths
-├─ Search          Typesense / Algolia connection / index health
-├─ Deliveries      in-transit / overdue / rider availability
-├─ Notifications   queued / sent / failed / delivery rates by channel
-├─ Foundation      donations today / disbursement queue
-├─ AI Engine       request count / cache hit rate / spend today
-├─ Users           online last 5m / new today / auth failures
-└─ Infrastructure  CF error rate / P95 latency / memory / CPU
+mediaAssets/{assetId}
+brandKits/{kitId}
+processingJobs/{jobId}
 ```
 
-### 9.2 Redis Monitor
+**Key Behaviours:**
+- All product images processed on upload: max 1200px, WebP conversion, thumbnail at 400px
+- Storage lifecycle: images for archived products deleted after 180 days
+- Brand kits: logo, colour palette, fonts stored per merchant; used for AI-generated content
+- AI creative studio: generates product descriptions, marketing copy, social media captions using `claude-sonnet-4-6`
 
-**File:** `redis-monitor.html` (Super Admin only)
+---
 
-13-panel real-time dashboard at 15-second auto-refresh:
-- KPI row: memory %, hit rate, ops/sec, active sessions
-- Connection: uptime, connected clients, total commands, hits/misses
-- Memory: used, peak, system total, fragmentation ratio, evictions
-- Platform totals: sessions, POS terminals, active locks, queued jobs, online presence
-- Queue depths: 8 queues with bar charts
-- Event stream lengths: 8 streams
-- POS terminal map: per-terminal cart state cards
-- Online presence grid
-- Active lock details
-- Rate limit violations log
-- Job audit log (from Firestore `redisJobAudit`)
-- Slowlog
-- Error log
+### 2.15 Hub Services
 
-### 9.3 Metric Collection
+Each vertical hub is a thin service layer that reuses the shared platform engines (Commerce, Booking, Delivery, Notification) while owning its domain-specific data.
 
-`snapshotPlatformMetrics` (Cloud Scheduler, every 5 minutes):
-- Reads operational state from Firestore collections
-- Writes `opsMetrics/{timestamp}` snapshot (7-day retention)
-- Triggers self-healing checks (see §10)
+| Hub | Description | Key CFs | Domain Collections |
+|---|---|---|---|
+| Food Hub | Restaurant ordering, menus, kitchen management | `food.js` | `restaurants`, `menus`, `kitchenOrders` |
+| Events Hub | Event lifecycle, ticketing, gate check-in | `events.js` (19 CFs) | `events`, `tickets`, `checkins` |
+| Healthcare Hub | Appointments, telemedicine, prescriptions | `healthcare.js` | `practitioners`, `appointments`, `consultations` |
+| Education Hub | Courses, enrolment, progress tracking | `education.js` (8 CFs) | `courses`, `enrolments`, `progress` |
+| Property Hub | Buy/rent listings, BnB | `property.js` | `properties`, `propertyBookings` |
+| Vehicles Hub | Car rental, NTSA integration, garages | `vehicles.js` | `vehicles`, `rentals`, `serviceRecords` |
+| Jobs Hub | Job posts, applications, employer dashboard | `jobs.js` | `jobListings`, `applications` |
+| Legal Hub | Service listings, document templates | `legal.js` | `legalServices`, `legalConsultations` |
+| Entertainment Hub | Content, events, ticketing | `entertainment.js` | `entertainmentListings` |
+| B2B Wholesale Hub | Bulk ordering, trade accounts | `b2b.js` (12 CFs) | `tradeAccounts`, `bulkOrders`, `catalogues` |
+| Foundation Hub | Donations, campaigns, disbursements | `foundation.js` | `foundationCampaigns`, `donations` |
 
-### 9.4 Cloud Monitoring Alerts
+---
 
-19 configured alerts:
+## 3. Data Architecture
 
-| Alert | Severity | Threshold |
+### 3.1 Firestore Collection Naming Conventions
+
+Collections follow camelCase plural naming. Subcollections are used only when data is tightly owned by the parent document and always accessed in that parent's context.
+
+**Rules:**
+- Collections: `camelCasePlural` — e.g. `products`, `orders`, `posTransactions`
+- Documents: auto-ID (Firestore's `add()`) for most collections; `{uid}` as document ID for per-user collections
+- Subcollections: only when the child data is never queried across parents (e.g. `orders/{id}/items` is fine; `users/{id}/orders` is not — orders are queried across all buyers by admin)
+- Audit and history subcollections: `{parent}/{id}/history/{entryId}`, `{parent}/{id}/audit/{entryId}`
+
+**Field naming:** camelCase for all fields. Timestamps always use Firestore `Timestamp` type, never Unix integers. Monetary amounts always stored as integers in the smallest currency unit (KES cents = 100 = KES 1.00) to avoid floating-point drift.
+
+### 3.2 Sharding Strategy for High-Volume Collections
+
+#### Orders — Shard by orderId Prefix
+
+Firestore distributes documents across tablet servers. A single sequential counter would hot-spot. Instead:
+
+```
+orders collection — documents auto-IDed by Firestore
+All orders for a seller: query where sellerId == X (indexed)
+All orders for a buyer: query where buyerId == X (indexed)
+Admin full scan: paginated, cursor-based, never unbounded
+
+For analytics: daily aggregate document pattern
+orderStats/{YYYY-MM-DD}
+  └─ totalOrders: number (FieldValue.increment)
+  └─ totalGMV: number
+  └─ byCategory: { [categoryId]: count }
+```
+
+#### Notifications — Shard by UID Prefix
+
+Rather than a global `notifications` collection that would hot-spot at scale, notifications are queryable by uid via composite index `(uid, createdAt DESC)`. Document IDs are Firestore auto-IDs (which Firestore distributes automatically).
+
+For push-delivery queuing at high volume:
+```
+notificationQueue/{shardId}    shardId = uid.substring(0, 2)  (256 logical shards)
+  └─ items: [] array capped at 100 per document
+```
+
+#### Analytics Events — Time-Bucketed Documents
+
+Raw events are never stored one-per-document (too expensive at scale). Instead:
+
+```
+analyticsEvents/{YYYY-MM-DD-HH}    (hourly bucket documents)
+  └─ events: []     array, max 500 events per bucket
+  └─ count: number  FieldValue.increment on each append
+  └─ createdAt, updatedAt: Timestamp
+
+Rollup: Cloud Scheduler aggregates hourly → daily → weekly documents
+Raw retention: 30 days (TTL policy on analyticsEvents)
+Aggregated retention: permanent
+```
+
+#### Counters — Distributed Counter Pattern
+
+For platform-wide totals (total orders, total GMV, active sellers), a single document would hit Firestore's 1 write/second limit at scale. Distributed counters distribute writes:
+
+```
+_counters/{counterId}/shards/{shardId}   (shardId: "0" through "9" = 10 shards)
+  └─ value: number
+
+Read total: sum across all 10 shards
+Write: pick random shard 0-9, FieldValue.increment(delta)
+Maximum write throughput: ~10 writes/second per counter (vs 1 without sharding)
+
+Counters in use:
+  platform_total_orders        (10 shards)
+  platform_total_gmv           (10 shards)
+  platform_active_sellers      (10 shards)
+  platform_daily_transactions  (10 shards)
+```
+
+### 3.3 Index Strategy
+
+All queries have a matching composite index. Index budget: 200 indexes maximum (Firebase limit).
+
+**Current state:** 197+ composite indexes deployed.
+
+**Overflow strategy:** When the 200 index limit is reached, new indexes go to `sokoni-ops` (second Firestore database). High-cardinality analytical queries are the first candidates for migration.
+
+**Governance rule:** Never drop an existing index. Dropping an index breaks all clients that haven't been updated. Add only; remove never.
+
+**Common index patterns:**
+```
+# Orders by seller + date (seller dashboard)
+orders: [sellerId ASC, createdAt DESC]
+
+# Orders by buyer (buyer order history)
+orders: [buyerId ASC, createdAt DESC]
+
+# Products by category + price (marketplace grid)
+products: [categoryId ASC, price ASC]
+
+# Notifications by user + priority (notification tray)
+notifications: [uid ASC, priority DESC, createdAt DESC]
+
+# Analytics by merchant + date (merchant dashboard)
+merchantAnalytics: [merchantId ASC, date DESC]
+```
+
+### 3.4 Data Retention Policy
+
+| Data Type | Retention | Policy |
 |---|---|---|
-| CF error rate | CRITICAL | > 2% |
-| CF P95 latency | WARNING | > 3s |
-| Payment failure rate | CRITICAL | > 5% |
-| Payment stuck | WARNING | > 5 stuck payments |
-| Memory > 85% | WARNING | — |
-| Redis connection loss | CRITICAL | Any disconnection |
-| Redis memory > 80% | WARNING | — |
-| Dead-letter events | WARNING | > 100 |
-| Order stuck | WARNING | > 10 orders in processing for > 30m |
-| Auth failure spike | WARNING | > 50 failures in 5m |
-| Health endpoint down | CRITICAL | Any failure |
-| Queue depth > 1000 | WARNING | Per queue |
-| Stock depleted | INFO | Per product |
-| POS session errors | WARNING | > 5 errors |
-| Delivery overdue | WARNING | > 10 overdue |
-| API rate limit violations | INFO | > 100/min |
-| Search index lag | WARNING | > 5m behind |
-| Disk > 80% (Memorystore) | WARNING | — |
-| Cold start > 2s | INFO | — |
+| Raw analytics events | 30 days | Firestore TTL policy on `analyticsEvents` |
+| Aggregated analytics | Permanent | Never deleted; storage cost is minimal for aggregated data |
+| Notification records | 90 days | TTL policy on `notifications` |
+| Search analytics | 90 days | TTL policy on `searchAnalytics` |
+| Audit logs | 7 years | Permanent (Kenya compliance requirement) |
+| Payment records | 7 years | Permanent (KRA compliance) |
+| User PII | Until account deletion + 30 days | GDPR-compatible; then anonymised |
+| POS transactions | 5 years | Tax compliance |
+| Redis data | Per TTL (seconds to 24h) | Operational only; no retention expectation |
+| Cloud Storage media | Per lifecycle rule | Archived product images deleted after 180 days |
+| Firestore PITR | 7 days | Point-in-time recovery window |
+| Firestore exports | 30 days | Nightly export to Cloud Storage |
 
-### 9.5 Structured Logging Convention
+### 3.5 Firestore Security Rules Architecture
 
-All Cloud Functions use structured JSON logs:
+Default deny. Each collection requires an explicit allow rule per role.
+
+**Principles:**
+- `request.auth != null` required for all non-public reads
+- `request.auth.token.{claim}` used for role checks (never `request.auth.uid` on its own for write access)
+- Document-scoped writes: `resource.data.uid == request.auth.uid` or `resource.data.sellerId == request.auth.uid`
+- Admin claims checked via `request.auth.token.admin == true`
+- Subcollection access follows parent document ownership
 
 ```javascript
-console.log(JSON.stringify({
-  severity: 'INFO',          // INFO | WARNING | ERROR | CRITICAL
-  message:  '[engine] description',
-  // Context fields
-  orderId, paymentId, userId, shopId,
-  // Performance
-  durationMs: Date.now() - start,
-  // Never include
-  // password, token, apiKey, cardNumber, phone (unless last 4 digits)
-}));
-```
+// Pattern: user-owned data
+match /users/{uid}/{document=**} {
+  allow read, write: if request.auth.uid == uid || request.auth.token.admin == true;
+}
 
-Log fields are queryable in Cloud Logging with structured filters.
+// Pattern: seller-owned data with admin read
+match /products/{productId} {
+  allow read: if request.auth != null;
+  allow create: if request.auth.token.seller == true;
+  allow update, delete: if resource.data.sellerId == request.auth.uid
+                        || request.auth.token.admin == true;
+}
 
----
-
-## 10. Self-Healing Architecture
-
-The platform is designed to recover automatically from the most common failure modes without human intervention.
-
-### 10.1 Recovery Map
-
-| Failure | Detection | Auto-Recovery | Manual Escalation |
-|---|---|---|---|
-| Redis unavailable | `isFallback()` check | Immediate Firestore fallback; ioredis reconnect backoff | If > 1 hour: check VPC connector, Redis instance status |
-| Stuck payment (> 30m in processing) | `paymentTimeoutSweep` (every 5m) | Auto-fail → `payment.transaction.failed` event | If recurrent: investigate provider webhook delivery |
-| Dead-letter event (> 3 retries) | `snapshotPlatformMetrics` (every 5m) | Auto-replay if count > 100 | If > 1000: investigate subscriber endpoint health |
-| Stale POS session (idle > 24h) | `posSessionCleanup` (every 6h) | Auto-close session + notify devices | — |
-| Failed queue job (> 3 retries) | Queue worker counts `_retries` | Write to `redisJobDeadLetter` Firestore collection | Review dead-letter, fix root cause, re-enqueue |
-| Offline POS device | Client-side: `window offline` event | Queue ops to IndexedDB; flush on reconnect | If > 1 hour offline: alert manager |
-| Lost rider connection | `PresenceService.remove('rider', id)` on TTL expiry | Mark rider unavailable; re-dispatch if active delivery | Ops team contacts rider |
-| Cloud Function cold start spike | Cloud Monitoring alert | Auto-scaled by GCP | Min instances 1 for critical functions |
-| Inventory lock orphan | TTL auto-expiry (2 minutes) | Lock released automatically | — |
-| Payment lock orphan | TTL auto-expiry (30 seconds) | Lock released automatically | — |
-| Search index out of sync | `recordHealthSnapshot` alert | Re-index trigger from Firestore trigger | If persistent: full re-sync script |
-
-### 10.2 Self-Healing Cloud Functions
-
-`runScheduledSelfHeal` (every 15 minutes):
-
-```
-1. retryStuckPayments
-   └─ Query: payments where status IN ('pending','processing')
-             AND updatedAt < now - 30m
-   └─ Action: status → 'failed', publish event
-
-2. replayDeadEvents
-   └─ Query: platformEvents where status = 'dead_letter' LIMIT 50
-   └─ Action: status → 'pending', retries → 0
-
-3. closeStaleSessions
-   └─ Query: posSessions where status = 'open'
-             AND updatedAt < now - 24h
-   └─ Action: status → 'closed', notify member devices
-
-4. releaseOrphanedLocks
-   └─ Redis: scan sokoni:lock:* → check TTL
-   └─ Action: locks with TTL < 0 are already expired (ioredis handles this)
-
-5. reconcileInventory
-   └─ Query: products where pendingReconciliation = true
-   └─ Action: recalculate stockQty from inventory history, clear flag
-```
-
-### 10.3 Offline POS Recovery
-
-```
-Device loses connectivity
-        │
-        ▼
-POS cart operations → IndexedDB queue (sokoni_offline DB)
-Status indicators: "Offline mode — changes will sync when reconnected"
-        │
-        ▼
-Network returns → window.online event
-        │
-        ▼
-SokoniRedis.connectivity.enableAutoFlush() triggers
-        │
-        ▼
-SokoniRedis.offline.flush() replays queued operations
-  ├── pos_cart_sync → redisPosSetState CF
-  ├── order         → DashboardService.incr
-  └── payment       → PaymentService.setState
-        │
-        ▼
-IndexedDB items marked 'synced'
-Manager console shows: "X operations synced successfully"
+// Pattern: admin-only write
+match /commissionRules/{ruleId} {
+  allow read: if request.auth.token.seller == true || request.auth.token.admin == true;
+  allow write: if request.auth.token.admin == true;
+}
 ```
 
 ---
 
-## 11. Data Architecture
+## 4. Performance Architecture
 
-### 11.1 Collection Hierarchy
+### 4.1 CDN Layer
 
+Firebase Hosting provides a global CDN with automatic SSL and HTTP/2. All static assets are served from the nearest PoP to the user, typically within 50ms in East Africa.
+
+Cloudflare is deployed as an optional additional layer providing:
+- Web Application Firewall (WAF)
+- DDoS protection
+- Canary traffic splitting (for gradual rollouts)
+- Additional edge caching for API responses
+
+**Cache hierarchy:**
 ```
-Firestore Root
-│
-├─ users/{uid}                    User profiles, roles, preferences
-│  └─ fcmTokens/{tokenId}         FCM push tokens
-│
-├─ sellers/{sellerId}             Seller profiles, bank details, KYC status
-│
-├─ products/{productId}           Product catalog
-│  └─ variants/{variantId}        Product variants (size, colour)
-│
-├─ orders/{orderId}               All marketplace orders
-│  └─ items/{itemId}              Line items
-│
-├─ payments/{paymentId}           Full payment lifecycle
-│  └─ history/{txId}              State machine transition log
-│
-├─ paymentIdempotency/{key}       Duplicate prevention (24h TTL)
-│
-├─ deliveries/{deliveryId}        Delivery records
-│  └─ trackingPoints/{pointId}    GPS breadcrumbs
-│
-├─ riders/{riderId}               Rider profiles + status
-│
-├─ platformEvents/{eventId}       Platform event bus log
-├─ eventSubscribers/{id}          Event bus subscriber registry
-│
-├─ posSessions/{sessionId}        SmartPOS multi-device sessions
-├─ posTransactions/{txId}         POS transaction records
-│
-├─ merchants/{merchantId}         Merchant profiles
-│  └─ posPeripherals/{deviceId}   Registered POS peripherals
-│  └─ posAudit/{entryId}          POS audit log
-│
-├─ notifications/{notifId}        Notification records
-├─ platformEvents/{eventId}       Event bus
-│
-├─ commissionRules/{ruleId}       Commission configuration
-├─ commissionLedger/{entryId}     Double-entry commission records
-│
-├─ inventory/{productId}          Authoritative inventory records
-│  └─ movements/{movId}           Stock movement history
-│
-├─ foundationCampaigns/{id}       Foundation campaigns
-├─ donations/{donationId}         Donation records
-├─ foundationLedger/{entryId}     Foundation financial records
-│
-├─ opsMetrics/{timestamp}         5-minute platform metric snapshots
-├─ selfHealLog/{logId}            Self-healing action audit trail
-│
-├─ redisJobAudit/{jobId}          Queue worker job audit log
-├─ redisJobDeadLetter/{jobId}     Failed jobs after max retries
-│
-├─ aiJobs/{jobId}                 Background AI job results
-├─ aiSessions/{sessionId}         KASS conversation context
-│
-├─ _migrations/{migrationId}      Migration state tracking
-└─ _health/{checkId}              Health check records
+User browser cache (immutable assets: 1 year)
+    ↓ miss
+Cloudflare edge cache (API responses: 60s catalog, bypass user-specific)
+    ↓ miss
+Firebase Hosting CDN (static assets: immutable)
+    ↓ miss
+Origin: Cloud Functions / Firebase Hosting
 ```
 
-### 11.2 Data Partitioning Strategy
+### 4.2 Cache Headers Strategy
 
-Firestore collections are designed to avoid hot spots:
+All resources have explicit Cache-Control headers. No implicit caching.
 
-- **Orders:** stored flat in `orders/` collection; shopId and buyerId are indexed for queries. No subcollection under seller or buyer (avoids document size growth).
-- **Inventory movements:** subcollection under product to keep movements co-located with product.
-- **POS audit:** subcollection under merchant, not a root collection, since it is always queried per merchant.
-- **Notifications:** flat root collection; queryable by uid + createdAt index.
-
-### 11.3 Firestore Index Architecture
-
-- 197+ composite indexes (approaching 200/200 limit)
-- When limit is reached: use `sokoni-ops` second Firestore database for new indexes
-- Never drop existing indexes: `feedback_index_management.md`
-- Index candidates for second DB: high-cardinality analytical queries (BI, reporting)
-
-### 11.4 Data Ownership Rules
-
-| Data Type | Firestore | Redis | Cloud Storage |
-|---|---|---|---|
-| Orders (permanent) | ✓ authoritative | ✗ | ✗ |
-| Payment records | ✓ authoritative | ✗ | ✗ |
-| Customer PII | ✓ authoritative | ✗ never | ✗ |
-| Product catalog | ✓ authoritative | cache TTL | ✗ |
-| Active cart | ✓ posSessions | ✓ sync copy | ✗ |
-| Session token | ✓ reference | ✓ operational | ✗ |
-| Receipt PDF | ✗ | ✗ | ✓ |
-| Product images | ✗ reference | ✗ | ✓ |
-| AI-generated content | ✓ aiJobs | ✓ cache 1h | ✓ |
-| Search index | ✗ | ✗ | Algolia/Typesense |
-
----
-
-## 12. Security Architecture
-
-### 12.1 Defence Layers
-
-```
-Request ──► Firebase App Check ──► Firebase Auth ──► CF Auth guard
-              (attestation)         (identity)         (claims check)
-                  │                     │                   │
-                  ▼                     ▼                   ▼
-           Reject bots          Identify user         Verify role
-                                                      (ABAC claims)
-                                                           │
-                                                           ▼
-                                                    Rate limit check
-                                                    (Redis / own guard)
-                                                           │
-                                                           ▼
-                                                    Input validation
-                                                    (sanitise all fields)
-                                                           │
-                                                           ▼
-                                                    Business logic
-                                                           │
-                                                           ▼
-                                                    Audit log write
-                                                    (securityAuditLog)
-```
-
-### 12.2 Role-Based Access Control
-
-8 roles with claim-based enforcement:
-
-| Role | Claims | Firestore Rules Access |
+| Resource Type | Cache-Control | Notes |
 |---|---|---|
-| Guest | (none) | Public product reads only |
-| Buyer | `buyer: true` | Own orders, own payments, own profile |
-| Seller | `seller: true` | Own products, own shop orders, own sessions |
-| Service Provider | `provider: true` | Own listings, own bookings |
-| Driver/Rider | `rider: true` | Assigned deliveries, own rider profile |
-| Business Owner | `owner: true` | All merchant data, POS sessions |
-| Admin | `admin: true` | Platform-wide read + moderated writes |
-| Super Admin | `superAdmin: true` | Full access + security operations |
+| HTML shell (`index.html`) | `no-cache` | Always revalidated; SW serves from cache |
+| JS/CSS (hashed filenames) | `public, max-age=31536000, immutable` | 1-year cache; filename hash changes on update |
+| Product images | `public, max-age=86400` | 24-hour CDN cache; Cloud Storage served |
+| API responses (catalog) | `public, s-maxage=60` | 60 seconds at CDN; private at client |
+| API responses (user-specific) | `private, no-store` | Never cached at CDN |
+| Service Worker script | `no-cache` | Browser always revalidates SW |
 
-Claims set by Cloud Functions via `admin.auth().setCustomUserClaims()` — never by clients.
+**Cloudflare caveat:** SW script must have `CDN-Cache-Control: no-store` to prevent Cloudflare caching it for 7 days (known bug — see `project_cloudflare_sw_cache.md`).
 
-### 12.3 Payment Security
+### 4.3 API Response Caching
 
-- Idempotency key on every payment attempt
-- HMAC signing on QR-based POS payments
-- IntaSend webhook HMAC verification before payment state update
-- Redis payment lock (NX) prevents double-charge race conditions
-- Client-side payment confirmation never trusted: always verify via Cloud Function + provider API
-- Payments stuck in `processing` for > 30 minutes are auto-failed
+| Endpoint Category | Cache Location | TTL | Strategy |
+|---|---|---|---|
+| Product catalog (listings grid) | Redis | 60 seconds | Cache-aside; invalidated on product write |
+| Product detail | Redis | 300 seconds | Cache-aside; invalidated on product write |
+| Search results | Redis | 60 seconds | Key = SHA-256(query + filters) |
+| AI responses | Redis | 3600 seconds | Key = SHA-256(model + sanitised prompt) |
+| User-specific data | No cache | — | Always fresh from Firestore |
+| Admin dashboards | Redis | 30 seconds | Tolerate 30s staleness for dashboard KPIs |
+| Merchant analytics | Redis | 120 seconds | Merchant-specific; key includes merchantId |
 
-### 12.4 Secret Management
+### 4.4 Service Worker — Offline-First Strategy
 
-All secrets in Google Secret Manager. No secrets in code, `.env` files committed to git, or Cloud Logging:
+Service Worker `sokoni-v{N}` implements a cache-then-network strategy for the application shell:
 
-| Secret | Usage |
-|---|---|
-| `INTASEND_PRIVATE_KEY` | M-Pesa / Card payment provider |
-| `QR_SIGNING_SECRET` / `SOKONI_HMAC_KEY` | POS QR HMAC |
-| `SENDGRID_API_KEY` | Email delivery |
-| `REDIS_URL` | Redis connection (optional) |
-| `ANTHROPIC_API_KEY` | AI engine |
-| `AT_API_KEY` / `AT_USERNAME` | Africa's Talking SMS |
-| `LOYALTY_HMAC_SECRET` | Offline loyalty sync |
-| `PAYMENT_HMAC_SECRET` | Payment integrity |
-| `PAYROLL_ENCRYPTION_KEY` | Payroll data at rest |
-| `ALGOLIA_ADMIN_KEY` | Search index admin |
+```
+SW Cache Strategy Map:
+  /                     → Cache First (app shell)
+  /index.html           → Network First (ensures latest)
+  /sokoni-*.js          → Cache First (hashed; safe to cache indefinitely)
+  /sokoni-tokens.css    → Cache First
+  /shared-header.js     → Stale-while-revalidate (1h)
+  /marketplace.html     → Stale-while-revalidate (1h)
+  /product/*            → Network First (product data must be fresh)
+  /checkout.html        → Network Only (payment pages never cached)
+  External: Firebase SDK → Cache First
 
-### 12.5 XSS Prevention
+Background sync:
+  - Failed write operations queued in IndexedDB
+  - Background sync tag: 'sokoni-sync'
+  - Replay on next connectivity
+```
 
-All dynamic DOM insertion uses explicit escaping:
+**CACHE_VERSION** is bumped on every significant deployment to bust cached SW.
+
+### 4.5 Image Pipeline
+
+All product images pass through a processing pipeline on upload:
+
+```
+Upload → Cloud Storage trigger → media-engine.js CF
+    ↓
+1. Validate: MIME type (JPEG/PNG/WebP only), max 10MB input
+2. Resize: max 1200×1200px (preserve aspect ratio)
+3. Convert: WebP output (typically 30–50% smaller than JPEG)
+4. Thumbnail: 400×400px WebP for grid view
+5. Store: original + processed + thumbnail in Cloud Storage
+6. Update: product.imageUrl, product.thumbnailUrl in Firestore
+```
+
+Client-side lazy loading:
+```html
+<img src="{thumbnailUrl}" loading="lazy" decoding="async"
+     width="400" height="400" alt="{productName}">
+```
+
+All images have explicit `width` and `height` to prevent layout shift (CLS target: < 0.1).
+
+### 4.6 Core Web Vitals Targets
+
+| Metric | Target | Ceiling | Current Strategy |
+|---|---|---|---|
+| LCP (Largest Contentful Paint) | < 2.5s | < 4.0s | Preconnect hints, critical CSS inline, lazy images |
+| CLS (Cumulative Layout Shift) | < 0.1 | < 0.25 | Explicit width/height on all images, no layout-shifting ads |
+| INP (Interaction to Next Paint) | < 200ms | < 500ms | Debounced inputs, async handlers, deferred non-critical JS |
+| TTFB (Time to First Byte) | < 600ms | < 1000ms | CDN edge serving, preconnect to Firebase |
+| FCP (First Contentful Paint) | < 1.8s | < 3.0s | Critical path CSS inlined, SW cache |
+
+Tracking: CWV metrics reported to `_sokoniTelemetry` Firestore collection via client-side observer (`PerformanceObserver`).
+
+---
+
+## 5. Resilience Architecture
+
+### 5.1 Circuit Breakers
+
+Circuit breakers prevent cascade failures by stopping requests to a degraded dependency before the failures propagate. Each external service has its own circuit breaker state tracked in Redis.
+
+```
+Circuit Breaker State Machine:
+  CLOSED (normal) ──► OPEN (failing)
+      ▲                    │
+      └─────────── HALF-OPEN (probing)
+
+Thresholds (configurable per service):
+  CLOSED → OPEN:     5 failures in 60s window
+  OPEN → HALF-OPEN:  30s cooldown
+  HALF-OPEN → CLOSED: 1 success
+  HALF-OPEN → OPEN:   1 failure
+
+Services with circuit breakers:
+  IntaSend payments      60s cooldown
+  Anthropic AI           30s cooldown
+  Typesense search       15s cooldown
+  Algolia search         15s cooldown
+  Africa's Talking SMS   60s cooldown
+  SendGrid email         60s cooldown
+  OSRM routing           30s cooldown
+  Redis itself           immediate Firestore fallback
+```
+
+### 5.2 Retry Policy
+
+Transient failures are retried with exponential backoff and jitter to prevent thundering herd.
+
 ```javascript
+// Retry configuration
+{
+  maxAttempts: 3,
+  baseDelayMs: 500,
+  maxDelayMs: 30000,
+  jitterFactor: 0.2,    // ±20% randomisation
+  retryableErrors: [
+    'UNAVAILABLE',        // Firestore / gRPC temporary unavailability
+    'DEADLINE_EXCEEDED',  // Timeout
+    'INTERNAL',           // Internal server error (5xx)
+    'RESOURCE_EXHAUSTED', // Quota temporarily exceeded
+  ],
+  // Never retry:
+  nonRetryableErrors: [
+    'INVALID_ARGUMENT',   // Client sent bad data; retry won't help
+    'NOT_FOUND',          // Resource doesn't exist
+    'ALREADY_EXISTS',     // Idempotency key already consumed
+    'PERMISSION_DENIED',  // Auth failure; retry won't help
+    'FAILED_PRECONDITION',// Business rule violation
+  ]
+}
+
+// Delay calculation:
+delay = min(baseDelayMs × 2^attempt, maxDelayMs) × (1 + jitter)
+// attempt=0: ~500ms, attempt=1: ~1000ms, attempt=2: ~2000ms
+```
+
+### 5.3 Dead-Letter Queues
+
+Failed operations that exhaust retries go to dead-letter queues for manual or automated recovery.
+
+| Queue | Trigger | Dead-Letter Collection | Recovery |
+|---|---|---|---|
+| Platform events | 3 failed subscriber deliveries | `platformEvents` (status: `dead_letter`) | `selfHeal.replayDeadEvents()` every 15m |
+| Notification delivery | 3 failed channel attempts | `notificationDeadLetter/{id}` | Admin review + re-queue |
+| Webhook delivery | 3 failed HTTP POSTs | `webhookDeadLetter/{id}` | Auto-retry at T+1h, T+6h, T+24h |
+| Payment processing | Provider timeout (IntaSend) | `paymentDeadLetter/{id}` | Manual review required; financial impact |
+| Queue worker jobs | 3 failed processing attempts | `redisJobDeadLetter/{jobId}` | Admin review in ops-center.html |
+| AI jobs | Provider error | `aiDeadLetter/{jobId}` | Auto-retry with lower model if budget allows |
+
+Dead-letter events are visible in the Operations Center (ops-center.html) under the "Dead Letter" tab. Alert fires when `dead_letter_count > 100`.
+
+### 5.4 Graceful Degradation
+
+Each dependency degradation has a defined fallback:
+
+| Dependency Fails | Degradation | User Impact | Data Impact |
+|---|---|---|---|
+| Redis | Firestore fallback for all state; rate limiting suspended | ~50ms latency increase | None — Redis is never source of truth |
+| Typesense search | Algolia fallback → Firestore text filter | Search quality degrades | None |
+| Algolia (both) | Firestore native query (limited) | Search becomes basic filter | None |
+| Anthropic AI | Cached response if available; "AI temporarily unavailable" message | AI features hidden | None |
+| IntaSend payment | "Payment service temporarily unavailable"; pending queue | No new payments taken | None |
+| Africa's Talking SMS | Email fallback for notifications | Notifications via email only | None |
+| SendGrid email | Queued in Redis; retried when available | Email delivery delayed | Queued in Firestore |
+| OSRM routing | Haversine straight-line estimate | Less accurate ETAs | None |
+| Cloud Storage | Existing images served from CDN; new uploads queued | Uploads temporarily unavailable | Queued locally |
+
+### 5.5 Health Checks
+
+**Active health checks:** `obsHealthProbe` CF runs every 5 minutes via Cloud Scheduler. Checks:
+- Firestore read/write round-trip
+- Redis PING (if configured)
+- Typesense cluster health
+- IntaSend connectivity
+- Recent payment success rate
+
+**Passive health checks:** Cloud Monitoring monitors CF error rates, latency P95, and queue depths continuously.
+
+**Alert threshold:** 3 consecutive health check failures trigger a CRITICAL alert to the ops team.
+
+**Health endpoint:** `GET /health` returns JSON `{ ok: boolean, checks: {...}, timestamp }` — used by uptime monitors.
+
+### 5.6 Idempotency
+
+All state-mutating API calls require an idempotency key. The platform enforces this at two levels:
+
+1. **Payment idempotency:** `paymentIdempotency/{orderId_method_amount_hash}` — 24h TTL. If a payment request arrives with a matching key, the existing payment record is returned, not a new charge created.
+
+2. **Order idempotency:** `orders` documents use Firestore's transactional write with a `idempotencyKey` field. Duplicate order creation attempts with the same key return the existing order.
+
+3. **CF trigger idempotency:** Firestore triggers can fire more than once for a single write (at-least-once semantics). All trigger handlers are idempotent: they check a `processed` flag or use Firestore transactions to prevent double-processing.
+
+```javascript
+// Pattern: idempotent trigger handler
+async function handleOrderCompleted(orderId) {
+  const ref = db.collection('commissionLedger').doc(`order_${orderId}`);
+  await db.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    if (doc.exists) return; // Already processed; exit silently
+    tx.set(ref, { orderId, calculatedAt: Timestamp.now(), ...commissionData });
+  });
+}
+```
+
+---
+
+## 6. Security Architecture
+
+### 6.1 Zero Trust Model
+
+Every request is evaluated regardless of its network origin. There is no "trusted internal network." A Cloud Function calling another Cloud Function is still subject to auth checks.
+
+```
+Inbound request (any origin)
+        │
+        ▼
+App Check attestation (is this a genuine SOKONI client?)
+        │
+        ▼
+Firebase Auth verification (who is this user?)
+        │
+        ▼
+Custom claims RBAC (what can this user do?)
+        │
+        ▼
+Rate limiter (is this user within their quota?)
+        │
+        ▼
+Input sanitisation (is this input safe?)
+        │
+        ▼
+Business logic
+        │
+        ▼
+Audit log (record what happened)
+```
+
+No step can be bypassed. Middleware chain is applied uniformly across all `onCall` functions.
+
+### 6.2 App Check
+
+Firebase App Check is enforced on all Cloud Functions (`enforceAppCheck: true`). Uses ReCaptchaV3 for web clients.
+
+**What App Check prevents:**
+- Automated bots calling Cloud Functions directly (without a genuine client)
+- Competitor scraping via CF endpoints
+- Denial of service via direct CF invocation
+
+**What App Check does not replace:**
+- Authentication (still required separately)
+- Authorisation (still enforced via custom claims)
+- Rate limiting (still required for authenticated abuse)
+
+### 6.3 HMAC Signing
+
+HMAC-SHA256 is used for tamper-proof signing wherever data crosses an untrusted boundary:
+
+| Use Case | Secret | Verification |
+|---|---|---|
+| IntaSend webhook callbacks | `PAYMENT_HMAC_SECRET` | `crypto.timingSafeEqual(expected, actual)` |
+| POS QR code payments | `QR_SIGNING_SECRET` | Verified server-side before payment state change |
+| Loyalty QR cards | `LOYALTY_HMAC_SECRET` | Offline HMAC verification at merchant |
+| Platform webhooks (outbound) | `SOKONI_HMAC_KEY` | Subscriber verifies before processing |
+
+Timing-safe comparison (`crypto.timingSafeEqual`) is always used — never string equality (`===`) — to prevent timing attacks.
+
+### 6.4 Secrets Management
+
+All secrets are stored in GCP Secret Manager. No secrets in:
+- Source code (git history included)
+- Environment variables committed to repository
+- Cloud Logging output
+- Client-side JS (even minified)
+
+Secrets are accessed at runtime by Cloud Functions using the Secret Manager API. `functions/.env` is gitignored.
+
+**Secrets registry:**
+```
+INTASEND_PRIVATE_KEY        M-Pesa + card payment provider
+INTASEND_PUBLISHABLE_KEY    Client-side payment initialisation
+QR_SIGNING_SECRET           POS QR HMAC
+SOKONI_HMAC_KEY             Platform webhook HMAC
+SENDGRID_API_KEY            Email delivery
+REDIS_URL                   Memorystore connection string
+ANTHROPIC_API_KEY           AI engine (Claude)
+AT_API_KEY                  Africa's Talking SMS
+AT_USERNAME                 Africa's Talking account
+LOYALTY_HMAC_SECRET         Offline loyalty card verification
+PAYMENT_HMAC_SECRET         Payment integrity checking
+PAYROLL_ENCRYPTION_KEY      Payroll data at rest (AES-256)
+ALGOLIA_ADMIN_KEY            Search index administration
+ETIMS_API_KEY               KRA eTIMS integration
+ETIMS_ENCRYPTION_KEY        eTIMS credential encryption
+VAPID_PRIVATE_KEY           Web push notification signing
+```
+
+### 6.5 Rate Limiting — Three Layers
+
+**Layer 1 — Cloudflare (edge):**
+- IP-based rate limiting at WAF level
+- Bot detection and challenge
+- DDoS mitigation
+
+**Layer 2 — API Gateway (CF middleware):**
+- Per-UID + per-IP composite rate limiting via Redis INCR
+- Different quotas per action type:
+
+| Action | Limit | Window |
+|---|---|---|
+| `checkout` | 10 | 1 minute |
+| `search` | 60 | 1 minute |
+| `login` | 5 | 15 minutes |
+| `message` | 30 | 1 minute |
+| `review` | 5 | 1 hour |
+| `payment.initiate` | 5 | 5 minutes |
+| `admin.*` | 100 | 1 minute |
+| `ai.generate` | 10 | 1 minute (free tier) |
+
+**Layer 3 — Business logic (CF-level):**
+- Domain-specific checks (e.g. max 3 payment retries per order)
+- Firestore-backed for critical paths (survives Redis outage)
+
+**Fallback:** If Redis is unavailable, rate limiting fails open (allows requests). Critical security controls (auth, payment verification) are Firestore-backed and unaffected.
+
+### 6.6 Content Security Policy
+
+Strict CSP applied via Firebase Hosting `firebase.json` headers:
+
+```
+Content-Security-Policy:
+  default-src 'self';
+  script-src 'self' 'unsafe-inline'    (unsafe-inline required by IntaSend SDK — tracked as tech debt)
+             https://www.gstatic.com
+             https://apis.google.com
+             https://www.recaptcha.net;
+  style-src 'self' 'unsafe-inline'
+            https://fonts.googleapis.com;
+  font-src 'self' https://fonts.gstatic.com;
+  img-src 'self' data: blob:
+          https://firebasestorage.googleapis.com
+          https://lh3.googleusercontent.com;
+  connect-src 'self'
+              https://*.firebaseapp.com
+              https://*.googleapis.com
+              wss://*.firebaseio.com
+              https://api.intasend.com
+              https://api.anthropic.com;
+  frame-src 'none';
+  object-src 'none';
+  report-uri https://us-central1-sokoni-aeb26.cloudfunctions.net/cspReport;
+```
+
+A shadow `Content-Security-Policy-Report-Only` policy is deployed alongside to test stricter rules before enforcement.
+
+**Technical debt:** `unsafe-inline` in `script-src` is required by the current IntaSend SDK. Migration to nonce-based CSP is tracked as a planned improvement (depends on IntaSend SDK nonce support).
+
+### 6.7 XSS Prevention
+
+All dynamic DOM manipulation uses explicit escaping. No `innerHTML` with user-supplied values.
+
+```javascript
+// Mandatory escaping helper used throughout all HTML-generating code
 function _esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
-                      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-// Never: element.innerHTML = userValue;
-// Always: element.innerHTML = _esc(userValue); or element.textContent = userValue;
+
+// Correct: element.textContent = userValue;
+// Correct: element.innerHTML = _esc(userValue);
+// Correct: element.setAttribute('data-id', _esc(id));
+// NEVER:   element.innerHTML = userValue;   // XSS vulnerability
 ```
 
-### 12.6 Firestore Security Rules
+9 XSS vulnerabilities identified and fixed during RC1 hardening (commit ae543de). All flagged via internal audit using `innerHTML =` pattern search.
 
-Architecture principle: deny everything by default, explicitly allow by role.
+### 6.8 Input Validation
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Default: deny all
-    match /{document=**} { allow read, write: if false; }
-
-    // Public product catalog: read-only for all authenticated users
-    match /products/{productId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth.token.seller == true || request.auth.token.admin == true;
-    }
-    // ... per-collection rules
-  }
-}
-```
-
----
-
-## 13. API Design Patterns
-
-### 13.1 Callable Functions (Primary Pattern)
-
-All client-facing business operations use `onCall` with `enforceAppCheck: true`:
-
-```javascript
-exports.createOrder = onCall({ enforceAppCheck: true }, async (request) => {
-  // 1. Extract and validate auth
-  const auth = _authRequired(request);
-  // 2. Rate limit
-  await checkRateLimit(request, 'checkout');
-  // 3. Validate and sanitise input
-  const { cart, paymentMethod } = _validateInput(request.data);
-  // 4. Business logic
-  const orderId = await OrderEngine.create({ uid: auth.uid, cart, paymentMethod });
-  // 5. Return typed response
-  return { ok: true, orderId };
-});
-```
-
-### 13.2 HTTP Functions (Webhooks and Public APIs)
-
-Used for: payment provider webhooks, public health checks, MiniShop public APIs.
-
-```javascript
-exports.intasendWebhook = onRequest(
-  { cors: false },
-  async (req, res) => {
-    // 1. Verify HMAC signature before processing
-    if (!verifyHMAC(req.body, req.headers['x-intasend-signature'])) {
-      return res.status(401).json({ error: 'Invalid signature' });
-    }
-    // 2. Process idempotently
-    await PaymentEngine.handleWebhook(req.body);
-    res.json({ ok: true });
-  }
-);
-```
-
-### 13.3 Firestore Triggers
-
-Used for: real-time reactions, cache invalidation, event publishing, Redis sync.
-
-```javascript
-exports.onOrderCreated = onDocumentCreated(
-  { document: 'orders/{orderId}' },
-  async (event) => {
-    const order = event.data.data();
-    // Wrapped in try/catch — trigger failure must never affect Firestore write
-    try {
-      await EventBus.publish('order.order.created', { orderId: event.params.orderId, ...order });
-      await RedisSync.syncOrderCreated(order);
-    } catch (err) {
-      console.error(JSON.stringify({ severity: 'ERROR', message: err.message }));
-    }
-  }
-);
-```
-
-### 13.4 Scheduled Functions
-
-Used for: maintenance, self-healing, metric snapshots, queue processing.
-
-```javascript
-exports.redisScheduledQueueWorker = onSchedule(
-  { schedule: '* * * * *', timeZone: 'Africa/Nairobi' },
-  async () => {
-    // Process up to 10 jobs per queue per minute
-    for (const queue of QUEUE_PRIORITY_ORDER) {
-      const jobs = await QueueService.pop(queue, 10);
-      for (const job of jobs) await dispatch(queue, job);
-    }
-  }
-);
-```
-
-### 13.5 Input Sanitisation Standard
+All Cloud Function inputs are validated and sanitised before business logic executes:
 
 ```javascript
 function _san(value, maxLength = 200) {
-  if (typeof value !== 'string') throw new HttpsError('invalid-argument', `Expected string`);
-  const clean = value.trim().replace(/[<>'"]/g, '');
-  if (clean.length > maxLength) throw new HttpsError('invalid-argument', `Value too long`);
+  if (typeof value !== 'string') throw new HttpsError('invalid-argument', 'Expected string');
+  const clean = value.trim().replace(/[<>'"\\]/g, '');
+  if (clean.length > maxLength) throw new HttpsError('invalid-argument', 'Value too long');
   return clean;
 }
 
@@ -1187,417 +1184,427 @@ function _validateAmount(amount) {
   const n = Number(amount);
   if (!Number.isFinite(n) || n <= 0 || n > 10_000_000)
     throw new HttpsError('invalid-argument', 'Invalid amount');
-  return Math.round(n * 100) / 100; // 2dp
+  return Math.round(n * 100) / 100; // 2 decimal places only
+}
+
+function _validatePhone(phone) {
+  // Kenya E.164: +254XXXXXXXXX (12 digits)
+  if (!/^\+254[7][0-9]{8}$/.test(phone))
+    throw new HttpsError('invalid-argument', 'Invalid Kenya phone number');
+  return phone;
 }
 ```
 
 ---
 
-## 14. Scalability Design
+## 7. Observability Architecture
 
-### 14.1 Horizontal Scaling
+### 7.1 Structured Logging
 
-Firebase Cloud Functions Gen2 scale to zero and scale out to thousands of instances automatically. Design constraints for horizontal scale:
-
-- **Stateless functions:** no global mutable state in CF instances (no in-memory caches that differ between instances)
-- **Idempotent handlers:** duplicate invocations (from retries) produce the same result
-- **Distributed locking:** Redis NX locks prevent concurrent-write conflicts on shared resources
-- **Atomic Firestore transactions:** for balance deductions, stock decrements, and sequential counters
-
-### 14.2 Database Scaling
-
-| Scenario | Firestore Handles | Redis Handles |
-|---|---|---|
-| 10,000 concurrent buyers | ✓ (Firestore scales automatically) | Session validation cached |
-| 1,000 concurrent POS terminals | ✓ (Firestore onSnapshot) | Cart state + metrics in Redis |
-| 100,000 search queries/hour | Algolia/Typesense (not Firestore) | Search result cache |
-| 10,000 rate-limit checks/min | Would be 10k Firestore reads | Redis INCR (< 1ms each) |
-| 50 concurrent deliveries | ✓ | Rider presence in Redis |
-
-### 14.3 Multi-Branch / Franchise Support
-
-The data model supports multi-branch operations natively:
-
-```
-merchants/{merchantId}
-  ├─ branches: { [branchId]: { name, location, managers } }
-  ├─ branchId is stored on every order, POS session, and inventory record
-  └─ Analytics can be queried per-branch or aggregated across branches
-
-sellers/{sellerId}
-  └─ shopIds: [shopId1, shopId2, ...]   // one seller, multiple shops
-```
-
-No architectural changes are required to support franchise chains — branch filtering is a query parameter, not a schema change.
-
-### 14.4 Multi-Region (Future)
-
-Current deployment: `us-central1` (lowest latency to East Africa via Google backbone).
-
-When traffic justifies multi-region:
-1. Firestore: enable multi-region (already possible; requires billing upgrade)
-2. Cloud Functions: add `europe-west1` and `asia-east1` replicas
-3. Redis: Redis Enterprise Active-Active for cross-region sync, or regional Redis instances with region-affinity routing
-4. Search: Typesense replication / Algolia multi-region
-5. CDN: Firebase Hosting is already global CDN
-
-The key namespace and event schemas are region-neutral — no data migrations required.
-
----
-
-## 15. Developer Experience Standards
-
-### 15.1 Shared Services Pattern
-
-Never implement cross-cutting concerns (auth check, rate limit, input sanitisation, event publish) inline in every handler. Use shared modules:
+All Cloud Functions emit structured JSON logs to Cloud Logging. Log entries are queryable using structured field filters.
 
 ```javascript
-// functions/shared/auth.js
-function requireAuth(request, requiredClaim = null) { ... }
-function requireAdmin(request) { ... }
-function requireSeller(request) { ... }
-
-// functions/shared/validation.js
-function sanitise(value, maxLen) { ... }
-function validateAmount(amount) { ... }
-function validatePhone(phone) { ... }
-
-// functions/shared/events.js
-async function publishEvent(type, payload, correlationId) { ... }
-```
-
-### 15.2 Engine Interface Contract
-
-Every engine exposes its interface through a clear export pattern:
-
-```javascript
-// functions/order-engine.js
-
-/**
- * Create a new order.
- * @param {object} params - { uid, cart, paymentMethod, shippingAddress }
- * @returns {{ orderId: string }}
- * @throws HttpsError on validation failure
- */
-async function createOrder(params) { ... }
-
-/**
- * Transition order to next status.
- * @param {string} orderId
- * @param {string} newStatus - 'processing' | 'packed' | 'shipped' | 'delivered' | 'completed'
- * @param {string} actorUid
- * @returns {{ ok: boolean }}
- * @throws HttpsError on illegal transition
- */
-async function transitionOrder(orderId, newStatus, actorUid) { ... }
-
-module.exports = { createOrder, transitionOrder, cancelOrder, getOrder };
-```
-
-### 15.3 Typed Interfaces (JSDoc)
-
-SOKONI uses JSDoc type annotations throughout Cloud Function code. These serve as executable documentation — readable by IDEs and searchable by grep:
-
-```javascript
-/**
- * @typedef {Object} OrderItem
- * @property {string} productId
- * @property {string} [variantId]
- * @property {number} qty
- * @property {number} unitPrice
- * @property {string} sellerId
- */
-
-/**
- * @typedef {Object} CreateOrderParams
- * @property {string} uid
- * @property {OrderItem[]} cart
- * @property {'mpesa'|'card'|'wallet'} paymentMethod
- * @property {string} [shippingAddress]
- */
-```
-
-### 15.4 Adding a New Hub or Feature
-
-Checklist for adding a new platform vertical:
-
-1. **Define the collection schema** — document in `docs/` before writing code
-2. **Define the events** — add to event catalog in §5.3
-3. **Write the engine module** — one file per engine, one interface contract
-4. **Wire the API layer** — add to `functions/index.js`
-5. **Write Firestore security rules** — follow least-privilege pattern
-6. **Add Firestore indexes** — document in FIRESTORE-INDEX-ARCHITECTURE.md
-7. **Update event subscribers** — register the new engine for relevant events
-8. **Add monitoring** — surface in Operations Center
-9. **Write documentation** — update ARCHITECTURE.md and create a vertical-specific doc
-10. **Update CHANGELOG.md** — with files affected, security implications, deployment steps
-
-### 15.5 Health Check Contract
-
-Every engine implements a health check function:
-
-```javascript
-exports.healthCheck = onCall({}, async (request) => {
-  const checks = {
-    firestore: await checkFirestoreConnectivity(),
-    redis:     await checkRedisConnectivity(),  // optional
-    search:    await checkSearchConnectivity(), // if applicable
+// Standard log format for all CFs
+function log(severity, message, context = {}) {
+  const entry = {
+    severity,           // 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL'
+    message: `[${SERVICE_NAME}] ${message}`,
+    timestamp: new Date().toISOString(),
+    ...context,         // orderId, paymentId, userId, shopId, merchantId as applicable
+    // Performance
+    durationMs: context.start ? Date.now() - context.start : undefined,
+    // Environment
+    functionName: process.env.FUNCTION_NAME,
+    region: process.env.FUNCTION_REGION,
   };
-  const healthy = Object.values(checks).every(c => c.ok);
-  return { ok: healthy, checks, timestamp: Date.now() };
-});
+  // NEVER include in logs:
+  // password, token, apiKey, cardNumber, pin, secret, privateKey
+  // Phone numbers except last 4 digits ("XXXXXXXX1234")
+  // Email addresses except domain ("****@gmail.com")
+  console.log(JSON.stringify(entry));
+}
 ```
 
-### 15.6 Performance Benchmarks
+**Log levels by scenario:**
+- `DEBUG`: Development only; suppressed in production
+- `INFO`: Normal operations (order created, payment initiated, rider assigned)
+- `WARNING`: Non-critical issues (cache miss, retry attempt, degraded mode)
+- `ERROR`: Business logic failures (payment failed, validation error)
+- `CRITICAL`: System failures requiring immediate attention (Redis down, payment provider unresponsive)
 
-Target metrics per CF category:
+### 7.2 Client Telemetry
 
-| CF Type | P50 | P95 | P99 |
+Client-side performance and error data is collected and stored in Firestore for analysis.
+
+```
+_sokoniTelemetry/{uid}/events/{eventId}
+  └─ type: 'cwv' | 'error' | 'journey' | 'page_load'
+  └─ metric: string         (e.g. 'LCP', 'CLS', 'INP')
+  └─ value: number
+  └─ page: string           (e.g. '/marketplace')
+  └─ userAgent: string
+  └─ timestamp: Timestamp
+  └─ connectionType: string (e.g. '4g', '3g')
+```
+
+**Core Web Vitals tracking:**
+```javascript
+// Installed on every page via shared-header.js
+new PerformanceObserver((list) => {
+  for (const entry of list.getEntries()) {
+    reportTelemetry({ type: 'cwv', metric: entry.name, value: entry.value });
+  }
+}).observe({ type: 'largest-contentful-paint', buffered: true });
+```
+
+**Error tracking:** `window.onerror` and `window.onunhandledrejection` capture all uncaught errors and send to `_sokoniTelemetry`.
+
+**User journey tracking:** Key funnel events (`page_view`, `product_viewed`, `cart_add`, `checkout_start`, `payment_complete`) are recorded for funnel analysis.
+
+**Retention:** Raw telemetry events pruned at 30 days; aggregated CWV summaries kept permanently.
+
+### 7.3 Distributed Tracing
+
+A `traceId` is propagated across all Cloud Function calls within a single business flow.
+
+```javascript
+// At API gateway entry point:
+const traceId = req.headers['x-trace-id'] || generateTraceId();
+
+// Injected into all logs:
+log('INFO', 'Order created', { orderId, traceId });
+
+// Passed to downstream CFs:
+await publishEvent('order.order.created', { orderId, traceId });
+
+// Subscriber CFs extract and continue:
+const { traceId } = event.payload;
+log('INFO', 'Processing commission', { orderId, traceId });
+```
+
+All logs with the same `traceId` can be found in Cloud Logging using the filter:
+```
+jsonPayload.traceId = "trace_abc123"
+```
+
+This allows tracing a complete payment flow across 5+ Cloud Functions without a dedicated tracing service.
+
+### 7.4 Metrics Collection
+
+**Server-side metrics:** `snapshotPlatformMetrics` (Cloud Scheduler, every 5 minutes):
+
+```
+opsMetrics/{ISO-timestamp}
+  └─ orders: { active, pending, stuck, completedToday }
+  └─ payments: { todayTotal, todayGMV, failedLast24h, stuckCount }
+  └─ deliveries: { inTransit, overdue, ridersOnline }
+  └─ pos: { openSessions, deviceCount, transactionsToday }
+  └─ eventBus: { pendingEvents, deadLetterCount }
+  └─ redis: { connected, memoryUsedMB, hitRate, queueDepths }
+  └─ notifications: { queued, sentLast24h, failedLast24h }
+  └─ ai: { requestsToday, cacheHitRate, spendToday }
+  └─ users: { onlineLast5m, newToday, authFailures24h }
+```
+
+Snapshots retained for 7 days; older snapshots deleted by `cleanupOpsMetrics` scheduler.
+
+**Client-side metrics:** Reported via `_sokoniTelemetry` collection (see §7.2).
+
+### 7.5 Alerting — 19 Active Policies
+
+| Alert | Severity | Threshold | Channel |
 |---|---|---|---|
-| Read (cached, Redis) | < 5ms | < 15ms | < 50ms |
-| Read (Firestore) | < 30ms | < 100ms | < 300ms |
-| Write (Firestore) | < 50ms | < 150ms | < 500ms |
-| Payment initiation | < 500ms | < 2s | < 5s |
-| AI response (cached) | < 10ms | < 30ms | < 100ms |
-| AI response (uncached) | < 2s | < 5s | < 10s |
-| Search | < 50ms | < 200ms | < 500ms |
-| Event publish | < 100ms | < 300ms | < 1s |
+| CF error rate > 2% | CRITICAL | 5-min window | PagerDuty + Email |
+| CF P95 latency > 3s | WARNING | 5-min window | Email |
+| Payment failure rate > 5% | CRITICAL | 1-hour window | PagerDuty + Email |
+| Stuck payments > 5 | WARNING | Any | Email |
+| Memory > 85% | WARNING | 10-min sustained | Email |
+| Redis disconnected | CRITICAL | Any | PagerDuty + Email |
+| Redis memory > 80% | WARNING | Any | Email |
+| Dead-letter events > 100 | WARNING | Snapshot | Email |
+| Orders stuck in processing > 30m | WARNING | > 10 orders | Email |
+| Auth failure spike > 50 in 5m | WARNING | Rolling | Email |
+| Health endpoint down | CRITICAL | Any failure | PagerDuty |
+| Queue depth > 1000 | WARNING | Per queue | Email |
+| POS session errors > 5 | WARNING | 15-min window | Email |
+| Delivery overdue > 10 | WARNING | Any | Email |
+| API rate limit violations > 100/min | INFO | Rolling | Slack |
+| Search index lag > 5m | WARNING | Any | Email |
+| Disk > 80% (Memorystore) | WARNING | Any | Email |
+| CF cold start > 2s (critical path) | INFO | Any | Slack |
+| Stock depleted — high-value product | INFO | Any | Slack |
 
----
+### 7.6 Audit Log
 
-## 16. Infrastructure Map
+All security-significant actions are written to the audit log immediately, before business logic executes, so the attempt is recorded even if the action subsequently fails.
 
+**Audit log collections:**
 ```
-Google Cloud Platform (project: sokoni-aeb26)
-│
-├─ Firebase
-│  ├─ Hosting          Static assets, PWA, CDN (global)
-│  ├─ Auth             Email/phone/OAuth, custom claims
-│  ├─ Firestore        System of record, multi-region
-│  ├─ Cloud Functions  Gen2, Node.js 22, us-central1 (1000+ functions)
-│  ├─ Cloud Storage    Media files, receipts, backups
-│  ├─ App Check        Attestation (ReCaptcha v3 for web)
-│  └─ Remote Config    Feature flags, A/B config
-│
-├─ Cloud Infrastructure
-│  ├─ Cloud Scheduler  30+ scheduled jobs (queue worker, health snapshots, cleanup)
-│  ├─ Secret Manager   All secrets (never in code)
-│  ├─ Cloud Logging    Structured JSON logs from all CFs
-│  ├─ Cloud Monitoring 19 alert policies + custom dashboards
-│  └─ VPC Connector    Required for Cloud Functions → Memorystore connectivity
-│
-├─ Redis
-│  ├─ Google Cloud Memorystore (Standard, 1GB, us-central1) — production
-│  └─ Redis Cloud (Fixed 250MB) — development/staging alternative
-│
-├─ Search
-│  ├─ Typesense (managed cloud)  Primary search engine, Swahili NLP
-│  └─ Algolia (managed cloud)    Fallback / analytics search
-│
-├─ External APIs
-│  ├─ IntaSend       M-Pesa STK push + card payments
-│  ├─ Africa's Talking  SMS delivery
-│  ├─ SendGrid       Transactional email (53 templates)
-│  ├─ Anthropic      AI (claude-haiku-4-5, claude-sonnet-4-6)
-│  └─ OSRM          Route calculation for delivery
-│
-└─ CDN / Edge
-   ├─ Firebase Hosting CDN  (static assets, PWA shell)
-   └─ Cloudflare (optional) Canary traffic splitting, WAF, DDoS
+securityAuditLog/{entryId}      Security events (auth, privilege escalation, HMAC failures)
+adminActions/{actionId}         All admin panel actions with actor, target, old/new values
+paymentAuditLog/{entryId}       Every payment state transition with actor + timestamp
+posAudit/{merchantId}/{entryId} Every POS manager authorisation action
+```
+
+**Fields on every audit log entry:**
+```
+actorUid:     string    Who performed the action
+actorRole:    string    Their role at time of action
+action:       string    What they did (e.g. 'seller.approve', 'order.cancel')
+targetId:     string    What was affected (orderId, userId, etc.)
+before:       object    State before change (for updates)
+after:        object    State after change
+ipAddress:    string    Requester IP (masked: last octet replaced with .xxx)
+userAgent:    string    Browser/client identifier
+timestamp:    Timestamp When it happened
+correlationId:string    Business flow trace ID
 ```
 
 ---
 
-## 17. Performance Targets
+## 8. Known Bottlenecks and Mitigations
 
-### Page Load
+### 8.1 Firestore — 1 Write/Second Per Document
 
-| Page | Target (cached PWA) | Target (first load) |
-|---|---|---|
-| Marketplace home | < 1s | < 3s |
-| Product detail | < 500ms | < 2s |
-| Checkout | < 500ms | < 2s |
-| POS (pos.html) | < 1s | < 3s |
-| Admin OS | < 2s | < 5s |
+**Problem:** Firestore limits each document to approximately 1 write per second. High-frequency global counters (total orders, total GMV) would contend on a single document.
 
-### API Latency
+**Mitigation:** Distributed counter pattern — 10 shards per counter. Each write picks a random shard. Maximum throughput: ~10 writes/second per counter. Read by summing all shards.
 
-| Operation | Target | Ceiling |
-|---|---|---|
-| Session validation (Redis) | < 3ms | 15ms |
-| Rate limit check (Redis) | < 2ms | 10ms |
-| Firestore read (indexed) | < 30ms | 100ms |
-| CF cold start (Gen2) | < 300ms | 800ms |
-| CF hot path | < 100ms | 500ms |
-| Payment initiation (M-Pesa) | < 2s | 5s |
-| STK push to phone | < 5s | 15s |
-| Search result (cached) | < 3ms | 15ms |
-| Search result (live) | < 50ms | 200ms |
-| AI response (cached) | < 5ms | 30ms |
-| AI response (uncached) | < 3s | 8s |
-| POS cart sync (Redis poll) | < 500ms | 1s |
-| POS cart sync (Firestore) | < 100ms | 300ms |
+**When to re-evaluate:** If transaction rate exceeds 1,000/minute, consider upgrading to 100 shards or aggregating via Cloud Pub/Sub.
 
-### Throughput Targets
+### 8.2 Cloud Function Cold Starts
 
-| Metric | Target at launch | Target at scale |
-|---|---|---|
-| Concurrent users | 5,000 | 500,000 |
-| Orders per minute | 100 | 10,000 |
-| POS transactions per minute | 500 | 50,000 |
-| API requests per second | 1,000 | 100,000 |
-| Notifications per minute | 10,000 | 1,000,000 |
+**Problem:** Gen2 Cloud Functions scale to zero when idle. First invocation after idle period incurs a cold start (~300–800ms for Node.js 22). This is unacceptable for payment and checkout flows.
+
+**Mitigation:** `minInstances: 1` on critical paths:
+```
+verifyIntasendPayment    minInstances: 1
+checkoutSessions         minInstances: 1
+sokoniSearch             minInstances: 1
+createPayment            minInstances: 1
+posUpdateCart            minInstances: 1
+```
+
+Non-critical CFs remain at `minInstances: 0` (scale-to-zero) to minimise cost.
+
+**When to re-evaluate:** If any critical CF shows P95 cold start > 500ms in monitoring, add to minInstances list.
+
+### 8.3 Firestore — 200 Composite Index Limit
+
+**Problem:** Firebase enforces a hard limit of 200 composite indexes per Firestore database. SOKONI currently uses 197+.
+
+**Mitigation:** Second Firestore database (`sokoni-ops`) for overflow. Analytical and BI queries (high cardinality, admin-only) are the first candidates to migrate.
+
+**Index governance:** Indexes are never dropped (see `feedback_index_management.md`). Only add indexes. Track all indexes in `docs/FIRESTORE-INDEX-ARCHITECTURE.md`.
+
+**When to re-evaluate:** When `sokoni-ops` also approaches 200 indexes, evaluate BigQuery for analytical workloads.
+
+### 8.4 Firebase Hosting — Bandwidth Costs at Scale
+
+**Problem:** Firebase Hosting Blaze plan charges per GB egress beyond the free tier (10GB/month). At 1M daily active users, bandwidth costs can become significant.
+
+**Mitigation:**
+- WebP images (30–50% smaller than JPEG)
+- Service Worker caches repeat visits (zero bandwidth for cached assets)
+- Cloudflare CDN caches at edge (reduces Firebase egress)
+- Lazy loading of images
+- Code splitting (defer loading of unused JS)
+- `Cache-Control: immutable` on hashed assets (365-day client cache)
+
+**When to re-evaluate:** Monitor monthly bandwidth in Firebase Console. If > 500GB/month, evaluate Cloudflare R2 for static asset hosting.
+
+### 8.5 Single-Region Firestore
+
+**Problem:** SOKONI Firestore is currently deployed in a single region (`us-central1`). A regional outage would cause platform unavailability. Latency from East Africa to US-central is approximately 200–250ms (still within acceptable range via Firebase SDK).
+
+**Mitigation (current):** PITR enabled (7-day recovery window). Nightly exports to Cloud Storage.
+
+**Mitigation (planned):** Enable Firestore multi-region (`nam5` or `eur3`) once transaction volume justifies cost. Estimated cost increase: 2–3× per-operation pricing.
+
+**When to re-evaluate:** When platform reaches 100K DAU or processes > 10K daily transactions.
+
+### 8.6 Redis — Single Instance, Single Region
+
+**Problem:** Google Cloud Memorystore Redis is deployed as a single instance in `us-central1`. Instance failure would trigger platform-wide Redis fallback (degraded performance, no data loss).
+
+**Mitigation (current):** Full Firestore fallback implemented in `sokoni-redis.js`. Every service has a defined fallback that preserves correctness.
+
+**Mitigation (planned):** Redis high-availability replica (Memorystore Standard tier with replica) once operational cost is justified.
+
+**VPC connector status:** Redis is accessible from Cloud Functions via VPC connector. VPC connector health monitored; failure would cause Redis unavailability (Firestore fallback activates).
+
+**Blocker (INF-1):** VPC connector configuration still pending full production validation. Tracked in launch certification.
+
+### 8.7 Search Index Synchronisation Lag
+
+**Problem:** Typesense and Algolia indexes are updated via Firestore triggers. Under high write load, index sync can lag by 1–5 minutes.
+
+**Mitigation:** 
+- Search results include Firestore fallback for products not yet indexed
+- Typesense index update: near-real-time via `onDocumentWritten` trigger
+- Bulk import: rate-limited to 50 products/minute to prevent index backlog
+
+**When to re-evaluate:** If search lag consistently exceeds 2 minutes, implement direct Typesense write from the product-creation CF rather than via trigger.
 
 ---
 
-## 18. Module Catalog
+## 9. Module Catalog
 
-A complete inventory of all platform modules with their status:
+Complete inventory of all production modules:
 
-| Module | File(s) | Status | Vertical |
+| Module | File(s) | Domain | Status |
 |---|---|---|---|
-| Order Engine | `orders.js` | Live | Marketplace |
-| Payment Orchestrator v2 | `payment-orchestrator.js` | Live | Payments |
-| Commission Engine | `commission.js` | Live | Finance |
-| Delivery Engine | `delivery.js` | Live | Logistics |
-| Rider Navigation | `sokoni-navigation.js` | Live | Logistics |
-| Inventory Engine | `inventory.js` | Live | Marketplace |
-| SmartPOS Engine | `pos.js` | Live | POS |
-| POS Peripheral Hub | `sokoni-device-hub.js` | Live | POS |
-| POS Payment Terminal | `sokoni-payment-terminal.js` | Live | POS |
-| POS Customer Display | `sokoni-customer-display.js` | Live | POS |
-| POS Peripherals CF | `pos-peripherals.js` | Live | POS |
-| Foundation Engine | `foundation.js` | Live | Foundation |
-| Notification Engine | `notifications.js` | Live | Platform |
-| Platform Event Bus | `platform-event-bus.js` | Live | Platform |
-| Operations Center | `operations-center.js` | Live | Platform |
-| Self-Healing Engine | `self-heal.js` | Live | Platform |
-| Redis Service Layer | `redis-service.js` | Live | Infrastructure |
-| Redis Cloud Functions | `redis-layer.js` | Live | Infrastructure |
-| Redis Job Handlers | `redis-jobs.js` | Live | Infrastructure |
-| Redis Rate Limiter | `redis-rate-limiter.js` | Live | Infrastructure |
-| Redis Integrations | `redis-integrations.js` | Live | Infrastructure |
-| KASS AI Concierge | `kass.js` | Live | AI |
-| AI Engine | `ai-engine.js` | Live | AI |
-| AI Creative Studio | `sokoni-creative.js` | Live | AI |
-| Enterprise Search | `sokoni-search-pro.js` | Live | Search |
-| Loyalty Engine v2 | `loyalty.js` | Live | Commerce |
-| Subscription Engine | `sub-engine.js` | Live | Commerce |
-| Financial OS v2 | `financial-os.js` | Live | Finance |
-| eTIMS Integration | `etims.js` | Live | Finance |
-| Business Bootstrap | `business-bootstrap.js` | Live | Platform |
-| Device Manager | `device-manager.js` | Live | Platform |
-| Universal Auth | `firebase.js` | Live | Auth |
-| App Check | `sokoni-appcheck.js` | Live | Security |
-| Security Engine | `security.js` | Live | Security |
-| Venue Booking | `booking.js` | Live | Services |
-| Event Hub | `events.js` | Live | Services |
-| Education Hub | `education.js` | Live | Services |
-| CRM Engine | `crm.js` | Live | Enterprise |
-| BI Analytics | `bi-advanced.js` | Live | Enterprise |
-| Commerce OS | `platform-core.js` | Live | Commerce OS |
-| HR / Payroll | `hr-payroll.js` | Live | Commerce OS |
-| Workflow Automation | `sokoni-wap.js` | Live | Platform |
-| GIP Geo Intelligence | `sokoni-gip.js` | Live | Platform |
-| Redis Client SDK | `sokoni-redis.js` | Live | Client |
-| Nav Engine | `sokoni-nav-engine.js` | Live | Client |
-| Drawer System | `sokoni-drawer.js` | Live | Client |
-| Payment Trust | `sokoni-payment-trust.js` | Live | Client |
-| Delivery Pricing | `sokoni-delivery-pricing.js` | Live | Client |
-| Universal Printer v3 | `sokoni-universal-printer.js` | Live | POS |
-| Manager Auth Engine | `pos-manager-auth.js` | Live | POS |
+| Order Engine | `orders.js` | Commerce | Live |
+| Payment Orchestrator v2 | `payment-orchestrator.js` | Commerce | Live |
+| Checkout Engine | `checkout.js` | Commerce | Live |
+| Commission Engine | `commission.js` | Commerce | Live |
+| Delivery Engine | `delivery.js` | Delivery | Live |
+| Rider Navigation | `sokoni-navigation.js` | Delivery | Live |
+| Dispatch Engine | `dispatch.js` | Delivery | Live |
+| Inventory Engine | `inventory.js` | Marketplace | Live |
+| Product Engine | `products.js` | Marketplace | Live |
+| Seller Engine | `sellers.js` | Marketplace | Live |
+| Reviews Engine | `reviews.js` | Marketplace | Live |
+| Enterprise Search | `sokoni-search-pro.js` | Marketplace | Live |
+| SmartPOS Engine | `pos.js` | POS | Live |
+| POS Peripheral Hub | `sokoni-device-hub.js` | POS | Live |
+| POS Payment Terminal | `sokoni-payment-terminal.js` | POS | Live |
+| POS Customer Display | `sokoni-customer-display.js` | POS | Live |
+| POS Peripherals CF | `pos-peripherals.js` | POS | Live |
+| Manager Auth Engine | `pos-manager-auth.js` | POS | Live |
+| Universal Printer v3 | `sokoni-universal-printer.js` | POS | Live |
+| Financial OS v2 | `financial-os.js` | Financial | Live |
+| FinOS Automation | `finos-automation.js` | Financial | Live |
+| Wallet Engine | `wallet.js` | Financial | Live |
+| eTIMS Integration | `etims.js` | Financial | Live |
+| HR/Payroll Engine | `hr-payroll.js` | Financial | Live |
+| Foundation Engine | `foundation.js` | Foundation | Live |
+| Notification Engine | `notifications.js` | Platform | Live |
+| Platform Event Bus | `platform-event-bus.js` | Platform | Live |
+| Operations Center | `operations-center.js` | Platform | Live |
+| Self-Healing Engine | `self-heal.js` | Platform | Live |
+| Platform Hub | `platform-hub.js` | Platform | Live |
+| Automation Center | `automation-center.js` | Platform | Live |
+| Loyalty Engine v2 | `loyalty.js` | Loyalty | Live |
+| Enterprise Loyalty | `loyalty-enterprise.js` | Loyalty | Live |
+| Subscription Engine | `sub-engine.js` | Commerce | Live |
+| KASS AI Concierge | `kass.js` | AI | Live |
+| AI Engine | `ai-engine.js` | AI | Live |
+| AI Creative Studio | `sokoni-creative.js` | AI | Live |
+| AI Policy Engine | `sokoni-ai-policy.js` | AI | Live |
+| Fraud Detection | `fraud.js` | Security | Live |
+| Zero Trust SDK | `sokoni-zero-trust.js` | Security | Live |
+| App Check SDK | `sokoni-appcheck.js` | Security | Live |
+| Security Engine | `security.js` | Security | Live |
+| Booking Engine | `booking.js` | Services | Live |
+| Event Hub | `events.js` | Services | Live |
+| Education Hub | `education.js` | Services | Live |
+| B2B Wholesale | `b2b.js` | Services | Live |
+| Food Hub | `food.js` | Services | Live |
+| Healthcare Hub | `healthcare.js` | Services | Live |
+| Legal Hub | `legal.js` | Services | Live |
+| Property Hub | `property.js` | Services | Live |
+| Vehicles Hub | `vehicles.js` | Services | Live |
+| Jobs Hub | `jobs.js` | Services | Live |
+| Entertainment Hub | `entertainment.js` | Services | Live |
+| BI Analytics | `bi-advanced.js` | Analytics | Live |
+| Analytics Engine | `analytics.js` | Analytics | Live |
+| CRM Engine | `crm.js` | Analytics | Live |
+| Admin Engine | `admin.js` | Admin | Live |
+| Universal Auth | `firebase.js` | Auth | Live |
+| Media Engine | `media-engine.js` | Media | Live |
+| Workflow Automation | `sokoni-wap.js` | Platform | Live |
+| GIP Geo Intelligence | `sokoni-gip.js` | Platform | Live |
+| Redis Service Layer | `redis-service.js` | Infrastructure | Live |
+| Redis Client SDK | `sokoni-redis.js` | Client | Live |
+| Platform Bootstrap | `sokoni-platform.js` | Client | Live |
+| Nav Engine | `sokoni-nav-engine.js` | Client | Live |
+| Drawer System | `sokoni-drawer.js` | Client | Live |
+| Payment Trust SDK | `sokoni-payment-trust.js` | Client | Live |
+| Delivery Pricing SDK | `sokoni-delivery-pricing.js` | Client | Live |
+| Notification SDK | `sokoni-notif-engine.js` | Client | Live |
+
+**Total deployed Cloud Functions: ~600+** (multiple CFs per module file)
 
 ---
 
-## 19. Deployment Architecture
+## 10. Architecture Decision Records
 
-See [[deployment/ARCHITECTURE]] for full CI/CD specification.
+### ADR-001: Firestore as System of Record, Redis as Operational Layer
 
-**Summary:**
-- Pre-deploy safety gate blocks if payments in-flight, POS sessions open, queue depth > 50
-- 6-stage canary rollout: 1% → 5% → 10% → 25% → 50% → 100%
-- Auto-rollback on 3 consecutive health check failures
-- Feature flags via Firebase Remote Config (all new features default `false`)
-- Firestore migrations: Expand → Migrate → Contract pattern
-- Nightly backups: Firestore (30 days), Storage (7 days), Typesense (14 days)
+**Decision:** All permanent business records are written to Firestore first and exclusively. Redis holds only ephemeral operational state with defined TTLs.
 
-**New in v3.0 — deploy the Redis v2.0 integration layer:**
-```bash
-firebase deploy --only \
-  functions:onOrderCreated,\
-  functions:onOrderStatusChange,\
-  functions:onPaymentCreated,\
-  functions:onPaymentUpdated,\
-  functions:onInventoryUpdated,\
-  functions:onUserCreated,\
-  functions:onRiderStatusChange,\
-  functions:onDeliveryStatusChange,\
-  functions:redisScheduledQueueWorker
-```
+**Rationale:** Redis has no durable backup, no PITR, no ACID transactions, and TTL-based expiry. Firestore provides all of these. The correctness vs speed distinction is absolute: losing Redis at any moment must cause a speed degradation, never a data loss event.
+
+**Consequences:** Every Redis write is redundant with Firestore. All Redis operations have a Firestore fallback. Engineers must never add a Redis write that is the only copy of business data.
 
 ---
 
-## 20. Architecture Decision Records
+### ADR-002: Platform Event Bus for Inter-Service Communication
 
-### ADR-001: Firestore as System of Record (Not Redis)
+**Decision:** Services communicate via the platform event bus (Firestore `platformEvents` collection) rather than direct Cloud Function invocations.
 
-**Decision:** All permanent business records (orders, payments, inventory, customers) are written to Firestore. Redis holds only ephemeral operational state.
+**Rationale:** Direct calls create tight coupling. Notification failure should not abort order creation. New subscribers (e.g. a new analytics engine) should not require modifying the Order service. Events invert the dependency.
 
-**Rationale:** Redis has no durable backup, no point-in-time recovery, no ACID guarantees, and TTL-based expiry. Firestore provides all of these. Redis provides speed; Firestore provides correctness. Use each for what it does best.
-
-**Consequence:** Every Redis operation must be redundant with Firestore. Losing Redis at any moment must be a speed degradation, not a data loss event.
+**Consequences:** Business flows span multiple async steps. Debugging requires tracing `correlationId` through event logs. Dead-letter queue must be monitored. Event schema versioning is required for backward compatibility.
 
 ---
 
-### ADR-002: Event Bus over Direct Module Calls
+### ADR-003: Gen2 Cloud Functions Over Cloud Run Services
 
-**Decision:** Modules communicate via the platform event bus rather than direct Cloud Function calls.
+**Decision:** All backend logic runs as Firebase Cloud Functions Gen2 (backed by Cloud Run), not standalone Cloud Run services or App Engine.
 
-**Rationale:** Direct calls create tight coupling. If Notification Engine is down, it should not abort order creation. If Loyalty Engine is added 6 months later, it should not require modifying Order Engine. Events invert the dependency.
+**Rationale:** Cloud Functions Gen2 provides: automatic scaling (including scale-to-zero), native Firebase SDK integration, built-in App Check enforcement, Cloud Logging integration, and IAM managed service accounts. The operational overhead of standalone Cloud Run services is not justified at current scale.
 
-**Consequence:** Business flows span multiple event-driven steps. Debugging requires tracing correlationId through the event log. Operations Center must surface dead-letter events.
-
----
-
-### ADR-003: Graceful Redis Degradation (Never Fail Open on Security)
-
-**Decision:** Redis unavailability causes platform speed degradation, not security failure. Rate limiting fails open (allows requests) when Redis is unavailable.
-
-**Rationale:** Rate limiting is defence against sustained abuse. Blocking all users because Redis is down causes more harm than a brief rate-limit gap. Critical security controls (authentication, authorisation, payment verification) are Firestore-backed and unaffected by Redis availability.
-
-**Consequence:** During a Redis outage, rate limiting does not apply. Brute-force protection must rely on Firestore-backed counters for OTP and auth endpoints.
+**Consequences:** Cold starts are a concern for critical paths (mitigated by `minInstances`). Function file size limits apply (100MB deployment package). All functions share the same Node.js runtime version.
 
 ---
 
 ### ADR-004: Universal Adapter Pattern for POS Hardware
 
-**Decision:** All POS hardware (payment terminals, printers, scanners) is accessed through a vendor-agnostic adapter layer. Core POS code never calls vendor APIs directly.
+**Decision:** All POS hardware (payment terminals, printers, scanners, cash drawers) is accessed through vendor-agnostic adapter interfaces. Core POS code never calls vendor APIs directly.
 
-**Rationale:** Kenya's market has 12+ payment terminal vendors, 5+ printer protocols, and no standard. Locking in to one vendor's API would make hardware migration prohibitively expensive. The adapter layer means adding a new vendor requires one new driver file, not a POS rewrite.
+**Rationale:** Kenya's market has 12+ payment terminal vendors, 5+ printer protocols, and no hardware standard. Locking in to any vendor's API would make hardware migration expensive. The adapter layer means adding a new vendor requires one new driver file.
 
-**Consequence:** Adapter interfaces must be stable. Breaking changes to `BaseTerminalDriver` or `SokoniDeviceHub` adapter protocols require updating all existing drivers.
+**Consequences:** Adapter interfaces must be stable. Breaking changes to `BaseTerminalDriver` or `SokoniDeviceHub` require updating all existing drivers. Driver authors must implement the full interface contract.
 
 ---
 
-### ADR-005: IndexedDB for Offline Queue (Not Service Worker Cache)
+### ADR-005: Mobile-First PWA Over Native Apps
 
-**Decision:** SmartPOS offline operations are queued in IndexedDB, not intercepted by Service Worker.
+**Decision:** SOKONI is delivered as a Progressive Web App (HTML5 PWA) rather than native iOS/Android applications.
 
-**Rationale:** Service Worker cache is appropriate for static assets. Business transactions (cart updates, orders) need structured storage, retry logic, and authentication — none of which Service Worker provides naturally. IndexedDB gives full control over the queue lifecycle.
+**Rationale:** Kenya's smartphone market is dominated by Android devices with varying capabilities. A PWA provides: universal device coverage, no app store distribution friction, instant updates without user action, and significantly lower development and maintenance cost (one codebase vs three). 85% of SOKONI traffic is mobile.
 
-**Consequence:** The Service Worker handles static asset caching only. IndexedDB queue requires explicit flush on reconnect via `SokoniRedis.offline.flush()`.
+**Consequences:** Platform features are limited to what Web APIs support (no background processes, limited BT/USB without Web Bluetooth/USB). Native apps are planned for the driver and merchant verticals (Phase 5) where deeper OS integration is required.
+
+---
+
+### ADR-006: Second Firestore Database for Index Overflow
+
+**Decision:** When the primary Firestore database approaches the 200 composite index limit, overflow indexes are created in a secondary database (`sokoni-ops`).
+
+**Rationale:** Dropping existing indexes breaks deployed clients. Creating a second database avoids this while respecting Firebase's per-database limit. Analytical and admin queries are the first candidates because they are accessed only by internal tools (not consumer-facing clients), making the connection string change manageable.
+
+**Consequences:** Application code targeting `sokoni-ops` must use a separate Firestore client instance. Deployment process must manage two databases. Security rules must be configured on both.
 
 ---
 
 ## Related Documents
 
 - [[REDIS_ARCHITECTURE]] — Full Redis layer specification (v2.0)
-- [[REDIS_SECURITY]] — Redis security controls and TTL strategy
-- [[FIRESTORE-INDEX-ARCHITECTURE]] — Index governance and scaling
-- [[deployment/ARCHITECTURE]] — CI/CD pipeline and rollback procedures
-- [[SECURITY_CERTIFICATION]] — Full security audit and certification
-- [[SMARTPOS_PRODUCTION_READINESS_REPORT]] — SmartPOS certification
+- [[REDIS_SECURITY]] — Redis security controls and TTL governance
+- [[FIRESTORE-INDEX-ARCHITECTURE]] — Index catalogue and governance rules
+- [[SCALABILITY]] — Forward-looking scalability playbook and growth gates
+- [[SCALABILITY_REVIEW]] — Point-in-time scalability review (2026-06-25)
+- [[SECURITY]] — Full security documentation and certification
+- [[SECURITY_CERTIFICATION]] — Security audit certification report
 - [[OPS_RUNBOOK]] — Day-to-day operational procedures
-- [[deployment/DISASTER_RECOVERY]] — Full disaster recovery guide
-- [[V2_ROADMAP]] — Feature roadmap and planned capabilities
-- [[SCALABILITY_REVIEW]] — Detailed scalability analysis
+- [[deployment/DISASTER_RECOVERY]] — Disaster recovery playbook
+- [[API]] — Cloud Function API reference
+- [[ROADMAP]] — Feature roadmap and planned capabilities
+- [[CHANGELOG]] — Release history
+
+---
+
+*Last updated: 2026-07-08 | Architecture version: 4.0 | Cloud Functions: ~600+ | Firestore indexes: 197+*
