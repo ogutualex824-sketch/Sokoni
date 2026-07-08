@@ -66,6 +66,16 @@
     "headers": [
 
       {
+        "source": "/shared-header.js",
+        "headers": [
+          { "key": "Cache-Control",                    "value": "public, max-age=3600, must-revalidate" },
+          { "key": "CDN-Cache-Control",                "value": "no-store" },
+          { "key": "Cloudflare-CDN-Cache-Control",     "value": "no-store" },
+          { "key": "Surrogate-Control",                "value": "no-store" }
+        ]
+      },
+
+      {
         "source": "/service-worker.js",
         "headers": [
           { "key": "Cache-Control",         "value": "no-cache, no-store, must-revalidate" },
