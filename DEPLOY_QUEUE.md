@@ -5,6 +5,63 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Logistics+ (Sprint 4.4) — 2026-07-08
+
+**Files:**
+- `functions/logistics-plus.js` — NEW (30 CFs)
+- `fleet-manager.html` — NEW (Fleet management + maintenance/fuel logs)
+- `route-planner.html` — NEW (Multi-stop route creation + optimize + stop status)
+- `warehouse.html` — NEW (Receive, putaway, pick list, ship)
+- `logistics-reports.html` — NEW (Delivery KPIs, rider leaderboard, zone perf, on-time trend)
+- `functions/index.js` — 30 new exports added
+
+**New CFs (30 — quota-blocked):**
+
+| Export | Module | Auth |
+|---|---|---|
+| `fleetVehicleCreate` | Fleet | Manager |
+| `fleetVehicleUpdate` | Fleet | Manager |
+| `fleetVehicleList` | Fleet | Shop member |
+| `fleetLogMaintenance` | Fleet | Shop member |
+| `fleetLogFuel` | Fleet | Shop member |
+| `fleetGetVehicleStats` | Fleet | Manager |
+| `routeCreate` | Route | Manager |
+| `routeOptimize` | Route | Manager |
+| `routeAssignDriver` | Route | Manager |
+| `routeUpdateStop` | Route | Assigned driver |
+| `routeGetActive` | Route | Shop member |
+| `warehouseReceive` | Warehouse | Manager |
+| `warehousePutaway` | Warehouse | Shop member |
+| `warehouseGeneratePickList` | Warehouse | Shop member |
+| `warehouseConfirmPick` | Warehouse | Shop member |
+| `warehouseShipOrder` | Warehouse | Shop member |
+| `warehouseGetInventory` | Warehouse | Shop member |
+| `warehouseGetDashboard` | Warehouse | Shop member |
+| `deliveryZoneCreate` | Zones | Manager |
+| `deliveryZoneUpdate` | Zones | Manager |
+| `deliveryZoneList` | Zones | Any auth |
+| `deliveryZoneCheckCoverage` | Zones | Any auth |
+| `cargoCalculateFreight` | Cargo | Any auth |
+| `cargoManifestCreate` | Cargo | Manager |
+| `cargoManifestAddItem` | Cargo | Manager |
+| `cargoManifestList` | Cargo | Shop member |
+| `logisticsGetDeliveryReport` | Reports | Manager |
+| `logisticsGetRiderLeaderboard` | Reports | Manager |
+| `logisticsGetZonePerformance` | Reports | Manager |
+| `logisticsGetOnTimeRate` | Reports | Manager |
+
+**Spot deploy (run after quota clears):**
+```bash
+firebase deploy --only functions:fleetVehicleCreate,functions:fleetVehicleUpdate,functions:fleetVehicleList,functions:fleetLogMaintenance,functions:fleetLogFuel,functions:fleetGetVehicleStats,functions:routeCreate,functions:routeOptimize,functions:routeAssignDriver,functions:routeUpdateStop,functions:routeGetActive,functions:warehouseReceive,functions:warehousePutaway,functions:warehouseGeneratePickList,functions:warehouseConfirmPick,functions:warehouseShipOrder,functions:warehouseGetInventory,functions:warehouseGetDashboard,functions:deliveryZoneCreate,functions:deliveryZoneUpdate,functions:deliveryZoneList,functions:deliveryZoneCheckCoverage,functions:cargoCalculateFreight,functions:cargoManifestCreate,functions:cargoManifestAddItem,functions:cargoManifestList,functions:logisticsGetDeliveryReport,functions:logisticsGetRiderLeaderboard,functions:logisticsGetZonePerformance,functions:logisticsGetOnTimeRate
+```
+
+**Hosting (4 new pages):**
+```bash
+firebase deploy --only hosting
+```
+
+---
+
 ## Finance OS (Sprint 4.3) — 2026-07-08
 
 **Files:**

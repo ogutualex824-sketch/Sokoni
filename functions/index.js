@@ -9432,3 +9432,42 @@ exports.invoiceMarkPaid       = finOS43.invoiceMarkPaid;
 exports.invoiceVoid           = finOS43.invoiceVoid;
 exports.invoiceGet            = finOS43.invoiceGet;
 exports.invoiceList           = finOS43.invoiceList;
+
+/* ── Logistics+ Sprint 4.4 — Fleet | Route Planning | Warehouse | Delivery Zones | Cargo & Freight | Logistics Reports ── */
+const logPlus = require('./logistics-plus');
+/* Fleet Management */
+exports.fleetVehicleCreate     = logPlus.fleetVehicleCreate;
+exports.fleetVehicleUpdate     = logPlus.fleetVehicleUpdate;
+exports.fleetVehicleList       = logPlus.fleetVehicleList;
+exports.fleetLogMaintenance    = logPlus.fleetLogMaintenance;
+exports.fleetLogFuel           = logPlus.fleetLogFuel;
+exports.fleetGetVehicleStats   = logPlus.fleetGetVehicleStats;
+/* Route Planning */
+exports.routeCreate            = logPlus.routeCreate;
+exports.routeOptimize          = logPlus.routeOptimize;
+exports.routeAssignDriver      = logPlus.routeAssignDriver;
+exports.routeUpdateStop        = logPlus.routeUpdateStop;
+exports.routeGetActive         = logPlus.routeGetActive;
+/* Warehouse Management */
+exports.warehouseReceive       = logPlus.warehouseReceive;
+exports.warehousePutaway       = logPlus.warehousePutaway;
+exports.warehouseGeneratePickList  = logPlus.warehouseGeneratePickList;
+exports.warehouseConfirmPick   = logPlus.warehouseConfirmPick;
+exports.warehouseShipOrder     = logPlus.warehouseShipOrder;
+exports.warehouseGetInventory  = logPlus.warehouseGetInventory;
+exports.warehouseGetDashboard  = logPlus.warehouseGetDashboard;
+/* Delivery Zones */
+exports.deliveryZoneCreate     = logPlus.deliveryZoneCreate;
+exports.deliveryZoneUpdate     = logPlus.deliveryZoneUpdate;
+exports.deliveryZoneList       = logPlus.deliveryZoneList;
+exports.deliveryZoneCheckCoverage = logPlus.deliveryZoneCheckCoverage;
+/* Cargo & Freight */
+exports.cargoCalculateFreight  = logPlus.cargoCalculateFreight;
+exports.cargoManifestCreate    = logPlus.cargoManifestCreate;
+exports.cargoManifestAddItem   = logPlus.cargoManifestAddItem;
+exports.cargoManifestList      = logPlus.cargoManifestList;
+/* Logistics Reports */
+exports.logisticsGetDeliveryReport  = logPlus.logisticsGetDeliveryReport;
+exports.logisticsGetRiderLeaderboard = logPlus.logisticsGetRiderLeaderboard;
+exports.logisticsGetZonePerformance = logPlus.logisticsGetZonePerformance;
+exports.logisticsGetOnTimeRate      = logPlus.logisticsGetOnTimeRate;

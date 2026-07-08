@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Fleet Manager &mdash; SOKONI Logistics</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,button{font-family:inherit}
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);
+      border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+    .hdr-btn{background:var(--accent);color:#000;border:none;border-radius:9px;padding:8px 14px;font-size:12px;font-weight:900;cursor:pointer;flex-shrink:0}
+    .tabs{display:flex;border-bottom:1px solid var(--border);position:sticky;top:57px;z-index:100;background:rgba(5,5,5,.97)}
+    .tab{flex:1;text-align:center;padding:12px;font-size:11px;font-weight:800;cursor:pointer;
+      color:var(--muted);border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:.4px;transition:all .15s}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .pane{padding:16px;max-width:900px;margin:0 auto;display:none}
+    .pane.active{display:block}
+    .shop-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:12px;margin-bottom:14px;display:flex;gap:8px;align-items:center}
+    .shop-bar label{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap}
+    .shop-bar input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--txt);font-size:13px;min-height:40px}
+    .shop-bar button{background:var(--accent);color:#000;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
+    /* Vehicle cards */
+    .v-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+    .v-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+    .v-icon{font-size:32px;margin-bottom:8px}
+    .v-plate{font-size:18px;font-weight:900;font-family:monospace;color:var(--accent);margin-bottom:4px}
+    .v-make{font-size:13px;color:var(--muted);margin-bottom:8px}
+    .v-status{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:800}
+    .v-status.active{background:rgba(113,255,0,.12);color:var(--accent)}
+    .v-status.maintenance{background:rgba(255,179,0,.12);color:var(--warn)}
+    .v-status.inactive{background:rgba(244,67,54,.08);color:var(--danger)}
+    .v-meta{font-size:12px;color:var(--muted);margin-top:6px}
+    .v-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .v-btn{padding:7px 12px;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;
+      border:1px solid var(--border);background:var(--surface2);color:var(--txt)}
+    .v-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .v-btn.fuel:hover{border-color:var(--info);color:var(--info)}
+    .v-btn:disabled{opacity:.4;cursor:not-allowed}
+    /* Log sheet */
+    #logSheet{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);align-items:flex-end;justify-content:center}
+    #logSheet.open{display:flex}
+    #logModal{background:#0d0d0d;border:1px solid var(--border);border-radius:20px 20px 0 0;
+      max-height:85vh;width:100%;max-width:500px;overflow-y:auto}
+    @media(min-width:501px){#logSheet{align-items:center;padding:16px}#logModal{border-radius:20px}}
+    .sh-handle{width:40px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:12px auto 0}
+    .sh-hdr{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+    .sh-hdr h3{font-size:14px;font-weight:800;flex:1}
+    .close-btn{background:var(--surface2);border:1px solid var(--border);width:34px;height:34px;
+      border-radius:50%;font-size:18px;cursor:pointer;color:var(--muted);display:flex;align-items:center;justify-content:center}
+    .sh-body{padding:16px}
+    .fg{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+    .fg label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+    .fg input,.fg select{background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+      padding:11px 13px;color:var(--txt);font-size:14px;width:100%;outline:none;min-height:44px}
+    .fg select option{background:#111}
+    .sh-btn{background:var(--accent);color:#000;border:none;border-radius:10px;padding:13px;
+      font-size:14px;font-weight:900;cursor:pointer;width:100%;min-height:48px}
+    .sh-btn:disabled{opacity:.4;cursor:not-allowed}
+    /* Create form */
+    .form-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+    .form-section h3{font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:480px){.form-grid{grid-column:1/-1;grid-template-columns:1fr}}
+    .submit-btn{background:var(--accent);color:#000;border:none;border-radius:10px;padding:13px;
+      font-size:14px;font-weight:900;cursor:pointer;width:100%;min-height:48px}
+    .submit-btn:disabled{opacity:.4;cursor:not-allowed}
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;border:1px solid var(--border);
+      padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;transition:all .3s;
+      pointer-events:none;z-index:9999;white-space:nowrap;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+    .empty{text-align:center;padding:50px 24px;color:var(--muted)}
+    .empty-icon{font-size:52px;margin-bottom:12px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .type-icon{bike:'&#x1F6B2;',car:'&#x1F697;',van:'&#x1F690;',truck:'&#x1F69B;',tuk_tuk:'&#x1F6FA;',bicycle:'&#x1F6B4;'}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrLogo">SOKONI</div>
+  <span style="flex:1;font-size:14px;font-weight:800">Fleet Manager</span>
+  <button class="hdr-btn" onclick="_switchTab(null,'add')">+ Vehicle</button>
+</div>
+<div class="tabs">
+  <div class="tab active" data-pane="fleet"  onclick="_switchTab(this,'fleet')">Fleet</div>
+  <div class="tab" data-pane="add"           onclick="_switchTab(this,'add')">Add Vehicle</div>
+</div>
+
+<div class="pane active" id="fleetPane">
+  <div class="shop-bar">
+    <label>Shop</label>
+    <input type="text" id="fleetShopId" placeholder="Shop ID">
+    <button onclick="_loadFleet()">Load</button>
+  </div>
+  <div id="fleetGrid" class="v-grid"></div>
+</div>
+
+<div class="pane" id="addPane">
+  <div class="form-section">
+    <h3>Register Vehicle</h3>
+    <div class="form-grid">
+      <div class="fg" style="grid-column:1/-1"><label>Shop ID *</label><input type="text" id="aShopId"></div>
+      <div class="fg"><label>Number Plate *</label><input type="text" id="aPlate" placeholder="KCA 123A"></div>
+      <div class="fg">
+        <label>Vehicle Type *</label>
+        <select id="aType">
+          <option value="bike">Motorbike</option>
+          <option value="car">Car</option>
+          <option value="van">Van</option>
+          <option value="truck">Truck</option>
+          <option value="tuk_tuk">Tuk-tuk</option>
+          <option value="bicycle">Bicycle</option>
+        </select>
+      </div>
+      <div class="fg"><label>Make</label><input type="text" id="aMake" placeholder="Toyota, Bajaj..."></div>
+      <div class="fg"><label>Model</label><input type="text" id="aModel" placeholder="Probox, Boxer..."></div>
+      <div class="fg"><label>Year</label><input type="number" id="aYear" placeholder="2020" min="1990" max="2030"></div>
+      <div class="fg"><label>Capacity (kg)</label><input type="number" id="aCapKg" placeholder="500"></div>
+    </div>
+  </div>
+  <button class="submit-btn" id="addVehicleBtn" onclick="_addVehicle()">Register Vehicle</button>
+</div>
+
+<!-- Maintenance / Fuel log sheet -->
+<div id="logSheet" onclick="if(event.target===this)_closeLog()">
+  <div id="logModal">
+    <div class="sh-handle"></div>
+    <div class="sh-hdr"><h3 id="logTitle">Log Event</h3><button class="close-btn" onclick="_closeLog()">&#x2715;</button></div>
+    <div class="sh-body">
+      <div id="logForm"></div>
+      <button class="sh-btn" id="logSubmitBtn" onclick="_submitLog()">Submit</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function(){
+var _uid=null, _logVehicleId=null, _logShopId=null, _logType=null;
+var TYPE_ICONS={bike:'&#x1F6B2;',car:'&#x1F697;',van:'&#x1F690;',truck:'&#x1F69B;',tuk_tuk:'&#x1F6FA;',bicycle:'&#x1F6B4;'};
+function _cf(n){return firebase.functions().httpsCallable(n);}
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _fmt(n){return 'KES '+Number(n||0).toLocaleString('en-KE');}
+function _toast(msg,type){var el=document.getElementById('toast');el.textContent=msg;el.className='show '+(type||'');clearTimeout(el._t);el._t=setTimeout(function(){el.className='';},3500);}
+firebase.auth().onAuthStateChanged(function(u){_uid=u?u.uid:null;});
+
+window._switchTab=function(el,pane){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  (el||document.querySelector('[data-pane="'+pane+'"]')).classList.add('active');
+  document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active');});
+  document.getElementById(pane+'Pane').classList.add('active');
+};
+
+window._loadFleet=function(){
+  var shopId=document.getElementById('fleetShopId').value.trim();
+  if(!shopId){_toast('Enter shop ID','error');return;}
+  var grid=document.getElementById('fleetGrid');
+  grid.innerHTML='<div class="skeleton" style="height:160px"></div><div class="skeleton" style="height:160px"></div><div class="skeleton" style="height:160px"></div>';
+  _cf('fleetVehicleList')({shopId:shopId}).then(function(r){
+    var vs=r.data.vehicles||[];
+    if(!vs.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="empty-icon">&#x1F697;</div><p>No vehicles registered</p></div>';return;}
+    grid.innerHTML=vs.map(function(v){
+      return '<div class="v-card">'+
+        '<div class="v-icon">'+(TYPE_ICONS[v.type]||'&#x1F697;')+'</div>'+
+        '<div class="v-plate">'+_esc(v.plate)+'</div>'+
+        '<div class="v-make">'+_esc(v.make)+' '+_esc(v.model)+(v.year?' ('+v.year+')':'')+'</div>'+
+        '<span class="v-status '+v.status+'">'+v.status+'</span>'+
+        '<div class="v-meta">'+(v.assignedDriverName?'Driver: '+_esc(v.assignedDriverName):'Unassigned')+
+        (v.capacityKg?' &bull; '+v.capacityKg+'kg':'')+
+        (v.odometer?' &bull; '+v.odometer+'km':'')+'</div>'+
+        '<div class="v-actions">'+
+        '<button class="v-btn" onclick="_openLog(\''+_esc(v.id)+'\',\''+_esc(shopId)+'\',\'maintenance\')">&#x1F527; Maintenance</button>'+
+        '<button class="v-btn fuel" onclick="_openLog(\''+_esc(v.id)+'\',\''+_esc(shopId)+'\',\'fuel\')">&#x26FD; Fuel</button>'+
+        '</div></div>';
+    }).join('');
+  }).catch(function(e){_toast(e.message,'error');grid.innerHTML='';});
+};
+
+window._addVehicle=function(){
+  if(!_uid){_toast('Sign in','error');return;}
+  var shopId=document.getElementById('aShopId').value.trim();
+  var plate=document.getElementById('aPlate').value.trim();
+  var type=document.getElementById('aType').value;
+  var make=document.getElementById('aMake').value.trim();
+  var model=document.getElementById('aModel').value.trim();
+  var year=parseInt(document.getElementById('aYear').value)||null;
+  var cap=parseFloat(document.getElementById('aCapKg').value)||null;
+  if(!shopId||!plate){_toast('Shop ID and plate required','error');return;}
+  var btn=document.getElementById('addVehicleBtn');btn.disabled=true;btn.textContent='Registering...';
+  _cf('fleetVehicleCreate')({shopId:shopId,plate:plate,type:type,make:make,model:model,year:year,capacityKg:cap})
+    .then(function(r){_toast('Vehicle '+plate+' registered!','success');document.getElementById('fleetShopId').value=shopId;_switchTab(null,'fleet');_loadFleet();})
+    .catch(function(e){_toast(e.message,'error');}).finally(function(){btn.disabled=false;btn.textContent='Register Vehicle';});
+};
+
+window._openLog=function(vehicleId,shopId,type){
+  _logVehicleId=vehicleId;_logShopId=shopId;_logType=type;
+  document.getElementById('logTitle').textContent=type==='fuel'?'Log Fuel Fill':'Log Maintenance';
+  var form=document.getElementById('logForm');
+  if(type==='fuel'){
+    form.innerHTML='<div class="fg"><label>Litres *</label><input type="number" id="lLitres" placeholder="30" min="0.1" step="0.1"></div>'+
+      '<div class="fg"><label>Cost per Litre (KES)</label><input type="number" id="lCostPerL" placeholder="220"></div>'+
+      '<div class="fg"><label>Odometer (km)</label><input type="number" id="lOdo" placeholder="Current reading"></div>'+
+      '<div class="fg"><label>Station</label><input type="text" id="lStation" placeholder="Shell, Total..."></div>'+
+      '<div class="fg"><label>Fuel Type</label><select id="lFuelType"><option value="petrol">Petrol</option><option value="diesel">Diesel</option><option value="electric">Electric</option></select></div>';
+  } else {
+    form.innerHTML='<div class="fg"><label>Maintenance Type</label><select id="lMaintType"><option value="service">Service</option><option value="repair">Repair</option><option value="tyre">Tyre Change</option><option value="oil_change">Oil Change</option><option value="brake">Brake Service</option><option value="inspection">Inspection</option><option value="completed">Completed (back to active)</option><option value="under_repair">Under Repair</option></select></div>'+
+      '<div class="fg"><label>Description *</label><input type="text" id="lMaintDesc" placeholder="What was done?"></div>'+
+      '<div class="fg"><label>Cost (KES)</label><input type="number" id="lMaintCost" placeholder="0"></div>'+
+      '<div class="fg"><label>Odometer at Service (km)</label><input type="number" id="lOdoSvc"></div>';
+  }
+  document.getElementById('logSheet').classList.add('open');
+};
+window._closeLog=function(){document.getElementById('logSheet').classList.remove('open');};
+
+window._submitLog=function(){
+  var btn=document.getElementById('logSubmitBtn');btn.disabled=true;btn.textContent='Saving...';
+  var p;
+  if(_logType==='fuel'){
+    var litres=parseFloat(document.getElementById('lLitres').value)||0;
+    if(litres<=0){_toast('Litres required','error');btn.disabled=false;btn.textContent='Submit';return;}
+    p=_cf('fleetLogFuel')({shopId:_logShopId,vehicleId:_logVehicleId,litres:litres,
+      costPerLitre:parseFloat(document.getElementById('lCostPerL').value)||0,
+      odometer:parseFloat(document.getElementById('lOdo').value)||0,
+      station:document.getElementById('lStation').value.trim(),
+      fuelType:document.getElementById('lFuelType').value});
+  } else {
+    var desc=document.getElementById('lMaintDesc').value.trim();
+    if(!desc){_toast('Description required','error');btn.disabled=false;btn.textContent='Submit';return;}
+    p=_cf('fleetLogMaintenance')({shopId:_logShopId,vehicleId:_logVehicleId,
+      type:document.getElementById('lMaintType').value,description:desc,
+      cost:parseFloat(document.getElementById('lMaintCost').value)||null,
+      odometerAtService:parseFloat(document.getElementById('lOdoSvc').value)||0});
+  }
+  p.then(function(){_toast('Logged!','success');_closeLog();_loadFleet();})
+    .catch(function(e){_toast(e.message,'error');}).finally(function(){btn.disabled=false;btn.textContent='Submit';});
+};
+})();
+</script>
+</body>
+</html>

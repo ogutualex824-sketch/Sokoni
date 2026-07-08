@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Warehouse &mdash; SOKONI Logistics</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,button{font-family:inherit}
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);
+      border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+    .tabs{display:flex;border-bottom:1px solid var(--border);position:sticky;top:57px;z-index:100;
+      background:rgba(5,5,5,.97);overflow-x:auto;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex-shrink:0;padding:12px 14px;font-size:11px;font-weight:800;cursor:pointer;
+      color:var(--muted);border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:.4px;transition:all .15s}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .pane{padding:16px;max-width:900px;margin:0 auto;display:none}
+    .pane.active{display:block}
+    .shop-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:12px;margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .shop-bar label{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap}
+    .shop-bar input{flex:1;min-width:80px;background:var(--surface2);border:1px solid var(--border);
+      border-radius:8px;padding:9px 12px;color:var(--txt);font-size:13px;min-height:40px}
+    .shop-bar button{background:var(--accent);color:#000;border:none;border-radius:8px;
+      padding:9px 14px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
+    /* stat row */
+    .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+    .stat-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:14px;text-align:center}
+    .stat-val{font-size:22px;font-weight:900;color:var(--accent)}
+    .stat-lbl{font-size:11px;color:var(--muted);font-weight:700;margin-top:3px}
+    /* cards */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:14px;margin-bottom:10px}
+    .card-hdr{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+    .card-info{flex:1}
+    .card-name{font-size:14px;font-weight:800;margin-bottom:4px}
+    .card-meta{font-size:12px;color:var(--muted)}
+    .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:800;text-transform:uppercase}
+    .badge-warn{background:rgba(255,179,0,.12);color:var(--warn)}
+    .badge-ok{background:rgba(113,255,0,.12);color:var(--accent)}
+    .badge-info{background:rgba(0,188,212,.12);color:var(--info)}
+    .badge-danger{background:rgba(244,67,54,.12);color:var(--danger)}
+    /* inventory table */
+    .inv-table{width:100%;border-collapse:collapse;font-size:12px}
+    .inv-table th{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);
+      color:var(--muted);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+    .inv-table td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.05)}
+    .inv-table tr:last-child td{border-bottom:none}
+    .qty-chip{display:inline-block;padding:3px 8px;border-radius:8px;font-size:12px;font-weight:800}
+    .qty-ok{background:rgba(113,255,0,.1);color:var(--accent)}
+    .qty-low{background:rgba(255,179,0,.1);color:var(--warn)}
+    .qty-zero{background:rgba(244,67,54,.1);color:var(--danger)}
+    /* pick list */
+    .pick-item{display:flex;align-items:center;gap:10px;padding:10px;background:var(--surface2);
+      border-radius:10px;margin-bottom:8px}
+    .pick-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--border);
+      background:none;cursor:pointer;appearance:none;flex-shrink:0}
+    .pick-check:checked{background:var(--accent);border-color:var(--accent)}
+    .pick-info{flex:1}
+    .pick-name{font-size:13px;font-weight:700}
+    .pick-detail{font-size:11px;color:var(--muted)}
+    .pick-qty{font-size:13px;font-weight:900;color:var(--accent)}
+    /* form */
+    .form-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+    .form-section h3{font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+    .fg{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+    .fg label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+    .fg input,.fg select,.fg textarea{background:var(--surface2);border:1px solid var(--border);
+      border-radius:9px;padding:11px 13px;color:var(--txt);font-size:14px;width:100%;outline:none;min-height:44px}
+    .fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--accent)}
+    .fg textarea{resize:vertical;min-height:80px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .item-row{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px}
+    .item-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .item-lbl{font-size:12px;font-weight:800;color:var(--accent);flex:1}
+    .rm-btn{background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px}
+    .item-inputs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .item-inputs input,.item-inputs select{background:var(--bg);border:1px solid var(--border);
+      border-radius:8px;padding:9px 10px;color:var(--txt);font-size:13px;width:100%;outline:none;min-height:38px}
+    .add-item-btn{background:var(--surface2);border:1px solid var(--accent);color:var(--accent);
+      border-radius:9px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;width:100%;margin-bottom:12px}
+    .submit-btn{background:var(--accent);color:#000;border:none;border-radius:10px;padding:13px;
+      font-size:14px;font-weight:900;cursor:pointer;width:100%;min-height:48px;margin-top:4px}
+    .submit-btn:disabled{opacity:.4;cursor:not-allowed}
+    .action-btn{padding:8px 12px;border-radius:9px;font-size:12px;font-weight:800;cursor:pointer;
+      border:1px solid var(--border);background:var(--surface2);color:var(--txt);margin-right:6px}
+    .action-btn.primary{border-color:var(--accent);color:var(--accent)}
+    .action-btn:disabled{opacity:.4;cursor:not-allowed}
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;border:1px solid var(--border);
+      padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;transition:all .3s;
+      pointer-events:none;z-index:9999;white-space:nowrap;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+    .empty{text-align:center;padding:40px 16px;color:var(--muted)}
+    .empty-icon{font-size:48px;margin-bottom:12px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    @media(max-width:400px){.stat-row{grid-template-columns:1fr 1fr}.item-inputs{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrLogo">SOKONI</div>
+  <span style="flex:1;font-size:14px;font-weight:800">Warehouse</span>
+</div>
+<div class="tabs">
+  <div class="tab active" data-pane="inventory" onclick="_tab(this,'inventory')">Inventory</div>
+  <div class="tab" data-pane="receive"    onclick="_tab(this,'receive')">Receive</div>
+  <div class="tab" data-pane="pick"       onclick="_tab(this,'pick')">Pick &amp; Ship</div>
+  <div class="tab" data-pane="putaway"    onclick="_tab(this,'putaway')">Putaway</div>
+</div>
+
+<!-- INVENTORY TAB -->
+<div class="pane active" id="inventoryPane">
+  <div class="shop-bar">
+    <label>Shop</label>
+    <input type="text" id="invShopId" placeholder="Shop ID">
+    <input type="text" id="invWarehouseId" placeholder="Warehouse ID">
+    <button onclick="_loadInventory()">Load</button>
+  </div>
+  <div id="dashboardStats" style="display:none">
+    <div class="stat-row">
+      <div class="stat-box"><div class="stat-val" id="dTotalSKUs">—</div><div class="stat-lbl">SKUs</div></div>
+      <div class="stat-box"><div class="stat-val" id="dLowStock">—</div><div class="stat-lbl">Low Stock</div></div>
+      <div class="stat-box"><div class="stat-val" id="dOutOfStock">—</div><div class="stat-lbl">Out of Stock</div></div>
+    </div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="overflow-x:auto">
+      <table class="inv-table" id="invTable">
+        <thead><tr><th>SKU</th><th>Product</th><th>Location</th><th>On Hand</th><th>Reserved</th><th>Available</th></tr></thead>
+        <tbody id="invBody"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">Enter shop + warehouse above</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- RECEIVE TAB -->
+<div class="pane" id="receivePane">
+  <div class="form-section">
+    <h3>Receive Stock</h3>
+    <div class="grid2">
+      <div class="fg"><label>Shop ID *</label><input type="text" id="rcvShopId"></div>
+      <div class="fg"><label>Warehouse ID *</label><input type="text" id="rcvWarehouseId"></div>
+    </div>
+    <div class="fg"><label>Supplier</label><input type="text" id="rcvSupplier" placeholder="Supplier name"></div>
+    <div class="fg"><label>Reference / PO No.</label><input type="text" id="rcvRef" placeholder="Optional"></div>
+  </div>
+  <div class="form-section">
+    <h3>Items</h3>
+    <div id="rcvItems"></div>
+    <button class="add-item-btn" onclick="_addRcvItem()">+ Add Item</button>
+  </div>
+  <button class="submit-btn" id="rcvBtn" onclick="_receiveStock()">Receive Stock</button>
+</div>
+
+<!-- PICK & SHIP TAB -->
+<div class="pane" id="pickPane">
+  <div class="shop-bar">
+    <label>Shop</label>
+    <input type="text" id="pickShopId" placeholder="Shop ID">
+    <input type="text" id="pickWarehouseId" placeholder="Warehouse ID">
+    <button onclick="_generatePickList()">Generate Pick List</button>
+  </div>
+  <div id="pickListContainer">
+    <div class="empty"><div class="empty-icon">&#x1F4E6;</div><p>Enter shop + warehouse then generate</p></div>
+  </div>
+  <div id="pickActions" style="display:none;margin-top:12px">
+    <button class="action-btn primary" id="confirmPickBtn" onclick="_confirmPick()">Confirm Picked Items</button>
+    <button class="action-btn" id="shipBtn" onclick="_showShipForm()">Ship Order</button>
+  </div>
+  <!-- ship form hidden -->
+  <div id="shipForm" style="display:none" class="form-section">
+    <h3>Ship Order</h3>
+    <div class="fg"><label>Order ID *</label><input type="text" id="shipOrderId"></div>
+    <div class="fg"><label>Carrier</label><input type="text" id="shipCarrier" placeholder="e.g. G4S, DHL"></div>
+    <div class="fg"><label>Tracking Number</label><input type="text" id="shipTracking"></div>
+    <button class="submit-btn" id="shipConfirmBtn" onclick="_shipOrder()">Confirm Shipment</button>
+  </div>
+</div>
+
+<!-- PUTAWAY TAB -->
+<div class="pane" id="putawayPane">
+  <div class="form-section">
+    <h3>Putaway Item</h3>
+    <div class="grid2">
+      <div class="fg"><label>Shop ID *</label><input type="text" id="paShopId"></div>
+      <div class="fg"><label>Warehouse ID *</label><input type="text" id="paWarehouseId"></div>
+    </div>
+    <div class="fg"><label>Stock Entry ID *</label><input type="text" id="paEntryId" placeholder="Receipt entry ID"></div>
+    <div class="grid2">
+      <div class="fg"><label>Bin / Location *</label><input type="text" id="paBin" placeholder="e.g. A-12-3"></div>
+      <div class="fg"><label>Aisle</label><input type="text" id="paAisle" placeholder="Optional"></div>
+    </div>
+    <button class="submit-btn" id="paBtn" onclick="_putaway()">Confirm Putaway</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function(){
+var _uid=null,_rcvCount=0,_pickListId=null;
+function _cf(n){return firebase.functions().httpsCallable(n);}
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _toast(msg,type){var el=document.getElementById('toast');el.textContent=msg;el.className='show '+(type||'');clearTimeout(el._t);el._t=setTimeout(function(){el.className='';},3500);}
+firebase.auth().onAuthStateChanged(function(u){_uid=u?u.uid:null;});
+
+window._tab=function(el,pane){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  el.classList.add('active');
+  document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active');});
+  document.getElementById(pane+'Pane').classList.add('active');
+};
+
+// ── Inventory ──
+window._loadInventory=function(){
+  var shopId=document.getElementById('invShopId').value.trim();
+  var warehouseId=document.getElementById('invWarehouseId').value.trim();
+  if(!shopId||!warehouseId){_toast('Shop + Warehouse required','error');return;}
+  document.getElementById('invBody').innerHTML='<tr><td colspan="6"><div class="skeleton" style="height:40px;margin:8px"></div></td></tr>'.repeat(5);
+  Promise.all([
+    _cf('warehouseGetInventory')({shopId:shopId,warehouseId:warehouseId}),
+    _cf('warehouseGetDashboard')({shopId:shopId,warehouseId:warehouseId})
+  ]).then(function(results){
+    var items=results[0].data.items||[];
+    var dash=results[1].data;
+    // dashboard
+    document.getElementById('dTotalSKUs').textContent=dash.totalSKUs||0;
+    document.getElementById('dLowStock').textContent=dash.lowStockCount||0;
+    document.getElementById('dOutOfStock').textContent=dash.outOfStockCount||0;
+    document.getElementById('dashboardStats').style.display='block';
+    // table
+    if(!items.length){document.getElementById('invBody').innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">No stock</td></tr>';return;}
+    document.getElementById('invBody').innerHTML=items.map(function(it){
+      var avail=it.quantityOnHand-it.quantityReserved;
+      var qClass=avail<=0?'qty-zero':avail<=it.reorderPoint?'qty-low':'qty-ok';
+      return '<tr><td style="font-family:monospace;font-size:11px">'+_esc(it.sku)+'</td>'+
+        '<td>'+_esc(it.productName)+'</td>'+
+        '<td style="font-size:11px">'+_esc(it.binLocation||'—')+'</td>'+
+        '<td>'+it.quantityOnHand+'</td>'+
+        '<td>'+it.quantityReserved+'</td>'+
+        '<td><span class="qty-chip '+qClass+'">'+avail+'</span></td></tr>';
+    }).join('');
+  }).catch(function(e){_toast(e.message,'error');});
+};
+
+// ── Receive ──
+_addRcvItem();
+window._addRcvItem=function(){
+  _rcvCount++;
+  var div=document.createElement('div');div.className='item-row';div.id='ri'+_rcvCount;
+  div.innerHTML='<div class="item-hdr"><span class="item-lbl">Item '+_rcvCount+'</span>'+
+    '<button class="rm-btn" onclick="_rmRcv(\'ri'+_rcvCount+'\')">&#x2715;</button></div>'+
+    '<div class="item-inputs">'+
+    '<input type="text" placeholder="SKU *" class="riSku">'+
+    '<input type="text" placeholder="Product name" class="riName">'+
+    '<input type="number" placeholder="Qty *" class="riQty" min="1">'+
+    '<input type="number" placeholder="Unit cost (KES)" class="riCost" step="0.01">'+
+    '<input type="text"   placeholder="Expiry (YYYY-MM-DD)" class="riExpiry">'+
+    '<input type="text"   placeholder="Batch / Lot No." class="riBatch">'+
+    '</div>';
+  document.getElementById('rcvItems').appendChild(div);
+};
+window._rmRcv=function(id){var el=document.getElementById(id);if(el)el.remove();};
+window._receiveStock=function(){
+  if(!_uid){_toast('Sign in','error');return;}
+  var shopId=document.getElementById('rcvShopId').value.trim();
+  var warehouseId=document.getElementById('rcvWarehouseId').value.trim();
+  if(!shopId||!warehouseId){_toast('Shop + Warehouse required','error');return;}
+  var items=[];
+  document.querySelectorAll('.item-row').forEach(function(el){
+    var sku=el.querySelector('.riSku').value.trim();
+    var qty=parseInt(el.querySelector('.riQty').value)||0;
+    if(sku&&qty>0){items.push({sku:sku,productName:el.querySelector('.riName').value.trim()||sku,
+      quantity:qty,unitCost:parseFloat(el.querySelector('.riCost').value)||0,
+      expiryDate:el.querySelector('.riExpiry').value||null,
+      batchNumber:el.querySelector('.riBatch').value.trim()||null});}
+  });
+  if(!items.length){_toast('Add at least 1 item','error');return;}
+  var btn=document.getElementById('rcvBtn');btn.disabled=true;btn.textContent='Receiving...';
+  _cf('warehouseReceive')({shopId:shopId,warehouseId:warehouseId,
+    supplier:document.getElementById('rcvSupplier').value.trim(),
+    referenceNumber:document.getElementById('rcvRef').value.trim(),items:items})
+    .then(function(r){
+      _toast('Stock received! Receipt '+r.data.receiptId,'success');
+      document.getElementById('paEntryId').value=r.data.receiptId||'';
+      _tab(document.querySelector('[data-pane="putaway"]'),'putaway');
+    }).catch(function(e){_toast(e.message,'error');}).finally(function(){btn.disabled=false;btn.textContent='Receive Stock';});
+};
+
+// ── Pick & Ship ──
+window._generatePickList=function(){
+  var shopId=document.getElementById('pickShopId').value.trim();
+  var warehouseId=document.getElementById('pickWarehouseId').value.trim();
+  if(!shopId||!warehouseId){_toast('Shop + Warehouse required','error');return;}
+  document.getElementById('pickListContainer').innerHTML='<div class="skeleton" style="height:80px;margin-bottom:8px"></div>'.repeat(3);
+  _cf('warehouseGeneratePickList')({shopId:shopId,warehouseId:warehouseId})
+    .then(function(r){
+      var picks=r.data.items||[];
+      _pickListId=r.data.pickListId||null;
+      if(!picks.length){document.getElementById('pickListContainer').innerHTML='<div class="empty"><div class="empty-icon">&#x2705;</div><p>No pending orders</p></div>';return;}
+      document.getElementById('pickListContainer').innerHTML=picks.map(function(p){
+        return '<div class="pick-item"><input type="checkbox" class="pick-check" data-sku="'+_esc(p.sku)+'" data-order="'+_esc(p.orderId)+'">'+
+          '<div class="pick-info"><div class="pick-name">'+_esc(p.productName||p.sku)+'</div>'+
+          '<div class="pick-detail">Bin: <strong>'+_esc(p.binLocation||'—')+'</strong> &bull; Order: '+_esc(p.orderId)+'</div></div>'+
+          '<div class="pick-qty">x'+p.quantity+'</div></div>';
+      }).join('');
+      document.getElementById('pickActions').style.display='flex';
+    }).catch(function(e){_toast(e.message,'error');});
+};
+window._confirmPick=function(){
+  if(!_pickListId){_toast('Generate pick list first','error');return;}
+  var shopId=document.getElementById('pickShopId').value.trim();
+  var warehouseId=document.getElementById('pickWarehouseId').value.trim();
+  var checked=[];
+  document.querySelectorAll('.pick-check:checked').forEach(function(cb){
+    checked.push({sku:cb.dataset.sku,orderId:cb.dataset.order});
+  });
+  if(!checked.length){_toast('Select at least one item','error');return;}
+  var btn=document.getElementById('confirmPickBtn');btn.disabled=true;btn.textContent='Confirming...';
+  _cf('warehouseConfirmPick')({shopId:shopId,warehouseId:warehouseId,pickListId:_pickListId,pickedItems:checked})
+    .then(function(){_toast('Pick confirmed!','success');_generatePickList();})
+    .catch(function(e){_toast(e.message,'error');}).finally(function(){btn.disabled=false;btn.textContent='Confirm Picked Items';});
+};
+window._showShipForm=function(){
+  var sf=document.getElementById('shipForm');sf.style.display=sf.style.display==='none'?'block':'none';
+};
+window._shipOrder=function(){
+  var shopId=document.getElementById('pickShopId').value.trim();
+  var warehouseId=document.getElementById('pickWarehouseId').value.trim();
+  var orderId=document.getElementById('shipOrderId').value.trim();
+  if(!shopId||!warehouseId||!orderId){_toast('Shop, Warehouse & Order ID required','error');return;}
+  var btn=document.getElementById('shipConfirmBtn');btn.disabled=true;btn.textContent='Shipping...';
+  _cf('warehouseShipOrder')({shopId:shopId,warehouseId:warehouseId,orderId:orderId,
+    carrier:document.getElementById('shipCarrier').value.trim(),
+    trackingNumber:document.getElementById('shipTracking').value.trim()})
+    .then(function(){_toast('Order shipped!','success');document.getElementById('shipForm').style.display='none';})
+    .catch(function(e){_toast(e.message,'error');}).finally(function(){btn.disabled=false;btn.textContent='Confirm Shipment';});
+};
+
+// ── Putaway ──
+window._putaway=function(){
+  if(!_uid){_toast('Sign in','error');return;}
+  var shopId=document.getElementById('paShopId').value.trim();
+  var warehouseId=document.getElementById('paWarehouseId').value.trim();
+  var entryId=document.getElementById('paEntryId').value.trim();
+  var binLocation=document.getElementById('paBin').value.trim();
+  if(!shopId||!warehouseId||!entryId||!binLocation){_toast('All required fields missing','error');return;}
+  var btn=document.getElementById('paBtn');btn.disabled=true;btn.textContent='Confirming...';
+  _cf('warehousePutaway')({shopId:shopId,warehouseId:warehouseId,receiptEntryId:entryId,
+    binLocation:binLocation,aisle:document.getElementById('paAisle').value.trim()||null})
+    .then(function(){_toast('Putaway confirmed!','success');})
+    .catch(function(e){_toast(e.message,'error');}).finally(function(){btn.disabled=false;btn.textContent='Confirm Putaway';});
+};
+})();
+</script>
+</body>
+</html>

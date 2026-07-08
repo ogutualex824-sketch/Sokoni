@@ -1,4 +1,68 @@
-﻿## [2026-07-08] — Finance OS (Sprint 4.3)
+﻿## [2026-07-08] — Logistics+ (Sprint 4.4)
+
+### Summary
+SOKONI 4.0 Sprint 4.4 — full logistics operations layer. Adds fleet vehicle registry with maintenance and fuel log tracking, nearest-neighbor TSP route optimization (no external API), warehouse stock receive/putaway/pick/ship workflow with FEFO-aware inventory, delivery zone management (radius via Haversine + polygon via ray-casting), Kenya-tier cargo freight rate calculation with volumetric weight, and a 4-report analytics suite (delivery KPIs, rider leaderboard, zone performance, on-time trend).
+
+### Files Affected
+| File | Change |
+|---|---|
+| `functions/logistics-plus.js` | NEW — 30 CFs across 6 modules |
+| `fleet-manager.html` | NEW — Fleet management (vehicle grid, maintenance/fuel logs) |
+| `route-planner.html` | NEW — Multi-stop route creation, optimize, stop status |
+| `warehouse.html` | NEW — Receive, putaway, pick list, ship order |
+| `logistics-reports.html` | NEW — Delivery KPIs, rider leaderboard, zone perf, on-time trend |
+| `functions/index.js` | 30 new exports |
+| `DEPLOY_QUEUE.md` | Added Sprint 4.4 spot deploy command |
+
+### New Cloud Functions (30)
+**Fleet (6):** `fleetVehicleCreate`, `fleetVehicleUpdate`, `fleetVehicleList`, `fleetLogMaintenance`, `fleetLogFuel`, `fleetGetVehicleStats`
+**Route Planning (5):** `routeCreate`, `routeOptimize`, `routeAssignDriver`, `routeUpdateStop`, `routeGetActive`
+**Warehouse (7):** `warehouseReceive`, `warehousePutaway`, `warehouseGeneratePickList`, `warehouseConfirmPick`, `warehouseShipOrder`, `warehouseGetInventory`, `warehouseGetDashboard`
+**Delivery Zones (4):** `deliveryZoneCreate`, `deliveryZoneUpdate`, `deliveryZoneList`, `deliveryZoneCheckCoverage`
+**Cargo & Freight (4):** `cargoCalculateFreight`, `cargoManifestCreate`, `cargoManifestAddItem`, `cargoManifestList`
+**Logistics Reports (4):** `logisticsGetDeliveryReport`, `logisticsGetRiderLeaderboard`, `logisticsGetZonePerformance`, `logisticsGetOnTimeRate`
+
+### Feature Details
+- **Fleet**: Vehicle types (motorcycle/van/truck/pickup/trailer); maintenance log with service type, odometer, cost, next service km; fuel log with litres, cost, odometer; `fleetGetVehicleStats` computes avg fuel efficiency and total maintenance cost per vehicle
+- **Route Planning**: Multi-stop route with `routeCreate`; `routeOptimize` uses nearest-neighbor TSP heuristic in-process — no Google Maps API; `routeAssignDriver` links `deliveryRoutes` to `users` collection; `routeUpdateStop` sets delivered/failed status and increments `completedStops`; `routeGetActive` returns all non-completed routes for a shop
+- **Warehouse**: `warehouseReceive` creates receipt + stock entries in batch; `warehousePutaway` assigns bin location to receipt entry and updates stock; `warehouseGeneratePickList` creates pick list from pending orders, respects FEFO (earliest expiry first); `warehouseConfirmPick` decrements `warehouseStock` reserved quantity atomically; `warehouseShipOrder` marks order shipped and clears reservation; `warehouseGetInventory` returns stock sorted by available quantity; `warehouseGetDashboard` aggregates low-stock and out-of-stock counts
+- **Delivery Zones**: Zone coverage types: radius (Haversine distance check) and polygon (ray-casting point-in-polygon); `deliveryZoneCheckCoverage` accepts lat/lng and returns matching zones with base fee and per-km rate
+- **Cargo & Freight**: Kenya weight-tier rates (KES 200/kg <5kg → KES 40/kg >500kg); volumetric weight via L×W×H÷4000 (road divisor); chargeable = max(actual, volumetric); `cargoManifestCreate` starts a consolidated shipment; `cargoManifestAddItem` appends items and recalculates totals in `runTransaction()`
+- **Reports**: All report CFs accept `period` (7d/30d/90d) parameter; `logisticsGetDeliveryReport` includes daily breakdown array for bar chart; `logisticsGetRiderLeaderboard` ranked by deliveries with success rate, avg rating, avg minutes; `logisticsGetZonePerformance` per-zone on-time rate with colour threshold (≥80% green, ≥60% amber, <60% red); `logisticsGetOnTimeRate` returns daily trend array for horizontal bar chart
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `vehicles/{id}` | Vehicle registry — plate, type, status, capacity |
+| `vehicleLogs/{id}` | Maintenance and fuel log entries |
+| `deliveryRoutes/{id}` | Multi-stop routes with stops[] array embedded |
+| `warehouseStock/{id}` | Stock level per SKU per warehouse — quantityOnHand, quantityReserved |
+| `warehouseReceipts/{id}` | Goods receipt notes — supplier, items[] |
+| `pickLists/{id}` | Generated pick lists — items[], status |
+| `deliveryZones/{id}` | Zone definitions — radius or polygon, fee schedule |
+| `cargoManifests/{id}` | Cargo manifests — items[], totalWeight, totalChargeableKg |
+
+### Security
+- `enforceAppCheck: true` on all 30 CFs
+- `_assertShopManager()` required for all write operations (vehicle create/update, route create/optimize/assign, zone create/update, cargo manifest create, all reports)
+- Route stop updates verified against `assignedDriverId === uid` OR manager role — riders cannot update stops they're not assigned to
+- Warehouse receive/ship require manager; pick/putaway/confirm allow all shop members to support floor staff
+- Cargo manifest sealed flag prevents adding items after sealing — prevents manifest tampering mid-transit
+- No external APIs called — Haversine, TSP, ray-casting, freight rates all computed in-process
+
+### Performance
+- All Firestore queries single-field `where()` — zero new composite indexes
+- Route stops embedded in route doc — single read for full stop list
+- Warehouse pick list fetches pending orders with single `status == pending` query; in-memory sort by FEFO
+- Report CFs compute `fromDate` in-process from `period` param; single date-range collection scan via `createdAt >= fromDate`
+- Nearest-neighbor TSP O(n²) — adequate for typical 10–50 stop routes; returns immediately with no I/O
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-07-08] — Finance OS (Sprint 4.3)
 
 ### Summary
 SOKONI 4.0 Sprint 4.3 — complete financial management layer. Adds budget creation and category tracking with over-spend alerts, expense claim submission and manager approval workflow, bank statement import and transaction matching, tax filing calendar (VAT/PAYE/withholding/corporate), P&L/Balance Sheet/Cash Flow statements derived from the existing ledger, petty cash fund management with physical reconciliation, and a full invoice lifecycle (create → send → paid/void) with auto-numbered invoice IDs and SendGrid email integration.

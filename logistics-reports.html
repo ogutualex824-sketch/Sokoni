@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Logistics Reports &mdash; SOKONI</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,button{font-family:inherit}
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);border-bottom:1px solid var(--border);
+      padding:12px 16px;display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+    .tabs{display:flex;border-bottom:1px solid var(--border);position:sticky;top:57px;z-index:100;
+      background:rgba(5,5,5,.97);overflow-x:auto;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex-shrink:0;padding:12px 14px;font-size:11px;font-weight:800;cursor:pointer;
+      color:var(--muted);border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:.4px;transition:all .15s}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .pane{padding:16px;max-width:900px;margin:0 auto;display:none}
+    .pane.active{display:block}
+    /* filter bar */
+    .filter-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:12px;margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .filter-bar label{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap}
+    .filter-bar input,.filter-bar select{background:var(--surface2);border:1px solid var(--border);
+      border-radius:8px;padding:9px 12px;color:var(--txt);font-size:13px;min-height:40px}
+    .filter-bar select option{background:#1a1a1a}
+    .filter-bar button{background:var(--accent);color:#000;border:none;border-radius:8px;
+      padding:9px 14px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
+    /* KPI grid */
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+    .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+    .kpi-val{font-size:24px;font-weight:900;color:var(--accent)}
+    .kpi-lbl{font-size:11px;color:var(--muted);font-weight:700;margin-top:3px}
+    .kpi-sub{font-size:11px;margin-top:4px}
+    .kpi-sub.up{color:var(--accent)}
+    .kpi-sub.down{color:var(--danger)}
+    /* chart bars */
+    .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+    .chart-title{font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+    .bar-chart{display:flex;align-items:flex-end;gap:4px;height:120px;padding-bottom:4px}
+    .bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;min-width:0}
+    .bar-fill{background:var(--accent);border-radius:4px 4px 0 0;width:100%;min-height:4px;transition:height .4s}
+    .bar-lbl{font-size:9px;color:var(--muted);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
+    .bar-val{font-size:9px;color:var(--txt);font-weight:700}
+    /* leaderboard */
+    .lb-table{width:100%;border-collapse:collapse}
+    .lb-table th{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);
+      color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+    .lb-table td{padding:10px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+    .lb-table tr:last-child td{border-bottom:none}
+    .rank-badge{display:inline-flex;align-items:center;justify-content:center;
+      width:26px;height:26px;border-radius:50%;font-size:12px;font-weight:900}
+    .rank-1{background:rgba(255,215,0,.2);color:#ffd700}
+    .rank-2{background:rgba(192,192,192,.2);color:#c0c0c0}
+    .rank-3{background:rgba(205,127,50,.2);color:#cd7f32}
+    .rank-n{background:var(--surface2);color:var(--muted)}
+    .perf-bar{height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-top:4px}
+    .perf-fill{height:100%;border-radius:3px;background:var(--accent)}
+    .zone-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px}
+    .zone-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .zone-name{font-size:14px;font-weight:800;flex:1}
+    .zone-metric{text-align:center;flex:1}
+    .zone-metric-val{font-size:16px;font-weight:900}
+    .zone-metric-lbl{font-size:10px;color:var(--muted);font-weight:700}
+    .zone-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding-top:8px;border-top:1px solid var(--border)}
+    /* on-time trend */
+    .trend-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+    .trend-row:last-child{border-bottom:none}
+    .trend-date{font-size:12px;color:var(--muted);width:80px;flex-shrink:0}
+    .trend-bar-wrap{flex:1;background:rgba(255,255,255,.06);border-radius:4px;height:20px;overflow:hidden}
+    .trend-bar{height:100%;border-radius:4px;transition:width .4s}
+    .trend-pct{font-size:12px;font-weight:800;width:40px;text-align:right;flex-shrink:0}
+    .empty{text-align:center;padding:40px 16px;color:var(--muted)}
+    .empty-icon{font-size:48px;margin-bottom:12px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;border:1px solid var(--border);
+      padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;transition:all .3s;
+      pointer-events:none;z-index:9999;white-space:nowrap;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+    @media(max-width:500px){.kpi-grid{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrLogo">SOKONI</div>
+  <span style="flex:1;font-size:14px;font-weight:800">Logistics Reports</span>
+</div>
+<div class="tabs">
+  <div class="tab active" data-pane="delivery" onclick="_tab(this,'delivery')">Delivery</div>
+  <div class="tab" data-pane="leaderboard" onclick="_tab(this,'leaderboard')">Riders</div>
+  <div class="tab" data-pane="zones"        onclick="_tab(this,'zones')">Zones</div>
+  <div class="tab" data-pane="ontime"       onclick="_tab(this,'ontime')">On-Time Trend</div>
+</div>
+
+<!-- DELIVERY TAB -->
+<div class="pane active" id="deliveryPane">
+  <div class="filter-bar">
+    <label>Shop</label>
+    <input type="text" id="dShopId" placeholder="Shop ID">
+    <label>Period</label>
+    <select id="dPeriod">
+      <option value="7d">Last 7 days</option>
+      <option value="30d" selected>Last 30 days</option>
+      <option value="90d">Last 90 days</option>
+    </select>
+    <button onclick="_loadDelivery()">Run</button>
+  </div>
+  <div id="deliveryKPIs" style="display:none">
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-val" id="dTotal">—</div><div class="kpi-lbl">Total Orders</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="dDelivered">—</div><div class="kpi-lbl">Delivered</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="dFailed">—</div><div class="kpi-lbl">Failed</div></div>
+      <div class="kpi-card"><div class="kpi-val" id="dAvgTime">—</div><div class="kpi-lbl">Avg Minutes</div><div class="kpi-sub" id="dOTR"></div></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Daily Deliveries</div>
+      <div class="bar-chart" id="dailyChart"></div>
+    </div>
+  </div>
+  <div id="deliveryEmpty" class="empty"><div class="empty-icon">&#x1F4CB;</div><p>Select shop and run report</p></div>
+</div>
+
+<!-- LEADERBOARD TAB -->
+<div class="pane" id="leaderboardPane">
+  <div class="filter-bar">
+    <label>Shop</label>
+    <input type="text" id="lbShopId" placeholder="Shop ID">
+    <label>Period</label>
+    <select id="lbPeriod">
+      <option value="7d">Last 7 days</option>
+      <option value="30d" selected>Last 30 days</option>
+    </select>
+    <button onclick="_loadLeaderboard()">Run</button>
+  </div>
+  <div class="chart-card" style="padding:0;overflow:hidden">
+    <div style="overflow-x:auto">
+      <table class="lb-table" id="lbTable">
+        <thead><tr><th>#</th><th>Rider</th><th>Deliveries</th><th>Success Rate</th><th>Avg Rating</th><th>Avg Minutes</th></tr></thead>
+        <tbody id="lbBody"><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">Run report above</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ZONES TAB -->
+<div class="pane" id="zonesPane">
+  <div class="filter-bar">
+    <label>Shop</label>
+    <input type="text" id="zShopId" placeholder="Shop ID">
+    <label>Period</label>
+    <select id="zPeriod">
+      <option value="7d">Last 7 days</option>
+      <option value="30d" selected>Last 30 days</option>
+    </select>
+    <button onclick="_loadZones()">Run</button>
+  </div>
+  <div id="zoneCards"><div class="empty"><div class="empty-icon">&#x1F4CD;</div><p>Run report above</p></div></div>
+</div>
+
+<!-- ON-TIME TREND TAB -->
+<div class="pane" id="ontimePane">
+  <div class="filter-bar">
+    <label>Shop</label>
+    <input type="text" id="otShopId" placeholder="Shop ID">
+    <label>Days</label>
+    <select id="otDays">
+      <option value="14">14 days</option>
+      <option value="30" selected>30 days</option>
+      <option value="60">60 days</option>
+    </select>
+    <button onclick="_loadOntime()">Run</button>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">On-Time Rate</div>
+    <div id="ontimeBars"><div class="empty" style="padding:20px"><p>Run report above</p></div></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function(){
+function _cf(n){return firebase.functions().httpsCallable(n);}
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _toast(msg,type){var el=document.getElementById('toast');el.textContent=msg;el.className='show '+(type||'');clearTimeout(el._t);el._t=setTimeout(function(){el.className='';},3500);}
+firebase.auth().onAuthStateChanged(function(){});
+
+window._tab=function(el,pane){
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
+  el.classList.add('active');
+  document.querySelectorAll('.pane').forEach(function(p){p.classList.remove('active');});
+  document.getElementById(pane+'Pane').classList.add('active');
+};
+
+// ── Delivery Report ──
+window._loadDelivery=function(){
+  var shopId=document.getElementById('dShopId').value.trim();
+  var period=document.getElementById('dPeriod').value;
+  if(!shopId){_toast('Enter shop ID','error');return;}
+  document.getElementById('deliveryKPIs').style.display='none';
+  document.getElementById('deliveryEmpty').innerHTML='<div class="skeleton" style="height:100px;margin-bottom:10px"></div>'.repeat(2);
+  _cf('logisticsGetDeliveryReport')({shopId:shopId,period:period})
+    .then(function(r){
+      var d=r.data;
+      document.getElementById('dTotal').textContent=d.totalOrders||0;
+      document.getElementById('dDelivered').textContent=d.delivered||0;
+      document.getElementById('dFailed').textContent=d.failed||0;
+      document.getElementById('dAvgTime').textContent=Math.round(d.avgDeliveryMinutes||0);
+      var otr=Math.round((d.onTimeRate||0)*100);
+      var otrEl=document.getElementById('dOTR');
+      otrEl.textContent=otr+'% on-time';
+      otrEl.className='kpi-sub '+(otr>=80?'up':'down');
+      document.getElementById('deliveryKPIs').style.display='block';
+      document.getElementById('deliveryEmpty').style.display='none';
+      // bar chart
+      var daily=d.dailyBreakdown||[];
+      var maxVal=daily.reduce(function(m,x){return Math.max(m,x.count||0);},1);
+      document.getElementById('dailyChart').innerHTML=daily.map(function(day){
+        var h=Math.max(8,Math.round((day.count/maxVal)*110));
+        return '<div class="bar-col">'+
+          '<div class="bar-val">'+day.count+'</div>'+
+          '<div class="bar-fill" style="height:'+h+'px"></div>'+
+          '<div class="bar-lbl">'+_esc(day.label)+'</div></div>';
+      }).join('');
+    }).catch(function(e){_toast(e.message,'error');document.getElementById('deliveryEmpty').innerHTML='<div class="empty"><div class="empty-icon">&#x26A0;</div><p>'+_esc(e.message)+'</p></div>';});
+};
+
+// ── Leaderboard ──
+window._loadLeaderboard=function(){
+  var shopId=document.getElementById('lbShopId').value.trim();
+  var period=document.getElementById('lbPeriod').value;
+  if(!shopId){_toast('Enter shop ID','error');return;}
+  document.getElementById('lbBody').innerHTML='<tr><td colspan="6"><div class="skeleton" style="height:40px;margin:8px"></div></td></tr>'.repeat(5);
+  _cf('logisticsGetRiderLeaderboard')({shopId:shopId,period:period,limit:20})
+    .then(function(r){
+      var riders=r.data.riders||[];
+      if(!riders.length){document.getElementById('lbBody').innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">No data</td></tr>';return;}
+      document.getElementById('lbBody').innerHTML=riders.map(function(rider,i){
+        var rank=i+1;
+        var rankClass=rank===1?'rank-1':rank===2?'rank-2':rank===3?'rank-3':'rank-n';
+        var rate=Math.round((rider.successRate||0)*100);
+        return '<tr>'+
+          '<td><span class="rank-badge '+rankClass+'">'+rank+'</span></td>'+
+          '<td><strong>'+_esc(rider.driverName||'Unknown')+'</strong>'+
+            '<div class="perf-bar"><div class="perf-fill" style="width:'+rate+'%"></div></div></td>'+
+          '<td>'+rider.totalDeliveries+'</td>'+
+          '<td>'+(rider.successRate?Math.round(rider.successRate*100)+'%':'—')+'</td>'+
+          '<td>'+(rider.avgRating?rider.avgRating.toFixed(1)+' &#x2605;':'—')+'</td>'+
+          '<td>'+(rider.avgMinutes?Math.round(rider.avgMinutes)+'m':'—')+'</td>'+
+          '</tr>';
+      }).join('');
+    }).catch(function(e){_toast(e.message,'error');});
+};
+
+// ── Zone Performance ──
+window._loadZones=function(){
+  var shopId=document.getElementById('zShopId').value.trim();
+  var period=document.getElementById('zPeriod').value;
+  if(!shopId){_toast('Enter shop ID','error');return;}
+  var container=document.getElementById('zoneCards');
+  container.innerHTML='<div class="skeleton" style="height:100px;margin-bottom:10px"></div>'.repeat(3);
+  _cf('logisticsGetZonePerformance')({shopId:shopId,period:period})
+    .then(function(r){
+      var zones=r.data.zones||[];
+      if(!zones.length){container.innerHTML='<div class="empty"><div class="empty-icon">&#x1F4CD;</div><p>No zone data</p></div>';return;}
+      container.innerHTML=zones.map(function(z){
+        var otr=Math.round((z.onTimeRate||0)*100);
+        var color=otr>=80?'var(--accent)':otr>=60?'var(--warn)':'var(--danger)';
+        return '<div class="zone-card">'+
+          '<div class="zone-hdr"><div class="zone-name">'+_esc(z.zoneName||z.zoneId)+'</div>'+
+          '<span style="font-size:18px;font-weight:900;color:'+color+'">'+otr+'%</span>'+
+          '<span style="font-size:11px;color:var(--muted)">on-time</span></div>'+
+          '<div class="zone-metrics">'+
+          '<div class="zone-metric"><div class="zone-metric-val">'+z.totalDeliveries+'</div><div class="zone-metric-lbl">Deliveries</div></div>'+
+          '<div class="zone-metric"><div class="zone-metric-val">'+Math.round(z.avgMinutes||0)+'m</div><div class="zone-metric-lbl">Avg Time</div></div>'+
+          '<div class="zone-metric"><div class="zone-metric-val">'+z.failedCount+'</div><div class="zone-metric-lbl">Failed</div></div>'+
+          '</div></div>';
+      }).join('');
+    }).catch(function(e){_toast(e.message,'error');});
+};
+
+// ── On-Time Rate Trend ──
+window._loadOntime=function(){
+  var shopId=document.getElementById('otShopId').value.trim();
+  var days=parseInt(document.getElementById('otDays').value)||30;
+  if(!shopId){_toast('Enter shop ID','error');return;}
+  document.getElementById('ontimeBars').innerHTML='<div class="skeleton" style="height:300px"></div>';
+  _cf('logisticsGetOnTimeRate')({shopId:shopId,days:days})
+    .then(function(r){
+      var trend=r.data.trend||[];
+      if(!trend.length){document.getElementById('ontimeBars').innerHTML='<div class="empty" style="padding:20px"><p>No data</p></div>';return;}
+      document.getElementById('ontimeBars').innerHTML=trend.map(function(day){
+        var pct=Math.round((day.onTimeRate||0)*100);
+        var color=pct>=80?'var(--accent)':pct>=60?'var(--warn)':'var(--danger)';
+        return '<div class="trend-row">'+
+          '<div class="trend-date">'+_esc(day.date)+'</div>'+
+          '<div class="trend-bar-wrap"><div class="trend-bar" style="width:'+pct+'%;background:'+color+'"></div></div>'+
+          '<div class="trend-pct" style="color:'+color+'">'+pct+'%</div>'+
+          '</div>';
+      }).join('');
+    }).catch(function(e){_toast(e.message,'error');});
+};
+})();
+</script>
+</body>
+</html>
