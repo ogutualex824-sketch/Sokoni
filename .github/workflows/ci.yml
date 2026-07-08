@@ -44,8 +44,14 @@ jobs:
       - name: Scan for hardcoded secrets
         run: |
           echo "Scanning for hardcoded secrets..."
-          if grep -rn "ISPrivKey_live_\|sk_live_\|pk_live_" \
-               --include="*.js" --include="*.html" \
+          # DEV-4 (Phase 4 audit): broadened beyond IntaSend/Stripe live keys to also
+          # catch SendGrid tokens, PEM private keys, and Slack tokens. Patterns require
+          # a HIGH-ENTROPY suffix after the prefix so they match real keys but NOT the
+          # prefix constants / doc placeholders (e.g. 'sk_live_', 'sk_live_your_key_here',
+          # 'ISPrivKey_live_XXXX') that legitimately appear in code and docs. Deliberately
+          # NOT matching AIza* (public Firebase web API keys are safe by design).
+          if grep -rnE "ISPrivKey_live_[A-Za-z0-9]{16,}|sk_live_[A-Za-z0-9]{20,}|pk_live_[A-Za-z0-9]{20,}|SG\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9]{8,}-[A-Za-z0-9]{8,}" \
+               --include="*.js" --include="*.html" --include="*.json" \
                --exclude-dir=node_modules --exclude-dir=Temp .; then
             echo "❌ HARDCODED SECRET DETECTED — failing build"
             exit 1
