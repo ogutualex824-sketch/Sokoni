@@ -9159,6 +9159,40 @@ exports.getPosPerfMetrics         = posPerf.getPosPerfMetrics;
 exports.getPosSpeedReport         = posPerf.getPosSpeedReport;
 exports.posScheduledPerfRollup    = posPerf.posScheduledPerfRollup;
 
+/* ── SmartPOS Completeness Engine (Sprint 4.1) ─────────────────────────── */
+const posComplete = require('./pos-completeness');
+/* Gift Cards */
+exports.giftCardIssue          = posComplete.giftCardIssue;
+exports.giftCardRedeem         = posComplete.giftCardRedeem;
+exports.giftCardBalance        = posComplete.giftCardBalance;
+exports.giftCardVoid           = posComplete.giftCardVoid;
+exports.giftCardList           = posComplete.giftCardList;
+/* Layaway */
+exports.layawayCreate          = posComplete.layawayCreate;
+exports.layawayAddPayment      = posComplete.layawayAddPayment;
+exports.layawayFulfill         = posComplete.layawayFulfill;
+exports.layawayCancel          = posComplete.layawayCancel;
+exports.layawayList            = posComplete.layawayList;
+/* Park & Suspend Sales */
+exports.salePark               = posComplete.salePark;
+exports.saleRetrieve           = posComplete.saleRetrieve;
+exports.saleListParked         = posComplete.saleListParked;
+exports.saleDiscardParked      = posComplete.saleDiscardParked;
+/* Kitchen Display System */
+exports.kdsSubmitOrder         = posComplete.kdsSubmitOrder;
+exports.kdsUpdateItem          = posComplete.kdsUpdateItem;
+exports.kdsGetQueue            = posComplete.kdsGetQueue;
+exports.kdsBump                = posComplete.kdsBump;
+/* Cycle Count */
+exports.cycleCountCreate       = posComplete.cycleCountCreate;
+exports.cycleCountUpdateItem   = posComplete.cycleCountUpdateItem;
+exports.cycleCountComplete     = posComplete.cycleCountComplete;
+exports.cycleCountList         = posComplete.cycleCountList;
+exports.cycleCountGet          = posComplete.cycleCountGet;
+/* Multi-Currency */
+exports.currencyGetRates       = posComplete.currencyGetRates;
+exports.currencySetRate        = posComplete.currencySetRate;
+
 /* ── Universal Printer Engine v5.0 — print log, history, config, templates ── */
 const posPrinter = require('./pos-printer');
 exports.posLogPrint          = posPrinter.posLogPrint;

@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>POS Completeness &mdash; SOKONI SmartPOS</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{
+      --bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ff9800;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.5);
+      --radius:14px;--hdr:56px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,textarea,button{font-family:inherit}
+
+    /* ── Header ── */
+    #hdr{position:sticky;top:0;z-index:200;height:var(--hdr);
+      background:rgba(5,5,5,.97);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:14px;padding:0 16px}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;
+      cursor:pointer;padding:4px;line-height:1}
+    .back-btn:hover{color:var(--txt)}
+    #hdrTitle{font-size:16px;font-weight:800;flex:1}
+    #shopBadge{font-size:11px;color:var(--accent);background:rgba(113,255,0,.12);
+      border:1px solid rgba(113,255,0,.3);padding:3px 8px;border-radius:20px}
+
+    /* ── Tab Bar ── */
+    #tabs{display:flex;overflow-x:auto;gap:4px;padding:12px 16px;
+      border-bottom:1px solid var(--border);scrollbar-width:none;
+      background:rgba(5,5,5,.97);position:sticky;top:var(--hdr);z-index:100}
+    #tabs::-webkit-scrollbar{display:none}
+    .tab{flex-shrink:0;padding:8px 16px;border-radius:20px;font-size:13px;
+      font-weight:700;cursor:pointer;border:1px solid var(--border);
+      background:var(--surface);color:var(--muted);transition:all .2s;white-space:nowrap}
+    .tab.active{background:var(--accent);color:#000;border-color:transparent}
+
+    /* ── Content ── */
+    .panel{display:none;padding:16px;max-width:860px;margin:0 auto}
+    .panel.active{display:block}
+    h2.section-title{font-size:17px;font-weight:800;margin-bottom:4px}
+    p.section-desc{font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.5}
+
+    /* ── Cards & Forms ── */
+    .card{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);padding:16px;margin-bottom:12px}
+    .card-header{display:flex;align-items:center;justify-content:space-between;
+      margin-bottom:14px}
+    .card-title{font-size:14px;font-weight:800}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:480px){.form-grid{grid-template-columns:1fr}}
+    .form-group{display:flex;flex-direction:column;gap:5px}
+    .form-group label{font-size:11px;color:var(--muted);text-transform:uppercase;
+      letter-spacing:.5px;font-weight:700}
+    .form-group input,.form-group select,.form-group textarea{
+      background:var(--surface2);border:1px solid var(--border);
+      border-radius:9px;padding:11px 13px;color:var(--txt);font-size:14px;
+      width:100%;outline:none;transition:border .2s;min-height:44px}
+    .form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+    .form-group textarea{resize:vertical;min-height:80px}
+    .form-group select option{background:#111}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:11px 18px;border-radius:10px;font-size:13px;font-weight:800;
+      cursor:pointer;border:none;min-height:44px;transition:opacity .15s}
+    .btn:disabled{opacity:.4;cursor:not-allowed}
+    .btn-primary{background:var(--accent);color:#000}
+    .btn-danger{background:var(--danger);color:#fff}
+    .btn-ghost{background:var(--surface2);border:1px solid var(--border);color:var(--txt)}
+    .btn-sm{padding:7px 13px;font-size:12px;min-height:36px}
+    .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+
+    /* ── Status badges ── */
+    .badge{display:inline-block;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:800}
+    .badge-green{background:rgba(113,255,0,.15);color:var(--accent);border:1px solid rgba(113,255,0,.3)}
+    .badge-blue{background:rgba(0,188,212,.15);color:var(--info);border:1px solid rgba(0,188,212,.3)}
+    .badge-warn{background:rgba(255,152,0,.15);color:var(--warn);border:1px solid rgba(255,152,0,.3)}
+    .badge-danger{background:rgba(244,67,54,.15);color:var(--danger);border:1px solid rgba(244,67,54,.3)}
+
+    /* ── List items ── */
+    .list-item{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);padding:13px 14px;margin-bottom:8px;
+      display:flex;align-items:center;gap:12px}
+    .list-item-info{flex:1;min-width:0}
+    .list-item-title{font-size:14px;font-weight:800;margin-bottom:2px;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .list-item-sub{font-size:11px;color:var(--muted)}
+    .list-item-amount{font-size:15px;font-weight:900;color:var(--accent);flex-shrink:0}
+
+    /* ── Gift card visual ── */
+    .gc-card{background:linear-gradient(135deg,#0d1f00,#162600);
+      border:2px solid var(--accent);border-radius:16px;padding:20px;
+      text-align:center;margin-bottom:16px;position:relative;overflow:hidden}
+    .gc-card::before{content:'SOKONI';position:absolute;font-size:80px;font-weight:900;
+      color:rgba(113,255,0,.04);top:50%;left:50%;transform:translate(-50%,-50%)}
+    .gc-code{font-size:20px;font-weight:900;letter-spacing:3px;color:var(--accent);
+      font-family:monospace;margin:8px 0}
+    .gc-balance{font-size:32px;font-weight:900;margin:6px 0}
+    .gc-sub{font-size:11px;color:var(--muted)}
+
+    /* ── Progress bar ── */
+    .progress-bar{background:var(--surface2);border-radius:6px;height:8px;overflow:hidden;margin:8px 0}
+    .progress-fill{height:100%;background:var(--accent);border-radius:6px;transition:width .4s}
+
+    /* ── Currency grid ── */
+    .currency-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+    .currency-card{background:var(--surface2);border:1px solid var(--border);
+      border-radius:var(--radius);padding:12px;text-align:center}
+    .currency-flag{font-size:24px;margin-bottom:6px}
+    .currency-code{font-size:13px;font-weight:800;color:var(--accent)}
+    .currency-rate{font-size:11px;color:var(--muted)}
+
+    /* ── Cycle count table ── */
+    .count-table{width:100%;border-collapse:collapse}
+    .count-table th{font-size:10px;color:var(--muted);text-transform:uppercase;
+      letter-spacing:.5px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}
+    .count-table td{padding:10px;border-bottom:1px solid rgba(255,255,255,.04);font-size:13px}
+    .count-table td input[type=number]{background:var(--surface2);border:1px solid var(--border);
+      border-radius:7px;padding:7px 10px;color:var(--txt);width:80px;font-size:13px;
+      outline:none;min-height:36px}
+    .count-table td input[type=number]:focus{border-color:var(--accent)}
+    .variance-pos{color:var(--warn)}
+    .variance-neg{color:var(--danger)}
+    .variance-zero{color:var(--muted)}
+
+    /* ── Toast ── */
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:rgba(20,20,20,.97);
+      border:1px solid var(--border);padding:12px 20px;border-radius:12px;
+      font-size:13px;font-weight:700;opacity:0;transition:all .3s;pointer-events:none;
+      white-space:nowrap;z-index:9999;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+
+    /* ── Loading skeleton ── */
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px;height:16px}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+    /* ── Empty state ── */
+    .empty{text-align:center;padding:48px 24px;color:var(--muted)}
+    .empty-icon{font-size:48px;margin-bottom:12px}
+    .empty p{font-size:14px}
+  </style>
+</head>
+<body>
+
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrTitle">POS Completeness</div>
+  <div id="shopBadge">Loading&hellip;</div>
+</div>
+
+<div id="tabs">
+  <div class="tab active" data-tab="gc">Gift Cards</div>
+  <div class="tab" data-tab="layaway">Layaway</div>
+  <div class="tab" data-tab="park">Parked Sales</div>
+  <div class="tab" data-tab="cycle">Cycle Count</div>
+  <div class="tab" data-tab="currency">Currency</div>
+</div>
+
+<!-- ── GIFT CARDS ── -->
+<div class="panel active" id="panel-gc">
+  <h2 class="section-title">Gift Cards</h2>
+  <p class="section-desc">Issue, check balance, and void gift cards. Cards are valid for 2 years and support partial redemption.</p>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Issue New Gift Card</div></div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Amount (KES)</label>
+        <input type="number" id="gcAmount" min="100" max="100000" placeholder="e.g. 1000" step="50">
+      </div>
+      <div class="form-group">
+        <label>Recipient Name (optional)</label>
+        <input type="text" id="gcRecipient" placeholder="e.g. Jane Doe">
+      </div>
+      <div class="form-group">
+        <label>PIN Protection (optional)</label>
+        <input type="number" id="gcPin" maxlength="4" placeholder="4-digit PIN">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnIssueGC">Issue Gift Card</button>
+    </div>
+  </div>
+
+  <div id="gcResult" style="display:none"></div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Check Balance / Void</div></div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Gift Card Code</label>
+        <input type="text" id="gcCheckCode" placeholder="XXXX-XXXX-XXXX-XXXX" style="text-transform:uppercase;letter-spacing:2px;font-family:monospace">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="btnCheckGC">Check Balance</button>
+      <button class="btn btn-danger" id="btnVoidGC">Void Card</button>
+    </div>
+    <div id="gcCheckResult" style="margin-top:14px;display:none"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">All Gift Cards</div>
+      <select id="gcFilter" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--txt);font-size:12px">
+        <option value="">All</option>
+        <option value="active">Active</option>
+        <option value="redeemed">Redeemed</option>
+        <option value="void">Void</option>
+      </select>
+    </div>
+    <div id="gcList"><div class="skeleton" style="height:60px;margin-bottom:8px"></div></div>
+  </div>
+</div>
+
+<!-- ── LAYAWAY ── -->
+<div class="panel" id="panel-layaway">
+  <h2 class="section-title">Layaway</h2>
+  <p class="section-desc">Create hire-purchase plans. Customers pay a deposit and the remainder in instalments before collecting their goods.</p>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Create Layaway Plan</div></div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Customer Name</label>
+        <input type="text" id="lyName" placeholder="Full name">
+      </div>
+      <div class="form-group">
+        <label>Phone Number</label>
+        <input type="tel" id="lyPhone" placeholder="07XX XXX XXX">
+      </div>
+      <div class="form-group">
+        <label>Total Amount (KES)</label>
+        <input type="number" id="lyTotal" min="1" placeholder="e.g. 15000">
+      </div>
+      <div class="form-group">
+        <label>Deposit Amount (KES)</label>
+        <input type="number" id="lyDeposit" min="0" placeholder="e.g. 3000">
+      </div>
+      <div class="form-group">
+        <label>Deposit Method</label>
+        <select id="lyDepositMethod">
+          <option value="cash">Cash</option>
+          <option value="mpesa">M-Pesa</option>
+          <option value="card">Card</option>
+          <option value="wallet">Wallet</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Due Date (optional)</label>
+        <input type="date" id="lyDue">
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Items / Description</label>
+        <textarea id="lyNotes" placeholder="e.g. Samsung TV 55&#x22; — 1 unit, IMEI 123456789"></textarea>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnCreateLayaway">Create Layaway</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Active Layaways</div>
+      <select id="lyFilter" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--txt);font-size:12px">
+        <option value="active">Active</option>
+        <option value="fulfilled">Fulfilled</option>
+        <option value="cancelled">Cancelled</option>
+        <option value="">All</option>
+      </select>
+    </div>
+    <div id="layawayList"><div class="skeleton" style="height:80px;margin-bottom:8px"></div></div>
+  </div>
+</div>
+
+<!-- ── PARK SALES ── -->
+<div class="panel" id="panel-park">
+  <h2 class="section-title">Parked Sales</h2>
+  <p class="section-desc">Sales parked mid-transaction. Retrieve from any cashier terminal on this shop. Max 20 parked sales per shop.</p>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Currently Parked</div>
+      <button class="btn btn-ghost btn-sm" id="btnRefreshParked">Refresh</button>
+    </div>
+    <div id="parkedList"><div class="skeleton" style="height:70px;margin-bottom:8px"></div></div>
+  </div>
+</div>
+
+<!-- ── CYCLE COUNT ── -->
+<div class="panel" id="panel-cycle">
+  <h2 class="section-title">Cycle Count</h2>
+  <p class="section-desc">Count physical stock and reconcile against system records. Optionally apply adjustments automatically.</p>
+
+  <div id="cycleCountWizard">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Start New Count</div></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Warehouse / Location</label>
+          <select id="ccWarehouse">
+            <option value="main">Main Store</option>
+            <option value="warehouse_a">Warehouse A</option>
+            <option value="warehouse_b">Warehouse B</option>
+            <option value="backroom">Back Room</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Scope</label>
+          <select id="ccScope">
+            <option value="all">All Products</option>
+            <option value="selected">Selected Products (IDs below)</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1" id="ccProductIdsGroup" style="display:none">
+          <label>Product IDs (comma-separated)</label>
+          <input type="text" id="ccProductIds" placeholder="abc123, def456, ghi789">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Notes</label>
+          <input type="text" id="ccNotes" placeholder="e.g. Month-end count">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnStartCount">Start Count</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Count History</div>
+        <button class="btn btn-ghost btn-sm" id="btnRefreshCounts">Refresh</button>
+      </div>
+      <div id="cycleCountHistory"><div class="skeleton" style="height:60px;margin-bottom:8px"></div></div>
+    </div>
+  </div>
+
+  <div id="cycleCountSession" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title" id="ccSessionTitle">Count Session</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="ccProgress" style="font-size:12px;color:var(--muted)">0 / 0</span>
+          <button class="btn btn-danger btn-sm" id="btnCompleteCount">Complete &amp; Adjust</button>
+          <button class="btn btn-ghost btn-sm" id="btnCompleteNoAdjust">Complete (No Adjust)</button>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="ccProgressBar" style="width:0%"></div></div>
+      <div style="overflow-x:auto;margin-top:12px">
+        <table class="count-table">
+          <thead><tr>
+            <th>Product</th><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th>
+          </tr></thead>
+          <tbody id="ccTableBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="btnCancelSession">Cancel Session</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CURRENCY ── -->
+<div class="panel" id="panel-currency">
+  <h2 class="section-title">Multi-Currency</h2>
+  <p class="section-desc">Set exchange rates for foreign currencies. All amounts settle to KES. Update rates daily for accuracy.</p>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Current Exchange Rates (to KES)</div>
+      <button class="btn btn-ghost btn-sm" id="btnRefreshRates">Refresh</button>
+    </div>
+    <div class="currency-grid" id="currencyGrid">
+      <div class="skeleton" style="height:90px"></div>
+      <div class="skeleton" style="height:90px"></div>
+      <div class="skeleton" style="height:90px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><div class="card-title">Update Rate</div></div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Currency</label>
+        <select id="currencyCode">
+          <option value="USD">USD — US Dollar</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="GBP">GBP — British Pound</option>
+          <option value="UGX">UGX — Ugandan Shilling</option>
+          <option value="TZS">TZS — Tanzanian Shilling</option>
+          <option value="RWF">RWF — Rwandan Franc</option>
+          <option value="ETB">ETB — Ethiopian Birr</option>
+          <option value="ZAR">ZAR — South African Rand</option>
+          <option value="NGN">NGN — Nigerian Naira</option>
+          <option value="AED">AED — UAE Dirham</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>1 [Currency] = ? KES</label>
+        <input type="number" id="currencyRate" min="0.001" step="0.001" placeholder="e.g. 128.5">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnSetRate">Save Rate</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- Layaway payment modal -->
+<div id="lyModal" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.8);
+  align-items:center;justify-content:center;padding:16px">
+  <div style="background:#111;border:1px solid var(--border);border-radius:16px;
+    padding:20px;max-width:360px;width:100%">
+    <div style="font-size:16px;font-weight:800;margin-bottom:14px">Add Payment</div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Amount (KES) &mdash; Balance: <span id="lyModalBalance"></span></label>
+      <input type="number" id="lyPayAmt" min="1" placeholder="Amount">
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>Method</label>
+      <select id="lyPayMethod">
+        <option value="cash">Cash</option>
+        <option value="mpesa">M-Pesa</option>
+        <option value="card">Card</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" id="btnConfirmPayment">Add Payment</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('lyModal').style.display='none'">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function () {
+
+var _shopId = null;
+var _uid = null;
+var _activeLyawayId = null;
+var _activeCycleCountId = null;
+var _cycleCountItems = [];
+
+function _cf(name) { return firebase.functions().httpsCallable(name); }
+function _db() { return firebase.firestore(); }
+function _esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function _toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(function () { el.className = ''; }, 3000);
+}
+
+function _fmt(n) {
+  return 'KES ' + Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function _date(ts) {
+  if (!ts) return '—';
+  var d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// ── Tab navigation ─────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(function (tab) {
+  tab.addEventListener('click', function () {
+    document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+    document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
+    tab.classList.add('active');
+    var panelId = 'panel-' + tab.dataset.tab;
+    document.getElementById(panelId).classList.add('active');
+    _onTabEnter(tab.dataset.tab);
+  });
+});
+
+function _onTabEnter(tab) {
+  if (!_shopId) return;
+  if (tab === 'gc') _loadGiftCards();
+  if (tab === 'layaway') _loadLayaways();
+  if (tab === 'park') _loadParked();
+  if (tab === 'cycle') _loadCycleCounts();
+  if (tab === 'currency') _loadRates();
+}
+
+// ── Auth guard ─────────────────────────────────────────────────────────────
+firebase.auth().onAuthStateChanged(function (user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  _uid = user.uid;
+  user.getIdTokenResult().then(function (r) {
+    var role = r.claims.role || '';
+    if (!['seller', 'admin', 'super_admin', 'manager', 'cashier'].includes(role)) {
+      window.location.href = 'index.html'; return;
+    }
+    _shopId = localStorage.getItem('activeShopId') || r.claims.shopId || '';
+    if (!_shopId) { window.location.href = 'seller-dashboard.html'; return; }
+    document.getElementById('shopBadge').textContent = _shopId.slice(0, 8).toUpperCase();
+    _loadGiftCards();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// GIFT CARDS
+// ──────────────────────────────────────────────────────────────────────────
+
+document.getElementById('btnIssueGC').addEventListener('click', function () {
+  var amount = parseFloat(document.getElementById('gcAmount').value);
+  if (!amount || amount < 100) { _toast('Enter a valid amount (min KES 100)', 'error'); return; }
+  var btn = this; btn.disabled = true; btn.textContent = 'Issuing…';
+  _cf('giftCardIssue')({
+    shopId: _shopId,
+    amount: amount,
+    pin: document.getElementById('gcPin').value || null,
+    recipientName: document.getElementById('gcRecipient').value || null,
+  }).then(function (r) {
+    var d = r.data;
+    document.getElementById('gcResult').style.display = 'block';
+    document.getElementById('gcResult').innerHTML =
+      '<div class="gc-card">' +
+      '<div class="gc-sub">SOKONI GIFT CARD</div>' +
+      '<div class="gc-code">' + _esc(d.code) + '</div>' +
+      '<div class="gc-balance">' + _fmt(amount) + '</div>' +
+      '<div class="gc-sub">Valid until ' + new Date(d.expiryDate).getFullYear() + '</div>' +
+      '</div>';
+    _toast('Gift card issued!', 'success');
+    _loadGiftCards();
+    document.getElementById('gcAmount').value = '';
+    document.getElementById('gcRecipient').value = '';
+    document.getElementById('gcPin').value = '';
+  }).catch(function (e) {
+    _toast(e.message, 'error');
+  }).finally(function () {
+    btn.disabled = false; btn.textContent = 'Issue Gift Card';
+  });
+});
+
+document.getElementById('btnCheckGC').addEventListener('click', function () {
+  var code = document.getElementById('gcCheckCode').value.trim().toUpperCase();
+  if (!code) { _toast('Enter a card code', 'error'); return; }
+  _cf('giftCardBalance')({ code: code }).then(function (r) {
+    var d = r.data;
+    var statusBadge = { active: 'badge-green', redeemed: 'badge-blue', void: 'badge-danger' }[d.status] || 'badge-warn';
+    document.getElementById('gcCheckResult').style.display = 'block';
+    document.getElementById('gcCheckResult').innerHTML =
+      '<div class="gc-card">' +
+      '<div class="gc-code" style="font-size:14px">' + _esc(code) + '</div>' +
+      '<div class="gc-balance">' + _fmt(d.balance) + '</div>' +
+      '<div style="margin-top:6px"><span class="badge ' + statusBadge + '">' + _esc(d.status) + '</span></div>' +
+      '<div class="gc-sub" style="margin-top:6px">Original: ' + _fmt(d.initialBalance) +
+      ' &nbsp;|&nbsp; ' + d.redemptionCount + ' redemption(s)</div>' +
+      '</div>';
+  }).catch(function (e) { _toast(e.message, 'error'); });
+});
+
+document.getElementById('btnVoidGC').addEventListener('click', function () {
+  var code = document.getElementById('gcCheckCode').value.trim().toUpperCase();
+  if (!code) { _toast('Enter a card code', 'error'); return; }
+  if (!confirm('Void this gift card? The balance will be permanently forfeited.')) return;
+  _cf('giftCardVoid')({ shopId: _shopId, code: code, reason: 'Manual void by cashier' })
+    .then(function () { _toast('Card voided', 'success'); _loadGiftCards(); })
+    .catch(function (e) { _toast(e.message, 'error'); });
+});
+
+document.getElementById('gcFilter').addEventListener('change', _loadGiftCards);
+
+function _loadGiftCards() {
+  _cf('giftCardList')({ shopId: _shopId, status: document.getElementById('gcFilter').value })
+    .then(function (r) {
+      var cards = r.data.cards;
+      var el = document.getElementById('gcList');
+      if (!cards.length) {
+        el.innerHTML = '<div class="empty"><div class="empty-icon">&#127873;</div><p>No gift cards found</p></div>';
+        return;
+      }
+      el.innerHTML = cards.map(function (c) {
+        var statusClass = { active: 'badge-green', redeemed: 'badge-blue', void: 'badge-danger' }[c.status] || 'badge-warn';
+        return '<div class="list-item">' +
+          '<div class="list-item-info">' +
+          '<div class="list-item-title" style="font-family:monospace;letter-spacing:1px">' + _esc(c.code) + '</div>' +
+          '<div class="list-item-sub">' + _esc(c.recipientName || 'No recipient') + ' &nbsp;&bull;&nbsp; Issued ' + _date(c.issuedAt) + '</div>' +
+          '</div>' +
+          '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
+          '<div class="list-item-amount">' + _fmt(c.balance) + '</div>' +
+          '<span class="badge ' + statusClass + '">' + _esc(c.status) + '</span>' +
+          '</div></div>';
+      }).join('');
+    }).catch(function (e) { _toast(e.message, 'error'); });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// LAYAWAY
+// ──────────────────────────────────────────────────────────────────────────
+
+document.getElementById('btnCreateLayaway').addEventListener('click', function () {
+  var name = document.getElementById('lyName').value.trim();
+  var phone = document.getElementById('lyPhone').value.trim();
+  var total = parseFloat(document.getElementById('lyTotal').value);
+  var deposit = parseFloat(document.getElementById('lyDeposit').value) || 0;
+  var method = document.getElementById('lyDepositMethod').value;
+  var due = document.getElementById('lyDue').value;
+  var notes = document.getElementById('lyNotes').value.trim();
+  if (!name || !phone) { _toast('Customer name and phone required', 'error'); return; }
+  if (!total || total <= 0) { _toast('Enter a valid total', 'error'); return; }
+  if (deposit > total) { _toast('Deposit cannot exceed total', 'error'); return; }
+  var btn = this; btn.disabled = true; btn.textContent = 'Creating…';
+  _cf('layawayCreate')({
+    shopId: _shopId,
+    customerName: name,
+    customerPhone: phone,
+    items: [{ description: notes || 'Layaway item', quantity: 1, price: total }],
+    totalAmount: total,
+    depositAmount: deposit,
+    depositMethod: method,
+    dueDate: due || null,
+    notes: notes,
+  }).then(function (r) {
+    _toast('Layaway created. Balance due: ' + _fmt(r.data.balanceDue), 'success');
+    _loadLayaways();
+    document.getElementById('lyName').value = '';
+    document.getElementById('lyPhone').value = '';
+    document.getElementById('lyTotal').value = '';
+    document.getElementById('lyDeposit').value = '';
+    document.getElementById('lyNotes').value = '';
+  }).catch(function (e) { _toast(e.message, 'error'); })
+    .finally(function () { btn.disabled = false; btn.textContent = 'Create Layaway'; });
+});
+
+document.getElementById('lyFilter').addEventListener('change', _loadLayaways);
+
+function _loadLayaways() {
+  _cf('layawayList')({ shopId: _shopId, status: document.getElementById('lyFilter').value })
+    .then(function (r) {
+      var items = r.data.layaways;
+      var el = document.getElementById('layawayList');
+      if (!items.length) {
+        el.innerHTML = '<div class="empty"><div class="empty-icon">&#128197;</div><p>No layaways found</p></div>';
+        return;
+      }
+      el.innerHTML = items.map(function (l) {
+        var statusClass = { active: 'badge-green', fulfilled: 'badge-blue', cancelled: 'badge-danger' }[l.status] || 'badge-warn';
+        var pct = Math.min(100, Math.round(((l.totalAmount - l.balanceDue) / l.totalAmount) * 100));
+        return '<div class="list-item" style="flex-direction:column;align-items:flex-start;gap:8px">' +
+          '<div style="display:flex;align-items:center;gap:10px;width:100%">' +
+          '<div class="list-item-info">' +
+          '<div class="list-item-title">' + _esc(l.customerName) + ' &mdash; ' + _esc(l.customerPhone) + '</div>' +
+          '<div class="list-item-sub">Created ' + _date(l.createdAt) +
+          (l.dueDate ? ' &nbsp;&bull;&nbsp; Due ' + _date(l.dueDate) : '') + '</div>' +
+          '</div>' +
+          '<div style="text-align:right;flex-shrink:0">' +
+          '<div class="list-item-amount">' + _fmt(l.balanceDue) + ' due</div>' +
+          '<span class="badge ' + statusClass + '">' + _esc(l.status) + '</span>' +
+          '</div></div>' +
+          '<div style="width:100%">' +
+          '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+          '<div style="font-size:10px;color:var(--muted);display:flex;justify-content:space-between;margin-top:3px">' +
+          '<span>Paid ' + _fmt(l.totalAmount - l.balanceDue) + '</span>' +
+          '<span>Total ' + _fmt(l.totalAmount) + '</span>' +
+          '</div></div>' +
+          (l.status === 'active' ? '<div style="display:flex;gap:6px">' +
+          '<button class="btn btn-ghost btn-sm" onclick="_addLayawayPayment(\'' + _esc(l.id) + '\',' + l.balanceDue + ')">Add Payment</button>' +
+          '<button class="btn btn-primary btn-sm" onclick="_fulfillLayaway(\'' + _esc(l.id) + '\',' + l.balanceDue + ')">Fulfill</button>' +
+          '<button class="btn btn-danger btn-sm" onclick="_cancelLayaway(\'' + _esc(l.id) + '\')">Cancel</button>' +
+          '</div>' : '') +
+          '</div>';
+      }).join('');
+    }).catch(function (e) { _toast(e.message, 'error'); });
+}
+
+window._addLayawayPayment = function (id, balance) {
+  _activeLyawayId = id;
+  document.getElementById('lyModalBalance').textContent = _fmt(balance);
+  document.getElementById('lyPayAmt').value = '';
+  document.getElementById('lyModal').style.display = 'flex';
+};
+
+document.getElementById('btnConfirmPayment').addEventListener('click', function () {
+  var amount = parseFloat(document.getElementById('lyPayAmt').value);
+  var method = document.getElementById('lyPayMethod').value;
+  if (!amount || amount <= 0) { _toast('Enter amount', 'error'); return; }
+  var btn = this; btn.disabled = true;
+  _cf('layawayAddPayment')({ layawayId: _activeLyawayId, shopId: _shopId, amount: amount, method: method })
+    .then(function (r) {
+      _toast('Payment added. Balance: ' + _fmt(r.data.balanceDue), 'success');
+      document.getElementById('lyModal').style.display = 'none';
+      _loadLayaways();
+    }).catch(function (e) { _toast(e.message, 'error'); })
+      .finally(function () { btn.disabled = false; });
+});
+
+window._fulfillLayaway = function (id, balance) {
+  var finalAmt = balance > 0 ? parseFloat(prompt('Enter final payment amount (KES ' + balance.toFixed(2) + ' remaining, or more):') || 0) : 0;
+  _cf('layawayFulfill')({ layawayId: id, shopId: _shopId, finalAmount: finalAmt, finalMethod: 'cash' })
+    .then(function () { _toast('Layaway fulfilled!', 'success'); _loadLayaways(); })
+    .catch(function (e) { _toast(e.message, 'error'); });
+};
+
+window._cancelLayaway = function (id) {
+  if (!confirm('Cancel this layaway? Refund amount will be recorded.')) return;
+  _cf('layawayCancel')({ layawayId: id, shopId: _shopId })
+    .then(function (r) { _toast('Cancelled. Refundable: ' + _fmt(r.data.refundablePaid), 'success'); _loadLayaways(); })
+    .catch(function (e) { _toast(e.message, 'error'); });
+};
+
+// ──────────────────────────────────────────────────────────────────────────
+// PARKED SALES
+// ──────────────────────────────────────────────────────────────────────────
+
+document.getElementById('btnRefreshParked').addEventListener('click', _loadParked);
+
+function _loadParked() {
+  _cf('saleListParked')({ shopId: _shopId }).then(function (r) {
+    var sales = r.data.parkedSales;
+    var el = document.getElementById('parkedList');
+    if (!sales.length) {
+      el.innerHTML = '<div class="empty"><div class="empty-icon">&#9208;</div><p>No parked sales</p></div>';
+      return;
+    }
+    el.innerHTML = sales.map(function (s) {
+      return '<div class="list-item">' +
+        '<div class="list-item-info">' +
+        '<div class="list-item-title">' + _esc(s.slotName) + '</div>' +
+        '<div class="list-item-sub">' + s.itemCount + ' item(s)' +
+        (s.customerName ? ' &nbsp;&bull;&nbsp; ' + _esc(s.customerName) : '') +
+        (s.notes ? ' &nbsp;&bull;&nbsp; ' + _esc(s.notes.slice(0, 40)) : '') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">' +
+        '<div class="list-item-amount">' + _fmt(s.total) + '</div>' +
+        '<div style="display:flex;gap:6px">' +
+        '<button class="btn btn-primary btn-sm" onclick="_retrieveSale(\'' + _esc(s.parkId) + '\')">Retrieve</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="_discardSale(\'' + _esc(s.parkId) + '\')">Discard</button>' +
+        '</div></div></div>';
+    }).join('');
+  }).catch(function (e) { _toast(e.message, 'error'); });
+}
+
+window._retrieveSale = function (parkId) {
+  _cf('saleRetrieve')({ parkId: parkId, shopId: _shopId })
+    .then(function (r) {
+      localStorage.setItem('retrievedCart', JSON.stringify(r.data));
+      _toast('Sale retrieved — opening POS', 'success');
+      setTimeout(function () { window.location.href = 'pos.html'; }, 1000);
+    }).catch(function (e) { _toast(e.message, 'error'); });
+};
+
+window._discardSale = function (parkId) {
+  if (!confirm('Permanently discard this parked sale?')) return;
+  _cf('saleDiscardParked')({ parkId: parkId, shopId: _shopId })
+    .then(function () { _toast('Discarded', 'success'); _loadParked(); })
+    .catch(function (e) { _toast(e.message, 'error'); });
+};
+
+// ──────────────────────────────────────────────────────────────────────────
+// CYCLE COUNT
+// ──────────────────────────────────────────────────────────────────────────
+
+document.getElementById('ccScope').addEventListener('change', function () {
+  document.getElementById('ccProductIdsGroup').style.display =
+    this.value === 'selected' ? 'flex' : 'none';
+});
+
+document.getElementById('btnStartCount').addEventListener('click', function () {
+  var warehouse = document.getElementById('ccWarehouse').value;
+  var scope = document.getElementById('ccScope').value;
+  var idsRaw = document.getElementById('ccProductIds').value;
+  var productIds = scope === 'selected' && idsRaw
+    ? idsRaw.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+    : null;
+  var notes = document.getElementById('ccNotes').value;
+  var btn = this; btn.disabled = true; btn.textContent = 'Loading products…';
+  _cf('cycleCountCreate')({ shopId: _shopId, warehouseId: warehouse, productIds: productIds, notes: notes })
+    .then(function (r) {
+      _activeCycleCountId = r.data.cycleCountId;
+      _toast('Count started — ' + r.data.itemCount + ' products', 'success');
+      _loadCycleSession();
+    }).catch(function (e) { _toast(e.message, 'error'); })
+      .finally(function () { btn.disabled = false; btn.textContent = 'Start Count'; });
+});
+
+document.getElementById('btnRefreshCounts').addEventListener('click', _loadCycleCounts);
+
+function _loadCycleCounts() {
+  _cf('cycleCountList')({ shopId: _shopId }).then(function (r) {
+    var counts = r.data.cycleCounts;
+    var el = document.getElementById('cycleCountHistory');
+    if (!counts.length) {
+      el.innerHTML = '<div class="empty"><div class="empty-icon">&#128203;</div><p>No counts yet</p></div>';
+      return;
+    }
+    el.innerHTML = counts.map(function (c) {
+      var statusClass = { open: 'badge-warn', completed: 'badge-green', cancelled: 'badge-danger' }[c.status] || 'badge-blue';
+      var pct = c.itemCount > 0 ? Math.round((c.countedCount / c.itemCount) * 100) : 0;
+      return '<div class="list-item">' +
+        '<div class="list-item-info">' +
+        '<div class="list-item-title">' + _esc(c.warehouseId) + ' &mdash; ' + _date(c.createdAt) + '</div>' +
+        '<div class="list-item-sub">' + c.countedCount + ' / ' + c.itemCount + ' items counted' +
+        (c.adjustmentsMade ? ' &nbsp;&bull;&nbsp; Adjusted' : '') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">' +
+        '<span class="badge ' + statusClass + '">' + _esc(c.status) + '</span>' +
+        (c.status === 'open' ? '<button class="btn btn-ghost btn-sm" onclick="_resumeCount(\'' + _esc(c.id) + '\')">Resume</button>' : '') +
+        '</div></div>';
+    }).join('');
+  }).catch(function (e) { _toast(e.message, 'error'); });
+}
+
+window._resumeCount = function (id) {
+  _activeCycleCountId = id;
+  _loadCycleSession();
+};
+
+function _loadCycleSession() {
+  _cf('cycleCountGet')({ cycleCountId: _activeCycleCountId, shopId: _shopId })
+    .then(function (r) {
+      _cycleCountItems = r.data.items || [];
+      _renderCycleSession();
+      document.getElementById('cycleCountWizard').style.display = 'none';
+      document.getElementById('cycleCountSession').style.display = 'block';
+    }).catch(function (e) { _toast(e.message, 'error'); });
+}
+
+function _renderCycleSession() {
+  var counted = _cycleCountItems.filter(function (i) { return i.countedQty !== null; }).length;
+  document.getElementById('ccSessionTitle').textContent =
+    'Count Session — ' + _cycleCountItems.length + ' products';
+  document.getElementById('ccProgress').textContent = counted + ' / ' + _cycleCountItems.length;
+  var pct = _cycleCountItems.length > 0 ? (counted / _cycleCountItems.length) * 100 : 0;
+  document.getElementById('ccProgressBar').style.width = pct + '%';
+
+  var tbody = document.getElementById('ccTableBody');
+  tbody.innerHTML = _cycleCountItems.map(function (item, idx) {
+    var variance = item.variance;
+    var varClass = variance == null ? '' : variance > 0 ? 'variance-pos' : variance < 0 ? 'variance-neg' : 'variance-zero';
+    var varText = variance == null ? '—' : (variance > 0 ? '+' + variance : variance);
+    return '<tr>' +
+      '<td>' + _esc(item.productName) + '</td>' +
+      '<td style="color:var(--muted);font-family:monospace;font-size:11px">' + _esc(item.sku || '—') + '</td>' +
+      '<td>' + item.expectedQty + '</td>' +
+      '<td><input type="number" min="0" data-idx="' + idx + '" data-pid="' + _esc(item.productId) + '" ' +
+      'value="' + (item.countedQty != null ? item.countedQty : '') + '" ' +
+      'placeholder="Count" style="width:80px"></td>' +
+      '<td class="' + varClass + '">' + varText + '</td>' +
+      '</tr>';
+  }).join('');
+
+  // Wire up input changes
+  tbody.querySelectorAll('input[type=number]').forEach(function (inp) {
+    inp.addEventListener('change', function () {
+      var qty = parseFloat(this.value);
+      if (isNaN(qty) || qty < 0) return;
+      var pid = this.dataset.pid;
+      var idx = parseInt(this.dataset.idx, 10);
+      _cf('cycleCountUpdateItem')({
+        cycleCountId: _activeCycleCountId,
+        shopId: _shopId,
+        productId: pid,
+        countedQty: qty,
+      }).then(function () {
+        _cycleCountItems[idx].countedQty = qty;
+        _cycleCountItems[idx].variance = qty - _cycleCountItems[idx].expectedQty;
+        // Update variance cell in-place
+        var row = inp.closest('tr');
+        var varCell = row.lastElementChild;
+        var variance = _cycleCountItems[idx].variance;
+        varCell.className = variance > 0 ? 'variance-pos' : variance < 0 ? 'variance-neg' : 'variance-zero';
+        varCell.textContent = variance > 0 ? '+' + variance : variance;
+        // Update progress
+        var counted = _cycleCountItems.filter(function (i) { return i.countedQty !== null; }).length;
+        document.getElementById('ccProgress').textContent = counted + ' / ' + _cycleCountItems.length;
+        document.getElementById('ccProgressBar').style.width =
+          (_cycleCountItems.length > 0 ? (counted / _cycleCountItems.length) * 100 : 0) + '%';
+      }).catch(function (e) { _toast(e.message, 'error'); });
+    });
+  });
+}
+
+document.getElementById('btnCompleteCount').addEventListener('click', function () {
+  if (!confirm('Complete count and apply inventory adjustments for all variances?')) return;
+  var btn = this; btn.disabled = true;
+  _cf('cycleCountComplete')({ cycleCountId: _activeCycleCountId, shopId: _shopId, adjustInventory: true })
+    .then(function (r) {
+      _toast('Count complete. ' + r.data.adjustmentsMade + ' adjustments applied.', 'success');
+      _endCycleSession();
+    }).catch(function (e) { _toast(e.message, 'error'); })
+      .finally(function () { btn.disabled = false; });
+});
+
+document.getElementById('btnCompleteNoAdjust').addEventListener('click', function () {
+  if (!confirm('Complete count without adjusting inventory?')) return;
+  _cf('cycleCountComplete')({ cycleCountId: _activeCycleCountId, shopId: _shopId, adjustInventory: false })
+    .then(function () { _toast('Count recorded (no adjustments)', 'success'); _endCycleSession(); })
+    .catch(function (e) { _toast(e.message, 'error'); });
+});
+
+document.getElementById('btnCancelSession').addEventListener('click', function () {
+  if (!confirm('Cancel this count session?')) return;
+  _endCycleSession();
+});
+
+function _endCycleSession() {
+  _activeCycleCountId = null;
+  _cycleCountItems = [];
+  document.getElementById('cycleCountSession').style.display = 'none';
+  document.getElementById('cycleCountWizard').style.display = 'block';
+  _loadCycleCounts();
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// MULTI-CURRENCY
+// ──────────────────────────────────────────────────────────────────────────
+
+var CURRENCY_FLAGS = { USD:'🇺🇸',EUR:'🇪🇺',GBP:'🇬🇧',UGX:'🇺🇬',TZS:'🇹🇿',RWF:'🇷🇼',ETB:'🇪🇹',ZAR:'🇿🇦',NGN:'🇳🇬',AED:'🇦🇪' };
+
+document.getElementById('btnRefreshRates').addEventListener('click', _loadRates);
+document.getElementById('btnSetRate').addEventListener('click', function () {
+  var currency = document.getElementById('currencyCode').value;
+  var rate = parseFloat(document.getElementById('currencyRate').value);
+  if (!rate || rate <= 0) { _toast('Enter a valid rate', 'error'); return; }
+  var btn = this; btn.disabled = true;
+  _cf('currencySetRate')({ shopId: _shopId, currency: currency, rateToKES: rate })
+    .then(function () { _toast('Rate saved: 1 ' + currency + ' = KES ' + rate, 'success'); _loadRates(); })
+    .catch(function (e) { _toast(e.message, 'error'); })
+    .finally(function () { btn.disabled = false; });
+});
+
+function _loadRates() {
+  _cf('currencyGetRates')({ shopId: _shopId }).then(function (r) {
+    var rates = r.data.rates;
+    var currencies = r.data.currencies;
+    document.getElementById('currencyGrid').innerHTML = currencies.map(function (code) {
+      var rate = rates[code] || '—';
+      return '<div class="currency-card">' +
+        '<div class="currency-flag">' + (CURRENCY_FLAGS[code] || '') + '</div>' +
+        '<div class="currency-code">' + _esc(code) + '</div>' +
+        '<div class="currency-rate">1 ' + _esc(code) + ' = KES ' +
+        (typeof rate === 'number' ? rate.toLocaleString() : rate) + '</div>' +
+        '</div>';
+    }).join('');
+  }).catch(function (e) { _toast(e.message, 'error'); });
+}
+
+})();
+</script>
+</body>
+</html>

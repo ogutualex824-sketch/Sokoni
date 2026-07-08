@@ -1,4 +1,63 @@
-﻿## [2026-07-08] — Navigation & Intelligent Dispatch v2.0
+﻿## [2026-07-08] — SmartPOS Completeness Engine (Sprint 4.1)
+
+### Summary
+SOKONI 4.0 Sprint 4.1 — closes the major POS feature gaps. Adds gift cards with partial redemption, layaway/hire-purchase plans, multi-cashier park & suspend sales, Kitchen Display System with real-time order tracking, physical cycle counting with optional inventory adjustment, and multi-currency support (10 currencies, KES base).
+
+### Files Affected
+| File | Change |
+|---|---|
+| `functions/pos-completeness.js` | NEW — 25 CFs across 6 modules |
+| `pos-completeness.html` | NEW — unified management hub (5 tabs) |
+| `pos-kds.html` | NEW — Kitchen Display System (real-time Firestore) |
+| `functions/index.js` | 25 new exports |
+| `DEPLOY_QUEUE.md` | Added Sprint 4.1 spot deploy command |
+
+### New Cloud Functions (25)
+**Gift Cards (5):** `giftCardIssue`, `giftCardRedeem`, `giftCardBalance`, `giftCardVoid`, `giftCardList`
+**Layaway (5):** `layawayCreate`, `layawayAddPayment`, `layawayFulfill`, `layawayCancel`, `layawayList`
+**Park Sales (4):** `salePark`, `saleRetrieve`, `saleListParked`, `saleDiscardParked`
+**KDS (4):** `kdsSubmitOrder`, `kdsUpdateItem`, `kdsGetQueue`, `kdsBump`
+**Cycle Count (5):** `cycleCountCreate`, `cycleCountUpdateItem`, `cycleCountComplete`, `cycleCountList`, `cycleCountGet`
+**Multi-Currency (2):** `currencyGetRates`, `currencySetRate`
+
+### Feature Details
+- **Gift Cards**: XXXX-XXXX-XXXX-XXXX format, optional PIN, 2-year expiry, partial redemption, per-shop scoping, void with reason
+- **Layaway**: Deposit + instalment payments, balance progress bar, due date, customer phone, fulfill with final payment, cancel with refund calculation
+- **Park Sales**: Firestore-backed (any cashier can retrieve), max 20 per shop, slot names, cart + customer carried forward, retrieved cart passed to `pos.html` via localStorage
+- **KDS**: Real-time onSnapshot listener, item-level status (pending → preparing → ready), bump to archive, sound notification on new order, urgency flag, table number, elapsed time with colour coding (green/amber/red), station routing
+- **Cycle Count**: Load all or selected products, enter counted quantities inline, live variance calculation, complete with optional inventory auto-adjustment, full audit trail in `inventoryAdjustments`
+- **Multi-Currency**: 10 currencies (USD, EUR, GBP, UGX, TZS, RWF, ETB, ZAR, NGN, AED), per-shop rates, KES base currency, flag display
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `giftCards/{code}` | Gift card docs — balance, redemptions array, status |
+| `layaways/{id}` | Layaway plans — payments array embedded in doc |
+| `parkedSales/{id}` | Parked cart docs — auto-deleted on retrieve/discard |
+| `kdsOrders/{id}` | KDS order queue — real-time listener by shopId |
+| `cycleCounts/{id}` | Count sessions — items with expected/counted/variance |
+| `inventoryAdjustments/{id}` | Immutable stock adjustment audit trail |
+| `currencyRates/{shopId}` | Per-shop FX rates (KES base) |
+
+### Security
+- `enforceAppCheck: true` on all 25 CFs
+- `_assertPOS()` validates shop ownership + employee membership on every write
+- Gift card redemption uses `runTransaction()` — race condition safe
+- Layaway payments use `runTransaction()` — prevents double-payment
+- Cycle count: verifies shopId on every item update before write
+- Park sales: capped at 20/shop to prevent storage abuse
+- Gift card codes exclude ambiguous characters (I/1/O/0) — 32^16 space
+- Gift card void sets balance to 0 atomically
+
+### Performance
+- KDS uses Firestore onSnapshot (sub-100ms updates) not polling
+- All queries single-field `where()` — no new composite indexes
+- Cycle count items stored in array in doc — no subcollection overhead
+- Layaway payments embedded in array — single read for full history
+
+---
+
+## [2026-07-08] — Navigation & Intelligent Dispatch v2.0
 
 ### Summary
 Production-grade upgrade of the navigation system, adding 4 new Cloud Functions (proof-of-delivery OTP, rider dashboard, offline batch sync, delivery analytics), SDK-level rider safety monitoring, dynamic GPS throttle, real-time customer tracking via Firestore onSnapshot (replaces 5s polling), and a new rider dashboard page.

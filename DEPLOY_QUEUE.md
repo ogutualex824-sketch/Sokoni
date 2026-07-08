@@ -5,6 +5,65 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## SmartPOS Completeness Engine (Sprint 4.1) — 2026-07-08
+
+**Files:**
+- `functions/pos-completeness.js` — NEW (27 CFs)
+- `pos-completeness.html` — NEW (Gift Cards, Layaway, Park Sales, Cycle Count, Currency hub)
+- `pos-kds.html` — NEW (Kitchen Display System — real-time Firestore onSnapshot)
+- `functions/index.js` — 27 new exports added
+
+**New CFs (27 — quota-blocked):**
+
+| Export | Module | Auth |
+|---|---|---|
+| `giftCardIssue` | Gift Cards | Seller/Cashier |
+| `giftCardRedeem` | Gift Cards | Seller/Cashier |
+| `giftCardBalance` | Gift Cards | Any authed |
+| `giftCardVoid` | Gift Cards | Seller |
+| `giftCardList` | Gift Cards | Seller |
+| `layawayCreate` | Layaway | Seller/Cashier |
+| `layawayAddPayment` | Layaway | Seller/Cashier |
+| `layawayFulfill` | Layaway | Seller/Cashier |
+| `layawayCancel` | Layaway | Seller/Cashier |
+| `layawayList` | Layaway | Seller/Cashier |
+| `salePark` | Park Sales | Seller/Cashier |
+| `saleRetrieve` | Park Sales | Seller/Cashier |
+| `saleListParked` | Park Sales | Seller/Cashier |
+| `saleDiscardParked` | Park Sales | Seller/Cashier |
+| `kdsSubmitOrder` | KDS | Seller/Cashier |
+| `kdsUpdateItem` | KDS | Seller/Cashier/Kitchen |
+| `kdsGetQueue` | KDS | Seller/Cashier/Kitchen |
+| `kdsBump` | KDS | Seller/Cashier/Kitchen |
+| `cycleCountCreate` | Cycle Count | Seller/Manager |
+| `cycleCountUpdateItem` | Cycle Count | Seller/Manager |
+| `cycleCountComplete` | Cycle Count | Seller/Manager |
+| `cycleCountList` | Cycle Count | Seller/Manager |
+| `cycleCountGet` | Cycle Count | Seller/Manager |
+| `currencyGetRates` | Multi-Currency | Any authed |
+| `currencySetRate` | Multi-Currency | Seller/Manager |
+
+**New Firestore collections:**
+- `giftCards/{code}` — gift card docs (active/redeemed/void)
+- `layaways/{id}` — layaway plans with embedded payments array
+- `parkedSales/{id}` — parked cart docs (TTL: until retrieved/discarded)
+- `kdsOrders/{id}` — KDS order queue (real-time listener)
+- `cycleCounts/{id}` — count sessions with embedded items
+- `inventoryAdjustments/{id}` — audit trail for stock corrections
+- `currencyRates/{shopId}` — per-shop FX rates
+
+**Spot deploy command:**
+```powershell
+firebase deploy --only "functions:giftCardIssue,functions:giftCardRedeem,functions:giftCardBalance,functions:giftCardVoid,functions:giftCardList,functions:layawayCreate,functions:layawayAddPayment,functions:layawayFulfill,functions:layawayCancel,functions:layawayList,functions:salePark,functions:saleRetrieve,functions:saleListParked,functions:saleDiscardParked,functions:kdsSubmitOrder,functions:kdsUpdateItem,functions:kdsGetQueue,functions:kdsBump,functions:cycleCountCreate,functions:cycleCountUpdateItem,functions:cycleCountComplete,functions:cycleCountList,functions:cycleCountGet,functions:currencyGetRates,functions:currencySetRate" --project sokoni-aeb26
+```
+
+**Hosting deploy:**
+```powershell
+firebase deploy --only hosting --project sokoni-aeb26
+```
+
+---
+
 ## Navigation & Intelligent Dispatch v2.0 — 2026-07-08
 
 **Files:**

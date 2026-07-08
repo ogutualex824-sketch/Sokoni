@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Kitchen Display &mdash; SOKONI SmartPOS</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{
+      --bg:#070707;--surface:#111;--surface2:rgba(255,255,255,.07);
+      --border:rgba(255,255,255,.12);--accent:#71ff00;--info:#00bcd4;
+      --warn:#ffb300;--danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);
+      --radius:14px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased;overflow:hidden}
+
+    /* ── Header ── */
+    #kds-hdr{height:52px;background:#050505;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:12px;padding:0 14px;flex-shrink:0}
+    #kds-hdr h1{font-size:15px;font-weight:900;flex:1}
+    .hdr-badge{font-size:11px;padding:4px 10px;border-radius:20px;font-weight:800}
+    .badge-pending{background:rgba(255,179,0,.15);color:var(--warn);border:1px solid rgba(255,179,0,.3)}
+    .badge-live{background:rgba(113,255,0,.12);color:var(--accent);border:1px solid rgba(113,255,0,.3);
+      display:flex;align-items:center;gap:5px}
+    .live-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);
+      animation:pulse 1.4s ease infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    #kds-clock{font-size:14px;font-weight:800;font-family:monospace;color:var(--muted)}
+    #stationSelect{background:var(--surface2);border:1px solid var(--border);
+      border-radius:8px;padding:6px 10px;color:var(--txt);font-size:12px}
+    #stationSelect option{background:#111}
+    .kds-btn{background:var(--surface2);border:1px solid var(--border);
+      border-radius:8px;padding:7px 12px;color:var(--txt);font-size:12px;
+      cursor:pointer;font-weight:700;white-space:nowrap}
+    .kds-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+    /* ── Layout ── */
+    #kds-body{height:calc(100vh - 52px);display:flex;flex-direction:column}
+    #kds-grid{flex:1;overflow-y:auto;display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+      gap:12px;padding:12px;align-content:start}
+    #kds-grid::-webkit-scrollbar{width:4px}
+    #kds-grid::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
+    #kds-empty{flex:1;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:12px;color:var(--muted);display:none}
+    #kds-empty .empty-icon{font-size:72px}
+    #kds-empty p{font-size:15px}
+
+    /* ── Order Card ── */
+    .order-card{background:var(--surface);border:2px solid var(--border);
+      border-radius:var(--radius);display:flex;flex-direction:column;
+      overflow:hidden;transition:border-color .2s}
+    .order-card.urgent{border-color:var(--danger)}
+    .order-card.ready{border-color:var(--accent)}
+    .order-card.preparing{border-color:var(--warn)}
+
+    .order-card-hdr{padding:10px 12px;display:flex;align-items:center;
+      gap:8px;border-bottom:1px solid var(--border)}
+    .order-card-hdr.urgent{background:rgba(244,67,54,.15)}
+    .order-ref{font-size:13px;font-weight:900;flex:1}
+    .order-customer{font-size:11px;color:var(--muted)}
+    .order-timer{font-size:12px;font-weight:800;font-family:monospace;
+      padding:3px 8px;border-radius:20px;flex-shrink:0}
+    .timer-ok{background:rgba(255,255,255,.07);color:var(--muted)}
+    .timer-warn{background:rgba(255,179,0,.2);color:var(--warn)}
+    .timer-crit{background:rgba(244,67,54,.2);color:var(--danger)}
+
+    .order-table-info{padding:5px 12px;font-size:10px;color:var(--info);
+      text-transform:uppercase;letter-spacing:.5px;font-weight:800;
+      border-bottom:1px solid var(--border)}
+
+    .order-items{padding:10px 12px;flex:1;overflow-y:auto;max-height:220px}
+    .order-items::-webkit-scrollbar{width:3px}
+    .order-item{display:flex;align-items:center;gap:8px;padding:6px 0;
+      border-bottom:1px solid rgba(255,255,255,.05)}
+    .order-item:last-child{border-bottom:none}
+    .item-qty{font-size:15px;font-weight:900;width:24px;flex-shrink:0;color:var(--accent)}
+    .item-name{font-size:13px;font-weight:700;flex:1}
+    .item-mod{font-size:10px;color:var(--muted)}
+    .item-status-btn{flex-shrink:0;padding:4px 8px;border-radius:8px;
+      font-size:10px;font-weight:800;border:none;cursor:pointer;transition:all .15s}
+    .item-status-pending{background:rgba(255,255,255,.08);color:var(--muted)}
+    .item-status-preparing{background:rgba(255,179,0,.2);color:var(--warn)}
+    .item-status-ready{background:rgba(113,255,0,.2);color:var(--accent)}
+
+    .order-card-footer{padding:10px 12px;border-top:1px solid var(--border);
+      display:flex;align-items:center;gap:8px}
+    .order-status-label{font-size:10px;font-weight:800;text-transform:uppercase;
+      letter-spacing:.5px;flex:1}
+    .status-pending{color:var(--muted)}
+    .status-preparing{color:var(--warn)}
+    .status-ready{color:var(--accent)}
+    .bump-btn{background:var(--accent);color:#000;border:none;
+      border-radius:9px;padding:8px 16px;font-size:12px;font-weight:900;
+      cursor:pointer;white-space:nowrap;transition:opacity .15s}
+    .bump-btn:hover{opacity:.85}
+    .bump-btn:disabled{opacity:.4;cursor:not-allowed}
+
+    .order-notes{padding:6px 12px;font-size:11px;color:var(--warn);
+      background:rgba(255,179,0,.07);border-top:1px solid rgba(255,179,0,.15)}
+
+    /* ── Priority ring ── */
+    .urgent-ring{position:absolute;top:-1px;left:-1px;right:-1px;
+      height:3px;background:var(--danger);border-radius:var(--radius) var(--radius) 0 0}
+
+    /* ── Toast ── */
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);
+      background:#1a1a1a;border:1px solid var(--border);padding:10px 18px;
+      border-radius:10px;font-size:13px;font-weight:700;opacity:0;
+      transition:all .3s;pointer-events:none;white-space:nowrap;z-index:9999}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+
+    /* ── Notification badge ── */
+    #newBadge{position:fixed;top:60px;right:12px;background:var(--danger);
+      color:#fff;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:800;
+      display:none;z-index:100;animation:bounce .4s ease}
+    @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+    #newBadge.show{display:block}
+
+    @media(max-width:480px){
+      #kds-grid{grid-template-columns:1fr;padding:8px}
+    }
+  </style>
+</head>
+<body>
+
+<div id="kds-hdr">
+  <h1>&#127859; Kitchen Display</h1>
+  <div class="hdr-badge badge-live">
+    <div class="live-dot"></div>LIVE
+  </div>
+  <span id="pendingBadge" class="hdr-badge badge-pending" style="display:none">0 pending</span>
+  <select id="stationSelect">
+    <option value="">All Stations</option>
+    <option value="kitchen">Kitchen</option>
+    <option value="grill">Grill</option>
+    <option value="bar">Bar</option>
+    <option value="bakery">Bakery</option>
+    <option value="cold">Cold Station</option>
+  </select>
+  <div id="kds-clock">00:00:00</div>
+  <button class="kds-btn" onclick="window.location.href='pos-completeness.html'">Back</button>
+</div>
+
+<div id="kds-body">
+  <div id="kds-grid"></div>
+  <div id="kds-empty">
+    <div class="empty-icon">&#128515;</div>
+    <p>No active orders &mdash; kitchen is clear!</p>
+  </div>
+</div>
+
+<div id="newBadge">New order!</div>
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function () {
+
+var _shopId = null;
+var _unsub = null;
+var _orders = {};       // keyed by kdsOrderId
+var _orderCount = 0;
+var _audioCtx = null;
+var _initialized = false;
+
+function _cf(name) { return firebase.functions().httpsCallable(name); }
+function _db() { return firebase.firestore(); }
+function _esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function _toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(function () { el.className = ''; }, 3000);
+}
+
+// ── Clock ──────────────────────────────────────────────────────────────────
+setInterval(function () {
+  var now = new Date();
+  document.getElementById('kds-clock').textContent =
+    now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // Refresh all order timers
+  Object.values(_orders).forEach(function (order) {
+    var timerEl = document.querySelector('[data-timer="' + order.id + '"]');
+    if (timerEl) {
+      var elapsed = _elapsed(order.createdAt);
+      timerEl.textContent = elapsed.text;
+      timerEl.className = 'order-timer ' + elapsed.cls;
+    }
+  });
+}, 1000);
+
+function _elapsed(createdAt) {
+  if (!createdAt) return { text: '—', cls: 'timer-ok' };
+  var ms = Date.now() - (createdAt.toDate ? createdAt.toDate().getTime() : new Date(createdAt).getTime());
+  var mins = Math.floor(ms / 60000);
+  var secs = Math.floor((ms % 60000) / 1000);
+  var text = (mins > 0 ? mins + 'm ' : '') + secs + 's';
+  var cls = mins >= 10 ? 'timer-crit' : mins >= 5 ? 'timer-warn' : 'timer-ok';
+  return { text: text, cls: cls };
+}
+
+// ── Sound notification ─────────────────────────────────────────────────────
+document.addEventListener('click', function init() {
+  // Unlock AudioContext on first user interaction
+  if (!_audioCtx) {
+    try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  document.removeEventListener('click', init);
+}, { once: true });
+
+function _ding() {
+  if (!_audioCtx) return;
+  try {
+    var osc = _audioCtx.createOscillator();
+    var gain = _audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(_audioCtx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.3, _audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, _audioCtx.currentTime + 0.4);
+    osc.start();
+    osc.stop(_audioCtx.currentTime + 0.4);
+  } catch (e) {}
+}
+
+// ── Auth guard ─────────────────────────────────────────────────────────────
+firebase.auth().onAuthStateChanged(function (user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  user.getIdTokenResult().then(function (r) {
+    var role = r.claims.role || '';
+    if (!['seller', 'admin', 'super_admin', 'manager', 'cashier', 'kitchen'].includes(role)) {
+      window.location.href = 'index.html'; return;
+    }
+    _shopId = localStorage.getItem('activeShopId') || r.claims.shopId || '';
+    if (!_shopId) { window.location.href = 'seller-dashboard.html'; return; }
+    _startListener();
+  });
+});
+
+// ── Station filter ─────────────────────────────────────────────────────────
+document.getElementById('stationSelect').addEventListener('change', function () {
+  _renderAll();
+});
+
+// ── Real-time Firestore listener ───────────────────────────────────────────
+function _startListener() {
+  if (_unsub) _unsub();
+
+  _unsub = _db().collection('kdsOrders')
+    .where('shopId', '==', _shopId)
+    .onSnapshot(function (snap) {
+      var prevCount = Object.keys(_orders).filter(function (id) {
+        return _orders[id].status !== 'bumped';
+      }).length;
+
+      snap.docChanges().forEach(function (change) {
+        var doc = change.doc;
+        var data = Object.assign({ id: doc.id }, doc.data());
+        if (change.type === 'removed' || data.status === 'bumped') {
+          delete _orders[doc.id];
+        } else {
+          _orders[doc.id] = data;
+        }
+      });
+
+      var activeOrders = Object.values(_orders).filter(function (o) {
+        return o.status !== 'bumped';
+      });
+      var newCount = activeOrders.length;
+
+      // Notify on new orders (after first load)
+      if (_initialized && newCount > prevCount) {
+        _ding();
+        var badge = document.getElementById('newBadge');
+        badge.classList.add('show');
+        setTimeout(function () { badge.classList.remove('show'); }, 3000);
+      }
+      _initialized = true;
+
+      _renderAll();
+    }, function (err) {
+      console.warn('[KDS] Listener error:', err.message);
+      _toast('Connection error — retrying', 'error');
+    });
+}
+
+// ── Render all orders ──────────────────────────────────────────────────────
+function _renderAll() {
+  var stationFilter = document.getElementById('stationSelect').value;
+  var activeOrders = Object.values(_orders).filter(function (o) {
+    if (o.status === 'bumped') return false;
+    if (stationFilter && o.stationId !== stationFilter) return false;
+    return true;
+  });
+
+  // Sort: urgent first, then oldest first
+  activeOrders.sort(function (a, b) {
+    if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+    if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+    var aT = a.createdAt && a.createdAt.toMillis ? a.createdAt.toMillis() : 0;
+    var bT = b.createdAt && b.createdAt.toMillis ? b.createdAt.toMillis() : 0;
+    return aT - bT;
+  });
+
+  var grid = document.getElementById('kds-grid');
+  var empty = document.getElementById('kds-empty');
+  var pendingBadge = document.getElementById('pendingBadge');
+
+  var pendingCount = activeOrders.filter(function (o) { return o.status === 'pending'; }).length;
+  if (pendingCount > 0) {
+    pendingBadge.style.display = '';
+    pendingBadge.textContent = pendingCount + ' pending';
+  } else {
+    pendingBadge.style.display = 'none';
+  }
+
+  if (activeOrders.length === 0) {
+    grid.style.display = 'none';
+    empty.style.display = 'flex';
+    return;
+  }
+
+  grid.style.display = '';
+  empty.style.display = 'none';
+
+  // Re-render changed cards only
+  var existingCards = {};
+  grid.querySelectorAll('.order-card').forEach(function (el) {
+    existingCards[el.dataset.id] = el;
+  });
+
+  // Remove cards no longer in active list
+  Object.keys(existingCards).forEach(function (id) {
+    if (!_orders[id] || _orders[id].status === 'bumped') {
+      existingCards[id].remove();
+    }
+  });
+
+  // Insert/update in sorted order
+  activeOrders.forEach(function (order, idx) {
+    var existing = grid.querySelector('[data-id="' + order.id + '"]');
+    var newCard = _buildCard(order);
+
+    if (existing) {
+      existing.replaceWith(newCard);
+    } else {
+      grid.appendChild(newCard);
+    }
+  });
+}
+
+function _buildCard(order) {
+  var div = document.createElement('div');
+  div.className = 'order-card' +
+    (order.priority === 'urgent' ? ' urgent' : '') +
+    (order.status === 'ready' ? ' ready' : '') +
+    (order.status === 'preparing' ? ' preparing' : '');
+  div.dataset.id = order.id;
+
+  var elapsed = _elapsed(order.createdAt);
+
+  var hdrClass = order.priority === 'urgent' ? ' urgent' : '';
+  var statusLabelClass = { pending: 'status-pending', preparing: 'status-preparing', ready: 'status-ready' }[order.status] || 'status-pending';
+  var statusLabel = { pending: 'PENDING', preparing: 'PREPARING', ready: 'READY TO SERVE' }[order.status] || order.status.toUpperCase();
+
+  var hdrHtml = '<div class="order-card-hdr' + hdrClass + '">' +
+    '<div><div class="order-ref">' +
+    (order.priority === 'urgent' ? '&#9888; URGENT &mdash; ' : '') +
+    _esc(order.orderRef || ('#' + order.id.slice(0, 6).toUpperCase())) +
+    '</div>' +
+    '<div class="order-customer">' + _esc(order.customerName) + '</div>' +
+    '</div>' +
+    '<span class="order-timer ' + elapsed.cls + '" data-timer="' + _esc(order.id) + '">' + elapsed.text + '</span>' +
+    '</div>';
+
+  var tableHtml = order.tableNumber
+    ? '<div class="order-table-info">Table ' + _esc(order.tableNumber) + '</div>'
+    : '';
+
+  var itemsHtml = '<div class="order-items">' +
+    (order.items || []).map(function (item, idx) {
+      var statusBtnClass = 'item-status-btn item-status-' + (item.itemStatus || 'pending');
+      var statusBtnLabel = { pending: 'Pending', preparing: 'Prep', ready: 'Ready' }[item.itemStatus] || 'Pending';
+      return '<div class="order-item">' +
+        '<div class="item-qty">' + _esc(item.quantity || 1) + 'x</div>' +
+        '<div style="flex:1"><div class="item-name">' + _esc(item.name || item.productName || 'Item') + '</div>' +
+        (item.modifiers ? '<div class="item-mod">' + _esc(item.modifiers) + '</div>' : '') +
+        '</div>' +
+        '<button class="' + statusBtnClass + '" ' +
+        'data-order-id="' + _esc(order.id) + '" data-item-idx="' + idx + '">' +
+        statusBtnLabel + '</button>' +
+        '</div>';
+    }).join('') +
+    '</div>';
+
+  var notesHtml = order.notes
+    ? '<div class="order-notes">&#9888; ' + _esc(order.notes) + '</div>'
+    : '';
+
+  var footerHtml = '<div class="order-card-footer">' +
+    '<div class="order-status-label ' + statusLabelClass + '">' + statusLabel + '</div>' +
+    '<button class="bump-btn" data-order-id="' + _esc(order.id) + '">' +
+    (order.status === 'ready' ? '&#10003; BUMP' : 'BUMP') +
+    '</button>' +
+    '</div>';
+
+  div.innerHTML = hdrHtml + tableHtml + itemsHtml + notesHtml + footerHtml;
+
+  // Wire item status buttons
+  div.querySelectorAll('[data-item-idx]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var orderId = this.dataset.orderId;
+      var itemIdx = parseInt(this.dataset.itemIdx, 10);
+      var currentOrder = _orders[orderId];
+      if (!currentOrder) return;
+      var currentStatus = currentOrder.items[itemIdx].itemStatus;
+      var nextStatus = { pending: 'preparing', preparing: 'ready', ready: 'ready' }[currentStatus] || 'preparing';
+      if (currentStatus === nextStatus) return;
+      _cf('kdsUpdateItem')({
+        kdsOrderId: orderId,
+        shopId: _shopId,
+        itemIndex: itemIdx,
+        itemStatus: nextStatus,
+      }).then(function (r) {
+        // Firestore listener will trigger re-render
+      }).catch(function (e) { _toast(e.message, 'error'); });
+    });
+  });
+
+  // Wire bump button
+  var bumpBtn = div.querySelector('.bump-btn');
+  if (bumpBtn) {
+    bumpBtn.addEventListener('click', function () {
+      var orderId = this.dataset.orderId;
+      this.disabled = true;
+      _cf('kdsBump')({ kdsOrderId: orderId, shopId: _shopId })
+        .then(function () {
+          // Listener will remove the card
+        }).catch(function (e) {
+          _toast(e.message, 'error');
+          bumpBtn.disabled = false;
+        });
+    });
+  }
+
+  return div;
+}
+
+// ── Cleanup ────────────────────────────────────────────────────────────────
+window.addEventListener('beforeunload', function () {
+  if (_unsub) _unsub();
+});
+
+})();
+</script>
+</body>
+</html>
