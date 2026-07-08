@@ -39,6 +39,16 @@
     rt.src = base + 'realtime.js';
     document.head.appendChild(rt);
   }
+  /* P1-9 (Phase 4 audit): load DOMPurify so SokoniSecurity.safeHTML() sanitizes with a
+     real, spec-aware library instead of the bypassable regex fallback. Deferred + from
+     cdnjs (allowed by CSP script-src). safeHTML falls back to regex until this loads. */
+  if (!window.DOMPurify && !document.querySelector('script[src*="dompurify"],script[src*="purify.min"]')) {
+    var dp = document.createElement('script');
+    dp.src = 'https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.9/purify.min.js';
+    dp.defer = true;
+    dp.crossOrigin = 'anonymous';
+    document.head.appendChild(dp);
+  }
 }());
 
 const SokoniSecurity = (() => {
@@ -105,12 +115,24 @@ const SokoniSecurity = (() => {
   }
 
   /**
-   * Safe innerHTML — only allows a whitelist of tags.
-   * Strips event handlers and javascript: hrefs.
+   * Safe innerHTML sanitizer.
+   * P1-9 (Phase 4 audit): prefer DOMPurify (a real, spec-aware sanitizer loaded
+   * globally below). The previous regex approach is bypassable and kept only as a
+   * fallback for the brief window before DOMPurify finishes loading. Every existing
+   * caller of safeHTML() is upgraded automatically — no call-site changes needed.
    */
   function safeHTML(str){
-    if(!str) return "";
-    /* Strip script tags, event handlers, javascript: */
+    if(str === null || str === undefined || str === "") return "";
+    if (typeof window !== "undefined" && window.DOMPurify && window.DOMPurify.sanitize) {
+      return window.DOMPurify.sanitize(String(str), {
+        ALLOWED_TAGS: ["b","i","em","strong","a","p","br","ul","ol","li","span","div",
+                       "h1","h2","h3","h4","h5","h6","blockquote","code","pre","img","hr","small"],
+        ALLOWED_ATTR: ["href","title","target","rel","src","alt","class"],
+        FORBID_ATTR:  ["style","onerror","onload"],
+        ALLOW_DATA_ATTR: false,
+      });
+    }
+    /* Fallback (pre-DOMPurify): regex strip — bypassable, best-effort only. */
     return String(str)
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "")
