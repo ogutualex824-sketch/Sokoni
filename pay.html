@@ -672,12 +672,17 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 
 /* â”€â”€ Config (public keys only â€” private keys in Secret Manager) â”€â”€ */
 const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyDfNnaCH1sHlsMnCFoNFW5sMeSFJTYYDok",
+  /* SEC-4 (Phase 4 audit): was a DIFFERENT project's config (sender 246984929044 /
+     appId ...4d7ac8...) than the rest of the platform (sender 24799054989 /
+     appId ...e1cf6ca8..., used in 86+ files) — which breaks App Check/reCAPTCHA on
+     the payment page. Aligned to canonical (firebase.js). TEST the live payment flow
+     before enabling App Check enforcement on payment callables (P0-6). */
+  apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
   authDomain:        "sokoni-aeb26.firebaseapp.com",
   projectId:         "sokoni-aeb26",
   storageBucket:     "sokoni-aeb26.appspot.com",
-  messagingSenderId: "246984929044",
-  appId:             "1:246984929044:web:4d7ac8e8a0d16b2db0eb50"
+  messagingSenderId: "24799054989",
+  appId:             "1:24799054989:web:e1cf6ca8c281bf1abf26c4"
 };
 
 const app = initializeApp(FIREBASE_CONFIG);
