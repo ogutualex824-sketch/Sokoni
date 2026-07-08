@@ -8,11 +8,16 @@
 const { onCall, HttpsError }   = require('firebase-functions/v2/https');
 const { onSchedule }           = require('firebase-functions/v2/scheduler');
 const { onDocumentCreated }    = require('firebase-functions/v2/firestore');
+const { defineSecret }         = require('firebase-functions/params');
 const admin  = require('firebase-admin');
 const crypto = require('crypto');
 
 const db         = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
+
+/* ── Secrets ────────────────────────────────────────────────────────────── */
+const AFRICASTALKING_API_KEY  = defineSecret('AFRICASTALKING_API_KEY');
+const AFRICASTALKING_USERNAME = defineSecret('AFRICASTALKING_USERNAME');
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 const TRIP_STATUSES  = ['pending','assigned','en_route_pickup','arrived_pickup','en_route_delivery','arrived_delivery','completed','cancelled'];
@@ -791,4 +796,358 @@ exports.navCleanupStaleLocations = onSchedule('every 2 hours', async () => {
     if (ts && ts.toDate && ts.toDate() < cutoff) batch.delete(d.ref);
   });
   await batch.commit();
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   16. navGenerateDeliveryOTP — generate & SMS a 6-digit stop OTP
+   Driver-only. Persists OTP to deliveryOTPs/{tripId}_{stopIndex} and
+   sends it via Africa's Talking SMS. SMS failure is non-fatal.
+═══════════════════════════════════════════════════════════════════════ */
+exports.navGenerateDeliveryOTP = onCall(
+  { enforceAppCheck: true, secrets: [AFRICASTALKING_API_KEY, AFRICASTALKING_USERNAME] },
+  async request => {
+    _requireAuth(request.auth);
+    _requireDriver(request.auth.token);
+    const uid       = request.auth.uid;
+    const tripId    = _san(request.data.tripId    || '', 64);
+    const stopIndex = request.data.stopIndex;
+
+    if (!tripId)
+      throw new HttpsError('invalid-argument', 'tripId required (max 64 chars)');
+    if (!Number.isInteger(stopIndex) || stopIndex < 0)
+      throw new HttpsError('invalid-argument', 'stopIndex must be a non-negative integer');
+
+    // Verify trip exists and belongs to this rider
+    const tripSnap = await db.collection('trips').doc(tripId).get();
+    if (!tripSnap.exists) throw new HttpsError('not-found', 'Trip not found');
+    const trip = tripSnap.data();
+    if (trip.riderId !== uid)
+      throw new HttpsError('permission-denied', 'Not your trip');
+
+    const stop = (trip.stops || [])[stopIndex];
+    if (!stop)
+      throw new HttpsError('invalid-argument', 'stopIndex out of range');
+    if (stop.pod?.type !== 'otp')
+      throw new HttpsError('invalid-argument', 'This stop does not require an OTP');
+
+    // Generate and persist OTP (30-min TTL)
+    const otp       = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 60 * 1000));
+
+    await db.collection('deliveryOTPs').doc(`${tripId}_${stopIndex}`).set({
+      otp,
+      tripId,
+      stopIndex,
+      createdAt: FieldValue.serverTimestamp(),
+      expiresAt,
+      usedAt:    null,
+    });
+
+    // SMS via Africa's Talking REST API — wrap in try/catch so OTP is always returned
+    let smsSent    = false;
+    let maskedPhone = null;
+    const phone    = stop.customer?.phone || stop.phone || null;
+
+    if (phone) {
+      maskedPhone = String(phone).slice(-4);
+      try {
+        const apiKey   = AFRICASTALKING_API_KEY.value();
+        const username = AFRICASTALKING_USERNAME.value();
+        const message  = `Your SOKONI delivery OTP is: ${otp}. Valid for 30 minutes. Do not share this code.`;
+        const res      = await fetch('https://api.africastalking.com/version1/messaging', {
+          method:  'POST',
+          headers: {
+            apiKey,
+            Accept:          'application/json',
+            'Content-Type':  'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({ username, to: phone, message }).toString(),
+        });
+        smsSent = res.ok;
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.error(`navGenerateDeliveryOTP: AT SMS failed status=${res.status} body=${errText}`);
+        }
+      } catch (smsErr) {
+        console.error('navGenerateDeliveryOTP: AT SMS error', smsErr.message);
+      }
+    }
+
+    return { success: true, smsSent, maskedPhone };
+  }
+);
+
+/* ═══════════════════════════════════════════════════════════════════════
+   17. navGetRiderDashboard — today / week / month performance stats
+   Admins can pass riderId to view any rider; otherwise uses auth uid.
+   All date filtering is in-memory to avoid composite indexes.
+═══════════════════════════════════════════════════════════════════════ */
+exports.navGetRiderDashboard = onCall({ enforceAppCheck: true }, async request => {
+  _requireAuth(request.auth);
+  const uid = request.auth.uid;
+
+  let riderId = uid;
+  if (request.data.riderId && request.data.riderId !== uid) {
+    _requireAdmin(request.auth.token);
+    riderId = _san(request.data.riderId, 128);
+  }
+
+  // Parallel fetches — single-field queries only
+  const [snap1, snap2, tripsSnap, earningSnap] = await Promise.all([
+    db.collection('riders').doc(riderId).get(),
+    db.collection('driverProfiles').doc(riderId).get(),
+    // Single-field filter: riderId only; status filtered in memory
+    db.collection('trips').where('riderId', '==', riderId).limit(500).get(),
+    db.collection('riderEarnings').doc(riderId).get(),
+  ]);
+
+  const riderDoc = snap1.exists ? snap1.data() : (snap2.exists ? snap2.data() : {});
+
+  // Timestamp → ms helper
+  function _tsMs(ts) {
+    if (!ts) return 0;
+    if (ts.toDate)  return ts.toDate().getTime();
+    if (ts.seconds) return ts.seconds * 1000;
+    return 0;
+  }
+
+  // Filter to only completed/cancelled for stat windows
+  const allTrips  = tripsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .filter(t => t.status === 'completed' || t.status === 'cancelled');
+
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const weekStart  = new Date(); weekStart.setDate(weekStart.getDate() - 7); weekStart.setHours(0, 0, 0, 0);
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+
+  // Aggregate stats for a slice of trips
+  function _bucket(list) {
+    const done     = list.filter(t => t.status === 'completed');
+    const earnings = done.reduce((s, t) => s + (t.earnings || 0), 0);
+    const distance = done.reduce((s, t) => s + (t.distanceKm || 0), 0);
+    return {
+      deliveries: done.length,
+      earnings:   Math.round(earnings * 100) / 100,
+      distance:   Math.round(distance * 100) / 100,
+      cancelled:  list.filter(t => t.status === 'cancelled').length,
+    };
+  }
+
+  const todayTrips = allTrips.filter(t => _tsMs(t.createdAt) >= todayStart.getTime());
+  const weekTrips  = allTrips.filter(t => _tsMs(t.createdAt) >= weekStart.getTime());
+  const monthTrips = allTrips.filter(t => _tsMs(t.createdAt) >= monthStart.getTime());
+
+  const completed  = allTrips.filter(t => t.status === 'completed');
+  const onTimeAll  = completed.filter(t => {
+    const arrived = _tsMs(t.arrivedAt); const est = _tsMs(t.estimatedArrival);
+    return arrived > 0 && est > 0 && arrived <= est;
+  }).length;
+  const onTimeRate     = completed.length ? Math.round((onTimeAll / completed.length) * 100) : 0;
+
+  const accepted       = riderDoc.acceptedCount || 0;
+  const declined       = riderDoc.declinedCount || 0;
+  const acceptanceRate = (accepted + declined) > 0
+    ? Math.round((accepted / (accepted + declined)) * 100)
+    : 0;
+
+  const totalEarnings  = earningSnap.exists
+    ? (earningSnap.data().totalEarnings || 0)
+    : completed.reduce((s, t) => s + (t.earnings || 0), 0);
+
+  return {
+    riderId,
+    today:   _bucket(todayTrips),
+    week:    _bucket(weekTrips),
+    month:   _bucket(monthTrips),
+    overall: {
+      totalDeliveries: completed.length,
+      totalEarnings:   Math.round(totalEarnings * 100) / 100,
+      avgRating:       riderDoc.rating || 0,
+      acceptanceRate,
+      onTimeRate,
+    },
+    rider: {
+      name:     riderDoc.name     || riderDoc.displayName || null,
+      vehicle:  riderDoc.vehicle  || riderDoc.vehicleType || null,
+      status:   riderDoc.status   || (riderDoc.available  ? 'active' : 'offline'),
+      rating:   riderDoc.rating   || null,
+      photoUrl: riderDoc.photoUrl || riderDoc.photo       || null,
+    },
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   18. navBatchSyncLocations — offline-buffered GPS batch upload
+   Writes the latest position to riderLocations/{uid} and up to 50
+   history points to riderLocationHistory/{uid}/points/{timestamp}.
+═══════════════════════════════════════════════════════════════════════ */
+exports.navBatchSyncLocations = onCall({ enforceAppCheck: true }, async request => {
+  _requireAuth(request.auth);
+  _requireDriver(request.auth.token);
+  const uid       = request.auth.uid;
+  const tripId    = _san(request.data.tripId || '', 64);
+  const locations = request.data.locations;
+
+  if (!tripId)
+    throw new HttpsError('invalid-argument', 'tripId required');
+  if (!Array.isArray(locations) || locations.length === 0)
+    throw new HttpsError('invalid-argument', 'locations must be a non-empty array');
+  if (locations.length > 100)
+    throw new HttpsError('invalid-argument', 'Maximum 100 locations per batch');
+
+  // Verify trip belongs to this rider (single-field doc fetch — no query)
+  const tripSnap = await db.collection('trips').doc(tripId).get();
+  if (!tripSnap.exists) throw new HttpsError('not-found', 'Trip not found');
+  if (tripSnap.data().riderId !== uid)
+    throw new HttpsError('permission-denied', 'Not your trip');
+
+  // Validate every location entry before writing anything
+  for (const [i, loc] of locations.entries()) {
+    if (typeof loc.lat !== 'number' || loc.lat < -90  || loc.lat > 90)
+      throw new HttpsError('invalid-argument', `locations[${i}].lat out of range (-90 to 90)`);
+    if (typeof loc.lng !== 'number' || loc.lng < -180 || loc.lng > 180)
+      throw new HttpsError('invalid-argument', `locations[${i}].lng out of range (-180 to 180)`);
+    if (typeof loc.timestamp !== 'number')
+      throw new HttpsError('invalid-argument', `locations[${i}].timestamp must be a number`);
+  }
+
+  const last    = locations[locations.length - 1];
+  const toStore = locations.slice(-50); // cap history writes at 50 to stay well under batch limit
+
+  const batch = db.batch();
+
+  // Live position — queried by customers and fleet monitor
+  batch.set(db.collection('riderLocations').doc(uid), {
+    lat:       last.lat,
+    lng:       last.lng,
+    bearing:   last.bearing   ?? null,
+    speed:     last.speed     ?? null,
+    updatedAt: FieldValue.serverTimestamp(),
+    tripId,
+    status:    'active',
+  }, { merge: true });
+
+  // History subcollection — analytics only, not customer-facing
+  const histRef = db.collection('riderLocationHistory').doc(uid).collection('points');
+  for (const loc of toStore) {
+    batch.set(histRef.doc(String(loc.timestamp)), {
+      lat:      loc.lat,
+      lng:      loc.lng,
+      bearing:  loc.bearing  ?? null,
+      speed:    loc.speed    ?? null,
+      accuracy: loc.accuracy ?? null,
+      ts:       loc.timestamp,
+    });
+  }
+
+  await batch.commit();
+  return {
+    synced:       locations.length,
+    lastLocation: { lat: last.lat, lng: last.lng, timestamp: last.timestamp },
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   19. navGetDeliveryAnalytics — admin delivery performance report
+   Admin-only. Queries last N days (1–90, default 30). All date and
+   grouping logic runs in-memory to avoid composite indexes.
+═══════════════════════════════════════════════════════════════════════ */
+exports.navGetDeliveryAnalytics = onCall({ enforceAppCheck: true }, async request => {
+  _requireAuth(request.auth);
+  _requireAdmin(request.auth.token);
+
+  const daysBack = Math.min(Math.max(Number(request.data.days) || 30, 1), 90);
+  const cutoff   = new Date(Date.now() - daysBack * 24 * 3600 * 1000);
+
+  // Single-field query: status only
+  const snap = await db.collection('trips')
+    .where('status', 'in', ['completed', 'cancelled'])
+    .limit(1000)
+    .get();
+
+  function _tsMs(ts) {
+    if (!ts) return 0;
+    if (ts.toDate)  return ts.toDate().getTime();
+    if (ts.seconds) return ts.seconds * 1000;
+    return 0;
+  }
+
+  // Filter to the requested date window in memory
+  const trips     = snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(t => _tsMs(t.createdAt) >= cutoff.getTime());
+
+  const completed = trips.filter(t => t.status === 'completed');
+  const cancelled = trips.filter(t => t.status === 'cancelled');
+
+  // Average delivery time: assignedAt → completedAt (minutes)
+  let sumMins = 0, countMins = 0;
+  for (const t of completed) {
+    const a = _tsMs(t.assignedAt); const c = _tsMs(t.completedAt);
+    if (a > 0 && c > a) { sumMins += (c - a) / 60000; countMins++; }
+  }
+  const avgDeliveryTimeMinutes = countMins > 0 ? Math.round((sumMins / countMins) * 10) / 10 : 0;
+
+  // On-time rate: arrivedAt ≤ estimatedArrival
+  const onTime    = completed.filter(t => {
+    const arrived = _tsMs(t.arrivedAt); const est = _tsMs(t.estimatedArrival);
+    return arrived > 0 && est > 0 && arrived <= est;
+  }).length;
+  const onTimeRate = completed.length > 0 ? Math.round((onTime / completed.length) * 100) : 0;
+
+  // Pre-seed a slot for every day in range so gaps appear as zeros
+  const dailyMap = {};
+  for (let i = 0; i < daysBack; i++) {
+    const d = new Date(Date.now() - i * 24 * 3600 * 1000); d.setHours(0, 0, 0, 0);
+    dailyMap[d.toISOString().slice(0, 10)] = { completed: 0, cancelled: 0, revenue: 0 };
+  }
+  for (const t of trips) {
+    const key = new Date(_tsMs(t.createdAt)).toISOString().slice(0, 10);
+    if (!dailyMap[key]) continue;
+    if (t.status === 'completed') { dailyMap[key].completed++; dailyMap[key].revenue += (t.earnings || 0); }
+    else                          { dailyMap[key].cancelled++; }
+  }
+  const dailyStats = Object.entries(dailyMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, s]) => ({
+      date,
+      completed: s.completed,
+      cancelled: s.cancelled,
+      revenue:   Math.round(s.revenue * 100) / 100,
+    }));
+
+  // Top 5 riders by completed delivery count
+  const riderCount = {};
+  for (const t of completed) {
+    const rid = t.riderId;
+    if (rid) riderCount[rid] = (riderCount[rid] || 0) + 1;
+  }
+  const topRiders = Object.entries(riderCount)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([riderId, completedTrips]) => ({ riderId, completedTrips }));
+
+  // Average stops per trip
+  const totalStops    = trips.reduce((s, t) => s + ((t.stops || []).length), 0);
+  const avgStopsPerTrip = trips.length > 0 ? Math.round((totalStops / trips.length) * 10) / 10 : 0;
+
+  // Cancellation breakdown by reason
+  const reasonMap = {};
+  for (const t of cancelled) {
+    const r = _san(t.cancelReason || 'unknown', 100);
+    reasonMap[r] = (reasonMap[r] || 0) + 1;
+  }
+  const cancellationByReason = Object.entries(reasonMap)
+    .map(([reason, count]) => ({ reason, count }));
+
+  return {
+    daysBack,
+    totalCompleted: completed.length,
+    totalCancelled: cancelled.length,
+    avgDeliveryTimeMinutes,
+    onTimeRate,
+    dailyStats,
+    topRiders,
+    avgStopsPerTrip,
+    cancellationByReason,
+  };
 });

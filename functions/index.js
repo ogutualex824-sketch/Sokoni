@@ -8229,7 +8229,7 @@ exports.getMerchantAcademy            = merchantSuccess.getMerchantAcademy;
 exports.updateAcademyProgress         = merchantSuccess.updateAcademyProgress;
 exports.generateMerchantContent       = merchantSuccess.generateMerchantContent;
 
-/* ── Navigation & Intelligent Dispatch v1.0 ────────────────────────────── */
+/* ── Navigation & Intelligent Dispatch v2.0 ────────────────────────────── */
 const navigation = require('./navigation');
 exports.navDispatchRider          = navigation.navDispatchRider;
 exports.navUpdateTripStatus       = navigation.navUpdateTripStatus;
@@ -8247,6 +8247,11 @@ exports.navAssignTrip             = navigation.navAssignTrip;
 exports.navResolveFleetEvent      = navigation.navResolveFleetEvent;
 exports.navCleanupStaleLocations  = navigation.navCleanupStaleLocations;
 exports.processDriverEarning      = navigation.processDriverEarning;
+// v2.0 additions
+exports.navGenerateDeliveryOTP    = navigation.navGenerateDeliveryOTP;
+exports.navGetRiderDashboard      = navigation.navGetRiderDashboard;
+exports.navBatchSyncLocations     = navigation.navBatchSyncLocations;
+exports.navGetDeliveryAnalytics   = navigation.navGetDeliveryAnalytics;
 
 /* ── Universal Loyalty & Rewards Engine v2.0 ─────────────────────────────── */
 const loyalty = require('./loyalty');

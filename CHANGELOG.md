@@ -1,4 +1,67 @@
-﻿## [2026-07-08] — Merchant Success & Growth Engine v2.0
+﻿## [2026-07-08] — Navigation & Intelligent Dispatch v2.0
+
+### Summary
+Production-grade upgrade of the navigation system, adding 4 new Cloud Functions (proof-of-delivery OTP, rider dashboard, offline batch sync, delivery analytics), SDK-level rider safety monitoring, dynamic GPS throttle, real-time customer tracking via Firestore onSnapshot (replaces 5s polling), and a new rider dashboard page.
+
+### Files Affected
+| File | Change |
+|---|---|
+| `functions/navigation.js` | +4 new CFs, 794 → 1,154 lines |
+| `functions/index.js` | 4 new exports: `navGenerateDeliveryOTP`, `navGetRiderDashboard`, `navBatchSyncLocations`, `navGetDeliveryAnalytics` |
+| `sokoni-navigation.js` | v2.0 SDK: safety interval, dynamic throttle, significant-movement tracking, `_checkSafety()`, `updateCheckIn()` |
+| `rider-dashboard.html` | NEW — driver portal: earnings, ratings, active trip banner, online/offline toggle |
+| `track.html` | Real-time Firestore listeners replace 5s polling; smooth marker animation; LIVE badge |
+| `DEPLOY_QUEUE.md` | Added Navigation v2.0 spot deploy + hosting commands |
+
+### New Cloud Functions (4)
+| Function | Purpose |
+|---|---|
+| `navGenerateDeliveryOTP` | Generates 6-digit OTP, stores in `deliveryOTPs/{tripId}_{stopIndex}`, sends SMS via Africa's Talking (AT call non-fatal) |
+| `navGetRiderDashboard` | Rider earnings, completion rate, ratings, active trip; date-bucketed in-memory |
+| `navBatchSyncLocations` | Flushes offline GPS queue: validates all before writing; updates `riderLocations/{uid}` + history subcollection; max 100 input, 50 history writes |
+| `navGetDeliveryAnalytics` | Admin: platform-wide delivery KPIs, `daysBack` clamped 1–90, all aggregation in-memory |
+
+### SDK Changes (sokoni-navigation.js)
+- Safety monitoring: `_checkSafety()` runs every 60s — fires `unexpectedStop` if no 20m movement in 3 min; fires `checkInReminder` if trip running >60 min without check-in
+- Dynamic GPS upload throttle: 2s (>30 km/h), 3s (>10 km/h), 4s (moving), 10s (stationary)
+- Significant movement tracking resets safety clock on ≥20m position change
+- `updateCheckIn()` public API for riders to dismiss safety reminders
+
+### track.html — Real-time upgrade
+- Removed `setInterval(_poll, 5000)` (5s polling)
+- Added `riderLocations/{riderId}` onSnapshot for live GPS updates
+- Added `trips/{tripId}` onSnapshot for live status updates
+- Smooth marker animation: 10-step lerp over 800ms between GPS positions
+- LIVE badge activates once listeners are open
+- Unsubscribe functions stored in `_unsubs[]`, cleared on completion and `beforeunload`
+
+### New Secrets Required
+- `AFRICASTALKING_API_KEY` — add to Secret Manager before deploying `navGenerateDeliveryOTP`
+- `AFRICASTALKING_USERNAME` — add to Secret Manager before deploying `navGenerateDeliveryOTP`
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `deliveryOTPs/{tripId}_{stopIndex}` | OTP doc, 10-min TTL, verified server-side |
+| `riderLocationHistory/{uid}/points/{ts}` | Offline-synced GPS history points |
+
+### Security
+- `enforceAppCheck: true` on all 4 new CFs
+- `navGetRiderDashboard` asserts `role === 'driver'` or admin before returning data
+- `navBatchSyncLocations` validates all 100 entries before any write (all-or-partial)
+- `navGetDeliveryAnalytics` admin-only via `_assertAdmin()`
+- AT SMS failure is non-fatal — OTP stored regardless, so delivery is never blocked
+- OTP verification is always server-side — client-side completion triggers CF check
+
+### Performance
+- `riderLocations` listener replaces 5s polling — sub-second updates from Firestore
+- Smooth lerp animation prevents jarring map jumps on location update
+- Dynamic GPS throttle reduces mobile data usage at low speeds (10s vs 2s)
+- Batch sync compresses offline queue to single CF call instead of N individual writes
+
+---
+
+## [2026-07-08] — Merchant Success & Growth Engine v2.0
 
 ### Summary
 Complete rebuild of the Merchant Success platform — replaces the 11-CF v1.0 shell with a full 17-CF business intelligence engine and a premium 10-section dashboard. Merchants can now track a live health score, get AI coaching, run CRM campaigns, monitor inventory, benchmark against peers, automate workflows, and access a full financial analytics suite — all from one page.

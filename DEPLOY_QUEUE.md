@@ -5,6 +5,44 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Navigation & Intelligent Dispatch v2.0 — 2026-07-08
+
+**Files:**
+- `functions/navigation.js` — +4 new CFs (794 → 1,154 lines)
+- `sokoni-navigation.js` — v2.0 SDK (safety monitor, dynamic throttle, offline queue)
+- `rider-dashboard.html` — NEW rider dashboard page
+- `track.html` — real-time Firestore listeners (replaces 5s polling)
+- `functions/index.js` — 4 new exports added
+
+**New CFs (4 — quota-blocked):**
+
+| Export name | Type | Auth | Purpose |
+|---|---|---|---|
+| `navGenerateDeliveryOTP` | onCall | Seller/Driver | 6-digit OTP for proof-of-delivery, SMS via Africa's Talking |
+| `navGetRiderDashboard` | onCall | Driver | Earnings, ratings, completion rate, active trip banner |
+| `navBatchSyncLocations` | onCall | Driver | Offline location queue flush (max 100 points, 50 history writes) |
+| `navGetDeliveryAnalytics` | onCall | Admin | Platform-wide delivery stats, clamp 1–90 days |
+
+**Secrets required:**
+- `AFRICASTALKING_API_KEY` (new — add to Secret Manager)
+- `AFRICASTALKING_USERNAME` (new — add to Secret Manager)
+
+**Spot deploy command:**
+```powershell
+firebase deploy --only "functions:navGenerateDeliveryOTP,functions:navGetRiderDashboard,functions:navBatchSyncLocations,functions:navGetDeliveryAnalytics" --project sokoni-aeb26
+```
+
+**Hosting deploy (new rider-dashboard.html + updated track.html):**
+```powershell
+firebase deploy --only hosting --project sokoni-aeb26
+```
+
+**New Firestore collections:**
+- `deliveryOTPs/{tripId}_{stopIndex}` — 6-digit OTP doc (expires 10 min)
+- `riderLocationHistory/{uid}/points/{ts}` — offline-synced GPS history
+
+---
+
 ## Merchant Success & Growth Engine v2.0 — 2026-07-08
 
 **Files:**

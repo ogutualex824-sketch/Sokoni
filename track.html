@@ -52,6 +52,12 @@
     @keyframes pls{0%,100%{box-shadow:0 0 0 0 rgba(113,255,0,.4)}50%{box-shadow:0 0 0 6px rgba(113,255,0,0)}}
     .tl-lbl{font-size:9px;color:var(--muted);text-align:center;margin-top:5px;line-height:1.3;max-width:62px}
     .tl-step.done .tl-lbl,.tl-step.active .tl-lbl{color:var(--accent)}
+    /* ── Bearing rotation ── */
+    .rider-marker-inner{transform:rotate(var(--bearing,0deg));transition:transform .5s ease}
+    /* ── LIVE badge ── */
+    #liveBadge{display:none;align-items:center;gap:5px;font-size:10px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+    #liveBadge.active{display:flex}
+    .live-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pls 1.4s ease infinite}
     /* â”€â”€ Loading â”€â”€ */
     #loadScreen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
     .spin{width:40px;height:40px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
@@ -85,6 +91,7 @@
 
 <div id="panel">
   <div id="panelHandle"></div>
+  <div id="liveBadge"><div class="live-dot"></div>LIVE</div>
   <div id="etaRow">
     <div class="eta-card" id="etaArrival"><div class="eta-val" id="etaArrVal">â€”</div><div class="eta-lbl">Arrives at</div></div>
     <div class="eta-card" id="etaDist"><div class="eta-val" id="etaDistVal">â€”</div><div class="eta-lbl">Distance away</div></div>
@@ -109,13 +116,16 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
 <script src="sokoni-appcheck.js"></script>
 <script src="sokoni-config.js"></script>
 <script>
 'use strict';
 
-var _map=null,_riderM=null,_destM=null,_polling=null,_code=null;
+var _map=null,_riderM=null,_destM=null,_code=null,_lastStatus=null,_realtimeSetup=false;
+var _unsubs=[];
+window.addEventListener('beforeunload',function(){_unsubs.forEach(function(u){if(u)u();});});
 var HAV=function(a,b,c,d){var R=6371,dL=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180,x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));};
 
 function _cf(n){return firebase.functions().httpsCallable(n);}
@@ -186,7 +196,12 @@ function _render(d){
     else if(!reached) el.classList.add('done');
   });
 
-  if(status==='completed'){clearInterval(_polling);document.getElementById('doneOverlay').classList.add('show');}
+  if(status==='completed'){
+    _unsubs.forEach(function(u){if(u)u();});_unsubs.length=0;
+    document.getElementById('doneOverlay').classList.add('show');
+  }
+  // On first render hand off to real-time Firestore listeners
+  if(!_realtimeSetup&&(d.riderId||d.tripId)){_realtimeSetup=true;_setupRealtime(d);}
 }
 
 function _share(){
@@ -194,6 +209,84 @@ function _share(){
   if(navigator.share) navigator.share({title:'Track my SOKONI delivery',url:url}).catch(function(){});
   else if(navigator.clipboard) navigator.clipboard.writeText(url).then(function(){alert('Link copied!');});
   else prompt('Copy tracking link:',url);
+}
+
+/* ── Real-time engine ── */
+function _setupRealtime(d){
+  var db=firebase.firestore();
+  if(d.riderId){
+    var locUnsub=db.collection('riderLocations').doc(d.riderId)
+      .onSnapshot(function(snap){
+        if(!snap.exists) return;
+        var loc=snap.data();
+        if(loc.lat&&loc.lng) _updateRiderPos(loc.lat,loc.lng,loc.bearing||null);
+      },function(err){console.warn('[Track] loc listener:',err.message);});
+    _unsubs.push(locUnsub);
+  }
+  if(d.tripId){
+    var tripUnsub=db.collection('trips').doc(d.tripId)
+      .onSnapshot(function(snap){
+        if(!snap.exists) return;
+        var trip=snap.data();
+        _updateStatus(trip.status||'assigned',trip);
+      },function(err){console.warn('[Track] trip listener:',err.message);});
+    _unsubs.push(tripUnsub);
+  }
+  // Activate LIVE badge once listeners are open
+  document.getElementById('liveBadge').classList.add('active');
+}
+
+function _animateMarker(marker,toLat,toLng){
+  var from=marker.getLatLng();
+  var steps=10,step=0;
+  var dLat=(toLat-from.lat)/steps,dLng=(toLng-from.lng)/steps;
+  var iv=setInterval(function(){
+    step++;
+    marker.setLatLng([from.lat+dLat*step,from.lng+dLng*step]);
+    if(step>=steps) clearInterval(iv);
+  },80);
+}
+
+function _updateRiderPos(lat,lng,bearing){
+  var ll=[lat,lng];
+  if(!_riderM){_riderMarker().setLatLng(ll);}
+  else{_animateMarker(_riderM,lat,lng);}
+  // Update bearing indicator
+  if(bearing!=null){
+    var el=_riderM&&_riderM.getElement?_riderM.getElement():null;
+    if(el){var inner=el.querySelector('.rider-marker-inner');if(inner)inner.style.setProperty('--bearing',bearing+'deg');}
+  }
+  if(!_destM) _map.panTo(ll,{animate:true});
+  if(_destM){
+    var dl=_destM.getLatLng();
+    var km=HAV(lat,lng,dl.lat,dl.lng);
+    var mins=Math.max(1,Math.round(km/0.45));
+    var arr=new Date(Date.now()+mins*60000);
+    document.getElementById('etaArrVal').textContent=arr.toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('etaDistVal').textContent=km.toFixed(1)+' km';
+  }
+}
+
+function _updateStatus(status,trip){
+  if(status===_lastStatus) return;
+  _lastStatus=status;
+  document.getElementById('hdrStatus').textContent=STATUS_LABELS[status]||status;
+  // Update destination marker from trip if available
+  if(!_destM&&trip&&trip.dropoffLat&&trip.dropoffLng){
+    _destM=L.circleMarker([trip.dropoffLat,trip.dropoffLng],{radius:10,fillColor:'#71ff00',color:'#000',weight:2,fillOpacity:.9}).addTo(_map);
+  }
+  // Timeline
+  var curr=TL_MAP[status]||'confirmed';
+  var reached=false;
+  document.querySelectorAll('.tl-step').forEach(function(el){
+    el.classList.remove('done','active');
+    if(el.dataset.s===curr){el.classList.add('active');reached=true;}
+    else if(!reached) el.classList.add('done');
+  });
+  if(status==='completed'){
+    _unsubs.forEach(function(u){if(u)u();});_unsubs.length=0;
+    document.getElementById('doneOverlay').classList.add('show');
+  }
 }
 
 /* â”€â”€ Bootstrap â”€â”€ */
@@ -204,8 +297,7 @@ function _share(){
     document.getElementById('loadScreen').innerHTML='<div style="text-align:center;padding:24px"><p style="font-size:18px;margin-bottom:8px">âš  Invalid tracking link</p><p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:14px">Check the link in your confirmation message.</p><a href="profile.html" style="display:inline-block;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">My Orders</a></div>';
     return;
   }
-  _poll();
-  _polling=setInterval(_poll,5000);
+  _poll(); // single initial load; real-time takes over via _setupRealtime()
 })();
 </script>
 </body>

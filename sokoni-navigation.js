@@ -1,7 +1,9 @@
 /* ==========================================================================
-   SOKONI Navigation Engine v1.0  (sokoni-navigation.js)
+   SOKONI Navigation Engine v2.0  (sokoni-navigation.js)
    Real-time GPS navigation · Turn-by-turn · Geofencing · Offline support
-   Works with OSRM for routing (same as sokoni-routing.js) and Leaflet for maps.
+   Safety monitoring: unexpected-stop detection + check-in reminders
+   Dynamic location throttle: 2–10 s cadence based on speed
+   Works with OSRM for routing and Leaflet for maps.
    Exposes window.SokoniNavigation and window.SokoniNavOptimize.
 ========================================================================== */
 (function (g) {
@@ -109,14 +111,16 @@
     this._tripId   = opts.tripId   || null;
     this._vehicle  = opts.vehicle  || 'motorcycle'; // motorcycle|driving|cycling
     this._cbs      = {
-      positionUpdate: opts.onPositionUpdate || null,
-      etaUpdate:      opts.onEtaUpdate      || null,
-      stepChange:     opts.onStepChange     || null,
-      arrival:        opts.onArrival        || null,
-      deviation:      opts.onDeviation      || null,
-      recalculated:   opts.onRecalculated   || null,
-      error:          opts.onError          || null,
-      offlineQueued:  opts.onOfflineQueued  || null,
+      positionUpdate:  opts.onPositionUpdate  || null,
+      etaUpdate:       opts.onEtaUpdate       || null,
+      stepChange:      opts.onStepChange      || null,
+      arrival:         opts.onArrival         || null,
+      deviation:       opts.onDeviation       || null,
+      recalculated:    opts.onRecalculated    || null,
+      error:           opts.onError           || null,
+      offlineQueued:   opts.onOfflineQueued   || null,
+      unexpectedStop:  opts.onUnexpectedStop  || null,
+      checkInReminder: opts.onCheckInReminder || null,
     };
 
     this._stops          = [];   // [{lat,lng,name,type,id,status,phone?,orderId?}]
@@ -141,6 +145,14 @@
     this._isOnline       = navigator.onLine;
     this._recalcTimer    = null;
     this._uploadRef      = null; // Firestore doc ref for location
+
+    // Safety monitoring
+    this._tripStartTime    = 0;
+    this._lastCheckin      = 0;
+    this._lastSigMoveLat   = null;
+    this._lastSigMoveLng   = null;
+    this._lastSigMoveTime  = 0;
+    this._safetyInterval   = null;
 
     var self = this;
     window.addEventListener('online',  function () { self._isOnline = true;  self._flushQueue(); });
@@ -237,6 +249,37 @@
   };
 
   /* ── GPS ─────────────────────────────────────────────────────────────────── */
+  /* ── Safety monitoring ───────────────────────────────────────────────────── */
+  SokoniNavigation.prototype._checkSafety = function () {
+    if (!this._pos || !this._tripId) return;
+    var now = Date.now();
+
+    // Unexpected stop: rider hasn't moved >20 m in the last 3 minutes
+    if (this._lastSigMoveTime > 0) {
+      var stoppedMs = now - this._lastSigMoveTime;
+      if (stoppedMs > 3 * 60 * 1000) {
+        this._emit('unexpectedStop', {
+          lat:            this._pos.lat,
+          lng:            this._pos.lng,
+          stoppedMinutes: Math.round(stoppedMs / 60000),
+        });
+      }
+    }
+
+    // Check-in reminder: trip running >60 min without a manual check-in
+    var sinceCheckin = now - Math.max(this._lastCheckin, this._tripStartTime);
+    if (sinceCheckin > 60 * 60 * 1000) {
+      this._lastCheckin = now; // reset so it doesn't fire every minute
+      this._emit('checkInReminder', {
+        tripDurationMinutes: Math.round((now - this._tripStartTime) / 60000),
+      });
+    }
+  };
+
+  SokoniNavigation.prototype.updateCheckIn = function () {
+    this._lastCheckin = Date.now();
+  };
+
   SokoniNavigation.prototype.startTracking = function () {
     if (!navigator.geolocation) {
       this._emit('error', 'GPS not supported on this device');
@@ -248,6 +291,10 @@
       function (e) { self._emit('error', 'GPS error: ' + e.message); },
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
     );
+    // Safety monitoring — check every 60 seconds
+    this._tripStartTime = Date.now();
+    this._lastCheckin   = Date.now();
+    this._safetyInterval = setInterval(function () { self._checkSafety(); }, 60000);
     return true;
   };
 
@@ -255,6 +302,10 @@
     if (this._watchId != null) {
       navigator.geolocation.clearWatch(this._watchId);
       this._watchId = null;
+    }
+    if (this._safetyInterval) {
+      clearInterval(this._safetyInterval);
+      this._safetyInterval = null;
     }
     if (this._riderId && window.firebase && firebase.firestore) {
       firebase.firestore().collection('riderLocations').doc(this._riderId)
@@ -308,12 +359,27 @@
       accuracy: Math.round(c.accuracy || 0),
     };
 
-    // Upload at interval
+    // Dynamic throttle: faster uploads when moving fast, slower when stationary
     var now = Date.now();
-    if (now - this._lastUpload >= UPLOAD_INTERVAL_MS) {
+    var speed = this._pos.speed || 0;
+    var dynInterval = speed > 30 ? 2000 : speed > 10 ? 3000 : speed > 0 ? 4000 : 10000;
+    if (now - this._lastUpload >= dynInterval) {
       this._lastUpload = now;
       if (this._isOnline) this._uploadLocation(this._pos);
       else this._saveOffline(this._pos);
+    }
+
+    // Safety: track significant movement (>20 m counts as moving)
+    if (this._lastSigMoveLat !== null) {
+      if (_hav(this._lastSigMoveLat, this._lastSigMoveLng, lat, lng) >= 20) {
+        this._lastSigMoveLat  = lat;
+        this._lastSigMoveLng  = lng;
+        this._lastSigMoveTime = now;
+      }
+    } else {
+      this._lastSigMoveLat  = lat;
+      this._lastSigMoveLng  = lng;
+      this._lastSigMoveTime = now;
     }
 
     // Map

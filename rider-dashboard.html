@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#050505">
+  <title>Rider Dashboard | SOKONI</title>
+  <style>
+    /* ── TOKENS ─────────────────────────────────────────────────────── */
+    :root {
+      --bg:       #050505;
+      --surface:  #0d0d0d;
+      --card:     #111111;
+      --border:   #1e1e1e;
+      --accent:   #71ff00;
+      --accent-10: rgba(113,255,0,0.10);
+      --text:     #f0f0f0;
+      --muted:    #888888;
+      --danger:   #ef5350;
+      --warning:  #f59e0b;
+      --info:     #3b82f6;
+      --purple:   #8b5cf6;
+      --radius:   12px;
+      --hdr-h:    64px;
+    }
+
+    /* ── RESET ───────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100dvh;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; font-family: inherit; }
+
+    /* ── LOADING ─────────────────────────────────────────────────────── */
+    .rd-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60dvh;
+      gap: 16px;
+    }
+    .rd-spinner {
+      width: 44px; height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: rdSpin 0.9s linear infinite;
+    }
+    @keyframes rdSpin { to { transform: rotate(360deg); } }
+    .rd-loading-text { color: var(--muted); font-size: 14px; }
+
+    /* ── APP WRAPPER ─────────────────────────────────────────────────── */
+    .rd-app {
+      max-width: 640px;
+      margin: 0 auto;
+      padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
+    }
+
+    /* ── HERO ────────────────────────────────────────────────────────── */
+    .rd-hero {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 20px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .rd-avatar-wrap { position: relative; flex-shrink: 0; }
+    .rd-avatar {
+      width: 60px; height: 60px;
+      background: var(--accent-10);
+      border-radius: 50%;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+    }
+    .rd-status-dot {
+      width: 13px; height: 13px;
+      border-radius: 50%;
+      position: absolute;
+      bottom: 1px; right: 1px;
+      background: #555;
+      border: 2px solid var(--surface);
+      transition: background 0.3s;
+    }
+    .rd-hero-info { flex: 1; min-width: 0; padding-top: 2px; }
+    .rd-rider-name {
+      font-size: 18px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.2;
+    }
+    .rd-vehicle {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+    .rd-rating-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .rd-stars { color: var(--warning); font-size: 13px; letter-spacing: 1px; }
+    .rd-rating-val { font-size: 13px; font-weight: 700; color: var(--text); }
+    .rd-muted { font-size: 12px; color: var(--muted); }
+    .rd-online-toggle { flex-shrink: 0; padding-top: 4px; }
+    .rd-toggle-btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      min-height: 44px;
+      white-space: nowrap;
+      transition: background 0.25s, color 0.25s;
+    }
+    .rd-toggle-btn:active { opacity: 0.85; transform: scale(0.97); }
+
+    /* ── ACTIVE TRIP BANNER ──────────────────────────────────────────── */
+    .rd-active-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 16px;
+      padding: 14px 16px;
+      background: var(--surface);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      animation: rdPulse 2s ease-in-out infinite;
+    }
+    @keyframes rdPulse {
+      0%,100% { border-left-color: var(--accent); }
+      50%      { border-left-color: rgba(113,255,0,0.4); }
+    }
+    .rd-active-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+    .rd-active-icon { font-size: 24px; flex-shrink: 0; }
+    .rd-active-title { font-size: 13px; font-weight: 700; color: var(--accent); }
+    .rd-active-desc { font-size: 13px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rd-btn-accent {
+      background: var(--accent);
+      color: #000;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+    }
+    .rd-btn-accent:active { opacity: 0.85; }
+
+    /* ── PERIOD ROW ──────────────────────────────────────────────────── */
+    .rd-period-row {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px 4px;
+    }
+    .rd-period-btn {
+      flex: 1;
+      background: var(--card);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 4px;
+      font-size: 13px;
+      font-weight: 600;
+      min-height: 44px;
+      transition: all 0.2s;
+    }
+    .rd-period-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-10);
+    }
+    .rd-period-btn:active { opacity: 0.75; }
+
+    /* ── KPI GRID ────────────────────────────────────────────────────── */
+    .rd-kpi-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 12px 16px;
+    }
+    .rd-kpi-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 14px;
+      text-align: center;
+    }
+    .rd-kpi-accent {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000;
+    }
+    .rd-kpi-val {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.5px;
+    }
+    .rd-kpi-accent .rd-kpi-val { color: #000; }
+    .rd-kpi-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .rd-kpi-accent .rd-kpi-label { color: rgba(0,0,0,0.6); }
+
+    /* ── CARDS ───────────────────────────────────────────────────────── */
+    .rd-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin: 0 16px 12px;
+      overflow: hidden;
+    }
+    .rd-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .rd-card-title { font-size: 14px; font-weight: 700; }
+    .rd-link-sm {
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 600;
+      background: none;
+      border: none;
+      padding: 4px 0;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+    }
+    .rd-link-sm:active { opacity: 0.7; }
+
+    /* ── PERFORMANCE BARS ────────────────────────────────────────────── */
+    .rd-perf-bars { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+    .rd-perf-row { display: flex; align-items: center; gap: 12px; }
+    .rd-perf-label { font-size: 13px; color: var(--muted); width: 88px; flex-shrink: 0; }
+    .rd-perf-track {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .rd-perf-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+    }
+    .rd-fill-blue   { background: var(--info); }
+    .rd-fill-purple { background: var(--purple); }
+    .rd-fill-orange { background: var(--warning); }
+    .rd-perf-val { font-size: 13px; font-weight: 700; width: 48px; text-align: right; flex-shrink: 0; }
+
+    /* ── EARNINGS CARD ───────────────────────────────────────────────── */
+    .rd-earnings-row {
+      display: flex;
+      align-items: stretch;
+      padding: 16px;
+      gap: 0;
+    }
+    .rd-earn-item { flex: 1; text-align: center; padding: 4px 8px; }
+    .rd-earn-val { font-size: 17px; font-weight: 800; color: var(--accent); }
+    .rd-earn-label { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .rd-earn-divider { width: 1px; background: var(--border); flex-shrink: 0; }
+
+    /* ── TRIP LIST ───────────────────────────────────────────────────── */
+    .rd-trip-list { padding: 0 16px; }
+    .rd-trip-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .rd-trip-row:last-child { border-bottom: none; }
+    .rd-trip-badge {
+      font-size: 10px;
+      padding: 4px 8px;
+      border-radius: 20px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+    .rd-trip-info { flex: 1; min-width: 0; }
+    .rd-trip-dest {
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .rd-trip-date { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .rd-trip-earn { font-size: 15px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+    .rd-empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 28px 16px;
+      font-size: 14px;
+    }
+
+    /* ── QUICK ACTIONS ───────────────────────────────────────────────── */
+    .rd-quick-row {
+      display: flex;
+      gap: 8px;
+      padding: 4px 16px 16px;
+    }
+    .rd-quick-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 14px 4px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 11px;
+      color: var(--muted);
+      min-height: 72px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .rd-quick-btn span:first-child { font-size: 22px; }
+    .rd-quick-btn:active, .rd-quick-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── TOAST ───────────────────────────────────────────────────────── */
+    .rd-toast-wrap {
+      position: fixed;
+      bottom: calc(16px + env(safe-area-inset-bottom, 0));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+      max-width: calc(100vw - 32px);
+      width: 360px;
+    }
+    .rd-toast {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      animation: rdToastIn 0.25s ease;
+    }
+    .rd-toast.rd-toast-error  { border-left: 3px solid var(--danger); }
+    .rd-toast.rd-toast-success { border-left: 3px solid var(--accent); }
+    .rd-toast.rd-toast-info   { border-left: 3px solid var(--info); }
+    @keyframes rdToastIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+    /* ── SECTION GAP ─────────────────────────────────────────────────── */
+    .rd-section-gap { height: 4px; }
+
+    /* ── SKELETON PULSE (initial load) ──────────────────────────────── */
+    .rd-skel {
+      background: linear-gradient(90deg, var(--border) 25%, #2a2a2a 50%, var(--border) 75%);
+      background-size: 200% 100%;
+      animation: rdSkel 1.4s ease infinite;
+      border-radius: 6px;
+    }
+    @keyframes rdSkel { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* ── RESPONSIVE ──────────────────────────────────────────────────── */
+    @media (min-width: 480px) {
+      .rd-kpi-val { font-size: 30px; }
+      .rd-toggle-btn { padding: 10px 20px; }
+    }
+    @media (min-width: 640px) {
+      .rd-hero { padding: 24px; }
+      .rd-app { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LOADING STATE -->
+  <div id="rdLoading" class="rd-loading">
+    <div class="rd-spinner"></div>
+    <div class="rd-loading-text">Loading your dashboard…</div>
+  </div>
+
+  <!-- MAIN DASHBOARD -->
+  <div id="rdApp" class="rd-app" hidden>
+
+    <!-- RIDER HERO -->
+    <div class="rd-hero">
+      <div class="rd-avatar-wrap">
+        <div id="rdAvatar" class="rd-avatar">🚴</div>
+        <div id="rdStatusDot" class="rd-status-dot"></div>
+      </div>
+      <div class="rd-hero-info">
+        <h1 id="rdName" class="rd-rider-name">—</h1>
+        <p id="rdVehicle" class="rd-vehicle">—</p>
+        <div id="rdRating" class="rd-rating-row">
+          <span id="rdStars" class="rd-stars">★★★★★</span>
+          <span id="rdRatingVal" class="rd-rating-val">5.0</span>
+          <span id="rdTripCount" class="rd-muted">(0 trips)</span>
+        </div>
+      </div>
+      <div class="rd-online-toggle">
+        <button id="rdToggleBtn" class="rd-toggle-btn" onclick="RD.toggleOnline()">
+          <span id="rdToggleLabel">Go Online</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ACTIVE TRIP BANNER -->
+    <div id="rdActiveBanner" class="rd-active-banner" hidden>
+      <div class="rd-active-left">
+        <span class="rd-active-icon">🚀</span>
+        <div>
+          <div class="rd-active-title">Active Delivery</div>
+          <div id="rdActiveDesc" class="rd-active-desc">Loading…</div>
+        </div>
+      </div>
+      <a href="rider-nav.html" id="rdNavLink" class="rd-btn-accent">Navigate →</a>
+    </div>
+
+    <!-- PERIOD SELECTOR -->
+    <div class="rd-period-row">
+      <button class="rd-period-btn active" data-period="today" onclick="RD.setPeriod('today', this)">Today</button>
+      <button class="rd-period-btn" data-period="week"  onclick="RD.setPeriod('week',  this)">This Week</button>
+      <button class="rd-period-btn" data-period="month" onclick="RD.setPeriod('month', this)">This Month</button>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="rd-kpi-grid">
+      <div class="rd-kpi-card">
+        <div id="rdKpiDeliveries" class="rd-kpi-val">—</div>
+        <div class="rd-kpi-label">Deliveries</div>
+      </div>
+      <div class="rd-kpi-card rd-kpi-accent">
+        <div id="rdKpiEarnings" class="rd-kpi-val">—</div>
+        <div class="rd-kpi-label">Earnings</div>
+      </div>
+      <div class="rd-kpi-card">
+        <div id="rdKpiAcceptance" class="rd-kpi-val">—</div>
+        <div class="rd-kpi-label">Acceptance Rate</div>
+      </div>
+      <div class="rd-kpi-card">
+        <div id="rdKpiOnTime" class="rd-kpi-val">—</div>
+        <div class="rd-kpi-label">On-Time Rate</div>
+      </div>
+    </div>
+
+    <!-- PERFORMANCE BARS -->
+    <div class="rd-card">
+      <div class="rd-card-header">
+        <span class="rd-card-title">📊 Performance</span>
+        <span id="rdPerfBadge" class="rd-muted" style="font-size:12px"></span>
+      </div>
+      <div class="rd-perf-bars">
+        <div class="rd-perf-row">
+          <span class="rd-perf-label">Rating</span>
+          <div class="rd-perf-track"><div id="rdBarRating" class="rd-perf-fill"></div></div>
+          <span id="rdPerfRating" class="rd-perf-val">—</span>
+        </div>
+        <div class="rd-perf-row">
+          <span class="rd-perf-label">Acceptance</span>
+          <div class="rd-perf-track"><div id="rdBarAcceptance" class="rd-perf-fill rd-fill-blue"></div></div>
+          <span id="rdPerfAcceptance" class="rd-perf-val">—</span>
+        </div>
+        <div class="rd-perf-row">
+          <span class="rd-perf-label">On-Time</span>
+          <div class="rd-perf-track"><div id="rdBarOnTime" class="rd-perf-fill rd-fill-purple"></div></div>
+          <span id="rdPerfOnTime" class="rd-perf-val">—</span>
+        </div>
+        <div class="rd-perf-row">
+          <span class="rd-perf-label">Completion</span>
+          <div class="rd-perf-track"><div id="rdBarCompletion" class="rd-perf-fill rd-fill-orange"></div></div>
+          <span id="rdPerfCompletion" class="rd-perf-val">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EARNINGS SUMMARY CARD -->
+    <div class="rd-card rd-earnings-card">
+      <div class="rd-card-header">
+        <span class="rd-card-title">💰 Earnings Summary</span>
+        <a href="wallet.html" class="rd-link-sm">Full breakdown →</a>
+      </div>
+      <div class="rd-earnings-row">
+        <div class="rd-earn-item">
+          <div id="rdEarnToday" class="rd-earn-val">—</div>
+          <div class="rd-earn-label">Today</div>
+        </div>
+        <div class="rd-earn-divider"></div>
+        <div class="rd-earn-item">
+          <div id="rdEarnWeek" class="rd-earn-val">—</div>
+          <div class="rd-earn-label">This Week</div>
+        </div>
+        <div class="rd-earn-divider"></div>
+        <div class="rd-earn-item">
+          <div id="rdEarnMonth" class="rd-earn-val">—</div>
+          <div class="rd-earn-label">This Month</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECENT DELIVERIES -->
+    <div class="rd-card">
+      <div class="rd-card-header">
+        <span class="rd-card-title">🗂 Recent Deliveries</span>
+        <button class="rd-link-sm" onclick="RD.loadMore()">Load more</button>
+      </div>
+      <div id="rdTripList" class="rd-trip-list"></div>
+    </div>
+
+    <!-- QUICK ACTIONS -->
+    <div class="rd-quick-row">
+      <a href="rider-nav.html"  class="rd-quick-btn"><span>🗺</span><span>Navigate</span></a>
+      <a href="driver.html"     class="rd-quick-btn"><span>📋</span><span>My Orders</span></a>
+      <a href="wallet.html"     class="rd-quick-btn"><span>💳</span><span>Earnings</span></a>
+      <a href="profile.html"    class="rd-quick-btn"><span>👤</span><span>Profile</span></a>
+    </div>
+
+  </div><!-- /#rdApp -->
+
+  <!-- TOAST REGION -->
+  <div id="rdToast" class="rd-toast-wrap" role="status" aria-live="polite"></div>
+
+  <!-- FIREBASE SCRIPTS -->
+  <script src="/__/firebase/9.22.2/firebase-app-compat.js"></script>
+  <script src="/__/firebase/9.22.2/firebase-auth-compat.js"></script>
+  <script src="/__/firebase/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="/__/firebase/9.22.2/firebase-functions-compat.js"></script>
+  <script src="/__/firebase/init.js"></script>
+  <script src="sokoni-appcheck.js"></script>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+
+  <!-- RD ENGINE -->
+  <script>
+    'use strict';
+
+    window.RD = (() => {
+
+      /* ── STATE ──────────────────────────────────────────────────────── */
+      const _state = {
+        uid:         null,
+        period:      'today',
+        dashboard:   null,
+        historyPage: 0,
+        historyDone: false,
+        online:      false,
+        activeTrip:  null,
+        toastTimer:  null
+      };
+
+      const _fns = firebase.functions();
+
+      /* ── UTILITIES ──────────────────────────────────────────────────── */
+
+      /** XSS-safe escaper — used on ALL dynamic content inserted into innerHTML */
+      function _esc(s) {
+        const d = document.createElement('div');
+        d.textContent = String(s == null ? '' : s);
+        return d.innerHTML;
+      }
+
+      /** Format KES currency, zero-decimal */
+      function _fmt(n) {
+        return Number(n || 0).toLocaleString('en-KE', {
+          style: 'currency', currency: 'KES', maximumFractionDigits: 0
+        });
+      }
+
+      /** Format a ratio (0–1) as percentage */
+      function _pct(n) {
+        const v = Math.round(Number(n || 0) * 100);
+        return v + '%';
+      }
+
+      /** Clamp a number between min and max */
+      function _clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
+
+      /** Get a dom element by id */
+      function _el(id) { return document.getElementById(id); }
+
+      /** Show a toast notification */
+      function _toast(msg, type) {
+        const wrap = _el('rdToast');
+        const el = document.createElement('div');
+        el.className = 'rd-toast rd-toast-' + (type || 'info');
+        el.textContent = msg;
+        wrap.appendChild(el);
+        setTimeout(() => {
+          el.style.opacity = '0';
+          el.style.transition = 'opacity 0.3s';
+          setTimeout(() => el.remove(), 320);
+        }, 3500);
+      }
+
+      /** Invoke a Firebase Cloud Function and return its data */
+      async function _call(name, data) {
+        const fn = _fns.httpsCallable(name);
+        const r = await fn(data || {});
+        return r.data;
+      }
+
+      /* ── RENDER HELPERS ─────────────────────────────────────────────── */
+
+      /** Set progress bar width and value label */
+      function _setBar(barId, valId, ratio, label) {
+        const bar = _el(barId);
+        const val = _el(valId);
+        const pct = Math.round(_clamp(Number(ratio) || 0, 0, 1) * 100);
+        if (bar) bar.style.width = pct + '%';
+        if (val) val.textContent = label || '—';
+      }
+
+      /** Build star string from numeric rating (0–5) */
+      function _stars(rating) {
+        const r = Math.round(_clamp(Number(rating || 0), 0, 5));
+        return '★'.repeat(r) + '☆'.repeat(5 - r);
+      }
+
+      /** Format a Firestore Timestamp or JS timestamp to readable string */
+      function _fmtDate(ts) {
+        if (!ts) return '';
+        const ms = ts._seconds ? ts._seconds * 1000 : (ts.seconds ? ts.seconds * 1000 : Number(ts));
+        if (!ms || isNaN(ms)) return '';
+        return new Date(ms).toLocaleDateString('en-KE', {
+          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+      }
+
+      /* ── RENDER HERO ────────────────────────────────────────────────── */
+
+      function _renderHero(rider) {
+        if (!rider) return;
+
+        // Name & vehicle
+        _el('rdName').textContent    = rider.name    || 'Rider';
+        _el('rdVehicle').textContent = rider.vehicle || rider.vehicleType || '';
+
+        // Rating
+        const rating = Number(rider.avgRating || rider.rating || 5);
+        _el('rdRatingVal').textContent  = rating.toFixed(1);
+        _el('rdStars').textContent      = _stars(rating);
+        _el('rdTripCount').textContent  = '(' + (Number(rider.totalTrips || rider.completedTrips || 0)) + ' trips)';
+
+        // Avatar emoji by vehicle type
+        const vehicleEmoji = {
+          'motorcycle': '🏍', 'bike': '🚴', 'car': '🚗',
+          'van': '🚐', 'truck': '🚛', 'bicycle': '🚲'
+        };
+        const vt = (rider.vehicle || rider.vehicleType || '').toLowerCase();
+        _el('rdAvatar').textContent = vehicleEmoji[vt] || '🚴';
+
+        // Online status
+        _applyOnlineUI(_state.online);
+      }
+
+      /** Apply the online/offline UI state without toggling the actual value */
+      function _applyOnlineUI(isOnline) {
+        const btn   = _el('rdToggleBtn');
+        const label = _el('rdToggleLabel');
+        const dot   = _el('rdStatusDot');
+
+        if (isOnline) {
+          label.textContent  = 'Go Offline';
+          btn.style.background = 'var(--danger)';
+          btn.style.color      = '#fff';
+          dot.style.background = 'var(--accent)';
+        } else {
+          label.textContent  = 'Go Online';
+          btn.style.background = 'var(--accent)';
+          btn.style.color      = '#000';
+          dot.style.background = '#555';
+        }
+      }
+
+      /* ── RENDER KPI + PERFORMANCE ───────────────────────────────────── */
+
+      function _renderPeriod(period) {
+        const d = _state.dashboard;
+        if (!d) return;
+
+        const stats   = d[period] || {};
+        const overall = d.overall  || {};
+
+        // KPI tiles
+        _el('rdKpiDeliveries').textContent = Number(stats.deliveries || 0).toLocaleString();
+        _el('rdKpiEarnings').textContent   = _fmt(stats.earnings);
+        _el('rdKpiAcceptance').textContent = _pct(overall.acceptanceRate);
+        _el('rdKpiOnTime').textContent     = _pct(overall.onTimeRate);
+
+        // Performance badge (tier label)
+        const acceptance = Number(overall.acceptanceRate || 0);
+        let tier = 'Standard';
+        if (acceptance >= 0.9)       tier = '🏆 Elite';
+        else if (acceptance >= 0.75) tier = '⭐ Pro';
+        else if (acceptance >= 0.5)  tier = '✅ Standard';
+        else                         tier = '⚠️ At Risk';
+        _el('rdPerfBadge').textContent = tier;
+
+        // Performance bars
+        const avgRating    = Number(overall.avgRating    || d.rider?.avgRating    || d.rider?.rating || 5);
+        const acceptanceR  = Number(overall.acceptanceRate  || 0);
+        const onTimeR      = Number(overall.onTimeRate      || 0);
+        const deliveries   = Number(stats.deliveries        || 0);
+        const cancelled    = Number(stats.cancelled         || 0);
+        const completionR  = (deliveries + cancelled) > 0
+          ? deliveries / (deliveries + cancelled)
+          : 1;
+
+        _setBar('rdBarRating',     'rdPerfRating',     avgRating / 5,  avgRating.toFixed(1) + '/5');
+        _setBar('rdBarAcceptance', 'rdPerfAcceptance', acceptanceR,    _pct(acceptanceR));
+        _setBar('rdBarOnTime',     'rdPerfOnTime',     onTimeR,        _pct(onTimeR));
+        _setBar('rdBarCompletion', 'rdPerfCompletion', completionR,    _pct(completionR));
+      }
+
+      /* ── RENDER EARNINGS ────────────────────────────────────────────── */
+
+      function _renderEarnings(data) {
+        _el('rdEarnToday').textContent = _fmt(data.today?.earnings);
+        _el('rdEarnWeek').textContent  = _fmt(data.week?.earnings);
+        _el('rdEarnMonth').textContent = _fmt(data.month?.earnings);
+      }
+
+      /* ── RENDER TRIP LIST ───────────────────────────────────────────── */
+
+      function _renderTripList(trips, append) {
+        const list = _el('rdTripList');
+        if (!append) list.innerHTML = '';
+
+        if (!trips.length && !append) {
+          list.innerHTML = '<p class="rd-empty">No deliveries yet — go online to start earning!</p>';
+          return;
+        }
+        if (!trips.length) {
+          _toast('No more deliveries to load', 'info');
+          return;
+        }
+
+        const frag = document.createDocumentFragment();
+        trips.forEach(trip => {
+          const isCompleted = trip.status === 'completed';
+          const color       = isCompleted ? '#71ff00' : 'var(--danger)';
+          const bgColor     = isCompleted ? 'rgba(113,255,0,0.12)' : 'rgba(239,83,80,0.12)';
+          const statusLabel = isCompleted ? 'completed' : (trip.status || 'cancelled');
+          const earning     = _fmt(trip.riderEarning || trip.driverEarning || 0);
+          const date        = _fmtDate(trip.completedAt || trip.updatedAt);
+
+          // Prefer the first delivery stop address; fall back to merchant name
+          const deliveryStop = (trip.stops || []).find(s => s.type === 'delivery' || s.type === 'dropoff');
+          const dest = deliveryStop?.address || trip.destinationAddress || trip.merchantName || 'Delivery';
+
+          // Distance
+          const dist = trip.distanceKm ? Number(trip.distanceKm).toFixed(1) + ' km' : '';
+
+          const row = document.createElement('div');
+          row.className = 'rd-trip-row';
+          row.innerHTML =
+            '<span class="rd-trip-badge" style="background:' + bgColor + ';color:' + color + '">' + _esc(statusLabel) + '</span>' +
+            '<div class="rd-trip-info">' +
+              '<div class="rd-trip-dest">' + _esc(dest) + '</div>' +
+              '<div class="rd-trip-date rd-muted">' + _esc(date) + (dist ? ' · ' + _esc(dist) : '') + '</div>' +
+            '</div>' +
+            '<div class="rd-trip-earn">' + _esc(earning) + '</div>';
+          frag.appendChild(row);
+        });
+        list.appendChild(frag);
+      }
+
+      /* ── ACTIVE TRIP BANNER ─────────────────────────────────────────── */
+
+      async function _loadActiveTrip() {
+        try {
+          const data = await _call('navGetActiveTrip', {});
+          const trip = data?.trip;
+          if (!trip) return;
+          _state.activeTrip = trip;
+
+          const banner = _el('rdActiveBanner');
+          banner.hidden = false;
+
+          // Find next incomplete stop
+          const nextStop = (trip.stops || []).find(s => !s.completed && !s.cancelled);
+          _el('rdActiveDesc').textContent = nextStop?.address || 'Active delivery in progress';
+          _el('rdNavLink').href = 'rider-nav.html?tripId=' + encodeURIComponent(trip.id || trip.tripId || '');
+        } catch (_e) {
+          // No active trip — silently ignore
+        }
+      }
+
+      /* ── LOAD DASHBOARD ─────────────────────────────────────────────── */
+
+      async function loadDashboard() {
+        try {
+          const data = await _call('navGetRiderDashboard', {});
+          _state.dashboard = data;
+
+          const riderStatus = data.rider?.status || '';
+          _state.online = riderStatus === 'online' || riderStatus === 'available';
+
+          _renderHero(data.rider || {});
+          _renderPeriod(_state.period);
+          _renderEarnings(data);
+        } catch (e) {
+          console.error('[RD] loadDashboard:', e);
+          _toast('Failed to load dashboard: ' + e.message, 'error');
+        }
+      }
+
+      /* ── LOAD HISTORY ───────────────────────────────────────────────── */
+
+      async function loadHistory(page) {
+        if (_state.historyDone && page > 0) {
+          _toast('All deliveries loaded', 'info');
+          return;
+        }
+        try {
+          const data  = await _call('navGetRiderHistory', { page: page || 0, limit: 15 });
+          const trips = data?.trips || [];
+          if (trips.length < 15) _state.historyDone = true;
+          _renderTripList(trips, page > 0);
+          _state.historyPage = page || 0;
+        } catch (e) {
+          console.error('[RD] loadHistory:', e);
+          _toast('Failed to load delivery history', 'error');
+        }
+      }
+
+      /* ── PUBLIC: SET PERIOD ─────────────────────────────────────────── */
+
+      function setPeriod(period, btn) {
+        _state.period = period;
+        document.querySelectorAll('.rd-period-btn').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        _renderPeriod(period);
+      }
+
+      /* ── PUBLIC: TOGGLE ONLINE ──────────────────────────────────────── */
+
+      async function toggleOnline() {
+        const btn = _el('rdToggleBtn');
+        btn.disabled = true;
+
+        const newStatus = _state.online ? 'offline' : 'available';
+
+        try {
+          await firebase.firestore()
+            .collection('riderLocations')
+            .doc(_state.uid)
+            .set(
+              {
+                status:    newStatus,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+              },
+              { merge: true }
+            );
+
+          _state.online = !_state.online;
+          _applyOnlineUI(_state.online);
+          _toast(_state.online ? 'You are now online — ready for deliveries!' : 'You are now offline', 'info');
+        } catch (e) {
+          console.error('[RD] toggleOnline:', e);
+          _toast('Could not update status. Please try again.', 'error');
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      /* ── PUBLIC: LOAD MORE ──────────────────────────────────────────── */
+
+      function loadMore() {
+        loadHistory(_state.historyPage + 1);
+      }
+
+      /* ── INIT ───────────────────────────────────────────────────────── */
+
+      function init() {
+        firebase.auth().onAuthStateChanged(async user => {
+          if (!user) {
+            location.href = 'login.html?redirect=' + encodeURIComponent(location.href);
+            return;
+          }
+
+          // Verify driver or admin role via custom claims
+          let claims = {};
+          try {
+            const tokenResult = await user.getIdTokenResult(/* forceRefresh */ false);
+            claims = tokenResult.claims || {};
+          } catch (_e) {
+            location.href = 'login.html?error=auth_failed';
+            return;
+          }
+
+          if (claims.role !== 'driver' && claims.role !== 'admin') {
+            location.href = 'login.html?error=not_driver';
+            return;
+          }
+
+          _state.uid = user.uid;
+
+          // Reveal dashboard, hide loader
+          _el('rdLoading').hidden = true;
+          _el('rdApp').hidden     = false;
+
+          // Parallel initial load — dashboard + active trip + history
+          await Promise.all([
+            loadDashboard(),
+            _loadActiveTrip()
+          ]);
+          await loadHistory(0);
+        });
+      }
+
+      // Kick off on DOM ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+
+      /* ── PUBLIC API ─────────────────────────────────────────────────── */
+      return { setPeriod, toggleOnline, loadMore };
+
+    })();
+  </script>
+
+</body>
+</html>
