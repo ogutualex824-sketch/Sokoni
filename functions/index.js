@@ -2280,8 +2280,14 @@ exports.verifyIntasendPayment = onRequest(
       const verifRef = db.collection("paymentVerifications").doc(ref);
 
       /* orderId and verificationToken are fixed before the transaction so they
-         remain stable across any internal retries. */
-      const orderId  = "SKN" + Date.now().toString().slice(-8).toUpperCase();
+         remain stable across any internal retries.
+         P0-2 (Phase 4 audit): was "SKN" + Date.now().slice(-8) — a MONOTONIC doc key
+         (hotspots one Firestore tablet range on write) that also COLLIDED for two
+         orders created in the same millisecond (last-8-digits clash → silent order
+         overwrite = lost order). Now a 48-bit random suffix: non-monotonic (writes
+         distribute across the key space) and collision-free, while keeping the SKN
+         display format so no client change is needed. */
+      const orderId  = "SKN" + require("crypto").randomBytes(6).toString("hex").toUpperCase();
       const sellerUid = resolvedItems?.[0]?.sellerUid || null;
       const orderDoc  = {
         id:              orderId,
