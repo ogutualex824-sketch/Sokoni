@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Auction Manager &mdash; SOKONI</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,button,textarea{font-family:inherit}
+
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);
+      border-bottom:1px solid var(--border);padding:12px 16px;
+      display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    #hdrTitle{font-size:15px;font-weight:800;flex:1}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+    .hdr-btn{background:var(--accent);color:#000;border:none;border-radius:9px;
+      padding:8px 14px;font-size:12px;font-weight:900;cursor:pointer;flex-shrink:0}
+
+    .tabs{display:flex;border-bottom:1px solid var(--border);
+      position:sticky;top:57px;z-index:100;background:rgba(5,5,5,.97)}
+    .tab{flex:1;text-align:center;padding:12px;font-size:12px;font-weight:800;
+      cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;
+      text-transform:uppercase;letter-spacing:.5px;transition:all .15s}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+    .pane{padding:16px;max-width:900px;margin:0 auto;display:none}
+    .pane.active{display:block}
+
+    /* Create form */
+    .form-section{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);padding:16px;margin-bottom:14px}
+    .form-section h3{font-size:13px;font-weight:800;color:var(--accent);
+      text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:480px){.form-grid{grid-template-columns:1fr}}
+    .form-group{display:flex;flex-direction:column;gap:5px}
+    .form-group label{font-size:11px;color:var(--muted);text-transform:uppercase;
+      letter-spacing:.5px;font-weight:700}
+    .form-group input,.form-group select,.form-group textarea{
+      background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+      padding:11px 13px;color:var(--txt);font-size:14px;width:100%;outline:none;min-height:44px}
+    .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
+    .form-group select option{background:#111}
+    .form-group textarea{min-height:80px;resize:vertical}
+    .full-col{grid-column:1/-1}
+    .submit-btn{background:var(--accent);color:#000;border:none;border-radius:10px;
+      padding:13px;font-size:14px;font-weight:900;cursor:pointer;width:100%;
+      min-height:48px;margin-top:4px;transition:opacity .15s}
+    .submit-btn:disabled{opacity:.4;cursor:not-allowed}
+
+    /* Auction cards */
+    .a-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:14px;margin-bottom:10px}
+    .a-card-hdr{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
+    .a-card-info{flex:1;min-width:0}
+    .a-card-title{font-size:14px;font-weight:800;overflow:hidden;white-space:nowrap;
+      text-overflow:ellipsis;margin-bottom:4px}
+    .status-badge{display:inline-block;padding:3px 9px;border-radius:20px;
+      font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+    .status-scheduled{background:rgba(0,188,212,.15);color:var(--info)}
+    .status-active{background:rgba(113,255,0,.15);color:var(--accent)}
+    .status-ended_sold{background:rgba(255,179,0,.15);color:var(--warn)}
+    .status-ended_unsold{background:rgba(244,67,54,.12);color:var(--danger)}
+    .a-meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+    .a-meta-item{background:var(--surface2);border-radius:9px;padding:9px;text-align:center}
+    .a-meta-val{font-size:15px;font-weight:900;color:var(--accent)}
+    .a-meta-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+    .a-end-time{font-size:12px;color:var(--muted);margin-bottom:10px}
+    .a-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .a-action-btn{padding:8px 13px;border-radius:9px;font-size:12px;font-weight:800;
+      cursor:pointer;border:1px solid var(--border);background:var(--surface2);
+      color:var(--txt);transition:all .15s}
+    .a-action-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .a-action-btn.danger{color:var(--danger);border-color:rgba(244,67,54,.3)}
+    .a-action-btn:disabled{opacity:.4;cursor:not-allowed}
+
+    /* Bids panel */
+    .bid-row{display:flex;align-items:center;gap:10px;padding:10px 0;
+      border-bottom:1px solid var(--border)}
+    .bid-row:last-child{border-bottom:none}
+    .bid-amt{font-size:15px;font-weight:900;color:var(--accent);flex-shrink:0;min-width:90px}
+    .bid-info{flex:1;min-width:0}
+    .bid-bidder{font-size:12px;font-weight:700;overflow:hidden;
+      white-space:nowrap;text-overflow:ellipsis}
+    .bid-time{font-size:11px;color:var(--muted);margin-top:1px}
+    .top-badge{font-size:10px;background:rgba(113,255,0,.15);color:var(--accent);
+      border:1px solid rgba(113,255,0,.3);border-radius:20px;padding:2px 7px;font-weight:800}
+
+    /* Bid panel sheet */
+    #bidSheet{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);
+      align-items:flex-end;justify-content:center}
+    #bidSheet.open{display:flex}
+    #bidModal{background:#0d0d0d;border:1px solid var(--border);border-radius:20px 20px 0 0;
+      max-height:80vh;width:100%;max-width:500px;overflow-y:auto}
+    @media(min-width:501px){#bidSheet{align-items:center;padding:16px}
+      #bidModal{border-radius:20px}}
+    .bk-handle{width:40px;height:4px;background:rgba(255,255,255,.15);
+      border-radius:2px;margin:12px auto 0}
+    .bk-hdr{padding:14px 16px;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:10px}
+    .bk-hdr h3{font-size:14px;font-weight:800;flex:1}
+    .close-btn{background:var(--surface2);border:1px solid var(--border);width:34px;height:34px;
+      border-radius:50%;font-size:18px;cursor:pointer;color:var(--muted);
+      display:flex;align-items:center;justify-content:center}
+    .bk-body{padding:16px}
+
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;
+      border:1px solid var(--border);padding:10px 18px;border-radius:10px;
+      font-size:13px;font-weight:700;opacity:0;transition:all .3s;
+      pointer-events:none;white-space:nowrap;z-index:9999;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+
+    .empty{text-align:center;padding:60px 24px;color:var(--muted)}
+    .empty-icon{font-size:56px;margin-bottom:12px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrLogo">SOKONI</div>
+  <div id="hdrTitle">Auction Manager</div>
+  <button class="hdr-btn" onclick="_switchTab(null,'create')">+ New</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-pane="auctions" onclick="_switchTab(this,'auctions')">My Auctions</div>
+  <div class="tab" data-pane="create" onclick="_switchTab(this,'create')">Create</div>
+</div>
+
+<!-- Auctions list pane -->
+<div class="pane active" id="auctionsPane">
+  <div id="auctionsList">
+    <div class="skeleton" style="height:160px;margin-bottom:10px"></div>
+    <div class="skeleton" style="height:160px;margin-bottom:10px"></div>
+  </div>
+</div>
+
+<!-- Create pane -->
+<div class="pane" id="createPane">
+  <form id="createForm" onsubmit="return false">
+    <div class="form-section">
+      <h3>Auction Details</h3>
+      <div class="form-grid">
+        <div class="form-group full-col">
+          <label>Product Title *</label>
+          <input type="text" id="cTitle" placeholder="e.g. iPhone 15 Pro Max 256GB" required maxlength="200">
+        </div>
+        <div class="form-group full-col">
+          <label>Description</label>
+          <textarea id="cDesc" placeholder="Condition, specifications, what's included..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Category *</label>
+          <select id="cCategory" required>
+            <option value="">Select category</option>
+            <option value="electronics">Electronics</option>
+            <option value="vehicles">Vehicles</option>
+            <option value="fashion">Fashion</option>
+            <option value="art">Art &amp; Collectibles</option>
+            <option value="furniture">Furniture</option>
+            <option value="appliances">Appliances</option>
+            <option value="books">Books &amp; Media</option>
+            <option value="property">Property</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Condition</label>
+          <select id="cCondition">
+            <option value="new">New</option>
+            <option value="like_new" selected>Like New</option>
+            <option value="excellent">Excellent</option>
+            <option value="good">Good</option>
+            <option value="fair">Fair</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="form-section">
+      <h3>Pricing</h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Starting Bid (KES) *</label>
+          <input type="number" id="cStartBid" placeholder="0" min="1" required>
+        </div>
+        <div class="form-group">
+          <label>Reserve Price (KES) — optional</label>
+          <input type="number" id="cReserve" placeholder="Hidden from bidders">
+        </div>
+        <div class="form-group">
+          <label>Buy-It-Now Price (KES) — optional</label>
+          <input type="number" id="cBIN" placeholder="Instant purchase price">
+        </div>
+        <div class="form-group">
+          <label>Currency</label>
+          <select id="cCurrency">
+            <option value="KES">KES — Kenyan Shilling</option>
+            <option value="USD">USD — US Dollar</option>
+            <option value="EUR">EUR — Euro</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="form-section">
+      <h3>Schedule</h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Start Date &amp; Time *</label>
+          <input type="datetime-local" id="cStart" required>
+        </div>
+        <div class="form-group">
+          <label>End Date &amp; Time *</label>
+          <input type="datetime-local" id="cEnd" required>
+        </div>
+        <div class="form-group full-col">
+          <label>Shop / Seller ID</label>
+          <input type="text" id="cShopId" placeholder="Your shop ID (leave blank for personal listing)">
+        </div>
+      </div>
+    </div>
+    <button type="submit" class="submit-btn" id="createBtn" onclick="_createAuction()">Create Auction</button>
+  </form>
+</div>
+
+<!-- Bid history sheet -->
+<div id="bidSheet" onclick="if(event.target===this)_closeBids()">
+  <div id="bidModal">
+    <div class="bk-handle"></div>
+    <div class="bk-hdr">
+      <h3 id="bidsTitle">Bid History</h3>
+      <button class="close-btn" onclick="_closeBids()">&#x2715;</button>
+    </div>
+    <div class="bk-body" id="bidsBody"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function () {
+
+var _uid = null;
+var _auctions = [];
+
+// Set min datetime to now
+var nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+document.getElementById('cStart').min = nowLocal;
+document.getElementById('cStart').value = nowLocal;
+document.getElementById('cEnd').min = nowLocal;
+
+function _cf(n) { return firebase.functions().httpsCallable(n); }
+function _esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function _toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(function () { el.className = ''; }, 3500);
+}
+function _fmt(n) { return 'KES ' + Number(n || 0).toLocaleString('en-KE'); }
+function _timeLabel(ts) {
+  if (!ts) return 'N/A';
+  var d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+firebase.auth().onAuthStateChanged(function (user) {
+  _uid = user ? user.uid : null;
+  if (!user) { window.location.href = 'login.html'; return; }
+  _loadAuctions();
+});
+
+window._switchTab = function (el, pane) {
+  document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  else document.querySelector('[data-pane="' + pane + '"]').classList.add('active');
+  document.querySelectorAll('.pane').forEach(function (p) { p.classList.remove('active'); });
+  document.getElementById(pane + 'Pane').classList.add('active');
+};
+
+function _loadAuctions() {
+  var list = document.getElementById('auctionsList');
+  list.innerHTML = '<div class="skeleton" style="height:160px;margin-bottom:10px"></div>'.repeat(2);
+
+  firebase.firestore().collection('auctions').where('sellerId', '==', _uid)
+    .limit(50).get().then(function (snap) {
+      _auctions = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      _auctions.sort(function (a, b) {
+        var ta = a.createdAt ? (a.createdAt.toMillis ? a.createdAt.toMillis() : new Date(a.createdAt).getTime()) : 0;
+        var tb = b.createdAt ? (b.createdAt.toMillis ? b.createdAt.toMillis() : new Date(b.createdAt).getTime()) : 0;
+        return tb - ta;
+      });
+      _renderAuctions(_auctions);
+    }).catch(function () {
+      list.innerHTML = '<div class="empty"><div class="empty-icon">&#x1F4CB;</div><p>Could not load auctions</p></div>';
+    });
+}
+
+function _renderAuctions(auctions) {
+  var list = document.getElementById('auctionsList');
+  if (!auctions.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">&#x1F528;</div><p>No auctions yet.<br>Tap <strong>+ New</strong> to create your first.</p></div>';
+    return;
+  }
+  list.innerHTML = auctions.map(function (a) {
+    var badge = '<span class="status-badge status-' + (a.status || 'scheduled') + '">' + (a.status || 'draft') + '</span>';
+    var endTime = a.endTime ? _timeLabel(a.endTime) : 'Not set';
+    return '<div class="a-card">' +
+      '<div class="a-card-hdr">' +
+      '<div class="a-card-info">' +
+      '<div class="a-card-title">' + _esc(a.title) + '</div>' +
+      badge + '</div></div>' +
+      '<div class="a-meta-grid">' +
+      '<div class="a-meta-item"><div class="a-meta-val">' + _fmt(a.currentBid || a.startingBid) + '</div><div class="a-meta-lbl">Current bid</div></div>' +
+      '<div class="a-meta-item"><div class="a-meta-val">' + (a.bidCount || 0) + '</div><div class="a-meta-lbl">Bids</div></div>' +
+      '<div class="a-meta-item"><div class="a-meta-val">' + (a.watcherCount || 0) + '</div><div class="a-meta-lbl">Watchers</div></div>' +
+      '</div>' +
+      '<div class="a-end-time">Ends: ' + endTime + '</div>' +
+      '<div class="a-actions">' +
+      '<button class="a-action-btn" onclick="_viewBids(\'' + _esc(a.id) + '\')">Bids</button>' +
+      (a.status === 'active' ? '<button class="a-action-btn danger" onclick="_cancelAuction(\'' + _esc(a.id) + '\',this)">Cancel</button>' : '') +
+      '</div></div>';
+  }).join('');
+}
+
+window._viewBids = function (auctionId) {
+  var auction = _auctions.find(function (a) { return a.id === auctionId; });
+  document.getElementById('bidsTitle').textContent = 'Bids — ' + (auction ? auction.title : '').slice(0, 40);
+  var body = document.getElementById('bidsBody');
+  body.innerHTML = '<div class="skeleton" style="height:50px;margin-bottom:8px"></div>'.repeat(3);
+  document.getElementById('bidSheet').classList.add('open');
+
+  _cf('auctionGetBids')({ auctionId: auctionId, limit: 30 }).then(function (r) {
+    var bids = (r.data && r.data.bids) || [];
+    if (!bids.length) { body.innerHTML = '<div class="empty"><div class="empty-icon">&#x1F4B8;</div><p>No bids yet</p></div>'; return; }
+    body.innerHTML = bids.map(function (b, i) {
+      return '<div class="bid-row">' +
+        '<div class="bid-amt">' + _fmt(b.amount) + '</div>' +
+        '<div class="bid-info">' +
+        '<div class="bid-bidder">' + _esc(b.bidderName || 'Anonymous') +
+        (i === 0 ? ' <span class="top-badge">TOP BID</span>' : '') + '</div>' +
+        '<div class="bid-time">' + _timeLabel(b.placedAt) + '</div>' +
+        '</div></div>';
+    }).join('');
+  }).catch(function () { body.innerHTML = '<p style="color:var(--muted);text-align:center;padding:24px">Failed to load bids</p>'; });
+};
+
+window._closeBids = function () { document.getElementById('bidSheet').classList.remove('open'); };
+
+window._cancelAuction = function (auctionId, btn) {
+  if (!confirm('Cancel this auction? All bids will be voided. This cannot be undone.')) return;
+  btn.disabled = true; btn.textContent = 'Cancelling...';
+  _cf('auctionCancel')({ auctionId: auctionId })
+    .then(function () { _toast('Auction cancelled', 'success'); _loadAuctions(); })
+    .catch(function (e) { _toast(e.message, 'error'); btn.disabled = false; btn.textContent = 'Cancel'; });
+};
+
+window._createAuction = function () {
+  if (!_uid) return;
+  var title    = document.getElementById('cTitle').value.trim();
+  var desc     = document.getElementById('cDesc').value.trim();
+  var cat      = document.getElementById('cCategory').value;
+  var cond     = document.getElementById('cCondition').value;
+  var startBid = parseFloat(document.getElementById('cStartBid').value) || 0;
+  var reserve  = parseFloat(document.getElementById('cReserve').value) || null;
+  var bin      = parseFloat(document.getElementById('cBIN').value) || null;
+  var currency = document.getElementById('cCurrency').value;
+  var start    = document.getElementById('cStart').value;
+  var end      = document.getElementById('cEnd').value;
+  var shopId   = document.getElementById('cShopId').value.trim() || null;
+
+  if (!title || !cat || !startBid || !start || !end) {
+    _toast('Fill in all required fields', 'error'); return;
+  }
+  if (new Date(end) <= new Date(start)) {
+    _toast('End time must be after start time', 'error'); return;
+  }
+  if (startBid < 1) { _toast('Starting bid must be at least KES 1', 'error'); return; }
+
+  var btn = document.getElementById('createBtn'); btn.disabled = true; btn.textContent = 'Creating...';
+
+  var payload = {
+    title: title, description: desc, category: cat, condition: cond,
+    startingBid: startBid, currency: currency,
+    startTime: new Date(start).toISOString(),
+    endTime:   new Date(end).toISOString(),
+  };
+  if (reserve)  payload.reservePrice = reserve;
+  if (bin)      payload.buyItNowPrice = bin;
+  if (shopId)   payload.shopId = shopId;
+
+  _cf('auctionCreate')(payload).then(function (r) {
+    _toast('Auction created! ID: ' + (r.data && r.data.auctionId || ''), 'success');
+    document.getElementById('createForm').reset();
+    _switchTab(null, 'auctions');
+    _loadAuctions();
+  }).catch(function (e) { _toast(e.message, 'error'); })
+    .finally(function () { btn.disabled = false; btn.textContent = 'Create Auction'; });
+};
+
+})();
+</script>
+</body>
+</html>

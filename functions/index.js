@@ -9343,3 +9343,45 @@ exports.pcGetCrossHubHealth               = platformHub.pcGetCrossHubHealth;
 exports.platformNotifyTransactionChange   = platformHub.platformNotifyTransactionChange;
 exports.pcActivateHub                     = platformHub.pcActivateHub;
 exports.pcDeactivateHub                   = platformHub.pcDeactivateHub;
+
+/* ── Marketplace Extensions (Sprint 4.2) — Auctions, Rentals, Digital Products, Q&A, Wishlist, Pricing, SEO ── */
+const mktExt = require('./marketplace-extensions');
+/* Auctions */
+exports.auctionCreate          = mktExt.auctionCreate;
+exports.auctionBid             = mktExt.auctionBid;
+exports.auctionGet             = mktExt.auctionGet;
+exports.auctionList            = mktExt.auctionList;
+exports.auctionGetBids         = mktExt.auctionGetBids;
+exports.auctionWatch           = mktExt.auctionWatch;
+exports.auctionGetMyBids       = mktExt.auctionGetMyBids;
+exports.auctionCloseSweep      = mktExt.auctionCloseSweep;
+/* Rentals */
+exports.rentalProductCreate    = mktExt.rentalProductCreate;
+exports.rentalGetAvailability  = mktExt.rentalGetAvailability;
+exports.rentalBook             = mktExt.rentalBook;
+exports.rentalConfirm          = mktExt.rentalConfirm;
+exports.rentalComplete         = mktExt.rentalComplete;
+exports.rentalCancel           = mktExt.rentalCancel;
+exports.rentalList             = mktExt.rentalList;
+/* Digital Products */
+exports.digitalProductCreate        = mktExt.digitalProductCreate;
+exports.digitalProductPurchase      = mktExt.digitalProductPurchase;
+exports.digitalProductDownload      = mktExt.digitalProductDownload;
+exports.digitalProductGetMyLibrary  = mktExt.digitalProductGetMyLibrary;
+exports.digitalProductGetSales      = mktExt.digitalProductGetSales;
+/* Product Q&A */
+exports.productAskQuestion     = mktExt.productAskQuestion;
+exports.productAnswerQuestion  = mktExt.productAnswerQuestion;
+exports.productGetQA           = mktExt.productGetQA;
+exports.productVoteHelpful     = mktExt.productVoteHelpful;
+/* Wishlist */
+exports.wishlistAdd            = mktExt.wishlistAdd;
+exports.wishlistRemove         = mktExt.wishlistRemove;
+exports.wishlistGet            = mktExt.wishlistGet;
+/* Price History */
+exports.priceHistoryRecord     = mktExt.priceHistoryRecord;
+exports.priceHistoryGet        = mktExt.priceHistoryGet;
+/* SEO */
+exports.seoGetProductMeta      = mktExt.seoGetProductMeta;
+exports.seoGetShopMeta         = mktExt.seoGetShopMeta;
+exports.seoGetSitemap          = mktExt.seoGetSitemap;

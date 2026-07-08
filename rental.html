@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Rentals &mdash; SOKONI</title>
+  <meta name="description" content="Rent equipment, vehicles, spaces, and more on SOKONI. Daily, weekly, and monthly rates.">
+  <meta property="og:title" content="SOKONI Rentals">
+  <meta property="og:description" content="Rent anything — equipment, vehicles, spaces, tools. Flexible pricing, secure booking.">
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,button,textarea{font-family:inherit}
+
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);
+      border-bottom:1px solid var(--border);padding:12px 16px;
+      display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    #hdrTitle{font-size:15px;font-weight:800;flex:1}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+
+    #filterBar{padding:10px 16px;border-bottom:1px solid var(--border);
+      display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;
+      position:sticky;top:57px;z-index:100;background:rgba(5,5,5,.97)}
+    #filterBar::-webkit-scrollbar{display:none}
+    .cat-chip{flex-shrink:0;padding:6px 13px;border-radius:20px;font-size:12px;font-weight:700;
+      cursor:pointer;border:1px solid var(--border);background:var(--surface);
+      color:var(--muted);transition:all .15s}
+    .cat-chip.active{background:var(--accent);color:#000;border-color:transparent}
+
+    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+      gap:14px;padding:16px;max-width:1100px;margin:0 auto}
+    @media(max-width:480px){#grid{grid-template-columns:1fr}}
+
+    .r-card{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);overflow:hidden;cursor:pointer;
+      transition:transform .2s,border-color .2s}
+    .r-card:hover{transform:translateY(-2px);border-color:rgba(113,255,0,.3)}
+    .r-img{width:100%;height:170px;object-fit:cover;background:var(--surface2)}
+    .r-img-placeholder{height:170px;background:linear-gradient(135deg,#001a20,#002a35);
+      display:flex;align-items:center;justify-content:center;font-size:44px}
+    .r-body{padding:13px}
+    .r-title{font-size:14px;font-weight:800;margin-bottom:8px;
+      overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    .r-pricing{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+    .r-price-pill{background:rgba(113,255,0,.1);color:var(--accent);
+      border:1px solid rgba(113,255,0,.2);border-radius:20px;
+      padding:4px 10px;font-size:11px;font-weight:800}
+    .r-deposit{font-size:11px;color:var(--muted)}
+
+    /* ── Booking sheet ── */
+    #bookSheet{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);
+      align-items:flex-end;justify-content:center}
+    #bookSheet.open{display:flex}
+    #bookModal{background:#0d0d0d;border:1px solid var(--border);border-radius:20px 20px 0 0;
+      max-height:90vh;width:100%;max-width:500px;overflow-y:auto}
+    @media(min-width:501px){#bookSheet{align-items:center;padding:16px}
+      #bookModal{border-radius:20px;max-height:85vh}}
+    .bk-handle{width:40px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;
+      margin:12px auto 0}
+    .bk-hdr{padding:16px;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:10px}
+    .bk-hdr h2{font-size:15px;font-weight:800;flex:1}
+    .close-btn{background:var(--surface2);border:1px solid var(--border);width:34px;height:34px;
+      border-radius:50%;font-size:18px;cursor:pointer;color:var(--muted);
+      display:flex;align-items:center;justify-content:center}
+    .bk-body{padding:16px}
+    .form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+    .form-group label{font-size:11px;color:var(--muted);text-transform:uppercase;
+      letter-spacing:.5px;font-weight:700}
+    .form-group input,.form-group select{background:var(--surface2);border:1px solid var(--border);
+      border-radius:9px;padding:11px 13px;color:var(--txt);font-size:14px;
+      width:100%;outline:none;min-height:44px}
+    .form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+    .form-group select option{background:#111}
+    .price-preview{background:rgba(113,255,0,.06);border:1px solid rgba(113,255,0,.2);
+      border-radius:10px;padding:12px;margin-bottom:14px;text-align:center}
+    .price-preview-val{font-size:22px;font-weight:900;color:var(--accent)}
+    .price-preview-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .book-btn{background:var(--accent);color:#000;border:none;border-radius:10px;
+      padding:13px;font-size:14px;font-weight:900;cursor:pointer;width:100%;
+      min-height:48px;transition:opacity .15s}
+    .book-btn:disabled{opacity:.4;cursor:not-allowed}
+
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;
+      border:1px solid var(--border);padding:10px 18px;border-radius:10px;
+      font-size:13px;font-weight:700;opacity:0;transition:all .3s;
+      pointer-events:none;white-space:nowrap;z-index:9999;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+
+    .empty{text-align:center;padding:60px 24px;color:var(--muted)}
+    .empty-icon{font-size:56px;margin-bottom:12px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrLogo">SOKONI</div>
+  <div id="hdrTitle">Rentals</div>
+</div>
+
+<div id="filterBar">
+  <div class="cat-chip active" data-cat="">All</div>
+  <div class="cat-chip" data-cat="vehicles">Vehicles</div>
+  <div class="cat-chip" data-cat="equipment">Equipment</div>
+  <div class="cat-chip" data-cat="spaces">Spaces</div>
+  <div class="cat-chip" data-cat="electronics">Electronics</div>
+  <div class="cat-chip" data-cat="tools">Tools</div>
+  <div class="cat-chip" data-cat="fashion">Fashion</div>
+</div>
+
+<div id="grid">
+  <div class="skeleton" style="height:240px;border-radius:14px"></div>
+  <div class="skeleton" style="height:240px;border-radius:14px"></div>
+  <div class="skeleton" style="height:240px;border-radius:14px"></div>
+</div>
+
+<!-- Booking sheet -->
+<div id="bookSheet" onclick="if(event.target===this)_closeBook()">
+  <div id="bookModal">
+    <div class="bk-handle"></div>
+    <div class="bk-hdr">
+      <h2 id="bookTitle">Book Rental</h2>
+      <button class="close-btn" onclick="_closeBook()">&#x2715;</button>
+    </div>
+    <div class="bk-body">
+      <div id="bookProductInfo" style="margin-bottom:14px;font-size:13px;color:var(--muted)"></div>
+      <div class="form-group">
+        <label>Start Date</label>
+        <input type="date" id="bookStart">
+      </div>
+      <div class="form-group">
+        <label>End Date</label>
+        <input type="date" id="bookEnd">
+      </div>
+      <div class="form-group">
+        <label>Duration Unit</label>
+        <select id="bookUnit">
+          <option value="hourly">Hourly</option>
+          <option value="daily" selected>Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" id="bookName" placeholder="Full name">
+      </div>
+      <div class="form-group">
+        <label>Phone Number</label>
+        <input type="tel" id="bookPhone" placeholder="07XX XXX XXX">
+      </div>
+      <div class="form-group">
+        <label>Payment Method</label>
+        <select id="bookPayment">
+          <option value="mpesa">M-Pesa</option>
+          <option value="card">Card</option>
+          <option value="wallet">SOKONI Wallet</option>
+          <option value="cash">Cash on pickup</option>
+        </select>
+      </div>
+      <div class="price-preview" id="pricePreview" style="display:none">
+        <div class="price-preview-val" id="previewTotal">KES 0</div>
+        <div class="price-preview-sub" id="previewBreakdown"></div>
+      </div>
+      <button class="book-btn" id="bookBtn" onclick="_confirmBook()">Calculate &amp; Book</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function () {
+
+var _uid = null;
+var _category = '';
+var _activeProduct = null;
+var _products = [];
+
+function _cf(n) { return firebase.functions().httpsCallable(n); }
+function _esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function _toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(function () { el.className = ''; }, 3500);
+}
+function _fmt(n) { return 'KES ' + Number(n || 0).toLocaleString('en-KE'); }
+
+// Set today as min date
+var todayStr = new Date().toISOString().split('T')[0];
+document.getElementById('bookStart').min = todayStr;
+document.getElementById('bookStart').value = todayStr;
+document.getElementById('bookEnd').min = todayStr;
+
+firebase.auth().onAuthStateChanged(function (user) {
+  _uid = user ? user.uid : null;
+  _load();
+});
+
+document.querySelectorAll('.cat-chip').forEach(function (chip) {
+  chip.addEventListener('click', function () {
+    document.querySelectorAll('.cat-chip').forEach(function (c) { c.classList.remove('active'); });
+    chip.classList.add('active');
+    _category = chip.dataset.cat;
+    _load();
+  });
+});
+
+function _load() {
+  document.getElementById('grid').innerHTML =
+    '<div class="skeleton" style="height:240px;border-radius:14px"></div>'.repeat(3);
+
+  var params = {};
+  if (_category) params.category = _category;
+
+  // Use rentalProducts directly if CF exists, otherwise fallback to products with isRental flag
+  _cf('rentalList')({ status: 'active', ...params }).then(function () {
+    // placeholder — in production, a rentalProductList CF would exist
+  }).catch(function () {});
+
+  // For now, load from Firestore rentalProducts collection directly
+  firebase.firestore().collection('rentalProducts')
+    .where('status', '==', 'active').limit(40).get()
+    .then(function (snap) {
+      _products = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      if (_category) _products = _products.filter(function (p) { return p.category === _category; });
+      _renderGrid(_products);
+    }).catch(function (e) {
+      document.getElementById('grid').innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">&#127968;</div><p>No rentals available yet. Check back soon!</p></div>';
+    });
+}
+
+function _renderGrid(products) {
+  var grid = document.getElementById('grid');
+  if (!products.length) {
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">&#127968;</div><p>No rentals in this category yet</p></div>';
+    return;
+  }
+  grid.innerHTML = products.map(function (p) {
+    var img = p.images && p.images[0]
+      ? '<img class="r-img" src="' + _esc(p.images[0]) + '" alt="' + _esc(p.title) + '" loading="lazy" onerror="this.outerHTML=\'<div class=\\"r-img-placeholder\\">&#127968;</div>\'">'
+      : '<div class="r-img-placeholder">&#127968;</div>';
+    var prices = [];
+    if (p.hourlyRate)  prices.push(_fmt(p.hourlyRate) + '/hr');
+    if (p.dailyRate)   prices.push(_fmt(p.dailyRate) + '/day');
+    if (p.weeklyRate)  prices.push(_fmt(p.weeklyRate) + '/week');
+    if (p.monthlyRate) prices.push(_fmt(p.monthlyRate) + '/month');
+    return '<div class="r-card" onclick="_openBook(\'' + _esc(p.id) + '\')">' +
+      img + '<div class="r-body">' +
+      '<div class="r-title">' + _esc(p.title) + '</div>' +
+      '<div class="r-pricing">' + prices.slice(0, 3).map(function (pr) {
+        return '<span class="r-price-pill">' + _esc(pr) + '</span>';
+      }).join('') + '</div>' +
+      (p.deposit ? '<div class="r-deposit">Deposit: ' + _fmt(p.deposit) + '</div>' : '') +
+      '</div></div>';
+  }).join('');
+}
+
+window._openBook = function (productId) {
+  _activeProduct = _products.find(function (p) { return p.id === productId; });
+  if (!_activeProduct) return;
+  document.getElementById('bookTitle').textContent = _activeProduct.title;
+  document.getElementById('bookProductInfo').textContent =
+    (_activeProduct.description || '').slice(0, 120) +
+    ((_activeProduct.description || '').length > 120 ? '…' : '');
+  document.getElementById('pricePreview').style.display = 'none';
+  document.getElementById('bookBtn').textContent = 'Calculate & Book';
+  document.getElementById('bookSheet').classList.add('open');
+};
+
+window._closeBook = function () {
+  document.getElementById('bookSheet').classList.remove('open');
+  _activeProduct = null;
+};
+
+// Recalculate price on date/unit change
+['bookStart', 'bookEnd', 'bookUnit'].forEach(function (id) {
+  document.getElementById(id).addEventListener('change', _calcPreview);
+});
+
+function _calcPreview() {
+  var p = _activeProduct;
+  if (!p) return;
+  var start = new Date(document.getElementById('bookStart').value);
+  var end   = new Date(document.getElementById('bookEnd').value);
+  var unit  = document.getElementById('bookUnit').value;
+  if (!start || !end || end <= start) return;
+  var ms = end - start;
+  var hours = ms / 3600000, days = hours / 24, weeks = days / 7, months = days / 30;
+  var total = 0, qty = 0, unitLabel = '';
+  if (unit === 'hourly'  && p.hourlyRate)  { qty = Math.ceil(hours);  total = qty * p.hourlyRate;  unitLabel = qty + ' hour(s) × ' + _fmt(p.hourlyRate); }
+  if (unit === 'daily'   && p.dailyRate)   { qty = Math.ceil(days);   total = qty * p.dailyRate;   unitLabel = qty + ' day(s) × ' + _fmt(p.dailyRate); }
+  if (unit === 'weekly'  && p.weeklyRate)  { qty = Math.ceil(weeks);  total = qty * p.weeklyRate;  unitLabel = qty + ' week(s) × ' + _fmt(p.weeklyRate); }
+  if (unit === 'monthly' && p.monthlyRate) { qty = Math.ceil(months); total = qty * p.monthlyRate; unitLabel = qty + ' month(s) × ' + _fmt(p.monthlyRate); }
+  if (total > 0) {
+    document.getElementById('previewTotal').textContent = _fmt(total);
+    document.getElementById('previewBreakdown').textContent =
+      unitLabel + (p.deposit ? ' + deposit ' + _fmt(p.deposit) : '');
+    document.getElementById('pricePreview').style.display = 'block';
+    document.getElementById('bookBtn').textContent = 'Book — ' + _fmt(total + (p.deposit || 0));
+  }
+}
+
+window._confirmBook = function () {
+  if (!_uid) { _toast('Sign in to book', 'error'); return; }
+  var start = document.getElementById('bookStart').value;
+  var end   = document.getElementById('bookEnd').value;
+  var unit  = document.getElementById('bookUnit').value;
+  var name  = document.getElementById('bookName').value.trim();
+  var phone = document.getElementById('bookPhone').value.trim();
+  var pay   = document.getElementById('bookPayment').value;
+  if (!start || !end) { _toast('Select dates', 'error'); return; }
+  if (!name || !phone) { _toast('Enter your name and phone', 'error'); return; }
+  var btn = document.getElementById('bookBtn'); btn.disabled = true;
+  _cf('rentalBook')({
+    rentalProductId: _activeProduct.id,
+    startDate: new Date(start).toISOString(),
+    endDate:   new Date(end).toISOString(),
+    durationUnit: unit,
+    customerName: name,
+    customerPhone: phone,
+    paymentMethod: pay,
+  }).then(function (r) {
+    _toast('Booking submitted! Total: ' + _fmt(r.data.totalAmount), 'success');
+    _closeBook();
+  }).catch(function (e) { _toast(e.message, 'error'); })
+    .finally(function () { btn.disabled = false; });
+};
+
+})();
+</script>
+</body>
+</html>

@@ -5,6 +5,76 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Marketplace Extensions (Sprint 4.2) — 2026-07-08
+
+**Files:**
+- `functions/marketplace-extensions.js` — NEW (31 CFs)
+- `auction.html` — NEW (public auction browser + live bidding)
+- `auction-manager.html` — NEW (seller auction management)
+- `rental.html` — NEW (rental product browser + booking flow)
+- `digital-store.html` — NEW (digital product store + my library)
+- `functions/index.js` — 31 new exports added
+
+**New CFs (31 — quota-blocked):**
+
+| Export | Module | Auth |
+|---|---|---|
+| `auctionCreate` | Auctions | Seller |
+| `auctionBid` | Auctions | Any authed |
+| `auctionGet` | Auctions | Public |
+| `auctionList` | Auctions | Public |
+| `auctionGetBids` | Auctions | Seller |
+| `auctionWatch` | Auctions | Any authed |
+| `auctionGetMyBids` | Auctions | Any authed |
+| `auctionCloseSweep` | Auctions | Scheduled |
+| `rentalProductCreate` | Rentals | Seller |
+| `rentalGetAvailability` | Rentals | Public |
+| `rentalBook` | Rentals | Any authed |
+| `rentalConfirm` | Rentals | Seller |
+| `rentalComplete` | Rentals | Seller |
+| `rentalCancel` | Rentals | Seller/Buyer |
+| `rentalList` | Rentals | Public |
+| `digitalProductCreate` | Digital Products | Seller |
+| `digitalProductPurchase` | Digital Products | Any authed |
+| `digitalProductDownload` | Digital Products | Buyer |
+| `digitalProductGetMyLibrary` | Digital Products | Any authed |
+| `digitalProductGetSales` | Digital Products | Seller |
+| `productAskQuestion` | Q&A | Any authed |
+| `productAnswerQuestion` | Q&A | Seller/Owner |
+| `productGetQA` | Q&A | Public |
+| `productVoteHelpful` | Q&A | Any authed |
+| `wishlistAdd` | Wishlist | Any authed |
+| `wishlistRemove` | Wishlist | Any authed |
+| `wishlistGet` | Wishlist | Any authed |
+| `priceHistoryRecord` | Price History | Internal/Seller |
+| `priceHistoryGet` | Price History | Public |
+| `seoGetProductMeta` | SEO | Public |
+| `seoGetSitemap` | SEO | Public (HTTP) |
+
+**New Firestore collections:**
+- `auctions/{id}` — auction docs (scheduled/active/ended_sold/ended_unsold)
+- `auctionBids/{id}` — bid records (single-field auctionId query)
+- `auctionWatchers/{auctionId}_{uid}` — compound doc ID
+- `rentalProducts/{id}` — rental listings with flexible rate types
+- `rentalBookings/{id}` — bookings with overlap detection
+- `digitalProducts/{id}` — listings with Firebase Storage path
+- `digitalPurchases/{id}` — purchase records with license key + download count
+- `productQuestions/{id}` — Q&A with embedded answers array
+- `wishlistItems/{uid}_{productId}` — compound doc ID
+- `priceHistoryLog/{id}` — flat collection with single productId field
+
+**Spot deploy command:**
+```powershell
+firebase deploy --only "functions:auctionCreate,functions:auctionBid,functions:auctionGet,functions:auctionList,functions:auctionGetBids,functions:auctionWatch,functions:auctionGetMyBids,functions:auctionCloseSweep,functions:rentalProductCreate,functions:rentalGetAvailability,functions:rentalBook,functions:rentalConfirm,functions:rentalComplete,functions:rentalCancel,functions:rentalList,functions:digitalProductCreate,functions:digitalProductPurchase,functions:digitalProductDownload,functions:digitalProductGetMyLibrary,functions:digitalProductGetSales,functions:productAskQuestion,functions:productAnswerQuestion,functions:productGetQA,functions:productVoteHelpful,functions:wishlistAdd,functions:wishlistRemove,functions:wishlistGet,functions:priceHistoryRecord,functions:priceHistoryGet,functions:seoGetProductMeta,functions:seoGetSitemap" --project sokoni-aeb26
+```
+
+**Hosting deploy:**
+```powershell
+firebase deploy --only hosting --project sokoni-aeb26
+```
+
+---
+
 ## SmartPOS Completeness Engine (Sprint 4.1) — 2026-07-08
 
 **Files:**

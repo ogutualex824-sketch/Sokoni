@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Live Auctions &mdash; SOKONI</title>
+  <meta name="description" content="Bid on exclusive items in SOKONI live auctions. Real-time bidding, auto-extend, outbid notifications.">
+  <meta property="og:title" content="SOKONI Live Auctions">
+  <meta property="og:description" content="Bid on exclusive items. Real-time, transparent, fair.">
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+
+    /* ── Header ── */
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);
+      border-bottom:1px solid var(--border);padding:12px 16px;
+      display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    #hdrTitle{font-size:15px;font-weight:800;flex:1}
+    .tab-pill{flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;
+      font-weight:700;cursor:pointer;border:1px solid var(--border);
+      background:var(--surface);color:var(--muted);transition:all .2s}
+    .tab-pill.active{background:var(--accent);color:#000;border-color:transparent}
+
+    /* ── Filter bar ── */
+    #filterBar{padding:10px 16px;border-bottom:1px solid var(--border);
+      display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;
+      position:sticky;top:57px;z-index:100;background:rgba(5,5,5,.97)}
+    #filterBar::-webkit-scrollbar{display:none}
+    .cat-chip{flex-shrink:0;padding:6px 13px;border-radius:20px;font-size:12px;
+      font-weight:700;cursor:pointer;border:1px solid var(--border);
+      background:var(--surface);color:var(--muted);transition:all .15s}
+    .cat-chip.active{background:var(--accent);color:#000;border-color:transparent}
+
+    /* ── Auction grid ── */
+    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+      gap:14px;padding:16px;max-width:1100px;margin:0 auto}
+    @media(max-width:480px){#grid{grid-template-columns:1fr}}
+
+    /* ── Auction card ── */
+    .a-card{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);overflow:hidden;cursor:pointer;
+      transition:transform .2s,border-color .2s}
+    .a-card:hover{transform:translateY(-2px);border-color:rgba(113,255,0,.3)}
+    .a-card.ending-soon{border-color:var(--warn);animation:borderPulse 2s ease infinite}
+    @keyframes borderPulse{0%,100%{border-color:var(--warn)}50%{border-color:rgba(255,179,0,.3)}}
+    .a-img{width:100%;height:180px;object-fit:cover;background:var(--surface2)}
+    .a-img-placeholder{height:180px;background:linear-gradient(135deg,#0a1500,#162600);
+      display:flex;align-items:center;justify-content:center;font-size:48px}
+    .a-body{padding:14px}
+    .a-title{font-size:14px;font-weight:800;margin-bottom:6px;
+      overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    .a-bid-row{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:10px}
+    .a-bid-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+    .a-bid-val{font-size:20px;font-weight:900;color:var(--accent)}
+    .a-bid-count{font-size:11px;color:var(--muted)}
+    .a-timer{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800}
+    .timer-green{color:var(--accent)}
+    .timer-amber{color:var(--warn)}
+    .timer-red{color:var(--danger)}
+    .timer-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+    /* ── Auction detail modal ── */
+    #modal{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);
+      align-items:flex-end;justify-content:center;padding:0}
+    #modal.open{display:flex}
+    #modalSheet{background:#0d0d0d;border:1px solid var(--border);
+      border-radius:20px 20px 0 0;max-height:90vh;width:100%;max-width:600px;
+      overflow-y:auto;display:flex;flex-direction:column}
+    @media(min-width:601px){#modal{align-items:center;padding:16px}
+      #modalSheet{border-radius:20px;max-height:85vh}}
+    .modal-handle{width:40px;height:4px;background:rgba(255,255,255,.15);
+      border-radius:2px;margin:12px auto 0;flex-shrink:0}
+    .modal-header{padding:16px;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:10px;flex-shrink:0}
+    .modal-header h2{font-size:16px;font-weight:800;flex:1}
+    .modal-close{background:var(--surface2);border:1px solid var(--border);
+      width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;color:var(--muted);flex-shrink:0}
+    .modal-body{padding:16px;flex:1}
+    #detailImages{width:100%;height:220px;object-fit:cover;border-radius:12px;
+      background:var(--surface2);margin-bottom:14px}
+    .detail-price{font-size:28px;font-weight:900;color:var(--accent);margin-bottom:4px}
+    .detail-meta{font-size:12px;color:var(--muted);margin-bottom:16px}
+    .detail-desc{font-size:13px;line-height:1.6;color:rgba(255,255,255,.8);margin-bottom:16px}
+    .detail-section-title{font-size:11px;font-weight:800;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+    #bidHistory{max-height:180px;overflow-y:auto}
+    .bid-row{display:flex;align-items:center;gap:10px;padding:8px 0;
+      border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+    .bid-row:last-child{border-bottom:none}
+    .bid-row-name{flex:1;font-weight:700}
+    .bid-row-amount{font-weight:900;color:var(--accent)}
+    .bid-row-time{font-size:11px;color:var(--muted)}
+    .bid-input-row{display:flex;gap:8px;margin-top:14px}
+    .bid-input{flex:1;background:var(--surface2);border:2px solid var(--border);
+      border-radius:10px;padding:12px 14px;color:var(--txt);font-size:16px;
+      font-weight:800;outline:none;min-height:50px}
+    .bid-input:focus{border-color:var(--accent)}
+    .bid-btn{background:var(--accent);color:#000;border:none;border-radius:10px;
+      padding:12px 20px;font-size:14px;font-weight:900;cursor:pointer;
+      white-space:nowrap;min-height:50px;transition:opacity .15s}
+    .bid-btn:disabled{opacity:.4;cursor:not-allowed}
+    .reserve-badge{background:rgba(255,179,0,.15);color:var(--warn);
+      border:1px solid rgba(255,179,0,.3);padding:4px 10px;border-radius:20px;
+      font-size:11px;font-weight:800;margin-bottom:10px;display:inline-block}
+
+    /* ── Toast ── */
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;
+      border:1px solid var(--border);padding:10px 18px;border-radius:10px;
+      font-size:13px;font-weight:700;opacity:0;transition:all .3s;
+      pointer-events:none;white-space:nowrap;z-index:9999;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+
+    /* ── Empty / skeleton ── */
+    .empty{text-align:center;padding:60px 24px;color:var(--muted)}
+    .empty-icon{font-size:56px;margin-bottom:12px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <div id="hdrLogo">SOKONI</div>
+  <div id="hdrTitle">Live Auctions</div>
+  <div class="tab-pill active" data-tab="browse" onclick="_switchTab('browse',this)">Browse</div>
+  <div class="tab-pill" data-tab="mybids" onclick="_switchTab('mybids',this)">My Bids</div>
+</div>
+
+<div id="filterBar">
+  <div class="cat-chip active" data-cat="">All</div>
+  <div class="cat-chip" data-cat="electronics">Electronics</div>
+  <div class="cat-chip" data-cat="fashion">Fashion</div>
+  <div class="cat-chip" data-cat="home">Home</div>
+  <div class="cat-chip" data-cat="vehicles">Vehicles</div>
+  <div class="cat-chip" data-cat="art">Art</div>
+  <div class="cat-chip" data-cat="collectibles">Collectibles</div>
+  <div class="cat-chip" data-cat="general">General</div>
+</div>
+
+<div id="grid">
+  <div class="skeleton" style="height:260px;border-radius:14px"></div>
+  <div class="skeleton" style="height:260px;border-radius:14px"></div>
+  <div class="skeleton" style="height:260px;border-radius:14px"></div>
+</div>
+
+<!-- ── Detail modal ── -->
+<div id="modal" onclick="if(event.target===this)_closeModal()">
+  <div id="modalSheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h2 id="detailTitle">Auction</h2>
+      <button class="modal-close" onclick="_closeModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <img id="detailImages" src="" alt="Auction image" onerror="this.style.display='none'">
+      <div id="detailBidRow" style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:4px">
+        <div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Current Bid</div>
+          <div class="detail-price" id="detailPrice">KES 0</div>
+        </div>
+        <div style="text-align:right">
+          <div id="detailBidCount" style="font-size:12px;color:var(--muted)"></div>
+          <div id="detailTimer" style="font-size:13px;font-weight:800;color:var(--warn)"></div>
+        </div>
+      </div>
+      <div id="detailReserve" class="reserve-badge" style="display:none">Reserve not yet met</div>
+      <div class="detail-meta" id="detailMeta"></div>
+      <div class="detail-desc" id="detailDesc"></div>
+      <div class="detail-section-title">Bid History</div>
+      <div id="bidHistory"></div>
+      <div class="bid-input-row">
+        <input type="number" class="bid-input" id="bidInput" placeholder="Enter your bid (KES)">
+        <button class="bid-btn" id="bidBtn" onclick="_placeBid()">Bid Now</button>
+      </div>
+      <div id="minBidHint" style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function () {
+
+var _uid = null;
+var _tab = 'browse';
+var _category = '';
+var _auctions = [];
+var _activeAuction = null;
+var _timerInterval = null;
+
+function _cf(n) { return firebase.functions().httpsCallable(n); }
+function _esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function _toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(function () { el.className = ''; }, 3500);
+}
+
+function _fmt(n) { return 'KES ' + Number(n || 0).toLocaleString('en-KE'); }
+
+function _minIncrement(cur) {
+  if (cur < 1000)  return 50;
+  if (cur < 5000)  return 100;
+  if (cur < 20000) return 500;
+  return 1000;
+}
+
+function _countdown(endTs) {
+  if (!endTs) return { text: '—', cls: 'timer-green' };
+  var end = endTs.toDate ? endTs.toDate() : new Date(endTs);
+  var ms  = end - Date.now();
+  if (ms <= 0) return { text: 'Ended', cls: 'timer-red' };
+  var h = Math.floor(ms / 3600000);
+  var m = Math.floor((ms % 3600000) / 60000);
+  var s = Math.floor((ms % 60000) / 1000);
+  var text = h > 0 ? h + 'h ' + m + 'm' : m > 0 ? m + 'm ' + s + 's' : s + 's';
+  var cls  = ms < 120000 ? 'timer-red' : ms < 600000 ? 'timer-amber' : 'timer-green';
+  return { text: text, cls: cls };
+}
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+firebase.auth().onAuthStateChanged(function (user) {
+  _uid = user ? user.uid : null;
+  _load();
+});
+
+// ── Category filter ────────────────────────────────────────────────────────
+document.querySelectorAll('.cat-chip').forEach(function (chip) {
+  chip.addEventListener('click', function () {
+    document.querySelectorAll('.cat-chip').forEach(function (c) { c.classList.remove('active'); });
+    chip.classList.add('active');
+    _category = chip.dataset.cat;
+    _load();
+  });
+});
+
+window._switchTab = function (tab, el) {
+  document.querySelectorAll('.tab-pill').forEach(function (t) { t.classList.remove('active'); });
+  el.classList.add('active');
+  _tab = tab;
+  _load();
+};
+
+function _load() {
+  var grid = document.getElementById('grid');
+  grid.innerHTML = '<div class="skeleton" style="height:260px;border-radius:14px"></div>'.repeat(3);
+
+  if (_tab === 'mybids') {
+    if (!_uid) {
+      grid.innerHTML = '<div class="empty"><div class="empty-icon">&#128274;</div><p>Sign in to see your bids</p></div>';
+      return;
+    }
+    _cf('auctionGetMyBids')({}).then(function (r) {
+      _renderMyBids(r.data.bids);
+    }).catch(function (e) { grid.innerHTML = '<div class="empty"><p>' + _esc(e.message) + '</p></div>'; });
+    return;
+  }
+
+  var params = { status: 'active' };
+  if (_category) params.category = _category;
+
+  _cf('auctionList')(params).then(function (r) {
+    _auctions = r.data.auctions;
+    _renderGrid(_auctions);
+    _startGridTimers();
+  }).catch(function (e) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">&#128683;</div><p>' + _esc(e.message) + '</p></div>';
+  });
+}
+
+function _renderGrid(auctions) {
+  var grid = document.getElementById('grid');
+  if (!auctions.length) {
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">&#128296;</div><p>No active auctions. Check back soon!</p></div>';
+    return;
+  }
+  grid.innerHTML = auctions.map(function (a) {
+    var ct = _countdown(a.endTime);
+    var img = a.images && a.images[0]
+      ? '<img class="a-img" src="' + _esc(a.images[0]) + '" alt="' + _esc(a.title) + '" loading="lazy" onerror="this.outerHTML=\'<div class=\\"a-img-placeholder\\">&#127873;</div>\'">'
+      : '<div class="a-img-placeholder">&#127873;</div>';
+    var endingSoon = ct.cls === 'timer-red' || ct.cls === 'timer-amber';
+    return '<div class="a-card' + (endingSoon ? ' ending-soon' : '') + '" onclick="_openAuction(\'' + _esc(a.id) + '\')">' +
+      img +
+      '<div class="a-body">' +
+      '<div class="a-title">' + _esc(a.title) + '</div>' +
+      '<div class="a-bid-row">' +
+      '<div><div class="a-bid-label">Current bid</div>' +
+      '<div class="a-bid-val">' + _fmt(a.currentBid) + '</div>' +
+      '<div class="a-bid-count">' + (a.bidCount || 0) + ' bid(s)</div></div>' +
+      '</div>' +
+      '<div class="a-timer"><span class="timer-dot ' + ct.cls + '"></span>' +
+      '<span class="' + ct.cls + '" data-auction-timer="' + _esc(a.id) + '">' + ct.text + '</span></div>' +
+      '</div></div>';
+  }).join('');
+}
+
+function _startGridTimers() {
+  clearInterval(_timerInterval);
+  _timerInterval = setInterval(function () {
+    _auctions.forEach(function (a) {
+      var el = document.querySelector('[data-auction-timer="' + a.id + '"]');
+      if (!el) return;
+      var ct = _countdown(a.endTime);
+      el.textContent = ct.text;
+      el.className = ct.cls;
+    });
+  }, 1000);
+}
+
+function _renderMyBids(bids) {
+  var grid = document.getElementById('grid');
+  if (!bids.length) {
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">&#128296;</div><p>You haven\'t placed any bids yet</p></div>';
+    return;
+  }
+  grid.innerHTML = '<div style="grid-column:1/-1">' +
+    bids.map(function (b) {
+      return '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px">' +
+        '<div style="flex:1"><div style="font-size:13px;font-weight:800">' + _esc(b.auctionId) + '</div>' +
+        '<div style="font-size:11px;color:var(--muted)">' + (b.bidAt && b.bidAt.toDate ? b.bidAt.toDate().toLocaleString('en-KE') : '') + '</div></div>' +
+        '<div style="font-size:16px;font-weight:900;color:' + (b.isWinning ? 'var(--accent)' : 'var(--muted)') + '">' + _fmt(b.amount) + '</div>' +
+        '</div>';
+    }).join('') +
+    '</div>';
+}
+
+// ── Auction Detail ─────────────────────────────────────────────────────────
+window._openAuction = function (auctionId) {
+  _activeAuction = auctionId;
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('bidHistory').innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">Loading&hellip;</div>';
+
+  Promise.all([
+    _cf('auctionGet')({ auctionId: auctionId }),
+    _cf('auctionGetBids')({ auctionId: auctionId }),
+  ]).then(function (results) {
+    var auction = results[0].data.auction;
+    var bids = results[1].data.bids;
+    _renderDetail(auction, bids);
+  }).catch(function (e) { _toast(e.message, 'error'); });
+};
+
+function _renderDetail(auction, bids) {
+  document.getElementById('detailTitle').textContent = auction.title;
+  var img = document.getElementById('detailImages');
+  if (auction.images && auction.images[0]) {
+    img.src = auction.images[0];
+    img.style.display = '';
+  } else {
+    img.style.display = 'none';
+  }
+  document.getElementById('detailPrice').textContent = _fmt(auction.currentBid);
+  document.getElementById('detailBidCount').textContent = (auction.bidCount || 0) + ' bid(s)';
+  document.getElementById('detailDesc').textContent = auction.description || '';
+
+  var ct = _countdown(auction.endTime);
+  document.getElementById('detailTimer').textContent = ct.text;
+  document.getElementById('detailTimer').className = ct.cls;
+
+  var reserveEl = document.getElementById('detailReserve');
+  reserveEl.style.display = (!auction.reserveMet && auction.hasReserve) ? 'inline-block' : 'none';
+
+  document.getElementById('detailMeta').textContent =
+    (auction.bidCount || 0) + ' bids &bull; Category: ' + (auction.category || 'General');
+
+  var minBid = auction.currentBid + (auction.currentBid < 1000 ? 50 : auction.currentBid < 5000 ? 100 : auction.currentBid < 20000 ? 500 : 1000);
+  document.getElementById('bidInput').placeholder = 'Min: KES ' + minBid.toLocaleString();
+  document.getElementById('bidInput').min = minBid;
+  document.getElementById('minBidHint').textContent = 'Minimum bid: ' + _fmt(minBid);
+
+  var histEl = document.getElementById('bidHistory');
+  if (!bids.length) {
+    histEl.innerHTML = '<div style="padding:12px 0;color:var(--muted);font-size:13px">No bids yet &mdash; be the first!</div>';
+  } else {
+    histEl.innerHTML = bids.slice(0, 10).map(function (b) {
+      var t = b.bidAt && b.bidAt.toDate ? b.bidAt.toDate().toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }) : '';
+      return '<div class="bid-row">' +
+        '<div class="bid-row-name">' + _esc(b.bidderName) + '</div>' +
+        '<div class="bid-row-amount">' + _fmt(b.amount) + '</div>' +
+        '<div class="bid-row-time">' + _esc(t) + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  // Store for bid placement
+  document.getElementById('bidBtn').dataset.auctionId = auction.id;
+  document.getElementById('bidBtn').dataset.currentBid = auction.currentBid;
+}
+
+window._closeModal = function () {
+  document.getElementById('modal').classList.remove('open');
+  _activeAuction = null;
+};
+
+window._placeBid = function () {
+  var amount = parseFloat(document.getElementById('bidInput').value);
+  var auctionId = _activeAuction;
+  if (!_uid) { _toast('Sign in to bid', 'error'); return; }
+  if (!amount || amount <= 0) { _toast('Enter a valid bid amount', 'error'); return; }
+  var btn = document.getElementById('bidBtn');
+  btn.disabled = true; btn.textContent = 'Placing bid&hellip;';
+  _cf('auctionBid')({ auctionId: auctionId, amount: amount })
+    .then(function (r) {
+      _toast('Bid placed! You\'re currently winning.', 'success');
+      document.getElementById('bidInput').value = '';
+      // Refresh detail
+      window._openAuction(auctionId);
+      // Refresh grid
+      _load();
+    }).catch(function (e) {
+      _toast(e.message.replace(/-/g, ' '), 'error');
+    }).finally(function () {
+      btn.disabled = false; btn.textContent = 'Bid Now';
+    });
+};
+
+})();
+</script>
+</body>
+</html>

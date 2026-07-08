@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Digital Store &mdash; SOKONI</title>
+  <meta name="description" content="Buy and download digital products, software, courses, and creative assets on SOKONI.">
+  <meta property="og:title" content="SOKONI Digital Store">
+  <meta property="og:description" content="Digital downloads — software, ebooks, music, courses, templates, graphics and more.">
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,button,textarea{font-family:inherit}
+
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);
+      border-bottom:1px solid var(--border);padding:12px 16px;
+      display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    #hdrTitle{font-size:15px;font-weight:800;flex:1}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+
+    .tabs{display:flex;border-bottom:1px solid var(--border);
+      position:sticky;top:57px;z-index:100;background:rgba(5,5,5,.97)}
+    .tab{flex:1;text-align:center;padding:12px;font-size:12px;font-weight:800;
+      cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;
+      text-transform:uppercase;letter-spacing:.5px;transition:all .15s}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+    #filterBar{padding:10px 16px;border-bottom:1px solid var(--border);
+      display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;
+      background:rgba(5,5,5,.97)}
+    #filterBar::-webkit-scrollbar{display:none}
+    .cat-chip{flex-shrink:0;padding:6px 13px;border-radius:20px;font-size:12px;font-weight:700;
+      cursor:pointer;border:1px solid var(--border);background:var(--surface);
+      color:var(--muted);transition:all .15s}
+    .cat-chip.active{background:var(--accent);color:#000;border-color:transparent}
+
+    #storePane,#libraryPane{padding:16px;max-width:1100px;margin:0 auto}
+
+    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+    @media(max-width:480px){#grid{grid-template-columns:1fr 1fr;gap:10px}}
+
+    .d-card{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);overflow:hidden;cursor:pointer;
+      transition:transform .2s,border-color .2s}
+    .d-card:hover{transform:translateY(-2px);border-color:rgba(113,255,0,.3)}
+    .d-cover{width:100%;height:150px;object-fit:cover;background:var(--surface2)}
+    .d-cover-placeholder{height:150px;background:linear-gradient(135deg,#0a001a,#14002a);
+      display:flex;align-items:center;justify-content:center;font-size:42px}
+    .d-body{padding:12px}
+    .d-type-badge{font-size:10px;font-weight:800;color:var(--info);text-transform:uppercase;
+      letter-spacing:.5px;margin-bottom:5px}
+    .d-title{font-size:13px;font-weight:800;margin-bottom:8px;
+      overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    .d-foot{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+    .d-price{font-size:16px;font-weight:900;color:var(--accent)}
+    .d-downloads{font-size:11px;color:var(--muted)}
+
+    /* Library entries */
+    .lib-item{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);padding:14px;display:flex;align-items:center;
+      gap:12px;margin-bottom:10px}
+    .lib-icon{font-size:32px;flex-shrink:0}
+    .lib-info{flex:1;min-width:0}
+    .lib-name{font-size:13px;font-weight:800;overflow:hidden;
+      white-space:nowrap;text-overflow:ellipsis}
+    .lib-key{font-size:11px;color:var(--muted);font-family:monospace;margin-top:3px}
+    .lib-dleft{font-size:11px;color:var(--warn);margin-top:3px}
+    .download-btn{background:var(--accent);color:#000;border:none;border-radius:9px;
+      padding:9px 14px;font-size:12px;font-weight:900;cursor:pointer;
+      flex-shrink:0;transition:opacity .15s;white-space:nowrap}
+    .download-btn:disabled{opacity:.4;cursor:not-allowed}
+
+    /* Detail sheet */
+    #detailSheet{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);
+      align-items:flex-end;justify-content:center}
+    #detailSheet.open{display:flex}
+    #detailModal{background:#0d0d0d;border:1px solid var(--border);
+      border-radius:20px 20px 0 0;max-height:90vh;width:100%;max-width:540px;
+      overflow-y:auto}
+    @media(min-width:541px){#detailSheet{align-items:center;padding:16px}
+      #detailModal{border-radius:20px;max-height:85vh}}
+    .bk-handle{width:40px;height:4px;background:rgba(255,255,255,.15);
+      border-radius:2px;margin:12px auto 0}
+    .det-hdr{padding:16px;border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:10px}
+    .det-hdr h2{font-size:14px;font-weight:800;flex:1}
+    .close-btn{background:var(--surface2);border:1px solid var(--border);width:34px;height:34px;
+      border-radius:50%;font-size:18px;cursor:pointer;color:var(--muted);
+      display:flex;align-items:center;justify-content:center}
+    .det-body{padding:16px}
+    .det-cover{width:100%;height:160px;object-fit:cover;border-radius:10px;margin-bottom:14px;background:var(--surface2)}
+    .det-type{font-size:11px;font-weight:800;color:var(--info);text-transform:uppercase;margin-bottom:6px}
+    .det-title{font-size:17px;font-weight:900;margin-bottom:8px}
+    .det-desc{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px}
+    .det-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+    .det-meta-item{background:var(--surface);border-radius:9px;padding:10px;text-align:center}
+    .det-meta-val{font-size:14px;font-weight:900;color:var(--accent)}
+    .det-meta-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;
+      letter-spacing:.5px;margin-top:3px}
+    .det-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+    .det-tag{background:rgba(0,188,212,.1);color:var(--info);border:1px solid rgba(0,188,212,.2);
+      border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700}
+    .price-row{display:flex;align-items:center;justify-content:space-between;
+      margin-bottom:14px}
+    .det-price{font-size:26px;font-weight:900;color:var(--accent)}
+    .buy-btn{background:var(--accent);color:#000;border:none;border-radius:10px;
+      padding:13px;font-size:14px;font-weight:900;cursor:pointer;width:100%;
+      min-height:48px;transition:opacity .15s}
+    .buy-btn:disabled{opacity:.4;cursor:not-allowed}
+
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;
+      border:1px solid var(--border);padding:10px 18px;border-radius:10px;
+      font-size:13px;font-weight:700;opacity:0;transition:all .3s;
+      pointer-events:none;white-space:nowrap;z-index:9999;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+
+    .empty{text-align:center;padding:60px 24px;color:var(--muted)}
+    .empty-icon{font-size:56px;margin-bottom:12px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+    .type-icons{software:'&#x1F4BB;',ebook:'&#x1F4DA;',music:'&#x1F3B5;',course:'&#x1F393;',
+      template:'&#x1F5C2;',graphics:'&#x1F3A8;',font:'&#x1F524;',video:'&#x1F3A5;',plugin:'&#x1F9E9;'}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrLogo">SOKONI</div>
+  <div id="hdrTitle">Digital Store</div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-pane="store" onclick="_switchTab(this,'store')">Store</div>
+  <div class="tab" data-pane="library" onclick="_switchTab(this,'library')">My Library</div>
+</div>
+
+<div id="filterBar">
+  <div class="cat-chip active" data-cat="">All</div>
+  <div class="cat-chip" data-cat="software">Software</div>
+  <div class="cat-chip" data-cat="ebook">Ebooks</div>
+  <div class="cat-chip" data-cat="music">Music</div>
+  <div class="cat-chip" data-cat="course">Courses</div>
+  <div class="cat-chip" data-cat="template">Templates</div>
+  <div class="cat-chip" data-cat="graphics">Graphics</div>
+  <div class="cat-chip" data-cat="font">Fonts</div>
+  <div class="cat-chip" data-cat="video">Video</div>
+</div>
+
+<div id="storePane">
+  <div id="grid">
+    <div class="skeleton" style="height:230px"></div>
+    <div class="skeleton" style="height:230px"></div>
+    <div class="skeleton" style="height:230px"></div>
+    <div class="skeleton" style="height:230px"></div>
+  </div>
+</div>
+
+<div id="libraryPane" style="display:none">
+  <div id="libraryList"></div>
+</div>
+
+<!-- Detail sheet -->
+<div id="detailSheet" onclick="if(event.target===this)_closeDetail()">
+  <div id="detailModal">
+    <div class="bk-handle"></div>
+    <div class="det-hdr">
+      <h2 id="detTitle"></h2>
+      <button class="close-btn" onclick="_closeDetail()">&#x2715;</button>
+    </div>
+    <div class="det-body" id="detBody"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function () {
+
+var _uid = null;
+var _category = '';
+var _products = [];
+var _activeProduct = null;
+var _activePane = 'store';
+
+var TYPE_ICONS = {
+  software:'&#x1F4BB;', ebook:'&#x1F4DA;', music:'&#x1F3B5;', course:'&#x1F393;',
+  template:'&#x1F5C2;', graphics:'&#x1F3A8;', font:'&#x1F524;', video:'&#x1F3A5;',
+  plugin:'&#x1F9E9;'
+};
+
+function _cf(n) { return firebase.functions().httpsCallable(n); }
+function _esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function _toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + (type || '');
+  clearTimeout(el._t);
+  el._t = setTimeout(function () { el.className = ''; }, 3500);
+}
+function _fmt(n) { return 'KES ' + Number(n || 0).toLocaleString('en-KE'); }
+
+firebase.auth().onAuthStateChanged(function (user) {
+  _uid = user ? user.uid : null;
+  _loadStore();
+  if (user) _loadLibrary();
+});
+
+window._switchTab = function (el, pane) {
+  document.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('active'); });
+  el.classList.add('active');
+  _activePane = pane;
+  document.getElementById('storePane').style.display = pane === 'store' ? '' : 'none';
+  document.getElementById('libraryPane').style.display = pane === 'library' ? '' : 'none';
+  document.getElementById('filterBar').style.display = pane === 'store' ? '' : 'none';
+};
+
+document.querySelectorAll('.cat-chip').forEach(function (chip) {
+  chip.addEventListener('click', function () {
+    document.querySelectorAll('.cat-chip').forEach(function (c) { c.classList.remove('active'); });
+    chip.classList.add('active');
+    _category = chip.dataset.cat;
+    _loadStore();
+  });
+});
+
+function _loadStore() {
+  var grid = document.getElementById('grid');
+  grid.innerHTML = '<div class="skeleton" style="height:230px"></div>'.repeat(4);
+
+  var q = firebase.firestore().collection('digitalProducts').where('status', '==', 'active');
+  if (_category) {
+    q = firebase.firestore().collection('digitalProducts')
+      .where('category', '==', _category).where('status', '==', 'active');
+  }
+  q.limit(40).get().then(function (snap) {
+    _products = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+    _renderGrid(_products);
+  }).catch(function () {
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">&#x1F4BB;</div><p>Digital store loading...</p></div>';
+  });
+}
+
+function _renderGrid(products) {
+  var grid = document.getElementById('grid');
+  if (!products.length) {
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">&#x1F6CD;</div><p>No products in this category yet</p></div>';
+    return;
+  }
+  grid.innerHTML = products.map(function (p) {
+    var icon = TYPE_ICONS[p.category] || '&#x1F4E6;';
+    var cover = p.coverUrl
+      ? '<img class="d-cover" src="' + _esc(p.coverUrl) + '" alt="" loading="lazy" onerror="this.outerHTML=\'<div class=\\"d-cover-placeholder\\">' + icon + '</div>\'">'
+      : '<div class="d-cover-placeholder">' + icon + '</div>';
+    return '<div class="d-card" onclick="_openDetail(\'' + _esc(p.id) + '\')">' +
+      cover + '<div class="d-body">' +
+      '<div class="d-type-badge">' + _esc(p.category || 'digital') + '</div>' +
+      '<div class="d-title">' + _esc(p.title) + '</div>' +
+      '<div class="d-foot"><span class="d-price">' + _fmt(p.price) + '</span>' +
+      '<span class="d-downloads">&#x2b07; ' + (p.totalDownloads || 0).toLocaleString() + '</span>' +
+      '</div></div></div>';
+  }).join('');
+}
+
+function _loadLibrary() {
+  if (_activePane !== 'library') return; // lazy
+  var list = document.getElementById('libraryList');
+  list.innerHTML = '<div class="skeleton" style="height:80px;margin-bottom:10px"></div>'.repeat(3);
+  _cf('digitalProductGetMyLibrary')({}).then(function (r) {
+    var items = (r.data && r.data.purchases) || [];
+    if (!items.length) {
+      list.innerHTML = '<div class="empty"><div class="empty-icon">&#x1F4C2;</div><p>Your library is empty. Purchase a digital product to see it here.</p></div>';
+      return;
+    }
+    list.innerHTML = items.map(function (item) {
+      var icon = TYPE_ICONS[item.category] || '&#x1F4E6;';
+      var dlLeft = item.downloadLimit > 0
+        ? (item.downloadLimit - (item.downloadCount || 0)) + ' downloads left'
+        : 'Unlimited downloads';
+      return '<div class="lib-item">' +
+        '<div class="lib-icon">' + icon + '</div>' +
+        '<div class="lib-info">' +
+        '<div class="lib-name">' + _esc(item.title) + '</div>' +
+        (item.licenseKey ? '<div class="lib-key">License: ' + _esc(item.licenseKey) + '</div>' : '') +
+        '<div class="lib-dleft">' + dlLeft + '</div>' +
+        '</div>' +
+        '<button class="download-btn" onclick="_download(\'' + _esc(item.purchaseId) + '\',this)">&#x2b07; Download</button>' +
+        '</div>';
+    }).join('');
+  }).catch(function () {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">&#x1F4C2;</div><p>Sign in to view your library</p></div>';
+  });
+}
+
+window._openDetail = function (productId) {
+  _activeProduct = _products.find(function (p) { return p.id === productId; }) || null;
+  if (!_activeProduct) return;
+  var p = _activeProduct;
+  var icon = TYPE_ICONS[p.category] || '&#x1F4E6;';
+  document.getElementById('detTitle').textContent = p.title;
+  var body = '';
+  if (p.coverUrl) body += '<img class="det-cover" src="' + _esc(p.coverUrl) + '" alt="" onerror="this.style.display=\'none\'">';
+  body += '<div class="det-type">' + _esc(p.category || 'digital') + '</div>';
+  body += '<div class="det-title">' + _esc(p.title) + '</div>';
+  if (p.description) body += '<div class="det-desc">' + _esc(p.description) + '</div>';
+  body += '<div class="det-meta">' +
+    '<div class="det-meta-item"><div class="det-meta-val">' + _fmt(p.price) + '</div><div class="det-meta-lbl">Price</div></div>' +
+    '<div class="det-meta-item"><div class="det-meta-val">' + (p.downloadLimit > 0 ? p.downloadLimit : 'Unlimited') + '</div><div class="det-meta-lbl">Downloads</div></div>' +
+    '</div>';
+  if (p.tags && p.tags.length) {
+    body += '<div class="det-tags">' + p.tags.slice(0, 8).map(function (t) {
+      return '<span class="det-tag">' + _esc(t) + '</span>';
+    }).join('') + '</div>';
+  }
+  body += '<div class="price-row"><span class="det-price">' + _fmt(p.price) + '</span></div>';
+  body += '<button class="buy-btn" id="buyBtn" onclick="_buy(\'' + _esc(p.id) + '\')">Buy Now &mdash; ' + _fmt(p.price) + '</button>';
+  document.getElementById('detBody').innerHTML = body;
+  document.getElementById('detailSheet').classList.add('open');
+};
+
+window._closeDetail = function () {
+  document.getElementById('detailSheet').classList.remove('open');
+  _activeProduct = null;
+};
+
+window._buy = function (productId) {
+  if (!_uid) { _toast('Sign in to purchase', 'error'); return; }
+  var btn = document.getElementById('buyBtn');
+  if (!btn) return;
+  btn.disabled = true; btn.textContent = 'Processing...';
+  _cf('digitalProductPurchase')({ digitalProductId: productId, paymentMethod: 'wallet' })
+    .then(function (r) {
+      _toast('Purchase complete! Check My Library.', 'success');
+      _closeDetail();
+      _loadLibrary();
+    }).catch(function (e) { _toast(e.message, 'error'); btn.disabled = false; btn.textContent = 'Buy Now'; });
+};
+
+window._download = function (purchaseId, btn) {
+  btn.disabled = true; btn.textContent = 'Getting link...';
+  _cf('digitalProductDownload')({ purchaseId: purchaseId })
+    .then(function (r) {
+      if (r.data && r.data.downloadUrl) {
+        var a = document.createElement('a'); a.href = r.data.downloadUrl;
+        a.target = '_blank'; a.rel = 'noopener noreferrer'; a.click();
+        _toast('Download started!', 'success');
+        _loadLibrary();
+      }
+    }).catch(function (e) { _toast(e.message, 'error'); })
+    .finally(function () { btn.disabled = false; btn.textContent = '&#x2b07; Download'; });
+};
+
+// Re-load library when user switches to that tab
+var libTab = document.querySelector('[data-pane="library"]');
+if (libTab) {
+  libTab.addEventListener('click', function () {
+    if (_uid) _loadLibrary();
+    else document.getElementById('libraryList').innerHTML =
+      '<div class="empty"><div class="empty-icon">&#x1F512;</div><p>Sign in to view your library</p></div>';
+  });
+}
+
+})();
+</script>
+</body>
+</html>

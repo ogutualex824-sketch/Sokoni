@@ -1,4 +1,76 @@
-﻿## [2026-07-08] — SmartPOS Completeness Engine (Sprint 4.1)
+﻿## [2026-07-08] — Marketplace Extensions (Sprint 4.2)
+
+### Summary
+SOKONI 4.0 Sprint 4.2 — expands the marketplace with five major capability layers: live auctions with anti-snipe bidding, equipment/vehicle/space rentals with flexible pricing, digital product store with secure downloads and license keys, community Q&A on product pages, and price history tracking. Also adds wishlist, SEO endpoints, and 4 new HTML pages (auction buyer, auction manager, rental browser, digital store + library).
+
+### Files Affected
+| File | Change |
+|---|---|
+| `functions/marketplace-extensions.js` | NEW — 31 CFs across 7 modules |
+| `auction.html` | NEW — public auction browser + live bidding UI |
+| `auction-manager.html` | NEW — seller auction creation + bid management |
+| `rental.html` | NEW — rental browser + date-range booking flow |
+| `digital-store.html` | NEW — digital product store + my library tab |
+| `functions/index.js` | 31 new exports |
+| `DEPLOY_QUEUE.md` | Added Sprint 4.2 spot deploy command |
+
+### New Cloud Functions (31)
+**Auctions (8):** `auctionCreate`, `auctionBid`, `auctionGet`, `auctionList`, `auctionGetBids`, `auctionWatch`, `auctionGetMyBids`, `auctionCloseSweep`
+**Rentals (7):** `rentalProductCreate`, `rentalGetAvailability`, `rentalBook`, `rentalConfirm`, `rentalComplete`, `rentalCancel`, `rentalList`
+**Digital Products (5):** `digitalProductCreate`, `digitalProductPurchase`, `digitalProductDownload`, `digitalProductGetMyLibrary`, `digitalProductGetSales`
+**Q&A (4):** `productAskQuestion`, `productAnswerQuestion`, `productGetQA`, `productVoteHelpful`
+**Wishlist (3):** `wishlistAdd`, `wishlistRemove`, `wishlistGet`
+**Price History (2):** `priceHistoryRecord`, `priceHistoryGet`
+**SEO (2):** `seoGetProductMeta`, `seoGetSitemap`
+
+### Feature Details
+- **Auctions**: Scheduled start, dynamic min bid increments (KES-banded), anti-snipe auto-extend (if bid within last 2 min → +2 min), reserve price hidden until met, Buy-It-Now instant purchase, outbid push notification, auto-close sweep every 5 min
+- **Rentals**: Hourly/daily/weekly/monthly pricing per product, in-memory overlap detection, deposit tracking, customer name + phone capture, confirm/complete/cancel lifecycle
+- **Digital Products**: Seller uploads file to Firebase Storage, license key (base36 XXXX-XXXX-XXXX-XXXX) generated on purchase, server-side download count vs limit, 15-min signed download URL (never exposed path directly), per-buyer library
+- **Q&A**: Questions on product pages, seller/shop-owner can answer, community helpful votes, public read
+- **Wishlist**: Doc ID `{uid}_{productId}` — avoids composite index, single-field userId query
+- **Price History**: Flat `priceHistoryLog` collection, single-field `productId` query, up to 60 entries per product, chart-ready (date + price array)
+- **SEO**: `seoGetSitemap` is `onRequest` (public HTTP), generates XML with static pages + active auctions + active digital products, `seoGetProductMeta` returns Open Graph tags
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `auctions/{id}` | Auction docs — status, current bid, bid count, watchers |
+| `auctionBids/{id}` | Bid records — auctionId, amount, bidderName, placedAt |
+| `auctionWatchers/{aId}_{uid}` | Compound ID — watcher registry |
+| `rentalProducts/{id}` | Rental listings with per-type rate fields |
+| `rentalBookings/{id}` | Booking records — dates, status, customer info |
+| `digitalProducts/{id}` | Digital product listings with storagePath |
+| `digitalPurchases/{id}` | Purchase records — licenseKey, downloadCount, downloadLimit |
+| `productQuestions/{id}` | Q&A docs — answers[] embedded array, helpfulVotes |
+| `wishlistItems/{uid}_{productId}` | Compound ID wishlist registry |
+| `priceHistoryLog/{id}` | Price events — productId, price, recordedAt |
+
+### Security
+- `enforceAppCheck: true` on all 31 CFs
+- Auction bid uses `runTransaction()` — prevents race on currentBid + bidCount
+- Digital purchase uses `runTransaction()` — prevents duplicate purchase
+- Download uses `runTransaction()` to enforce downloadCount vs downloadLimit atomically
+- Signed URL expires in 15 minutes — direct Storage path never exposed
+- Reserve price stripped server-side before response (`reservePrice: null, hasReserve: true`)
+- Buy-It-Now purchase uses `runTransaction()` — prevents concurrent BIN + bid conflict
+- `auctionCancel` restricted to seller only (verified via `sellerId === auth.uid`)
+- Rental overlap detection: in-memory, no composite index needed
+
+### Performance
+- All Firestore queries single-field `where()` — zero new composite indexes
+- `auctionCloseSweep` runs every 5 min on schedule (no polling from client)
+- Wishlist + watcher doc IDs compound-keyed — O(1) presence check with `.get()`
+- Price history capped at 60 entries per product with in-memory sort
+- SEO sitemap generated server-side with parallel Firestore reads
+
+### Database Changes
+- 10 new Firestore collections (see above)
+- No new composite indexes (at 200/200 limit)
+
+---
+
+## [2026-07-08] — SmartPOS Completeness Engine (Sprint 4.1)
 
 ### Summary
 SOKONI 4.0 Sprint 4.1 — closes the major POS feature gaps. Adds gift cards with partial redemption, layaway/hire-purchase plans, multi-cashier park & suspend sales, Kitchen Display System with real-time order tracking, physical cycle counting with optional inventory adjustment, and multi-currency support (10 currencies, KES base).
