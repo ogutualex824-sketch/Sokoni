@@ -759,3 +759,298 @@ exports.scheduledAvailabilityMaintenance = onSchedule(
     }));
   },
 );
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CF 8 — setVacationMode
+   Enable or disable vacation mode. Blocks all bookings while active.
+   Vacation is automatically deactivated on endDate by the maintenance job.
+══════════════════════════════════════════════════════════════════════════ */
+exports.setVacationMode = onCall(CF_OPTIONS, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const uid = request.auth.uid;
+  const { active, startDate, endDate, message, autoReactivate, reason } = request.data || {};
+
+  if (typeof active !== "boolean") throw new HttpsError("invalid-argument", "active (boolean) required.");
+
+  if (active) {
+    if (!startDate || !endDate) throw new HttpsError("invalid-argument", "startDate and endDate required (YYYY-MM-DD).");
+    if (String(startDate) > String(endDate)) throw new HttpsError("invalid-argument", "startDate must be ≤ endDate.");
+  }
+
+  const patch = {
+    isOnVacation:           active,
+    vacationStartDate:      active ? String(startDate) : null,
+    vacationEndDate:        active ? String(endDate)   : null,
+    vacationMessage:        active ? String(message  || "").slice(0, 300) : null,
+    vacationReason:         active ? String(reason   || "").slice(0, 200) : null,
+    vacationAutoReactivate: active ? autoReactivate !== false : false,
+    liveStatus:             active ? "vacation" : "available",
+    isManualOverride:       true,
+    updatedAt:              admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  const configRef = db.collection("providerAvailability").doc(uid);
+  await configRef.set(patch, { merge: true });
+
+  const snap   = await configRef.get();
+  const merged = { ...(snap.data() || {}), ...patch };
+  await db.collection("availabilityStatus").doc(uid)
+    .set(_buildStatusDoc(merged), { merge: false });
+
+  return { success: true, isOnVacation: active };
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CF 9 — addAvailabilityOverride
+   Add a day-specific schedule override: holiday, special hours, or closure.
+   Stored at: providerAvailability/{uid}/overrides/{YYYY-MM-DD}
+══════════════════════════════════════════════════════════════════════════ */
+exports.addAvailabilityOverride = onCall(CF_OPTIONS, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const uid = request.auth.uid;
+  const { date, closed, periods, label } = request.data || {};
+
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+    throw new HttpsError("invalid-argument", "date must be YYYY-MM-DD.");
+  }
+
+  const safePeriods = closed !== false  // default: closed
+    ? []
+    : (Array.isArray(periods) ? periods : []).filter(_validPeriod).slice(0, 4);
+
+  await db.collection("providerAvailability").doc(uid)
+    .collection("overrides").doc(String(date)).set({
+      date:      String(date),
+      closed:    closed !== false,
+      periods:   safePeriods,
+      label:     String(label || "").slice(0, 100),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+  return { success: true, date, closed: closed !== false };
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CF 10 — removeAvailabilityOverride
+   Remove a day override and restore the normal weekly schedule for that date.
+══════════════════════════════════════════════════════════════════════════ */
+exports.removeAvailabilityOverride = onCall(CF_OPTIONS, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const uid  = request.auth.uid;
+  const date = String(request.data?.date || "");
+
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new HttpsError("invalid-argument", "date must be YYYY-MM-DD.");
+  }
+
+  await db.collection("providerAvailability").doc(uid)
+    .collection("overrides").doc(date).delete();
+
+  return { success: true, date };
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CF 11 — listAvailabilityOverrides
+   List upcoming day overrides (from today, next 365 days, max 100).
+   Callers can only read their own overrides or an admin can read any.
+══════════════════════════════════════════════════════════════════════════ */
+exports.listAvailabilityOverrides = onCall(CF_OPTIONS, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const targetUid = String(request.data?.providerId || request.auth.uid);
+
+  if (targetUid !== request.auth.uid && !request.auth.token?.admin && !request.auth.token?.superAdmin) {
+    throw new HttpsError("permission-denied", "Access denied.");
+  }
+
+  const today = _nairobiNow().date;
+  const snap  = await db.collection("providerAvailability").doc(targetUid)
+    .collection("overrides")
+    .where("date", ">=", today)
+    .orderBy("date", "asc")
+    .limit(100)
+    .get();
+
+  return {
+    overrides: snap.docs.map(d => d.data()),
+    total:     snap.size,
+  };
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CF 12 — setMarketplaceAvailability
+   Set stock and delivery status for marketplace/product sellers.
+   Stock changes are reflected immediately in availabilityStatus.
+══════════════════════════════════════════════════════════════════════════ */
+const VALID_STOCK_STATUSES    = new Set(["in_stock","low_stock","out_of_stock","pre_order","backorder","discontinued"]);
+const VALID_DELIVERY_STATUSES = new Set(["same_day","next_day","pickup_only","unavailable"]);
+
+exports.setMarketplaceAvailability = onCall(CF_OPTIONS, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const uid = request.auth.uid;
+  const d   = request.data || {};
+
+  if (d.stockStatus    && !VALID_STOCK_STATUSES.has(d.stockStatus))
+    throw new HttpsError("invalid-argument", `Invalid stockStatus: ${d.stockStatus}`);
+  if (d.deliveryStatus && !VALID_DELIVERY_STATUSES.has(d.deliveryStatus))
+    throw new HttpsError("invalid-argument", `Invalid deliveryStatus: ${d.deliveryStatus}`);
+
+  const patch = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+  if (d.stockStatus    != null) patch.stockStatus    = d.stockStatus;
+  if (d.deliveryStatus != null) patch.deliveryStatus = d.deliveryStatus;
+  if (d.preOrderDate   != null) patch.preOrderDate   = String(d.preOrderDate);
+  if (d.stockNote      != null) patch.stockNote      = String(d.stockNote).slice(0, 200);
+
+  const configRef = db.collection("providerAvailability").doc(uid);
+  await configRef.set(patch, { merge: true });
+
+  await db.collection("availabilityStatus").doc(uid).set({
+    stockStatus:    patch.stockStatus    ?? null,
+    deliveryStatus: patch.deliveryStatus ?? null,
+    updatedAt:      admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return { success: true };
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CF 13 — checkProviderAvailability
+   Unified availability check: schedule + live status + vacation + capacity.
+   Designed to be called by checkout flows, booking UIs, and KASS.
+══════════════════════════════════════════════════════════════════════════ */
+exports.checkProviderAvailability = onCall(
+  { ...CF_OPTIONS, timeoutSeconds: 15 },
+  async (request) => {
+    const providerId = String(request.data?.providerId || "");
+    if (!providerId) throw new HttpsError("invalid-argument", "providerId required.");
+
+    const [configSnap, statusSnap] = await Promise.all([
+      db.collection("providerAvailability").doc(providerId).get(),
+      db.collection("availabilityStatus").doc(providerId).get(),
+    ]);
+
+    if (!configSnap.exists) return { available: false, reason: "not_configured" };
+
+    const cfg    = configSnap.data();
+    const status = statusSnap.exists ? statusSnap.data() : {};
+    const isOpen = _computeIsOpen(cfg);
+    const next   = isOpen ? null : _nextOpen(cfg);
+
+    let available = isOpen;
+    let reason    = isOpen ? "schedule" : "outside_hours";
+
+    if (cfg.isOnVacation) {
+      available = false; reason = "vacation";
+    } else if (cfg.liveStatus === "emergency_closure") {
+      available = false; reason = "emergency";
+    } else if (cfg.liveStatus === "do_not_disturb") {
+      available = false; reason = "dnd";
+    } else if (cfg.modes?.includes("temporary_closed")) {
+      available = false; reason = "temporary_closed";
+    }
+
+    const today      = _nairobiNow().date;
+    const todayCount = cfg.cap?.todayDate === today ? (cfg.cap.todayCount || 0) : 0;
+    const maxPerDay  = cfg.cap?.maxPerDay ?? null;
+    const atCapacity = maxPerDay !== null && todayCount >= maxPerDay;
+    if (atCapacity) { available = false; reason = "capacity_full"; }
+
+    return {
+      available,
+      reason,
+      liveStatus:      cfg.liveStatus || "available",
+      isOpen,
+      isOnVacation:    cfg.isOnVacation || false,
+      vacationEndDate: cfg.vacationEndDate || null,
+      vacationMessage: cfg.vacationMessage || null,
+      nextOpenAt:      next,
+      atCapacity,
+      capacityUsed:    todayCount,
+      capacityMax:     maxPerDay,
+      modes:           cfg.modes || [],
+      apptEnabled:     Boolean(cfg.appt?.enabled),
+      stockStatus:     cfg.stockStatus    || null,
+      deliveryStatus:  cfg.deliveryStatus || null,
+      label:           status.label || (isOpen ? "Open Now" : "Closed"),
+    };
+  }
+);
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CF 14 — getNextAvailableSlot
+   Finds the earliest bookable appointment slot from a given date.
+   Searches up to 30 days ahead. Respects notices, capacity, and overrides.
+══════════════════════════════════════════════════════════════════════════ */
+exports.getNextAvailableSlot = onCall(CF_OPTIONS, async (request) => {
+  const providerId = String(request.data?.providerId || "");
+  const fromDate   = request.data?.fromDate || _nairobiNow().date;
+  if (!providerId) throw new HttpsError("invalid-argument", "providerId required.");
+
+  const configSnap = await db.collection("providerAvailability").doc(providerId).get();
+  if (!configSnap.exists) return { found: false, slot: null };
+
+  const cfg = configSnap.data();
+  if (!cfg.appt?.enabled) return { found: false, slot: null, reason: "appointments_disabled" };
+
+  const DOW_NAMES  = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+  const minNoticeMs = (cfg.appt.minNoticeHours || 1) * 3_600_000;
+  const earliest   = new Date(Date.now() + minNoticeMs);
+  const dur  = cfg.appt.durationMins || 30;
+  const step = dur + (cfg.appt.bufferMins || 0) + (cfg.appt.travelMins || 0);
+
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(fromDate + "T00:00:00+03:00");
+    d.setDate(d.getDate() + i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const dow     = DOW_NAMES[d.getDay()];
+
+    const overSnap = await db.collection("providerAvailability").doc(providerId)
+      .collection("overrides").doc(dateStr).get();
+
+    let periods   = [];
+    let dayClosed = false;
+
+    if (overSnap.exists) {
+      const ov = overSnap.data();
+      dayClosed = Boolean(ov.closed);
+      periods   = dayClosed ? [] : (ov.periods || []);
+    } else {
+      const day = cfg.schedule?.[dow];
+      dayClosed = !day || day.closed;
+      periods   = dayClosed ? [] : (day.periods || []);
+    }
+
+    if (dayClosed || !periods.length) continue;
+
+    // Load existing bookings via doc-ID prefix range
+    const bookingsSnap = await db.collection("providerAvailability").doc(providerId)
+      .collection("bookings")
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .startAt(`${dateStr}_0000`).endAt(`${dateStr}_2359`).get();
+
+    const bookedTimes = new Set(
+      bookingsSnap.docs
+        .filter(bd => bd.data().status !== "cancelled")
+        .map(bd => bd.data().startTime)
+    );
+
+    for (const period of periods.filter(_validPeriod)) {
+      let cur  = _mins(period.open);
+      const last = _mins(period.close) - dur;
+      while (cur <= last) {
+        const hh = String(Math.floor(cur / 60)).padStart(2, "0");
+        const mm = String(cur % 60).padStart(2, "0");
+        const startT  = `${hh}:${mm}`;
+        const slotDt  = new Date(`${dateStr}T${startT}:00+03:00`);
+        const endC    = cur + dur;
+        const endT    = `${String(Math.floor(endC/60)).padStart(2,"0")}:${String(endC%60).padStart(2,"0")}`;
+
+        if (!bookedTimes.has(startT) && slotDt >= earliest) {
+          return { found: true, slot: { date: dateStr, startTime: startT, endTime: endT } };
+        }
+        cur += step;
+      }
+    }
+  }
+
+  return { found: false, slot: null, reason: "no_slots_in_30_days" };
+});

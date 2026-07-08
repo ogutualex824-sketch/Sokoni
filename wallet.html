@@ -765,6 +765,13 @@
           <i class="fa-solid fa-circle-info"></i>
           You will receive an M-Pesa prompt on your phone. Enter your PIN within 90 seconds to complete the top-up.
         </p>
+
+        <!-- Trust badge — populated by SokoniTrust.renderBadge() -->
+        <div id="walTrustBadge" style="margin-top:16px"></div>
+
+        <!-- Buyer protection — populated by SokoniTrust.renderProtection() -->
+        <div id="walTrustProtection" style="margin-top:12px"></div>
+
       </div>
 
       <!-- ─── TRANSACTIONS PANEL ─── -->
@@ -894,16 +901,40 @@
     </div><!-- /wal-tab-content -->
   </main>
 
+  <!-- Trust footer — populated by SokoniTrust.renderFooter() -->
+  <div id="walTrustFooter" style="margin-top:24px;padding-bottom:env(safe-area-inset-bottom,0)"></div>
+
   <!-- Toast container -->
   <div class="wal-toast-container" id="walToasts" aria-live="polite" aria-atomic="false"></div>
 
   <!-- Firebase auto-config -->
   <script src="/__/firebase/init.js"></script>
+  <!-- Payment trust SDK — must load before wallet module -->
+  <script src="sokoni-payment-trust.js"></script>
   <!-- Wallet module -->
   <script src="sokoni-wallet.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       SokoniWallet.init();
+
+      /* ── Trust elements ──────────────────────────────────────────────
+         SokoniTrust is loaded from sokoni-payment-trust.js.
+         We render the badge and protection sections that the spec requires
+         on wallet/payment pages.
+      ─────────────────────────────────────────────────────────────────── */
+      if (window.SokoniTrust) {
+        /* Compact IntaSend badge + secure payment pills inside top-up panel */
+        const badgeEl = document.getElementById('walTrustBadge');
+        if (badgeEl) SokoniTrust.renderBadge(badgeEl, 'compact');
+
+        /* Buyer protection for wallet context (top-up = marketplace) */
+        const protEl = document.getElementById('walTrustProtection');
+        if (protEl) SokoniTrust.renderProtection(protEl, 'marketplace');
+
+        /* Trust footer: SSL + IntaSend + PCI DSS + CBK Compliant */
+        const footerEl = document.getElementById('walTrustFooter');
+        if (footerEl) SokoniTrust.renderFooter(footerEl);
+      }
     });
   </script>
 </body>

@@ -706,4 +706,60 @@
     detectConflict,
     getDeltaSync,
   });
+
+  /* ── PosSync adapter ──────────────────────────────────────────────────────
+     pos-sales.js, pos-customers.js, and pos-inventory.js call:
+       PosSync.queue(collection, docId, data)
+       PosSync.enqueue(type, payload)
+     This adapter maps those calls into the PosSyncEngine queue format.
+  ─────────────────────────────────────────────────────────────────────────── */
+  const _COLLECTION_TYPE_MAP = {
+    posTransactions:   'transaction',
+    posRetailSales:    'transaction',
+    posProducts:       'product_update',
+    posStockMovements: 'stock_movement',
+    posCustomers:      'customer',
+    posShifts:         'shift',
+    posCashFloats:     'cash_float',
+    posVoids:          'void',
+    posRefunds:        'refund',
+  };
+
+  window.PosSync = {
+    queue(collection, docId, data) {
+      const type = _COLLECTION_TYPE_MAP[collection] || String(collection);
+      if (!window.PosDB?.syncQueue?.add) {
+        console.warn('[PosSync] PosDB not ready — write queued locally will be lost:', collection, docId);
+        return Promise.resolve();
+      }
+      return PosDB.syncQueue.add({
+        type,
+        data:      { ...(data || {}), id: String(docId) },
+        status:    'pending',
+        retries:   0,
+        createdAt: new Date().toISOString(),
+      }).catch(err => console.warn('[PosSync] queue add failed:', err.message));
+    },
+
+    enqueue(type, payload) {
+      if (!window.PosDB?.syncQueue?.add) {
+        console.warn('[PosSync] PosDB not ready — enqueue dropped:', type);
+        return Promise.resolve();
+      }
+      return PosDB.syncQueue.add({
+        type:      String(type),
+        data:      payload || {},
+        status:    'pending',
+        retries:   0,
+        createdAt: new Date().toISOString(),
+      }).catch(err => console.warn('[PosSync] enqueue failed:', err.message));
+    },
+
+    processQueue: () => window.PosSyncEngine.processQueue(),
+    getStats:     () => window.PosSyncEngine.getStatus(),
+    on: (event, fn) => {
+      window.addEventListener('pos:sync:' + event, e => { try { fn(e.detail); } catch (_) {} });
+    },
+  };
+
 })();

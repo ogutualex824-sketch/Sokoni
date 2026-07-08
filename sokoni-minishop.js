@@ -62,6 +62,10 @@ window.SokoniMiniShop = (() => {
 
   // ─── Handle Parser ───────────────────────────────────────────────────────────
   function _parseHandle() {
+    // OG CF shell page pre-injects window.MS_HANDLE — use it first
+    if (window.MS_HANDLE && /^[a-z0-9_-]{1,30}$/.test(window.MS_HANDLE)) {
+      return window.MS_HANDLE;
+    }
     const path = location.pathname;
     let m = path.match(/\/shop\/([^/?#]+)/);
     if (m) return m[1].replace(/^@/, '');
@@ -182,27 +186,46 @@ window.SokoniMiniShop = (() => {
     const price = Number(p.price || 0);
     const orig = Number(p.originalPrice || 0);
     const discount = p.discountPercent ? parseInt(p.discountPercent) : (orig > price && orig > 0 ? Math.round((orig - price) / orig * 100) : 0);
-    const badge = p.isBestseller ? '<span class="ms-prod-badge ms-badge-best">Bestseller</span>' : (discount > 0 ? '<span class="ms-prod-badge ms-badge-sale">-' + discount + '%</span>' : '');
-    const imgUrl = _esc(p.imageUrl || p.images?.[0] || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'200\'%3E%3Crect fill=\'%23f0f0f0\' width=\'200\' height=\'200\'/%3E%3C/svg%3E');
-    return `<div class="ms-prod-card" onclick="location.href='product.html?id=${_esc(p.id)}'">
-  <div class="ms-prod-img-wrap">
-    <img src="${imgUrl}" alt="${_esc(p.name)}" class="ms-prod-img" loading="lazy">
-    ${badge}
-  </div>
-  <div class="ms-prod-info">
-    <div class="ms-prod-name">${_esc(p.name)}</div>
-    <div class="ms-prod-price">
-      <span class="ms-price-current">KES ${price.toLocaleString()}</span>
-      ${orig > price ? '<span class="ms-price-orig">KES ' + orig.toLocaleString() + '</span>' : ''}
-    </div>
-    ${p.rating ? '<div class="ms-prod-stars">' + _stars(p.rating) + ' <span>(' + (p.reviewCount || 0) + ')</span></div>' : ''}
+    const badge = p.isBestseller ? '<span class="ms-badge ms-badge-popular">Bestseller</span>' : (discount > 0 ? '<span class="ms-badge ms-badge-sale">-' + discount + '%</span>' : '');
+    const imgUrl = _esc(p.imageUrl || p.images?.[0] || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'200\'%3E%3Crect fill=\'%23111\' width=\'200\' height=\'200\'/%3E%3C/svg%3E');
+    return `<div class="ms-product-card" onclick="location.href='product.html?id=${_esc(p.id)}'">
+  <img src="${imgUrl}" alt="${_esc(p.name)}" class="ms-product-img" loading="lazy">
+  ${badge}
+  <button class="ms-wishlist-btn" onclick="event.stopPropagation();SokoniMiniShop.toggleWishlist('${_esc(p.id)}')" aria-label="Wishlist">&#x2665;</button>
+  <div class="ms-product-body">
+    <div class="ms-product-name">${_esc(p.name)}</div>
+    <div class="ms-product-price">KES ${price.toLocaleString()}${orig > price ? '<span class="ms-product-original-price"> KES ' + orig.toLocaleString() + '</span>' : ''}</div>
+    ${p.rating ? '<div class="ms-prod-rating">' + _stars(p.rating) + ' <span class="ms-prod-rating-count">(' + (p.reviewCount || 0) + ')</span></div>' : ''}
   </div>
 </div>`;
+  }
+
+  // ─── Tab Switching ───────────────────────────────────────────────────────────
+  function _setupTabs() {
+    const tabBtns = document.querySelectorAll('#msTabs .ms-tab');
+    const tabContents = document.querySelectorAll('.ms-tab-content');
+    const catalogFilter = document.getElementById('msCatalogFilter');
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.tab;
+        tabBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        tabContents.forEach(c => { c.classList.remove('active'); c.hidden = true; });
+        const panel = document.getElementById('ms' + target.charAt(0).toUpperCase() + target.slice(1));
+        if (panel) { panel.classList.add('active'); panel.hidden = false; }
+        if (catalogFilter) catalogFilter.hidden = target !== 'store' || catalogFilter.dataset.hasTypes !== 'true';
+      });
+    });
   }
 
   // ─── Product Sections ────────────────────────────────────────────────────────
   function _renderProductSections(products, shopId) {
     if (!products || !products.length) return;
+    _state.allProducts = products;
+    _state.shopIdForFilter = shopId;
+    _state.productsById = {};
+    products.forEach(p => { _state.productsById[p.id] = p; });
+
     const now = Date.now() / 1000;
     const THIRTY_DAYS = 30 * 86400;
     const bestSellers = products.filter(p => p.isBestseller === true || (p.salesCount || 0) > 10).slice(0, 6);
@@ -214,35 +237,78 @@ window.SokoniMiniShop = (() => {
     const shownIds = new Set([...bestSellers, ...newArrivals, ...todaysDeals].map(p => p.id));
     const remaining = products.filter(p => !shownIds.has(p.id));
 
-    function _renderSection(sectionId, items, allCount) {
-      const wrap = document.getElementById(sectionId);
-      if (!wrap) return;
-      if (!items.length) { wrap.hidden = true; return; }
-      wrap.hidden = false;
-      const grid = wrap.querySelector('.ms-prod-grid');
+    function _renderSection(sectionId, gridId, items, seeAllId) {
+      const section = document.getElementById(sectionId);
+      const grid = document.getElementById(gridId);
+      if (!section) return;
+      if (!items.length) { section.hidden = true; return; }
+      section.hidden = false;
       if (grid) grid.innerHTML = items.map(_productCard).join('');
-      const seeAll = wrap.querySelector('.ms-see-all');
-      if (seeAll) seeAll.hidden = (allCount || items.length) <= items.length;
+      if (seeAllId) {
+        const seeAll = document.getElementById(seeAllId);
+        if (seeAll) seeAll.hidden = false;
+      }
     }
 
-    _renderSection('msBestSellers', bestSellers, bestSellers.length);
-    _renderSection('msNewArrivals', newArrivals, newArrivals.length);
-    _renderSection('msTodaysDeals', todaysDeals, todaysDeals.length);
+    _renderSection('msBestSellersSection', 'msBestSellers', bestSellers, 'msBestSellersAll');
+    _renderSection('msNewArrivalsSection', 'msNewArrivals', newArrivals, 'msNewArrivalsAll');
+    _renderSection('msTodaysDealsSection', 'msTodaysDeals', todaysDeals, null);
 
-    const allWrap = document.getElementById('msAllProducts');
-    if (allWrap) {
+    const allSection = document.getElementById('msAllProductsSection');
+    const allGrid = document.getElementById('msProductGrid');
+    if (allSection) {
       const showAll = !bestSellers.length && !newArrivals.length && !todaysDeals.length;
       const allItems = showAll ? products : remaining;
       if (allItems.length) {
-        allWrap.hidden = false;
-        const grid = allWrap.querySelector('.ms-prod-grid');
-        if (grid) grid.innerHTML = allItems.map(_productCard).join('');
-        const seeAll = allWrap.querySelector('.ms-see-all');
+        allSection.hidden = false;
+        if (allGrid) allGrid.innerHTML = allItems.map(_productCard).join('');
+        const seeAll = document.getElementById('msAllProductsAll');
         if (seeAll) { seeAll.hidden = false; seeAll.href = 'products.html?shopId=' + shopId; }
       } else {
-        allWrap.hidden = true;
+        allSection.hidden = true;
       }
     }
+
+    _initCatalogFilter(products);
+  }
+
+  function _initCatalogFilter(products) {
+    const filter = document.getElementById('msCatalogFilter');
+    if (!filter) return;
+    const types = new Set(products.map(p => p.type || 'product'));
+    if (types.size <= 1) { filter.hidden = true; filter.dataset.hasTypes = 'false'; return; }
+    filter.hidden = false;
+    filter.dataset.hasTypes = 'true';
+    filter.querySelectorAll('.ms-cat-btn').forEach(btn => {
+      const cat = btn.dataset.cat;
+      if (cat !== 'all' && !products.some(p => (p.type || 'product') === cat)) {
+        btn.hidden = true; return;
+      }
+      btn.addEventListener('click', () => {
+        filter.querySelectorAll('.ms-cat-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _filterProductsByType(cat);
+      });
+    });
+  }
+
+  function _filterProductsByType(cat) {
+    const products = _state.allProducts || [];
+    const filtered = cat === 'all' ? products : products.filter(p => (p.type || 'product') === cat);
+    const allSection = document.getElementById('msAllProductsSection');
+    const allGrid = document.getElementById('msProductGrid');
+    if (!allSection || !allGrid) return;
+    const isCatFilter = cat !== 'all';
+    ['msBestSellersSection', 'msNewArrivalsSection', 'msTodaysDealsSection'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.hidden = isCatFilter;
+    });
+    allSection.hidden = false;
+    allGrid.innerHTML = filtered.length
+      ? filtered.map(_productCard).join('')
+      : '<p style="color:#888;padding:20px;grid-column:1/-1;text-align:center">No items in this category.</p>';
+    const title = document.getElementById('msAllProductsTitle');
+    if (title) title.textContent = cat === 'all' ? '🛍 All Products' : '🛍 ' + cat.charAt(0).toUpperCase() + cat.slice(1) + 's';
   }
 
   // ─── Reviews ─────────────────────────────────────────────────────────────────
@@ -454,6 +520,9 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     const shareUrlEl = document.getElementById('msShareUrl');
     if (shareUrlEl) shareUrlEl.textContent = _state.shopUrl;
 
+    // Tab switching
+    _setupTabs();
+
     // Product sections
     _renderProductSections(products, _state.shopId);
 
@@ -562,6 +631,15 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
       _renderShop(data);
       _trackView(_state.shopId);
       _checkFollowStatus();
+      // v3.0: load supplementary sections in parallel
+      const sid = _state.shopId;
+      if (sid) {
+        Promise.all([
+          loadPromotions(sid),
+          loadAnnouncements(sid),
+          loadSimilar(sid, data.shop && data.shop.category),
+        ]).catch(() => {});
+      }
     } catch (err) {
       console.error('[MiniShop] initPublic error:', err);
       _showNotFound();
@@ -1041,6 +1119,120 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
     bind('msaPrintPoster', 'click', printPoster);
   }
 
+  // ─── v3.0: Promotions ────────────────────────────────────────────────────────
+  async function loadPromotions(shopId) {
+    const el = document.getElementById('msPromotionsSection');
+    if (!el) return;
+    try {
+      const r = await _callCF('miniShopGetPromotions', { shopId });
+      const promos = (r && r.promotions) || [];
+      if (!promos.length) { el.hidden = true; return; }
+      el.hidden = false;
+      const grid = document.getElementById('msPromosGrid');
+      if (!grid) return;
+      grid.innerHTML = promos.map(p => {
+        const icon = p.type === 'flash_sale' ? '⚡' : p.type === 'bundle' ? '🎁' : p.type === 'seasonal' ? '🌟' : '🏷️';
+        const badge = p.discountType === 'percent' ? `${p.discountValue}% OFF` : `KES ${p.discountValue} OFF`;
+        const expires = p.validUntil ? new Date(p.validUntil._seconds ? p.validUntil._seconds * 1000 : p.validUntil).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' }) : '';
+        const codeHtml = p.code ? `<div class="ms-promo-code" onclick="navigator.clipboard.writeText('${_esc(p.code)}');SokoniMiniShop._toast('Code copied!','success')" title="Click to copy">${_esc(p.code)}</div>` : '';
+        return `<div class="ms-promo-card ${p.type === 'flash_sale' ? 'flash' : p.type === 'bundle' ? 'bundle' : 'coupon'}">
+          <div class="ms-promo-icon">${icon}</div>
+          <div class="ms-promo-body">
+            <div class="ms-promo-title">${_esc(p.title)}</div>
+            <div class="ms-promo-desc">${_esc(p.description || '')}</div>
+            ${codeHtml}
+            ${expires ? `<div class="ms-promo-timer">Ends ${expires}</div>` : ''}
+          </div>
+          <div class="ms-promo-badge ${p.type === 'flash_sale' ? 'flash' : p.type === 'bundle' ? 'bundle' : 'coupon'}">${badge}</div>
+        </div>`;
+      }).join('');
+    } catch (e) { el.hidden = true; }
+  }
+
+  // ─── v3.0: Wishlist ──────────────────────────────────────────────────────────
+  async function toggleWishlist(productId) {
+    const user = firebase.auth().currentUser;
+    if (!user) { _toast('Sign in to save items', 'info'); return; }
+    const p = (_state.productsById || {})[productId] || {};
+    const shopId = _state.shopId || '';
+    try {
+      const r = await _callCF('miniShopToggleWishlist', {
+        productId,
+        shopId,
+        productName: p.name || '',
+        productPrice: p.price || 0,
+        productImage: p.imageUrl || (p.images && p.images[0]) || ''
+      });
+      const btns = document.querySelectorAll(`.ms-wishlist-btn[onclick*="${productId}"]`);
+      btns.forEach(btn => btn.classList.toggle('active', !!(r && r.added)));
+      _toast(r && r.added ? 'Saved to wishlist' : 'Removed from wishlist', 'info');
+    } catch (e) { _toast('Could not update wishlist', 'error'); }
+  }
+
+  // ─── v3.0: Per-product share ─────────────────────────────────────────────────
+  async function shareProduct(productId, shopId, name, price) {
+    try {
+      const r = await _callCF('miniShopShareProduct', { productId, shopId, productName: name, productPrice: price });
+      if (r && r.shareUrls) {
+        if (navigator.share) {
+          navigator.share({ title: name, text: r.shareText, url: r.productUrl || location.href }).catch(() => {});
+        } else {
+          navigator.clipboard.writeText(r.productUrl || location.href);
+          _toast('Product link copied!', 'success');
+        }
+      }
+    } catch (e) {
+      navigator.clipboard.writeText(location.href + '?p=' + productId);
+      _toast('Link copied!', 'success');
+    }
+  }
+
+  // ─── v3.0: Announcements ─────────────────────────────────────────────────────
+  async function loadAnnouncements(shopId) {
+    const el = document.getElementById('msAnnouncementsSection');
+    if (!el) return;
+    try {
+      const r = await _callCF('miniShopGetAnnouncements', { shopId, limit: 3 });
+      const posts = (r && r.announcements) || [];
+      if (!posts.length) { el.hidden = true; return; }
+      el.hidden = false;
+      const list = document.getElementById('msAnnounceList');
+      if (!list) return;
+      list.innerHTML = posts.map(p => {
+        const ts = p.createdAt ? new Date(p.createdAt._seconds ? p.createdAt._seconds * 1000 : p.createdAt).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' }) : '';
+        return `<div class="ms-announce-item ${_esc(p.type || 'general')}">
+          <div class="ms-announce-title">${_esc(p.title)}</div>
+          <div class="ms-announce-msg">${_esc(p.message)}</div>
+          ${ts ? `<div class="ms-announce-time">${ts}</div>` : ''}
+        </div>`;
+      }).join('');
+    } catch (e) { el.hidden = true; }
+  }
+
+  // ─── v3.0: Similar shops ─────────────────────────────────────────────────────
+  async function loadSimilar(shopId, category) {
+    const el = document.getElementById('msSimilarSection');
+    if (!el) return;
+    try {
+      const r = await _callCF('miniShopGetSimilar', { shopId, category, limit: 6 });
+      const shops = (r && r.shops) || [];
+      if (!shops.length) { el.hidden = true; return; }
+      el.hidden = false;
+      const grid = document.getElementById('msSimilarGrid');
+      if (!grid) return;
+      grid.innerHTML = shops.map(s => {
+        const url = s.handle ? `/shop/${_esc(s.handle)}` : '#';
+        const logo = s.logoUrl ? `<img class="ms-similar-logo" src="${_esc(s.logoUrl)}" alt="" loading="lazy">` : `<div class="ms-similar-logo" style="background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:18px;">${_esc((s.name||'?')[0].toUpperCase())}</div>`;
+        return `<a class="ms-similar-card" href="${url}">
+          ${logo}
+          <div class="ms-similar-name">${_esc(s.name || '')}</div>
+          <div class="ms-similar-cat">${_esc(s.category || '')}</div>
+          ${s.rating ? `<div class="ms-similar-rating">★ ${Number(s.rating).toFixed(1)}</div>` : ''}
+        </a>`;
+      }).join('');
+    } catch (e) { el.hidden = true; }
+  }
+
   // ─── _ctaAction exposed ───────────────────────────────────────────────────────
   // (defined inline above, referenced by rendered buttons)
 
@@ -1064,6 +1256,11 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
     _toggleDay,
     _toast,
     _ctaAction,
-    _bindAdminDom
+    _bindAdminDom,
+    loadPromotions,
+    toggleWishlist,
+    shareProduct,
+    loadAnnouncements,
+    loadSimilar
   };
 })();

@@ -926,6 +926,84 @@ body.queue-mode .cashier-strip { transition: none !important; }
 .recovery-btn.cash   { background: var(--blue-dk); color: white; }
 .recovery-btn.card   { background: #37474f; color: white; }
 .recovery-btn.cancel { background: var(--gray); color: var(--muted); }
+
+/* ── Gift Card modal ── */
+.gift-code-input {
+  width: 100%; height: 52px; border: 2px solid var(--orange); border-radius: 8px;
+  padding: 0 14px; font-size: 20px; font-weight: 600; font-family: inherit;
+  text-align: center; letter-spacing: 3px; text-transform: uppercase; outline: none;
+  margin-bottom: 10px;
+}
+.gift-code-input:focus { border-color: #ef6c00; }
+/* ── Void confirmation ── */
+.void-warning { text-align: center; padding: 16px 0; }
+.void-icon { font-size: 42px; }
+.void-text { font-size: 16px; font-weight: 700; margin-top: 8px; color: var(--red); }
+.void-sub  { font-size: 13px; color: var(--muted); margin-top: 4px; }
+/* ── Low stock product tile ── */
+.prod-tile.low-stock { border: 1px solid rgba(230,81,0,.35); }
+.prod-tile.low-stock .pt-stock { color: var(--orange); font-weight: 700; }
+
+/* ── Customer purchase history ── */
+.cust-history { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.cust-history-title { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 5px; }
+.cust-hist-item { display: flex; align-items: baseline; gap: 4px; padding: 2px 0; font-size: 11px; }
+.cust-hist-item .chi-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cust-hist-item .chi-amount { color: var(--g); font-weight: 600; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.cust-hist-item .chi-date { color: var(--muted); flex-shrink: 0; }
+
+/* ── Shift cash input ── */
+.shift-cash-input {
+  width: 100%; height: 52px; border: 2px solid var(--g); border-radius: 8px;
+  padding: 0 14px; font-size: 22px; font-weight: 700; text-align: right;
+  font-family: inherit; outline: none; font-variant-numeric: tabular-nums; margin-top: 8px;
+}
+.shift-cash-input:focus { border-color: #52ff00; }
+.shift-info-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+/* ── WhatsApp receipt float button ── */
+.wa-receipt-btn {
+  position: fixed; bottom: 52px; right: 16px; z-index: 300;
+  background: #25d366; color: white;
+  padding: 10px 18px; border-radius: 28px; font-size: 13px; font-weight: 700;
+  border: none; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,.35);
+  display: flex; align-items: center; gap: 8px;
+  animation: toastIn .2s ease;
+  transition: opacity .2s;
+}
+.wa-receipt-btn:hover { opacity: .9; }
+
+/* ── Queue mode: suppress non-essential decoration ── */
+body.queue-mode .ai-strip        { display: none !important; }
+body.queue-mode .note-indicator  { display: none !important; }
+body.queue-mode .hotkey-bar      { display: none; }
+
+/* ── Card terminal instruction strip ── */
+.card-strip {
+  display: none; background: var(--blue-lt); border-left: 3px solid var(--blue);
+  padding: 10px 14px; font-size: 14px; font-weight: 600; color: var(--blue);
+  align-items: center; gap: 10px; flex-shrink: 0;
+}
+.card-strip.visible { display: flex; }
+
+/* ── Note ── */
+.note-textarea {
+  width: 100%; min-height: 80px; border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; font-size: 14px; font-family: inherit; resize: vertical;
+  outline: none; line-height: 1.5;
+}
+.note-textarea:focus { border-color: var(--yellow); }
+.note-indicator {
+  display: none; font-size: 11px; color: var(--yellow); padding: 4px 10px;
+  background: rgba(249,168,37,.08); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  align-items: center; gap: 6px;
+}
+.note-indicator.visible { display: flex; }
+.note-indicator .note-edit {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  color: var(--yellow); font-size: 11px; font-weight: 600; text-decoration: underline;
+}
 </style>
 </head>
 <body>
@@ -949,6 +1027,7 @@ body.queue-mode .cashier-strip { transition: none !important; }
   <button class="topbar-btn" onclick="Checkout.parkSale()">Park</button>
   <button class="topbar-btn" onclick="Checkout.openParked()">Retrieve</button>
   <button class="topbar-btn" onclick="Checkout.openRefund()">Refund</button>
+  <button class="topbar-btn" id="end-shift-btn" onclick="Checkout.openCloseShift()" title="Close current shift">End Shift</button>
   <button class="topbar-btn" id="queue-btn" onclick="Checkout.toggleQueueMode()" title="Ctrl+Q — Toggle Queue Mode">Queue</button>
   <button class="topbar-btn" onclick="window.location.href='pos.html'">&#9776; Menu</button>
 </div>
@@ -1000,6 +1079,17 @@ body.queue-mode .cashier-strip { transition: none !important; }
       </div>
       <div id="cart-rows"></div>
     </div>
+    <!-- Card terminal instruction (shown during card payment) -->
+    <div class="card-strip" id="card-strip">
+      <span>💳</span>
+      <span>Ask customer to tap, insert, or swipe card on the terminal</span>
+    </div>
+
+    <!-- Note indicator (shown when a sale note is active) -->
+    <div class="note-indicator" id="note-indicator">
+      <span>📝</span><span id="note-display"></span>
+      <button class="note-edit" onclick="Checkout.noteDialog()">edit</button>
+    </div>
 
     <!-- AI suggestion strip -->
     <div class="ai-strip" id="ai-strip" style="display:none">
@@ -1043,6 +1133,7 @@ body.queue-mode .cashier-strip { transition: none !important; }
             <span class="cust-tier" id="cust-tier"></span>
           </div>
           <div class="cust-points-row" id="cust-points"></div>
+          <div class="cust-history" id="cust-history" style="display:none"></div>
         </div>
       </div>
 
@@ -1243,6 +1334,7 @@ body.queue-mode .cashier-strip { transition: none !important; }
 <div class="overlay" id="parked-overlay">
   <div class="modal">
     <div class="modal-title">Parked Sales</div>
+    <div style="font-size:11px;color:var(--muted);padding:0 4px 8px">Selecting a sale replaces the current cart.</div>
     <div class="parked-list" id="parked-list">
       <div style="text-align:center;color:var(--muted);padding:20px">No parked sales</div>
     </div>
@@ -1267,8 +1359,92 @@ body.queue-mode .cashier-strip { transition: none !important; }
   </div>
 </div>
 
+<!-- Gift Card modal -->
+<div class="overlay" id="gift-card-overlay">
+  <div class="modal">
+    <div class="modal-title">Gift Card Payment</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Scan gift card QR or type the code</div>
+    <input type="text" class="gift-code-input" id="gift-card-code" placeholder="GIFT CARD CODE" maxlength="24" autocomplete="off" spellcheck="false">
+    <div id="gift-card-status" style="font-size:13px;min-height:18px;text-align:center;color:var(--muted)"></div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn-secondary" onclick="Checkout.closeModal('gift-card-overlay')">Cancel</button>
+      <button class="btn-primary" onclick="Checkout.confirmGiftCard()" style="background:var(--orange)">Redeem</button>
+    </div>
+  </div>
+</div>
+
+<!-- Void confirmation modal -->
+<div class="overlay" id="void-overlay">
+  <div class="modal">
+    <div class="void-warning">
+      <div class="void-icon">🗑</div>
+      <div class="void-text">Void This Sale?</div>
+      <div class="void-sub" id="void-summary">All items will be cleared from the cart.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="Checkout.closeModal('void-overlay')">Keep Items</button>
+      <button class="btn-primary" onclick="Checkout.confirmVoid()" style="background:var(--red)">Void Sale</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sale note modal -->
+<div class="overlay" id="note-overlay">
+  <div class="modal">
+    <div class="modal-title">&#9998; Sale Note</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Printed on receipt</div>
+    <textarea class="note-textarea" id="note-input" placeholder="e.g. Delivery instructions, special requests…" maxlength="200"></textarea>
+    <div style="font-size:11px;color:var(--muted);text-align:right;margin-top:4px" id="note-chars">200 chars remaining</div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="Checkout.clearNote()">Clear Note</button>
+      <button class="btn-primary" onclick="Checkout.confirmNote()">Save Note</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shift open modal -->
+<div class="overlay" id="shift-open-overlay">
+  <div class="modal">
+    <div class="modal-title">&#9201; Open Shift</div>
+    <div class="modal-body">Count your cash drawer and enter the opening float to begin the shift.</div>
+    <div style="margin-top:12px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:2px">Opening Cash Float (KES)</div>
+      <input type="number" class="shift-cash-input" id="shift-opening-cash" placeholder="0.00" min="0" step="any">
+    </div>
+    <div class="shift-info-row" id="shift-open-info">
+      <span id="shift-open-cashier"></span>
+      <span id="shift-open-time"></span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="Checkout.closeModal('shift-open-overlay')">Skip</button>
+      <button class="btn-primary" onclick="Checkout.confirmOpenShift()" style="background:var(--green)">Open Shift</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shift close modal -->
+<div class="overlay" id="shift-close-overlay">
+  <div class="modal">
+    <div class="modal-title">&#9940; Close Shift</div>
+    <div class="modal-body">Count your cash drawer and enter the closing float for reconciliation.</div>
+    <div style="margin-top:12px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:2px">Closing Cash Float (KES)</div>
+      <input type="number" class="shift-cash-input" id="shift-closing-cash" placeholder="0.00" min="0" step="any">
+    </div>
+    <div class="shift-info-row" id="shift-close-info">
+      <span id="shift-close-cashier"></span>
+      <span id="shift-close-variance" style="font-weight:700"></span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="Checkout.closeModal('shift-close-overlay')">Cancel</button>
+      <button class="btn-primary" onclick="Checkout.confirmCloseShift()" style="background:var(--red)">Close Shift</button>
+    </div>
+  </div>
+</div>
+
 <script src="firebase.js"></script>
 <script src="pos-db.js"></script>
+<script src="pos-sync.js"></script>
 <script src="pos-scanner.js"></script>
 <script src="pos-inventory.js"></script>
 <script src="pos-sales.js"></script>
@@ -1322,6 +1498,8 @@ const Checkout = (() => {
     mpesaCountdownId:  null,       /* interval handle for countdown bar */
     lastPaymentTotals: null,       /* kept for retry */
     lastPaymentMethod: null,
+    note:              '',          /* sale note — printed on receipt */
+    _aiSuggestion:     null,
   };
 
   /* ── State machine ── */
@@ -1352,8 +1530,11 @@ const Checkout = (() => {
     /* Auth */
     firebase.auth().onAuthStateChanged(async u => {
       if (!u) { window.location.href = 'pos.html'; return; }
-      _s.cashierId = u.uid;
-      document.getElementById('topbar-cashier').textContent = u.displayName || u.email || 'Cashier';
+      _s.cashierId   = u.uid;
+      _s.cashierName = u.displayName || u.email || 'Cashier';
+      document.getElementById('topbar-cashier').textContent = _s.cashierName;
+      /* Check for active shift; prompt to open if none */
+      await _checkShiftStatus();
     });
 
     /* Clock */
@@ -1376,7 +1557,7 @@ const Checkout = (() => {
     let _searchDebounce;
     si.addEventListener('input', () => {
       clearTimeout(_searchDebounce);
-      _searchDebounce = setTimeout(() => _search(si.value), 180);
+      _searchDebounce = setTimeout(() => _search(si.value), 120);
     });
 
     /* Customer input listener */
@@ -1392,6 +1573,11 @@ const Checkout = (() => {
     /* Coupon input */
     document.getElementById('coupon-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') applyCoupon();
+    });
+
+    /* Gift card Enter key */
+    document.getElementById('gift-card-code').addEventListener('keydown', e => {
+      if (e.key === 'Enter') confirmGiftCard();
     });
 
     /* Load categories + products */
@@ -1484,7 +1670,9 @@ const Checkout = (() => {
     }
     products.slice(0, 48).forEach(p => {
       const tile = document.createElement('div');
-      tile.className = 'prod-tile' + (p.stockQty === 0 && p.trackInventory !== false ? ' out-of-stock' : '');
+      const _isOut  = p.stockQty === 0 && p.trackInventory !== false;
+      const _isLow  = !_isOut && p.trackInventory !== false && p.stockQty > 0 && p.stockQty <= 5;
+      tile.className = 'prod-tile' + (_isOut ? ' out-of-stock' : _isLow ? ' low-stock' : '');
       tile.title     = p.name;
       tile.innerHTML = `
         <div class="pt-name">${_e(p.name)}</div>
@@ -1510,11 +1698,7 @@ const Checkout = (() => {
     sr.innerHTML = '';
     gr.style.display = 'none';
     sr.classList.add('visible');
-    if (!results.length) {
-      sr.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">No products found</div>';
-      return;
-    }
-    results.forEach(p => {
+    function _renderSearchRow(p, container) {
       const row = document.createElement('div');
       row.className = 'sr-item';
       row.innerHTML = `
@@ -1526,8 +1710,29 @@ const Checkout = (() => {
         </div>
       `;
       row.addEventListener('click', () => { addItem(p); clearSearch(); });
-      sr.appendChild(row);
-    });
+      container.appendChild(row);
+    }
+    if (!results.length) {
+      /* Fuzzy fallback — Levenshtein distance ≤ 2 on any word */
+      const fuzzy = q.trim().length >= 3
+        ? _allProducts.filter(p => {
+            const words = (p.name + ' ' + (p.sku||'')).toLowerCase().split(/\s+/);
+            const qt    = q.trim().toLowerCase();
+            return words.some(w => _fuzzyScore(w, qt) <= 2) && p.stockQty !== 0;
+          }).slice(0, 10)
+        : [];
+      if (!fuzzy.length) {
+        sr.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">No products found</div>';
+        return;
+      }
+      const hint = document.createElement('div');
+      hint.style.cssText = 'padding:6px 12px 2px;font-size:11px;color:var(--yellow);';
+      hint.textContent = 'Did you mean…';
+      sr.appendChild(hint);
+      fuzzy.forEach(p => _renderSearchRow(p, sr));
+      return;
+    }
+    results.forEach(p => _renderSearchRow(p, sr));
   }
 
   function clearSearch() {
@@ -1600,6 +1805,11 @@ const Checkout = (() => {
     _updateTotals();
     _broadcastDisplayUpdate();
     _setState('ITEMS');
+    _triggerAISuggestion(product);
+    /* Low stock alert */
+    if (product.trackInventory !== false && product.stockQty != null && product.stockQty <= 3 && product.stockQty > 0) {
+      _toast(`Low stock: ${_e(product.name)} — only ${product.stockQty} left`, 'warning');
+    }
     /* Remove _isNew after animation */
     setTimeout(() => { const it = _s.items.find(i => i.productId === product.id); if (it) it._isNew = false; }, 300);
   }
@@ -1726,6 +1936,25 @@ const Checkout = (() => {
       document.getElementById('loyalty-pts-badge').textContent = `${_s.customer.loyalty?.points || 0} pts`;
     }
 
+    /* ── Contextual guidance strip ──────────────────────────────────────────
+       When the cashier has items in cart, replace the generic "Add items…"
+       with a payment-specific prompt so they know exactly what to tap.
+    ─────────────────────────────────────────────────────────────────────── */
+    if (_s.currentState === 'ITEMS' && _s.items.length > 0) {
+      const msgEl = document.getElementById('strip-msg');
+      if (msgEl) {
+        const p = _s.preferredPayment;
+        const phone = _s.customer?.phone;
+        const amt   = _kes(total);
+        msgEl.textContent =
+          p === 'mpesa' && phone ? `Ready — Send ${amt} to ${_maskPhone(phone)} · Press F5`
+          : p === 'mpesa'        ? `Ready — ${amt} via M-Pesa · Press F5`
+          : p === 'cash'         ? `Ready — ${amt} cash · Press F6`
+          : p === 'card'         ? `Ready — ${amt} by card · Press F7`
+          :                        `Ready — ${amt} · choose payment method`;
+      }
+    }
+
     return { subtotal, discount, couponDsc, loyaltyDsc, tax, total };
   }
 
@@ -1776,6 +2005,8 @@ const Checkout = (() => {
       lr.style.display = 'none';
     }
     _updateTotals();
+    /* Load last 3 purchases for cashier context */
+    _loadRecentPurchases(cust.id || cust.customerId || cust.uid || '');
   }
 
   function clearCustomer() {
@@ -1783,6 +2014,8 @@ const Checkout = (() => {
     _s.loyaltyRedeem = 0;
     _s.loyaltyData   = null;
     document.getElementById('customer-card').classList.remove('visible');
+    const histEl = document.getElementById('cust-history');
+    if (histEl) { histEl.innerHTML = ''; histEl.style.display = 'none'; }
     document.getElementById('cust-input').value = '';
     document.getElementById('loyalty-row').style.display = 'none';
     document.getElementById('redeem-btn').classList.remove('active');
@@ -1853,15 +2086,26 @@ const Checkout = (() => {
     if (totals.total <= 0) { _finalize('loyalty_full', [], totals); return; }
 
     if (method === 'mpesa') {
-      /* Pre-fill phone from customer */
       const phone = _s.customer?.phone || '';
-      document.getElementById('mpesa-phone').value = phone;
+      /* Reset modal state */
+      document.getElementById('mpesa-phone').value  = phone;
       document.getElementById('mpesa-amount').textContent = _kes(totals.total);
-      document.getElementById('mpesa-status').className = 'mpesa-status';
+      document.getElementById('mpesa-status').className   = 'mpesa-status';
       document.getElementById('mpesa-status').textContent = '';
       document.getElementById('mpesa-status').classList.remove('visible');
-      openModal('mpesa-overlay');
-      document.getElementById('mpesa-phone').focus();
+      document.getElementById('mpesa-recovery').classList.remove('visible');
+      document.getElementById('mpesa-action-row').style.display = '';
+      document.getElementById('mpesa-send-btn').disabled = false;
+
+      if (_s.queueMode && phone) {
+        /* Queue mode + known phone: open modal and immediately send — zero extra taps */
+        openModal('mpesa-overlay');
+        _setState('PAYMENT');
+        setTimeout(() => sendMpesa(), 60);
+      } else {
+        openModal('mpesa-overlay');
+        setTimeout(() => document.getElementById(phone ? 'mpesa-send-btn' : 'mpesa-phone').focus(), 60);
+      }
       return;
     }
 
@@ -1876,9 +2120,9 @@ const Checkout = (() => {
 
     if (method === 'card') {
       _setState('PAYMENT');
-      const msg = document.getElementById('strip-msg');
-      if (msg) msg.textContent = 'Tap or insert customer\'s card on the terminal';
-      /* Proceed immediately — no confirm() dialog; card terminal handles auth */
+      /* Show card terminal instruction strip */
+      document.getElementById('card-strip').classList.add('visible');
+      /* Card terminal handles auth — finalize immediately once cashier confirms card was processed */
       _finalize('card', [{ method: 'card', amount: totals.total }], totals);
       return;
     }
@@ -1892,10 +2136,16 @@ const Checkout = (() => {
     }
 
     if (method === 'gift_card') {
-      const _gc = giftCode || (window.prompt('Gift card code:') || '').trim().toUpperCase();
-      const code = _gc;
-      if (!code) return;
-      _processGiftCard(code.trim().toUpperCase(), totals);
+      if (giftCode) {
+        /* Called from scanner — code already known */
+        _processGiftCard(giftCode.trim().toUpperCase(), totals);
+      } else {
+        /* Open Gift Card modal */
+        document.getElementById('gift-card-code').value = '';
+        document.getElementById('gift-card-status').textContent = '';
+        openModal('gift-card-overlay');
+        setTimeout(() => document.getElementById('gift-card-code').focus(), 80);
+      }
       return;
     }
   }
@@ -2090,6 +2340,71 @@ const Checkout = (() => {
     _toast('Payment cancelled — items kept', 'info');
   }
 
+  /* ── Gift Card confirmation (from modal) ── */
+  async function confirmGiftCard() {
+    const code = (document.getElementById('gift-card-code').value || '').trim().toUpperCase();
+    if (!code) {
+      document.getElementById('gift-card-status').textContent = 'Enter or scan a gift card code';
+      document.getElementById('gift-card-status').style.color = 'var(--red)';
+      return;
+    }
+    const totals = _updateTotals();
+    document.getElementById('gift-card-status').textContent = 'Validating…';
+    document.getElementById('gift-card-status').style.color = 'var(--muted)';
+    try {
+      const gc = await PosLoyalty.checkGiftCard(code);
+      if (!gc.valid) {
+        document.getElementById('gift-card-status').textContent = gc.error || 'Gift card invalid or expired';
+        document.getElementById('gift-card-status').style.color = 'var(--red)';
+        return;
+      }
+      if (gc.balance < totals.total) {
+        document.getElementById('gift-card-status').textContent =
+          `Insufficient balance: KES ${gc.balance.toFixed(2)} — use split for remainder`;
+        document.getElementById('gift-card-status').style.color = 'var(--orange)';
+        return;
+      }
+      closeModal('gift-card-overlay');
+      await PosLoyalty.redeemGiftCard(code, totals.total);
+      _finalize('gift_card', [{ method: 'gift_card', code, amount: totals.total }], totals);
+    } catch (err) {
+      document.getElementById('gift-card-status').textContent = err.message || 'Gift card error';
+      document.getElementById('gift-card-status').style.color = 'var(--red)';
+    }
+  }
+
+  /* ── AI suggestion strip ── */
+  function _triggerAISuggestion(justAdded) {
+    /* Hide if cart empty */
+    if (!_s.items.length) {
+      document.getElementById('ai-strip').style.display = 'none';
+      return;
+    }
+    /* Find a product in same category not already in cart */
+    const cartIds = new Set(_s.items.map(i => i.productId));
+    const catId   = justAdded?.categoryId || _s.items[_s.items.length - 1]?.categoryId;
+    const pool    = _allProducts.filter(p =>
+      !cartIds.has(p.id) &&
+      p.id !== (justAdded?.id) &&
+      (p.stockQty === undefined || p.stockQty === null || p.stockQty > 0)
+    );
+    /* Prefer same category, fall back to any available product */
+    const sameCat = pool.filter(p => p.categoryId === catId);
+    const suggestion = sameCat[0] || pool[0] || null;
+    if (!suggestion) {
+      document.getElementById('ai-strip').style.display = 'none';
+      return;
+    }
+    _s._aiSuggestion = suggestion;
+    document.getElementById('ai-text').textContent =
+      `Customers also buy: ${suggestion.name} — KES ${(suggestion.salePrice || suggestion.price || 0).toFixed(0)}`;
+    document.getElementById('ai-action-btn').onclick = () => {
+      addItem(suggestion);
+      document.getElementById('ai-strip').style.display = 'none';
+    };
+    document.getElementById('ai-strip').style.display = 'flex';
+  }
+
   /* Cash */
   function cashQuick(amount) {
     document.getElementById('cash-tendered').value = amount;
@@ -2173,19 +2488,24 @@ const Checkout = (() => {
         discountTotal: totals.discount + totals.couponDsc,
         taxTotal:      totals.tax,
         grandTotal:    totals.total,
-        metadata:      { checkoutStartedAt: _s.saleStartTs },
+        metadata:      { checkoutStartedAt: _s.saleStartTs, note: _s.note || null },
       });
 
       const { receipt, loyaltyAwarded } = res.data;
       _setState('SUCCESS');
       _broadcastThankYou({ customerName: _s.customer?.name, loyaltyEarned: loyaltyAwarded });
 
+      /* Offer WhatsApp receipt while printing — non-blocking */
+      if (_s.customer?.phone) {
+        _offerWhatsAppReceipt(_s.customer.phone, _s.customer.name, receipt.receiptNo, totals.total);
+      }
+
       setTimeout(async () => {
         _setState('PRINTING');
         await _printReceipt(receipt);
         _setState('COMPLETE');
         _toast(`Receipt #${receipt.receiptNo}`, 'success');
-        const resetDelay = _s.queueMode ? 800 : 2500;
+        const resetDelay = _s.queueMode ? 300 : 2200;
         setTimeout(() => _resetSale(), resetDelay);
       }, 600);
 
@@ -2198,8 +2518,11 @@ const Checkout = (() => {
         _setState('PRINTING');
         await _printReceiptLocal(totals, method);
         _toast('Offline: sale saved, will sync', 'warning');
+        if (_s.customer?.phone) {
+          _offerWhatsAppReceipt(_s.customer.phone, _s.customer.name, idempotencyKey.slice(-6).toUpperCase(), totals.total);
+        }
         _setState('COMPLETE');
-        const resetDelay = _s.queueMode ? 800 : 2500;
+        const resetDelay = _s.queueMode ? 300 : 2200;
         setTimeout(() => _resetSale(), resetDelay);
       } else {
         _setState('ERROR');
@@ -2239,12 +2562,17 @@ const Checkout = (() => {
     _s.loyaltyData   = null;
     _s.lastPaymentTotals = null;
     _s.lastPaymentMethod = null;
+    _s.note          = '';
+    _s._aiSuggestion = null;
     _s.saleStartTs   = Date.now();
     clearCustomer();
     document.getElementById('cart-rows').innerHTML = '';
     document.getElementById('coupon-input').value  = '';
     document.getElementById('coupon-badge').classList.remove('visible');
     document.getElementById('split-panel').classList.remove('visible');
+    document.getElementById('note-indicator').classList.remove('visible');
+    document.getElementById('card-strip').classList.remove('visible');
+    document.getElementById('ai-strip').style.display = 'none';
     ['split-mpesa','split-cash','split-card'].forEach(id => { document.getElementById(id).value = ''; });
     _renderCart();
     _updateTotals();
@@ -2281,7 +2609,21 @@ const Checkout = (() => {
   /* ── Void ── */
   function voidSale() {
     if (!_s.items.length) return;
-    if (!confirm('Void this entire sale?')) return;
+    /* Queue mode: skip confirmation modal for speed */
+    if (_s.queueMode) {
+      _resetSale();
+      _toast('Sale voided', 'info');
+      return;
+    }
+    const count = _s.items.reduce((s,i) => s + i.qty, 0);
+    const totals = _updateTotals();
+    document.getElementById('void-summary').textContent =
+      `${count} item${count !== 1 ? 's' : ''} · ${_kes(totals.total)} will be cleared.`;
+    openModal('void-overlay');
+  }
+
+  function confirmVoid() {
+    closeModal('void-overlay');
     _resetSale();
     _toast('Sale voided', 'info');
   }
@@ -2334,7 +2676,6 @@ const Checkout = (() => {
   }
 
   function _retrieveParked(p) {
-    if (_s.items.length && !confirm('This will replace the current cart. Continue?')) return;
     _s.items       = p.items || [];
     _s.customer    = p.customer || null;
     _s.discount    = p.discount || { type:'pct', value:0 };
@@ -2348,15 +2689,146 @@ const Checkout = (() => {
 
   /* ── Refund ── */
   function openRefund() {
-    const saleId = prompt('Enter Sale ID to refund:');
-    if (!saleId) return;
-    alert('Full refund UI — open pos.html → Sales → Search sale → Refund');
+    /* Refunds require manager override — handled in the dedicated POS dashboard */
+    if (_s.items.length) {
+      parkSale();
+      _toast('Cart parked — open POS dashboard to process refund', 'info');
+    }
+    setTimeout(() => { window.location.href = 'pos.html'; }, _s.items.length ? 1200 : 0);
   }
 
   /* ── Note ── */
   function noteDialog() {
-    const note = prompt('Sale note:');
-    if (note !== null) _toast('Note added', 'info');
+    const ta = document.getElementById('note-input');
+    ta.value = _s.note || '';
+    const charEl = document.getElementById('note-chars');
+    charEl.textContent = (200 - ta.value.length) + ' chars remaining';
+    ta.oninput = () => { charEl.textContent = (200 - ta.value.length) + ' chars remaining'; };
+    openModal('note-overlay');
+    setTimeout(() => ta.focus(), 80);
+  }
+
+  function confirmNote() {
+    const val = (document.getElementById('note-input').value || '').trim();
+    _s.note = val;
+    const ind = document.getElementById('note-indicator');
+    if (val) {
+      document.getElementById('note-display').textContent = val.length > 60 ? val.slice(0, 60) + '…' : val;
+      ind.classList.add('visible');
+    } else {
+      ind.classList.remove('visible');
+    }
+    closeModal('note-overlay');
+    if (val) _toast('Note saved', 'success');
+  }
+
+  function clearNote() {
+    _s.note = '';
+    document.getElementById('note-input').value = '';
+    document.getElementById('note-indicator').classList.remove('visible');
+    closeModal('note-overlay');
+  }
+
+  /* ── Shift management ── */
+  async function _checkShiftStatus() {
+    try {
+      if (typeof PosSales?.getActiveShift !== 'function') return;
+      const shift = await PosSales.getActiveShift(_s.cashierId);
+      if (shift) {
+        _s.shiftId = shift.id || shift.shiftId;
+        const opened = shift.openedAt ? new Date(shift.openedAt).toLocaleTimeString('en-KE', { hour12:false, hour:'2-digit', minute:'2-digit' }) : '--:--';
+        document.getElementById('topbar-shift').textContent = `Shift since ${opened}`;
+      } else {
+        /* Prompt cashier to open shift — pre-fill cashier name */
+        document.getElementById('shift-open-cashier').textContent = _s.cashierName;
+        document.getElementById('shift-open-time').textContent = new Date().toLocaleTimeString('en-KE', { hour12:false, hour:'2-digit', minute:'2-digit' });
+        openModal('shift-open-overlay');
+        setTimeout(() => document.getElementById('shift-opening-cash').focus(), 80);
+      }
+    } catch (_) { /* graceful — POS works without shift tracking */ }
+  }
+
+  function confirmOpenShift() {
+    const cash = parseFloat(document.getElementById('shift-opening-cash').value) || 0;
+    closeModal('shift-open-overlay');
+    if (typeof PosSales?.openShift !== 'function') { _toast('Shift tracking not available', 'warning'); return; }
+    PosSales.openShift(_s.cashierId, cash)
+      .then(shiftId => {
+        _s.shiftId = shiftId;
+        const now = new Date().toLocaleTimeString('en-KE', { hour12:false, hour:'2-digit', minute:'2-digit' });
+        document.getElementById('topbar-shift').textContent = `Shift since ${now}`;
+        _toast(`Shift opened — float: KES ${cash.toFixed(2)}`, 'success');
+      })
+      .catch(() => _toast('Shift open failed — continuing anyway', 'warning'));
+  }
+
+  function openCloseShift() {
+    if (!_s.shiftId) { _toast('No active shift', 'warning'); return; }
+    document.getElementById('shift-closing-cash').value = '';
+    document.getElementById('shift-close-cashier').textContent = _s.cashierName;
+    document.getElementById('shift-close-variance').textContent = '';
+    openModal('shift-close-overlay');
+    setTimeout(() => document.getElementById('shift-closing-cash').focus(), 80);
+  }
+
+  function confirmCloseShift() {
+    const cash = parseFloat(document.getElementById('shift-closing-cash').value) || 0;
+    if (!_s.shiftId) { _toast('No active shift', 'warning'); return; }
+    closeModal('shift-close-overlay');
+    if (typeof PosSales?.closeShift !== 'function') { _toast('Shift close not available', 'warning'); return; }
+    PosSales.closeShift(_s.cashierId, cash)
+      .then(() => {
+        _s.shiftId = null;
+        document.getElementById('topbar-shift').textContent = 'No shift';
+        _toast(`Shift closed — closing float: KES ${cash.toFixed(2)}`, 'success');
+      })
+      .catch(() => _toast('Shift close failed', 'error'));
+  }
+
+  /* ── Customer recent purchases ── */
+  async function _loadRecentPurchases(customerId) {
+    const el = document.getElementById('cust-history');
+    if (!el || !customerId) return;
+    try {
+      const history = typeof PosCustomers?.getPurchaseHistory === 'function'
+        ? await PosCustomers.getPurchaseHistory(customerId, 3)
+        : null;
+      if (!history?.length) { el.style.display = 'none'; return; }
+      el.innerHTML = '<div class="cust-history-title">Recent Purchases</div>' +
+        history.map(h => {
+          const date = h.timestamp
+            ? new Date(h.timestamp).toLocaleDateString('en-KE', { day:'2-digit', month:'short' })
+            : '';
+          const label = h.items?.[0]?.name || h.description || 'Purchase';
+          const amount = h.grandTotal || h.total || 0;
+          return `<div class="cust-hist-item">
+            <span class="chi-name">${_e(label)}</span>
+            <span class="chi-date">${_e(date)}</span>
+            <span class="chi-amount">${_kes(amount)}</span>
+          </div>`;
+        }).join('');
+      el.style.display = '';
+    } catch (_) {
+      if (el) el.style.display = 'none';
+    }
+  }
+
+  /* ── Fuzzy score (Levenshtein distance) ── */
+  function _fuzzyScore(str, pat) {
+    if (str.includes(pat)) return 0;
+    const m = str.length, n = pat.length;
+    if (Math.abs(m - n) > 4) return 99;
+    const dp = Array.from({ length: m + 1 }, (_, i) =>
+      Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0)
+    );
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        dp[i][j] = str[i-1] === pat[j-1]
+          ? dp[i-1][j-1]
+          : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+      }
+    }
+    return dp[m][n];
   }
 
   /* ── Customer display ── */
@@ -2484,6 +2956,32 @@ const Checkout = (() => {
   function _kes(n) { return 'KES ' + Number(n||0).toFixed(2); }
   function _e(s)   { const d = document.createElement('div'); d.textContent = String(s||''); return d.innerHTML; }
 
+  function _maskPhone(phone) {
+    const p = String(phone || '').replace(/\s/g, '');
+    if (p.length < 6) return p;
+    return p.slice(0, 4) + '****' + p.slice(-3);
+  }
+
+  function _offerWhatsAppReceipt(phone, name, receiptNo, total) {
+    const num  = String(phone).replace(/^0/, '254').replace(/\D/g, '');
+    const text = encodeURIComponent(
+      `Hi ${name || 'valued customer'},\n` +
+      `Your receipt #${receiptNo} — Total: KES ${Number(total||0).toFixed(2)}.\n` +
+      `Thank you for shopping with us at SOKONI!`
+    );
+    const btn = document.createElement('button');
+    btn.className = 'wa-receipt-btn';
+    btn.innerHTML = '📱 Send receipt via WhatsApp';
+    btn.title = 'Opens WhatsApp with pre-filled receipt message';
+    btn.onclick = () => {
+      window.open(`https://wa.me/${num}?text=${text}`, '_blank', 'noopener');
+      btn.remove();
+    };
+    document.body.appendChild(btn);
+    /* Auto-dismiss after 7 seconds so it doesn't linger into the next sale */
+    setTimeout(() => { if (btn.parentNode) btn.remove(); }, 7000);
+  }
+
   /* ── Public API ── */
   return {
     init,
@@ -2503,7 +3001,7 @@ const Checkout = (() => {
     /* Discount */
     openDiscount, discType, previewDiscount, applyDiscount,
     /* Sale control */
-    voidSale, parkSale, confirmPark, openParked,
+    voidSale, confirmVoid, parkSale, confirmPark, openParked,
     /* Queue mode */
     toggleQueueMode,
     /* Refund */
@@ -2513,7 +3011,11 @@ const Checkout = (() => {
     /* Display */
     openDisplay,
     /* Note */
-    noteDialog,
+    noteDialog, confirmNote, clearNote,
+    /* Gift card */
+    confirmGiftCard,
+    /* Shift management */
+    confirmOpenShift, openCloseShift, confirmCloseShift,
     /* Modal */
     openModal, closeModal,
     /* Loader */

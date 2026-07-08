@@ -11,9 +11,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin      = require('firebase-admin');
 
-const SENDGRID_SK          = defineSecret('SENDGRID_API_KEY');
-const AFRICASTALKING_SK    = defineSecret('AFRICASTALKING_API_KEY');
-const AFRICASTALKING_UN    = defineSecret('AFRICASTALKING_USERNAME');
+const SENDGRID_SK = defineSecret('SENDGRID_API_KEY');
+const sokoniAt    = require('./sokoni-at');
 
 /* Guard against double-init in monorepo */
 if (!admin.apps.length) admin.initializeApp();
@@ -92,7 +91,7 @@ exports.posSyncToMarketplace = onCall(
    after a POS sale. Falls back gracefully if service unavailable.
 ══════════════════════════════════════════════════════════ */
 exports.sendPOSReceipt = onCall(
-  { secrets: [SENDGRID_SK, AFRICASTALKING_SK, AFRICASTALKING_UN], region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
+  { secrets: [SENDGRID_SK, ...sokoniAt.secrets], region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Must be signed in');
 
@@ -115,8 +114,11 @@ exports.sendPOSReceipt = onCall(
     let result = { sent: false, channel };
 
     if (channel === 'sms' && phone) {
-      const apiKey = AFRICASTALKING_SK.value();
-      if (!apiKey) throw new HttpsError('failed-precondition', 'SMS service not configured');
+      try {
+        sokoniAt.resolveAtCredentials();
+      } catch (e) {
+        throw new HttpsError('failed-precondition', e.message);
+      }
 
       const smsBody = [
         `${shopName} Receipt #${receiptNo}`,
@@ -126,10 +128,7 @@ exports.sendPOSReceipt = onCall(
         `Thank you for shopping at ${shopName}!`,
       ].filter(Boolean).join('\n').slice(0, 320);
 
-      const atUsername = AFRICASTALKING_UN.value();
-      if (!atUsername) throw new HttpsError('failed-precondition', 'AFRICASTALKING_USERNAME secret not set — contact admin');
-      const AtKit = require('africastalking');
-      const at    = AtKit({ apiKey, username: atUsername });
+      const at = sokoniAt.atBuildClient();
       await at.SMS.send({ to: [phone], message: smsBody, from: 'SOKONI' });
       result = { sent: true, channel: 'sms', to: phone };
 

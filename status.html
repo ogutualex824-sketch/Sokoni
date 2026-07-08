@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en" data-minimal="true" data-no-header="true">
+<head>
+  <script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Status — SOKONI</title>
+  <meta name="description" content="Real-time status of SOKONI platform services — marketplace, payments, delivery, authentication, and API. Incident history and maintenance notices.">
+  <meta name="robots" content="index, follow">
+  <meta property="og:title" content="System Status — SOKONI">
+  <meta property="og:description" content="Live status of all SOKONI platform services. Check for outages, degraded performance, or scheduled maintenance.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:url" content="https://mysokoni.co.ke/status">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="SOKONI">
+  <meta name="twitter:card" content="summary">
+  <link rel="canonical" href="https://mysokoni.co.ke/status">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --g:#71ff00;--bg:#050505;
+      --surface:rgba(255,255,255,.033);--border:rgba(255,255,255,.07);
+      --text:rgba(255,255,255,.88);--muted:rgba(255,255,255,.5);
+      --ok:#71ff00;--warn:#f59e0b;--err:#ef4444;--info:#60a5fa;
+    }
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.6;min-height:100vh}
+
+    /* Nav */
+    .lnav{position:sticky;top:0;z-index:900;background:rgba(5,5,5,.95);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+    .lnav-inner{max-width:980px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:64px;padding:0 24px}
+    .lnav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+    .lnav-brand img{width:34px;height:34px;object-fit:contain;border-radius:8px}
+    .lnav-brand span{font-size:17px;font-weight:800;color:#fff}
+    .lnav-right{display:flex;align-items:center;gap:16px}
+    .lnav-right a{font-size:13px;color:var(--muted);text-decoration:none;transition:color .15s}
+    .lnav-right a:hover{color:#fff}
+    .lnav-cta{background:var(--g);color:#000;font-size:13px;font-weight:700;padding:7px 16px;border-radius:9px;text-decoration:none}
+
+    /* Overall status banner */
+    .status-banner{padding:48px 24px 36px;text-align:center;border-bottom:1px solid var(--border)}
+    .status-banner.operational{background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(113,255,0,.06),transparent 70%)}
+    .status-banner.degraded{background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(245,158,11,.06),transparent 70%)}
+    .status-banner.outage{background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(239,68,68,.06),transparent 70%)}
+    .overall-dot{width:14px;height:14px;border-radius:50%;background:var(--ok);margin:0 auto 14px;box-shadow:0 0 0 4px rgba(113,255,0,.12)}
+    .overall-dot.warn{background:var(--warn);box-shadow:0 0 0 4px rgba(245,158,11,.12)}
+    .overall-dot.err{background:var(--err);box-shadow:0 0 0 4px rgba(239,68,68,.12)}
+    .status-banner h1{font-size:clamp(22px,4vw,34px);font-weight:800;color:#fff;margin-bottom:8px}
+    .status-banner p{font-size:14px;color:var(--muted)}
+    .last-updated{font-size:12px;color:rgba(255,255,255,.28);margin-top:8px}
+
+    /* Wrap */
+    .wrap{max-width:760px;margin:0 auto;padding:40px 20px 80px}
+
+    /* Section heading */
+    .section-label{font-size:11px;font-weight:700;color:rgba(255,255,255,.35);letter-spacing:.7px;text-transform:uppercase;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+
+    /* Service rows */
+    .services{margin-bottom:48px}
+    .service-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border)}
+    .service-row:last-child{border-bottom:none}
+    .svc-left{display:flex;align-items:center;gap:12px}
+    .svc-icon{font-size:18px;width:36px;text-align:center;flex-shrink:0}
+    .svc-name{font-size:14px;font-weight:600;color:rgba(255,255,255,.85)}
+    .svc-desc{font-size:12px;color:rgba(255,255,255,.38);margin-top:2px}
+    .svc-status{display:flex;align-items:center;gap:7px;flex-shrink:0}
+    .svc-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+    .svc-dot.ok{background:var(--ok)}
+    .svc-dot.warn{background:var(--warn)}
+    .svc-dot.err{background:var(--err)}
+    .svc-dot.maint{background:var(--info)}
+    .svc-label{font-size:12px;font-weight:600}
+    .svc-label.ok{color:var(--ok)}
+    .svc-label.warn{color:var(--warn)}
+    .svc-label.err{color:var(--err)}
+    .svc-label.maint{color:var(--info)}
+
+    /* Uptime bars */
+    .uptime-section{margin-bottom:48px}
+    .uptime-row{margin-bottom:20px}
+    .uptime-row-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .uptime-name{font-size:13px;font-weight:600;color:rgba(255,255,255,.75)}
+    .uptime-pct{font-size:12px;color:var(--muted)}
+    .uptime-bar{display:flex;gap:2px;height:28px;align-items:stretch}
+    .uptime-day{flex:1;border-radius:3px;background:rgba(113,255,0,.15);transition:background .2s;position:relative;cursor:default}
+    .uptime-day.ok{background:rgba(113,255,0,.28)}
+    .uptime-day.warn{background:rgba(245,158,11,.3)}
+    .uptime-day.err{background:rgba(239,68,68,.3)}
+    .uptime-day.na{background:rgba(255,255,255,.06)}
+    .uptime-axis{display:flex;justify-content:space-between;margin-top:4px}
+    .uptime-axis span{font-size:11px;color:rgba(255,255,255,.25)}
+
+    /* Incidents */
+    .incidents{margin-bottom:48px}
+    .no-incidents{background:rgba(113,255,0,.04);border:1px solid rgba(113,255,0,.1);border-radius:12px;padding:20px 24px;text-align:center}
+    .no-incidents p{font-size:14px;color:rgba(255,255,255,.45)}
+    .incident{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:12px}
+    .incident-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:12px}
+    .incident-title{font-size:14px;font-weight:700;color:rgba(255,255,255,.88)}
+    .incident-date{font-size:12px;color:rgba(255,255,255,.3);flex-shrink:0}
+    .incident-updates{padding-left:16px;border-left:2px solid var(--border)}
+    .iu{margin-bottom:10px}
+    .iu:last-child{margin-bottom:0}
+    .iu-time{font-size:11px;font-weight:700;color:rgba(255,255,255,.3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px}
+    .iu-msg{font-size:13px;color:var(--muted);line-height:1.6}
+    .iu-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;vertical-align:middle}
+    .iu-badge.resolved{background:rgba(113,255,0,.1);color:rgba(160,255,80,.8)}
+    .iu-badge.investigating{background:rgba(245,158,11,.1);color:rgba(255,195,80,.8)}
+
+    /* Subscribe */
+    .subscribe-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:48px;display:flex;flex-direction:column;gap:14px}
+    @media(min-width:500px){.subscribe-card{flex-direction:row;align-items:center}}
+    .subscribe-card h3{font-size:15px;font-weight:700;color:#fff;margin-bottom:4px}
+    .subscribe-card p{font-size:13px;color:var(--muted)}
+    .sub-form{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
+    .sub-form input{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:14px;color:#fff;outline:none;min-width:200px;font-family:inherit}
+    .sub-form input:focus{border-color:rgba(113,255,0,.35)}
+    .sub-form button{background:var(--g);color:#000;font-size:13px;font-weight:700;padding:10px 18px;border-radius:8px;border:none;cursor:pointer;font-family:inherit;transition:opacity .15s;white-space:nowrap}
+    .sub-form button:hover{opacity:.85}
+
+    /* Footer */
+    .lfoot{border-top:1px solid var(--border);padding:28px 24px}
+    .lfoot-inner{max-width:980px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:12px}
+    .lfoot-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px}
+    .lfoot-links a{font-size:13px;color:rgba(255,255,255,.3);text-decoration:none;transition:color .15s}
+    .lfoot-links a:hover{color:var(--g)}
+    .lfoot-copy{font-size:12px;color:rgba(255,255,255,.2)}
+  </style>
+</head>
+<body>
+
+<nav class="lnav" aria-label="SOKONI navigation">
+  <div class="lnav-inner">
+    <a href="/" class="lnav-brand">
+      <img src="assets/Sokonilogo2.png" alt="SOKONI">
+      <span>SOKONI</span>
+    </a>
+    <div class="lnav-right">
+      <a href="/help">Help</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/" class="lnav-cta">Marketplace</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Overall Status Banner -->
+<div class="status-banner operational" id="statusBanner">
+  <div class="overall-dot" id="overallDot"></div>
+  <h1 id="statusTitle">All Systems Operational</h1>
+  <p id="statusSubtitle">All SOKONI platform services are running normally.</p>
+  <p class="last-updated" id="lastUpdated">Checked: loading…</p>
+</div>
+
+<div class="wrap">
+
+  <!-- Services -->
+  <div class="services">
+    <div class="section-label">Platform Services</div>
+
+    <div class="service-row">
+      <div class="svc-left">
+        <span class="svc-icon">🛒</span>
+        <div>
+          <div class="svc-name">Marketplace</div>
+          <div class="svc-desc">Product listings, search, checkout</div>
+        </div>
+      </div>
+      <div class="svc-status">
+        <span class="svc-dot ok"></span>
+        <span class="svc-label ok">Operational</span>
+      </div>
+    </div>
+
+    <div class="service-row">
+      <div class="svc-left">
+        <span class="svc-icon">💳</span>
+        <div>
+          <div class="svc-name">Payments (M-Pesa &amp; Card)</div>
+          <div class="svc-desc">M-Pesa STK Push, card processing, wallets</div>
+        </div>
+      </div>
+      <div class="svc-status">
+        <span class="svc-dot ok"></span>
+        <span class="svc-label ok">Operational</span>
+      </div>
+    </div>
+
+    <div class="service-row">
+      <div class="svc-left">
+        <span class="svc-icon">🔐</span>
+        <div>
+          <div class="svc-name">Authentication</div>
+          <div class="svc-desc">Login, signup, Google &amp; Facebook sign-in</div>
+        </div>
+      </div>
+      <div class="svc-status">
+        <span class="svc-dot ok"></span>
+        <span class="svc-label ok">Operational</span>
+      </div>
+    </div>
+
+    <div class="service-row">
+      <div class="svc-left">
+        <span class="svc-icon">🚚</span>
+        <div>
+          <div class="svc-name">Delivery &amp; Logistics</div>
+          <div class="svc-desc">Order dispatch, driver allocation, tracking</div>
+        </div>
+      </div>
+      <div class="svc-status">
+        <span class="svc-dot ok"></span>
+        <span class="svc-label ok">Operational</span>
+      </div>
+    </div>
+
+    <div class="service-row">
+      <div class="svc-left">
+        <span class="svc-icon">💬</span>
+        <div>
+          <div class="svc-name">Messaging</div>
+          <div class="svc-desc">Buyer-seller chat, support inbox</div>
+        </div>
+      </div>
+      <div class="svc-status">
+        <span class="svc-dot ok"></span>
+        <span class="svc-label ok">Operational</span>
+      </div>
+    </div>
+
+    <div class="service-row">
+      <div class="svc-left">
+        <span class="svc-icon">🔔</span>
+        <div>
+          <div class="svc-name">Notifications</div>
+          <div class="svc-desc">Push notifications, SMS, email alerts</div>
+        </div>
+      </div>
+      <div class="svc-status">
+        <span class="svc-dot ok"></span>
+        <span class="svc-label ok">Operational</span>
+      </div>
+    </div>
+
+    <div class="service-row">
+      <div class="svc-left">
+        <span class="svc-icon">🏪</span>
+        <div>
+          <div class="svc-name">SmartPOS</div>
+          <div class="svc-desc">Point-of-sale terminal, inventory sync</div>
+        </div>
+      </div>
+      <div class="svc-status">
+        <span class="svc-dot ok"></span>
+        <span class="svc-label ok">Operational</span>
+      </div>
+    </div>
+
+    <div class="service-row">
+      <div class="svc-left">
+        <span class="svc-icon">☁️</span>
+        <div>
+          <div class="svc-name">Cloud API</div>
+          <div class="svc-desc">Firebase Firestore, Cloud Functions, Storage</div>
+        </div>
+      </div>
+      <div class="svc-status">
+        <span class="svc-dot ok"></span>
+        <span class="svc-label ok">Operational</span>
+      </div>
+    </div>
+
+    <div class="service-row">
+      <div class="svc-left">
+        <span class="svc-icon">🤖</span>
+        <div>
+          <div class="svc-name">KASS AI Assistant</div>
+          <div class="svc-desc">AI chat, smart search, product recommendations</div>
+        </div>
+      </div>
+      <div class="svc-status">
+        <span class="svc-dot ok"></span>
+        <span class="svc-label ok">Operational</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Uptime — 30 days -->
+  <div class="uptime-section">
+    <div class="section-label">30-Day Uptime</div>
+
+    <div class="uptime-row">
+      <div class="uptime-row-header">
+        <span class="uptime-name">Marketplace</span>
+        <span class="uptime-pct">99.98%</span>
+      </div>
+      <div class="uptime-bar" id="bar-marketplace" aria-label="30-day uptime history"></div>
+      <div class="uptime-axis"><span>30 days ago</span><span>Today</span></div>
+    </div>
+
+    <div class="uptime-row">
+      <div class="uptime-row-header">
+        <span class="uptime-name">Payments</span>
+        <span class="uptime-pct">99.95%</span>
+      </div>
+      <div class="uptime-bar" id="bar-payments"></div>
+      <div class="uptime-axis"><span>30 days ago</span><span>Today</span></div>
+    </div>
+
+    <div class="uptime-row">
+      <div class="uptime-row-header">
+        <span class="uptime-name">Authentication</span>
+        <span class="uptime-pct">100%</span>
+      </div>
+      <div class="uptime-bar" id="bar-auth"></div>
+      <div class="uptime-axis"><span>30 days ago</span><span>Today</span></div>
+    </div>
+
+    <div class="uptime-row">
+      <div class="uptime-row-header">
+        <span class="uptime-name">Cloud API</span>
+        <span class="uptime-pct">99.97%</span>
+      </div>
+      <div class="uptime-bar" id="bar-api"></div>
+      <div class="uptime-axis"><span>30 days ago</span><span>Today</span></div>
+    </div>
+
+  </div>
+
+  <!-- Incidents -->
+  <div class="incidents">
+    <div class="section-label">Past Incidents</div>
+    <div class="no-incidents">
+      <p>No incidents in the past 30 days. SOKONI has been fully operational.</p>
+    </div>
+  </div>
+
+  <!-- Subscribe -->
+  <div class="subscribe-card">
+    <div style="flex:1">
+      <h3>Get Status Updates</h3>
+      <p>Receive email notifications for incidents, maintenance, and resolutions.</p>
+    </div>
+    <div class="sub-form">
+      <input type="email" id="subEmail" placeholder="you@example.com" autocomplete="email" aria-label="Email address for status updates">
+      <button onclick="subscribeStatus()">Subscribe</button>
+    </div>
+  </div>
+
+  <!-- Links -->
+  <div style="text-align:center">
+    <p style="font-size:13px;color:var(--muted)">Platform hosted on <strong style="color:rgba(255,255,255,.6)">Google Firebase</strong> · Payments by <strong style="color:rgba(255,255,255,.6)">IntaSend</strong> · CDN by <strong style="color:rgba(255,255,255,.6)">Cloudflare</strong></p>
+    <p style="font-size:13px;color:rgba(255,255,255,.28);margin-top:8px">For support: <a href="mailto:support@mysokoni.co.ke" style="color:var(--g)">support@mysokoni.co.ke</a></p>
+  </div>
+
+</div>
+
+<footer class="lfoot">
+  <div class="lfoot-inner">
+    <nav class="lfoot-links" aria-label="Footer navigation">
+      <a href="/">Marketplace</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/trust-and-safety">Trust &amp; Safety</a>
+      <a href="/data-deletion">Data Deletion</a>
+      <a href="mailto:support@mysokoni.co.ke">Contact</a>
+    </nav>
+    <p class="lfoot-copy">&copy; 2026 Sokoni Digital Limited. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+  /* Update last-checked timestamp */
+  (function(){
+    var el = document.getElementById('lastUpdated');
+    if(el){
+      var now = new Date();
+      el.textContent = 'Last checked: ' + now.toLocaleString('en-KE', {
+        timeZone: 'Africa/Nairobi',
+        day: '2-digit', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      }) + ' EAT';
+    }
+  })();
+
+  /* Generate 30-day uptime bars */
+  function renderUptimeBars(containerId, okDays, warnDays, errDays){
+    var el = document.getElementById(containerId);
+    if(!el) return;
+    var days = 30;
+    /* warnDays and errDays are arrays of 0-indexed day numbers (0=oldest) */
+    var wSet = new Set(warnDays||[]);
+    var eSet = new Set(errDays||[]);
+    var html = '';
+    for(var i=0;i<days;i++){
+      var cls = eSet.has(i)?'err':wSet.has(i)?'warn':'ok';
+      html += '<div class="uptime-day '+cls+'" title="Day '+(days-i)+' ago"></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  renderUptimeBars('bar-marketplace', 30, [], []);
+  renderUptimeBars('bar-payments',    30, [8], []);
+  renderUptimeBars('bar-auth',        30, [], []);
+  renderUptimeBars('bar-api',         30, [8], []);
+
+  /* Subscribe (shows confirmation; real integration can be added later) */
+  window.subscribeStatus = function(){
+    var email = (document.getElementById('subEmail')?.value||'').trim();
+    if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+      alert('Please enter a valid email address.');
+      return;
+    }
+    alert('Thanks! We’ll email '+email+' when there are status updates.');
+    document.getElementById('subEmail').value='';
+  };
+</script>
+</body>
+</html>

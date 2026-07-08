@@ -5,7 +5,27 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
-## ▶ AUTHORITATIVE PENDING SNAPSHOT — 2026-07-07
+## BUG FIX — 2026-07-08 (earnLoyaltyPoints export mismatch)
+
+**File:** `functions/index.js` line 8224
+
+`loyalty.js` exports `awardLoyaltyPoints` (not `earnLoyaltyPoints`). The index.js
+export was using the wrong function name, causing deploy to abort immediately with
+"No function matches the filter: default:earnLoyaltyPoints".
+
+**Fix applied:**
+```js
+// Before (wrong):
+exports.earnLoyaltyPoints = loyalty.earnLoyaltyPoints;
+// After (correct):
+exports.awardLoyaltyPoints = loyalty.awardLoyaltyPoints;
+```
+
+Use `functions:awardLoyaltyPoints` in all deploy commands (not `earnLoyaltyPoints`).
+
+---
+
+## ▶ AUTHORITATIVE PENDING SNAPSHOT — 2026-07-08 (updated)
 _Supersedes the older per-batch counts below (14/23, 0/143 were partial views)._
 
 Ground truth: `firebase functions:list` (1512 live) vs trigger exports loaded from
@@ -14,9 +34,11 @@ same hard **Cloud Run CPU quota ceiling** in `us-central1` (HTTP 429). Confirmed
 dry auto-retries returning 0 created; freeing 14 slots earlier let in exactly 14 — a
 1:1 hard ceiling that does NOT reset on a timer.
 
-### Pending by subsystem (187 total)
+### Pending by subsystem (218 total)
 - 38 — POS terminal / peripheral (`pos*`) — includes 7 new printer CFs
 - 17 — financial-os (`fos*`)
+- **17 — venue & resource booking engine (NEW) ⚠ PRIORITY**
+- **14 — availability engine (NEW) ⚠ PRIORITY (enables open/closed status on all hubs)**
 - 13 — Firestore triggers (`on*` order/payment/delivery/user)
 - **11 — async job-engine (NEW) ⚠ PRIORITY (restores job processing — see gap note)**
 - 10 — sessions
@@ -36,6 +58,59 @@ dry auto-retries returning 0 created; freeing 14 slots earlier let in exactly 14
 
 Full name list: `scratchpad/pending.txt`.
 
+---
+
+## Intelligent Automation & Decision Engine v1.0 — 2026-07-08
+
+**Files:**
+- `functions/automation-engine.js` — 15 CFs (6 triggers + 2 scheduled + 7 callable)
+- `automation-center.html` — admin UI; calls `auto*` CFs
+- `admin-os.html` — added sidebar links to automation-center + ADE rules
+
+**New CFs (add to pending count — blocked by same quota):**
+
+| Export name | Type | Purpose |
+|---|---|---|
+| `autoOnAccountCreate` | Firestore trigger `users/{uid}` | Auto-activate new accounts |
+| `autoOnSubscriptionCreate` | Firestore trigger `subscriptions/{subId}` | Activate subscription lifecycle |
+| `autoOnSellerApplication` | Firestore trigger `sellerApplications/{appId}` | Auto-approve/queue seller applications |
+| `autoOnDisputeCreate` | Firestore trigger `disputes/{disputeId}` | AI-powered dispute resolution |
+| `autoOnRefundRequest` | Firestore trigger `refundRequests/{refId}` | Auto-approve small refunds, queue large |
+| `autoOnApprovalRequest` | Firestore trigger `approvalRequests/{reqId}` | Route approval requests by risk |
+| `autoScheduledPayouts` | Schedule every 6 hours | Process eligible seller payouts |
+| `autoScheduledMaintenance` | Schedule every 24 hours | Archive orders, retry failed jobs |
+| `autoGetExceptionQueue` | onCall admin | List automationQueue items |
+| `autoResolveException` | onCall admin | Resolve exception with override tracking |
+| `autoGetRules` | onCall admin | Fetch all business rules |
+| `autoUpdateRule` | onCall admin | Update single rule category |
+| `autoGetAuditLog` | onCall admin | Paginated automation audit log |
+| `autoGetStatus` | onCall admin | Engine health and queue stats |
+| `autoTriggerMaintenance` | onCall admin | On-demand maintenance run |
+
+**New Firestore collections:**
+- `automationRules/{category}` — configurable business rules (no-code threshold editing)
+- `automationQueue` — exception items requiring human review
+- `automationAuditLog` — immutable trail of every automated action
+
+**Secrets required:** `ANTHROPIC_API_KEY` (already in Secret Manager — for AI dispute resolution)
+
+**Deploy command (when quota available):**
+```bash
+firebase deploy --only functions:autoOnAccountCreate,functions:autoOnSubscriptionCreate,functions:autoOnSellerApplication,functions:autoOnDisputeCreate,functions:autoOnRefundRequest,functions:autoOnApprovalRequest,functions:autoScheduledPayouts,functions:autoScheduledMaintenance,functions:autoGetExceptionQueue,functions:autoResolveException,functions:autoGetRules,functions:autoUpdateRule,functions:autoGetAuditLog,functions:autoGetStatus,functions:autoTriggerMaintenance,hosting
+```
+
+**What's automated on deploy:**
+- Every new user account auto-activated (configurable: can require email verify)
+- Every new subscription auto-activated with billing cycle date
+- Seller applications with standard docs auto-approved; incomplete → exception queue with guidance
+- Disputes under KES 1,000 auto-resolved with evidence; larger disputes get Claude Haiku recommendation + queued
+- Refunds under KES 2,000 auto-approved + wallet credited; over KES 20,000 → exception queue
+- Low-risk approval requests (score < 30, amount < KES 10K) auto-approved; others queued
+- Payouts over 2-day hold and under KES 100K auto-processed; larger → exception queue
+- Daily: archive completed orders > 90 days, retry failed async jobs, expire stale queue items
+
+---
+
 ### ⚠ Async job-engine gap (deploy these first when quota frees)
 This session pruned the old `async-jobs-engine.js` workers (10 caller-less callables
 + 4 redundant workers) to free quota. Their replacement `async-jobs.js` workers
@@ -49,6 +124,122 @@ This session pruned the old `async-jobs-engine.js` workers (10 caller-less calla
 GCP Console → IAM & Admin → **Quotas** → `run.googleapis.com`, `us-central1` →
 **"CPU allocation without committed use (Total, per region)"** → request increase,
 then `firebase deploy --only functions --force` lands all 187.
+
+---
+
+## DEPLOY ACTIVITY — 2026-07-08 (Admin OS v2.0 — Mission Control)
+
+### Admin Operating System v2.0 — hosting deploy required
+**Files changed:** `admin-os.html`, `sokoni-aos.js`
+
+**New panels / tabs added:**
+- Dashboard: +5 KPI cards (Active Businesses, Active Bookings, Inventory Alerts, Platform Uptime, MRR) — now 19 total KPI cards
+- User Management: 11 role filters (added agent/doctor/lawyer/hotel/freelancer/employee)
+- Delivery: +3 stats (Failed Today, On-Time Rate, Active Riders) + Fleet Monitor / Rider Nav / GIP map links
+- Financial: +2 tabs — Wallet Ops (`adminGetWalletOperations`) + Escrow (`finosGetEscrowAccounts`, `finosReleaseEscrow`) + formatted Report tab with JSON export
+- Communications: Push tab refactored + Email Blast tab (`adminSendEmailBlast`) + SMS tab (`adminSendSMSBlast`)
+- Content: +Campaigns tab (`adminGetCampaigns`, `adminCreateCampaign`, `adminUpdateCampaignStatus`, `adminDeleteCampaign`)
+- Analytics: +3 tabs — Cohort (`adminGetCohortAnalysis`), Funnel (`adminGetConversionFunnel`), Retention (`adminGetRetentionMetrics`)
+- Config: +Commission Rules section + Payout Schedule section (both save via `adminUpdatePlatformSettings`)
+- Audit: +search/filter input (`filterAuditRows` — client-side, no CF needed)
+- Fraud: + Payment Anomaly section (`detectPaymentAnomalies` live) + Void Receipt button (`voidTrustReceipt`)
+- Security: +Security Tools row (links to Security Center, Zero Trust Dashboard) + Security Events feed (`securityEvents` collection) + Revoke All Sessions
+- SmartPOS: +2 tabs — Revenue (`getAdminRevenueReport` with `scope:pos`) + Shifts (`posShifts` collection) + Observability link
+
+**New functions added to public API:** `voidReceiptDialog`, `analyticsTab`, `saveCommissionRules`, `savePayoutSchedule`, `filterAuditRows`, `revokeAllSessions`, `loadSecurityEvents`, `posTab`, `releaseEscrow`, `exportFinancialReport`, `commsTab`, `sendEmailBlast`, `sendSMSBlast`, `createCampaign`, `activateCampaign`, `deleteCampaign`
+
+**Live KPI listeners added:** `businesses` (active count) + `bookings` (confirmed+pending count)
+
+**No new CFs required** — all new tabs call existing CFs or Firestore directly. Some tabs (`adminGetCohortAnalysis`, `adminGetConversionFunnel`, `adminGetRetentionMetrics`, `adminGetWalletOperations`, `adminSendEmailBlast`, `adminSendSMSBlast`, `adminGetCampaigns`) will gracefully show empty states until the corresponding CFs are deployed.
+
+**Hosting deploy (run now):**
+```powershell
+firebase deploy --only hosting
+```
+
+---
+
+## DEPLOY ACTIVITY — 2026-07-07 (Payment Trust & Security)
+
+### Payment Trust & Security v2.0 — hosting deployed, 1 CF quota-blocked
+**Files changed:** `wallet.html`, `functions/payment-trust.js` (+velocity+outlier patterns +voidTrustReceipt), `functions/index.js`
+
+**Security fix:** `_assertAdmin()` was missing `await` on `_assertAuth()` — `uid` resolved to a Promise, meaning the admin check ran before auth resolved. All admin-guarded CFs (`getPaymentSecurityAlerts`) were effectively unauthenticated.
+
+**`detectPaymentAnomalies` now implements all 4 documented patterns:**
+1. Duplicate charges (same amount, same user, <5 min) — was implemented
+2. Failed payment spikes (≥5 failures/24h per user) — was implemented
+3. **Velocity breach (>20 tx/hour per cashier)** — was documented but missing; now added
+4. **Large transaction outlier (>3× 30-day average per merchant)** — was documented but missing; now added
+
+**New CF:** `voidTrustReceipt` — admin-only; marks a receipt `status:'void'`, logs to `receiptEvents`, validates double-void
+
+**`wallet.html` trust integration (was zero):**
+- `sokoni-payment-trust.js` now loaded on wallet page
+- Compact IntaSend badge + secure payment pills in top-up panel
+- Buyer protection section (marketplace context)
+- Trust footer: SSL / IntaSend / PCI DSS / CBK Compliant
+
+**CF deploy (quota-blocked):**
+```powershell
+firebase deploy --only "functions:voidTrustReceipt,functions:detectPaymentAnomalies"
+```
+
+---
+
+## DEPLOY ACTIVITY — 2026-07-07 (SmartPOS Checkout + Venue Booking)
+
+### SmartPOS Zero-Friction Checkout v3.0 — hosting deployed, 5 CFs quota-blocked
+**Files changed:** `pos-checkout.html` (2726 → 2927 lines), `pos-sync.js` (+55 lines adapter), `functions/pos-intelligence.js` (+5 new CFs), `functions/index.js`
+
+**What's new:**
+- `window.PosSync` adapter added to `pos-sync.js` — fixes broken offline sync across `pos-sales.js`, `pos-customers.js`, `pos-inventory.js` (all three called `PosSync.queue/enqueue` with no definition)
+- `pos-sync.js` now loaded in `pos-checkout.html` (was missing from script list)
+- Shift startup: checks for active shift on auth; if none, prompts cashier to enter opening cash float; "End Shift" button in topbar → closing cash float → `PosSales.closeShift()`
+- Customer purchase history: `_loadRecentPurchases()` fetches last 3 purchases via `PosCustomers.getPurchaseHistory()` and shows them in the customer card
+- Low stock indicators: product tiles get amber `.low-stock` border/text when `stockQty ≤ 5`; toast on `addItem()` when adding item with `stockQty ≤ 3`
+- Fuzzy product search: Levenshtein distance matching as fallback when no exact results; "Did you mean…" header before fuzzy results
+- 5 new AI assistance CFs in `pos-intelligence.js`: `posSmartSearch` (Haiku-corrected search), `posDetectAnomaly` (pricing errors, large transactions), `posGetCustomerInsights` (purchase patterns + upsell suggestion), `posGetInventoryAlerts` (expiry + low-stock at session start), `posGetReorderSuggestions` (velocity-ranked reorder list)
+
+**Hosting deploy (run now):**
+```powershell
+firebase deploy --only hosting
+```
+
+**CF deploy (quota-blocked, run once quota frees):**
+```powershell
+firebase deploy --only "functions:posSmartSearch,functions:posDetectAnomaly,functions:posGetCustomerInsights,functions:posGetInventoryAlerts,functions:posGetReorderSuggestions"
+```
+
+---
+
+### ✅ SmartPOS Next-Generation Checkout v2.0 — client-side only (hosting)
+**Files changed:** `pos-checkout.html` (2528 → 2726 lines)
+
+**Enhancements:**
+- Replaced all `prompt()` / `confirm()` / `alert()` calls with proper SOKONI modals — zero native dialogs remain
+- Gift Card modal: scans via wedge or manual entry; validates via `PosLoyalty.checkGiftCard()` before redeeming; Enter key confirm
+- Void Confirmation modal: shows item count + total before clearing cart
+- Sale Note modal: 200-char textarea with live char counter; note stored in state + passed to `posCompleteCheckout` metadata + displayed as indicator strip in cart
+- AI Suggestion Strip wired: on every `addItem()` call, finds an in-stock product from the same category not already in cart and suggests it; one-tap add; cleared on sale reset
+- `openRefund()` parks current cart then redirects to `pos.html` (refund flow requires manager authorization — handled in POS dashboard)
+- Parked sales list now shows "Selecting a sale replaces the current cart" hint instead of native `confirm()`
+- No new CFs, no new Firestore indexes
+
+**Deploy (hosting only):**
+```powershell
+firebase deploy --only hosting
+```
+
+---
+
+### Venue & Resource Booking Engine v1.0 — code-complete, QUOTA-BLOCKED
+**Files changed:** `functions/venue-booking.js` (NEW, 430 lines, 17 CFs), `venue-booking.html`, `venue-manager.html`, `functions/index.js`, `firestore.indexes.json` (191 indexes)
+
+**Pending spot deploy (run once quota frees):**
+```powershell
+firebase deploy --only "functions:venueCreate,functions:venueUpdate,functions:venueGetPublic,functions:venueGetAvailability,functions:venueCalculatePrice,functions:venueCreateBooking,functions:venueCancelBooking,functions:venueConfirmBooking,functions:venueCheckIn,functions:venueCheckOut,functions:venueMarkNoShow,functions:venueGetBooking,functions:venueGetMyBookings,functions:venueGetCalendar,functions:venueBlockDates,functions:venueRemoveBlock,functions:venueGetStats"
+```
 
 ---
 
@@ -436,12 +627,12 @@ npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; f
 
 ---
 
-## MASTER DEPLOY COMMAND (all 163 new CFs)
+## MASTER DEPLOY COMMAND (all 233 new CFs — updated 2026-07-08 ✅)
 
-Run once when quota is cleared:
+Includes: 218 original + 15 auto* (automation engine) + `earnLoyaltyPoints` → `awardLoyaltyPoints` fix.
 
 ```powershell
-npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:fosInitiatePayment,functions:fosSecureWebhook,functions:fosSubmitRefund,functions:fosApproveRefund,functions:fosGenerateInvoice,functions:fosExportReport,functions:fosGetProviderHealth,functions:fosGetAdminConsole,functions:subScheduleRenewals,functions:subAutoActivateOnPayment,functions:subUpgradeWithProration,functions:getSellerEarningsReport,functions:getAdminRevenueByHub,functions:getConversationContext,functions:searchConversations,functions:editMessage,functions:updateConversationStatus,functions:pcGetHubRegistry,functions:pcRegisterHub,functions:pcUpdateHubConfig,functions:pcGetFeatureFlags,functions:pcSetFeatureFlag,functions:pcGetCrossHubMetrics,functions:asyncEnqueue,functions:asyncWorker,functions:asyncSweeper,functions:asyncEventRouter,functions:asyncCancel,functions:asyncRetryJob,functions:asyncPauseQueue,functions:asyncGetDashboard,functions:asyncGetJobs,functions:asyncInspect,functions:asyncCleanup,functions:opsGetMasterDashboard,functions:opsGetAlerts,functions:opsAcknowledgeAlert,functions:opsCreateAlert,functions:opsGetPostLaunchMetrics,functions:opsScheduledHealthCheck,functions:rollbackGetSnapshots,functions:rollbackCreateSnapshot,functions:rollbackTrigger,functions:rollbackGetExecutions,functions:rollbackUpdateStatus,functions:rollbackScheduledSnapshot,functions:recordPosEvent,functions:getPosPerfMetrics,functions:getPosSpeedReport,functions:posScheduledPerfRollup,functions:acknowledgeShift,functions:approveShiftSwap,functions:assignShift,functions:createShiftTemplate,functions:getRoster,functions:getRosterGaps,functions:getStaffRoster,functions:publishWeeklyRoster,functions:schedulerWeeklyDigest,functions:setStaffAvailability,functions:swapShiftRequest,functions:createSession,functions:detectSessionAnomaly,functions:getUserSessions,functions:revokeDeviceSessions,functions:rotateSession,functions:scheduledSessionCleanup,functions:terminateAllSessions,functions:terminateSession,functions:validateSession,functions:generateSecureUploadUrl,functions:getFileAuditLog,functions:onFileUploaded,functions:quarantineFile,functions:validateUploadRequest,functions:getLatestSecurityReport,functions:runSecurityAudit,functions:scheduleWeeklySecurityAudit,functions:getPOSInventoryIntelligence,functions:getProductSalesTrend,functions:earnLoyaltyPoints,functions:onInventoryUpdated,functions:onOrderCreated,functions:onPaymentCreated,functions:onPaymentUpdated,functions:onRiderStatusChange,functions:onUserCreated,functions:posCleanupPeripheralSignals,functions:posCreateCustomerDisplay,functions:posGetPeripherals,functions:posRegisterPeripheral,functions:posRemovePeripheral,functions:posUpdateCustomerDisplay,functions:posUpdatePeripheralStatus,functions:posGetApiDocs,functions:posGetEtimsExport,functions:posGetInventoryExport,functions:posGetLedgerExport,functions:posGetSalesExport,functions:posListApiKeys,functions:posReceiveErpUpdate,functions:posRegisterApiKey,functions:posRegisterWebhook,functions:posRevokeApiKey,functions:posRevokeWebhook,functions:posTestWebhook,functions:posGetTerminalBatchReport,functions:posGetTerminalCapabilities,functions:posGetTerminalHealth,functions:posPollTerminalStatus,functions:posReverseTerminalPayment,functions:posSettleTerminalBatch,functions:posTerminalEventWebhook,functions:currencyGetRates,functions:currencyConvert,functions:currencyUpdateRates,functions:currencyGetHistory,functions:currencyScheduledRateRefresh,functions:installmentCreatePlan,functions:installmentRecordPayment,functions:installmentGetMyPlans,functions:installmentGetSellerPlans,functions:installmentMarkOverdue,functions:installmentCancelPlan,functions:franchiseCreateBrand,functions:franchiseApplyForLocation,functions:franchiseReviewApplication,functions:franchiseRecordRoyalty,functions:franchiseGetMyLocations,functions:franchiseGetBrandDashboard,functions:franchiseGetLocations,functions:onOrderStatusChanged,functions:onBookingStatusChanged,functions:onFoodOrderStatusChanged,functions:posLogPrint,functions:getPrintHistory,functions:getPrinterConfig,functions:setPrinterConfig,functions:processSettlement,functions:requestWithdrawal,functions:approveWithdrawal,functions:rejectWithdrawal,functions:getWithdrawals,functions:subCheckFeature,functions:subRetryFailedPayments,functions:subDowngrade,functions:fosAutoSettlement,functions:fosAutoRefund,functions:fosReconcile,functions:fosGetForecast,functions:fosGetSettlementConfig,functions:fosSetSettlementConfig,functions:fosGetAuditTrail,functions:wapProcessDelays,functions:wapGetInstances,functions:wapRetryStep,functions:pcGetPerHubFlags,functions:pcSetPerHubFlag,functions:pcGetHubDetails,functions:pcGetCrossHubHealth,functions:platformNotifyTransactionChange,functions:pcActivateHub,functions:pcDeactivateHub" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:fosInitiatePayment,functions:fosSecureWebhook,functions:fosSubmitRefund,functions:fosApproveRefund,functions:fosGenerateInvoice,functions:fosExportReport,functions:fosGetProviderHealth,functions:fosGetAdminConsole,functions:subScheduleRenewals,functions:subAutoActivateOnPayment,functions:subUpgradeWithProration,functions:getSellerEarningsReport,functions:getAdminRevenueByHub,functions:getConversationContext,functions:searchConversations,functions:editMessage,functions:updateConversationStatus,functions:pcGetHubRegistry,functions:pcRegisterHub,functions:pcUpdateHubConfig,functions:pcGetFeatureFlags,functions:pcSetFeatureFlag,functions:pcGetCrossHubMetrics,functions:asyncEnqueue,functions:asyncWorker,functions:asyncSweeper,functions:asyncEventRouter,functions:asyncCancel,functions:asyncRetryJob,functions:asyncPauseQueue,functions:asyncGetDashboard,functions:asyncGetJobs,functions:asyncInspect,functions:asyncCleanup,functions:opsGetMasterDashboard,functions:opsGetAlerts,functions:opsAcknowledgeAlert,functions:opsCreateAlert,functions:opsGetPostLaunchMetrics,functions:opsScheduledHealthCheck,functions:rollbackGetSnapshots,functions:rollbackCreateSnapshot,functions:rollbackTrigger,functions:rollbackGetExecutions,functions:rollbackUpdateStatus,functions:rollbackScheduledSnapshot,functions:recordPosEvent,functions:getPosPerfMetrics,functions:getPosSpeedReport,functions:posScheduledPerfRollup,functions:acknowledgeShift,functions:approveShiftSwap,functions:assignShift,functions:createShiftTemplate,functions:getRoster,functions:getRosterGaps,functions:getStaffRoster,functions:publishWeeklyRoster,functions:schedulerWeeklyDigest,functions:setStaffAvailability,functions:swapShiftRequest,functions:createSession,functions:detectSessionAnomaly,functions:getUserSessions,functions:revokeDeviceSessions,functions:rotateSession,functions:scheduledSessionCleanup,functions:terminateAllSessions,functions:terminateSession,functions:validateSession,functions:generateSecureUploadUrl,functions:getFileAuditLog,functions:onFileUploaded,functions:quarantineFile,functions:validateUploadRequest,functions:getLatestSecurityReport,functions:runSecurityAudit,functions:scheduleWeeklySecurityAudit,functions:getPOSInventoryIntelligence,functions:getProductSalesTrend,functions:awardLoyaltyPoints,functions:onInventoryUpdated,functions:onOrderCreated,functions:onPaymentCreated,functions:onPaymentUpdated,functions:onRiderStatusChange,functions:onUserCreated,functions:posCleanupPeripheralSignals,functions:posCreateCustomerDisplay,functions:posGetPeripherals,functions:posRegisterPeripheral,functions:posRemovePeripheral,functions:posUpdateCustomerDisplay,functions:posUpdatePeripheralStatus,functions:posGetApiDocs,functions:posGetEtimsExport,functions:posGetInventoryExport,functions:posGetLedgerExport,functions:posGetSalesExport,functions:posListApiKeys,functions:posReceiveErpUpdate,functions:posRegisterApiKey,functions:posRegisterWebhook,functions:posRevokeApiKey,functions:posRevokeWebhook,functions:posTestWebhook,functions:posGetTerminalBatchReport,functions:posGetTerminalCapabilities,functions:posGetTerminalHealth,functions:posPollTerminalStatus,functions:posReverseTerminalPayment,functions:posSettleTerminalBatch,functions:posTerminalEventWebhook,functions:currencyGetRates,functions:currencyConvert,functions:currencyUpdateRates,functions:currencyGetHistory,functions:currencyScheduledRateRefresh,functions:installmentCreatePlan,functions:installmentRecordPayment,functions:installmentGetMyPlans,functions:installmentGetSellerPlans,functions:installmentMarkOverdue,functions:installmentCancelPlan,functions:franchiseCreateBrand,functions:franchiseApplyForLocation,functions:franchiseReviewApplication,functions:franchiseRecordRoyalty,functions:franchiseGetMyLocations,functions:franchiseGetBrandDashboard,functions:franchiseGetLocations,functions:onOrderStatusChanged,functions:onBookingStatusChanged,functions:onFoodOrderStatusChanged,functions:posLogPrint,functions:getPrintHistory,functions:getPrinterConfig,functions:setPrinterConfig,functions:processSettlement,functions:requestWithdrawal,functions:approveWithdrawal,functions:rejectWithdrawal,functions:getWithdrawals,functions:subCheckFeature,functions:subRetryFailedPayments,functions:subDowngrade,functions:fosAutoSettlement,functions:fosAutoRefund,functions:fosReconcile,functions:fosGetForecast,functions:fosGetSettlementConfig,functions:fosSetSettlementConfig,functions:fosGetAuditTrail,functions:wapProcessDelays,functions:wapGetInstances,functions:wapRetryStep,functions:pcGetPerHubFlags,functions:pcSetPerHubFlag,functions:pcGetHubDetails,functions:pcGetCrossHubHealth,functions:platformNotifyTransactionChange,functions:pcActivateHub,functions:pcDeactivateHub,functions:setProviderAvailability,functions:setLiveStatus,functions:getAvailabilitySlots,functions:reserveSlot,functions:releaseSlot,functions:scheduledAvailabilityMaintenance,functions:getProviderAvailability,functions:setVacationMode,functions:addAvailabilityOverride,functions:removeAvailabilityOverride,functions:listAvailabilityOverrides,functions:setMarketplaceAvailability,functions:checkProviderAvailability,functions:getNextAvailableSlot,functions:venueCreate,functions:venueUpdate,functions:venueGetPublic,functions:venueGetAvailability,functions:venueCalculatePrice,functions:venueCreateBooking,functions:venueCancelBooking,functions:venueConfirmBooking,functions:venueCheckIn,functions:venueCheckOut,functions:venueMarkNoShow,functions:venueGetBooking,functions:venueGetMyBookings,functions:venueGetCalendar,functions:venueBlockDates,functions:venueRemoveBlock,functions:venueGetStats" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
 ```
 
 ---
@@ -460,8 +651,8 @@ All secrets verified via `firebase functions:secrets:access`. Status as of this 
 | `ALGOLIA_SEARCH_KEY` | Third-party | ✅ SET | Algolia dashboard |
 | `TYPESENSE_ADMIN_KEY` | Third-party | ✅ SET | Typesense cloud |
 | `TYPESENSE_SEARCH_KEY` | Third-party | ✅ SET | Typesense cloud |
-| `AT_API_KEY` | Third-party | ✅ SET | Africa's Talking dashboard |
-| `AT_USERNAME` | Third-party | ✅ SET | Africa's Talking dashboard |
+| `AFRICASTALKING_API_KEY` | Third-party | ✅ SET | Africa's Talking dashboard |
+| `AFRICASTALKING_USERNAME` | Third-party | ⏳ Sandbox (set when going live) | Africa's Talking — production username only |
 | `ANTHROPIC_API_KEY` | Third-party | ✅ SET | Anthropic console |
 | `FACEBOOK_APP_SECRET` | Third-party | ✅ SET | Meta developer console |
 | `MAIL_HOST` | Third-party | ✅ SET | SMTP provider |
@@ -477,7 +668,7 @@ All secrets verified via `firebase functions:secrets:access`. Status as of this 
 | `ETIMS_PLATFORM_PIN` | Third-party | ✅ SET | KRA eTIMS |
 | `ETIMS_PLATFORM_SECRET` | Third-party | ✅ SET | KRA eTIMS |
 
-**All 24 production secrets are SET. No missing secrets remain.**
+**All production secrets are SET. `AFRICASTALKING_USERNAME` intentionally left as sandbox until AT account goes live.**
 
 ### Redis rate limiting status
 `REDIS_URL` is stored in Firebase Secret Manager (version 2 — `redis://10.127.36.43:6379`).
@@ -960,6 +1151,164 @@ npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; f
 
 ---
 
+---
+
+### availability.js — Universal Availability & Scheduling Engine v1.0 (14 CFs) — added 2026-07-07
+
+Source: `functions/availability.js` · Client SDK: `sokoni-availability.js` · UI: `availability-manager.html`
+
+| Function | Type | Auth | Purpose |
+|---|---|---|---|
+| `setProviderAvailability` | onCall | Auth (owner) | Save full weekly schedule, modes, appt settings |
+| `setLiveStatus` | onCall | Auth (owner) | Instant live status change (available/busy/break/DND/etc.) |
+| `getAvailabilitySlots` | onCall | Public | Fetch open appointment slots for a provider (next N days) |
+| `reserveSlot` | onCall | Auth (buyer) | Book a slot atomically — prevents double-booking |
+| `releaseSlot` | onCall | Auth (buyer/owner/admin) | Cancel a booked slot; decrements capacity |
+| `scheduledAvailabilityMaintenance` | onSchedule (00:01 Nairobi daily) | — | Reactivate expired vacations; reset daily counters |
+| `getProviderAvailability` | onRequest | Public HTTP | Lightweight public endpoint for embedding in external pages |
+| `setVacationMode` | onCall | Auth (owner) | Enable/disable vacation mode with optional date range |
+| `addAvailabilityOverride` | onCall | Auth (owner) | Day-specific schedule exception (closed or alternate hours) |
+| `removeAvailabilityOverride` | onCall | Auth (owner) | Remove a day override |
+| `listAvailabilityOverrides` | onCall | Auth (owner/admin) | Paginated future overrides list |
+| `setMarketplaceAvailability` | onCall | Auth (owner) | Set stock status and delivery status for marketplace items |
+| `checkProviderAvailability` | onCall | Public | Full real-time availability check (computes isOpen, nextOpenAt, capacity) |
+| `getNextAvailableSlot` | onCall | Public | Find next free appointment slot within 30 days |
+
+**Firestore paths:**
+- `providerAvailability/{uid}` — provider config (owner read/write; CFs read)
+- `availabilityStatus/{uid}` — denormalized public cache (public read; CFs write)
+- `providerAvailability/{uid}/bookings/{YYYY-MM-DD}_{HHmm}` — booked slots (atomic via `runTransaction`)
+- `providerAvailability/{uid}/overrides/{YYYY-MM-DD}` — day-specific exceptions
+
+**No new secrets required.** No new Firestore composite indexes (doc-ID prefix queries + single-field ranges).
+
+**Spot deploy command (all 14):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:setProviderAvailability,functions:setLiveStatus,functions:getAvailabilitySlots,functions:reserveSlot,functions:releaseSlot,functions:scheduledAvailabilityMaintenance,functions:getProviderAvailability,functions:setVacationMode,functions:addAvailabilityOverride,functions:removeAvailabilityOverride,functions:listAvailabilityOverrides,functions:setMarketplaceAvailability,functions:checkProviderAvailability,functions:getNextAvailableSlot" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
+
+### sokoni-at.js — Africa's Talking SMS Consolidation (2026-07-07)
+
+**New file:** `functions/sokoni-at.js` — single source of truth for all AT SMS integration.
+
+**What changed:**
+- Secrets renamed: `AT_API_KEY` → `AFRICASTALKING_API_KEY`, `AT_USERNAME` → `AFRICASTALKING_USERNAME`
+- Non-sensitive env var `AT_ENV=sandbox|production` in `functions/.env` (committed; safe)
+- `sokoni-at.js` exports `atSendSMS()`, `atBuildClient()`, `resolveAtCredentials()`, `secrets[]`
+- `index.js`, `redis-jobs.js`, `redis-layer.js`, `pos-retail.js` — all migrated to shared module
+- `system-health.js` — secret name updated from `AT_API_KEY` to `AFRICASTALKING_API_KEY`
+
+**No new CFs — update existing CFs to pick up the new secret names:**
+
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:onOrderStatusChange,functions:onNewOrderCreated,functions:posSendSMS,functions:sendPOSReceipt,functions:redisScheduledQueueWorker,functions:systemHealthCheck" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+**Secret migration steps (when going to production):**
+1. `firebase functions:secrets:set AFRICASTALKING_API_KEY` — set the real AT API key
+2. `firebase functions:secrets:set AFRICASTALKING_USERNAME` — set your registered AT username
+3. In `functions/.env`: change `AT_ENV=sandbox` → `AT_ENV=production`
+4. Redeploy the 6 CFs above
+
+---
+
+---
+
+### venue-booking.js — Venue, Facility & Resource Booking Engine v1.0 (17 CFs) — 2026-07-07
+
+Source: `functions/venue-booking.js` · Customer UI: `venue-booking.html` · Owner UI: `venue-manager.html`
+
+| Function | Type | Auth | Purpose |
+|---|---|---|---|
+| `venueCreate` | onCall | Auth (owner) | Create a venue / bookable resource |
+| `venueUpdate` | onCall | Auth (owner/admin) | Update venue config, schedule, pricing |
+| `venueGetPublic` | onCall | Public | Read venue profile (no owner fields) |
+| `venueGetAvailability` | onCall | Public | Slot grid for a date range (up to 60 days) |
+| `venueCalculatePrice` | onCall | Public | Dynamic price breakdown for a proposed booking |
+| `venueCreateBooking` | onCall | Auth (customer) | Atomic slot reservation — `runTransaction()`, prevents double-booking |
+| `venueCancelBooking` | onCall | Auth (customer/owner/admin) | Cancel with cancellation fee per policy |
+| `venueConfirmBooking` | onCall | Auth (owner/admin) | Confirm a pending booking |
+| `venueCheckIn` | onCall | Auth (owner/admin) | Mark booking as checked-in |
+| `venueCheckOut` | onCall | Auth (owner/admin) | Mark booking as completed |
+| `venueMarkNoShow` | onCall | Auth (owner/admin) | Mark no-show, apply no-show fee |
+| `venueGetBooking` | onCall | Auth (customer/owner/admin) | Fetch single booking |
+| `venueGetMyBookings` | onCall | Auth (customer) | Customer booking history — paginated |
+| `venueGetCalendar` | onCall | Auth (owner/admin) | Calendar view with bookings + blockouts |
+| `venueBlockDates` | onCall | Auth (owner/admin) | Block date range (maintenance, holidays) |
+| `venueRemoveBlock` | onCall | Auth (owner/admin) | Remove a blockout — restores availability |
+| `venueGetStats` | onCall | Auth (owner/admin) | 30-day analytics: revenue, utilisation, peak hour |
+
+**Firestore paths:**
+- `venues/{venueId}` — venue profile, schedule, pricing, capacity
+- `venues/{venueId}/bookings/{YYYY-MM-DD_HHmm_shortId}` — slot locks (atomic via `runTransaction`)
+- `venues/{venueId}/blockouts/{blockId}` — maintenance / holiday blocks
+- `venueBookings/{bookingId}` — top-level mirror for customer history queries
+
+**New composite index (firestore.indexes.json — already added):**
+- Collection: `venueBookings` | `customerId ASC, createdAt DESC`
+- Index count: 190 → 191 (9 slots remaining before 200 limit)
+
+**Booking models supported:** hourly · half_day · full_day · multi_day · weekly_recurring · monthly_recurring · seasonal · exclusive · shared
+
+**Dynamic pricing features:** base rate/hour, weekend multiplier, peak-hour surcharges (time-range overlaps), member discount, deposit %, cancellation fee policy (free window, late %, no-show %)
+
+**No new secrets required.** Extends the Universal Availability Engine. Double-booking prevented by `runTransaction()` — exclusive or shared (capacity) logic per venue config.
+
+**Spot deploy command (all 17):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:venueCreate,functions:venueUpdate,functions:venueGetPublic,functions:venueGetAvailability,functions:venueCalculatePrice,functions:venueCreateBooking,functions:venueCancelBooking,functions:venueConfirmBooking,functions:venueCheckIn,functions:venueCheckOut,functions:venueMarkNoShow,functions:venueGetBooking,functions:venueGetMyBookings,functions:venueGetCalendar,functions:venueBlockDates,functions:venueRemoveBlock,functions:venueGetStats" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+---
+
+## MiniShop Social Commerce Engine v3.0 — 2026-07-08
+
+**Files:**
+- `functions/minishop-v3.js` — 12 CFs
+- `minishop.html` — v3 HTML sections added (catalog filter, promotions, announcements, similar shops)
+- `minishop.css` — NEW; extracted from minishop.html + v3.0 styles
+- `minishop-admin.html` — Flash Sales tab, Canvas asset generator, Announcements section
+- `sokoni-minishop.js` — handle parser, v3 loaders, product card fixes
+- `firebase.json` — `/shop/**` and `/@**` now route to `miniShopOGMeta` CF
+
+**New CFs (12 — blocked by same quota):**
+
+| Export name | Type | Purpose |
+|---|---|---|
+| `miniShopOGMeta` | onRequest (public) | Dynamic OG meta / shell page for all /shop/* and /@* URLs |
+| `miniShopCreatePromotion` | onCall | Create flash sale / bundle / coupon / BOGO |
+| `miniShopGetPromotions` | onCall (public) | List active promotions for a shop |
+| `miniShopUpdatePromotion` | onCall | Pause/activate/edit promotion |
+| `miniShopToggleWishlist` | onCall (auth) | Add/remove product from wishlist |
+| `miniShopGetWishlist` | onCall (auth) | Get user wishlist for a shop |
+| `miniShopShareProduct` | onCall | Record per-product share event + return share URL |
+| `miniShopAIMarketing` | onCall | AI marketing: best_times, seasonal, trending_angle, campaign_plan |
+| `miniShopSendAnnouncement` | onCall | Seller sends announcement to followers |
+| `miniShopGetAnnouncements` | onCall (public) | Get recent shop announcements |
+| `miniShopGetSimilar` | onCall (public) | Get similar businesses by category |
+| `miniShopScheduledDigest` | onSchedule (weekly) | Email sellers their weekly analytics digest |
+
+**New Firestore collections:**
+- `minishopPromotions/{promoId}` — flash sales, bundles, coupons
+- `minishopWishlist/{uid}/items/{productId}` — per-user wishlists
+- `minishopAnnouncements/{shopId}/posts/{id}` — seller announcements
+
+**Secrets required:** `ANTHROPIC_API_KEY` (already in Secret Manager for `miniShopAIMarketing`)
+
+**Spot deploy command (all 12):**
+```powershell
+npm config set fetch-timeout 3000; npm config set fetch-retry-mintimeout 1000; firebase deploy --only "functions:miniShopOGMeta,functions:miniShopCreatePromotion,functions:miniShopGetPromotions,functions:miniShopUpdatePromotion,functions:miniShopToggleWishlist,functions:miniShopGetWishlist,functions:miniShopShareProduct,functions:miniShopAIMarketing,functions:miniShopSendAnnouncement,functions:miniShopGetAnnouncements,functions:miniShopGetSimilar,functions:miniShopScheduledDigest" --project sokoni-aeb26; npm config delete fetch-timeout; npm config delete fetch-retry-mintimeout
+```
+
+**Hosting spot deploy (static assets only):**
+```powershell
+firebase deploy --only hosting --project sokoni-aeb26
+```
+
+---
+
 ## Hosting (already deployed 2026-07-06)
 All HTML/CSS/JS pages are LIVE. CF features will activate when quota clears.
 New pages deployed:
@@ -969,3 +1318,6 @@ New pages deployed:
 - `/fos-admin` — Financial OS admin console
 - `/async-jobs` — Async Jobs Engine monitoring dashboard
 - `/messages-admin` — Business Communication admin console (moderation, policies, conversation search)
+- `/availability-manager` — Universal Availability & Scheduling Manager (all hub types)
+- `/venue-booking` — Customer venue search & booking (sports courts, event halls, studios, all resource types)
+- `/venue-manager` — Owner venue management: calendar, bookings, block dates, pricing, stats

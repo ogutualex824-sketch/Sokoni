@@ -1,4 +1,85 @@
-﻿## [2026-07-07] — Universal Printer Engine v4.0 + Printer Setup Portal Rebuild
+﻿## [2026-07-08] — MiniShop Social Commerce Engine v3.0
+
+### Summary
+Full v3.0 upgrade of the SOKONI MiniShop system. Every seller, business, and service provider now gets a premium, socially shareable digital storefront at `mysokoni.co.ke/shop/{handle}` and `mysokoni.co.ke/@{handle}`. Firebase Hosting rewrites now route both URL patterns through a new `miniShopOGMeta` Cloud Function that serves dynamic Open Graph metadata to social crawlers (WhatsApp, Facebook, Twitter, LinkedIn, Telegram) and a complete shell page to real users — enabling rich link previews everywhere. Added promotions (flash sales, bundles, coupons, BOGO), wishlist, per-product sharing, seller-to-follower announcements, AI marketing intelligence, and similar-shop recommendations.
+
+### Files Affected
+| File | Change |
+|---|---|
+| `functions/minishop-v3.js` | NEW — 12 Cloud Functions (OG meta, promotions, wishlist, sharing, AI marketing, announcements, similar shops, scheduled digest) |
+| `functions/index.js` | Added 12 new minishop-v3 exports |
+| `minishop.css` | NEW — CSS extracted from minishop.html inline style block + v3.0 styles for all new components |
+| `minishop.html` | Replaced `<style>` block with `<link href="/minishop.css">`; added catalog filter, promotions section, announcements section, similar shops section |
+| `minishop-admin.html` | Added Flash Sales tab (tab-6), Canvas-based promotional asset generator, Announcements section with send/history |
+| `sokoni-minishop.js` | Handle parser updated for `window.MS_HANDLE` injection; product card class names fixed (ms-prod-* → ms-product-*); section ID references fixed; v3 loaders added (loadPromotions, loadAnnouncements, loadSimilar, toggleWishlist, shareProduct); catalog filter wiring; allProducts stored in state for filter |
+| `firebase.json` | `/shop/**` and `/@**` rewrites changed from static destination to `function:miniShopOGMeta` |
+| `DEPLOY_QUEUE.md` | Added 12 new CFs and hosting spot-deploy commands |
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `minishopPromotions/{promoId}` | Flash sales, bundles, coupons, BOGO deals |
+| `minishopWishlist/{uid}/items/{productId}` | Per-user product wishlists |
+| `minishopAnnouncements/{shopId}/posts/{id}` | Seller announcements to followers |
+
+### New Cloud Functions
+| Function | Type | Description |
+|---|---|---|
+| `miniShopOGMeta` | onRequest | Dynamic OG HTML — bots get meta tags, users get full shell page |
+| `miniShopCreatePromotion` | onCall | Create promotion (seller only) |
+| `miniShopGetPromotions` | onCall | List shop promotions (public) |
+| `miniShopUpdatePromotion` | onCall | Pause/activate/edit promotion |
+| `miniShopToggleWishlist` | onCall | Toggle product wishlist (auth) |
+| `miniShopGetWishlist` | onCall | Get user's wishlist (auth) |
+| `miniShopShareProduct` | onCall | Record share event + return share URL |
+| `miniShopAIMarketing` | onCall | AI: best posting times, seasonal campaigns, trending angle, campaign plan |
+| `miniShopSendAnnouncement` | onCall | Seller sends announcement (seller only) |
+| `miniShopGetAnnouncements` | onCall | Get shop announcements (public) |
+| `miniShopGetSimilar` | onCall | Get similar businesses by category (public) |
+| `miniShopScheduledDigest` | onSchedule (weekly) | Email sellers weekly analytics digest |
+
+### Secrets Required
+- `ANTHROPIC_API_KEY` — already in Secret Manager; used by `miniShopAIMarketing`
+
+### Security Notes
+- All seller-only functions verify `uid === shop.ownerId` before writing
+- All onCall functions use `enforceAppCheck: true`
+- `miniShopOGMeta` is onRequest (public) — only reads Firestore, no writes
+- Announcements are limited to 280 chars, rate-limited to 3/day per shop
+- Wishlist writes are scoped to the authenticated user's own subcollection
+
+### Performance Notes
+- OG CF shell page loads `/minishop.css` and `/sokoni-minishop.js` from CDN with long cache headers
+- Bot detection is based on `User-Agent` string; no Firestore reads for bots before the shop fetch
+- Product section IDs corrected — eliminates failed `querySelector` lookups that silently dropped products from the grid
+
+### Breaking Changes
+- None — existing shops at `/shop/{handle}` continue to work unchanged; the CF shell page renders identically to the old static HTML for real users
+
+### Deployment
+1. Deploy 12 new CFs: see DEPLOY_QUEUE.md spot deploy command
+2. Deploy hosting for CSS/HTML: `firebase deploy --only hosting --project sokoni-aeb26`
+3. No migration required — new collections are created on first use
+
+---
+
+## [2026-07-07] — Product Card Buy Button Layout Fix
+
+### Summary
+Fixed product buy buttons being pushed to the far right edge of mobile product cards. Changed the `.pcard-mobile-strip` action strip from a single-row `justify-content:space-between` flex layout (social proof text left, cramped buttons right) to a two-row column layout: social proof text on the top row (full width, truncated), and the wish+buy button row below it (full card width). The buy button now expands via `flex:1` to fill all available space next to the fixed-width wish icon, making it prominently tappable. Applied across all mobile breakpoints: `≤600px` (2-col grid + horizontal swipe strip) and `601–767px` (small tablet portrait).
+
+### Files Affected
+| File | Change |
+|---|---|
+| `compact-grid.css` | `.pcard-mobile-strip` changed from row `space-between` to column layout; `.pcard-m-buy` set to `flex:1`; `.pcard-m-wish` given `flex-shrink:0`; strip-info width set to `100%` |
+
+### Before → After
+- **Before**: `[📦 In stock ···] [❤] [⚡ Buy]` — single row, buttons right-aligned on narrow card
+- **After**: `[📦 In stock]` / `[❤] [⚡ Buy ─────────────────]` — two rows, buy button fills full width
+
+---
+
+## [2026-07-07] — Universal Printer Engine v4.0 + Printer Setup Portal Rebuild
 
 ### Summary
 Full rewrite of the SOKONI SmartPOS printing stack to v4.0. Introduced image printing via canvas-to-ESC/POS rasterisation, automatic printer capability detection, cross-tab sync via BroadcastChannel, exponential-backoff Bluetooth reconnection, a 30+ document type renderer (including exchange, shipping label, picking slip, parking ticket, service confirmation, and monthly summary), a priority-ordered offline print queue, and 4 Cloud Function backend services for cloud-sync print logging, history, and configuration. The printer setup portal (`pos-printer-setup.html`) was fully rebuilt on the POS premium dark theme.

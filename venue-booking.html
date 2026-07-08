@@ -1,684 +1,754 @@
-﻿<!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <script src="security.js"></script>
-  <script src="shared-header.js"></script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Book a Venue — SOKONI</title>
-  <link rel="manifest" href="manifest.json">
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Book a Venue · SOKONI</title>
+  <link rel="icon" href="favicon.ico" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#71ff00" />
+  <link rel="stylesheet" href="sokoni-tokens.css" />
   <style>
-    :root{--bg:#050505;--bg2:#111115;--card:rgba(255,255,255,0.04);--card2:rgba(255,255,255,0.06);--border:rgba(255,255,255,0.08);--accent:#71ff00;--accent2:#9fff40;--green:#71ff00;--red:#f87171;--yellow:#fbbf24;--blue:#60a5fa;--text:rgba(255,255,255,0.9);--muted:rgba(255,255,255,0.45);--r:14px}
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',sans-serif;font-size:15px;min-height:100vh}
-    /* Header */
-    .hdr{background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;padding:0 16px;height:56px;display:flex;align-items:center;gap:10px}
-    .hdr-back{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:4px 8px}
-    .hdr-title{font-size:16px;font-weight:700;flex:1}
-    /* Search bar */
-    .search-bar{background:var(--card2);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;margin:14px 12px 0;display:flex;align-items:center;gap:10px}
-    .search-bar input{flex:1;background:none;border:none;color:var(--text);font-size:15px;outline:none}
-    .search-bar input::placeholder{color:var(--muted)}
-    /* Filter chips */
-    .filter-row{display:flex;gap:6px;padding:10px 12px;overflow-x:auto;scrollbar-width:none}
-    .filter-row::-webkit-scrollbar{display:none}
-    .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer;white-space:nowrap;flex-shrink:0}
-    .chip.active{border-color:var(--accent);background:rgba(113,255,0,.2);color:var(--accent2)}
-    /* Grid */
-    .venues-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding:12px}
-    /* Venue card */
-    .vcard{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s}
-    .vcard:hover{transform:translateY(-2px);border-color:var(--accent)}
-    .vcard-img{height:180px;background:linear-gradient(135deg,var(--accent),var(--accent2));position:relative;overflow:hidden}
-    .vcard-img img{width:100%;height:100%;object-fit:cover}
-    .vcard-status{position:absolute;top:10px;left:10px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase}
-    .st-available{background:rgba(34,197,94,.85);color:#fff}
-    .st-closes_soon{background:rgba(234,179,8,.85);color:#000}
-    .st-opens_soon{background:rgba(59,130,246,.85);color:#fff}
-    .st-closed,.st-maintenance{background:rgba(100,100,120,.85);color:#fff}
-    .vcard-type{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);padding:3px 10px;border-radius:20px;font-size:11px;color:#fff}
-    .vcard-body{padding:14px}
-    .vcard-name{font-size:15px;font-weight:700;margin-bottom:4px}
-    .vcard-loc{font-size:12px;color:var(--muted);margin-bottom:8px}
-    .vcard-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
-    .vcard-price{font-size:16px;font-weight:700;color:var(--accent2)}
-    .vcard-price span{font-size:11px;color:var(--muted);font-weight:400}
-    .vcard-amenities{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
-    .amenity-pill{background:rgba(113,255,0,.1);color:var(--accent2);font-size:10px;padding:2px 7px;border-radius:10px}
-    .vcard-rating{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--yellow)}
-    .empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
-    .empty-icon{font-size:56px;margin-bottom:12px}
-    /* Btn */
-    .btn{padding:10px 18px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap}
-    .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent2)}
-    .btn-outline{background:none;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--accent)}
-    .btn-sm{padding:7px 14px;font-size:12px}
-    /* Modal */
-    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:flex;align-items:flex-end;justify-content:center;padding-top:80px}
-    @media(min-width:600px){.modal-bg{align-items:center;padding-top:0}}
-    .modal{background:var(--card);border:1px solid var(--border);border-radius:var(--r) var(--r) 0 0;width:100%;max-width:640px;max-height:90vh;overflow-y:auto}
-    @media(min-width:600px){.modal{border-radius:var(--r)}}
-    .modal-hdr{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:10}
-    .modal-title{font-size:16px;font-weight:700}
-    .modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%}
-    .modal-body{padding:20px}
-    .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:var(--card)}
-    /* Form */
-    .form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
-    .form-label{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-    .form-input{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:10px 13px;color:var(--text);font-size:14px;outline:none;width:100%}
-    .form-input:focus{border-color:var(--accent)}
-    select.form-input{cursor:pointer}
-    /* Slots */
-    .slots-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;margin:12px 0}
-    .slot{padding:8px 4px;border:1px solid var(--border);border-radius:8px;text-align:center;font-size:12px;cursor:pointer;background:var(--card2);transition:all .15s;user-select:none}
-    .slot:hover{border-color:var(--accent)}
-    .slot.selected{background:var(--accent);color:#fff;border-color:var(--accent)}
-    .slot.unavailable{opacity:.35;cursor:not-allowed;pointer-events:none;text-decoration:line-through}
-    .slot.range{background:rgba(113,255,0,.25);border-color:var(--accent);color:var(--accent2)}
-    /* Duration selector */
-    .dur-row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
-    .dur-btn{padding:7px 14px;border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer;background:var(--card2);color:var(--text);font-weight:500}
-    .dur-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-    /* Pricing */
-    .price-table{width:100%;font-size:13px}
-    .price-table tr{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
-    .price-table .total-row{font-weight:700;font-size:15px;border-top:1px solid var(--border);border-bottom:none;margin-top:6px;padding-top:10px}
-    /* Add-ons */
-    .addon-item{display:flex;align-items:center;justify-content:space-between;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;margin-bottom:6px}
-    .addon-check{accent-color:var(--accent);width:18px;height:18px;cursor:pointer}
-    /* Calendar */
-    .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-    .cal-nav-title{font-weight:700;font-size:14px}
-    .cal-btn{background:none;border:1px solid var(--border);color:var(--text);border-radius:7px;width:32px;height:32px;cursor:pointer;font-size:16px}
-    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
-    .cal-day-header{font-size:11px;color:var(--muted);padding:4px 0;font-weight:600}
-    .cal-day{padding:7px 3px;border-radius:7px;font-size:13px;cursor:pointer;border:1px solid transparent}
-    .cal-day:hover{background:var(--card2)}
-    .cal-day.today{border-color:var(--accent);color:var(--accent2)}
-    .cal-day.selected{background:var(--accent);color:#fff}
-    .cal-day.past{opacity:.3;cursor:not-allowed;pointer-events:none}
-    .cal-day.empty{visibility:hidden}
-    /* Steps */
-    .steps{display:flex;gap:0;margin-bottom:20px}
-    .step{flex:1;text-align:center;padding:8px 4px;font-size:11px;font-weight:600;color:var(--muted);border-bottom:2px solid var(--border);cursor:pointer}
-    .step.active{color:var(--accent2);border-bottom-color:var(--accent)}
-    .step.done{color:var(--green);border-bottom-color:var(--green)}
-    .step-panel{display:none}.step-panel.active{display:block}
-    /* Hold timer */
-    .hold-timer{background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:9px;padding:10px 14px;font-size:13px;color:var(--yellow);display:flex;align-items:center;gap:8px;margin-bottom:12px}
-    /* Toast */
-    #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);padding:10px 20px;border-radius:30px;font-size:13px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;max-width:90vw;text-align:center}
-    #toast.show{opacity:1}
-    .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    :root{--bg:#050505;--sur:#0d0d0d;--sur2:#141414;--g:#71ff00;--ga:rgba(113,255,0,.12);--ga2:rgba(113,255,0,.06);--bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;--radius:12px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;padding-bottom:90px}
+
+    /* ── Layout ─────────────────────────────────────────────────────────── */
+    .page{max-width:960px;margin:0 auto;padding:16px}
+    .view{display:none}.view.active{display:block}
+
+    /* ── Nav strip ──────────────────────────────────────────────────────── */
+    .nav-strip{display:flex;background:var(--sur);border:1px solid var(--bor2);border-radius:var(--radius);margin-bottom:22px;overflow:hidden}
+    .nav-tab{flex:1;background:none;border:none;color:var(--sub);padding:11px 8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+    .nav-tab.active{background:var(--ga);color:var(--g)}
+
+    /* ── Search bar ─────────────────────────────────────────────────────── */
+    .search-bar{display:grid;grid-template-columns:1fr 155px 115px auto;gap:8px;background:var(--sur);border:1px solid var(--bor2);border-radius:var(--radius);padding:12px;margin-bottom:14px}
+    @media(max-width:640px){.search-bar{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}}
+    @media(max-width:400px){.search-bar{grid-template-columns:1fr}}
+    .sb-input{background:var(--sur2);border:1px solid var(--bor2);color:var(--txt);border-radius:8px;padding:10px 12px;font-size:14px;outline:none;width:100%;min-width:0;transition:border-color .15s}
+    .sb-input:focus{border-color:var(--g)}
+    .sb-input::placeholder{color:var(--sub)}
+    input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(1) brightness(.45)}
+
+    /* ── Buttons ────────────────────────────────────────────────────────── */
+    .btn-primary{background:var(--g);color:#000;border:none;border-radius:8px;padding:10px 20px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap;transition:opacity .15s}
+    .btn-primary:hover{opacity:.88}
+    .btn-primary:disabled{opacity:.4;cursor:not-allowed}
+    .btn-full{width:100%;padding:14px;font-size:15px}
+
+    /* ── Filter chips ───────────────────────────────────────────────────── */
+    .chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none;margin-bottom:20px}
+    .chips::-webkit-scrollbar{display:none}
+    .chip{background:var(--sur);border:1px solid var(--bor2);color:var(--sub);border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;user-select:none}
+    .chip.active{background:var(--ga);border-color:var(--g);color:var(--g)}
+
+    /* ── Results grid ───────────────────────────────────────────────────── */
+    .results-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+    @media(max-width:580px){.results-grid{grid-template-columns:1fr}}
+
+    /* ── Venue card ─────────────────────────────────────────────────────── */
+    .venue-card{background:var(--sur);border:1px solid var(--bor2);border-radius:var(--radius);padding:16px;cursor:pointer;transition:border-color .15s;display:flex;flex-direction:column;gap:10px}
+    .venue-card:hover{border-color:var(--g)}
+    .vc-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+    .vc-name{font-size:15px;font-weight:600;color:var(--txt);line-height:1.3}
+    .avail-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:5px}
+    .avail-dot.open{background:var(--g)}.avail-dot.closed{background:#ff4444}
+    .badge{display:inline-block;background:var(--ga);color:var(--g);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700}
+    .badge-gray{background:var(--sur2);color:var(--sub)}
+    .vc-meta{font-size:13px;color:var(--sub)}
+    .vc-footer{display:flex;justify-content:space-between;align-items:center;margin-top:2px}
+    .vc-price{font-size:16px;font-weight:700;color:var(--g)}
+
+    /* ── Section heading ────────────────────────────────────────────────── */
+    .sec-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .sec-head h2{font-size:18px;font-weight:700}
+
+    /* ── Skeleton ───────────────────────────────────────────────────────── */
+    .skeleton{background:var(--sur);border:1px solid var(--bor2);border-radius:var(--radius);padding:16px;animation:pulse 1.4s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+    .sk-ln{background:var(--sur2);border-radius:4px;height:12px;margin-bottom:10px}
+    .sk-ln.w80{width:80%}.sk-ln.w55{width:55%;height:10px}
+
+    /* ── Back button ────────────────────────────────────────────────────── */
+    .back-btn{display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--sub);cursor:pointer;font-size:14px;padding:0 0 16px;transition:color .15s}
+    .back-btn:hover{color:var(--g)}
+
+    /* ── Venue hero ─────────────────────────────────────────────────────── */
+    .venue-hero{background:var(--sur);border:1px solid var(--bor2);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+    .vh-name{font-size:22px;font-weight:700;margin-bottom:10px}
+    .vh-meta{display:flex;flex-wrap:wrap;gap:8px}
+
+    /* ── Tabs ───────────────────────────────────────────────────────────── */
+    .tabs{display:flex;border-bottom:1px solid var(--bor2);margin-bottom:20px;overflow-x:auto;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{background:none;border:none;color:var(--sub);padding:10px 22px;font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;flex-shrink:0}
+    .tab.active{color:var(--g);border-bottom-color:var(--g)}
+    .tab-panel{display:none}.tab-panel.active{display:block}
+
+    /* ── Slot picker ────────────────────────────────────────────────────── */
+    .slot-date-row{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+    .slot-date-row label{font-size:13px;color:var(--sub)}
+    .slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px}
+    .slot-btn{background:var(--sur);border:1px solid var(--bor2);border-radius:8px;padding:10px 6px;color:var(--txt);font-size:13px;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit}
+    .slot-btn:hover:not(:disabled){border-color:var(--g);color:var(--g)}
+    .slot-btn.selected{background:var(--g);color:#000;border-color:var(--g);font-weight:700}
+    .slot-btn:disabled{opacity:.3;cursor:not-allowed}
+    .slot-dur{font-size:11px;color:var(--sub);margin-top:3px}
+    .slot-btn.selected .slot-dur{color:#000}
+
+    /* ── About / Pricing ────────────────────────────────────────────────── */
+    .about-sec{margin-bottom:22px}
+    .about-sec h4{font-size:12px;color:var(--sub);margin-bottom:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:700}
+    .about-sec p{font-size:14px;line-height:1.65;color:var(--txt)}
+    .amenities{display:flex;flex-wrap:wrap;gap:8px}
+    .amenity-tag{background:var(--sur2);border:1px solid var(--bor2);border-radius:6px;padding:5px 10px;font-size:13px;color:var(--txt)}
+    .pricing-table{width:100%;border-collapse:collapse}
+    .pricing-table td{padding:11px 0;border-bottom:1px solid var(--bor);font-size:14px;vertical-align:middle}
+    .pricing-table tr:last-child td{border-bottom:none}
+    .pricing-table td:last-child{text-align:right;color:var(--g);font-weight:600}
+    .pricing-table td:first-child{color:var(--sub)}
+
+    /* ── Sticky selection bar ───────────────────────────────────────────── */
+    .sticky-bar{position:fixed;bottom:0;left:0;right:0;background:var(--sur);border-top:1px solid var(--bor2);padding:12px 20px;display:none;justify-content:space-between;align-items:center;gap:12px;z-index:90}
+    .sticky-bar.show{display:flex}
+    .sb-slot-info{font-size:13px;color:var(--sub);margin-bottom:2px}
+    .sb-slot-price{font-size:17px;font-weight:700;color:var(--g)}
+
+    /* ── Confirm view ───────────────────────────────────────────────────── */
+    .confirm-card{background:var(--sur);border:1px solid var(--bor2);border-radius:var(--radius);padding:18px;margin-bottom:14px}
+    .confirm-card h3{font-size:12px;font-weight:700;margin-bottom:14px;text-transform:uppercase;letter-spacing:.07em;color:var(--sub)}
+    .p-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;font-size:14px;border-bottom:1px solid var(--bor)}
+    .p-row:last-child{border-bottom:none}
+    .p-row span:first-child{color:var(--sub)}
+    .p-row.total{font-weight:700;font-size:15px}
+    .p-row.total span:last-child{color:var(--g)}
+    .notes-area{background:var(--sur2);border:1px solid var(--bor2);color:var(--txt);border-radius:8px;padding:12px;width:100%;font-size:14px;resize:vertical;min-height:80px;outline:none;font-family:inherit;transition:border-color .15s}
+    .notes-area:focus{border-color:var(--g)}
+    .notes-area::placeholder{color:var(--sub)}
+
+    /* ── Success screen ─────────────────────────────────────────────────── */
+    .success-screen{text-align:center;padding:48px 24px;display:none}
+    .success-screen.show{display:block}
+    .success-icon{width:66px;height:66px;border-radius:50%;background:var(--ga);border:2px solid var(--g);display:inline-flex;align-items:center;justify-content:center;font-size:28px;color:var(--g);margin-bottom:20px}
+    .success-screen h2{font-size:22px;font-weight:700;color:var(--g);margin-bottom:8px}
+    .success-screen .desc{color:var(--sub);font-size:14px;margin-bottom:6px}
+    .booking-id-chip{background:var(--ga);color:var(--g);border-radius:8px;padding:8px 18px;font-size:13px;font-family:monospace;margin:14px 0 22px;display:inline-block;border:1px solid rgba(113,255,0,.3)}
+
+    /* ── My Bookings ────────────────────────────────────────────────────── */
+    .bk-list{display:flex;flex-direction:column;gap:12px}
+    .bk-item{background:var(--sur);border:1px solid var(--bor2);border-radius:var(--radius);padding:16px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+    .bk-info h4{font-size:14px;font-weight:600;margin-bottom:4px}
+    .bk-info p{font-size:13px;color:var(--sub);line-height:1.4}
+    .bk-ref{font-size:11px;font-family:monospace;color:var(--sub);margin-top:3px;opacity:.7}
+    .st-badge{border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;flex-shrink:0}
+    .st-pending_payment{background:rgba(255,200,0,.12);color:#ffc800}
+    .st-confirmed{background:var(--ga);color:var(--g)}
+    .st-checked_in{background:rgba(0,150,255,.12);color:#0096ff}
+    .st-completed{background:var(--sur2);color:var(--sub)}
+    .st-cancelled{background:rgba(255,68,68,.1);color:#ff4444}
+
+    /* ── Auth prompt ────────────────────────────────────────────────────── */
+    .auth-prompt{background:var(--sur);border:1px solid var(--bor2);border-radius:var(--radius);padding:40px 24px;text-align:center}
+    .auth-prompt h3{font-size:17px;font-weight:700;margin-bottom:8px}
+    .auth-prompt p{color:var(--sub);font-size:14px;margin-bottom:22px}
+
+    /* ── Misc ───────────────────────────────────────────────────────────── */
+    .empty-state{text-align:center;padding:40px 20px;color:var(--sub);font-size:14px}
+    .spinner{width:26px;height:26px;border:2px solid var(--bor2);border-top-color:var(--g);border-radius:50%;animation:spin .7s linear infinite;margin:32px auto}
     @keyframes spin{to{transform:rotate(360deg)}}
-    @media(max-width:480px){.venues-grid{grid-template-columns:1fr}}
-    .section-title{font-size:15px;font-weight:700;margin-bottom:10px}
+    .full-col{grid-column:1/-1}
+
+    /* ── Toast ──────────────────────────────────────────────────────────── */
+    #toast-box{position:fixed;bottom:82px;left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:max-content;max-width:calc(100vw - 32px)}
+    .toast{background:var(--sur2);border:1px solid var(--bor2);color:var(--txt);border-radius:8px;padding:10px 20px;font-size:13px;animation:toastIn .2s ease;max-width:320px;text-align:center}
+    .toast.ok{border-color:var(--g);color:var(--g)}.toast.err{border-color:#ff4444;color:#ff4444}
+    @keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
   </style>
 </head>
 <body>
+<div class="page">
 
-<div class="hdr">
-  <button class="hdr-back" onclick="history.back()">&#8592;</button>
-  <div class="hdr-title">🏟️ Book a Venue</div>
-  <button class="btn btn-sm btn-outline" onclick="window.location.href='venue-manager.html'">My Venues</button>
-</div>
-
-<!-- Search -->
-<div class="search-bar">
-  <span style="font-size:18px">🔍</span>
-  <input id="searchInput" placeholder="Search venues, sports, events…" oninput="debounceSearch()">
-  <button class="btn btn-sm btn-primary" onclick="runSearch()">Search</button>
-</div>
-
-<!-- Filters -->
-<div class="filter-row" id="filterRow">
-  <div class="chip active" data-filter="type" data-value="" onclick="setTypeFilter(this,'')">All Types</div>
-  <div class="chip" data-filter="type" data-value="Football Ground" onclick="setTypeFilter(this,'Football Ground')">⚽ Football</div>
-  <div class="chip" data-filter="type" data-value="Basketball Court" onclick="setTypeFilter(this,'Basketball Court')">🏀 Basketball</div>
-  <div class="chip" data-filter="type" data-value="Tennis Court" onclick="setTypeFilter(this,'Tennis Court')">🎾 Tennis</div>
-  <div class="chip" data-filter="type" data-value="Swimming Pool" onclick="setTypeFilter(this,'Swimming Pool')">🏊 Pool</div>
-  <div class="chip" data-filter="type" data-value="Gym" onclick="setTypeFilter(this,'Gym')">💪 Gym</div>
-  <div class="chip" data-filter="type" data-value="Event Venue" onclick="setTypeFilter(this,'Event Venue')">🎉 Events</div>
-  <div class="chip" data-filter="type" data-value="Conference Hall" onclick="setTypeFilter(this,'Conference Hall')">🏛️ Conference</div>
-  <div class="chip" data-filter="type" data-value="Studio" onclick="setTypeFilter(this,'Studio')">🎙️ Studio</div>
-  <div class="chip" data-filter="type" data-value="Co-working Space" onclick="setTypeFilter(this,'Co-working Space')">💻 Co-working</div>
-  <div class="chip" data-filter="type" data-value="Wedding Venue" onclick="setTypeFilter(this,'Wedding Venue')">💒 Wedding</div>
-</div>
-
-<!-- Date + price filters -->
-<div style="display:flex;gap:8px;padding:0 12px 10px;flex-wrap:wrap;align-items:center">
-  <input type="date" class="form-input" id="dateFilter" style="width:150px" onchange="runSearch()">
-  <select class="form-input" id="cityFilter" style="width:130px" onchange="runSearch()">
-    <option value="">All Cities</option>
-    <option>Nairobi</option><option>Mombasa</option><option>Kisumu</option>
-    <option>Nakuru</option><option>Eldoret</option><option>Thika</option>
-  </select>
-  <select class="form-input" id="indoorFilter" style="width:120px" onchange="runSearch()">
-    <option value="">Indoor/Outdoor</option>
-    <option value="true">Indoor</option>
-    <option value="false">Outdoor</option>
-  </select>
-</div>
-
-<!-- Results -->
-<div id="venuesGrid" class="venues-grid">
-  <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">
-    <span class="spinner"></span> Loading venues…
+  <!-- Top nav strip -->
+  <div class="nav-strip">
+    <button class="nav-tab active" id="nt-browse" onclick="showSearch()">Browse Venues</button>
+    <button class="nav-tab" id="nt-bookings" onclick="showMyBookings()">My Bookings</button>
   </div>
-</div>
 
-<!-- BOOKING MODAL -->
-<div class="modal-bg" id="bookingModal" style="display:none" onclick="if(event.target===this)closeModal()">
-  <div class="modal">
-    <div class="modal-hdr">
-      <div class="modal-title" id="modalVenueName">Book Venue</div>
-      <button class="modal-close" onclick="closeModal()">✕</button>
+  <!-- ══ VIEW 1 · Search & Browse ══════════════════════════════════════════ -->
+  <div id="v-search" class="view active">
+    <div class="sec-head"><h2>Find a Venue</h2></div>
+    <div class="search-bar">
+      <input class="sb-input" id="q-input" type="text" placeholder="Venue name or type…" autocomplete="off" onkeydown="if(event.key==='Enter')doSearch()" />
+      <input class="sb-input" id="date-input" type="date" />
+      <input class="sb-input" id="cap-input" type="number" placeholder="Capacity" min="1" max="9999" />
+      <button class="btn-primary" onclick="doSearch()">Search</button>
     </div>
-    <div class="modal-body">
-      <!-- Steps -->
-      <div class="steps">
-        <div class="step active" data-step="1" onclick="goStep(1)">1. Date &amp; Time</div>
-        <div class="step" data-step="2" onclick="goStep(2)">2. Add-ons</div>
-        <div class="step" data-step="3" onclick="goStep(3)">3. Review</div>
-        <div class="step" data-step="4" onclick="goStep(4)">4. Pay</div>
-      </div>
-
-      <!-- Step 1: Date & Slots -->
-      <div class="step-panel active" id="step-1">
-        <!-- Calendar -->
-        <div style="margin-bottom:16px">
-          <div class="cal-nav">
-            <button class="cal-btn" onclick="calPrev()">‹</button>
-            <div class="cal-nav-title" id="calTitle"></div>
-            <button class="cal-btn" onclick="calNext()">›</button>
-          </div>
-          <div class="cal-grid" id="calGrid"></div>
-        </div>
-        <div id="selectedDateLabel" style="font-size:13px;color:var(--muted);margin-bottom:8px"></div>
-        <!-- Booking type -->
-        <div class="form-group">
-          <div class="form-label">Booking Type</div>
-          <div class="dur-row" id="bookingTypeRow"></div>
-        </div>
-        <!-- Slots -->
-        <div id="slotsSection">
-          <div class="form-label" style="margin-bottom:6px">Available Slots</div>
-          <div class="slots-grid" id="slotsGrid"></div>
-          <div id="slotsLoading" style="display:none;text-align:center;padding:16px;color:var(--muted)"><span class="spinner"></span> Checking availability…</div>
-          <div id="slotsDurationRow" style="display:none;margin-top:10px">
-            <div class="form-label">End Time</div>
-            <div class="slots-grid" id="endSlotGrid"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 2: Add-ons -->
-      <div class="step-panel" id="step-2">
-        <div class="section-title">Optional Add-ons</div>
-        <div id="addOnList"></div>
-        <div id="noAddons" style="color:var(--muted);font-size:13px;display:none">No add-ons available for this venue.</div>
-        <div class="form-group" style="margin-top:14px">
-          <label class="form-label">Notes for venue owner</label>
-          <textarea class="form-input" id="bookingNotes" rows="2" placeholder="Any special requests or requirements…" style="resize:vertical"></textarea>
-        </div>
-      </div>
-
-      <!-- Step 3: Review -->
-      <div class="step-panel" id="step-3">
-        <div id="reviewSummary"></div>
-      </div>
-
-      <!-- Step 4: Pay -->
-      <div class="step-panel" id="step-4">
-        <div id="paymentSection"></div>
-      </div>
+    <div class="chips" id="chips">
+      <button class="chip active" data-type="all">All</button>
+      <button class="chip" data-type="sports">Sports Courts</button>
+      <button class="chip" data-type="events">Event Venues</button>
+      <button class="chip" data-type="conference">Conference Rooms</button>
+      <button class="chip" data-type="studio">Studios</button>
+      <button class="chip" data-type="coworking">Co-working</button>
+      <button class="chip" data-type="other">Other</button>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" id="prevBtn" onclick="goStep(_currentStep-1)" style="display:none">← Back</button>
-      <button class="btn btn-primary" id="nextBtn" onclick="stepAction()">Next →</button>
+    <div class="results-grid" id="results"></div>
+  </div>
+
+  <!-- ══ VIEW 2 · Venue Detail ══════════════════════════════════════════════ -->
+  <div id="v-detail" class="view">
+    <button class="back-btn" onclick="backToSearch()">&#8592; Back to results</button>
+    <div class="venue-hero" id="vh"></div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('slots',this)">Slots</button>
+      <button class="tab" onclick="switchTab('about',this)">About</button>
+      <button class="tab" onclick="switchTab('pricing',this)">Pricing</button>
+    </div>
+    <div id="tp-slots" class="tab-panel active">
+      <div class="slot-date-row">
+        <label for="slot-date">Date:</label>
+        <input class="sb-input" id="slot-date" type="date" style="max-width:180px" onchange="loadSlots()" />
+      </div>
+      <div id="slot-grid" class="slot-grid"></div>
+    </div>
+    <div id="tp-about" class="tab-panel" style="padding-top:4px"></div>
+    <div id="tp-pricing" class="tab-panel" style="padding-top:4px"></div>
+  </div>
+
+  <!-- ══ VIEW 3 · Booking Confirmation ═════════════════════════════════════ -->
+  <div id="v-confirm" class="view">
+    <button class="back-btn" id="confirm-back" onclick="backToDetail()">&#8592; Back to venue</button>
+    <div id="confirm-summary" class="confirm-card"></div>
+    <div id="confirm-price" class="confirm-card"></div>
+    <div class="confirm-card">
+      <h3>Notes (optional)</h3>
+      <textarea class="notes-area" id="booking-notes" placeholder="Special requirements or setup instructions (max 500 chars)…" maxlength="500"></textarea>
+    </div>
+    <button class="btn-primary btn-full" id="confirm-btn" onclick="submitBooking()">Confirm Booking</button>
+    <!-- Success state -->
+    <div class="success-screen" id="success-screen">
+      <div class="success-icon">&#10003;</div>
+      <h2>Booking Confirmed!</h2>
+      <p class="desc">Your venue is reserved.</p>
+      <div class="booking-id-chip" id="success-ref"></div>
+      <p class="desc" style="margin-bottom:28px">You will receive a confirmation notification shortly.</p>
+      <button class="btn-primary" onclick="showMyBookings()">View My Bookings</button>
     </div>
   </div>
+
+  <!-- ══ VIEW 4 · My Bookings ═══════════════════════════════════════════════ -->
+  <div id="v-bookings" class="view">
+    <button class="back-btn" onclick="showSearch()">&#8592; Back to Browse</button>
+    <div class="sec-head"><h2>My Bookings</h2></div>
+    <div class="bk-list" id="bk-list"></div>
+  </div>
+
+</div><!-- .page -->
+
+<!-- Sticky slot selection bar -->
+<div class="sticky-bar" id="sticky-bar">
+  <div>
+    <div class="sb-slot-info" id="sb-info">&#8212;</div>
+    <div class="sb-slot-price" id="sb-price">&#8212;</div>
+  </div>
+  <button class="btn-primary" onclick="goToConfirm()">Continue</button>
 </div>
 
-<div id="toast"></div>
+<!-- Toast container -->
+<div id="toast-box"></div>
 
-<script src="firebase.js"></script>
 <script src="sokoni-config.js"></script>
-<script src="sokoni-pay.js"></script>
-<script src="sokoni-booking-engine.js"></script>
+<script src="sokoni-availability.js"></script>
 <script>
-const E   = id => document.getElementById(id);
-const _e  = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-const KES = n  => 'KES ' + Number(n||0).toFixed(2);
+// Firebase compat SDK is loaded by shared-header.js
+// db = firebase.firestore() available globally
+// firebase.auth(), firebase.functions().httpsCallable(name) available
 
-let _venues = [], _activeType = '', _activeVenue = null;
-let _selectedDate = '', _selectedStart = null, _selectedEnd = null;
-let _currentStep = 1, _hold = null, _holdTimer = null, _holdInterval = null;
-let _selectedAddOns = [], _calMonth = new Date();
-let _allSlots = [], _bookingType = 'hourly';
+/* ── State ──────────────────────────────────────────────────────────────── */
+var S = {
+  filter: 'all',
+  user: null,
+  venue: null,
+  slot: null,
+  priceCalc: null,
+  iKey: null
+};
 
-/* ── Toast ── */
-function toast(msg, dur=2500) {
-  const el = E('toast'); el.textContent = msg; el.classList.add('show');
-  clearTimeout(toast._t); toast._t = setTimeout(()=>el.classList.remove('show'), dur);
+/* ── Auth ────────────────────────────────────────────────────────────────── */
+firebase.auth().onAuthStateChanged(function(u) { S.user = u; });
+
+function requireAuth(fn) {
+  if (S.user) { fn(); return; }
+  toast('Please sign in to continue', 'err');
+  setTimeout(function() { window.location.href = 'auth.html'; }, 1300);
 }
 
-/* ── Date filter default ── */
-E('dateFilter').value = new Date().toISOString().slice(0,10);
-
-/* ── Type filter ── */
-function setTypeFilter(el, val) {
-  document.querySelectorAll('[data-filter="type"]').forEach(c => c.classList.toggle('active', c===el));
-  _activeType = val;
-  runSearch();
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+function toast(msg, type) {
+  var el = document.createElement('div');
+  el.className = 'toast' + (type ? ' ' + type : '');
+  el.textContent = String(msg);
+  var box = document.getElementById('toast-box');
+  box.appendChild(el);
+  setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 3200);
 }
 
-/* ── Search ── */
-let _searchTimer;
-function debounceSearch() { clearTimeout(_searchTimer); _searchTimer = setTimeout(runSearch, 400); }
-
-async function runSearch() {
-  const grid = E('venuesGrid');
-  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)"><span class="spinner"></span> Loading…</div>';
-  try {
-    const params = {
-      type:   _activeType || undefined,
-      city:   E('cityFilter').value || undefined,
-      date:   E('dateFilter').value || undefined,
-      indoor: E('indoorFilter').value === '' ? undefined : E('indoorFilter').value === 'true',
-    };
-    const q = E('searchInput').value.trim();
-    _venues = await SokoniBooking.searchVenues(params);
-    /* Client-side keyword filter */
-    if (q) _venues = _venues.filter(v => (v.name+v.type+v.area+v.city+v.description).toLowerCase().includes(q.toLowerCase()));
-    renderVenues(_venues);
-  } catch(err) {
-    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--red)">⚠️ ${_e(err.message)}</div>`;
-  }
+/* ── Views ───────────────────────────────────────────────────────────────── */
+var VIEWS = ['v-search', 'v-detail', 'v-confirm', 'v-bookings'];
+function showView(id) {
+  VIEWS.forEach(function(v) { document.getElementById(v).classList.remove('active'); });
+  document.getElementById(id).classList.add('active');
 }
 
-function renderVenues(venues) {
-  const grid = E('venuesGrid');
-  if (!venues.length) {
-    grid.innerHTML = '<div style="grid-column:1/-1"><div class="empty-state"><div class="empty-icon">🏟️</div><div>No venues found.<br>Try different filters or be the first to list one!</div><br><button class="btn btn-primary" onclick="window.location.href=\'venue-manager.html\'">List Your Venue</button></div></div>';
-    return;
-  }
-  grid.innerHTML = venues.map(v => {
-    const status = v.liveStatus || 'available';
-    const stLabel= {available:'Available Now',opens_soon:'Opens Soon',closing_soon:'Closing Soon',closed:'Closed',maintenance:'Maintenance'}[status]||'Available';
-    const stCls  = 'st-'+status;
-    return `<div class="vcard" onclick="openBooking('${_e(v.id)}')">
-      <div class="vcard-img">
-        ${v.photos?.[0] ? `<img src="${_e(v.photos[0])}" alt="${_e(v.name)}" loading="lazy">` : ''}
-        <div class="vcard-status ${stCls}">${stLabel}</div>
-        <div class="vcard-type">${_e(v.type||'Venue')}</div>
-      </div>
-      <div class="vcard-body">
-        <div class="vcard-name">${_e(v.name)}</div>
-        <div class="vcard-loc">📍 ${_e(v.area||'')}${v.area&&v.city?', ':''}${_e(v.city||'')}</div>
-        <div class="vcard-row">
-          <div class="vcard-price">${KES(v.pricing?.hourly||0)} <span>/hour</span></div>
-          ${v.rating?`<div class="vcard-rating">⭐ ${Number(v.rating).toFixed(1)} <span style="color:var(--muted)">(${v.reviewCount||0})</span></div>`:''}
-        </div>
-        ${v.capacity?.max?`<div style="font-size:12px;color:var(--muted);margin-top:4px">👥 Up to ${v.capacity.max} people</div>`:''}
-        ${(v.amenities||[]).length?`<div class="vcard-amenities">${v.amenities.slice(0,4).map(a=>`<span class="amenity-pill">${_e(a)}</span>`).join('')}</div>`:''}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-/* ══ BOOKING FLOW ══ */
-async function openBooking(venueId) {
-  const venue = _venues.find(v => v.id === venueId) || await SokoniBooking.getVenue(venueId);
-  _activeVenue = venue;
-  _selectedDate = E('dateFilter').value || new Date().toISOString().slice(0,10);
-  _selectedStart = _selectedEnd = null;
-  _hold = null;
-  _selectedAddOns = [];
-  _currentStep = 1;
-  _bookingType = 'hourly';
-
-  E('modalVenueName').textContent = venue.name || 'Book Venue';
-  E('bookingModal').style.display = '';
-  updateStepUI();
-  renderCalendar();
-  renderBookingTypes();
-  loadSlots();
-  renderAddOns();
-}
-
-function closeModal() {
-  E('bookingModal').style.display = 'none';
-  if (_hold) SokoniBooking.releaseHold(_hold.holdId).catch(()=>{});
-  clearTimeout(_holdTimer); clearInterval(_holdInterval);
-  _hold = null;
-}
-
-/* ── Calendar ── */
-function renderCalendar() {
-  const y = _calMonth.getFullYear(), m = _calMonth.getMonth();
-  E('calTitle').textContent = _calMonth.toLocaleDateString('en-KE',{month:'long',year:'numeric'});
-  const firstDay = new Date(y, m, 1).getDay();
-  const daysInMonth = new Date(y, m+1, 0).getDate();
-  const today = new Date().toISOString().slice(0,10);
-  const days = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-  let html = days.map(d=>`<div class="cal-day-header">${d}</div>`).join('');
-  for (let i=0;i<firstDay;i++) html += '<div class="cal-day empty"></div>';
-  for (let d=1;d<=daysInMonth;d++) {
-    const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const past    = dateStr < today;
-    const sel     = dateStr === _selectedDate;
-    const tod     = dateStr === today;
-    html += `<div class="cal-day ${past?'past':''} ${sel?'selected':''} ${tod&&!sel?'today':''}" onclick="selectDate('${dateStr}')">${d}</div>`;
-  }
-  E('calGrid').innerHTML = html;
-}
-
-function calPrev() { _calMonth = new Date(_calMonth.getFullYear(), _calMonth.getMonth()-1, 1); renderCalendar(); }
-function calNext() { _calMonth = new Date(_calMonth.getFullYear(), _calMonth.getMonth()+1, 1); renderCalendar(); }
-
-function selectDate(d) {
-  _selectedDate = d;
-  _selectedStart = _selectedEnd = null;
-  renderCalendar();
-  E('selectedDateLabel').textContent = '📅 ' + new Date(d).toLocaleDateString('en-KE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  loadSlots();
-}
-
-/* ── Booking type ── */
-function renderBookingTypes() {
-  const types = ['hourly','half_day','full_day'];
-  E('bookingTypeRow').innerHTML = types.map(t => {
-    const labels = {hourly:'Hourly',half_day:'Half Day',full_day:'Full Day'};
-    return `<div class="dur-btn ${t===_bookingType?'active':''}" onclick="setBookingType('${t}')">${labels[t]}</div>`;
-  }).join('');
-}
-
-function setBookingType(t) { _bookingType = t; renderBookingTypes(); _selectedStart=_selectedEnd=null; renderSlots(_allSlots); }
-
-/* ── Slots ── */
-async function loadSlots() {
-  if (!_activeVenue || !_selectedDate) return;
-  E('slotsLoading').style.display='';
-  E('slotsGrid').innerHTML='';
-  try {
-    const res = await SokoniBooking.getAvailability(_activeVenue.id, _selectedDate);
-    _allSlots = res.slots || [];
-    renderSlots(_allSlots);
-  } catch(err) {
-    E('slotsGrid').innerHTML = `<div style="color:var(--red);font-size:13px">⚠️ ${_e(err.message)}</div>`;
-  } finally {
-    E('slotsLoading').style.display = 'none';
-  }
-}
-
-function renderSlots(slots) {
-  E('slotsDurationRow').style.display = 'none';
-  E('slotsGrid').innerHTML = slots.map(s => `
-    <div class="slot ${!s.available?'unavailable':''} ${s.startTime===_selectedStart?.startTime?'selected':''}"
-         onclick="selectStartSlot(${JSON.stringify({startTime:s.startTime,endTime:s.endTime,startMins:s.startMins,endMins:s.endMins}).replace(/"/g,'&quot;')})">
-      ${s.startTime}
-    </div>`).join('');
-}
-
-function selectStartSlot(slot) {
-  _selectedStart = slot;
-  if (_bookingType === 'hourly') {
-    /* Show end time selector */
-    E('slotsDurationRow').style.display = '';
-    const avail = _allSlots.filter(s => s.available && s.startMins >= slot.startMins + 30);
-    E('endSlotGrid').innerHTML = avail.slice(0, 12).map(s => `
-      <div class="slot ${s.endTime===_selectedEnd?.endTime?'selected':''}"
-           onclick="selectEndSlot(${JSON.stringify({startTime:s.startTime,endTime:s.endTime,startMins:s.startMins,endMins:s.endMins}).replace(/"/g,'&quot;')})">
-        ${s.endTime}
-      </div>`).join('');
-  } else {
-    /* For half/full day, compute end automatically */
-    const mins = _bookingType==='half_day' ? 240 : 480;
-    _selectedEnd = { ..._allSlots.find(s=>s.startMins===slot.startMins+mins-30)||slot, endTime: SokoniBooking._minsToTime(slot.startMins+mins) };
-  }
-  renderSlots(_allSlots);
-  updatePrice();
-}
-
-function selectEndSlot(slot) {
-  _selectedEnd = slot;
-  E('endSlotGrid').querySelectorAll('.slot').forEach(el => el.classList.toggle('selected', el.textContent.trim()===slot.endTime));
-  updatePrice();
-}
-
-/* ── Add-ons ── */
-function renderAddOns() {
-  const addons = _activeVenue?.addOns || [];
-  if (!addons.length) { E('noAddons').style.display=''; E('addOnList').innerHTML=''; return; }
-  E('noAddons').style.display = 'none';
-  E('addOnList').innerHTML = addons.map((a, i) => `
-    <div class="addon-item">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1">
-        <input type="checkbox" class="addon-check" data-index="${i}" onchange="toggleAddon(this,${i})" ${_selectedAddOns.some(x=>x.name===a.name)?'checked':''}>
-        <div><div style="font-weight:600;font-size:13px">${_e(a.name)}</div><div style="font-size:12px;color:var(--muted)">${_e(a.description||'')}</div></div>
-      </label>
-      <div style="font-weight:700;color:var(--accent2)">${KES(a.price)}</div>
-    </div>`).join('');
-}
-
-function toggleAddon(el, idx) {
-  const a = _activeVenue.addOns[idx];
-  if (el.checked) { if (!_selectedAddOns.some(x=>x.name===a.name)) _selectedAddOns.push(a); }
-  else _selectedAddOns = _selectedAddOns.filter(x=>x.name!==a.name);
-  updatePrice();
-}
-
-/* ── Price ── */
-function updatePrice() {
-  if (!_activeVenue || !_selectedStart || !_selectedEnd) return;
-  const p = SokoniBooking.calculatePrice(_activeVenue, _selectedStart.startMins, _selectedEnd.endMins||_selectedEnd.startMins+30, _selectedDate, { addOns: _selectedAddOns });
-  return p;
-}
-
-/* ── Step nav ── */
-function goStep(n) {
-  if (n < 1 || n > 4) return;
-  if (n > 1 && !_selectedStart) { toast('❌ Select a start time first'); return; }
-  if (n > 1 && !_selectedEnd && _bookingType==='hourly') { toast('❌ Select an end time'); return; }
-  _currentStep = n;
-  updateStepUI();
-  if (n===3) renderReview();
-  if (n===4) renderPayment();
-}
-
-function updateStepUI() {
-  document.querySelectorAll('.step').forEach((el,i) => {
-    const sn = i+1;
-    el.classList.toggle('active', sn===_currentStep);
-    el.classList.toggle('done', sn<_currentStep);
+function setNavTab(id) {
+  ['nt-browse', 'nt-bookings'].forEach(function(t) {
+    document.getElementById(t).classList.toggle('active', t === id);
   });
-  document.querySelectorAll('.step-panel').forEach((el,i) => el.classList.toggle('active', i+1===_currentStep));
-  E('prevBtn').style.display = _currentStep>1?'':'none';
-  E('nextBtn').textContent   = _currentStep===4 ? '✅ Confirm Booking' : _currentStep===3 ? 'Proceed to Payment →' : 'Next →';
 }
 
-async function stepAction() {
-  if (_currentStep < 4) { goStep(_currentStep+1); return; }
-  /* Final: confirm booking */
-  await confirmBooking();
+function showSearch() {
+  showView('v-search');
+  hideStickyBar();
+  setNavTab('nt-browse');
 }
 
-/* ── Review ── */
-function renderReview() {
-  const v = _activeVenue;
-  if (!_selectedStart || !_selectedEnd) return;
-  const endMins = _selectedEnd.endMins || _selectedEnd.startMins+30;
-  const p = SokoniBooking.calculatePrice(v, _selectedStart.startMins, endMins, _selectedDate, { addOns: _selectedAddOns });
-  E('reviewSummary').innerHTML = `
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px">
-      <div style="font-weight:700;font-size:16px;margin-bottom:4px">${_e(v.name)}</div>
-      <div style="font-size:13px;color:var(--muted)">📍 ${_e(v.area||'')} ${_e(v.city||'')}</div>
-      <div style="margin-top:10px;font-size:14px">
-        <div>📅 ${new Date(_selectedDate).toLocaleDateString('en-KE',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>
-        <div>⏰ ${_selectedStart.startTime} – ${SokoniBooking._minsToTime(endMins)}</div>
-        <div>⏱️ ${Math.round((endMins-_selectedStart.startMins)/60*10)/10} hours</div>
-      </div>
-    </div>
-    <div class="section-title">Price Breakdown</div>
-    <table class="price-table">
-      ${p.breakdown.map(b=>`<tr><td>${_e(b.label)}</td><td>${KES(Math.abs(b.amount))}${b.amount<0?' (discount)':''}</td></tr>`).join('')}
-      ${p.deposit?`<tr><td>Deposit</td><td>${KES(p.deposit)}</td></tr>`:''}
-      <tr class="total-row"><td>Total</td><td style="color:var(--accent2)">${KES(p.total)}</td></tr>
-    </table>
-    ${v.config?.approvalRequired?'<div style="margin-top:12px;padding:10px;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.3);border-radius:8px;font-size:13px;color:var(--yellow)">⚠️ This venue requires owner approval. Your booking will be confirmed after review.</div>':''}
-  `;
+function backToSearch() { showSearch(); }
+
+function backToDetail() {
+  showView('v-detail');
+  if (S.slot) renderStickyBar();
 }
 
-/* ── Payment ── */
-async function renderPayment() {
-  /* Hold the slot */
-  if (!_hold) {
-    const venue  = _activeVenue;
-    const dayStart = new Date(_selectedDate+'T00:00:00').getTime();
-    const endMins  = _selectedEnd?.endMins || _selectedEnd?.startMins+30;
-    const startTs  = dayStart + _selectedStart.startMins * 60000;
-    const endTs    = dayStart + endMins * 60000;
-    try {
-      const holdRes = await SokoniBooking.holdSlot(venue.id, startTs, endTs);
-      _hold = holdRes;
-      startHoldCountdown(2*60);
-    } catch(err) {
-      E('paymentSection').innerHTML = `<div style="color:var(--red)">❌ ${_e(err.message||'Slot no longer available')}</div>`;
-      return;
-    }
-  }
-
-  const endMins = _selectedEnd?.endMins || _selectedEnd?.startMins+30;
-  const p = SokoniBooking.calculatePrice(_activeVenue, _selectedStart.startMins, endMins, _selectedDate, { addOns: _selectedAddOns });
-
-  E('paymentSection').innerHTML = `
-    <div class="hold-timer" id="holdTimerEl">⏳ Slot held for <strong id="holdCountdown">2:00</strong> — complete payment now</div>
-    <div style="text-align:center;margin:20px 0">
-      <div style="font-size:14px;color:var(--muted)">Total to pay</div>
-      <div style="font-size:36px;font-weight:800;color:var(--accent2)">${KES(p.total)}</div>
-    </div>
-    <div style="display:grid;gap:8px">
-      <button class="btn btn-primary" onclick="payWith('mpesa')" style="font-size:15px;padding:14px">
-        📱 Pay with M-Pesa STK Push
-      </button>
-      <button class="btn btn-outline" onclick="payWith('card')">💳 Card Payment</button>
-      <button class="btn btn-outline" onclick="payWith('wallet')">👜 SOKONI Wallet</button>
-    </div>
-  `;
+function showMyBookings() {
+  showView('v-bookings');
+  hideStickyBar();
+  setNavTab('nt-bookings');
+  loadMyBookings();
 }
 
-let _holdCountdownInterval;
-function startHoldCountdown(secs) {
-  clearInterval(_holdCountdownInterval);
-  let rem = secs;
-  _holdCountdownInterval = setInterval(() => {
-    rem--;
-    const el = E('holdCountdown');
-    if (el) el.textContent = `${Math.floor(rem/60)}:${String(rem%60).padStart(2,'0')}`;
-    if (rem <= 0) {
-      clearInterval(_holdCountdownInterval);
-      _hold = null;
-      toast('⏰ Your slot hold expired. Please try again.');
-      goStep(1);
-    }
-  }, 1000);
-}
+/* ── Filter chips ────────────────────────────────────────────────────────── */
+document.getElementById('chips').addEventListener('click', function(e) {
+  var chip = e.target.closest('.chip');
+  if (!chip) return;
+  document.querySelectorAll('.chip').forEach(function(c) { c.classList.remove('active'); });
+  chip.classList.add('active');
+  S.filter = chip.dataset.type || 'all';
+  doSearch();
+});
 
-async function payWith(method) {
-  const v      = _activeVenue;
-  const endMins = _selectedEnd?.endMins || _selectedEnd?.startMins + 30;
-  const p       = SokoniBooking.calculatePrice(v, _selectedStart.startMins, endMins, _selectedDate, { addOns: _selectedAddOns });
-  const notes   = E('bookingNotes')?.value || '';
+/* ── Default dates ───────────────────────────────────────────────────────── */
+(function() {
+  var today = new Date().toISOString().slice(0, 10);
+  document.getElementById('date-input').value = today;
+  document.getElementById('slot-date').value = today;
+})();
 
-  async function _finalise(paymentId) {
-    try {
-      const result = await SokoniBooking.createBooking({
-        venueId:   v.id,
-        holdId:    _hold?.holdId,
-        date:      _selectedDate,
-        startTime: _selectedStart.startTime,
-        endTime:   SokoniBooking._minsToTime(endMins),
-        addOns:    _selectedAddOns,
-        notes,
-        paymentId,
+/* ── Search & Browse ─────────────────────────────────────────────────────── */
+function doSearch() {
+  var grid = document.getElementById('results');
+  renderSkeletons(grid, 4);
+
+  var q = (document.getElementById('q-input').value || '').trim().toLowerCase();
+  var cap = parseInt(document.getElementById('cap-input').value, 10) || 0;
+
+  var ref = db.collection('venues').where('status', '==', 'active');
+  if (S.filter !== 'all') ref = ref.where('type', '==', S.filter);
+  ref = ref.limit(24);
+
+  ref.get().then(function(snap) {
+    var list = [];
+    snap.forEach(function(doc) { list.push(Object.assign({ id: doc.id }, doc.data())); });
+    if (q) {
+      list = list.filter(function(v) {
+        return (v.name || '').toLowerCase().includes(q) ||
+               (v.type || '').toLowerCase().includes(q) ||
+               (v.location || '').toLowerCase().includes(q);
       });
-      clearInterval(_holdCountdownInterval);
-      closeModal();
-      showBookingSuccess(result);
-    } catch(err) {
-      toast('❌ ' + (err.message || 'Booking failed — please try again'));
     }
-  }
+    if (cap > 0) list = list.filter(function(v) { return (v.capacity || 0) >= cap; });
+    renderVenues(grid, list);
+  }).catch(function(err) {
+    console.error('[venue-booking] search:', err);
+    clearEl(grid);
+    var p = document.createElement('p');
+    p.className = 'full-col';
+    p.style.cssText = 'color:#ff6666;text-align:center;padding:40px;font-size:14px';
+    p.textContent = 'Could not load venues. Please try again.';
+    grid.appendChild(p);
+  });
+}
 
-  if (method === 'mpesa') {
-    /* Real M-Pesa STK push via SokoniPay.platformBook() — deposit-first, balance on check-in */
-    if (typeof SokoniPay === 'undefined') { toast('❌ Payment system not loaded — refresh and try again'); return; }
-    SokoniPay.platformBook({
-      providerName:  v.name,
-      category:      'booking',
-      serviceDesc:   `Venue booking: ${v.name} · ${_selectedDate} ${_selectedStart.startTime}–${SokoniBooking._minsToTime(endMins)}`,
-      totalAmount:   p.total,
-      depositPct:    v.pricing?.deposit ? Math.round((v.pricing.deposit / p.total) * 100) : 50,
-      providerPhone: v.ownerPhone || '',
-      bookingDetails: {
-        venueId:   v.id,
-        date:      _selectedDate,
-        startTime: _selectedStart.startTime,
-        endTime:   SokoniBooking._minsToTime(endMins),
-      },
-      onSuccess: function(ref) { _finalise(ref); },
+function renderSkeletons(el, n) {
+  clearEl(el);
+  for (var i = 0; i < n; i++) {
+    var sk = document.createElement('div');
+    sk.className = 'skeleton';
+    ['sk-ln w80', 'sk-ln w55', 'sk-ln'].forEach(function(cls) {
+      var d = document.createElement('div'); d.className = cls; sk.appendChild(d);
     });
-    return;
-  }
-
-  if (method === 'wallet') {
-    /* SOKONI Wallet deduction */
-    if (typeof SokoniPay === 'undefined') { toast('❌ Payment system not loaded'); return; }
-    SokoniPay.gateway({
-      providerName: v.name,
-      category:    'booking',
-      serviceDesc: `Venue: ${v.name} · ${_selectedDate}`,
-      amount:       p.total,
-      method:       'wallet',
-      onSuccess:    function(ref) { _finalise(ref); },
-    });
-    return;
-  }
-
-  /* Card / other — show gateway */
-  if (typeof SokoniPay !== 'undefined') {
-    SokoniPay.gateway({
-      providerName: v.name,
-      category:    'booking',
-      serviceDesc: `Venue: ${v.name} · ${_selectedDate}`,
-      amount:       p.total,
-      onSuccess:    function(ref) { _finalise(ref); },
-    });
-  } else {
-    toast('❌ Payment system not loaded — refresh and try again');
+    el.appendChild(sk);
   }
 }
 
-function showBookingSuccess(result) {
-  const overlay = document.createElement('div');
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-  overlay.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);max-width:380px;width:100%;padding:30px;text-align:center">
-    <div style="font-size:64px;margin-bottom:16px">🎉</div>
-    <div style="font-size:20px;font-weight:800;margin-bottom:8px">Booking Confirmed!</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Reference: <strong style="color:var(--text);font-family:monospace">${_e(result.bookingId||'')}</strong></div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">You'll receive a confirmation notification shortly.</div>
-    <button class="btn btn-primary" style="width:100%" onclick="this.closest('.overlay-cls').remove();window.location.reload()">Done</button>
-  </div>`;
-  overlay.className='overlay-cls';
-  document.body.appendChild(overlay);
+function renderVenues(grid, list) {
+  clearEl(grid);
+  if (!list.length) {
+    var p = document.createElement('p');
+    p.className = 'full-col';
+    p.style.cssText = 'color:var(--sub);text-align:center;padding:48px 16px;font-size:14px';
+    p.textContent = 'No venues found. Try different filters or clear your search.';
+    grid.appendChild(p);
+    return;
+  }
+  list.forEach(function(v) {
+    var card = document.createElement('div');
+    card.className = 'venue-card';
+    card.onclick = function() { openVenue(v); };
+
+    // Header
+    var hdr = document.createElement('div'); hdr.className = 'vc-header';
+    var nm = document.createElement('div'); nm.className = 'vc-name';
+    nm.textContent = v.name || 'Venue';
+    var dot = document.createElement('div');
+    dot.className = 'avail-dot ' + (v.isOpen ? 'open' : 'closed');
+    hdr.appendChild(nm); hdr.appendChild(dot);
+
+    // Badges
+    var badges = document.createElement('div');
+    badges.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+    var tb = document.createElement('span'); tb.className = 'badge';
+    tb.textContent = fmtType(v.type);
+    var cb = document.createElement('span'); cb.className = 'badge badge-gray';
+    cb.textContent = 'Up to ' + (v.capacity || '?') + ' people';
+    badges.appendChild(tb); badges.appendChild(cb);
+
+    // Location
+    var meta = document.createElement('div'); meta.className = 'vc-meta';
+    meta.textContent = v.location ? '📍 ' + v.location : 'No location listed';
+
+    // Footer
+    var footer = document.createElement('div'); footer.className = 'vc-footer';
+    var price = document.createElement('div'); price.className = 'vc-price';
+    price.textContent = v.pricePerHour ? 'KES ' + fmtN(v.pricePerHour) + '/hr' : 'Price on request';
+    var btn = document.createElement('button'); btn.className = 'btn-primary';
+    btn.textContent = 'Book';
+    btn.onclick = function(e) { e.stopPropagation(); openVenue(v); };
+    footer.appendChild(price); footer.appendChild(btn);
+
+    card.appendChild(hdr);
+    card.appendChild(badges);
+    card.appendChild(meta);
+    card.appendChild(footer);
+    grid.appendChild(card);
+  });
 }
 
-async function confirmBooking() { /* fallthrough to stepAction */ }
+/* ── Venue Detail ─────────────────────────────────────────────────────────── */
+function openVenue(v) {
+  S.venue = v;
+  S.slot = null;
+  S.priceCalc = null;
+  hideStickyBar();
+  renderHero(v);
+  renderAbout(v);
+  renderPricing(v);
+  // Reset to Slots tab
+  document.querySelectorAll('.tab').forEach(function(t, i) { t.classList.toggle('active', i === 0); });
+  document.querySelectorAll('.tab-panel').forEach(function(p, i) { p.classList.toggle('active', i === 0); });
+  loadSlots();
+  showView('v-detail');
+}
 
-/* ── Init ── */
-runSearch();
+function renderHero(v) {
+  var el = document.getElementById('vh');
+  clearEl(el);
+  var nm = document.createElement('div'); nm.className = 'vh-name';
+  nm.textContent = v.name || 'Venue';
+  var meta = document.createElement('div'); meta.className = 'vh-meta';
+  [fmtType(v.type), '📍 ' + (v.location || 'No location'), 'Capacity: ' + (v.capacity || '?') + ' people'].forEach(function(txt) {
+    var b = document.createElement('span'); b.className = 'badge badge-gray'; b.textContent = txt; meta.appendChild(b);
+  });
+  el.appendChild(nm); el.appendChild(meta);
+}
+
+function renderAbout(v) {
+  var el = document.getElementById('tp-about');
+  clearEl(el);
+  if (v.description) {
+    addAboutSec(el, 'About', function(wrap) {
+      var p = document.createElement('p'); p.textContent = v.description; wrap.appendChild(p);
+    });
+  }
+  if (v.amenities && v.amenities.length) {
+    addAboutSec(el, 'Amenities', function(wrap) {
+      var grid = document.createElement('div'); grid.className = 'amenities';
+      v.amenities.forEach(function(a) {
+        var c = document.createElement('div'); c.className = 'amenity-tag'; c.textContent = a; grid.appendChild(c);
+      });
+      wrap.appendChild(grid);
+    });
+  }
+  if (v.rules) {
+    addAboutSec(el, 'Rules & Policies', function(wrap) {
+      var p = document.createElement('p'); p.style.color = 'var(--sub)'; p.textContent = v.rules; wrap.appendChild(p);
+    });
+  }
+  if (!el.children.length) {
+    var p = document.createElement('p'); p.style.cssText = 'color:var(--sub);font-size:14px';
+    p.textContent = 'No additional information available for this venue.'; el.appendChild(p);
+  }
+}
+
+function addAboutSec(parent, title, fn) {
+  var sec = document.createElement('div'); sec.className = 'about-sec';
+  var h4 = document.createElement('h4'); h4.textContent = title; sec.appendChild(h4);
+  fn(sec); parent.appendChild(sec);
+}
+
+function renderPricing(v) {
+  var el = document.getElementById('tp-pricing');
+  clearEl(el);
+  var tbl = document.createElement('table'); tbl.className = 'pricing-table';
+  [
+    ['Base rate (per hour)', v.pricePerHour ? 'KES ' + fmtN(v.pricePerHour) : 'On request'],
+    ['Weekend rate', v.weekendRate ? 'KES ' + fmtN(v.weekendRate) + '/hr' : 'Same as base'],
+    ['Peak hours surcharge', v.peakSurcharge ? '+' + v.peakSurcharge + '%' : 'None'],
+    ['Deposit policy', v.depositPolicy || 'None'],
+    ['Cancellation policy', v.cancellationPolicy || 'Contact the venue directly'],
+  ].forEach(function(r) {
+    var tr = document.createElement('tr');
+    var td1 = document.createElement('td'); td1.textContent = r[0];
+    var td2 = document.createElement('td'); td2.textContent = r[1];
+    tr.appendChild(td1); tr.appendChild(td2); tbl.appendChild(tr);
+  });
+  el.appendChild(tbl);
+}
+
+/* ── Tabs ─────────────────────────────────────────────────────────────────── */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('tp-' + name).classList.add('active');
+}
+
+/* ── Slots ────────────────────────────────────────────────────────────────── */
+function loadSlots() {
+  if (!S.venue) return;
+  var grid = document.getElementById('slot-grid');
+  clearEl(grid); grid.appendChild(mkSpinner());
+  var date = document.getElementById('slot-date').value;
+  firebase.functions().httpsCallable('venueGetAvailability')({ venueId: S.venue.id, startDate: date, days: 1 })
+    .then(function(res) {
+      var slots = (res.data && res.data.slots) || [];
+      renderSlots(grid, slots, date);
+    })
+    .catch(function(err) {
+      console.error('[venue-booking] availability:', err);
+      clearEl(grid);
+      var p = document.createElement('p');
+      p.style.cssText = 'color:var(--sub);font-size:14px';
+      p.textContent = 'Could not load availability. Please try again.';
+      grid.appendChild(p);
+    });
+}
+
+function renderSlots(grid, slots, date) {
+  clearEl(grid);
+  if (!slots.length) {
+    var p = document.createElement('p');
+    p.style.cssText = 'color:var(--sub);font-size:14px';
+    p.textContent = 'No available slots for this date.';
+    grid.appendChild(p); return;
+  }
+  slots.forEach(function(slot) {
+    var btn = document.createElement('button'); btn.className = 'slot-btn';
+    if (!slot.available) btn.disabled = true;
+    var timeEl = document.createElement('div');
+    timeEl.textContent = slot.startTime + (slot.endTime ? '–' + slot.endTime : '');
+    var durEl = document.createElement('div'); durEl.className = 'slot-dur';
+    durEl.textContent = slot.durationMins ? (slot.durationMins / 60) + 'h' : '';
+    btn.appendChild(timeEl); btn.appendChild(durEl);
+    btn.onclick = function() { if (!slot.available) return; selectSlot(slot, date, btn); };
+    grid.appendChild(btn);
+  });
+}
+
+function selectSlot(slot, date, btn) {
+  document.querySelectorAll('.slot-btn').forEach(function(b) { b.classList.remove('selected'); });
+  btn.classList.add('selected');
+  S.slot = Object.assign({ date: date }, slot);
+  calcPrice(slot, date);
+}
+
+function calcPrice(slot, date) {
+  firebase.functions().httpsCallable('venueCalculatePrice')({
+    venueId: S.venue.id, date: date, startTime: slot.startTime, durationMins: slot.durationMins || 60
+  }).then(function(res) {
+    S.priceCalc = res.data || {};
+    var total = S.priceCalc.total || S.venue.pricePerHour || 0;
+    renderStickyBar(
+      date + ' · ' + slot.startTime + (slot.endTime ? '–' + slot.endTime : ''),
+      total ? 'KES ' + fmtN(total) : 'Price TBC'
+    );
+  }).catch(function() {
+    var fallback = S.venue.pricePerHour || 0;
+    renderStickyBar(date + ' · ' + slot.startTime, fallback ? 'KES ' + fmtN(fallback) : 'Price TBC');
+  });
+}
+
+function renderStickyBar(info, price) {
+  document.getElementById('sb-info').textContent = info || '';
+  document.getElementById('sb-price').textContent = price || '';
+  document.getElementById('sticky-bar').classList.add('show');
+}
+function hideStickyBar() { document.getElementById('sticky-bar').classList.remove('show'); }
+
+/* ── Confirm Booking ──────────────────────────────────────────────────────── */
+function goToConfirm() {
+  requireAuth(function() {
+    if (!S.slot || !S.venue) { toast('Please select a time slot first', 'err'); return; }
+    buildSummary();
+    buildPriceBreakdown();
+    document.getElementById('booking-notes').value = '';
+    document.getElementById('confirm-btn').style.display = '';
+    document.getElementById('confirm-btn').disabled = false;
+    document.getElementById('confirm-btn').textContent = 'Confirm Booking';
+    document.getElementById('confirm-back').style.display = '';
+    document.getElementById('success-screen').classList.remove('show');
+    S.iKey = 'bk-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+    hideStickyBar();
+    showView('v-confirm');
+  });
+}
+
+function buildSummary() {
+  var el = document.getElementById('confirm-summary');
+  clearEl(el);
+  var h3 = document.createElement('h3'); h3.textContent = 'Booking Summary'; el.appendChild(h3);
+  [
+    ['Venue', S.venue.name || '—'],
+    ['Type', fmtType(S.venue.type)],
+    ['Date', S.slot.date],
+    ['Time', S.slot.startTime + (S.slot.endTime ? ' – ' + S.slot.endTime : '')],
+    ['Location', S.venue.location || '—'],
+    ['Capacity', 'Up to ' + (S.venue.capacity || '?') + ' people'],
+  ].forEach(function(r) { el.appendChild(mkPRow(r[0], r[1], false)); });
+}
+
+function buildPriceBreakdown() {
+  var el = document.getElementById('confirm-price');
+  clearEl(el);
+  var h3 = document.createElement('h3'); h3.textContent = 'Price Breakdown'; el.appendChild(h3);
+  var c = S.priceCalc || {};
+  var base = c.base || S.venue.pricePerHour || 0;
+  var surge = c.peakSurcharge || 0;
+  var total = c.total || base;
+  var deposit = c.deposit || 0;
+  el.appendChild(mkPRow('Base rate', 'KES ' + fmtN(base), false));
+  el.appendChild(mkPRow('Peak surcharge', surge ? 'KES ' + fmtN(surge) : '—', false));
+  el.appendChild(mkPRow('Total', 'KES ' + fmtN(total), true));
+  el.appendChild(mkPRow('Deposit required', deposit ? 'KES ' + fmtN(deposit) : 'None', false));
+}
+
+function mkPRow(label, value, isTotal) {
+  var row = document.createElement('div');
+  row.className = 'p-row' + (isTotal ? ' total' : '');
+  var k = document.createElement('span'); k.textContent = label;
+  var v = document.createElement('span'); v.textContent = value;
+  row.appendChild(k); row.appendChild(v); return row;
+}
+
+function submitBooking() {
+  var btn = document.getElementById('confirm-btn');
+  btn.disabled = true; btn.textContent = 'Processing…';
+  var notes = (document.getElementById('booking-notes').value || '').trim().slice(0, 500);
+  firebase.functions().httpsCallable('venueCreateBooking')({
+    venueId: S.venue.id,
+    date: S.slot.date,
+    startTime: S.slot.startTime,
+    durationMins: S.slot.durationMins || 60,
+    bookingModel: 'hourly',
+    notes: notes,
+    idempotencyKey: S.iKey
+  }).then(function(res) {
+    var ref = (res.data && res.data.bookingId) || '—';
+    document.getElementById('success-ref').textContent = 'Booking ID: ' + ref;
+    document.getElementById('confirm-back').style.display = 'none';
+    btn.style.display = 'none';
+    document.getElementById('success-screen').classList.add('show');
+    toast('Booking confirmed!', 'ok');
+  }).catch(function(err) {
+    console.error('[venue-booking] createBooking:', err);
+    toast((err.message || 'Booking failed. Please try again.'), 'err');
+    btn.disabled = false; btn.textContent = 'Confirm Booking';
+  });
+}
+
+/* ── My Bookings ──────────────────────────────────────────────────────────── */
+function loadMyBookings() {
+  var list = document.getElementById('bk-list');
+  clearEl(list); list.appendChild(mkSpinner());
+  if (!S.user) { clearEl(list); list.appendChild(mkAuthPrompt()); return; }
+  firebase.functions().httpsCallable('venueGetMyBookings')({})
+    .then(function(res) {
+      var bks = (res.data && res.data.bookings) || [];
+      clearEl(list);
+      if (!bks.length) {
+        var p = document.createElement('div'); p.className = 'empty-state';
+        p.textContent = 'No bookings yet. Browse venues to get started.';
+        list.appendChild(p); return;
+      }
+      bks.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+      bks.forEach(function(bk) {
+        var item = document.createElement('div'); item.className = 'bk-item';
+        var info = document.createElement('div'); info.className = 'bk-info';
+        var h4 = document.createElement('h4'); h4.textContent = bk.venueName || 'Venue';
+        var p = document.createElement('p');
+        p.textContent = (bk.date || '') + ' · ' + (bk.startTime || '') + (bk.endTime ? '–' + bk.endTime : '');
+        info.appendChild(h4); info.appendChild(p);
+        if (bk.bookingId) {
+          var ref = document.createElement('div'); ref.className = 'bk-ref';
+          ref.textContent = bk.bookingId; info.appendChild(ref);
+        }
+        var st = bk.status || 'pending_payment';
+        var badge = document.createElement('span');
+        badge.className = 'st-badge st-' + st;
+        badge.textContent = st.replace(/_/g, ' ');
+        item.appendChild(info); item.appendChild(badge); list.appendChild(item);
+      });
+    })
+    .catch(function(err) {
+      console.error('[venue-booking] myBookings:', err);
+      clearEl(list);
+      var p = document.createElement('p');
+      p.style.cssText = 'color:var(--sub);text-align:center;padding:32px;font-size:14px';
+      p.textContent = 'Could not load bookings. Please try again.';
+      list.appendChild(p);
+    });
+}
+
+function mkAuthPrompt() {
+  var wrap = document.createElement('div'); wrap.className = 'auth-prompt';
+  var h3 = document.createElement('h3'); h3.textContent = 'Sign in to view your bookings';
+  var p = document.createElement('p'); p.textContent = 'Log in to see your upcoming and past venue bookings.';
+  var btn = document.createElement('button'); btn.className = 'btn-primary'; btn.textContent = 'Sign In';
+  btn.onclick = function() { window.location.href = 'auth.html'; };
+  wrap.appendChild(h3); wrap.appendChild(p); wrap.appendChild(btn); return wrap;
+}
+
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+var TYPE_MAP = { sports: 'Sports Court', events: 'Event Venue', conference: 'Conference Room', studio: 'Studio', coworking: 'Co-working', other: 'Other' };
+function fmtType(t) { return TYPE_MAP[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Venue'); }
+function fmtN(n) { return Number(n).toLocaleString('en-KE'); }
+function clearEl(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+function mkSpinner() { var d = document.createElement('div'); d.className = 'spinner'; return d; }
+
+/* ── Boot ─────────────────────────────────────────────────────────────────── */
+doSearch();
 </script>
 </body>
 </html>

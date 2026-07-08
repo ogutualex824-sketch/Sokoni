@@ -108,16 +108,18 @@
   <url><loc>https://mysokoni.co.ke/press</loc>                    <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.55</priority></url>
 
   <!-- ══ LEGAL & POLICIES ══ -->
-  <url><loc>https://mysokoni.co.ke/privacy</loc>                  <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.70</priority></url>
-  <url><loc>https://mysokoni.co.ke/terms</loc>                    <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.70</priority></url>
-  <url><loc>https://mysokoni.co.ke/data-deletion</loc>            <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
-  <url><loc>https://mysokoni.co.ke/cookie-policy</loc>            <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.60</priority></url>
-  <url><loc>https://mysokoni.co.ke/refund-policy</loc>            <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
-  <url><loc>https://mysokoni.co.ke/returns-policy</loc>           <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
-  <url><loc>https://mysokoni.co.ke/seller-terms</loc>             <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
-  <url><loc>https://mysokoni.co.ke/provider-terms</loc>           <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.60</priority></url>
-  <url><loc>https://mysokoni.co.ke/community-guidelines</loc>     <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
-  <url><loc>https://mysokoni.co.ke/payment-security</loc>         <lastmod>2026-06-28</lastmod><changefreq>monthly</changefreq><priority>0.70</priority></url>
+  <url><loc>https://mysokoni.co.ke/privacy</loc>                  <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.70</priority></url>
+  <url><loc>https://mysokoni.co.ke/terms</loc>                    <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.70</priority></url>
+  <url><loc>https://mysokoni.co.ke/data-deletion</loc>            <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
+  <url><loc>https://mysokoni.co.ke/cookie-policy</loc>            <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.60</priority></url>
+  <url><loc>https://mysokoni.co.ke/refund-policy</loc>            <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
+  <url><loc>https://mysokoni.co.ke/returns-policy</loc>           <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
+  <url><loc>https://mysokoni.co.ke/seller-terms</loc>             <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
+  <url><loc>https://mysokoni.co.ke/provider-terms</loc>           <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.60</priority></url>
+  <url><loc>https://mysokoni.co.ke/community-guidelines</loc>     <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.65</priority></url>
+  <url><loc>https://mysokoni.co.ke/payment-security</loc>         <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.70</priority></url>
+  <url><loc>https://mysokoni.co.ke/trust-and-safety</loc>         <lastmod>2026-07-08</lastmod><changefreq>monthly</changefreq><priority>0.70</priority></url>
+  <url><loc>https://mysokoni.co.ke/status</loc>                   <lastmod>2026-07-08</lastmod><changefreq>daily</changefreq>  <priority>0.55</priority></url>
 
   <!-- ══ JOBS HUB ══ -->
   <url><loc>https://mysokoni.co.ke/jobs.html</loc>               <lastmod>2026-06-28</lastmod><changefreq>daily</changefreq>   <priority>0.85</priority></url>

@@ -335,11 +335,7 @@ exports.bookingCreate = onCall(
       throw new HttpsError('invalid-argument','venueId, date, startTime, endTime required');
     }
 
-    /* Idempotency: check if already created */
-    const existSnap = await db.collection('bookings').where('idempotencyKey','==',idempotencyKey).limit(1).get();
-    if (!existSnap.empty) return { bookingId: existSnap.docs[0].id, idempotent: true };
-
-    /* Fetch venue */
+    /* Fetch venue outside the transaction — venue config rarely changes mid-booking */
     const venueSnap = await db.collection('venues').doc(venueId).get();
     if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
     const venue = venueSnap.data();
@@ -354,52 +350,103 @@ exports.bookingCreate = onCall(
 
     if (duration <= 0) throw new HttpsError('invalid-argument','endTime must be after startTime');
 
-    /* Server-side pricing calculation */
     const pricingBreakdown = _calculatePrice(venue, startMins, endMins, date, { addOns });
 
-    /* Capacity check */
-    if (venue.capacity?.max) {
-      const concurrent = venue.capacity.concurrent || 1;
-      const dayBookings = (await db.collection('bookings')
-        .where('venueId','==',venueId)
-        .where('date','==',date)
-        .where('status','in',['confirmed','active'])
-        .get()).size;
-      if (dayBookings >= concurrent) {
-        throw new HttpsError('resource-exhausted','Venue is fully booked for this time');
-      }
-    }
+    /* Fetch user profile outside the transaction — read-only, no conflict risk */
+    const userSnap = await db.collection('users').doc(uid).get();
+    const user = userSnap.data() || {};
 
-    /* Validate hold or re-check availability */
+    /* Pre-fetch active bookings for the day for overlap + capacity checks.
+       The slotLockRef inside the transaction provides the final CAS guarantee
+       against concurrent requests for the same slot. */
+    const existingSnap = await db.collection('bookings')
+      .where('venueId', '==', venueId)
+      .where('date',    '==', date)
+      .where('status',  'in', ['pending', 'confirmed', 'active'])
+      .get();
+    const existingBookings = existingSnap.docs.map(d => d.data());
+
+    const requiresApproval = venue.config?.approvalRequired || false;
     const bookingId = _uid();
-    const committed = await db.runTransaction(async txn => {
-      /* Overlap check */
-      const bSnap = await db.collection('bookings')
-        .where('venueId','==',venueId)
-        .where('endTs','>',startTs)
-        .where('status','in',['pending','confirmed','active'])
-        .get();
 
-      for (const doc of bSnap.docs) {
-        const b = doc.data();
-        if (b.startTs < endTs && b.endTs > startTs) return null;
+    /* Slot-lock document: keyed on the exact time window.
+       Writing this atomically inside the transaction prevents two concurrent
+       requests for the identical slot from both committing. */
+    const slotKey    = `${date}_${startTs}_${endTs}`;
+    const slotLockRef = db.collection('venues').doc(venueId).collection('slotLocks').doc(slotKey);
+
+    /* Idempotency record keyed by client-supplied key (document lookup — tx-safe) */
+    const idemRef = idempotencyKey
+      ? db.collection('_bookingIdempotency').doc(String(idempotencyKey))
+      : null;
+
+    let isReplay    = false;
+    let replayData  = null;
+    let isConflict  = false;
+    let conflictCode = 'already-exists';
+
+    await db.runTransaction(async txn => {
+      /* Reset per-attempt so transaction retries start clean */
+      isReplay = false; isConflict = false;
+
+      /* ── 1. Idempotency guard (atomic document read) ───────────────────────
+         Two concurrent requests with the same key: one commits, the other
+         retries and sees idemSnap.exists = true → returns the existing booking.
+      ── */
+      if (idemRef) {
+        const idemSnap = await txn.get(idemRef);
+        if (idemSnap.exists) {
+          isReplay   = true;
+          replayData = idemSnap.data();
+          return; /* no writes — idempotent */
+        }
       }
 
-      /* Validate hold ownership */
+      /* ── 2. Slot-lock CAS ──────────────────────────────────────────────────
+         If the exact slot is already locked (another transaction committed
+         first), bail. Firestore's optimistic concurrency also retries THIS
+         transaction if a concurrent write touches slotLockRef.
+      ── */
+      const slotSnap = await txn.get(slotLockRef);
+      if (slotSnap.exists) {
+        isConflict   = true;
+        conflictCode = 'already-exists';
+        return;
+      }
+
+      /* ── 3. Capacity check (against pre-fetched snapshot) ─────────────────
+         Slightly optimistic but acceptable — the slot-lock above prevents
+         the most dangerous same-slot race condition.
+      ── */
+      if (venue.capacity?.max) {
+        const concurrent = venue.capacity.concurrent || 1;
+        if (existingBookings.length >= concurrent) {
+          isConflict   = true;
+          conflictCode = 'resource-exhausted';
+          return;
+        }
+      }
+
+      /* ── 4. Overlap check (against pre-fetched snapshot) ──────────────────  */
+      const hasOverlap = existingBookings.some(b => b.startTs < endTs && b.endTs > startTs);
+      if (hasOverlap) {
+        isConflict   = true;
+        conflictCode = 'already-exists';
+        return;
+      }
+
+      /* ── 5. Validate hold ownership ────────────────────────────────────── */
       if (holdId) {
         const holdDoc = await txn.get(db.collection('bookingHolds').doc(holdId));
         if (!holdDoc.exists || holdDoc.data().userId !== uid || holdDoc.data().expiresAt < Date.now()) {
-          return null; // hold expired
+          isConflict   = true;
+          conflictCode = 'already-exists';
+          return;
         }
         txn.delete(db.collection('bookingHolds').doc(holdId));
       }
 
-      /* Fetch user profile for name/phone */
-      const userSnap = await db.collection('users').doc(uid).get();
-      const user = userSnap.data() || {};
-
-      const requiresApproval = venue.config?.approvalRequired || false;
-
+      /* ── 6. Atomic writes ─────────────────────────────────────────────── */
       const booking = {
         venueId, venueName: venue.name, venueType: venue.type,
         ownerId: venue.ownerId,
@@ -414,12 +461,12 @@ exports.bookingCreate = onCall(
         status:   requiresApproval ? 'pending' : 'confirmed',
         paymentId: paymentId || null,
         paymentStatus: paymentId ? 'paid' : 'awaiting',
-        idempotencyKey,
+        idempotencyKey: idempotencyKey || null,
         cancellationWindowHours: venue.pricing?.cancellationWindow || 24,
         cancellationFeeRate:     venue.pricing?.cancellationFeeRate || 0,
         reminders: [
-          { minutesBefore: 1440, sent: false }, // 24h
-          { minutesBefore:   60, sent: false }, // 1h
+          { minutesBefore: 1440, sent: false },
+          { minutesBefore:   60, sent: false },
         ],
         checkIn:  null,
         checkOut: null,
@@ -429,16 +476,27 @@ exports.bookingCreate = onCall(
 
       txn.set(db.collection('bookings').doc(bookingId), booking);
 
-      /* Update venue booking count */
+      /* Slot lock — prevents same-slot concurrent write from committing */
+      txn.set(slotLockRef, { bookingId, uid, venueId, date, startTime, endTime, createdAt: Date.now() });
+
+      /* Venue booking counter */
       txn.update(db.collection('venues').doc(venueId), {
         totalBookings: FieldValue.increment(1),
         updatedAt:     Date.now(),
       });
 
-      return bookingId;
+      /* Idempotency record written atomically — durable across retries */
+      if (idemRef) {
+        txn.set(idemRef, { bookingId, uid, venueId, date, startTime, endTime, createdAt: Date.now() });
+      }
     });
 
-    if (!committed) throw new HttpsError('already-exists','Slot is no longer available');
+    /* Resolve outcomes */
+    if (isReplay)   return { bookingId: replayData.bookingId, idempotent: true };
+    if (isConflict) throw new HttpsError(
+      conflictCode,
+      conflictCode === 'resource-exhausted' ? 'Venue is fully booked for this time' : 'Slot is no longer available'
+    );
 
     /* Send confirmation notification */
     await db.collection('notifications').add({

@@ -23,9 +23,8 @@ const db = admin.firestore();
 
 const ANTHROPIC_API_KEY    = defineSecret("ANTHROPIC_API_KEY");
 const INTASEND_PRIVATE_KEY = defineSecret("INTASEND_PRIVATE_KEY");
-const AT_API_KEY           = defineSecret("AT_API_KEY");
-const AT_USERNAME          = defineSecret("AT_USERNAME");
 const ALGOLIA_ADMIN_KEY    = defineSecret("ALGOLIA_ADMIN_KEY");
+const sokoniAt             = require("./sokoni-at");
 const SOKONI_HMAC_KEY      = defineSecret("SOKONI_HMAC_KEY");
 
 /* ── Structured logging utility ─────────────────────────────────────────────
@@ -1864,26 +1863,11 @@ exports.onSellerBroadcast = onDocumentCreated(
 ============================================================ */
 
 /**
- * sendSms — Africa's Talking REST API
- * Normalises phone to +254…, sends single SMS.
- * Silently no-ops if apiKey/username/to are falsy.
+ * sendSms — thin wrapper around sokoni-at.atSendSMS.
+ * Delegates all credential resolution and phone normalisation to sokoni-at.js.
  */
-async function sendSms(apiKey, username, to, message) {
-  if (!apiKey || !username || !to || !message) return;
-  let phone = String(to).replace(/\s+/g, "").replace(/^0/, "+254").replace(/^\+?2540/, "+254");
-  if (!phone.startsWith("+")) phone = "+254" + phone;
-  try {
-    const form = new URLSearchParams({ username, to: phone, message });
-    const res  = await fetch("https://api.africastalking.com/version1/messaging", {
-      method:  "POST",
-      headers: { apiKey, "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-      body:    form.toString(),
-    });
-    const data = await res.json();
-    console.log("[SMS]", phone.slice(0,4)+"****"+phone.slice(-2), data.SMSMessageData?.Message || data);
-  } catch (e) {
-    console.warn("[SMS] Error:", e.message);
-  }
+async function sendSms(to, message) {
+  await sokoniAt.atSendSMS(to, message);
 }
 
 /**
@@ -2286,21 +2270,17 @@ exports.verifyIntasendPayment = onRequest(
          no session is present (e.g., service bookings not going through the cart). ── */
       const resolvedItems = sessionDoc ? sessionDoc.items : (orderItems || []);
 
-      /* ── Idempotency guard ─────────────────────────────────────────────────────
+      /* ── Idempotency guard (transaction-safe) ────────────────────────────────
          Use the IntaSend invoice/tracking ref as a payment-level idempotency key.
-         If a prior call already verified and created an order for this ref,
-         return the cached result without touching Firestore again. This prevents
-         duplicate orders on client network retries and double-clicks.
+         The check AND the order write happen inside a single runTransaction so
+         two concurrent retries cannot both slip past a non-existent snapshot:
+         Firestore's optimistic-concurrency ensures only one commits; the loser
+         retries and sees verifSnap.exists = true on the second read.
       ── */
-      const verifRef  = db.collection("paymentVerifications").doc(ref);
-      const verifSnap = await verifRef.get();
-      if (verifSnap.exists) {
-        const cached = verifSnap.data();
-        log.audit("idempotent replay", { ref, existingOrder: cached.orderId });
-        return res.json({ verified: true, orderId: cached.orderId, verificationToken: cached.verificationToken, replayed: true });
-      }
+      const verifRef = db.collection("paymentVerifications").doc(ref);
 
-      /* ── Create order in Firestore (inside a transaction for atomicity) ── */
+      /* orderId and verificationToken are fixed before the transaction so they
+         remain stable across any internal retries. */
       const orderId  = "SKN" + Date.now().toString().slice(-8).toUpperCase();
       const sellerUid = resolvedItems?.[0]?.sellerUid || null;
       const orderDoc  = {
@@ -2326,29 +2306,43 @@ exports.verifyIntasendPayment = onRequest(
       };
       const verificationToken = `${orderId}_v${Date.now()}`;
 
-      /* Run all writes in a single batch for atomicity */
-      const batch = db.batch();
+      let isReplay = false;
+      let replayData = null;
 
-      batch.set(db.collection("orders").doc(orderId), orderDoc);
+      await db.runTransaction(async tx => {
+        /* Atomic read — if already committed by a concurrent request, bail out */
+        const verifSnap = await tx.get(verifRef);
+        if (verifSnap.exists) {
+          isReplay  = true;
+          replayData = verifSnap.data();
+          return; /* commit with no writes — idempotent */
+        }
 
-      /* Idempotency record — prevents duplicate orders on retry */
-      batch.set(verifRef, {
-        orderId,
-        ref,
-        verificationToken,
-        amount: confirmedAmount,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        tx.set(db.collection("orders").doc(orderId), orderDoc);
+
+        /* Idempotency record written atomically with the order */
+        tx.set(verifRef, {
+          orderId,
+          ref,
+          verificationToken,
+          amount: confirmedAmount,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        /* Session consumed marker */
+        if (sessionId && sessionDoc) {
+          tx.update(
+            db.collection("checkoutSessions").doc(String(sessionId)),
+            { status: "consumed", orderId, consumedAt: admin.firestore.FieldValue.serverTimestamp() }
+          );
+        }
       });
 
-      /* Session consumed marker */
-      if (sessionId && sessionDoc) {
-        batch.update(
-          db.collection("checkoutSessions").doc(String(sessionId)),
-          { status: "consumed", orderId, consumedAt: admin.firestore.FieldValue.serverTimestamp() }
-        );
+      /* Return cached result for replayed requests — no duplicate order created */
+      if (isReplay) {
+        log.audit("idempotent replay", { ref, existingOrder: replayData.orderId });
+        return res.json({ verified: true, orderId: replayData.orderId, verificationToken: replayData.verificationToken, replayed: true });
       }
-
-      await batch.commit();
 
       /* Decrement stock per-product in individual transactions (TOCTOU-safe).
          Payment is already confirmed so oversold items are flagged, not rejected. */
@@ -2402,7 +2396,7 @@ exports.verifyIntasendPayment = onRequest(
 exports.onOrderStatusChange = onDocumentUpdated(
   {
     document:       "orders/{orderId}",
-    secrets:        [AT_API_KEY, AT_USERNAME],
+    secrets:        [...sokoniAt.secrets],
     minInstances:   1,
   },
   async (event) => {
@@ -2417,16 +2411,14 @@ exports.onOrderStatusChange = onDocumentUpdated(
 
     console.log(`[onOrderStatusChange] ${orderId}: ${before.status} → ${toStatus}`);
 
-    const apiKey   = AT_API_KEY.value()   || "";
-    const username = AT_USERNAME.value()  || "";
-    const tmpl     = smsTemplates(after);
-    const msgs     = tmpl[toStatus] || {};
+    const tmpl = smsTemplates(after);
+    const msgs = tmpl[toStatus] || {};
 
     /* ── SMS ── */
     const smsTasks = [];
-    if (msgs.buyer  && after.buyerPhone)  smsTasks.push(sendSms(apiKey, username, after.buyerPhone,  msgs.buyer));
-    if (msgs.seller && after.sellerPhone) smsTasks.push(sendSms(apiKey, username, after.sellerPhone, msgs.seller));
-    if (msgs.driver && after.driverPhone) smsTasks.push(sendSms(apiKey, username, after.driverPhone, msgs.driver));
+    if (msgs.buyer  && after.buyerPhone)  smsTasks.push(sendSms(after.buyerPhone,  msgs.buyer));
+    if (msgs.seller && after.sellerPhone) smsTasks.push(sendSms(after.sellerPhone, msgs.seller));
+    if (msgs.driver && after.driverPhone) smsTasks.push(sendSms(after.driverPhone, msgs.driver));
 
     /* ── FCM ── */
     const fcmTasks = [];
@@ -2595,7 +2587,7 @@ exports.onOrderConfirmed = onDocumentUpdated(
 exports.onNewOrderCreated = onDocumentCreated(
   {
     document:       "orders/{orderId}",
-    secrets:        [AT_API_KEY, AT_USERNAME],
+    secrets:        [...sokoniAt.secrets],
     minInstances:   1,
   },
   async (event) => {
@@ -2649,13 +2641,9 @@ exports.onNewOrderCreated = onDocumentCreated(
     );
 
     /* ── 3. SMS ── */
-    const apiKey   = AT_API_KEY.value()   || "";
-    const username = AT_USERNAME.value()  || "";
-    if (apiKey && username && sellerPhone) {
+    if (sellerPhone) {
       tasks.push(
         sendSms(
-          apiKey,
-          username,
           sellerPhone,
           `SOKONI: New order ${orderId} from ${buyerName}! KES ${total}. Confirm now: mysokoni.co.ke/seller.html`
         )
@@ -4125,19 +4113,20 @@ If no products are detectable, return: []`,
    posSendSMS
    POS callable: sends an SMS to a customer via Africa's Talking.
    Used for receipts, marketing blasts, and low-stock alerts.
-   Requires AT_API_KEY + AT_USERNAME secrets to be set.
+   Requires AFRICASTALKING_API_KEY secret + AT_ENV in functions/.env.
 ══════════════════════════════════════════════════════════════ */
 exports.posSendSMS = onCall(
-  { secrets: [AT_API_KEY, AT_USERNAME], timeoutSeconds: 20, cors: true },
+  { secrets: [...sokoniAt.secrets], timeoutSeconds: 20, cors: true },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
     const { to, message, bulk } = request.data || {};
 
-    const apiKey   = AT_API_KEY.value();
-    const username = AT_USERNAME.value();
-    if (!apiKey || !username) {
-      throw new HttpsError("failed-precondition", "SMS gateway not configured. Set AT_API_KEY and AT_USERNAME secrets.");
+    /* Validate credentials early — surfaces AT_ENV misconfiguration as a clear error */
+    try {
+      sokoniAt.resolveAtCredentials();
+    } catch (e) {
+      throw new HttpsError("failed-precondition", e.message);
     }
 
     /* Bulk send: array of phone numbers */
@@ -4146,7 +4135,7 @@ exports.posSendSMS = onCall(
       if (!message || typeof message !== "string") throw new HttpsError("invalid-argument", "message required.");
       const msg = message.slice(0, 160);
       const results = await Promise.allSettled(
-        bulk.map(phone => sendSms(apiKey, username, phone, msg))
+        bulk.map(phone => sendSms(phone, msg))
       );
       const sent = results.filter(r => r.status === "fulfilled").length;
       db.collection("auditLogs").add({
@@ -4159,7 +4148,7 @@ exports.posSendSMS = onCall(
     /* Single send */
     if (!to || !message) throw new HttpsError("invalid-argument", "to and message required.");
     const msg = String(message).slice(0, 160);
-    await sendSms(apiKey, username, to, msg);
+    await sendSms(to, msg);
     db.collection("auditLogs").add({
       type: "posSendSMS", callerUid: request.auth.uid,
       ts: admin.firestore.FieldValue.serverTimestamp(),
@@ -5350,7 +5339,7 @@ exports.getSecurityEvents = onCall({ timeoutSeconds: 15 }, async (request) => {
    Search Indexer Â· Event Processor Â· Monitoring Â· Health Checks
    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    All new functions use the Firebase Admin SDK already loaded above.
-   Secrets: INTASEND_PRIVATE_KEY, AT_API_KEY, AT_USERNAME (existing).
+   Secrets: INTASEND_PRIVATE_KEY, AFRICASTALKING_API_KEY, AFRICASTALKING_USERNAME (via sokoni-at).
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 
@@ -8031,6 +8020,13 @@ exports.reserveSlot                      = availability.reserveSlot;
 exports.releaseSlot                      = availability.releaseSlot;
 exports.getProviderAvailability          = availability.getProviderAvailability;
 exports.scheduledAvailabilityMaintenance = availability.scheduledAvailabilityMaintenance;
+exports.setVacationMode                  = availability.setVacationMode;
+exports.addAvailabilityOverride          = availability.addAvailabilityOverride;
+exports.removeAvailabilityOverride       = availability.removeAvailabilityOverride;
+exports.listAvailabilityOverrides        = availability.listAvailabilityOverrides;
+exports.setMarketplaceAvailability       = availability.setMarketplaceAvailability;
+exports.checkProviderAvailability        = availability.checkProviderAvailability;
+exports.getNextAvailableSlot             = availability.getNextAvailableSlot;
 
 /* ── Reviews & Ratings Engine v1.0 ───────────────────────────────────── */
 const reviews = require("./reviews");
@@ -8092,6 +8088,7 @@ exports.emailTrustReceipt         = payTrust.emailTrustReceipt;
 exports.verifyTrustReceipt        = payTrust.verifyTrustReceipt;
 exports.getPaymentSecurityAlerts  = payTrust.getPaymentSecurityAlerts;
 exports.detectPaymentAnomalies    = payTrust.detectPaymentAnomalies;
+exports.voidTrustReceipt          = payTrust.voidTrustReceipt;
 
 /* ── Security Fraud Engine v1.0 — velocity, travel, scoring, alerts ──────── */
 const secFraud = require('./security-fraud-engine');
@@ -8139,6 +8136,21 @@ exports.trackCampaignClick      = minishopCampaigns.trackCampaignClick;
 exports.pauseMinishopCampaign   = minishopCampaigns.pauseMinishopCampaign;
 exports.deleteMinishopCampaign  = minishopCampaigns.deleteMinishopCampaign;
 
+/* ── MiniShop Social Commerce Engine v3.0 — 12 CFs ─────────────────────── */
+const minishopV3 = require('./minishop-v3');
+exports.miniShopOGMeta             = minishopV3.miniShopOGMeta;
+exports.miniShopCreatePromotion    = minishopV3.miniShopCreatePromotion;
+exports.miniShopGetPromotions      = minishopV3.miniShopGetPromotions;
+exports.miniShopUpdatePromotion    = minishopV3.miniShopUpdatePromotion;
+exports.miniShopToggleWishlist     = minishopV3.miniShopToggleWishlist;
+exports.miniShopGetWishlist        = minishopV3.miniShopGetWishlist;
+exports.miniShopShareProduct       = minishopV3.miniShopShareProduct;
+exports.miniShopAIMarketing        = minishopV3.miniShopAIMarketing;
+exports.miniShopSendAnnouncement   = minishopV3.miniShopSendAnnouncement;
+exports.miniShopGetAnnouncements   = minishopV3.miniShopGetAnnouncements;
+exports.miniShopGetSimilar         = minishopV3.miniShopGetSimilar;
+exports.miniShopScheduledDigest    = minishopV3.miniShopScheduledDigest;
+
 /* ── Automation & Decision Engine (ADE) v1.0 ────────────────────────────── */
 const ade = require('./ade');
 // Firestore triggers
@@ -8163,6 +8175,27 @@ exports.adeGetMetrics            = ade.adeGetMetrics;
 // Scheduled
 exports.adeRetryFailedJobs       = ade.adeRetryFailedJobs;
 exports.adeDailyMaintenance      = ade.adeDailyMaintenance;
+
+/* ── Intelligent Automation & Decision Engine v1.0 — 15 CFs ── */
+const automationEngine = require('./automation-engine');
+// Firestore triggers
+exports.autoOnAccountCreate      = automationEngine.autoOnAccountCreate;
+exports.autoOnSubscriptionCreate = automationEngine.autoOnSubscriptionCreate;
+exports.autoOnSellerApplication  = automationEngine.autoOnSellerApplication;
+exports.autoOnDisputeCreate      = automationEngine.autoOnDisputeCreate;
+exports.autoOnRefundRequest      = automationEngine.autoOnRefundRequest;
+exports.autoOnApprovalRequest    = automationEngine.autoOnApprovalRequest;
+// Scheduled
+exports.autoScheduledPayouts     = automationEngine.autoScheduledPayouts;
+exports.autoScheduledMaintenance = automationEngine.autoScheduledMaintenance;
+// Callable — admin
+exports.autoGetExceptionQueue    = automationEngine.autoGetExceptionQueue;
+exports.autoResolveException     = automationEngine.autoResolveException;
+exports.autoGetRules             = automationEngine.autoGetRules;
+exports.autoUpdateRule           = automationEngine.autoUpdateRule;
+exports.autoGetAuditLog          = automationEngine.autoGetAuditLog;
+exports.autoGetStatus            = automationEngine.autoGetStatus;
+exports.autoTriggerMaintenance   = automationEngine.autoTriggerMaintenance;
 
 /* ── Buyer Dispute Portal v1.0 ──────────────────────────────────────────── */
 const disputes = require('./disputes');
@@ -8213,7 +8246,7 @@ exports.processDriverEarning      = navigation.processDriverEarning;
 const loyalty = require('./loyalty');
 /* v1 compat exports — unchanged CF names */
 exports.getLoyaltyAccount         = loyalty.getLoyaltyAccount;
-exports.earnLoyaltyPoints         = loyalty.earnLoyaltyPoints;
+exports.awardLoyaltyPoints        = loyalty.awardLoyaltyPoints;
 exports.redeemLoyaltyPoints       = loyalty.redeemLoyaltyPoints;
 exports.confirmLoyaltyRedemption  = loyalty.confirmLoyaltyRedemption;
 exports.getLoyaltyHistory         = loyalty.getLoyaltyHistory;
@@ -9056,10 +9089,16 @@ exports.onUserCreated           = redisIntegrations.onUserCreated;
 exports.onRiderStatusChange     = redisIntegrations.onRiderStatusChange;
 exports.onDeliveryStatusChangeRedisSync = redisIntegrations.onDeliveryStatusChange;
 
-/* ── SmartPOS 2.1 — Inventory Intelligence ──────────────────────────────── */
+/* ── SmartPOS Intelligence (Inventory + AI Assistance) ─────────────────── */
 const posIntelligence = require('./pos-intelligence');
 exports.getPOSInventoryIntelligence = posIntelligence.getPOSInventoryIntelligence;
 exports.getProductSalesTrend        = posIntelligence.getProductSalesTrend;
+/* SmartPOS AI Assistance Layer — 5 new CFs */
+exports.posSmartSearch              = posIntelligence.posSmartSearch;
+exports.posDetectAnomaly            = posIntelligence.posDetectAnomaly;
+exports.posGetCustomerInsights      = posIntelligence.posGetCustomerInsights;
+exports.posGetInventoryAlerts       = posIntelligence.posGetInventoryAlerts;
+exports.posGetReorderSuggestions    = posIntelligence.posGetReorderSuggestions;
 
 /* ── SmartPOS 3.0 — Production Payment Terminal Integrations ────────────── */
 const posTerminalLive = require('./pos-terminal-live');
@@ -9226,6 +9265,26 @@ exports.requestWithdrawal   = commission.requestWithdrawal;
 exports.approveWithdrawal   = commission.approveWithdrawal;
 exports.rejectWithdrawal    = commission.rejectWithdrawal;
 exports.getWithdrawals      = commission.getWithdrawals;
+
+/* ── Venue, Facility & Resource Booking Engine v1.0 — 17 CFs ── */
+const venueBooking = require('./venue-booking');
+exports.venueCreate             = venueBooking.venueCreate;
+exports.venueUpdate             = venueBooking.venueUpdate;
+exports.venueGetPublic          = venueBooking.venueGetPublic;
+exports.venueGetAvailability    = venueBooking.venueGetAvailability;
+exports.venueCalculatePrice     = venueBooking.venueCalculatePrice;
+exports.venueCreateBooking      = venueBooking.venueCreateBooking;
+exports.venueCancelBooking      = venueBooking.venueCancelBooking;
+exports.venueConfirmBooking     = venueBooking.venueConfirmBooking;
+exports.venueCheckIn            = venueBooking.venueCheckIn;
+exports.venueCheckOut           = venueBooking.venueCheckOut;
+exports.venueMarkNoShow         = venueBooking.venueMarkNoShow;
+exports.venueGetBooking         = venueBooking.venueGetBooking;
+exports.venueGetMyBookings      = venueBooking.venueGetMyBookings;
+exports.venueGetCalendar        = venueBooking.venueGetCalendar;
+exports.venueBlockDates         = venueBooking.venueBlockDates;
+exports.venueRemoveBlock        = venueBooking.venueRemoveBlock;
+exports.venueGetStats           = venueBooking.venueGetStats;
 
 /* ── Platform Hub Engine v1.0 — 10 CFs ── */
 const platformHub = require('./platform-hub');

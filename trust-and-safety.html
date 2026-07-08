@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1" data-minimal="true" data-no-header="true">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trust &amp; Safety — SOKONI | Keeping Kenya's Marketplace Safe</title>
+  <meta name="description" content="How SOKONI protects buyers, sellers, and service providers. Our verification system, fraud prevention, dispute resolution, and community standards.">
+  <meta name="robots" content="index, follow">
+  <meta property="og:title" content="Trust &amp; Safety — SOKONI">
+  <meta property="og:description" content="How SOKONI keeps Kenya's marketplace safe for everyone — verification, fraud prevention, buyer protection, and dispute resolution.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+  <meta property="og:url" content="https://mysokoni.co.ke/trust-and-safety">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="SOKONI">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://mysokoni.co.ke/trust-and-safety">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <style>
+    #sk-splash{position:fixed;inset:0;z-index:99999;background:#050505;display:flex;align-items:center;justify-content:center;transition:opacity .65s ease,visibility .65s ease}
+    #sk-splash.sk-out{opacity:0;visibility:hidden;pointer-events:none}
+    .sks-inner{display:flex;flex-direction:column;align-items:center;gap:22px}
+    .sks-logo{width:84px;height:84px;object-fit:contain;animation:skPulse 1.3s ease-in-out infinite alternate}
+    .sks-ring{width:44px;height:44px;border:3px solid rgba(113,255,0,.14);border-top-color:#71ff00;border-radius:50%;animation:skSpin .75s linear infinite}
+    .sks-tag{font:500 11px/1 -apple-system,sans-serif;color:rgba(255,255,255,.32);letter-spacing:.1em;text-transform:uppercase}
+    @keyframes skPulse{from{opacity:.72;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+    @keyframes skSpin{to{transform:rotate(360deg)}}
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --g:#71ff00;--bg:#050505;--bg2:#080d08;
+      --surface:rgba(255,255,255,.033);--border:rgba(255,255,255,.07);
+      --text:rgba(255,255,255,.88);--muted:rgba(255,255,255,.5);
+      --card:#0c180c;
+    }
+    html{scroll-behavior:smooth;scroll-padding-top:80px}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.7;min-height:100vh}
+
+    .lnav{position:sticky;top:0;z-index:900;background:rgba(5,5,5,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+    .lnav-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:64px;padding:0 24px}
+    .lnav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+    .lnav-brand img{width:36px;height:36px;object-fit:contain;border-radius:9px}
+    .lnav-brand span{font-size:18px;font-weight:800;color:#fff;letter-spacing:-.3px}
+    .lnav-links{display:flex;align-items:center;gap:22px}
+    .lnav-links a{font-size:13px;font-weight:500;color:var(--muted);text-decoration:none;transition:color .15s}
+    .lnav-links a:hover{color:#fff}
+    .lnav-links a.cur{color:var(--g)}
+    .lnav-cta{background:var(--g);color:#000;font-size:13px;font-weight:700;padding:8px 18px;border-radius:10px;text-decoration:none;transition:opacity .15s}
+    .lnav-cta:hover{opacity:.85;color:#000}
+    @media(max-width:640px){.lnav-links{display:none}}
+
+    .hero{padding:64px 24px 44px;text-align:center;border-bottom:1px solid var(--border);background:radial-gradient(ellipse 70% 60% at 50% 0%,rgba(113,255,0,.05) 0%,transparent 70%)}
+    .hero-badge{display:inline-block;padding:5px 14px;background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);border-radius:20px;font-size:11px;font-weight:700;color:var(--g);letter-spacing:.6px;text-transform:uppercase;margin-bottom:18px}
+    .hero h1{font-size:clamp(28px,5vw,44px);font-weight:800;color:#fff;line-height:1.12;margin-bottom:12px}
+    .hero p{font-size:15px;color:var(--muted);max-width:560px;margin:0 auto}
+    .hero-meta{font-size:13px;color:rgba(255,255,255,.3);margin-top:12px}
+    .hero-meta span{margin:0 6px;color:rgba(255,255,255,.15)}
+
+    .wrap{max-width:960px;margin:0 auto;padding:52px 24px 96px}
+
+    /* Pillars grid */
+    .pillars{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:60px}
+    .pillar{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;transition:border-color .2s}
+    .pillar:hover{border-color:rgba(113,255,0,.2)}
+    .pillar-icon{font-size:28px;margin-bottom:14px;display:block}
+    .pillar h3{font-size:15px;font-weight:700;color:#fff;margin-bottom:8px}
+    .pillar p{font-size:13px;color:var(--muted);line-height:1.65}
+
+    .toc{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;margin-bottom:52px}
+    .toc-label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:14px}
+    .toc-grid{display:flex;flex-wrap:wrap;gap:8px}
+    .toc-grid a{font-size:13px;color:rgba(255,255,255,.5);text-decoration:none;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:8px;padding:5px 12px;transition:all .15s}
+    .toc-grid a:hover{color:var(--g);border-color:rgba(113,255,0,.25);background:rgba(113,255,0,.05)}
+
+    .sec{margin-bottom:52px}
+    .sec h2{font-size:20px;font-weight:700;color:#fff;padding-left:16px;border-left:3px solid var(--g);margin-bottom:20px}
+    .sec h3{font-size:15px;font-weight:600;color:rgba(255,255,255,.78);margin:22px 0 10px}
+    .sec p{font-size:15px;color:var(--muted);line-height:1.76;margin-bottom:14px}
+    .sec ul{padding-left:22px;margin-bottom:14px}
+    .sec li{font-size:15px;color:var(--muted);line-height:1.76;margin-bottom:6px}
+    .sec a{color:var(--g);text-decoration:none}
+    .sec a:hover{text-decoration:underline}
+    hr.div{border:none;border-top:1px solid var(--border);margin:52px 0}
+
+    /* Trust levels */
+    .trust-levels{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:16px 0}
+    .tl{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px}
+    .tl-badge{display:inline-block;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;margin-bottom:10px}
+    .tl-b{background:rgba(180,140,60,.12);border:1px solid rgba(180,140,60,.25);color:rgba(205,175,90,.9)}
+    .tl-s{background:rgba(180,180,180,.1);border:1px solid rgba(180,180,180,.22);color:rgba(200,200,200,.8)}
+    .tl-g{background:rgba(255,195,0,.1);border:1px solid rgba(255,195,0,.22);color:rgba(255,215,60,.8)}
+    .tl-p{background:rgba(147,112,219,.1);border:1px solid rgba(147,112,219,.22);color:rgba(175,145,230,.8)}
+    .tl h4{font-size:14px;font-weight:700;color:rgba(255,255,255,.8);margin-bottom:6px}
+    .tl ul{padding-left:14px;margin:0}
+    .tl li{font-size:12px;color:var(--muted);margin-bottom:3px}
+
+    /* Stats */
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:20px 0}
+    .stat{background:var(--card);border:1px solid rgba(113,255,0,.1);border-radius:12px;padding:20px 18px;text-align:center}
+    .stat-n{font-size:28px;font-weight:800;color:var(--g);line-height:1}
+    .stat-l{font-size:12px;color:var(--muted);margin-top:6px}
+
+    /* Report card */
+    .report-card{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin:12px 0;display:flex;gap:16px;align-items:flex-start}
+    .report-card .icon{font-size:22px;flex-shrink:0;margin-top:2px}
+    .report-card h4{font-size:14px;font-weight:700;color:rgba(255,255,255,.8);margin-bottom:4px}
+    .report-card p{font-size:13px;color:var(--muted);margin:0;line-height:1.55}
+
+    /* CTA */
+    .cta-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
+    .btn-g{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;background:var(--g);color:#000;font-size:14px;font-weight:700;border-radius:10px;text-decoration:none;transition:opacity .15s}
+    .btn-g:hover{opacity:.85}
+    .btn-o{display:inline-flex;align-items:center;gap:8px;padding:12px 22px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.75);font-size:14px;font-weight:600;border-radius:10px;text-decoration:none;transition:all .15s}
+    .btn-o:hover{border-color:rgba(113,255,0,.3);color:#fff}
+
+    .contact-card{background:var(--card);border:1px solid rgba(113,255,0,.13);border-radius:14px;padding:24px 28px}
+    .contact-card p{font-size:14px;color:var(--muted);margin-bottom:9px}
+    .contact-card p:last-child{margin-bottom:0}
+    .contact-card a{color:var(--g)}
+
+    .lfoot{border-top:1px solid var(--border);padding:32px 24px}
+    .lfoot-inner{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:14px}
+    .lfoot-logo{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+    .lfoot-logo img{width:28px;height:28px;object-fit:contain}
+    .lfoot-logo span{font-size:16px;font-weight:800;color:#fff}
+    .lfoot-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px}
+    .lfoot-links a{font-size:13px;color:rgba(255,255,255,.35);text-decoration:none;transition:color .15s}
+    .lfoot-links a:hover,.lfoot-links a.cur{color:var(--g)}
+    .lfoot-copy{font-size:12px;color:rgba(255,255,255,.2);text-align:center}
+  </style>
+</head>
+<body>
+
+<div id="sk-splash" role="presentation" aria-hidden="true">
+  <div class="sks-inner">
+    <img src="assets/Sokonilogo2.png" class="sks-logo" alt="SOKONI" fetchpriority="high">
+    <div class="sks-ring"></div>
+    <p class="sks-tag">Kenya's Digital Marketplace</p>
+  </div>
+</div>
+
+<nav class="lnav" aria-label="SOKONI navigation">
+  <div class="lnav-inner">
+    <a href="/" class="lnav-brand" aria-label="SOKONI Home">
+      <img src="assets/Sokonilogo2.png" alt="SOKONI">
+      <span>SOKONI</span>
+    </a>
+    <div class="lnav-links">
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/trust-and-safety" class="cur" aria-current="page">Trust &amp; Safety</a>
+      <a href="/community-guidelines">Guidelines</a>
+      <a href="/" class="lnav-cta">Marketplace</a>
+    </div>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-badge">Trust &amp; Safety</div>
+  <h1>Keeping Kenya's Marketplace Safe</h1>
+  <p>SOKONI is built on trust. Every buyer, seller, driver, and service provider on our platform is protected by a layered system of verification, payment security, fraud detection, and community standards.</p>
+  <p class="hero-meta">Last updated: July 2026<span>·</span>Sokoni Digital Limited<span>·</span>Nairobi, Kenya</p>
+</div>
+
+<div class="wrap">
+
+  <!-- Trust pillars -->
+  <div class="pillars">
+    <div class="pillar">
+      <span class="pillar-icon">🛡️</span>
+      <h3>Buyer Protection</h3>
+      <p>Every purchase is covered. If your order doesn't arrive or isn't as described, you're protected by SOKONI's buyer guarantee.</p>
+    </div>
+    <div class="pillar">
+      <span class="pillar-icon">✅</span>
+      <h3>Verified Sellers</h3>
+      <p>Sellers undergo identity verification, business registration checks, and ongoing performance monitoring before and after approval.</p>
+    </div>
+    <div class="pillar">
+      <span class="pillar-icon">🔒</span>
+      <h3>Secure Payments</h3>
+      <p>All payments are processed through IntaSend, licensed by the Central Bank of Kenya. We never hold your card number or M-Pesa PIN.</p>
+    </div>
+    <div class="pillar">
+      <span class="pillar-icon">🤝</span>
+      <h3>Dispute Resolution</h3>
+      <p>Dedicated mediation for buyer-seller disputes. Human review within 48 hours. Fair, transparent outcomes informed by evidence.</p>
+    </div>
+    <div class="pillar">
+      <span class="pillar-icon">🚨</span>
+      <h3>Fraud Detection</h3>
+      <p>AI-powered monitoring flags suspicious activity in real time — duplicate orders, payment anomalies, fake reviews, and account takeovers.</p>
+    </div>
+    <div class="pillar">
+      <span class="pillar-icon">📋</span>
+      <h3>Community Standards</h3>
+      <p>Our Community Guidelines define what is and isn't allowed. Content moderation protects everyone from harmful, misleading, or illegal listings.</p>
+    </div>
+  </div>
+
+  <nav class="toc" aria-label="Table of contents">
+    <div class="toc-label">Jump to section</div>
+    <div class="toc-grid">
+      <a href="#buyer-protection">Buyer Protection</a>
+      <a href="#seller-verification">Seller Verification</a>
+      <a href="#payment-security">Payment Security</a>
+      <a href="#dispute-resolution">Dispute Resolution</a>
+      <a href="#fraud-prevention">Fraud Prevention</a>
+      <a href="#content-moderation">Content Moderation</a>
+      <a href="#trust-levels">Trust Levels</a>
+      <a href="#reporting">Reporting Abuse</a>
+      <a href="#contact">Contact Safety Team</a>
+    </div>
+  </nav>
+
+  <!-- 1: Buyer Protection -->
+  <section class="sec" id="buyer-protection">
+    <h2>Buyer Protection</h2>
+    <p>Every purchase on SOKONI is covered by our Buyer Protection Policy. If something goes wrong, we'll make it right.</p>
+    <div class="stats">
+      <div class="stat"><div class="stat-n">30</div><div class="stat-l">Day return window</div></div>
+      <div class="stat"><div class="stat-n">48h</div><div class="stat-l">Dispute response SLA</div></div>
+      <div class="stat"><div class="stat-n">100%</div><div class="stat-l">Payment encrypted</div></div>
+    </div>
+    <h3>What Buyer Protection covers</h3>
+    <ul>
+      <li><strong>Item not received:</strong> If your order doesn't arrive within the stated delivery window, you can open a dispute and receive a full refund.</li>
+      <li><strong>Item not as described:</strong> If the product you receive materially differs from the listing (wrong colour, model, size, or condition), you're entitled to a refund or replacement.</li>
+      <li><strong>Counterfeit goods:</strong> Sale of fake or counterfeit items is prohibited. We cooperate with rights holders and remove infringing listings immediately.</li>
+      <li><strong>Unauthorised charges:</strong> If you did not authorise a payment, contact us immediately. We investigate and refund confirmed unauthorised transactions.</li>
+    </ul>
+    <h3>How to claim Buyer Protection</h3>
+    <ul>
+      <li>Open your Order in the SOKONI app and tap "Problem with Order"</li>
+      <li>Select the issue type and provide evidence (photos, screenshots, messages)</li>
+      <li>Our team responds within 48 hours</li>
+      <li>Refunds are processed within 5–7 business days of approval</li>
+    </ul>
+    <p>See our <a href="/refund-policy">Refund Policy</a> and <a href="/returns-policy">Returns Policy</a> for full terms.</p>
+  </section>
+
+  <hr class="div">
+
+  <!-- 2: Seller Verification -->
+  <section class="sec" id="seller-verification">
+    <h2>Seller Verification</h2>
+    <p>All sellers on SOKONI are subject to a verification process. We don't allow anonymous selling — every merchant is accountable.</p>
+    <h3>Verification requirements</h3>
+    <ul>
+      <li><strong>Identity verification:</strong> National ID or passport, selfie liveness check</li>
+      <li><strong>Business registration:</strong> Business registration certificate for commercial sellers</li>
+      <li><strong>KRA compliance:</strong> KRA PIN for tax compliance; eTIMS registration for applicable sellers</li>
+      <li><strong>Bank or M-Pesa account:</strong> Verified payment account for disbursements (prevents anonymous cashouts)</li>
+      <li><strong>Phone verification:</strong> Mobile number verified via OTP</li>
+    </ul>
+    <div class="trust-levels">
+      <div class="tl">
+        <span class="tl-badge tl-b">Bronze</span>
+        <h4>New Seller</h4>
+        <ul>
+          <li>Phone verified</li>
+          <li>Basic listing access</li>
+          <li>Up to 20 listings</li>
+        </ul>
+      </div>
+      <div class="tl">
+        <span class="tl-badge tl-s">Silver</span>
+        <h4>Verified Seller</h4>
+        <ul>
+          <li>National ID verified</li>
+          <li>Up to 100 listings</li>
+          <li>Verified badge displayed</li>
+        </ul>
+      </div>
+      <div class="tl">
+        <span class="tl-badge tl-g">Gold</span>
+        <h4>Business Verified</h4>
+        <ul>
+          <li>Business registration verified</li>
+          <li>KRA PIN confirmed</li>
+          <li>Unlimited listings</li>
+        </ul>
+      </div>
+      <div class="tl">
+        <span class="tl-badge tl-p">Platinum</span>
+        <h4>Enterprise Partner</h4>
+        <ul>
+          <li>Full due diligence</li>
+          <li>Priority support</li>
+          <li>Featured placement</li>
+        </ul>
+      </div>
+    </div>
+    <p>Sellers who accumulate negative reviews, dispute losses, or policy violations are subject to performance warnings, listing restrictions, or permanent suspension.</p>
+  </section>
+
+  <hr class="div">
+
+  <!-- 3: Payment Security -->
+  <section class="sec" id="payment-security">
+    <h2>Payment Security</h2>
+    <p>Payments on SOKONI are handled exclusively by <strong>IntaSend</strong>, a Central Bank of Kenya-licensed payment processor. We never process card payments directly, and we never store card numbers or M-Pesa PINs.</p>
+    <ul>
+      <li>All transactions are TLS 1.2+ encrypted in transit</li>
+      <li>M-Pesa STK Push: your PIN is entered directly on Safaricom's secure interface</li>
+      <li>Card payments are tokenised — only a token reference is stored by SOKONI</li>
+      <li>HMAC-SHA256 payment signatures prevent replay and tampering attacks</li>
+      <li>Idempotency keys prevent duplicate charges on network failures</li>
+      <li>Real-time velocity monitoring flags unusual spending patterns</li>
+      <li>Seller payouts require verified bank accounts or M-Pesa — no anonymous disbursements</li>
+    </ul>
+    <p>Read more: <a href="/payment-security">Payment Security Centre</a></p>
+  </section>
+
+  <hr class="div">
+
+  <!-- 4: Dispute Resolution -->
+  <section class="sec" id="dispute-resolution">
+    <h2>Dispute Resolution</h2>
+    <p>When a buyer and seller cannot resolve an issue directly, SOKONI provides structured mediation. Our goal is a fair outcome informed by evidence, not just the loudest complaint.</p>
+    <h3>How disputes work</h3>
+    <ul>
+      <li>Either party can open a dispute within 30 days of order completion</li>
+      <li>Both parties are notified and given 48 hours to respond with evidence</li>
+      <li>A SOKONI mediator reviews messages, photos, delivery confirmations, and payment records</li>
+      <li>A decision is issued within 5 business days</li>
+      <li>Decisions can be appealed once within 7 days of the outcome</li>
+    </ul>
+    <h3>Possible outcomes</h3>
+    <ul>
+      <li><strong>Full refund to buyer</strong> — item not received, item significantly not as described, or seller non-responsive</li>
+      <li><strong>Partial refund</strong> — item partially as described; negotiated settlement</li>
+      <li><strong>Decision in seller's favour</strong> — item delivered as described, buyer misrepresentation</li>
+      <li><strong>Mutual cancellation</strong> — order cancelled by agreement before fulfilment</li>
+    </ul>
+    <h3>Seller consequences</h3>
+    <p>Sellers with a dispute loss rate above 5% receive a performance warning. Above 10% triggers a mandatory review. Persistent violations result in suspension.</p>
+    <div class="cta-row">
+      <a href="/dispute.html" class="btn-o">Open a Dispute</a>
+      <a href="/refund-policy" class="btn-o">Read Refund Policy</a>
+    </div>
+  </section>
+
+  <hr class="div">
+
+  <!-- 5: Fraud Prevention -->
+  <section class="sec" id="fraud-prevention">
+    <h2>Fraud Prevention</h2>
+    <p>SOKONI operates a layered anti-fraud system combining rule-based detection with AI monitoring. We protect both buyers and sellers from fraud.</p>
+    <h3>What we detect</h3>
+    <div class="report-card">
+      <span class="icon">💳</span>
+      <div>
+        <h4>Duplicate Charges</h4>
+        <p>Automated detection flags the same amount charged to the same account within 5 minutes. Duplicates are rejected before the second charge completes.</p>
+      </div>
+    </div>
+    <div class="report-card">
+      <span class="icon">⚡</span>
+      <div>
+        <h4>Payment Velocity</h4>
+        <p>Unusual payment volumes — more than 20 transactions per hour from a single merchant terminal — trigger a real-time alert and review.</p>
+      </div>
+    </div>
+    <div class="report-card">
+      <span class="icon">🎭</span>
+      <div>
+        <h4>Fake Reviews</h4>
+        <p>Reviews are only accepted from verified buyers with completed transactions. Self-review, incentivised review, and review farming are detected and removed.</p>
+      </div>
+    </div>
+    <div class="report-card">
+      <span class="icon">🔓</span>
+      <div>
+        <h4>Account Takeover</h4>
+        <p>Unusual login patterns, impossible travel, and credential stuffing attempts trigger automatic session revocation and re-authentication requirements.</p>
+      </div>
+    </div>
+    <div class="report-card">
+      <span class="icon">🧾</span>
+      <div>
+        <h4>Counterfeit Listings</h4>
+        <p>AI scans new listings for known counterfeit signals — pricing far below market value, stock photos from known fake goods, brand name misuse — and flags them for human review.</p>
+      </div>
+    </div>
+    <h3>Brute-force protection</h3>
+    <p>Accounts are locked after 5 consecutive failed login attempts. Unlocking requires email or SMS verification. IP-based rate limiting applies across all authentication endpoints.</p>
+  </section>
+
+  <hr class="div">
+
+  <!-- 6: Content Moderation -->
+  <section class="sec" id="content-moderation">
+    <h2>Content Moderation</h2>
+    <p>All listings, reviews, and user-generated content on SOKONI are subject to moderation. Our standards are set out in detail in the <a href="/community-guidelines">Community Guidelines</a>.</p>
+    <h3>Prohibited content</h3>
+    <ul>
+      <li>Counterfeit or intellectual property infringing goods</li>
+      <li>Dangerous, illegal, or regulated goods (weapons, narcotics, controlled substances)</li>
+      <li>Stolen goods or property</li>
+      <li>Adult content, explicit material, or content involving minors</li>
+      <li>Misleading pricing or deceptive product descriptions</li>
+      <li>Hate speech, harassment, or threatening content</li>
+      <li>Spam listings, duplicate accounts, or artificial inflation of ratings</li>
+    </ul>
+    <h3>Moderation process</h3>
+    <ul>
+      <li>AI pre-screening of all new listings before they go live</li>
+      <li>Human moderation queue for flagged content, reviewed within 24 hours</li>
+      <li>User reports reviewed within 48 hours</li>
+      <li>Immediate takedown for severe violations; seller notified and given right of appeal</li>
+    </ul>
+  </section>
+
+  <hr class="div">
+
+  <!-- 7: Trust Levels -->
+  <section class="sec" id="trust-levels">
+    <h2>Trust Levels &amp; Verification Badges</h2>
+    <p>SOKONI uses a Trust Passport system to communicate the verification level of every user on the platform. Badges are displayed on profiles, listings, and during checkout.</p>
+    <ul>
+      <li><strong>Verified Identity</strong> — National ID or passport confirmed</li>
+      <li><strong>Verified Business</strong> — Business registration certificate confirmed</li>
+      <li><strong>Verified Professional</strong> — Qualifications and professional credentials confirmed</li>
+      <li><strong>KRA Compliant</strong> — KRA PIN and eTIMS registration confirmed</li>
+      <li><strong>Highly Rated</strong> — 4.5+ star average rating with &ge;20 completed orders</li>
+    </ul>
+    <p>To start verification, visit your Profile and go to <strong>Settings &rarr; Verification</strong>, or visit <a href="/verification.html">the Verification Centre</a>.</p>
+  </section>
+
+  <hr class="div">
+
+  <!-- 8: Reporting -->
+  <section class="sec" id="reporting">
+    <h2>Reporting Abuse</h2>
+    <p>Help us keep SOKONI safe by reporting anything suspicious. Your report is confidential and reviewed by a human within 24 hours.</p>
+    <h3>How to report</h3>
+    <ul>
+      <li><strong>On a listing:</strong> tap the three-dot menu and select "Report Listing"</li>
+      <li><strong>On a seller profile:</strong> tap "Report Seller" at the bottom of their profile page</li>
+      <li><strong>On a review:</strong> tap the flag icon next to the review</li>
+      <li><strong>On a message:</strong> long-press the message and tap "Report"</li>
+      <li><strong>By email:</strong> <a href="mailto:trust@mysokoni.co.ke">trust@mysokoni.co.ke</a> with evidence</li>
+    </ul>
+    <h3>Emergency safety situations</h3>
+    <p>If you believe you are in immediate danger as a result of a transaction on SOKONI, contact the <strong>Kenya Police Service</strong> on 999 or 0800 722 203 immediately. Then contact us at <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a> so we can cooperate with law enforcement.</p>
+    <h3>Intellectual property infringement</h3>
+    <p>Rights holders may submit takedown requests to <a href="mailto:legal@mysokoni.co.ke">legal@mysokoni.co.ke</a>. Include the infringing listing URL, proof of ownership, and a statement of good faith. We respond within 3 business days.</p>
+  </section>
+
+  <hr class="div">
+
+  <!-- 9: Contact -->
+  <section class="sec" id="contact">
+    <h2>Contact Our Trust &amp; Safety Team</h2>
+    <div class="contact-card">
+      <p><strong>Trust &amp; Safety:</strong> <a href="mailto:trust@mysokoni.co.ke">trust@mysokoni.co.ke</a></p>
+      <p><strong>Security incidents:</strong> <a href="mailto:security@mysokoni.co.ke">security@mysokoni.co.ke</a></p>
+      <p><strong>Legal / IP takedown:</strong> <a href="mailto:legal@mysokoni.co.ke">legal@mysokoni.co.ke</a></p>
+      <p><strong>Privacy / KDPA requests:</strong> <a href="mailto:privacy@mysokoni.co.ke">privacy@mysokoni.co.ke</a></p>
+      <p><strong>General support:</strong> <a href="mailto:support@mysokoni.co.ke">support@mysokoni.co.ke</a></p>
+      <p style="margin-top:12px;font-size:13px;color:rgba(255,255,255,.28)">Response times: trust reports &lt;24h · security incidents &lt;4h · legal takedowns &lt;3 business days · general support &lt;72h</p>
+    </div>
+    <div class="cta-row" style="margin-top:20px">
+      <a href="/community-guidelines" class="btn-o">Community Guidelines</a>
+      <a href="/privacy" class="btn-o">Privacy Policy</a>
+      <a href="/data-deletion" class="btn-o">Data Deletion</a>
+    </div>
+  </section>
+
+</div>
+
+<footer class="lfoot">
+  <div class="lfoot-inner">
+    <div class="lfoot-logo">
+      <img src="assets/Sokonilogo2.png" alt="SOKONI">
+      <span>SOKONI</span>
+    </div>
+    <nav class="lfoot-links" aria-label="Footer navigation">
+      <a href="/">Marketplace</a>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="/trust-and-safety" class="cur">Trust &amp; Safety</a>
+      <a href="/community-guidelines">Community Guidelines</a>
+      <a href="/data-deletion">Data Deletion</a>
+      <a href="mailto:support@mysokoni.co.ke">Contact</a>
+    </nav>
+    <p class="lfoot-copy">&copy; 2026 Sokoni Digital Limited. All rights reserved. Nairobi, Kenya.</p>
+  </div>
+</footer>
+
+<script>
+  setTimeout(function(){
+    var s=document.getElementById('sk-splash');
+    if(s) s.classList.add('sk-out');
+  }, 1400);
+</script>
+</body>
+</html>

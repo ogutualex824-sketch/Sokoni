@@ -21,9 +21,8 @@ const admin     = require('firebase-admin');
 const { defineSecret } = require('firebase-functions/params');
 
 const SENDGRID_API_KEY  = defineSecret('SENDGRID_API_KEY');
-const AT_API_KEY        = defineSecret('AT_API_KEY');
-const AT_USERNAME       = defineSecret('AT_USERNAME');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+const sokoniAt          = require('./sokoni-at');
 
 const R = require('./redis-service');
 
@@ -158,33 +157,9 @@ async function handleNotification(job) {
    `to` may be a single phone string or an array (max 20)
 ════════════════════════════════════════════════════════════════ */
 async function handleSMS(job) {
-  const apiKey   = AT_API_KEY.value();
-  const username = AT_USERNAME.value();
-  if (!apiKey || !username) { _log('ERROR', 'AT keys not set'); throw new Error('Africa\'s Talking not configured'); }
-
-  const recipients = Array.isArray(job.to)
-    ? job.to.slice(0, 20).join(',')
-    : String(job.to);
-
-  const params = new URLSearchParams({
-    username,
-    to:      recipients,
-    message: job.message.slice(0, 918), /* SMS max per AT */
-    ...(job.from ? { from: job.from } : {}),
-  });
-
-  const res = await fetch('https://api.africastalking.com/version1/messaging', {
-    method:  'POST',
-    headers: { 'apiKey': apiKey, 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
-    body:    params.toString(),
-    signal:  AbortSignal.timeout(15_000),
-  });
-
-  const json = await res.json();
-  if (json?.SMSMessageData?.Recipients) {
-    const delivered = json.SMSMessageData.Recipients.filter(r => r.status === 'Success').length;
-    _log('INFO', `SMS sent ${delivered}/${json.SMSMessageData.Recipients.length}`, { jobId: job._id });
-  }
+  const to = Array.isArray(job.to) ? job.to.slice(0, 20) : String(job.to);
+  await sokoniAt.atSendSMS(to, job.message, job.from || undefined);
+  _log('INFO', 'SMS job dispatched', { jobId: job._id });
 }
 
 /* ════════════════════════════════════════════════════════════════

@@ -2051,6 +2051,8 @@ async function sendStkPush(){
   .on("FAILED", err => {
     showPushToast("❌ Payment Failed", (err?.message || err?.detail || "Please retry"), "orange");
     resetStkSteps();
+    btn.disabled = false;
+    btn.innerHTML = '🔄 Retry Payment';
   })
   .run({
     amount:       stkAmount ?? orderTotal, /* stkAmount set by server; fallback is belt-and-suspenders only */

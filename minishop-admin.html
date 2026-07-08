@@ -268,6 +268,22 @@
     @media(max-width:420px){
       #msaViewStats{grid-template-columns:1fr 1fr}
     }
+
+    /* ── Flash Sales / Promotions ── */
+    .ms-promo-admin-list { display:flex; flex-direction:column; gap:12px; }
+    .ms-promo-admin-item { background:#111; border:1px solid #1e1e1e; border-radius:10px; padding:14px 16px; }
+    .ms-promo-admin-info { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:8px; }
+    .ms-promo-admin-info strong { color:#fff; font-size:1em; }
+    .ms-promo-admin-meta { display:flex; flex-wrap:wrap; align-items:center; gap:10px; font-size:.82em; color:#888; }
+    .ms-promo-type-badge { background:#1a2a0a; color:#71ff00; font-size:.75em; font-weight:700; text-transform:uppercase; padding:2px 8px; border-radius:20px; letter-spacing:.05em; }
+    .ms-promo-status { padding:2px 8px; border-radius:20px; font-weight:700; text-transform:uppercase; font-size:.75em; }
+    .ms-promo-status-active { background:#0a2a0a; color:#71ff00; }
+    .ms-promo-status-paused { background:#2a1a0a; color:#f90; }
+    .ms-promo-status-expired { background:#1e1e1e; color:#888; }
+    .ms-btn-xs { background:transparent; border:1px solid #333; color:#ccc; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:.8em; }
+    .ms-btn-xs:hover { border-color:#71ff00; color:#71ff00; }
+    .ms-asset-canvas-wrap { margin-top:20px; text-align:center; }
+    .ms-asset-actions { display:flex; gap:10px; justify-content:center; margin-top:12px; }
   </style>
 </head>
 <body>
@@ -301,6 +317,7 @@
   <button class="msa-tab" data-tab="analytics" role="tab" aria-selected="false">Analytics</button>
   <button class="msa-tab" data-tab="share" role="tab" aria-selected="false">Share &amp; Promote</button>
   <button class="msa-tab" data-tab="ai" role="tab" aria-selected="false">AI Marketing</button>
+  <button class="msa-tab" data-tab="6" role="tab" aria-selected="false" onclick="msAdminTab(6)">&#x26A1; Flash Sales</button>
 </div>
 
 <!-- ══════════ PANEL: OVERVIEW ══════════ -->
@@ -391,6 +408,17 @@
           <button class="msa-btn" id="msaGoAnalytics">&#128202; View Analytics</button>
         </div>
       </div>
+    </div>
+
+    <!-- Announcements -->
+    <div class="msa-card" id="msAnnouncementsCard">
+      <h2>&#x1F4E2; Announcements</h2>
+      <p style="font-size:13px;color:var(--ms-muted);margin-bottom:14px">Send updates to customers who follow your shop. Appears on your MiniShop page.</p>
+      <div class="msa-form-row">
+        <textarea id="msAnnounceText" class="msa-textarea" rows="3" placeholder="Write an announcement (max 280 characters)..." maxlength="280"></textarea>
+      </div>
+      <button class="msa-btn primary" onclick="msSendAnnouncement()">&#x1F4E4; Send Announcement</button>
+      <div id="msAnnounceHistory" style="margin-top:16px;"></div>
     </div>
 
   </div><!-- /panel-overview -->
@@ -697,6 +725,13 @@
           <div class="msa-promo-desc">Share-ready status image</div>
         </div>
       </div>
+      <div class="ms-asset-canvas-wrap" id="msAssetPreview" hidden>
+        <canvas id="msAssetCanvas" width="1080" height="1080" style="width:100%;max-width:320px;border-radius:12px;"></canvas>
+        <div class="ms-asset-actions">
+          <button class="msa-btn-sm" onclick="msDownloadAsset()">&#x2B07; Download PNG</button>
+          <button class="msa-btn-sm" onclick="msShareAsset()">&#x2197; Share</button>
+        </div>
+      </div>
     </div>
 
   </div><!-- /panel-share -->
@@ -769,6 +804,65 @@
     </div>
 
   </div><!-- /panel-ai -->
+
+  <!-- ══════════ PANEL: FLASH SALES ══════════ -->
+  <div class="msa-panel" id="panel-6" hidden role="tabpanel">
+
+    <div style="margin-bottom:24px">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:4px">&#x26A1; Flash Sales &amp; Promotions</h2>
+      <p style="font-size:13px;color:var(--ms-muted)">Create time-limited deals, bundle offers, and coupon codes for your MiniShop.</p>
+    </div>
+
+    <!-- Promotion Creator -->
+    <div class="msa-card">
+      <h2>Create Promotion</h2>
+      <div class="msa-two-col">
+        <div class="msa-form-row">
+          <label>Promotion Type</label>
+          <select id="msPromoType" class="msa-select" onchange="msTogglePromoType(this.value)">
+            <option value="flash_sale">Flash Sale</option>
+            <option value="bundle">Bundle Deal</option>
+            <option value="coupon">Coupon Code</option>
+            <option value="bogo">Buy 1 Get 1</option>
+          </select>
+        </div>
+        <div class="msa-form-row">
+          <label>Promotion Title</label>
+          <input type="text" id="msPromoTitle" class="msa-input" placeholder="e.g. Weekend Flash Sale" maxlength="60">
+        </div>
+        <div class="msa-form-row">
+          <label>Discount (%)</label>
+          <input type="number" id="msPromoDiscount" class="msa-input" min="1" max="90" placeholder="20">
+        </div>
+        <div class="msa-form-row" id="msPromoCodeGroup">
+          <label>Coupon Code (optional)</label>
+          <input type="text" id="msPromoCode" class="msa-input" placeholder="SAVE20" maxlength="20" style="text-transform:uppercase">
+        </div>
+        <div class="msa-form-row">
+          <label>Start Time</label>
+          <input type="datetime-local" id="msPromoStart" class="msa-input">
+        </div>
+        <div class="msa-form-row">
+          <label>End Time</label>
+          <input type="datetime-local" id="msPromoEnd" class="msa-input">
+        </div>
+        <div class="msa-form-row" style="grid-column:1/-1">
+          <label>Description (optional)</label>
+          <textarea id="msPromoDesc" class="msa-textarea" rows="2" placeholder="Add details about this promotion..."></textarea>
+        </div>
+      </div>
+      <button class="msa-btn primary" onclick="msCreatePromotion()" style="margin-top:8px">&#x26A1; Launch Promotion</button>
+    </div>
+
+    <!-- Active Promotions -->
+    <div class="msa-card" id="msActivePromos">
+      <h2>Active &amp; Upcoming Promotions</h2>
+      <div id="msPromoList" class="ms-promo-admin-list">
+        <div class="msa-empty">No promotions yet. Create your first one above.</div>
+      </div>
+    </div>
+
+  </div><!-- /panel-6 -->
 
 </div><!-- /msa-content -->
 
@@ -949,6 +1043,7 @@
           if (_state.handle) {
             _state.shopUrl = buildShopUrl(_state.handle);
           }
+          window.msAdminShopId = doc.id;
         }
         hideAuthGate();
         initUI();
@@ -1741,6 +1836,239 @@
       window.SokoniMiniShop.initAdmin();
     }
   });
+
+// ── Global helpers for new features ──────────────────────────────────────
+function msEsc(s){const d=document.createElement('div');d.textContent=String(s||'');return d.innerHTML;}
+
+function msAdminToast(msg, type) {
+  var c = document.getElementById('msaToasts');
+  if (!c) return;
+  type = type || 'info';
+  var t = document.createElement('div');
+  var icons = {success:'✓', error:'✕', info:'ℹ'};
+  t.className = 'msa-toast ' + type;
+  t.innerHTML = '<span>' + (icons[type]||'') + '</span><span>' + msEsc(msg) + '</span>';
+  c.appendChild(t);
+  setTimeout(function(){ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(function(){ t.remove(); },300); }, 3500);
+}
+
+function msAdminTab(n) {
+  var tab = document.querySelector('.msa-tab[data-tab="' + n + '"]');
+  if (tab) tab.click();
+}
+
+// ── Flash Sales ──────────────────────────────────────────────────────────
+async function msCreatePromotion() {
+  const shopId = window.msAdminShopId || '';
+  if (!shopId) { msAdminToast('Shop not loaded yet. Please wait.', 'error'); return; }
+  const type = document.getElementById('msPromoType').value;
+  const title = document.getElementById('msPromoTitle').value.trim();
+  const discount = parseInt(document.getElementById('msPromoDiscount').value);
+  const code = document.getElementById('msPromoCode').value.trim().toUpperCase();
+  const start = document.getElementById('msPromoStart').value;
+  const end = document.getElementById('msPromoEnd').value;
+  const desc = document.getElementById('msPromoDesc').value.trim();
+  if (!title || !discount || !start || !end) { msAdminToast('Fill in all required fields', 'error'); return; }
+  if (new Date(end) <= new Date(start)) { msAdminToast('End must be after start', 'error'); return; }
+  try {
+    const fn = firebase.functions().httpsCallable('miniShopCreatePromotion');
+    const { data } = await fn({
+      shopId,
+      type,
+      title,
+      discountType: 'percent',
+      discountValue: discount,
+      code: code || null,
+      validUntil: end,
+      description: desc,
+    });
+    if (data.ok || data.promotionId) { msAdminToast('Promotion created!', 'success'); msLoadPromotions(); }
+    else msAdminToast(data.error || 'Failed', 'error');
+  } catch (e) { msAdminToast(e.message, 'error'); }
+}
+
+async function msLoadPromotions() {
+  const shopId = window.msAdminShopId || '';
+  if (!shopId) return;
+  try {
+    const fn = firebase.functions().httpsCallable('miniShopGetPromotions');
+    const { data } = await fn({ shopId, limit: 20 });
+    const list = document.getElementById('msPromoList');
+    if (!data.promotions || !data.promotions.length) {
+      list.innerHTML = '<div class="msa-empty">No promotions yet.</div>'; return;
+    }
+    list.innerHTML = data.promotions.map(p => `
+      <div class="ms-promo-admin-item" data-id="${p.id}">
+        <div class="ms-promo-admin-info">
+          <span class="ms-promo-type-badge">${p.type.replace('_',' ')}</span>
+          <strong>${msEsc(p.title)}</strong>
+          <span>${p.discount}% off</span>
+          ${p.code ? `<code class="ms-promo-code">${msEsc(p.code)}</code>` : ''}
+        </div>
+        <div class="ms-promo-admin-meta">
+          <span>${new Date(p.startAt).toLocaleDateString()} → ${new Date(p.endAt).toLocaleDateString()}</span>
+          <span class="ms-promo-status ms-promo-status-${p.status}">${p.status}</span>
+          <button class="ms-btn-xs" onclick="msTogglePromo('${p.id}','${p.status}')">
+            ${p.status === 'active' ? 'Pause' : 'Activate'}
+          </button>
+        </div>
+      </div>`).join('');
+  } catch (e) { console.error('msLoadPromotions', e); }
+}
+
+async function msTogglePromo(promoId, currentStatus) {
+  try {
+    const fn = firebase.functions().httpsCallable('miniShopUpdatePromotion');
+    const status = currentStatus === 'active' ? 'paused' : 'active';
+    await fn({ promoId, status });
+    msAdminToast('Updated', 'success');
+    msLoadPromotions();
+  } catch (e) { msAdminToast(e.message, 'error'); }
+}
+
+function msTogglePromoType(type) {
+  const codeGroup = document.getElementById('msPromoCodeGroup');
+  if (codeGroup) codeGroup.hidden = type !== 'coupon';
+}
+
+// ── Announcements ────────────────────────────────────────────────────────
+async function msSendAnnouncement() {
+  const shopId = window.msAdminShopId || '';
+  if (!shopId) { msAdminToast('Shop not loaded yet. Please wait.', 'error'); return; }
+  const text = document.getElementById('msAnnounceText').value.trim();
+  if (!text) { msAdminToast('Write an announcement first', 'error'); return; }
+  if (text.length > 280) { msAdminToast('Max 280 characters', 'error'); return; }
+  try {
+    const fn = firebase.functions().httpsCallable('miniShopSendAnnouncement');
+    const title = text.length > 50 ? text.substring(0, 47) + '...' : text;
+    const { data } = await fn({ shopId, title, message: text, type: 'general' });
+    if (data.announcementId || data.success) {
+      msAdminToast('Announcement sent!', 'success');
+      document.getElementById('msAnnounceText').value = '';
+      msLoadAnnouncements();
+    } else msAdminToast(data.error || 'Failed', 'error');
+  } catch (e) { msAdminToast(e.message, 'error'); }
+}
+
+async function msLoadAnnouncements() {
+  const shopId = window.msAdminShopId || '';
+  if (!shopId) return;
+  try {
+    const fn = firebase.functions().httpsCallable('miniShopGetAnnouncements');
+    const { data } = await fn({ shopId, limit: 10 });
+    const el = document.getElementById('msAnnounceHistory');
+    if (!el) return;
+    if (!data.announcements || !data.announcements.length) {
+      el.innerHTML = '<p style="color:var(--ms-muted,#888);font-size:.85em">No announcements yet.</p>'; return;
+    }
+    el.innerHTML = data.announcements.map(a => `
+      <div style="border-top:1px solid #1a1a1a;padding:10px 0;">
+        <p style="margin:0;font-size:.9em;color:#ccc">${msEsc(a.message)}</p>
+        <span style="font-size:.75em;color:#666">${new Date(a.createdAt).toLocaleString()}</span>
+      </div>`).join('');
+  } catch (e) { console.error('msLoadAnnouncements', e); }
+}
+
+// ── Canvas Asset Generator ────────────────────────────────────────────────
+function msRenderAssetCanvas(type) {
+  const canvas = document.getElementById('msAssetCanvas');
+  const preview = document.getElementById('msAssetPreview');
+  if (!canvas) return;
+  preview.hidden = false;
+  const ctx = canvas.getContext('2d');
+  const w = 1080, h = 1080;
+  const shopNameEl = document.getElementById('msaPreviewName');
+  const shopName = shopNameEl ? shopNameEl.textContent : 'My Shop';
+  const handle = window._msHandle || '';
+  const accent = '#71ff00';
+
+  // Background
+  ctx.fillStyle = '#050505';
+  ctx.fillRect(0, 0, w, h);
+
+  if (type === 'qr_poster') {
+    // Header bar
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, 0, w, 180);
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 72px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SCAN TO VISIT', w/2, 120);
+    // Shop name
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 64px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(shopName, w/2, 320);
+    // URL
+    ctx.fillStyle = accent;
+    ctx.font = '36px monospace';
+    ctx.fillText('mysokoni.co.ke/@' + handle, w/2, 420);
+    // QR placeholder box
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 6;
+    ctx.strokeRect(315, 480, 450, 450);
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px sans-serif';
+    ctx.fillText('QR CODE', w/2, 720);
+    // Footer
+    ctx.fillStyle = accent;
+    ctx.font = 'bold 32px sans-serif';
+    ctx.fillText('SOKONI', w/2, 1020);
+  } else if (type === 'story') {
+    canvas.height = 1920;
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, 1080, 1920);
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, 0, 1080, 200);
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 80px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SOKONI', 540, 140);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 72px sans-serif';
+    ctx.fillText(shopName, 540, 500);
+    ctx.fillStyle = accent;
+    ctx.font = '40px monospace';
+    ctx.fillText('@' + handle, 540, 600);
+  } else {
+    // Default: business card style (square)
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, 0, w, 200);
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 80px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SOKONI', w/2, 140);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 72px sans-serif';
+    ctx.fillText(shopName, w/2, 400);
+    ctx.fillStyle = accent;
+    ctx.font = '40px monospace';
+    ctx.fillText('mysokoni.co.ke/@' + handle, w/2, 520);
+  }
+}
+
+function msDownloadAsset() {
+  const canvas = document.getElementById('msAssetCanvas');
+  if (!canvas) return;
+  const a = document.createElement('a');
+  a.download = 'sokoni-shop-asset.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+async function msShareAsset() {
+  const canvas = document.getElementById('msAssetCanvas');
+  if (!canvas) return;
+  canvas.toBlob(async blob => {
+    if (navigator.share && blob) {
+      try {
+        await navigator.share({ files: [new File([blob], 'sokoni-shop.png', { type: 'image/png' })], title: 'My SOKONI Shop' });
+      } catch(e) { msDownloadAsset(); }
+    } else {
+      msDownloadAsset();
+    }
+  });
+}
 </script>
 
 <script src="shared-header.js" defer></script>

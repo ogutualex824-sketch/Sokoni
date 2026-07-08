@@ -14,6 +14,7 @@ const { dispatch }            = require('./redis-jobs');
 
 const { defineSecret } = require('firebase-functions/params');
 const REDIS_URL_SECRET = defineSecret('REDIS_URL');
+const sokoniAt         = require('./sokoni-at');
 
 // VPC connector routes private-IP traffic (10.127.36.43 Memorystore) through the project VPC.
 // Create first:  GCP Console → VPC Access → Create connector → name: sokoni-redis-connector,
@@ -27,7 +28,8 @@ const _VPC = {
 
 const _CF_OPTS    = { enforceAppCheck: true, secrets: [REDIS_URL_SECRET], ..._VPC };
 const _ADMIN_OPTS = { enforceAppCheck: true, secrets: [REDIS_URL_SECRET], ..._VPC };
-const _SCHED_OPTS = { timeZone: 'Africa/Nairobi', secrets: [REDIS_URL_SECRET], ..._VPC };
+// Scheduled queue worker needs AT secrets to dispatch SMS jobs from Redis queue.
+const _SCHED_OPTS = { timeZone: 'Africa/Nairobi', secrets: [REDIS_URL_SECRET, ...sokoniAt.secrets], ..._VPC };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Automation Center — SOKONI</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="favicon.ico" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:     #050505;
+      --sur:    #0d0d0d;
+      --sur2:   #141414;
+      --bor:    #1a1a1a;
+      --g:      #71ff00;
+      --ga:     rgba(113,255,0,.12);
+      --txt:    #e8e8e8;
+      --muted:  #777;
+      --red:    #ff4444;
+      --orange: #ff8800;
+      --yellow: #ffcc00;
+    }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--txt);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ─────────────────────────────────────── */
+    .hdr {
+      background: var(--sur);
+      border-bottom: 1px solid var(--bor);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .hdr-logo { font-weight: 800; color: var(--g); font-size: 17px; }
+    .hdr-sep  { width: 1px; height: 24px; background: var(--bor); }
+    .hdr-title { font-size: 14px; color: var(--muted); }
+    .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .btn {
+      background: var(--bor);
+      border: none;
+      color: var(--txt);
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:hover { background: #252525; }
+    .btn.g  { background: var(--g); color: #000; font-weight: 700; }
+    .btn.g:hover { background: #5acc00; }
+    .btn.outline { background: none; border: 1px solid var(--bor); }
+    .btn.outline:hover { border-color: var(--g); color: var(--g); }
+
+    /* ── Stats strip ─────────────────────────────────── */
+    .stats {
+      background: var(--sur);
+      border-bottom: 1px solid var(--bor);
+      padding: 12px 24px;
+      display: flex;
+      gap: 40px;
+      overflow-x: auto;
+    }
+    .stat { flex-shrink: 0; }
+    .stat-v { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--g); }
+    .stat-v.red    { color: var(--red); }
+    .stat-v.orange { color: var(--orange); }
+    .stat-l { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    /* ── Tab nav ─────────────────────────────────────── */
+    .tabs {
+      background: var(--sur);
+      border-bottom: 1px solid var(--bor);
+      padding: 0 24px;
+      display: flex;
+    }
+    .tab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      padding: 13px 18px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .tab:hover { color: var(--txt); }
+    .tab.on    { color: var(--g); border-bottom-color: var(--g); }
+
+    /* ── Content ─────────────────────────────────────── */
+    .content { padding: 24px; max-width: 1400px; margin: 0 auto; }
+    .panel { display: none; }
+    .panel.on { display: block; }
+
+    /* ── Card ────────────────────────────────────────── */
+    .card {
+      background: var(--sur);
+      border: 1px solid var(--bor);
+      border-radius: 10px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .card-hdr {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--bor);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .card-hdr h3 { font-size: 14px; font-weight: 600; }
+    .card-body { padding: 20px; }
+
+    /* ── Toolbar ─────────────────────────────────────── */
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .toolbar select, .toolbar input[type=search] {
+      background: var(--sur2);
+      border: 1px solid var(--bor);
+      color: var(--txt);
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      outline: none;
+    }
+    .toolbar select:focus, .toolbar input:focus { border-color: var(--g); }
+
+    /* ── Priority badge ──────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .3px;
+    }
+    .badge.critical { background: rgba(255,68,68,.15); color: var(--red); }
+    .badge.high     { background: rgba(255,136,0,.15); color: var(--orange); }
+    .badge.medium   { background: rgba(255,204,0,.15); color: var(--yellow); }
+    .badge.low      { background: rgba(113,255,0,.15); color: var(--g); }
+    .badge.auto     { background: rgba(113,255,0,.08); color: var(--g); }
+    .badge.human    { background: rgba(255,136,0,.1);  color: var(--orange); }
+    .badge.success  { background: rgba(113,255,0,.12); color: var(--g); }
+    .badge.neutral  { background: rgba(136,136,136,.15); color: var(--muted); }
+
+    /* ── Exception items ─────────────────────────────── */
+    .ex-list { display: flex; flex-direction: column; gap: 10px; }
+    .ex-item {
+      background: #080808;
+      border: 1px solid var(--bor);
+      border-radius: 8px;
+      padding: 14px 16px;
+      border-left: 3px solid var(--bor);
+    }
+    .ex-item.critical { border-left-color: var(--red); }
+    .ex-item.high     { border-left-color: var(--orange); }
+    .ex-item.medium   { border-left-color: var(--yellow); }
+    .ex-item.low      { border-left-color: var(--g); }
+
+    .ex-row1 { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+    .ex-title { font-size: 13px; font-weight: 600; }
+    .ex-desc  { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+
+    .ai-rec {
+      background: rgba(113,255,0,.04);
+      border: 1px solid rgba(113,255,0,.12);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .ai-rec-label  { font-size: 10px; color: var(--g); text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin-bottom: 3px; }
+    .ai-rec-action { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+    .ai-rec-conf   { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .ai-rec-reason { font-size: 12px; color: #aaa; }
+
+    .ev-chips { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+    .ev-chip {
+      background: #151515;
+      border: 1px solid var(--bor);
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .ex-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .ex-meta    { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+    /* ── Business rules ──────────────────────────────── */
+    .rules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 14px;
+    }
+    .rule-card {
+      background: #080808;
+      border: 1px solid var(--bor);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .rule-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .rule-name { font-size: 13px; font-weight: 600; text-transform: capitalize; }
+    .rule-desc { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+
+    /* Toggle */
+    .tog { position: relative; display: inline-block; width: 34px; height: 18px; }
+    .tog input { opacity: 0; width: 0; height: 0; }
+    .tog-sl { position: absolute; inset: 0; background: #2a2a2a; border-radius: 999px; cursor: pointer; transition: background .2s; }
+    .tog-sl::before { content: ''; position: absolute; width: 12px; height: 12px; left: 3px; bottom: 3px; background: #555; border-radius: 50%; transition: transform .2s, background .2s; }
+    .tog input:checked + .tog-sl { background: rgba(113,255,0,.15); }
+    .tog input:checked + .tog-sl::before { transform: translateX(16px); background: var(--g); }
+
+    .rf { margin-bottom: 9px; }
+    .rf label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+    .rf input, .rf select {
+      width: 100%;
+      background: var(--sur);
+      border: 1px solid var(--bor);
+      color: var(--txt);
+      padding: 7px 9px;
+      border-radius: 5px;
+      font-size: 12px;
+      outline: none;
+    }
+    .rf input:focus, .rf select:focus { border-color: var(--g); }
+    .rule-save {
+      width: 100%;
+      margin-top: 4px;
+      padding: 7px;
+      background: var(--g);
+      color: #000;
+      border: none;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .rule-save:hover { background: #5acc00; }
+
+    /* ── Audit table ─────────────────────────────────── */
+    .audit-tbl { width: 100%; border-collapse: collapse; }
+    .audit-tbl th, .audit-tbl td {
+      text-align: left;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--bor);
+      font-size: 12px;
+    }
+    .audit-tbl th { color: var(--muted); font-weight: 500; background: #070707; }
+    .audit-tbl tr:hover td { background: #0a0a0a; }
+    .outcome-ok  { color: var(--g); }
+    .outcome-esc { color: var(--orange); }
+    .outcome-q   { color: var(--yellow); }
+
+    /* ── Engine status ───────────────────────────────── */
+    .pri-row { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+    .pri-box {
+      flex: 1; min-width: 100px;
+      background: #080808;
+      border: 1px solid var(--bor);
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+    }
+    .pri-val   { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .pri-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-top: 3px; }
+    .pri-val.critical { color: var(--red); }
+    .pri-val.high     { color: var(--orange); }
+    .pri-val.medium   { color: var(--yellow); }
+    .pri-val.low      { color: var(--g); }
+
+    .modules { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .mod-card {
+      background: #080808;
+      border: 1px solid var(--bor);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .mod-name    { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+    .mod-trigger { font-size: 11px; color: var(--muted); margin-bottom: 7px; }
+    .mod-status  {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; color: var(--g);
+    }
+    .mod-status::before { content: ''; width: 6px; height: 6px; background: var(--g); border-radius: 50%; }
+
+    /* ── Modal ───────────────────────────────────────── */
+    .modal-bg {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.75);
+      z-index: 300;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-bg.open { display: flex; }
+    .modal {
+      background: var(--sur);
+      border: 1px solid var(--bor);
+      border-radius: 12px;
+      padding: 26px;
+      max-width: 440px;
+      width: 92%;
+    }
+    .modal h3 { font-size: 16px; margin-bottom: 6px; }
+    .modal p  { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+    .mf { margin-bottom: 13px; }
+    .mf label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+    .mf select, .mf textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--bor);
+      color: var(--txt); padding: 9px; border-radius: 6px; font-size: 12px;
+      font-family: inherit; outline: none;
+    }
+    .mf select:focus, .mf textarea:focus { border-color: var(--g); }
+    .mf textarea { resize: vertical; min-height: 72px; }
+    .mf-check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--orange); }
+    .modal-acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+
+    /* ── Spinner / empty ─────────────────────────────── */
+    .spin {
+      display: flex; align-items: center; justify-content: center;
+      padding: 36px; gap: 8px;
+    }
+    .sd { width: 7px; height: 7px; background: var(--g); border-radius: 50%; animation: blink 1.2s infinite; }
+    .sd:nth-child(2) { animation-delay: .2s; }
+    .sd:nth-child(3) { animation-delay: .4s; }
+    @keyframes blink { 0%,100%{opacity:.15} 50%{opacity:1} }
+    .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+    .empty span { display: block; font-size: 30px; margin-bottom: 8px; opacity: .5; }
+
+    /* ── Toast ───────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #0f1f0f;
+      border: 1px solid var(--g);
+      color: var(--txt);
+      padding: 11px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      z-index: 999;
+      display: none;
+      max-width: 300px;
+    }
+    #toast.err { background: #1f0808; border-color: var(--red); }
+
+    @media (max-width: 640px) {
+      .content { padding: 16px; }
+      .tab { padding: 11px 13px; font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="hdr">
+  <span class="hdr-logo">SOKONI</span>
+  <div class="hdr-sep"></div>
+  <span class="hdr-title">&#x1F916; Intelligent Automation Center</span>
+  <div class="hdr-right">
+    <a class="btn outline" href="automation-engine.html">ADE Rules</a>
+    <a class="btn outline" href="admin-os.html">&#x2190; Admin OS</a>
+    <button class="btn" onclick="AC.maintenance()" title="Run maintenance now">&#x1F527;</button>
+  </div>
+</header>
+
+<div class="stats" id="statsBar">
+  <div class="stat"><div class="stat-v red" id="sQueue">&#x2014;</div><div class="stat-l">Items Queued</div></div>
+  <div class="stat"><div class="stat-v orange" id="sCrit">&#x2014;</div><div class="stat-l">Critical</div></div>
+  <div class="stat"><div class="stat-v" id="sToday">&#x2014;</div><div class="stat-l">Automated Today</div></div>
+  <div class="stat"><div class="stat-v" id="sRules">&#x2014;</div><div class="stat-l">Rules Configured</div></div>
+  <div class="stat" style="margin-left:auto">
+    <button class="btn g" onclick="AC.refresh()">&#x21BB; Refresh</button>
+  </div>
+</div>
+
+<nav class="tabs">
+  <button class="tab on"  data-tab="queue"  onclick="AC.tab('queue')">&#x1F6A8; Exception Queue</button>
+  <button class="tab"     data-tab="rules"  onclick="AC.tab('rules')">&#x2699; Business Rules</button>
+  <button class="tab"     data-tab="audit"  onclick="AC.tab('audit')">&#x1F4CB; Audit Log</button>
+  <button class="tab"     data-tab="status" onclick="AC.tab('status')">&#x1F4CA; Engine Status</button>
+</nav>
+
+<main class="content">
+
+  <!-- Exception Queue -->
+  <div class="panel on" id="panel-queue">
+    <div class="card">
+      <div class="card-hdr">
+        <h3>&#x1F6A8; Exception Queue — Items Requiring Human Decision</h3>
+        <div class="toolbar" style="margin:0">
+          <select id="qStatus" onchange="AC.loadQueue()">
+            <option value="pending">Pending</option>
+            <option value="resolved">Resolved</option>
+            <option value="expired">Expired</option>
+          </select>
+          <select id="qPriority" onchange="AC.loadQueue()">
+            <option value="">All Priorities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select id="qType" onchange="AC.loadQueue()">
+            <option value="">All Types</option>
+            <option value="dispute">Dispute</option>
+            <option value="high_value_refund">High-Value Refund</option>
+            <option value="high_value_payout">High-Value Payout</option>
+            <option value="verification_failure">Verification Failure</option>
+            <option value="approval_required">Approval Required</option>
+          </select>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="queueBody"><div class="spin"><div class="sd"></div><div class="sd"></div><div class="sd"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Business Rules -->
+  <div class="panel" id="panel-rules">
+    <div class="card">
+      <div class="card-hdr">
+        <h3>&#x2699; Configurable Business Rules</h3>
+        <span style="font-size:12px;color:var(--muted)">Changes apply to the next automation run</span>
+      </div>
+      <div class="card-body">
+        <div id="rulesBody"><div class="spin"><div class="sd"></div><div class="sd"></div><div class="sd"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audit Log -->
+  <div class="panel" id="panel-audit">
+    <div class="card">
+      <div class="card-hdr">
+        <h3>&#x1F4CB; Automation Audit Log</h3>
+      </div>
+      <div class="card-body">
+        <div class="toolbar">
+          <select id="aAction" onchange="AC.loadAudit()">
+            <option value="">All Actions</option>
+            <option value="auto_activate_account">Account Activation</option>
+            <option value="auto_activate_subscription">Subscription Activation</option>
+            <option value="auto_approve_seller">Seller Approval</option>
+            <option value="queue_seller_application">Seller Application Queued</option>
+            <option value="auto_resolve_dispute">Dispute Auto-Resolved</option>
+            <option value="escalate_dispute">Dispute Escalated</option>
+            <option value="auto_approve_refund">Refund Auto-Approved</option>
+            <option value="queue_high_value_refund">Refund Queued</option>
+            <option value="auto_schedule_payout">Payout Scheduled</option>
+            <option value="human_resolve_exception">Human Override</option>
+            <option value="update_automation_rule">Rule Updated</option>
+            <option value="scheduled_maintenance">Maintenance Run</option>
+            <option value="scheduled_payout_batch">Payout Batch</option>
+          </select>
+          <select id="aEntity" onchange="AC.loadAudit()">
+            <option value="">All Entities</option>
+            <option value="user">User</option>
+            <option value="subscription">Subscription</option>
+            <option value="seller_application">Seller Application</option>
+            <option value="dispute">Dispute</option>
+            <option value="refund">Refund</option>
+            <option value="payout">Payout</option>
+            <option value="exception_queue_item">Queue Item</option>
+            <option value="automation_rule">Rule</option>
+            <option value="system">System</option>
+          </select>
+          <input type="search" id="aSearch" placeholder="Filter&#x2026;" style="width:180px" oninput="AC.filterAudit(this.value)" />
+        </div>
+        <div style="overflow-x:auto">
+          <table class="audit-tbl">
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>Entity</th>
+                <th>Outcome</th>
+                <th>Rule</th>
+                <th>Source</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody id="auditBody">
+              <tr><td colspan="6"><div class="spin"><div class="sd"></div><div class="sd"></div><div class="sd"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="text-align:center;margin-top:14px">
+          <button class="btn" id="auditMore" style="display:none" onclick="AC.loadMoreAudit()">Load More</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Engine Status -->
+  <div class="panel" id="panel-status">
+    <div class="card">
+      <div class="card-hdr"><h3>&#x1F4CA; Engine Status</h3></div>
+      <div class="card-body">
+        <div class="pri-row">
+          <div class="pri-box"><div class="pri-val critical" id="sCritBox">&#x2014;</div><div class="pri-label">Critical</div></div>
+          <div class="pri-box"><div class="pri-val high"     id="sHighBox">&#x2014;</div><div class="pri-label">High</div></div>
+          <div class="pri-box"><div class="pri-val medium"   id="sMedBox">&#x2014;</div><div class="pri-label">Medium</div></div>
+          <div class="pri-box"><div class="pri-val low"      id="sLowBox">&#x2014;</div><div class="pri-label">Low</div></div>
+        </div>
+        <div class="modules" id="modulesGrid">
+          <div class="spin"><div class="sd"></div><div class="sd"></div><div class="sd"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Resolve Modal -->
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)AC.closeModal()">
+  <div class="modal">
+    <h3>Resolve Exception</h3>
+    <p id="mDesc">Review the AI recommendation and enter your decision.</p>
+    <input type="hidden" id="mId" />
+    <input type="hidden" id="mRec" />
+    <div class="mf">
+      <label>Decision</label>
+      <select id="mAction">
+        <option value="approve">Approve</option>
+        <option value="reject">Reject</option>
+        <option value="buyer_wins">Buyer Wins</option>
+        <option value="seller_wins">Seller Wins</option>
+        <option value="approve_refund">Approve Refund</option>
+        <option value="approve_payout">Approve Payout</option>
+        <option value="escalate">Escalate Further</option>
+        <option value="dismissed">Dismiss (No Action)</option>
+      </select>
+    </div>
+    <div class="mf">
+      <label>Resolution Note (optional)</label>
+      <textarea id="mNote" placeholder="Explain your decision&#x2026;"></textarea>
+    </div>
+    <div class="mf">
+      <label class="mf-check">
+        <input type="checkbox" id="mOverride" />
+        Mark as human override (deviating from AI recommendation)
+      </label>
+    </div>
+    <div class="modal-acts">
+      <button class="btn" onclick="AC.closeModal()">Cancel</button>
+      <button class="btn g" onclick="AC.submitResolve()">Confirm Decision</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="sokoni-config.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script>
+'use strict';
+
+/* ── Init ─────────────────────────────────── */
+firebase.initializeApp(window.SOKONI_CONFIG || window.firebaseConfig || {});
+var fn = firebase.app().functions('us-central1');
+function _cf(name) { return fn.httpsCallable(name); }
+
+/* ── Auth guard ───────────────────────────── */
+firebase.auth().onAuthStateChanged(function(user) {
+  if (!user) { location.href = 'admin.html'; return; }
+  user.getIdTokenResult().then(function(r) {
+    if (!r.claims.admin && !r.claims.superAdmin) { location.href = 'index.html'; return; }
+    AC.refresh();
+  });
+});
+
+/* ── Helpers ──────────────────────────────── */
+function _esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, function(c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function _rel(ts) {
+  if (!ts) return '—';
+  var s = ts._seconds || ts.seconds || Math.floor((ts.toDate ? ts.toDate().getTime() : ts) / 1000);
+  var d = Math.floor(Date.now() / 1000 - s);
+  if (d < 60)    return d + 's ago';
+  if (d < 3600)  return Math.floor(d / 60) + 'm ago';
+  if (d < 86400) return Math.floor(d / 3600) + 'h ago';
+  return Math.floor(d / 86400) + 'd ago';
+}
+function _fmt(n) { return Number(n || 0).toLocaleString(); }
+function _toast(msg, isErr) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isErr ? 'err' : '';
+  t.style.display = 'block';
+  clearTimeout(t._t);
+  t._t = setTimeout(function() { t.style.display = 'none'; }, 4000);
+}
+function _spin() { return '<div class="spin"><div class="sd"></div><div class="sd"></div><div class="sd"></div></div>'; }
+
+/* ── State ────────────────────────────────── */
+var _auditAll = [], _auditLastId = null;
+
+/* ── Module ───────────────────────────────── */
+window.AC = {
+
+  refresh: function() {
+    AC.loadStatus();
+    if (document.getElementById('panel-queue').classList.contains('on')) AC.loadQueue();
+  },
+
+  tab: function(t) {
+    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('on'); });
+    document.querySelectorAll('.tab').forEach(function(b) { b.classList.toggle('on', b.dataset.tab === t); });
+    document.getElementById('panel-' + t).classList.add('on');
+    if (t === 'queue')  AC.loadQueue();
+    if (t === 'rules')  AC.loadRules();
+    if (t === 'audit')  AC.loadAudit();
+    if (t === 'status') AC.loadStatus();
+  },
+
+  /* ── Queue ──────────────────────────────── */
+  loadQueue: function() {
+    var el = document.getElementById('queueBody');
+    el.innerHTML = _spin();
+    var status   = document.getElementById('qStatus').value;
+    var priority = document.getElementById('qPriority').value || undefined;
+    var type     = document.getElementById('qType').value || undefined;
+    _cf('autoGetExceptionQueue')({ status: status, priority: priority, type: type, limit: 40 })
+      .then(function(r) {
+        var items = r.data.items || [];
+        if (!items.length) {
+          el.innerHTML = '<div class="empty"><span>&#x2705;</span>Queue is clear</div>';
+          return;
+        }
+        var list = document.createElement('div');
+        list.className = 'ex-list';
+        items.forEach(function(item) { list.appendChild(AC._renderItem(item)); });
+        el.innerHTML = '';
+        el.appendChild(list);
+      })
+      .catch(function(e) { el.innerHTML = '<div class="empty"><span>&#x26A0;</span>' + _esc(e.message) + '</div>'; });
+  },
+
+  _renderItem: function(item) {
+    var div = document.createElement('div');
+    div.className = 'ex-item ' + _esc(item.priority || 'medium');
+    var rec = item.recommendation || {};
+    var conf = Math.round((rec.confidence || 0) * 100);
+    var isResolved = item.status === 'resolved';
+
+    var evHtml = (item.evidence || []).map(function(e) {
+      return '<span class="ev-chip">' + _esc(e.label || e.type) + '</span>';
+    }).join('');
+
+    div.innerHTML =
+      '<div class="ex-row1">'
+        + '<div class="ex-title">' + _esc(item.title || item.type) + '</div>'
+        + '<span class="badge ' + _esc(item.priority || 'medium') + '">' + _esc(item.priority || 'medium') + '</span>'
+      + '</div>'
+      + '<div class="ex-desc">' + _esc(item.description || '') + '</div>'
+      + (rec.action
+          ? '<div class="ai-rec">'
+              + '<div class="ai-rec-label">&#x1F916; AI Recommendation</div>'
+              + '<div class="ai-rec-action">&#x279C; ' + _esc((rec.action || '').replace(/_/g, ' ')) + '</div>'
+              + '<div class="ai-rec-conf">Confidence: ' + conf + '%</div>'
+              + (rec.reasoning ? '<div class="ai-rec-reason">' + _esc(rec.reasoning) + '</div>' : '')
+            + '</div>'
+          : '')
+      + (evHtml ? '<div class="ev-chips">' + evHtml + '</div>' : '')
+      + '<div class="ex-actions">'
+        + (!isResolved
+            ? '<button class="btn g" onclick="AC.openModal(\'' + _esc(item.id) + '\',\'' + _esc(item.title||item.type) + '\',\'' + _esc(rec.action||'approve') + '\')">Resolve</button>'
+              + '<button class="btn" onclick="AC.quickResolve(\'' + _esc(item.id) + '\',\'' + _esc(rec.action||'approve') + '\')">&#x2714; Follow AI</button>'
+            : '<span style="font-size:12px;color:var(--g)">&#x2714; ' + _esc(item.resolution||'resolved') + '</span>'
+              + (item.overrodeRecommendation ? '&nbsp;<span class="badge human">override</span>' : ''))
+        + '<span class="ex-meta">' + _rel(item.createdAt) + ' &bull; ' + _esc(item.entityType||'') + '</span>'
+      + '</div>';
+    return div;
+  },
+
+  openModal: function(id, title, recAction) {
+    document.getElementById('mId').value    = id;
+    document.getElementById('mRec').value   = recAction;
+    document.getElementById('mDesc').textContent = title;
+    document.getElementById('mAction').value = recAction || 'approve';
+    document.getElementById('mNote').value  = '';
+    document.getElementById('mOverride').checked = false;
+    document.getElementById('modalBg').classList.add('open');
+  },
+
+  closeModal: function() { document.getElementById('modalBg').classList.remove('open'); },
+
+  quickResolve: function(itemId, recAction) {
+    if (!confirm('Follow AI recommendation: ' + recAction.replace(/_/g, ' ') + '?')) return;
+    _cf('autoResolveException')({ itemId: itemId, action: recAction, note: 'Followed AI recommendation', override: false })
+      .then(function() { _toast('Resolved.'); AC.loadQueue(); })
+      .catch(function(e) { _toast(e.message, true); });
+  },
+
+  submitResolve: function() {
+    var itemId   = document.getElementById('mId').value;
+    var action   = document.getElementById('mAction').value;
+    var note     = document.getElementById('mNote').value.trim();
+    var override = document.getElementById('mOverride').checked;
+    var recAct   = document.getElementById('mRec').value;
+    if (!itemId || !action) { _toast('Action required.', true); return; }
+    _cf('autoResolveException')({ itemId: itemId, action: action, note: note, override: override || action !== recAct })
+      .then(function() { _toast('Exception resolved.'); AC.closeModal(); AC.loadQueue(); })
+      .catch(function(e) { _toast(e.message, true); });
+  },
+
+  /* ── Rules ──────────────────────────────── */
+  loadRules: function() {
+    var el = document.getElementById('rulesBody');
+    el.innerHTML = _spin();
+    _cf('autoGetRules')({})
+      .then(function(r) {
+        var rules = r.data.rules || {};
+        var grid  = document.createElement('div');
+        grid.className = 'rules-grid';
+        Object.keys(rules).forEach(function(cat) {
+          grid.appendChild(AC._renderRuleCard(cat, rules[cat]));
+        });
+        el.innerHTML = '';
+        el.appendChild(grid);
+      })
+      .catch(function(e) { el.innerHTML = '<div class="empty"><span>&#x26A0;</span>' + _esc(e.message) + '</div>'; });
+  },
+
+  _renderRuleCard: function(cat, rule) {
+    var div = document.createElement('div');
+    div.className = 'rule-card';
+
+    var numFields = [
+      { k: 'autoApproveBelow',   l: 'Auto-approve below (KES)' },
+      { k: 'requireManualAbove', l: 'Manual review above (KES)' },
+      { k: 'autoResolveBelow',   l: 'Auto-resolve below (KES)' },
+      { k: 'autoProcessBelow',   l: 'Auto-process below (KES)' },
+      { k: 'holdDays',           l: 'Hold period (days)' },
+      { k: 'gracePeriodDays',    l: 'Grace period (days)' },
+      { k: 'orderRetentionDays', l: 'Order retention (days)' },
+      { k: 'logRetentionDays',   l: 'Log retention (days)' },
+      { k: 'jobRetryLimit',      l: 'Job retry limit' },
+    ].filter(function(f) { return rule[f.k] !== undefined; });
+
+    var fieldsHtml = numFields.map(function(f) {
+      return '<div class="rf"><label>' + _esc(f.l) + '</label>'
+        + '<input type="number" id="' + _esc(cat) + '_' + _esc(f.k) + '" value="' + _esc(String(rule[f.k])) + '" min="0" /></div>';
+    }).join('');
+
+    div.innerHTML =
+      '<div class="rule-head">'
+        + '<span class="rule-name">' + _esc(cat.replace(/_/g, ' ')) + '</span>'
+        + '<label class="tog"><input type="checkbox" id="' + _esc(cat) + '_enabled"' + (rule.enabled !== false ? ' checked' : '') + ' /><span class="tog-sl"></span></label>'
+      + '</div>'
+      + (rule.description ? '<div class="rule-desc">' + _esc(rule.description) + '</div>' : '')
+      + fieldsHtml
+      + '<button class="rule-save" onclick="AC.saveRule(\'' + _esc(cat) + '\',[' + numFields.map(function(f){ return '\''+f.k+'\''; }).join(',') + '])">Save</button>';
+    return div;
+  },
+
+  saveRule: function(cat, keys) {
+    var updates = { enabled: !!(document.getElementById(cat + '_enabled') || {}).checked };
+    keys.forEach(function(k) {
+      var el = document.getElementById(cat + '_' + k);
+      if (el) updates[k] = Number(el.value);
+    });
+    _cf('autoUpdateRule')({ category: cat, updates: updates })
+      .then(function() { _toast('Rule "' + cat + '" saved.'); })
+      .catch(function(e) { _toast(e.message, true); });
+  },
+
+  /* ── Audit ──────────────────────────────── */
+  loadAudit: function() {
+    _auditAll = []; _auditLastId = null;
+    document.getElementById('auditMore').style.display = 'none';
+    var tbody = document.getElementById('auditBody');
+    tbody.innerHTML = '<tr><td colspan="6">' + _spin() + '</td></tr>';
+    var action     = document.getElementById('aAction').value || undefined;
+    var entityType = document.getElementById('aEntity').value || undefined;
+    _cf('autoGetAuditLog')({ action: action, entityType: entityType, limit: 50 })
+      .then(function(r) {
+        _auditAll = r.data.logs || [];
+        _auditLastId = r.data.lastId;
+        AC._renderAudit(_auditAll);
+        if (r.data.lastId) document.getElementById('auditMore').style.display = 'inline-flex';
+      })
+      .catch(function(e) { tbody.innerHTML = '<tr><td colspan="6" style="color:var(--red);padding:20px">' + _esc(e.message) + '</td></tr>'; });
+  },
+
+  loadMoreAudit: function() {
+    if (!_auditLastId) return;
+    var action     = document.getElementById('aAction').value || undefined;
+    var entityType = document.getElementById('aEntity').value || undefined;
+    _cf('autoGetAuditLog')({ action: action, entityType: entityType, limit: 50, startAfter: _auditLastId })
+      .then(function(r) {
+        var more = r.data.logs || [];
+        _auditAll = _auditAll.concat(more);
+        _auditLastId = r.data.lastId;
+        AC._renderAudit(_auditAll);
+        if (!r.data.lastId) document.getElementById('auditMore').style.display = 'none';
+      })
+      .catch(function(e) { _toast(e.message, true); });
+  },
+
+  filterAudit: function(q) {
+    if (!q) { AC._renderAudit(_auditAll); return; }
+    var ql = q.toLowerCase();
+    AC._renderAudit(_auditAll.filter(function(r) {
+      return (r.action||'').toLowerCase().includes(ql) || (r.entityId||'').toLowerCase().includes(ql) || (r.outcome||'').toLowerCase().includes(ql);
+    }));
+  },
+
+  _renderAudit: function(rows) {
+    var tbody = document.getElementById('auditBody');
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="6" style="padding:20px;color:var(--muted)">No entries</td></tr>'; return; }
+    tbody.innerHTML = rows.map(function(r) {
+      var oc = (r.outcome || '').toLowerCase();
+      var cls = (oc.includes('approv') || oc.includes('activat') || oc.includes('complet')) ? 'outcome-ok'
+              : (oc.includes('escal') || oc.includes('queue') || oc.includes('review')) ? 'outcome-esc' : '';
+      return '<tr>'
+        + '<td>' + _esc(r.action || '') + '</td>'
+        + '<td>' + _esc(r.entityType || '') + (r.entityId && r.entityId !== 'batch' ? ' <span style="color:var(--muted);font-size:10px">' + _esc(r.entityId.substring(0, 12)) + '</span>' : '') + '</td>'
+        + '<td class="' + cls + '">' + _esc(r.outcome || '') + '</td>'
+        + '<td style="color:var(--muted)">' + _esc(r.ruleApplied || '') + '</td>'
+        + '<td>' + (r.humanOverride ? '<span class="badge human">human</span>' : '<span class="badge auto">auto</span>') + '</td>'
+        + '<td style="color:var(--muted)">' + _rel(r.createdAt) + '</td>'
+        + '</tr>';
+    }).join('');
+  },
+
+  /* ── Status ─────────────────────────────── */
+  loadStatus: function() {
+    _cf('autoGetStatus')({})
+      .then(function(r) {
+        var d = r.data;
+        document.getElementById('sQueue').textContent  = _fmt(d.queueSize);
+        document.getElementById('sCrit').textContent   = _fmt((d.queueByPriority || {}).critical || 0);
+        document.getElementById('sToday').textContent  = _fmt(d.automatedToday);
+        document.getElementById('sRules').textContent  = _fmt(d.rulesConfigured);
+        document.getElementById('sCritBox').textContent = _fmt((d.queueByPriority || {}).critical || 0);
+        document.getElementById('sHighBox').textContent = _fmt((d.queueByPriority || {}).high || 0);
+        document.getElementById('sMedBox').textContent  = _fmt((d.queueByPriority || {}).medium || 0);
+        document.getElementById('sLowBox').textContent  = _fmt((d.queueByPriority || {}).low || 0);
+        var grid = document.getElementById('modulesGrid');
+        grid.innerHTML = (d.modules || []).map(function(m) {
+          return '<div class="mod-card">'
+            + '<div class="mod-name">' + _esc(m.name) + '</div>'
+            + '<div class="mod-trigger">' + _esc(m.trigger) + '</div>'
+            + '<div class="mod-status">' + _esc(m.status) + '</div>'
+            + '</div>';
+        }).join('');
+      })
+      .catch(function() {});
+  },
+
+  /* ── Maintenance ─────────────────────────── */
+  maintenance: function() {
+    if (!confirm('Run on-demand maintenance? This archives old orders and retries failed jobs.')) return;
+    _cf('autoTriggerMaintenance')({})
+      .then(function(r) { _toast('Maintenance done. Archived: ' + r.data.archived + ', Retried: ' + r.data.retried + '.'); })
+      .catch(function(e) { _toast(e.message, true); });
+  },
+};
+</script>
+</body>
+</html>

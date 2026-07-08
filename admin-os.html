@@ -287,6 +287,8 @@
       <a class="nav-item" href="trust-safety.html" target="_blank"><span class="nav-icon">&#x1F512;</span>Trust &amp; Safety</a>
       <a class="nav-item" href="launch-readiness.html" target="_blank"><span class="nav-icon">&#x1F680;</span>Launch Readiness</a>
       <a class="nav-item" href="reliability-center.html" target="_blank"><span class="nav-icon">&#x1F4E1;</span>Reliability</a>
+      <a class="nav-item" href="automation-center.html" target="_blank"><span class="nav-icon">&#x1F916;</span>Automation</a>
+      <a class="nav-item" href="automation-engine.html" target="_blank"><span class="nav-icon">&#x2699;&#xFE0F;</span>ADE Rules</a>
       <a class="nav-item" href="super-admin.html" target="_blank"><span class="nav-icon">&#x1F451;</span>Super Admin</a>
     </div>
     <div class="aos-sidebar-footer">
@@ -315,6 +317,7 @@
           <a class="quick-link" href="financial-os.html" target="_blank">&#x1F4C4; Financial OS</a>
           <a class="quick-link" href="trust-safety.html" target="_blank">&#x1F512; Trust &amp; Safety</a>
           <a class="quick-link" href="reliability-center.html" target="_blank">&#x1F4E1; Reliability</a>
+          <a class="quick-link" href="automation-center.html" target="_blank">&#x1F916; Automation</a>
           <a class="quick-link" href="seller-success.html" target="_blank">&#x1F3EA; Seller Success</a>
           <a class="quick-link" href="merchant-pipeline.html" target="_blank">&#x1F4CA; Merchant Pipeline</a>
           <a class="quick-link" href="launch-readiness.html" target="_blank">&#x1F680; Launch Readiness</a>
@@ -335,6 +338,11 @@
           <div class="kpi-card"><div class="kpi-label">New Registrations</div><div class="kpi-value" id="kpiNewRegistrations">&#x2014;</div><div class="kpi-sub">today</div></div>
           <div class="kpi-card"><div class="kpi-label">Refund Requests</div><div class="kpi-value" id="kpiRefundRequests">&#x2014;</div><div class="kpi-sub">pending</div></div>
           <div class="kpi-card"><div class="kpi-label">Active Subscriptions</div><div class="kpi-value" id="kpiActiveSubs">&#x2014;</div><div class="kpi-sub">paid plans</div></div>
+          <div class="kpi-card"><div class="kpi-label">Active Businesses</div><div class="kpi-value" id="kpiActiveBusinesses">&#x2014;</div><div class="kpi-sub">merchants</div></div>
+          <div class="kpi-card"><div class="kpi-label">Active Bookings</div><div class="kpi-value" id="kpiActiveBookings">&#x2014;</div><div class="kpi-sub">services</div></div>
+          <div class="kpi-card warn"><div class="kpi-label">Inventory Alerts</div><div class="kpi-value" id="kpiInventoryAlerts">&#x2014;</div><div class="kpi-sub">low stock</div></div>
+          <div class="kpi-card success"><div class="kpi-label">Platform Uptime</div><div class="kpi-value" id="kpiPlatformUptime">&#x2014;</div><div class="kpi-sub">30-day avg</div></div>
+          <div class="kpi-card accent"><div class="kpi-label">MRR</div><div class="kpi-value" id="kpiMRR">&#x2014;</div><div class="kpi-sub">recurring</div></div>
         </div>
         <h3 style="margin-bottom:12px;font-size:14px;font-weight:600">Platform Health</h3>
         <div id="healthScores"><div class="aos-spinner"><div></div></div></div>
@@ -348,7 +356,7 @@
         <div class="panel-toolbar">
           <h2>User Management</h2>
           <input type="search" placeholder="Search users&#x2026;" oninput="SokoniAOS.loadUsers(this.value)" style="min-width:200px">
-          <select onchange="SokoniAOS.loadUsers('',this.value,'')"><option value="">All Roles</option><option>buyer</option><option>seller</option><option>provider</option><option>driver</option><option>moderator</option><option>admin</option></select>
+          <select onchange="SokoniAOS.loadUsers('',this.value,'')"><option value="">All Roles</option><option>buyer</option><option>seller</option><option>provider</option><option>driver</option><option>agent</option><option>doctor</option><option>lawyer</option><option>hotel</option><option>freelancer</option><option>employee</option><option>moderator</option><option>admin</option></select>
           <select onchange="SokoniAOS.loadUsers('','',this.value)"><option value="">All Status</option><option>active</option><option>inactive</option><option>banned</option><option>suspended</option></select>
           <span id="userTotal" style="color:var(--aos-muted);font-size:12px;margin-left:auto"></span>
         </div>
@@ -387,6 +395,17 @@
           <div class="delivery-stat"><span>Delivering Now</span><strong id="deliveringNow">&#x2014;</strong></div>
           <div class="delivery-stat"><span>Completed Today</span><strong id="deliveredToday">&#x2014;</strong></div>
           <div class="delivery-stat"><span>Avg Time</span><strong id="avgDeliveryMin">&#x2014;</strong></div>
+          <div class="delivery-stat"><span>Failed Today</span><strong id="deliveryFailed">&#x2014;</strong></div>
+          <div class="delivery-stat"><span>On-Time Rate</span><strong id="deliveryOnTime">&#x2014;</strong></div>
+          <div class="delivery-stat"><span>Active Riders</span><strong id="deliveryRiders">&#x2014;</strong></div>
+        </div>
+        <div style="background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);height:120px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;gap:16px;color:var(--aos-muted);font-size:13px">
+          &#x1F5FA;&#xFE0F; Live Rider Map &mdash;
+          <a href="fleet-monitor.html" target="_blank" style="color:var(--aos-accent);text-decoration:none;font-weight:600">Fleet Monitor</a>
+          &nbsp;&middot;&nbsp;
+          <a href="rider-nav.html" target="_blank" style="color:var(--aos-accent);text-decoration:none;font-weight:600">Rider Nav</a>
+          &nbsp;&middot;&nbsp;
+          <a href="gip.html" target="_blank" style="color:var(--aos-accent);text-decoration:none;font-weight:600">Geo Intelligence</a>
         </div>
         <div id="deliveryBody"><div class="aos-spinner"><div></div></div></div>
       </div>
@@ -399,6 +418,8 @@
           <button class="tab-btn" data-tab="payouts" onclick="SokoniAOS.financialTab('payouts')">Payouts</button>
           <button class="tab-btn" data-tab="disputes" onclick="SokoniAOS.financialTab('disputes')">Disputes</button>
           <button class="tab-btn" data-tab="refunds" onclick="SokoniAOS.financialTab('refunds')">Refunds</button>
+          <button class="tab-btn" data-tab="wallet" onclick="SokoniAOS.financialTab('wallet')">Wallet Ops</button>
+          <button class="tab-btn" data-tab="escrow" onclick="SokoniAOS.financialTab('escrow')">Escrow</button>
           <button class="tab-btn" data-tab="report" onclick="SokoniAOS.financialTab('report')">Report</button>
         </div>
         <div id="finBody"><div class="aos-spinner"><div></div></div></div>
@@ -415,17 +436,12 @@
 
       <div class="aos-panel" id="panel-comms" hidden>
         <div class="panel-toolbar"><h2>Communications</h2></div>
-        <div class="compose-form">
-          <h3>&#x1F4E2; Send Notification</h3>
-          <input type="text" id="notifTitle" placeholder="Title">
-          <textarea id="notifBody" placeholder="Message body&#x2026;" rows="3"></textarea>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <select id="notifTarget"><option value="all">All Users</option><option value="role">By Role</option><option value="active">Active (7d)</option><option value="sellers">Sellers</option><option value="buyers">Buyers</option><option value="drivers">Drivers</option></select>
-            <select id="notifRole"><option value="">Role (if By Role)</option><option>buyer</option><option>seller</option><option>driver</option><option>provider</option><option>moderator</option><option>admin</option></select>
-          </div>
-          <button class="aos-btn success" style="margin-top:10px" onclick="SokoniAOS.sendPushNotification()">&#x1F680; Send Notification</button>
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="push" onclick="SokoniAOS.commsTab('push')">&#x1F514; Push</button>
+          <button class="tab-btn" data-tab="email" onclick="SokoniAOS.commsTab('email')">&#x1F4E7; Email Blast</button>
+          <button class="tab-btn" data-tab="sms" onclick="SokoniAOS.commsTab('sms')">&#x1F4F1; SMS</button>
         </div>
-        <div class="dash-section"><h3>Recent Notifications</h3><div id="recentNotifs"><div class="aos-spinner"><div></div></div></div></div>
+        <div id="commsBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
       <div class="aos-panel" id="panel-content" hidden>
@@ -434,6 +450,7 @@
           <button class="tab-btn active" data-tab="banners" onclick="SokoniAOS.contentTab('banners')">Banners</button>
           <button class="tab-btn" data-tab="announcements" onclick="SokoniAOS.contentTab('announcements')">Announcements</button>
           <button class="tab-btn" data-tab="faqs" onclick="SokoniAOS.contentTab('faqs')">FAQs</button>
+          <button class="tab-btn" data-tab="campaigns" onclick="SokoniAOS.contentTab('campaigns')">Campaigns</button>
         </div>
         <div id="contentBody"><div class="aos-spinner"><div></div></div></div>
       </div>
@@ -449,7 +466,12 @@
       </div>
 
       <div class="aos-panel" id="panel-smartpos" hidden>
-        <div class="panel-toolbar"><h2>SmartPOS Management</h2><a class="aos-btn" href="pos.html" target="_blank">&#x1F5A5;&#xFE0F; POS</a><a class="aos-btn" href="commissioning.html" target="_blank">&#x1F527; Commissioning</a></div>
+        <div class="panel-toolbar"><h2>SmartPOS Management</h2><a class="aos-btn" href="pos.html" target="_blank">&#x1F5A5;&#xFE0F; POS</a><a class="aos-btn" href="commissioning.html" target="_blank">&#x1F527; Commissioning</a><a class="aos-btn" href="pos-observability.html" target="_blank">&#x1F4CA; Observability</a></div>
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="devices" onclick="SokoniAOS.posTab('devices')">Devices</button>
+          <button class="tab-btn" data-tab="revenue" onclick="SokoniAOS.posTab('revenue')">Revenue</button>
+          <button class="tab-btn" data-tab="shifts" onclick="SokoniAOS.posTab('shifts')">Shifts</button>
+        </div>
         <div id="posBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
@@ -460,6 +482,12 @@
 
       <div class="aos-panel" id="panel-analytics" hidden>
         <div class="panel-toolbar"><h2>Analytics &amp; Business Intelligence</h2></div>
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="overview" onclick="SokoniAOS.analyticsTab('overview')">Overview</button>
+          <button class="tab-btn" data-tab="cohort" onclick="SokoniAOS.analyticsTab('cohort')">Cohort</button>
+          <button class="tab-btn" data-tab="funnel" onclick="SokoniAOS.analyticsTab('funnel')">Funnel</button>
+          <button class="tab-btn" data-tab="retention" onclick="SokoniAOS.analyticsTab('retention')">Retention</button>
+        </div>
         <div id="analyticsBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
@@ -471,10 +499,11 @@
       <div class="aos-panel" id="panel-audit" hidden>
         <div class="panel-toolbar">
           <h2>Audit Center</h2>
-          <select onchange="SokoniAOS.loadAudit(this.value)">
+          <select id="auditTypeSelect" onchange="SokoniAOS.loadAudit(this.value)">
             <option value="admin">Admin Actions</option><option value="payment">Payment Trail</option>
             <option value="security">Security Events</option><option value="platform">Platform Events</option>
           </select>
+          <input type="search" id="auditSearch" placeholder="Filter action or admin&#x2026;" style="width:200px;padding:7px 12px;background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);color:var(--aos-text);font-size:13px;outline:none" oninput="SokoniAOS.filterAuditRows(this.value)">
           <button class="aos-btn" id="auditExportBtn">&#x1F4E5; Export CSV</button>
         </div>
         <div id="auditBody"><div class="aos-spinner"><div></div></div></div>

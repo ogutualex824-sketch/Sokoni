@@ -35,6 +35,47 @@ Disallow: /seller-revenue.html
 Disallow: /growth-dashboard.html
 Disallow: /business-analytics.html
 Disallow: /customer-analytics.html
+Disallow: /returns.html
+Disallow: /admin-os.html
+Disallow: /admin-feedback.html
+Disallow: /admin-messages.html
+Disallow: /admin-subscriptions.html
+Disallow: /super-admin.html
+Disallow: /superadmin.html
+Disallow: /ops-center.html
+Disallow: /ops-dashboard.html
+Disallow: /redis-monitor.html
+Disallow: /security-center.html
+Disallow: /security-zero-trust-dashboard.html
+Disallow: /launch-readiness.html
+Disallow: /launch-metrics.html
+Disallow: /uat-center.html
+Disallow: /platform-health.html
+Disallow: /reliability-center.html
+Disallow: /revenue-dashboard.html
+Disallow: /executive-dashboard.html
+Disallow: /moderation.html
+Disallow: /finos-admin.html
+Disallow: /etims-admin.html
+Disallow: /commission-admin.html
+Disallow: /sasos-admin.html
+Disallow: /minishop-admin.html
+Disallow: /verification-admin.html
+Disallow: /test-accounts.html
+
+# Public pages — explicitly allowed (for clarity)
+Allow: /trust-and-safety
+Allow: /status
+Allow: /privacy
+Allow: /terms
+Allow: /data-deletion
+Allow: /cookie-policy
+Allow: /refund-policy
+Allow: /returns-policy
+Allow: /seller-terms
+Allow: /provider-terms
+Allow: /community-guidelines
+Allow: /payment-security
 
 # Block query strings with session/tracking params
 Disallow: /*?fbclid=

@@ -104,12 +104,14 @@
     /* FAB */
     '#kassBtn{position:fixed;bottom:80px;right:16px;width:52px;height:52px;border-radius:50%;',
     'background:#0f0f0f;border:2px solid #71ff00;cursor:pointer;z-index:9999;',
-    'display:flex;align-items:center;justify-content:center;',
+    'display:flex;align-items:center;justify-content:center;overflow:visible;',
     'box-shadow:0 4px 20px rgba(113,255,0,0.3);transition:transform .2s;}',
     '#kassBtn:hover{transform:scale(1.08);}',
-    '#kassUnread{position:absolute;top:-5px;right:-5px;width:20px;height:20px;border-radius:50%;',
+    '#kassUnread{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;',
+    'border-radius:10px;padding:0 5px;',
     'background:#ff4444;color:#fff;font-size:11px;font-weight:800;display:none;',
-    'align-items:center;justify-content:center;}',
+    'align-items:center;justify-content:center;z-index:10;pointer-events:none;',
+    'box-shadow:0 0 0 2px #0f0f0f;line-height:1;}',
     /* Modal */
     '#kassModal{position:fixed;bottom:148px;right:12px;width:360px;max-height:560px;',
     'background:#111;border:1px solid rgba(255,255,255,0.1);border-radius:18px;',
@@ -204,7 +206,7 @@
   _btn.id = 'kassBtn';
   _btn.setAttribute('aria-label', 'Ask KASS AI assistant');
   _btn.innerHTML = [
-    '<div id="kassUnread">?</div>',
+    '<div id="kassUnread" aria-hidden="true"></div>',
     '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#71ff00"',
       ' stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">',
       '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
@@ -441,6 +443,7 @@
   /* ── Show unread badge 3 s after load ── */
   setTimeout(function() {
     if (!_modal.classList.contains('open') && !_greeted) {
+      _unread.textContent = '1';
       _unread.style.display = 'flex';
     }
   }, 3000);

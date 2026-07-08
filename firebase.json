@@ -54,8 +54,8 @@
     "rewrites": [
       { "source": "/api/chat",                     "function": "sokoniChat",           "region": "us-central1" },
       { "source": "/api/facebook/data-deletion",   "function": "facebookDataDeletion", "region": "us-central1" },
-      { "source": "/shop/**",                      "destination": "/minishop.html" },
-      { "source": "/@**",                          "destination": "/minishop.html" },
+      { "source": "/shop/**",                      "function": "miniShopOGMeta", "region": "us-central1" },
+      { "source": "/@**",                          "function": "miniShopOGMeta", "region": "us-central1" },
       { "source": "/card/**",                      "destination": "/minishop-status.html" },
       { "source": "/pay/**",                       "destination": "/pay.html" }
     ],

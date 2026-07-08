@@ -36,8 +36,8 @@ async function _assertAuth(auth) {
   return auth.uid;
 }
 
-function _assertAdmin(auth) {
-  const uid = _assertAuth(auth);
+async function _assertAdmin(auth) {
+  const uid = await _assertAuth(auth);       /* was missing await — uid was a Promise */
   if (!auth?.token?.admin && !auth?.token?.superAdmin) {
     _e('Admin access required', 'permission-denied');
   }
@@ -433,6 +433,82 @@ exports.detectPaymentAnomalies = onSchedule({
     }
   }
 
+  /* ── 3. Velocity breach (>20 transactions per hour per cashier) ── */
+  const oneHourAgo = new Date(now - 60 * 60 * 1000);
+  const velSnap = await db.collection('posRetailSales')
+    .where('createdAt', '>=', oneHourAgo)
+    .limit(2000)
+    .get();
+
+  const velByUser = {};
+  for (const doc of velSnap.docs) {
+    const d = doc.data();
+    const k = (d.cashierId || d.customerId || 'unknown') + '|' + (d.merchantId || '');
+    if (!velByUser[k]) {
+      velByUser[k] = { count: 0, userId: d.cashierId || d.customerId, merchantId: d.merchantId };
+    }
+    velByUser[k].count++;
+  }
+  for (const v of Object.values(velByUser)) {
+    if (v.count > 20) {
+      alerts.push({
+        type:       'velocity_breach',
+        severity:   v.count > 40 ? 'critical' : 'high',
+        userId:     v.userId,
+        merchantId: v.merchantId,
+        txCount:    v.count,
+        window:     '1 hour',
+        message:    `Velocity breach: ${v.count} transactions in 1 hour for user ${v.userId} at merchant ${v.merchantId}`,
+        createdAt:  FieldValue.serverTimestamp(),
+        status:     'open',
+      });
+    }
+  }
+
+  /* ── 4. Large transaction outliers (>3× rolling 30-day average per merchant) ── */
+  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+  const baseSnap = await db.collection('posRetailSales')
+    .where('createdAt', '>=', thirtyDaysAgo)
+    .where('createdAt', '<', oneDayAgo)  /* baseline excludes today */
+    .limit(5000)
+    .get();
+
+  const baseByMerchant = {};
+  for (const doc of baseSnap.docs) {
+    const d = doc.data();
+    const m = d.merchantId || 'unknown';
+    if (!baseByMerchant[m]) baseByMerchant[m] = { sum: 0, count: 0 };
+    baseByMerchant[m].sum   += d.grandTotal || 0;
+    baseByMerchant[m].count += 1;
+  }
+  const avgByMerchant = {};
+  for (const [mid, v] of Object.entries(baseByMerchant)) {
+    if (v.count >= 5) avgByMerchant[mid] = v.sum / v.count;
+  }
+
+  for (const doc of salesSnap.docs) {
+    const d   = doc.data();
+    const m   = d.merchantId;
+    const avg = avgByMerchant[m];
+    if (!avg) continue;
+    const total = d.grandTotal || 0;
+    if (total > avg * 3 && total > 10000) {
+      alerts.push({
+        type:       'large_transaction_outlier',
+        severity:   total > avg * 6 ? 'critical' : 'high',
+        userId:     d.cashierId || d.customerId || 'unknown',
+        merchantId: m,
+        amount:     total,
+        baseline:   Math.round(avg),
+        multiplier: Math.round((total / avg) * 10) / 10,
+        saleId:     doc.id,
+        message:    `Outlier: KES ${total.toFixed(0)} is ${(total/avg).toFixed(1)}× the 30-day avg (KES ${Math.round(avg)}) for merchant ${m}`,
+        createdAt:  FieldValue.serverTimestamp(),
+        status:     'open',
+      });
+    }
+  }
+
   /* ── Write alerts to Firestore ── */
   if (alerts.length > 0) {
     const batch = db.batch();
@@ -455,4 +531,44 @@ exports.detectPaymentAnomalies = onSchedule({
   }
 
   return { alertsGenerated: alerts.length };
+});
+
+/* ════════════════════════════════════════════════════════════════
+   voidTrustReceipt — admin: mark a receipt as voided (refunded/cancelled)
+   Updates posReceipts.status to 'void' and logs the action.
+════════════════════════════════════════════════════════════════ */
+exports.voidTrustReceipt = onCall(cfg, async ({ data, auth }) => {
+  await _assertAdmin(auth);
+  const { receiptNo, reason } = data || {};
+  if (!receiptNo || typeof receiptNo !== 'string') _e('receiptNo required');
+  if (!reason    || typeof reason    !== 'string') _e('reason required');
+
+  const snap = await db.collection('posReceipts')
+    .where('receiptNo', '==', receiptNo.trim().toUpperCase())
+    .limit(1)
+    .get();
+
+  if (snap.empty) _e('Receipt not found', 'not-found');
+
+  const ref  = snap.docs[0].ref;
+  const data2 = snap.docs[0].data();
+  if (data2.status === 'void') _e('Receipt is already voided');
+
+  await ref.update({
+    status:     'void',
+    voidedAt:   FieldValue.serverTimestamp(),
+    voidedBy:   auth.uid,
+    voidReason: _sanitize(reason),
+  });
+
+  await db.collection('receiptEvents').add({
+    receiptNo:  receiptNo.trim().toUpperCase(),
+    receiptId:  snap.docs[0].id,
+    action:     'voided',
+    actorUid:   auth.uid,
+    reason:     _sanitize(reason),
+    createdAt:  FieldValue.serverTimestamp(),
+  });
+
+  return { voided: true, receiptNo: receiptNo.trim().toUpperCase() };
 });

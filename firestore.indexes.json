@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "venueBookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "workflowInstances",
       "queryScope": "COLLECTION",
       "fields": [

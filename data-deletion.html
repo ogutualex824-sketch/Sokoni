@@ -213,6 +213,17 @@
       <p>Deleting your account removes your personal data from SOKONI systems. Financial and tax records required by Kenyan law are retained for 7 years. This action cannot be undone.</p>
     </div>
 
+    <!-- ── Authenticated Delete Widget (shown only when signed in) ── -->
+    <div id="auth-delete-widget" style="display:none">
+      <div style="background:rgba(255,50,50,.06);border:1px solid rgba(255,50,50,.18);border-radius:14px;padding:22px 24px;margin:20px 0">
+        <p style="font-size:13px;color:rgba(255,180,180,.75);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Signed in as</p>
+        <p style="font-size:16px;color:rgba(255,255,255,.85);margin-bottom:18px" id="auth-user-label">—</p>
+        <button id="btn-open-delete-modal" onclick="openDeleteModal()" style="background:rgba(255,50,50,.14);border:1px solid rgba(255,50,50,.32);border-radius:10px;color:rgba(255,100,100,.9);font-size:15px;font-weight:700;padding:12px 24px;cursor:pointer;font-family:inherit;transition:background .18s" onmouseover="this.style.background='rgba(255,50,50,.28)'" onmouseout="this.style.background='rgba(255,50,50,.14)'">
+          Permanently Delete My Account
+        </button>
+      </div>
+    </div>
+
     <h3>Self-service deletion (fastest method)</h3>
     <ol class="steps">
       <li><span>Sign in to your account at <strong>mysokoni.co.ke</strong></span></li>
@@ -226,6 +237,41 @@
       <p>Cannot sign in? Use the <a href="#request-form">Data Rights Request Form</a> below. We will verify your identity manually and process the deletion within 30 days.</p>
     </div>
   </section>
+
+  <!-- ── Delete Account Confirmation Modal ── -->
+  <div id="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px">
+    <div style="background:#0d0d0d;border:1px solid rgba(255,50,50,.25);border-radius:18px;max-width:460px;width:100%;padding:32px 28px">
+      <h2 id="delete-modal-title" style="font-size:20px;font-weight:800;color:#fff;margin-bottom:10px">Delete Account</h2>
+      <p style="font-size:14px;color:rgba(255,180,180,.75);margin-bottom:20px;line-height:1.6">This will permanently delete your SOKONI account. Your name, email, profile, and activity will be removed. Financial records are retained for 7 years as required by Kenyan law.</p>
+      <p style="font-size:13px;font-weight:600;color:rgba(255,255,255,.55);margin-bottom:8px">What will be deleted immediately:</p>
+      <ul style="font-size:13px;color:rgba(255,255,255,.4);padding-left:18px;margin-bottom:20px;line-height:1.8">
+        <li>Your name, email, phone number</li>
+        <li>Profile photo and saved addresses</li>
+        <li>Active sessions and push notifications</li>
+        <li>All personal data within 30 days</li>
+      </ul>
+      <div style="margin-bottom:16px">
+        <label for="delete-confirm-input" style="display:block;font-size:13px;font-weight:600;color:rgba(255,255,255,.55);margin-bottom:8px">Type <strong style="color:rgba(255,100,100,.9)">DELETE</strong> to confirm</label>
+        <input type="text" id="delete-confirm-input" placeholder="DELETE" autocomplete="off" spellcheck="false" oninput="validateDeleteInput()" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,50,50,.2);border-radius:9px;padding:12px 14px;font-size:15px;color:#fff;outline:none;font-family:inherit;transition:border-color .18s">
+      </div>
+      <div style="margin-bottom:16px">
+        <label for="delete-reason" style="display:block;font-size:13px;font-weight:600;color:rgba(255,255,255,.55);margin-bottom:8px">Reason (optional)</label>
+        <select id="delete-reason" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,50,50,.14);border-radius:9px;padding:12px 14px;font-size:14px;color:rgba(255,255,255,.7);outline:none;font-family:inherit;appearance:none">
+          <option value="">Prefer not to say</option>
+          <option value="privacy">Privacy concerns</option>
+          <option value="not_using">Not using the platform anymore</option>
+          <option value="found_alternative">Found a better alternative</option>
+          <option value="too_many_notifications">Too many notifications</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="closeDeleteModal()" style="flex:1;padding:13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:rgba(255,255,255,.6);font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">Cancel</button>
+        <button id="btn-confirm-delete" onclick="confirmAccountDeletion()" disabled style="flex:1;padding:13px;background:rgba(255,50,50,.14);border:1px solid rgba(255,50,50,.32);border-radius:10px;color:rgba(255,100,100,.6);font-size:15px;font-weight:700;cursor:not-allowed;font-family:inherit;transition:all .18s">Delete Account</button>
+      </div>
+      <div id="delete-modal-msg" style="margin-top:12px;padding:12px 14px;border-radius:8px;font-size:13px;display:none;line-height:1.6"></div>
+    </div>
+  </div>
 
   <hr class="div">
 
@@ -505,6 +551,119 @@
   function escHtml(s){
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  /* ── Auth-aware delete widget ── */
+  (function(){
+    function initAuthWidget(){
+      var auth = window.firebase && firebase.auth && firebase.auth();
+      if(!auth) return;
+      auth.onAuthStateChanged(function(user){
+        var widget = document.getElementById('auth-delete-widget');
+        var label  = document.getElementById('auth-user-label');
+        if(!widget) return;
+        if(user){
+          widget.style.display = 'block';
+          label.textContent = user.displayName ? user.displayName + ' (' + (user.email || user.phoneNumber || '') + ')' : (user.email || user.phoneNumber || 'Your Account');
+        } else {
+          widget.style.display = 'none';
+        }
+      });
+    }
+    // firebase.js loads async; wait for it
+    if(window.firebase && window.firebase.auth){
+      initAuthWidget();
+    } else {
+      document.addEventListener('firebase-ready', initAuthWidget);
+      window.addEventListener('load', function(){ setTimeout(initAuthWidget, 800); });
+    }
+  })();
+
+  /* ── Delete modal ── */
+  window.openDeleteModal = function(){
+    var modal = document.getElementById('delete-modal');
+    modal.style.display = 'flex';
+    document.getElementById('delete-confirm-input').value = '';
+    document.getElementById('delete-modal-msg').style.display = 'none';
+    validateDeleteInput();
+    setTimeout(function(){ document.getElementById('delete-confirm-input').focus(); }, 100);
+  };
+
+  window.closeDeleteModal = function(){
+    document.getElementById('delete-modal').style.display = 'none';
+  };
+
+  window.validateDeleteInput = function(){
+    var val = (document.getElementById('delete-confirm-input')?.value||'').trim().toUpperCase();
+    var btn = document.getElementById('btn-confirm-delete');
+    if(!btn) return;
+    if(val === 'DELETE'){
+      btn.disabled = false;
+      btn.style.cursor = 'pointer';
+      btn.style.color = 'rgba(255,100,100,.95)';
+      btn.style.background = 'rgba(255,50,50,.22)';
+    } else {
+      btn.disabled = true;
+      btn.style.cursor = 'not-allowed';
+      btn.style.color = 'rgba(255,100,100,.4)';
+      btn.style.background = 'rgba(255,50,50,.08)';
+    }
+  };
+
+  window.confirmAccountDeletion = async function(){
+    var val = (document.getElementById('delete-confirm-input')?.value||'').trim().toUpperCase();
+    if(val !== 'DELETE') return;
+
+    var btn    = document.getElementById('btn-confirm-delete');
+    var msg    = document.getElementById('delete-modal-msg');
+    var reason = document.getElementById('delete-reason')?.value || '';
+
+    btn.disabled = true;
+    btn.textContent = 'Deleting…';
+    msg.style.display = 'none';
+
+    try {
+      var fns = firebase.functions();
+      var deleteFn = fns.httpsCallable('deleteMyAccount');
+      var result = await deleteFn({ confirmDelete: true, reason: reason || null });
+
+      msg.style.background = 'rgba(113,255,0,.07)';
+      msg.style.border = '1px solid rgba(113,255,0,.14)';
+      msg.style.color = 'rgba(180,255,100,.8)';
+      msg.innerHTML = '<strong>Account deleted successfully.</strong><br>Your account has been deactivated. You will be signed out now. All personal data will be permanently deleted within 30 days.';
+      msg.style.display = 'block';
+
+      // Sign out and redirect after 3 seconds
+      setTimeout(async function(){
+        try { await firebase.auth().signOut(); } catch(_){}
+        window.location.href = '/';
+      }, 3000);
+
+    } catch(err){
+      console.error('[deleteMyAccount]', err);
+      var errMsg = err.code === 'already-exists'
+        ? 'A deletion request is already pending for this account.'
+        : err.code === 'unauthenticated'
+        ? 'Your session has expired. Please sign in again to delete your account.'
+        : 'Unable to process deletion automatically. Please email <a href="mailto:privacy@mysokoni.co.ke" style="color:#71ff00">privacy@mysokoni.co.ke</a> to request manual deletion.';
+      msg.style.background = 'rgba(255,50,50,.07)';
+      msg.style.border = '1px solid rgba(255,50,50,.16)';
+      msg.style.color = 'rgba(255,180,180,.85)';
+      msg.innerHTML = errMsg;
+      msg.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Delete Account';
+    }
+  };
+
+  /* ── Close modal on backdrop click ── */
+  document.getElementById('delete-modal').addEventListener('click', function(e){
+    if(e.target === this) closeDeleteModal();
+  });
+
+  /* ── Close modal on Escape ── */
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') closeDeleteModal();
+  });
 </script>
 
 </body>

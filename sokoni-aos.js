@@ -109,6 +109,12 @@ window.SokoniAOS = (() => {
 
     _listen(_db.collection("disputes").where("status", "==", "open"),
       snap => _set("kpiDisputes", snap.size));
+
+    _listen(_db.collection("businesses").where("status", "==", "active"),
+      snap => _set("kpiActiveBusinesses", _fmt(snap.size)));
+
+    _listen(_db.collection("bookings").where("status", "in", ["confirmed", "pending"]),
+      snap => _set("kpiActiveBookings", _fmt(snap.size)));
   }
 
   function _listen(query, cb) {
@@ -137,6 +143,9 @@ window.SokoniAOS = (() => {
       _set("kpiFailedPayments",   _fmt(m.failedPayments   || 0));
       _set("kpiRefundRequests",   _fmt(m.refundRequests   || 0));
       _set("kpiActiveSubs",       _fmt(m.activeSubscriptions || 0));
+      _set("kpiInventoryAlerts",  _fmt(m.inventoryAlerts || 0));
+      _set("kpiMRR",              "KES " + _fmt(m.mrr || m.monthlyRevenue || 0));
+      _set("kpiPlatformUptime",   (m.uptimePct !== undefined ? m.uptimePct : 99.9).toFixed(1) + "%");
 
       // Health scores
       if (h.scores) {
@@ -236,7 +245,7 @@ window.SokoniAOS = (() => {
   }
 
   async function changeRole(uid) {
-    const role = prompt("Enter new role (buyer, seller, provider, driver, moderator, admin):");
+    const role = prompt("Enter new role:\nbuyer, seller, provider, driver, agent, doctor, lawyer, hotel, freelancer, employee, moderator, admin");
     if (!role) return;
     await _call("adminUpdateUserRole", { uid, role }).catch(e => _toast(e.message, "error"));
     _toast("Role updated", "success");
@@ -394,6 +403,9 @@ window.SokoniAOS = (() => {
       document.getElementById("deliveringNow").textContent  = _fmt(s.activeDeliveries || 0);
       document.getElementById("deliveredToday").textContent = _fmt(s.completedToday || 0);
       document.getElementById("avgDeliveryMin").textContent = (s.avgMinutes || 0) + "min";
+      _set("deliveryFailed",  _fmt(s.failedToday || 0));
+      _set("deliveryOnTime",  (s.onTimeRate || 0).toFixed(0) + "%");
+      _set("deliveryRiders",  _fmt(s.activeRiders || 0));
 
       const orders = snap.docs.map(d => {
         const o = d.data();
@@ -497,11 +509,60 @@ window.SokoniAOS = (() => {
               <button class="aos-btn-sm danger" onclick="SokoniAOS.processRefund('${r.id}','rejected')">Reject</button>
             </td>
           </tr>`).join("")}</tbody></table>` : _emptyMsg("No pending refund requests");
+      } else if (tab === "wallet") {
+        const data = await _call("adminGetWalletOperations", { limit: 30 }).catch(() => ({ operations: [] }));
+        const ops = data.operations || data.transactions || [];
+        body.innerHTML = ops.length ? `<table class="aos-table"><thead><tr>
+            <th>User</th><th>Type</th><th>Amount</th><th>Balance After</th><th>Date</th>
+          </tr></thead><tbody>${ops.map(o => `<tr>
+            <td>${_esc(o.userName||o.uid||"—")}</td>
+            <td><span class="audit-action">${_esc(o.type||"—")}</span></td>
+            <td style="color:${(o.amount||0)>0?"var(--aos-success)":"var(--aos-danger)"}">KES ${_fmt(Math.abs(o.amount||0))}</td>
+            <td>KES ${_fmt(o.balanceAfter||0)}</td>
+            <td class="aos-muted">${_date(o.createdAt)}</td>
+          </tr>`).join("")}</tbody></table>` : _emptyMsg("No wallet operations found");
+      } else if (tab === "escrow") {
+        const data = await _call("finosGetEscrowAccounts", { status: "held", limit: 30 }).catch(() => ({ accounts: [] }));
+        const accounts = data.accounts || data.escrows || [];
+        body.innerHTML = accounts.length ? `<table class="aos-table"><thead><tr>
+            <th>Order</th><th>Buyer</th><th>Seller</th><th>Amount</th><th>Status</th><th>Held Since</th><th>Actions</th>
+          </tr></thead><tbody>${accounts.map(a => `<tr>
+            <td class="aos-mono">${(a.orderId||"—").slice(0,8)}</td>
+            <td>${_esc(a.buyerName||"—")}</td>
+            <td>${_esc(a.sellerName||"—")}</td>
+            <td>KES ${_fmt(a.amount||0)}</td>
+            <td><span class="status-badge st-${a.status||"held"}">${a.status||"held"}</span></td>
+            <td class="aos-muted">${_date(a.createdAt)}</td>
+            <td><button class="aos-btn-sm success" onclick="SokoniAOS.releaseEscrow('${a.id}')">Release</button></td>
+          </tr>`).join("")}</tbody></table>` : _emptyMsg("No held escrow funds");
       } else if (tab === "report") {
-        const data = await _call("getFinancialReport", { period: "monthly" });
-        body.innerHTML = `<div class="fin-report">${JSON.stringify(data, null, 2)}</div>`;
+        const data = await _call("getFinancialReport", { period: "monthly" }).catch(() => ({}));
+        const r = data.report || data;
+        body.innerHTML = `<div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="aos-btn" onclick="SokoniAOS.financialTab('report')">&#x1F504; Refresh</button>
+          <button class="aos-btn" onclick="SokoniAOS.exportFinancialReport()">&#x1F4E5; Export CSV</button>
+        </div>
+        <div class="fin-report">${JSON.stringify(r, null, 2)}</div>`;
       }
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+  }
+
+  async function releaseEscrow(id) {
+    if (!confirm("Release this escrow to the seller? This is irreversible.")) return;
+    await _call("finosReleaseEscrow", { escrowId: id }).catch(e => _toast(e.message, "error"));
+    _toast("Escrow released to seller", "success");
+    _financialTab("escrow");
+  }
+
+  async function exportFinancialReport() {
+    _toast("Preparing financial export…", "info");
+    const data = await _call("getFinancialReport", { period: "monthly" }).catch(e => { _toast(e.message, "error"); return null; });
+    if (!data) return;
+    const json = JSON.stringify(data, null, 2);
+    const a = document.createElement("a");
+    a.href = "data:application/json;charset=utf-8," + encodeURIComponent(json);
+    a.download = "sokoni-financial-report-" + new Date().toISOString().slice(0, 10) + ".json";
+    a.click();
   }
 
   async function markCommPaid(id) {
@@ -591,17 +652,63 @@ window.SokoniAOS = (() => {
   }
 
   // ── Communications ────────────────────────────────────────────────────────────
-  async function _loadComms() {
-    const recent = await _call("adminGetRecentNotifications", { limit: 10 }).catch(() => ({ notifications: [] }));
-    const notifs = recent.notifications || [];
-    const el = document.getElementById("recentNotifs");
-    if (el) el.innerHTML = notifs.map(n => `
-      <div class="notif-row">
-        <span class="notif-type notif-${n.type||"info"}">${n.type||"info"}</span>
-        <span>${_esc(n.title||"—")}</span>
-        <span class="aos-muted">${n.sentCount||0} sent</span>
-        <time class="aos-muted">${_date(n.sentAt||n.createdAt)}</time>
-      </div>`).join("") || "<p class='aos-muted'>No recent notifications.</p>";
+  async function _loadComms() { _commsTab("push"); }
+
+  async function _commsTab(tab) {
+    document.querySelectorAll("#panel-comms .tab-btn").forEach(b =>
+      b.classList.toggle("active", b.dataset.tab === tab));
+    const body = document.getElementById("commsBody");
+    if (!body) return;
+    body.innerHTML = _spinner();
+
+    if (tab === "push") {
+      const recent = await _call("adminGetRecentNotifications", { limit: 10 }).catch(() => ({ notifications: [] }));
+      const notifs = recent.notifications || [];
+      body.innerHTML = `
+        <div class="compose-form">
+          <h3>&#x1F4E2; Send Push Notification</h3>
+          <input type="text" id="notifTitle" placeholder="Title">
+          <textarea id="notifBody" placeholder="Message body&#x2026;" rows="3"></textarea>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <select id="notifTarget"><option value="all">All Users</option><option value="role">By Role</option><option value="active">Active (7d)</option><option value="sellers">Sellers</option><option value="buyers">Buyers</option><option value="drivers">Drivers</option></select>
+            <select id="notifRole"><option value="">Role (if By Role)</option><option>buyer</option><option>seller</option><option>driver</option><option>provider</option><option>moderator</option><option>admin</option></select>
+          </div>
+          <button class="aos-btn success" style="margin-top:10px" onclick="SokoniAOS.sendPushNotification()">&#x1F680; Send Push</button>
+        </div>
+        <div class="dash-section"><h3>Recent Notifications</h3>
+          ${notifs.map(n => `<div class="notif-row">
+            <span class="notif-type">${_esc(n.type||"info")}</span>
+            <span>${_esc(n.title||"—")}</span>
+            <span class="aos-muted">${_fmt(n.sentCount||0)} sent</span>
+            <time class="aos-muted">${_date(n.sentAt||n.createdAt)}</time>
+          </div>`).join("") || "<p class='aos-muted'>No recent push notifications.</p>"}
+        </div>`;
+    } else if (tab === "email") {
+      body.innerHTML = `
+        <div class="compose-form">
+          <h3>&#x1F4E7; Email Blast</h3>
+          <input type="text" id="emailSubject" placeholder="Subject line">
+          <textarea id="emailHtml" placeholder="Email body (plain text or HTML)&#x2026;" rows="6"></textarea>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <select id="emailTarget"><option value="all">All Users</option><option value="sellers">Sellers</option><option value="buyers">Buyers</option><option value="drivers">Drivers</option><option value="providers">Providers</option></select>
+            <input type="text" id="emailTag" placeholder="Template tag (optional)">
+          </div>
+          <p style="color:var(--aos-muted);font-size:11px;margin:8px 0">Requires SENDGRID_API_KEY configured in Secret Manager.</p>
+          <button class="aos-btn success" style="margin-top:6px" onclick="SokoniAOS.sendEmailBlast()">&#x1F4E8; Send Email Blast</button>
+        </div>`;
+    } else if (tab === "sms") {
+      body.innerHTML = `
+        <div class="compose-form">
+          <h3>&#x1F4F1; SMS Broadcast</h3>
+          <textarea id="smsBody" placeholder="SMS message (160 chars max)&#x2026;" rows="3" maxlength="160" oninput="document.getElementById('smsCount').textContent=this.value.length+'/160'"></textarea>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+            <select id="smsTarget"><option value="all">All Users</option><option value="sellers">Sellers</option><option value="buyers">Buyers</option><option value="drivers">Drivers</option></select>
+            <span id="smsCount" style="color:var(--aos-muted);font-size:12px;white-space:nowrap">0/160</span>
+          </div>
+          <p style="color:var(--aos-muted);font-size:11px;margin:8px 0">SMS charges apply. Confirm before sending.</p>
+          <button class="aos-btn success" onclick="SokoniAOS.sendSMSBlast()">&#x1F4AC; Send SMS Broadcast</button>
+        </div>`;
+    }
   }
 
   async function sendPushNotification() {
@@ -614,7 +721,26 @@ window.SokoniAOS = (() => {
     _toast("Notification sent to " + target,"success");
     document.getElementById("notifTitle").value = "";
     document.getElementById("notifBody").value  = "";
-    _panelCache.comms = false; _loadComms();
+    _panelCache.comms = false; _commsTab("push");
+  }
+
+  async function sendEmailBlast() {
+    const subject = document.getElementById("emailSubject")?.value;
+    const html    = document.getElementById("emailHtml")?.value;
+    const target  = document.getElementById("emailTarget")?.value || "all";
+    if (!subject || !html) { _toast("Subject and body are required", "error"); return; }
+    if (!confirm(`Send email blast to all ${target}? This will queue emails immediately.`)) return;
+    await _call("adminSendEmailBlast", { subject, html, target }).catch(e => _toast(e.message, "error"));
+    _toast("Email blast queued for " + target, "success");
+  }
+
+  async function sendSMSBlast() {
+    const message = document.getElementById("smsBody")?.value;
+    const target  = document.getElementById("smsTarget")?.value || "all";
+    if (!message) { _toast("Message body is required", "error"); return; }
+    if (!confirm(`Send SMS to all ${target}? Carrier charges apply.`)) return;
+    await _call("adminSendSMSBlast", { message, target }).catch(e => _toast(e.message, "error"));
+    _toast("SMS queued for " + target, "success");
   }
 
   // ── Content ───────────────────────────────────────────────────────────────────
@@ -668,8 +794,56 @@ window.SokoniAOS = (() => {
                 <button class="aos-btn-sm danger" onclick="SokoniAOS.deleteAnnouncement('${a.id}')">Remove</button>
               </div>
             </div>`).join("") || "<p class='aos-muted'>No announcements.</p>"}</div>`;
+      } else if (tab === "campaigns") {
+        const data = await _call("adminGetCampaigns", { limit: 20 }).catch(() => ({ campaigns: [] }));
+        const campaigns = data.campaigns || [];
+        body.innerHTML = `<button class="aos-btn" onclick="SokoniAOS.createCampaign()" style="margin-bottom:12px">+ New Campaign</button>
+          ${campaigns.length ? `<table class="aos-table"><thead><tr>
+            <th>Name</th><th>Type</th><th>Target</th><th>Status</th><th>Start</th><th>End</th><th>Actions</th>
+          </tr></thead><tbody>${campaigns.map(c => `<tr>
+            <td>${_esc(c.name||"—")}</td>
+            <td><span class="audit-action">${_esc(c.type||"—")}</span></td>
+            <td class="aos-muted">${_esc(c.target||"all")}</td>
+            <td><span class="status-badge st-${c.status||"draft"}">${c.status||"draft"}</span></td>
+            <td class="aos-muted">${_date(c.startDate)}</td>
+            <td class="aos-muted">${_date(c.endDate)}</td>
+            <td style="display:flex;gap:4px">
+              ${c.status==="draft"?`<button class="aos-btn-sm success" onclick="SokoniAOS.activateCampaign('${c.id}')">Activate</button>`:""}
+              <button class="aos-btn-sm danger" onclick="SokoniAOS.deleteCampaign('${c.id}')">Delete</button>
+            </td>
+          </tr>`).join("")}</tbody></table>` : _emptyMsg("No campaigns yet — create the first one")}`;
       }
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+  }
+
+  async function createCampaign() {
+    const name   = prompt("Campaign name:");
+    const type   = prompt("Type (discount/flash-sale/referral/loyalty):", "discount");
+    const target = prompt("Target audience (all/sellers/buyers):", "all");
+    const start  = prompt("Start date (YYYY-MM-DD):");
+    const end    = prompt("End date (YYYY-MM-DD):");
+    if (!name || !type || !start || !end) return;
+    await _call("adminCreateCampaign", { name, type, target, startDate: start, endDate: end })
+      .catch(e => _toast(e.message, "error"));
+    _toast("Campaign created", "success");
+    _panelCache.content = false;
+    _contentTab("campaigns");
+  }
+
+  async function activateCampaign(id) {
+    await _call("adminUpdateCampaignStatus", { campaignId: id, status: "active" })
+      .catch(e => _toast(e.message, "error"));
+    _toast("Campaign activated", "success");
+    _contentTab("campaigns");
+  }
+
+  async function deleteCampaign(id) {
+    if (!confirm("Permanently delete this campaign?")) return;
+    await _call("adminDeleteCampaign", { campaignId: id })
+      .catch(e => _toast(e.message, "error"));
+    _toast("Campaign deleted", "success");
+    _panelCache.content = false;
+    _contentTab("campaigns");
   }
 
   async function addBanner() {
@@ -812,29 +986,62 @@ window.SokoniAOS = (() => {
   }
 
   // ── SmartPOS ──────────────────────────────────────────────────────────────────
-  async function _loadSmartPOS() {
+  async function _loadSmartPOS() { _posTab("devices"); }
+
+  async function _posTab(tab) {
+    document.querySelectorAll("#panel-smartpos .tab-btn").forEach(b =>
+      b.classList.toggle("active", b.dataset.tab === tab));
     const body = document.getElementById("posBody");
     if (!body) return;
     body.innerHTML = _spinner();
     try {
-      const data = await _call("adminGetPosDevices").catch(() => ({ devices: [] }));
-      const devices = data.devices || [];
-      body.innerHTML = `
-        <div class="pos-stats">
-          <div class="stat-card"><span>Connected Devices</span><strong>${devices.filter(d=>d.status==="online").length}</strong></div>
-          <div class="stat-card"><span>Total Registered</span><strong>${devices.length}</strong></div>
-          <div class="stat-card"><span>Offline</span><strong>${devices.filter(d=>d.status!=="online").length}</strong></div>
-        </div>
-        <table class="aos-table"><thead><tr>
-          <th>Device</th><th>Type</th><th>Merchant</th><th>Version</th><th>Status</th><th>Last Seen</th>
-        </tr></thead><tbody>${devices.map(d => `<tr>
-          <td class="aos-mono">${_esc(d.deviceId||d.id||"—")}</td>
-          <td>${_esc(d.type||"—")}</td>
-          <td>${_esc(d.merchantName||d.merchantUid||"—")}</td>
-          <td>${_esc(d.version||"—")}</td>
-          <td><span class="status-badge st-${d.status||"unknown"}">${d.status||"unknown"}</span></td>
-          <td class="aos-muted">${_date(d.lastSeen)}</td>
-        </tr>`).join("") || _emptyRow(6,"No devices registered")}</tbody></table>`;
+      if (tab === "devices") {
+        const data = await _call("adminGetPosDevices").catch(() => ({ devices: [] }));
+        const devices = data.devices || [];
+        const online  = devices.filter(d => d.status === "online").length;
+        body.innerHTML = `
+          <div class="pos-stats">
+            <div class="stat-card success"><span>Online Now</span><strong>${online}</strong></div>
+            <div class="stat-card"><span>Total Registered</span><strong>${devices.length}</strong></div>
+            <div class="stat-card warn"><span>Offline</span><strong>${devices.length - online}</strong></div>
+          </div>
+          <table class="aos-table"><thead><tr>
+            <th>Device ID</th><th>Type</th><th>Merchant</th><th>Version</th><th>Status</th><th>Last Seen</th>
+          </tr></thead><tbody>${devices.map(d => `<tr>
+            <td class="aos-mono">${_esc(d.deviceId||d.id||"—")}</td>
+            <td>${_esc(d.type||"—")}</td>
+            <td>${_esc(d.merchantName||d.merchantUid||"—")}</td>
+            <td>${_esc(d.version||"—")}</td>
+            <td><span class="status-badge st-${d.status||"unknown"}">${d.status||"unknown"}</span></td>
+            <td class="aos-muted">${_date(d.lastSeen)}</td>
+          </tr>`).join("") || _emptyRow(6,"No devices registered")}</tbody></table>`;
+      } else if (tab === "revenue") {
+        const data = await _call("getAdminRevenueReport", { scope: "pos", days: 7 }).catch(() => ({}));
+        const r = data.report || data;
+        body.innerHTML = `
+          <div class="pos-stats">
+            <div class="stat-card success"><span>POS Revenue (7d)</span><strong>KES ${_fmt(r.totalRevenue||0)}</strong></div>
+            <div class="stat-card"><span>Total Transactions</span><strong>${_fmt(r.transactionCount||0)}</strong></div>
+            <div class="stat-card"><span>Avg Basket Size</span><strong>KES ${_fmt(r.avgBasket||0)}</strong></div>
+            <div class="stat-card"><span>Platform Commission</span><strong>KES ${_fmt(r.totalCommission||0)}</strong></div>
+          </div>
+          ${r.revenueByDay ? `<div class="dash-section"><h3>Daily Revenue</h3><div class="chart-wrap"><canvas id="posRevenueChart" height="160"></canvas></div></div>` : _emptyMsg("Revenue chart data not available")}`;
+        if (r.revenueByDay) _drawLineChart("posRevenueChart", r.revenueByDay, "KES");
+      } else if (tab === "shifts") {
+        const snap = await _db.collection("posShifts").orderBy("openedAt","desc").limit(30).get().catch(() => null);
+        const shifts = snap ? snap.docs.map(d => ({id:d.id,...d.data()})) : [];
+        body.innerHTML = shifts.length ? `<table class="aos-table"><thead><tr>
+            <th>Shift ID</th><th>Cashier</th><th>Merchant</th><th>Opened</th><th>Closed</th><th>Total Sales</th><th>Status</th>
+          </tr></thead><tbody>${shifts.map(s => `<tr>
+            <td class="aos-mono">${s.id.slice(0,8)}</td>
+            <td>${_esc(s.cashierName||s.cashierId||"—")}</td>
+            <td>${_esc(s.merchantName||s.merchantId||"—")}</td>
+            <td class="aos-muted">${_date(s.openedAt)}</td>
+            <td class="aos-muted">${s.closedAt ? _date(s.closedAt) : "<span class='st-active status-badge'>Open</span>"}</td>
+            <td>KES ${_fmt(s.totalSales||0)}</td>
+            <td><span class="status-badge st-${s.status||"open"}">${s.status||"open"}</span></td>
+          </tr>`).join("")}</tbody></table>` : _emptyMsg("No shift records found");
+      }
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
   }
 
@@ -860,10 +1067,11 @@ window.SokoniAOS = (() => {
           <div class="stat-card success"><span>False Positives</span><strong>${_fmt(d.falsePositives||0)}</strong></div>
         </div>
         <div style="display:flex;gap:8px;margin:16px 0;flex-wrap:wrap">
-          <button class="aos-btn" onclick="SokoniAOS.viewReports()">📋 Reports Queue</button>
-          <button class="aos-btn" onclick="SokoniAOS.viewBanned()">🚫 Banned Users</button>
-          <button class="aos-btn" onclick="SokoniAOS.viewRiskScores()">⚠️ Risk Scores</button>
-          <button class="aos-btn" onclick="window.open('trust-safety.html','_blank')">🔗 Full Trust Center</button>
+          <button class="aos-btn" onclick="SokoniAOS.viewReports()">&#x1F4CB; Reports Queue</button>
+          <button class="aos-btn" onclick="SokoniAOS.viewBanned()">&#x1F6AB; Banned Users</button>
+          <button class="aos-btn" onclick="SokoniAOS.viewRiskScores()">&#x26A0;&#xFE0F; Risk Scores</button>
+          <a class="aos-btn" href="trust-safety.html" target="_blank">&#x1F512; Full Trust Center</a>
+          <button class="aos-btn danger" onclick="SokoniAOS.voidReceiptDialog()">&#x1F6AB; Void Receipt</button>
         </div>
         <h3>Live Fraud Alerts</h3>
         <div class="alert-list">${a.length ? a.map(al => `
@@ -872,8 +1080,37 @@ window.SokoniAOS = (() => {
             <span><strong>${_esc(al.title||"Alert")}</strong> — ${_esc(al.description||"")}</span>
             <time>${_ago(al.createdAt)}</time>
             <button class="aos-btn-sm" onclick="SokoniAOS.investigateAlert('${al.id}')">Investigate</button>
-          </div>`).join("") : "<p class='aos-muted'>No active fraud alerts.</p>"}</div>`;
+          </div>`).join("") : "<p class='aos-muted'>No active fraud alerts.</p>"}</div>
+        <h3 style="margin-top:20px;margin-bottom:10px;font-size:14px">Payment Anomaly Detection</h3>
+        <div id="paymentAnomaliesSection">${_spinner()}</div>`;
+      _loadPaymentAnomalies();
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+  }
+
+  async function _loadPaymentAnomalies() {
+    const el = document.getElementById("paymentAnomaliesSection");
+    if (!el) return;
+    const data = await _call("detectPaymentAnomalies").catch(() => ({ anomalies: [] }));
+    const anomalies = data.anomalies || [];
+    el.innerHTML = anomalies.length ? `<table class="aos-table"><thead><tr>
+        <th>Pattern</th><th>Severity</th><th>Amount</th><th>Count</th><th>Detected</th>
+      </tr></thead><tbody>${anomalies.map(a => `<tr>
+        <td><span class="audit-action">${_esc(a.pattern||"—")}</span></td>
+        <td><span class="prio-badge prio-${a.severity||"medium"}">${a.severity||"medium"}</span></td>
+        <td>KES ${_fmt(a.amount||0)}</td>
+        <td>${_fmt(a.count||0)}</td>
+        <td class="aos-muted">${_ago(a.detectedAt||a.createdAt)}</td>
+      </tr>`).join("")}</tbody></table>` : "<p class='aos-muted' style='padding:8px 0'>No payment anomalies detected. &#x2705;</p>";
+  }
+
+  async function voidReceiptDialog() {
+    const receiptId = prompt("Enter receipt ID to void:");
+    if (!receiptId) return;
+    const reason = prompt("Void reason (required for audit):");
+    if (!reason) return;
+    if (!confirm(`Permanently void receipt ${receiptId}?\nThis action is irreversible and will be logged.`)) return;
+    await _call("voidTrustReceipt", { receiptId, reason }).catch(e => _toast(e.message, "error"));
+    _toast("Receipt voided — audit trail recorded", "success");
   }
 
   async function viewReports() {
@@ -904,49 +1141,135 @@ window.SokoniAOS = (() => {
   }
 
   // ── Analytics ─────────────────────────────────────────────────────────────────
-  async function _loadAnalytics() {
+  async function _loadAnalytics() { _analyticsTab("overview"); }
+
+  async function _analyticsTab(tab) {
+    document.querySelectorAll("#panel-analytics .tab-btn").forEach(b =>
+      b.classList.toggle("active", b.dataset.tab === tab));
     const body = document.getElementById("analyticsBody");
     if (!body) return;
     body.innerHTML = _spinner();
     try {
-      const [weekly, marketplace, products] = await Promise.all([
-        _call("getWeeklyReports").catch(() => ({})),
-        _call("getMarketplaceQualityReport").catch(() => ({})),
-        _call("getAdminProductAnalytics").catch(() => ({})),
-      ]);
-      const w = weekly.report || weekly;
-      const m = marketplace.report || marketplace;
-      body.innerHTML = `
-        <div class="analytics-grid">
-          <div class="chart-card" style="grid-column:span 2">
-            <h4>Weekly Revenue</h4>
-            <div class="chart-wrap"><canvas id="analyticsRevenueChart" height="160"></canvas></div>
+      if (tab === "overview") {
+        const [weekly, marketplace] = await Promise.all([
+          _call("getWeeklyReports").catch(() => ({})),
+          _call("getMarketplaceQualityReport").catch(() => ({})),
+        ]);
+        const w = weekly.report || weekly;
+        const m = marketplace.report || marketplace;
+        body.innerHTML = `
+          <div class="analytics-grid">
+            <div class="dash-section" style="grid-column:span 2">
+              <h3>Weekly Revenue</h3>
+              <div class="chart-wrap"><canvas id="analyticsRevenueChart" height="160"></canvas></div>
+            </div>
+            <div class="dash-section">
+              <h3>Order Status</h3>
+              <div class="chart-wrap"><canvas id="analyticsOrderChart" height="160"></canvas></div>
+            </div>
+            <div class="dash-section">
+              <h3>User Growth</h3>
+              <div class="chart-wrap"><canvas id="analyticsUserChart" height="160"></canvas></div>
+            </div>
           </div>
-          <div class="chart-card">
-            <h4>Order Status</h4>
-            <div class="chart-wrap"><canvas id="analyticsOrderChart" height="160"></canvas></div>
+          <div style="margin-top:24px">
+            <h3 style="margin-bottom:12px;font-size:14px">Marketplace Quality</h3>
+            <div class="mkt-quality">
+              <div class="stat-card"><span>Avg Product Rating</span><strong>${(m.avgRating||0).toFixed(2)} &#x2605;</strong></div>
+              <div class="stat-card"><span>Active Listings</span><strong>${_fmt(m.activeListings||0)}</strong></div>
+              <div class="stat-card"><span>Incomplete Listings</span><strong class="${(m.incompleteListings||0)>0?"warn":""}">${_fmt(m.incompleteListings||0)}</strong></div>
+              <div class="stat-card warn"><span>Low Stock Alerts</span><strong>${_fmt(m.lowStockCount||0)}</strong></div>
+            </div>
           </div>
-          <div class="chart-card">
-            <h4>User Growth</h4>
-            <div class="chart-wrap"><canvas id="analyticsUserChart" height="160"></canvas></div>
+          <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="aos-btn" onclick="SokoniAOS.exportAnalytics()">&#x1F4E5; Export CSV</button>
+            <a class="aos-btn" href="platform-health.html" target="_blank">&#x1F4CA; Platform Health</a>
+            <a class="aos-btn" href="revenue-dashboard.html" target="_blank">&#x1F4B0; Revenue Dashboard</a>
+          </div>`;
+        if (w.revenueByDay)    _drawLineChart("analyticsRevenueChart", w.revenueByDay, "KES");
+        if (w.ordersByStatus)  _drawDonutChart("analyticsOrderChart",  w.ordersByStatus);
+        if (w.userGrowthByDay) _drawLineChart("analyticsUserChart",    w.userGrowthByDay, "");
+      } else if (tab === "cohort") {
+        const data = await _call("adminGetCohortAnalysis").catch(() => ({ cohorts: [] }));
+        const cohorts = data.cohorts || [];
+        if (!cohorts.length) {
+          body.innerHTML = `
+            <div class="dash-section">
+              <h3>User Cohorts (Monthly)</h3>
+              <p class="aos-muted" style="margin:8px 0 12px;font-size:12px">Tracks retention of users signed up in each month, measured by subsequent weekly activity.</p>
+              ${_emptyMsg("Cohort analysis data not yet available — ensure adminGetCohortAnalysis CF is deployed")}
+            </div>`;
+        } else {
+          const weeks = cohorts[0]?.weeks?.length || 8;
+          const headers = Array.from({length: weeks}, (_,i) => `W${i+1}`);
+          body.innerHTML = `
+            <div class="dash-section">
+              <h3>User Cohorts (Monthly)</h3>
+              <p class="aos-muted" style="margin:8px 0 12px;font-size:12px">Retention % by week after signup. Darker = higher retention.</p>
+              <div style="overflow-x:auto"><table class="aos-table">
+                <thead><tr><th>Cohort</th><th>Users</th>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead>
+                <tbody>${cohorts.map(c => `<tr>
+                  <td>${_esc(c.month||"—")}</td>
+                  <td>${_fmt(c.users||0)}</td>
+                  ${(c.weeks||[]).map(pct => {
+                    const v = Math.round(pct||0);
+                    const bg = v>=60?"rgba(76,175,80,0.3)":v>=30?"rgba(255,152,0,0.2)":"rgba(244,67,54,0.2)";
+                    return `<td style="background:${bg};text-align:center">${v}%</td>`;
+                  }).join("")}
+                </tr>`).join("")}</tbody>
+              </table></div>
+            </div>`;
+        }
+      } else if (tab === "funnel") {
+        const data = await _call("adminGetConversionFunnel").catch(() => ({ steps: [] }));
+        const steps = data.steps || [
+          { label: "Visited", count: 0 },
+          { label: "Registered", count: 0 },
+          { label: "Browsed", count: 0 },
+          { label: "Added to Cart", count: 0 },
+          { label: "Checkout", count: 0 },
+          { label: "Completed Order", count: 0 },
+        ];
+        const max = steps[0]?.count || 1;
+        body.innerHTML = `
+          <div class="dash-section">
+            <h3>Conversion Funnel</h3>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+              ${steps.map((s, i) => {
+                const pct = max ? Math.round((s.count||0) / max * 100) : 0;
+                const prev = i > 0 ? steps[i-1].count || 1 : max;
+                const drop = i > 0 ? (100 - Math.round((s.count||0) / prev * 100)) : 0;
+                return `<div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;font-size:13px">
+                    <span>${_esc(s.label)}</span>
+                    <span style="color:var(--aos-muted)">${_fmt(s.count||0)} users${drop>0?` <span style="color:var(--aos-danger)">&#x2193;${drop}%</span>`:""}</span>
+                  </div>
+                  <div style="background:rgba(255,255,255,.06);border-radius:4px;height:28px;position:relative">
+                    <div style="background:var(--aos-accent);opacity:0.7;height:100%;border-radius:4px;width:${pct}%;transition:width .3s"></div>
+                    <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;color:#000;font-weight:600">${pct}%</span>
+                  </div>
+                </div>`;
+              }).join("")}
+            </div>
+          </div>`;
+      } else if (tab === "retention") {
+        const data = await _call("adminGetRetentionMetrics").catch(() => ({}));
+        const r = data.retention || data;
+        body.innerHTML = `
+          <div class="ai-stats-grid" style="margin-bottom:20px">
+            <div class="stat-card"><span>D1 Retention</span><strong>${(r.d1||0).toFixed(1)}%</strong></div>
+            <div class="stat-card"><span>D7 Retention</span><strong>${(r.d7||0).toFixed(1)}%</strong></div>
+            <div class="stat-card"><span>D30 Retention</span><strong>${(r.d30||0).toFixed(1)}%</strong></div>
+            <div class="stat-card"><span>D90 Retention</span><strong>${(r.d90||0).toFixed(1)}%</strong></div>
+            <div class="stat-card success"><span>Monthly Active Users</span><strong>${_fmt(r.mau||0)}</strong></div>
+            <div class="stat-card"><span>Weekly Active Users</span><strong>${_fmt(r.wau||0)}</strong></div>
           </div>
-        </div>
-        <div class="analytics-table-wrap" style="margin-top:24px">
-          <h3>Marketplace Quality Insights</h3>
-          <div class="mkt-quality">
-            <div class="stat-card"><span>Avg Product Rating</span><strong>${(m.avgRating||0).toFixed(2)} ⭐</strong></div>
-            <div class="stat-card"><span>Active Listings</span><strong>${_fmt(m.activeListings||0)}</strong></div>
-            <div class="stat-card"><span>Incomplete Listings</span><strong>${_fmt(m.incompleteListings||0)}</strong></div>
-            <div class="stat-card"><span>Low Stock Alerts</span><strong>${_fmt(m.lowStockCount||0)}</strong></div>
-          </div>
-        </div>
-        <div style="margin-top:16px">
-          <button class="aos-btn" onclick="SokoniAOS.exportAnalytics()">📥 Export CSV</button>
-          <button class="aos-btn" onclick="window.open('platform-health.html','_blank')" style="margin-left:8px">🔗 Platform Health</button>
-        </div>`;
-      if (w.revenueByDay)     _drawLineChart("analyticsRevenueChart", w.revenueByDay, "KES");
-      if (w.ordersByStatus)   _drawDonutChart("analyticsOrderChart",  w.ordersByStatus);
-      if (w.userGrowthByDay)  _drawLineChart("analyticsUserChart",    w.userGrowthByDay, "");
+          <div class="dash-section">
+            <h3>Retention Trend (30 Days)</h3>
+            <div class="chart-wrap"><canvas id="retentionChart" height="160"></canvas></div>
+          </div>`;
+        if (r.trend) _drawLineChart("retentionChart", r.trend, "");
+      }
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
   }
 
@@ -1003,6 +1326,35 @@ window.SokoniAOS = (() => {
                 </label>
               </div>`).join("") || "<p class='aos-muted'>No feature flags configured.</p>"}</div>
           </section>
+        </div>
+        <div class="config-grid" style="margin-top:20px">
+          <section class="config-section">
+            <h3>Commission Rules</h3>
+            <form id="commissionForm">
+              ${_configField("Marketplace Commission (%)","commMarketplace", s.commMarketplace||"5","number")}
+              ${_configField("Services Commission (%)",    "commServices",    s.commServices||"8","number")}
+              ${_configField("Events Commission (%)",      "commEvents",      s.commEvents||"3","number")}
+              ${_configField("SmartPOS Commission (%)",    "commPOS",         s.commPOS||"1.5","number")}
+              ${_configField("Delivery Commission (%)",    "commDelivery",    s.commDelivery||"0","number")}
+              ${_configField("Jobs Commission (%)",        "commJobs",        s.commJobs||"5","number")}
+              <button type="button" class="aos-btn success" onclick="SokoniAOS.saveCommissionRules()">Save Commission Rules</button>
+            </form>
+          </section>
+          <section class="config-section">
+            <h3>Payout Schedule</h3>
+            <form id="payoutForm">
+              ${_configField("Payout Frequency",           "payoutFrequency", s.payoutFrequency||"weekly")}
+              ${_configField("Payout Day (0=Sun…6=Sat)",   "payoutDay",       s.payoutDay||"1","number")}
+              ${_configField("Hold Period (days)",          "payoutHoldDays",  s.payoutHoldDays||"2","number")}
+              ${_configField("Min Payout Threshold (KES)",  "payoutMinKES",    s.payoutMinKES||"500","number")}
+              ${_configField("Auto-Payout Limit (KES)",     "payoutAutoLimit", s.payoutAutoLimit||"100000","number")}
+              <label class="config-label toggle-row">
+                <span>Auto-Payout Enabled</span>
+                <label class="toggle-sw"><input type="checkbox" id="payoutAutoEnabled" ${s.payoutAutoEnabled?"checked":""}><span></span></label>
+              </label>
+              <button type="button" class="aos-btn success" onclick="SokoniAOS.savePayoutSchedule()">Save Payout Schedule</button>
+            </form>
+          </section>
         </div>`;
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
   }
@@ -1021,6 +1373,26 @@ window.SokoniAOS = (() => {
   async function updateFlag(key, enabled) {
     await _call("adminUpdateFeatureFlag", { key, enabled }).catch(e => _toast(e.message,"error"));
     _toast((enabled?"Enabled":"Disabled") + " " + key,"success");
+  }
+
+  async function saveCommissionRules() {
+    const form = document.getElementById("commissionForm");
+    if (!form) return;
+    const rules = {};
+    form.querySelectorAll("[id]").forEach(el => { rules[el.id] = parseFloat(el.value) || 0; });
+    await _call("adminUpdatePlatformSettings", { settings: rules }).catch(e => _toast(e.message,"error"));
+    _toast("Commission rules saved","success");
+  }
+
+  async function savePayoutSchedule() {
+    const form = document.getElementById("payoutForm");
+    if (!form) return;
+    const schedule = {};
+    form.querySelectorAll("[id]").forEach(el => {
+      schedule[el.id] = el.type === "checkbox" ? el.checked : (isNaN(Number(el.value)) ? el.value : Number(el.value));
+    });
+    await _call("adminUpdatePlatformSettings", { settings: schedule }).catch(e => _toast(e.message,"error"));
+    _toast("Payout schedule saved","success");
   }
 
   // ── Audit ─────────────────────────────────────────────────────────────────────
@@ -1049,6 +1421,13 @@ window.SokoniAOS = (() => {
       const exportBtn = document.getElementById("auditExportBtn");
       if (exportBtn) exportBtn.onclick = () => _exportAuditLogs(logs, type);
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+  }
+
+  function filterAuditRows(query) {
+    const q = (query || "").toLowerCase();
+    document.querySelectorAll("#auditBody .aos-table tbody tr").forEach(row => {
+      row.style.display = !q || row.textContent.toLowerCase().includes(q) ? "" : "none";
+    });
   }
 
   function _exportAuditLogs(logs, type) {
@@ -1110,8 +1489,54 @@ window.SokoniAOS = (() => {
                 </td>
               </tr>`).join("")}</tbody></table>` : "<p class='aos-muted'>No pending approvals.</p>"}
           </section>
+          <section style="grid-column:1/-1">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <h3>Security Tools</h3>
+              <button class="aos-btn danger" onclick="SokoniAOS.revokeAllSessions()">&#x26A0;&#xFE0F; Revoke All Sessions</button>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+              <a class="aos-btn" href="security-center.html" target="_blank">&#x1F6E1;&#xFE0F; Security Center</a>
+              <a class="aos-btn" href="security-zero-trust-dashboard.html" target="_blank">&#x1F510; Zero Trust Dashboard</a>
+              <button class="aos-btn" onclick="SokoniAOS.loadSecurityEvents()">&#x1F50D; Load Security Events</button>
+            </div>
+            <h3 style="margin-bottom:10px;font-size:14px">Recent Security Events</h3>
+            <div id="securityEventsBody">${_spinner()}</div>
+          </section>
         </div>`;
+      _loadSecurityEvents();
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+  }
+
+  async function _loadSecurityEvents() {
+    const el = document.getElementById("securityEventsBody");
+    if (!el) return;
+    const snap = await _db.collection("securityEvents")
+      .orderBy("createdAt","desc").limit(20).get().catch(() => null);
+    if (!snap) { el.innerHTML = "<p class='aos-muted'>Security events collection not available.</p>"; return; }
+    el.innerHTML = snap.empty ? "<p class='aos-muted'>No recent security events.</p>"
+      : `<table class="aos-table"><thead><tr>
+          <th>Event</th><th>User</th><th>IP</th><th>Time</th>
+        </tr></thead><tbody>${snap.docs.map(d => {
+          const e = d.data();
+          return `<tr>
+            <td><span class="audit-action">${_esc(e.type||e.event||"—")}</span></td>
+            <td class="aos-muted">${_esc(e.email||e.uid||"system")}</td>
+            <td class="aos-mono aos-muted">${_esc(e.ip||"—")}</td>
+            <td class="aos-muted">${_ago(e.createdAt)}</td>
+          </tr>`;
+        }).join("")}</tbody></table>`;
+  }
+
+  async function revokeAllSessions() {
+    if (!confirm("Revoke ALL active sessions? Every signed-in user will be signed out.")) return;
+    const snap = await _db.collection("activeSessions").get().catch(() => null);
+    if (!snap || snap.empty) { _toast("No active sessions to revoke", "info"); return; }
+    const batch = _db.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit().catch(e => _toast(e.message, "error"));
+    _toast(`${snap.size} session(s) revoked`, "success");
+    _panelCache.security = false;
+    _loadSecurity();
   }
 
   async function revokeSession(sessionId) {
@@ -1558,17 +1983,37 @@ window.SokoniAOS = (() => {
     viewRiskScores:      _viewRiskScores,
     reviewReport,
     investigateAlert,
+    voidReceiptDialog,
     // Analytics
     exportAnalytics,
+    analyticsTab:        _analyticsTab,
     // Config
     saveSettings,
+    saveCommissionRules,
+    savePayoutSchedule,
     updateFlag,
     // Audit
     loadAudit:           _loadAudit,
+    filterAuditRows,
     // Security
     revokeSession,
+    revokeAllSessions,
+    loadSecurityEvents:  _loadSecurityEvents,
     approveRequest,
     rejectRequest,
+    // SmartPOS
+    posTab:              _posTab,
+    // Financial
+    releaseEscrow,
+    exportFinancialReport,
+    // Communications
+    commsTab:            _commsTab,
+    sendEmailBlast,
+    sendSMSBlast,
+    // Content
+    createCampaign,
+    activateCampaign,
+    deleteCampaign,
     // Hubs
     refreshHubs:         () => { _panelCache.hubs = false; _loadHubs(); },
     loadHubHealth:       _loadHubHealth,

@@ -22,16 +22,16 @@ const admin = require("firebase-admin");
 
 if (!admin.apps.length) admin.initializeApp();
 
-const SENDGRID_KEY = defineSecret("SENDGRID_API_KEY");
-const INTASEND_KEY = defineSecret("INTASEND_PRIVATE_KEY");
-const AT_API_KEY   = defineSecret("AT_API_KEY");
-const ALGOLIA_KEY  = defineSecret("ALGOLIA_ADMIN_KEY");
+const SENDGRID_KEY  = defineSecret("SENDGRID_API_KEY");
+const INTASEND_KEY  = defineSecret("INTASEND_PRIVATE_KEY");
+const AFRICASTALKING_API_KEY = defineSecret("AFRICASTALKING_API_KEY");
+const ALGOLIA_KEY   = defineSecret("ALGOLIA_ADMIN_KEY");
 
 const SECRETS_REQUIRED = {
-  SENDGRID_API_KEY:    () => SENDGRID_KEY.value(),
-  INTASEND_PRIVATE_KEY:() => INTASEND_KEY.value(),
-  AT_API_KEY:          () => AT_API_KEY.value(),
-  ALGOLIA_ADMIN_KEY:   () => ALGOLIA_KEY.value(),
+  SENDGRID_API_KEY:        () => SENDGRID_KEY.value(),
+  INTASEND_PRIVATE_KEY:    () => INTASEND_KEY.value(),
+  AFRICASTALKING_API_KEY:  () => AFRICASTALKING_API_KEY.value(),
+  ALGOLIA_ADMIN_KEY:       () => ALGOLIA_KEY.value(),
 };
 
 const PROJECT = "sokoni-aeb26";
@@ -146,7 +146,7 @@ exports.systemHealthCheck = onRequest(
     invoker:     "public",
     maxInstances: 10,
     timeoutSeconds: 15,
-    secrets: [SENDGRID_KEY, INTASEND_KEY, AT_API_KEY, ALGOLIA_KEY],
+    secrets: [SENDGRID_KEY, INTASEND_KEY, AFRICASTALKING_API_KEY, ALGOLIA_KEY],
   },
   async (req, res) => {
     res.set("Cache-Control", "no-store");

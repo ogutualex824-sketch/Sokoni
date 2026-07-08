@@ -578,11 +578,10 @@
     font-size: 9.5px !important;
     font-weight: 700 !important;
     color: rgba(255,255,255,0.45) !important;
-    flex: 1 !important;
-    min-width: 0 !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
+    width: 100% !important;
   }
 
   .ptrend-grid .pcard-m-wish,
@@ -590,11 +589,13 @@
     width: 32px !important;
     height: 32px !important;
     font-size: 14px !important;
+    flex-shrink: 0 !important;
   }
   .ptrend-grid .pcard-m-buy,
   #productsContainer .pcard-m-buy {
+    flex: 1 !important;
     height: 32px !important;
-    padding: 0 14px !important;
+    padding: 0 10px !important;
     font-size: 11.5px !important;
     border-radius: 16px !important;
   }
@@ -662,15 +663,14 @@
 
   .pcard-mobile-strip {
     display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
+    flex-direction: column !important;
     padding: 5px 7px 8px !important;
-    gap: 5px !important;
+    gap: 4px !important;
     border-top: 1px solid rgba(255,255,255,0.07) !important;
     background: rgba(255,255,255,0.02) !important;
   }
 
-  /* Strip info / category tag */
+  /* Strip info / category tag — full top row */
   .pcard-cat-tag,
   .pcard-strip-info {
     font-size: 8.5px !important;
@@ -680,22 +680,23 @@
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    flex: 1 !important;
-    min-width: 0 !important;
     text-transform: uppercase !important;
+    width: 100% !important;
   }
 
+  /* Buttons row — full width below the strip info */
   .pcard-m-btns {
     display: flex !important;
     gap: 5px !important;
-    flex-shrink: 0 !important;
     align-items: center !important;
+    width: 100% !important;
   }
 
   /* Heart — glowing circle */
   .pcard-m-wish {
     width: 28px !important;
     height: 28px !important;
+    flex-shrink: 0 !important;
     background: rgba(255,30,80,0.1) !important;
     border: 1px solid rgba(255,45,85,0.32) !important;
     border-radius: 50% !important;
@@ -714,10 +715,11 @@
     box-shadow: 0 0 16px rgba(255,45,85,0.45) !important;
   }
 
-  /* Buy — neon gradient pill with glow */
+  /* Buy — full-width neon gradient pill */
   .pcard-m-buy {
+    flex: 1 !important;
     height: 28px !important;
-    padding: 0 11px !important;
+    padding: 0 8px !important;
     background: linear-gradient(135deg, #71ff00 0%, #39e600 100%) !important;
     border: none !important;
     border-radius: 14px !important;
@@ -847,8 +849,9 @@
   .ptrend-grid .pcard-mobile-strip,
   #productsContainer .pcard-mobile-strip {
     display: flex !important;
+    flex-direction: column !important;
     padding: 7px 10px 10px !important;
-    gap: 6px !important;
+    gap: 5px !important;
   }
 
   .ptrend-grid .pcard-strip-info,
@@ -856,24 +859,25 @@
     font-size: 9.5px !important;
     font-weight: 700 !important;
     color: rgba(255,255,255,0.45) !important;
-    flex: 1 !important;
-    min-width: 0 !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
+    width: 100% !important;
   }
 
   .ptrend-grid .pcard-m-wish,
   #productsContainer .pcard-m-wish {
     width: 32px !important;
     height: 32px !important;
+    flex-shrink: 0 !important;
     font-size: 14px !important;
   }
 
   .ptrend-grid .pcard-m-buy,
   #productsContainer .pcard-m-buy {
+    flex: 1 !important;
     height: 32px !important;
-    padding: 0 14px !important;
+    padding: 0 10px !important;
     font-size: 11.5px !important;
     border-radius: 16px !important;
   }
