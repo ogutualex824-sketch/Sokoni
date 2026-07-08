@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Bank Reconciliation &mdash; SOKONI Finance</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,button,textarea{font-family:inherit}
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);border-bottom:1px solid var(--border);
+      padding:12px 16px;display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+    .tabs{display:flex;border-bottom:1px solid var(--border);position:sticky;top:57px;z-index:100;background:rgba(5,5,5,.97)}
+    .tab{flex:1;text-align:center;padding:12px;font-size:11px;font-weight:800;cursor:pointer;color:var(--muted);
+      border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:.4px;transition:all .15s}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .pane{padding:16px;max-width:900px;margin:0 auto;display:none}
+    .pane.active{display:block}
+    .form-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+    .form-section h3{font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+    .form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+    .form-group label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+    .form-group input,.form-group select{background:var(--surface2);border:1px solid var(--border);
+      border-radius:9px;padding:11px 13px;color:var(--txt);font-size:14px;width:100%;outline:none;min-height:44px}
+    .form-group input:focus{border-color:var(--accent)}
+    .form-group select option{background:#111}
+    .form-group textarea{background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+      padding:11px 13px;color:var(--txt);font-size:13px;width:100%;outline:none;min-height:200px;
+      resize:vertical;font-family:monospace}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:480px){.form-grid{grid-template-columns:1fr}}
+    .form-group.full{grid-column:1/-1}
+    .submit-btn{background:var(--accent);color:#000;border:none;border-radius:10px;
+      padding:13px;font-size:14px;font-weight:900;cursor:pointer;width:100%;min-height:48px}
+    .submit-btn:disabled{opacity:.4;cursor:not-allowed}
+    /* Summary cards */
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+    .summary-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:12px;text-align:center}
+    .summary-val{font-size:20px;font-weight:900;color:var(--accent)}
+    .summary-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:3px}
+    /* Entry rows */
+    .entry-row{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+      padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+    .entry-amt{font-size:16px;font-weight:900;min-width:100px}
+    .entry-amt.credit{color:var(--accent)}
+    .entry-amt.debit{color:var(--danger)}
+    .entry-info{flex:1;min-width:0}
+    .entry-desc{font-size:13px;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    .entry-meta{font-size:11px;color:var(--muted);margin-top:2px}
+    .entry-actions{display:flex;gap:6px;flex-shrink:0}
+    .entry-btn{padding:7px 11px;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;
+      border:1px solid var(--border);background:var(--surface2);color:var(--txt);white-space:nowrap}
+    .entry-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .entry-btn.ext:hover{border-color:var(--warn);color:var(--warn)}
+    .entry-btn:disabled{opacity:.4;cursor:not-allowed}
+    /* Statement list */
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:14px;margin-bottom:10px;cursor:pointer;transition:border-color .15s}
+    .stat-card:hover{border-color:rgba(113,255,0,.3)}
+    .stat-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .stat-name{font-size:14px;font-weight:800}
+    .match-rate{font-size:12px;font-weight:800}
+    .stat-meta{font-size:12px;color:var(--muted)}
+    .progress-bar{height:6px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;margin-top:8px}
+    .progress-fill{height:100%;border-radius:3px;background:var(--accent);transition:width .3s}
+    .shop-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:12px;margin-bottom:14px;display:flex;gap:8px;align-items:center}
+    .shop-bar label{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap}
+    .shop-bar input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--txt);font-size:13px;min-height:40px}
+    .shop-bar button{background:var(--accent);color:#000;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;border:1px solid var(--border);
+      padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;transition:all .3s;
+      pointer-events:none;z-index:9999;white-space:nowrap;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+    .empty{text-align:center;padding:50px 24px;color:var(--muted)}
+    .empty-icon{font-size:52px;margin-bottom:12px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .hint{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px;
+      background:rgba(0,188,212,.06);border:1px solid rgba(0,188,212,.15);border-radius:9px;padding:10px}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrLogo">SOKONI</div>
+  <span style="flex:1;font-size:14px;font-weight:800">Bank Reconciliation</span>
+</div>
+<div class="tabs">
+  <div class="tab active" data-pane="import"   onclick="_switchTab(this,'import')">Import</div>
+  <div class="tab" data-pane="unmatched"        onclick="_switchTab(this,'unmatched')">Unmatched</div>
+  <div class="tab" data-pane="statements"       onclick="_switchTab(this,'statements')">Statements</div>
+</div>
+
+<!-- Import pane -->
+<div class="pane active" id="importPane">
+  <div class="form-section">
+    <h3>Import Bank Statement</h3>
+    <div class="hint">Paste your bank statement as JSON array. Each entry needs: <code>date</code> (YYYY-MM-DD), <code>description</code>, <code>amount</code> (positive=credit, negative=debit). Optional: <code>reference</code>.</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Shop ID *</label><input type="text" id="impShopId"></div>
+      <div class="form-group"><label>Bank Name *</label><input type="text" id="impBankName" placeholder="e.g. KCB, Equity, NCBA"></div>
+      <div class="form-group"><label>Period Start</label><input type="date" id="impStart"></div>
+      <div class="form-group"><label>Period End</label><input type="date" id="impEnd"></div>
+      <div class="form-group full">
+        <label>Statement Entries (JSON) *</label>
+        <textarea id="impJson" placeholder='[
+  {"date":"2026-07-01","description":"CUSTOMER PAYMENT","amount":15000,"reference":"REF001"},
+  {"date":"2026-07-02","description":"RENT PAYMENT","amount":-45000}
+]'></textarea>
+      </div>
+    </div>
+    <button class="submit-btn" id="importBtn" onclick="_importStatement()">Import Statement</button>
+  </div>
+  <div id="importResult"></div>
+</div>
+
+<!-- Unmatched pane -->
+<div class="pane" id="unmatchedPane">
+  <div class="shop-bar">
+    <label>Shop</label>
+    <input type="text" id="unmShopId" placeholder="Shop ID">
+    <button onclick="_loadUnmatched()">Load</button>
+  </div>
+  <div id="unmatchedList"><div class="empty"><div class="empty-icon">&#x1F50D;</div><p>Enter shop ID above</p></div></div>
+</div>
+
+<!-- Statements pane -->
+<div class="pane" id="statementsPane">
+  <div class="shop-bar">
+    <label>Shop</label>
+    <input type="text" id="statShopId" placeholder="Shop ID">
+    <button onclick="_loadStatements()">Load</button>
+  </div>
+  <div id="statementsList"><div class="empty"><div class="empty-icon">&#x1F4C4;</div><p>Enter shop ID above</p></div></div>
+  <div id="statSummary" style="margin-top:14px"></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function(){
+var _uid = null;
+function _cf(n){ return firebase.functions().httpsCallable(n); }
+function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _fmt(n){ return 'KES ' + Number(n||0).toLocaleString('en-KE'); }
+function _toast(msg, type){
+  var el = document.getElementById('toast');
+  el.textContent=msg; el.className='show '+(type||'');
+  clearTimeout(el._t); el._t=setTimeout(function(){ el.className=''; },3500);
+}
+firebase.auth().onAuthStateChanged(function(u){ _uid = u ? u.uid : null; });
+
+window._switchTab = function(el, pane){
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  (el||document.querySelector('[data-pane="'+pane+'"]')).classList.add('active');
+  document.querySelectorAll('.pane').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById(pane+'Pane').classList.add('active');
+};
+
+window._importStatement = function(){
+  if (!_uid){ _toast('Sign in first','error'); return; }
+  var shopId   = document.getElementById('impShopId').value.trim();
+  var bankName = document.getElementById('impBankName').value.trim();
+  var start    = document.getElementById('impStart').value;
+  var end      = document.getElementById('impEnd').value;
+  var jsonStr  = document.getElementById('impJson').value.trim();
+  if (!shopId||!bankName||!jsonStr){ _toast('Fill required fields','error'); return; }
+  var entries;
+  try { entries = JSON.parse(jsonStr); } catch(e){ _toast('Invalid JSON — check format','error'); return; }
+  if (!Array.isArray(entries)||!entries.length){ _toast('Must be a non-empty JSON array','error'); return; }
+  var btn = document.getElementById('importBtn'); btn.disabled=true; btn.textContent='Importing...';
+  _cf('reconImportStatement')({ shopId:shopId, bankName:bankName, periodStart:start||null, periodEnd:end||null, entries:entries })
+    .then(function(r){
+      _toast('Imported '+r.data.entryCount+' entries','success');
+      document.getElementById('importResult').innerHTML = '<div style="background:rgba(113,255,0,.06);border:1px solid rgba(113,255,0,.2);border-radius:10px;padding:12px;margin-top:10px;font-size:13px;color:var(--accent)">&#x2705; Statement '+_esc(r.data.statementId)+' created with '+r.data.entryCount+' entries. Go to Unmatched to begin reconciliation.</div>';
+      document.getElementById('unmShopId').value = shopId;
+    }).catch(function(e){ _toast(e.message,'error'); })
+    .finally(function(){ btn.disabled=false; btn.textContent='Import Statement'; });
+};
+
+window._loadUnmatched = function(){
+  var shopId = document.getElementById('unmShopId').value.trim();
+  if (!shopId){ _toast('Enter shop ID','error'); return; }
+  var list = document.getElementById('unmatchedList');
+  list.innerHTML = '<div class="skeleton" style="height:80px;margin-bottom:8px"></div>'.repeat(4);
+  _cf('reconGetUnmatched')({ shopId:shopId }).then(function(r){
+    var entries = r.data.entries || [];
+    if (!entries.length){ list.innerHTML='<div class="empty"><div class="empty-icon">&#x2705;</div><p>All entries matched!</p></div>'; return; }
+    list.innerHTML = entries.map(function(e){
+      var isCredit = e.amount >= 0;
+      var amtClass = isCredit ? 'credit' : 'debit';
+      return '<div class="entry-row" id="row-'+_esc(e.id||e.statementId)+'">'+
+        '<div class="entry-amt '+amtClass+'">'+(isCredit?'+':'')+_fmt(Math.abs(e.amount))+'</div>'+
+        '<div class="entry-info"><div class="entry-desc">'+_esc(e.description)+'</div>'+
+        '<div class="entry-meta">'+_esc(e.date||'')+(e.reference?' &bull; Ref: '+_esc(e.reference):'')+'</div></div>'+
+        '<div class="entry-actions">'+
+        '<input type="text" placeholder="Txn ID" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--txt);font-size:12px;width:100px" id="txn-'+_esc(e.id)+'">'+
+        '<button class="entry-btn" onclick="_matchEntry(\''+_esc(e.id)+'\',\''+_esc(shopId)+'\',\''+_esc(e.id)+'\',this)">Match</button>'+
+        '<button class="entry-btn ext" onclick="_markExt(\''+_esc(e.id)+'\',\''+_esc(shopId)+'\',this)">External</button>'+
+        '</div></div>';
+    }).join('');
+  }).catch(function(e){ _toast(e.message,'error'); });
+};
+
+window._matchEntry = function(entryId, shopId, inputSuffix, btn){
+  var txnId = document.getElementById('txn-'+inputSuffix).value.trim();
+  if (!txnId){ _toast('Enter transaction ID','error'); return; }
+  btn.disabled=true; btn.textContent='...';
+  _cf('reconMatchTransaction')({ shopId:shopId, entryId:entryId, transactionId:txnId })
+    .then(function(){
+      _toast('Matched!','success');
+      var row = document.getElementById('row-'+entryId);
+      if (row) row.style.opacity='0.3';
+    }).catch(function(e){ _toast(e.message,'error'); btn.disabled=false; btn.textContent='Match'; });
+};
+
+window._markExt = function(entryId, shopId, btn){
+  var note = prompt('Mark as external — enter a note:');
+  if (note === null) return;
+  btn.disabled=true;
+  _cf('reconMarkExternal')({ shopId:shopId, entryId:entryId, note:note })
+    .then(function(){
+      _toast('Marked external','success');
+      var row = btn.closest('.entry-row');
+      if (row) row.style.opacity='0.3';
+    }).catch(function(e){ _toast(e.message,'error'); btn.disabled=false; });
+};
+
+window._loadStatements = function(){
+  var shopId = document.getElementById('statShopId').value.trim();
+  if (!shopId){ _toast('Enter shop ID','error'); return; }
+  var list = document.getElementById('statementsList');
+  list.innerHTML = '<div class="skeleton" style="height:100px;margin-bottom:10px"></div>'.repeat(2);
+  firebase.firestore().collection('bankStatements').where('shopId','==',shopId).limit(20).get()
+    .then(function(snap){
+      var statements = snap.docs.map(function(d){ return d.data(); });
+      statements.sort(function(a,b){ return (b.importedAt && b.importedAt.toMillis ? b.importedAt.toMillis() : 0) - (a.importedAt && a.importedAt.toMillis ? a.importedAt.toMillis() : 0); });
+      if (!statements.length){ list.innerHTML='<div class="empty"><div class="empty-icon">&#x1F4C4;</div><p>No statements imported yet</p></div>'; return; }
+      list.innerHTML = statements.map(function(s){
+        var matchRate = s.entryCount > 0 ? Math.round((s.matchedCount/s.entryCount)*100) : 0;
+        return '<div class="stat-card" onclick="_viewSummary(\''+_esc(s.id)+'\',\''+_esc(shopId)+'\')">'+
+          '<div class="stat-card-hdr"><span class="stat-name">'+_esc(s.bankName)+'</span>'+
+          '<span class="match-rate" style="color:'+(matchRate>=80?'var(--accent)':matchRate>=50?'var(--warn)':'var(--danger)')+'">'+matchRate+'% matched</span></div>'+
+          '<div class="stat-meta">'+s.entryCount+' entries &bull; '+s.matchedCount+' matched &bull; ID: '+_esc(s.id.slice(0,8))+'...</div>'+
+          '<div class="progress-bar"><div class="progress-fill" style="width:'+matchRate+'%"></div></div>'+
+          '</div>';
+      }).join('');
+    }).catch(function(){ list.innerHTML='<div class="empty"><div class="empty-icon">&#x274C;</div><p>Could not load statements</p></div>'; });
+};
+
+window._viewSummary = function(statId, shopId){
+  var sumEl = document.getElementById('statSummary');
+  sumEl.innerHTML = '<div class="skeleton" style="height:120px"></div>';
+  _cf('reconGetSummary')({ shopId:shopId, statementId:statId }).then(function(r){
+    var s = r.data.summary;
+    sumEl.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px">'+
+      '<div style="font-size:13px;font-weight:800;margin-bottom:10px">Summary: '+_esc(r.data.statement.bankName)+'</div>'+
+      '<div class="summary-grid">'+
+      '<div class="summary-card"><div class="summary-val">'+s.totalEntries+'</div><div class="summary-lbl">Total</div></div>'+
+      '<div class="summary-card"><div class="summary-val" style="color:var(--accent)">'+s.matched+'</div><div class="summary-lbl">Matched</div></div>'+
+      '<div class="summary-card"><div class="summary-val" style="color:var(--warn)">'+s.unmatched+'</div><div class="summary-lbl">Unmatched</div></div>'+
+      '<div class="summary-card"><div class="summary-val" style="color:var(--muted)">'+s.external+'</div><div class="summary-lbl">External</div></div>'+
+      '<div class="summary-card"><div class="summary-val">'+_fmt(s.totalCredits)+'</div><div class="summary-lbl">Credits</div></div>'+
+      '<div class="summary-card"><div class="summary-val">'+_fmt(s.totalDebits)+'</div><div class="summary-lbl">Debits</div></div>'+
+      '</div>'+
+      '<div style="text-align:center;font-size:22px;font-weight:900;color:var(--accent);margin-top:8px">'+s.matchRate+'% Match Rate</div>'+
+      '</div>';
+  }).catch(function(e){ sumEl.innerHTML=''; _toast(e.message,'error'); });
+};
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Expense Management &mdash; SOKONI Finance</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,button,textarea{font-family:inherit}
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);
+      border-bottom:1px solid var(--border);padding:12px 16px;
+      display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+    .hdr-btn{background:var(--accent);color:#000;border:none;border-radius:9px;
+      padding:8px 14px;font-size:12px;font-weight:900;cursor:pointer;flex-shrink:0}
+    .tabs{display:flex;border-bottom:1px solid var(--border);
+      position:sticky;top:57px;z-index:100;background:rgba(5,5,5,.97)}
+    .tab{flex:1;text-align:center;padding:11px 6px;font-size:11px;font-weight:800;
+      cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;
+      text-transform:uppercase;letter-spacing:.4px;transition:all .15s}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .pane{padding:16px;max-width:800px;margin:0 auto;display:none}
+    .pane.active{display:block}
+    .shop-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:12px;margin-bottom:14px;display:flex;gap:8px;align-items:center}
+    .shop-bar label{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap}
+    .shop-bar input{flex:1;background:var(--surface2);border:1px solid var(--border);
+      border-radius:8px;padding:9px 12px;color:var(--txt);font-size:13px;min-height:40px}
+    .shop-bar button{background:var(--accent);color:#000;border:none;border-radius:8px;
+      padding:9px 14px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
+    /* Claim cards */
+    .e-card{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);padding:14px;margin-bottom:10px}
+    .e-card-hdr{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+    .e-card-info{flex:1}
+    .e-card-title{font-size:14px;font-weight:800;margin-bottom:3px}
+    .e-card-sub{font-size:12px;color:var(--muted)}
+    .status-badge{display:inline-block;padding:3px 9px;border-radius:20px;
+      font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+    .status-pending{background:rgba(255,179,0,.12);color:var(--warn)}
+    .status-approved{background:rgba(0,188,212,.12);color:var(--info)}
+    .status-rejected{background:rgba(244,67,54,.12);color:var(--danger)}
+    .status-paid{background:rgba(113,255,0,.12);color:var(--accent)}
+    .e-amount{font-size:18px;font-weight:900;color:var(--accent);flex-shrink:0}
+    .e-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .e-btn{padding:8px 13px;border-radius:9px;font-size:12px;font-weight:800;
+      cursor:pointer;border:1px solid var(--border);background:var(--surface2);
+      color:var(--txt);transition:all .15s}
+    .e-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .e-btn.approve{color:var(--accent);border-color:rgba(113,255,0,.3)}
+    .e-btn.reject{color:var(--danger);border-color:rgba(244,67,54,.3)}
+    .e-btn.pay{background:var(--accent);color:#000;border:none}
+    .e-btn:disabled{opacity:.4;cursor:not-allowed}
+    /* Submit form */
+    .form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+    .form-group label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+    .form-group input,.form-group select,.form-group textarea{background:var(--surface2);border:1px solid var(--border);
+      border-radius:9px;padding:11px 13px;color:var(--txt);font-size:14px;width:100%;outline:none;min-height:44px}
+    .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
+    .form-group select option{background:#111}
+    .form-group textarea{min-height:70px;resize:vertical}
+    .submit-btn{background:var(--accent);color:#000;border:none;border-radius:10px;
+      padding:13px;font-size:14px;font-weight:900;cursor:pointer;width:100%;min-height:48px}
+    .submit-btn:disabled{opacity:.4;cursor:not-allowed}
+    /* Reject modal */
+    #rejectModal{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.85);align-items:center;justify-content:center}
+    #rejectModal.open{display:flex}
+    .modal-box{background:#0d0d0d;border:1px solid var(--border);border-radius:var(--radius);padding:20px;width:90%;max-width:400px}
+    .modal-box h3{font-size:14px;font-weight:800;margin-bottom:12px}
+    .modal-box textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+      padding:11px;color:var(--txt);font-size:13px;min-height:80px;resize:vertical;margin-bottom:12px}
+    .modal-btns{display:flex;gap:8px}
+    .modal-btns button{flex:1;padding:11px;border-radius:9px;font-size:13px;font-weight:800;cursor:pointer;border:none}
+    .modal-btns .cancel{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+    .modal-btns .confirm{background:var(--danger);color:#fff}
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;border:1px solid var(--border);
+      padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;
+      transition:all .3s;pointer-events:none;z-index:9999;white-space:nowrap;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+    .empty{text-align:center;padding:50px 24px;color:var(--muted)}
+    .empty-icon{font-size:52px;margin-bottom:12px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrLogo">SOKONI</div>
+  <span style="flex:1;font-size:14px;font-weight:800">Expenses</span>
+  <button class="hdr-btn" onclick="_switchTab(null,'submit')">+ Claim</button>
+</div>
+<div class="tabs">
+  <div class="tab active" data-pane="mine"    onclick="_switchTab(this,'mine')">My Claims</div>
+  <div class="tab" data-pane="pending"        onclick="_switchTab(this,'pending')">Pending</div>
+  <div class="tab" data-pane="all"            onclick="_switchTab(this,'all')">All</div>
+  <div class="tab" data-pane="submit"         onclick="_switchTab(this,'submit')">Submit</div>
+</div>
+
+<!-- My Claims -->
+<div class="pane active" id="minePane">
+  <div class="shop-bar">
+    <label>Shop</label>
+    <input type="text" id="mineShopId" placeholder="Shop ID">
+    <button onclick="_loadMine()">Load</button>
+  </div>
+  <div id="mineList"><div class="empty"><div class="empty-icon">&#x1F4CB;</div><p>Enter shop ID above</p></div></div>
+</div>
+
+<!-- Pending Approval -->
+<div class="pane" id="pendingPane">
+  <div class="shop-bar">
+    <label>Shop</label>
+    <input type="text" id="pendingShopId" placeholder="Shop ID">
+    <button onclick="_loadPending()">Load</button>
+  </div>
+  <div id="pendingList"><div class="empty"><div class="empty-icon">&#x231B;</div><p>Enter shop ID above</p></div></div>
+</div>
+
+<!-- All -->
+<div class="pane" id="allPane">
+  <div class="shop-bar">
+    <label>Shop</label>
+    <input type="text" id="allShopId" placeholder="Shop ID">
+    <button onclick="_loadAll()">Load</button>
+  </div>
+  <div id="allList"><div class="empty"><div class="empty-icon">&#x1F4CB;</div><p>Enter shop ID above</p></div></div>
+</div>
+
+<!-- Submit -->
+<div class="pane" id="submitPane">
+  <div class="form-group"><label>Shop ID *</label><input type="text" id="sShopId"></div>
+  <div class="form-group"><label>Amount (KES) *</label><input type="number" id="sAmount" min="1" placeholder="0"></div>
+  <div class="form-group">
+    <label>Category</label>
+    <select id="sCat">
+      <option value="general">General</option>
+      <option value="travel">Travel</option>
+      <option value="meals">Meals &amp; Entertainment</option>
+      <option value="office">Office Supplies</option>
+      <option value="utilities">Utilities</option>
+      <option value="repairs">Repairs &amp; Maintenance</option>
+      <option value="marketing">Marketing</option>
+      <option value="training">Training</option>
+      <option value="other">Other</option>
+    </select>
+  </div>
+  <div class="form-group"><label>Description *</label><textarea id="sDesc" placeholder="What was this expense for?"></textarea></div>
+  <div class="form-group"><label>Expense Date</label><input type="date" id="sDate"></div>
+  <div class="form-group"><label>Receipt URL (optional)</label><input type="url" id="sReceipt" placeholder="https://..."></div>
+  <button class="submit-btn" id="submitBtn" onclick="_submitExpense()">Submit Claim</button>
+</div>
+
+<!-- Reject modal -->
+<div id="rejectModal">
+  <div class="modal-box">
+    <h3>Reject Expense</h3>
+    <textarea id="rejectReason" placeholder="Reason for rejection (required)"></textarea>
+    <div class="modal-btns">
+      <button class="cancel" onclick="_closeReject()">Cancel</button>
+      <button class="confirm" id="rejectConfirmBtn" onclick="_confirmReject()">Reject</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function () {
+var _uid = null, _pendingRejectId = null, _pendingRejectShop = null;
+function _cf(n) { return firebase.functions().httpsCallable(n); }
+function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _fmt(n) { return 'KES ' + Number(n||0).toLocaleString('en-KE'); }
+function _toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show '+(type||'');
+  clearTimeout(el._t); el._t = setTimeout(function(){ el.className=''; },3500);
+}
+function _mills(ts) { return ts ? (ts.toMillis ? ts.toMillis() : new Date(ts).getTime()) : 0; }
+
+firebase.auth().onAuthStateChanged(function(u){ _uid = u ? u.uid : null; });
+document.getElementById('sDate').value = new Date().toISOString().split('T')[0];
+
+window._switchTab = function(el, pane) {
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  (el || document.querySelector('[data-pane="'+pane+'"]')).classList.add('active');
+  document.querySelectorAll('.pane').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById(pane+'Pane').classList.add('active');
+};
+
+function _renderCards(expenses, listId, showActions) {
+  var list = document.getElementById(listId);
+  if (!expenses.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">&#x1F4CB;</div><p>No expenses found</p></div>'; return; }
+  list.innerHTML = expenses.map(function(e) {
+    var statusHtml = '<span class="status-badge status-'+e.status+'">'+e.status+'</span>';
+    var actionsHtml = '';
+    if (showActions) {
+      if (e.status === 'pending') {
+        actionsHtml = '<div class="e-actions">'+
+          '<button class="e-btn approve" onclick="_approve(\''+_esc(e.id)+'\',\''+_esc(e.shopId)+'\',this)">Approve</button>'+
+          '<button class="e-btn reject" onclick="_openReject(\''+_esc(e.id)+'\',\''+_esc(e.shopId)+'\')">Reject</button>'+
+          '</div>';
+      } else if (e.status === 'approved') {
+        actionsHtml = '<div class="e-actions"><button class="e-btn pay" onclick="_markPaid(\''+_esc(e.id)+'\',\''+_esc(e.shopId)+'\',this)">Mark Paid</button></div>';
+      }
+    }
+    return '<div class="e-card">'+
+      '<div class="e-card-hdr">'+
+      '<div class="e-card-info"><div class="e-card-title">'+_esc(e.description)+'</div>'+
+      '<div class="e-card-sub">'+_esc(e.category)+' &bull; '+_esc((e.expenseDate||'').split('T')[0])+' &bull; '+statusHtml+'</div></div>'+
+      '<span class="e-amount">'+_fmt(e.amount)+'</span>'+
+      '</div>'+actionsHtml+'</div>';
+  }).join('');
+}
+
+window._loadMine = function() {
+  var shopId = document.getElementById('mineShopId').value.trim();
+  if (!shopId) { _toast('Enter shop ID','error'); return; }
+  document.getElementById('mineList').innerHTML = '<div class="skeleton" style="height:90px;margin-bottom:10px"></div>'.repeat(3);
+  _cf('expenseGetMine')({ shopId: shopId }).then(function(r){ _renderCards(r.data.expenses||[], 'mineList', false); }).catch(function(e){ _toast(e.message,'error'); });
+};
+
+window._loadPending = function() {
+  var shopId = document.getElementById('pendingShopId').value.trim();
+  if (!shopId) { _toast('Enter shop ID','error'); return; }
+  document.getElementById('pendingList').innerHTML = '<div class="skeleton" style="height:90px;margin-bottom:10px"></div>'.repeat(3);
+  _cf('expenseGetPending')({ shopId: shopId }).then(function(r){ _renderCards(r.data.expenses||[], 'pendingList', true); }).catch(function(e){ _toast(e.message,'error'); });
+};
+
+window._loadAll = function() {
+  var shopId = document.getElementById('allShopId').value.trim();
+  if (!shopId) { _toast('Enter shop ID','error'); return; }
+  document.getElementById('allList').innerHTML = '<div class="skeleton" style="height:90px;margin-bottom:10px"></div>'.repeat(3);
+  _cf('expenseList')({ shopId: shopId }).then(function(r){ _renderCards(r.data.expenses||[], 'allList', true); }).catch(function(e){ _toast(e.message,'error'); });
+};
+
+window._approve = function(expenseId, shopId, btn) {
+  btn.disabled = true; btn.textContent = 'Approving...';
+  _cf('expenseApprove')({ expenseId: expenseId, shopId: shopId })
+    .then(function(){ _toast('Expense approved','success'); _loadPending(); })
+    .catch(function(e){ _toast(e.message,'error'); btn.disabled=false; btn.textContent='Approve'; });
+};
+
+window._openReject = function(expenseId, shopId) {
+  _pendingRejectId = expenseId; _pendingRejectShop = shopId;
+  document.getElementById('rejectReason').value = '';
+  document.getElementById('rejectModal').classList.add('open');
+};
+window._closeReject = function() { document.getElementById('rejectModal').classList.remove('open'); };
+window._confirmReject = function() {
+  var reason = document.getElementById('rejectReason').value.trim();
+  if (!reason) { _toast('Reason required','error'); return; }
+  var btn = document.getElementById('rejectConfirmBtn'); btn.disabled = true;
+  _cf('expenseReject')({ expenseId: _pendingRejectId, shopId: _pendingRejectShop, reason: reason })
+    .then(function(){ _toast('Expense rejected','success'); _closeReject(); _loadPending(); })
+    .catch(function(e){ _toast(e.message,'error'); }).finally(function(){ btn.disabled=false; });
+};
+
+window._markPaid = function(expenseId, shopId, btn) {
+  btn.disabled = true; btn.textContent = 'Processing...';
+  _cf('expenseMarkPaid')({ expenseId: expenseId, shopId: shopId, paymentMethod: 'cash' })
+    .then(function(){ _toast('Marked as paid','success'); _loadPending(); _loadAll(); })
+    .catch(function(e){ _toast(e.message,'error'); btn.disabled=false; btn.textContent='Mark Paid'; });
+};
+
+window._submitExpense = function() {
+  if (!_uid) { _toast('Sign in first','error'); return; }
+  var shopId = document.getElementById('sShopId').value.trim();
+  var amount = parseFloat(document.getElementById('sAmount').value)||0;
+  var cat    = document.getElementById('sCat').value;
+  var desc   = document.getElementById('sDesc').value.trim();
+  var date   = document.getElementById('sDate').value;
+  var receipt = document.getElementById('sReceipt').value.trim();
+  if (!shopId||!amount||!desc) { _toast('Fill required fields','error'); return; }
+  var btn = document.getElementById('submitBtn'); btn.disabled=true; btn.textContent='Submitting...';
+  _cf('expenseCreate')({ shopId:shopId, amount:amount, category:cat, description:desc, date:date, receiptUrl:receipt||null })
+    .then(function(){ _toast('Claim submitted!','success'); document.getElementById('sAmount').value=''; document.getElementById('sDesc').value=''; document.getElementById('mineShopId').value=shopId; _switchTab(null,'mine'); _loadMine(); })
+    .catch(function(e){ _toast(e.message,'error'); }).finally(function(){ btn.disabled=false; btn.textContent='Submit Claim'; });
+};
+})();
+</script>
+</body>
+</html>

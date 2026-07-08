@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Budget Manager &mdash; SOKONI Finance</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,button,textarea{font-family:inherit}
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);
+      border-bottom:1px solid var(--border);padding:12px 16px;
+      display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+    .hdr-btn{background:var(--accent);color:#000;border:none;border-radius:9px;
+      padding:8px 14px;font-size:12px;font-weight:900;cursor:pointer;flex-shrink:0}
+    .tabs{display:flex;border-bottom:1px solid var(--border);
+      position:sticky;top:57px;z-index:100;background:rgba(5,5,5,.97)}
+    .tab{flex:1;text-align:center;padding:12px;font-size:12px;font-weight:800;
+      cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;
+      text-transform:uppercase;letter-spacing:.5px;transition:all .15s}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .pane{padding:16px;max-width:900px;margin:0 auto;display:none}
+    .pane.active{display:block}
+    .shop-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:12px;margin-bottom:14px;display:flex;gap:10px;align-items:center}
+    .shop-bar label{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;flex-shrink:0}
+    .shop-bar input{flex:1;background:var(--surface2);border:1px solid var(--border);
+      border-radius:8px;padding:9px 12px;color:var(--txt);font-size:13px;min-height:40px}
+    .shop-bar button{background:var(--accent);color:#000;border:none;border-radius:8px;
+      padding:9px 14px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
+    .b-card{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);padding:14px;margin-bottom:12px}
+    .b-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .b-name{font-size:15px;font-weight:800}
+    .b-period-badge{font-size:11px;background:rgba(0,188,212,.1);color:var(--info);
+      border:1px solid rgba(0,188,212,.2);border-radius:20px;padding:3px 9px;font-weight:700}
+    .b-progress-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .b-progress-track{flex:1;height:7px;background:rgba(255,255,255,.1);border-radius:4px;overflow:hidden}
+    .b-progress-fill{height:100%;border-radius:4px;background:var(--accent);transition:width .3s}
+    .b-progress-fill.warn{background:var(--warn)}
+    .b-progress-fill.danger{background:var(--danger)}
+    .b-progress-pct{font-size:12px;font-weight:800;min-width:36px;text-align:right}
+    .b-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:10px}
+    .b-cat{background:var(--surface2);border-radius:9px;padding:10px}
+    .b-cat-name{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:5px;
+      overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    .b-cat-track{height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-bottom:4px}
+    .b-cat-fill{height:100%;border-radius:3px;background:var(--accent)}
+    .b-cat-fill.warn{background:var(--warn)}
+    .b-cat-fill.danger{background:var(--danger)}
+    .b-cat-amounts{font-size:11px;color:var(--muted)}
+    .b-cat-amounts strong{color:var(--txt)}
+    .b-totals{display:flex;gap:10px;flex-wrap:wrap}
+    .b-total-item{flex:1;background:var(--surface2);border-radius:9px;padding:10px;min-width:90px;text-align:center}
+    .b-total-val{font-size:16px;font-weight:900;color:var(--accent)}
+    .b-total-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+    /* Create form */
+    .form-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+    .form-section h3{font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:480px){.form-grid{grid-template-columns:1fr}}
+    .form-group{display:flex;flex-direction:column;gap:5px}
+    .form-group.full{grid-column:1/-1}
+    .form-group label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+    .form-group input,.form-group select{background:var(--surface2);border:1px solid var(--border);
+      border-radius:9px;padding:11px 13px;color:var(--txt);font-size:14px;width:100%;outline:none;min-height:44px}
+    .form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+    .form-group select option{background:#111}
+    .cat-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    .cat-row input{flex:1;background:var(--surface2);border:1px solid var(--border);
+      border-radius:9px;padding:9px 12px;color:var(--txt);font-size:13px;min-height:40px}
+    .add-cat-btn,.rm-cat-btn{background:var(--surface2);border:1px solid var(--border);
+      border-radius:8px;padding:8px 12px;color:var(--muted);font-size:14px;cursor:pointer;flex-shrink:0}
+    .add-cat-btn:hover{border-color:var(--accent);color:var(--accent)}
+    .rm-cat-btn:hover{border-color:var(--danger);color:var(--danger)}
+    .submit-btn{background:var(--accent);color:#000;border:none;border-radius:10px;
+      padding:13px;font-size:14px;font-weight:900;cursor:pointer;width:100%;min-height:48px;margin-top:4px}
+    .submit-btn:disabled{opacity:.4;cursor:not-allowed}
+    /* Alerts */
+    .alert-card{background:var(--surface);border:1px solid var(--border);
+      border-radius:var(--radius);padding:14px;margin-bottom:10px;
+      display:flex;align-items:center;gap:12px}
+    .alert-card.exceeded{border-color:rgba(244,67,54,.3)}
+    .alert-card.warning{border-color:rgba(255,179,0,.3)}
+    .alert-icon{font-size:28px;flex-shrink:0}
+    .alert-info{flex:1}
+    .alert-title{font-size:13px;font-weight:800;margin-bottom:3px}
+    .alert-sub{font-size:12px;color:var(--muted)}
+    .alert-pct{font-size:20px;font-weight:900}
+    .alert-pct.exceeded{color:var(--danger)}
+    .alert-pct.warning{color:var(--warn)}
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;
+      border:1px solid var(--border);padding:10px 18px;border-radius:10px;font-size:13px;
+      font-weight:700;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;
+      white-space:nowrap;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+    .empty{text-align:center;padding:60px 24px;color:var(--muted)}
+    .empty-icon{font-size:52px;margin-bottom:12px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrLogo">SOKONI</div>
+  <span style="flex:1;font-size:14px;font-weight:800">Budget Manager</span>
+  <button class="hdr-btn" onclick="_switchTab(null,'create')">+ Budget</button>
+</div>
+<div class="tabs">
+  <div class="tab active" data-pane="overview" onclick="_switchTab(this,'overview')">Overview</div>
+  <div class="tab" data-pane="create"   onclick="_switchTab(this,'create')">Create</div>
+  <div class="tab" data-pane="alerts"   onclick="_switchTab(this,'alerts')">Alerts</div>
+</div>
+
+<!-- Overview -->
+<div class="pane active" id="overviewPane">
+  <div class="shop-bar">
+    <label>Shop ID</label>
+    <input type="text" id="shopIdInput" placeholder="Enter your shop ID">
+    <button onclick="_loadBudgets()">Load</button>
+  </div>
+  <div id="budgetList"><div class="empty"><div class="empty-icon">&#x1F4CA;</div><p>Enter your shop ID above</p></div></div>
+</div>
+
+<!-- Create -->
+<div class="pane" id="createPane">
+  <div class="form-section">
+    <h3>Budget Details</h3>
+    <div class="form-grid">
+      <div class="form-group full"><label>Shop ID *</label><input type="text" id="cShopId" placeholder="Shop ID"></div>
+      <div class="form-group full"><label>Budget Name *</label><input type="text" id="cName" placeholder="e.g. Q3 2026 Operations"></div>
+      <div class="form-group">
+        <label>Period *</label>
+        <select id="cPeriod">
+          <option value="monthly">Monthly</option>
+          <option value="quarterly" selected>Quarterly</option>
+          <option value="annual">Annual</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Total Budget (KES) *</label><input type="number" id="cTotal" placeholder="0" min="1"></div>
+      <div class="form-group"><label>Start Date *</label><input type="date" id="cStart"></div>
+      <div class="form-group"><label>End Date *</label><input type="date" id="cEnd"></div>
+    </div>
+  </div>
+  <div class="form-section">
+    <h3>Category Allocations <span style="color:var(--muted);font-weight:400;text-transform:none">(optional)</span></h3>
+    <div id="catRows"></div>
+    <button class="add-cat-btn" onclick="_addCatRow()" style="margin-top:4px">+ Add Category</button>
+  </div>
+  <div id="createAllocSummary" style="margin-bottom:12px;font-size:12px;color:var(--muted);text-align:right"></div>
+  <button class="submit-btn" id="createBtn" onclick="_createBudget()">Create Budget</button>
+</div>
+
+<!-- Alerts -->
+<div class="pane" id="alertsPane">
+  <div class="shop-bar">
+    <label>Shop ID</label>
+    <input type="text" id="alertShopId" placeholder="Enter your shop ID">
+    <button onclick="_loadAlerts()">Check</button>
+  </div>
+  <div id="alertsList"><div class="empty"><div class="empty-icon">&#x1F514;</div><p>Enter your shop ID above</p></div></div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function () {
+var _uid = null;
+function _cf(n) { return firebase.functions().httpsCallable(n); }
+function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _fmt(n) { return 'KES ' + Number(n||0).toLocaleString('en-KE'); }
+function _toast(msg, type) {
+  var el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show ' + (type||'');
+  clearTimeout(el._t); el._t = setTimeout(function(){ el.className=''; }, 3500);
+}
+
+firebase.auth().onAuthStateChanged(function(u){ _uid = u ? u.uid : null; });
+
+// Set default dates
+var today = new Date().toISOString().split('T')[0];
+document.getElementById('cStart').value = today;
+var endDef = new Date(); endDef.setMonth(endDef.getMonth() + 3);
+document.getElementById('cEnd').value = endDef.toISOString().split('T')[0];
+
+window._switchTab = function(el, pane) {
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  (el || document.querySelector('[data-pane="'+pane+'"]')).classList.add('active');
+  document.querySelectorAll('.pane').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById(pane+'Pane').classList.add('active');
+};
+
+window._loadBudgets = function() {
+  var shopId = document.getElementById('shopIdInput').value.trim();
+  if (!shopId) { _toast('Enter shop ID', 'error'); return; }
+  document.getElementById('budgetList').innerHTML = '<div class="skeleton" style="height:160px;margin-bottom:12px"></div>'.repeat(2);
+  _cf('budgetList')({ shopId: shopId, status: 'active' }).then(function(r) {
+    var budgets = r.data.budgets || [];
+    if (!budgets.length) { document.getElementById('budgetList').innerHTML = '<div class="empty"><div class="empty-icon">&#x1F4CA;</div><p>No active budgets</p></div>'; return; }
+    document.getElementById('budgetList').innerHTML = budgets.map(function(b) {
+      var totalSpent = (b.categories||[]).reduce(function(s,c){ return s+(c.spent||0); }, 0);
+      var pct = b.totalAmount > 0 ? Math.round((totalSpent/b.totalAmount)*100) : 0;
+      var fillClass = pct >= 100 ? 'danger' : pct >= 80 ? 'warn' : '';
+      var catsHtml = (b.categories||[]).slice(0,6).map(function(c) {
+        var cp = c.allocated > 0 ? Math.min(100,Math.round(((c.spent||0)/c.allocated)*100)) : 0;
+        var cf = cp >= 100 ? 'danger' : cp >= 80 ? 'warn' : '';
+        return '<div class="b-cat"><div class="b-cat-name">'+_esc(c.name)+'</div>'+
+          '<div class="b-cat-track"><div class="b-cat-fill '+cf+'" style="width:'+cp+'%"></div></div>'+
+          '<div class="b-cat-amounts"><strong>'+_fmt(c.spent||0)+'</strong> / '+_fmt(c.allocated)+'</div></div>';
+      }).join('');
+      return '<div class="b-card">'+
+        '<div class="b-card-hdr"><span class="b-name">'+_esc(b.name)+'</span><span class="b-period-badge">'+_esc(b.period)+'</span></div>'+
+        '<div class="b-progress-row"><div class="b-progress-track"><div class="b-progress-fill '+fillClass+'" style="width:'+pct+'%"></div></div><span class="b-progress-pct">'+pct+'%</span></div>'+
+        (b.categories&&b.categories.length ? '<div class="b-cats">'+catsHtml+'</div>' : '')+
+        '<div class="b-totals">'+
+        '<div class="b-total-item"><div class="b-total-val">'+_fmt(b.totalAmount)+'</div><div class="b-total-lbl">Total</div></div>'+
+        '<div class="b-total-item"><div class="b-total-val">'+_fmt(totalSpent)+'</div><div class="b-total-lbl">Spent</div></div>'+
+        '<div class="b-total-item"><div class="b-total-val" style="color:'+(pct>=100?'var(--danger)':'var(--accent)')+'">'+_fmt(b.totalAmount-totalSpent)+'</div><div class="b-total-lbl">Remaining</div></div>'+
+        '</div></div>';
+    }).join('');
+  }).catch(function(e){ _toast(e.message, 'error'); document.getElementById('budgetList').innerHTML = '<div class="empty"><div class="empty-icon">&#x274C;</div><p>'+_esc(e.message)+'</p></div>'; });
+};
+
+// Category rows for create
+var _catCount = 0;
+window._addCatRow = function() {
+  _catCount++;
+  var id = 'cat'+_catCount;
+  var row = document.createElement('div');
+  row.className = 'cat-row'; row.id = id;
+  row.innerHTML = '<input type="text" placeholder="Category name" class="cat-name">'+
+    '<input type="number" placeholder="Allocated (KES)" min="0" class="cat-alloc" oninput="_updateAllocSummary()">'+
+    '<button class="rm-cat-btn" onclick="_rmCat(\''+id+'\')">&#x2715;</button>';
+  document.getElementById('catRows').appendChild(row);
+};
+window._rmCat = function(id) { var el = document.getElementById(id); if (el) el.remove(); _updateAllocSummary(); };
+window._updateAllocSummary = function() {
+  var total = parseFloat(document.getElementById('cTotal').value)||0;
+  var alloc = Array.from(document.querySelectorAll('.cat-alloc')).reduce(function(s,el){ return s+(parseFloat(el.value)||0); },0);
+  document.getElementById('createAllocSummary').textContent = alloc > 0 ? 'Allocated: '+_fmt(alloc)+' / '+_fmt(total) : '';
+};
+document.getElementById('cTotal').addEventListener('input', _updateAllocSummary);
+
+window._createBudget = function() {
+  if (!_uid) { _toast('Sign in first', 'error'); return; }
+  var shopId = document.getElementById('cShopId').value.trim();
+  var name   = document.getElementById('cName').value.trim();
+  var period = document.getElementById('cPeriod').value;
+  var total  = parseFloat(document.getElementById('cTotal').value)||0;
+  var start  = document.getElementById('cStart').value;
+  var end    = document.getElementById('cEnd').value;
+  if (!shopId||!name||!total||!start||!end) { _toast('Fill required fields', 'error'); return; }
+  if (total <= 0) { _toast('Total must be > 0', 'error'); return; }
+  var cats = [];
+  document.querySelectorAll('.cat-row').forEach(function(row) {
+    var n = row.querySelector('.cat-name').value.trim();
+    var a = parseFloat(row.querySelector('.cat-alloc').value)||0;
+    if (n) cats.push({ name: n, allocated: a });
+  });
+  var btn = document.getElementById('createBtn'); btn.disabled = true; btn.textContent = 'Creating...';
+  _cf('budgetCreate')({ shopId:shopId, name:name, period:period, startDate:start, endDate:end, totalAmount:total, categories:cats })
+    .then(function(r) {
+      _toast('Budget created! ID: '+r.data.budgetId, 'success');
+      document.getElementById('cName').value = '';
+      document.getElementById('cTotal').value = '';
+      document.getElementById('catRows').innerHTML = '';
+      _catCount = 0;
+      document.getElementById('shopIdInput').value = shopId;
+      _switchTab(null,'overview'); _loadBudgets();
+    }).catch(function(e){ _toast(e.message,'error'); })
+    .finally(function(){ btn.disabled=false; btn.textContent='Create Budget'; });
+};
+
+window._loadAlerts = function() {
+  var shopId = document.getElementById('alertShopId').value.trim();
+  if (!shopId) { _toast('Enter shop ID', 'error'); return; }
+  document.getElementById('alertsList').innerHTML = '<div class="skeleton" style="height:80px;margin-bottom:10px"></div>'.repeat(3);
+  _cf('budgetGetAlerts')({ shopId: shopId }).then(function(r) {
+    var alerts = r.data.alerts || [];
+    if (!alerts.length) { document.getElementById('alertsList').innerHTML = '<div class="empty"><div class="empty-icon">&#x2705;</div><p>No budget alerts — all categories within limits</p></div>'; return; }
+    document.getElementById('alertsList').innerHTML = alerts.map(function(a) {
+      return '<div class="alert-card '+a.severity+'">'+
+        '<div class="alert-icon">'+(a.severity==='exceeded'?'&#x1F6A8;':'&#x26A0;&#xFE0F;')+'</div>'+
+        '<div class="alert-info"><div class="alert-title">'+_esc(a.budgetName)+' — '+_esc(a.category)+'</div>'+
+        '<div class="alert-sub">Spent: '+_fmt(a.spent)+' / '+_fmt(a.allocated)+'</div></div>'+
+        '<div class="alert-pct '+a.severity+'">'+a.pct+'%</div>'+
+        '</div>';
+    }).join('');
+  }).catch(function(e){ _toast(e.message,'error'); });
+};
+})();
+</script>
+</body>
+</html>

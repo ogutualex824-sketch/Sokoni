@@ -5,6 +5,81 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Finance OS (Sprint 4.3) — 2026-07-08
+
+**Files:**
+- `functions/finance-os-sprint43.js` — NEW (37 CFs)
+- `finance-budget.html` — NEW (Budget creation, tracking, alerts)
+- `finance-expenses.html` — NEW (Expense claims + approval workflow)
+- `finance-reconcile.html` — NEW (Bank statement import + matching)
+- `finance-invoices.html` — NEW (Invoice creation + lifecycle)
+- `functions/index.js` — 37 new exports added
+
+**New CFs (37 — quota-blocked):**
+
+| Export | Module | Auth |
+|---|---|---|
+| `budgetCreate` | Budgeting | Manager |
+| `budgetUpdate` | Budgeting | Manager |
+| `budgetGet` | Budgeting | Shop member |
+| `budgetList` | Budgeting | Shop member |
+| `budgetRecordExpense` | Budgeting | Shop member |
+| `budgetGetAlerts` | Budgeting | Shop member |
+| `expenseCreate` | Expenses | Shop member |
+| `expenseApprove` | Expenses | Manager |
+| `expenseReject` | Expenses | Manager |
+| `expenseMarkPaid` | Expenses | Manager |
+| `expenseGetMine` | Expenses | Shop member |
+| `expenseGetPending` | Expenses | Manager |
+| `expenseList` | Expenses | Manager |
+| `reconImportStatement` | Bank Recon | Manager |
+| `reconGetUnmatched` | Bank Recon | Shop member |
+| `reconMatchTransaction` | Bank Recon | Manager |
+| `reconMarkExternal` | Bank Recon | Manager |
+| `reconGetSummary` | Bank Recon | Shop member |
+| `taxFilingCreate` | Tax Calendar | Manager |
+| `taxFilingMarkFiled` | Tax Calendar | Manager |
+| `taxFilingGetDue` | Tax Calendar | Shop member |
+| `taxFilingGetHistory` | Tax Calendar | Shop member |
+| `finStmtGetPL` | Financial Stmts | Manager |
+| `finStmtGetBalanceSheet` | Financial Stmts | Manager |
+| `finStmtGetCashFlow` | Financial Stmts | Manager |
+| `finStmtExport` | Financial Stmts | Manager |
+| `pettyCashCreate` | Petty Cash | Manager |
+| `pettyCashDisburse` | Petty Cash | Shop member |
+| `pettyCashReplenish` | Petty Cash | Manager |
+| `pettyCashGetBalance` | Petty Cash | Shop member |
+| `pettyCashReconcile` | Petty Cash | Manager |
+| `invoiceCreate` | Invoices | Shop member |
+| `invoiceSend` | Invoices | Shop member |
+| `invoiceMarkPaid` | Invoices | Shop member |
+| `invoiceVoid` | Invoices | Manager |
+| `invoiceGet` | Invoices | Shop member |
+| `invoiceList` | Invoices | Shop member |
+
+**New Firestore collections:**
+- `budgets/{id}` — budget docs with embedded categories[] array
+- `expenseClaims/{id}` — expense claims with approval lifecycle
+- `bankStatements/{id}` — imported statement metadata
+- `bankStatementEntries/{id}` — individual statement rows
+- `taxFilings/{id}` — tax filing calendar entries
+- `pettyCashFunds/{id}` — petty cash funds
+- `pettyCashTransactions/{id}` — disbursements/replenishments/reconciliations
+- `invoices/{id}` — invoice docs with embedded line items[]
+- `invoiceCounters/{shopId}` — auto-increment invoice number per shop
+
+**Spot deploy command:**
+```powershell
+firebase deploy --only "functions:budgetCreate,functions:budgetUpdate,functions:budgetGet,functions:budgetList,functions:budgetRecordExpense,functions:budgetGetAlerts,functions:expenseCreate,functions:expenseApprove,functions:expenseReject,functions:expenseMarkPaid,functions:expenseGetMine,functions:expenseGetPending,functions:expenseList,functions:reconImportStatement,functions:reconGetUnmatched,functions:reconMatchTransaction,functions:reconMarkExternal,functions:reconGetSummary,functions:taxFilingCreate,functions:taxFilingMarkFiled,functions:taxFilingGetDue,functions:taxFilingGetHistory,functions:finStmtGetPL,functions:finStmtGetBalanceSheet,functions:finStmtGetCashFlow,functions:finStmtExport,functions:pettyCashCreate,functions:pettyCashDisburse,functions:pettyCashReplenish,functions:pettyCashGetBalance,functions:pettyCashReconcile,functions:invoiceCreate,functions:invoiceSend,functions:invoiceMarkPaid,functions:invoiceVoid,functions:invoiceGet,functions:invoiceList" --project sokoni-aeb26
+```
+
+**Hosting deploy:**
+```powershell
+firebase deploy --only hosting --project sokoni-aeb26
+```
+
+---
+
 ## Marketplace Extensions (Sprint 4.2) — 2026-07-08
 
 **Files:**

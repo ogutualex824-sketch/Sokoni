@@ -1,4 +1,70 @@
-﻿## [2026-07-08] — Marketplace Extensions (Sprint 4.2)
+﻿## [2026-07-08] — Finance OS (Sprint 4.3)
+
+### Summary
+SOKONI 4.0 Sprint 4.3 — complete financial management layer. Adds budget creation and category tracking with over-spend alerts, expense claim submission and manager approval workflow, bank statement import and transaction matching, tax filing calendar (VAT/PAYE/withholding/corporate), P&L/Balance Sheet/Cash Flow statements derived from the existing ledger, petty cash fund management with physical reconciliation, and a full invoice lifecycle (create → send → paid/void) with auto-numbered invoice IDs and SendGrid email integration.
+
+### Files Affected
+| File | Change |
+|---|---|
+| `functions/finance-os-sprint43.js` | NEW — 37 CFs across 7 modules |
+| `finance-budget.html` | NEW — Budget manager (create, track, alerts) |
+| `finance-expenses.html` | NEW — Expense claims + approval workflow |
+| `finance-reconcile.html` | NEW — Bank reconciliation (import, match, summary) |
+| `finance-invoices.html` | NEW — Invoice management with live line-item calculator |
+| `functions/index.js` | 37 new exports |
+| `DEPLOY_QUEUE.md` | Added Sprint 4.3 spot deploy command |
+
+### New Cloud Functions (37)
+**Budgeting (6):** `budgetCreate`, `budgetUpdate`, `budgetGet`, `budgetList`, `budgetRecordExpense`, `budgetGetAlerts`
+**Expense Management (7):** `expenseCreate`, `expenseApprove`, `expenseReject`, `expenseMarkPaid`, `expenseGetMine`, `expenseGetPending`, `expenseList`
+**Bank Reconciliation (5):** `reconImportStatement`, `reconGetUnmatched`, `reconMatchTransaction`, `reconMarkExternal`, `reconGetSummary`
+**Tax Calendar (4):** `taxFilingCreate`, `taxFilingMarkFiled`, `taxFilingGetDue`, `taxFilingGetHistory`
+**Financial Statements (4):** `finStmtGetPL`, `finStmtGetBalanceSheet`, `finStmtGetCashFlow`, `finStmtExport`
+**Petty Cash (5):** `pettyCashCreate`, `pettyCashDisburse`, `pettyCashReplenish`, `pettyCashGetBalance`, `pettyCashReconcile`
+**Invoices (6):** `invoiceCreate`, `invoiceSend`, `invoiceMarkPaid`, `invoiceVoid`, `invoiceGet`, `invoiceList`
+
+### Feature Details
+- **Budgeting**: Monthly/quarterly/annual/custom periods, up to N category allocations per budget, per-category progress tracking, `budgetGetAlerts` returns all categories ≥80% spent with warning/exceeded severity
+- **Expenses**: Submit claim with receipt URL; manager approves/rejects (cannot self-approve); mark paid with payment reference; full status lifecycle (pending → approved/rejected → paid)
+- **Bank Reconciliation**: Import up to 500 entries per statement as JSON array; unmatched entries listed for matching; match to a system transactionId or mark as external; summary shows match rate, credits/debits, net flow
+- **Tax Calendar**: Types: VAT, PAYE, withholding, corporate, rental, turnover; upcoming/overdue status derived from dueDate; `taxFilingGetDue` accepts `daysAhead` window (default 30); filed entries stored with reference
+- **Financial Statements**: P&L and Cash Flow derived from `ledgerEntries` (existing FinOS v1 collection); Balance Sheet accumulates from inception to `asOfDate`; revenue detection by keyword matching against account/category field
+- **Petty Cash**: Opening balance recorded as transaction; disbursements check balance before write (`runTransaction`); replenishments by manager; physical count reconciliation adjusts system balance and records variance in audit trail
+- **Invoices**: Auto-incremented per-shop invoice numbers (`INV-{prefix}-{N:06}`); line items with qty × unitPrice; configurable tax rate; due date with overdue flag on `invoiceList`; `invoiceSend` emails client via SendGrid (non-fatal on failure); void requires reason; paid invoices cannot be voided
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `budgets/{id}` | Budget docs — categories[] array embedded |
+| `expenseClaims/{id}` | Expense claim lifecycle |
+| `bankStatements/{id}` | Imported statement metadata |
+| `bankStatementEntries/{id}` | Individual statement rows — matched/isExternal flags |
+| `taxFilings/{id}` | Tax filing calendar entries by type + period |
+| `pettyCashFunds/{id}` | Fund balance + status |
+| `pettyCashTransactions/{id}` | Disbursements, replenishments, reconciliation audit trail |
+| `invoices/{id}` | Invoice docs with embedded items[] |
+| `invoiceCounters/{shopId}` | Auto-increment counter for invoice numbering |
+
+### Security
+- `enforceAppCheck: true` on all 37 CFs
+- `_assertShopManager()` required on all write operations that affect money: budget create/update, expense approve/reject/pay, statement import/match, filing create/file, petty cash create/replenish/reconcile, invoice void
+- Expense approval: submitter cannot approve own expense (`submittedBy === uid` check)
+- Petty cash disbursement: balance check inside `runTransaction()` — prevents overdraft race condition
+- Invoice `invoiceSend` uses SENDGRID_API_KEY via `defineSecret()` — never `process.env`; email failure non-fatal so invoice status still updates
+- Tax type validated against whitelist before write
+- Bank reconciliation: entry ownership verified against shopId before match/external mark
+
+### Performance
+- All Firestore queries single-field `where()` — zero new composite indexes
+- Budget categories embedded in budget doc — single read for full state
+- Expense list capped at 200 entries, in-memory status filter
+- P&L and Cash Flow capped at 5000 ledger entries; Balance Sheet at 10000 (full history)
+- Invoice line items embedded in invoice doc — no subcollection overhead
+- Bank statement entries: max 500 per import batch; query by `statementId` or `shopId` single-field
+
+---
+
+## [2026-07-08] — Marketplace Extensions (Sprint 4.2)
 
 ### Summary
 SOKONI 4.0 Sprint 4.2 — expands the marketplace with five major capability layers: live auctions with anti-snipe bidding, equipment/vehicle/space rentals with flexible pricing, digital product store with secure downloads and license keys, community Q&A on product pages, and price history tracking. Also adds wishlist, SEO endpoints, and 4 new HTML pages (auction buyer, auction manager, rental browser, digital store + library).
