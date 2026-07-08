@@ -1193,7 +1193,14 @@ service cloud.firestore {
     }
 
     match /deliveryLocations/{riderId} {
-      allow read:   if true;
+      /* P0-7 (Phase 4 audit): was `read: if true` — anonymous access to every rider's
+         real-time GPS (privacy/safety leak). Minimum baseline: require auth so live
+         location can't be scraped anonymously. TODO(P0-7 full): scope to the delivery's
+         participants (assigned rider + order buyer/seller + admin) by denormalizing a
+         `viewers` array onto this doc from the assignment path, then:
+           allow read: if isAdmin() || request.auth.uid == riderId
+                        || (isAuthed() && request.auth.uid in resource.data.viewers); */
+      allow read:   if isAuthed();
       allow write:  if isAdmin()
                     || (isAuthed() && request.auth.uid == riderId);
     }

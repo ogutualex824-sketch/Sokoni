@@ -2926,18 +2926,36 @@ exports.darajaSTKCallback = onRequest(
       const newStatus = resultCode === 0 ? "completed" : "failed";
       const ts        = admin.firestore.FieldValue.serverTimestamp();
 
-      /* Update posPayments */
-      await payRef.update({
-        status:     newStatus,
-        resultCode,
-        resultDesc,
-        mpesaCode:  mpesaCode  || null,
-        paidAmount: paidAmount || null,
-        paidPhone:  paidPhone  || null,
-        updatedAt:  ts,
+      /* P0-1 (Phase 4 audit): atomically CLAIM the pending→completed/failed transition
+         inside a transaction so two concurrent Safaricom retries cannot both proceed.
+         Only the single winner credits the seller — and the credit uses a deterministic
+         doc ID, so even a re-run overwrites rather than duplicating. Previously this was
+         a non-transactional read-check-write + sellerPayments.add() (auto-ID), which
+         allowed double seller credits on retries. */
+      let claimed = false;
+      await db.runTransaction(async (txn) => {
+        const snap = await txn.get(payRef);
+        if (!snap.exists) return;
+        const d = snap.data();
+        if (d.status === "completed" || d.status === "failed") return; /* already processed by a concurrent retry */
+        txn.update(payRef, {
+          status:     newStatus,
+          resultCode,
+          resultDesc,
+          mpesaCode:  mpesaCode  || null,
+          paidAmount: paidAmount || null,
+          paidPhone:  paidPhone  || null,
+          updatedAt:  ts,
+        });
+        claimed = true;
       });
 
-      /* On success: write to sellerPayments + update order */
+      if (!claimed) {
+        console.log(`[darajaSTKCallback] Already processed (raced): ${checkoutId}`);
+        return;
+      }
+
+      /* On success: write to sellerPayments + update order (winner only) */
       if (resultCode === 0) {
         const paymentRecord = {
           checkoutId,
@@ -2953,7 +2971,8 @@ exports.darajaSTKCallback = onRequest(
           status:      "completed",
           createdAt:   ts,
         };
-        await db.collection("sellerPayments").add(paymentRecord);
+        /* Deterministic ID — one credit per STK checkout request; idempotent by construction. */
+        await db.collection("sellerPayments").doc(checkoutId).set(paymentRecord);
 
         /* Update the linked order document if orderId provided */
         if (payData.orderId) {
