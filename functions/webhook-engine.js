@@ -300,31 +300,30 @@ async function _recordDeliveryAttempt(deliveryRef, subRef, result, prevAttempts)
     deliveryUpdate.failedAt  = FieldValue.serverTimestamp();
     deliveryUpdate.nextRetryAt = null;
 
-    /* Read subscription to calculate cumulative failures */
-    const subSnap  = await subRef.get();
-    const subData  = subSnap.exists ? subSnap.data() : {};
-    const newFails = (subData.failureCount || 0) + 1;
+    /* Atomic increment — avoids read-modify-write race on failureCount */
+    await Promise.all([
+      deliveryRef.update(deliveryUpdate),
+      subRef.update({
+        failureCount:   FieldValue.increment(1),
+        lastDeliveryAt: FieldValue.serverTimestamp(),
+      }),
+    ]);
 
-    const subUpdate = {
-      failureCount:   newFails,
-      lastDeliveryAt: FieldValue.serverTimestamp(),
-    };
+    /* Read back the post-increment value to check auto-disable threshold */
+    const subSnap  = await subRef.get();
+    const newFails = subSnap.exists ? (subSnap.data().failureCount || 0) : 0;
 
     if (newFails >= MAX_SUBSCRIPTION_FAILS) {
-      subUpdate.active              = false;
-      subUpdate.autoDisabledAt      = FieldValue.serverTimestamp();
-      subUpdate.autoDisabledReason  =
-        `Auto-disabled after ${newFails} cumulative delivery failures. Reactivate and fix your endpoint to resume.`;
+      await subRef.update({
+        active:             false,
+        autoDisabledAt:     FieldValue.serverTimestamp(),
+        autoDisabledReason: `Auto-disabled after ${newFails} cumulative delivery failures. Reactivate and fix your endpoint to resume.`,
+      });
       logger.warn('[webhooks] Subscription auto-disabled', {
         subscriptionId: subRef.id,
         failureCount:   newFails,
       });
     }
-
-    await Promise.all([
-      deliveryRef.update(deliveryUpdate),
-      subRef.update(subUpdate),
-    ]);
 
   } else {
     /* ── Pending retry ───────────────────────────────────────── */
@@ -684,46 +683,85 @@ exports.webhookRetryProcessor = onSchedule(
 
     logger.info(`[webhooks] Retry processor: processing ${snap.size} deliveries`);
 
-    const results = await Promise.allSettled(
-      snap.docs.map(async deliveryDoc => {
-        const delivery = deliveryDoc.data();
+    /* Sequential loop — each delivery is atomically claimed before sending,
+       preventing double-delivery when concurrent scheduler invocations
+       pick up the same pending documents.                               */
+    const results = [];
 
-        if (!delivery.subscriptionId) {
-          /* Orphaned delivery — dead-letter it */
-          await deliveryDoc.ref.update({
-            status:      'failed',
-            failedAt:    FieldValue.serverTimestamp(),
-            responseBody: 'No subscriptionId — orphaned delivery.',
+    for (const deliveryDoc of snap.docs) {
+      const delivery = deliveryDoc.data();
+
+      if (!delivery.subscriptionId) {
+        /* Orphaned delivery — dead-letter it */
+        await deliveryDoc.ref.update({
+          status:      'failed',
+          failedAt:    FieldValue.serverTimestamp(),
+          responseBody: 'No subscriptionId — orphaned delivery.',
+        });
+        results.push({ status: 'fulfilled', value: { deliveryId: deliveryDoc.id, skipped: true, reason: 'orphaned' } });
+        continue;
+      }
+
+      /* ── Atomic claim — transition pending → processing ─────── */
+      const deliveryRef = deliveryDoc.ref;
+      let claimed = false;
+      try {
+        await firestore.runTransaction(async txn => {
+          const fresh = await txn.get(deliveryRef);
+          if (!fresh.exists || fresh.data().status !== 'pending') {
+            return; // already claimed by another invocation
+          }
+          txn.update(deliveryRef, {
+            status:               'processing',
+            processingStartedAt:  admin.firestore.FieldValue.serverTimestamp(),
           });
-          return { deliveryId: deliveryDoc.id, skipped: true, reason: 'orphaned' };
-        }
+          claimed = true;
+        });
+      } catch (e) {
+        logger.warn('[wh] claim failed, skipping', { deliveryId: deliveryDoc.id, error: e.message });
+        results.push({ status: 'rejected', reason: e });
+        continue;
+      }
+      if (!claimed) {
+        results.push({ status: 'fulfilled', value: { deliveryId: deliveryDoc.id, skipped: true, reason: 'already_claimed' } });
+        continue;
+      }
 
-        const subRef  = firestore.collection('webhookSubscriptions').doc(delivery.subscriptionId);
-        const subSnap = await subRef.get();
+      /* ── Subscription validity check ───────────────────────── */
+      const subRef  = firestore.collection('webhookSubscriptions').doc(delivery.subscriptionId);
+      const subSnap = await subRef.get();
 
-        if (!subSnap.exists || !subSnap.data().active) {
-          /* Subscription gone or disabled — dead-letter without incrementing failure count */
-          await deliveryDoc.ref.update({
-            status:      'failed',
-            failedAt:    FieldValue.serverTimestamp(),
-            responseBody: 'Subscription is inactive or deleted. Delivery aborted.',
-          });
-          return { deliveryId: deliveryDoc.id, skipped: true, reason: 'subscription_inactive' };
-        }
+      if (!subSnap.exists || !subSnap.data().active) {
+        /* Subscription gone or disabled — dead-letter without incrementing failure count */
+        await deliveryDoc.ref.update({
+          status:      'failed',
+          failedAt:    FieldValue.serverTimestamp(),
+          responseBody: 'Subscription is inactive or deleted. Delivery aborted.',
+        });
+        results.push({ status: 'fulfilled', value: { deliveryId: deliveryDoc.id, skipped: true, reason: 'subscription_inactive' } });
+        continue;
+      }
 
+      /* ── Send and record ────────────────────────────────────── */
+      try {
         const sub    = { id: subSnap.id, ...subSnap.data() };
         const result = await _sendWebhook(sub, deliveryDoc.id, delivery.event, delivery.payload || {});
         await _recordDeliveryAttempt(deliveryDoc.ref, subRef, result, delivery.attempts || 0);
 
-        return {
-          deliveryId:     deliveryDoc.id,
-          subscriptionId: sub.id,
-          success:        result.success,
-          responseCode:   result.responseCode,
-          latencyMs:      result.latencyMs,
-        };
-      })
-    );
+        results.push({
+          status: 'fulfilled',
+          value: {
+            deliveryId:     deliveryDoc.id,
+            subscriptionId: sub.id,
+            success:        result.success,
+            responseCode:   result.responseCode,
+            latencyMs:      result.latencyMs,
+          },
+        });
+      } catch (e) {
+        results.push({ status: 'rejected', reason: e });
+      }
+    }
 
     const failed = results.filter(r => r.status === 'rejected');
     if (failed.length > 0) {
@@ -832,6 +870,27 @@ exports.webhookTestEndpoint = onCall(CF_OPTS, async req => {
   if (subSnap.data().ownerId !== uid && !_isAdmin(req)) {
     throw new HttpsError('permission-denied', 'Access denied — you do not own this subscription.');
   }
+
+  /* ── Per-user rate limit: max 10 test pings per 60 seconds ── */
+  const cooldownRef = db().collection('_webhookTestCooldown').doc(uid);
+  const cooldownDoc = await cooldownRef.get();
+  if (cooldownDoc.exists) {
+    const lastTest = cooldownDoc.data().lastTestAt?.toMillis() || 0;
+    const elapsed  = Date.now() - lastTest;
+    const count    = cooldownDoc.data().countInWindow || 0;
+    if (elapsed < 60_000 && count >= 10) {
+      throw new HttpsError('resource-exhausted', 'Test limit: max 10 pings per minute.');
+    }
+  }
+  const withinWindow = cooldownDoc.exists &&
+    (Date.now() - (cooldownDoc.data().lastTestAt?.toMillis() || 0)) < 60_000;
+  await cooldownRef.set({
+    lastTestAt:      FieldValue.serverTimestamp(),
+    countInWindow:   FieldValue.increment(1),
+    windowStart:     withinWindow
+      ? cooldownDoc.data().windowStart
+      : FieldValue.serverTimestamp(),
+  }, { merge: true });
 
   const sub    = subSnap.data();
   const testId = 'test_' + crypto.randomBytes(10).toString('hex');

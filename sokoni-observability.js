@@ -133,21 +133,19 @@
     } catch (_) { /* silent */ }
   }
 
-  function _cloneSmall(obj, depth) {
-    if (depth === undefined) depth = 3;
+  function _cloneSmall(obj, maxSize) {
+    const seen = new WeakSet();
     try {
-      return JSON.parse(JSON.stringify(obj, (_k, v) => {
-        if (depth < 0) return '[truncated]';
-        if (v && typeof v === 'object' && Object.keys(v).length > 30) {
-          const subset = {};
-          Object.keys(v).slice(0, 30).forEach(k => { subset[k] = v[k]; });
-          subset.__truncated = true;
-          return subset;
+      return JSON.stringify(obj, (key, val) => {
+        if (typeof val === 'object' && val !== null) {
+          if (seen.has(val)) return '[Circular]';
+          seen.add(val);
         }
-        return v;
-      }));
+        if (typeof val === 'string' && val.length > 200) return val.slice(0, 200) + '…';
+        return val;
+      })?.slice(0, maxSize || 4096);
     } catch (_) {
-      return {};
+      return undefined;
     }
   }
 
@@ -279,7 +277,7 @@
       const offline = _loadOfflineQueue();
 
       if (!navigator.onLine) {
-        _saveOfflineQueue([...offline, ...batch]);
+        _saveOfflineQueue(batch);
         _debugLog('offline — queued', batch.length, 'events to localStorage');
         return;
       }
@@ -302,8 +300,8 @@
         if (offline.length) _clearOfflineQueue();
       } else {
         _health.flushFailures++;
-        _saveOfflineQueue(allEvents);
-        _debugLog('flush failed — saved', allEvents.length, 'events offline');
+        _saveOfflineQueue(batch);
+        _debugLog('flush failed — saved', batch.length, 'events offline');
       }
     } catch (_) {
       _health.flushFailures++;
@@ -440,7 +438,7 @@
         fidObs.observe({ type: 'first-input', buffered: true });
       } catch (_) { /* FID not supported */ }
 
-      // CLS
+      // CLS — accumulate only; report final value once at page end (below)
       try {
         const clsObs = new PerformanceObserver(function (list) {
           try {
@@ -449,19 +447,35 @@
                 _vitals.CLS += entry.value;
               }
             });
+          } catch (_) { /* silent */ }
+        });
+        clsObs.observe({ type: 'layout-shift', buffered: true });
+      } catch (_) { /* CLS not supported */ }
+
+      // Report CLS final value once at page end
+      (function () {
+        var _clsReported = false;
+        function _reportCls() {
+          if (_clsReported) return;
+          _clsReported = true;
+          try {
             _enqueue({
               type:       'vital',
               name:       'CLS',
               value:      _vitals.CLS,
+              page:       location.pathname,
               ts:         _ts(),
               sessionId:  _sessionId,
               pageLoadId: _pageLoadId,
               url:        window.location.href,
             });
           } catch (_) { /* silent */ }
+        }
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'hidden') _reportCls();
         });
-        clsObs.observe({ type: 'layout-shift', buffered: true });
-      } catch (_) { /* CLS not supported */ }
+        window.addEventListener('pagehide', _reportCls, { once: true });
+      }());
 
       // FCP
       try {

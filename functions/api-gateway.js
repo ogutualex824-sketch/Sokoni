@@ -88,13 +88,16 @@ function _genRequestId() {
   return 'gw_' + Date.now().toString(36) + crypto.randomBytes(5).toString('hex');
 }
 
-/** Extract real client IP, respecting Cloud Run's X-Forwarded-For chain. */
+/** Extract real client IP, respecting Cloud Run's X-Forwarded-For chain.
+ *  Cloud Run appends the real client IP as the RIGHTMOST entry.
+ *  Never trust the leftmost entry — it is attacker-controlled. */
 function _clientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'] || '';
-  return forwarded.split(',')[0]?.trim()
-    || req.headers['x-real-ip']
-    || req.socket?.remoteAddress
-    || 'unknown';
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const parts = forwarded.split(',').map(s => s.trim()).filter(Boolean);
+    return parts[parts.length - 1]; // rightmost = real client IP on Cloud Run
+  }
+  return req.socket?.remoteAddress || req.ip || 'unknown';
 }
 
 /** Derive auth tier from verified token claims. */
@@ -432,8 +435,15 @@ async function _handleRoute(req, res, { routePath, version, requestId, auth, sta
     if (method === 'GET' && routePath === '/search') {
       try {
         const upstream = await _proxyToFunction('sokoniSearch', req);
+        if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
+          logger.warn('[gateway] sokoniSearch upstream error', { requestId, statusCode: upstream.statusCode });
+          return _error(res, upstream.statusCode, 'gateway/upstream-error',
+            upstream.body?.error?.message || upstream.body?.message || 'Upstream service error',
+            { version, requestId, startTime }
+          );
+        }
         return _success(res, upstream.body,
-          { version, requestId, startTime, status: upstream.statusCode,
+          { version, requestId, startTime,
             cacheControl: 'public, max-age=30, s-maxage=60' }
         );
       } catch (err) {
@@ -455,9 +465,15 @@ async function _handleRoute(req, res, { routePath, version, requestId, auth, sta
       }
       try {
         const upstream = await _proxyToFunction('createOrder', req);
+        if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
+          logger.warn('[gateway] createOrder upstream error', { requestId, statusCode: upstream.statusCode });
+          return _error(res, upstream.statusCode, 'gateway/upstream-error',
+            upstream.body?.error?.message || upstream.body?.message || 'Upstream service error',
+            { version, requestId, startTime }
+          );
+        }
         return _success(res, upstream.body,
-          { version, requestId, startTime, status: upstream.statusCode,
-            cacheControl: 'no-store' }
+          { version, requestId, startTime, cacheControl: 'no-store' }
         );
       } catch (err) {
         logger.error('[gateway] createOrder proxy error', { requestId, error: err.message });
@@ -803,10 +819,14 @@ exports.gwManageRateLimit = onCall(
       throw new HttpsError('invalid-argument', '"key" is required (an IP address or UID).');
     }
 
-    const firestore = db();
-    const normalKey = key.trim();
-    const configRef = firestore.collection('_gwRateLimitConfig').doc(normalKey);
-    const callerUid = req.auth.uid;
+    const firestore  = db();
+    const normalKey  = key.trim();
+    /* _checkRateLimit looks up _gwRateLimitConfig by prefixed key ("ip:<ip>"
+       or "uid:<uid>").  We must store under the same prefixed key so whitelist
+       and blacklist entries are actually found at lookup time.               */
+    const storageKey = type === 'uid' ? `uid:${normalKey}` : `ip:${normalKey}`;
+    const configRef  = firestore.collection('_gwRateLimitConfig').doc(storageKey);
+    const callerUid  = req.auth.uid;
     const now       = FieldValue.serverTimestamp();
 
     switch (action) {

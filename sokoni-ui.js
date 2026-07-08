@@ -618,30 +618,56 @@
       /* Sit directly below the fixed nav; --sk-header-h is written by
          sokoni-layout.js once the nav is measured. Falls back to 64px. */
       'top:var(--sk-header-h,64px);left:0;right:0;',
-      'background:#1a0a00;',
-      'border-bottom:1px solid rgba(255,149,0,0.3);',
-      'color:#ff9500;',
+      'display:flex;align-items:center;justify-content:center;gap:10px;',
+      'background:linear-gradient(180deg,rgba(26,10,0,0.98),rgba(18,7,0,0.96));',
+      '-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);',
+      'border-bottom:1px solid rgba(255,149,0,0.22);',
+      'box-shadow:0 8px 28px rgba(0,0,0,0.5);',
+      'color:#ffb454;',
       'font-size:13px;',
       'font-weight:700;',
+      'letter-spacing:0.01em;',
       'text-align:center;',
-      'padding:8px 16px;',
+      'padding:10px 46px 10px 16px;',
       'z-index:999;',
       'transform:translateY(-100%);',
-      'transition:transform var(--sk-duration-normal,250ms) ease;',
+      'transition:transform 0.42s cubic-bezier(0.22,1,0.36,1);',
+      'will-change:transform;',
     '}',
-    '#sk-offline-bar.sk-offline--visible{transform:translateY(0);}'
+    '#sk-offline-bar.sk-offline--visible{transform:translateY(0);}',
+    '#sk-offline-bar .sk-off-dot{',
+      'width:8px;height:8px;border-radius:50%;background:#ff9500;flex-shrink:0;',
+      'box-shadow:0 0 0 0 rgba(255,149,0,0.5);animation:skOffPulse 1.6s ease-out infinite;',
+    '}',
+    '@keyframes skOffPulse{',
+      '0%{box-shadow:0 0 0 0 rgba(255,149,0,0.5);}',
+      '70%{box-shadow:0 0 0 7px rgba(255,149,0,0);}',
+      '100%{box-shadow:0 0 0 0 rgba(255,149,0,0);}',
+    '}',
+    '#sk-offline-bar .sk-off-x{',
+      'position:absolute;right:8px;top:50%;transform:translateY(-50%);',
+      'background:none;border:none;color:inherit;font-size:18px;line-height:1;',
+      'cursor:pointer;padding:5px 9px;border-radius:9px;opacity:.6;flex-shrink:0;',
+      'transition:opacity .15s ease,background .15s ease;',
+    '}',
+    '#sk-offline-bar .sk-off-x:hover{opacity:1;background:rgba(255,149,0,0.14);}',
+    '@media (prefers-reduced-motion: reduce){',
+      '#sk-offline-bar{transition:none;}',
+      '#sk-offline-bar .sk-off-dot{animation:none;}',
+    '}'
   ].join('');
 
   function _initOfflineBar() {
+    if (document.getElementById('sk-offline-bar')) return; /* already initialised — avoid duplicate bars/probe loops */
     _injectStyles('sk-offline-styles', _OFFLINE_CSS);
     var bar = document.createElement('div');
     bar.id = 'sk-offline-bar';
-    bar.innerHTML = '<span style="flex:1;">📡 No internet connection — some features may not work</span>'
-      + '<button onclick="document.getElementById(\'sk-offline-bar\').classList.remove(\'sk-offline--visible\')" '
-      + 'style="background:none;border:none;color:inherit;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;opacity:.7;flex-shrink:0;" '
-      + 'aria-label="Dismiss">×</button>';
-    bar.style.display = 'flex';
-    bar.style.alignItems = 'center';
+    bar.setAttribute('role', 'status');
+    bar.setAttribute('aria-live', 'polite');
+    bar.innerHTML =
+      '<span class="sk-off-dot" aria-hidden="true"></span>'
+      + '<span>📡 No internet connection — some features may not work</span>'
+      + '<button type="button" class="sk-off-x" aria-label="Dismiss">×</button>';
     document.body.insertBefore(bar, document.body.firstChild);
 
     /* ── State ─────────────────────────────────────────── */
@@ -649,39 +675,36 @@
     var _showing    = false;      /* is bar currently visible?   */
     var _probing    = false;      /* probe fetch in-flight?       */
     var _probeTimer = null;       /* handle for next scheduled probe */
+    var _dismissed  = false;      /* user tapped ×; stay hidden until reconnect */
     var _bootTime   = Date.now(); /* used to suppress false positives during SW install */
-    var _GRACE_MS   = 15000;     /* 15 s grace — covers slow-network SW install on mobile */
+    var _GRACE_MS   = 12000;     /* grace — covers slow-network SW install on mobile */
 
     /* ── Probe ─────────────────────────────────────────────────────────────
-       Two-stage:
-       1. HEAD https://www.gstatic.com/generate_204  (cross-origin — SW never
-          intercepts it; resolves with opaque response when network is live)
-       2. HEAD /manifest.json?_nc=<timestamp>        (own-origin cache-busted
-          fallback in case gstatic is blocked by a corporate firewall)
-       AbortController timeout on each stage prevents hung probes.
+       Active connectivity check — the SOURCE OF TRUTH. We deliberately do NOT
+       trust `navigator.onLine === false` on its own: some Android/iOS webviews
+       and installed PWAs report offline while the network is actually up, which
+       used to leave this banner stuck on-screen with working internet. The probe
+       always runs so recovery is guaranteed.
+       1. no-cors GET https://www.gstatic.com/generate_204 (SW never intercepts it)
+       2. HEAD /manifest.json?_nc=<ts> fallback (corporate firewalls that block gstatic)
     ─────────────────────────────────────────────────────────────────────── */
     function _doProbe() {
-      /* navigator.onLine false → skip fetch, report offline immediately */
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        return Promise.resolve(false);
-      }
       var c1 = new AbortController();
-      var t1 = setTimeout(function() { c1.abort(); }, 6000); /* 6 s — generous for mobile */
+      var t1 = setTimeout(function() { c1.abort(); }, 4000);
       return fetch('https://www.gstatic.com/generate_204', {
         mode: 'no-cors', cache: 'no-store', signal: c1.signal,
       }).then(function() {
         clearTimeout(t1);
-        return true;
+        return true;                       /* reached the network → online */
       }).catch(function() {
         clearTimeout(t1);
-        /* navigator.onLine true = network exists; treat gstatic block as "online" */
-        if (typeof navigator !== 'undefined' && navigator.onLine === true) return true;
-        var c2 = new AbortController();
-        var t2 = setTimeout(function() { c2.abort(); }, 4000);
-        return fetch('/manifest.json?_nc=' + Date.now(), {
-          method: 'HEAD', cache: 'no-store', signal: c2.signal,
-        }).then(function() { clearTimeout(t2); return true;  })
-          .catch(function() { clearTimeout(t2); return false; });
+        /* gstatic unreachable. We deliberately do NOT fall back to an own-origin
+           request (e.g. /manifest.json): the service worker serves those from
+           cache even when offline, which would falsely report "online" and leave
+           the banner stuck. Instead trust navigator.onLine here — false means
+           genuinely offline; true means gstatic is likely firewall-blocked but the
+           network is up. */
+        return (typeof navigator !== 'undefined' && navigator.onLine === true);
       });
     }
 
@@ -698,23 +721,23 @@
           _probing = false;
           if (online) {
             _failures = 0;
-            _setBar(false);
-            _scheduleProbe(30000); /* slow poll while connected */
+            _dismissed = false;       /* reconnected → allow a future offline to show again */
+            _setBar(false);           /* slide up behind the header */
+            _scheduleProbe(30000);    /* relaxed poll while connected */
           } else {
             _failures += 1;
-            if (_failures >= 3) _setBar(true); /* 3 consecutive failures → show */
-            _scheduleProbe(10000); /* fast poll while disconnected */
+            /* If the browser also reports offline, one failed probe is enough
+               (fast, high-confidence). Otherwise require two to avoid flicker. */
+            var browserOffline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+            if ((browserOffline && _failures >= 1) || _failures >= 2) _setBar(true);
+            _scheduleProbe(8000);     /* faster poll while disconnected */
           }
         })
-        .catch(function() { _probing = false; _scheduleProbe(15000); });
+        .catch(function() { _probing = false; _scheduleProbe(12000); });
     }
 
     function _setBar(visible) {
-      /* Never show banner if browser API says device is online.
-         This prevents false positives when cached SW content is being served,
-         or when gstatic.com is blocked by a corporate/carrier firewall.
-         Rule: show only when navigator.onLine === false AND probes confirm unreachable. */
-      if (visible && typeof navigator !== 'undefined' && navigator.onLine === true) return;
+      if (visible && _dismissed) return;                         /* user dismissed — stay hidden */
       /* Suppress banner during grace period — avoids SW-install false positives on mobile */
       if (visible && (Date.now() - _bootTime) < _GRACE_MS) return;
       if (_showing === visible) return;
@@ -731,14 +754,35 @@
       if (legacy) legacy.remove();
     }
 
-    /* online/offline events are hints only — always verify with a real probe.
-       Reset failure count on 'online' so recovery is immediate after 1 success. */
-    global.addEventListener('online',  function() { _failures = 0; _probe(); });
-    /* Delay offline-event probe by 1.5 s — browser may fire spurious offline events */
-    global.addEventListener('offline', function() { setTimeout(_probe, 1500); });
+    /* ── Dismiss (×) — actually works now ──────────────────────────────────
+       The old inline handler just removed the class, so the probe loop re-added
+       it seconds later ("× does nothing"). Setting a flag keeps it hidden until
+       the network genuinely drops and recovers again. */
+    var _xBtn = bar.querySelector('.sk-off-x');
+    if (_xBtn) _xBtn.addEventListener('click', function () {
+      _dismissed = true;
+      _setBar(false);
+    });
 
-    /* First probe: 15 s delay so SW finishes installing before we hit the network */
-    setTimeout(_probe, 15000);
+    /* Reconnect → hide INSTANTLY. Don't wait on the async probe; the browser
+       just told us the network is back, so slide the bar up immediately, then
+       verify in the background. */
+    global.addEventListener('online',  function() {
+      _failures = 0; _dismissed = false; _setBar(false); _probe();
+    });
+    global.addEventListener('offline', function() { setTimeout(_probe, 1200); });
+
+    /* Recover after the tab/app regains focus — mobile devices that sleep offline
+       and wake online frequently never fire the `online` event. */
+    global.addEventListener('pageshow', _probe);
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) return;
+      if (typeof navigator !== 'undefined' && navigator.onLine) _setBar(false);
+      _probe();
+    });
+
+    /* First probe shortly after boot (lets the SW finish installing first). */
+    setTimeout(_probe, 8000);
   }
 
   /* ─────────────────────────────────────────────────────────────────────────

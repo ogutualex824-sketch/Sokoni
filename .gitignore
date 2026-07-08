@@ -114,3 +114,8 @@ playwright-report/
 # Generated build artifacts
 dist/
 build/
+
+# Android signing — NEVER commit keystore or passwords
+*.keystore
+*.jks
+sokoni-release.keystore

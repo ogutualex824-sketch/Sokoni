@@ -56,6 +56,9 @@
   }
 
   function _show() {
+    /* Defer to sokoni-ui.js's richer #sk-offline-bar where it is present
+       (index, etims, hub-dashboard) — avoids two stacked offline banners. */
+    if (document.getElementById('sk-offline-bar')) return;
     if (_shown) return;
     _shown = true;
     var b = _ensureBanner();

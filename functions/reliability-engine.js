@@ -64,6 +64,7 @@ const _cfgSched = {
 
 /* ── Admin assertion ─────────────────────────────────────────── */
 function _assertAdmin(req) {
+  if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Authentication required.');
   const t = req.auth?.token ?? {};
   if (!t.admin && !t.superAdmin)
     throw new HttpsError('permission-denied', 'Admin access required.');
@@ -468,7 +469,7 @@ exports.relCircuitBreakerState = onCall(_cfg, async req => {
 
   } else {
     /* ── Read all ──────────────────────────────────────────── */
-    const snap = await _db().collection('_sokoniCircuitBreakers').get();
+    const snap = await _db().collection('_sokoniCircuitBreakers').limit(100).get();
     return {
       breakers: snap.docs.map(d => ({ name: d.id, ...d.data() })),
     };
@@ -536,6 +537,15 @@ exports.relScheduledHealthCheck = onSchedule(
         });
 
         if (allFailing) {
+          const recentAlertSnap = await _db().collection('_sokoniAlertFired')
+            .where('type', '==', 'health_check_failure')
+            .where('firedAt', '>=', new Date(Date.now() - 30 * 60 * 1000)) // 30-min cooldown
+            .limit(1)
+            .get();
+          if (!recentAlertSnap.empty) {
+            logger.info('[rel] health alert suppressed — within cooldown window');
+            return; // skip writing duplicate alert
+          }
           await _db().collection('_sokoniAlertFired').add({
             type:     'health_check_consecutive_failure',
             services: unhealthy,

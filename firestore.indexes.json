@@ -2885,7 +2885,92 @@
         { "fieldPath": "businessId", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "ASCENDING" }
       ]
+    },
+
+    {
+      "collectionGroup": "_sokoniTaskQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",       "order": "ASCENDING" },
+        { "fieldPath": "priority",     "order": "ASCENDING" },
+        { "fieldPath": "scheduledFor", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "_sokoniTaskQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "completedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "_sokoniTaskQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "cancelledAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "_sokoniTaskQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",   "order": "ASCENDING" },
+        { "fieldPath": "failedAt", "order": "ASCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "webhookDeliveries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "nextRetryAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "webhookDeliveries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subscriptionId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt",      "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "_sokoniPerf",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type",      "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "_sokoniErrors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "severity",  "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "category",  "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "_gwRateLimit",
+      "fieldPath": "expiresAt",
+      "indexes": [],
+      "ttlConfig": {}
+    }
+  ]
 }

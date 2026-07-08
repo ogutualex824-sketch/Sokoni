@@ -60,14 +60,36 @@
 
   /* ── SokoniObservability bridge ──────────────────────────────── */
   function _obs() { return global.SokoniObservability || null; }
-  function _count(name, delta, tags) {
-    const o = _obs(); if (o && o.counter) o.counter(name, delta || 1, tags || {});
+
+  // [RES-1] Use trackEvent (the actual SDK API); o.counter/o.histogram do not exist.
+  function _count(name, val, tags) {
+    try {
+      const o = _obs();
+      if (o && typeof o.trackEvent === 'function') {
+        o.trackEvent(name, Object.assign({ value: val != null ? val : 1 }, tags || {}));
+      }
+    } catch (_) {}
   }
-  function _hist(name, value, tags) {
-    const o = _obs(); if (o && o.histogram) o.histogram(name, value, tags || {});
+  function _hist(name, val, tags) {
+    try {
+      const o = _obs();
+      if (o && typeof o.trackEvent === 'function') {
+        o.trackEvent(name, Object.assign({ value: val }, tags || {}));
+      }
+    } catch (_) {}
   }
+
+  // [RES-3] trackError expects a string message, not a raw Error object.
+  // Fall back to log.error if trackError is somehow absent.
   function _trackErr(err) {
-    const o = _obs(); if (o && o.trackError) o.trackError(err);
+    try {
+      const o = _obs();
+      if (o && typeof o.trackError === 'function') {
+        o.trackError(err && err.message ? err.message : String(err), { stack: err && err.stack });
+      } else if (o && o.log && typeof o.log.error === 'function') {
+        o.log.error(err && err.message ? err.message : String(err));
+      }
+    } catch (_) {}
   }
 
   /* ── Structured logger ───────────────────────────────────────── */
@@ -338,7 +360,8 @@
 
         /* Compute backoff: base × factor^(attempt−1) capped, then jitter. */
         let delay = Math.min(baseDelay * Math.pow(factor, attempt - 1), maxDelay);
-        if (jitter) delay = delay * (0.6 + Math.random() * 0.4); // [60 %…100 %]
+        // [RES-4] True ±30 % jitter: range is [70 %…130 %] of base delay.
+        if (jitter) delay = delay * (0.7 + Math.random() * 0.6);
         delay = Math.round(delay);
 
         _log.info(`Retry ${attempt}/${maxAttempts} — waiting ${delay} ms.`, { error: err.message });
@@ -437,7 +460,10 @@
    */
   function rateLimiter(opts = {}) {
     const rpm    = Math.max(1, opts.rpm || 60);
-    const ssKey  = SS_RL_PREFIX + rpm;
+    // [RES-2] Incorporate a caller-supplied name so limiters with the same rpm
+    // do not share bucket state in sessionStorage.
+    const name   = opts.name || 'default';
+    const ssKey  = SS_RL_PREFIX + name + '_' + rpm;
     let buckets  = {};
 
     /* Restore from sessionStorage. */
@@ -554,8 +580,9 @@
           };
 
           const putReq = store.put(record);
-          putReq.onerror   = () => reject(putReq.error);
-          putReq.onsuccess = () => {
+          putReq.onerror = () => reject(putReq.error);
+          // [RES-5] Resolve on tx.oncomplete (durable write) not putReq.onsuccess.
+          tx.oncomplete = () => {
             _log.info(`Offline task enqueued [${priority}]: '${record.fn}'`, { id: record.id });
             _count('resilience.queue.enqueued', 1, { priority });
             resolve(record.id);
@@ -617,9 +644,10 @@
     return new Promise((resolve, reject) => {
       const tx  = db.transaction(IDB_STORE, 'readwrite');
       const req = tx.objectStore(IDB_STORE).delete(id);
-      req.onsuccess = () => resolve();
-      req.onerror   = () => reject(req.error);
+      // [RES-5] Resolve on tx.oncomplete for write durability, not req.onsuccess.
+      tx.oncomplete = () => resolve();
       tx.onerror    = () => reject(tx.error);
+      req.onerror   = () => reject(req.error);
     });
   }
 

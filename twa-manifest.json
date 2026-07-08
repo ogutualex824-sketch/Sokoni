@@ -20,8 +20,8 @@
   "signing": {
     "store": "sokoni-release.keystore",
     "alias": "sokoni-key",
-    "keyPassword": "",
-    "storePassword": ""
+    "keyPassword": "6GCSQxHA83nCW7K3PANEd#$C",
+    "storePassword": "6GCSQxHA83nCW7K3PANEd#$C"
   },
   "appVersion": "1.0.0",
   "appVersionCode": 1,
@@ -58,7 +58,7 @@
   "fingerprints": [
     {
       "name": "release",
-      "value": "REPLACE_WITH_RELEASE_SHA256_FINGERPRINT"
+      "value": "4E:6C:DE:F1:99:31:D5:CB:C7:FE:2A:79:43:73:F6:89:34:90:F6:53:AB:FA:EE:1A:17:7C:E7:B6:94:A7:43:1F"
     }
   ],
   "generatorApp": "bubblewrap",

@@ -38,6 +38,8 @@ const functions              = require('firebase-functions/v2');
 const admin                  = require('firebase-admin');
 const crypto                 = require('crypto');
 
+if (!admin.apps.length) admin.initializeApp();
+
 const db     = () => admin.firestore();
 const logger = functions.logger;
 
@@ -188,34 +190,13 @@ async function _handleSendNotification(task) {
 
 /**
  * PROCESS_IMAGE
- * Placeholder — logs intent and returns a mock manifest.
+ * Not yet implemented — throws so the task is routed to retry / dead-letter
+ * instead of silently completing with placeholder data.
  * Production: wire to a dedicated image-processing Cloud Function
  * backed by Sharp / Cloud Vision / Imagekit.
  */
 async function _handleProcessImage(task) {
-  const { storagePath, operations } = task.payload || {};
-  if (!storagePath) throw new Error('PROCESS_IMAGE: payload.storagePath is required.');
-
-  const base    = storagePath.replace(/\.(jpe?g|png|gif|tiff?)(\?.*)?$/i, '');
-  const ext     = (storagePath.match(/\.(jpe?g|png|gif|tiff?)(\?.*)?$/i) || [''])[0].toLowerCase();
-  const isRaster = /\.(jpe?g|png)$/i.test(ext);
-
-  const result = {
-    original:    storagePath,
-    placeholder: true,
-    note:        'Wire to Cloud Functions image pipeline for production.',
-    processed:   isRaster
-      ? [
-          { variant: '800w', format: 'webp', path: `${base}_800w.webp` },
-          { variant: '400w', format: 'webp', path: `${base}_400w.webp` },
-          { variant: '200w', format: 'webp', path: `${base}_200w.webp` },
-        ]
-      : [{ variant: 'original', format: ext.replace('.', ''), path: storagePath }],
-    requestedOps: operations || [],
-  };
-
-  logger.info('[TQ:PROCESS_IMAGE] placeholder executed', { taskId: task.taskId, storagePath });
-  return result;
+  throw new Error('PROCESS_IMAGE handler not yet implemented — wire to image pipeline CF');
 }
 
 /**
@@ -254,13 +235,17 @@ async function _handleSyncAnalytics(task) {
   if (!merchantId) throw new Error('SYNC_ANALYTICS: payload.merchantId is required.');
 
   const targetPeriod = period || 'daily';
-  const dateKey      = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const dateKey      = task.payload.dateKey || new Date().toISOString().split('T')[0];
+  const startOfDay   = new Date(dateKey + 'T00:00:00Z');
+  const endOfDay     = new Date(dateKey + 'T23:59:59.999Z');
 
   const ordersSnap = await db()
     .collection('orders')
     .where('merchantId', '==', merchantId)
     .where('status',     '==', 'completed')
-    .orderBy('createdAt', 'desc')
+    .where('createdAt',  '>=', startOfDay)
+    .where('createdAt',  '<',  endOfDay)
+    .orderBy('createdAt', 'asc')
     .limit(1000)
     .get();
 
@@ -738,7 +723,7 @@ exports.tqGetStatus = onCall(CALL_OPTS, async ({ data, auth }) => {
  * Response { taskId, status, cancelledAt }
  */
 exports.tqCancelTask = onCall(CALL_OPTS, async ({ data, auth }) => {
-  _requireAdmin(auth);
+  _requireAuth(auth);
 
   const { taskId } = data || {};
   if (!taskId || typeof taskId !== 'string') {
@@ -752,7 +737,12 @@ exports.tqCancelTask = onCall(CALL_OPTS, async ({ data, auth }) => {
     if (!snap.exists) {
       throw new HttpsError('not-found', `Task "${taskId}" not found.`);
     }
-    const { status } = snap.data();
+    const task = snap.data();
+    const isAdmin = auth.token?.admin || auth.token?.superAdmin;
+    if (!isAdmin && task.createdBy !== auth.uid) {
+      throw new HttpsError('permission-denied', 'You can only cancel your own tasks.');
+    }
+    const { status } = task;
     if (status !== STATUS.PENDING) {
       throw new HttpsError(
         'failed-precondition',
@@ -1135,7 +1125,7 @@ exports.tqScheduledCleanup = onSchedule(
       completedTasksDeleted: completedDeleted,
       cancelledTasksDeleted: cancelledDeleted,
       workerRecordsDeleted:  workersDeleted,
-      totalDeleted:          completedDeleted + cancelledDeleted,
+      totalDeleted:          completedDeleted + cancelledDeleted + (workersDeleted || 0),
     };
 
     logger.info('[TQ:Cleanup] done', result);

@@ -200,7 +200,7 @@ function isValidEvent(event) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const obsIngestTelemetry = onCall(
-  { region: REGION, maxInstances: 50 },
+  { region: REGION, maxInstances: 50, enforceAppCheck: true },
   async (request) => {
     const { data, auth } = request;
 
@@ -276,7 +276,7 @@ const obsIngestTelemetry = onCall(
 // ─────────────────────────────────────────────────────────────────────────────
 
 const obsGetErrorReport = onCall(
-  { region: REGION, maxInstances: 10 },
+  { region: REGION, maxInstances: 10, enforceAppCheck: true },
   async (request) => {
     await assertAdmin(request.auth);
     const data = request.data || {};
@@ -377,7 +377,7 @@ const obsGetErrorReport = onCall(
 // ─────────────────────────────────────────────────────────────────────────────
 
 const obsGetPerformanceReport = onCall(
-  { region: REGION, maxInstances: 10 },
+  { region: REGION, maxInstances: 10, enforceAppCheck: true },
   async (request) => {
     await assertAdmin(request.auth);
     const data = request.data || {};
@@ -390,10 +390,12 @@ const obsGetPerformanceReport = onCall(
       throw new HttpsError('invalid-argument', 'Invalid date range.');
     }
 
+    // [H-5] orderBy before limit to get the most recent samples when capped
     let query = db().collection(COL_PERF)
       .where('timestamp', '>=', from.toISOString())
       .where('timestamp', '<=', to.toISOString())
       .where('type', '==', 'perf')
+      .orderBy('timestamp', 'desc')
       .limit(5000); // cap reads
 
     if (page) query = query.where('page', '==', page);
@@ -462,21 +464,23 @@ const obsGetPerformanceReport = onCall(
 // ─────────────────────────────────────────────────────────────────────────────
 
 const obsGetRealTimeMetrics = onCall(
-  { region: REGION, maxInstances: 20 },
+  { region: REGION, maxInstances: 20, enforceAppCheck: true },
   async (request) => {
     await assertAdmin(request.auth);
 
     const windowStart = new Date(Date.now() - REALTIME_WINDOW_MS).toISOString();
     const now         = new Date().toISOString();
 
-    // Query all three collections in parallel
+    // [H-2] orderBy before limit on both event and error queries
     const [eventsSnap, errorsSnap, perfSnap] = await Promise.all([
       db().collection(COL_EVENTS)
         .where('timestamp', '>=', windowStart)
+        .orderBy('timestamp', 'desc')
         .limit(2000)
         .get(),
       db().collection(COL_ERRORS)
         .where('timestamp', '>=', windowStart)
+        .orderBy('timestamp', 'desc')
         .limit(2000)
         .get(),
       db().collection(COL_PERF)
@@ -549,7 +553,7 @@ const obsGetRealTimeMetrics = onCall(
 // ─────────────────────────────────────────────────────────────────────────────
 
 const obsScheduledAggregation = onSchedule(
-  { schedule: 'every 1 hours', region: REGION, timeoutSeconds: 540 },
+  { schedule: 'every 1 hour', region: REGION, timeoutSeconds: 540 },  // [L-2] fixed schedule string
   async () => {
     const now       = new Date();
     const hourStart = new Date(now);
@@ -588,6 +592,17 @@ const obsScheduledAggregation = onSchedule(
         .limit(5000)
         .get(),
     ]);
+
+    // [M-5] Warn when any query hits the 5000-doc cap — rollup data may be incomplete
+    if (errSnap.size >= 5000) {
+      logger.warn('[obs] rollup hit 5000-doc cap — data may be incomplete', { collection: COL_ERRORS });
+    }
+    if (perfSnap.size >= 5000) {
+      logger.warn('[obs] rollup hit 5000-doc cap — data may be incomplete', { collection: COL_PERF });
+    }
+    if (evtSnap.size >= 5000) {
+      logger.warn('[obs] rollup hit 5000-doc cap — data may be incomplete', { collection: COL_EVENTS });
+    }
 
     const errors   = errSnap.docs.map(d => d.data());
     const perfs    = perfSnap.docs.map(d => d.data());
@@ -685,7 +700,7 @@ async function _deleteOldDocs(colName, cutoffISO) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const obsGetAuditLog = onCall(
-  { region: REGION, maxInstances: 10 },
+  { region: REGION, maxInstances: 10, enforceAppCheck: true },
   async (request) => {
     await assertAdmin(request.auth);
     const data = request.data || {};
@@ -709,9 +724,13 @@ const obsGetAuditLog = onCall(
     if (userId) query = query.where('userId', '==', userId);
     if (action) query = query.where('action', '==', action);
 
+    // [L-3] Throw when cursor document no longer exists
     if (startAfter) {
       const cursorDoc = await db().collection(COL_AUDIT).doc(startAfter).get();
-      if (cursorDoc.exists) query = query.startAfter(cursorDoc);
+      if (!cursorDoc.exists) {
+        throw new HttpsError('not-found', 'Pagination cursor is no longer valid; restart from page 1.');
+      }
+      query = query.startAfter(cursorDoc);
     }
 
     query = query.limit(limit + 1); // fetch one extra to detect next page
@@ -736,11 +755,12 @@ const obsGetAuditLog = onCall(
 //    Persist a metric alert rule to _sokoniAlerts/{alertId}.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const VALID_METRICS     = ['errorRate', 'errorCount', 'avgLCP', 'avgFCP', 'activeSessionCount', 'avgTTFB'];
+// [H-4] avgFCP and avgTTFB removed — they are always null in evaluation and mislead alert authors
+const VALID_METRICS     = ['errorRate', 'errorCount', 'avgLCP', 'activeSessionCount'];
 const VALID_COMPARISONS = ['gt', 'lt', 'gte', 'lte', 'eq'];
 
 const obsCreateAlert = onCall(
-  { region: REGION, maxInstances: 5 },
+  { region: REGION, maxInstances: 5, enforceAppCheck: true },
   async (request) => {
     await assertAdmin(request.auth);
     const data = request.data || {};
@@ -767,14 +787,17 @@ const obsCreateAlert = onCall(
     }
 
     const alertRef = db().collection(COL_ALERTS).doc();
+    const alertName = safeStr(data.name, 200) || `${metric} ${comparison} ${threshold}`;
+    const alertDesc = safeStr(data.description, 500) || null;
+
     const alertDoc = {
       alertId     : alertRef.id,
       metric,
       threshold,
       comparison,
       notifyEmail : notifyEmail || null,
-      name        : safeStr(data.name, 200) || `${metric} ${comparison} ${threshold}`,
-      description : safeStr(data.description, 500) || null,
+      name        : alertName,
+      description : alertDesc,
       active      : true,
       createdBy   : request.auth.uid,
       createdAt   : admin.firestore.FieldValue.serverTimestamp(),
@@ -785,7 +808,22 @@ const obsCreateAlert = onCall(
     await alertRef.set(alertDoc);
     logger.info('[obs] alert created', { alertId: alertRef.id, metric, threshold, comparison });
 
-    return { alertId: alertRef.id, ...alertDoc };
+    // [H-1] Build return value without FieldValue sentinels
+    const returnNow = new Date().toISOString();
+    return {
+      alertId     : alertRef.id,
+      metric,
+      threshold,
+      comparison,
+      notifyEmail : notifyEmail || null,
+      name        : alertName,
+      description : alertDesc,
+      active      : true,
+      createdBy   : request.auth.uid,
+      createdAt   : returnNow,
+      updatedAt   : returnNow,
+      fireCount   : 0,
+    };
   }
 );
 
@@ -808,9 +846,10 @@ const obsCheckAlerts = onSchedule(
     // Compute current real-time metrics (reuse the 5-min window)
     const windowStart = new Date(Date.now() - REALTIME_WINDOW_MS).toISOString();
 
+    // [H-3] orderBy before limit on event and error queries
     const [evtSnap, errSnap, perfSnap] = await Promise.all([
-      db().collection(COL_EVENTS).where('timestamp', '>=', windowStart).limit(2000).get(),
-      db().collection(COL_ERRORS).where('timestamp', '>=', windowStart).limit(2000).get(),
+      db().collection(COL_EVENTS).where('timestamp', '>=', windowStart).orderBy('timestamp', 'desc').limit(2000).get(),
+      db().collection(COL_ERRORS).where('timestamp', '>=', windowStart).orderBy('timestamp', 'desc').limit(2000).get(),
       db().collection(COL_PERF).where('timestamp', '>=', windowStart)
           .where('metric', '==', 'LCP').limit(1000).get(),
     ]);
@@ -832,18 +871,16 @@ const obsCheckAlerts = onSchedule(
       ? lcpVals.reduce((a, b) => a + b, 0) / lcpVals.length
       : null;
 
+    // [H-4] avgFCP and avgTTFB removed from currentMetrics
     const currentMetrics = {
       errorRate,
       errorCount,
       avgLCP,
-      avgFCP          : null, // extend as needed
       activeSessionCount,
-      avgTTFB         : null,
     };
 
     // Evaluate each alert
     const checkBatch = db().batch();
-    const now        = new Date().toISOString();
     const fires      = [];
 
     for (const alertDoc of alertsSnap.docs) {
@@ -874,14 +911,14 @@ const obsCheckAlerts = onSchedule(
         comparison : alert.comparison,
         currentValue: current,
         notifyEmail: alert.notifyEmail || null,
-        firedAt    : now,
+        firedAt    : admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Increment fire count on alert doc
+      // [M-2] Use serverTimestamp consistently for updatedAt and lastFiredAt
       checkBatch.update(alertDoc.ref, {
-        fireCount : admin.firestore.FieldValue.increment(1),
-        lastFiredAt: now,
-        updatedAt  : now,
+        fireCount   : admin.firestore.FieldValue.increment(1),
+        lastFiredAt : admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt   : admin.firestore.FieldValue.serverTimestamp(),
       });
 
       fires.push({ alertId: alertDoc.id, metric: alert.metric, current, threshold: alert.threshold });
@@ -892,6 +929,7 @@ const obsCheckAlerts = onSchedule(
       logger.warn('[obs] alerts fired', { count: fires.length, fires });
 
       // Notify admin
+      const now = new Date().toISOString();
       await adminNotify(
         `[SOKONI Observability] ${fires.length} alert(s) triggered`,
         fires.map(f =>
@@ -909,7 +947,7 @@ const obsCheckAlerts = onSchedule(
 // ─────────────────────────────────────────────────────────────────────────────
 
 const obsDistributedTrace = onCall(
-  { region: REGION, maxInstances: 30 },
+  { region: REGION, maxInstances: 30, enforceAppCheck: true },
   async (request) => {
     assertAuth(request.auth);
     const data = request.data || {};
@@ -940,6 +978,14 @@ const obsDistributedTrace = onCall(
       throw new HttpsError('invalid-argument', 'status must be ok | error | timeout | cancelled.');
     }
 
+    // [M-4] Validate tags size before writing
+    const tags = (data.tags && typeof data.tags === 'object' && !Array.isArray(data.tags))
+                   ? data.tags
+                   : {};
+    if (tags && JSON.stringify(tags).length > 4096) {
+      throw new HttpsError('invalid-argument', 'tags object exceeds 4KB limit.');
+    }
+
     const expiresAt = new Date(Date.now() + TRACE_TTL_DAYS * 24 * 3600 * 1000);
 
     const spanDoc = {
@@ -949,20 +995,26 @@ const obsDistributedTrace = onCall(
       operation,
       duration,
       status,
-      tags        : (data.tags && typeof data.tags === 'object' && !Array.isArray(data.tags))
-                      ? data.tags
-                      : {},
+      tags,
       uid         : request.auth.uid,
       recordedAt  : new Date().toISOString(),
       expiresAt   : expiresAt.toISOString(),
     };
 
-    await db()
-      .collection(COL_TRACES)
-      .doc(traceId)
-      .collection('spans')
-      .doc(spanId)
-      .set(spanDoc);
+    // [M-3] Use .create() to prevent span overwrites; return idempotent flag if already exists
+    try {
+      await db()
+        .collection(COL_TRACES)
+        .doc(traceId)
+        .collection('spans')
+        .doc(spanId)
+        .create(spanDoc);
+    } catch (err) {
+      if (err.code === 'already-exists' || err.code === 6) {
+        return { traceId, spanId, idempotent: true };
+      }
+      throw err;
+    }
 
     return { traceId, spanId, expiresAt: spanDoc.expiresAt };
   }

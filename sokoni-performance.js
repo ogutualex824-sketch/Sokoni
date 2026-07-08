@@ -48,10 +48,30 @@
   /** Pending background sync registrations: tag → fn */
   const _bgSyncFns = new Map();
 
+  /** Guard: ensure prefetchLinks() only registers its listeners once */
+  let _prefetchListenersAdded = false;
+
   /** The shared IntersectionObserver instance for lazy images */
   let _lazyObserver = null;
 
   /* ── CSS injection ──────────────────────────────────────────── */
+
+  /**
+   * _safeBgUrl(raw)
+   * ────────────────
+   * Validate a raw string before using it as a CSS background-image URL.
+   * Only http/https and data:image/ URLs are accepted to prevent CSS
+   * injection attacks (IE expression() and CSS data-exfiltration vectors).
+   * Returns a safely quoted url(...) string, or '' to reject the value.
+   */
+  function _safeBgUrl(raw) {
+    if (!raw) return '';
+    var trimmed = raw.trim();
+    if (/^https?:\/\//i.test(trimmed) || /^data:image\//i.test(trimmed)) {
+      return 'url("' + trimmed.replace(/"/g, '%22') + '")';
+    }
+    return ''; // reject anything else (javascript:, expression(), relative paths, etc.)
+  }
 
   /**
    * Inject the minimal CSS required for lazy-load fade-in.
@@ -225,10 +245,13 @@
       }, { once: true });
     }
 
-    /* CSS background-image via data-bg */
+    /* CSS background-image via data-bg — validated to prevent CSS injection */
     if (el.dataset.bg) {
-      el.style.backgroundImage = 'url(' + el.dataset.bg + ')';
-      el.classList.add('sk-lazy-loaded');
+      var safeBg = _safeBgUrl(el.dataset.bg);
+      if (safeBg) {
+        el.style.backgroundImage = safeBg;
+        el.classList.add('sk-lazy-loaded');
+      }
       delete el.dataset.bg;
     }
   }
@@ -264,6 +287,10 @@
    *  - Rate-limits to PREFETCH_MAX_PER_SEC (3) triggers per second
    */
   function prefetchLinks() {
+    /* PERF-3: guard against re-registering listeners on repeated calls */
+    if (_prefetchListenersAdded) return;
+    _prefetchListenersAdded = true;
+
     function _isSameOriginPageLink(href) {
       if (!href || href.startsWith('#') || href.startsWith('javascript:')) return false;
       try {
@@ -843,7 +870,7 @@
         var eventEntries = performance.getEntriesByType('event');
         if (eventEntries && eventEntries.length) {
           var durations = eventEntries
-            .map(function (e) { return e.processingEnd - e.startTime; })
+            .map(function (e) { return e.duration; }) // entry.duration is the correct INP metric
             .sort(function (a, b) { return a - b; });
           var p98idx = Math.floor(durations.length * 0.98);
           _record('INP', Math.round(durations[Math.max(0, p98idx - 1)]));
