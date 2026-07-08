@@ -677,7 +677,9 @@
     var _probeTimer = null;       /* handle for next scheduled probe */
     var _dismissed  = false;      /* user tapped ×; stay hidden until reconnect */
     var _bootTime   = Date.now(); /* used to suppress false positives during SW install */
-    var _GRACE_MS   = 12000;     /* grace — covers slow-network SW install on mobile */
+    var _GRACE_MS   = 4000;      /* short grace — the active probe already guards against
+                                    boot-time false positives, so a long grace only delays
+                                    a genuine offline banner. */
 
     /* ── Probe ─────────────────────────────────────────────────────────────
        Active connectivity check — the SOURCE OF TRUTH. We deliberately do NOT
