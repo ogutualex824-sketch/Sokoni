@@ -94,20 +94,30 @@
       });
   }
 
-  /* ── Decision logic ────────────────────────────────────── */
+  /* ── Decision logic ────────────────────────────────────────────────────
+     `navigator.onLine` is authoritative for "is there a network?" and is the
+     ONLY gate for hiding the banner. Recovery must never depend on a backend
+     ping succeeding — a failed/blocked ping (SW interception, CDN cache, a 404
+     on a reserved URL) used to leave the banner stuck visible after the network
+     had already returned. If onLine is true, hide immediately.               */
+  function _sync() {
+    if (navigator.onLine) _hide();
+    else _show();
+  }
+
+  /* Kept for API compatibility (window.SokoniOffline.check). navigator.onLine
+     drives visibility; the ping only escalates to "show" if the browser thinks
+     it is online but the backend is unreachable (captive portal) — it can never
+     block a hide. */
   function _check() {
-    if (!navigator.onLine) {
-      /* Browser is certain — no network at all */
-      _show();
-    } else {
-      /* navigator.onLine = true is optimistic; confirm with a real request */
-      _ping();
-    }
+    if (!navigator.onLine) { _show(); return; }
+    _hide();
+    _ping();
   }
 
   /* ── Network event listeners ───────────────────────────── */
   window.addEventListener('offline', function () {
-    /* Debounce 1 s — Android/iOS briefly fires `offline` during Wi-Fi handoffs
+    /* Debounce 1 s — Android/iOS briefly fire `offline` during Wi-Fi handoffs
        that resolve on their own. Only show if still offline after 1 s. */
     clearTimeout(_debounceTimer);
     _debounceTimer = setTimeout(function () {
@@ -116,14 +126,22 @@
   });
 
   window.addEventListener('online', function () {
-    /* Network restored — verify before hiding (captive portal guard) */
+    /* Network restored — trust the browser and hide instantly. Do NOT wait on a
+       ping; that dependency was the cause of the "banner stuck while online" bug. */
     clearTimeout(_debounceTimer);
-    _ping();
+    _hide();
   });
 
-  /* Initial state: show immediately if browser reports offline.
-     No proactive ping on load — that was the source of false positives. */
+  /* Re-sync when the tab regains focus or is restored from bfcache/app-switch.
+     Mobile devices that sleep offline and wake online often miss the `online`
+     event, which previously left the banner stranded. */
+  window.addEventListener('pageshow', _sync);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) _sync();
+  });
+
+  /* Initial state: show only if the browser reports offline. */
   if (!navigator.onLine) { _show(); }
 
-  window.SokoniOffline = { check: _check };
+  window.SokoniOffline = { check: _check, sync: _sync };
 }());
