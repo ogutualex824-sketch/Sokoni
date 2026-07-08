@@ -57,8 +57,9 @@
       'warehouse.html':               { line: 'Stock In. Orders Out.',          bar: '#71ff00' },
       'logistics-reports.html':       { line: 'Logistics Performance. Visualised.',bar:'#71ff00'},
       'delivery-zones.html':          { line: 'Coverage That Reaches Further',  bar: '#00bcd4' },
-      /* Analytics */
+      /* Analytics & Observability */
       'analytics.html':               { line: 'Insights That Drive Growth',     bar: '#71ff00' },
+      'observability.html':           { line: 'Platform Health at a Glance.',   bar: '#00bcd4' },
       /* SmartPOS */
       'pos.html':                     { line: 'Point of Sale. Powered by AI.',  bar: '#71ff00' },
       'pos-checkout.html':            { line: 'Fast Checkout. Every Time.',     bar: '#71ff00' },
