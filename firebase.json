@@ -54,6 +54,7 @@
     "rewrites": [
       { "source": "/api/chat",                     "function": "sokoniChat",           "region": "us-central1" },
       { "source": "/api/facebook/data-deletion",   "function": "facebookDataDeletion", "region": "us-central1" },
+      { "source": "/.well-known/assetlinks.json",  "destination": "/assetlinks.json" },
       { "source": "/shop/**",                      "destination": "/minishop.html" },
       { "source": "/@**",                          "destination": "/minishop.html" },
       { "source": "/card/**",                      "destination": "/minishop-status.html" },
@@ -89,6 +90,24 @@
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=86400, must-revalidate" },
           { "key": "Content-Type",  "value": "application/manifest+json" }
+        ]
+      },
+
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          { "key": "Content-Type",              "value": "application/json" },
+          { "key": "Access-Control-Allow-Origin","value": "*" },
+          { "key": "Cache-Control",             "value": "public, max-age=86400" }
+        ]
+      },
+
+      {
+        "source": "/assetlinks.json",
+        "headers": [
+          { "key": "Content-Type",              "value": "application/json" },
+          { "key": "Access-Control-Allow-Origin","value": "*" },
+          { "key": "Cache-Control",             "value": "public, max-age=86400" }
         ]
       },
 

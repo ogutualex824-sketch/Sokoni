@@ -82,9 +82,44 @@
     }
   ],
 
-  "related_applications": [],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=ke.co.mysokoni.app",
+      "id": "ke.co.mysokoni.app"
+    }
+  ],
 
-  "screenshots": [],
+  "screenshots": [
+    {
+      "src": "assets/screenshots/screen-home.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Home — browse products"
+    },
+    {
+      "src": "assets/screenshots/screen-seller.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Seller dashboard"
+    },
+    {
+      "src": "assets/screenshots/screen-checkout.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Checkout with M-Pesa"
+    },
+    {
+      "src": "assets/screenshots/screen-track.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Live order tracking"
+    }
+  ],
 
   "share_target": {
     "action": "/product",

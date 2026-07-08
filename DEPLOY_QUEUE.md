@@ -5,6 +5,34 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Sprint 4.7 — Native Android TWA — 2026-07-08
+
+**No new Cloud Functions.**
+
+**Hosting deploy required** (publishes `assetlinks.json`, updated `firebase.json`, updated `manifest.json`):
+
+```bash
+npx firebase-tools@latest deploy --only hosting
+```
+
+**Then build the Android app:**
+```bash
+# Prerequisites: JDK 11+, Android SDK, npm i -g @bubblewrap/cli
+# 1. Generate keystore (once only)
+keytool -genkeypair -alias sokoni-key -keyalg RSA -keysize 2048 -validity 10000 -keystore sokoni-release.keystore
+# 2. Get SHA-256 fingerprint
+keytool -list -v -keystore sokoni-release.keystore -alias sokoni-key | grep "SHA256:"
+# 3. Update assetlinks.json + twa-manifest.json with fingerprint
+# 4. Redeploy hosting
+npx firebase-tools@latest deploy --only hosting
+# 5. Build AAB for Play Store
+bubblewrap build --skipPwaValidation
+```
+
+See `docs/ANDROID_RELEASE.md` for the full 10-step guide.
+
+---
+
 ## Sprint 4.6 — Platform Shell — 2026-07-08
 
 **No new Cloud Functions.** All observability CFs were deployed in Phase 3.

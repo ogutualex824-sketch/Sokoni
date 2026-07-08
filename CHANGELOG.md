@@ -1,4 +1,35 @@
-﻿## [2026-07-08] — Sprint 4.6: Platform Shell — Command Palette + Observability Dashboard
+﻿## [2026-07-08] — Sprint 4.7: Native Android — TWA / Play Store Packaging
+
+### Summary
+SOKONI is now Play Store-ready as a Trusted Web Activity (TWA). The PWA is wrapped in a native Android shell using Bubblewrap. Digital Asset Links are wired via a Firebase Hosting rewrite (works around the `.well-known/` dot-directory ignore rule). The web app manifest is upgraded with Play Store screenshots metadata.
+
+### New Files
+- `assetlinks.json` — Digital Asset Links at root; served at `/.well-known/assetlinks.json` via rewrite
+- `twa-manifest.json` — Bubblewrap TWA configuration (package `ke.co.mysokoni.app`; theme `#71ff00`; 3 shortcuts)
+- `docs/ANDROID_RELEASE.md` — 10-step build + Play Store submission guide
+
+### Modified Files
+- `firebase.json` — added `/.well-known/assetlinks.json` rewrite → `/assetlinks.json`; added proper `Content-Type` + CORS headers for both paths
+- `manifest.json` — added `screenshots` array (4 entries) and `related_applications` pointing to Play Store listing
+
+### Security
+- SHA-256 fingerprint in `assetlinks.json` is a placeholder — must be replaced with the actual keystore fingerprint before Play Store submission
+- Signing keystore (`sokoni-release.keystore`) must never be committed to the repository
+- Digital Asset Links prevent third-party apps from hijacking the TWA verification
+
+### Deployment Steps
+1. Generate keystore: `keytool -genkeypair -alias sokoni-key …`
+2. Extract SHA-256, update `assetlinks.json` + `twa-manifest.json`
+3. `npx firebase-tools@latest deploy --only hosting`
+4. `bubblewrap build --skipPwaValidation`
+5. Upload `.aab` to Play Console → Internal Testing → Production
+
+### Breaking Changes
+None — the TWA is additive; existing web users are unaffected.
+
+---
+
+## [2026-07-08] — Sprint 4.6: Platform Shell — Command Palette + Observability Dashboard
 
 ### Summary
 Platform Shell sprint: adds a global command palette (Ctrl+K / Cmd+K) available on every page, and a new admin-only Observability Dashboard with 5 tabs (Overview, Errors, Performance, Audit Log, Alerts). The command palette requires no backend and is injected via `shared-header.js` across all 291+ pages.
