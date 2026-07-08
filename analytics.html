@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="security.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Analytics &mdash; SOKONI</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="icon" href="favicon.ico">
+  <style>
+    :root{--bg:#050505;--surface:rgba(255,255,255,.05);--surface2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.1);--accent:#71ff00;--info:#00bcd4;--warn:#ffb300;
+      --danger:#f44336;--txt:#fff;--muted:rgba(255,255,255,.45);--radius:14px}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+    input,select,button{font-family:inherit}
+    #hdr{position:sticky;top:0;z-index:200;background:rgba(5,5,5,.97);
+      border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px}
+    #hdrLogo{font-size:18px;font-weight:900;background:linear-gradient(135deg,#71ff00,#00bcd4);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;flex-shrink:0}
+    .back-btn{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px}
+    /* Tabs */
+    .tabs{display:flex;border-bottom:1px solid var(--border);position:sticky;top:57px;z-index:100;
+      background:rgba(5,5,5,.97);overflow-x:auto;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex-shrink:0;padding:12px 14px;font-size:11px;font-weight:800;cursor:pointer;
+      color:var(--muted);border-bottom:2px solid transparent;text-transform:uppercase;letter-spacing:.4px;transition:all .15s}
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .pane{padding:16px;max-width:1100px;margin:0 auto;display:none}
+    .pane.active{display:block}
+    /* Filter bar */
+    .filter-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:12px;margin-bottom:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .filter-bar label{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap}
+    .filter-bar input,.filter-bar select{background:var(--surface2);border:1px solid var(--border);
+      border-radius:8px;padding:9px 12px;color:var(--txt);font-size:13px;min-height:40px;flex:1;min-width:80px}
+    .filter-bar select option{background:#1a1a1a}
+    .filter-bar button{background:var(--accent);color:#000;border:none;border-radius:8px;
+      padding:9px 14px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
+    /* KPI grid */
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+    .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+    .kpi-val{font-size:26px;font-weight:900;color:var(--accent);line-height:1}
+    .kpi-lbl{font-size:11px;color:var(--muted);font-weight:700;margin-top:5px;text-transform:uppercase;letter-spacing:.4px}
+    .kpi-change{font-size:12px;font-weight:800;margin-top:5px}
+    .kpi-change.up{color:var(--accent)}.kpi-change.down{color:var(--danger)}.kpi-change.neutral{color:var(--muted)}
+    /* Chart cards */
+    .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      padding:16px;margin-bottom:12px}
+    .chart-title{font-size:12px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+    /* Bar chart */
+    .bar-chart{display:flex;align-items:flex-end;gap:3px;height:140px;padding-bottom:6px;overflow-x:auto}
+    .bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;min-width:28px;max-width:60px;flex:1}
+    .bar-fill{background:var(--accent);border-radius:4px 4px 0 0;width:100%;min-height:3px;transition:height .4s}
+    .bar-fill.secondary{background:rgba(0,188,212,.5)}
+    .bar-lbl{font-size:9px;color:var(--muted);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
+    .bar-val{font-size:9px;color:var(--txt);font-weight:800;white-space:nowrap}
+    .bar-legend{display:flex;gap:14px;margin-top:10px}
+    .bar-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+    .bar-legend-dot{width:10px;height:10px;border-radius:3px}
+    /* Heatmap */
+    .heatmap-wrap{overflow-x:auto}
+    .heatmap{display:grid;grid-template-columns:40px repeat(24,1fr);gap:2px}
+    .hm-cell{height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
+    .hm-day{color:var(--muted);font-size:10px;font-weight:700;display:flex;align-items:center}
+    .hm-hour-hdr{font-size:8px;color:var(--muted);text-align:center}
+    /* Funnel */
+    .funnel-step{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+    .funnel-bar-wrap{flex:1;background:rgba(255,255,255,.06);border-radius:6px;height:32px;overflow:hidden;position:relative}
+    .funnel-bar-fill{height:100%;border-radius:6px;background:var(--accent);transition:width .6s}
+    .funnel-label{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:800;color:#000;white-space:nowrap}
+    .funnel-count{font-size:12px;font-weight:800;width:80px;text-align:right;flex-shrink:0}
+    .funnel-drop{font-size:11px;color:var(--danger);width:50px;flex-shrink:0}
+    /* Table */
+    .sk-table{width:100%;border-collapse:collapse;font-size:12px}
+    .sk-table th{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);
+      color:var(--muted);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+    .sk-table td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.05)}
+    .sk-table tr:last-child td{border-bottom:none}
+    .sk-table tbody tr:hover{background:var(--surface2)}
+    /* Donut chart */
+    .donut-wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+    .donut-canvas{flex-shrink:0}
+    .donut-legend{display:flex;flex-direction:column;gap:8px;flex:1;min-width:140px}
+    .donut-legend-item{display:flex;align-items:center;gap:8px;font-size:12px}
+    .donut-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+    /* Mini stat row */
+    .mini-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+    .mini-stat{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center}
+    .mini-stat-val{font-size:18px;font-weight:900;color:var(--accent)}
+    .mini-stat-lbl{font-size:10px;color:var(--muted);font-weight:700}
+    /* Retention matrix */
+    .retention-table{width:100%;border-collapse:collapse;font-size:11px;overflow-x:auto;display:block}
+    .retention-table th{padding:6px 8px;background:var(--surface2);color:var(--muted);font-weight:700;white-space:nowrap}
+    .retention-table td{padding:6px 8px;border:1px solid rgba(255,255,255,.04);text-align:center;border-radius:4px}
+    /* Trend bars */
+    .trend-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+    .trend-row:last-child{border-bottom:none}
+    .trend-key{font-size:12px;color:var(--muted);width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .trend-bar-wrap{flex:1;background:rgba(255,255,255,.06);border-radius:4px;height:20px;overflow:hidden}
+    .trend-bar{height:100%;border-radius:4px;background:var(--accent)}
+    .trend-val{font-size:12px;font-weight:800;width:50px;text-align:right;flex-shrink:0}
+    /* Utility */
+    .empty{text-align:center;padding:40px 16px;color:var(--muted)}
+    .empty-icon{font-size:48px;margin-bottom:10px}
+    .skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);
+      background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:var(--radius)}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    #toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom));left:50%;
+      transform:translateX(-50%) translateY(20px);background:#1a1a1a;border:1px solid var(--border);
+      padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;transition:all .3s;
+      pointer-events:none;z-index:9999;white-space:nowrap;max-width:90vw;text-align:center}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.success{border-color:var(--accent);color:var(--accent)}
+    #toast.error{border-color:var(--danger);color:var(--danger)}
+    @media(max-width:600px){.kpi-grid{grid-template-columns:1fr 1fr}.mini-stats{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+<div id="hdr">
+  <button class="back-btn" onclick="history.back()">&#8592;</button>
+  <div id="hdrLogo">SOKONI</div>
+  <span style="flex:1;font-size:14px;font-weight:800">Analytics</span>
+</div>
+<div class="tabs">
+  <div class="tab active" data-pane="sales"      onclick="_tab(this,'sales')">Sales</div>
+  <div class="tab" data-pane="funnel"            onclick="_tab(this,'funnel')">Funnel</div>
+  <div class="tab" data-pane="customers"         onclick="_tab(this,'customers')">Customers</div>
+  <div class="tab" data-pane="products"          onclick="_tab(this,'products')">Products</div>
+  <div class="tab" data-pane="realtime"          onclick="_tab(this,'realtime')">Real-time</div>
+</div>
+
+<!-- ── SALES TAB ── -->
+<div class="pane active" id="salesPane">
+  <div class="filter-bar">
+    <label>Shop</label>
+    <input type="text" id="sShopId" placeholder="Shop ID">
+    <label>Period</label>
+    <select id="sPeriod">
+      <option value="7d">Last 7 days</option>
+      <option value="30d" selected>Last 30 days</option>
+      <option value="90d">Last 90 days</option>
+      <option value="365d">Last 12 months</option>
+    </select>
+    <button onclick="_loadSales()">Run</button>
+  </div>
+  <div id="salesKPIs" style="display:none">
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-val" id="kRevenue">—</div><div class="kpi-lbl">Revenue (KES)</div><div class="kpi-change" id="kRevChange"></div></div>
+      <div class="kpi"><div class="kpi-val" id="kOrders">—</div><div class="kpi-lbl">Orders</div><div class="kpi-change" id="kOrdChange"></div></div>
+      <div class="kpi"><div class="kpi-val" id="kAOV">—</div><div class="kpi-lbl">Avg Order Value</div></div>
+      <div class="kpi"><div class="kpi-val" id="kRefunds">—</div><div class="kpi-lbl">Refunds</div></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Revenue &amp; Orders over time</div>
+      <div class="bar-chart" id="salesChart"></div>
+      <div class="bar-legend">
+        <div class="bar-legend-item"><div class="bar-legend-dot" style="background:var(--accent)"></div>Revenue</div>
+        <div class="bar-legend-item"><div class="bar-legend-dot" style="background:rgba(0,188,212,.5)"></div>Orders</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="chart-card">
+        <div class="chart-title">By Category</div>
+        <div id="catChart"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">By Channel</div>
+        <div id="chanChart"></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Top Products</div>
+      <div style="overflow-x:auto">
+        <table class="sk-table"><thead><tr><th>#</th><th>Product</th><th>Revenue</th><th>Units</th><th>Orders</th></tr></thead>
+        <tbody id="topProducts"></tbody></table>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Order Volume Heatmap (Day &times; Hour)</div>
+      <div class="heatmap-wrap"><div class="heatmap" id="heatmap"></div></div>
+    </div>
+  </div>
+  <div id="salesEmpty" class="empty"><div class="empty-icon">&#x1F4CA;</div><p>Select a shop and run report</p></div>
+</div>
+
+<!-- ── FUNNEL TAB ── -->
+<div class="pane" id="funnelPane">
+  <div class="filter-bar">
+    <label>Shop</label>
+    <input type="text" id="fShopId" placeholder="Shop ID">
+    <label>Period</label>
+    <select id="fPeriod">
+      <option value="7d">Last 7 days</option>
+      <option value="30d" selected>Last 30 days</option>
+    </select>
+    <button onclick="_loadFunnel()">Run</button>
+  </div>
+  <div class="mini-stats">
+    <div class="mini-stat"><div class="mini-stat-val" id="fCartRate">—</div><div class="mini-stat-lbl">Cart Add Rate</div></div>
+    <div class="mini-stat"><div class="mini-stat-val" id="fAbandon">—</div><div class="mini-stat-lbl">Abandoned Carts</div></div>
+    <div class="mini-stat"><div class="mini-stat-val" id="fConvert">—</div><div class="mini-stat-lbl">Checkout Conv.</div></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Conversion Funnel</div>
+    <div id="funnelViz"><div class="empty"><p>Run report above</p></div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="chart-card">
+      <div class="chart-title">Top Pages</div>
+      <div id="topPages"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Top Search Terms</div>
+      <div id="topSearch"></div>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Traffic Sources</div>
+    <div id="trafficSrc"></div>
+  </div>
+</div>
+
+<!-- ── CUSTOMERS TAB ── -->
+<div class="pane" id="customersPane">
+  <div class="filter-bar">
+    <label>Shop</label>
+    <input type="text" id="cShopId" placeholder="Shop ID">
+    <label>Period</label>
+    <select id="cPeriod">
+      <option value="30d" selected>Last 30 days</option>
+      <option value="90d">Last 90 days</option>
+    </select>
+    <button onclick="_loadCustomers()">Run</button>
+  </div>
+  <div class="mini-stats">
+    <div class="mini-stat"><div class="mini-stat-val" id="cNewBuyers">—</div><div class="mini-stat-lbl">New Buyers</div></div>
+    <div class="mini-stat"><div class="mini-stat-val" id="cReturning">—</div><div class="mini-stat-lbl">Returning</div></div>
+    <div class="mini-stat"><div class="mini-stat-val" id="cChurnRate">—</div><div class="mini-stat-lbl">Churn Rate</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div class="chart-card">
+      <div class="chart-title">New vs Returning Revenue</div>
+      <canvas id="nvRCanvas" width="200" height="200" class="donut-canvas"></canvas>
+      <div class="donut-legend" id="nvRLegend"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Top Buyers</div>
+      <div style="overflow-x:auto">
+        <table class="sk-table"><thead><tr><th>#</th><th>Buyer</th><th>Spent</th><th>Orders</th><th>AOV</th></tr></thead>
+        <tbody id="topBuyers"></tbody></table>
+      </div>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Cohort Retention Matrix</div>
+    <div style="overflow-x:auto"><table class="retention-table" id="retentionTable">
+      <thead><tr><th>Cohort</th><th>Size</th><th>Month 1</th><th>Month 2</th><th>Month 3</th><th>Month 4</th><th>Month 5</th><th>Month 6</th></tr></thead>
+      <tbody id="retentionBody"><tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted)">Run report above</td></tr></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ── PRODUCTS TAB ── -->
+<div class="pane" id="productsPane">
+  <div class="filter-bar">
+    <label>Shop</label>
+    <input type="text" id="pShopId" placeholder="Shop ID">
+    <label>Period</label>
+    <select id="pPeriod">
+      <option value="30d" selected>Last 30 days</option>
+      <option value="90d">Last 90 days</option>
+    </select>
+    <button onclick="_loadProducts()">Run</button>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Sales Velocity (units/day)</div>
+    <div id="velocityList"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div class="chart-card">
+      <div class="chart-title">Highest Return Rate</div>
+      <div id="returnRateList"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Slow Movers (&#8804;3 units)</div>
+      <div id="slowMoverList"></div>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Margin Analysis</div>
+    <div style="overflow-x:auto">
+      <table class="sk-table"><thead><tr><th>Product</th><th>Revenue</th><th>Cost</th><th>Profit</th><th>Margin</th></tr></thead>
+      <tbody id="marginTable"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ── REAL-TIME TAB ── -->
+<div class="pane" id="realtimePane">
+  <div class="filter-bar">
+    <label>Shop</label>
+    <input type="text" id="rtShopId" placeholder="Shop ID">
+    <button onclick="_loadRealtime()">Refresh</button>
+    <button onclick="_startAutoRefresh()" id="autoBtn" style="background:var(--surface2);color:var(--txt);border:1px solid var(--border)">Auto (30s)</button>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-val" id="rtTodayOrders">—</div><div class="kpi-lbl">Orders Today</div></div>
+    <div class="kpi"><div class="kpi-val" id="rtTodayRevenue">—</div><div class="kpi-lbl">Revenue Today</div></div>
+    <div class="kpi"><div class="kpi-val" id="rtPending">—</div><div class="kpi-lbl">Pending Orders</div></div>
+    <div class="kpi"><div class="kpi-val" id="rtLastHour">—</div><div class="kpi-lbl">Last Hour (KES)</div></div>
+  </div>
+  <div class="kpi-grid" style="margin-top:-8px">
+    <div class="kpi"><div class="kpi-val" id="rtDisputes" style="color:var(--danger)">—</div><div class="kpi-lbl">Open Disputes</div></div>
+    <div class="kpi"><div class="kpi-val" id="rtLowStock" style="color:var(--warn)">—</div><div class="kpi-lbl">Low Stock SKUs</div></div>
+    <div class="kpi"><div class="kpi-val" id="rtTs" style="font-size:14px">—</div><div class="kpi-lbl">Last updated</div></div>
+    <div class="kpi" style="display:flex;align-items:center;justify-content:center">
+      <div id="rtStatusDot" style="width:14px;height:14px;border-radius:50%;background:var(--muted)"></div>
+      <span id="rtStatus" style="font-size:12px;margin-left:8px;color:var(--muted)">Idle</span>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Order Status Breakdown</div>
+    <div id="statusBreakdown"><div class="empty" style="padding:20px"><p>Run above</p></div></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Payment Methods (7 days)</div>
+    <div id="paymentMethods"><div class="empty" style="padding:20px"><p>Run above</p></div></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script src="sokoni-config.js"></script>
+<script>
+'use strict';
+(function(){
+var _autoTimer = null;
+
+function _cf(n){ return firebase.functions().httpsCallable(n); }
+function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _fmt(n){ return Number(n||0).toLocaleString(); }
+function _toast(msg,type){ var el=document.getElementById('toast'); el.textContent=msg; el.className='show '+(type||''); clearTimeout(el._t); el._t=setTimeout(function(){ el.className=''; }, 3500); }
+firebase.auth().onAuthStateChanged(function(){});
+
+window._tab = function(el, pane){
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  el.classList.add('active');
+  document.querySelectorAll('.pane').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById(pane+'Pane').classList.add('active');
+};
+
+function _changeChip(pct){
+  if(pct===null) return '<span class="kpi-change neutral">—</span>';
+  var cls = pct >= 0 ? 'up' : 'down';
+  var sign = pct >= 0 ? '+' : '';
+  return '<span class="kpi-change '+cls+'">'+sign+pct+'% vs prev</span>';
+}
+
+// ── SALES ──────────────────────────────────────────────────────────────────
+window._loadSales = function(){
+  var shopId = document.getElementById('sShopId').value.trim();
+  var period = document.getElementById('sPeriod').value;
+  if(!shopId){ _toast('Enter shop ID','error'); return; }
+  document.getElementById('salesKPIs').style.display='none';
+  document.getElementById('salesEmpty').innerHTML='<div class="skeleton" style="height:100px;margin-bottom:10px"></div>'.repeat(2);
+
+  Promise.all([
+    _cf('salesGetSummary')({shopId, period}),
+    _cf('salesGetTimeSeries')({shopId, period}),
+    _cf('salesGetByCategory')({shopId, period}),
+    _cf('salesGetByChannel')({shopId, period}),
+    _cf('salesGetTopProducts')({shopId, period, metric:'revenue', limit:10}),
+    _cf('salesGetHourlyHeatmap')({shopId, period}),
+  ]).then(function(results){
+    var s = results[0].data;
+    // KPIs
+    document.getElementById('kRevenue').textContent = _fmt(s.revenue);
+    document.getElementById('kOrders').textContent  = _fmt(s.orders);
+    document.getElementById('kAOV').textContent     = _fmt(s.aov);
+    document.getElementById('kRefunds').textContent = _fmt(s.refunds);
+    document.getElementById('kRevChange').innerHTML = _changeChip(s.revenueChange);
+    document.getElementById('kOrdChange').innerHTML = _changeChip(s.ordersChange);
+    // Time series bar chart
+    var series = results[1].data.series || [];
+    var maxRev = series.reduce(function(m,x){ return Math.max(m, x.revenue||0); }, 1);
+    var maxOrd = series.reduce(function(m,x){ return Math.max(m, x.orders||0); }, 1);
+    document.getElementById('salesChart').innerHTML = series.map(function(d){
+      var rh = Math.max(4, Math.round((d.revenue / maxRev) * 130));
+      var oh = Math.max(2, Math.round((d.orders / maxOrd) * 130));
+      return '<div class="bar-col">'+
+        '<div style="display:flex;align-items:flex-end;gap:1px;height:130px">'+
+        '<div class="bar-fill" style="height:'+rh+'px;width:48%"></div>'+
+        '<div class="bar-fill secondary" style="height:'+oh+'px;width:48%"></div>'+
+        '</div><div class="bar-lbl">'+_esc(d.label.slice(-5))+'</div></div>';
+    }).join('');
+    // By category horizontal bars
+    var cats = (results[2].data.rows || []).slice(0,8);
+    var maxCat = cats.reduce(function(m,r){ return Math.max(m,r.revenue||0); },1);
+    document.getElementById('catChart').innerHTML = cats.map(function(r){
+      return '<div class="trend-row"><div class="trend-key">'+_esc(r.category)+'</div>'+
+        '<div class="trend-bar-wrap"><div class="trend-bar" style="width:'+Math.round(r.revenue/maxCat*100)+'%"></div></div>'+
+        '<div class="trend-val">'+r.share+'%</div></div>';
+    }).join('');
+    // By channel
+    var chans = (results[3].data.channels || []).slice(0,6);
+    var maxChan = chans.reduce(function(m,r){ return Math.max(m,r.revenue||0); },1);
+    document.getElementById('chanChart').innerHTML = chans.map(function(r){
+      return '<div class="trend-row"><div class="trend-key">'+_esc(r.channel)+'</div>'+
+        '<div class="trend-bar-wrap"><div class="trend-bar" style="width:'+Math.round(r.revenue/maxChan*100)+'%"></div></div>'+
+        '<div class="trend-val">'+_fmt(r.revenue)+'</div></div>';
+    }).join('');
+    // Top products
+    document.getElementById('topProducts').innerHTML = (results[4].data.rows||[]).map(function(p,i){
+      return '<tr><td>'+(i+1)+'</td><td>'+_esc(p.productName)+'</td><td>'+_fmt(p.revenue)+'</td><td>'+p.units+'</td><td>'+p.orders+'</td></tr>';
+    }).join('');
+    // Heatmap
+    var matrix = results[5].data.matrix || [];
+    var days   = results[5].data.days   || ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    var maxVal = 1;
+    matrix.forEach(function(row){ row.forEach(function(v){ if(v>maxVal) maxVal=v; }); });
+    var hm = document.getElementById('heatmap');
+    // header row
+    var headerHTML = '<div class="hm-cell"></div>';
+    for(var h=0; h<24; h++) headerHTML += '<div class="hm-hour-hdr">'+(h<10?'0':'')+h+'</div>';
+    var bodyHTML = '';
+    for(var d=0; d<7; d++){
+      bodyHTML += '<div class="hm-day">'+days[d]+'</div>';
+      for(var hr=0; hr<24; hr++){
+        var v = (matrix[d]||[])[hr]||0;
+        var alpha = maxVal ? (v/maxVal) : 0;
+        var bg = alpha < 0.05 ? 'rgba(255,255,255,.04)' : 'rgba(113,255,0,'+Math.round(alpha*100)/100+')';
+        var textColor = alpha > 0.5 ? '#000' : 'rgba(255,255,255,.4)';
+        bodyHTML += '<div class="hm-cell" style="background:'+bg+';color:'+textColor+'">'+(v||'')+'</div>';
+      }
+    }
+    hm.innerHTML = headerHTML + bodyHTML;
+    // show
+    document.getElementById('salesKPIs').style.display = 'block';
+    document.getElementById('salesEmpty').style.display = 'none';
+  }).catch(function(e){ _toast(e.message,'error'); document.getElementById('salesEmpty').innerHTML='<div class="empty"><p>'+_esc(e.message)+'</p></div>'; });
+};
+
+// ── FUNNEL ─────────────────────────────────────────────────────────────────
+window._loadFunnel = function(){
+  var shopId = document.getElementById('fShopId').value.trim();
+  var period = document.getElementById('fPeriod').value;
+  if(!shopId){ _toast('Enter shop ID','error'); return; }
+  document.getElementById('funnelViz').innerHTML = '<div class="skeleton" style="height:160px"></div>';
+
+  Promise.all([
+    _cf('analyticsGetFunnel')({shopId, period}),
+    _cf('analyticsGetCartAbandonment')({shopId, period}),
+    _cf('analyticsGetTopPages')({shopId, period, limit:8}),
+    _cf('analyticsGetSearchTerms')({shopId, period, limit:10}),
+    _cf('analyticsGetTrafficSources')({shopId, period}),
+  ]).then(function(results){
+    var funnel = results[0].data.steps || [];
+    var aband  = results[1].data;
+    document.getElementById('fCartRate').textContent = (aband.cartSessions||0)+' carts';
+    document.getElementById('fAbandon').textContent  = aband.abandonmentRate+'%';
+    document.getElementById('fConvert').textContent  = funnel.length ? funnel[funnel.length-1].conversionFromTop+'%' : '—';
+    // Funnel bars
+    var topCount = funnel.length ? funnel[0].count : 1;
+    document.getElementById('funnelViz').innerHTML = funnel.map(function(step, i){
+      var pct = topCount ? Math.round((step.count/topCount)*100) : 0;
+      var drop = i>0 ? (100 - step.conversionFromPrev)+'% drop' : '';
+      return '<div class="funnel-step">'+
+        '<div class="funnel-bar-wrap" style="max-width:'+(Math.max(20,pct))+'%">'+
+        '<div class="funnel-bar-fill" style="width:100%">'+
+        '<span class="funnel-label">'+_esc(step.step.replace(/_/g,' '))+'</span></div></div>'+
+        '<div class="funnel-count">'+_fmt(step.count)+'</div>'+
+        '<div class="funnel-drop" style="color:var(--danger)">'+drop+'</div></div>';
+    }).join('');
+    // Top pages
+    var pages = results[2].data.pages || [];
+    var maxPV = pages.reduce(function(m,p){ return Math.max(m,p.views||0); },1);
+    document.getElementById('topPages').innerHTML = pages.map(function(p){
+      return '<div class="trend-row"><div class="trend-key">'+_esc(p.page.replace(/.*\//,'').slice(0,20)||'/')+'</div>'+
+        '<div class="trend-bar-wrap"><div class="trend-bar" style="width:'+Math.round(p.views/maxPV*100)+'%"></div></div>'+
+        '<div class="trend-val">'+p.views+'</div></div>';
+    }).join('') || '<div class="empty" style="padding:20px"><p>No data</p></div>';
+    // Search terms
+    var terms = results[3].data.terms || [];
+    var maxT = terms.reduce(function(m,t){ return Math.max(m,t.count||0); },1);
+    document.getElementById('topSearch').innerHTML = terms.map(function(t){
+      return '<div class="trend-row"><div class="trend-key">'+_esc(t.term)+'</div>'+
+        '<div class="trend-bar-wrap"><div class="trend-bar" style="width:'+Math.round(t.count/maxT*100)+'%"></div></div>'+
+        '<div class="trend-val">'+t.count+'</div></div>';
+    }).join('') || '<div class="empty" style="padding:20px"><p>No data</p></div>';
+    // Traffic sources
+    var srcs = results[4].data.sources || [];
+    var maxS = srcs.reduce(function(m,s){ return Math.max(m,s.views||0); },1);
+    document.getElementById('trafficSrc').innerHTML = srcs.map(function(s){
+      return '<div class="trend-row"><div class="trend-key">'+_esc(s.source.replace(/_/g,' '))+'</div>'+
+        '<div class="trend-bar-wrap"><div class="trend-bar" style="width:'+Math.round(s.views/maxS*100)+'%"></div></div>'+
+        '<div class="trend-val">'+s.share+'%</div></div>';
+    }).join('') || '<div class="empty" style="padding:20px"><p>No data</p></div>';
+  }).catch(function(e){ _toast(e.message,'error'); });
+};
+
+// ── CUSTOMERS ──────────────────────────────────────────────────────────────
+window._loadCustomers = function(){
+  var shopId = document.getElementById('cShopId').value.trim();
+  var period = document.getElementById('cPeriod').value;
+  if(!shopId){ _toast('Enter shop ID','error'); return; }
+  document.getElementById('retentionBody').innerHTML = '<tr><td colspan="8"><div class="skeleton" style="height:40px;margin:8px"></div></td></tr>'.repeat(3);
+
+  Promise.all([
+    _cf('cohortGetNewVsReturning')({shopId, period}),
+    _cf('cohortGetTopBuyers')({shopId, period, limit:10}),
+    _cf('cohortGetRetention')({shopId, cohortMonths:3}),
+    _cf('cohortGetChurn')({shopId, inactiveDays:60}),
+  ]).then(function(results){
+    var nvr   = results[0].data;
+    var buyers = results[1].data.buyers || [];
+    var ret    = results[2].data.rows  || [];
+    var churn  = results[3].data;
+
+    document.getElementById('cNewBuyers').textContent  = nvr.newBuyers || 0;
+    document.getElementById('cReturning').textContent  = nvr.returningBuyers || 0;
+    document.getElementById('cChurnRate').textContent  = churn.churnRate + '%';
+
+    // New vs Returning donut (simple canvas)
+    _drawDonut('nvRCanvas', [
+      { label:'New', value: nvr.newRevenue||0, color:'#71ff00' },
+      { label:'Returning', value: nvr.returningRevenue||0, color:'#00bcd4' },
+    ], 'nvRLegend');
+
+    // Top buyers table
+    document.getElementById('topBuyers').innerHTML = buyers.map(function(b,i){
+      return '<tr><td>'+(i+1)+'</td><td>'+_esc(b.buyerName)+'</td><td>'+_fmt(b.spent)+'</td><td>'+b.orders+'</td><td>'+_fmt(b.aov)+'</td></tr>';
+    }).join('');
+
+    // Retention matrix
+    var _retColor = function(rate){ return rate>50?'rgba(113,255,0,.3)':rate>20?'rgba(255,179,0,.2)':'rgba(255,255,255,.04)'; };
+    document.getElementById('retentionBody').innerHTML = ret.map(function(r){
+      var cells = r.retention.map(function(p){
+        return '<td style="background:'+_retColor(p.rate)+';font-weight:800">'+(r.size ? p.rate+'%' : '—')+'</td>';
+      }).join('');
+      return '<tr><td style="font-weight:700">'+r.month+'</td><td>'+r.size+'</td>'+cells+'</tr>';
+    }).join('') || '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted)">No data</td></tr>';
+  }).catch(function(e){ _toast(e.message,'error'); });
+};
+
+// ── PRODUCTS ───────────────────────────────────────────────────────────────
+window._loadProducts = function(){
+  var shopId = document.getElementById('pShopId').value.trim();
+  var period = document.getElementById('pPeriod').value;
+  if(!shopId){ _toast('Enter shop ID','error'); return; }
+
+  Promise.all([
+    _cf('productGetSalesVelocity')({shopId, period, limit:10}),
+    _cf('productGetReturnRate')({shopId, period}),
+    _cf('productGetSlowMovers')({shopId, period, threshold:3}),
+    _cf('productGetMarginAnalysis')({shopId, period, limit:10}),
+  ]).then(function(results){
+    var vel   = results[0].data.products || [];
+    var retRt = results[1].data.products || [];
+    var slow  = results[2].data.products || [];
+    var margins = results[3].data.products || [];
+
+    var maxVel = vel.reduce(function(m,p){ return Math.max(m, p.velocity||0); },1);
+    document.getElementById('velocityList').innerHTML = vel.map(function(p){
+      return '<div class="trend-row"><div class="trend-key">'+_esc((p.productName||p.productId).slice(0,22))+'</div>'+
+        '<div class="trend-bar-wrap"><div class="trend-bar" style="width:'+Math.round((p.velocity/maxVel)*100)+'%"></div></div>'+
+        '<div class="trend-val">'+p.velocity+'/d</div></div>';
+    }).join('') || '<div class="empty" style="padding:20px"><p>No data</p></div>';
+
+    document.getElementById('returnRateList').innerHTML = retRt.slice(0,8).map(function(p){
+      var color = p.returnRate>10 ? 'var(--danger)' : p.returnRate>5 ? 'var(--warn)' : 'var(--accent)';
+      return '<div class="trend-row"><div class="trend-key">'+_esc((p.productId||'').slice(0,18))+'</div>'+
+        '<div class="trend-bar-wrap"><div class="trend-bar" style="width:'+Math.min(100,p.returnRate*5)+'%;background:'+color+'"></div></div>'+
+        '<div class="trend-val" style="color:'+color+'">'+p.returnRate+'%</div></div>';
+    }).join('') || '<div class="empty" style="padding:20px"><p>No returns</p></div>';
+
+    document.getElementById('slowMoverList').innerHTML = slow.map(function(p){
+      return '<div class="trend-row"><div class="trend-key">'+_esc((p.name||p.productId||'').slice(0,22))+'</div>'+
+        '<div style="font-size:12px;color:var(--warn);font-weight:800;flex-shrink:0">'+p.unitsSold+' sold</div></div>';
+    }).join('') || '<div class="empty" style="padding:20px"><p>No slow movers</p></div>';
+
+    document.getElementById('marginTable').innerHTML = margins.map(function(p){
+      var mc = p.margin > 30 ? 'color:var(--accent)' : p.margin < 10 ? 'color:var(--danger)' : 'color:var(--warn)';
+      return '<tr><td>'+_esc(p.productName)+'</td><td>'+_fmt(p.revenue)+'</td><td>'+_fmt(p.cost)+'</td><td>'+_fmt(p.grossProfit)+'</td><td style="font-weight:900;'+mc+'">'+p.margin+'%</td></tr>';
+    }).join('') || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">No cost data</td></tr>';
+  }).catch(function(e){ _toast(e.message,'error'); });
+};
+
+// ── REAL-TIME ──────────────────────────────────────────────────────────────
+window._loadRealtime = function(){
+  var shopId = document.getElementById('rtShopId').value.trim();
+  if(!shopId){ _toast('Enter shop ID','error'); return; }
+  var dot = document.getElementById('rtStatusDot');
+  dot.style.background = 'var(--warn)';
+  document.getElementById('rtStatus').textContent = 'Loading...';
+
+  Promise.all([
+    _cf('analyticsGetRealtimeSnapshot')({shopId}),
+    _cf('analyticsGetOrderStatusBreakdown')({shopId, period:'7d'}),
+    _cf('salesGetPaymentMethodBreakdown')({shopId, period:'7d'}),
+  ]).then(function(results){
+    var rt = results[0].data;
+    document.getElementById('rtTodayOrders').textContent  = _fmt(rt.todayOrders);
+    document.getElementById('rtTodayRevenue').textContent = _fmt(rt.todayRevenue);
+    document.getElementById('rtPending').textContent      = _fmt(rt.pendingOrders);
+    document.getElementById('rtLastHour').textContent     = _fmt(rt.lastHourRevenue);
+    document.getElementById('rtDisputes').textContent     = rt.openDisputes;
+    document.getElementById('rtLowStock').textContent     = rt.lowStockSKUs;
+    var d = new Date(rt.timestamp);
+    document.getElementById('rtTs').textContent = d.toLocaleTimeString();
+    dot.style.background = 'var(--accent)';
+    document.getElementById('rtStatus').textContent = 'Live';
+
+    // Status breakdown
+    var statuses = results[1].data.statuses || [];
+    var maxSt = statuses.reduce(function(m,s){ return Math.max(m,s.count||0); },1);
+    document.getElementById('statusBreakdown').innerHTML = statuses.map(function(s){
+      return '<div class="trend-row"><div class="trend-key">'+_esc(s.status)+'</div>'+
+        '<div class="trend-bar-wrap"><div class="trend-bar" style="width:'+Math.round(s.count/maxSt*100)+'%"></div></div>'+
+        '<div class="trend-val">'+s.count+' ('+s.share+'%)</div></div>';
+    }).join('') || '<div class="empty" style="padding:20px"><p>No data</p></div>';
+
+    // Payment methods
+    var methods = results[2].data.methods || [];
+    var maxM = methods.reduce(function(m,x){ return Math.max(m,x.revenue||0); },1);
+    document.getElementById('paymentMethods').innerHTML = methods.map(function(m){
+      return '<div class="trend-row"><div class="trend-key">'+_esc(m.method)+'</div>'+
+        '<div class="trend-bar-wrap"><div class="trend-bar" style="width:'+Math.round(m.revenue/maxM*100)+'%"></div></div>'+
+        '<div class="trend-val">'+m.share+'%</div></div>';
+    }).join('') || '<div class="empty" style="padding:20px"><p>No data</p></div>';
+  }).catch(function(e){
+    _toast(e.message,'error');
+    dot.style.background='var(--danger)';
+    document.getElementById('rtStatus').textContent='Error';
+  });
+};
+
+var _autoOn = false;
+window._startAutoRefresh = function(){
+  _autoOn = !_autoOn;
+  var btn = document.getElementById('autoBtn');
+  if(_autoOn){
+    btn.style.background='var(--accent)'; btn.style.color='#000'; btn.textContent='Auto ON';
+    _autoTimer = setInterval(_loadRealtime, 30000);
+    _loadRealtime();
+  } else {
+    btn.style.background='var(--surface2)'; btn.style.color='var(--txt)'; btn.textContent='Auto (30s)';
+    clearInterval(_autoTimer);
+  }
+};
+
+// ── Donut chart (canvas) ───────────────────────────────────────────────────
+function _drawDonut(canvasId, segments, legendId){
+  var canvas = document.getElementById(canvasId);
+  if(!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var total = segments.reduce(function(s,seg){ return s+(seg.value||0); },0);
+  if(!total){ ctx.clearRect(0,0,200,200); return; }
+  var cx=100, cy=100, r=70, inner=45, start=Math.PI*-0.5;
+  ctx.clearRect(0,0,200,200);
+  segments.forEach(function(seg){
+    var angle = (seg.value/total) * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,start,start+angle);
+    ctx.closePath(); ctx.fillStyle=seg.color; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx,cy,inner,0,Math.PI*2);
+    ctx.fillStyle='#050505'; ctx.fill();
+    start += angle;
+  });
+  if(legendId){
+    document.getElementById(legendId).innerHTML = segments.map(function(s){
+      return '<div class="donut-legend-item"><div class="donut-dot" style="background:'+s.color+'"></div>'+
+        '<span>'+_esc(s.label)+' — <strong>'+_fmt(s.value)+'</strong></span></div>';
+    }).join('');
+  }
+}
+})();
+</script>
+</body>
+</html>

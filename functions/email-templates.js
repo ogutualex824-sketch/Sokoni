@@ -105,7 +105,7 @@ ${hidden}
       <a href="${esc(UNSUB_URL)}" style="color:rgba(255,255,255,0.25);text-decoration:none;">Unsubscribe</a>
     </p>
     <p style="margin:0;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.15);">
-      &copy; ${YEAR} SOKONI Platform Ltd · Nairobi, Kenya
+      &copy; ${YEAR} Sokoni Digital Limited. All rights reserved. Nairobi, Kenya.
     </p>
   </td></tr>
 

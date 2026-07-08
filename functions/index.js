@@ -6380,7 +6380,7 @@ exports.sendInvoiceEmail = onCall(
       </p>
     </div>
     <div style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
-      <span style="font-size:10px;color:rgba(255,255,255,0.2);">© 2026 SOKONI — Kenya's Super Platform</span>
+      <span style="font-size:10px;color:rgba(255,255,255,0.2);">&copy; 2026 Sokoni Digital Limited. All rights reserved.</span>
     </div>
   </div>
 </body></html>`;
@@ -6780,7 +6780,7 @@ exports.previewEmailTemplate = onCall({ cors: ["https://mysokoni.co.ke", "https:
 <div class="wrap">
   <div class="hd"><div class="hd-logo">SOKONI</div><div class="hd-sub">${esc(headerLabel)}</div></div>
   <div class="bd">${bodyHtml}</div>
-  <div class="ft">© 2026 SOKONI — Kenya's Super Platform &nbsp;·&nbsp;
+  <div class="ft">&copy; 2026 Sokoni Digital Limited. All rights reserved. &nbsp;·&nbsp;
     <a href="https://mysokoni.co.ke/support.html">Support</a> &nbsp;·&nbsp;
     <a href="https://mysokoni.co.ke">mysokoni.co.ke</a>
   </div>
