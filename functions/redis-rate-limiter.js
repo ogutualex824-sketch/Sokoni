@@ -21,6 +21,47 @@
 
 const { HttpsError } = require('firebase-functions/v2/https');
 const { RateLimitService, isFallback } = require('./redis-service');
+const admin = require('firebase-admin');
+if (!admin.apps.length) { try { admin.initializeApp(); } catch (_) { /* already initialised */ } }
+
+/* ── P0-5 (Phase 4 audit): Firestore durable fallback ─────────────────────────
+   Previously, when Redis was unavailable EVERY rate-limit check passed
+   transparently — which, because Redis is currently unreachable (no VPC connector),
+   disabled brute-force / OTP / payment-abuse protection platform-wide. For
+   security-sensitive actions we now enforce a fixed-window counter in Firestore
+   when Redis is down. The counter doc is keyed per (action, identifier, window) so
+   it is naturally sharded across users/IPs — an abuser only contends their OWN doc,
+   so there is no global write hotspot. Non-security high-volume actions (search,
+   pos, notification) still pass through to avoid per-request Firestore cost.
+   NOTE: add a native Firestore TTL policy on `rateLimitsFallback.expiresAt`.        */
+const _SECURITY_ACTIONS = new Set(['auth', 'otp', 'payment', 'checkout', 'admin', 'review', 'listing']);
+
+async function _firestoreCheck(identifier, action, maxRequests, windowSeconds) {
+  const db     = admin.firestore();
+  const bucket = Math.floor(Date.now() / (windowSeconds * 1000));
+  const safeId = String(identifier).replace(/[^\w.-]/g, '_').slice(0, 200);
+  const ref    = db.collection('rateLimitsFallback').doc(`${action}_${safeId}_${bucket}`);
+  try {
+    const count = await db.runTransaction(async (txn) => {
+      const snap = await txn.get(ref);
+      const next = (snap.exists ? (snap.data().count || 0) : 0) + 1;
+      txn.set(ref, {
+        count:     next,
+        action,
+        identifier: safeId,
+        /* keep for 2 windows so late requests still count; TTL policy reaps it */
+        expiresAt:  admin.firestore.Timestamp.fromMillis((bucket + 2) * windowSeconds * 1000),
+        updatedAt:  admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return next;
+    });
+    return { allowed: count <= maxRequests, count, remaining: Math.max(0, maxRequests - count) };
+  } catch (e) {
+    /* If even Firestore fails, fail OPEN (availability) but log loudly. */
+    console.warn('[rate-limiter] Firestore fallback error: ' + e.message);
+    return { allowed: true, fallback: true };
+  }
+}
 
 /* ── Rate-limit profiles ─────────────────────────────────────── */
 /**
@@ -143,9 +184,6 @@ function _extractIp(req) {
  * @throws {HttpsError} 'resource-exhausted' when limit exceeded
  */
 async function checkRateLimit(req, action, overrides = {}) {
-  /* Always pass when Redis is down — never block on infrastructure failure */
-  if (isFallback()) return { allowed: true, fallback: true };
-
   const profile = { ...(LIMITS[action] || LIMITS.default), ...overrides };
   const uid = req.auth?.uid;
   const ip  = _extractIp(req);
@@ -153,6 +191,22 @@ async function checkRateLimit(req, action, overrides = {}) {
   const identifier = profile.byUid
     ? (uid || ip)
     : ip;
+
+  /* Redis down: enforce security-sensitive actions via Firestore instead of
+     failing open (P0-5). High-volume non-security actions still pass through. */
+  if (isFallback()) {
+    if (!_SECURITY_ACTIONS.has(action)) return { allowed: true, fallback: true };
+    const r = await _firestoreCheck(identifier, action, profile.maxRequests, profile.windowSeconds);
+    if (r.fallback) return r;
+    if (!r.allowed) {
+      console.warn(JSON.stringify({
+        severity: 'WARNING', message: '[rate-limiter] Limit exceeded (durable fallback)',
+        action, identifier, count: r.count, maxRequests: profile.maxRequests, uid, ip,
+      }));
+      throw new HttpsError('resource-exhausted', profile.errorMessage);
+    }
+    return { allowed: true, remaining: r.remaining, durable: true };
+  }
 
   const result = await RateLimitService.check(
     identifier,
