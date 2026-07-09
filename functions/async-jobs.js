@@ -586,3 +586,19 @@ exports.asyncCleanup = onSchedule(
     console.log(`asyncCleanup: purged ${count} docs`);
   }
 );
+
+// ── getQueueDepth — flat KPI snapshot (backward compat for enterprise-ops + sokoni-async-jobs.js)
+// Returns { queued, running, failed, dlq, processed } matching the shape the client renders.
+exports.getQueueDepth = onCall({ region: 'us-central1', timeoutSeconds: 30 }, async req => {
+  _admin(req);
+  const [qSnap, rSnap, fSnap, dlqSnap, cSnap] = await Promise.all([
+    db.collection(JOBS_COL).where('status', '==', STATUS.QUEUED).count().get(),
+    db.collection(JOBS_COL).where('status', '==', STATUS.RUNNING).count().get(),
+    db.collection(JOBS_COL).where('status', '==', STATUS.FAILED).count().get(),
+    db.collection(DLQ_COL).count().get(),
+    db.collection(JOBS_COL).where('status', '==', STATUS.COMPLETED).count().get(),
+  ]);
+  const processed = cSnap.data().count;
+  const failed    = fSnap.data().count;
+  return { queued: qSnap.data().count, running: rSnap.data().count, failed, dlq: dlqSnap.data().count, processed };
+});

@@ -8253,6 +8253,11 @@ exports.getMerchantCampaigns          = merchantSuccess.getMerchantCampaigns;
 exports.getMerchantAcademy            = merchantSuccess.getMerchantAcademy;
 exports.updateAcademyProgress         = merchantSuccess.updateAcademyProgress;
 exports.generateMerchantContent       = merchantSuccess.generateMerchantContent;
+// Backward-compat aliases — original names used by client code before module rename
+exports.getAICoachInsights       = merchantSuccess.getMerchantAICoach;
+exports.getMerchantBenchmarks    = merchantSuccess.getMerchantBenchmark;
+exports.completeMerchantLesson   = merchantSuccess.updateAcademyProgress;
+exports.createMerchantAutomation = merchantSuccess.saveMerchantAutomation;
 
 /* ── Navigation & Intelligent Dispatch v2.0 ────────────────────────────── */
 const navigation = require('./navigation');
@@ -8770,6 +8775,7 @@ exports.asyncGetDashboard  = asyncJobs.asyncGetDashboard;
 exports.asyncGetJobs       = asyncJobs.asyncGetJobs;
 exports.asyncInspect       = asyncJobs.asyncInspect;
 exports.asyncCleanup       = asyncJobs.asyncCleanup;
+exports.getQueueDepth      = asyncJobs.getQueueDepth;
 
 /* -- Security 6.0 -- Enterprise Identity (MFA + Passkeys + Device Trust) -- */
 const secIdentity = require('./security-identity');
