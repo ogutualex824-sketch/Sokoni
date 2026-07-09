@@ -178,7 +178,7 @@ const PRECACHE_STATIC = [
   "/sokoni-media.js", "/sokoni-creative.js", "/sokoni-ai-subscriptions.js",
   "/sokoni-entitlement.js", "/sokoni-subscription-brain.js",
   /* Enterprise v2.0 modules */
-  "/sokoni-qr.js", "/sokoni-barcode.js", "/sokoni-receipt.js", "/sokoni-event-bus.js", "/sokoni-observability.js", "/sokoni-service-mesh.js", "/sokoni-gateway.js",
+  "/sokoni-qr.js", "/sokoni-barcode.js", "/sokoni-receipt-engine.js", "/sokoni-event-bus.js", "/sokoni-observability.js", "/sokoni-service-mesh.js", "/sokoni-gateway.js",
   "/sokoni-payment-engine.js", "/sokoni-fraud-engine.js", "/sokoni-webhook-engine.js", "/sokoni-search-pro.js",
   "/firebase.js", "/seller.js", "/cart.js", "/checkout.js",
   "/inventory-manager.js", "/market-actions.js",
@@ -187,7 +187,7 @@ const PRECACHE_STATIC = [
   "/etims.js", "/inspiq.js",
   /* SmartPOS core modules */
   "/pos.css", "/pos-bos.css", "/pos-mobile.css",
-  "/pos.js", "/pos-db.js", "/pos-printer.js", "/sokoni-print-engine.js", "/sokoni-universal-printer.js", "/pos-health.js", "/pos-idempotency.js", "/pos-sync.js", "/pos-resilience.js", "/pos-omni.js", "/pos-barcode.js",
+  "/pos.js", "/pos-db.js", "/pos-printer.js", "/sokoni-print-engine.js", "/sokoni-universal-printer.js", "/pos-health.js", "/pos-idempotency.js", "/pos-sync.js", "/sokoni-pos-resilience.js", "/pos-omni.js", "/pos-barcode.js",
   "/pos-ai.js", "/pos-analytics.js", "/pos-boss.js", "/pos-plugins.js",
   "/pos-voice.js", "/pos-ai-engine.js", "/pos-finance.js", "/pos-audit.js",
   "/pos-modules.js", "/pos-scanner.js", "/pos-mobile.js",

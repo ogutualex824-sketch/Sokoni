@@ -7,12 +7,12 @@
 
 window.SokoniFeatured = (() => {
   const _FIREBASE = {
-    apiKey:"AIzaSyBmPL3mFJXFN3LXY_gPuH2HSJY8oWmyOJ4",
+    apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
     authDomain:"sokoni-aeb26.firebaseapp.com",
     projectId:"sokoni-aeb26",
-    storageBucket:"sokoni-aeb26.appspot.com",
-    messagingSenderId:"448791489749",
-    appId:"1:448791489749:web:your-app-id",
+    storageBucket:"sokoni-aeb26.firebasestorage.app",
+    messagingSenderId:"24799054989",
+    appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",
   };
 
   let _db = null, _dbMod = null;

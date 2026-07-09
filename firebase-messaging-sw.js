@@ -27,8 +27,6 @@ const messaging = firebase.messaging();
 
 /* ── Background Message Handler ── */
 messaging.onBackgroundMessage(payload => {
-  console.log("[SOKONI FCM] Background message:", payload);
-
   const notification = payload.notification || {};
   const data         = payload.data         || {};
 

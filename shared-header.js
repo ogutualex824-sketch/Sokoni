@@ -214,7 +214,13 @@
   /* Initialize Observability after page load */
   (function () {
     window.addEventListener('load', function () {
-      if (window.SokoniObservability) { window.SokoniObservability.init(); }
+      if (window.SokoniObservability) {
+        window.SokoniObservability.init({
+          projectId:   'sokoni-aeb26',
+          appVersion:  (window.SOKONI_VERSION || '1.0.0'),
+          environment: 'production',
+        });
+      }
     }, { once: true });
   }());
 
@@ -1155,8 +1161,13 @@
     if (type === 'messages')      _setBadge('sk-msg-badge', count);
   };
 
+  var _realtimeUnsubs = [];
+
   function _wireRealtime(uid) {
     if (!uid) return;
+    /* Clean up any previous listeners before attaching new ones */
+    _realtimeUnsubs.forEach(function(fn) { try { fn(); } catch (_) {} });
+    _realtimeUnsubs = [];
 
     Promise.all([
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
@@ -1181,7 +1192,7 @@
          This fallback fires only if engine hasn't loaded yet. */
       if (!window.SokoniNotifEngine) {
         try {
-          onSnapshot(
+          const unsubNotif = onSnapshot(
             query(collection(db, 'notifications'),
               where('targetUid', '==', uid),
               where('read', '==', false)),
@@ -1192,13 +1203,14 @@
             },
             function() {}
           );
+          _realtimeUnsubs.push(unsubNotif);
         } catch (e) {}
       }
 
       /* Unread messages — conversations where user is a participant,
          last message was sent by someone else, and unread > 0 */
       try {
-        onSnapshot(
+        const unsubMsgs = onSnapshot(
           query(collection(db, 'conversations'),
             where('participants', 'array-contains', uid),
             where('unread', '>', 0)),
@@ -1212,6 +1224,7 @@
           },
           function() {}
         );
+        _realtimeUnsubs.push(unsubMsgs);
       } catch (e) {}
 
     }).catch(function() { /* Firebase unavailable — skip live counts */ });

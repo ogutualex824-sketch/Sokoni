@@ -148,11 +148,13 @@
         img.addEventListener('load', _stampDimensions, { once: true });
       }
 
-      /* Wrap jpg/png in <picture> + WebP <source> (only once, only raster) */
+      /* Wrap jpg/png in <picture> + WebP <source> (only once, only raster)
+         Skip local brand assets — they don't have .webp counterparts */
       var src = img.getAttribute('src') || '';
       if (
         src &&
         /\.(jpe?g|png)(\?[^#]*)?$/i.test(src) &&
+        !/^assets\//i.test(src) &&
         img.parentElement &&
         img.parentElement.tagName !== 'PICTURE'
       ) {
@@ -924,13 +926,6 @@
     console.info('[SokoniPerf] SDK v1.0.0 initialised.');
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _autoInit);
-  } else {
-    /* Already parsed — run synchronously (e.g. script inserted dynamically) */
-    _autoInit();
-  }
-
   /* ── Public API ─────────────────────────────────────────────── */
 
   var SokoniPerformance = {
@@ -968,5 +963,13 @@
   };
 
   global.SokoniPerformance = SokoniPerformance;
+
+  /* Auto-init fires AFTER SokoniPerformance is defined so lazyLoadImages()
+     can write back to SokoniPerformance._lazyObserver without hitting undefined */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _autoInit);
+  } else {
+    _autoInit();
+  }
 
 }(typeof window !== 'undefined' ? window : this));

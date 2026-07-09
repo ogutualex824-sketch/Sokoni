@@ -57,6 +57,7 @@
   let _eventListeners = {};      /* local listeners registered before init */
   let _unsubscribers  = [];      /* Firestore real-time listener cleanup */
   let _heartbeatTimer = null;
+  let _riskTimer      = null;
 
   const _featureCache = new Map();   /* feature:product → { result, expiry } */
   const FEATURE_TTL   = 30000;       /* 30s cache for feature checks */
@@ -249,7 +250,7 @@
         }
 
         /* 6. Refresh risk profile every 5 minutes */
-        setInterval(() => _refreshRiskProfile(), 300000);
+        _riskTimer = setInterval(() => _refreshRiskProfile(), 300000);
       }
 
       /* 7. Flush any pre-init subscriptions */
@@ -269,6 +270,7 @@
       _unsubscribers.forEach(fn => { try { fn(); } catch (_) {} });
       _unsubscribers = [];
       if (_heartbeatTimer) clearInterval(_heartbeatTimer);
+      if (_riskTimer) clearInterval(_riskTimer);
       _initialized = false;
       _user = null;
       _featureCache.clear();

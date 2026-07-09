@@ -295,10 +295,6 @@ async function loginUser(){
         setTimeout(() => window.location.href = _safeRedir, 1200);
 
     } catch(err){
-        // ⚠️ AUTH DEBUG — exposes raw Firebase error code/message
-        console.error('[SOKONI AUTH DEBUG] loginUser FAILED — code:', err.code, '| message:', err.message, '| full error:', err);
-        console.groupEnd();
-
         if(btn){ btn.disabled = false; btn.textContent = "Sign In →"; }
 
         if(typeof SokoniSecurity !== 'undefined'){
@@ -787,12 +783,6 @@ async function signInWithGoogle() {
         return;
     }
 
-    // ⚠️ AUTH DEBUG
-    console.group('[SOKONI AUTH DEBUG] signInWithGoogle()');
-    console.log('firebaseAuth :', window.firebaseAuth ? 'ready ✓' : 'NULL ✗');
-    console.log('popup supported:', _isPopupSupported());
-    console.log('domain       :', location.hostname);
-
     const btn = document.getElementById('googleSignInBtn');
     if (btn) { btn.disabled = true; _googleBtnLabel(btn, 'Connecting to Google…'); }
 
@@ -810,13 +800,9 @@ async function signInWithGoogle() {
 
         if (_isPopupSupported()) {
             try {
-                console.log('[SOKONI AUTH DEBUG] Calling signInWithPopup...');
                 const result = await signInWithPopup(window.firebaseAuth, provider);
-                console.log('[SOKONI AUTH DEBUG] Popup sign-in SUCCESS:', result.user?.uid);
-                console.groupEnd();
                 await _handleGoogleResult(result);
             } catch (popupErr) {
-                console.error('[SOKONI AUTH DEBUG] signInWithPopup FAILED — code:', popupErr.code, '| message:', popupErr.message, '| full:', popupErr);
                 if (popupErr.code === 'auth/popup-blocked') {
                     /* Transparent fallback to redirect */
                     _googleBtnLabel(btn, 'Redirecting to Google…');
@@ -825,7 +811,6 @@ async function signInWithGoogle() {
                     _handleGoogleLinkError(popupErr);
                 } else if (popupErr.code === 'auth/popup-closed-by-user' ||
                            popupErr.code === 'auth/cancelled-popup-request') {
-                    console.groupEnd();
                     _resetGoogleBtn(); /* silent */
                 } else {
                     throw popupErr;
@@ -833,15 +818,10 @@ async function signInWithGoogle() {
             }
         } else {
             /* PWA / iOS — redirect flow */
-            console.log('[SOKONI AUTH DEBUG] Using signInWithRedirect (PWA/iOS)');
-            console.groupEnd();
             _googleBtnLabel(btn, 'Redirecting to Google…');
             await signInWithRedirect(window.firebaseAuth, provider);
         }
     } catch (err) {
-        // ⚠️ AUTH DEBUG
-        console.error('[SOKONI AUTH DEBUG] signInWithGoogle FAILED — code:', err.code, '| message:', err.message, '| full:', err);
-        console.groupEnd();
         _resetGoogleBtn();
         const msg = _googleAuthErr(err.code);
         if (msg) showAuthMsg(msg, 'error');
@@ -1109,8 +1089,6 @@ async function sendPhoneOTP() {
         showAuthMsg('OTP sent to ' + fullPhone + '. Check your messages.', 'success');
 
     } catch (err) {
-        // ⚠️ AUTH DEBUG
-        console.error('[SOKONI AUTH DEBUG] sendPhoneOTP FAILED — code:', err.code, '| message:', err.message, '| full:', err);
         if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
         _recaptchaVerifier = null;
         showAuthMsg(
@@ -1246,8 +1224,7 @@ async function _setPersistenceFromUI() {
             remember ? browserLocalPersistence : browserSessionPersistence
         );
     } catch (err) {
-        // ⚠️ AUTH DEBUG — was silently swallowed
-        console.error('[SOKONI AUTH DEBUG] _setPersistenceFromUI FAILED:', err.code, err.message, err);
+        /* persistence failure is non-fatal; auth continues with default persistence */
     }
 }
 

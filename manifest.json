@@ -92,28 +92,28 @@
 
   "screenshots": [
     {
-      "src": "assets/screenshots/screen-home.png",
+      "src": "assets/screenshots/screen-1.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Home — browse products"
     },
     {
-      "src": "assets/screenshots/screen-seller.png",
+      "src": "assets/screenshots/screen-2.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Seller dashboard"
     },
     {
-      "src": "assets/screenshots/screen-checkout.png",
+      "src": "assets/screenshots/screen-3.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Checkout with M-Pesa"
     },
     {
-      "src": "assets/screenshots/screen-track.png",
+      "src": "assets/screenshots/screen-4.png",
       "sizes": "1080x1920",
       "type": "image/png",
       "form_factor": "narrow",

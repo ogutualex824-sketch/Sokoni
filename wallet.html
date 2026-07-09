@@ -906,9 +906,6 @@
 
   <!-- Toast container -->
   <div class="wal-toast-container" id="walToasts" aria-live="polite" aria-atomic="false"></div>
-
-  <!-- Firebase auto-config -->
-  <script src="/__/firebase/init.js"></script>
   <!-- Payment trust SDK — must load before wallet module -->
   <script src="sokoni-payment-trust.js"></script>
   <!-- Wallet module -->
@@ -925,15 +922,15 @@
       if (window.SokoniTrust) {
         /* Compact IntaSend badge + secure payment pills inside top-up panel */
         const badgeEl = document.getElementById('walTrustBadge');
-        if (badgeEl) SokoniTrust.renderBadge(badgeEl, 'compact');
+        if (badgeEl) SokoniTrust.badge(badgeEl, { variant: 'compact' });
 
         /* Buyer protection for wallet context (top-up = marketplace) */
         const protEl = document.getElementById('walTrustProtection');
-        if (protEl) SokoniTrust.renderProtection(protEl, 'marketplace');
+        if (protEl) SokoniTrust.protections(protEl, 'marketplace');
 
         /* Trust footer: SSL + IntaSend + PCI DSS + CBK Compliant */
         const footerEl = document.getElementById('walTrustFooter');
-        if (footerEl) SokoniTrust.renderFooter(footerEl);
+        if (footerEl) SokoniTrust.footer(footerEl);
       }
     });
   </script>

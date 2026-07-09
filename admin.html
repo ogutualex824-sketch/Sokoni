@@ -3918,8 +3918,7 @@ function clearDemo(){
 }
 function reseedDemo(){
   localStorage.removeItem('sokoniDemoSeeded');
-  var s=document.createElement('script'); s.src='demo-seed.js'; document.head.appendChild(s);
-  setTimeout(function(){ loadAll(); toast('🌱 Demo data re-seeded'); },800);
+  toast('⚠️ Demo seeding not available in production');
 }
 
 /* ════════════════════════════════

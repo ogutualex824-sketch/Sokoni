@@ -33,36 +33,24 @@ const firebaseConfig = {
 };
 
 /* ── Initialize ── */
-// ⚠️ AUTH DEBUG — remove this block once auth is confirmed working
-console.group('[SOKONI AUTH DEBUG] firebase.js init');
-console.log('Timestamp     :', new Date().toISOString());
-console.log('Domain        :', location.hostname);
-console.log('Project ID    :', firebaseConfig.projectId);
-console.log('Auth domain   :', firebaseConfig.authDomain);
-console.log('App ID        :', firebaseConfig.appId);
-
-const app       = initializeApp(firebaseConfig);
-console.log('Firebase app  :', app.name, '✓');
+const app = initializeApp(firebaseConfig);
 
 /* ── App Check — must be before any Firebase service ── */
 try {
   if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
     self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
-    console.log('App Check     : DEBUG token enabled (localhost)');
   }
   initializeAppCheck(app, {
     provider: new ReCaptchaV3Provider('6Lf93TktAAAAAIqCj8l3YM3dIoS1MIXpilsdnsxj'),
     isTokenAutoRefreshEnabled: true,
   });
-  console.log('App Check     : initialized ✓');
 } catch (e) {
-  console.error('[SOKONI AUTH DEBUG] App Check FAILED:', e.code, e.message, e);
+  console.error('[SOKONI] App Check init failed:', e.message);
 }
 
-const auth      = getAuth(app);
-console.log('Firebase Auth :', auth ? 'instance ready ✓' : 'NULL — CRITICAL ERROR');
-const db        = getFirestore(app);
-const storage   = getStorage(app);
+const auth    = getAuth(app);
+const db      = getFirestore(app);
+const storage = getStorage(app);
 let messaging = null;
 
 if (typeof window !== "undefined") {
@@ -80,8 +68,6 @@ window.firebaseApp     = app;
 window.firebaseAuth    = auth;
 window.firebaseDB      = db;
 window.firebaseStorage = storage;
-console.log('Globals set   : window.firebaseAuth =', window.firebaseAuth ? 'OK ✓' : 'NULL ✗');
-console.groupEnd(); // end AUTH DEBUG group
 
 /* ══════════════════════════════════════════════════════════════════
    GOOGLE REDIRECT RESULT

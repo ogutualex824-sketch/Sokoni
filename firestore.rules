@@ -112,7 +112,7 @@ service cloud.firestore {
     }
 
     match /providers/{providerId} {
-      allow read:   if true;
+      allow read:   if isAuthed();
       allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
       allow update: if isAdmin()
                     || (isAuthed()
@@ -1024,7 +1024,7 @@ service cloud.firestore {
     }
 
     match /rideDrivers/{driverId} {
-      allow read:   if true;
+      allow read:   if isAuthed();
       allow create: if isAuthed()
                     && request.resource.data.uid == request.auth.uid
                     && noAdminFields()
@@ -1181,7 +1181,7 @@ service cloud.firestore {
     }
 
     match /deliveryRiders/{riderId} {
-      allow read:   if true;
+      allow read:   if isAuthed();
       allow create: if isAuthed() && request.auth.uid == riderId
                     && !request.resource.data.keys().hasAny(['approved','verified','suspended','banned']);
       allow update: if isAdmin()
@@ -2190,7 +2190,7 @@ service cloud.firestore {
         allow create: if isTenantMember();
       }
       match /inventory_supplier_catalog/{supplierId} {
-        allow read:   if isAuthed();
+        allow read:   if isTenantMember();
       }
 
       match /inventory_variants/{variantId} {
@@ -3355,7 +3355,7 @@ service cloud.firestore {
       allow write: if false;
     }
     match /impactBusinessScores/{uid} {
-      allow read: if true;
+      allow read: if isAuthed();
       allow write: if false;
     }
     match /impactBookmarks/{bookmarkId} {
