@@ -9293,14 +9293,6 @@ exports.reviewReturn         = returnsEngine.reviewReturn;
 exports.adminForceReturn     = returnsEngine.adminForceReturn;
 exports.markReturnProcessed  = returnsEngine.markReturnProcessed;
 
-/* ── Property Maintenance v1.0 — tenant requests, landlord workflow ────────── */
-const propMaint = require('./property-maintenance');
-exports.submitMaintenanceRequest  = propMaint.submitMaintenanceRequest;
-exports.getMyMaintenanceRequests  = propMaint.getMyMaintenanceRequests;
-exports.getLandlordRequests       = propMaint.getLandlordRequests;
-exports.updateMaintenanceStatus   = propMaint.updateMaintenanceStatus;
-exports.respondToRequest          = propMaint.respondToRequest;
-
 /* ── Franchise Management Engine v1.0 ──────────────────────────────────────── */
 const franchiseEngine = require('./franchise-engine');
 exports.franchiseCreateBrand         = franchiseEngine.franchiseCreateBrand;
@@ -9310,8 +9302,6 @@ exports.franchiseRecordRoyalty       = franchiseEngine.franchiseRecordRoyalty;
 exports.franchiseGetMyLocations      = franchiseEngine.franchiseGetMyLocations;
 exports.franchiseGetBrandDashboard   = franchiseEngine.franchiseGetBrandDashboard;
 exports.franchiseGetLocations        = franchiseEngine.franchiseGetLocations;
-exports.getMaintenanceStats       = propMaint.getMaintenanceStats;
-
 /* ── Currency Engine v1.0 — multi-currency rates, conversion, audit history ── */
 const currencyEngine = require('./currency-engine');
 exports.currencyGetRates             = currencyEngine.currencyGetRates;
