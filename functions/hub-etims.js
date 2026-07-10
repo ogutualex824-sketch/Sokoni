@@ -296,6 +296,7 @@ td{padding:6px 8px;border:1px solid #ddd;vertical-align:top}
     OPERATIONAL DOCUMENT — NOT A TAX INVOICE &nbsp;|&nbsp;
     Verify at: <strong>${esc(verifyUrl)}</strong> &nbsp;|&nbsp;
     SOKONI Platform &nbsp;|&nbsp; Ref: ${esc(docNumber)}
+    <br>Operated by Bravilex International Company Limited
   </div>
 </div>
 </body>
@@ -410,6 +411,7 @@ td{padding:6px 8px;border:1px solid #ddd}
     &nbsp;|&nbsp; Order: ${esc(invoice.orderId || "—")}
     &nbsp;|&nbsp; Verify: <strong>${esc(verifyUrl)}</strong>
     ${invoice.kraReceiptNumber ? " &nbsp;|&nbsp; KRA: " + esc(invoice.verificationUrl || "") : ""}
+    <br>Operated by Bravilex International Company Limited
   </div>
 </div>
 </body>

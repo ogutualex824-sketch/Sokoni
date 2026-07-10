@@ -390,6 +390,7 @@ ${invoice.orderId?`<p style="font-size:10px;color:#666;margin:0 0 10px">Order re
   This is an official KRA eTIMS fiscal receipt valid as a VAT invoice under the Tax Procedures Act, 2015.
   The KRA Control Unit Number and digital signature confirm authenticity. For queries: support@mysokoni.co.ke
   &nbsp;|&nbsp; <b>mysokoni.co.ke</b>
+  <br>Operated by Bravilex International Company Limited
 </div>
 
 </body></html>`;
@@ -523,6 +524,7 @@ async function emailBuyer({ invoice, profile, buyer }) {
         ${invoice.pdfUrl?`<p><a href="${invoice.pdfUrl}" style="background:#003366;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:700">📄 View / Download Invoice</a></p>`:""}
         ${invoice.verificationUrl?`<p style="font-size:11px;color:#666">Verify at KRA: <a href="${invoice.verificationUrl}">${invoice.verificationUrl}</a></p>`:""}
         <p style="font-size:11px;color:#999;margin-top:20px">Powered by SOKONI | mysokoni.co.ke</p>
+        <p style="font-size:11px;color:#999;margin-top:2px">SOKONI — Powered by Bravilex International Company Limited</p>
       </div>`,
     });
     await db.collection("etimsInvoices").doc(invoice.invoiceId).update({ emailSentAt: new Date().toISOString() });

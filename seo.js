@@ -15,7 +15,7 @@ const SokoniSEO = (() => {
   /* ── Core brand info ── */
   const BRAND = {
     name:        "SOKONI",
-    legalName:   "Sokoni Technologies Ltd",
+    legalName:   "Bravilex International Company Limited",
     url:         "https://mysokoni.co.ke",
     logo:        "https://mysokoni.co.ke/assets/Sokonilogo2.png",
     description: "Kenya's all-in-one marketplace — shop products, book services, find rentals, BnBs, healthcare, entertainment and B2B wholesale. Pay via M-Pesa.",
@@ -173,6 +173,7 @@ const SokoniSEO = (() => {
       "@context": "https://schema.org",
       "@type": ["Organization", "LocalBusiness"],
       "name": BRAND.name,
+      "brand": "SOKONI",
       "legalName": BRAND.legalName,
       "url": BRAND.url,
       "logo": { "@type": "ImageObject", "url": BRAND.logo, "width": 512, "height": 512 },

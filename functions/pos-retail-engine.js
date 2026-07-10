@@ -504,7 +504,7 @@ exports.emailReceipt = onCall(
     <p style="font-size:12px;color:#999">Scan to verify: <a href="${r.verifyUrl}">${r.verifyUrl}</a></p>
   </div>
   <hr>
-  <p style="text-align:center;color:#999;font-size:12px">Powered by SOKONI • mysokoni.co.ke</p>
+  <p style="text-align:center;color:#999;font-size:12px">Powered by SOKONI • mysokoni.co.ke<br>Operated by Bravilex International Company Limited</p>
 </body></html>`;
 
     const sgKey = SENDGRID_KEY.value();
