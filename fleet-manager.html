@@ -165,7 +165,7 @@
 (function(){
 var _uid=null, _logVehicleId=null, _logShopId=null, _logType=null;
 var TYPE_ICONS={bike:'&#x1F6B2;',car:'&#x1F697;',van:'&#x1F690;',truck:'&#x1F69B;',tuk_tuk:'&#x1F6FA;',bicycle:'&#x1F6B4;'};
-function _cf(n){return firebase.functions().httpsCallable(n);}
+function _cf(n){var d=firebase.functions().httpsCallable('logisticsPlusDispatch');return function(data){return d(Object.assign({op:n},data||{}));};}
 function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function _fmt(n){return 'KES '+Number(n||0).toLocaleString('en-KE');}
 function _toast(msg,type){var el=document.getElementById('toast');el.textContent=msg;el.className='show '+(type||'');clearTimeout(el._t);el._t=setTimeout(function(){el.className='';},3500);}

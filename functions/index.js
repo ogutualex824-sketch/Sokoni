@@ -9328,44 +9328,10 @@ exports.seoGetSitemap          = mktExt.seoGetSitemap;
 const finSprintDispatcher = require('./finance-sprint-dispatch');
 exports.financeSprintDispatch = finSprintDispatcher.financeSprintDispatch;
 
-/* ── Logistics+ Sprint 4.4 — Fleet | Route Planning | Warehouse | Delivery Zones | Cargo & Freight | Logistics Reports ── */
-const logPlus = require('./logistics-plus');
-/* Fleet Management */
-exports.fleetVehicleCreate     = logPlus.fleetVehicleCreate;
-exports.fleetVehicleUpdate     = logPlus.fleetVehicleUpdate;
-exports.fleetVehicleList       = logPlus.fleetVehicleList;
-exports.fleetLogMaintenance    = logPlus.fleetLogMaintenance;
-exports.fleetLogFuel           = logPlus.fleetLogFuel;
-exports.fleetGetVehicleStats   = logPlus.fleetGetVehicleStats;
-/* Route Planning */
-exports.routeCreate            = logPlus.routeCreate;
-exports.routeOptimize          = logPlus.routeOptimize;
-exports.routeAssignDriver      = logPlus.routeAssignDriver;
-exports.routeUpdateStop        = logPlus.routeUpdateStop;
-exports.routeGetActive         = logPlus.routeGetActive;
-/* Warehouse Management */
-exports.warehouseReceive       = logPlus.warehouseReceive;
-exports.warehousePutaway       = logPlus.warehousePutaway;
-exports.warehouseGeneratePickList  = logPlus.warehouseGeneratePickList;
-exports.warehouseConfirmPick   = logPlus.warehouseConfirmPick;
-exports.warehouseShipOrder     = logPlus.warehouseShipOrder;
-exports.warehouseGetInventory  = logPlus.warehouseGetInventory;
-exports.warehouseGetDashboard  = logPlus.warehouseGetDashboard;
-/* Delivery Zones */
-exports.deliveryZoneCreate     = logPlus.deliveryZoneCreate;
-exports.deliveryZoneUpdate     = logPlus.deliveryZoneUpdate;
-exports.deliveryZoneList       = logPlus.deliveryZoneList;
-exports.deliveryZoneCheckCoverage = logPlus.deliveryZoneCheckCoverage;
-/* Cargo & Freight */
-exports.cargoCalculateFreight  = logPlus.cargoCalculateFreight;
-exports.cargoManifestCreate    = logPlus.cargoManifestCreate;
-exports.cargoManifestAddItem   = logPlus.cargoManifestAddItem;
-exports.cargoManifestList      = logPlus.cargoManifestList;
-/* Logistics Reports */
-exports.logisticsGetDeliveryReport  = logPlus.logisticsGetDeliveryReport;
-exports.logisticsGetRiderLeaderboard = logPlus.logisticsGetRiderLeaderboard;
-exports.logisticsGetZonePerformance = logPlus.logisticsGetZonePerformance;
-exports.logisticsGetOnTimeRate      = logPlus.logisticsGetOnTimeRate;
+/* ── Logistics+ Sprint 4.4 — DISPATCH CONSOLIDATION: 30 onCall → 1 logisticsPlusDispatch ── */
+/* fleet-manager.html routes via _cf() wrapper. Cloud Run: 30 → 1. */
+const logPlusDispatcher = require('./logistics-plus-dispatch');
+exports.logisticsPlusDispatch = logPlusDispatcher.logisticsPlusDispatch;
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PHASE 3 — Enterprise Scalability & Distributed Systems

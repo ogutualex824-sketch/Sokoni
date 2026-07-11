@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * SOKONI Logistics+ — Sprint 4.4
  * Fleet Management | Route Planning | Warehouse Management |
@@ -77,6 +77,8 @@ function _pointInPolygon(polygon, lat, lng) {
 
 const _CALL = { region: 'us-central1', enforceAppCheck: true };
 
+exports._h = {}; // handler registry for logistics-plus-dispatch.js
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FLEET MANAGEMENT  (6 CFs)
 // Collections: vehicles/{id}, vehicleLogs/{id}
@@ -84,7 +86,7 @@ const _CALL = { region: 'us-central1', enforceAppCheck: true };
 
 const _VEHICLE_TYPES = ['bike', 'car', 'van', 'truck', 'tuk_tuk', 'bicycle'];
 
-exports.fleetVehicleCreate = onCall(_CALL, async (req) => {
+exports.fleetVehicleCreate = onCall(_CALL, exports._h.fleetVehicleCreate = async (req) => {
   const uid = _uid(req);
   const { shopId, make, model, plate, type, capacityKg, capacityM3, year } = req.data;
   await _assertRole(uid, shopId, 'manager');
@@ -106,7 +108,7 @@ exports.fleetVehicleCreate = onCall(_CALL, async (req) => {
   return { vehicleId: id };
 });
 
-exports.fleetVehicleUpdate = onCall(_CALL, async (req) => {
+exports.fleetVehicleUpdate = onCall(_CALL, exports._h.fleetVehicleUpdate = async (req) => {
   const uid = _uid(req);
   const { shopId, vehicleId, status, assignedDriverId, assignedDriverName, odometer } = req.data;
   await _assertRole(uid, shopId, 'manager');
@@ -122,7 +124,7 @@ exports.fleetVehicleUpdate = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.fleetVehicleList = onCall(_CALL, async (req) => {
+exports.fleetVehicleList = onCall(_CALL, exports._h.fleetVehicleList = async (req) => {
   const uid = _uid(req);
   const { shopId, status } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -132,7 +134,7 @@ exports.fleetVehicleList = onCall(_CALL, async (req) => {
   return { vehicles };
 });
 
-exports.fleetLogMaintenance = onCall(_CALL, async (req) => {
+exports.fleetLogMaintenance = onCall(_CALL, exports._h.fleetLogMaintenance = async (req) => {
   const uid = _uid(req);
   const { shopId, vehicleId, type, description, cost, odometerAtService, nextServiceKm } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -159,7 +161,7 @@ exports.fleetLogMaintenance = onCall(_CALL, async (req) => {
   return { logId };
 });
 
-exports.fleetLogFuel = onCall(_CALL, async (req) => {
+exports.fleetLogFuel = onCall(_CALL, exports._h.fleetLogFuel = async (req) => {
   const uid = _uid(req);
   const { shopId, vehicleId, litres, costPerLitre, odometer, fuelType, station } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -183,7 +185,7 @@ exports.fleetLogFuel = onCall(_CALL, async (req) => {
   return { logId, totalCost };
 });
 
-exports.fleetGetVehicleStats = onCall(_CALL, async (req) => {
+exports.fleetGetVehicleStats = onCall(_CALL, exports._h.fleetGetVehicleStats = async (req) => {
   const uid = _uid(req);
   const { shopId, vehicleId } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -212,7 +214,7 @@ exports.fleetGetVehicleStats = onCall(_CALL, async (req) => {
 // Collections: deliveryRoutes/{id}
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.routeCreate = onCall(_CALL, async (req) => {
+exports.routeCreate = onCall(_CALL, exports._h.routeCreate = async (req) => {
   const uid = _uid(req);
   const { shopId, name, stops, vehicleId, date } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -240,7 +242,7 @@ exports.routeCreate = onCall(_CALL, async (req) => {
   return { routeId: id };
 });
 
-exports.routeOptimize = onCall(_CALL, async (req) => {
+exports.routeOptimize = onCall(_CALL, exports._h.routeOptimize = async (req) => {
   const uid = _uid(req);
   const { shopId, routeId, keepFirst } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -267,7 +269,7 @@ exports.routeOptimize = onCall(_CALL, async (req) => {
   return { success: true, estimatedDistanceKm: Math.round(totalDist * 10) / 10, stopsCount: reindexed.length };
 });
 
-exports.routeAssignDriver = onCall(_CALL, async (req) => {
+exports.routeAssignDriver = onCall(_CALL, exports._h.routeAssignDriver = async (req) => {
   const uid = _uid(req);
   const { shopId, routeId, driverId, driverName } = req.data;
   await _assertRole(uid, shopId, 'manager');
@@ -282,7 +284,7 @@ exports.routeAssignDriver = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.routeUpdateStop = onCall(_CALL, async (req) => {
+exports.routeUpdateStop = onCall(_CALL, exports._h.routeUpdateStop = async (req) => {
   const uid = _uid(req);
   const { shopId, routeId, stopIndex, status, failureReason } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -309,7 +311,7 @@ exports.routeUpdateStop = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.routeGetActive = onCall(_CALL, async (req) => {
+exports.routeGetActive = onCall(_CALL, exports._h.routeGetActive = async (req) => {
   const uid = _uid(req);
   const { shopId, driverId } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -327,7 +329,7 @@ exports.routeGetActive = onCall(_CALL, async (req) => {
 // Collections: warehouseStock/{id}, warehouseReceipts/{id}, pickLists/{id}
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.warehouseReceive = onCall(_CALL, async (req) => {
+exports.warehouseReceive = onCall(_CALL, exports._h.warehouseReceive = async (req) => {
   const uid = _uid(req);
   const { shopId, supplierId, supplierName, items, purchaseOrderRef } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -354,7 +356,7 @@ exports.warehouseReceive = onCall(_CALL, async (req) => {
   return { receiptId, itemCount: validItems.length };
 });
 
-exports.warehousePutaway = onCall(_CALL, async (req) => {
+exports.warehousePutaway = onCall(_CALL, exports._h.warehousePutaway = async (req) => {
   const uid = _uid(req);
   const { shopId, receiptId, itemIndex, binLocation } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -388,7 +390,7 @@ exports.warehousePutaway = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.warehouseGeneratePickList = onCall(_CALL, async (req) => {
+exports.warehouseGeneratePickList = onCall(_CALL, exports._h.warehouseGeneratePickList = async (req) => {
   const uid = _uid(req);
   const { shopId, orderId, orderItems } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -424,7 +426,7 @@ exports.warehouseGeneratePickList = onCall(_CALL, async (req) => {
   return { pickListId: id, hasShortfall: pickItems.some(i => i.shortfall > 0), items: pickItems };
 });
 
-exports.warehouseConfirmPick = onCall(_CALL, async (req) => {
+exports.warehouseConfirmPick = onCall(_CALL, exports._h.warehouseConfirmPick = async (req) => {
   const uid = _uid(req);
   const { shopId, pickListId, itemIndex } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -447,7 +449,7 @@ exports.warehouseConfirmPick = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.warehouseShipOrder = onCall(_CALL, async (req) => {
+exports.warehouseShipOrder = onCall(_CALL, exports._h.warehouseShipOrder = async (req) => {
   const uid = _uid(req);
   const { shopId, pickListId, trackingNumber, courier } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -462,7 +464,7 @@ exports.warehouseShipOrder = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.warehouseGetInventory = onCall(_CALL, async (req) => {
+exports.warehouseGetInventory = onCall(_CALL, exports._h.warehouseGetInventory = async (req) => {
   const uid = _uid(req);
   const { shopId, binLocation, lowStockThreshold } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -481,7 +483,7 @@ exports.warehouseGetInventory = onCall(_CALL, async (req) => {
   return { stock, summary };
 });
 
-exports.warehouseGetDashboard = onCall(_CALL, async (req) => {
+exports.warehouseGetDashboard = onCall(_CALL, exports._h.warehouseGetDashboard = async (req) => {
   const uid = _uid(req);
   const { shopId } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -513,7 +515,7 @@ exports.warehouseGetDashboard = onCall(_CALL, async (req) => {
 // Collections: deliveryZones/{id}
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.deliveryZoneCreate = onCall(_CALL, async (req) => {
+exports.deliveryZoneCreate = onCall(_CALL, exports._h.deliveryZoneCreate = async (req) => {
   const uid = _uid(req);
   const { shopId, name, type, center, radiusKm, polygon, basePrice, pricePerKm, minOrderAmount, currency } = req.data;
   await _assertRole(uid, shopId, 'manager');
@@ -535,7 +537,7 @@ exports.deliveryZoneCreate = onCall(_CALL, async (req) => {
   return { zoneId: id };
 });
 
-exports.deliveryZoneUpdate = onCall(_CALL, async (req) => {
+exports.deliveryZoneUpdate = onCall(_CALL, exports._h.deliveryZoneUpdate = async (req) => {
   const uid = _uid(req);
   const { shopId, zoneId } = req.data;
   await _assertRole(uid, shopId, 'manager');
@@ -549,7 +551,7 @@ exports.deliveryZoneUpdate = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.deliveryZoneList = onCall(_CALL, async (req) => {
+exports.deliveryZoneList = onCall(_CALL, exports._h.deliveryZoneList = async (req) => {
   const uid = _uid(req);
   const { shopId } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -557,7 +559,7 @@ exports.deliveryZoneList = onCall(_CALL, async (req) => {
   return { zones: snap.docs.map(d => d.data()) };
 });
 
-exports.deliveryZoneCheckCoverage = onCall(_CALL, async (req) => {
+exports.deliveryZoneCheckCoverage = onCall(_CALL, exports._h.deliveryZoneCheckCoverage = async (req) => {
   const uid = _uid(req);
   const { shopId, lat, lng } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -597,7 +599,7 @@ function _freightRate(kg) {
   return (_FREIGHT_RATES.find(t => kg <= t.maxKg) || _FREIGHT_RATES.at(-1)).rate;
 }
 
-exports.cargoCalculateFreight = onCall(_CALL, async (req) => {
+exports.cargoCalculateFreight = onCall(_CALL, exports._h.cargoCalculateFreight = async (req) => {
   const uid = _uid(req);
   const { shopId, weightKg, lengthCm, widthCm, heightCm, distanceKm } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -618,7 +620,7 @@ exports.cargoCalculateFreight = onCall(_CALL, async (req) => {
   };
 });
 
-exports.cargoManifestCreate = onCall(_CALL, async (req) => {
+exports.cargoManifestCreate = onCall(_CALL, exports._h.cargoManifestCreate = async (req) => {
   const uid = _uid(req);
   const { shopId, consigneeName, consigneePhone, consigneeAddress, courier, pickupDate, notes } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -636,7 +638,7 @@ exports.cargoManifestCreate = onCall(_CALL, async (req) => {
   return { manifestId: id, manifestNumber };
 });
 
-exports.cargoManifestAddItem = onCall(_CALL, async (req) => {
+exports.cargoManifestAddItem = onCall(_CALL, exports._h.cargoManifestAddItem = async (req) => {
   const uid = _uid(req);
   const { shopId, manifestId, description, weightKg, lengthCm, widthCm, heightCm, quantity, declaredValue } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -665,7 +667,7 @@ exports.cargoManifestAddItem = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.cargoManifestList = onCall(_CALL, async (req) => {
+exports.cargoManifestList = onCall(_CALL, exports._h.cargoManifestList = async (req) => {
   const uid = _uid(req);
   const { shopId, status } = req.data;
   await _assertRole(uid, shopId, 'employee');
@@ -681,7 +683,7 @@ exports.cargoManifestList = onCall(_CALL, async (req) => {
 // Derived from existing deliveries/trips/riderLocations collections
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.logisticsGetDeliveryReport = onCall(_CALL, async (req) => {
+exports.logisticsGetDeliveryReport = onCall(_CALL, exports._h.logisticsGetDeliveryReport = async (req) => {
   const uid = _uid(req);
   const { shopId, startDate, endDate } = req.data;
   await _assertRole(uid, shopId, 'manager');
@@ -712,7 +714,7 @@ exports.logisticsGetDeliveryReport = onCall(_CALL, async (req) => {
   };
 });
 
-exports.logisticsGetRiderLeaderboard = onCall(_CALL, async (req) => {
+exports.logisticsGetRiderLeaderboard = onCall(_CALL, exports._h.logisticsGetRiderLeaderboard = async (req) => {
   const uid = _uid(req);
   const { shopId, limit: lim } = req.data;
   await _assertRole(uid, shopId, 'manager');
@@ -741,7 +743,7 @@ exports.logisticsGetRiderLeaderboard = onCall(_CALL, async (req) => {
   return { riders };
 });
 
-exports.logisticsGetZonePerformance = onCall(_CALL, async (req) => {
+exports.logisticsGetZonePerformance = onCall(_CALL, exports._h.logisticsGetZonePerformance = async (req) => {
   const uid = _uid(req);
   const { shopId } = req.data;
   await _assertRole(uid, shopId, 'manager');
@@ -761,7 +763,7 @@ exports.logisticsGetZonePerformance = onCall(_CALL, async (req) => {
   return { zones: zoneStats.sort((a, b) => b.total - a.total) };
 });
 
-exports.logisticsGetOnTimeRate = onCall(_CALL, async (req) => {
+exports.logisticsGetOnTimeRate = onCall(_CALL, exports._h.logisticsGetOnTimeRate = async (req) => {
   const uid = _uid(req);
   const { shopId, daysBack } = req.data;
   await _assertRole(uid, shopId, 'manager');
