@@ -553,7 +553,7 @@ const obsGetRealTimeMetrics = onCall(
 // ─────────────────────────────────────────────────────────────────────────────
 
 const obsScheduledAggregation = onSchedule(
-  { schedule: 'every 1 hour', region: REGION, timeoutSeconds: 540 },  // [L-2] fixed schedule string
+  { schedule: 'every 60 minutes', region: REGION, timeoutSeconds: 540 },
   async () => {
     const now       = new Date();
     const hourStart = new Date(now);
