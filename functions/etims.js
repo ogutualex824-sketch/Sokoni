@@ -1085,7 +1085,7 @@ const etimsDownloadReceipt = onRequest({ secrets: _ALL_SECRETS }, async (req, re
 
     const profSnap = await db.collection("etimsProfiles").doc(inv.sellerUid).get();
     const profile  = profSnap.exists ? profSnap.data()
-      : { businessName:"SOKONI Ltd", kraPin:"", branchId:"00", vatStatus:"registered", address:COMPANY.address };
+      : { businessName:COMPANY.legalName, kraPin:"", branchId:"00", vatStatus:"registered", address:COMPANY.address };
 
     const html = buildReceiptHtml({ invoice: inv, profile, buyer: inv.buyer });
     res.setHeader("Content-Type","text/html; charset=utf-8");

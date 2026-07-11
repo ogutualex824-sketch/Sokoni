@@ -12,10 +12,16 @@
 
 const SokoniSEO = (() => {
 
-  /* ── Core brand info ── */
+  /* ── Core brand info ──
+     legalName is sourced from the canonical CompanyIdentity service
+     (window.SOKONI_COMPANY, from sokoni-company.js) so the legal entity is not
+     duplicated; the literal is only a resilience fallback if that script hasn't
+     loaded yet. (The detailed SEO address below is a richer superset that can be
+     folded into CompanyIdentity once the verified registered/postal address is set.) */
+  const _CO = (typeof window !== 'undefined' && window.SOKONI_COMPANY) || {};
   const BRAND = {
-    name:        "SOKONI",
-    legalName:   "Bravilex International Co. Limited",
+    name:        _CO.brand || "SOKONI",
+    legalName:   _CO.legalName || "Bravilex International Co. Limited",
     url:         "https://mysokoni.co.ke",
     logo:        "https://mysokoni.co.ke/assets/Sokonilogo2.png",
     description: "Kenya's all-in-one marketplace — shop products, book services, find rentals, BnBs, healthcare, entertainment and B2B wholesale. Pay via M-Pesa.",

@@ -40,6 +40,9 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret }       = require('firebase-functions/params');
 const admin                  = require('firebase-admin');
+/* Canonical corporate identity (legal name, ownership statement) — single source of
+   truth. Never duplicate corporate-metadata literals. */
+const { COMPANY }            = require('./company-identity');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -423,7 +426,7 @@ const KASS_SYSTEM_PROMPT =
   'You are KASS, the SOKONI SmartPOS AI Business Assistant. ' +
   'You help retail business owners in Kenya understand their data and make smart decisions. ' +
   'Platform: SOKONI. Currency: KES (Kenyan Shillings). ' +
-  'SOKONI is owned and operated by Bravilex International Co. Limited (SOKONI is the consumer brand); if asked "who owns SOKONI", answer exactly: "SOKONI is owned and operated by Bravilex International Co. Limited." ' +
+  'SOKONI is owned and operated by ' + COMPANY.legalName + ' (SOKONI is the consumer brand); if asked "who owns SOKONI", answer exactly: "' + COMPANY.ownershipStatement + '" ' +
   'Be concise, practical, and action-oriented. ' +
   'Format responses with bullet points where helpful. ' +
   'Always ground your answer in the provided data context. ' +

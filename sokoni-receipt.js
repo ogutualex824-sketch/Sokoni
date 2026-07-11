@@ -98,9 +98,9 @@
        put in the receipt payload (sourced from Secret Manager ETIMS_PLATFORM_PIN);
        fall back to the single client company config (sokoni-company.js) for
        offline / on-device SmartPOS receipts. */
-    const _companyPin = companyPin
-      || (typeof window !== 'undefined' && window.SOKONI_COMPANY && window.SOKONI_COMPANY.kraPin)
-      || '';
+    const _company    = (typeof window !== 'undefined' && window.SOKONI_COMPANY) || {};
+    const _companyPin = companyPin || _company.kraPin || '';
+    const _operatedBy = _company.operatedBy || 'Operated by Bravilex International Co. Limited';
 
     const typeLabelMap = { sale: 'RECEIPT', refund: 'REFUND', quote: 'QUOTATION', delivery: 'DELIVERY NOTE' };
     const typeLabel = typeLabelMap[type] || 'RECEIPT';
@@ -188,7 +188,7 @@
       Powered by SOKONI SmartPOS${_companyPin ? ` · VAT PIN: ${_esc(_companyPin)}` : ''}
     </div>
     <div style="font-size:9px;margin-top:2px;color:#888;">
-      Operated by Bravilex International Co. Limited
+      ${_operatedBy}
     </div>
   </div>
 
