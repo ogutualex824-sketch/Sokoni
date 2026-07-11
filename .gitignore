@@ -116,6 +116,15 @@ playwright-report/
 dist/
 build/
 
+# CF audit / migration tool outputs (generated; not source)
+cf-audit*.html
+cf-audit*.json
+cf-audit*.csv
+cf-complete-audit.html
+cf-exports-cache.json
+cf-migration-plan*.html
+cf-partition-report.html
+
 # Android signing — NEVER commit keystore or passwords
 *.keystore
 *.jks

@@ -53,29 +53,25 @@
 
 These are legitimately individual and are excluded from the dispatcher model.
 
-## Open architecture debt (guard-surfaced, 2026-07-11)
+## Name-collision analysis (guard-surfaced, 2026-07-11) — CORRECTED
 
-13 ops are **both dispatched and individually exported** (each wastes one Cloud Run service). Resolution = remove the individual `index.js` export (keep the dispatcher handler) + delete the deployed individual CF. Client-caller analysis classifies each precisely:
+The guard flags 13 ops that are **both a dispatcher handler AND an individual export**. Deeper verification (comparing the actual implementations) proved these are **NOT duplicates** — they are **cross-domain name collisions**: two genuinely different functions in different modules that happen to share a name. **Both implementations are legitimately used**, so **none may be de-exported** (that would break the exported version's callers).
 
-**Group A — pure duplicates (all callers already on the dispatcher OR none): safe to de-export + delete now.**
-| Op | Dispatcher | Evidence |
-|----|-----------|----------|
-| `registerWebhook` | smartPos | partner-portal migrated (commit eff7903) |
-| `testWebhook` | smartPos | partner-portal migrated |
-| `createPurchaseOrder` | smartPos | procurement migrated |
-| `refundToWallet` | smartPos | only caller pos-crm-pro `cf`→smartPosDispatch |
-| `getAuditLog` | smartPos | no client caller found |
-| `registerDevice` | services | no client caller found |
-| `deleteWebhook`, `listWebhooks` | smartPos | verify partner-portal routing (likely migrated) |
+| Op | Dispatcher handler (module) | Individual export (module) | Both used? |
+|----|-----------------------------|-----------------------------|-----------|
+| `registerWebhook`/`testWebhook`/`deleteWebhook`/`listWebhooks` | pos-integrations (seller POS webhooks) | developer-portal (partner API webhooks) | ✅ yes |
+| `createPurchaseOrder` | pos-inventory-pro | procurement (supplier PO) | ✅ yes |
+| `getWalletBalance`/`getWalletTransactions`/`refundToWallet` | pos-crm-pro (POS wallet) | wallet (customer wallet) | ✅ yes |
+| `currencyGetRates` | pos (POS pricing) | currency-engine | ✅ yes |
+| `getAuditLog` | pos | security-audit | ✅ yes |
+| `registerDevice` | services | device-manager | ✅ yes |
+| `adminGetPendingPayouts` | admin-os | wallet | ✅ yes |
+| `adminResolveDispute` | admin-os | disputes | ✅ yes |
 
-**Group B — still has a DIRECT caller: migrate the caller to the dispatcher first, then de-export.**
-| Op | Dispatcher | Direct caller to migrate |
-|----|-----------|--------------------------|
-| `adminGetPendingPayouts` | admin | `super-admin.html:1175` (direct `httpsCallable`) |
-| `adminResolveDispute` | admin | `trust-safety.html:557` (`_cf` direct) — note `sokoni-aos.js` already uses `adminOsDispatch` |
-| `currencyGetRates` | smartPos | `pos-completeness.html:949` (`_cf` direct) |
-| `getWalletBalance`, `getWalletTransactions` | smartPos | `sokoni-wallet.js` `_cf` (confirm target) — pos-crm-pro already on dispatcher |
+**Group A (de-export) is CANCELLED** — there are **zero** true duplicates. Verification caught 3 regressions the earlier POS migration had introduced by routing `partner-portal`/`procurement` clients to the wrong same-named implementation; these were reverted (commit `a6a0b59`).
 
-**Procedure per op (same as the reclamation campaign):** migrate any Group-B caller → remove `exports.<op>` from `index.js` → `firebase functions:delete <op>` → guard passes. Not executed in this turn to avoid conflicting with a concurrent index.js editor and to hold the sprint's zero-regression rule.
+**Correct remediation (future, careful):** *namespace* the POS/admin-domain dispatcher handlers to domain-unique op names (e.g. `posRegisterWebhook`, `posCreatePurchaseOrder`, `posGetWalletBalance`) so each callable name maps to exactly one business domain — the sprint's "one domain per callable" principle. This requires updating each handler's `_h` key + any client that calls it via the dispatcher. It is **not** a de-export and must not delete the individually-exported functions.
+
+**Guard behaviour:** true duplicates (same module) → hard fail (de-export). Cross-domain collisions (different module) → warning (namespace). Currently: 0 hard failures, 13 namespacing warnings — guard **passes**.
 
 Related: [[ORPHAN_RECLAMATION_CAMPAIGN]] · [[SETTLEMENT_DISPATCHER_CONSOLIDATION]]

@@ -1,4 +1,98 @@
-﻿## [2026-07-11] — Enterprise Cash Manager v3 — Full Spec Completion
+﻿## [2026-07-11] — CSP Fix — Maps, Charts, QR Scanning Restored (17 pages)
+
+### Summary
+`cdn.jsdelivr.net` and `unpkg.com` were missing from both `script-src` and `style-src` in both the enforcement and report-only Content-Security-Policy headers in `firebase.json`. The browser was silently blocking Leaflet JS/CSS, Chart.js, jsQR, leaflet-heat, and leaflet.markercluster on 17 pages, making maps, charts, and QR scanning completely non-functional in production.
+
+### Files Affected
+- `firebase.json` — `Content-Security-Policy` and `Content-Security-Policy-Report-Only`:
+  - `script-src`: added `https://unpkg.com https://cdn.jsdelivr.net`
+  - `style-src`: added `https://unpkg.com https://cdn.jsdelivr.net`
+
+### Pages Fixed
+`delivery-tracking.html`, `rider-nav.html`, `car-hub.html`, `food-order.html`, `food-rider.html`, `fleet-monitor.html`, `dispatch.html`, `gip.html`, `delivery.html`, `foundation.html`, `seller-delivery.html`, `track.html`, `entertainment.html`, `ent-organizer.html`, `landlord.html`, `business-health.html`, `index.html`
+
+### Libraries Now Unblocked
+- Leaflet JS + CSS (maps on all delivery/tracking/fleet pages)
+- Leaflet.heat (heat maps)
+- Leaflet.markercluster (clustered map markers)
+- Chart.js (business analytics charts)
+- jsQR (QR code scanning)
+- IntaSend Inline SDK (via unpkg)
+
+---
+
+## [2026-07-11] — SmartPOS Cash Manager — Deferred Audit Fixes (offline events + multi-tab lock)
+
+### Summary
+Resolved the two deferred items from the production hardening audit: (1) drawer open events were silently dropped when offline because `_posDispatch` was never defined in `pos-checkout.html` — all logging calls threw `ReferenceError` and logged nothing; (2) `window._shiftClosing` was tab-local, meaning a second browser tab on the same register could still process sales while the close wizard was open in the first tab.
+
+### Files Affected
+- `pos-checkout.html`:
+  - `_posDispatch` — defined inside the Checkout IIFE calling `smartPosDispatch` via Firebase Functions (was completely missing, causing all downstream calls to fail silently)
+  - `_logDrawerEvent(payload)` — offline-safe wrapper: fires immediately when online; when offline, writes `{ cfName:'smartPosDispatch', data:{ op:'cmLogDrawerOpen', ...payload } }` to the `sokoni_cash_mgr_v1` IDB queue so the event replays on reconnect
+  - All 4 `_posDispatch('cmLogDrawerOpen',...)` calls replaced with `_logDrawerEvent(...)`
+  - `_setShiftLock(locked)` — replaces all `window._shiftClosing = true/false` writes; broadcasts `{ type:'SHIFT_LOCK', locked }` via `BroadcastChannel('sokoni_pos_shift_lock')` to all same-origin tabs
+  - `_shiftLockChannel` — opened in `init()`; `onmessage` handler sets `window._shiftClosing` and shows a warning toast on receiving tabs
+  - `online` event listener extended to call `PosRegister.syncQueue()` to flush queued drawer events on reconnect
+  - HTML Cancel button in close wizard: removed redundant inline `window._shiftClosing=false` (now handled by `closeModal` → `_setShiftLock(false)`)
+- `pos-cash-manager.js`:
+  - `PosRegister.syncQueue` exposed in public API — was private `_syncQueue`; now callable externally so `pos-checkout.html` can trigger replay on reconnect
+
+### Architecture Notes
+- Drawer events share the same `sokoni_cash_mgr_v1` IDB `queue` object store as cash events. The `_syncQueue` loop calls `httpsCallable(item.cfName)(item.data)`, so queueing `{ cfName:'smartPosDispatch', data:{ op:'cmLogDrawerOpen', ...} }` correctly routes through the dispatcher on replay.
+- `BroadcastChannel` scope is same-origin. A cashier opening a second tab of `pos-checkout.html` will receive the lock broadcast and block new sales immediately.
+
+### Known Remaining Limitations
+- Page refresh on the tab with the close wizard open: lock is lost (wizard is also gone, so the cashier must re-open the close wizard — acceptable UX)
+- Cross-device / cross-browser-session locking: not addressed (requires server-side session state — out of scope for POS)
+
+---
+
+## [2026-07-11] — SmartPOS Cash Manager — Production Hardening (16 Audit Findings)
+
+### Summary
+Production traffic audit of the Enterprise Cash Manager (v3) surfaced 16 issues (4 P0, 9 P1, 3 P2). All 16 addressed except two deferred items (offline drawer-event queue, multi-tab shift-lock). P0 fixes prevent data loss on crash/reopen, close-wizard lock escape via Esc key, missing Firestore security rules, and 14 missing composite indexes that would have caused query failures at any meaningful data volume.
+
+### Files Affected
+- `firestore.indexes.json` — 14 new composite indexes across `posCashEvents`, `posDrawerEvents`, `posCloseApprovals`, `posCashSessions`
+- `firestore.rules` — security rules added for all 4 new collections (`posCashSessions`, `posCashEvents`, `posDrawerEvents`, `posCloseApprovals`); CF-write-only, merchant-scoped client reads
+- `functions/pos-cash-manager.js`:
+  - `cmRecordCashEvent` — `register_open` path changed from `merge:false` → `merge:true` (prevents session data destruction on crash/interrupted close)
+  - `cmGetLiveTillBalance` — now requires `shiftId`; `.limit(2000)` added (was unbounded full-merchant scan)
+  - `cmGetBranchSummary` — EAT (UTC+3) day boundaries matching `cmGetEndOfDay`; branch filter pushed into Firestore query; `truncated` flag added
+  - `cmGetCashierPerformance` — limit 2000→5000; `truncated` flag returned
+  - `cmRequestCloseApproval` — idempotency guard returns existing pending request instead of creating duplicate
+  - `cmLogDrawerOpen` — 5-char random suffix on document ID prevents same-millisecond collision
+- `pos-checkout.html` — `closeModal()` and `closeAllModals()` now reset `window._shiftClosing`, releasing the pay() hard-lock when close wizard is dismissed via Escape or any cancel path
+- `pos-cash-manager.html`:
+  - `loadOverview()` sessions query — `.orderBy('openedAt','desc').limit(50)` added (was unbounded collection scan)
+  - `rejectClose()` — returns early on prompt Cancel (null check); prevents empty-note accidental rejection
+  - `approveClose()` / `rejectClose()` — `loadCloseApprovals()` moved to `finally` block; UI stays in sync after CF errors
+  - Truncation warnings shown when `cmGetBranchSummary` / `cmGetCashierPerformance` return `truncated:true`
+
+### Database Changes
+- 14 composite Firestore indexes deployed for `posCashEvents`, `posDrawerEvents`, `posCloseApprovals`, `posCashSessions`
+- Firestore security rules deployed for all 4 Cash Manager collections
+
+### Security Changes
+- CF-only write enforced on all 4 collections via `allow write: if false` Firestore rules
+- Client reads scoped to `merchantId` claim, cashierId (sessions), and manager/supervisor claim (approvals)
+- Idempotent approval requests prevent duplicate approval documents in `posCloseApprovals`
+
+### Performance Changes
+- All known unbounded queries now bounded: `cmGetLiveTillBalance` requires shiftId + limit 2000; `cmGetBranchSummary` limit 10 000 + EAT boundaries; `cmGetCashierPerformance` limit 5000; `loadOverview()` limit 50
+- `truncated` flag surfaces to UI so operators know a report may be incomplete
+
+### Known Limitations (Deferred)
+- Drawer open events silently dropped when offline — no IDB retry queue (same pattern as `PosSales.park()` needed)
+- `window._shiftClosing` is tab-local — a second browser tab could still process sales while close wizard is open in the first
+
+### Breaking Changes
+- `cmGetLiveTillBalance` now requires `shiftId` parameter — callers without it receive a validation error
+
+---
+
+## [2026-07-11] — Enterprise Cash Manager v3 — Full Spec Completion
 
 ### Summary
 Third wave completing every item in the enterprise cash management spec. Adds hardware verification to the opening wizard, hard shift lock during register closing, percentage and Over/Short variance labelling, manager approval workflow for register closes, immutable drawer event logging to Firestore via CF, a Drawer Events tab in the Cash Office, a Branch Summary tab with cross-register reconciliation, print/PDF export for the EOD report, and pending close-approval management for managers.

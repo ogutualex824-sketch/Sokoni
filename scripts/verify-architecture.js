@@ -63,23 +63,42 @@ for (const d of Object.keys(DISPATCHERS)) {
   if (!exportSet.has(d)) warnings.push(`Dispatcher "${d}" not exported by index.js (registry drift?)`);
 }
 
-/* 2. No dispatcher handler also individually exported (best-effort — needs module load). */
+/* Map each index.js export to its SOURCE module alias:  exports.X = alias.Y
+   and  const alias = require('./module')  →  export op → module path. */
+const aliasToModule = {};
+for (const m of indexSrc.matchAll(/const\s+([A-Za-z0-9_]+)\s*=\s*require\(['"]\.\/([A-Za-z0-9_-]+)['"]\)/g)) {
+  aliasToModule[m[1]] = m[2];
+}
+const exportToModule = {};
+for (const m of indexSrc.matchAll(/^exports\.([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_]+)\./gm)) {
+  if (aliasToModule[m[2]]) exportToModule[m[1]] = aliasToModule[m[2]];
+}
+
+/* 2. Classify name-collisions: op that is BOTH a dispatcher handler AND an
+   individual export. TRUE DUPLICATE (same source module) = hard error → de-export.
+   CROSS-DOMAIN COLLISION (different module = a genuinely different function that
+   happens to share a name) = warning → namespace the handler; NEVER de-export
+   (would break the exported implementation's callers). */
 let handlerCheckRan = false;
 try {
   const admin = require(path.join(FUNCTIONS, 'node_modules', 'firebase-admin'));
   try { admin.initializeApp(); } catch (_) {}
   handlerCheckRan = true;
-  const collisions = [];
+  const trueDuplicates = [], crossDomain = [];
   for (const [d, mods] of Object.entries(DISPATCHERS)) {
     const H = {};
     for (const m of mods) {
       try { Object.assign(H, require(path.join(FUNCTIONS, m + '.js'))._h || {}); } catch (_) {}
     }
     for (const op of Object.keys(H)) {
-      if (exportSet.has(op)) collisions.push(`${op} (in ${d} AND exported individually)`);
+      if (!exportSet.has(op)) continue;
+      const src = exportToModule[op];
+      if (src && mods.includes(src)) trueDuplicates.push(`${op} (${d} ⇄ exports from ${src} — SAME module: de-export the individual CF)`);
+      else crossDomain.push(`${op} (${d} handler vs exports from ${src || '?'} — different function, same name: namespace the handler)`);
     }
   }
-  if (collisions.length) errors.push(`Ops both dispatched AND individually exported (wasted Cloud Run services):\n    - ${collisions.join('\n    - ')}`);
+  if (trueDuplicates.length) errors.push(`TRUE duplicate ops (dispatched AND individually exported from the SAME module — wasted Cloud Run services):\n    - ${trueDuplicates.join('\n    - ')}`);
+  if (crossDomain.length) warnings.push(`Cross-domain name collisions (distinct functions sharing a name — namespace, do NOT de-export):\n    - ${crossDomain.join('\n    - ')}`);
 } catch (_) {
   warnings.push('Handler-collision check skipped (could not load modules — run inside functions/ with deps installed).');
 }
