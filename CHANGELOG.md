@@ -1,4 +1,28 @@
-﻿## [2026-07-11] — Enterprise Cash Manager + SmartPOS Dispatcher Migration v1.0
+﻿## [2026-07-11] — Enterprise Cash Manager v2 — Gap-Fill Wave 2
+
+### Summary
+Second-wave enhancements completing the full enterprise cash management spec: live topbar balance display, category dropdowns per event type, safe-drop field visibility control, safe-drop location validation and receipt printing, split payment cash leg recording, shift warning on pay(), manager approval secured through CF handler (not direct Firestore), cashier performance tab with KPI row and color-coded variance table, CSV export for both EOD and cashier performance, and branch filter on EOD report.
+
+### Files Affected
+- `pos-checkout.html` — `#topbar-balance` DOM element with tabular-nums display; `_setCashEventModal()` helper controls category dropdown and safe-drop field visibility per event type; `openCashIn/Out/SafeDrop/Pickup()` all use the new helper; safe-drop validation (location required, witness optional); `_printSafeDropReceipt()` sends to SokoniPrinter; split payment cash leg now extracted from `payments[]` filtered by `method === 'cash'`; shift warning toast when `pay()` called with no active session
+- `functions/pos-cash-manager.js` — `cmApprovePendingEvent()`: CF handler validates caller role, cross-merchant access, `approvalRequired` flag, and idempotency before approving pending safe drop / float event; `cmGetCashierPerformance()`: groups events by cashierId for a requested date range, returns sorted summary with cashSales, cashRefunds, cashIn, cashOut, safeDrops, variance, sessionCount; both added to `exports._h`
+- `pos-cash-manager.html` — Cashier Performance tab: date range pickers, Generate button, 3 KPI cards (Total Cash Sales, Total Safe Drops, Net Variance), 9-column table with color-coded variance and CSV export; EOD tab: branch filter input, CSV export button (hidden until report loaded); `approveItem()` calls `cmApprovePendingEvent` via dispatcher instead of writing Firestore directly; `setDefaultDates()` seeds cp-from to month start, cp-to to today
+- `functions/smartpos-dispatch.js` — handler count comment updated (8 → 10 for pos-cash-manager.js)
+
+### Architecture Changes
+- Manager event approval now flows CF → Firestore (not client → Firestore), preventing privilege-escalation via tampered Firestore writes
+- `smartPosDispatch` now routes 173 handlers across 10 modules
+
+### Security Changes
+- `cmApprovePendingEvent` validates: authenticated session, manager role (`isManager` claim), merchant ownership, `approvalRequired === true`, not already approved — client can no longer bypass any of these checks by writing Firestore directly
+- Safe-drop receipt printed server-side through SokoniPrinter; no amount manipulation possible client-side
+
+### Performance Changes
+- `cmGetCashierPerformance` uses a single Firestore query over the date range; aggregation is done in-process (no N+1 reads); result is sorted descending by cashSales before returning
+
+---
+
+## [2026-07-11] — Enterprise Cash Manager + SmartPOS Dispatcher Migration v1.0
 
 ### Summary
 Full enterprise cash management system for SmartPOS: denomination-based register opening wizard, event-sourced live till balance, change calculation with denomination breakdown, formal safe drop workflow, shift closing with variance gate, EOD reconciliation across all tills, and an immutable audit trail. All CF handlers (9 Multi-Till + 8 Cash Manager = 17 total) are merged into `smartPosDispatch` via the `_merge()` dispatcher pattern — no new Cloud Run services required. All client pages updated to call `smartPosDispatch({op: '...', ...})` instead of direct CF references.
