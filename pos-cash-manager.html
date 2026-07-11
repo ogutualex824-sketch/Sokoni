@@ -102,13 +102,26 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,sys
 .toast.show{opacity:1}
 /* Empty */
 .empty{text-align:center;padding:48px 0;color:var(--sub)}
+/* Pending close approvals */
+.close-req{background:var(--sur);border:1px solid var(--bor);border-radius:11px;padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.close-req-info{flex:1;min-width:200px}
+.close-req-title{font-size:13px;font-weight:700}
+.close-req-meta{font-size:12px;color:var(--sub);margin-top:3px}
+.close-req-variance{font-size:13px;font-weight:700}
 /* Print */
 @media print{
   .topbar,.tab-bar,.filter-bar{display:none!important}
   .tab-panel:not(.active){display:none}
   body{background:#fff;color:#000}
-  .card,.till-card,.eod-section{border:1px solid #ccc!important;background:#fff!important}
+  .card,.till-card,.eod-section{border:1px solid #ccc!important;background:#fff!important;color:#000!important}
+  .eod-row{color:#000!important}
+  .eod-section-title{color:#333!important}
+  #eod-print-header{display:block!important}
+  .btn,.btn-secondary,.btn-g{display:none!important}
 }
+#eod-print-header{display:none;margin-bottom:16px}
+#eod-print-header h2{font-size:18px;font-weight:800;margin-bottom:4px}
+#eod-print-header p{font-size:12px;color:#555}
 </style>
 </head>
 <body>
@@ -127,6 +140,8 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,sys
   <div class="tab" onclick="switchTab('eod',this)">EOD Report</div>
   <div class="tab" onclick="switchTab('performance',this)">Cashier Performance</div>
   <div class="tab" onclick="switchTab('audit',this)">Audit Trail</div>
+  <div class="tab" onclick="switchTab('drawer',this)">Drawer Events</div>
+  <div class="tab" onclick="switchTab('branch',this)">Branch Summary</div>
 </div>
 
 <!-- ══ OVERVIEW ══════════════════════════════════════════════════ -->
@@ -138,9 +153,20 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,sys
     <div class="kpi"><div class="kpi-label">Safe Drops</div><div class="kpi-value o" id="ov-drops">—</div></div>
     <div class="kpi"><div class="kpi-label">Pending Approvals</div><div class="kpi-value r" id="ov-approvals">—</div></div>
   </div>
-  <div class="card">
-    <div class="card-title">Pending Manager Approvals</div>
+  <!-- Pending event approvals (safe drops, floats) -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Pending Event Approvals</div>
     <div id="approval-list"><div class="empty">No pending approvals.</div></div>
+  </div>
+  <!-- Pending register close approvals -->
+  <div class="card">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Pending Register Close Approvals</span>
+      <button class="btn btn-secondary" onclick="loadCloseApprovals()" style="font-size:11px;padding:5px 10px">&#x21BB; Refresh</button>
+    </div>
+    <div id="close-approval-list" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+      <div class="empty">No pending close approvals.</div>
+    </div>
   </div>
 </div>
 
@@ -187,8 +213,12 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,sys
     <input type="date" id="eod-date">
     <input type="text" id="eod-branch" placeholder="Branch ID (optional)…" style="max-width:200px">
     <button class="btn btn-g" onclick="loadEOD()">Generate Report</button>
-    <button class="btn btn-secondary" onclick="window.print()">&#x1F5A8; Print</button>
+    <button class="btn btn-secondary" id="eod-print-btn" onclick="_printEOD()" style="display:none">&#x1F5A8; Print / PDF</button>
     <button class="btn btn-secondary" id="eod-csv-btn" onclick="downloadEODCSV()" style="display:none">&#x2B07; CSV</button>
+  </div>
+  <div id="eod-print-header">
+    <h2>End-of-Day Cash Reconciliation</h2>
+    <p id="eod-print-meta"></p>
   </div>
   <div id="eod-report">
     <div class="empty">Select a date and generate the report.</div>
@@ -260,6 +290,67 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,sys
   </div>
 </div>
 
+<!-- ══ DRAWER EVENTS ════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-drawer">
+  <div class="filter-bar">
+    <input type="text" id="dr-register" placeholder="Register ID (optional)…" style="max-width:200px">
+    <select id="dr-reason" style="min-width:160px">
+      <option value="">All Reasons</option>
+      <option value="payment">Payment</option>
+      <option value="refund">Refund</option>
+      <option value="manual">Manual</option>
+      <option value="safe_drop">Safe Drop</option>
+      <option value="cash_in">Cash In</option>
+      <option value="cash_out">Cash Out</option>
+      <option value="register_open">Register Open</option>
+      <option value="register_close">Register Close</option>
+      <option value="pickup">Pickup</option>
+    </select>
+    <button class="btn btn-g" onclick="loadDrawerHistory()">Search</button>
+    <button class="btn btn-secondary" id="dr-csv-btn" onclick="downloadDrawerCSV()" style="display:none">&#x2B07; CSV</button>
+  </div>
+  <div class="card">
+    <div class="tbl-wrap">
+      <table class="tbl" id="dr-table">
+        <thead><tr>
+          <th>Timestamp</th><th>Register</th><th>Cashier</th><th>Role</th>
+          <th>Reason</th><th>Branch</th><th>Device</th>
+        </tr></thead>
+        <tbody id="dr-body"><tr><td colspan="7" style="text-align:center;color:var(--sub);padding:32px">Search to view drawer events.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BRANCH SUMMARY ═════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-branch">
+  <div class="filter-bar">
+    <input type="date" id="bs-date">
+    <input type="text" id="bs-branch" placeholder="Branch ID (optional)…" style="max-width:200px">
+    <button class="btn btn-g" onclick="loadBranchSummary()">Generate</button>
+    <button class="btn btn-secondary" id="bs-csv-btn" onclick="downloadBranchCSV()" style="display:none">&#x2B07; CSV</button>
+  </div>
+  <div id="bs-totals" style="display:none;margin-bottom:16px">
+    <div class="kpi-row" id="bs-kpi-row"></div>
+  </div>
+  <div class="card">
+    <div class="tbl-wrap">
+      <table class="tbl" id="bs-table">
+        <thead><tr>
+          <th>Register</th><th>Branch</th><th>Cashier</th><th>Status</th>
+          <th style="text-align:right">Opening Float</th>
+          <th style="text-align:right">Cash Sales</th>
+          <th style="text-align:right">Safe Drops</th>
+          <th style="text-align:right">Expected</th>
+          <th style="text-align:right">Variance</th>
+          <th style="text-align:right">Drawer Opens</th>
+        </tr></thead>
+        <tbody id="bs-body"><tr><td colspan="10" style="text-align:center;color:var(--sub);padding:32px">Select a date and generate.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="firebase.js"></script>
@@ -311,10 +402,9 @@ function _typeBadge(type) {
 
 function setDefaultDates() {
   const today = new Date().toISOString().slice(0, 10);
-  /* Month start for performance date range */
   const monthStart = new Date(); monthStart.setDate(1);
   const monthStartStr = monthStart.toISOString().slice(0, 10);
-  const els = ['mv-date','eod-date','au-from','au-to'];
+  const els = ['mv-date','eod-date','au-from','au-to','bs-date'];
   els.forEach(id => { const el = document.getElementById(id); if(el) el.value = today; });
   const cpFrom = document.getElementById('cp-from');
   const cpTo   = document.getElementById('cp-to');
@@ -332,6 +422,7 @@ function switchTab(tab, el) {
   if (tab === 'movements')   loadMovements();
   if (tab === 'audit')       loadAudit();
   if (tab === 'performance') loadCashierPerf();
+  if (tab === 'drawer')      loadDrawerHistory();
 }
 
 /* ── Overview ── */
@@ -395,6 +486,7 @@ async function loadOverview() {
           <td><button class="btn btn-g" onclick="approveItem('${_esc(p.id)}')">Approve</button></td>
         </tr>`).join('')}</tbody></table>`;
     }
+    loadCloseApprovals();
   } catch(err) { _toast('Overview load failed: ' + err.message, true); }
 }
 
@@ -535,7 +627,10 @@ async function loadEOD() {
         </div>
       </div>
       ${tillsHTML}`;
-    document.getElementById('eod-csv-btn').style.display = '';
+    document.getElementById('eod-csv-btn').style.display   = '';
+    document.getElementById('eod-print-btn').style.display = '';
+    const metaEl = document.getElementById('eod-print-meta');
+    if (metaEl) metaEl.textContent = `Date: ${reportDate}  |  Merchant: ${_merchantId}  |  Generated: ${new Date().toLocaleString('en-KE')}`;
   } catch(err) {
     wrap.innerHTML = `<div class="empty" style="color:var(--red)">${_esc(err.message)}</div>`;
   }
@@ -707,6 +802,195 @@ async function loadAudit() {
 }
 
 /* ── Toast ── */
+/* ── Print EOD ── */
+function _printEOD() {
+  /* Switch to EOD tab, then print so the report is visible */
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-eod').classList.add('active');
+  window.print();
+}
+
+/* ── Pending Register Close Approvals ── */
+let _closeApprovals = [];
+async function loadCloseApprovals() {
+  const wrap = document.getElementById('close-approval-list');
+  wrap.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const snap = await db.collection('posCloseApprovals')
+      .where('merchantId', '==', _merchantId)
+      .where('status', '==', 'pending')
+      .orderBy('requestedAt', 'desc')
+      .limit(20)
+      .get();
+    _closeApprovals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!_closeApprovals.length) {
+      wrap.innerHTML = '<div class="empty">No pending close approvals.</div>'; return;
+    }
+    wrap.innerHTML = _closeApprovals.map(r => {
+      const vAmt  = Math.abs((r.varianceCents || 0) / 100).toFixed(2);
+      const vDir  = r.varianceCents > 0 ? 'OVER' : r.varianceCents < 0 ? 'SHORT' : 'Balanced';
+      const vClr  = r.varianceCents === 0 ? 'var(--g)' : r.varianceCents > 0 ? '#42a5f5' : '#ef5350';
+      return `<div class="close-req">
+        <div class="close-req-info">
+          <div class="close-req-title">&#x1F510; Register ${_esc(r.registerId)}</div>
+          <div class="close-req-meta">
+            ${_esc(r.requestedByName)} &bull; ${new Date(r.requestedAt||0).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'})}
+          </div>
+          ${r.varianceExplanation ? `<div style="font-size:12px;color:var(--sub);margin-top:4px;font-style:italic">${_esc(r.varianceExplanation)}</div>` : ''}
+        </div>
+        <div class="close-req-variance" style="color:${vClr}">${vDir}${r.varianceCents !== 0 ? ' KES ' + vAmt : ''}</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-g" onclick="approveClose('${r.id}')">Approve</button>
+          <button class="btn btn-secondary" onclick="rejectClose('${r.id}')" style="background:rgba(239,83,80,.15);color:#ef5350">Reject</button>
+        </div>
+      </div>`;
+    }).join('');
+    document.getElementById('ov-approvals').textContent = _closeApprovals.length;
+  } catch(err) {
+    wrap.innerHTML = `<div class="empty" style="color:var(--red)">${_esc(err.message)}</div>`;
+  }
+}
+
+async function approveClose(id) {
+  if (!confirm('Approve this register close?')) return;
+  try {
+    await _posDispatch('cmApproveRegisterClose', { approvalId: id, merchantId: _merchantId, approved: true });
+    _toast('Register close approved', false);
+    loadCloseApprovals();
+  } catch(err) { _toast(err.message, true); }
+}
+
+async function rejectClose(id) {
+  const note = prompt('Reason for rejection (optional):') || '';
+  try {
+    await _posDispatch('cmApproveRegisterClose', { approvalId: id, merchantId: _merchantId, approved: false, note });
+    _toast('Register close rejected', false);
+    loadCloseApprovals();
+  } catch(err) { _toast(err.message, true); }
+}
+
+/* ── Drawer History ── */
+let _lastDrawerData = [];
+async function loadDrawerHistory() {
+  const registerId = document.getElementById('dr-register')?.value?.trim() || undefined;
+  const reason     = document.getElementById('dr-reason')?.value || undefined;
+  const body       = document.getElementById('dr-body');
+  body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--sub)">Loading…</td></tr>';
+  document.getElementById('dr-csv-btn').style.display = 'none';
+  try {
+    const res = await _posDispatch('cmGetDrawerHistory', {
+      merchantId: _merchantId,
+      registerId: registerId || undefined,
+      limitN: 200,
+    });
+    let events = (res.events || []);
+    if (reason) events = events.filter(e => e.reason === reason);
+    _lastDrawerData = events;
+    if (!events.length) {
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--sub)">No drawer events found.</td></tr>';
+      return;
+    }
+    const reasonBadge = r => {
+      const map = { payment:'sale', refund:'refund', manual:'out', safe_drop:'drop',
+                    cash_in:'in', cash_out:'out', register_open:'open', register_close:'close' };
+      return `<span class="badge badge-${map[r]||''}">${_esc(r||'')}</span>`;
+    };
+    body.innerHTML = events.map(e => `<tr>
+      <td>${_ts(e.ts)}</td>
+      <td style="font-family:monospace;font-size:12px">${_esc(e.registerId)}</td>
+      <td>${_esc(e.userName)}</td>
+      <td style="font-size:12px;color:var(--sub)">${_esc(e.role)}</td>
+      <td>${reasonBadge(e.reason)}</td>
+      <td style="font-size:12px;color:var(--sub)">${_esc(e.branch||'—')}</td>
+      <td style="font-size:11px;color:var(--sub);max-width:180px;overflow:hidden;text-overflow:ellipsis">${_esc((e.deviceId||'').slice(0,40))}</td>
+    </tr>`).join('');
+    document.getElementById('dr-csv-btn').style.display = '';
+  } catch(err) {
+    body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--red)">${_esc(err.message)}</td></tr>`;
+  }
+}
+
+function downloadDrawerCSV() {
+  if (!_lastDrawerData.length) return;
+  const rows = [
+    ['Timestamp','Register','Cashier','Role','Reason','Branch','Device'],
+    ..._lastDrawerData.map(e => [
+      _ts(e.ts), e.registerId||'', e.userName||'', e.role||'', e.reason||'', e.branch||'', (e.deviceId||'').slice(0,60),
+    ]),
+  ];
+  _csvDownload(rows, `drawer-events-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+/* ── Branch Summary ── */
+let _lastBranchData = null;
+async function loadBranchSummary() {
+  const date   = document.getElementById('bs-date')?.value || new Date().toISOString().slice(0,10);
+  const branch = document.getElementById('bs-branch')?.value?.trim() || '';
+  const body   = document.getElementById('bs-body');
+  body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--sub)">Loading…</td></tr>';
+  document.getElementById('bs-csv-btn').style.display = 'none';
+  document.getElementById('bs-totals').style.display  = 'none';
+  try {
+    const res = await _posDispatch('cmGetBranchSummary', { merchantId: _merchantId, branch, date });
+    _lastBranchData = res;
+    const { registers = [], totals = {} } = res;
+    if (!registers.length) {
+      body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--sub)">No data for this date/branch.</td></tr>';
+      return;
+    }
+    /* KPI row */
+    document.getElementById('bs-kpi-row').innerHTML = `
+      <div class="kpi"><div class="kpi-label">Registers</div><div class="kpi-value g">${registers.length}</div></div>
+      <div class="kpi"><div class="kpi-label">Total Cash Sales</div><div class="kpi-value b">${_kes(totals.cashSales)}</div></div>
+      <div class="kpi"><div class="kpi-label">Total Expected</div><div class="kpi-value g">${_kes(totals.expected)}</div></div>
+      <div class="kpi"><div class="kpi-label">Net Variance</div>
+        <div class="kpi-value" style="color:${(totals.variance||0)===0?'var(--g)':(totals.variance>0?'#42a5f5':'#ef5350')}">
+          ${(totals.variance||0)===0?'Balanced':((totals.variance>0?'+':'')+_kes(totals.variance))}</div></div>
+      <div class="kpi"><div class="kpi-label">Drawer Opens</div><div class="kpi-value">${totals.drawerOpens||0}</div></div>`;
+    document.getElementById('bs-totals').style.display = '';
+    const statusChip = s => s === 'closed'
+      ? '<span class="sb sb-closed">Closed</span>'
+      : '<span class="sb sb-open">Open</span>';
+    const varChip = v => {
+      if (v === null || v === undefined) return '<span style="color:var(--sub)">—</span>';
+      const cls = v === 0 ? 'variance-balanced' : v > 0 ? 'variance-over' : 'variance-short';
+      const lbl = v === 0 ? 'Balanced' : (v > 0 ? '+' : '') + _kes(v);
+      return `<span class="variance-chip ${cls}">${lbl}</span>`;
+    };
+    body.innerHTML = registers.map(r => `<tr>
+      <td style="font-family:monospace;font-size:12px">${_esc(r.registerId)}</td>
+      <td>${_esc(r.branch||'—')}</td>
+      <td>${_esc(r.cashierName||'—')}</td>
+      <td>${statusChip(r.status)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${_kes(r.openingFloat)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${_kes(r.cashSales)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${_kes(r.safeDrops)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--g)">${_kes(r.expected)}</td>
+      <td style="text-align:right">${varChip(r.variance)}</td>
+      <td style="text-align:right">${r.drawerOpens||0}</td>
+    </tr>`).join('');
+    document.getElementById('bs-csv-btn').style.display = '';
+  } catch(err) {
+    body.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--red)">${_esc(err.message)}</td></tr>`;
+  }
+}
+
+function downloadBranchCSV() {
+  if (!_lastBranchData) return;
+  const { registers = [], date } = _lastBranchData;
+  const rows = [
+    ['Register','Branch','Cashier','Status','Opening Float','Cash Sales','Safe Drops','Expected','Variance','Drawer Opens'],
+    ...registers.map(r => [
+      r.registerId||'', r.branch||'', r.cashierName||'', r.status||'',
+      ((r.openingFloat||0)/100).toFixed(2), ((r.cashSales||0)/100).toFixed(2),
+      ((r.safeDrops||0)/100).toFixed(2), ((r.expected||0)/100).toFixed(2),
+      r.variance !== null ? ((r.variance||0)/100).toFixed(2) : '',
+      r.drawerOpens||0,
+    ]),
+  ];
+  _csvDownload(rows, `branch-summary-${date||'today'}.csv`);
+}
+
 function _toast(msg, isErr = false) {
   const t = document.getElementById('toast');
   t.textContent = msg;

@@ -1,26 +1,34 @@
 /* ================================================================
-   SOKONI SmartPOS — Cash Manager Cloud Functions v1.0
+   SOKONI SmartPOS — Cash Manager Cloud Functions v3.0
    functions/pos-cash-manager.js
 
-   10 Cloud Functions covering the full enterprise cash lifecycle:
-   event logging, session management, manager approval, live
-   balance, shift reports, EOD reconciliation, and audit trail.
+   15 Cloud Functions covering the full enterprise cash lifecycle:
+   event logging, session management, manager approval, live balance,
+   shift reports, EOD reconciliation, drawer event logging, branch
+   summaries, manager close approvals, and cashier performance.
 
    Collections:
-     posCashSessions/{sessionId}   — shift sessions
-     posCashEvents/{id}            — immutable event ledger
+     posCashSessions/{sessionId}    — shift sessions
+     posCashEvents/{id}             — immutable event ledger
+     posDrawerEvents/{id}           — immutable drawer open log
+     posCloseApprovals/{id}         — manager close-approval requests
 
    Exports:
-     cmRecordCashEvent    — log any cash event (universal)
-     cmOpenRegister       — create session on register open
-     cmCloseRegister      — finalize session with variance
-     cmApproveFloat       — manager approval / adjustment
-     cmSafeDrop           — formal safe-drop with optional approval
-     cmGetLiveTillBalance — server-side computed balance
-     cmGetShiftReport     — full single-shift reconciliation
-     cmGetEndOfDay        — EOD report across all tills
-     cmGetAuditTrail      — paginated, filterable audit log
-     cmGetManagerQueue    — pending approvals for managers
+     cmRecordCashEvent       — log any cash event (universal)
+     cmApproveFloat          — manager approval / float adjustment
+     cmSafeDrop              — formal safe-drop with optional approval
+     cmGetLiveTillBalance    — server-side computed balance
+     cmGetShiftReport        — full single-shift reconciliation
+     cmGetEndOfDay           — EOD report across all tills
+     cmGetAuditTrail         — paginated, filterable audit log
+     cmGetManagerQueue       — pending approvals for managers
+     cmApprovePendingEvent   — approve a pending safe drop / float
+     cmGetCashierPerformance — per-cashier summary for a date range
+     cmLogDrawerOpen         — immutable drawer event log
+     cmGetDrawerHistory      — paginated drawer history per register
+     cmGetBranchSummary      — cross-register branch reconciliation
+     cmRequestCloseApproval  — cashier requests manager sign-off
+     cmApproveRegisterClose  — manager approves / rejects close
 ================================================================ */
 'use strict';
 
@@ -526,6 +534,179 @@ async function cmGetCashierPerformance(req) {
   };
 }
 
+/* ════════════════════════════════════════════════════════════════
+   cmLogDrawerOpen — immutable drawer-open event record
+   Called client-side after every auto or manual drawer open.
+════════════════════════════════════════════════════════════════ */
+const VALID_DRAWER_REASONS = new Set([
+  'payment','refund','exchange','safe_drop','cash_in','cash_out',
+  'register_open','register_close','manual','pickup','test',
+]);
+
+async function cmLogDrawerOpen(req) {
+  _auth(req);
+  const { merchantId, registerId, reason, deviceId = '', branch = '', role = 'cashier' } = req.data || {};
+  if (!merchantId || !registerId) throw new HttpsError('invalid-argument', 'merchantId and registerId required.');
+  if (!VALID_DRAWER_REASONS.has(reason)) throw new HttpsError('invalid-argument', `Invalid reason. Valid: ${[...VALID_DRAWER_REASONS].join(', ')}`);
+
+  const id = `drevt_${_san(merchantId,32)}_${_san(registerId,32)}_${Date.now()}`;
+  await db().collection('posDrawerEvents').doc(id).set({
+    id,
+    merchantId:  _san(merchantId, 64),
+    registerId:  _san(registerId, 64),
+    userId:      req.auth.uid,
+    userName:    _san(req.auth.token?.name || 'Unknown', 128),
+    role:        _san(role, 32),
+    reason,
+    deviceId:    _san(deviceId, 128),
+    branch:      _san(branch, 128),
+    ts:          Date.now(),
+    createdAt:   now(),
+  });
+  logger.info('[CashMgr] drawer opened', { merchantId, registerId, reason, uid: req.auth.uid });
+  return { ok: true, id };
+}
+
+/* ════════════════════════════════════════════════════════════════
+   cmGetDrawerHistory — paginated drawer events per register
+════════════════════════════════════════════════════════════════ */
+async function cmGetDrawerHistory(req) {
+  _auth(req);
+  const { merchantId, registerId, limitN = 100, before } = req.data || {};
+  if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId required.');
+
+  let q = db().collection('posDrawerEvents')
+    .where('merchantId', '==', _san(merchantId, 64))
+    .orderBy('ts', 'desc')
+    .limit(Math.min(Number(limitN) || 100, 500));
+  if (registerId) q = q.where('registerId', '==', _san(registerId, 64));
+  if (before)     q = q.startAfter(Number(before));
+
+  const snap = await q.get();
+  return { events: snap.docs.map(d => d.data()), count: snap.size };
+}
+
+/* ════════════════════════════════════════════════════════════════
+   cmGetBranchSummary — cross-register reconciliation for a branch
+════════════════════════════════════════════════════════════════ */
+async function cmGetBranchSummary(req) {
+  _auth(req);
+  if (!_isManager(req)) throw new HttpsError('permission-denied', 'Manager access required.');
+
+  const { merchantId, branch = '', date } = req.data || {};
+  if (!merchantId || !date) throw new HttpsError('invalid-argument', 'merchantId and date required.');
+
+  const dayStart = new Date(date + 'T00:00:00.000Z').getTime();
+  const dayEnd   = new Date(date + 'T23:59:59.999Z').getTime();
+
+  let q = db().collection('posCashEvents')
+    .where('merchantId', '==', _san(merchantId, 64))
+    .where('clientTs',   '>=', dayStart)
+    .where('clientTs',   '<=', dayEnd)
+    .limit(5000);
+
+  const snap = await q.get();
+  const registers = {};
+
+  for (const doc of snap.docs) {
+    const ev = doc.data();
+    if (branch && ev.branchId !== branch) continue;
+    const rid = ev.registerId || 'unknown';
+    if (!registers[rid]) registers[rid] = {
+      registerId: rid, branch: ev.branchId || '', cashierName: ev.cashierName || '',
+      openingFloat: 0, cashSales: 0, cashRefunds: 0,
+      cashIn: 0, cashOut: 0, safeDrops: 0, adjustments: 0,
+      drawerOpens: 0, variance: null, status: 'open',
+    };
+    const r = registers[rid];
+    const amt = ev.amountCents || 0;
+    switch (ev.type) {
+      case 'register_open':    r.openingFloat += amt; r.drawerOpens++; break;
+      case 'cash_sale':        r.cashSales    += amt; break;
+      case 'cash_refund':      r.cashRefunds  += amt; break;
+      case 'cash_in':          r.cashIn       += amt; break;
+      case 'cash_out':         r.cashOut      += amt; break;
+      case 'safe_drop':        r.safeDrops    += amt; break;
+      case 'float_adjustment': r.adjustments  += amt; break;
+      case 'register_close':   r.variance = ev.varianceCents || 0; r.status = 'closed'; break;
+    }
+  }
+
+  const rows = Object.values(registers).map(r => ({
+    ...r,
+    expected: r.openingFloat + r.cashSales - r.cashRefunds + r.cashIn - r.cashOut - r.safeDrops + r.adjustments,
+  }));
+
+  const tot = (field) => rows.reduce((s, r) => s + (r[field] || 0), 0);
+  return {
+    branch: branch || 'All',
+    date,
+    registers: rows,
+    totals: {
+      openingFloat: tot('openingFloat'), cashSales: tot('cashSales'),
+      cashRefunds: tot('cashRefunds'),   cashIn: tot('cashIn'),
+      cashOut: tot('cashOut'),           safeDrops: tot('safeDrops'),
+      expected: tot('expected'),         variance: tot('variance'),
+      drawerOpens: tot('drawerOpens'),
+    },
+  };
+}
+
+/* ════════════════════════════════════════════════════════════════
+   cmRequestCloseApproval — cashier submits close for manager sign-off
+════════════════════════════════════════════════════════════════ */
+async function cmRequestCloseApproval(req) {
+  _auth(req);
+  const { merchantId, registerId, countedCents, varianceCents, varianceExplanation = '' } = req.data || {};
+  if (!merchantId || !registerId) throw new HttpsError('invalid-argument', 'merchantId and registerId required.');
+
+  const id  = `clappr_${_san(merchantId,32)}_${_san(registerId,32)}_${Date.now()}`;
+  await db().collection('posCloseApprovals').doc(id).set({
+    id,
+    merchantId:          _san(merchantId, 64),
+    registerId:          _san(registerId, 64),
+    requestedBy:         req.auth.uid,
+    requestedByName:     _san(req.auth.token?.name || 'Unknown', 128),
+    countedCents:        _cents(countedCents),
+    varianceCents:       Math.round(Number(varianceCents) || 0),
+    varianceExplanation: _san(varianceExplanation, 512),
+    status:      'pending',
+    requestedAt: Date.now(),
+    createdAt:   now(),
+  });
+  logger.info('[CashMgr] close approval requested', { merchantId, registerId, uid: req.auth.uid });
+  return { ok: true, id };
+}
+
+/* ════════════════════════════════════════════════════════════════
+   cmApproveRegisterClose — manager approves or rejects a close request
+════════════════════════════════════════════════════════════════ */
+async function cmApproveRegisterClose(req) {
+  _auth(req);
+  if (!_isManager(req)) throw new HttpsError('permission-denied', 'Manager access required.');
+
+  const { approvalId, merchantId, approved = true, note = '' } = req.data || {};
+  if (!approvalId || !merchantId) throw new HttpsError('invalid-argument', 'approvalId and merchantId required.');
+
+  const ref  = db().collection('posCloseApprovals').doc(_san(approvalId, 128));
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Approval request not found.');
+
+  const data = snap.data();
+  if (data.merchantId !== _san(merchantId, 64)) throw new HttpsError('permission-denied', 'Merchant mismatch.');
+  if (data.status !== 'pending')               throw new HttpsError('failed-precondition', 'Already processed.');
+
+  await ref.update({
+    status:        approved ? 'approved' : 'rejected',
+    approvedBy:    req.auth.uid,
+    approvedByName: _san(req.auth.token?.name || 'Unknown', 128),
+    approvalNote:  _san(note, 256),
+    processedAt:   Date.now(),
+  });
+  logger.info('[CashMgr] close approval processed', { approvalId, approved, by: req.auth.uid });
+  return { ok: true, approved };
+}
+
 exports._h = {
   cmRecordCashEvent,
   cmApproveFloat,
@@ -537,4 +718,9 @@ exports._h = {
   cmGetManagerQueue,
   cmApprovePendingEvent,
   cmGetCashierPerformance,
+  cmLogDrawerOpen,
+  cmGetDrawerHistory,
+  cmGetBranchSummary,
+  cmRequestCloseApproval,
+  cmApproveRegisterClose,
 };
