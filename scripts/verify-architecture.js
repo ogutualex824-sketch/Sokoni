@@ -42,6 +42,7 @@ const DISPATCHERS = {
   smartPosDispatch:      ['pos-crm-pro', 'pos-completeness', 'pos-staff-ops', 'pos-inventory-pro', 'pos-accounting', 'pos-retail-engine', 'pos-integrations', 'pos-hq', 'pos-multi-till', 'pos-cash-manager', 'business-bootstrap'],
   logisticsPlusDispatch: ['logistics-plus'],
   financeSprintDispatch: ['finance-os-sprint43'],   // + settlement handlers (settlement-dispatch)
+  providerDispatch:      ['provider-onboarding'],
 };
 
 const errors = [];

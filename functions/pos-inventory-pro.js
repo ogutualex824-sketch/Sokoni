@@ -682,7 +682,9 @@ exports.transferWarehouseStock = onCall(_CF, exports._h.transferWarehouseStock =
  *        expectedDelivery (ISO string, optional), notes (optional)
  * Writes to: posPurchaseOrders/{id}
  */
-exports.createPurchaseOrder = onCall(_CF, exports._h.createPurchaseOrder = async (req) => {
+/* createPurchaseOrder: standalone onCall only. Dispatcher handler removed —
+   procurement.html calls the canonical procurement CF directly (verified). */
+exports.createPurchaseOrder = onCall(_CF, async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 

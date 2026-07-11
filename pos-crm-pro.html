@@ -662,8 +662,8 @@ window.loadWallet = async () => {
   try {
     const [custRes, balRes, txRes] = await Promise.all([
       cf('getPOSCustomer')({ query: phone }),
-      cf('getWalletBalance')({ phone }),
-      cf('getWalletTransactions')({ phone })
+      cf('posGetWalletBalance')({ phone }),
+      cf('posGetWalletTransactions')({ phone })
     ]);
     walletCustomerId = custRes.data.id;
     document.getElementById('walletAmount').textContent = `KES ${(balRes.data.balance||0).toLocaleString()}`;
@@ -715,7 +715,7 @@ window.doRefund = async () => {
   const origSale = document.getElementById('refundSale').value.trim();
   if (!amount || !origSale) { toast('Amount and original sale ID required.', 'error'); return; }
   try {
-    await cf('refundToWallet')({ phone: document.getElementById('walletPhone').value.trim(), amount, originalSaleId: origSale });
+    await cf('posRefundToWallet')({ phone: document.getElementById('walletPhone').value.trim(), amount, originalSaleId: origSale });
     closeModal('refundModal');
     toast(`KES ${amount} refunded to wallet.`, 'success');
     window.loadWallet();

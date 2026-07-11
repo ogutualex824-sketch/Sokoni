@@ -84,10 +84,10 @@ window.SokoniAOS = (() => {
     'adminGetAiStats','adminGetAnnouncements','adminGetAuditLogs','adminGetBanners',
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
     'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFraudAlerts',
-    'adminGetOrders','adminGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
+    'adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
     'adminGetPosDevices','adminGetProducts','adminGetRecentNotifications','adminGetReviews',
     'adminGetSearchStats','adminGetSupportTickets','adminGetUser','adminRemoveReview',
-    'adminResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
+    'aosResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
     'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
     'adminUpdatePlatformSettings','adminUpdateProductStatus','adminUpdateUserRole',
     'adminUpsertCategory','adminUpsertFaq',
@@ -477,7 +477,7 @@ window.SokoniAOS = (() => {
             <td>${c.status!=="paid"?`<button class="aos-btn-sm success" onclick="SokoniAOS.markCommPaid('${c.id}')">Mark Paid</button>`:"—"}</td>
           </tr>`).join("")}</tbody></table>` : _emptyMsg("No commission entries");
       } else if (tab === "payouts") {
-        const data = await _call("adminGetPendingPayouts");
+        const data = await _call("aosGetPendingPayouts");
         const payouts = data.payouts || [];
         body.innerHTML = payouts.length ? `<div class="payout-actions">
           <button class="aos-btn success" onclick="SokoniAOS.approveAllPayouts()">Approve All (${payouts.length})</button>
@@ -604,7 +604,7 @@ window.SokoniAOS = (() => {
   }
   async function resolveDispute(id, winnerSide) {
     const note = prompt("Resolution note:");
-    await _call("adminResolveDispute", { disputeId: id, resolution: winnerSide, note }).catch(e => _toast(e.message,"error"));
+    await _call("aosResolveDispute", { disputeId: id, resolution: winnerSide, note }).catch(e => _toast(e.message,"error"));
     _toast("Dispute resolved","success"); _financialTab("disputes");
   }
   async function processRefund(id, action) {

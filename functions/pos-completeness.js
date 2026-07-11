@@ -699,7 +699,10 @@ const DEFAULT_RATES_TO_KES = {
   ETB: 2.24, ZAR: 6.8, NGN: 0.08, AED: 34.8,
 };
 
-exports.currencyGetRates = onCall({ enforceAppCheck: true }, exports._h.currencyGetRates = async (req) => {
+/* currencyGetRates: standalone onCall only. Dispatcher handler removed — clients
+   call the canonical currency-engine CF directly (verified: pos-completeness.html
+   uses direct httpsCallable). Was a dead cross-domain name collision. */
+exports.currencyGetRates = onCall({ enforceAppCheck: true }, async (req) => {
   const { shopId } = req.data;
   if (!req.auth) throw new Error('unauthenticated');
   const snap = await _db().collection('currencyRates').doc(shopId).get();

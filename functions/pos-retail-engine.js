@@ -925,7 +925,9 @@ exports.recordAuditEvent = onCall({ enforceAppCheck: true }, exports._h.recordAu
 /**
  * CF: getAuditLog — retrieve audit trail (manager+ only)
  */
-exports.getAuditLog = onCall({ enforceAppCheck: true }, exports._h.getAuditLog = async (req) => {
+/* getAuditLog: standalone onCall only. Dispatcher handler removed — no client
+   routes getAuditLog through smartPosDispatch (verified). */
+exports.getAuditLog = onCall({ enforceAppCheck: true }, async (req) => {
   const auth   = _authRequired(req);
   const claims = auth.token || {};
   const canView = claims.admin || claims.posRole === 'manager'

@@ -97,7 +97,9 @@ function _walletId(sellerId, phone) {
  * getWalletBalance
  * Returns the customer wallet balance and last 10 transactions.
  */
-exports.getWalletBalance = onCall(_CF, exports._h.getWalletBalance = async (req) => {
+/* Dispatcher key namespaced posGetWalletBalance to avoid a cross-domain name
+   clash with the global wallet CF. Caller: pos-crm-pro.html cf('posGetWalletBalance'). */
+exports.getWalletBalance = onCall(_CF, exports._h.posGetWalletBalance = async (req) => {
   _requireAuth(req);
   const { sellerId, phone } = req.data;
   _requireFields(req.data, ['sellerId', 'phone']);
@@ -208,7 +210,7 @@ exports.deductWallet = onCall(_CF, exports._h.deductWallet = async (req) => {
  * refundToWallet
  * Role: manager+. Refunds an amount back to the customer wallet.
  */
-exports.refundToWallet = onCall(_CF, exports._h.refundToWallet = async (req) => {
+exports.refundToWallet = onCall(_CF, exports._h.posRefundToWallet = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId, phone, amount, saleId, reason } = req.data;
@@ -246,7 +248,7 @@ exports.refundToWallet = onCall(_CF, exports._h.refundToWallet = async (req) => 
  * getWalletTransactions
  * Returns the last 50 wallet transactions for a customer.
  */
-exports.getWalletTransactions = onCall(_CF, exports._h.getWalletTransactions = async (req) => {
+exports.getWalletTransactions = onCall(_CF, exports._h.posGetWalletTransactions = async (req) => {
   _requireAuth(req);
   const { sellerId, phone } = req.data;
   _requireFields(req.data, ['sellerId', 'phone']);

@@ -1101,7 +1101,9 @@ const verifyPasskeyAuthentication = onCall(CF_OPTIONS, _h.verifyPasskeyAuthentic
  * }
  * Output: { deviceId, trusted, trustScore, isNew }
  */
-const registerDevice = onCall(CF_OPTIONS, _h.registerDevice = async ({ data, auth }) => {
+/* registerDevice: standalone onCall only. servicesDispatch handler removed —
+   pos-setup.html calls the canonical device-manager CF directly (verified). */
+const registerDevice = onCall(CF_OPTIONS, async ({ data, auth }) => {
   _requireAuth(auth);
   const uid = auth.uid;
 

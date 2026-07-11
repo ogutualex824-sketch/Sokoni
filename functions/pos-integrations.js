@@ -157,7 +157,9 @@ function _randomHex(bytes) {
 ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── A1. registerWebhook ───────────────────────────────────────────────── */
-exports.registerWebhook = onCall(_CF, exports._h.registerWebhook = async (req) => {
+/* Webhook ops: standalone onCall only. Dispatcher handlers removed — developer-portal
+   and partner-portal call the canonical developer-portal CFs directly (verified). */
+exports.registerWebhook = onCall(_CF, async (req) => {
   const auth     = _requireAuth(req);
   const sellerId = _validateSellerId(req.data?.sellerId);
   _requireRole(auth, 'owner');
@@ -219,7 +221,7 @@ exports.registerWebhook = onCall(_CF, exports._h.registerWebhook = async (req) =
 });
 
 /* ── A2. deleteWebhook ─────────────────────────────────────────────────── */
-exports.deleteWebhook = onCall(_CF, exports._h.deleteWebhook = async (req) => {
+exports.deleteWebhook = onCall(_CF, async (req) => {
   const auth      = _requireAuth(req);
   const sellerId  = _validateSellerId(req.data?.sellerId);
   const webhookId = req.data?.webhookId;
@@ -245,7 +247,7 @@ exports.deleteWebhook = onCall(_CF, exports._h.deleteWebhook = async (req) => {
 });
 
 /* ── A3. listWebhooks ──────────────────────────────────────────────────── */
-exports.listWebhooks = onCall(_CF, exports._h.listWebhooks = async (req) => {
+exports.listWebhooks = onCall(_CF, async (req) => {
   const auth     = _requireAuth(req);
   const sellerId = _validateSellerId(req.data?.sellerId);
   _requireRole(auth, 'manager');
@@ -275,7 +277,7 @@ exports.listWebhooks = onCall(_CF, exports._h.listWebhooks = async (req) => {
 });
 
 /* ── A4. testWebhook ───────────────────────────────────────────────────── */
-exports.testWebhook = onCall(_CF, exports._h.testWebhook = async (req) => {
+exports.testWebhook = onCall(_CF, async (req) => {
   const auth      = _requireAuth(req);
   const sellerId  = _validateSellerId(req.data?.sellerId);
   const webhookId = req.data?.webhookId;

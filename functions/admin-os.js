@@ -553,7 +553,9 @@ exports.adminGetDeliveryStats = onCall({ region: 'us-central1', maxInstances: 10
 /* ─────────────────────────────────────────────────────────────────────────
    Payouts
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetPendingPayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPendingPayouts = async (req) => {
+/* Dispatcher key namespaced aosGetPendingPayouts to avoid a cross-domain name
+   clash with the global payouts CF. Caller: sokoni-aos.js _call('aosGetPendingPayouts'). */
+exports.adminGetPendingPayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.aosGetPendingPayouts = async (req) => {
   _requireAdmin(req);
   const snap = await getFirestore().collection('payouts').where('status', '==', 'pending').orderBy('createdAt', 'desc').limit(100).get().catch(() => ({ docs: [] }));
   return { payouts: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
@@ -584,7 +586,7 @@ exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10, enf
   return { disputes: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
 });
 
-exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminResolveDispute = async (req) => {
+exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.aosResolveDispute = async (req) => {
   _requireAdmin(req);
   const { disputeId, resolution, favorBuyer } = req.data;
   if (!disputeId || !resolution) throw new Error('disputeId and resolution required');
