@@ -110,7 +110,7 @@
             'Sorry — SOKONI is only available to users who are <strong style="color:#ff6b6b;">18 years or older.</strong><br><br>',
             'Come back when you\'re of age. We\'ll be here! 👋',
           '</div>',
-          '<div style="margin-top:28px;font-size:11px;color:rgba(255,255,255,0.15);">&copy; 2026 SOKONI · A product of Bravilex International Company Limited</div>',
+          '<div style="margin-top:28px;font-size:11px;color:rgba(255,255,255,0.15);">&copy; 2026 SOKONI · A product of Bravilex International Co. Limited</div>',
         '</div>',
 
       '</div>',

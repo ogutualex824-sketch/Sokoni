@@ -845,7 +845,7 @@ exports.kass = onRequest(
 
     const systemPrompt = `You are Kass, the intelligent admin AI agent for SOKONI — Kenya's premier digital marketplace. You help the admin manage the platform efficiently and professionally.
 
-SOKONI is owned and operated by Bravilex International Company Limited. SOKONI is the consumer brand. If asked "who owns SOKONI", answer exactly: "SOKONI is owned and operated by Bravilex International Company Limited."
+SOKONI is owned and operated by Bravilex International Co. Limited. SOKONI is the consumer brand. If asked "who owns SOKONI", answer exactly: "SOKONI is owned and operated by Bravilex International Co. Limited."
 
 You have full access to:
 - Orders, users, sellers, products, disputes, rides, applications
@@ -1497,7 +1497,7 @@ exports.sokoniChat = onRequest(
 
 SOKONI (mysokoni.co.ke) is Kenya's #1 all-in-one marketplace: shop products, hire services, order food, book stays, find jobs, catch events, get healthcare, transport, property and more — all in one place.
 
-OWNERSHIP: SOKONI is owned and operated by Bravilex International Company Limited. SOKONI is the consumer brand. If a user asks "who owns SOKONI" (or anything about ownership/the legal entity), answer exactly: "SOKONI is owned and operated by Bravilex International Company Limited."
+OWNERSHIP: SOKONI is owned and operated by Bravilex International Co. Limited. SOKONI is the consumer brand. If a user asks "who owns SOKONI" (or anything about ownership/the legal entity), answer exactly: "SOKONI is owned and operated by Bravilex International Co. Limited."
 ${uid ? `\nAuthenticated user (uid: ${uid.slice(0,8)}…). All action tools are live.` : "\nGuest session. Action tools will prompt sign-in when needed."}${userProfile}
 
 MARKETPLACE-FIRST MINDSET:
@@ -6409,7 +6409,7 @@ exports.sendInvoiceEmail = onCall(
       </p>
     </div>
     <div style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
-      <span style="font-size:10px;color:rgba(255,255,255,0.2);">&copy; 2026 SOKONI · A product of Bravilex International Company Limited · All Rights Reserved.</span>
+      <span style="font-size:10px;color:rgba(255,255,255,0.2);">&copy; 2026 SOKONI · A product of Bravilex International Co. Limited · All Rights Reserved.</span>
     </div>
   </div>
 </body></html>`;
@@ -6809,7 +6809,7 @@ exports.previewEmailTemplate = onCall({ cors: ["https://mysokoni.co.ke", "https:
 <div class="wrap">
   <div class="hd"><div class="hd-logo">SOKONI</div><div class="hd-sub">${esc(headerLabel)}</div></div>
   <div class="bd">${bodyHtml}</div>
-  <div class="ft">&copy; 2026 SOKONI · A product of Bravilex International Company Limited · All Rights Reserved. &nbsp;·&nbsp;
+  <div class="ft">&copy; 2026 SOKONI · A product of Bravilex International Co. Limited · All Rights Reserved. &nbsp;·&nbsp;
     <a href="https://mysokoni.co.ke/support.html">Support</a> &nbsp;·&nbsp;
     <a href="https://mysokoni.co.ke">mysokoni.co.ke</a>
   </div>

@@ -15,7 +15,7 @@ const SokoniSEO = (() => {
   /* ── Core brand info ── */
   const BRAND = {
     name:        "SOKONI",
-    legalName:   "Bravilex International Company Limited",
+    legalName:   "Bravilex International Co. Limited",
     url:         "https://mysokoni.co.ke",
     logo:        "https://mysokoni.co.ke/assets/Sokonilogo2.png",
     description: "Kenya's all-in-one marketplace — shop products, book services, find rentals, BnBs, healthcare, entertainment and B2B wholesale. Pay via M-Pesa.",

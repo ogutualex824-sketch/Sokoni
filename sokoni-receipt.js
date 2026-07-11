@@ -179,7 +179,7 @@
       Powered by SOKONI SmartPOS · VAT PIN: P051234567X
     </div>
     <div style="font-size:9px;margin-top:2px;color:#888;">
-      Operated by Bravilex International Company Limited
+      Operated by Bravilex International Co. Limited
     </div>
   </div>
 

@@ -105,10 +105,10 @@ ${hidden}
       <a href="${esc(UNSUB_URL)}" style="color:rgba(255,255,255,0.25);text-decoration:none;">Unsubscribe</a>
     </p>
     <p style="margin:0 0 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.2);letter-spacing:0.03em;">
-      SOKONI — Powered by Bravilex International Company Limited
+      SOKONI — Powered by Bravilex International Co. Limited
     </p>
     <p style="margin:0;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.15);">
-      &copy; ${YEAR} SOKONI · A product of Bravilex International Company Limited. All rights reserved.
+      &copy; ${YEAR} SOKONI · A product of Bravilex International Co. Limited. All rights reserved.
     </p>
   </td></tr>
 
