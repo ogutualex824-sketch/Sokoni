@@ -923,9 +923,20 @@ class BtAdapter {
   }
 
   async connect (info) {
+    /* ── Stage 1: validate device object ── */
+    if (!info)       throw new Error('Bluetooth device info is undefined');
+    if (!info._dev)  throw new Error('Bluetooth device object (_dev) missing — device list may have expired; please scan again');
     const d = info._dev;
+    if (!d.gatt)     throw new Error('Bluetooth GATT not available on device "' + (info.name || 'unknown') + '"');
+
+    /* ── Stage 2: GATT connect ── */
     this._dev = d;
+    console.log('[BtAdapter] GATT connecting to', d.name || 'printer', d.id || '');
     this._srv = await d.gatt.connect();
+    if (!this._srv)  throw new Error('GATT server is null after connect() — printer may be off or out of range');
+    console.log('[BtAdapter] GATT server connected');
+
+    /* ── Stage 3: discover print service ── */
     const serviceUUIDs = [
       '0000ff00-0000-1000-8000-00805f9b34fb', // P58E primary — check first
       '000018f0-0000-1000-8000-00805f9b34fb',
@@ -933,23 +944,48 @@ class BtAdapter {
       '0000ffe0-0000-1000-8000-00805f9b34fb',
     ];
     let svc = null;
-    for (const u of serviceUUIDs) { try { svc = await this._srv.getPrimaryService(u); break; } catch(e) {} }
-    if (!svc) throw new Error('No print service on this Bluetooth device');
+    for (const u of serviceUUIDs) {
+      try { svc = await this._srv.getPrimaryService(u); console.log('[BtAdapter] Service found:', u); break; }
+      catch(e) { /* try next */ }
+    }
+    if (!svc) {
+      /* Last resort: enumerate all primary services */
+      console.log('[BtAdapter] Known UUIDs failed — enumerating all services');
+      const all = await this._srv.getPrimaryServices().catch(() => []);
+      console.log('[BtAdapter] All services:', all.map(s => s.uuid));
+      svc = all[0] || null;
+    }
+    if (!svc) throw new Error('No print service found on this Bluetooth device. Check printer is P58E / ESC-POS compatible.');
+
+    /* ── Stage 4: discover write characteristic ── */
     const charUUIDs = [
       '0000ff02-0000-1000-8000-00805f9b34fb', // P58E write characteristic
       '00002af1-0000-1000-8000-00805f9b34fb',
       'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
       '0000ffe1-0000-1000-8000-00805f9b34fb',
     ];
-    for (const u of charUUIDs) { try { this._char = await svc.getCharacteristic(u); break; } catch(e) {} }
+    for (const u of charUUIDs) {
+      try { this._char = await svc.getCharacteristic(u); console.log('[BtAdapter] Char found:', u); break; }
+      catch(e) { /* try next */ }
+    }
     if (!this._char) {
+      console.log('[BtAdapter] Known char UUIDs failed — enumerating all characteristics');
       const chars = await svc.getCharacteristics().catch(() => []);
+      console.log('[BtAdapter] All chars:', chars.map(c => c.uuid + ' write=' + c.properties.write + ' writeNoResp=' + c.properties.writeWithoutResponse));
       this._char = chars.find(c => c.properties.write || c.properties.writeWithoutResponse) || null;
     }
-    if (!this._char) throw new Error('No write characteristic found');
-    this.ok = true; this._info = info;
+    if (!this._char) throw new Error('No writable characteristic found — printer may not support BLE ESC/POS');
+
+    /* ── Stage 5: ready ── */
+    this.ok = true;
+    this._info = { ...info, serviceUUID: svc.uuid, charUUID: this._char.uuid,
+                   writeMode: this._char.properties.writeWithoutResponse ? 'writeWithoutResponse' : 'write',
+                   connectedAt: new Date().toISOString() };
+    console.log('[BtAdapter] Ready — service:', svc.uuid, 'char:', this._char.uuid, 'mode:', this._info.writeMode);
+
     d.addEventListener('gattserverdisconnected', () => {
       this.ok = false;
+      console.log('[BtAdapter] GATT disconnected — scheduling reconnect');
       this._reconnect(d);
     });
   }
@@ -1240,9 +1276,19 @@ class SPEngine {
 
   /* ── Connection ──────────────────────────────────────────── */
   async connect (deviceInfo) {
+    if (!deviceInfo)      throw new Error('connect() called with undefined deviceInfo');
+    if (!deviceInfo.type) throw new Error('connect() called with no device type');
+
+    /* Bluetooth-specific pre-flight */
+    if (deviceInfo.type === 'bluetooth') {
+      if (!navigator.bluetooth) throw new Error('Web Bluetooth is not available in this browser. Use Chrome 85+ on HTTPS.');
+      if (!deviceInfo._dev)     throw new Error('Bluetooth device reference (_dev) missing — please scan again and click Connect immediately');
+      if (!deviceInfo._dev.gatt) throw new Error('Bluetooth GATT interface unavailable — device may not support BLE');
+    }
+
     if (this._active?.ok) await this.disconnect();
     const a = this._adapters[deviceInfo.type];
-    if (!a) throw new Error('No adapter for: ' + deviceInfo.type);
+    if (!a) throw new Error('No adapter for transport type: ' + deviceInfo.type);
     await a.connect(deviceInfo);
     this._active = a;
     this._profile.connectionType = deviceInfo.type;

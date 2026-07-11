@@ -822,6 +822,20 @@ function updateStatusBar () {
   }
 }
 
+/* ── Device cache ─────────────────────────────────────────────────────────
+   JSON.stringify strips non-serialisable properties (_dev: BluetoothDevice,
+   _port: SerialPort) from discovered device objects, making them useless for
+   connect(). We cache the full live objects here and pass only a string key
+   through the DOM. The cache is cleared on each new scan.
+─────────────────────────────────────────────────────────────────────────── */
+const _devCache = new Map();
+let   _devCacheSeq = 0;
+function _cacheDevice (d) {
+  const key = 'dev_' + (++_devCacheSeq);
+  _devCache.set(key, d);
+  return key;
+}
+
 /* ── Scan ── */
 async function scan (type) {
   document.querySelectorAll('.transport-btn').forEach(b => b.classList.remove('active-transport'));
@@ -836,8 +850,16 @@ async function scan (type) {
   list.innerHTML = '<div style="color:var(--sub);font-size:12px;padding:8px 0">Searching…</div>';
   document.getElementById('statusDot').className = 'status-dot scanning';
 
+  /* Clear stale device refs from previous scan */
+  _devCache.clear();
+
   try {
+    _dbg('Scan started', { type });
+    _dbg(navigator.bluetooth ? 'Web Bluetooth: available' : 'Web Bluetooth: NOT available');
+
     const devices = await SokoniPrinter.discoverBy(type);
+    _dbg('Devices found', devices.length);
+
     if (!devices.length) {
       title.textContent = 'No printers found';
       list.innerHTML = '<div style="color:var(--sub);font-size:12px;padding:8px 0">No devices detected. Make sure the printer is on and in pairing mode.</div>';
@@ -845,37 +867,78 @@ async function scan (type) {
       title.textContent = devices.length + ' printer' + (devices.length > 1 ? 's' : '') + ' found';
       list.innerHTML = '';
       devices.forEach(d => {
+        const key = _cacheDevice(d);   /* store full object; pass key to DOM */
+        _dbg('Caching device', { key, name: d.name, type: d.type, has_dev: !!d._dev });
         const el = document.createElement('div');
         el.className = 'device-item';
         el.innerHTML = `
           <div class="device-icon">&#128268;</div>
           <div>
             <div class="device-name">${_esc(d.name || 'Printer')}</div>
-            <div class="device-sub">${_esc(d.type)} ${d.endpoint ? '· ' + _esc(d.endpoint) : ''}</div>
+            <div class="device-sub">${_esc(d.type)} ${d.endpoint ? '· ' + _esc(d.endpoint) : ''} ${d._dev ? '· BLE ready' : ''}</div>
           </div>
           <div class="device-actions">
-            <button class="btn btn-sm btn-primary" onclick="connectDevice(${JSON.stringify(d).replace(/"/g,'&quot;')})">Connect</button>
+            <button class="btn btn-sm btn-primary" onclick="connectDevice('${key}')">Connect</button>
           </div>`;
         list.appendChild(el);
       });
     }
   } catch (e) {
+    _dbg('Scan error', e.message);
     title.textContent = 'Scan failed';
     list.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px 0">${_esc(e.message)}</div>`;
   }
   updateStatusBar();
 }
 
-async function connectDevice (info) {
-  toast('Connecting…');
+/* ── Connect ─────────────────────────────────────────────────────────────
+   Accepts either:
+     • a string cache key  — "dev_3"  → look up from _devCache (scan flow)
+     • a plain object      → use directly (network printers from renderNetPrinters)
+─────────────────────────────────────────────────────────────────────────── */
+async function connectDevice (keyOrInfo) {
+  /* Resolve info object */
+  let info;
+  if (typeof keyOrInfo === 'string') {
+    info = _devCache.get(keyOrInfo);
+    if (!info) {
+      toast('Device reference lost — please scan again', 5000);
+      _dbg('ERROR: cache miss for key', keyOrInfo);
+      return;
+    }
+  } else {
+    info = keyOrInfo;
+  }
+
+  /* Defensive pre-flight checks */
+  if (!info)        { toast('No device selected', 4000); return; }
+  if (!info.type)   { toast('Invalid device: missing type', 4000); return; }
+  if (info.type === 'bluetooth' && !info._dev) {
+    toast('Bluetooth device object missing — please scan again', 5000);
+    _dbg('ERROR: _dev is undefined on info', info);
+    return;
+  }
+  if (info.type === 'bluetooth' && !info._dev.gatt) {
+    toast('Bluetooth GATT not available on this device', 5000);
+    _dbg('ERROR: _dev.gatt is undefined', info._dev);
+    return;
+  }
+
+  _dbg('Connecting to', { name: info.name, type: info.type, has_dev: !!info._dev, has_gatt: !!info._dev?.gatt });
+  toast('Connecting to ' + (info.name || 'printer') + '…');
+
   try {
+    _dbg('Creating transport…');
     await SokoniPrinter.connect(info);
+    _dbg('Connected ✓');
     _connectedDevice = info;
     updateStatusBar();
     toast('Connected to ' + (info.name || 'printer'));
     await SokoniPrinter.detectCapabilities().then(renderCapabilities).catch(() => {});
+    if (info.type === 'bluetooth') renderP58EPanel();
   } catch (e) {
-    toast('Connection failed: ' + e.message, 4000);
+    _dbg('Connection failed', e.message, e.stack);
+    toast('Connection failed: ' + e.message, 5000);
   }
 }
 
@@ -904,6 +967,7 @@ function renderNetPrinters () {
   if (!list.length) { el.innerHTML = '<div style="color:var(--sub);font-size:12px;padding:6px 0">No network printers saved yet.</div>'; return; }
   el.innerHTML = '';
   list.forEach(p => {
+    const key = _cacheDevice(p);   /* use cache even for network — safe, consistent */
     const d = document.createElement('div');
     d.className = 'device-item';
     d.innerHTML = `
@@ -913,7 +977,7 @@ function renderNetPrinters () {
         <div class="device-sub">${_esc(p.endpoint)}</div>
       </div>
       <div class="device-actions">
-        <button class="btn btn-sm btn-primary" onclick="connectDevice(${JSON.stringify(p).replace(/"/g,'&quot;')})">Connect</button>
+        <button class="btn btn-sm btn-primary" onclick="connectDevice('${key}')">Connect</button>
         <button class="btn btn-sm btn-danger" onclick="removeNet('${_esc(p.endpoint)}')">Remove</button>
       </div>`;
     el.appendChild(d);
@@ -1146,6 +1210,21 @@ function _dummyData (docType) {
 
 /* ── XSS helper ── */
 function _esc (s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ── Debug logger — writes timestamped lines to console and #hwLog if visible ── */
+function _dbg (...args) {
+  const ts  = new Date().toLocaleTimeString('en-KE', { hour12: false });
+  const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+  console.log('[SOKONI-PRINTER ' + ts + ']', ...args);
+  const el = document.getElementById('hwLog');
+  if (el && el.style.display !== 'none') {
+    const line = document.createElement('div');
+    line.style.cssText = 'font-size:11px;color:var(--sub);font-family:monospace';
+    line.textContent = '[' + ts + '] ' + msg;
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  }
+}
 
 /* ── Printer events ── */
 SokoniPrinter.on('connected',    () => { updateStatusBar(); toast('Printer connected'); });
