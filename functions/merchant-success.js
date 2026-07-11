@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    SOKONI — Merchant Success & Growth Engine  v2.0
    17 Cloud Functions | Firebase Gen2 | Node 22 | us-central1
 
@@ -34,6 +34,8 @@ const admin                  = require("firebase-admin");
 if (!admin.apps.length) admin.initializeApp();
 
 const ANTHROPIC_KEY = defineSecret("ANTHROPIC_API_KEY");
+
+const _h = {}; // handler registry
 const db            = admin.firestore();
 
 /* ── CF option sets ──────────────────────────────────────── */
@@ -390,7 +392,7 @@ const VALID_CONTENT_TYPES = new Set([
 /* ═══════════════════════════════════════════════════════════
    1. getMerchantDashboard
 ═══════════════════════════════════════════════════════════ */
-const getMerchantDashboard = onCall(CF_OPTS, async (req) => {
+const getMerchantDashboard = onCall(CF_OPTS, _h.getMerchantDashboard = async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
@@ -445,7 +447,7 @@ const getMerchantDashboard = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    2. getMerchantHealthScore
 ═══════════════════════════════════════════════════════════ */
-const getMerchantHealthScore = onCall(CF_OPTS, async (req) => {
+const getMerchantHealthScore = onCall(CF_OPTS, _h.getMerchantHealthScore = async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
@@ -498,7 +500,7 @@ const getMerchantHealthScore = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    3. getMerchantAICoach
 ═══════════════════════════════════════════════════════════ */
-const getMerchantAICoach = onCall(CF_AI_OPTS, async (req) => {
+const getMerchantAICoach = onCall(CF_AI_OPTS, _h.getMerchantAICoach = async (req) => {
   _requireAuth(req);
   const uid      = req.auth.uid;
   const shopId   = _sanId(req.data?.shopId);
@@ -550,7 +552,7 @@ Format: numbered list. Be specific, not generic.`;
 /* ═══════════════════════════════════════════════════════════
    4. getMerchantOpportunities
 ═══════════════════════════════════════════════════════════ */
-const getMerchantOpportunities = onCall(CF_OPTS, async (req) => {
+const getMerchantOpportunities = onCall(CF_OPTS, _h.getMerchantOpportunities = async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
@@ -647,7 +649,7 @@ const getMerchantOpportunities = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    5. getMerchantCRM
 ═══════════════════════════════════════════════════════════ */
-const getMerchantCRM = onCall(CF_OPTS, async (req) => {
+const getMerchantCRM = onCall(CF_OPTS, _h.getMerchantCRM = async (req) => {
   _requireAuth(req);
   const uid     = req.auth.uid;
   const shopId  = _sanId(req.data?.shopId);
@@ -750,7 +752,7 @@ const getMerchantCRM = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    6. updateCustomerNote
 ═══════════════════════════════════════════════════════════ */
-const updateCustomerNote = onCall(CF_OPTS, async (req) => {
+const updateCustomerNote = onCall(CF_OPTS, _h.updateCustomerNote = async (req) => {
   _requireAuth(req);
   const uid        = req.auth.uid;
   const shopId     = _sanId(req.data?.shopId);
@@ -773,7 +775,7 @@ const updateCustomerNote = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    7. getMerchantInventoryIntelligence
 ═══════════════════════════════════════════════════════════ */
-const getMerchantInventoryIntelligence = onCall(CF_OPTS, async (req) => {
+const getMerchantInventoryIntelligence = onCall(CF_OPTS, _h.getMerchantInventoryIntelligence = async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
@@ -859,7 +861,7 @@ const getMerchantInventoryIntelligence = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    8. getMerchantFinancials
 ═══════════════════════════════════════════════════════════ */
-const getMerchantFinancials = onCall(CF_OPTS, async (req) => {
+const getMerchantFinancials = onCall(CF_OPTS, _h.getMerchantFinancials = async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
@@ -965,7 +967,7 @@ const getMerchantFinancials = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    9. getMerchantBenchmark
 ═══════════════════════════════════════════════════════════ */
-const getMerchantBenchmark = onCall(CF_OPTS, async (req) => {
+const getMerchantBenchmark = onCall(CF_OPTS, _h.getMerchantBenchmark = async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
@@ -1028,7 +1030,7 @@ const getMerchantBenchmark = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    10. getMerchantAutomations
 ═══════════════════════════════════════════════════════════ */
-const getMerchantAutomations = onCall(CF_OPTS, async (req) => {
+const getMerchantAutomations = onCall(CF_OPTS, _h.getMerchantAutomations = async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
@@ -1057,7 +1059,7 @@ const getMerchantAutomations = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    11. saveMerchantAutomation
 ═══════════════════════════════════════════════════════════ */
-const saveMerchantAutomation = onCall(CF_OPTS, async (req) => {
+const saveMerchantAutomation = onCall(CF_OPTS, _h.saveMerchantAutomation = async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
@@ -1090,7 +1092,7 @@ const saveMerchantAutomation = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    12. toggleMerchantAutomation
 ═══════════════════════════════════════════════════════════ */
-const toggleMerchantAutomation = onCall(CF_OPTS, async (req) => {
+const toggleMerchantAutomation = onCall(CF_OPTS, _h.toggleMerchantAutomation = async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
@@ -1114,7 +1116,7 @@ const toggleMerchantAutomation = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    13. createMerchantCampaign
 ═══════════════════════════════════════════════════════════ */
-const createMerchantCampaign = onCall(CF_AI_OPTS, async (req) => {
+const createMerchantCampaign = onCall(CF_AI_OPTS, _h.createMerchantCampaign = async (req) => {
   _requireAuth(req);
   const uid             = req.auth.uid;
   const shopId          = _sanId(req.data?.shopId);
@@ -1159,7 +1161,7 @@ const createMerchantCampaign = onCall(CF_AI_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    14. getMerchantCampaigns
 ═══════════════════════════════════════════════════════════ */
-const getMerchantCampaigns = onCall(CF_OPTS, async (req) => {
+const getMerchantCampaigns = onCall(CF_OPTS, _h.getMerchantCampaigns = async (req) => {
   _requireAuth(req);
   const uid    = req.auth.uid;
   const shopId = _sanId(req.data?.shopId);
@@ -1177,7 +1179,7 @@ const getMerchantCampaigns = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    15. getMerchantAcademy
 ═══════════════════════════════════════════════════════════ */
-const getMerchantAcademy = onCall(CF_OPTS, async (req) => {
+const getMerchantAcademy = onCall(CF_OPTS, _h.getMerchantAcademy = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
 
@@ -1223,7 +1225,7 @@ const getMerchantAcademy = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    16. updateAcademyProgress
 ═══════════════════════════════════════════════════════════ */
-const updateAcademyProgress = onCall(CF_OPTS, async (req) => {
+const updateAcademyProgress = onCall(CF_OPTS, _h.updateAcademyProgress = async (req) => {
   _requireAuth(req);
   const uid      = req.auth.uid;
   const lessonId = _san(req.data?.lessonId || "", 20);
@@ -1276,7 +1278,7 @@ const updateAcademyProgress = onCall(CF_OPTS, async (req) => {
 /* ═══════════════════════════════════════════════════════════
    17. generateMerchantContent
 ═══════════════════════════════════════════════════════════ */
-const generateMerchantContent = onCall(CF_AI_OPTS, async (req) => {
+const generateMerchantContent = onCall(CF_AI_OPTS, _h.generateMerchantContent = async (req) => {
   _requireAuth(req);
   const uid         = req.auth.uid;
   const shopId      = _sanId(req.data?.shopId);
@@ -1320,6 +1322,7 @@ const generateMerchantContent = onCall(CF_AI_OPTS, async (req) => {
    EXPORTS
 ═══════════════════════════════════════════════════════════ */
 module.exports = {
+  _h,
   getMerchantDashboard,
   getMerchantHealthScore,
   getMerchantAICoach,

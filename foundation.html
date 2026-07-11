@@ -744,7 +744,10 @@ function _initCF() {
   return new Promise(r => {
     const t = setInterval(() => {
       if (window.firebaseFunctions && window.httpsCallable) {
-        clearInterval(t); _cf = n => window.httpsCallable(window.firebaseFunctions, n); r();
+        clearInterval(t);
+        var _dispatch = window.httpsCallable(window.firebaseFunctions, 'commerceDispatch');
+        _cf = n => (d) => _dispatch(Object.assign({op:n}, d||{}));
+        r();
       }
     }, 150);
     setTimeout(() => { clearInterval(t); r(); }, 10000);

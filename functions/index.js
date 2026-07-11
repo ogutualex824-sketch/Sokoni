@@ -8166,30 +8166,11 @@ exports.getSellerDisputes       = disputes.getSellerDisputes;
 exports.adminGetAllDisputes     = disputes.adminGetAllDisputes;
 exports.adminResolveDispute     = disputes.adminResolveDispute;
 
-/* ── Merchant Success & Growth Engine v2.0 ──────────────────────────────── */
-const merchantSuccess = require('./merchant-success');
-exports.getMerchantDashboard          = merchantSuccess.getMerchantDashboard;
-exports.getMerchantHealthScore        = merchantSuccess.getMerchantHealthScore;
-exports.getMerchantAICoach            = merchantSuccess.getMerchantAICoach;
-exports.getMerchantOpportunities      = merchantSuccess.getMerchantOpportunities;
-exports.getMerchantCRM                = merchantSuccess.getMerchantCRM;
-exports.updateCustomerNote            = merchantSuccess.updateCustomerNote;
-exports.getMerchantInventoryIntelligence = merchantSuccess.getMerchantInventoryIntelligence;
-exports.getMerchantFinancials         = merchantSuccess.getMerchantFinancials;
-exports.getMerchantBenchmark          = merchantSuccess.getMerchantBenchmark;
-exports.getMerchantAutomations        = merchantSuccess.getMerchantAutomations;
-exports.saveMerchantAutomation        = merchantSuccess.saveMerchantAutomation;
-exports.toggleMerchantAutomation      = merchantSuccess.toggleMerchantAutomation;
-exports.createMerchantCampaign        = merchantSuccess.createMerchantCampaign;
-exports.getMerchantCampaigns          = merchantSuccess.getMerchantCampaigns;
-exports.getMerchantAcademy            = merchantSuccess.getMerchantAcademy;
-exports.updateAcademyProgress         = merchantSuccess.updateAcademyProgress;
-exports.generateMerchantContent       = merchantSuccess.generateMerchantContent;
-// Backward-compat aliases — original names used by client code before module rename
-exports.getAICoachInsights       = merchantSuccess.getMerchantAICoach;
-exports.getMerchantBenchmarks    = merchantSuccess.getMerchantBenchmark;
-exports.completeMerchantLesson   = merchantSuccess.updateAcademyProgress;
-exports.createMerchantAutomation = merchantSuccess.saveMerchantAutomation;
+/* ── Commerce Dispatcher — mkt-ext + merchant-success + foundation + marketing-engine ── */
+/* DISPATCH CONSOLIDATION: 75 onCall CFs → 1 commerceDispatch */
+const commerceDispatcher = require('./commerce-dispatch');
+exports.commerceDispatch = commerceDispatcher.commerceDispatch;
+/* merchant-success: all 17 onCall — fully consolidated */
 
 /* ── Navigation & Intelligent Dispatch v2.0 ────────────────────────────── */
 const navigation = require('./navigation');
@@ -8283,26 +8264,9 @@ exports.setUserRole            = superAdmin.setUserRole;
 exports.suspendUser            = superAdmin.suspendUser;
 exports.sendPlatformBroadcast  = superAdmin.sendPlatformBroadcast;
 
-/* ── Foundation Charitable Giving Platform v1.0 ────────────────── */
+/* ── Foundation — consolidated into commerceDispatch above ── */
 const foundation = require('./foundation');
-exports.foundationGetStats           = foundation.foundationGetStats;
-exports.foundationDonate             = foundation.foundationDonate;
-exports.foundationCheckPayment       = foundation.foundationCheckPayment;
-exports.foundationDonateWallet       = foundation.foundationDonateWallet;
-exports.foundationGetMyDonations     = foundation.foundationGetMyDonations;
-exports.foundationGetMyApplications  = foundation.foundationGetMyApplications;
-exports.foundationSubmitApplication  = foundation.foundationSubmitApplication;
-exports.foundationManageRecurring    = foundation.foundationManageRecurring;
-exports.foundationGetMyRecurring     = foundation.foundationGetMyRecurring;
-exports.foundationGenerateReceipt    = foundation.foundationGenerateReceipt;
-exports.foundationEmailReceipt       = foundation.foundationEmailReceipt;
-exports.foundationVerifyReceipt      = foundation.foundationVerifyReceipt;
-exports.foundationGetCampaigns       = foundation.foundationGetCampaigns;
-exports.foundationGetTransparency    = foundation.foundationGetTransparency;
-exports.foundationAdminDashboard     = foundation.foundationAdminDashboard;
-exports.foundationAdminUpdateApp     = foundation.foundationAdminUpdateApp;
-exports.foundationAdminUpdateStats   = foundation.foundationAdminUpdateStats;
-exports.foundationScheduledRecurring = foundation.foundationScheduledRecurring;
+exports.foundationScheduledRecurring = foundation.foundationScheduledRecurring; /* scheduled */
 
 /* ── SOKONI Impact Enterprise Platform v1.0 ────────────────────── */
 const impact = require('./impact');
@@ -8710,20 +8674,9 @@ exports.resolveUnmatchedPayment       = paymentRecon.resolveUnmatchedPayment;
 exports.getMpesaReconciliationSummary = paymentRecon.getMpesaReconciliationSummary;
 exports.triggerManualReconciliation   = paymentRecon.triggerManualReconciliation;
 
-/* ── Marketing & Promotions Engine v1.0 ─────────────────────────────────── */
+/* ── Marketing Engine — consolidated into commerceDispatch above ── */
 const mktEngine = require('./marketing-engine');
-exports.createBundleDeal                = mktEngine.createBundleDeal;
-exports.getActiveBundleDeals            = mktEngine.getActiveBundleDeals;
-exports.createFlashSale                 = mktEngine.createFlashSale;
-exports.getFlashSalePrice               = mktEngine.getFlashSalePrice;
-exports.recordFlashSalePurchase         = mktEngine.recordFlashSalePurchase;
-exports.getCrossSellRecommendations     = mktEngine.getCrossSellRecommendations;
-exports.getUpsellRecommendations        = mktEngine.getUpsellRecommendations;
-exports.createMarketingCampaign         = mktEngine.createMarketingCampaign;
-exports.runABTest                       = mktEngine.runABTest;
-exports.recordABTestImpression          = mktEngine.recordABTestImpression;
-exports.applyCouponCode                 = mktEngine.applyCouponCode;
-exports.concludeExpiredFlashSales       = mktEngine.concludeExpiredFlashSales;
+exports.concludeExpiredFlashSales       = mktEngine.concludeExpiredFlashSales; /* scheduled */
 
 /* ── Business Health Score Engine v1.0 ──────────────────────────────────── */
 const bizHealth = require('./business-health-score');
@@ -9006,47 +8959,10 @@ exports.platformNotifyTransactionChange   = platformHub.platformNotifyTransactio
 exports.pcActivateHub                     = platformHub.pcActivateHub;
 exports.pcDeactivateHub                   = platformHub.pcDeactivateHub;
 
-/* ── Marketplace Extensions (Sprint 4.2) — Auctions, Rentals, Digital Products, Q&A, Wishlist, Pricing, SEO ── */
+/* ── Marketplace Extensions — consolidated into commerceDispatch above ── */
 const mktExt = require('./marketplace-extensions');
-/* Auctions */
-exports.auctionCreate          = mktExt.auctionCreate;
-exports.auctionBid             = mktExt.auctionBid;
-exports.auctionGet             = mktExt.auctionGet;
-exports.auctionList            = mktExt.auctionList;
-exports.auctionGetBids         = mktExt.auctionGetBids;
-exports.auctionWatch           = mktExt.auctionWatch;
-exports.auctionGetMyBids       = mktExt.auctionGetMyBids;
-exports.auctionCloseSweep      = mktExt.auctionCloseSweep;
-/* Rentals */
-exports.rentalProductCreate    = mktExt.rentalProductCreate;
-exports.rentalGetAvailability  = mktExt.rentalGetAvailability;
-exports.rentalBook             = mktExt.rentalBook;
-exports.rentalConfirm          = mktExt.rentalConfirm;
-exports.rentalComplete         = mktExt.rentalComplete;
-exports.rentalCancel           = mktExt.rentalCancel;
-exports.rentalList             = mktExt.rentalList;
-/* Digital Products */
-exports.digitalProductCreate        = mktExt.digitalProductCreate;
-exports.digitalProductPurchase      = mktExt.digitalProductPurchase;
-exports.digitalProductDownload      = mktExt.digitalProductDownload;
-exports.digitalProductGetMyLibrary  = mktExt.digitalProductGetMyLibrary;
-exports.digitalProductGetSales      = mktExt.digitalProductGetSales;
-/* Product Q&A */
-exports.productAskQuestion     = mktExt.productAskQuestion;
-exports.productAnswerQuestion  = mktExt.productAnswerQuestion;
-exports.productGetQA           = mktExt.productGetQA;
-exports.productVoteHelpful     = mktExt.productVoteHelpful;
-/* Wishlist */
-exports.wishlistAdd            = mktExt.wishlistAdd;
-exports.wishlistRemove         = mktExt.wishlistRemove;
-exports.wishlistGet            = mktExt.wishlistGet;
-/* Price History */
-exports.priceHistoryRecord     = mktExt.priceHistoryRecord;
-exports.priceHistoryGet        = mktExt.priceHistoryGet;
-/* SEO */
-exports.seoGetProductMeta      = mktExt.seoGetProductMeta;
-exports.seoGetShopMeta         = mktExt.seoGetShopMeta;
-exports.seoGetSitemap          = mktExt.seoGetSitemap;
+exports.auctionCloseSweep = mktExt.auctionCloseSweep; /* scheduled */
+exports.seoGetSitemap     = mktExt.seoGetSitemap;     /* onRequest */
 
 /* ── Finance OS Sprint 4.3 — Budgeting | Expenses | Recon | Tax | Statements | Petty Cash | Invoices ── */
 /* DISPATCH CONSOLIDATION: 37 onCall CFs → 1 financeSprintDispatch.

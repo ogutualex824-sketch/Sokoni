@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * SOKONI — Marketing & Promotions Engine v1.0
@@ -43,6 +43,8 @@ const db = admin.firestore();
 const F  = admin.firestore.FieldValue;
 
 const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
+
+const _h = {}; // handler registry
 const REGION        = 'us-central1';
 
 /** Options for mutating / sensitive functions */
@@ -104,7 +106,7 @@ const COUPON_TYPES   = ['percent', 'flat', 'shipping_free'];
 // 1. createBundleDeal
 // ---------------------------------------------------------------------------
 
-const createBundleDeal = onCall(OPT, async (req) => {
+const createBundleDeal = onCall(OPT, _h.createBundleDeal = async (req) => {
   const uid = _requireMerchant(req);
   const {
     merchantId,
@@ -190,7 +192,7 @@ const createBundleDeal = onCall(OPT, async (req) => {
 // 2. getActiveBundleDeals
 // ---------------------------------------------------------------------------
 
-const getActiveBundleDeals = onCall(OPT_READ, async (req) => {
+const getActiveBundleDeals = onCall(OPT_READ, _h.getActiveBundleDeals = async (req) => {
   const { merchantId } = req.data || {};
   if (!merchantId) _err('merchantId is required.');
 
@@ -214,7 +216,7 @@ const getActiveBundleDeals = onCall(OPT_READ, async (req) => {
 // 3. createFlashSale
 // ---------------------------------------------------------------------------
 
-const createFlashSale = onCall(OPT, async (req) => {
+const createFlashSale = onCall(OPT, _h.createFlashSale = async (req) => {
   const uid = _requireMerchant(req);
   const {
     merchantId,
@@ -276,7 +278,7 @@ const createFlashSale = onCall(OPT, async (req) => {
 // 4. getFlashSalePrice
 // ---------------------------------------------------------------------------
 
-const getFlashSalePrice = onCall(OPT_READ, async (req) => {
+const getFlashSalePrice = onCall(OPT_READ, _h.getFlashSalePrice = async (req) => {
   const { productId, merchantId } = req.data || {};
   if (!productId)  _err('productId is required.');
   if (!merchantId) _err('merchantId is required.');
@@ -314,7 +316,7 @@ const getFlashSalePrice = onCall(OPT_READ, async (req) => {
 // 5. recordFlashSalePurchase
 // ---------------------------------------------------------------------------
 
-const recordFlashSalePurchase = onCall(OPT, async (req) => {
+const recordFlashSalePurchase = onCall(OPT, _h.recordFlashSalePurchase = async (req) => {
   _requireAuth(req);
   const { saleId, qty } = req.data || {};
   if (!saleId)                                   _err('saleId is required.');
@@ -351,7 +353,7 @@ const recordFlashSalePurchase = onCall(OPT, async (req) => {
 // 6. getCrossSellRecommendations
 // ---------------------------------------------------------------------------
 
-const getCrossSellRecommendations = onCall(OPT_AI, async (req) => {
+const getCrossSellRecommendations = onCall(OPT_AI, _h.getCrossSellRecommendations = async (req) => {
   const { productId, merchantId, cartItems = [], limit = 5 } = req.data || {};
   if (!productId)  _err('productId is required.');
   if (!merchantId) _err('merchantId is required.');
@@ -471,7 +473,7 @@ Example: ["Product A","Product B","Product C"]`,
 // 7. getUpsellRecommendations
 // ---------------------------------------------------------------------------
 
-const getUpsellRecommendations = onCall(OPT_AI, async (req) => {
+const getUpsellRecommendations = onCall(OPT_AI, _h.getUpsellRecommendations = async (req) => {
   const { productId, merchantId, currentPrice, limit = 3 } = req.data || {};
   if (!productId)                                 _err('productId is required.');
   if (!merchantId)                                _err('merchantId is required.');
@@ -588,7 +590,7 @@ Return ONLY a JSON array of product name strings. No explanation.`,
 // 8. createMarketingCampaign
 // ---------------------------------------------------------------------------
 
-const createMarketingCampaign = onCall(OPT, async (req) => {
+const createMarketingCampaign = onCall(OPT, _h.createMarketingCampaign = async (req) => {
   const uid = _requireMerchant(req);
   const {
     merchantId,
@@ -639,7 +641,7 @@ const createMarketingCampaign = onCall(OPT, async (req) => {
 // 9. runABTest
 // ---------------------------------------------------------------------------
 
-const runABTest = onCall(OPT, async (req) => {
+const runABTest = onCall(OPT, _h.runABTest = async (req) => {
   const uid = _requireMerchant(req);
   const {
     merchantId,
@@ -700,7 +702,7 @@ const runABTest = onCall(OPT, async (req) => {
 // 10. recordABTestImpression
 // ---------------------------------------------------------------------------
 
-const recordABTestImpression = onCall(OPT_READ, async (req) => {
+const recordABTestImpression = onCall(OPT_READ, _h.recordABTestImpression = async (req) => {
   const { testId, variant, converted = false } = req.data || {};
   if (!testId)                       _err('testId is required.');
   if (!['A', 'B'].includes(variant)) _err("variant must be 'A' or 'B'.");
@@ -759,7 +761,7 @@ const recordABTestImpression = onCall(OPT_READ, async (req) => {
 // 11. applyCouponCode
 // ---------------------------------------------------------------------------
 
-const applyCouponCode = onCall(OPT, async (req) => {
+const applyCouponCode = onCall(OPT, _h.applyCouponCode = async (req) => {
   const uid = _requireAuth(req);
   const {
     code,
@@ -911,6 +913,7 @@ const concludeExpiredFlashSales = onSchedule(
 // ---------------------------------------------------------------------------
 
 module.exports = {
+  _h,
   createBundleDeal,
   getActiveBundleDeals,
   createFlashSale,

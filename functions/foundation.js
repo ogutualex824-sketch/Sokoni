@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    SOKONI Foundation — Cloud Functions
    Charitable Giving Platform Backend
    16 Cloud Functions covering:
@@ -20,6 +20,8 @@ const fdb = () => admin.firestore();
 
 const INTASEND_PRIVATE_KEY = defineSecret('INTASEND_PRIVATE_KEY');
 const SENDGRID_API_KEY     = defineSecret('SENDGRID_API_KEY');
+
+exports._h = {}; // handler registry — consumed by commerce-dispatch.js
 
 /* ── helpers ─────────────────────────────────────────────── */
 const _now   = () => admin.firestore().FieldValue.serverTimestamp();
@@ -199,7 +201,7 @@ h2{font-size:22px;font-weight:900;margin:0 0 28px;color:white;text-align:center;
 ══════════════════════════════════════════════════════════ */
 exports.foundationGetStats = onCall(
   { timeoutSeconds: 15, enforceAppCheck: true },
-  async () => {
+  exports._h.foundationGetStats = async (req) => {
     const snap = await fdb().collection('foundationStats').doc('current').get();
     if (snap.exists) return { ok: true, stats: snap.data() };
 
@@ -222,7 +224,7 @@ exports.foundationGetStats = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationDonate = onCall(
   { timeoutSeconds: 40, enforceAppCheck: true, secrets: [INTASEND_PRIVATE_KEY] },
-  async (request) => {
+  exports._h.foundationDonate = async (req) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in to donate.');
 
     const uid = request.auth.uid;
@@ -281,7 +283,7 @@ exports.foundationDonate = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationCheckPayment = onCall(
   { timeoutSeconds: 20, enforceAppCheck: true, secrets: [INTASEND_PRIVATE_KEY] },
-  async (request) => {
+  exports._h.foundationCheckPayment = async (req) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const uid = request.auth.uid;
     const { donationId } = request.data || {};
@@ -357,7 +359,7 @@ exports.foundationCheckPayment = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationDonateWallet = onCall(
   { timeoutSeconds: 20, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationDonateWallet = async (req) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const uid = request.auth.uid;
     const { amount, destination, displayName, anonymous, frequency } = request.data || {};
@@ -410,7 +412,7 @@ exports.foundationDonateWallet = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationGetMyDonations = onCall(
   { timeoutSeconds: 15, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationGetMyDonations = async (req) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const uid   = request.auth.uid;
     const limit = Math.min(Number(request.data?.limit) || 20, 50);
@@ -433,7 +435,7 @@ exports.foundationGetMyDonations = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationGetMyApplications = onCall(
   { timeoutSeconds: 15, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationGetMyApplications = async (req) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const uid  = request.auth.uid;
     const snap = await fdb().collection('foundationApplications')
@@ -447,7 +449,7 @@ exports.foundationGetMyApplications = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationSubmitApplication = onCall(
   { timeoutSeconds: 20, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationSubmitApplication = async (req) => {
     /* Rate limit by IP/uid: 3 applications per 24 hours */
     const uid = _uid(request.auth) || 'anon';
     const ok  = await _rateLimit(`fn_app_${uid}`, 3, 86400000);
@@ -485,7 +487,7 @@ exports.foundationSubmitApplication = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationManageRecurring = onCall(
   { timeoutSeconds: 15, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationManageRecurring = async (req) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const uid = request.auth.uid;
     const { recurringId, action, newAmount } = request.data || {};
@@ -518,7 +520,7 @@ exports.foundationManageRecurring = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationGetMyRecurring = onCall(
   { timeoutSeconds: 15, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationGetMyRecurring = async (req) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const uid  = request.auth.uid;
     const snap = await fdb().collection('foundationRecurring')
@@ -532,7 +534,7 @@ exports.foundationGetMyRecurring = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationGenerateReceipt = onCall(
   { timeoutSeconds: 15, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationGenerateReceipt = async (req) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const uid  = request.auth.uid;
     const { donationId } = request.data || {};
@@ -554,7 +556,7 @@ exports.foundationGenerateReceipt = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationEmailReceipt = onCall(
   { timeoutSeconds: 20, enforceAppCheck: true, secrets: [SENDGRID_API_KEY] },
-  async (request) => {
+  exports._h.foundationEmailReceipt = async (req) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
     const uid = request.auth.uid;
     const { donationId, email } = request.data || {};
@@ -582,7 +584,7 @@ exports.foundationEmailReceipt = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationVerifyReceipt = onCall(
   { timeoutSeconds: 15, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationVerifyReceipt = async (req) => {
     const { verifyCode } = request.data || {};
     if (!verifyCode) throw new HttpsError('invalid-argument', 'verifyCode required.');
 
@@ -609,7 +611,7 @@ exports.foundationVerifyReceipt = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationGetCampaigns = onCall(
   { timeoutSeconds: 15, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationGetCampaigns = async (req) => {
     const { category, limit: rawLimit, status: statusFilter } = request.data || {};
     const lim = Math.min(Number(rawLimit) || 12, 50);
 
@@ -642,7 +644,7 @@ exports.foundationGetCampaigns = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationGetTransparency = onCall(
   { timeoutSeconds: 20, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationGetTransparency = async (req) => {
     const [statsSnap, recentSnap] = await Promise.all([
       fdb().collection('foundationStats').doc('current').get(),
       fdb().collection('foundationDonations')
@@ -670,7 +672,7 @@ exports.foundationGetTransparency = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationAdminDashboard = onCall(
   { timeoutSeconds: 30, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationAdminDashboard = async (req) => {
     if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
 
     const [statsSnap, donSnap, appSnap, recurSnap] = await Promise.all([
@@ -706,7 +708,7 @@ exports.foundationAdminDashboard = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationAdminUpdateApp = onCall(
   { timeoutSeconds: 15, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationAdminUpdateApp = async (req) => {
     if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
     const { appId, status, notes } = request.data || {};
     if (!appId || !['approved','rejected','waitlisted','interview'].includes(status)) {
@@ -727,7 +729,7 @@ exports.foundationAdminUpdateApp = onCall(
 ══════════════════════════════════════════════════════════ */
 exports.foundationAdminUpdateStats = onCall(
   { timeoutSeconds: 15, enforceAppCheck: true },
-  async (request) => {
+  exports._h.foundationAdminUpdateStats = async (req) => {
     if (!_isAdmin(request.auth)) throw new HttpsError('permission-denied', 'Admin only.');
     const allowed = ['youthTrained','grantsIssued','countiesReached','vendorsDigitised',
                      'jobsCreated','beneficiaries','treesPlanted','mealsProvided',

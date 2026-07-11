@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <script src="security.js"></script>
@@ -272,7 +272,7 @@ document.getElementById('cStart').min = nowLocal;
 document.getElementById('cStart').value = nowLocal;
 document.getElementById('cEnd').min = nowLocal;
 
-function _cf(n) { return firebase.functions().httpsCallable(n); }
+var _cfDisp=null; function _cf(n){if(!_cfDisp)_cfDisp=firebase.functions().httpsCallable('commerceDispatch');return(d)=>_cfDisp(Object.assign({op:n},d||{}));}
 function _esc(s) {
   if (s == null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');

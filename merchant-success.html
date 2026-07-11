@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
   <script src="security.js"></script>
@@ -948,8 +948,8 @@ window.MSEngine = (function () {
 
   /* ── Firebase callable ── */
   async function _call(name, data) {
-    var fn = firebase.functions().httpsCallable(name);
-    var r = await fn(data || {});
+    var fn = firebase.functions().httpsCallable('commerceDispatch');
+    var r = await fn(Object.assign({ op: name }, data || {}));
     return r.data;
   }
 

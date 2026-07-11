@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * SOKONI — Marketplace Extensions Engine (Sprint 4.2)
  * Auctions • Rentals • Digital Products • Q&A • Wishlist • Price History • SEO
@@ -47,10 +47,12 @@ function _minIncrement(currentBid) {
   return 1000;
 }
 
+exports._h = {}; // handler registry — consumed by commerce-dispatch.js
+
 // ─── AUCTIONS ────────────────────────────────────────────────────────────────
 // Collections: auctions/{id}, auctionBids/{id}
 
-exports.auctionCreate = onCall({ enforceAppCheck: true }, async (req) => {
+exports.auctionCreate = onCall({ enforceAppCheck: true }, exports._h.auctionCreate = async (req) => {
   const {
     shopId, title, description, images,
     startingPrice, reservePrice,
@@ -91,7 +93,7 @@ exports.auctionCreate = onCall({ enforceAppCheck: true }, async (req) => {
   return { auctionId: id };
 });
 
-exports.auctionBid = onCall({ enforceAppCheck: true }, async (req) => {
+exports.auctionBid = onCall({ enforceAppCheck: true }, exports._h.auctionBid = async (req) => {
   const { auctionId, amount } = req.data;
   await _assertAuth(req.auth);
   if (!auctionId || !amount || amount <= 0) throw new Error('invalid-input');
@@ -169,7 +171,7 @@ exports.auctionBid = onCall({ enforceAppCheck: true }, async (req) => {
   };
 });
 
-exports.auctionGet = onCall({ enforceAppCheck: true }, async (req) => {
+exports.auctionGet = onCall({ enforceAppCheck: true }, exports._h.auctionGet = async (req) => {
   const { auctionId } = req.data;
   await _assertAuth(req.auth);
   const snap = await _db().collection('auctions').doc(auctionId).get();
@@ -183,7 +185,7 @@ exports.auctionGet = onCall({ enforceAppCheck: true }, async (req) => {
   return { auction };
 });
 
-exports.auctionList = onCall({ enforceAppCheck: true }, async (req) => {
+exports.auctionList = onCall({ enforceAppCheck: true }, exports._h.auctionList = async (req) => {
   const { status, category, shopId, limit: lim } = req.data;
   await _assertAuth(req.auth);
   const maxResults = Math.min(lim || 40, 100);
@@ -220,7 +222,7 @@ exports.auctionList = onCall({ enforceAppCheck: true }, async (req) => {
   return { auctions };
 });
 
-exports.auctionGetBids = onCall({ enforceAppCheck: true }, async (req) => {
+exports.auctionGetBids = onCall({ enforceAppCheck: true }, exports._h.auctionGetBids = async (req) => {
   const { auctionId } = req.data;
   await _assertAuth(req.auth);
   const snap = await _db().collection('auctionBids')
@@ -234,7 +236,7 @@ exports.auctionGetBids = onCall({ enforceAppCheck: true }, async (req) => {
   return { bids };
 });
 
-exports.auctionWatch = onCall({ enforceAppCheck: true }, async (req) => {
+exports.auctionWatch = onCall({ enforceAppCheck: true }, exports._h.auctionWatch = async (req) => {
   const { auctionId, watching } = req.data;
   await _assertAuth(req.auth);
   const ref = _db().collection('auctionWatchers').doc(`${auctionId}_${req.auth.uid}`);
@@ -246,7 +248,7 @@ exports.auctionWatch = onCall({ enforceAppCheck: true }, async (req) => {
   return { success: true };
 });
 
-exports.auctionGetMyBids = onCall({ enforceAppCheck: true }, async (req) => {
+exports.auctionGetMyBids = onCall({ enforceAppCheck: true }, exports._h.auctionGetMyBids = async (req) => {
   await _assertAuth(req.auth);
   const snap = await _db().collection('auctionBids')
     .where('bidderId', '==', req.auth.uid).limit(50).get();
@@ -304,7 +306,7 @@ exports.auctionCloseSweep = onSchedule('every 5 minutes', async () => {
 // ─── RENTALS ─────────────────────────────────────────────────────────────────
 // Collections: rentalProducts/{id}, rentalBookings/{id}
 
-exports.rentalProductCreate = onCall({ enforceAppCheck: true }, async (req) => {
+exports.rentalProductCreate = onCall({ enforceAppCheck: true }, exports._h.rentalProductCreate = async (req) => {
   const {
     shopId, title, description, images, category,
     pricingType, hourlyRate, dailyRate, weeklyRate, monthlyRate,
@@ -340,7 +342,7 @@ exports.rentalProductCreate = onCall({ enforceAppCheck: true }, async (req) => {
   return { rentalProductId: id };
 });
 
-exports.rentalGetAvailability = onCall({ enforceAppCheck: true }, async (req) => {
+exports.rentalGetAvailability = onCall({ enforceAppCheck: true }, exports._h.rentalGetAvailability = async (req) => {
   const { rentalProductId, fromDate, toDate } = req.data;
   await _assertAuth(req.auth);
   const snap = await _db().collection('rentalBookings')
@@ -357,7 +359,7 @@ exports.rentalGetAvailability = onCall({ enforceAppCheck: true }, async (req) =>
   return { unavailablePeriods: bookings };
 });
 
-exports.rentalBook = onCall({ enforceAppCheck: true }, async (req) => {
+exports.rentalBook = onCall({ enforceAppCheck: true }, exports._h.rentalBook = async (req) => {
   const {
     rentalProductId, startDate, endDate, durationUnit,
     customerName, customerPhone, paymentMethod, notes,
@@ -423,7 +425,7 @@ exports.rentalBook = onCall({ enforceAppCheck: true }, async (req) => {
   return { bookingId: id, totalAmount, depositAmount };
 });
 
-exports.rentalConfirm = onCall({ enforceAppCheck: true }, async (req) => {
+exports.rentalConfirm = onCall({ enforceAppCheck: true }, exports._h.rentalConfirm = async (req) => {
   const { bookingId, shopId } = req.data;
   await _assertSeller(req.auth, shopId);
   const ref = _db().collection('rentalBookings').doc(bookingId);
@@ -435,7 +437,7 @@ exports.rentalConfirm = onCall({ enforceAppCheck: true }, async (req) => {
   return { success: true };
 });
 
-exports.rentalComplete = onCall({ enforceAppCheck: true }, async (req) => {
+exports.rentalComplete = onCall({ enforceAppCheck: true }, exports._h.rentalComplete = async (req) => {
   const { bookingId, shopId, notes } = req.data;
   await _assertSeller(req.auth, shopId);
   const ref = _db().collection('rentalBookings').doc(bookingId);
@@ -448,7 +450,7 @@ exports.rentalComplete = onCall({ enforceAppCheck: true }, async (req) => {
   return { success: true };
 });
 
-exports.rentalCancel = onCall({ enforceAppCheck: true }, async (req) => {
+exports.rentalCancel = onCall({ enforceAppCheck: true }, exports._h.rentalCancel = async (req) => {
   const { bookingId, reason } = req.data;
   await _assertAuth(req.auth);
   const ref = _db().collection('rentalBookings').doc(bookingId);
@@ -466,7 +468,7 @@ exports.rentalCancel = onCall({ enforceAppCheck: true }, async (req) => {
   return { success: true };
 });
 
-exports.rentalList = onCall({ enforceAppCheck: true }, async (req) => {
+exports.rentalList = onCall({ enforceAppCheck: true }, exports._h.rentalList = async (req) => {
   const { shopId, buyerId, status } = req.data;
   await _assertAuth(req.auth);
   let snap;
@@ -492,7 +494,7 @@ exports.rentalList = onCall({ enforceAppCheck: true }, async (req) => {
 // Files stored in Firebase Storage: digitalProducts/{productId}/{filename}
 // Signed download URLs generated per-request (15 min expiry)
 
-exports.digitalProductCreate = onCall({ enforceAppCheck: true }, async (req) => {
+exports.digitalProductCreate = onCall({ enforceAppCheck: true }, exports._h.digitalProductCreate = async (req) => {
   const {
     shopId, title, description, previewUrl, category,
     price, downloadLimit, licenseType, version, fileType, fileSize, storagePath,
@@ -535,7 +537,7 @@ exports.digitalProductCreate = onCall({ enforceAppCheck: true }, async (req) => 
   return { productId: id };
 });
 
-exports.digitalProductPurchase = onCall({ enforceAppCheck: true }, async (req) => {
+exports.digitalProductPurchase = onCall({ enforceAppCheck: true }, exports._h.digitalProductPurchase = async (req) => {
   const { productId, paymentMethod } = req.data;
   await _assertAuth(req.auth);
 
@@ -579,7 +581,7 @@ exports.digitalProductPurchase = onCall({ enforceAppCheck: true }, async (req) =
   return { purchaseId, licenseKey, downloadLimit: product.downloadLimit };
 });
 
-exports.digitalProductDownload = onCall({ enforceAppCheck: true }, async (req) => {
+exports.digitalProductDownload = onCall({ enforceAppCheck: true }, exports._h.digitalProductDownload = async (req) => {
   const { purchaseId } = req.data;
   await _assertAuth(req.auth);
 
@@ -608,7 +610,7 @@ exports.digitalProductDownload = onCall({ enforceAppCheck: true }, async (req) =
   });
 });
 
-exports.digitalProductGetMyLibrary = onCall({ enforceAppCheck: true }, async (req) => {
+exports.digitalProductGetMyLibrary = onCall({ enforceAppCheck: true }, exports._h.digitalProductGetMyLibrary = async (req) => {
   await _assertAuth(req.auth);
   const snap = await _db().collection('digitalPurchases')
     .where('buyerId', '==', req.auth.uid).limit(100).get();
@@ -634,7 +636,7 @@ exports.digitalProductGetMyLibrary = onCall({ enforceAppCheck: true }, async (re
   return { purchases };
 });
 
-exports.digitalProductGetSales = onCall({ enforceAppCheck: true }, async (req) => {
+exports.digitalProductGetSales = onCall({ enforceAppCheck: true }, exports._h.digitalProductGetSales = async (req) => {
   const { shopId } = req.data;
   await _assertSeller(req.auth, shopId);
   const snap = await _db().collection('digitalPurchases')
@@ -652,7 +654,7 @@ exports.digitalProductGetSales = onCall({ enforceAppCheck: true }, async (req) =
 // ─── PRODUCT Q&A ─────────────────────────────────────────────────────────────
 // Collections: productQuestions/{id}  (answers embedded in array)
 
-exports.productAskQuestion = onCall({ enforceAppCheck: true }, async (req) => {
+exports.productAskQuestion = onCall({ enforceAppCheck: true }, exports._h.productAskQuestion = async (req) => {
   const { productId, shopId, question } = req.data;
   await _assertAuth(req.auth);
   if (!productId || !question || question.length < 5) throw new Error('invalid-question');
@@ -673,7 +675,7 @@ exports.productAskQuestion = onCall({ enforceAppCheck: true }, async (req) => {
   return { questionId: id };
 });
 
-exports.productAnswerQuestion = onCall({ enforceAppCheck: true }, async (req) => {
+exports.productAnswerQuestion = onCall({ enforceAppCheck: true }, exports._h.productAnswerQuestion = async (req) => {
   const { questionId, answer, shopId } = req.data;
   await _assertAuth(req.auth);
   if (!answer || answer.length < 5) throw new Error('invalid-answer');
@@ -706,7 +708,7 @@ exports.productAnswerQuestion = onCall({ enforceAppCheck: true }, async (req) =>
   return { success: true };
 });
 
-exports.productGetQA = onCall({ enforceAppCheck: true }, async (req) => {
+exports.productGetQA = onCall({ enforceAppCheck: true }, exports._h.productGetQA = async (req) => {
   const { productId, limit: lim } = req.data;
   await _assertAuth(req.auth);
   const snap = await _db().collection('productQuestions')
@@ -720,7 +722,7 @@ exports.productGetQA = onCall({ enforceAppCheck: true }, async (req) => {
   return { questions };
 });
 
-exports.productVoteHelpful = onCall({ enforceAppCheck: true }, async (req) => {
+exports.productVoteHelpful = onCall({ enforceAppCheck: true }, exports._h.productVoteHelpful = async (req) => {
   const { questionId } = req.data;
   await _assertAuth(req.auth);
   const ref = _db().collection('productQuestions').doc(questionId);
@@ -733,7 +735,7 @@ exports.productVoteHelpful = onCall({ enforceAppCheck: true }, async (req) => {
 // ─── WISHLIST ─────────────────────────────────────────────────────────────────
 // Collections: wishlistItems/{uid_productId}  (single-field uid query)
 
-exports.wishlistAdd = onCall({ enforceAppCheck: true }, async (req) => {
+exports.wishlistAdd = onCall({ enforceAppCheck: true }, exports._h.wishlistAdd = async (req) => {
   const { productId, shopId, name, price, image } = req.data;
   await _assertAuth(req.auth);
   if (!productId) throw new Error('productId-required');
@@ -750,14 +752,14 @@ exports.wishlistAdd = onCall({ enforceAppCheck: true }, async (req) => {
   return { success: true };
 });
 
-exports.wishlistRemove = onCall({ enforceAppCheck: true }, async (req) => {
+exports.wishlistRemove = onCall({ enforceAppCheck: true }, exports._h.wishlistRemove = async (req) => {
   const { productId } = req.data;
   await _assertAuth(req.auth);
   await _db().collection('wishlistItems').doc(`${req.auth.uid}_${productId}`).delete();
   return { success: true };
 });
 
-exports.wishlistGet = onCall({ enforceAppCheck: true }, async (req) => {
+exports.wishlistGet = onCall({ enforceAppCheck: true }, exports._h.wishlistGet = async (req) => {
   await _assertAuth(req.auth);
   const snap = await _db().collection('wishlistItems')
     .where('uid', '==', req.auth.uid).limit(200).get();
@@ -774,7 +776,7 @@ exports.wishlistGet = onCall({ enforceAppCheck: true }, async (req) => {
 // Collections: priceHistoryLog/{id}   (query by productId — single-field)
 // Also called from digitalProductCreate / any price update
 
-exports.priceHistoryRecord = onCall({ enforceAppCheck: true }, async (req) => {
+exports.priceHistoryRecord = onCall({ enforceAppCheck: true }, exports._h.priceHistoryRecord = async (req) => {
   const { productId, shopId, oldPrice, newPrice } = req.data;
   await _assertSeller(req.auth, shopId);
   if (!productId || newPrice == null) throw new Error('invalid-input');
@@ -790,7 +792,7 @@ exports.priceHistoryRecord = onCall({ enforceAppCheck: true }, async (req) => {
   return { success: true };
 });
 
-exports.priceHistoryGet = onCall({ enforceAppCheck: true }, async (req) => {
+exports.priceHistoryGet = onCall({ enforceAppCheck: true }, exports._h.priceHistoryGet = async (req) => {
   const { productId, limit: lim } = req.data;
   await _assertAuth(req.auth);
   const snap = await _db().collection('priceHistoryLog')
@@ -806,7 +808,7 @@ exports.priceHistoryGet = onCall({ enforceAppCheck: true }, async (req) => {
 
 // ─── SEO ─────────────────────────────────────────────────────────────────────
 
-exports.seoGetProductMeta = onCall({ enforceAppCheck: true }, async (req) => {
+exports.seoGetProductMeta = onCall({ enforceAppCheck: true }, exports._h.seoGetProductMeta = async (req) => {
   const { productId } = req.data;
   await _assertAuth(req.auth);
   // Try products collection, then digitalProducts, then rentalProducts
@@ -827,7 +829,7 @@ exports.seoGetProductMeta = onCall({ enforceAppCheck: true }, async (req) => {
   throw new Error('product-not-found');
 });
 
-exports.seoGetShopMeta = onCall({ enforceAppCheck: true }, async (req) => {
+exports.seoGetShopMeta = onCall({ enforceAppCheck: true }, exports._h.seoGetShopMeta = async (req) => {
   const { shopId } = req.data;
   await _assertAuth(req.auth);
   const snap = await _db().collection('shops').doc(shopId).get();
