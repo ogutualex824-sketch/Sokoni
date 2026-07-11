@@ -1,4 +1,34 @@
-﻿## [2026-07-11] — Dispatcher Race-Condition Hardening v1.0
+﻿## [2026-07-11] — Security Identity Hardening v1.0
+
+### Summary
+Three critical security bugs fixed in the TOTP MFA and WebAuthn passkey system. TOTP QR codes now use the RFC 4648 Base32 encoding required by all authenticator apps (Google Authenticator, Authy, etc.). Passkey authentication now performs real cryptographic signature verification using P-256/ES256 (implemented via a minimal built-in CBOR decoder — no new npm dependencies). TOTP brute-force is now blocked by a 5-attempt / 30-minute lockout on both enrollment and step-up verification.
+
+### Files Affected
+- `functions/security-identity.js` — 227 lines added, 52 removed:
+  - `_encodeBase32()` — RFC 4648 Base32 encoder for TOTP secrets
+  - `_cborRead()` — minimal CBOR decoder (uint/nint/bstr/tstr/array/map)
+  - `_extractCOSEPublicKey()` — parses attestationObject, validates rpIdHash, extracts P-256 x/y
+  - `_P256_SPKI_PREFIX` — fixed DER header for P-256 SubjectPublicKeyInfo reconstruction
+  - `_verifyES256Signature()` — verifies authenticatorData||SHA256(clientDataJSON) against ECDSA sig
+  - `initiateTOTPEnrollment` — QR URI now uses Base32 secret; returns Base32 to client
+  - `verifyTOTPEnrollment` — rate-limit check added (5 attempts → 30-min lock)
+  - `verifyTOTP` — lockout check + failure counter + reset on success
+  - `verifyPasskeyRegistration` — extracts P-256 coords, stores `{x, y, alg}`, validates credentialId
+  - `verifyPasskeyAuthentication` — signature verified before counter check; legacy creds rejected
+
+### Security Changes
+- TOTP codes in QR are now cryptographically correct (Base32)
+- Passkey auth now enforces real ECDSA signature verification (was a no-op)
+- TOTP brute-force window closed: 5 failures lock account for 30 minutes
+- rpIdHash validated on every passkey registration — prevents cross-origin credential abuse
+
+### Breaking Changes
+- **Passkeys**: All passkeys registered before this deploy stored raw attestationObject (not usable for verification) and must be re-registered. Users will see a 'failed-precondition' error directing them to re-register.
+- **TOTP pending enrollments**: Any QR codes scanned before this deploy used Base64 and will not work. Users mid-enrollment (scanned but not verified yet) must restart enrollment. Confirmed enrollments (already verified and stored) are **unaffected** — verification decodes the stored Base64 key correctly.
+
+---
+
+## [2026-07-11] — Dispatcher Race-Condition Hardening v1.0
 
 ### Summary
 Production traffic hardening across all six Services domain modules and all four CF dispatchers. Eliminates double-bookings, duplicate payrolls, duplicate enquiries/viewings, and double-approval vulnerabilities using Firestore transactions and deterministic document IDs. Adds `enforceAppCheck: true` to all Jobs CF endpoints to block bot spam. All four dispatchers gain `_merge()` collision detection and structured error logging with op name.
