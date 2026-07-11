@@ -867,11 +867,10 @@ exports.onOrderStatusChanged = onDocumentUpdated(
   }
 );
 
-/* ═══════════════════════════════════════════════════════════════
-   17. onBookingStatusChanged
-   Posts a system message whenever a service booking status changes.
-═══════════════════════════════════════════════════════════════ */
-exports.onBookingStatusChanged = onDocumentUpdated(
+/* onBookingStatusChanged — temporarily removed from exports so Firebase can
+   delete the stale GCP HTTPS version. Will be re-added after clean deploy.
+   The handler is kept below so it is not lost.
+const _onBookingStatusChangedHandler = onDocumentUpdated(
   { document: 'bookings/{bookingId}', region: REGION, timeoutSeconds: 30 },
   async (event) => {
     const before = event.data?.before?.data();
@@ -884,7 +883,7 @@ exports.onBookingStatusChanged = onDocumentUpdated(
       .catch(e => logger.warn('[messages] onBookingStatusChanged', { error: e.message }));
     return null;
   }
-);
+); */
 
 /* ═══════════════════════════════════════════════════════════════
    18. onFoodOrderStatusChanged
