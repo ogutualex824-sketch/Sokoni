@@ -6,13 +6,27 @@
 
 ---
 
-## Progress
+## Progress (FINAL)
 
-| Metric | Start | Now |
-|--------|-------|-----|
-| Cloud Run services | 1512 | **1390** (−122) |
-| Orphans | 482 | **355** |
-| Dispatchers deployed | 3 (delivery only) | **8** (+loyalty, finance, admin, redis, booking) |
+| Metric | Start | Final |
+|--------|-------|-------|
+| Cloud Run services | 1512 | **1239** (−273, −18%) |
+| Orphans | 482 | **199** (283 reclaimed) |
+| Dispatchers deployed | 3 (delivery only) | **13 — ALL live** |
+
+**Every consolidation dispatcher is now deployed.** Remaining 199 orphans = **~147 Firestore triggers + ~52 email-notification triggers/webhooks/scheduled** (correctly kept — not dispatcher-superseded) + **~15 genuine onCall orphans with mismatched names** (no dispatcher covers them → manual review, per safety rule).
+
+### Round 2 (this session, continued)
+| Subsystem | Orphans deleted | Dispatcher | Notes |
+|-----------|-----------------|------------|-------|
+| Messages | 10 | `messagesDispatch` ✅ | incl. the 4 admin-chat ops excluded from Admin |
+| Commerce | 34 | `commerceDispatch` ✅ | foundation/merchant/marketing/marketplace |
+| Analytics | 0 | `analyticsDispatch` ✅ | no orphans — dispatcher restored |
+| Logistics+ | 0 | `logisticsPlusDispatch` ✅ | no orphans — dispatcher restored |
+| Services | 0 | `servicesDispatch` ✅ | no orphans — dispatcher restored |
+| **POS** | **115** | `smartPosDispatch` ✅ | **client migration completed first** (7 call sites, 5 files) then reclaimed |
+
+**POS migration (Track B):** migrated `pos.html`, `partner-portal.html`, `procurement.html`, `pos-analytics-live.js`, `sokoni-merchant-success.js` to route smartPos ops through `smartPosDispatch` (commit `eff7903`); deployed dispatcher + hosting; verified zero direct callers; then deleted 115 orphans — zero downtime.
 
 ## Subsystems reclaimed ✅
 
