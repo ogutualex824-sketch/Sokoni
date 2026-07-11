@@ -433,7 +433,8 @@ exports.processPendingPayouts = onSchedule(
 
       /* ── MANDATORY duplicate-payout protection ──────────────────────────
          Orders settled via NATIVE SPLIT are paid directly by the payment
-         gateway (seller net → seller account, commission → Bravilex) and MUST
+         gateway (seller net → seller account, commission → platform collection
+         account) and MUST
          NEVER enter the B2C payout queue. Split-settled orders normally never
          create a payout doc at all; this is the defense-in-depth guard that
          quarantines any that slip through, guaranteeing exactly one settlement
