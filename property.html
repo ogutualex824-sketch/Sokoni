@@ -554,6 +554,18 @@
 
   loadProps();
 </script>
+<!-- ── Are You a Landlord, Agent or Developer? ── -->
+<div style="padding:0 16px 32px;">
+  <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(0,170,255,0.2);border-radius:18px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <span style="font-size:40px;flex-shrink:0;">🏘️</span>
+    <div style="flex:1;min-width:180px;">
+      <div style="font-size:15px;font-weight:900;color:white;margin-bottom:3px;">Landlord, Property Agent or Developer?</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.6;">List your properties on SOKONI for free — apartments, houses, commercial spaces, land and more. Reach thousands of Kenyan tenants and buyers.</div>
+    </div>
+    <button type="button" onclick="HubRegister.open({hub:'property',category:'property-agent'})" style="flex-shrink:0;padding:11px 20px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;">List Your Property →</button>
+  </div>
+</div>
+<script src="hub-register.js" defer></script>
 <script src="scroll-memory.js" defer></script>
 <script src="scroll-top.js" defer></script>
 <script src="seo.js" defer></script>

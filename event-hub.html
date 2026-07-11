@@ -510,5 +510,18 @@
   /* Boot */
   loadEvents(false);
 </script>
+
+<!-- ── Are You an Event Organiser? ── -->
+<div style="padding:0 16px 32px;">
+  <div style="background:rgba(255,255,255,0.025);border:1px solid rgba(113,255,0,0.18);border-radius:18px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+    <span style="font-size:40px;flex-shrink:0;">🎪</span>
+    <div style="flex:1;min-width:180px;">
+      <div style="font-size:15px;font-weight:900;color:white;margin-bottom:3px;">Organise Events or Run a Venue?</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.6;">List your events, sell tickets and manage RSVPs on SOKONI — concerts, conferences, workshops, sports, exhibitions and more.</div>
+    </div>
+    <button type="button" onclick="HubRegister.open({hub:'entertainment',category:'event-planner'})" style="flex-shrink:0;padding:11px 20px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;">List Your Event →</button>
+  </div>
+</div>
+<script src="hub-register.js" defer></script>
 </body>
 </html>
