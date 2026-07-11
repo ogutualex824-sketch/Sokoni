@@ -168,6 +168,8 @@ Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
 | POS core (pos.js, pos-db.js, pos-boss.js) | v1.0 | ✅ Done |
 | POS mobile layout (pos-mobile.js/.css) | v2.1 | ✅ Done |
 | POS hardware API (Bluetooth/USB printer, cash drawer) | v2.1 | ✅ Done |
+| P58E printer driver — BLE + Web Serial COM port (Windows SPP) | v5.0 | ✅ Done |
+| pos-printer-setup.html — transport selector, device cache, demo receipt | v5.0 | ✅ Done |
 | POS terminals + sync queue | v1.2 | ✅ Done |
 | BOS v2 — Finance, Audit, Repair tabs | v1.5 | ✅ Done |
 
@@ -343,6 +345,7 @@ Evidence from real users determines what gets built next, not assumptions.
 | ~~`MAIL_HOST` secret = placeholder~~ | RESOLVED | smtp.sendgrid.net — SendGrid SMTP relay configured 2026-06-25 |
 | First Firestore backup not yet run | INFO | Scheduled daily; will self-resolve |
 | Search index backfill pending | INFO | Run `searchBackfillAll` once |
+| ~~`onBookingStatusChanged` HTTPS→Firestore migration blocked~~ | RESOLVED | GCP stale HTTPS version deleted 2026-07-11; re-exported as `onDocumentUpdated` trigger |
 
 ---
 
