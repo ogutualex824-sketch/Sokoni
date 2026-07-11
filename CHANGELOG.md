@@ -1,4 +1,36 @@
-﻿## [2026-07-11] — Security Identity Hardening v1.0
+﻿## [2026-07-11] — Enterprise Cash Manager + SmartPOS Dispatcher Migration v1.0
+
+### Summary
+Full enterprise cash management system for SmartPOS: denomination-based register opening wizard, event-sourced live till balance, change calculation with denomination breakdown, formal safe drop workflow, shift closing with variance gate, EOD reconciliation across all tills, and an immutable audit trail. All CF handlers (9 Multi-Till + 8 Cash Manager = 17 total) are merged into `smartPosDispatch` via the `_merge()` dispatcher pattern — no new Cloud Run services required. All client pages updated to call `smartPosDispatch({op: '...', ...})` instead of direct CF references.
+
+### Files Affected
+- `pos-cash-manager.js` (NEW) — client SDK: `PosRegister` window object; `sokoni_cash_mgr_v1` IDB for offline session + queue; event-sourced balance via `_compute()`; `openRegister()`, `closeRegister()`, `cashIn()`, `cashOut()`, `safeDrop()`, `recordCashSale()`, `getVariance()`, `calcChange()`, `getLiveBalance()`; `EventEmitter` `balance_changed` events; offline sync on `window online`
+- `functions/pos-cash-manager.js` (NEW) — 8 `_h` handlers for `smartPosDispatch`: `cmRecordCashEvent`, `cmApproveFloat`, `cmSafeDrop`, `cmGetLiveTillBalance`, `cmGetShiftReport`, `cmGetEndOfDay`, `cmGetAuditTrail`, `cmGetManagerQueue`; collections: `posCashSessions`, `posCashEvents`
+- `functions/pos-multi-till.js` — converted 9 individual `onCall` exports to `_h` handler map (dispatcher pattern)
+- `functions/smartpos-dispatch.js` — `require('./pos-multi-till')` + `require('./pos-cash-manager')`; `_merge()` includes both `_h` maps; handler count 154 → 171
+- `functions/index.js` — removed individual `mt*` exports (replaced by comment pointing to dispatcher)
+- `pos-cash-manager.html` (NEW) — manager cash office: 5 tabs (Overview, Live Tills, Movements, EOD Report, Audit Trail); all CF calls through `_posDispatch` helper
+- `pos-till-manager.html` — all 5 CF calls migrated from `fn.httpsCallable('mtXxx')` to `_posDispatch('mtXxx', ...)`
+- `pos-checkout.html` — register open/close wizards: `_sowStep()`, `_scwStep()`, `_sowCalcTotal()`, `_scwCalcTotal()`, denomination grids, variance panel; `_renderLiveBalance()` for topbar cash display; `PosRegister.recordCashSale()` in `_finalize()`; `confirmCashEvent()` routes through `PosRegister`
+
+### Database Changes
+- New collection: `posCashSessions/{merchantId}_{registerId}` — shift sessions (open/closed)
+- New collection: `posCashEvents/{id}` — immutable event ledger (open, close, cash_in, cash_out, safe_drop, cash_sale, cash_refund, float_adjustment)
+
+### Architecture Changes
+- `smartPosDispatch` now consolidates 171 handlers across 10 modules (was 8)
+- `mt*` and `cm*` ops are no longer individual Cloud Run services — they route through the single `smartPosDispatch` service, reducing Cloud Run count by 17
+
+### Security Changes
+- All `cm*` handlers enforce `enforceAppCheck: true` via dispatcher `_OPTS`
+- Category validation: `cash_in` and `cash_out` events validated against allowlists (`VALID_IN_CATS`, `VALID_OUT_CATS`)
+- All inputs sanitized via `_san()`, amounts stored as integer cents only
+- Audit trail is append-only (`posCashEvents` collection; no update/delete operations)
+- Variance explanation required when |variance| > KES 50
+
+---
+
+## [2026-07-11] — Security Identity Hardening v1.0
 
 ### Summary
 Three critical security bugs fixed in the TOTP MFA and WebAuthn passkey system. TOTP QR codes now use the RFC 4648 Base32 encoding required by all authenticator apps (Google Authenticator, Authy, etc.). Passkey authentication now performs real cryptographic signature verification using P-256/ES256 (implemented via a minimal built-in CBOR decoder — no new npm dependencies). TOTP brute-force is now blocked by a 5-attempt / 30-minute lockout on both enrollment and step-up verification.
