@@ -665,10 +665,14 @@
       color: var(--sk-accent);
     }
 
-    /* reCAPTCHA container for phone auth */
+    /* reCAPTCHA container for phone auth — invisible size:invisible
+       anchor; constrained so any fallback visible challenge stays
+       inside the form and never overflows horizontally */
     #recaptcha-container {
+      width: 100%;
       display: flex;
       justify-content: center;
+      overflow: hidden;
     }
 
     /* ══════════════════════════════════════════════════

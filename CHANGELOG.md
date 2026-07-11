@@ -1,4 +1,24 @@
-﻿## [2026-07-11] — P58E Web Serial COM Port Transport + Functions Deploy Cleanup
+﻿## [2026-07-11] — reCAPTCHA Badge Layout Fix (Mobile + Desktop)
+
+### Summary
+Fixed the `.grecaptcha-badge` (injected by Google's reCAPTCHA v2 invisible and App Check v3 on every page) overflowing the right edge of the viewport on narrow mobile screens (320–414 px). The badge is now pinned flush to the right edge with the slide-in transform disabled, sitting 80 px above the bottom navigation bar. Also tightened the `#recaptcha-container` in `pos-setup.html` to constrain any fallback visible challenge within the form.
+
+### Files Changed
+- `sokoni-polish.css` — Added `.grecaptcha-badge` global rules: `right:0`, `bottom:80px`, `border-radius:6px 0 0 6px`, `transform:translateX(0)`, `transition:none`, `overflow:hidden`, `max-width:256px`; `@media (max-width:320px)` narrows badge to `80vw`
+- `pos-setup.html` — `#recaptcha-container` CSS updated: added `width:100%; overflow:hidden`
+
+### Security Implications
+None — only visual positioning changed; authentication logic untouched.
+
+### Performance Implications
+None.
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-07-11] — P58E Web Serial COM Port Transport + Functions Deploy Cleanup
 
 ### Summary
 Added Web Serial (COM port) transport for the P58E printer paired via Windows Classic Bluetooth (SPP). Windows BT pairing creates a virtual COM port; Web Bluetooth API cannot reach it — Web Serial API can. Also cleaned up two stale GCP HTTPS function registrations (`onBookingStatusChanged`, `autoOnDisputeCreate`) that were blocking Cloud Functions deployment after trigger-type migrations.

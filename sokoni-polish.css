@@ -454,6 +454,27 @@ label { font-size:12px !important; font-weight:700 !important; margin-bottom:4px
 }
 
 /* ──────────────────────────────────────────────────────────────
+   RECAPTCHA BADGE — prevent right-edge overflow on all viewports
+   reCAPTCHA v2 invisible (phone OTP) and App Check v3 both inject
+   .grecaptcha-badge as position:fixed. Default transform + right
+   values can extend past the viewport on 320–414 px screens.
+   Pinned here globally: flush to right edge, above bottom nav.
+────────────────────────────────────────────────────────────── */
+.grecaptcha-badge {
+  right: 0 !important;
+  bottom: 80px !important;
+  border-radius: 6px 0 0 6px !important;
+  transform: translateX(0) !important;
+  transition: none !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35) !important;
+  overflow: hidden !important;
+  max-width: 256px !important;
+}
+@media (max-width:320px) {
+  .grecaptcha-badge { max-width: 80vw !important; }
+}
+
+/* ──────────────────────────────────────────────────────────────
    REDUCED MOTION SAFETY
 ────────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion:reduce) {
