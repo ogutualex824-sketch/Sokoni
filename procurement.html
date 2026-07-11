@@ -448,8 +448,7 @@ const ProcurementPortal = (() => {
     });
     if (!items.length) { _toast('Add at least one item'); return; }
     try {
-      await fn.httpsCallable('smartPosDispatch')({
-        op:               'createPurchaseOrder',
+      await _call('createPurchaseOrder')({
         merchantId:       mid,
         supplierId,
         items,
