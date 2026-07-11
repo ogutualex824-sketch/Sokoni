@@ -6310,27 +6310,12 @@ exports.aggregateTrendingSearches = onSchedule(
   }
 );
 
-exports.processSettlementQueue = onSchedule(
-  { schedule: "every 60 minutes", timeoutSeconds: 300 },
-  async () => {
-    const snap = await db.collection("settlementQueue")
-      .where("status", "==", "queued")
-      .limit(20).get().catch(() => null);
-    if (!snap || snap.empty) return;
-
-    for (let i = 0; i < snap.docs.length; i++) {
-      const docRef = snap.docs[i];
-      const item   = docRef.data();
-      await docRef.ref.update({ status: "processing" }).catch(() => {});
-      console.log("[Settlement] Processing " + docRef.id + " seller:" + (item.sellerId||'').slice(0,8) + "…");
-      await docRef.ref.update({
-        status: "completed",
-        processedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }).catch(() => {});
-    }
-    console.log("[Settlement] Processed " + snap.docs.length + " items");
-  }
-);
+/* processSettlementQueue — RETIRED 2026-07-11. This scheduled CF was a no-op
+   stub: it only flipped settlementQueue items queued→completed with no payout,
+   ledger, or credit (real settlement runs via the finos escrow/payout engine).
+   Removed to reclaim one Cloud Run slot for the consolidated financeSprintDispatch
+   (which now hosts the 12 Enterprise Settlement ops). No functional behaviour
+   was lost — nothing consumed the "completed" flag it wrote. */
 
 
 /* ============================================================
@@ -8369,146 +8354,14 @@ exports.smartPosDispatch = smartPosDispatcher.smartPosDispatch;
 const posRetailEngine = require('./pos-retail-engine');
 exports.inventoryAlertSweep        = posRetailEngine.inventoryAlertSweep;
 
-/* ── SmartPOS 3.0 — Smart Inventory Pro ─────────────────────── */
+/* Scheduled CFs from consolidated SmartPOS modules */
 const posInventoryPro = require('./pos-inventory-pro');
-/* Batch / Lot */
-exports.createBatch                = posInventoryPro.createBatch;
-exports.getBatches                 = posInventoryPro.getBatches;
-exports.consumeBatch               = posInventoryPro.consumeBatch;
-/* Serial Numbers */
-exports.registerSerial             = posInventoryPro.registerSerial;
-exports.getSerial                  = posInventoryPro.getSerial;
-exports.updateSerialStatus         = posInventoryPro.updateSerialStatus;
-/* Warehouses */
-exports.createWarehouse            = posInventoryPro.createWarehouse;
-exports.getWarehouses              = posInventoryPro.getWarehouses;
-exports.transferWarehouseStock     = posInventoryPro.transferWarehouseStock;
-/* Purchase Orders (POS-native, legacy — enterprise procurement is in procurement.js) */
-exports.posCreatePurchaseOrder     = posInventoryPro.createPurchaseOrder;
-exports.posReceivePurchaseOrder    = posInventoryPro.receivePurchaseOrder;
-exports.posUpdatePOStatus          = posInventoryPro.updatePurchaseOrderStatus;
-exports.posGetPurchaseOrders       = posInventoryPro.getPurchaseOrders;
-/* Suppliers (POS-native) */
-exports.upsertSupplier             = posInventoryPro.upsertSupplier;
-exports.getSuppliers               = posInventoryPro.getSuppliers;
-exports.deleteSupplier             = posInventoryPro.deleteSupplier;
-/* Reorder */
-exports.getReorderQueue            = posInventoryPro.getReorderQueue;
-exports.dismissReorderItem         = posInventoryPro.dismissReorderItem;
-exports.createAutoReorderPO        = posInventoryPro.createAutoReorderPO;
-/* Valuation */
-exports.getStockValuation          = posInventoryPro.getStockValuation;
-/* Forecasting */
-exports.getInventoryForecast       = posInventoryPro.getInventoryForecast;
-/* Scheduled */
 exports.batchExpiryAlertSweep      = posInventoryPro.batchExpiryAlertSweep;
-
-/* ── SmartPOS 3.0 — Accounting ──────────────────────────────── */
 const posAccounting = require('./pos-accounting');
-exports.initializeChartOfAccounts  = posAccounting.initializeChartOfAccounts;
-exports.getChartOfAccounts         = posAccounting.getChartOfAccounts;
-exports.createAccount              = posAccounting.createAccount;
-exports.createJournalEntry         = posAccounting.createJournalEntry;
-exports.getJournalEntries          = posAccounting.getJournalEntries;
-exports.voidJournalEntry           = posAccounting.voidJournalEntry;
-exports.getProfitAndLoss           = posAccounting.getProfitAndLoss;
-exports.getBalanceSheet            = posAccounting.getBalanceSheet;
-exports.getCashFlow                = posAccounting.getCashFlow;
-exports.getVATReport               = posAccounting.getVATReport;
-exports.createExpense              = posAccounting.createExpense;
-exports.getExpenses                = posAccounting.getExpenses;
-exports.updateExpense              = posAccounting.updateExpense;
-exports.deleteExpense              = posAccounting.deleteExpense;
-exports.getExpenseSummary          = posAccounting.getExpenseSummary;
-exports.closeAccountingPeriod      = posAccounting.closeAccountingPeriod;
-exports.getAccountingPeriods       = posAccounting.getAccountingPeriods;
-exports.exportAccountingData       = posAccounting.exportAccountingData;
 exports.monthlyAccountingSnapshot  = posAccounting.monthlyAccountingSnapshot;
-
-/* ── SmartPOS 3.0 — CRM Pro ─────────────────────────────────── */
 const posCrmPro = require('./pos-crm-pro');
-/* POS Wallet — prefixed to avoid collision with main SOKONI wallet (wallet.js) */
-exports.posCrmGetWalletBalance     = posCrmPro.getWalletBalance;
-exports.posCrmTopUpWallet          = posCrmPro.topUpWallet;
-exports.posCrmDeductWallet         = posCrmPro.deductWallet;
-exports.posCrmRefundToWallet       = posCrmPro.refundToWallet;
-exports.posCrmGetWalletTransactions = posCrmPro.getWalletTransactions;
-/* Gift Cards */
-exports.issueGiftCard              = posCrmPro.issueGiftCard;
-exports.redeemGiftCard             = posCrmPro.redeemGiftCard;
-exports.checkGiftCardBalance       = posCrmPro.checkGiftCardBalance;
-exports.getGiftCards               = posCrmPro.getGiftCards;
-/* Store Credit */
-exports.issueStoreCredit           = posCrmPro.issueStoreCredit;
-exports.useStoreCredit             = posCrmPro.useStoreCredit;
-exports.getStoreCreditBalance      = posCrmPro.getStoreCreditBalance;
-/* Birthday & Referrals */
-exports.checkBirthdayReward        = posCrmPro.checkBirthdayReward;
-exports.getBirthdayCustomers       = posCrmPro.getBirthdayCustomers;
-exports.recordReferral             = posCrmPro.recordReferral;
-exports.completeReferralReward     = posCrmPro.completeReferralReward;
-exports.getReferralStats           = posCrmPro.getReferralStats;
-/* Offers */
-exports.createOffer                = posCrmPro.createOffer;
-exports.getActiveOffers            = posCrmPro.getActiveOffers;
-exports.getOffers                  = posCrmPro.getOffers;
-exports.toggleOffer                = posCrmPro.toggleOffer;
-/* Segmentation */
-exports.getCustomerSegments        = posCrmPro.getCustomerSegments;
-exports.getCustomerInsights        = posCrmPro.getCustomerInsights;
-/* Tiers */
-exports.upgradeMembershipTier      = posCrmPro.upgradeMembershipTier;
-exports.getMembershipStats         = posCrmPro.getMembershipStats;
-/* Scheduled */
 exports.birthdayRewardSweep        = posCrmPro.birthdayRewardSweep;
-
-/* ── SmartPOS 3.0 — Staff Operations ───────────────────────── */
-const posStaffOps = require('./pos-staff-ops');
-/* Shifts */
-exports.openShift                  = posStaffOps.openShift;
-exports.closeShift                 = posStaffOps.closeShift;
-exports.getCurrentShift            = posStaffOps.getCurrentShift;
-exports.getShiftHistory            = posStaffOps.getShiftHistory;
-/* Attendance */
-exports.clockIn                    = posStaffOps.clockIn;
-exports.clockOut                   = posStaffOps.clockOut;
-exports.getAttendance              = posStaffOps.getAttendance;
-exports.getAttendanceSummary       = posStaffOps.getAttendanceSummary;
-/* Commissions */
-exports.setCommissionRate          = posStaffOps.setCommissionRate;
-exports.getCommissionRate          = posStaffOps.getCommissionRate;
-exports.calculateMonthlyCommission = posStaffOps.calculateMonthlyCommission;
-exports.approveCommission          = posStaffOps.approveCommission;
-exports.getCommissionsSummary      = posStaffOps.getCommissionsSummary;
-/* Approvals */
-exports.createApprovalRequest      = posStaffOps.createApprovalRequest;
-exports.reviewApproval             = posStaffOps.reviewApproval;
-exports.getPendingApprovals        = posStaffOps.getPendingApprovals;
-exports.checkApproval              = posStaffOps.checkApproval;
-/* Cash Reconciliation */
-exports.submitCashCount            = posStaffOps.submitCashCount;
-exports.getCashReconciliation      = posStaffOps.getCashReconciliation;
-exports.getCashVarianceSummary     = posStaffOps.getCashVarianceSummary;
-/* Performance */
-exports.getStaffPerformanceDashboard = posStaffOps.getStaffPerformanceDashboard;
-/* Scheduled */
-exports.dailyStaffReport           = posStaffOps.dailyStaffReport;
-
-/* ── SmartPOS 3.0 — HQ Multi-Branch ─────────────────────────── */
-const posHQ = require('./pos-hq');
-exports.setCentralPrice            = posHQ.setCentralPrice;
-exports.getCentralPrices           = posHQ.getCentralPrices;
-exports.pushPricesToBranches       = posHQ.pushPricesToBranches;
-exports.removeCentralPrice         = posHQ.removeCentralPrice;
-exports.syncCatalogToBranch        = posHQ.syncCatalogToBranch;
-exports.getSharedCatalogStatus     = posHQ.getSharedCatalogStatus;
-exports.publishCatalogUpdate       = posHQ.publishCatalogUpdate;
-exports.checkStockAcrossBranches   = posHQ.checkStockAcrossBranches;
-exports.createCrossBranchFulfillment = posHQ.createCrossBranchFulfillment;
-exports.getCrossBranchFulfillments = posHQ.getCrossBranchFulfillments;
-exports.getHQInventoryOverview     = posHQ.getHQInventoryOverview;
-exports.createMasterInventoryTransfer = posHQ.createMasterInventoryTransfer;
-exports.getRegionalReport          = posHQ.getRegionalReport;
+/* pos-staff-ops and pos-hq: all onCall — fully consolidated into smartPosDispatch */
 
 /* ── SmartPOS 3.0 — Business Intelligence ───────────────────── */
 const posBI = require('./pos-bi');
@@ -8529,23 +8382,7 @@ exports.askPOSAssistant            = posAI.askPOSAssistant;
 exports.getAIQueryHistory          = posAI.getAIQueryHistory;
 exports.clearAIQueryHistory        = posAI.clearAIQueryHistory;
 
-/* ── SmartPOS 3.0 — Integrations & Observability ───────────── */
-const posIntegrations = require('./pos-integrations');
-exports.posSmartposRegisterWebhook = posIntegrations.registerWebhook;
-exports.posSmartposDeleteWebhook   = posIntegrations.deleteWebhook;
-exports.posSmartposListWebhooks    = posIntegrations.listWebhooks;
-exports.posSmartposTestWebhook     = posIntegrations.testWebhook;
-exports.deliverWebhookEvent        = posIntegrations.deliverWebhookEvent;
-exports.createAPIKey               = posIntegrations.createAPIKey;
-exports.revokeAPIKey               = posIntegrations.revokeAPIKey;
-exports.listAPIKeys                = posIntegrations.listAPIKeys;
-exports.validateAPIKey             = posIntegrations.validateAPIKey;
-exports.getPOSSaleForETIMS         = posIntegrations.getPOSSaleForETIMS;
-exports.markSaleSubmittedToETIMS   = posIntegrations.markSaleSubmittedToETIMS;
-exports.exportToAccountingFormat   = posIntegrations.exportToAccountingFormat;
-exports.importBankStatement        = posIntegrations.importBankStatement;
-exports.getPOSSystemHealth         = posIntegrations.getPOSSystemHealth;
-exports.getPOSAlertHistory         = posIntegrations.getPOSAlertHistory;
+/* pos-integrations: all 15 onCall CFs consolidated into smartPosDispatch */
 
 
 /* -- SmartPOS 4.0 -- Marketplace <-> POS Integration -------------------- */
@@ -9042,39 +8879,8 @@ exports.getPosPerfMetrics         = posPerf.getPosPerfMetrics;
 exports.getPosSpeedReport         = posPerf.getPosSpeedReport;
 exports.posScheduledPerfRollup    = posPerf.posScheduledPerfRollup;
 
-/* ── SmartPOS Completeness Engine (Sprint 4.1) ─────────────────────────── */
-const posComplete = require('./pos-completeness');
-/* Gift Cards */
-exports.giftCardIssue          = posComplete.giftCardIssue;
-exports.giftCardRedeem         = posComplete.giftCardRedeem;
-exports.giftCardBalance        = posComplete.giftCardBalance;
-exports.giftCardVoid           = posComplete.giftCardVoid;
-exports.giftCardList           = posComplete.giftCardList;
-/* Layaway */
-exports.layawayCreate          = posComplete.layawayCreate;
-exports.layawayAddPayment      = posComplete.layawayAddPayment;
-exports.layawayFulfill         = posComplete.layawayFulfill;
-exports.layawayCancel          = posComplete.layawayCancel;
-exports.layawayList            = posComplete.layawayList;
-/* Park & Suspend Sales */
-exports.salePark               = posComplete.salePark;
-exports.saleRetrieve           = posComplete.saleRetrieve;
-exports.saleListParked         = posComplete.saleListParked;
-exports.saleDiscardParked      = posComplete.saleDiscardParked;
-/* Kitchen Display System */
-exports.kdsSubmitOrder         = posComplete.kdsSubmitOrder;
-exports.kdsUpdateItem          = posComplete.kdsUpdateItem;
-exports.kdsGetQueue            = posComplete.kdsGetQueue;
-exports.kdsBump                = posComplete.kdsBump;
-/* Cycle Count */
-exports.cycleCountCreate       = posComplete.cycleCountCreate;
-exports.cycleCountUpdateItem   = posComplete.cycleCountUpdateItem;
-exports.cycleCountComplete     = posComplete.cycleCountComplete;
-exports.cycleCountList         = posComplete.cycleCountList;
-exports.cycleCountGet          = posComplete.cycleCountGet;
-/* Multi-Currency */
-exports.currencyGetRates       = posComplete.currencyGetRates;
-exports.currencySetRate        = posComplete.currencySetRate;
+/* ── SmartPOS Completeness Engine — consolidated into smartPosDispatch ── */
+/* All 25 posComplete onCall CFs are routed through smartPosDispatch. */
 
 /* ── Universal Printer Engine v5.0 — print log, history, config, templates ── */
 const posPrinter = require('./pos-printer');
