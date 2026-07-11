@@ -600,6 +600,11 @@ const disableMFA = onCall(CF_OPTIONS, _h.disableMFA = async ({ data, auth }) => 
 
   const mfaData = mfaSnap.data();
 
+  if (mfaData.lockedUntil && mfaData.lockedUntil.toMillis() > Date.now()) {
+    const mins = Math.ceil((mfaData.lockedUntil.toMillis() - Date.now()) / 60000);
+    _err(`Too many failed attempts. Try again in ${mins} minute(s).`, 'resource-exhausted');
+  }
+
   /* Require valid TOTP code (or backup code) to authorise disablement */
   let authorised = _verifyTOTP(mfaData.secret, currentCode);
 
@@ -613,7 +618,13 @@ const disableMFA = onCall(CF_OPTIONS, _h.disableMFA = async ({ data, auth }) => 
   }
 
   if (!authorised) {
-    await _audit('mfa.disable.failed', uid, { reason: 'invalid_code' });
+    const attempts = (mfaData.failedAttempts || 0) + 1;
+    const upd = { failedAttempts: attempts, updatedAt: FieldValue.serverTimestamp() };
+    if (attempts >= TOTP_MAX_ATTEMPTS) {
+      upd.lockedUntil = admin.firestore.Timestamp.fromDate(new Date(Date.now() + TOTP_LOCK_DURATION));
+    }
+    await mfaRef.update(upd);
+    await _audit('mfa.disable.failed', uid, { reason: 'invalid_code', attempts });
     _err('Invalid TOTP code. MFA not disabled.', 'permission-denied');
   }
 
@@ -681,8 +692,19 @@ const regenerateBackupCodes = onCall(CF_OPTIONS, _h.regenerateBackupCodes = asyn
 
   const mfaData = mfaSnap.data();
 
+  if (mfaData.lockedUntil && mfaData.lockedUntil.toMillis() > Date.now()) {
+    const mins = Math.ceil((mfaData.lockedUntil.toMillis() - Date.now()) / 60000);
+    _err(`Too many failed attempts. Try again in ${mins} minute(s).`, 'resource-exhausted');
+  }
+
   if (!_verifyTOTP(mfaData.secret, code)) {
-    await _audit('backup_codes.regenerate.failed', uid, { reason: 'invalid_code' });
+    const attempts = (mfaData.failedAttempts || 0) + 1;
+    const upd = { failedAttempts: attempts, updatedAt: FieldValue.serverTimestamp() };
+    if (attempts >= TOTP_MAX_ATTEMPTS) {
+      upd.lockedUntil = admin.firestore.Timestamp.fromDate(new Date(Date.now() + TOTP_LOCK_DURATION));
+    }
+    await mfaRef.update(upd);
+    await _audit('backup_codes.regenerate.failed', uid, { reason: 'invalid_code', attempts });
     _err('Invalid TOTP code.', 'permission-denied');
   }
 
@@ -692,6 +714,8 @@ const regenerateBackupCodes = onCall(CF_OPTIONS, _h.regenerateBackupCodes = asyn
     backupCodeHashes,
     backupCodesUsed:      [],
     backupCodesRemaining: BACKUP_CODE_COUNT,
+    failedAttempts:       0,
+    lockedUntil:          FieldValue.delete(),
     updatedAt:            FieldValue.serverTimestamp(),
   });
 
