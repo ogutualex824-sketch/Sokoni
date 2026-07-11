@@ -2793,18 +2793,33 @@ document.getElementById('btn-configure-hw').addEventListener('click', () => {
    BOOT — check if setup already done
 ════════════════════════════════════════════════════════════════ */
 (function boot() {
-  // If setup is already complete and user is signed in, redirect directly.
-  // The user must still be authenticated for this to apply.
-  const setupDone = localStorage.getItem('sokoni_setup_complete') === '1';
-  if (setupDone && _auth.currentUser) {
-    window.location.replace('pos.html');
-    return;
-  }
+  const goLive = () => window.location.replace('pos.html');
 
-  // On auth state ready, if user exists and setup is done, redirect
-  _auth.onAuthStateChanged(user => {
-    if (user && localStorage.getItem('sokoni_setup_complete') === '1') {
-      window.location.replace('pos.html');
+  // Fast path: previously-completed setup + already signed in.
+  if (localStorage.getItem('sokoni_setup_complete') === '1' && _auth.currentUser) { goLive(); return; }
+
+  // Authoritative resume gate (mandatory first-run spec): the merchant enters live
+  // POS ONLY when getSetupStatus.productionReady is true. Otherwise the wizard
+  // resumes from the first incomplete step — never restarts.
+  _auth.onAuthStateChanged(async (user) => {
+    if (!user) return;
+    try {
+      const res = await SPOS('getSetupStatus')({});
+      const s = (res && res.data) || {};
+      if (s.hasBusiness && s.productionReady) {
+        localStorage.setItem('sokoni_setup_complete', '1');
+        goLive();
+        return;
+      }
+      // Business exists but setup incomplete → resume the wizard (do not go live).
+      if (s.hasBusiness && !s.productionReady) {
+        localStorage.removeItem('sokoni_setup_complete');
+        WIZ.resumeNextStep = s.nextStep || null;   // consumed by the business/ready steps
+      }
+      // No business → the wizard's create flow handles it.
+    } catch (_) {
+      // Resilient fallback to the legacy flag if the status call is unavailable.
+      if (localStorage.getItem('sokoni_setup_complete') === '1') goLive();
     }
   });
 })();
