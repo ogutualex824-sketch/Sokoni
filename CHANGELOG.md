@@ -1,4 +1,36 @@
-﻿## [2026-07-11] — SmartPOS Enterprise Multi-Till System v1.0
+﻿## [2026-07-11] — Dispatcher Race-Condition Hardening v1.0
+
+### Summary
+Production traffic hardening across all six Services domain modules and all four CF dispatchers. Eliminates double-bookings, duplicate payrolls, duplicate enquiries/viewings, and double-approval vulnerabilities using Firestore transactions and deterministic document IDs. Adds `enforceAppCheck: true` to all Jobs CF endpoints to block bot spam. All four dispatchers gain `_merge()` collision detection and structured error logging with op name.
+
+### Files Affected
+- `functions/healthcare-hub.js` — `bookAppointment` rewritten with slot-lock document pattern inside `runTransaction()`; `updateAppointmentStatus` wrapped in `runTransaction()` with `getRole()` hoisted outside; slot lock released on cancel/complete
+- `functions/property-hub.js` — `submitPropertyEnquiry` and `scheduleViewing` use deterministic doc IDs + `runTransaction()` idempotency checks
+- `functions/hr-payroll.js` — `runPayroll` uses deterministic `{merchantId}_{period}` runId + transaction gate + 499-op chunked WriteBatches; `approvePayrollRun` wrapped in transaction; `addStaffMember` uses deterministic staffId + transaction
+- `functions/jobs.js` — `CF_OPTS = { cors: true, enforceAppCheck: true }` applied to all 12 handlers
+- `functions/b2b-wholesale.js` — helper function parameter `request` → `req` bug fixed (all 12 handlers were crashing)
+- `functions/services-dispatch.js` — `_merge()` collision detection, `secRegisterDevice` backward-compat alias, try/catch with op name
+- `functions/booking-dispatch.js`, `functions/smartpos-dispatch.js`, `functions/commerce-dispatch.js` — `_merge()` + try/catch
+- `sokoni-jobs.js` — op-overwrite fix; dead `_callableCache` variable removed
+- `hr-payroll.html` — callable cached; op-overwrite fix
+- `wholesale-portal.html` — op-overwrite fix; error code `functions/` prefix normalisation
+- `security-center.html` — op-overwrite fix
+- `sokoni-booking-engine.js` — broken fetch fallback removed; op-overwrite fix
+
+### Security Changes
+- `enforceAppCheck: true` added to all 12 Jobs CF handlers (previously unprotected from bot abuse)
+- `_merge()` logs op-name collisions at Cloud Run startup for early detection
+
+### Performance Changes
+- `runPayroll` now writes payslips in 499-op chunks — supports merchants with any staff count without hitting Firestore WriteBatch 500-op cap
+
+### Breaking Changes
+- `addStaffMember` now uses `{merchantId}_{employeeNumber}` as the Firestore doc ID (was random). Existing staff records retain their old IDs; only new hires use the deterministic format. Payslip keys (`{runId}_{staffId}`) are unaffected for existing records.
+- `runPayroll` now uses `{merchantId}_{period}` as the run doc ID (was random). Existing run records retain their old IDs.
+
+---
+
+## [2026-07-11] — SmartPOS Enterprise Multi-Till System v1.0
 
 ### Summary
 Transforms SOKONI SmartPOS into an enterprise-grade multi-till checkout system supporting unlimited concurrent registers. Provides sub-100ms search, sub-50ms barcode lookup, real-time live floor monitoring for managers, and full register lifecycle management for admins.
