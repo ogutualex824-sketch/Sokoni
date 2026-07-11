@@ -1,4 +1,31 @@
-﻿## [2026-07-11] — P58E Bluetooth Thermal Printer — Full Integration
+﻿## [2026-07-11] — P58E Web Serial COM Port Transport + Functions Deploy Cleanup
+
+### Summary
+Added Web Serial (COM port) transport for the P58E printer paired via Windows Classic Bluetooth (SPP). Windows BT pairing creates a virtual COM port; Web Bluetooth API cannot reach it — Web Serial API can. Also cleaned up two stale GCP HTTPS function registrations (`onBookingStatusChanged`, `autoOnDisputeCreate`) that were blocking Cloud Functions deployment after trigger-type migrations.
+
+### Files Changed
+- `sokoni-universal-printer.js` — `SerialAdapter` fully rewritten: `getPorts()` for pre-permitted ports (no picker), baud-rate auto-detection (9600 → 115200), 4 KB chunks for BT SPP buffer, open/reopen guard; `discoverBy('serial-list')` added to SPEngine; `BtAdapter.connect()` and `SPEngine.connect()` hardened with 8 defensive pre-flight checks
+- `pos-printer-setup.html` — "BT COM Port" transport added as first/recommended tile (green badge); `_devCache` Map replaces `JSON.stringify(device)` in onclick attributes (fixes "Cannot read properties of undefined (reading 'connect')" bug); `serial-list` scan mode lists already-permitted ports with Connect buttons; `_cacheDevice()` + `connectDevice(keyOrString)` resolver added
+- `functions/messages.js` — `onBookingStatusChanged` restored as `onDocumentUpdated` Firestore trigger
+- `functions/index.js` — `exports.onBookingStatusChanged` restored
+
+### Security Implications
+None — Web Serial requires explicit user permission per port (browser enforces).
+
+### Performance Implications
+BT SPP via COM port is faster and more reliable than BLE for ESC/POS: no 128-byte chunk limit, no 40ms inter-chunk delay, no GATT overhead. 4 KB chunks at 9600 baud ≈ 960 bytes/sec; at 115200 baud ≈ 11 KB/sec.
+
+### Migration / Deployment Notes
+- GCP: deleted `onBookingStatusChanged` and `autoOnDisputeCreate` stale HTTPS registrations via `firebase functions:delete --force`
+- No Firestore schema changes
+- Hosting already deployed (commit `6190445`)
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-07-11] — P58E Bluetooth Thermal Printer — Full Integration
 
 ### Summary
 Complete end-to-end integration of the P58E 58mm ESC/POS Bluetooth thermal printer with SOKONI SmartPOS. Covers BLE discovery with pairing, persistent auto-reconnect across sessions, a robust connection manager with exponential-backoff retry and offline print queue, a full ESC/POS driver, professional receipt template, test receipt, cash drawer test, a 14-item production checklist, and a dedicated settings/test UI. Also fixes two silent receipt-printing failures in `pos-checkout.html`.
