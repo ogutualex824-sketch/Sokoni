@@ -67,9 +67,13 @@ Provider abstraction · split settlement · automatic fallback to collect-then-p
 
 ## 6. Deployment status
 
-- Consolidation committed: `c7f1ff9`.
-- Deploying **1** new Cloud Run service (`settlementDispatch`) + hosting (dashboard + `sokoni-settlement.js`).
-- _Status: see deployment log — updated on completion._
+**The project is at the Cloud Run CPU quota ceiling — even a single new service (`settlementDispatch`) returned HTTP 429.** Per the directive to reuse existing infrastructure rather than request quota, the 12 settlement ops are **hosted inside the already-deployed `financeSprintDispatch`** service (finance domain):
+
+- `finance-sprint-dispatch.js` merges finance (37) + settlement (12) = **49 ops**, binds `SETTLEMENT_ACCOUNT_NUMBER`, memory 256→512MiB, timeout 60→120s. Collision-guarded.
+- Deploying this is a **pure UPDATE** to an existing service → **zero new Cloud Run services created**.
+- Callers use `financeSprintDispatch({op,...})` via `sokoni-settlement.js`; op names/payloads/responses unchanged.
+- Commits: `c7f1ff9` (consolidation), `a899e87` (host-in-finance).
+- Final Cloud Run footprint for the entire settlement subsystem: **0 additional services** (was 12).
 
 ## 7. Remaining operational prerequisites
 
