@@ -72,6 +72,18 @@ The guard flags 13 ops that are **both a dispatcher handler AND an individual ex
 
 **Correct remediation (future, careful):** *namespace* the POS/admin-domain dispatcher handlers to domain-unique op names (e.g. `posRegisterWebhook`, `posCreatePurchaseOrder`, `posGetWalletBalance`) so each callable name maps to exactly one business domain — the sprint's "one domain per callable" principle. This requires updating each handler's `_h` key + any client that calls it via the dispatcher. It is **not** a de-export and must not delete the individually-exported functions.
 
-**Guard behaviour:** true duplicates (same module) → hard fail (de-export). Cross-domain collisions (different module) → warning (namespace). Currently: 0 hard failures, 13 namespacing warnings — guard **passes**.
+**Guard behaviour:** true duplicates (same module) → hard fail (de-export). Cross-domain collisions (different module) → warning (namespace). ~~Currently: 0 hard failures, 13 namespacing warnings~~ → **RESOLVED 2026-07-12 (commit `8fe29e2`): 0 hard failures, 0 warnings.**
+
+## Collision resolution (2026-07-12, caller-verified)
+Every client helper was traced (`.html` + `.js`) before touching anything:
+
+- **8 DEAD handlers removed** from their module `_h` (no client routed them via a dispatcher — all callers use the canonical standalone CF directly): `currencyGetRates` (pos-completeness), `createPurchaseOrder` (pos-inventory-pro), `registerWebhook`/`deleteWebhook`/`listWebhooks`/`testWebhook` (pos-integrations), `getAuditLog` (pos-retail-engine), `registerDevice` (security-identity). Standalone onCall exports + canonical CFs untouched.
+- **5 USED handlers namespaced** (distinct impls both legitimately used; renamed the dispatcher `_h` key + updated the exact verified caller, behavior preserved):
+  - `getWalletBalance`/`getWalletTransactions`/`refundToWallet` → `posGetWalletBalance`/`posGetWalletTransactions`/`posRefundToWallet` (caller: `pos-crm-pro.html` via smartPosDispatch; `sokoni-wallet.js` stays on the direct wallet CF).
+  - `adminGetPendingPayouts`/`adminResolveDispute` → `aosGetPendingPayouts`/`aosResolveDispute` (caller: `sokoni-aos.js` whitelist + `_call` via adminOsDispatch; `super-admin.html`/`trust-safety.html` stay on the direct CFs).
+
+Deployed: smartPosDispatch, adminOsDispatch, servicesDispatch (updated) + providerDispatch (new). **Reversible:** `git revert 8fe29e2` + redeploy the 4 dispatchers. ⏳ Money/admin dispatch paths (POS wallet, admin payouts/disputes) should get an authenticated-device smoke test.
+
+New dispatcher: **`providerDispatch`** → `provider-onboarding` (18 ops, 1 Cloud Run service).
 
 Related: [[ORPHAN_RECLAMATION_CAMPAIGN]] · [[SETTLEMENT_DISPATCHER_CONSOLIDATION]]
