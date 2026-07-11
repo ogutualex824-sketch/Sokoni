@@ -29,16 +29,20 @@ const COMPANY = Object.freeze({
   operatingName:    'SOKONI',                               // trading / operating name
   incomeTaxStatus:  'ACTIVE',                               // KRA income-tax status
 
-  /* Addresses */
+  /* Registered office (physical / display) */
   address:          'Nairobi, Kenya',                       // registered office (display)
   registeredOffice: 'Nairobi, Kenya',
-  postalAddress:    'P.O. Box 114–50411, Siaya, Kenya',     // verified postal address
   city:             'Nairobi',
   country:          'Kenya',
   countryCode:      'KE',
 
-  /* Registration (fill when provided) */
-  registrationNumber: '',                                  // TODO: company registration no. (not yet provided)
+  /* Postal address (verified) */
+  postalAddress:    'P.O. Box 114–50411',                  // P.O. Box (box–postal code)
+  postalCode:       '50411',
+  town:             'Siaya',                                // postal town
+
+  /* Registration (verified — BRS Certificate of Incorporation) */
+  registrationNumber: 'CPR/2014/166272',
 
   /* Contact */
   email:            'info@mysokoni.co.ke',
@@ -66,6 +70,12 @@ function getKraPin() {
   try { return ETIMS_PLATFORM_PIN.value() || ''; } catch (_) { return ''; }
 }
 
+/* Full postal address line, composed from the atomic parts (no duplicate literal).
+   → "P.O. Box 114–50411, Siaya, Kenya" */
+function postalLine() {
+  return `${COMPANY.postalAddress}, ${COMPANY.town}, ${COMPANY.country}`;
+}
+
 /* ── Derived issuer blocks (single place the shape is defined) ───── */
 /* Invoice issuer — for tax invoices / billing documents. Pass a pin (getKraPin())
    from a secret-bound caller, or omit to resolve it here. */
@@ -73,7 +83,9 @@ function invoiceIssuer(pin) {
   return {
     name:    COMPANY.legalName,
     pin:     pin != null ? pin : getKraPin(),
+    regNo:   COMPANY.registrationNumber,
     address: COMPANY.address,
+    postal:  postalLine(),
     email:   COMPANY.billingEmail,
     phone:   COMPANY.phone,
     website: COMPANY.website,
@@ -84,7 +96,9 @@ function receiptIssuer(pin) {
   return {
     name:    COMPANY.legalName,
     pin:     pin != null ? pin : getKraPin(),
+    regNo:   COMPANY.registrationNumber,
     address: COMPANY.address,
+    postal:  postalLine(),
     poweredBy: COMPANY.poweredBy,
   };
 }
@@ -94,6 +108,7 @@ function posIssuer(pin) {
     brand:   'SOKONI SmartPOS',
     name:    COMPANY.legalName,
     pin:     pin != null ? pin : getKraPin(),
+    regNo:   COMPANY.registrationNumber,
     operatedBy: COMPANY.operatedBy,
   };
 }
@@ -125,6 +140,6 @@ function emailFooter() {
 }
 
 module.exports = {
-  COMPANY, ETIMS_PLATFORM_PIN, getKraPin,
+  COMPANY, ETIMS_PLATFORM_PIN, getKraPin, postalLine,
   invoiceIssuer, receiptIssuer, posIssuer, pdfMeta, orgSchema, emailFooter,
 };

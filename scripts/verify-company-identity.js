@@ -47,6 +47,15 @@ const CANON = {
   domain:          C.domain,           // mysokoni.co.ke
 };
 
+/* Canonical fields that must be populated (no empty / placeholder values). */
+const REQUIRED_FIELDS = [
+  'legalName', 'brand', 'operatingName', 'incomeTaxStatus', 'kraPin',
+  'registrationNumber', 'postalAddress', 'postalCode', 'town', 'country',
+  'email', 'supportEmail', 'phone', 'website', 'domain', 'footerCopyright',
+];
+/* Placeholder tokens that indicate an un-filled value. */
+const PLACEHOLDER_RX = /\b(TODO|TBD|XXXX+|YYYY|123456|999999|PLACEHOLDER|CHANGE_?ME)\b/i;
+
 /* Known-obsolete literals that must NEVER reappear (past names / placeholders). */
 const FORBIDDEN = [
   'Bravilex International Company Limited', // pre-rename long form
@@ -75,6 +84,16 @@ function collectFiles(dir, out) {
 const files = collectFiles(ROOT, []);
 const errors = [];
 
+/* 0. Canonical config completeness — every required field populated, no placeholders. */
+for (const field of REQUIRED_FIELDS) {
+  const val = C[field];
+  if (val == null || String(val).trim() === '') {
+    errors.push(`sokoni-company.js: required field "${field}" is empty`);
+  } else if (PLACEHOLDER_RX.test(String(val))) {
+    errors.push(`sokoni-company.js: field "${field}" still holds a placeholder value ("${val}")`);
+  }
+}
+
 for (const file of files) {
   const rel = path.relative(ROOT, file);
   const text = fs.readFileSync(file, 'utf8');
@@ -98,7 +117,10 @@ if (errors.length) {
 }
 
 console.log('✅ CompanyIdentity consistent across', files.length, 'files.');
-console.log('   legalName      :', CANON.legalName);
-console.log('   footerCopyright:', CANON.footerCopyright);
-console.log('   domain         :', CANON.domain);
+console.log('   legalName         :', C.legalName);
+console.log('   registrationNumber:', C.registrationNumber);
+console.log('   postalAddress     :', C.postalAddress + ', ' + C.town + ' ' + C.postalCode + ', ' + C.country);
+console.log('   kraPin            :', C.kraPin, '(client copy; server = Secret Manager)');
+console.log('   footerCopyright   :', C.footerCopyright);
+console.log('   domain            :', C.domain);
 process.exit(0);

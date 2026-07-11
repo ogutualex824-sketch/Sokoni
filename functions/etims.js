@@ -32,7 +32,7 @@ const admin   = require("firebase-admin");
 const crypto  = require("crypto");
 const https   = require("https");
 const emailSvc = require("./email-service");
-const { COMPANY }                       = require("./company-identity");
+const { COMPANY, postalLine }           = require("./company-identity");
 
 const db = admin.firestore();
 
@@ -321,7 +321,9 @@ tr:last-child td{border-bottom:none}
     <h1>SOKONI</h1>
     <p><b>${_e(profile.businessName)}</b></p>
     <p>KRA PIN: <b>${_e(profile.kraPin)}</b> &nbsp;|&nbsp; Branch: ${_e(profile.branchId||"00")}</p>
+    ${profile.regNo?`<p>Reg No: ${_e(profile.regNo)}</p>`:""}
     ${profile.address?`<p>${_e(profile.address)}</p>`:""}
+    ${profile.postal?`<p>${_e(profile.postal)}</p>`:""}
     ${profile.vatStatus==="registered"?`<span class="vat-badge">VAT Registered</span>`:""}
   </div>
   <div class="kra-badge">
@@ -962,7 +964,7 @@ const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: tr
   const invNo  = `SOKONI-${String(invcNo).padStart(6,"0")}`;
   const now    = new Date().toISOString();
 
-  const platProfile = { kraPin:platPin, businessName:COMPANY.legalName, branchId:"00", vatStatus:"registered", address:COMPANY.address, invoicePrefix:"SOKONI" };
+  const platProfile = { kraPin:platPin, businessName:COMPANY.legalName, regNo:COMPANY.registrationNumber, branchId:"00", vatStatus:"registered", address:COMPANY.address, postal:postalLine(), invoicePrefix:"SOKONI" };
   const lineItems   = [{ name: FEE_LABELS[feeType]+(description?`: ${description}`:""), quantity:1, unitPrice:amount, discountRate:0 }];
   const kraLines    = lineItems.map((it,i) => calcLine({...it,seq:i+1},"registered"));
   const totals      = calcTotals(kraLines);

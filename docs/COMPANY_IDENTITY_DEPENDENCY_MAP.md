@@ -17,10 +17,10 @@
 
 The two files are kept in **lock-step** (identical field values). The server never ships the KRA PIN in source — it reads it from **Secret Manager (`ETIMS_PLATFORM_PIN`)** via `getKraPin()`. The client copy carries the KRA PIN only because it is a **legally-public** identifier printed on tax receipts and needs to render on offline/on-device SmartPOS receipts.
 
-### Fields covered
-Legal entity name · Brand name · Operating name · KRA PIN (secret on server) · Income-tax status · Registered office address · Postal address¹ · Official company email · Billing email · Support email · Official phone numbers · Website · Domain · Copyright text · "Powered by" / "Operated by" text · Ownership statement · Organization JSON-LD schema · Invoice issuer block · Receipt issuer block · SmartPOS issuer block · PDF metadata · Email-footer metadata.
+### Fields covered (all populated — no placeholders)
+Legal entity name (`Bravilex International Co. Limited`) · Brand (`SOKONI`) · Operating name · **Company registration number (`CPR/2014/166272`)** · KRA PIN (`P051521597J` — secret on server) · Income-tax status (`ACTIVE`) · Registered office address · **Postal address (`P.O. Box 114–50411`) + postal code (`50411`) + town (`Siaya`) + country (`Kenya`)** · Official company email · Billing email · Support email · Official phone numbers · Website · Domain · Copyright text · "Powered by" / "Operated by" text · Ownership statement · Organization JSON-LD schema · Invoice issuer block · Receipt issuer block · SmartPOS issuer block · PDF metadata · Email-footer metadata.
 
-¹ `postalAddress` and `registrationNumber` are present but empty (`''`) — flagged **TODO**, pending verified P.O. Box and company registration number.
+Derived helper `postalLine()` composes the full postal line (`P.O. Box 114–50411, Siaya, Kenya`) from the atomic parts so no document re-hardcodes it. The `invoiceIssuer()`/`receiptIssuer()`/`posIssuer()` blocks now carry `regNo` + `postal`.
 
 ---
 
@@ -33,7 +33,7 @@ These modules generate documents/output at runtime and now consume CompanyIdenti
 |------|------------------|
 | `functions/index.js` | `COMPANY.footerCopyright` (2 generated footers); `COMPANY.ownershipStatement` (KASS admin + marketplace prompts) |
 | `functions/sasos-billing.js` | `COMPANY.legalName`, `COMPANY.address`, `COMPANY.billingEmail`; `ETIMS_PLATFORM_PIN` secret handle (invoice issuer) |
-| `functions/etims.js` | `COMPANY.legalName` (platform tax-invoice taxpayer name — must match PIN owner), `COMPANY.operatedBy`, `COMPANY.poweredBy`, `COMPANY.address`, `COMPANY.supportEmail`, `COMPANY.website`; `ETIMS_PLATFORM_PIN.value()` |
+| `functions/etims.js` | `COMPANY.legalName` (platform tax-invoice taxpayer name — must match PIN owner), `COMPANY.registrationNumber` + `postalLine()` (rendered on platform tax invoice issuer block), `COMPANY.operatedBy`, `COMPANY.poweredBy`, `COMPANY.address`, `COMPANY.supportEmail`, `COMPANY.website`; `ETIMS_PLATFORM_PIN.value()` |
 | `functions/hub-etims.js` | `COMPANY.legalName`, `COMPANY.operatedBy`, `COMPANY.poweredBy` |
 | `functions/pos-retail.js` | `COMPANY.legalName`, `COMPANY.operatedBy`, `COMPANY.poweredBy` (POS receipts) |
 | `functions/pos-retail-engine.js` | `COMPANY.*` issuer/footer strings |

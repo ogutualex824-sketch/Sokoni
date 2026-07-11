@@ -27,14 +27,20 @@
     incomeTaxStatus:  'ACTIVE',
     kraPin:           'P051521597J',          /* verified — legally shown on tax receipts/invoices */
 
-    /* Addresses */
+    /* Registered office (physical / display) */
     address:          'Nairobi, Kenya',
     registeredOffice: 'Nairobi, Kenya',
-    postalAddress:    'P.O. Box 114–50411, Siaya, Kenya',  /* verified postal address */
     city:             'Nairobi',
     country:          'Kenya',
     countryCode:      'KE',
-    registrationNumber: '',                   /* TODO: company reg no. (not yet provided) */
+
+    /* Postal address (verified) */
+    postalAddress:    'P.O. Box 114–50411',   /* P.O. Box (box–postal code) */
+    postalCode:       '50411',
+    town:             'Siaya',                 /* postal town */
+
+    /* Registration (verified — BRS Certificate of Incorporation) */
+    registrationNumber: 'CPR/2014/166272',
 
     /* Contact */
     email:            'info@mysokoni.co.ke',
@@ -70,9 +76,17 @@
       'address':   { '@type': 'PostalAddress', 'addressLocality': C.city, 'addressCountry': C.countryCode },
     };
   };
+  /* Full postal address line, composed from atomic parts (no duplicate literal).
+     → "P.O. Box 114–50411, Siaya, Kenya" */
+  C.postalLine = function () {
+    return C.postalAddress + ', ' + C.town + ', ' + C.country;
+  };
   /* Receipt / SmartPOS issuer block for client-rendered documents. */
   C.receiptIssuer = function () {
-    return { name: C.legalName, pin: C.kraPin, address: C.address, operatedBy: C.operatedBy };
+    return {
+      name: C.legalName, pin: C.kraPin, regNo: C.registrationNumber,
+      address: C.address, postal: C.postalLine(), operatedBy: C.operatedBy,
+    };
   };
 
   w.SOKONI_COMPANY = C;
