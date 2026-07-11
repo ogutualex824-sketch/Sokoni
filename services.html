@@ -1414,7 +1414,7 @@ function updateJobStatus(id, status){
         "SOKONI Commission ("+pct+"%):\n" +
         "KES "+owed.toLocaleString()+"\n\n" +
         "Pay to M-PESA:\n" +
-        "Paybill: 522522\n" +
+        "Paybill: " + ((window.SOKONI_PAY && window.SOKONI_PAY.commissionPaybill) || "522522") + "\n" +
         "Account: SOK-"+ref+"\n\n" +
         "Non-payment suspends your listing."
       ), 100);

@@ -331,7 +331,7 @@
       <p><strong style="color:#ccc">1. You receive payments directly</strong> — customers pay into your own M-Pesa account. SOKONI never holds your money.</p>
       <p><strong style="color:#ccc">2. Commission is tracked automatically</strong> — every confirmed payment generates a commission record in your ledger.</p>
       <p><strong style="color:#ccc">3. Monthly invoice</strong> — on the 1st of each month, SOKONI issues an invoice for commissions from the previous month.</p>
-      <p><strong style="color:#ccc">4. Payment terms</strong> — invoices are due by the 7th. Pay via M-Pesa Paybill 123456 (Account: your seller ID) or bank transfer.</p>
+      <p><strong style="color:#ccc">4. Payment terms</strong> — invoices are due by the 7th. Pay via M-Pesa Paybill <span data-sk-pay="commissionPaybill">522522</span> (Account: your seller ID) or bank transfer.</p>
       <p><strong style="color:#ccc">5. Future</strong> — automatic commission collection directly from payments will be available once integrated with payment partners.</p>
     </div>
   </div>
@@ -547,7 +547,7 @@ window.loadBilling = async function() {
 };
 
 window.payInvoice = function(invoiceId) {
-  (window._skToast||alert)("To pay invoice " + invoiceId.slice(0,12) + "…\n\nM-Pesa: Lipa Na M-Pesa → Paybill → Business No. 123456 → Account: YOUR_SELLER_ID → Amount: as invoiced\n\nBank: Equity Bank → Account: 0123456789 → Ref: SOKONI-INV-" + invoiceId.slice(0,8) + "\n\nContact support@mysokoni.co.ke once paid.");
+  (window._skToast||alert)("To pay invoice " + invoiceId.slice(0,12) + "…\n\nM-Pesa: Lipa Na M-Pesa → Paybill → Business No. " + ((window.SOKONI_PAY&&window.SOKONI_PAY.commissionPaybill)||"522522") + " → Account: YOUR_SELLER_ID → Amount: as invoiced\n\nContact support@mysokoni.co.ke once paid.");
 };
 
 window.selectPlan = function(plan) {
@@ -592,7 +592,7 @@ window.buyFeature = function(duration) {
   const msg = document.getElementById("featBuyMsg");
   const item = prompt("Enter your product/listing title to feature:");
   if (!item) return;
-  msg.textContent = `To feature "${item}" for ${duration} (${PRICES[duration]}), pay via M-Pesa Paybill 123456, Account: FEATURE-${(_uid||"").slice(0,8)}, then WhatsApp +254 705 726 803 with your payment code.`;
+  msg.textContent = `To feature "${item}" for ${duration} (${PRICES[duration]}), pay via M-Pesa Paybill ${(window.SOKONI_PAY&&window.SOKONI_PAY.commissionPaybill)||"522522"}, Account: FEATURE-${(_uid||"").slice(0,8)}, then WhatsApp +254 705 726 803 with your payment code.`;
   msg.style.color = "#00d4ff";
 };
 

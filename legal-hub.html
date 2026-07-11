@@ -1053,7 +1053,7 @@
           <span style="color:rgba(255,255,255,0.7);">SOKONI commission (5%)</span><span id="prevOwed" style="color:#71ff00;"></span>
         </div>
         <div style="font-size:11px;color:rgba(255,255,255,0.4);line-height:1.7;">
-          Pay via M-PESA: <strong style="color:white;">Paybill 522522</strong>  Account: <strong style="color:#71ff00;" id="prevRef">SOK-[REF]</strong>
+          Pay via M-PESA: <strong style="color:white;">Paybill <span data-sk-pay="commissionPaybill">522522</span></strong>  Account: <strong style="color:#71ff00;" id="prevRef">SOK-[REF]</strong>
         </div>
       </div>
 
@@ -3670,7 +3670,7 @@ function submitCaseCompletion(){
   if(msg){
     msg.innerHTML =
       `✅ Logged! Pay SOKONI commission of <strong style="color:#71ff00;">KES ${owed.toLocaleString()}</strong><br>` +
-      `M-PESA   Paybill: <strong style="color:white;">522522</strong>  Account: <strong style="color:#71ff00;">SOK-${commRef}</strong>`;
+      `M-PESA   Paybill: <strong style="color:white;">${(window.SOKONI_PAY&&window.SOKONI_PAY.commissionPaybill)||'522522'}</strong>  Account: <strong style="color:#71ff00;">SOK-${commRef}</strong>`;
     msg.style.color = "#71ff00";
   }
 
