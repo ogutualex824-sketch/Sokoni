@@ -7853,7 +7853,7 @@ exports.moderateMessage               = _messagesMod.moderateMessage;
 exports.archiveCompletedConversations = _messagesMod.archiveCompletedConversations;
 exports.cleanupChatStorage            = _messagesMod.cleanupChatStorage;
 exports.onOrderStatusChanged          = _messagesMod.onOrderStatusChanged;
-// exports.onBookingStatusChanged — pending GCP cleanup (HTTPS→Firestore trigger migration)
+exports.onBookingStatusChanged        = _messagesMod.onBookingStatusChanged;
 exports.onFoodOrderStatusChanged      = _messagesMod.onFoodOrderStatusChanged;
 
 /* ══════════════════════════════════════════════════════════════════
