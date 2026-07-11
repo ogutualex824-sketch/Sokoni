@@ -793,6 +793,173 @@ exports.validateDeviceAccess = onCall(OPT, async (req) => {
   };
 });
 
+/* ══════════════════════════════════════════════════════════════════
+   SmartPOS Onboarding v2 — auto Merchant ID, business picker, create,
+   device pairing. Exposed via smartPosDispatch (NO new Cloud Run
+   service): these handlers live in the `_h` registry and are merged by
+   smartpos-dispatch.js. Ownership is always validated on the backend.
+══════════════════════════════════════════════════════════════════ */
+
+/* Merchant ID: human-readable, immutable (doc id), globally unique.
+   Format SOK-XXXXXX using an unambiguous alphabet (no 0/O/1/I). */
+const _MID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+async function _generateMerchantId() {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const bytes = crypto.randomBytes(6);
+    let code = '';
+    for (let j = 0; j < 6; j++) code += _MID_ALPHABET[bytes[j] % _MID_ALPHABET.length];
+    const id = `SOK-${code}`;
+    const snap = await db.collection('businesses').doc(id).get();
+    if (!snap.exists) return id;   // collision-free (indexed doc-id lookup)
+  }
+  _err('Could not allocate a unique Merchant ID — please retry.', 'aborted');
+}
+
+/* getMyBusinesses — businesses the authenticated user owns. No Merchant ID
+   required; drives the onboarding business picker. */
+async function _getMyBusinesses(req) {
+  const uid = _requireAuth(req);
+  /* Detect ownership across both the businesses doc and the legacy merchants
+     mirror (older businesses recorded ownership only in `merchants`). Union by
+     merchantId so existing users see their shops without any migration. */
+  const [ownedBiz, ownedMerchant, adminMerchant] = await Promise.all([
+    db.collection('businesses').where('ownerId', '==', uid).limit(50).get(),
+    db.collection('merchants').where('ownerId', '==', uid).limit(50).get().catch(() => ({ docs: [] })),
+    db.collection('merchants').where('adminUids', 'array-contains', uid).limit(50).get().catch(() => ({ docs: [] })),
+  ]);
+
+  const ids = new Set();
+  const businesses = [];
+  const push = (mid, b, role) => {
+    if (ids.has(mid)) return;
+    ids.add(mid);
+    businesses.push({
+      merchantId: mid,
+      businessId: (b && b.businessId) || mid,
+      name:       _san((b && (b.name || b.businessName)) || '', 200),
+      logo:       (b && b.logo) || null,
+      category:   (b && (b.category || b.businessType)) || null,
+      branch:     (b && b.defaultBranchId) || `${mid}-main`,
+      status:     (b && b.status) || 'active',
+      role,
+    });
+  };
+  ownedBiz.docs.forEach((d) => push(d.id, d.data(), 'owner'));
+  /* For merchant-only matches, fetch the business doc for display fields. */
+  const merchantOnly = [...ownedMerchant.docs, ...adminMerchant.docs].filter((d) => !ids.has(d.id));
+  const bizDocs = await Promise.all(merchantOnly.map((d) => db.collection('businesses').doc(d.id).get().catch(() => null)));
+  merchantOnly.forEach((d, i) => {
+    const bd = bizDocs[i];
+    push(d.id, (bd && bd.exists) ? bd.data() : d.data(), 'owner');
+  });
+
+  return { businesses, count: businesses.length };
+}
+
+/* createBusiness — first-time onboarding. Auto-generates the Merchant ID and
+   Business ID, provisions defaults (branch, owner staff+role, payment methods,
+   tax/receipt/flags/settings, starter category), and returns a pairing QR. */
+async function _createBusiness(req) {
+  const uid = _requireAuth(req);
+  const d = req.data || {};
+  const businessName = _san(d.businessName || '', 200).trim();
+  if (!businessName) _err('Business name is required.');
+  const category = _san(d.category || '', 80).trim();
+  if (!category) _err('Business category is required.');
+
+  const merchantId  = await _generateMerchantId();
+  const businessId  = 'BIZ-' + crypto.randomBytes(8).toString('hex').toUpperCase();
+  const branchId    = `${merchantId}-main`;
+  const pairingToken = crypto.randomBytes(20).toString('hex');
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const qr  = JSON.stringify({ v: 1, t: 'sokoni-pos-pair', merchantId, businessId, branchId, token: pairingToken });
+
+  const batch = db.batch();
+  batch.set(db.collection('businesses').doc(merchantId), {
+    merchantId, businessId, name: businessName, businessName,
+    category, businessType: category,
+    country: _san(d.country || 'Kenya', 80), county: _san(d.county || '', 120), city: _san(d.county || '', 120),
+    phone: _san(d.phone || '', 30), logo: d.logo || null, currency: 'KES',
+    ownerId: uid, status: 'active', defaultBranchId: branchId, pairingToken,
+    provisionedBy: 'onboarding-v2', createdAt: now, updatedAt: now,
+  });
+  batch.set(db.collection('merchants').doc(merchantId), {
+    merchantId, name: businessName, ownerId: uid, adminUids: [uid], status: 'active', createdAt: now,
+  });
+  batch.set(db.collection('branches').doc(branchId), {
+    id: branchId, merchantId, name: 'Main Branch', address: _san(d.county || '', 120),
+    phone: _san(d.phone || '', 30), timezone: 'Africa/Nairobi', isDefault: true, status: 'active', createdAt: now,
+  });
+  batch.set(db.collection('posRoles').doc(`${merchantId}-owner`), {
+    merchantId, name: 'Owner', key: 'owner', permissions: ['*'], isDefault: true, createdAt: now,
+  });
+  batch.set(db.collection('posStaff').doc(`${branchId}-${uid}`), {
+    merchantId, branchId, uid, name: _san(d.ownerName || '', 120) || 'Owner',
+    role: 'owner', status: 'active', createdAt: now,
+  });
+  batch.set(db.collection('paymentMethods').doc(`${merchantId}-cash`),  { merchantId, type: 'cash',  label: 'Cash',   enabled: true, order: 1, createdAt: now });
+  batch.set(db.collection('paymentMethods').doc(`${merchantId}-mpesa`), { merchantId, type: 'mpesa', label: 'M-Pesa', enabled: true, order: 2, createdAt: now });
+  batch.set(db.collection('taxConfig').doc(merchantId),     { merchantId, vatEnabled: false, vatRate: 16, currency: 'KES', createdAt: now });
+  batch.set(db.collection('receiptConfig').doc(merchantId), { merchantId, header: businessName, footer: 'Thank you for shopping with us', showLogo: true, createdAt: now });
+  batch.set(db.collection('featureFlags').doc(merchantId),  { merchantId, offlineMode: true, loyalty: false, createdAt: now });
+  batch.set(db.collection('posSettings').doc(merchantId),   { merchantId, currency: 'KES', lowStockThreshold: 5, roundingMode: 'none', createdAt: now });
+  batch.set(db.collection('categories').doc(`${merchantId}-general`), { merchantId, name: 'General', isDefault: true, createdAt: now });
+
+  await batch.commit();
+  _log('INFO', 'createBusiness provisioned', { merchantId, uid });
+  return { merchantId, businessId, branchId, name: businessName, category, qr, status: 'active' };
+}
+
+/* pairDevice — connect an additional device via Merchant ID or scanned QR.
+   Ownership/staff is validated on the backend; the client Merchant ID is
+   never trusted. If a QR token is supplied it must match the business. */
+async function _pairDevice(req) {
+  _requireAuth(req);
+  const d = req.data || {};
+  let merchantId = _san(d.merchantId || '', 128).trim();
+  let branchId   = _san(d.branchId || '', 128).trim();
+  let token = null;
+  if (!merchantId && d.qr) {
+    try {
+      const p = JSON.parse(d.qr);
+      if (p && p.t === 'sokoni-pos-pair') { merchantId = _san(p.merchantId || '', 128); branchId = _san(p.branchId || '', 128); token = p.token || null; }
+      else _err('Invalid pairing QR code.');
+    } catch (_) { _err('Invalid pairing QR code.'); }
+  }
+  if (!merchantId) _err('Merchant ID or a valid pairing QR is required.');
+  if (!branchId) branchId = `${merchantId}-main`;
+
+  await _assertMerchantAccess(req, merchantId, branchId);   // backend ownership check
+
+  const bizSnap = await db.collection('businesses').doc(merchantId).get();
+  if (!bizSnap.exists) _err('Business not found.', 'not-found');
+  const b = bizSnap.data();
+  if (token && b.pairingToken !== token) _err('Pairing code expired or invalid — regenerate the QR.', 'permission-denied');
+
+  return {
+    ok: true, merchantId, branchId,
+    business: { merchantId, name: _san(b.name || b.businessName || '', 200), logo: b.logo || null, category: b.category || b.businessType || null, status: b.status || 'active' },
+  };
+}
+
+/* regeneratePairingQR — new pairing token/QR WITHOUT changing the Merchant ID
+   (owner only). For Business Settings → "Regenerate pairing QR". */
+async function _regeneratePairingQR(req) {
+  const uid = _requireAuth(req);
+  const d = req.data || {};
+  const merchantId = _san(d.merchantId || '', 128).trim();
+  if (!merchantId) _err('merchantId is required.');
+  const ref = db.collection('businesses').doc(merchantId);
+  const snap = await ref.get();
+  if (!snap.exists) _err('Business not found.', 'not-found');
+  if (snap.data().ownerId !== uid && !_isAdmin(req)) _err('Only the owner can regenerate the pairing QR.', 'permission-denied');
+  const pairingToken = crypto.randomBytes(20).toString('hex');
+  const b = snap.data();
+  const branchId = b.defaultBranchId || `${merchantId}-main`;
+  await ref.update({ pairingToken, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  return { merchantId, qr: JSON.stringify({ v: 1, t: 'sokoni-pos-pair', merchantId, businessId: b.businessId || merchantId, branchId, token: pairingToken }) };
+}
+
 /* ── Exports ─────────────────────────────────────────────────────── */
 module.exports = {
   bootstrapDevice:          exports.bootstrapDevice,
@@ -800,4 +967,11 @@ module.exports = {
   invalidateBootstrapCache: exports.invalidateBootstrapCache,
   getBusinessConfig:        exports.getBusinessConfig,
   validateDeviceAccess:     exports.validateDeviceAccess,
+  /* Onboarding v2 handlers — served through smartPosDispatch (no new CF). */
+  _h: {
+    getMyBusinesses:     _getMyBusinesses,
+    createBusiness:      _createBusiness,
+    pairDevice:          _pairDevice,
+    regeneratePairingQR: _regeneratePairingQR,
+  },
 };

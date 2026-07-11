@@ -39,7 +39,7 @@ const DISPATCHERS = {
   loyaltyDispatch:       ['loyalty', 'loyalty-enterprise'],
   messagesDispatch:      ['messages'],
   servicesDispatch:      ['healthcare-hub', 'security-identity', 'jobs', 'hr-payroll', 'b2b-wholesale', 'property-hub'],
-  smartPosDispatch:      ['pos-crm-pro', 'pos-completeness', 'pos-staff-ops', 'pos-inventory-pro', 'pos-accounting', 'pos-retail-engine', 'pos-integrations', 'pos-hq'],
+  smartPosDispatch:      ['pos-crm-pro', 'pos-completeness', 'pos-staff-ops', 'pos-inventory-pro', 'pos-accounting', 'pos-retail-engine', 'pos-integrations', 'pos-hq', 'pos-multi-till', 'pos-cash-manager', 'business-bootstrap'],
   logisticsPlusDispatch: ['logistics-plus'],
   financeSprintDispatch: ['finance-os-sprint43'],   // + settlement handlers (settlement-dispatch)
 };

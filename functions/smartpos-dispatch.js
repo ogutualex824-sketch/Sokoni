@@ -32,6 +32,7 @@ const posIntegrations= require('./pos-integrations');
 const posHq          = require('./pos-hq');
 const posMultiTill   = require('./pos-multi-till');
 const posCashManager = require('./pos-cash-manager');
+const bizBootstrap   = require('./business-bootstrap');   // onboarding v2: getMyBusinesses/createBusiness/pairDevice/regeneratePairingQR
 
 function _merge() {
   const seen = {}, result = {};
@@ -53,7 +54,8 @@ const _H = _merge(
   posIntegrations._h,
   posHq._h,
   posMultiTill._h,
-  posCashManager._h
+  posCashManager._h,
+  bizBootstrap._h
 );
 
 const _OPTS = {

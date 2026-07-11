@@ -1664,6 +1664,13 @@ function CF(name) {
   return _fns.httpsCallable(name, { timeout: 30000 });
 }
 
+/* SmartPOS domain ops are consolidated behind smartPosDispatch (one Cloud Run
+   service). SPOS('op')(data) routes through it; response shape is unchanged. */
+function SPOS(op) {
+  const disp = _fns.httpsCallable('smartPosDispatch', { timeout: 30000 });
+  return (data) => disp(Object.assign({ op: op }, data || {}));
+}
+
 /* ═══════════════════════════════════════════════════════════════
    SECURITY — XSS ESCAPER
    Must be used for ALL dynamic innerHTML insertions.
@@ -2143,38 +2150,28 @@ async function initBizStep() {
     // prompting the user to enter their merchant ID.
     let businesses = [];
 
-    // Attempt listMerchants CF (may not exist on all deployments)
+    // Onboarding v2 — auto-detect businesses the user owns (NO Merchant ID needed).
     try {
-      const listFn = CF('listMerchants');
-      const res    = await listFn({ uid });
-      businesses   = (res.data && Array.isArray(res.data.merchants))
-                   ? res.data.merchants
-                   : [];
+      const res  = await SPOS('getMyBusinesses')({});
+      businesses = (res.data && Array.isArray(res.data.businesses))
+        ? res.data.businesses.map(b => ({
+            id: b.merchantId, merchantId: b.merchantId, name: b.name,
+            logo: b.logo, businessType: b.category, category: b.category,
+            branch: b.branch, status: b.status,
+          }))
+        : [];
     } catch (_) {
-      // If listMerchants doesn't exist, pull from user's token claims
+      // Backward-compatible fallback: legacy claims-based discovery.
       const token = await WIZ.user.getIdTokenResult(true);
       const merchantIds = token.claims.merchantIds ||
                           (token.claims.merchantId ? [token.claims.merchantId] : []);
-
-      if (merchantIds.length === 0) {
-        // Prompt user to enter merchant ID
-        renderBizManualEntry();
-        return;
-      }
-
-      // Fetch each merchant via getBusinessConfig
       const results = await Promise.allSettled(
         merchantIds.map(mid => CF('getBusinessConfig')({ merchantId: mid }).then(r => ({
-          id:           mid,
-          name:         r.data.business.name,
-          logo:         r.data.business.logo,
-          businessType: r.data.business.businessType,
-          branches:     r.data.branches,
+          id: mid, merchantId: mid, name: r.data.business.name, logo: r.data.business.logo,
+          businessType: r.data.business.businessType, branches: r.data.branches,
         })))
       );
-      businesses = results
-        .filter(r => r.status === 'fulfilled')
-        .map(r => r.value);
+      businesses = results.filter(r => r.status === 'fulfilled').map(r => r.value);
     }
 
     _bizAllItems = businesses;
@@ -2182,7 +2179,8 @@ async function initBizStep() {
     document.getElementById('biz-loading').style.display = 'none';
 
     if (businesses.length === 0) {
-      document.getElementById('biz-empty').style.display = 'block';
+      // First-time user — Create Your Business (never prompt for a Merchant ID).
+      renderCreateBusiness();
       return;
     }
 
@@ -2266,6 +2264,66 @@ function renderBizManualEntry() {
     </div>`;
 }
 
+/* First-time onboarding — Create Your Business. Merchant ID auto-generated
+   by the backend (createBusiness). The user is NEVER asked for one. */
+function renderCreateBusiness() {
+  document.getElementById('biz-loading').style.display = 'none';
+  document.getElementById('biz-empty').style.display   = 'none';
+  const list = document.getElementById('biz-list');
+  list.style.display = 'block';
+  const cats = ['Retail Shop','Supermarket','Restaurant / Food','Pharmacy','Electronics',
+                'Fashion / Apparel','Hardware','Salon / Beauty','Wholesale','Services','Other'];
+  list.innerHTML = `
+    <div style="width:100%;display:flex;flex-direction:column;gap:12px;">
+      <div style="text-align:center;margin-bottom:2px;">
+        <h3 style="font-size:18px;font-weight:800;margin:0;">Create Your Business</h3>
+        <p style="font-size:13px;color:var(--sk-text-muted);margin:4px 0 0;">We'll generate your Merchant ID automatically — no code to remember.</p>
+      </div>
+      <label class="input-label" for="cb-name">Business name *</label>
+      <input type="text" class="sk-input" id="cb-name" placeholder="e.g. Mama Njeri Shop" autocomplete="organization">
+      <label class="input-label" for="cb-category">Category *</label>
+      <select class="sk-input" id="cb-category">${cats.map(c => '<option value="'+c+'">'+c+'</option>').join('')}</select>
+      <label class="input-label" for="cb-country">Country</label>
+      <input type="text" class="sk-input" id="cb-country" value="Kenya" autocomplete="country-name">
+      <label class="input-label" for="cb-county">County / City</label>
+      <input type="text" class="sk-input" id="cb-county" placeholder="e.g. Nairobi">
+      <label class="input-label" for="cb-phone">Phone number</label>
+      <input type="tel" class="sk-input" id="cb-phone" placeholder="e.g. 0712 345 678" inputmode="tel" autocomplete="tel">
+      <button class="btn-primary" id="cb-submit" onclick="createMyBusiness()" style="margin-top:6px;">Create business &amp; start selling</button>
+      <div class="error-box" id="cb-error" role="alert"></div>
+    </div>`;
+}
+
+async function createMyBusiness() {
+  const name  = (document.getElementById('cb-name') || {}).value?.trim();
+  const errEl = document.getElementById('cb-error');
+  const btn   = document.getElementById('cb-submit');
+  if (!name) { errEl.textContent = 'Please enter your business name.'; errEl.classList.add('visible'); return; }
+  errEl.classList.remove('visible');
+  btn.disabled = true; const orig = btn.textContent; btn.textContent = 'Creating…';
+  try {
+    const res = await SPOS('createBusiness')({
+      businessName: name,
+      category:     (document.getElementById('cb-category') || {}).value,
+      country:      (document.getElementById('cb-country') || {}).value?.trim() || 'Kenya',
+      county:       (document.getElementById('cb-county')  || {}).value?.trim() || '',
+      phone:        (document.getElementById('cb-phone')   || {}).value?.trim() || '',
+    });
+    const d = res.data;
+    WIZ.selectedBiz        = { id: d.merchantId, merchantId: d.merchantId, name: d.name, logo: null, businessType: d.category };
+    WIZ.selectedMerchantId = d.merchantId;
+    WIZ._bizBranches       = [{ id: d.branchId, name: 'Main Branch' }];
+    WIZ.newBusinessQr      = d.qr;            // shown later in Business Settings
+    goToStep(5);
+  } catch (err) {
+    errEl.textContent = (err && err.message) || 'Could not create business. Please try again.';
+    errEl.classList.add('visible');
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+
+/* Manual Merchant ID entry — connecting an ADDITIONAL device to an existing
+   business. Validated on the backend via pairDevice (ownership never trusted). */
 async function loadManualMerchant() {
   const mid   = (document.getElementById('manual-merchant-id') || {}).value?.trim();
   const errEl = document.getElementById('manual-biz-error');
@@ -2276,7 +2334,8 @@ async function loadManualMerchant() {
   }
   errEl.classList.remove('visible');
   try {
-    const res = await CF('getBusinessConfig')({ merchantId: mid });
+    const pair = await SPOS('pairDevice')({ merchantId: mid });
+    const res  = await CF('getBusinessConfig')({ merchantId: pair.data.merchantId });
     const biz = {
       id:           mid,
       name:         res.data.business.name,
