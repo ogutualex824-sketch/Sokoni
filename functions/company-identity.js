@@ -32,7 +32,7 @@ const COMPANY = Object.freeze({
   /* Addresses */
   address:          'Nairobi, Kenya',                       // registered office (display)
   registeredOffice: 'Nairobi, Kenya',
-  postalAddress:    '',                                     // TODO: set verified P.O. Box (not yet provided)
+  postalAddress:    'P.O. Box 114–50411, Siaya, Kenya',     // verified postal address
   city:             'Nairobi',
   country:          'Kenya',
   countryCode:      'KE',

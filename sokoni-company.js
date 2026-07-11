@@ -30,7 +30,7 @@
     /* Addresses */
     address:          'Nairobi, Kenya',
     registeredOffice: 'Nairobi, Kenya',
-    postalAddress:    '',                     /* TODO: verified P.O. Box (not yet provided) */
+    postalAddress:    'P.O. Box 114–50411, Siaya, Kenya',  /* verified postal address */
     city:             'Nairobi',
     country:          'Kenya',
     countryCode:      'KE',
