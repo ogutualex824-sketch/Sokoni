@@ -134,11 +134,12 @@
 (function(){
   'use strict';
   var _fns=null, _disp=null;
-  /* Route every settlement op through the consolidated settlementDispatch CF.
-     Call sites keep the cf('opName')(payload) shape and the {data} response. */
+  /* Route every settlement op through the dispatcher that hosts them
+     (financeSprintDispatch — quota-optimized). Call sites keep the
+     cf('opName')(payload) shape and the {data} response. */
   function cf(op){
     if(!_fns)_fns=firebase.functions();
-    if(!_disp)_disp=_fns.httpsCallable('settlementDispatch');
+    if(!_disp)_disp=_fns.httpsCallable('financeSprintDispatch');
     return function(payload){ return _disp(Object.assign({op:op}, payload||{})); };
   }
   function kes(cents){ return 'KES '+((Number(cents)||0)/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0}); }

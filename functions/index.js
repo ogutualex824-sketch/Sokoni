@@ -7980,14 +7980,13 @@ exports.fosGetSettlementConfig = finosAutomation.fosGetSettlementConfig;
 exports.fosSetSettlementConfig = finosAutomation.fosSetSettlementConfig;
 exports.fosGetAuditTrail       = finosAutomation.fosGetAuditTrail;
 
-/* ── Enterprise Settlement — CONSOLIDATED into ONE dispatcher (quota-optimized).
-   All 12 settlement ops (Phase 1 engine + Phase 2 flags/config/validation +
-   Phase 3 split/providers) route through settlementDispatch({op,...}) — see
-   settlement-dispatch.js. Individual CFs are intentionally NOT exported so only
-   a single Cloud Run service is created. Auth/App Check unchanged (enforced per
-   handler). Client wrapper: sokoni-settlement.js. ── */
-const settlementDispatcher = require('./settlement-dispatch');
-exports.settlementDispatch = settlementDispatcher.settlementDispatch;
+/* ── Enterprise Settlement — 12 ops hosted inside the existing
+   financeSprintDispatch service (see finance-sprint-dispatch.js). A dedicated
+   settlementDispatch CF could not be created under Cloud Run quota, so the
+   settlement handler registry is merged into an already-deployed dispatcher —
+   ZERO new Cloud Run services. Callers use financeSprintDispatch({op,...}) via
+   the sokoni-settlement.js client wrapper. No individual settlement CFs are
+   exported. Auth/App Check enforced per handler (unchanged). ── */
 
 /* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
 const trustSafety = require('./trust-safety');
@@ -8361,34 +8360,13 @@ exports.removeDeviceFromSession   = posSession.removeDeviceFromSession;
 exports.listActiveSessions        = posSession.listActiveSessions;
 exports.posSessionCleanup         = posSession.posSessionCleanup;
 
-/* ── SmartPOS 2.1 Retail Engine ─────────────────────────────── */
+/* ── SmartPOS Dispatcher — 154 onCall CFs → 1 Cloud Run service ─── */
+/* DISPATCH CONSOLIDATION: retail-engine(18) + inventory-pro(21) + accounting(18)
+   + crm-pro(25) + staff-ops(21) + hq(13) + integrations(15) + completeness(25) = 156 CFs */
+const smartPosDispatcher = require('./smartpos-dispatch');
+exports.smartPosDispatch = smartPosDispatcher.smartPosDispatch;
+/* Scheduled CFs remain individual */
 const posRetailEngine = require('./pos-retail-engine');
-/* Customer Engine */
-exports.getPOSCustomer             = posRetailEngine.getPOSCustomer;
-exports.upsertPOSCustomer          = posRetailEngine.upsertPOSCustomer;
-/* Sale Recording */
-exports.recordPOSSale              = posRetailEngine.recordPOSSale;
-exports.getPOSSale                 = posRetailEngine.getPOSSale;
-exports.voidPOSSale                = posRetailEngine.voidPOSSale;
-/* Receipt Engine */
-exports.getReceipt                 = posRetailEngine.getReceipt;
-exports.emailReceipt               = posRetailEngine.emailReceipt;
-/* Inventory Intelligence */
-exports.getInventoryAlerts         = posRetailEngine.getInventoryAlerts;
-exports.getInventoryInsights       = posRetailEngine.getInventoryInsights;
-exports.getReorderSuggestions      = posRetailEngine.getReorderSuggestions;
-/* POS Analytics */
-exports.getPOSAnalytics            = posRetailEngine.getPOSAnalytics;
-exports.getLivePOSMetrics          = posRetailEngine.getLivePOSMetrics;
-/* Staff Management */
-exports.getStaffPermissions        = posRetailEngine.getStaffPermissions;
-exports.recordAuditEvent           = posRetailEngine.recordAuditEvent;
-exports.getPosAuditLog             = posRetailEngine.getAuditLog;
-exports.getShiftSummary            = posRetailEngine.getShiftSummary;
-/* Multi-Branch */
-exports.getBranchComparison        = posRetailEngine.getBranchComparison;
-exports.initiateInventoryTransfer  = posRetailEngine.initiateInventoryTransfer;
-/* Scheduled */
 exports.inventoryAlertSweep        = posRetailEngine.inventoryAlertSweep;
 
 /* ── SmartPOS 3.0 — Smart Inventory Pro ─────────────────────── */

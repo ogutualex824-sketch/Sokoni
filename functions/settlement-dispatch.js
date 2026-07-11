@@ -73,5 +73,11 @@ exports.settlementDispatch = onCall(_OPTS, async (req) => {
   return handler(req);   // handler enforces its own admin/auth checks
 });
 
+/* Merged settlement handler registry — exported so it can be hosted inside an
+   existing deployed dispatcher (financeSprintDispatch) when a dedicated
+   settlementDispatch service can't be created under Cloud Run quota. */
+module.exports.handlers = _H;
+module.exports.SETTLEMENT_ACCOUNT_NUMBER = SA.SETTLEMENT_ACCOUNT_NUMBER;
+
 /* Exposed for validation tooling. */
 module.exports._ops = () => Object.keys(_H).sort();

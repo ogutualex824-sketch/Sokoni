@@ -2,18 +2,23 @@
    SOKONI — Settlement client wrapper
    sokoni-settlement.js  →  window.SokoniSettlement
 
-   Thin client for the consolidated settlementDispatch Cloud Function. Callers
-   use SokoniSettlement.call('opName', data) instead of individual callables,
+   Thin client for the consolidated settlement dispatcher. Callers use
+   SokoniSettlement.call('opName', data) instead of individual callables,
    mirroring the loyalty/analytics dispatcher client pattern. Preserves the
    original per-op API contract (same op names, same payloads, same responses).
+
+   The 12 settlement ops are HOSTED inside the existing financeSprintDispatch
+   Cloud Function (no dedicated settlementDispatch service exists under Cloud
+   Run quota) — this wrapper hides that transport detail from callers.
 
    Requires firebase-functions-compat + firebase.js on the page.
 ================================================================ */
 (function (w) {
   'use strict';
   var _fn = null;
+  var DISPATCH_CF = 'financeSprintDispatch';   // hosts settlement ops (quota-optimized)
   function _dispatch() {
-    if (!_fn) _fn = firebase.functions().httpsCallable('settlementDispatch');
+    if (!_fn) _fn = firebase.functions().httpsCallable(DISPATCH_CF);
     return _fn;
   }
   var API = {
