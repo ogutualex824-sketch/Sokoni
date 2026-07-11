@@ -922,7 +922,18 @@ async function _createBusiness(req) {
     ownerId: uid, status: 'active', defaultBranchId: branchId, pairingToken,
     storeCode, posCode, publicStoreId, referralCode, apiPublicKey,
     typeFlags: typeDef.flags,
+    /* Setup checklist — auto-satisfied steps true; explicit steps pending. */
+    setupChecklist: {
+      subscription: true, taxesConfigured: true, staff: false,
+      inventoryReady: false, hardwareConnected: false, testSaleSuccessful: false,
+    },
+    productionReady: false,
     provisionedBy: 'onboarding-v2', createdAt: now, updatedAt: now,
+  });
+  /* Auto-activate a free trial (Step 7 — activates automatically where applicable). */
+  batch.set(db.collection('subscriptions').doc(merchantId), {
+    merchantId, plan: 'trial', status: 'trialing', trialDays: 14, autoActivated: true,
+    startedAt: now, createdAt: now,
   });
   batch.set(db.collection('merchants').doc(merchantId), {
     merchantId, name: businessName, ownerId: uid, adminUids: [uid], status: 'active', createdAt: now,
@@ -1013,6 +1024,92 @@ async function _regeneratePairingQR(req) {
   return { merchantId, qr: JSON.stringify({ v: 1, t: 'sokoni-pos-pair', merchantId, businessId: b.businessId || merchantId, branchId, token: pairingToken }) };
 }
 
+/* getSetupStatus — authoritative resume logic + production-readiness checklist,
+   computed from REAL Firestore state so the wizard resumes at the first
+   incomplete step and never marks a merchant production-ready prematurely. */
+async function _getSetupStatus(req) {
+  const uid = _requireAuth(req);
+  const d = req.data || {};
+  let merchantId = _san(d.merchantId || '', 128).trim();
+  if (!merchantId) {
+    const owned = await db.collection('businesses').where('ownerId', '==', uid).limit(1).get();
+    if (owned.empty) return { hasBusiness: false, nextStep: 'business', productionReady: false, checklist: { authenticated: true, businessCreated: false } };
+    merchantId = owned.docs[0].id;
+  }
+  const bizSnap = await db.collection('businesses').doc(merchantId).get();
+  if (!bizSnap.exists) _err('Business not found.', 'not-found');
+  const b = bizSnap.data();
+  if (b.ownerId !== uid && !_isAdmin(req)) _err('Access denied.', 'permission-denied');
+  const cl = b.setupChecklist || {};
+
+  const [subSnap, branchSnap, taxSnap, prodSnap, deviceSnap] = await Promise.all([
+    db.collection('subscriptions').where('merchantId', '==', merchantId).where('status', 'in', ['active', 'trialing']).limit(1).get().catch(() => ({ empty: true })),
+    db.collection('branches').where('merchantId', '==', merchantId).limit(1).get().catch(() => ({ empty: true })),
+    db.collection('taxConfig').doc(merchantId).get().catch(() => ({ exists: false })),
+    db.collection('posProducts').where('merchantId', '==', merchantId).limit(1).get().catch(() => ({ empty: true })),
+    db.collection('posDevices').where('merchantId', '==', merchantId).limit(1).get().catch(() => ({ empty: true })),
+  ]);
+
+  const checklist = {
+    authenticated:       true,
+    businessCreated:     true,
+    merchantIdGenerated: !!b.merchantId,
+    subscription:        !subSnap.empty || cl.subscription === true,
+    branchCreated:       !branchSnap.empty,
+    taxesConfigured:     taxSnap.exists || cl.taxesConfigured === true,
+    staff:               cl.staff === true,                                  // optional
+    inventoryReady:      !prodSnap.empty || cl.inventoryReady === true,
+    hardwareConnected:   !deviceSnap.empty || cl.hardwareConnected === true, // connected OR intentionally skipped
+    testSaleSuccessful:  cl.testSaleSuccessful === true,
+  };
+
+  const order = [
+    ['business',     checklist.businessCreated],
+    ['subscription', checklist.subscription],
+    ['branch',       checklist.branchCreated],
+    ['taxes',        checklist.taxesConfigured],
+    ['inventory',    checklist.inventoryReady],
+    ['hardware',     checklist.hardwareConnected],
+    ['testSale',     checklist.testSaleSuccessful],
+  ];
+  const firstIncomplete = order.find(([, ok]) => !ok);
+  const requiredOk = !firstIncomplete;
+  const nextStep = requiredOk ? 'ready' : firstIncomplete[0];
+
+  return {
+    hasBusiness: true, merchantId,
+    business: {
+      merchantId, name: _san(b.name || b.businessName || '', 200),
+      businessId: b.businessId || merchantId, branchId: b.defaultBranchId || `${merchantId}-main`,
+      category: b.category || null, storeCode: b.storeCode || null,
+    },
+    checklist, nextStep, productionReady: requiredOk,
+  };
+}
+
+/* markSetupStep — record completion/choice for steps not inferable from data
+   (inventory choice, hardware connected/skipped, test sale done, staff added). */
+async function _markSetupStep(req) {
+  const uid = _requireAuth(req);
+  const d = req.data || {};
+  const merchantId = _san(d.merchantId || '', 128).trim();
+  const step = _san(d.step || '', 40).trim();
+  const value = d.value !== false;
+  if (!merchantId) _err('merchantId is required.');
+  const allowed = ['subscription', 'taxesConfigured', 'staff', 'inventoryReady', 'hardwareConnected', 'testSaleSuccessful'];
+  if (!allowed.includes(step)) _err('Unknown setup step.');
+  const ref = db.collection('businesses').doc(merchantId);
+  const snap = await ref.get();
+  if (!snap.exists) _err('Business not found.', 'not-found');
+  if (snap.data().ownerId !== uid && !_isAdmin(req)) _err('Access denied.', 'permission-denied');
+  await ref.update({ [`setupChecklist.${step}`]: value, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  const status = await _getSetupStatus({ auth: req.auth, data: { merchantId } });
+  if (status.productionReady && !snap.data().productionReady) {
+    await ref.update({ productionReady: true, productionReadyAt: admin.firestore.FieldValue.serverTimestamp() });
+  }
+  return { ok: true, step, value, productionReady: status.productionReady, nextStep: status.nextStep };
+}
+
 /* Resumable setup wizard — persist/restore per-user progress so the 12-step
    wizard never loses state (resume anytime, offline-safe on the client). */
 async function _saveOnboardingProgress(req) {
@@ -1049,5 +1146,7 @@ module.exports = {
     regeneratePairingQR:    _regeneratePairingQR,
     saveOnboardingProgress: _saveOnboardingProgress,
     getOnboardingProgress:  _getOnboardingProgress,
+    getSetupStatus:         _getSetupStatus,
+    markSetupStep:          _markSetupStep,
   },
 };
