@@ -47,6 +47,22 @@ class PaymentAdapter {
     return { healthy: true, latencyMs: 0, provider: this.constructor.name };
   }
 
+  /* Settlement capabilities — providers override to declare NATIVE split support.
+     Base default: no split (caller falls back to collect-then-payout). */
+  capabilities() {
+    return { supportsSplit: false, supportsPayout: true, supportsRefund: true };
+  }
+
+  /* Initiate a NATIVE split payment: the gateway distributes the single customer
+     charge directly to multiple destinations per the computed split (platform
+     commission → Bravilex, seller net → seller payout account). Only providers
+     that support it override this; the base throws so the caller cleanly falls
+     back to the collect-then-payout workflow.
+       splits: [{ role:'platform'|'seller', account:{type,value}, amountKES }] */
+  async initiateSplitPayment({ phone, amountKES, ref, narrative, splits, currency = 'KES', metadata = {} }) {
+    throw new Error(`${this.constructor.name} does not support native split settlement`);
+  }
+
   /* Normalise a phone number to international format (254XXXXXXXXX) */
   _normalizeKenyanPhone(phone) {
     const d = String(phone).replace(/\D/g, '');
@@ -165,6 +181,51 @@ class IntaSendAdapter extends PaymentAdapter {
     const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
     try { return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected)); }
     catch (_) { return false; }
+  }
+
+  /* IntaSend supports native split settlement via its split-payment / wallets
+     feature — a single collection is distributed to multiple destination wallets
+     or M-Pesa accounts. Declared capable; activation is still gated per-gateway
+     by settlement-providers config (splitEnabled, default OFF). */
+  capabilities() {
+    return { supportsSplit: true, supportsPayout: true, supportsRefund: true, splitApi: 'intasend-split' };
+  }
+
+  /* Initiate a split collection. splits: [{ role, account:{type,value}, amountKES }].
+     NOTE: the exact IntaSend split endpoint/payload MUST be confirmed against the
+     live IntaSend split-payment/wallets API and validated in sandbox before
+     splitEnabled is turned on for this provider. Until then this path is never
+     reached (config default splitEnabled=false → collect-then-payout fallback). */
+  async initiateSplitPayment({ phone, amountKES, ref, narrative, splits, currency = 'KES' }) {
+    if (!Array.isArray(splits) || splits.length < 2)
+      throw new Error('initiateSplitPayment: at least two splits (platform + seller) required');
+    const total = splits.reduce((s, x) => s + Number(x.amountKES || 0), 0);
+    if (Math.round(total) !== Math.round(amountKES))
+      throw new Error(`split total ${total} != charge amount ${amountKES}`);
+
+    const body = {
+      currency,
+      amount:       String(Math.round(amountKES)),
+      api_ref:      ref,
+      phone_number: this._normalizeKenyanPhone(phone),
+      narrative:    narrative || 'SOKONI',
+      /* Destination distribution — mapped to IntaSend split/wallet fields at
+         integration time (pending API confirmation, see note above). */
+      splits: splits.map((s) => ({
+        role:    s.role,
+        account: s.account,
+        amount:  String(Math.round(s.amountKES)),
+      })),
+    };
+    const res = await this._request('/api/v1/payment/split-collection/', 'POST', body);
+    const ok  = res.status === 200 || res.status === 201;
+    return {
+      success:      ok,
+      splitId:      res.body?.id || res.body?.invoice?.invoice_id || null,
+      distribution: splits.map((s) => ({ role: s.role, amountKES: s.amountKES })),
+      rawResponse:  res.body,
+      error:        ok ? null : (res.body?.detail || 'IntaSend split-collection error'),
+    };
   }
 
   async healthCheck() {

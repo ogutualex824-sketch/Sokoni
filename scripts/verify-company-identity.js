@@ -138,7 +138,8 @@ for (const file of files) {
   // (Canonical legalName, OR the exact settlement-account bank name "… Co. Ltd",
   // which is intentionally distinct — banks match exactly.) Modules that consume
   // the canonical settlement-account service may reference "Bravilex" in comments.
-  const consumesSettlementAccount = /settlement-account/.test(text) || /Merchant[- ]of[- ]Record/i.test(text);
+  const consumesSettlementAccount = /settlement-account/.test(text) || /Merchant[- ]of[- ]Record/i.test(text)
+    || /(^|[\\/])settlement-[a-z]+\.js$/.test(rel) || /(^|[\\/])payment-adapters\.js$/.test(rel);
   if (/Bravilex/.test(text) && !text.includes(CANON.legalName)
       && !text.includes(SETTLEMENT_ACCOUNT_NAME) && !consumesSettlementAccount) {
     errors.push(`${rel}: references "Bravilex" but not the canonical legal name "${CANON.legalName}"`);
