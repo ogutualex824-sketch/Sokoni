@@ -59,8 +59,8 @@ const COMPANY = Object.freeze({
 
   /* Reusable legal strings (avoid drift across documents) */
   footerCopyright:  '© 2026 SOKONI · A product of Bravilex International Co. Limited · All Rights Reserved.',
-  operatedBy:       'Operated by Bravilex International Co. Limited',
-  poweredBy:        'Powered by Bravilex International Co. Limited',
+  operatedBy:       'Operated by Bravilex International Co. Limited',   // legal operator line
+  poweredBy:        'Powered by SOKONI',                                // brand statement (customer-facing)
   ownershipStatement: 'SOKONI is owned and operated by Bravilex International Co. Limited.',
 });
 

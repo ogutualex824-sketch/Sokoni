@@ -65,6 +65,30 @@ const FORBIDDEN = [
   'P051234567X',                           // old KRA PIN placeholder
 ];
 
+/* ── Customer-Facing Brand Policy ──────────────────────────────────────
+   Brand shown to customers/merchants/riders is ALWAYS "SOKONI". "Bravilex"
+   is permitted ONLY as legal footer ("Operated by …"), KRA tax-invoice issuer,
+   and the backend settlement account. These phrases put Bravilex in a
+   customer-facing brand position (payment / wallet / checkout / subscription /
+   merchant dashboard) and must NEVER appear anywhere in source. */
+const BRAND_FORBIDDEN = [
+  /Bravilex\s+Payment\s+Confirmed/i,
+  /Paid\s+to\s+Bravilex/i,
+  /Bravilex\s+Received(\s+Payment)?/i,
+  /Bravilex\s+Wallet/i,
+  /Bravilex\s+Balance/i,
+  /Bravilex\s+Credits?/i,
+  /Bravilex\s+Checkout/i,
+  /Bravilex\s+(Earnings|Sales|Orders|Settlements)/i,
+  /Subscribed\s+via\s+Bravilex/i,
+  /Bravilex\s+Subscription/i,
+  /Powered\s+by\s+Bravilex/i,   // legal footer must read "Operated by …", not "Powered by"
+];
+/* JSON-LD must brand as SOKONI (name) with Bravilex only in legalName. */
+const JSONLD_NAME_BRAVILEX = /"name"\s*:\s*"Bravilex\b/i;
+/* Exact settlement-account bank name — a permitted Bravilex variant ("… Co. Ltd"). */
+const SETTLEMENT_ACCOUNT_NAME = 'Bravilex International Co. Ltd';
+
 /* Directories that are not repo source (vendored deps, VCS, temp worktrees). */
 const SKIP_DIRS = new Set(['node_modules', '.git', '.claude', 'dist', 'build', '.firebase']);
 /* This guard intentionally embeds obsolete literals in FORBIDDEN — never scan it. */
@@ -102,9 +126,21 @@ for (const file of files) {
     if (text.includes(bad)) errors.push(`${rel}: contains obsolete literal "${bad}"`);
   }
 
+  // Customer-Facing Brand Policy: no Bravilex in a brand position.
+  for (const rx of BRAND_FORBIDDEN) {
+    const m = text.match(rx);
+    if (m) errors.push(`${rel}: brand-policy violation — "${m[0]}" (customer-facing brand must be SOKONI; Bravilex only in legal footer / tax issuer / settlement account)`);
+  }
+  if (JSONLD_NAME_BRAVILEX.test(text))
+    errors.push(`${rel}: JSON-LD uses Bravilex as "name" — brand should be "SOKONI" with Bravilex in "legalName"`);
+
   // Any page that mentions the legal entity must use the CURRENT spelling.
-  // (The canonical spelling is CANON.legalName; a near-miss is drift.)
-  if (/Bravilex/.test(text) && !text.includes(CANON.legalName)) {
+  // (Canonical legalName, OR the exact settlement-account bank name "… Co. Ltd",
+  // which is intentionally distinct — banks match exactly.) Modules that consume
+  // the canonical settlement-account service may reference "Bravilex" in comments.
+  const consumesSettlementAccount = /settlement-account/.test(text);
+  if (/Bravilex/.test(text) && !text.includes(CANON.legalName)
+      && !text.includes(SETTLEMENT_ACCOUNT_NAME) && !consumesSettlementAccount) {
     errors.push(`${rel}: references "Bravilex" but not the canonical legal name "${CANON.legalName}"`);
   }
 }

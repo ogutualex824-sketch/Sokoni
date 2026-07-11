@@ -527,7 +527,7 @@ async function emailBuyer({ invoice, profile, buyer }) {
         ${invoice.pdfUrl?`<p><a href="${invoice.pdfUrl}" style="background:#003366;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:700">📄 View / Download Invoice</a></p>`:""}
         ${invoice.verificationUrl?`<p style="font-size:11px;color:#666">Verify at KRA: <a href="${invoice.verificationUrl}">${invoice.verificationUrl}</a></p>`:""}
         <p style="font-size:11px;color:#999;margin-top:20px">Powered by SOKONI | mysokoni.co.ke</p>
-        <p style="font-size:11px;color:#999;margin-top:2px">SOKONI — ${COMPANY.poweredBy}</p>
+        <p style="font-size:11px;color:#999;margin-top:2px">SOKONI — ${COMPANY.operatedBy}</p>
       </div>`,
     });
     await db.collection("etimsInvoices").doc(invoice.invoiceId).update({ emailSentAt: new Date().toISOString() });
