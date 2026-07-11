@@ -1,24 +1,24 @@
 'use strict';
 /**
- * SOKONI Services Dispatcher — 77 onCall CFs → 1 Cloud Run service.
+ * SOKONI Services Dispatcher â€” 77 onCall CFs â†’ 1 Cloud Run service.
  *
  * Modules merged:
- *   healthcare-hub.js    — 15 handlers  (provider registration, appointments, records, prescriptions …)
- *   security-identity.js — 14 handlers  (TOTP MFA, WebAuthn passkeys, device trust registry …)
- *   jobs.js              — 12 handlers  (job posts, applications, seeker profiles …)
- *   hr-payroll.js        — 12 handlers  (staff, attendance, payroll, leave, training …)
- *   b2b-wholesale.js     — 12 handlers  (wholesale accounts, orders, payments, catalog …)
- *   property-hub.js      — 12 handlers  (listings, enquiries, viewings, agent management …)
+ *   healthcare-hub.js    â€” 15 handlers  (provider registration, appointments, records, prescriptions â€¦)
+ *   security-identity.js â€” 14 handlers  (TOTP MFA, WebAuthn passkeys, device trust registry â€¦)
+ *   jobs.js              â€” 12 handlers  (job posts, applications, seeker profiles â€¦)
+ *   hr-payroll.js        â€” 12 handlers  (staff, attendance, payroll, leave, training â€¦)
+ *   b2b-wholesale.js     â€” 12 handlers  (wholesale accounts, orders, payments, catalog â€¦)
+ *   property-hub.js      â€” 12 handlers  (listings, enquiries, viewings, agent management â€¦)
  *
- * Cloud Run reduction: 77 → 1.
+ * Cloud Run reduction: 77 â†’ 1.
  *
  * Secrets bundled:
- *   PAYROLL_ENCRYPTION_KEY — hr-payroll.js AES-256-GCM encryption for bank account details
+ *   PAYROLL_ENCRYPTION_KEY â€” hr-payroll.js AES-256-GCM encryption for bank account details
  *
  * Op-name note: the legacy index.js alias "secRegisterDevice" maps to op "registerDevice"
  * in this dispatcher (the _h key is always the original function name).
  *
- * No scheduled/trigger CFs in any of these modules — all 77 are dispatchable.
+ * No scheduled/trigger CFs in any of these modules â€” all 77 are dispatchable.
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
@@ -33,8 +33,17 @@ const hrPayroll        = require('./hr-payroll');
 const b2bWholesale     = require('./b2b-wholesale');
 const propertyHub      = require('./property-hub');
 
-const _H = Object.assign(
-  {},
+function _merge() {
+  const seen = {}, result = {};
+  for (const m of arguments) {
+    for (const k of Object.keys(m || {})) {
+      if (k in seen) console.error('[dispatch] op collision: "' + k + '" defined in multiple modules — first wins');
+      else { result[k] = m[k]; seen[k] = 1; }
+    }
+  }
+  return result;
+}
+const _H = _merge(
   healthcareHub._h,
   securityIdentity._h,
   jobs._h,
@@ -42,6 +51,8 @@ const _H = Object.assign(
   b2bWholesale._h,
   propertyHub._h
 );
+// Backward-compat: legacy index.js exported registerDevice as secRegisterDevice
+if (_H.registerDevice) _H.secRegisterDevice = _H.registerDevice;
 
 const _OPTS = {
   region:          'us-central1',
@@ -67,5 +78,11 @@ exports.servicesDispatch = onCall(_OPTS, async (req) => {
       `Unknown services operation: "${op}". Valid ops: ${Object.keys(_H).sort().join(', ')}`
     );
   }
-  return handler(req);
+  try {
+    return await handler(req);
+  } catch (err) {
+    if (err && err.httpErrorCode) throw err; // re-throw HttpsError
+    console.error('[dispatch] op="' + op + '" unhandled error:', err && err.message, err && err.stack);
+    throw new HttpsError('internal', 'Operation failed unexpectedly.');
+  }
 });

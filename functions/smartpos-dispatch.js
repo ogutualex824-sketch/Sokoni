@@ -1,18 +1,18 @@
 'use strict';
 /**
- * SOKONI SmartPOS Dispatcher — 154 onCall CFs → 1 Cloud Run service.
+ * SOKONI SmartPOS Dispatcher â€” 154 onCall CFs â†’ 1 Cloud Run service.
  *
  * Modules merged:
- *   pos-crm-pro.js       — 25 handlers  (wallet, CRM, customer history …)
- *   pos-completeness.js  — 25 handlers  (gift cards, layaway, KDS, cycle count …)
- *   pos-staff-ops.js     — 21 handlers  (shifts, payroll, permissions …)
- *   pos-inventory-pro.js — 21 handlers  (batches, FEFO, expiry, transfers …)
- *   pos-accounting.js    — 18 handlers  (chart of accounts, journal, P&L …)
- *   pos-retail-engine.js — 18 handlers  (customer engine, sale recording, analytics …)
- *   pos-integrations.js  — 15 handlers  (webhooks, API keys, bank reconciliation …)
- *   pos-hq.js            — 13 handlers  (central pricing, HQ dashboard, broadcasts …)
+ *   pos-crm-pro.js       â€” 25 handlers  (wallet, CRM, customer history â€¦)
+ *   pos-completeness.js  â€” 25 handlers  (gift cards, layaway, KDS, cycle count â€¦)
+ *   pos-staff-ops.js     â€” 21 handlers  (shifts, payroll, permissions â€¦)
+ *   pos-inventory-pro.js â€” 21 handlers  (batches, FEFO, expiry, transfers â€¦)
+ *   pos-accounting.js    â€” 18 handlers  (chart of accounts, journal, P&L â€¦)
+ *   pos-retail-engine.js â€” 18 handlers  (customer engine, sale recording, analytics â€¦)
+ *   pos-integrations.js  â€” 15 handlers  (webhooks, API keys, bank reconciliation â€¦)
+ *   pos-hq.js            â€” 13 handlers  (central pricing, HQ dashboard, broadcasts â€¦)
  *
- * Cloud Run reduction: 154 → 1.
+ * Cloud Run reduction: 154 â†’ 1.
  * Secret: SENDGRID_API_KEY required by pos-retail-engine emailReceipt.
  */
 
@@ -30,8 +30,17 @@ const posRetailEngine= require('./pos-retail-engine');
 const posIntegrations= require('./pos-integrations');
 const posHq          = require('./pos-hq');
 
-const _H = Object.assign(
-  {},
+function _merge() {
+  const seen = {}, result = {};
+  for (const m of arguments) {
+    for (const k of Object.keys(m || {})) {
+      if (k in seen) console.error('[dispatch] op collision: "' + k + '" defined in multiple modules — first wins');
+      else { result[k] = m[k]; seen[k] = 1; }
+    }
+  }
+  return result;
+}
+const _H = _merge(
   posCrmPro._h,
   posCompleteness._h,
   posStaffOps._h,
@@ -66,5 +75,11 @@ exports.smartPosDispatch = onCall(_OPTS, async (req) => {
       `Unknown SmartPOS operation: "${op}". Valid ops: ${Object.keys(_H).sort().join(', ')}`
     );
   }
-  return handler(req);
+  try {
+    return await handler(req);
+  } catch (err) {
+    if (err && err.httpErrorCode) throw err; // re-throw HttpsError
+    console.error('[dispatch] op="' + op + '" unhandled error:', err && err.message, err && err.stack);
+    throw new HttpsError('internal', 'Operation failed unexpectedly.');
+  }
 });

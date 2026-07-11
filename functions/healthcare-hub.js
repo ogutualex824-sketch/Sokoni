@@ -153,49 +153,53 @@ exports.bookAppointment = onCall(CF_OPTS, exports._h.bookAppointment = async (re
   if (!providerId || !dateTime || !idempotencyKey) {
     throw new HttpsError('invalid-argument', 'providerId, dateTime, idempotencyKey required');
   }
+  if (new Date(dateTime) < new Date()) throw new HttpsError('invalid-argument', 'Appointment must be in the future');
 
-  const idemRef = db().collection('healthApptIdempotency').doc(idempotencyKey);
-  const idemSnap = await idemRef.get();
-  if (idemSnap.exists) return { appointmentId: idemSnap.data().appointmentId, idempotent: true };
+  // Round to 30-min bucket for the slot-lock document key
+  const apptMs   = new Date(dateTime).getTime();
+  const bucketMs = Math.floor(apptMs / (30 * 60000)) * (30 * 60000);
+  const slotKey  = new Date(bucketMs).toISOString().replace(/[:.]/g, '-');
 
+  // Fetch provider outside the transaction (read-only, no races)
   const provSnap = await db().collection('healthProviders').doc(providerId).get();
   if (!provSnap.exists || provSnap.data().status !== 'active') {
     throw new HttpsError('not-found', 'Provider not found or unavailable');
   }
   const prov = provSnap.data();
-  if (new Date(dateTime) < new Date()) throw new HttpsError('invalid-argument', 'Appointment must be in the future');
 
-  // Slot conflict check (same provider Â± 30 min)
-  const apptTime = new Date(dateTime);
-  const slotStart = new Date(apptTime.getTime() - 30 * 60000).toISOString();
-  const slotEnd = new Date(apptTime.getTime() + 30 * 60000).toISOString();
-  const conflict = await db().collection('healthAppointments')
-    .where('providerId', '==', providerId)
-    .where('status', 'in', ['pending', 'confirmed'])
-    .where('dateTime', '>=', slotStart)
-    .where('dateTime', '<=', slotEnd)
-    .limit(1).get();
-  if (!conflict.empty) throw new HttpsError('resource-exhausted', 'This time slot is already booked. Please choose another.');
+  const idemRef  = db().collection('healthApptIdempotency').doc(idempotencyKey);
+  // Slot-lock doc prevents double-bookings without needing a query inside the transaction
+  const lockRef  = db().collection('healthSlotLocks').doc(`${providerId}_${slotKey}`);
+  const apptRef  = db().collection('healthAppointments').doc();
 
-  const ref = db().collection('healthAppointments').doc();
-  const batch = db().batch();
-  batch.set(ref, {
-    appointmentId: ref.id, patientUid: uid, providerId,
-    providerName: prov.name, specialization: prov.specialization,
-    dateTime: new Date(dateTime).toISOString(),
-    reason: san(reason, 500), isOnline: Boolean(isOnline),
-    consultationFee: prov.consultationFee, currency: prov.currency,
-    status: 'pending',
-    idempotencyKey,
-    createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
-  });
-  batch.update(db().collection('healthProviders').doc(providerId), {
-    totalAppointments: FieldValue.increment(1),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  batch.set(idemRef, { appointmentId: ref.id, createdAt: FieldValue.serverTimestamp() });
-  await batch.commit();
-  return { appointmentId: ref.id, status: 'pending' };
+  let result;
+  try {
+    result = await db().runTransaction(async t => {
+      const [idemSnap, lockSnap] = await Promise.all([t.get(idemRef), t.get(lockRef)]);
+      if (idemSnap.exists) return { appointmentId: idemSnap.data().appointmentId, idempotent: true };
+      if (lockSnap.exists) throw new HttpsError('resource-exhausted', 'This time slot is already booked. Please choose another.');
+
+      t.set(lockRef, { providerId, slotKey, appointmentId: apptRef.id, createdAt: FieldValue.serverTimestamp() });
+      t.set(apptRef, {
+        appointmentId: apptRef.id, patientUid: uid, providerId,
+        providerName: prov.name, specialization: prov.specialization,
+        dateTime: new Date(dateTime).toISOString(),
+        reason: san(reason, 500), isOnline: Boolean(isOnline),
+        consultationFee: prov.consultationFee, currency: prov.currency,
+        status: 'pending', idempotencyKey, slotKey,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      t.update(db().collection('healthProviders').doc(providerId), {
+        totalAppointments: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
+      });
+      t.set(idemRef, { appointmentId: apptRef.id, createdAt: FieldValue.serverTimestamp() });
+      return { appointmentId: apptRef.id, status: 'pending' };
+    });
+  } catch (err) {
+    if (err && err.httpErrorCode) throw err;
+    throw new HttpsError('internal', 'Booking failed. Please try again.');
+  }
+  return result;
 });
 
 /* â”€â”€ 6. getMyAppointments (patient) â”€â”€ */
@@ -239,29 +243,38 @@ exports.updateAppointmentStatus = onCall(CF_OPTS, exports._h.updateAppointmentSt
   const VALID = ['confirmed', 'cancelled', 'completed', 'no_show'];
   if (!VALID.includes(status)) throw new HttpsError('invalid-argument', 'Invalid status');
 
-  const ref = db().collection('healthAppointments').doc(appointmentId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('not-found', 'Appointment not found');
-  const appt = snap.data();
-
+  // getRole() uses Auth Admin SDK — must be called OUTSIDE the transaction
   const role = await getRole(uid);
-  if (appt.patientUid !== uid && appt.providerId !== uid && role < 4) {
-    throw new HttpsError('permission-denied', 'Not authorized');
-  }
 
-  const updates = { status, updatedAt: FieldValue.serverTimestamp() };
-  if (notes) updates.notes = san(notes, 1000);
-  if (status === 'completed') updates.completedAt = FieldValue.serverTimestamp();
-  if (status === 'cancelled') updates.cancelledAt = FieldValue.serverTimestamp();
+  const ref = db().collection('healthAppointments').doc(appointmentId);
+  await db().runTransaction(async t => {
+    const snap = await t.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Appointment not found');
+    const appt = snap.data();
 
-  await ref.update(updates);
+    if (appt.patientUid !== uid && appt.providerId !== uid && role < 4) {
+      throw new HttpsError('permission-denied', 'Not authorized');
+    }
 
-  if (status === 'completed') {
-    await db().collection('healthProviders').doc(appt.providerId).update({
-      completedAppointments: FieldValue.increment(1),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  }
+    const updates = { status, updatedAt: FieldValue.serverTimestamp() };
+    if (notes) updates.notes = san(notes, 1000);
+    if (status === 'completed') updates.completedAt = FieldValue.serverTimestamp();
+    if (status === 'cancelled') updates.cancelledAt = FieldValue.serverTimestamp();
+
+    t.update(ref, updates);
+
+    if (status === 'completed') {
+      t.update(db().collection('healthProviders').doc(appt.providerId), {
+        completedAppointments: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    // Release slot lock when appointment ends so the slot is bookable again
+    if ((status === 'cancelled' || status === 'completed') && appt.slotKey) {
+      t.delete(db().collection('healthSlotLocks').doc(`${appt.providerId}_${appt.slotKey}`));
+    }
+  });
   return { ok: true };
 });
 

@@ -35,14 +35,11 @@ window.SokoniBooking = (() => {
   /* ── Firebase callable wrapper — routes all ops through bookingDispatch ── */
   let _dispatchFn = null;
   function _call(name, data) {
-    if (typeof firebase !== 'undefined' && firebase.functions) {
-      if (!_dispatchFn) _dispatchFn = firebase.functions().httpsCallable('bookingDispatch');
-      return _dispatchFn(Object.assign({ op: name }, data || {})).then(r => r.data);
+    if (typeof firebase === 'undefined' || !firebase.functions) {
+      return Promise.reject(new Error('Firebase SDK not loaded'));
     }
-    return fetch(`${CF_BASE}/bookingDispatch`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: Object.assign({ op: name }, data || {}) }),
-    }).then(r => r.json()).then(r => r.result || r);
+    if (!_dispatchFn) _dispatchFn = firebase.functions().httpsCallable('bookingDispatch');
+    return _dispatchFn(Object.assign({}, data || {}, { op: name })).then(r => r.data);
   }
 
   /* ═══════════════════════════════════════════════════════

@@ -350,47 +350,29 @@ const addStaffMember = onCall(
     }
 
     // â”€â”€ Duplicate employee number check â”€â”€
-    const dupSnap = await db
-      .collection('hrStaff')
-      .where('merchantId', '==', merchantId)
-      .where('employeeNumber', '==', employeeNumber)
-      .limit(1)
-      .get();
-    if (!dupSnap.empty) {
-      throw new HttpsError(
-        'already-exists',
-        `Employee number ${employeeNumber} already exists for this merchant.`
-      );
-    }
-
-    // â”€â”€ Encrypt bank account details â”€â”€
+    // ── Encrypt bank account details ──
     let encryptedBankAccount = null;
     if (bankAccount && typeof bankAccount === 'object') {
       const keyHex = PAYROLL_ENCRYPTION_KEY.value();
-      encryptedBankAccount = encryptData(
-        JSON.stringify(bankAccount),
-        keyHex
-      );
+      encryptedBankAccount = encryptData(JSON.stringify(bankAccount), keyHex);
     }
 
-    const staffId = db.collection('hrStaff').doc().id;
+    // Deterministic doc ID prevents duplicate employee numbers atomically —
+    // two concurrent calls for the same merchantId+employeeNumber both resolve
+    // to the same doc; the transaction ensures only the first one wins.
+    const staffId  = `${merchantId}_${employeeNumber}`;
+    const staffRef = db.collection('hrStaff').doc(staffId);
 
-    await db.collection('hrStaff').doc(staffId).set({
-      merchantId,
-      name,
-      employeeNumber,
-      department,
-      position,
-      grossSalary,
-      startDate,
-      bankAccount: encryptedBankAccount,
-      kraPin: kraPin || null,
-      phone: phone || null,
-      email: email || null,
-      status: 'active',
-      uid: null, // linked once employee creates their app account
-      createdAt: F.serverTimestamp(),
-      createdBy: req.auth.uid,
+    await db.runTransaction(async t => {
+      const snap = await t.get(staffRef);
+      if (snap.exists) throw new HttpsError('already-exists', `Employee number ${employeeNumber} already exists for this merchant.`);
+      t.set(staffRef, {
+        merchantId, name, employeeNumber, department, position, grossSalary,
+        startDate, bankAccount: encryptedBankAccount,
+        kraPin: kraPin || null, phone: phone || null, email: email || null,
+        status: 'active', uid: null,
+        createdAt: F.serverTimestamp(), createdBy: req.auth.uid,
+      });
     });
 
     return { staffId, message: 'Staff member added successfully.' };
@@ -565,18 +547,14 @@ const runPayroll = onCall(
     }
 
     // â”€â”€ Guard: prevent duplicate runs â”€â”€
-    const existingRun = await db
-      .collection('hrPayrollRuns')
-      .where('merchantId', '==', merchantId)
-      .where('period', '==', period)
-      .limit(1)
-      .get();
-    if (!existingRun.empty) {
-      throw new HttpsError(
-        'already-exists',
-        `Payroll for ${period} has already been run for this merchant.`
-      );
-    }
+    // Deterministic runId + transaction gate prevents concurrent duplicate runs
+    const runId  = `${merchantId}_${period}`;
+    const runRef = db.collection('hrPayrollRuns').doc(runId);
+    await db.runTransaction(async t => {
+      const snap = await t.get(runRef);
+      if (snap.exists) throw new HttpsError('already-exists', `Payroll for ${period} has already been run for this merchant.`);
+      t.set(runRef, { merchantId, period, status: 'processing', createdBy: req.auth.uid, createdAt: F.serverTimestamp() });
+    });
 
     // â”€â”€ Fetch active staff â”€â”€
     const staffSnap = await db
@@ -609,9 +587,7 @@ const runPayroll = onCall(
     });
 
     const workingDays = getWorkingDaysInMonth(period);
-    const runId = db.collection('hrPayrollRuns').doc().id;
-    const batch = db.batch();
-
+    // runId and runRef were created by the transaction gate above
     let totalGross = 0;
     let totalNet = 0;
     let totalPAYE = 0;
@@ -622,65 +598,52 @@ const runPayroll = onCall(
     let totalEmployerHousingLevy = 0;
     let staffCount = 0;
 
-    staffSnap.forEach((staffDoc) => {
-      const staff = staffDoc.data();
-      const staffId = staffDoc.id;
-      const daysWorked = attendanceMap[staffId] || 0;
-
-      // Prorate salary: full salary if no attendance records (manual payroll mode)
-      const attendanceRecorded = attendanceSnap.size > 0;
-      const adjustedGross = attendanceRecorded
-        ? staff.grossSalary * (daysWorked / workingDays)
-        : staff.grossSalary;
-
-      const deductions = calculateDeductions(adjustedGross);
-      const payslipRef = db
-        .collection('hrPayslips')
-        .doc(`${runId}_${staffId}`);
-
-      batch.set(payslipRef, {
-        runId,
-        staffId,
-        merchantId,
-        period,
-        employeeNumber: staff.employeeNumber,
-        name: staff.name,
-        department: staff.department,
-        position: staff.position,
-        grossSalary: staff.grossSalary,
-        daysWorked,
-        workingDays,
-        adjustedGross: deductions.gross,
-        nhif: deductions.nhif,
-        nssf: deductions.nssf,
-        housingLevy: deductions.housingLevy,
-        taxableIncome: deductions.taxableIncome,
-        paye: deductions.paye,
-        totalDeductions: deductions.totalDeductions,
-        netSalary: deductions.netSalary,
-        employerNSSF: deductions.employerNSSF,
-        employerHousingLevy: deductions.employerHousingLevy,
-        status: 'draft',
-        createdAt: F.serverTimestamp(),
-      });
-
-      totalGross += deductions.gross;
-      totalNet += deductions.netSalary;
-      totalPAYE += deductions.paye;
-      totalNHIF += deductions.nhif;
-      totalNSSF += deductions.nssf.total;
-      totalHousingLevy += deductions.housingLevy;
-      totalEmployerNSSF += deductions.employerNSSF;
-      totalEmployerHousingLevy += deductions.employerHousingLevy;
-      staffCount++;
-    });
-
-    // Round totals
+    // Firestore WriteBatch cap is 500 ops; chunk payslips to stay under the limit
+    const CHUNK = 499;
+    const staffDocs = staffSnap.docs;
+    const attendanceRecorded = attendanceSnap.size > 0;
     const round = (n) => Math.round(n * 100) / 100;
-    const runRef = db.collection('hrPayrollRuns').doc(runId);
-    batch.set(runRef, {
-      merchantId,
-      period,
+
+    for (let i = 0; i < staffDocs.length; i += CHUNK) {
+      const chunk = staffDocs.slice(i, i + CHUNK);
+      const batch = db.batch();
+      chunk.forEach((staffDoc) => {
+        const staff    = staffDoc.data();
+        const staffId  = staffDoc.id;
+        const daysWorked = attendanceMap[staffId] || 0;
+        const adjustedGross = attendanceRecorded
+          ? staff.grossSalary * (daysWorked / workingDays)
+          : staff.grossSalary;
+        const deductions = calculateDeductions(adjustedGross);
+
+        batch.set(db.collection('hrPayslips').doc(`${runId}_${staffId}`), {
+          runId, staffId, merchantId, period,
+          employeeNumber: staff.employeeNumber,
+          name: staff.name, department: staff.department, position: staff.position,
+          grossSalary: staff.grossSalary, daysWorked, workingDays,
+          adjustedGross: deductions.gross,
+          nhif: deductions.nhif, nssf: deductions.nssf, housingLevy: deductions.housingLevy,
+          taxableIncome: deductions.taxableIncome, paye: deductions.paye,
+          totalDeductions: deductions.totalDeductions, netSalary: deductions.netSalary,
+          employerNSSF: deductions.employerNSSF, employerHousingLevy: deductions.employerHousingLevy,
+          status: 'draft', createdAt: F.serverTimestamp(),
+        });
+
+        totalGross += deductions.gross;
+        totalNet += deductions.netSalary;
+        totalPAYE += deductions.paye;
+        totalNHIF += deductions.nhif;
+        totalNSSF += deductions.nssf.total;
+        totalHousingLevy += deductions.housingLevy;
+        totalEmployerNSSF += deductions.employerNSSF;
+        totalEmployerHousingLevy += deductions.employerHousingLevy;
+        staffCount++;
+      });
+      await batch.commit();
+    }
+
+    // Update run doc from 'processing' → 'draft' with computed totals
+    await runRef.update({
       status: 'draft',
       totalGross: round(totalGross),
       totalNet: round(totalNet),
@@ -690,16 +653,9 @@ const runPayroll = onCall(
       totalHousingLevy: round(totalHousingLevy),
       totalEmployerNSSF: round(totalEmployerNSSF),
       totalEmployerHousingLevy: round(totalEmployerHousingLevy),
-      totalEmployerCost: round(
-        totalGross + totalEmployerNSSF + totalEmployerHousingLevy
-      ),
-      workingDays,
-      staffCount,
-      createdBy: req.auth.uid,
-      createdAt: F.serverTimestamp(),
+      totalEmployerCost: round(totalGross + totalEmployerNSSF + totalEmployerHousingLevy),
+      workingDays, staffCount,
     });
-
-    await batch.commit();
 
     return {
       runId,
@@ -711,9 +667,7 @@ const runPayroll = onCall(
         totalNHIF: round(totalNHIF),
         totalNSSF: round(totalNSSF),
         totalHousingLevy: round(totalHousingLevy),
-        totalEmployerCost: round(
-          totalGross + totalEmployerNSSF + totalEmployerHousingLevy
-        ),
+        totalEmployerCost: round(totalGross + totalEmployerNSSF + totalEmployerHousingLevy),
       },
     };
   }
@@ -737,22 +691,12 @@ const approvePayrollRun = onCall(OPT, _h.approvePayrollRun = async (req) => {
   }
 
   const runRef = db.collection('hrPayrollRuns').doc(runId);
-  const runSnap = await runRef.get();
 
-  if (!runSnap.exists) {
-    throw new HttpsError('not-found', 'Payroll run not found.');
-  }
-  if (runSnap.data().status !== 'draft') {
-    throw new HttpsError(
-      'failed-precondition',
-      'Only draft payroll runs can be approved.'
-    );
-  }
-
-  await runRef.update({
-    status: 'approved',
-    approvedBy: req.auth.uid,
-    approvedAt: F.serverTimestamp(),
+  await db.runTransaction(async t => {
+    const runSnap = await t.get(runRef);
+    if (!runSnap.exists) throw new HttpsError('not-found', 'Payroll run not found.');
+    if (runSnap.data().status !== 'draft') throw new HttpsError('failed-precondition', 'Only draft payroll runs can be approved.');
+    t.update(runRef, { status: 'approved', approvedBy: req.auth.uid, approvedAt: F.serverTimestamp() });
   });
 
   return { runId, status: 'approved' };

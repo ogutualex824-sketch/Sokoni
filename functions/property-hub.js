@@ -230,24 +230,26 @@ exports.submitPropertyEnquiry = onCall(CF_OPTS, exports._h.submitPropertyEnquiry
   const { listingId, message, phone, moveInDate, budget } = req.data;
   if (!listingId || !message) throw new HttpsError('invalid-argument', 'listingId and message required');
 
-  const snap = await db().collection('propertyListings').doc(listingId).get();
-  if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Listing not found');
+  // Deterministic ID prevents duplicate enquiries under concurrent requests
+  const listingRef = db().collection('propertyListings').doc(listingId);
+  const enquiryRef = db().collection('propertyEnquiries').doc(`${listingId}_${uid}`);
 
-  const ref = db().collection('propertyEnquiries').doc();
-  const batch = db().batch();
-  batch.set(ref, {
-    enquiryId: ref.id, listingId, buyerUid: uid,
-    agentUid: snap.data().agentUid,
-    message: san(message, 1000), phone: san(phone, 20),
-    moveInDate: moveInDate || null, budget: parseFloat(budget) || null,
-    status: 'new',
-    createdAt: FieldValue.serverTimestamp(),
+  await db().runTransaction(async t => {
+    const [snap, existing] = await Promise.all([t.get(listingRef), t.get(enquiryRef)]);
+    if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Listing not found');
+    if (existing.exists) return; // idempotent — buyer already enquired on this listing
+
+    t.set(enquiryRef, {
+      enquiryId: enquiryRef.id, listingId, buyerUid: uid,
+      agentUid: snap.data().agentUid,
+      message: san(message, 1000), phone: san(phone, 20),
+      moveInDate: moveInDate || null, budget: parseFloat(budget) || null,
+      status: 'new',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    t.update(listingRef, { enquiryCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
   });
-  batch.update(db().collection('propertyListings').doc(listingId), {
-    enquiryCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
-  });
-  await batch.commit();
-  return { enquiryId: ref.id };
+  return { enquiryId: enquiryRef.id };
 });
 
 /* â”€â”€ 9. getPropertyEnquiries (agent) â”€â”€ */
@@ -273,24 +275,26 @@ exports.scheduleViewing = onCall(CF_OPTS, exports._h.scheduleViewing = async (re
   const { listingId, preferredDate, preferredTime, notes } = req.data;
   if (!listingId || !preferredDate) throw new HttpsError('invalid-argument', 'listingId and preferredDate required');
 
-  const snap = await db().collection('propertyListings').doc(listingId).get();
-  if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Listing not found');
+  // Deterministic ID prevents duplicate viewings for the same buyer+listing+date
+  const listingRef  = db().collection('propertyListings').doc(listingId);
+  const viewingRef  = db().collection('propertyViewings').doc(`${listingId}_${uid}_${preferredDate}`);
 
-  const ref = db().collection('propertyViewings').doc();
-  const batch = db().batch();
-  batch.set(ref, {
-    viewingId: ref.id, listingId, buyerUid: uid,
-    agentUid: snap.data().agentUid,
-    propertyTitle: snap.data().title,
-    preferredDate, preferredTime: san(preferredTime, 20),
-    notes: san(notes, 500), status: 'requested',
-    createdAt: FieldValue.serverTimestamp(),
+  await db().runTransaction(async t => {
+    const [snap, existing] = await Promise.all([t.get(listingRef), t.get(viewingRef)]);
+    if (!snap.exists || snap.data().status !== 'active') throw new HttpsError('not-found', 'Listing not found');
+    if (existing.exists) return; // idempotent — already requested this date
+
+    t.set(viewingRef, {
+      viewingId: viewingRef.id, listingId, buyerUid: uid,
+      agentUid: snap.data().agentUid,
+      propertyTitle: snap.data().title,
+      preferredDate, preferredTime: san(preferredTime, 20),
+      notes: san(notes, 500), status: 'requested',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    t.update(listingRef, { viewingCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() });
   });
-  batch.update(db().collection('propertyListings').doc(listingId), {
-    viewingCount: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
-  });
-  await batch.commit();
-  return { viewingId: ref.id };
+  return { viewingId: viewingRef.id };
 });
 
 /* â”€â”€ 11. getViewings (agent or buyer) â”€â”€ */

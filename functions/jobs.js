@@ -75,7 +75,9 @@ function _isActive(data) {
 
 exports._h = {};
 
-exports.createJob = onCall({ cors: true }, exports._h.createJob = async (req) => {
+const CF_OPTS = { cors: true, enforceAppCheck: true };
+
+exports.createJob = onCall(CF_OPTS, exports._h.createJob = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -151,7 +153,7 @@ exports.createJob = onCall({ cors: true }, exports._h.createJob = async (req) =>
 
 // â”€â”€â”€ 2. updateJob â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.updateJob = onCall({ cors: true }, exports._h.updateJob = async (req) => {
+exports.updateJob = onCall(CF_OPTS, exports._h.updateJob = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -209,7 +211,7 @@ exports.updateJob = onCall({ cors: true }, exports._h.updateJob = async (req) =>
 
 // â”€â”€â”€ 3. closeJob â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.closeJob = onCall({ cors: true }, exports._h.closeJob = async (req) => {
+exports.closeJob = onCall(CF_OPTS, exports._h.closeJob = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -228,7 +230,7 @@ exports.closeJob = onCall({ cors: true }, exports._h.closeJob = async (req) => {
 
 // â”€â”€â”€ 4. listJobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.listJobs = onCall({ cors: true }, exports._h.listJobs = async (req) => {
+exports.listJobs = onCall(CF_OPTS, exports._h.listJobs = async (req) => {
   // Public â€” no auth required
   const db = getFirestore();
 
@@ -277,7 +279,7 @@ exports.listJobs = onCall({ cors: true }, exports._h.listJobs = async (req) => {
 
 // â”€â”€â”€ 5. getJob â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.getJob = onCall({ cors: true }, exports._h.getJob = async (req) => {
+exports.getJob = onCall(CF_OPTS, exports._h.getJob = async (req) => {
   // Public â€” no auth required
   const db     = getFirestore();
   const uid    = req.auth?.uid || null;
@@ -314,7 +316,7 @@ exports.getJob = onCall({ cors: true }, exports._h.getJob = async (req) => {
 
 // â”€â”€â”€ 6. applyForJob â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.applyForJob = onCall({ cors: true }, exports._h.applyForJob = async (req) => {
+exports.applyForJob = onCall(CF_OPTS, exports._h.applyForJob = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -368,7 +370,7 @@ exports.applyForJob = onCall({ cors: true }, exports._h.applyForJob = async (req
 
 // â”€â”€â”€ 7. getJobApplications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.getJobApplications = onCall({ cors: true }, exports._h.getJobApplications = async (req) => {
+exports.getJobApplications = onCall(CF_OPTS, exports._h.getJobApplications = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -430,7 +432,7 @@ exports.getJobApplications = onCall({ cors: true }, exports._h.getJobApplication
 
 // â”€â”€â”€ 8. updateApplicationStatus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.updateApplicationStatus = onCall({ cors: true }, exports._h.updateApplicationStatus = async (req) => {
+exports.updateApplicationStatus = onCall(CF_OPTS, exports._h.updateApplicationStatus = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -454,7 +456,7 @@ exports.updateApplicationStatus = onCall({ cors: true }, exports._h.updateApplic
 
 // â”€â”€â”€ 9. getMyApplications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.getMyApplications = onCall({ cors: true }, exports._h.getMyApplications = async (req) => {
+exports.getMyApplications = onCall(CF_OPTS, exports._h.getMyApplications = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -506,7 +508,7 @@ exports.getMyApplications = onCall({ cors: true }, exports._h.getMyApplications 
 
 // â”€â”€â”€ 10. saveJobSeekerProfile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.saveJobSeekerProfile = onCall({ cors: true }, exports._h.saveJobSeekerProfile = async (req) => {
+exports.saveJobSeekerProfile = onCall(CF_OPTS, exports._h.saveJobSeekerProfile = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -557,7 +559,7 @@ exports.saveJobSeekerProfile = onCall({ cors: true }, exports._h.saveJobSeekerPr
 
 // â”€â”€â”€ 11. getJobSeekerProfile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.getJobSeekerProfile = onCall({ cors: true }, exports._h.getJobSeekerProfile = async (req) => {
+exports.getJobSeekerProfile = onCall(CF_OPTS, exports._h.getJobSeekerProfile = async (req) => {
   _requireAuth(req);
   const callerUid = req.auth.uid;
   const db        = getFirestore();
@@ -596,7 +598,7 @@ exports.getJobSeekerProfile = onCall({ cors: true }, exports._h.getJobSeekerProf
 
 // â”€â”€â”€ 12. getFeaturedJobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.getFeaturedJobs = onCall({ cors: true }, exports._h.getFeaturedJobs = async (req) => {
+exports.getFeaturedJobs = onCall(CF_OPTS, exports._h.getFeaturedJobs = async (req) => {
   // Public â€” no auth required
   const db  = getFirestore();
   const now = Date.now();

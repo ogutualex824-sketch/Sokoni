@@ -1,13 +1,13 @@
 'use strict';
 /**
- * SOKONI Booking Dispatcher — 45 onCall CFs → 1 Cloud Run service.
+ * SOKONI Booking Dispatcher â€” 45 onCall CFs â†’ 1 Cloud Run service.
  * Covers: venue search/booking, venue management, slot availability, provider scheduling.
- * Cloud Run reduction: 45 → 1 (scheduled CFs remain individual in index.js).
+ * Cloud Run reduction: 45 â†’ 1 (scheduled CFs remain individual in index.js).
  *
  * Modules merged:
- *   booking.js         — 16 handlers (bookingSearch, bookingCreate, bookingCancel …)
- *   venue-booking.js   — 17 handlers (venueCreate, venueUpdate, venueGetBookings …)
- *   availability.js    — 12 handlers (setProviderAvailability, reserveSlot, getAvailabilitySlots …)
+ *   booking.js         â€” 16 handlers (bookingSearch, bookingCreate, bookingCancel â€¦)
+ *   venue-booking.js   â€” 17 handlers (venueCreate, venueUpdate, venueGetBookings â€¦)
+ *   availability.js    â€” 12 handlers (setProviderAvailability, reserveSlot, getAvailabilitySlots â€¦)
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
@@ -16,7 +16,17 @@ const booking      = require('./booking');
 const venueBooking = require('./venue-booking');
 const availability = require('./availability');
 
-const _H = Object.assign({}, booking._h, venueBooking._h, availability._h);
+function _merge() {
+  const seen = {}, result = {};
+  for (const m of arguments) {
+    for (const k of Object.keys(m || {})) {
+      if (k in seen) console.error('[dispatch] op collision: "' + k + '" defined in multiple modules — first wins');
+      else { result[k] = m[k]; seen[k] = 1; }
+    }
+  }
+  return result;
+}
+const _H = _merge( booking._h, venueBooking._h, availability._h);
 
 const _OPTS = {
   region:          'us-central1',
@@ -41,5 +51,11 @@ exports.bookingDispatch = onCall(_OPTS, async (req) => {
       `Unknown booking operation: "${op}". Valid ops: ${Object.keys(_H).sort().join(', ')}`
     );
   }
-  return handler(req);
+  try {
+    return await handler(req);
+  } catch (err) {
+    if (err && err.httpErrorCode) throw err; // re-throw HttpsError
+    console.error('[dispatch] op="' + op + '" unhandled error:', err && err.message, err && err.stack);
+    throw new HttpsError('internal', 'Operation failed unexpectedly.');
+  }
 });

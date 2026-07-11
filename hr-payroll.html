@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
   <script src="security.js"></script>
@@ -899,8 +899,10 @@
     }
   }
 
+  let _sdDispatch = null;
   function callCF(name, data) {
-    return functions.httpsCallable('servicesDispatch')(Object.assign({ op: name }, data || {}));
+    if (!_sdDispatch) _sdDispatch = functions.httpsCallable('servicesDispatch');
+    return _sdDispatch(Object.assign({}, data || {}, { op: name }));
   }
 
   function getMid() {

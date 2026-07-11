@@ -5,8 +5,8 @@
 <script src="shared-header.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Wholesale Portal — SOKONI B2B</title>
-  <meta name="description" content="SOKONI B2B Wholesale Buyer Portal — manage orders, catalog, credit notes and payments.">
+  <title>Wholesale Portal â€” SOKONI B2B</title>
+  <meta name="description" content="SOKONI B2B Wholesale Buyer Portal â€” manage orders, catalog, credit notes and payments.">
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <link rel="apple-touch-icon" href="assets/logosokoni.png">
@@ -20,7 +20,7 @@
 
   <style>
     /* ============================================================
-       SOKONI Wholesale Portal — All styles inline
+       SOKONI Wholesale Portal â€” All styles inline
        Dark theme: GitHub-style dark
     ============================================================ */
     :root {
@@ -83,7 +83,7 @@
     select option { background: var(--bg2); }
     label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; font-weight: 500; }
 
-    /* ── Loading Overlay ── */
+    /* â”€â”€ Loading Overlay â”€â”€ */
     #loading-overlay {
       position: fixed;
       inset: 0;
@@ -105,7 +105,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Gate Screens ── */
+    /* â”€â”€ Gate Screens â”€â”€ */
     .gate-screen {
       display: none;
       position: fixed;
@@ -138,7 +138,7 @@
     .gate-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
     .gate-msg { font-size: 13px; margin-top: 8px; min-height: 18px; text-align: center; }
 
-    /* ── Buttons ── */
+    /* â”€â”€ Buttons â”€â”€ */
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       padding: 9px 18px; border-radius: var(--radius);
@@ -160,7 +160,7 @@
     .btn-full { width: 100%; }
     .btn-icon { padding: 7px; border-radius: var(--radius); }
 
-    /* ── Header ── */
+    /* â”€â”€ Header â”€â”€ */
     #app-header {
       position: sticky; top: 0; z-index: 500;
       background: var(--bg2);
@@ -200,7 +200,7 @@
     }
     .signout-btn:hover { background: rgba(248,81,73,0.1); color: var(--red); border-color: rgba(248,81,73,0.4); }
 
-    /* ── Tab Bar ── */
+    /* â”€â”€ Tab Bar â”€â”€ */
     #tab-bar {
       background: var(--bg2);
       border-bottom: 1px solid var(--border);
@@ -220,12 +220,12 @@
     .tab-btn:hover { color: var(--text); }
     .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
 
-    /* ── Main content ── */
+    /* â”€â”€ Main content â”€â”€ */
     #app-main { padding: 24px; max-width: 1200px; margin: 0 auto; }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
-    /* ── Cards & Sections ── */
+    /* â”€â”€ Cards & Sections â”€â”€ */
     .card {
       background: var(--bg2);
       border: 1px solid var(--border);
@@ -236,7 +236,7 @@
     .card-title { font-size: 14px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
     .section-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
 
-    /* ── Stats Grid ── */
+    /* â”€â”€ Stats Grid â”€â”€ */
     .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
     .stat-card {
       background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
@@ -250,7 +250,7 @@
     .stat-card.orange { border-color: rgba(210,153,34,0.3); }
     .stat-card.red    { border-color: rgba(248,81,73,0.3); }
 
-    /* ── Account Summary ── */
+    /* â”€â”€ Account Summary â”€â”€ */
     .account-summary {
       display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;
     }
@@ -259,7 +259,7 @@
     .acct-field-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
     .acct-field-value { font-size: 15px; font-weight: 600; }
 
-    /* ── Status Badges ── */
+    /* â”€â”€ Status Badges â”€â”€ */
     .badge {
       display: inline-flex; align-items: center; gap: 4px;
       padding: 2px 10px; border-radius: 20px;
@@ -274,7 +274,7 @@
     .badge-grey     { background: rgba(139,148,158,0.15); color: var(--text2); border: 1px solid rgba(139,148,158,0.3); }
     .badge-purple   { background: rgba(188,140,255,0.15); color: var(--g); border: 1px solid rgba(188,140,255,0.3); }
 
-    /* ── Ledger / Transaction list ── */
+    /* â”€â”€ Ledger / Transaction list â”€â”€ */
     .ledger-list { display: flex; flex-direction: column; gap: 8px; }
     .ledger-item {
       display: flex; align-items: center; gap: 12px;
@@ -297,7 +297,7 @@
     .ledger-amount.credit { color: var(--green); }
     .ledger-amount.debit  { color: var(--red); }
 
-    /* ── Product Catalog Grid ── */
+    /* â”€â”€ Product Catalog Grid â”€â”€ */
     .catalog-toolbar {
       display: flex; align-items: center; gap: 12px;
       margin-bottom: 20px; flex-wrap: wrap;
@@ -342,11 +342,11 @@
     .product-footer { padding: 12px 14px; border-top: 1px solid var(--border); }
     .product-footer .btn { width: 100%; }
 
-    /* ── Pagination ── */
+    /* â”€â”€ Pagination â”€â”€ */
     .pagination { display: flex; align-items: center; gap: 8px; justify-content: center; }
     .pagination .btn-ghost { min-width: 36px; }
 
-    /* ── Order Form ── */
+    /* â”€â”€ Order Form â”€â”€ */
     .order-form { max-width: 860px; }
     .order-items-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
     .order-items-table th {
@@ -394,7 +394,7 @@
 
     .order-actions { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
 
-    /* ── Orders Table ── */
+    /* â”€â”€ Orders Table â”€â”€ */
     .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
     .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .data-table th {
@@ -410,12 +410,12 @@
     .data-table tbody tr.overdue { background: rgba(248,81,73,0.05); }
     .data-table tbody tr.overdue:hover { background: rgba(248,81,73,0.09); }
 
-    /* ── Filter bar ── */
+    /* â”€â”€ Filter bar â”€â”€ */
     .filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
     .filter-bar select { max-width: 180px; }
     .filter-bar-spacer { flex: 1; }
 
-    /* ── Empty state ── */
+    /* â”€â”€ Empty state â”€â”€ */
     .empty-state {
       text-align: center; padding: 48px 24px;
       color: var(--text2);
@@ -424,7 +424,7 @@
     .empty-state h3 { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
     .empty-state p { font-size: 13px; line-height: 1.6; }
 
-    /* ── Modal ── */
+    /* â”€â”€ Modal â”€â”€ */
     .modal-overlay {
       position: fixed; inset: 0; z-index: 7000;
       background: rgba(13,17,23,0.8);
@@ -454,7 +454,7 @@
     .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
     .modal-amount-display { font-size: 28px; font-weight: 800; color: var(--green); text-align: center; margin: 16px 0; }
 
-    /* ── Toast ── */
+    /* â”€â”€ Toast â”€â”€ */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
       background: var(--bg3); border: 1px solid var(--border);
@@ -467,16 +467,16 @@
     #toast.success { border-color: rgba(63,185,80,0.4); color: var(--green); }
     #toast.error   { border-color: rgba(248,81,73,0.4); color: var(--red); }
 
-    /* ── Dashboard grid ── */
+    /* â”€â”€ Dashboard grid â”€â”€ */
     .dash-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 768px) { .dash-grid-2 { grid-template-columns: 1fr; } }
     @media (max-width: 768px) { .account-summary { grid-template-columns: 1fr; } }
 
-    /* ── Credit Notes Table ── */
+    /* â”€â”€ Credit Notes Table â”€â”€ */
     .credit-note-id { font-family: monospace; font-size: 12px; color: var(--text2); }
     .credit-note-amount { font-weight: 700; color: var(--green); }
 
-    /* ── Responsive ── */
+    /* â”€â”€ Responsive â”€â”€ */
     @media (max-width: 600px) {
       #app-header { padding: 0 16px; }
       #tab-bar { padding: 0 8px; }
@@ -489,7 +489,7 @@
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
     }
 
-    /* ── Loading shimmer ── */
+    /* â”€â”€ Loading shimmer â”€â”€ */
     .shimmer {
       background: linear-gradient(90deg, var(--bg3) 25%, var(--bg2) 50%, var(--bg3) 75%);
       background-size: 200% 100%;
@@ -498,10 +498,10 @@
     }
     @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 
-    /* ── Inline error message ── */
+    /* â”€â”€ Inline error message â”€â”€ */
     .field-error { font-size: 12px; color: var(--red); margin-top: 4px; }
 
-    /* ── Autocomplete dropdown ── */
+    /* â”€â”€ Autocomplete dropdown â”€â”€ */
     .autocomplete-wrap { position: relative; }
     .autocomplete-list {
       position: absolute; top: calc(100% + 4px); left: 0; right: 0;
@@ -519,23 +519,23 @@
     .autocomplete-item-price { font-size: 11px; color: var(--green); white-space: nowrap; }
     .autocomplete-item-moq { font-size: 10px; color: var(--text2); }
 
-    /* ── Due date display ── */
+    /* â”€â”€ Due date display â”€â”€ */
     .due-date-display { font-size: 13px; color: var(--text2); padding-top: 6px; }
   </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════════════
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      LOADING OVERLAY
-═══════════════════════════════════════════════════════ -->
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div id="loading-overlay">
   <div class="spinner"></div>
-  <p>Loading Wholesale Portal…</p>
+  <p>Loading Wholesale Portalâ€¦</p>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════
-     GATE: No Account — Apply
-═══════════════════════════════════════════════════════ -->
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     GATE: No Account â€” Apply
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div class="gate-screen" id="gate-apply">
   <div class="gate-card">
     <div class="gate-logo">
@@ -561,7 +561,7 @@
         <div>
           <label for="apply-business-type">Business Type *</label>
           <select id="apply-business-type" required>
-            <option value="">Select type…</option>
+            <option value="">Select typeâ€¦</option>
             <option value="distributor">Distributor</option>
             <option value="retailer">Retailer</option>
             <option value="manufacturer">Manufacturer</option>
@@ -583,9 +583,9 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      GATE: Pending Review
-═══════════════════════════════════════════════════════ -->
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div class="gate-screen" id="gate-pending">
   <div class="gate-card">
     <div class="gate-logo">
@@ -604,9 +604,9 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      GATE: Account Suspended
-═══════════════════════════════════════════════════════ -->
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div class="gate-screen" id="gate-suspended">
   <div class="gate-card">
     <div class="gate-logo">
@@ -625,9 +625,9 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      MAIN APP (hidden until approved)
-═══════════════════════════════════════════════════════ -->
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div id="main-app" style="display:none">
 
   <!-- Header -->
@@ -641,7 +641,7 @@
     </div>
     <div class="header-spacer"></div>
     <div class="header-user">
-      <div class="header-user-name" id="header-biz-name">Loading…</div>
+      <div class="header-user-name" id="header-biz-name">Loadingâ€¦</div>
       <div class="header-avatar" id="header-avatar">W</div>
       <button class="signout-btn" id="signout-btn">Sign out</button>
     </div>
@@ -659,7 +659,7 @@
   <!-- Main Content -->
   <main id="app-main">
 
-    <!-- ─── TAB 1: DASHBOARD ─────────────────────────── -->
+    <!-- â”€â”€â”€ TAB 1: DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <section class="tab-panel active" id="tab-dashboard" role="tabpanel">
       <div class="section-title">Dashboard</div>
 
@@ -671,23 +671,23 @@
           <div class="acct-info-grid">
             <div class="acct-field">
               <div class="acct-field-label">Business Name</div>
-              <div class="acct-field-value" id="dash-biz-name">—</div>
+              <div class="acct-field-value" id="dash-biz-name">â€”</div>
             </div>
             <div class="acct-field">
               <div class="acct-field-label">Business Type</div>
-              <div class="acct-field-value" id="dash-biz-type">—</div>
+              <div class="acct-field-value" id="dash-biz-type">â€”</div>
             </div>
             <div class="acct-field">
               <div class="acct-field-label">Credit Limit</div>
-              <div class="acct-field-value" id="dash-credit-limit">—</div>
+              <div class="acct-field-value" id="dash-credit-limit">â€”</div>
             </div>
             <div class="acct-field">
               <div class="acct-field-label">Payment Terms</div>
-              <div class="acct-field-value" id="dash-payment-terms">—</div>
+              <div class="acct-field-value" id="dash-payment-terms">â€”</div>
             </div>
             <div class="acct-field">
               <div class="acct-field-label">Account Status</div>
-              <div class="acct-field-value" id="dash-status-badge">—</div>
+              <div class="acct-field-value" id="dash-status-badge">â€”</div>
             </div>
           </div>
         </div>
@@ -705,17 +705,17 @@
       <div class="stats-grid">
         <div class="stat-card blue">
           <div class="stat-label">Total Orders</div>
-          <div class="stat-value" id="dash-total-orders">—</div>
+          <div class="stat-value" id="dash-total-orders">â€”</div>
           <div class="stat-sub">All time</div>
         </div>
         <div class="stat-card green">
           <div class="stat-label">Total Paid</div>
-          <div class="stat-value" id="dash-total-paid">—</div>
+          <div class="stat-value" id="dash-total-paid">â€”</div>
           <div class="stat-sub">Lifetime payments</div>
         </div>
         <div class="stat-card orange">
           <div class="stat-label">Credit Notes</div>
-          <div class="stat-value" id="dash-cn-count">—</div>
+          <div class="stat-value" id="dash-cn-count">â€”</div>
           <div class="stat-sub" id="dash-cn-total">Active</div>
         </div>
       </div>
@@ -731,11 +731,11 @@
       </div>
     </section>
 
-    <!-- ─── TAB 2: CATALOG ───────────────────────────── -->
+    <!-- â”€â”€â”€ TAB 2: CATALOG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <section class="tab-panel" id="tab-catalog" role="tabpanel">
       <div class="section-title">Product Catalog</div>
       <div class="catalog-toolbar">
-        <input type="search" id="catalog-search" placeholder="Search products…" oninput="debouncedCatalogSearch()" style="max-width:280px;">
+        <input type="search" id="catalog-search" placeholder="Search productsâ€¦" oninput="debouncedCatalogSearch()" style="max-width:280px;">
         <div class="catalog-toolbar-spacer"></div>
         <span style="font-size:12px;color:var(--text2);" id="catalog-count-label"></span>
       </div>
@@ -752,7 +752,7 @@
       </div>
     </section>
 
-    <!-- ─── TAB 3: PLACE ORDER ───────────────────────── -->
+    <!-- â”€â”€â”€ TAB 3: PLACE ORDER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <section class="tab-panel" id="tab-order" role="tabpanel">
       <div class="section-title">Place Order</div>
       <div class="order-form">
@@ -787,7 +787,7 @@
             </div>
             <div>
               <label>Estimated Due Date</label>
-              <div class="due-date-display" id="order-due-date">—</div>
+              <div class="due-date-display" id="order-due-date">â€”</div>
             </div>
           </div>
 
@@ -817,7 +817,7 @@
       </div>
     </section>
 
-    <!-- ─── TAB 4: MY ORDERS ─────────────────────────── -->
+    <!-- â”€â”€â”€ TAB 4: MY ORDERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <section class="tab-panel" id="tab-orders" role="tabpanel">
       <div class="section-title">My Orders</div>
       <div class="filter-bar">
@@ -847,13 +847,13 @@
             </tr>
           </thead>
           <tbody id="orders-body">
-            <tr><td colspan="8" class="empty-cell" style="text-align:center;padding:32px;color:var(--text2);">Loading orders…</td></tr>
+            <tr><td colspan="8" class="empty-cell" style="text-align:center;padding:32px;color:var(--text2);">Loading ordersâ€¦</td></tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <!-- ─── TAB 5: CREDIT NOTES ──────────────────────── -->
+    <!-- â”€â”€â”€ TAB 5: CREDIT NOTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <section class="tab-panel" id="tab-credits" role="tabpanel">
       <div class="section-title">Credit Notes</div>
       <div class="table-wrap">
@@ -868,7 +868,7 @@
             </tr>
           </thead>
           <tbody id="credits-body">
-            <tr><td colspan="5" class="empty-cell" style="text-align:center;padding:32px;color:var(--text2);">Loading…</td></tr>
+            <tr><td colspan="5" class="empty-cell" style="text-align:center;padding:32px;color:var(--text2);">Loadingâ€¦</td></tr>
           </tbody>
         </table>
       </div>
@@ -881,9 +881,9 @@
   </main>
 </div><!-- /main-app -->
 
-<!-- ═══════════════════════════════════════════════════════
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      PAYMENT MODAL
-═══════════════════════════════════════════════════════ -->
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div class="modal-overlay" id="payment-modal">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="payment-modal-title">
     <div class="modal-header">
@@ -904,7 +904,7 @@
       <div class="modal-field" id="credit-note-field" style="display:none;">
         <label for="pay-credit-note">Select Credit Note</label>
         <select id="pay-credit-note">
-          <option value="">Loading credit notes…</option>
+          <option value="">Loading credit notesâ€¦</option>
         </select>
       </div>
       <div id="pay-modal-msg" style="font-size:12px;min-height:16px;text-align:center;margin-top:4px;"></div>
@@ -916,9 +916,9 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      ORDER DETAIL MODAL (quick add to order from catalog)
-═══════════════════════════════════════════════════════ -->
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <div class="modal-overlay" id="add-to-order-modal">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="add-order-title">
     <div class="modal-header">
@@ -947,9 +947,9 @@
 <!-- Toast -->
 <div id="toast" role="status" aria-live="polite"></div>
 
-<!-- ═══════════════════════════════════════════════════════
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      FIREBASE SDK + CONFIG
-═══════════════════════════════════════════════════════ -->
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
@@ -958,7 +958,7 @@
 
 <script>
 /* ====================================================================
-   SOKONI Wholesale Portal — B2B Buyer Portal
+   SOKONI Wholesale Portal â€” B2B Buyer Portal
    Firebase named app: wholesale-portal
    Auth gate: wholesaleAccounts/{uid}.status === 'approved'
    Date: 2026-06-28
@@ -966,7 +966,7 @@
 ==================================================================== */
 'use strict';
 
-/* ── XSS Protection ────────────────────────────────────────────── */
+/* â”€â”€ XSS Protection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function escHtml(str) {
   if (str == null) return '';
   return String(str)
@@ -977,25 +977,25 @@ function escHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-/* ── KES Formatter ─────────────────────────────────────────────── */
+/* â”€â”€ KES Formatter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function fmtKES(num) {
   const n = parseFloat(num) || 0;
   return 'KES ' + n.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/* ── Date Formatter ────────────────────────────────────────────── */
+/* â”€â”€ Date Formatter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function fmtDate(ts) {
-  if (!ts) return '—';
+  if (!ts) return 'â€”';
   try {
     const d = ts.toDate ? ts.toDate() : new Date(ts);
     return d.toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' });
-  } catch { return '—'; }
+  } catch { return 'â€”'; }
 }
 
-/* ── Terms to days map ─────────────────────────────────────────── */
+/* â”€â”€ Terms to days map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const TERMS_DAYS = { net7: 7, net14: 14, net30: 30 };
 
-/* ── Compute due date from terms ───────────────────────────────── */
+/* â”€â”€ Compute due date from terms â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function computeDueDate(terms) {
   const days = TERMS_DAYS[terms] || 30;
   const d = new Date();
@@ -1003,9 +1003,9 @@ function computeDueDate(terms) {
   return d.toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-/* ──────────────────────────────────────────────────────────────────
-   FIREBASE INIT — named app: wholesale-portal
-────────────────────────────────────────────────────────────────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   FIREBASE INIT â€” named app: wholesale-portal
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 let WP_APP;
 try {
   WP_APP = firebase.app('wholesale-portal');
@@ -1027,14 +1027,14 @@ const wpAuth = firebase.auth(WP_APP);
 const wpFns  = firebase.functions(WP_APP);
 const wpDb   = firebase.firestore(WP_APP);
 
-/* ── CF wrapper ─────────────────────────────────────────────────── */
+/* â”€â”€ CF wrapper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function callCF(name, data = {}) {
-  return wpFns.httpsCallable('servicesDispatch')(Object.assign({ op: name }, data)).then(r => r.data);
+  return wpFns.httpsCallable('servicesDispatch')(Object.assign({}, data, { op: name })).then(r => r.data);
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    GLOBAL STATE
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 let currentUser     = null;
 let wholesaleAcct   = null;   // account doc from getWholesaleAccount CF
 let catalogCache    = [];     // cached catalog page
@@ -1046,9 +1046,9 @@ let creditNotes     = [];     // raw credit notes from getWholesaleCreditNotes
 let payingOrderId   = null;   // order ID currently being paid
 let addToOrderProduct = null; // product being added from catalog
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    TOAST
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 let _toastTimer = null;
 function showToast(msg, type = '') {
   const el = document.getElementById('toast');
@@ -1058,9 +1058,9 @@ function showToast(msg, type = '') {
   _toastTimer = setTimeout(() => { el.className = ''; }, 3500);
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    LOADING / GATE HELPERS
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function hideLoading() {
   document.getElementById('loading-overlay').style.display = 'none';
 }
@@ -1073,9 +1073,9 @@ function showApp() {
   document.getElementById('main-app').style.display = 'block';
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    AUTH FLOW
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 wpAuth.onAuthStateChanged(async user => {
   if (!user) {
     hideLoading();
@@ -1111,18 +1111,22 @@ wpAuth.onAuthStateChanged(async user => {
   } catch (err) {
     console.error('[WP] getWholesaleAccount error:', err);
     hideLoading();
-    // If no account exists (not-found), show apply screen
-    if (err && (err.code === 'not-found' || (err.message && err.message.includes('not-found')))) {
+    const code = (err && (err.code || '')).replace('functions/', '');
+    if (code === 'not-found' || (err.message && err.message.includes('not-found'))) {
       showGate('gate-apply');
+    } else if (code === 'permission-denied') {
+      showGate('gate-apply'); // suspended accounts also re-apply
+      console.warn('[WP] permission-denied loading wholesale account');
     } else {
       showGate('gate-apply');
+      console.error('[WP] unexpected error loading wholesale account:', code);
     }
   }
 });
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    INIT APP (status === 'approved')
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function initApp(acct) {
   showApp();
 
@@ -1144,9 +1148,9 @@ function initApp(acct) {
   updateOrderDueDate();
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    TAB SWITCHING
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => {
@@ -1169,14 +1173,14 @@ function switchTab(name, btn) {
   if (name === 'credits') loadCreditNotes();
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    TAB 1: DASHBOARD
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function renderDashboard(acct) {
   // Account summary
-  document.getElementById('dash-biz-name').textContent     = escHtml(acct.businessName || '—');
+  document.getElementById('dash-biz-name').textContent     = escHtml(acct.businessName || 'â€”');
   document.getElementById('dash-biz-type').textContent     = escHtml(fmtBizType(acct.businessType));
-  document.getElementById('dash-credit-limit').textContent = acct.creditLimit ? fmtKES(acct.creditLimit) : '—';
+  document.getElementById('dash-credit-limit').textContent = acct.creditLimit ? fmtKES(acct.creditLimit) : 'â€”';
   document.getElementById('dash-payment-terms').textContent = escHtml(fmtTerms(acct.paymentTerms));
   document.getElementById('dash-status-badge').innerHTML   = statusBadge(acct.status);
 
@@ -1185,8 +1189,8 @@ function renderDashboard(acct) {
   document.getElementById('dash-outstanding').textContent = fmtKES(outstanding);
 
   // Quick stats
-  document.getElementById('dash-total-orders').textContent = acct.totalOrders != null ? escHtml(String(acct.totalOrders)) : '—';
-  document.getElementById('dash-total-paid').textContent   = acct.totalPaid != null ? fmtKES(acct.totalPaid) : '—';
+  document.getElementById('dash-total-orders').textContent = acct.totalOrders != null ? escHtml(String(acct.totalOrders)) : 'â€”';
+  document.getElementById('dash-total-paid').textContent   = acct.totalPaid != null ? fmtKES(acct.totalPaid) : 'â€”';
 
   const cnCount = acct.creditNotesCount != null ? acct.creditNotesCount : (acct.creditNotes ? acct.creditNotes.length : 0);
   const cnTotal = acct.creditNotesTotal != null ? acct.creditNotesTotal : 0;
@@ -1233,12 +1237,12 @@ function fmtBizType(type) {
     distributor: 'Distributor', retailer: 'Retailer', manufacturer: 'Manufacturer',
     wholesaler: 'Wholesaler', institution: 'Institution', other: 'Other'
   };
-  return map[type] || type || '—';
+  return map[type] || type || 'â€”';
 }
 
 function fmtTerms(terms) {
   const map = { net7: 'Net 7 Days', net14: 'Net 14 Days', net30: 'Net 30 Days' };
-  return map[terms] || terms || '—';
+  return map[terms] || terms || 'â€”';
 }
 
 function statusBadge(status) {
@@ -1250,7 +1254,7 @@ function statusBadge(status) {
     overdue:   '<span class="badge badge-overdue">&#9888; Overdue</span>',
     approved:  '<span class="badge badge-approved">&#10003; Approved</span>',
   };
-  return map[status] || `<span class="badge badge-grey">${escHtml(status || '—')}</span>`;
+  return map[status] || `<span class="badge badge-grey">${escHtml(status || 'â€”')}</span>`;
 }
 
 function orderStatusBadge(status, isOverdue) {
@@ -1262,12 +1266,12 @@ function orderStatusBadge(status, isOverdue) {
     overdue:  '<span class="badge badge-overdue">Overdue</span>',
     cancelled:'<span class="badge badge-grey">Cancelled</span>',
   };
-  return map[status] || `<span class="badge badge-grey">${escHtml(status || '—')}</span>`;
+  return map[status] || `<span class="badge badge-grey">${escHtml(status || 'â€”')}</span>`;
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    TAB 2: CATALOG
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 let catalogSearchTimer = null;
 function debouncedCatalogSearch() {
   clearTimeout(catalogSearchTimer);
@@ -1446,9 +1450,9 @@ function loadPrevCatalogPage() {
   loadCatalog();
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    TAB 3: PLACE ORDER
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 let orderRowCount = 0;
 
 function addOrderItem() {
@@ -1463,7 +1467,7 @@ function addOrderItem() {
       <div class="autocomplete-wrap">
         <input type="text"
           class="product-search-input"
-          placeholder="Search product…"
+          placeholder="Search productâ€¦"
           oninput="onProductSearch(this, '${id}')"
           onfocus="onProductSearch(this, '${id}')"
           autocomplete="off"
@@ -1687,7 +1691,7 @@ async function submitOrder() {
   const btn   = document.getElementById('submit-order-btn');
   const msgEl = document.getElementById('order-form-msg');
   btn.disabled = true;
-  btn.textContent = 'Submitting…';
+  btn.textContent = 'Submittingâ€¦';
   msgEl.textContent = '';
 
   // Build items array
@@ -1755,12 +1759,12 @@ function resetOrderForm() {
   orderRowCount = 0;
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    TAB 4: MY ORDERS
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 async function loadOrders() {
   const tbody = document.getElementById('orders-body');
-  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text2);">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text2);">Loadingâ€¦</td></tr>';
 
   try {
     const data = await callCF('getWholesaleOrders', {});
@@ -1797,7 +1801,7 @@ function renderOrdersTable(orders) {
 
   tbody.innerHTML = orders.map(o => {
     const isOverdue   = !!(o.isOverdue || o.status === 'overdue');
-    const orderId     = escHtml(o.orderId || o.id || '—');
+    const orderId     = escHtml(o.orderId || o.id || 'â€”');
     const date        = escHtml(fmtDate(o.createdAt || o.date));
     const itemCount   = parseInt(o.itemCount || (o.items && o.items.length) || 0, 10);
     const total       = fmtKES(o.total || 0);
@@ -1822,9 +1826,9 @@ function renderOrdersTable(orders) {
   }).join('');
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    PAYMENT MODAL
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 async function openPaymentModal(orderId, amount) {
   payingOrderId = orderId;
   document.getElementById('pay-modal-amount').textContent = fmtKES(amount);
@@ -1851,7 +1855,7 @@ function onPayMethodChange() {
 
 async function populateCreditNotesDropdown() {
   const sel = document.getElementById('pay-credit-note');
-  sel.innerHTML = '<option value="">Loading…</option>';
+  sel.innerHTML = '<option value="">Loadingâ€¦</option>';
   try {
     const data = await callCF('getWholesaleCreditNotes', { status: 'active' });
     const notes = data.creditNotes || data.notes || data || [];
@@ -1863,7 +1867,7 @@ async function populateCreditNotesDropdown() {
     sel.innerHTML = notes.map(n => {
       const id  = escHtml(n.id || n.noteId || '');
       const amt = fmtKES(n.amount || 0);
-      return `<option value="${id}">${id} — ${amt}</option>`;
+      return `<option value="${id}">${id} â€” ${amt}</option>`;
     }).join('');
   } catch (err) {
     sel.innerHTML = '<option value="">Failed to load credit notes</option>';
@@ -1887,7 +1891,7 @@ async function confirmPayment() {
   }
 
   btn.disabled = true;
-  btn.textContent = 'Processing…';
+  btn.textContent = 'Processingâ€¦';
   msgEl.textContent = '';
 
   try {
@@ -1916,12 +1920,12 @@ async function confirmPayment() {
   }
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    TAB 5: CREDIT NOTES
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 async function loadCreditNotes() {
   const tbody = document.getElementById('credits-body');
-  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text2);">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text2);">Loadingâ€¦</td></tr>';
   try {
     const data = await callCF('getWholesaleCreditNotes', {});
     const notes = data.creditNotes || data.notes || data || [];
@@ -1947,9 +1951,9 @@ function renderCreditNotesTable(notes) {
   }
 
   tbody.innerHTML = notes.map(n => {
-    const noteId  = escHtml(n.id || n.noteId || '—');
+    const noteId  = escHtml(n.id || n.noteId || 'â€”');
     const amount  = fmtKES(n.amount || 0);
-    const reason  = escHtml(n.reason || '—');
+    const reason  = escHtml(n.reason || 'â€”');
     const expires = escHtml(fmtDate(n.expiresAt || n.expiry));
     const status  = n.status || 'active';
     const badgeHtml = status === 'active'
@@ -1967,9 +1971,9 @@ function renderCreditNotesTable(notes) {
   }).join('');
 }
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    APPLY FOR WHOLESALE ACCOUNT
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const KRA_PIN_RE = /^[A-Z]\d{9}[A-Z]$/;
 
 document.getElementById('apply-form').addEventListener('submit', async function(e) {
@@ -2003,7 +2007,7 @@ document.getElementById('apply-form').addEventListener('submit', async function(
   }
 
   btn.disabled = true;
-  btn.textContent = 'Submitting…';
+  btn.textContent = 'Submittingâ€¦';
   msgEl.textContent = '';
 
   try {
@@ -2031,9 +2035,9 @@ document.getElementById('apply-kra-pin').addEventListener('input', function() {
   document.getElementById('kra-pin-error').hidden = true;
 });
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    CLOSE MODALS ON OVERLAY CLICK
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 document.getElementById('payment-modal').addEventListener('click', function(e) {
   if (e.target === this) closePaymentModal();
 });
@@ -2041,9 +2045,9 @@ document.getElementById('add-to-order-modal').addEventListener('click', function
   if (e.target === this) closeAddToOrderModal();
 });
 
-/* ──────────────────────────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    KEYBOARD: ESC closes modals
-────────────────────────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closePaymentModal();
