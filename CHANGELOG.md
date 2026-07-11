@@ -1,4 +1,47 @@
-﻿## [2026-07-11] — Enterprise Cash Manager v2 — Gap-Fill Wave 2
+﻿## [2026-07-11] — Enterprise Cash Manager v3 — Full Spec Completion
+
+### Summary
+Third wave completing every item in the enterprise cash management spec. Adds hardware verification to the opening wizard, hard shift lock during register closing, percentage and Over/Short variance labelling, manager approval workflow for register closes, immutable drawer event logging to Firestore via CF, a Drawer Events tab in the Cash Office, a Branch Summary tab with cross-register reconciliation, print/PDF export for the EOD report, and pending close-approval management for managers.
+
+### Files Affected
+- `pos-checkout.html`:
+  - `_sowBuildDeviceList()` — Step 1 of opening wizard shows Cash Drawer, Printer, Scanner (auto-detected), Payment Terminal, Customer Display (manual checkbox verification)
+  - Hard shift lock: `window._shiftClosing = true` when close wizard opens; `pay()` hard-blocks with error message; Cancel button resets flag
+  - Enhanced variance panel: OVER / SHORT / BALANCED label + percentage variance (`|varianceCents| / expectedCents × 100`)
+  - Close wizard Step C: manager approval request (`_scwRequestManagerApproval()`) submits to `cmRequestCloseApproval`; polling (`_scwCheckApproval()`) reads `posCloseApprovals`; `confirmCloseShift(true)` completes approved close
+  - Drawer logging: `cmLogDrawerOpen` called after every auto-open (payment, after-receipt) and manual open; register_close event also logged
+  - Split cash drawer guard: auto-open only fires when a cash leg is present
+- `functions/pos-cash-manager.js` — 5 new handlers (10 → 15 total):
+  - `cmLogDrawerOpen` — validates reason against allowlist; writes `posDrawerEvents/{id}`
+  - `cmGetDrawerHistory` — paginated (max 500), optional register filter
+  - `cmGetBranchSummary` — cross-register reconciliation; groups events by registerId; manager-only
+  - `cmRequestCloseApproval` — stores pending close with countedCents, varianceCents, explanation
+  - `cmApproveRegisterClose` — manager validates role/merchant/pending status; approves or rejects
+- `pos-cash-manager.html`:
+  - Drawer Events tab — filter by register/reason, 7-column table, CSV export
+  - Branch Summary tab — date+branch filter, 5 KPI cards, 10-column register table, variance chips, CSV export
+  - Pending Register Close Approvals section in Overview — approve/reject buttons call CF handler
+  - Print/PDF for EOD — `_printEOD()` focuses EOD tab and calls `window.print()`; print header shows date/merchant/generated-at; @media print hides nav, renders in light mode
+  - `loadOverview()` now also calls `loadCloseApprovals()` on mount
+- `functions/smartpos-dispatch.js` — handler count comment updated (10 → 15)
+
+### Database Changes
+- New collection: `posDrawerEvents/{id}` — immutable drawer open log (userId, role, reason, registerId, branch, deviceId, ts)
+- New collection: `posCloseApprovals/{id}` — register close approval requests (status: pending → approved/rejected)
+
+### Security Changes
+- `cmLogDrawerOpen`: reason validated against server-side allowlist; no client can log arbitrary reasons
+- `cmGetBranchSummary`, `cmRequestCloseApproval`, `cmApproveRegisterClose`: all require authentication; branch summary and approve require manager role
+- `cmApproveRegisterClose`: idempotency guard — rejects if `status !== 'pending'`
+- Hard shift lock: `window._shiftClosing` prevents new sales from being initiated while register closing is in progress
+
+### Performance Changes
+- `cmGetBranchSummary` queries a bounded date range (dayStart → dayEnd); max 5000 events scanned per request
+- Drawer logging is fire-and-forget (`.catch(() => {})`) — never blocks the payment or drawer-open path
+
+---
+
+## [2026-07-11] — Enterprise Cash Manager v2 — Gap-Fill Wave 2
 
 ### Summary
 Second-wave enhancements completing the full enterprise cash management spec: live topbar balance display, category dropdowns per event type, safe-drop field visibility control, safe-drop location validation and receipt printing, split payment cash leg recording, shift warning on pay(), manager approval secured through CF handler (not direct Firestore), cashier performance tab with KPI row and color-coded variance table, CSV export for both EOD and cashier performance, and branch filter on EOD report.
