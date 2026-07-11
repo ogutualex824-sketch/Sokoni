@@ -91,7 +91,15 @@
       date       = null,
       showQR     = true,
       vatRate    = 16,          // % for VAT line display
+      companyPin = '',          // company KRA PIN — passed in from the server receipt payload
     } = opts;
+
+    /* Centralized company KRA PIN — never hardcoded here. Prefer the value the server
+       put in the receipt payload (sourced from Secret Manager ETIMS_PLATFORM_PIN);
+       fall back to a single client config global for offline-rendered receipts. */
+    const _companyPin = companyPin
+      || (typeof window !== 'undefined' && (window.SOKONI_COMPANY_KRA_PIN || (window.SOKONI_CONFIG && window.SOKONI_CONFIG.companyKraPin)))
+      || '';
 
     const typeLabelMap = { sale: 'RECEIPT', refund: 'REFUND', quote: 'QUOTATION', delivery: 'DELIVERY NOTE' };
     const typeLabel = typeLabelMap[type] || 'RECEIPT';
@@ -176,7 +184,7 @@
     <div style="margin-top:4px;">Support: ${SUPPORT_TEL}</div>
     <div>${BRAND_SUB}</div>
     <div style="font-size:9px;margin-top:4px;color:#888;">
-      Powered by SOKONI SmartPOS · VAT PIN: P051234567X
+      Powered by SOKONI SmartPOS${_companyPin ? ` · VAT PIN: ${_esc(_companyPin)}` : ''}
     </div>
     <div style="font-size:9px;margin-top:2px;color:#888;">
       Operated by Bravilex International Co. Limited

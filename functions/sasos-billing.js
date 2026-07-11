@@ -37,6 +37,10 @@ const { logger }             = require('firebase-functions');
 const admin                  = require('firebase-admin');
 const FieldValue             = admin.firestore.FieldValue;
 const { _resolvePlan, SASOS_PRODUCTS } = require('./sasos-core');
+const { defineSecret }       = require('firebase-functions/params');
+/* Single source of truth for the company (Bravilex) KRA PIN — Secret Manager.
+   Shared name with etims.js; defineSecret is idempotent per name. Never hardcode. */
+const ETIMS_PLATFORM_PIN     = defineSecret('ETIMS_PLATFORM_PIN');
 
 const { assertAuth, assertAdmin, sanitize } = require('./shared/errors');
 const { VAT_RATE, DUNNING_DAYS, GRACE_PERIOD_DAYS, currentPeriod } = require('./shared/constants');
@@ -83,7 +87,7 @@ function _calcProration(currentPrice, periodStart, periodEnd, billing) {
    subscription payment. Called after successful payment confirmation.
 ================================================================ */
 const sasosCreateInvoice = onCall(
-  { region: 'us-central1', timeoutSeconds: 20, memory: '128MiB' },
+  { region: 'us-central1', timeoutSeconds: 20, memory: '128MiB', secrets: [ETIMS_PLATFORM_PIN] },
   async (req) => {
     const uid      = assertAuth(req);
     const planId   = san(req.data.planId, 60);
@@ -126,8 +130,8 @@ const sasosCreateInvoice = onCall(
       periodStart: now,
       periodEnd:   billing === 'annual' ? now + 365 * 86400000 : now + 30 * 86400000,
       issuer: {
-        name:    'Sokoni Digital Ltd',
-        pin:     'P051999999K',          /* Kenya KRA PIN */
+        name:    'Bravilex International Co. Limited',
+        pin:     ETIMS_PLATFORM_PIN.value(),   /* company KRA PIN — single source of truth (Secret Manager) */
         address: 'Nairobi, Kenya',
         email:   'billing@mysokoni.co.ke',
       },
