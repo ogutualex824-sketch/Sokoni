@@ -561,7 +561,7 @@
     <div class="bcard-actions">
       <button id="saveContactBtn" class="bcard-btn bcard-btn-primary">&#11015; Save Contact</button>
       <button onclick="window.print()" class="bcard-btn bcard-btn-outline">&#128438; Print Card</button>
-      <a id="visitShopBtn" href="#" class="bcard-btn bcard-btn-outline">&#127978; Visit MiniShop</a>
+      <a id="visitShopBtn" href="#" class="bcard-btn bcard-btn-outline" aria-disabled="true" style="opacity:.45;pointer-events:none;" title="Shop URL not yet available">&#127978; Visit MiniShop</a>
     </div>
 
     <!-- Social links -->
@@ -736,8 +736,13 @@
         /* QR code */
         document.getElementById('bcardQrImg').src = qrUrl(shopUrl);
 
-        /* Visit shop button */
-        document.getElementById('visitShopBtn').href = shopUrl;
+        /* Visit shop button — re-enable once URL is known */
+        var vsb = document.getElementById('visitShopBtn');
+        vsb.href = shopUrl;
+        vsb.removeAttribute('aria-disabled');
+        vsb.style.opacity = '';
+        vsb.style.pointerEvents = '';
+        vsb.removeAttribute('title');
 
         /* Social links */
         var socials = config.socialLinks || {};

@@ -550,9 +550,15 @@ async function completeRoleSelection(){
     } else if(user.registeredAs.driver){
         dest  = "driver.html";
         label = "Opening Driver Dashboard…";
+    } else if(user.registeredAs.delivery){
+        dest  = "onboarding-driver.html";
+        label = "Setting up your Delivery Profile…";
     } else if(user.registeredAs.healthcare){
         dest  = "healthcare.html";
         label = "Opening Healthcare Hub…";
+    } else if(user.registeredAs.legal){
+        dest  = "provider.html?cat=legal";
+        label = "Opening Legal Services Dashboard…";
     } else if(user.registeredAs.landlord){
         dest  = "landlord.html";
         label = "Opening Property Dashboard…";
