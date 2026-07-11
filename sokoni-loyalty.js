@@ -129,12 +129,12 @@ window.SokoniLoyalty = (function () {
     }
   }
 
-  /* ── Callable helper ── */
+  /* ── Callable helper — all loyalty ops route through single loyaltyDispatch CF ── */
   function _call(name, payload) {
     var fns = _getFns();
     if (!fns) return Promise.reject(new Error('Firebase Functions not available'));
-    var fn = fns.httpsCallable(name);
-    return fn(payload || {}).then(function (res) { return res.data; });
+    var fn = fns.httpsCallable('loyaltyDispatch');
+    return fn(Object.assign({ op: name }, payload || {})).then(function (res) { return res.data; });
   }
 
   /* ================================================================
@@ -817,7 +817,7 @@ window.SokoniLoyalty = (function () {
     resultEl.textContent   = 'Checking gift card…';
 
     /* Call the Cloud Function to validate + redeem */
-    firebase.functions().httpsCallable('redeemGiftCard')({ code: code, uid: _uid, merchantId: null, orderTotal: 999999 })
+    firebase.functions().httpsCallable('loyaltyDispatch')({ op: 'redeemGiftCard', code: code, uid: _uid, merchantId: null, orderTotal: 999999 })
       .then(function (res) {
         var d = res.data || {};
         if (d.valid) {

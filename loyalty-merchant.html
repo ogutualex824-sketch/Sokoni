@@ -634,7 +634,8 @@ window.LoyaltyMerchant = (function () {
   function _call(name, data) {
     var fns = _getFns();
     if (!fns) return Promise.reject(new Error('Firebase Functions unavailable'));
-    return fns.httpsCallable(name)(data || {}).then(function (r) { return r.data; });
+    // All loyalty ops route through the single loyaltyDispatch CF
+    return fns.httpsCallable('loyaltyDispatch')(Object.assign({ op: name }, data || {})).then(function (r) { return r.data; });
   }
 
   function _esc(s) {

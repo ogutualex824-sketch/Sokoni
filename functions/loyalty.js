@@ -1,24 +1,24 @@
 'use strict';
 /**
  * SOKONI Universal Loyalty & Rewards Engine v2.0
- * Firebase Gen2 / Node.js 22 — Enterprise Edition
+ * Firebase Gen2 / Node.js 22 â€” Enterprise Edition
  *
  * Performance targets:
  *   Reward calculation  < 100 ms
  *   Checkout completion < 3 s (incl. payment)
  *   Push notification   < 2 s
- *   100,000+ customers · 10,000+ merchants · Millions of transactions
+ *   100,000+ customers Â· 10,000+ merchants Â· Millions of transactions
  *
  * Collections:
- *   loyaltyAccounts/{uid}         — one per customer (uid = Firebase Auth UID)
- *   loyaltyLedger/{entryId}       — immutable double-entry ledger
- *   loyaltyTransactions/{txId}    — v1 ledger (preserved for backward compat)
- *   loyaltyMerchantConfigs/{mid}  — per-merchant program rules
- *   loyaltyCampaigns/{cid}        — time-bounded bonus campaigns
- *   loyaltyRewards/{rid}          — redeemable reward catalog
- *   loyaltyRedemptions/{redId}    — redemption audit records
- *   loyaltyCards/{cardId}         — physical / NFC card registry
- *   loyaltyRules/default          — global platform defaults (v1 compat)
+ *   loyaltyAccounts/{uid}         â€” one per customer (uid = Firebase Auth UID)
+ *   loyaltyLedger/{entryId}       â€” immutable double-entry ledger
+ *   loyaltyTransactions/{txId}    â€” v1 ledger (preserved for backward compat)
+ *   loyaltyMerchantConfigs/{mid}  â€” per-merchant program rules
+ *   loyaltyCampaigns/{cid}        â€” time-bounded bonus campaigns
+ *   loyaltyRewards/{rid}          â€” redeemable reward catalog
+ *   loyaltyRedemptions/{redId}    â€” redemption audit records
+ *   loyaltyCards/{cardId}         â€” physical / NFC card registry
+ *   loyaltyRules/default          â€” global platform defaults (v1 compat)
  *
  * DEPLOYMENT: set secret LOYALTY_HMAC_SECRET in Firebase Secret Manager
  *   firebase functions:secrets:set LOYALTY_HMAC_SECRET
@@ -36,7 +36,10 @@ const LOYALTY_HMAC = defineSecret('LOYALTY_HMAC_SECRET');
 const REGION = 'us-central1';
 const OPT    = { region: REGION, enforceAppCheck: true };
 
-// ── Firestore helpers ─────────────────────────────────────────────────────────
+// Handler registry — populated below; consumed by loyalty-dispatch.js dispatcher
+exports._h = {};
+
+// â”€â”€ Firestore helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const _db   = () => getFirestore();
 const _now  = () => FieldValue.serverTimestamp();
@@ -74,7 +77,7 @@ function _requireMerchant(ctx) {
   return auth;
 }
 
-// ── Crypto helpers ────────────────────────────────────────────────────────────
+// â”€â”€ Crypto helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function _hmac16(secret, data) {
   return crypto.createHmac('sha256', secret).update(String(data)).digest('hex').slice(0, 16);
@@ -94,14 +97,14 @@ function _generateCardNumber() {
   return `628400${rand}`;
 }
 
-// ── Tier Engine ───────────────────────────────────────────────────────────────
+// â”€â”€ Tier Engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const TIERS = [
-  { name: 'Bronze',   key: 'bronze',   min: 0,      max: 4999,   multiplier: 1.0, color: '#CD7F32', icon: '🥉' },
-  { name: 'Silver',   key: 'silver',   min: 5000,   max: 19999,  multiplier: 1.5, color: '#C0C0C0', icon: '🥈' },
-  { name: 'Gold',     key: 'gold',     min: 20000,  max: 49999,  multiplier: 2.0, color: '#FFD700', icon: '🥇' },
-  { name: 'Platinum', key: 'platinum', min: 50000,  max: 99999,  multiplier: 3.0, color: '#E5E4E2', icon: '💎' },
-  { name: 'Diamond',  key: 'diamond',  min: 100000, max: null,   multiplier: 5.0, color: '#B9F2FF', icon: '💠' },
+  { name: 'Bronze',   key: 'bronze',   min: 0,      max: 4999,   multiplier: 1.0, color: '#CD7F32', icon: 'ðŸ¥‰' },
+  { name: 'Silver',   key: 'silver',   min: 5000,   max: 19999,  multiplier: 1.5, color: '#C0C0C0', icon: 'ðŸ¥ˆ' },
+  { name: 'Gold',     key: 'gold',     min: 20000,  max: 49999,  multiplier: 2.0, color: '#FFD700', icon: 'ðŸ¥‡' },
+  { name: 'Platinum', key: 'platinum', min: 50000,  max: 99999,  multiplier: 3.0, color: '#E5E4E2', icon: 'ðŸ’Ž' },
+  { name: 'Diamond',  key: 'diamond',  min: 100000, max: null,   multiplier: 5.0, color: '#B9F2FF', icon: 'ðŸ’ ' },
 ];
 
 function _tierFor(lifetimePoints) {
@@ -125,7 +128,7 @@ function _nextTierInfo(lifetimePoints) {
   };
 }
 
-// ── Points Calculator ─────────────────────────────────────────────────────────
+// â”€â”€ Points Calculator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function _calcPoints(amountKES, config, tierKey, activeCampaigns = []) {
   if (amountKES < (config.minPurchaseKES || 0))
@@ -154,7 +157,7 @@ function _calcPoints(amountKES, config, tierKey, activeCampaigns = []) {
   return { basePoints: base, tierBonus, weekendBonus, campaignBonus, total: base + tierBonus + weekendBonus + campaignBonus };
 }
 
-// ── Default config ────────────────────────────────────────────────────────────
+// â”€â”€ Default config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function _defaultConfig(merchantId) {
   return {
@@ -170,7 +173,7 @@ function _defaultConfig(merchantId) {
   };
 }
 
-// ── Global platform rules (v1 compat) ────────────────────────────────────────
+// â”€â”€ Global platform rules (v1 compat) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function _getRules() {
   try {
@@ -180,7 +183,7 @@ async function _getRules() {
   return { earnRate: 1, redemptionRate: 10, minRedemption: 500, maxBonusPoints: 1000, reviewBonus: 5, referralBonus: 50, profileBonus: 10 };
 }
 
-// ── FCM notification ──────────────────────────────────────────────────────────
+// â”€â”€ FCM notification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function _notify(uid, title, body, data = {}) {
   try {
@@ -200,13 +203,13 @@ async function _notify(uid, title, body, data = {}) {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 1 — createLoyaltyAccount
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 1 â€” createLoyaltyAccount
 // Creates full enterprise account: profile + QR + barcode + welcome points.
 // Called by POS at checkout or by customer in-app.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.createLoyaltyAccount = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds: 30 }, async (req) => {
+exports.createLoyaltyAccount = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds: 30 }, exports._h.createLoyaltyAccount = async (req) => {
   const auth = _requireAuth(req);
   const { phone, name, email, birthdayMonth, birthdayDay, referredBy, merchantId } = req.data || {};
 
@@ -214,7 +217,7 @@ exports.createLoyaltyAccount = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeout
 
   const db = _db();
 
-  // One account per phone — best-effort guard (collection query cannot be atomic inside a
+  // One account per phone â€” best-effort guard (collection query cannot be atomic inside a
   // Firestore transaction; the UID doc check inside runTransaction below is the authoritative
   // idempotency guard for concurrent calls on the same UID).
   const phoneCheck = await db.collection('loyaltyAccounts')
@@ -248,7 +251,7 @@ exports.createLoyaltyAccount = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeout
     birthdayRewardYear: null, referredBy: referredBy ? _san(referredBy, 64) : null,
   };
 
-  // Pre-fetch referrer reference OUTSIDE the transaction — collection queries are not supported
+  // Pre-fetch referrer reference OUTSIDE the transaction â€” collection queries are not supported
   // inside Firestore transactions. The referrer doc is re-read inside the txn via txn.get() to
   // obtain a consistent balance snapshot before writing.
   let referrerRef = null;
@@ -260,7 +263,7 @@ exports.createLoyaltyAccount = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeout
 
   let isReplay = false; let replayData = null;
   await db.runTransaction(async (txn) => {
-    // Idempotency — atomic UID-account guard; FIRST read inside tx so every retry also checks.
+    // Idempotency â€” atomic UID-account guard; FIRST read inside tx so every retry also checks.
     // Two concurrent createLoyaltyAccount calls for the same UID will both enter the transaction
     // but only one will commit; the second retry will see the document and short-circuit.
     const uidSnap = await txn.get(db.collection('loyaltyAccounts').doc(auth.uid));
@@ -297,7 +300,7 @@ exports.createLoyaltyAccount = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeout
   });
 
   if (isReplay) return { ...replayData, already_exists: true };
-  _notify(auth.uid, 'Welcome to SOKONI Rewards! 🎉',
+  _notify(auth.uid, 'Welcome to SOKONI Rewards! ðŸŽ‰',
     `You earned ${welcome} welcome points. Show your QR code at any checkout.`,
     { type: 'loyalty_welcome', points: welcome }).catch(() => {});
 
@@ -306,13 +309,13 @@ exports.createLoyaltyAccount = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeout
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 2 — lookupLoyaltyCustomer
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 2 â€” lookupLoyaltyCustomer
 // POS: find customer by phone / QR / email / loyaltyId / cardNumber.
 // Returns cashier-safe profile + active campaigns for checkout.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.lookupLoyaltyCustomer = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds: 10 }, async (req) => {
+exports.lookupLoyaltyCustomer = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds: 10 }, exports._h.lookupLoyaltyCustomer = async (req) => {
   _requireAuth(req);
   const { by, value, merchantId } = req.data || {};
   if (!by || !value) throw new HttpsError('invalid-argument', 'by and value required');
@@ -371,13 +374,13 @@ exports.lookupLoyaltyCustomer = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeou
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 3 — awardLoyaltyPoints
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 3 â€” awardLoyaltyPoints
 // Post-checkout points award. Atomic. Idempotent per orderId.
 // Called by POS after payment or triggered by order completion.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) => {
+exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.awardLoyaltyPoints = async (req) => {
   _requireAuth(req);
   const {
     customerUid, amountKES, orderId, paymentId,
@@ -395,7 +398,7 @@ exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) 
   const idKey = _ledgerKey(['earn', customerUid, orderId, mid]);
 
   // Load config + campaigns in parallel (non-critical config reads; idempotency is enforced
-  // atomically inside the transaction below — no outer pre-check needed).
+  // atomically inside the transaction below â€” no outer pre-check needed).
   const [cfgSnap, ...cSnaps] = await Promise.all([
     db.collection('loyaltyMerchantConfigs').doc(mid).get(),
     ...campaignIds.slice(0, 5).map(id => db.collection('loyaltyCampaigns').doc(id).get()),
@@ -412,7 +415,7 @@ exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) 
   let result;
   let isReplay = false; let replayData = null;
   await db.runTransaction(async (txn) => {
-    // Idempotency — FIRST read inside tx so every retry (including contended retries) also
+    // Idempotency â€” FIRST read inside tx so every retry (including contended retries) also
     // checks. Two concurrent awardLoyaltyPoints calls for the same idKey will both enter the
     // transaction but only one will commit the ledger write; the second retry sees the doc.
     const idemSnap = await txn.get(db.collection('loyaltyLedger').doc(idKey));
@@ -495,7 +498,7 @@ exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) 
   if (isReplay) return { ...replayData, idempotent: true };
 
   _notify(customerUid, `+${result.pointsAwarded} Points Earned!`,
-    `Balance: ${result.newBalance.toLocaleString()} pts${result.tierChanged ? ' · Tier upgraded!' : ''}`,
+    `Balance: ${result.newBalance.toLocaleString()} pts${result.tierChanged ? ' Â· Tier upgraded!' : ''}`,
     { type: 'loyalty_earned', points: result.pointsAwarded, balance: result.newBalance }).catch(() => {});
 
   logger.info('[loyalty] Points awarded', { customerUid, orderId, pts: result.pointsAwarded });
@@ -503,13 +506,13 @@ exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) 
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 4 — redeemLoyaltyPoints (enhanced v2)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 4 â€” redeemLoyaltyPoints (enhanced v2)
 // Deducts points before payment. Returns cashback KES amount.
 // Enforces merchant's max redemption cap.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.redeemLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) => {
+exports.redeemLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.redeemLoyaltyPoints = async (req) => {
   const auth = _requireAuth(req);
   const { pointsToRedeem, orderId, merchantId, totalAmountKES } = req.data || {};
 
@@ -528,7 +531,7 @@ exports.redeemLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req)
   let result;
   let isReplay = false; let replayData = null;
   await db.runTransaction(async (txn) => {
-    // Idempotency — FIRST read inside tx so every retry (including contended retries) also
+    // Idempotency â€” FIRST read inside tx so every retry (including contended retries) also
     // checks. Two concurrent redeemLoyaltyPoints calls with the same idKey will both enter
     // the transaction but only one will commit; the second retry sees the existing ledger doc.
     const idemSnap = await txn.get(db.collection('loyaltyLedger').doc(idKey));
@@ -573,12 +576,12 @@ exports.redeemLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req)
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 5 — confirmLoyaltyRedemption
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 5 â€” confirmLoyaltyRedemption
 // Confirms or cancels a pending redemption. Returns to v1 compatibility.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.confirmLoyaltyRedemption = onCall({ ...OPT, timeoutSeconds: 20 }, async (req) => {
+exports.confirmLoyaltyRedemption = onCall({ ...OPT, timeoutSeconds: 20 }, exports._h.confirmLoyaltyRedemption = async (req) => {
   const auth = _requireAuth(req);
   const { orderId, confirm = true, merchantId } = req.data || {};
   if (!orderId) throw new HttpsError('invalid-argument', 'orderId required');
@@ -614,12 +617,12 @@ exports.confirmLoyaltyRedemption = onCall({ ...OPT, timeoutSeconds: 20 }, async 
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 6 — getLoyaltyAccount (v1 compat + enterprise fields)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 6 â€” getLoyaltyAccount (v1 compat + enterprise fields)
 // Returns caller's loyalty account, creating one on first call.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.getLoyaltyAccount = onCall(OPT, async (req) => {
+exports.getLoyaltyAccount = onCall(OPT, exports._h.getLoyaltyAccount = async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required');
   const uid = req.auth.uid;
   const db  = _db();
@@ -650,12 +653,12 @@ exports.getLoyaltyAccount = onCall(OPT, async (req) => {
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 7 — getLoyaltyCard
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 7 â€” getLoyaltyCard
 // Returns all data needed to render the digital membership card.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.getLoyaltyCard = onCall({ ...OPT, timeoutSeconds: 10 }, async (req) => {
+exports.getLoyaltyCard = onCall({ ...OPT, timeoutSeconds: 10 }, exports._h.getLoyaltyCard = async (req) => {
   const auth = _requireAuth(req);
   const snap = await _db().collection('loyaltyAccounts').doc(auth.uid).get();
   if (!snap.exists) throw new HttpsError('not-found', 'No loyalty account. Create one first.');
@@ -673,12 +676,12 @@ exports.getLoyaltyCard = onCall({ ...OPT, timeoutSeconds: 10 }, async (req) => {
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 8 — getLoyaltyHistory (enhanced + v1 compat)
-// Paginated ledger — reads from loyaltyLedger (v2) + loyaltyTransactions (v1).
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 8 â€” getLoyaltyHistory (enhanced + v1 compat)
+// Paginated ledger â€” reads from loyaltyLedger (v2) + loyaltyTransactions (v1).
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.getLoyaltyHistory = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) => {
+exports.getLoyaltyHistory = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.getLoyaltyHistory = async (req) => {
   const auth = _requireAuth(req);
   const { limit: lim = 20, startAfter, type } = req.data || {};
   const db = _db();
@@ -709,12 +712,12 @@ exports.getLoyaltyHistory = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) =
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 9 — getLoyaltyTiers
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 9 â€” getLoyaltyTiers
 // Public tier definitions + current merchant earn rates.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.getLoyaltyTiers = onCall(OPT, async (req) => {
+exports.getLoyaltyTiers = onCall(OPT, exports._h.getLoyaltyTiers = async (req) => {
   const { merchantId } = req.data || {};
   let config = _defaultConfig(merchantId || 'sokoni');
   if (merchantId) {
@@ -738,16 +741,16 @@ exports.getLoyaltyTiers = onCall(OPT, async (req) => {
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 10 — adminAdjustPoints (v1 compat alias)
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 10 â€” adminAdjustPoints (v1 compat alias)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.adminAdjustPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) => {
+exports.adminAdjustPoints = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.adminAdjustPoints = async (req) => {
   const auth = _requireAdmin(req);
   const { uid: targetUid, points, reason } = req.data || {};
   if (!targetUid) throw new HttpsError('invalid-argument', 'uid required');
   if (!points || points === 0) throw new HttpsError('invalid-argument', 'points must be non-zero integer');
-  if (Math.abs(points) > 100000) throw new HttpsError('invalid-argument', 'Max ±100,000 per adjustment');
+  if (Math.abs(points) > 100000) throw new HttpsError('invalid-argument', 'Max Â±100,000 per adjustment');
   if (!reason) throw new HttpsError('invalid-argument', 'reason required');
 
   const db     = _db();
@@ -776,12 +779,12 @@ exports.adminAdjustPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) =
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 11 — getLoyaltyLeaderboard (v1 compat)
-// Top 10 earners — fully anonymised.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 11 â€” getLoyaltyLeaderboard (v1 compat)
+// Top 10 earners â€” fully anonymised.
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.getLoyaltyLeaderboard = onCall(OPT, async () => {
+exports.getLoyaltyLeaderboard = onCall(OPT, exports._h.getLoyaltyLeaderboard = async () => {
   const snap = await _db().collection('loyaltyAccounts').orderBy('lifetimePoints', 'desc').limit(10).get();
   return {
     leaderboard: snap.docs.map((d, i) => ({
@@ -793,22 +796,22 @@ exports.getLoyaltyLeaderboard = onCall(OPT, async () => {
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 12 — configureLoyaltyProgram
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 12 â€” configureLoyaltyProgram
 // Merchant sets their loyalty program rules.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.configureLoyaltyProgram = onCall({ ...OPT, timeoutSeconds: 20 }, async (req) => {
+exports.configureLoyaltyProgram = onCall({ ...OPT, timeoutSeconds: 20 }, exports._h.configureLoyaltyProgram = async (req) => {
   const auth = _requireMerchant(req);
   const { merchantId, ...cfg } = req.data || {};
   const mid = _san(merchantId || auth.uid, 64);
 
   if (cfg.pointsPerKES != null && (cfg.pointsPerKES < 0 || cfg.pointsPerKES > 100))
-    throw new HttpsError('invalid-argument', 'pointsPerKES must be 0–100');
+    throw new HttpsError('invalid-argument', 'pointsPerKES must be 0â€“100');
   if (cfg.redemptionRate != null && cfg.redemptionRate < 1)
     throw new HttpsError('invalid-argument', 'redemptionRate must be >= 1');
   if (cfg.maxRedemptionPct != null && (cfg.maxRedemptionPct < 0 || cfg.maxRedemptionPct > 100))
-    throw new HttpsError('invalid-argument', 'maxRedemptionPct must be 0–100');
+    throw new HttpsError('invalid-argument', 'maxRedemptionPct must be 0â€“100');
 
   const safe = {
     merchantId: mid,
@@ -834,12 +837,12 @@ exports.configureLoyaltyProgram = onCall({ ...OPT, timeoutSeconds: 20 }, async (
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 13 — getMerchantLoyaltyConfig
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 13 â€” getMerchantLoyaltyConfig
 // POS fetches active merchant config before calculating checkout points.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.getMerchantLoyaltyConfig = onCall({ ...OPT, timeoutSeconds: 10 }, async (req) => {
+exports.getMerchantLoyaltyConfig = onCall({ ...OPT, timeoutSeconds: 10 }, exports._h.getMerchantLoyaltyConfig = async (req) => {
   _requireAuth(req);
   const { merchantId } = req.data || {};
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId required');
@@ -848,12 +851,12 @@ exports.getMerchantLoyaltyConfig = onCall({ ...OPT, timeoutSeconds: 10 }, async 
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 14 — createLoyaltyCampaign
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 14 â€” createLoyaltyCampaign
 // Merchant creates a time-bounded bonus campaign.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.createLoyaltyCampaign = onCall({ ...OPT, timeoutSeconds: 20 }, async (req) => {
+exports.createLoyaltyCampaign = onCall({ ...OPT, timeoutSeconds: 20 }, exports._h.createLoyaltyCampaign = async (req) => {
   const auth = _requireMerchant(req);
   const { merchantId, name, description, bonusType, bonusValue, startsAt, endsAt, daysOfWeek } = req.data || {};
   if (!name) throw new HttpsError('invalid-argument', 'name required');
@@ -875,12 +878,12 @@ exports.createLoyaltyCampaign = onCall({ ...OPT, timeoutSeconds: 20 }, async (re
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 15 — getActiveCampaigns
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 15 â€” getActiveCampaigns
 // POS fetches campaigns before checkout. Filters by day-of-week.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.getActiveCampaigns = onCall({ ...OPT, timeoutSeconds: 10 }, async (req) => {
+exports.getActiveCampaigns = onCall({ ...OPT, timeoutSeconds: 10 }, exports._h.getActiveCampaigns = async (req) => {
   _requireAuth(req);
   const { merchantId } = req.data || {};
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId required');
@@ -901,12 +904,12 @@ exports.getActiveCampaigns = onCall({ ...OPT, timeoutSeconds: 10 }, async (req) 
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 16 — getMerchantLoyaltyDashboard
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 16 â€” getMerchantLoyaltyDashboard
 // Merchant analytics: members, points, redemptions, top customers.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.getMerchantLoyaltyDashboard = onCall({ ...OPT, timeoutSeconds: 30, memory: '256MiB' }, async (req) => {
+exports.getMerchantLoyaltyDashboard = onCall({ ...OPT, timeoutSeconds: 30, memory: '256MiB' }, exports._h.getMerchantLoyaltyDashboard = async (req) => {
   const auth = _requireMerchant(req);
   const { merchantId, days = 30 } = req.data || {};
   const mid    = _san(merchantId || auth.uid, 64);
@@ -941,12 +944,12 @@ exports.getMerchantLoyaltyDashboard = onCall({ ...OPT, timeoutSeconds: 30, memor
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 17 — createLoyaltyReward
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 17 â€” createLoyaltyReward
 // Merchant adds a redeemable reward to their catalog.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.createLoyaltyReward = onCall({ ...OPT, timeoutSeconds: 20 }, async (req) => {
+exports.createLoyaltyReward = onCall({ ...OPT, timeoutSeconds: 20 }, exports._h.createLoyaltyReward = async (req) => {
   const auth = _requireMerchant(req);
   const { merchantId, name, description, pointsCost, rewardType, value, stock, expiresAt, imageUrl } = req.data || {};
   if (!name) throw new HttpsError('invalid-argument', 'name required');
@@ -969,12 +972,12 @@ exports.createLoyaltyReward = onCall({ ...OPT, timeoutSeconds: 20 }, async (req)
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 18 — getAvailableRewards
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 18 â€” getAvailableRewards
 // Customer/POS sees what can be redeemed.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.getAvailableRewards = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) => {
+exports.getAvailableRewards = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.getAvailableRewards = async (req) => {
   const auth = _requireAuth(req);
   const { merchantId } = req.data || {};
   const db = _db();
@@ -997,12 +1000,12 @@ exports.getAvailableRewards = onCall({ ...OPT, timeoutSeconds: 15 }, async (req)
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 19 — redeemLoyaltyReward
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 19 â€” redeemLoyaltyReward
 // Customer redeems a specific catalog reward. Generates voucher code.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.redeemLoyaltyReward = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) => {
+exports.redeemLoyaltyReward = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.redeemLoyaltyReward = async (req) => {
   const auth = _requireAuth(req);
   const { rewardId } = req.data || {};
   if (!rewardId) throw new HttpsError('invalid-argument', 'rewardId required');
@@ -1047,12 +1050,12 @@ exports.redeemLoyaltyReward = onCall({ ...OPT, timeoutSeconds: 30 }, async (req)
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 20 — linkPhysicalCard
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 20 â€” linkPhysicalCard
 // Links an NFC / barcode / QR physical card to a loyalty account.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.linkPhysicalCard = onCall({ ...OPT, timeoutSeconds: 20 }, async (req) => {
+exports.linkPhysicalCard = onCall({ ...OPT, timeoutSeconds: 20 }, exports._h.linkPhysicalCard = async (req) => {
   const auth = _requireAuth(req);
   const { cardNumber, cardType } = req.data || {};
   if (!cardNumber) throw new HttpsError('invalid-argument', 'cardNumber required');
@@ -1078,14 +1081,14 @@ exports.linkPhysicalCard = onCall({ ...OPT, timeoutSeconds: 20 }, async (req) =>
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 21 — syncOfflineLoyaltyTransactions
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 21 â€” syncOfflineLoyaltyTransactions
 // POS syncs buffered offline loyalty transactions.
 // Security: merchant must be authenticated + App Check enforced.
 // Each tx has a UUID for idempotency. Per-tx HMAC verifies offline integrity.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.syncOfflineLoyaltyTransactions = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds: 60, memory: '256MiB' }, async (req) => {
+exports.syncOfflineLoyaltyTransactions = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds: 60, memory: '256MiB' }, exports._h.syncOfflineLoyaltyTransactions = async (req) => {
   _requireMerchant(req);
   const { transactions = [], merchantId, terminalId } = req.data || {};
   if (!Array.isArray(transactions) || !transactions.length)
@@ -1108,7 +1111,7 @@ exports.syncOfflineLoyaltyTransactions = onCall({ ...OPT, secrets: [LOYALTY_HMAC
     const expected = _hmac16(secret, `${txId}|${customerUid}|${amountKES}|${orderId}|${timestamp || ''}`);
     if (!sig || !crypto.timingSafeEqual(Buffer.from(expected.padEnd(32, '0')), Buffer.from((sig.slice(0, 16)).padEnd(32, '0')))) {
       results.push({ txId, status: 'rejected', reason: 'Invalid signature' });
-      logger.warn('[loyalty] Offline tx rejected — bad signature', { txId, mid });
+      logger.warn('[loyalty] Offline tx rejected â€” bad signature', { txId, mid });
       continue;
     }
 
@@ -1122,7 +1125,7 @@ exports.syncOfflineLoyaltyTransactions = onCall({ ...OPT, secrets: [LOYALTY_HMAC
       let awarded   = 0;
 
       await db.runTransaction(async (txn) => {
-        // Idempotency — FIRST read inside tx. The outer exists-check above is a fast-path
+        // Idempotency â€” FIRST read inside tx. The outer exists-check above is a fast-path
         // optimisation only; two overlapping sync calls can both pass that check, so this
         // inner check is the authoritative atomic guard that prevents double-awarding.
         const idemSnap = await txn.get(db.collection('loyaltyLedger').doc(idKey));
@@ -1158,30 +1161,30 @@ exports.syncOfflineLoyaltyTransactions = onCall({ ...OPT, secrets: [LOYALTY_HMAC
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 22 — adminAdjustLoyaltyPoints (enhanced with audit trail)
-// Admin manual adjustment — named separately from v1 adminAdjustPoints.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 22 â€” adminAdjustLoyaltyPoints (enhanced with audit trail)
+// Admin manual adjustment â€” named separately from v1 adminAdjustPoints.
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.adminAdjustLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) => {
+exports.adminAdjustLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.adminAdjustLoyaltyPoints = async (req) => {
   const auth = _requireAdmin(req);
   const { customerUid, points, reason, merchantId } = req.data || {};
   if (!customerUid) throw new HttpsError('invalid-argument', 'customerUid required');
   if (!points || points === 0) throw new HttpsError('invalid-argument', 'points must be non-zero');
-  if (Math.abs(points) > 100000) throw new HttpsError('invalid-argument', 'Max ±100,000 per adjustment');
+  if (Math.abs(points) > 100000) throw new HttpsError('invalid-argument', 'Max Â±100,000 per adjustment');
   if (!reason) throw new HttpsError('invalid-argument', 'reason required');
 
   return exports.adminAdjustPoints({ auth, data: { uid: customerUid, points, reason } });
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 23 — voidLoyaltyTransaction
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 23 â€” voidLoyaltyTransaction
 // Admin voids a ledger entry and reverses points.
-// Original entry marked voided — never deleted (immutable audit).
-// ═════════════════════════════════════════════════════════════════════════════
+// Original entry marked voided â€” never deleted (immutable audit).
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.voidLoyaltyTransaction = onCall({ ...OPT, timeoutSeconds: 30 }, async (req) => {
+exports.voidLoyaltyTransaction = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.voidLoyaltyTransaction = async (req) => {
   const auth = _requireAdmin(req);
   const { entryId, reason } = req.data || {};
   if (!entryId) throw new HttpsError('invalid-argument', 'entryId required');
@@ -1219,12 +1222,12 @@ exports.voidLoyaltyTransaction = onCall({ ...OPT, timeoutSeconds: 30 }, async (r
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ENTERPRISE CF 24 — getLoyaltyInsights (AI-powered)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ENTERPRISE CF 24 â€” getLoyaltyInsights (AI-powered)
 // Merchant gets Haiku-generated loyalty recommendations.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-exports.getLoyaltyInsights = onCall({ ...OPT, timeoutSeconds: 60, memory: '512MiB' }, async (req) => {
+exports.getLoyaltyInsights = onCall({ ...OPT, timeoutSeconds: 60, memory: '512MiB' }, exports._h.getLoyaltyInsights = async (req) => {
   const auth = _requireMerchant(req);
   const { merchantId, days = 30 } = req.data || {};
   const mid    = _san(merchantId || auth.uid, 64);
@@ -1271,18 +1274,18 @@ Respond ONLY in JSON: {"insights":[{"title":"...","body":"...","action":"...","p
 
   // Rule-based fallback
   const insights = [];
-  if (Number(rate) < 15) insights.push({ title: 'Low Redemption Rate', body: `Only ${rate}% redeemed. Lower the minimum or run a "Redeem This Month" SMS campaign.`, action: 'Create a 2× cashback weekend campaign', priority: 'high' });
-  if (Number(rate) > 60) insights.push({ title: 'High Redemption — Review Margins', body: 'Redemption rate exceeds 60%. Review reward cost vs. margin to ensure profitability.', action: 'Increase redemptionRate from current value', priority: 'medium' });
-  insights.push({ title: 'Payday Surge Opportunity', body: 'Kenyan retail peaks on the 25th–5th (payday cycle). Double points on those dates.', action: 'Create a "Payday Bonus" campaign for days 25–5', priority: 'high' });
+  if (Number(rate) < 15) insights.push({ title: 'Low Redemption Rate', body: `Only ${rate}% redeemed. Lower the minimum or run a "Redeem This Month" SMS campaign.`, action: 'Create a 2Ã— cashback weekend campaign', priority: 'high' });
+  if (Number(rate) > 60) insights.push({ title: 'High Redemption â€” Review Margins', body: 'Redemption rate exceeds 60%. Review reward cost vs. margin to ensure profitability.', action: 'Increase redemptionRate from current value', priority: 'medium' });
+  insights.push({ title: 'Payday Surge Opportunity', body: 'Kenyan retail peaks on the 25thâ€“5th (payday cycle). Double points on those dates.', action: 'Create a "Payday Bonus" campaign for days 25â€“5', priority: 'high' });
   if (!config.birthdayBonus) insights.push({ title: 'Enable Birthday Rewards', body: 'Birthday bonuses increase customer retention by 20-30%. Currently disabled.', action: 'Set birthdayBonus to 500 pts', priority: 'medium' });
   return { insights, redemptionRate: rate, stats: { members, issued, redeemed, revenue }, aiUnavailable: true };
 });
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Scheduled CF 25 — processExpiringPoints
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Scheduled CF 25 â€” processExpiringPoints
 // Expires earn entries past their expiresAt date. Runs daily at 2 AM EAT.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 exports.processExpiringPoints = onSchedule(
   { schedule: '0 2 * * *', timeZone: 'Africa/Nairobi', region: REGION, timeoutSeconds: 540 },
@@ -1330,10 +1333,10 @@ exports.processExpiringPoints = onSchedule(
 );
 
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Scheduled CF 26 — processLoyaltyMilestones
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Scheduled CF 26 â€” processLoyaltyMilestones
 // Awards birthday bonuses. Runs daily at 7 AM EAT.
-// ═════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 exports.processLoyaltyMilestones = onSchedule(
   { schedule: '0 7 * * *', timeZone: 'Africa/Nairobi', region: REGION, timeoutSeconds: 300 },
@@ -1377,11 +1380,11 @@ exports.processLoyaltyMilestones = onSchedule(
           txn.set(db.collection('loyaltyLedger').doc(idKey), {
             uid: acc.uid, type: 'birthday', merchantId: acc.lastMerchantId || 'sokoni',
             points: bonus, balanceBefore: cur.balance || 0, balanceAfter: after,
-            description: `🎂 Happy Birthday! ${bonus} bonus points`, idempotencyKey: idKey, createdAt: _now(),
+            description: `ðŸŽ‚ Happy Birthday! ${bonus} bonus points`, idempotencyKey: idKey, createdAt: _now(),
           });
         });
 
-        _notify(acc.uid, '🎂 Happy Birthday!',
+        _notify(acc.uid, 'ðŸŽ‚ Happy Birthday!',
           `SOKONI Rewards wishes you a great day! You've earned ${bonus} birthday bonus points.`,
           { type: 'birthday_bonus', points: bonus }).catch(() => {});
         awarded++;

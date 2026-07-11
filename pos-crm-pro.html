@@ -778,7 +778,7 @@ window.redeemGiftCard = async () => {
   const saleId = document.getElementById('gcRedeemSale').value.trim();
   if (!code || !amount || !saleId) { toast('Code, amount and sale ID are required.', 'error'); return; }
   try {
-    const res = await cf('redeemGiftCard')({ code, amount, saleId });
+    const res = await cf('loyaltyDispatch')({ op: 'redeemGiftCard', code, amount, saleId });
     toast(`Redeemed KES ${amount}. Remaining: KES ${res.data.remaining}.`, 'success');
     loadGiftCards();
   } catch(e) { toast(e.message, 'error'); }

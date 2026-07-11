@@ -8296,56 +8296,19 @@ exports.navGetRiderDashboard      = navigation.navGetRiderDashboard;
 exports.navBatchSyncLocations     = navigation.navBatchSyncLocations;
 exports.navGetDeliveryAnalytics   = navigation.navGetDeliveryAnalytics;
 
-/* ── Universal Loyalty & Rewards Engine v2.0 ─────────────────────────────── */
-const loyalty = require('./loyalty');
-/* v1 compat exports — unchanged CF names */
-exports.getLoyaltyAccount         = loyalty.getLoyaltyAccount;
-exports.awardLoyaltyPoints        = loyalty.awardLoyaltyPoints;
-exports.redeemLoyaltyPoints       = loyalty.redeemLoyaltyPoints;
-exports.confirmLoyaltyRedemption  = loyalty.confirmLoyaltyRedemption;
-exports.getLoyaltyHistory         = loyalty.getLoyaltyHistory;
-exports.getLoyaltyTiers           = loyalty.getLoyaltyTiers;
-exports.adminAdjustPoints         = loyalty.adminAdjustPoints;
-exports.getLoyaltyLeaderboard     = loyalty.getLoyaltyLeaderboard;
-/* Enterprise v2.0 — new CFs */
-exports.createLoyaltyAccount              = loyalty.createLoyaltyAccount;
-exports.lookupLoyaltyCustomer             = loyalty.lookupLoyaltyCustomer;
-exports.awardLoyaltyPoints                = loyalty.awardLoyaltyPoints;
-exports.getLoyaltyCard                    = loyalty.getLoyaltyCard;
-exports.configureLoyaltyProgram           = loyalty.configureLoyaltyProgram;
-exports.getMerchantLoyaltyConfig          = loyalty.getMerchantLoyaltyConfig;
-exports.createLoyaltyCampaign             = loyalty.createLoyaltyCampaign;
-exports.getActiveCampaigns                = loyalty.getActiveCampaigns;
-exports.getMerchantLoyaltyDashboard       = loyalty.getMerchantLoyaltyDashboard;
-exports.createLoyaltyReward               = loyalty.createLoyaltyReward;
-exports.getAvailableRewards               = loyalty.getAvailableRewards;
-exports.redeemLoyaltyReward               = loyalty.redeemLoyaltyReward;
-exports.linkPhysicalCard                  = loyalty.linkPhysicalCard;
-exports.syncOfflineLoyaltyTransactions    = loyalty.syncOfflineLoyaltyTransactions;
-exports.adminAdjustLoyaltyPoints          = loyalty.adminAdjustLoyaltyPoints;
-exports.voidLoyaltyTransaction            = loyalty.voidLoyaltyTransaction;
-exports.getLoyaltyInsights                = loyalty.getLoyaltyInsights;
-exports.processExpiringPoints             = loyalty.processExpiringPoints;
-exports.processLoyaltyMilestones          = loyalty.processLoyaltyMilestones;
-
-/* ── Enterprise Loyalty & Membership Platform v1.0 ──────────────────────── */
-const loyaltyEnterprise = require('./loyalty-enterprise');
-exports.loyaltyCheckoutOrchestrate   = loyaltyEnterprise.loyaltyCheckoutOrchestrate;
-exports.loyaltyPreflightCheck        = loyaltyEnterprise.loyaltyPreflightCheck;
-exports.awardCashback                = loyaltyEnterprise.awardCashback;
-exports.loyaltyIssueGiftCard         = loyaltyEnterprise.issueGiftCard;
-exports.loyaltyCheckGiftCard         = loyaltyEnterprise.redeemGiftCard;
-exports.enterLuckyDraw               = loyaltyEnterprise.enterLuckyDraw;
-exports.runLuckyDraw                 = loyaltyEnterprise.runLuckyDraw;
-exports.trackReferral                = loyaltyEnterprise.trackReferral;
-exports.getPersonalizedOffers        = loyaltyEnterprise.getPersonalizedOffers;
-exports.getMembershipBenefits        = loyaltyEnterprise.getMembershipBenefits;
-exports.getLoyaltyFraudDashboard     = loyaltyEnterprise.getLoyaltyFraudDashboard;
-exports.joinLoyaltyNetwork           = loyaltyEnterprise.joinLoyaltyNetwork;
-exports.getCrossMerchantPoints       = loyaltyEnterprise.getCrossMerchantPoints;
-exports.reconcileLoyaltyLedger       = loyaltyEnterprise.reconcileLoyaltyLedger;
-exports.getLoyaltyReceipt            = loyaltyEnterprise.getLoyaltyReceipt;
-exports.getVisitFrequencyReward      = loyaltyEnterprise.getVisitFrequencyReward;
+/* ── Universal Loyalty & Rewards Platform v2.0 ──────────────────────────── */
+/* DISPATCH CONSOLIDATION: 40 onCall CFs (loyalty.js + loyalty-enterprise.js) → 1 dispatcher.
+   Clients call loyaltyDispatch({op:'functionName',...data}) via sokoni-loyalty.js and
+   loyalty-merchant.html. Cloud Run services: 40 → 1 (4 scheduled remain individual). */
+const loyaltyDispatcher = require('./loyalty-dispatch');
+exports.loyaltyDispatch          = loyaltyDispatcher.loyaltyDispatch;
+/* Scheduled CFs — cannot be dispatched */
+const _loyaltyMod    = require('./loyalty');
+const _loyaltyEntMod = require('./loyalty-enterprise');
+exports.processExpiringPoints    = _loyaltyMod.processExpiringPoints;
+exports.processLoyaltyMilestones = _loyaltyMod.processLoyaltyMilestones;
+exports.runLuckyDraw             = _loyaltyEntMod.runLuckyDraw;
+exports.reconcileLoyaltyLedger   = _loyaltyEntMod.reconcileLoyaltyLedger;
 
 /* ── Wallet & Seller Payouts v1.0 ────────────────────────────────────────── */
 const wallet = require('./wallet');

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * SOKONI Enterprise Loyalty Platform — Cloud Functions v2
+ * SOKONI Enterprise Loyalty Platform â€” Cloud Functions v2
  * 16 Cloud Functions covering checkout orchestration, cashback, gift cards,
  * lucky draws, referrals, AI personalization, fraud detection, network, and reconciliation.
  *
@@ -25,6 +25,9 @@ const OPT    = { region: REGION, enforceAppCheck: true };
 
 const LOYALTY_HMAC  = defineSecret('LOYALTY_HMAC_SECRET');
 const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
+
+// Handler registry — populated below; consumed by loyalty-dispatch.js dispatcher
+exports._h = {};
 
 // ---------------------------------------------------------------------------
 // Tier definitions
@@ -65,7 +68,7 @@ function _getTier(lifetimePoints) {
   return TIERS[TIERS.length - 1]; // bronze fallback
 }
 
-/** Generates a 4×4 alphanumeric gift card code, excluding ambiguous chars. */
+/** Generates a 4Ã—4 alphanumeric gift card code, excluding ambiguous chars. */
 function _giftCardCode() {
   const CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no O,0,I,1,L
   const segment = () => {
@@ -211,7 +214,7 @@ function _calcPoints({ total, items = [], config = {}, account = {}, campaigns =
   const st = config.spendThreshold;
   if (st && typeof st.minAmount === 'number' && total >= st.minAmount && st.bonusPoints > 0) {
     bonusPoints += st.bonusPoints;
-    breakdown.push({ label: `Spend threshold (≥ KES ${st.minAmount})`, points: st.bonusPoints, type: 'spend_threshold' });
+    breakdown.push({ label: `Spend threshold (â‰¥ KES ${st.minAmount})`, points: st.bonusPoints, type: 'spend_threshold' });
   }
 
   // Active campaign bonuses
@@ -269,7 +272,7 @@ exports.loyaltyCheckoutOrchestrate = onCall({
   secrets:        [LOYALTY_HMAC],
   timeoutSeconds: 30,
   memory:         '512MiB',
-}, async (req) => {
+}, exports._h.loyaltyCheckoutOrchestrate = async (req) => {
   const {
     items = [], subtotal, taxAmount, total,
     paymentMethod, paymentRef, paymentVerified,
@@ -670,7 +673,7 @@ exports.loyaltyCheckoutOrchestrate = onCall({
 // ---------------------------------------------------------------------------
 // 2. loyaltyPreflightCheck
 // ---------------------------------------------------------------------------
-exports.loyaltyPreflightCheck = onCall({ ...OPT, timeoutSeconds: 10 }, async (req) => {
+exports.loyaltyPreflightCheck = onCall({ ...OPT, timeoutSeconds: 10 }, exports._h.loyaltyPreflightCheck = async (req) => {
   const { uid, phone, loyaltyId: rawLoyaltyId, merchantId, total = 0, items = [], redeemPoints = 0 } = req.data;
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
 
@@ -722,7 +725,7 @@ exports.loyaltyPreflightCheck = onCall({ ...OPT, timeoutSeconds: 10 }, async (re
 // ---------------------------------------------------------------------------
 // 3. awardCashback
 // ---------------------------------------------------------------------------
-exports.awardCashback = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds: 15 }, async (req) => {
+exports.awardCashback = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds: 15 }, exports._h.awardCashback = async (req) => {
   const { uid, amount, merchantId, orderId, type = 'earned' } = req.data;
   if (!uid)         throw new HttpsError('invalid-argument', 'uid is required');
   if (!amount || amount <= 0) throw new HttpsError('invalid-argument', 'amount must be > 0');
@@ -759,7 +762,7 @@ exports.awardCashback = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds
 // ---------------------------------------------------------------------------
 // 4. issueGiftCard
 // ---------------------------------------------------------------------------
-exports.issueGiftCard = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) => {
+exports.issueGiftCard = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.issueGiftCard = async (req) => {
   const { merchantId, issuedTo, valueType = 'fixed', value, minOrderValue = 0, validDays = 30, maxUses = 1 } = req.data;
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
   if (!value || value <= 0) throw new HttpsError('invalid-argument', 'value must be > 0');
@@ -790,7 +793,7 @@ exports.issueGiftCard = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) => {
     if (accSnap.exists && accSnap.data().fcmToken) {
       admin.messaging().send({
         token:        accSnap.data().fcmToken,
-        notification: { title: 'You have a gift card!', body: `Code: ${code} — Value: KES ${value}` },
+        notification: { title: 'You have a gift card!', body: `Code: ${code} â€” Value: KES ${value}` },
         data:         { type: 'gift_card', code, cardId },
       }).catch(() => {});
     }
@@ -802,7 +805,7 @@ exports.issueGiftCard = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) => {
 // ---------------------------------------------------------------------------
 // 5. redeemGiftCard
 // ---------------------------------------------------------------------------
-exports.redeemGiftCard = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds: 15 }, async (req) => {
+exports.redeemGiftCard = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSeconds: 15 }, exports._h.redeemGiftCard = async (req) => {
   const { code, uid, merchantId, orderTotal = 0 } = req.data;
   if (!code)       throw new HttpsError('invalid-argument', 'code is required');
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
@@ -838,7 +841,7 @@ exports.redeemGiftCard = onCall({ ...OPT, secrets: [LOYALTY_HMAC], timeoutSecond
 // ---------------------------------------------------------------------------
 // 6. enterLuckyDraw
 // ---------------------------------------------------------------------------
-exports.enterLuckyDraw = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) => {
+exports.enterLuckyDraw = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.enterLuckyDraw = async (req) => {
   const { uid, merchantId, orderId, purchaseAmount = 0 } = req.data;
   if (!uid)         throw new HttpsError('invalid-argument', 'uid is required');
   if (!merchantId)  throw new HttpsError('invalid-argument', 'merchantId is required');
@@ -953,7 +956,7 @@ exports.runLuckyDraw = onSchedule({ schedule: '0 6 * * *', region: REGION }, asy
 // ---------------------------------------------------------------------------
 // 8. trackReferral
 // ---------------------------------------------------------------------------
-exports.trackReferral = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) => {
+exports.trackReferral = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.trackReferral = async (req) => {
   const { referrerId, referredPhone, referredUid } = req.data;
   if (!referrerId) throw new HttpsError('invalid-argument', 'referrerId is required');
   if (!referredPhone && !referredUid) throw new HttpsError('invalid-argument', 'referredPhone or referredUid required');
@@ -985,7 +988,7 @@ exports.getPersonalizedOffers = onCall({
   secrets:        [ANTHROPIC_KEY],
   timeoutSeconds: 25,
   memory:         '512MiB',
-}, async (req) => {
+}, exports._h.getPersonalizedOffers = async (req) => {
   const { uid, merchantId, limit = 5 } = req.data;
   if (!uid)        throw new HttpsError('invalid-argument', 'uid is required');
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
@@ -1076,7 +1079,7 @@ Limit to ${Math.min(limit, 5)} offers. Focus on Kenya market, KES currency.`;
 // ---------------------------------------------------------------------------
 // 10. getMembershipBenefits
 // ---------------------------------------------------------------------------
-exports.getMembershipBenefits = onCall({ region: REGION }, async (req) => {
+exports.getMembershipBenefits = onCall({ region: REGION }, exports._h.getMembershipBenefits = async (req) => {
   const { uid, tier: rawTier } = req.data;
 
   let tierName = rawTier;
@@ -1113,7 +1116,7 @@ exports.getMembershipBenefits = onCall({ region: REGION }, async (req) => {
 // ---------------------------------------------------------------------------
 // 11. getLoyaltyFraudDashboard
 // ---------------------------------------------------------------------------
-exports.getLoyaltyFraudDashboard = onCall({ ...OPT, timeoutSeconds: 20 }, async (req) => {
+exports.getLoyaltyFraudDashboard = onCall({ ...OPT, timeoutSeconds: 20 }, exports._h.getLoyaltyFraudDashboard = async (req) => {
   if (!req.auth?.token?.admin) throw new HttpsError('permission-denied', 'Admin only');
   const { merchantId, days = 7 } = req.data;
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
@@ -1174,7 +1177,7 @@ exports.getLoyaltyFraudDashboard = onCall({ ...OPT, timeoutSeconds: 20 }, async 
 // ---------------------------------------------------------------------------
 // 12. joinLoyaltyNetwork
 // ---------------------------------------------------------------------------
-exports.joinLoyaltyNetwork = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) => {
+exports.joinLoyaltyNetwork = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.joinLoyaltyNetwork = async (req) => {
   const { merchantId, networkId = 'sokoni_universal', sharePoints = false, earnMultiplier = 1.0 } = req.data;
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
 
@@ -1202,7 +1205,7 @@ exports.joinLoyaltyNetwork = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) 
 // ---------------------------------------------------------------------------
 // 13. getCrossMerchantPoints
 // ---------------------------------------------------------------------------
-exports.getCrossMerchantPoints = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) => {
+exports.getCrossMerchantPoints = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.getCrossMerchantPoints = async (req) => {
   const { uid } = req.data;
   if (!uid) throw new HttpsError('invalid-argument', 'uid is required');
 
@@ -1313,7 +1316,7 @@ exports.reconcileLoyaltyLedger = onSchedule({ schedule: '0 0 * * *', region: REG
 // ---------------------------------------------------------------------------
 // 15. getLoyaltyReceipt
 // ---------------------------------------------------------------------------
-exports.getLoyaltyReceipt = onCall({ region: REGION }, async (req) => {
+exports.getLoyaltyReceipt = onCall({ region: REGION }, exports._h.getLoyaltyReceipt = async (req) => {
   const { checkoutId } = req.data;
   if (!checkoutId) throw new HttpsError('invalid-argument', 'checkoutId is required');
 
@@ -1343,7 +1346,7 @@ exports.getLoyaltyReceipt = onCall({ region: REGION }, async (req) => {
 // ---------------------------------------------------------------------------
 // 16. getVisitFrequencyReward
 // ---------------------------------------------------------------------------
-exports.getVisitFrequencyReward = onCall({ ...OPT, timeoutSeconds: 15 }, async (req) => {
+exports.getVisitFrequencyReward = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.getVisitFrequencyReward = async (req) => {
   const { uid, merchantId } = req.data;
   if (!uid)        throw new HttpsError('invalid-argument', 'uid is required');
   if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
@@ -1418,5 +1421,75 @@ exports.getVisitFrequencyReward = onCall({ ...OPT, timeoutSeconds: 15 }, async (
     bonusPoints,
     threshold,
     message:      `Awarded ${bonusPoints} bonus points for ${visitCount} visits this month!`,
+  };
+});
+
+// ---------------------------------------------------------------------------
+// 17. listGiftCards — list gift cards issued by a merchant
+// ---------------------------------------------------------------------------
+exports.listGiftCards = onCall({ ...OPT, timeoutSeconds: 15 }, exports._h.listGiftCards = async (req) => {
+  const { merchantId, limit: lim = 50, status } = req.data || {};
+  if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
+
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Authentication required');
+
+  // Fetch by merchantId; post-filter by status to avoid Firestore double-inequality
+  const snap = await db.collection('loyaltyGiftCards')
+    .where('merchantId', '==', merchantId)
+    .orderBy('createdAt', 'desc')
+    .limit(Math.min(lim, 100))
+    .get();
+
+  const now = new Date();
+  let docs = snap.docs;
+  if (status === 'active') {
+    docs = docs.filter(d => {
+      const c = d.data();
+      const exp = c.expiresAt ? c.expiresAt.toDate() : null;
+      return (c.usesRemaining || 0) > 0 && (!exp || exp > now);
+    });
+  } else if (status === 'used') {
+    docs = docs.filter(d => (d.data().usesRemaining || 0) === 0);
+  }
+
+  const cards = docs.map(d => {
+    const c = d.data();
+    return {
+      id:            d.id,
+      code:          c.code,
+      valueType:     c.valueType,
+      value:         c.value,
+      usesRemaining: c.usesRemaining,
+      maxUses:       c.maxUses,
+      issuedTo:      c.issuedTo || null,
+      expiresAt:     c.expiresAt ? c.expiresAt.toDate().toISOString() : null,
+      createdAt:     c.createdAt ? c.createdAt.toDate().toISOString() : null,
+    };
+  });
+
+  return { cards, total: cards.length };
+});
+
+// ---------------------------------------------------------------------------
+// 18. getLoyaltyNetworkStatus — get loyalty network membership for a merchant
+// ---------------------------------------------------------------------------
+exports.getLoyaltyNetworkStatus = onCall({ ...OPT, timeoutSeconds: 10 }, exports._h.getLoyaltyNetworkStatus = async (req) => {
+  const { merchantId } = req.data || {};
+  if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
+
+  const snap = await db.collection('loyaltyNetwork').doc(merchantId).get();
+  if (!snap.exists) {
+    return { joined: false, merchantId, networkId: null, status: 'not_joined' };
+  }
+
+  const d = snap.data();
+  return {
+    joined:         true,
+    merchantId,
+    networkId:      d.networkId      || 'sokoni_universal',
+    sharePoints:    d.sharePoints    ?? false,
+    earnMultiplier: d.earnMultiplier ?? 1.0,
+    status:         d.status         || 'active',
+    joinedAt:       d.joinedAt ? d.joinedAt.toDate().toISOString() : null,
   };
 });
