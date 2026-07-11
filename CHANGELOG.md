@@ -1,4 +1,61 @@
-﻿## [2026-07-11] — CSP Fix — Maps, Charts, QR Scanning Restored (17 pages)
+﻿## [2026-07-11] — P58E Bluetooth Thermal Printer — Full Integration
+
+### Summary
+Complete end-to-end integration of the P58E 58mm ESC/POS Bluetooth thermal printer with SOKONI SmartPOS. Covers BLE discovery with pairing, persistent auto-reconnect across sessions, a robust connection manager with exponential-backoff retry and offline print queue, a full ESC/POS driver, professional receipt template, test receipt, cash drawer test, a 14-item production checklist, and a dedicated settings/test UI. Also fixes two silent receipt-printing failures in `pos-checkout.html`.
+
+### Files Affected
+- `sokoni-universal-printer.js` (modified — 6 targeted edits; all backward-compatible):
+  - BtAdapter: P58E BLE service `0000ff00` and write char `0000ff02` added as first entries in `discover()`, `connect()`, and `_reconnect()` UUID lists
+  - BtAdapter: chunk size reduced to 128 bytes / 40ms inter-chunk delay (P58E BLE buffer limit — was 512 bytes / 20ms causing data corruption)
+  - BtAdapter: `_chunkSize` and `_chunkDelay` instance properties for future per-printer tuning
+  - BtAdapter.discover(): added 20+ brand name-prefix filters (P58, P80, Rongta, Xprinter, EPSON, Star, etc.)
+  - SPEngine.autoReconnect(): added Bluetooth path via `navigator.bluetooth.getDevices()` (Chrome 85+) for cross-session reconnect without user gesture
+- `sokoni-bluetooth-printer.js` (new file — ~460 lines):
+  - `P58EService` class: `requestDevice()`, `requestAndPair()`, `autoConnect()`, `disconnect()`, `forget()`, `printTestReceipt()`, `openCashDrawer()`, `paperFeed()`, `getStatusSnapshot()`, `markChecklistItem()`, `resetChecklist()`, `on(event, cb)` event emitter
+  - 14-item production checklist (setup/print/stress/reliability/error/hardware categories) with localStorage persistence
+  - Exponential-backoff auto-reconnect within session (1.5s → max 30s, 8 attempts), `gattserverdisconnected` hook
+  - `P58EService.checkCompatibility()` — static browser compatibility check (Web BT API, HTTPS, getDevices support)
+  - Auto-connects on `window load` event if a paired device is saved and printer not already connected
+  - Exposed as `window.P58EPrinter`
+- `pos-checkout.html` (bug fixes — 2 silent receipt printing failures):
+  - `_printReceipt()`: was calling non-existent `window.UniversalPrinter.printReceipt()` → fixed to `SokoniPrinter.print('sale', {...})`
+  - `_printSafeDropReceipt()`: was calling non-existent `SokoniPrinter.printText([...])` → fixed to `SokoniPrinter.print('custom', { build(enc,W){...} })`
+- `pos-printer-setup.html` (modified — new P58E Setup and Hardware Tests panels):
+  - "P58E Setup" tab: 5-step pairing guide, Pair/Forget/Reconnect buttons, connected device info card (model, BT ID, service UUID, write mode, paper width, connection status), saved-but-offline card, settings toggles (auto-connect, cash drawer, paper width), troubleshooting FAQ
+  - "Hardware Tests" tab: 8 test buttons (Test Receipt, Sales Receipt, Barcode Only, QR Only, Cash Drawer, Paper Feed, 3× Consecutive, Large 12-item), hardware log div, 14-item production checklist with progress bar
+  - JavaScript: `pairP58E`, `reconnectP58E`, `forgetP58E`, `renderP58EPanel`, `p58eOpenCashDrawer`, `p58ePaperFeed`, `hwTestReceipt`, `hwTestBarcode`, `hwTestQR`, `hwTestDrawer`, `hwTestFeed`, `hwTestConsecutive`, `hwTestLarge`, `renderChecklist`, `hwLog`, P58EPrinter event listeners, browser compatibility check, `showPanel` extension
+
+### Platform Requirements
+- Chrome 85+ on Desktop (Windows / macOS / Linux / ChromeOS) — Web Bluetooth only works in Chromium-based browsers
+- HTTPS or localhost — Web Bluetooth is blocked on plain HTTP
+- `navigator.bluetooth.getDevices()` (Chrome 85+) enables cross-session auto-reconnect without repeating the pairing UI
+- Android Chrome supported if using Termux / Android webview with Web BT; iOS Safari does NOT support Web Bluetooth — use native app (TWA / BT bridge) for iOS
+
+### Pairing Guide (Step-by-Step)
+1. Power on the P58E — it beeps and BT indicator blinks
+2. Open SmartPOS → Settings → Printer Setup → **P58E Setup** tab
+3. Click **Pair P58E Printer** — browser BLE picker opens
+4. Select "P58E-XXXX" (or your printer's name) and click **Pair**
+5. Browser connects, auto-reconnect activates; device card appears with green CONNECTED status
+6. Go to **Hardware Tests** tab → click **Print Test Receipt** to verify
+7. Future page loads reconnect automatically (no pairing dialog)
+
+### Security Implications
+- Web Bluetooth requests require explicit user gesture — no background scanning possible
+- Pairing data saved to `localStorage('p58e_paired_device')` — device name and ID only; no print data cached in localStorage
+- No sensitive receipt data persists beyond the in-memory `PrintQueue`
+
+### Performance
+- BLE connection target: < 3 seconds after user selects device
+- ESC/POS receipt encoding: < 200ms for a 10-item receipt (in-memory Uint8Array construction)
+- P58E BLE throughput: ~3,200 bytes/sec at 128-byte chunks / 40ms delay; a full receipt (~2KB) transmits in ~0.6s
+
+### Breaking Changes
+None. All edits to `sokoni-universal-printer.js` are additive or replace broken defaults with correct ones.
+
+---
+
+## [2026-07-11] — CSP Fix — Maps, Charts, QR Scanning Restored (17 pages)
 
 ### Summary
 `cdn.jsdelivr.net` and `unpkg.com` were missing from both `script-src` and `style-src` in both the enforcement and report-only Content-Security-Policy headers in `firebase.json`. The browser was silently blocking Leaflet JS/CSS, Chart.js, jsQR, leaflet-heat, and leaflet.markercluster on 17 pages, making maps, charts, and QR scanning completely non-functional in production.

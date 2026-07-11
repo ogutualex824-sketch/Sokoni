@@ -889,25 +889,30 @@ class PrintQueue {
 ───────────────────────────────────────────────────────────────── */
 
 class BtAdapter {
-  constructor () { this.ok = false; this._char = null; this._dev = null; this._srv = null; }
+  constructor () { this.ok = false; this._char = null; this._dev = null; this._srv = null; this._chunkSize = 128; this._chunkDelay = 40; }
   get type () { return 'bluetooth'; }
   get avail () { return !!navigator.bluetooth; }
 
   async discover () {
     if (!this.avail) return [];
     const filters = [
+      { services: ['0000ff00-0000-1000-8000-00805f9b34fb'] }, // P58E / Goojprt / Chinese BLE printers
       { services: ['000018f0-0000-1000-8000-00805f9b34fb'] },
       { services: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2'] },
       { services: ['0000ffe0-0000-1000-8000-00805f9b34fb'] },
-      { namePrefix: 'MTP' }, { namePrefix: 'Rongta' }, { namePrefix: 'Xprinter' },
-      { namePrefix: 'EPSON' }, { namePrefix: 'Star' }, { namePrefix: 'POS' },
-      { namePrefix: 'BP-' }, { namePrefix: 'RPP' }, { namePrefix: 'BTPT' },
-      { namePrefix: 'Printer' }, { namePrefix: 'TM-' }, { namePrefix: 'iDPRT' },
+      { namePrefix: 'P58'  }, { namePrefix: 'P80'   }, { namePrefix: 'PT-'  },
+      { namePrefix: 'BTP'  }, { namePrefix: 'HOP'   }, { namePrefix: 'SP-'  },
+      { namePrefix: 'MTP'  }, { namePrefix: 'Rongta'}, { namePrefix: 'Xprinter' },
+      { namePrefix: 'EPSON'}, { namePrefix: 'Star'  }, { namePrefix: 'POS'  },
+      { namePrefix: 'BP-'  }, { namePrefix: 'RPP'   }, { namePrefix: 'BTPT' },
+      { namePrefix: 'Printer'}, { namePrefix: 'TM-' }, { namePrefix: 'iDPRT'},
+      { namePrefix: 'Cashino'}, { namePrefix: 'GT'  },
     ];
     try {
       const d = await navigator.bluetooth.requestDevice({
         filters,
         optionalServices: [
+          '0000ff00-0000-1000-8000-00805f9b34fb',
           '000018f0-0000-1000-8000-00805f9b34fb',
           'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
           '0000ffe0-0000-1000-8000-00805f9b34fb',
@@ -922,6 +927,7 @@ class BtAdapter {
     this._dev = d;
     this._srv = await d.gatt.connect();
     const serviceUUIDs = [
+      '0000ff00-0000-1000-8000-00805f9b34fb', // P58E primary — check first
       '000018f0-0000-1000-8000-00805f9b34fb',
       'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
       '0000ffe0-0000-1000-8000-00805f9b34fb',
@@ -930,6 +936,7 @@ class BtAdapter {
     for (const u of serviceUUIDs) { try { svc = await this._srv.getPrimaryService(u); break; } catch(e) {} }
     if (!svc) throw new Error('No print service on this Bluetooth device');
     const charUUIDs = [
+      '0000ff02-0000-1000-8000-00805f9b34fb', // P58E write characteristic
       '00002af1-0000-1000-8000-00805f9b34fb',
       'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
       '0000ffe1-0000-1000-8000-00805f9b34fb',
@@ -956,6 +963,7 @@ class BtAdapter {
         const srv = await device.gatt.connect();
         this._srv = srv;
         const serviceUUIDs = [
+          '0000ff00-0000-1000-8000-00805f9b34fb',
           '000018f0-0000-1000-8000-00805f9b34fb',
           'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
           '0000ffe0-0000-1000-8000-00805f9b34fb',
@@ -964,6 +972,7 @@ class BtAdapter {
         for (const u of serviceUUIDs) { try { svc = await srv.getPrimaryService(u); break; } catch(e) {} }
         if (!svc) continue;
         const charUUIDs = [
+          '0000ff02-0000-1000-8000-00805f9b34fb',
           '00002af1-0000-1000-8000-00805f9b34fb',
           'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
           '0000ffe1-0000-1000-8000-00805f9b34fb',
@@ -983,14 +992,15 @@ class BtAdapter {
 
   async write (data) {
     if (!this.ok || !this._char) throw Object.assign(new Error('BT printer not connected'), { code: PRINTER_ERRORS.OFFLINE });
-    const CHUNK = 512;
+    const CHUNK = this._chunkSize || 128; // 128 bytes — safe for P58E and all BLE printers
+    const DELAY = this._chunkDelay || 40; // 40ms inter-chunk delay required by P58E
     for (let i = 0; i < data.length; i += CHUNK) {
       if (this._char.properties.writeWithoutResponse) {
         await this._char.writeValueWithoutResponse(data.slice(i, i + CHUNK));
       } else {
         await this._char.writeValue(data.slice(i, i + CHUNK));
       }
-      await new Promise(r => setTimeout(r, 20));
+      await new Promise(r => setTimeout(r, DELAY));
     }
   }
 }
@@ -1245,6 +1255,18 @@ class SPEngine {
   async autoReconnect () {
     const last = this._profile.lastDevice;
     if (!last) return false;
+
+    /* Bluetooth: getDevices() returns previously-granted devices without a user gesture (Chrome 85+) */
+    if (last.type === 'bluetooth' && navigator.bluetooth?.getDevices) {
+      try {
+        const devices = await navigator.bluetooth.getDevices();
+        const matched = devices.find(d => d.name === last.name || d.id === last.id);
+        if (!matched) return false;
+        await this.connect({ ...last, _dev: matched });
+        return true;
+      } catch(e) { return false; }
+    }
+
     if (last.type !== 'network' && last.type !== 'browser') return false;
     try { await this.connect(last); return true; } catch(e) { return false; }
   }

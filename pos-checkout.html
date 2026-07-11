@@ -2827,8 +2827,13 @@ const Checkout = (() => {
 
   async function _printReceipt(receipt) {
     try {
-      if (window.UniversalPrinter) {
-        await UniversalPrinter.printReceipt({ type:'sale', ...receipt });
+      if (window.SokoniPrinter?.connected) {
+        await SokoniPrinter.print('sale', {
+          ...receipt,
+          cashierName: _s.cashierName,
+          tillNumber:  _s.registerId || 'Default',
+          branchId:    _s.branchId,
+        });
       }
     } catch (_) {}
 
@@ -3751,22 +3756,25 @@ const Checkout = (() => {
   function _printSafeDropReceipt({ amount, loc, witness, reason }) {
     if (!window.SokoniPrinter) return;
     const now = new Date().toLocaleString('en-KE', { hour12:false });
-    SokoniPrinter.printText([
-      { type:'header', text:'SOKONI POS' },
-      { type:'line',   text:'SAFE DROP RECEIPT' },
-      { type:'divider' },
-      { type:'row', label:'Cashier',   value: _s.cashierName },
-      { type:'row', label:'Register',  value: _s.registerId || 'Default' },
-      { type:'row', label:'Branch',    value: _s.branchId || '-' },
-      { type:'row', label:'Amount',    value: 'KES ' + amount.toFixed(2) },
-      { type:'row', label:'Location',  value: loc || '-' },
-      { type:'row', label:'Witness',   value: witness || '-' },
-      { type:'row', label:'Reason',    value: reason || '-' },
-      { type:'row', label:'Date/Time', value: now },
-      { type:'divider' },
-      { type:'line', text:'Cashier signature: _______________' },
-      { type:'line', text:'Witness signature: _______________' },
-    ]).catch(() => {});
+    SokoniPrinter.print('custom', {
+      build (enc, W) {
+        const row = (l, r) => { const rs = String(r); return String(l).slice(0, W - rs.length - 1).padEnd(W - rs.length - 1) + ' ' + rs; };
+        enc.ac().bold(true).sz('tall').text('SOKONI POS').lf()
+           .sz('normal').bold(false).text('SAFE DROP RECEIPT').lf()
+           .al().text('-'.repeat(W)).lf()
+           .text(row('Cashier:', _s.cashierName || '-')).lf()
+           .text(row('Register:', _s.registerId || 'Default')).lf()
+           .text(row('Branch:', _s.branchId || '-')).lf()
+           .bold(true).text(row('Amount:', 'KES ' + amount.toFixed(2))).lf().bold(false)
+           .text(row('Location:', loc || '-')).lf()
+           .text(row('Witness:', witness || '-')).lf()
+           .text(row('Reason:', reason || '-')).lf()
+           .text(row('Date/Time:', now)).lf()
+           .text('-'.repeat(W)).lf()
+           .text('Cashier signature: _______________').lf().lf()
+           .text('Witness signature:  _______________').lf();
+      },
+    }).catch(() => {});
   }
 
   /* ── Public API ── */

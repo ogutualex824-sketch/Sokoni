@@ -186,6 +186,8 @@ input:checked+.slider:before{transform:translateX(18px)}
 
 <div class="tabs">
   <div class="tab active" data-panel="discover" onclick="showPanel(this)">Discover</div>
+  <div class="tab" data-panel="p58e" onclick="showPanel(this)">P58E Setup</div>
+  <div class="tab" data-panel="hardware" onclick="showPanel(this)">Hardware Tests</div>
   <div class="tab" data-panel="capabilities" onclick="showPanel(this)">Capabilities</div>
   <div class="tab" data-panel="documents" onclick="showPanel(this)">Test Documents</div>
   <div class="tab" data-panel="config" onclick="showPanel(this)">Configuration</div>
@@ -395,6 +397,266 @@ input:checked+.slider:before{transform:translateX(18px)}
   </div>
 </div>
 
+<!-- ═══ P58E SETUP ═══ -->
+<div class="panel" id="panel-p58e">
+
+  <!-- Compatibility notice -->
+  <div class="card" id="p58eBrowserNotice" style="display:none">
+    <div class="card-top" style="background:linear-gradient(90deg,var(--red),#ff8800)"></div>
+    <div class="card-body">
+      <div class="card-title" style="color:var(--red)">&#9888; Browser Not Supported</div>
+      <div id="p58eCompatMsg" style="font-size:12px;color:var(--sub);line-height:1.7"></div>
+    </div>
+  </div>
+
+  <!-- Step-by-step pairing guide -->
+  <div class="card">
+    <div class="card-top" style="background:linear-gradient(90deg,#1a73e8,var(--acc))"></div>
+    <div class="card-body">
+      <div class="card-title">&#128268; P58E Bluetooth Pairing Guide</div>
+      <div style="display:grid;gap:10px;margin-bottom:16px">
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px;background:var(--bg3);border-radius:8px;border:1px solid var(--bor)">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">1</div>
+          <div><div style="font-size:12px;font-weight:600;margin-bottom:2px">Power on the P58E</div><div style="font-size:11px;color:var(--sub)">Hold the power button until the LED turns blue and you hear a beep. The printer will print a self-test page.</div></div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px;background:var(--bg3);border-radius:8px;border:1px solid var(--bor)">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">2</div>
+          <div><div style="font-size:12px;font-weight:600;margin-bottom:2px">Enter pairing mode</div><div style="font-size:11px;color:var(--sub)">The blue LED should blink. If it's solid blue, press and hold the Feed button for 3 seconds to enter pairing mode.</div></div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px;background:var(--bg3);border-radius:8px;border:1px solid var(--bor)">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">3</div>
+          <div><div style="font-size:12px;font-weight:600;margin-bottom:2px">Click "Pair P58E Printer" below</div><div style="font-size:11px;color:var(--sub)">A browser Bluetooth picker will open. Select your printer from the list (look for a name starting with P58 or the device name printed on the self-test page).</div></div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px;background:var(--bg3);border-radius:8px;border:1px solid var(--bor)">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">4</div>
+          <div><div style="font-size:12px;font-weight:600;margin-bottom:2px">Click "Pair" in the browser dialog</div><div style="font-size:11px;color:var(--sub)">No PIN required. The browser remembers this printer. Future page loads will auto-connect without any dialog.</div></div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:10px;background:var(--bg3);border-radius:8px;border:1px solid var(--bor)">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">&#10003;</div>
+          <div><div style="font-size:12px;font-weight:600;margin-bottom:2px">Print a test receipt</div><div style="font-size:11px;color:var(--sub)">Go to the Hardware Tests tab and click "Print Test Receipt" to verify everything works. The receipt will include printer info, sample products, a barcode, and a QR code.</div></div>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <button class="btn btn-primary" id="btnPairP58E" onclick="pairP58E()">&#128268; Pair P58E Printer</button>
+        <button class="btn btn-danger"  id="btnForgetP58E" onclick="forgetP58E()" style="display:none">&#128465; Forget Printer</button>
+        <button class="btn btn-outline" id="btnReconnectP58E" onclick="reconnectP58E()" style="display:none">&#8635; Reconnect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connected / Saved printer info -->
+  <div class="card" id="p58eDeviceCard" style="display:none">
+    <div class="card-top" style="background:linear-gradient(90deg,var(--green),var(--acc))"></div>
+    <div class="card-body">
+      <div class="card-title">&#9989; Connected Printer</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="p58eDeviceInfo"></div>
+      <div class="actions-row" style="margin-top:14px">
+        <button class="btn btn-sm btn-green" onclick="showPanel(document.querySelector('[data-panel=hardware]'))">&#128424; Hardware Tests</button>
+        <button class="btn btn-sm btn-outline" onclick="p58eOpenCashDrawer()">&#128218; Test Cash Drawer</button>
+        <button class="btn btn-sm btn-outline" onclick="p58ePaperFeed()">&#8659; Paper Feed</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Saved (not yet connected) printer -->
+  <div class="card" id="p58eSavedCard" style="display:none">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">&#128268; Saved Printer (Not Connected)</div>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:12px">This printer was paired in a previous session. Click Reconnect to restore the connection without the browser picker.</div>
+      <div id="p58eSavedInfo" style="font-size:12px;color:var(--txt);margin-bottom:12px"></div>
+      <div class="actions-row">
+        <button class="btn btn-primary" onclick="reconnectP58E()">&#8635; Reconnect Now</button>
+        <button class="btn btn-danger" onclick="forgetP58E()">&#128465; Forget &amp; Unpair</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">Bluetooth Settings</div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="t-label">Auto-connect on page load</div>
+          <div class="t-sub">Reconnects to the paired printer when this page opens (requires Chrome 85+)</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="p58eAutoConnect" onchange="P58EPrinter.updateSettings({autoConnect:this.checked})"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="t-label">Cash drawer connected through printer</div>
+          <div class="t-sub">Enable to show cash drawer test buttons in Hardware Tests</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="p58eDrawer" onchange="P58EPrinter.updateSettings({drawerEnabled:this.checked})"><span class="slider"></span></label>
+      </div>
+      <div class="actions-row" style="margin-top:12px">
+        <div class="form-group" style="flex:1">
+          <label>Paper Width</label>
+          <select id="p58ePaperWidth" onchange="SokoniPrinter.setConfig({paperWidth:this.value});toast('Paper width saved')">
+            <option value="58mm" selected>58mm (32 chars) — P58E standard</option>
+            <option value="76mm">76mm (42 chars)</option>
+            <option value="80mm">80mm (48 chars)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Troubleshooting -->
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">&#10067; Troubleshooting</div>
+      <div style="display:flex;flex-direction:column;gap:10px;font-size:12px">
+        <details style="cursor:pointer">
+          <summary style="font-weight:600;color:var(--txt);padding:4px 0">Printer not showing in the picker</summary>
+          <div style="color:var(--sub);padding:8px 0 0 12px;line-height:1.7">
+            • Make sure the printer is powered on and the LED is blinking blue<br>
+            • Press and hold the Feed button for 3 seconds to enter pairing mode<br>
+            • Check that Bluetooth is enabled on this device<br>
+            • Try moving closer — BLE range is ~10m in open air<br>
+            • If the printer has already been paired to another app, remove it from the OS Bluetooth settings first
+          </div>
+        </details>
+        <details style="cursor:pointer">
+          <summary style="font-weight:600;color:var(--txt);padding:4px 0">Connected but nothing prints</summary>
+          <div style="color:var(--sub);padding:8px 0 0 12px;line-height:1.7">
+            • Check the paper roll is loaded correctly and not jammed<br>
+            • Go to Hardware Tests → Print Test Receipt<br>
+            • Try disconnecting and reconnecting<br>
+            • Verify the paper width setting matches the loaded paper (58mm for P58E)<br>
+            • The BLE write chunk size is 128 bytes with 40ms delay — no action needed, this is applied automatically
+          </div>
+        </details>
+        <details style="cursor:pointer">
+          <summary style="font-weight:600;color:var(--txt);padding:4px 0">Printer disconnects frequently</summary>
+          <div style="color:var(--sub);padding:8px 0 0 12px;line-height:1.7">
+            • Keep the printer within 5m of the device<br>
+            • Check the printer battery level (low battery causes disconnects)<br>
+            • Make sure no other app is connected to the same printer<br>
+            • Auto-reconnect will restore the connection within 1–30 seconds automatically
+          </div>
+        </details>
+        <details style="cursor:pointer">
+          <summary style="font-weight:600;color:var(--txt);padding:4px 0">Auto-connect not working after page reload</summary>
+          <div style="color:var(--sub);padding:8px 0 0 12px;line-height:1.7">
+            • Auto-connect requires Chrome 85+ and the printer to be powered on<br>
+            • This uses navigator.bluetooth.getDevices() — no user gesture required<br>
+            • If it still doesn't work, go to Chrome Settings → Site Settings → Bluetooth → check SOKONI has permission<br>
+            • Manually click "Reconnect" if auto-connect fails
+          </div>
+        </details>
+        <details style="cursor:pointer">
+          <summary style="font-weight:600;color:var(--txt);padding:4px 0">Cash drawer not opening</summary>
+          <div style="color:var(--sub);padding:8px 0 0 12px;line-height:1.7">
+            • The cash drawer must be connected to the printer's RJ11/RJ12 port<br>
+            • The ESC/POS drawer kick command (ESC p) is sent to the printer, not the drawer directly<br>
+            • Some P58E models may not support the drawer kick — check the specification sheet<br>
+            • Try "Test Cash Drawer" in Hardware Tests to verify
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ HARDWARE TESTS ═══ -->
+<div class="panel" id="panel-hardware">
+
+  <!-- Quick actions -->
+  <div class="card">
+    <div class="card-top" style="background:linear-gradient(90deg,var(--acc2),var(--green))"></div>
+    <div class="card-body">
+      <div class="card-title">&#9881; Hardware Test Console</div>
+      <p style="font-size:12px;color:var(--sub);margin-bottom:14px">
+        Run these tests with the P58E powered on and connected. Each test sends real ESC/POS commands to the printer.
+        Results are logged in the Production Checklist below.
+      </p>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+
+        <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
+          <div style="font-size:26px;margin-bottom:6px">&#128424;</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Test Receipt</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">Full P58E diagnostic print</div>
+          <button class="btn btn-primary btn-sm" style="width:100%" onclick="hwTestReceipt()">Print</button>
+        </div>
+
+        <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
+          <div style="font-size:26px;margin-bottom:6px">&#128176;</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Sales Receipt</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">Standard SOKONI receipt</div>
+          <button class="btn btn-outline btn-sm" style="width:100%" onclick="testDoc('sale')">Print</button>
+        </div>
+
+        <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
+          <div style="font-size:26px;margin-bottom:6px">&#9632;</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Barcode Only</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">Code 128 test</div>
+          <button class="btn btn-outline btn-sm" style="width:100%" onclick="hwTestBarcode()">Print</button>
+        </div>
+
+        <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
+          <div style="font-size:26px;margin-bottom:6px">&#9638;</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">QR Code Only</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">16×16 module QR</div>
+          <button class="btn btn-outline btn-sm" style="width:100%" onclick="hwTestQR()">Print</button>
+        </div>
+
+        <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
+          <div style="font-size:26px;margin-bottom:6px">&#128218;</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Cash Drawer</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">ESC p kick command</div>
+          <button class="btn btn-outline btn-sm" style="width:100%" onclick="hwTestDrawer()">Open</button>
+        </div>
+
+        <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
+          <div style="font-size:26px;margin-bottom:6px">&#8659;</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Paper Feed</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">Advance 5 lines</div>
+          <button class="btn btn-outline btn-sm" style="width:100%" onclick="hwTestFeed()">Feed</button>
+        </div>
+
+        <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
+          <div style="font-size:26px;margin-bottom:6px">&#128197;</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">3× Consecutive</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">Stress: print queue</div>
+          <button class="btn btn-outline btn-sm" style="width:100%" onclick="hwTestConsecutive()">Print ×3</button>
+        </div>
+
+        <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
+          <div style="font-size:26px;margin-bottom:6px">&#128221;</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Large Receipt</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">12-item order test</div>
+          <button class="btn btn-outline btn-sm" style="width:100%" onclick="hwTestLarge()">Print</button>
+        </div>
+
+      </div>
+
+      <div id="hwLog" style="margin-top:14px;background:var(--bg3);border:1px solid var(--bor);border-radius:8px;padding:10px;max-height:180px;overflow-y:auto;font-family:monospace;font-size:11px;color:var(--sub);display:none"></div>
+
+    </div>
+  </div>
+
+  <!-- Production checklist -->
+  <div class="card">
+    <div class="card-top" style="background:linear-gradient(90deg,var(--green),#00b050)"></div>
+    <div class="card-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">&#9989; Production Readiness Checklist</div>
+        <button class="btn btn-sm btn-danger" onclick="P58EPrinter.resetChecklist();renderChecklist()">Reset All</button>
+      </div>
+      <div id="hwChecklist" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div id="hwChecklistScore" style="margin-top:12px;font-size:12px;color:var(--sub)"></div>
+    </div>
+  </div>
+
+</div>
+
 <!-- ═══ QUEUE ═══ -->
 <div class="panel" id="panel-queue">
   <div class="card">
@@ -434,6 +696,7 @@ input:checked+.slider:before{transform:translateX(18px)}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
 <script src="sokoni-universal-printer.js"></script>
+<script src="sokoni-bluetooth-printer.js"></script>
 <script>
 /* ── Firebase init ── */
 if (!firebase.apps.length) {
@@ -882,9 +1145,273 @@ SokoniPrinter.on('disconnected', () => { updateStatusBar(); toast('Printer disco
 SokoniPrinter.on('printed',      j  => { toast('Printed: ' + j.docType); renderQueue(); });
 SokoniPrinter.on('error',        ev => { toast('Print error: ' + ev.error, 4000); renderQueue(); });
 
+/* ═══════════════════════════════════════════════════════
+   P58E SETUP PANEL — handlers
+═══════════════════════════════════════════════════════ */
+
+function renderP58EPanel () {
+  /* Compatibility check */
+  const compat = P58EService.checkCompatibility();
+  const notice = document.getElementById('p58eBrowserNotice');
+  if (!compat.supported) {
+    notice.style.display = '';
+    document.getElementById('p58eCompatMsg').innerHTML = compat.issues.map(i => '&#9888; ' + _esc(i)).join('<br>');
+  } else {
+    notice.style.display = 'none';
+  }
+
+  /* Settings toggles */
+  const s = P58EPrinter.settings;
+  document.getElementById('p58eAutoConnect').checked = !!s.autoConnect;
+  document.getElementById('p58eDrawer').checked      = !!s.drawerEnabled;
+  document.getElementById('p58ePaperWidth').value    = SokoniPrinter.getConfig().paperWidth || '58mm';
+
+  /* Pair / forget buttons */
+  const paired  = P58EPrinter.paired;
+  const connected = P58EPrinter.isConnected;
+
+  document.getElementById('btnForgetP58E').style.display    = paired     ? '' : 'none';
+  document.getElementById('btnReconnectP58E').style.display = (paired && !connected) ? '' : 'none';
+
+  /* Connected device card */
+  const devCard   = document.getElementById('p58eDeviceCard');
+  const savedCard = document.getElementById('p58eSavedCard');
+  if (connected && P58EPrinter.info) {
+    devCard.style.display   = '';
+    savedCard.style.display = 'none';
+    const info = P58EPrinter.info;
+    document.getElementById('p58eDeviceInfo').innerHTML = [
+      ['Model',        info.name || 'Bluetooth Printer'],
+      ['BT Device ID', (info.id || 'N/A').slice(0, 32)],
+      ['BLE Service',  info.serviceUUID ? 'FF00 (P58E native)' : 'Unknown'],
+      ['Write Mode',   info.writeMode || 'N/A'],
+      ['Paper Width',  '58mm'],
+      ['Connected At', (info.connectedAt || '').slice(0, 19)],
+    ].map(([l, v]) => `<div style="background:var(--bg3);border:1px solid var(--bor);border-radius:6px;padding:8px 10px"><div style="font-size:10px;color:var(--sub);font-weight:700;letter-spacing:.3px;margin-bottom:2px">${_esc(l)}</div><div style="font-size:12px;font-weight:600;word-break:break-all">${_esc(v)}</div></div>`).join('');
+  } else if (paired) {
+    devCard.style.display   = 'none';
+    savedCard.style.display = '';
+    document.getElementById('p58eSavedInfo').innerHTML =
+      `<b>${_esc(paired.name || 'Bluetooth Printer')}</b><br>` +
+      `Saved: ${_esc((paired.savedAt || '').slice(0, 16))}`;
+  } else {
+    devCard.style.display   = 'none';
+    savedCard.style.display = 'none';
+  }
+}
+
+async function pairP58E () {
+  const btn = document.getElementById('btnPairP58E');
+  btn.disabled = true; btn.textContent = 'Opening picker…';
+  try {
+    const info = await P58EPrinter.requestAndPair();
+    if (info) {
+      toast('Connected to ' + info.name);
+      _connectedDevice = { name: info.name, type: 'bluetooth' };
+      updateStatusBar();
+      renderP58EPanel();
+      renderChecklist();
+    } else {
+      toast('Pairing cancelled');
+    }
+  } catch(e) {
+    toast('Pairing failed: ' + e.message, 5000);
+  } finally {
+    btn.disabled = false; btn.innerHTML = '&#128268; Pair P58E Printer';
+  }
+}
+
+async function reconnectP58E () {
+  const btn = document.getElementById('btnReconnectP58E');
+  btn.disabled = true; btn.textContent = 'Reconnecting…';
+  try {
+    const ok = await P58EPrinter.autoConnect();
+    if (ok) {
+      toast('Reconnected to ' + P58EPrinter.info?.name);
+      _connectedDevice = { name: P58EPrinter.info?.name, type: 'bluetooth' };
+      updateStatusBar();
+      renderP58EPanel();
+    } else {
+      toast('Could not auto-reconnect. Make sure the printer is on, then try Pair.', 5000);
+    }
+  } catch(e) {
+    toast('Reconnect failed: ' + e.message, 5000);
+  } finally {
+    btn.disabled = false; btn.innerHTML = '&#8635; Reconnect';
+  }
+}
+
+async function forgetP58E () {
+  if (!confirm('Remove saved printer? You will need to pair again next time.')) return;
+  P58EPrinter.forget();
+  _connectedDevice = null;
+  updateStatusBar();
+  renderP58EPanel();
+  toast('Printer forgotten');
+}
+
+async function p58eOpenCashDrawer () {
+  try {
+    await P58EPrinter.openCashDrawer();
+    hwLog('Cash drawer kick sent ✓');
+    toast('Cash drawer command sent');
+    renderChecklist();
+  } catch(e) {
+    toast('Cash drawer error: ' + e.message, 4000);
+  }
+}
+
+async function p58ePaperFeed () {
+  try {
+    await P58EPrinter.paperFeed(5);
+    hwLog('Paper feed (5 lines) sent ✓');
+    toast('Paper fed 5 lines');
+  } catch(e) {
+    toast('Paper feed error: ' + e.message, 4000);
+  }
+}
+
+/* Wire P58EPrinter events */
+P58EPrinter.on('connected',       info => { _connectedDevice = { name: info.name, type: 'bluetooth' }; updateStatusBar(); renderP58EPanel(); toast('P58E connected: ' + info.name); });
+P58EPrinter.on('disconnected',    ()   => { updateStatusBar(); renderP58EPanel(); toast('P58E disconnected'); });
+P58EPrinter.on('reconnecting',    ev   => { document.getElementById('statusDot').className = 'status-dot scanning'; document.getElementById('statusText').textContent = 'Reconnecting… attempt ' + ev.attempt + '/' + ev.max; });
+P58EPrinter.on('reconnect_failed',()   => { updateStatusBar(); toast('Could not reconnect — power the printer on and click Reconnect.', 5000); });
+P58EPrinter.on('checklist',       ()   => renderChecklist());
+
+/* ═══════════════════════════════════════════════════════
+   HARDWARE TESTS PANEL — handlers
+═══════════════════════════════════════════════════════ */
+
+function hwLog (msg) {
+  const el = document.getElementById('hwLog');
+  el.style.display = '';
+  const line = document.createElement('div');
+  line.textContent = '[' + new Date().toLocaleTimeString('en-KE', { hour12: false }) + '] ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+async function hwRun (label, fn) {
+  hwLog(label + '…');
+  try {
+    await fn();
+    hwLog(label + ' — PASS ✓');
+    toast(label + ' passed');
+  } catch(e) {
+    hwLog(label + ' — FAIL ✗  ' + e.message);
+    toast(label + ' failed: ' + e.message, 5000);
+  }
+}
+
+function hwTestReceipt    () { hwRun('Test Receipt', () => P58EPrinter.printTestReceipt()); }
+function hwTestDrawer     () { hwRun('Cash Drawer',  () => P58EPrinter.openCashDrawer()); }
+function hwTestFeed       () { hwRun('Paper Feed',   () => P58EPrinter.paperFeed(5)); }
+
+async function hwTestBarcode () {
+  await hwRun('Barcode Print', async () => {
+    if (!SokoniPrinter?.connected) throw new Error('Printer not connected');
+    await SokoniPrinter.print('custom', {
+      build (enc, W) {
+        enc.ac().bold(true).text('BARCODE TEST').lf().bold(false);
+        enc.barcode('1234567890').lf();
+        enc.text('Code 128 — 1234567890').lf().lf(2);
+      }
+    });
+    P58EPrinter.markChecklistItem('barcode', true);
+  });
+}
+
+async function hwTestQR () {
+  await hwRun('QR Code Print', async () => {
+    if (!SokoniPrinter?.connected) throw new Error('Printer not connected');
+    await SokoniPrinter.printQR('https://sokoni.co.ke/', { label: 'sokoni.co.ke', size: 5 });
+    P58EPrinter.markChecklistItem('qrcode', true);
+  });
+}
+
+async function hwTestConsecutive () {
+  await hwRun('Consecutive ×3', async () => {
+    if (!SokoniPrinter?.connected) throw new Error('Printer not connected');
+    for (let i = 1; i <= 3; i++) {
+      await SokoniPrinter.print('custom', {
+        build (enc, W) {
+          enc.ac().bold(true).sz('tall').text('RECEIPT ' + i + ' OF 3').lf().sz('normal').bold(false)
+             .text('Consecutive print test — SmartPOS').lf().lf(3);
+        }
+      });
+      hwLog('Receipt ' + i + '/3 queued');
+      await new Promise(r => setTimeout(r, 800));
+    }
+    P58EPrinter.markChecklistItem('consecutive', true);
+    renderChecklist();
+  });
+}
+
+async function hwTestLarge () {
+  await hwRun('Large Receipt (12 items)', async () => {
+    if (!SokoniPrinter?.connected) throw new Error('Printer not connected');
+    const items = Array.from({ length: 12 }, (_, i) => ({
+      name: 'Test Product ' + (i + 1).toString().padStart(2, '0'),
+      quantity: Math.ceil(Math.random() * 5),
+      unitPrice: Math.round((Math.random() * 500 + 50) / 10) * 10,
+    }));
+    await SokoniPrinter.print('sale', {
+      businessName: 'SOKONI SmartPOS', cashierName: 'Stress Test',
+      receiptNumber: 'LARGE-TEST-001',
+      items,
+      totals: {
+        subtotal: items.reduce((s, i) => s + i.quantity * i.unitPrice, 0),
+        vat: Math.round(items.reduce((s, i) => s + i.quantity * i.unitPrice, 0) * 0.16),
+        grandTotal: Math.round(items.reduce((s, i) => s + i.quantity * i.unitPrice, 0) * 1.16),
+      },
+      payment: { method: 'M-Pesa' },
+    });
+    P58EPrinter.markChecklistItem('large', true);
+    renderChecklist();
+  });
+}
+
+/* Checklist render */
+function renderChecklist () {
+  const list  = P58EPrinter.checklist;
+  const done  = list.filter(i => i.done).length;
+  const el    = document.getElementById('hwChecklist');
+  const score = document.getElementById('hwChecklistScore');
+  if (!el) return;
+
+  const catLabels = { setup:'Setup', print:'Print Quality', stress:'Stress Tests', reliability:'Reliability', error:'Error Handling', hardware:'Hardware' };
+  const groups = {};
+  list.forEach(i => { (groups[i.cat] = groups[i.cat] || []).push(i); });
+
+  el.innerHTML = Object.entries(groups).map(([cat, items]) => `
+    <div style="margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px;padding:0 2px">${_esc(catLabels[cat] || cat)}</div>
+      ${items.map(i => `
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--bg3);border:1px solid ${i.done ? 'rgba(0,230,118,.3)' : 'var(--bor)'};border-radius:6px;margin-bottom:4px;cursor:pointer" onclick="P58EPrinter.markChecklistItem('${_esc(i.id)}',${!i.done});renderChecklist()">
+          <div style="width:18px;height:18px;border-radius:4px;border:2px solid ${i.done ? 'var(--green)' : 'var(--bor2)'};background:${i.done ? 'var(--green)' : 'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#000">
+            ${i.done ? '&#10003;' : ''}
+          </div>
+          <span style="font-size:12px;color:${i.done ? 'var(--green)' : 'var(--txt)'}">${_esc(i.label)}</span>
+        </div>`).join('')}
+    </div>`).join('');
+
+  score.innerHTML = `<span style="color:${done === list.length ? 'var(--green)' : 'var(--amber)'};font-weight:700">${done}/${list.length}</span> tests completed` +
+    (done === list.length ? ' — <span style="color:var(--green);font-weight:700">&#9989; Production Ready</span>' : '');
+}
+
+/* Panel routing — extend to handle p58e + hardware */
+const _origShowPanel = showPanel;
+showPanel = function (el) {
+  _origShowPanel(el);
+  if (el.dataset.panel === 'p58e')     { renderP58EPanel(); }
+  if (el.dataset.panel === 'hardware') { renderChecklist(); document.getElementById('hwLog').style.display = 'none'; }
+};
+
 /* ── Init ── */
 loadConfig();
 updateStatusBar();
+renderP58EPanel();
+renderChecklist();
 SokoniPrinter.autoReconnect().then(ok => { if (ok) updateStatusBar(); });
 </script>
 </body>
