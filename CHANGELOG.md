@@ -1,4 +1,29 @@
-﻿## [2026-07-11] — reCAPTCHA Badge Layout Fix (Mobile + Desktop)
+﻿## [2026-07-11] — platformInfraDispatch — 28 onCall CFs → 1 Cloud Run Service (Quota Relief)
+
+### Summary
+Consolidated the 28 individually-exported Phase-3 onCall Cloud Functions (observability, reliability, webhooks, task queue, API gateway) into a single `platformInfraDispatch` Cloud Run service using the `_h` lazy-load dispatcher pattern. Freed 27 Cloud Run quota slots, enabling future Phase-3 function deployments without requesting a quota increase. 9 scheduled/onRequest exports remain individual (they cannot route through an onCall dispatcher).
+
+### Files Changed
+- `functions/platform-infra-dispatch.js` — NEW: single `platformInfraDispatch` onCall with 28-entry lazy-load route map
+- `functions/observability-engine.js` — added `_h` map (7 onCall handlers)
+- `functions/reliability-engine.js` — added `_h` map (7 onCall handlers)
+- `functions/webhook-engine.js` — added `_h` map (7 onCall handlers)
+- `functions/task-queue.js` — added `_h` map (5 onCall handlers)
+- `functions/api-gateway.js` — added `_h` map (2 onCall handlers)
+- `functions/index.js` — removed 28 individual onCall exports; added 1 dispatcher + 9 individual scheduled/onRequest = exports 1226→1199
+
+### Architecture Impact
+Cloud Run services: -27. Quota freed for future deployments. No API surface change for clients (dispatcher called via `platformInfraDispatch({ op: 'obsGetErrorReport', ... })`).
+
+### Security Implications
+`platformInfraDispatch` enforces `enforceAppCheck: true` — equivalent to all individual function settings.
+
+### Breaking Changes
+None for deployed callers (functions were not yet live). Client SDK migration required when callers are added: use `firebase.functions().httpsCallable('platformInfraDispatch')({ op, ...params })`.
+
+---
+
+## [2026-07-11] — reCAPTCHA Badge Layout Fix (Mobile + Desktop)
 
 ### Summary
 Fixed the `.grecaptcha-badge` (injected by Google's reCAPTCHA v2 invisible and App Check v3 on every page) overflowing the right edge of the viewport on narrow mobile screens (320–414 px). The badge is now pinned flush to the right edge with the slide-in transform disabled, sitting 80 px above the bottom navigation bar. Also tightened the `#recaptcha-container` in `pos-setup.html` to constrain any fallback visible challenge within the form.

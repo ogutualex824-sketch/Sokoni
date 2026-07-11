@@ -5,6 +5,19 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Phase-3 Infrastructure — platformInfraDispatch — 2026-07-11 — ✅ DEPLOYED
+
+28 onCall CFs (obs 7 + rel 7 + webhook 7 + tq 5 + api-gateway 2) consolidated into
+`platformInfraDispatch` via `_h` lazy-load pattern. 9 scheduled/onRequest kept individual.
+27 Cloud Run quota slots freed. Commit `aaac2f1`. Deployed via:
+```
+firebase deploy --only functions:platformInfraDispatch,functions:obsScheduledAggregation,...(9 individual)
+```
+
+Client callers: `firebase.functions().httpsCallable('platformInfraDispatch')({ op: 'obsGetErrorReport', ... })`
+
+---
+
 ## Enterprise Settlement (Phase 2 + Phase 3) — 2026-07-11 — ✅ DEPLOYED
 
 All 12 settlement ops are LIVE, consolidated into a single dispatcher and hosted
