@@ -142,19 +142,24 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 24px 24px 40px;
+      justify-content: flex-start;   /* top-aligned; .step-inner margin:auto centres when it fits */
+      padding: 24px 16px 40px;
       opacity: 0;
+      visibility: hidden;            /* bulletproof: non-active panels can never overlap */
       pointer-events: none;
       transform: translateX(60px);
-      transition: opacity var(--sk-transition), transform var(--sk-transition);
+      transition: opacity var(--sk-transition), transform var(--sk-transition), visibility 0s linear .38s;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     .step-panel.active {
       opacity: 1;
+      visibility: visible;
       pointer-events: auto;
       transform: translateX(0);
+      transition: opacity var(--sk-transition), transform var(--sk-transition), visibility 0s;
+      z-index: 2;                    /* active step always on top */
     }
 
     .step-panel.exit-left {
@@ -164,11 +169,12 @@
 
     .step-inner {
       width: 100%;
-      max-width: 440px;
+      max-width: 520px;              /* centred form, capped for desktop readability */
+      margin: auto 0;                /* vertical-centre when it fits; scroll from top when tall */
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0;
+      gap: 0;                        /* preserved — each step manages its own spacing */
     }
 
     /* ══════════════════════════════════════════════════
@@ -1778,6 +1784,9 @@ function goToStep(n) {
   const fromEl  = document.getElementById('step-' + WIZ.currentStep);
   const toEl    = document.getElementById('step-' + n);
   const forward = n > WIZ.currentStep;
+
+  /* Guarantee exactly one active step — no two panels can ever render together. */
+  document.querySelectorAll('.step-panel.active').forEach((p) => { if (p !== toEl) p.classList.remove('active'); });
 
   // Update dots
   const dots = document.querySelectorAll('.step-dot');

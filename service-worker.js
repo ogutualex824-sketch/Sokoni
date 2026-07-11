@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260711-recovery-v23";
+const CACHE_VERSION = "sokoni-20260711-recovery-v24";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -400,7 +400,20 @@ self.addEventListener("fetch", event => {
   }
 
   /* HTML â†' Network First with Offline Fallback */
-  if (request.headers.get("accept")?.includes("text/html") || ext === "html" || url.pathname === "/") {
+  /* .html suffix: issue a SW-level 301 to the clean URL.
+     Firebase cleanUrls:true redirects .html to canonical, but when the SW
+     follows that redirect internally Chrome receives a navigation response
+     whose final URL differs from the request URL and raises ERR_FAILED.
+     Returning an explicit redirect lets the browser resolve it natively;
+     the SW then handles the clean URL on the second navigation pass. */
+  if (ext === "html" && url.pathname !== "/index.html") {
+    const clean = new URL(request.url);
+    clean.pathname = clean.pathname.replace(/\.html$/, "");
+    event.respondWith(Promise.resolve(Response.redirect(clean.toString(), 301)));
+    return;
+  }
+
+  if (request.headers.get("accept")?.includes("text/html") || url.pathname === "/") {
     event.respondWith(networkFirstPage(request));
     return;
   }
