@@ -815,6 +815,37 @@ async function _generateMerchantId() {
   _err('Could not allocate a unique Merchant ID — please retry.', 'aborted');
 }
 
+/* Short, human-readable code from the unambiguous alphabet. */
+function _shortCode(prefix, len = 6) {
+  const bytes = crypto.randomBytes(len);
+  let s = '';
+  for (let i = 0; i < len; i++) s += _MID_ALPHABET[bytes[i] % _MID_ALPHABET.length];
+  return `${prefix}-${s}`;
+}
+
+/* Per-business-type intelligent defaults (Step 8). Keeps onboarding zero-typing:
+   sensible categories + POS behaviour flags derived from the business type. */
+const _TYPE_DEFAULTS = {
+  restaurant:  { categories: ['Food', 'Drinks', 'Desserts'],        flags: { kitchenPrinter: true, tableService: true, taxInclusive: true } },
+  cafe:        { categories: ['Hot Drinks', 'Cold Drinks', 'Snacks'], flags: { kitchenPrinter: true, tableService: true } },
+  bakery:      { categories: ['Bread', 'Cakes', 'Pastries'],         flags: { kitchenPrinter: true } },
+  supermarket: { categories: ['Groceries', 'Beverages', 'Household'], flags: { barcodeScanning: true, weighScale: true } },
+  pharmacy:    { categories: ['Prescription', 'OTC', 'Wellness'],     flags: { batchTracking: true, expiryTracking: true } },
+  hardware:    { categories: ['Tools', 'Building', 'Electrical'],     flags: { barcodeScanning: true } },
+  electronics: { categories: ['Phones', 'Accessories', 'Computing'],  flags: { barcodeScanning: true, serialTracking: true } },
+  clothing:    { categories: ['Men', 'Women', 'Kids'],               flags: { variantMatrix: true } },
+  liquor:      { categories: ['Beer', 'Wine', 'Spirits'],            flags: { ageRestricted: true } },
+  salon:       { categories: ['Services', 'Products'],               flags: { appointments: true } },
+  hotel:       { categories: ['Rooms', 'Food', 'Bar'],              flags: { tableService: true, roomBilling: true } },
+  wholesale:   { categories: ['Bulk', 'Retail'],                     flags: { tieredPricing: true, barcodeScanning: true } },
+  default:     { categories: ['General'],                            flags: {} },
+};
+function _typeDefaults(category) {
+  const key = String(category || '').toLowerCase().replace(/[^a-z]/g, '');
+  for (const k of Object.keys(_TYPE_DEFAULTS)) if (key.includes(k)) return _TYPE_DEFAULTS[k];
+  return _TYPE_DEFAULTS.default;
+}
+
 /* getMyBusinesses — businesses the authenticated user owns. No Merchant ID
    required; drives the onboarding business picker. */
 async function _getMyBusinesses(req) {
@@ -874,6 +905,14 @@ async function _createBusiness(req) {
   const now = admin.firestore.FieldValue.serverTimestamp();
   const qr  = JSON.stringify({ v: 1, t: 'sokoni-pos-pair', merchantId, businessId, branchId, token: pairingToken });
 
+  /* Full enterprise ID set — all auto-generated, never typed by the user. */
+  const storeCode     = _shortCode('STR', 6);
+  const posCode       = _shortCode('POS', 6);
+  const publicStoreId = _shortCode('SHOP', 6);
+  const referralCode  = _shortCode('REF', 6);
+  const apiPublicKey  = 'pk_' + crypto.randomBytes(12).toString('hex');
+  const typeDef       = _typeDefaults(category);
+
   const batch = db.batch();
   batch.set(db.collection('businesses').doc(merchantId), {
     merchantId, businessId, name: businessName, businessName,
@@ -881,6 +920,8 @@ async function _createBusiness(req) {
     country: _san(d.country || 'Kenya', 80), county: _san(d.county || '', 120), city: _san(d.county || '', 120),
     phone: _san(d.phone || '', 30), logo: d.logo || null, currency: 'KES',
     ownerId: uid, status: 'active', defaultBranchId: branchId, pairingToken,
+    storeCode, posCode, publicStoreId, referralCode, apiPublicKey,
+    typeFlags: typeDef.flags,
     provisionedBy: 'onboarding-v2', createdAt: now, updatedAt: now,
   });
   batch.set(db.collection('merchants').doc(merchantId), {
@@ -901,13 +942,25 @@ async function _createBusiness(req) {
   batch.set(db.collection('paymentMethods').doc(`${merchantId}-mpesa`), { merchantId, type: 'mpesa', label: 'M-Pesa', enabled: true, order: 2, createdAt: now });
   batch.set(db.collection('taxConfig').doc(merchantId),     { merchantId, vatEnabled: false, vatRate: 16, currency: 'KES', createdAt: now });
   batch.set(db.collection('receiptConfig').doc(merchantId), { merchantId, header: businessName, footer: 'Thank you for shopping with us', showLogo: true, createdAt: now });
-  batch.set(db.collection('featureFlags').doc(merchantId),  { merchantId, offlineMode: true, loyalty: false, createdAt: now });
-  batch.set(db.collection('posSettings').doc(merchantId),   { merchantId, currency: 'KES', lowStockThreshold: 5, roundingMode: 'none', createdAt: now });
-  batch.set(db.collection('categories').doc(`${merchantId}-general`), { merchantId, name: 'General', isDefault: true, createdAt: now });
+  batch.set(db.collection('featureFlags').doc(merchantId),  Object.assign({ merchantId, offlineMode: true, loyalty: false, createdAt: now }, typeDef.flags));
+  batch.set(db.collection('posSettings').doc(merchantId),   { merchantId, currency: 'KES', lowStockThreshold: 5, roundingMode: 'none', barcodeFormat: 'CODE128', createdAt: now });
+  /* Intelligent starter categories derived from the business type (Step 8). */
+  typeDef.categories.forEach((catName, i) => {
+    const slug = catName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    batch.set(db.collection('categories').doc(`${merchantId}-${slug}`), { merchantId, name: catName, isDefault: i === 0, order: i + 1, createdAt: now });
+  });
 
   await batch.commit();
-  _log('INFO', 'createBusiness provisioned', { merchantId, uid });
-  return { merchantId, businessId, branchId, name: businessName, category, qr, status: 'active' };
+  _log('INFO', 'createBusiness provisioned', { merchantId, uid, category });
+  return {
+    merchantId, businessId, branchId, storeCode, posCode, publicStoreId, referralCode,
+    apiPublicKey, name: businessName, category, status: 'active',
+    qr,                              // business pairing QR (back-compat)
+    qrs: {
+      business: qr,
+      pos:      JSON.stringify({ v: 1, t: 'sokoni-pos-device', merchantId, branchId, posCode }),
+    },
+  };
 }
 
 /* pairDevice — connect an additional device via Merchant ID or scanned QR.
@@ -960,6 +1013,27 @@ async function _regeneratePairingQR(req) {
   return { merchantId, qr: JSON.stringify({ v: 1, t: 'sokoni-pos-pair', merchantId, businessId: b.businessId || merchantId, branchId, token: pairingToken }) };
 }
 
+/* Resumable setup wizard — persist/restore per-user progress so the 12-step
+   wizard never loses state (resume anytime, offline-safe on the client). */
+async function _saveOnboardingProgress(req) {
+  const uid = _requireAuth(req);
+  const d = req.data || {};
+  const step = Math.max(0, Math.min(20, parseInt(d.step, 10) || 0));
+  const payload = (d.data && typeof d.data === 'object') ? d.data : {};
+  await db.collection('onboardingProgress').doc(uid).set({
+    uid, step, data: payload, merchantId: _san(d.merchantId || '', 128) || null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { ok: true, step };
+}
+async function _getOnboardingProgress(req) {
+  const uid = _requireAuth(req);
+  const snap = await db.collection('onboardingProgress').doc(uid).get();
+  if (!snap.exists) return { exists: false, step: 0, data: {} };
+  const p = snap.data();
+  return { exists: true, step: p.step || 0, data: p.data || {}, merchantId: p.merchantId || null };
+}
+
 /* ── Exports ─────────────────────────────────────────────────────── */
 module.exports = {
   bootstrapDevice:          exports.bootstrapDevice,
@@ -969,9 +1043,11 @@ module.exports = {
   validateDeviceAccess:     exports.validateDeviceAccess,
   /* Onboarding v2 handlers — served through smartPosDispatch (no new CF). */
   _h: {
-    getMyBusinesses:     _getMyBusinesses,
-    createBusiness:      _createBusiness,
-    pairDevice:          _pairDevice,
-    regeneratePairingQR: _regeneratePairingQR,
+    getMyBusinesses:        _getMyBusinesses,
+    createBusiness:         _createBusiness,
+    pairDevice:             _pairDevice,
+    regeneratePairingQR:    _regeneratePairingQR,
+    saveOnboardingProgress: _saveOnboardingProgress,
+    getOnboardingProgress:  _getOnboardingProgress,
   },
 };
