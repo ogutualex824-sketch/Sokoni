@@ -902,8 +902,8 @@
 
   /* ── Call CF helper ── */
   async function callCF(name, data = {}) {
-    const fn = fns.httpsCallable(name);
-    const r  = await fn(data);
+    const fn = fns.httpsCallable('servicesDispatch');
+    const r  = await fn(Object.assign({ op: name }, data));
     return r.data;
   }
 

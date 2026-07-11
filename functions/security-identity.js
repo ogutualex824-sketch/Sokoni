@@ -1,29 +1,29 @@
 /* ============================================================================
-   SOKONI Enterprise Identity Module — security-identity.js
-   Firebase Cloud Functions Gen2 · Node.js 22
+   SOKONI Enterprise Identity Module Ã¢â‚¬â€ security-identity.js
+   Firebase Cloud Functions Gen2 Ã‚Â· Node.js 22
    ============================================================================
 
    Functions (14 total):
 
    TOTP MFA (6)
-     initiateTOTPEnrollment   — generate secret, store pending enrollment
-     verifyTOTPEnrollment     — confirm code, activate MFA, return backup codes
-     verifyTOTP               — step-up verification (code or backup code)
-     disableMFA               — deactivate after TOTP confirmation
-     getMFAStatus             — read own enrollment status
-     regenerateBackupCodes    — replace backup codes after TOTP confirmation
+     initiateTOTPEnrollment   Ã¢â‚¬â€ generate secret, store pending enrollment
+     verifyTOTPEnrollment     Ã¢â‚¬â€ confirm code, activate MFA, return backup codes
+     verifyTOTP               Ã¢â‚¬â€ step-up verification (code or backup code)
+     disableMFA               Ã¢â‚¬â€ deactivate after TOTP confirmation
+     getMFAStatus             Ã¢â‚¬â€ read own enrollment status
+     regenerateBackupCodes    Ã¢â‚¬â€ replace backup codes after TOTP confirmation
 
    WebAuthn / Passkeys (4)
-     initiatePasskeyRegistration    — issue challenge for credential creation
-     verifyPasskeyRegistration      — store verified credential
-     initiatePasskeyAuthentication  — issue challenge for credential assertion
-     verifyPasskeyAuthentication    — validate assertion, update counter
+     initiatePasskeyRegistration    Ã¢â‚¬â€ issue challenge for credential creation
+     verifyPasskeyRegistration      Ã¢â‚¬â€ store verified credential
+     initiatePasskeyAuthentication  Ã¢â‚¬â€ issue challenge for credential assertion
+     verifyPasskeyAuthentication    Ã¢â‚¬â€ validate assertion, update counter
 
    Device Trust Registry (4)
-     registerDevice           — fingerprint → device record (new or update)
-     getDevices               — list all trusted devices for authenticated user
-     removeDevice             — soft-delete / revoke trust
-     updateDeviceTrustScore   — event-driven score adjustment
+     registerDevice           Ã¢â‚¬â€ fingerprint Ã¢â€ â€™ device record (new or update)
+     getDevices               Ã¢â‚¬â€ list all trusted devices for authenticated user
+     removeDevice             Ã¢â‚¬â€ soft-delete / revoke trust
+     updateDeviceTrustScore   Ã¢â‚¬â€ event-driven score adjustment
 
    Firestore Collections:
      securityMFA/{userId}
@@ -33,11 +33,11 @@
      securityAuditLog/{eventId}
 
    Security Standards:
-     · TOTP backup codes: SHA-256 hashed, never stored plaintext
-     · Passkey challenges: 32-byte random, 5-min TTL, single-use
-     · Device fingerprints: SHA-256 hashed, raw value never persisted
-     · All sensitive operations emit immutable audit log entries
-     · All functions enforce App Check
+     Ã‚Â· TOTP backup codes: SHA-256 hashed, never stored plaintext
+     Ã‚Â· Passkey challenges: 32-byte random, 5-min TTL, single-use
+     Ã‚Â· Device fingerprints: SHA-256 hashed, raw value never persisted
+     Ã‚Â· All sensitive operations emit immutable audit log entries
+     Ã‚Â· All functions enforce App Check
    ============================================================================ */
 'use strict';
 
@@ -45,11 +45,11 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin  = require('firebase-admin');
 const crypto = require('crypto');
 
-/* ── Firebase references ─────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Firebase references Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 const db         = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 
-/* ── Shared Cloud Function options ───────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Shared Cloud Function options Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 const CF_OPTIONS = {
   region:          'us-central1',
   enforceAppCheck: true,
@@ -57,7 +57,7 @@ const CF_OPTIONS = {
   timeoutSeconds:  60,
 };
 
-/* ── Role hierarchy ──────────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Role hierarchy Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 const ROLE = {
   cashier:    0,
   supervisor: 1,
@@ -67,7 +67,7 @@ const ROLE = {
   super_admin:5,
 };
 
-/* ── Collection name constants ───────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Collection name constants Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 const COL = {
   MFA:       'securityMFA',
   PASSKEYS:  'securityPasskeys',
@@ -75,15 +75,16 @@ const COL = {
   AUDIT:     'securityAuditLog',
 };
 
-/* ── Platform constants ──────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Platform constants Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 const RELYING_PARTY_ID   = 'mysokoni.co.ke';
 const RELYING_PARTY_NAME = 'SOKONI';
 const TOTP_ISSUER        = 'SOKONI';
-const TOTP_WINDOW        = 1;           // ±1 step (90-second tolerance)
+const TOTP_WINDOW        = 1;           // Ã‚Â±1 step (90-second tolerance)
 const CHALLENGE_TTL_MS   = 5 * 60 * 1000; // 5 minutes
 const ENROLLMENT_TTL_MS  = 10 * 60 * 1000; // 10 minutes
 const BACKUP_CODE_COUNT  = 8;
 const BACKUP_CODE_LENGTH = 8;
+const _h = {};
 
 /* ============================================================================
    SHARED HELPERS
@@ -114,7 +115,7 @@ function _requireRole(auth, minRole) {
 }
 
 /**
- * Structured logger — every call in this module emits JSON to Cloud Logging.
+ * Structured logger Ã¢â‚¬â€ every call in this module emits JSON to Cloud Logging.
  * Pass `audit: true` for audit-trail lines (severity NOTICE).
  */
 function _log(severity, message, extra = {}) {
@@ -126,7 +127,7 @@ function _log(severity, message, extra = {}) {
 
 /**
  * Write an immutable event to securityAuditLog.
- * Never throws — audit failures must not abort the primary operation.
+ * Never throws Ã¢â‚¬â€ audit failures must not abort the primary operation.
  */
 async function _audit(event, uid, extra = {}) {
   try {
@@ -164,7 +165,7 @@ function _err(msg, code = 'invalid-argument') {
 
 /**
  * Generate an HOTP value for the given secret buffer and counter.
- * Algorithm: RFC 4226 §5.3
+ * Algorithm: RFC 4226 Ã‚Â§5.3
  *
  * @param {Buffer} secret  - Raw key bytes
  * @param {number} counter - TOTP time-step counter
@@ -185,7 +186,7 @@ function _generateHOTP(secret, counter) {
 
 /**
  * Verify a 6-digit TOTP code against the stored Base64-encoded secret.
- * Tolerates clock drift of ±windowSize time-steps (30 s each).
+ * Tolerates clock drift of Ã‚Â±windowSize time-steps (30 s each).
  *
  * @param {string} secretBase64 - Secret stored as plain base64 string
  * @param {string|number} code  - 6-digit code to verify
@@ -209,7 +210,7 @@ function _verifyTOTP(secretBase64, code, windowSize = TOTP_WINDOW) {
 
 /**
  * Generate `count` random alphanumeric backup codes of `length` characters.
- * Returns { plaintext: string[], hashes: string[] } — store only hashes.
+ * Returns { plaintext: string[], hashes: string[] } Ã¢â‚¬â€ store only hashes.
  */
 function _generateBackupCodes(count = BACKUP_CODE_COUNT, length = BACKUP_CODE_LENGTH) {
   const plaintext = [];
@@ -229,7 +230,7 @@ function _generateBackupCodes(count = BACKUP_CODE_COUNT, length = BACKUP_CODE_LE
 
 /**
  * Check a submitted backup code against the stored hash array.
- * Returns { matched: boolean, index: number } — caller marks code used by index.
+ * Returns { matched: boolean, index: number } Ã¢â‚¬â€ caller marks code used by index.
  */
 function _checkBackupCode(submittedCode, storedHashes = []) {
   const normalised = String(submittedCode || '').toUpperCase().replace(/\s+/g, '');
@@ -239,10 +240,10 @@ function _checkBackupCode(submittedCode, storedHashes = []) {
 }
 
 /* ============================================================================
-   TOTP MFA — CLOUD FUNCTIONS
+   TOTP MFA Ã¢â‚¬â€ CLOUD FUNCTIONS
    ============================================================================ */
 
-/* ── 1. initiateTOTPEnrollment ────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 1. initiateTOTPEnrollment Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Generate a TOTP secret and store a pending enrollment record.
  * The client renders the returned qrUri as a QR code for authenticator apps.
@@ -250,18 +251,18 @@ function _checkBackupCode(submittedCode, storedHashes = []) {
  * Input:  none (uses auth.uid / auth.token.email)
  * Output: { secret: string, qrUri: string }
  */
-const initiateTOTPEnrollment = onCall(CF_OPTIONS, async ({ auth }) => {
+const initiateTOTPEnrollment = onCall(CF_OPTIONS, _h.initiateTOTPEnrollment = async ({ auth }) => {
   _requireAuth(auth);
   const uid   = auth.uid;
   const email = auth.token?.email || auth.token?.phone_number || uid;
 
-  /* Check for existing confirmed enrollment — require disableMFA first */
+  /* Check for existing confirmed enrollment Ã¢â‚¬â€ require disableMFA first */
   const existingSnap = await db.collection(COL.MFA).doc(uid).get();
   if (existingSnap.exists && existingSnap.data()?.pending === false) {
     _err('MFA is already enrolled. Disable it first before re-enrolling.', 'failed-precondition');
   }
 
-  /* Generate 20-byte (160-bit) TOTP secret — RFC 4226 recommended minimum */
+  /* Generate 20-byte (160-bit) TOTP secret Ã¢â‚¬â€ RFC 4226 recommended minimum */
   const secret = crypto.randomBytes(20).toString('base64');
 
   /* Store pending enrollment */
@@ -287,15 +288,15 @@ const initiateTOTPEnrollment = onCall(CF_OPTIONS, async ({ auth }) => {
   return { secret, qrUri };
 });
 
-/* ── 2. verifyTOTPEnrollment ──────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 2. verifyTOTPEnrollment Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Confirm a 6-digit code to activate TOTP enrollment.
- * Generates and returns 8 backup codes (shown ONCE — not stored in plaintext).
+ * Generates and returns 8 backup codes (shown ONCE Ã¢â‚¬â€ not stored in plaintext).
  *
  * Input:  { code: string }
  * Output: { success: true, backupCodes: string[] }
  */
-const verifyTOTPEnrollment = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const verifyTOTPEnrollment = onCall(CF_OPTIONS, _h.verifyTOTPEnrollment = async ({ data, auth }) => {
   _requireAuth(auth);
   const uid  = auth.uid;
   const code = String(data?.code || '').trim();
@@ -328,7 +329,7 @@ const verifyTOTPEnrollment = onCall(CF_OPTIONS, async ({ data, auth }) => {
     _err('Invalid TOTP code.', 'invalid-argument');
   }
 
-  /* Generate backup codes — store only hashes */
+  /* Generate backup codes Ã¢â‚¬â€ store only hashes */
   const { plaintext: backupCodes, hashes: backupCodeHashes } = _generateBackupCodes();
   const enrolledAt = new Date().toISOString();
 
@@ -348,19 +349,19 @@ const verifyTOTPEnrollment = onCall(CF_OPTIONS, async ({ data, auth }) => {
   _log('INFO', 'TOTP enrollment confirmed', { uid });
   await _audit('totp.enrolled', uid, { enrolledAt });
 
-  /* Return plaintext backup codes — only opportunity the user will see them */
+  /* Return plaintext backup codes Ã¢â‚¬â€ only opportunity the user will see them */
   return { success: true, backupCodes };
 });
 
-/* ── 3. verifyTOTP ────────────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 3. verifyTOTP Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
- * Step-up TOTP verification — accepts live code OR a backup recovery code.
+ * Step-up TOTP verification Ã¢â‚¬â€ accepts live code OR a backup recovery code.
  * Logs every attempt to the audit log.
  *
  * Input:  { code: string, challengeId?: string }
  * Output: { verified: boolean }
  */
-const verifyTOTP = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const verifyTOTP = onCall(CF_OPTIONS, _h.verifyTOTP = async ({ data, auth }) => {
   _requireAuth(auth);
   const uid  = auth.uid;
   const code = String(data?.code || '').trim();
@@ -380,7 +381,7 @@ const verifyTOTP = onCall(CF_OPTIONS, async ({ data, auth }) => {
     verified = true;
   }
 
-  /* 2. Try backup code (remaining hashes only — used hashes excluded) */
+  /* 2. Try backup code (remaining hashes only Ã¢â‚¬â€ used hashes excluded) */
   if (!verified) {
     const remainingHashes = (mfaData.backupCodeHashes || []).filter(
       (h, idx) => !(mfaData.backupCodesUsed || []).includes(idx)
@@ -419,14 +420,14 @@ const verifyTOTP = onCall(CF_OPTIONS, async ({ data, auth }) => {
   return { verified };
 });
 
-/* ── 4. disableMFA ────────────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 4. disableMFA Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Deactivate TOTP MFA after verifying the current code (step-up required).
  *
  * Input:  { currentCode: string }
  * Output: { disabled: true }
  */
-const disableMFA = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const disableMFA = onCall(CF_OPTIONS, _h.disableMFA = async ({ data, auth }) => {
   _requireAuth(auth);
   const uid         = auth.uid;
   const currentCode = String(data?.currentCode || '').trim();
@@ -466,7 +467,7 @@ const disableMFA = onCall(CF_OPTIONS, async ({ data, auth }) => {
   return { disabled: true };
 });
 
-/* ── 5. getMFAStatus ──────────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 5. getMFAStatus Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Return the authenticated user's current MFA enrollment status.
  * Does NOT expose secrets or backup code hashes.
@@ -475,7 +476,7 @@ const disableMFA = onCall(CF_OPTIONS, async ({ data, auth }) => {
  * Output: { enrolled: boolean, method: string|null, enrolledAt: string|null,
  *            backupCodesRemaining: number }
  */
-const getMFAStatus = onCall(CF_OPTIONS, async ({ auth }) => {
+const getMFAStatus = onCall(CF_OPTIONS, _h.getMFAStatus = async ({ auth }) => {
   _requireAuth(auth);
   const uid = auth.uid;
 
@@ -499,15 +500,15 @@ const getMFAStatus = onCall(CF_OPTIONS, async ({ auth }) => {
   };
 });
 
-/* ── 6. regenerateBackupCodes ─────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 6. regenerateBackupCodes Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Replace all backup codes after verifying current TOTP.
- * Returns new plaintext codes — shown ONCE.
+ * Returns new plaintext codes Ã¢â‚¬â€ shown ONCE.
  *
  * Input:  { code: string }
  * Output: { backupCodes: string[] }
  */
-const regenerateBackupCodes = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const regenerateBackupCodes = onCall(CF_OPTIONS, _h.regenerateBackupCodes = async ({ data, auth }) => {
   _requireAuth(auth);
   const uid  = auth.uid;
   const code = String(data?.code || '').trim();
@@ -543,7 +544,7 @@ const regenerateBackupCodes = onCall(CF_OPTIONS, async ({ data, auth }) => {
 });
 
 /* ============================================================================
-   WEBAUTHN / PASSKEYS — CLOUD FUNCTIONS
+   WEBAUTHN / PASSKEYS Ã¢â‚¬â€ CLOUD FUNCTIONS
    ============================================================================ */
 
 /**
@@ -573,7 +574,7 @@ function _base64urlEquals(a, b) {
   }
 }
 
-/* ── 7. initiatePasskeyRegistration ──────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 7. initiatePasskeyRegistration Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Generate a WebAuthn registration challenge.
  * The client passes this to `navigator.credentials.create()`.
@@ -584,7 +585,7 @@ function _base64urlEquals(a, b) {
  *   userId, userName, userDisplayName
  * }
  */
-const initiatePasskeyRegistration = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const initiatePasskeyRegistration = onCall(CF_OPTIONS, _h.initiatePasskeyRegistration = async ({ data, auth }) => {
   _requireAuth(auth);
   const uid         = auth.uid;
   const deviceLabel = _sanitize(data?.deviceLabel || 'My Device', 64);
@@ -625,7 +626,7 @@ const initiatePasskeyRegistration = onCall(CF_OPTIONS, async ({ data, auth }) =>
   };
 });
 
-/* ── 8. verifyPasskeyRegistration ─────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 8. verifyPasskeyRegistration Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Verify the credential created by `navigator.credentials.create()` and store it.
  *
@@ -636,7 +637,7 @@ const initiatePasskeyRegistration = onCall(CF_OPTIONS, async ({ data, auth }) =>
  * }
  * Output: { registered: true, credentialId }
  */
-const verifyPasskeyRegistration = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const verifyPasskeyRegistration = onCall(CF_OPTIONS, _h.verifyPasskeyRegistration = async ({ data, auth }) => {
   _requireAuth(auth);
   const uid = auth.uid;
 
@@ -716,7 +717,7 @@ const verifyPasskeyRegistration = onCall(CF_OPTIONS, async ({ data, auth }) => {
   return { registered: true, credentialId };
 });
 
-/* ── 9. initiatePasskeyAuthentication ────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 9. initiatePasskeyAuthentication Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Generate a WebAuthn authentication (assertion) challenge.
  * The client passes this to `navigator.credentials.get()`.
@@ -727,7 +728,7 @@ const verifyPasskeyRegistration = onCall(CF_OPTIONS, async ({ data, auth }) => {
  *   allowCredentials: [{ id, type }]
  * }
  */
-const initiatePasskeyAuthentication = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const initiatePasskeyAuthentication = onCall(CF_OPTIONS, _h.initiatePasskeyAuthentication = async ({ data, auth }) => {
   _requireAuth(auth);
   /* For step-up authentication the userId is always self */
   const uid = auth.uid;
@@ -771,7 +772,7 @@ const initiatePasskeyAuthentication = onCall(CF_OPTIONS, async ({ data, auth }) 
   return { challengeId, challenge, allowCredentials };
 });
 
-/* ── 10. verifyPasskeyAuthentication ─────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 10. verifyPasskeyAuthentication Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Verify a WebAuthn assertion from `navigator.credentials.get()`.
  * Enforces counter monotonicity to prevent credential cloning / replay.
@@ -782,7 +783,7 @@ const initiatePasskeyAuthentication = onCall(CF_OPTIONS, async ({ data, auth }) 
  * }
  * Output: { verified: true, credentialId }
  */
-const verifyPasskeyAuthentication = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const verifyPasskeyAuthentication = onCall(CF_OPTIONS, _h.verifyPasskeyAuthentication = async ({ data, auth }) => {
   _requireAuth(auth);
   const uid = auth.uid;
 
@@ -868,7 +869,7 @@ const verifyPasskeyAuthentication = onCall(CF_OPTIONS, async ({ data, auth }) =>
       storedCounter:   credData.counter,
       incomingCounter,
     });
-    _err('Counter regression detected — possible credential cloning or replay.', 'permission-denied');
+    _err('Counter regression detected Ã¢â‚¬â€ possible credential cloning or replay.', 'permission-denied');
   }
 
   /* Mark challenge consumed and update credential metadata atomically */
@@ -887,13 +888,13 @@ const verifyPasskeyAuthentication = onCall(CF_OPTIONS, async ({ data, auth }) =>
 });
 
 /* ============================================================================
-   DEVICE TRUST REGISTRY — CLOUD FUNCTIONS
+   DEVICE TRUST REGISTRY Ã¢â‚¬â€ CLOUD FUNCTIONS
    ============================================================================ */
 
-/* ── 11. registerDevice ───────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 11. registerDevice Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Register or update a device fingerprint in the trust registry.
- * Raw fingerprint is hashed — never stored plaintext.
+ * Raw fingerprint is hashed Ã¢â‚¬â€ never stored plaintext.
  *
  * Input:  {
  *   fingerprint, userAgent, platform,
@@ -901,7 +902,7 @@ const verifyPasskeyAuthentication = onCall(CF_OPTIONS, async ({ data, auth }) =>
  * }
  * Output: { deviceId, trusted, trustScore, isNew }
  */
-const registerDevice = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const registerDevice = onCall(CF_OPTIONS, _h.registerDevice = async ({ data, auth }) => {
   _requireAuth(auth);
   const uid = auth.uid;
 
@@ -917,7 +918,7 @@ const registerDevice = onCall(CF_OPTIONS, async ({ data, auth }) => {
 
   if (!fingerprint) _err('fingerprint is required.');
 
-  /* Hash fingerprint — raw value is never stored */
+  /* Hash fingerprint Ã¢â‚¬â€ raw value is never stored */
   const fingerprintHash = crypto
     .createHash('sha256')
     .update(String(fingerprint))
@@ -927,7 +928,7 @@ const registerDevice = onCall(CF_OPTIONS, async ({ data, auth }) => {
   const deviceSnap = await deviceRef.get();
 
   if (deviceSnap.exists) {
-    /* Known device — bump lastSeenAt and loginCount */
+    /* Known device Ã¢â‚¬â€ bump lastSeenAt and loginCount */
     const existing = deviceSnap.data();
 
     /* Skip updates for revoked devices (keep audit trail intact) */
@@ -996,7 +997,7 @@ const registerDevice = onCall(CF_OPTIONS, async ({ data, auth }) => {
   };
 });
 
-/* ── 12. getDevices ───────────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 12. getDevices Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * List all device records for the authenticated user.
  * Excludes internal fields (uid, raw fingerprint never stored anyway).
@@ -1004,7 +1005,7 @@ const registerDevice = onCall(CF_OPTIONS, async ({ data, auth }) => {
  * Input:  none
  * Output: { devices: DeviceRecord[] }
  */
-const getDevices = onCall(CF_OPTIONS, async ({ auth }) => {
+const getDevices = onCall(CF_OPTIONS, _h.getDevices = async ({ auth }) => {
   _requireAuth(auth);
   const uid = auth.uid;
 
@@ -1032,7 +1033,7 @@ const getDevices = onCall(CF_OPTIONS, async ({ auth }) => {
   return { devices };
 });
 
-/* ── 13. removeDevice ─────────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 13. removeDevice Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Soft-delete a device: revoke trust while preserving audit record.
  * Verifies ownership (device must belong to authenticated user).
@@ -1040,7 +1041,7 @@ const getDevices = onCall(CF_OPTIONS, async ({ auth }) => {
  * Input:  { deviceId: string }
  * Output: { removed: true }
  */
-const removeDevice = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const removeDevice = onCall(CF_OPTIONS, _h.removeDevice = async ({ data, auth }) => {
   _requireAuth(auth);
   const uid      = auth.uid;
   const deviceId = String(data?.deviceId || '').trim();
@@ -1053,7 +1054,7 @@ const removeDevice = onCall(CF_OPTIONS, async ({ data, auth }) => {
     _err('Device not found.', 'not-found');
   }
 
-  /* Ownership is implicitly guaranteed — device is stored under /uid/devices/{deviceId} */
+  /* Ownership is implicitly guaranteed Ã¢â‚¬â€ device is stored under /uid/devices/{deviceId} */
   const existing = deviceSnap.data();
   if (existing.uid && existing.uid !== uid) {
     /* Sanity check against stored uid field (defence-in-depth) */
@@ -1077,7 +1078,7 @@ const removeDevice = onCall(CF_OPTIONS, async ({ data, auth }) => {
   return { removed: true };
 });
 
-/* ── 14. updateDeviceTrustScore ──────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ 14. updateDeviceTrustScore Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 /**
  * Adjust a device's trust score in response to a security event.
  *
@@ -1093,7 +1094,7 @@ const removeDevice = onCall(CF_OPTIONS, async ({ data, auth }) => {
  * Input:  { deviceId: string, event: string }
  * Output: { deviceId, trustScore, trusted }
  */
-const updateDeviceTrustScore = onCall(CF_OPTIONS, async ({ data, auth }) => {
+const updateDeviceTrustScore = onCall(CF_OPTIONS, _h.updateDeviceTrustScore = async ({ data, auth }) => {
   _requireAuth(auth);
   const uid      = auth.uid;
   const deviceId = String(data?.deviceId || '').trim();
@@ -1154,6 +1155,7 @@ const updateDeviceTrustScore = onCall(CF_OPTIONS, async ({ data, auth }) => {
    EXPORTS
    ============================================================================ */
 module.exports = {
+  _h,
   initiateTOTPEnrollment,
   verifyTOTPEnrollment,
   verifyTOTP,

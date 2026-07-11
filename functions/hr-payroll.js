@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * @fileoverview SOKONI HR & Payroll Engine — Kenya-specific Firebase Cloud Functions
+ * @fileoverview SOKONI HR & Payroll Engine â€” Kenya-specific Firebase Cloud Functions
  * @module hr-payroll
  * @description
  *   Provides 12 Cloud Functions covering the full HR & Payroll lifecycle:
@@ -14,7 +14,7 @@
  *   All statutory deductions follow Kenya Finance Act 2024/2025 rates:
  *   PAYE (progressive), NHIF, NSSF (Tier I + II), Housing Levy.
  *
- * @requires PAYROLL_ENCRYPTION_KEY — AES-256-GCM key (hex) stored in Secret Manager
+ * @requires PAYROLL_ENCRYPTION_KEY â€” AES-256-GCM key (hex) stored in Secret Manager
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
@@ -29,8 +29,9 @@ const OPT = { region: REGION, enforceAppCheck: true };
 
 /** AES-256-GCM encryption key for bank account details */
 const PAYROLL_ENCRYPTION_KEY = defineSecret('PAYROLL_ENCRYPTION_KEY');
+const _h = {};
 
-// ─── Kenya Statutory Deduction Tables (Finance Act 2024/2025) ───────────────
+// â”€â”€â”€ Kenya Statutory Deduction Tables (Finance Act 2024/2025) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * PAYE progressive tax bands (monthly gross, KES).
@@ -48,7 +49,7 @@ const PAYE_BANDS = [
 const PAYE_RELIEF = 2400;
 
 /**
- * NHIF contribution lookup table (monthly gross → flat contribution, KES).
+ * NHIF contribution lookup table (monthly gross â†’ flat contribution, KES).
  */
 const NHIF_BANDS = [
   { max: 5999,     amount: 150  },
@@ -79,7 +80,7 @@ const NSSF_RATE = 0.06;
 /** Affordable Housing Levy rate (employee & employer each) */
 const HOUSING_LEVY_RATE = 0.015;
 
-// ─── Statutory Deduction Helpers ─────────────────────────────────────────────
+// â”€â”€â”€ Statutory Deduction Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Calculate NHIF contribution from gross salary.
@@ -184,7 +185,7 @@ function calculateDeductions(grossSalary) {
   };
 }
 
-// ─── Encryption Helpers ───────────────────────────────────────────────────────
+// â”€â”€â”€ Encryption Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Encrypt plaintext using AES-256-GCM.
@@ -230,10 +231,10 @@ function decryptData(encryptedJson, keyHex) {
   return decrypted.toString('utf8');
 }
 
-// ─── Date / Calendar Helpers ──────────────────────────────────────────────────
+// â”€â”€â”€ Date / Calendar Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * Count working days (Monday–Friday) in a given month.
+ * Count working days (Mondayâ€“Friday) in a given month.
  * @param {string} yearMonth - Format 'YYYY-MM'
  * @returns {number} Number of weekdays in that month
  */
@@ -256,11 +257,11 @@ function getNairobiDateString() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' });
 }
 
-// ─── Auth Guard Helpers ───────────────────────────────────────────────────────
+// â”€â”€â”€ Auth Guard Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Assert the caller has admin or manager role.
- * @param {object} auth - request.auth from onCall
+ * @param {object} auth - req.auth from onCall
  * @throws {HttpsError} PERMISSION_DENIED if not admin or manager
  */
 function assertAdminOrManager(auth) {
@@ -277,7 +278,7 @@ function assertAdminOrManager(auth) {
 
 /**
  * Assert the caller has admin role.
- * @param {object} auth - request.auth from onCall
+ * @param {object} auth - req.auth from onCall
  * @throws {HttpsError} PERMISSION_DENIED if not admin
  */
 function assertAdmin(auth) {
@@ -289,7 +290,7 @@ function assertAdmin(auth) {
   }
 }
 
-// ─── Cloud Function 1: addStaffMember ────────────────────────────────────────
+// â”€â”€â”€ Cloud Function 1: addStaffMember â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Add a new staff member to the HR registry.
@@ -311,8 +312,8 @@ function assertAdmin(auth) {
  */
 const addStaffMember = onCall(
   { ...OPT, secrets: [PAYROLL_ENCRYPTION_KEY] },
-  async (request) => {
-    assertAdminOrManager(request.auth);
+  _h.addStaffMember = async (req) => {
+    assertAdminOrManager(req.auth);
 
     const {
       merchantId,
@@ -326,9 +327,9 @@ const addStaffMember = onCall(
       kraPin,
       phone,
       email,
-    } = request.data;
+    } = req.data;
 
-    // ── Input validation ──
+    // â”€â”€ Input validation â”€â”€
     if (!merchantId || !name || !employeeNumber || !department || !position) {
       throw new HttpsError(
         'invalid-argument',
@@ -348,7 +349,7 @@ const addStaffMember = onCall(
       );
     }
 
-    // ── Duplicate employee number check ──
+    // â”€â”€ Duplicate employee number check â”€â”€
     const dupSnap = await db
       .collection('hrStaff')
       .where('merchantId', '==', merchantId)
@@ -362,7 +363,7 @@ const addStaffMember = onCall(
       );
     }
 
-    // ── Encrypt bank account details ──
+    // â”€â”€ Encrypt bank account details â”€â”€
     let encryptedBankAccount = null;
     if (bankAccount && typeof bankAccount === 'object') {
       const keyHex = PAYROLL_ENCRYPTION_KEY.value();
@@ -389,14 +390,14 @@ const addStaffMember = onCall(
       status: 'active',
       uid: null, // linked once employee creates their app account
       createdAt: F.serverTimestamp(),
-      createdBy: request.auth.uid,
+      createdBy: req.auth.uid,
     });
 
     return { staffId, message: 'Staff member added successfully.' };
   }
 );
 
-// ─── Cloud Function 2: recordAttendance ──────────────────────────────────────
+// â”€â”€â”€ Cloud Function 2: recordAttendance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Record clock-in or clock-out for a staff member.
@@ -408,12 +409,12 @@ const addStaffMember = onCall(
  * @param {string} [data.timestamp] - ISO timestamp (defaults to now)
  * @returns {{ success: boolean, docId: string }}
  */
-const recordAttendance = onCall(OPT, async (request) => {
-  if (!request.auth) {
+const recordAttendance = onCall(OPT, _h.recordAttendance = async (req) => {
+  if (!req.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
 
-  const { merchantId, staffId, action, timestamp } = request.data;
+  const { merchantId, staffId, action, timestamp } = req.data;
 
   if (!merchantId || !staffId) {
     throw new HttpsError(
@@ -479,7 +480,7 @@ const recordAttendance = onCall(OPT, async (request) => {
   return { success: true, docId };
 });
 
-// ─── Cloud Function 3: getAttendanceReport ───────────────────────────────────
+// â”€â”€â”€ Cloud Function 3: getAttendanceReport â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Aggregate attendance data for a merchant over a given month.
@@ -489,10 +490,10 @@ const recordAttendance = onCall(OPT, async (request) => {
  * @param {string} data.month - Format 'YYYY-MM'
  * @returns {{ month: string, records: Array }}
  */
-const getAttendanceReport = onCall(OPT, async (request) => {
-  assertAdminOrManager(request.auth);
+const getAttendanceReport = onCall(OPT, _h.getAttendanceReport = async (req) => {
+  assertAdminOrManager(req.auth);
 
-  const { merchantId, month } = request.data;
+  const { merchantId, month } = req.data;
   if (!merchantId || !month || !/^\d{4}-\d{2}$/.test(month)) {
     throw new HttpsError(
       'invalid-argument',
@@ -538,7 +539,7 @@ const getAttendanceReport = onCall(OPT, async (request) => {
   return { month, workingDays, records };
 });
 
-// ─── Cloud Function 4: runPayroll ─────────────────────────────────────────────
+// â”€â”€â”€ Cloud Function 4: runPayroll â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Process payroll for all active staff in a merchant for a given period.
@@ -552,10 +553,10 @@ const getAttendanceReport = onCall(OPT, async (request) => {
  */
 const runPayroll = onCall(
   { ...OPT, secrets: [PAYROLL_ENCRYPTION_KEY] },
-  async (request) => {
-    assertAdminOrManager(request.auth);
+  _h.runPayroll = async (req) => {
+    assertAdminOrManager(req.auth);
 
-    const { merchantId, period } = request.data;
+    const { merchantId, period } = req.data;
     if (!merchantId || !period || !/^\d{4}-\d{2}$/.test(period)) {
       throw new HttpsError(
         'invalid-argument',
@@ -563,7 +564,7 @@ const runPayroll = onCall(
       );
     }
 
-    // ── Guard: prevent duplicate runs ──
+    // â”€â”€ Guard: prevent duplicate runs â”€â”€
     const existingRun = await db
       .collection('hrPayrollRuns')
       .where('merchantId', '==', merchantId)
@@ -577,7 +578,7 @@ const runPayroll = onCall(
       );
     }
 
-    // ── Fetch active staff ──
+    // â”€â”€ Fetch active staff â”€â”€
     const staffSnap = await db
       .collection('hrStaff')
       .where('merchantId', '==', merchantId)
@@ -588,7 +589,7 @@ const runPayroll = onCall(
       throw new HttpsError('not-found', 'No active staff found for this merchant.');
     }
 
-    // ── Fetch attendance for the period ──
+    // â”€â”€ Fetch attendance for the period â”€â”€
     const monthStart = `${period}-01`;
     const monthEnd = `${period}-31`;
     const attendanceSnap = await db
@@ -598,7 +599,7 @@ const runPayroll = onCall(
       .where('date', '<=', monthEnd)
       .get();
 
-    // Build attendance lookup: staffId → daysWorked
+    // Build attendance lookup: staffId â†’ daysWorked
     const attendanceMap = {};
     attendanceSnap.forEach((doc) => {
       const d = doc.data();
@@ -694,7 +695,7 @@ const runPayroll = onCall(
       ),
       workingDays,
       staffCount,
-      createdBy: request.auth.uid,
+      createdBy: req.auth.uid,
       createdAt: F.serverTimestamp(),
     });
 
@@ -718,7 +719,7 @@ const runPayroll = onCall(
   }
 );
 
-// ─── Cloud Function 5: approvePayrollRun ─────────────────────────────────────
+// â”€â”€â”€ Cloud Function 5: approvePayrollRun â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Approve a draft payroll run (admin only).
@@ -727,10 +728,10 @@ const runPayroll = onCall(
  * @param {string} data.runId
  * @returns {{ runId: string, status: 'approved' }}
  */
-const approvePayrollRun = onCall(OPT, async (request) => {
-  assertAdmin(request.auth);
+const approvePayrollRun = onCall(OPT, _h.approvePayrollRun = async (req) => {
+  assertAdmin(req.auth);
 
-  const { runId } = request.data;
+  const { runId } = req.data;
   if (!runId) {
     throw new HttpsError('invalid-argument', 'runId is required.');
   }
@@ -750,14 +751,14 @@ const approvePayrollRun = onCall(OPT, async (request) => {
 
   await runRef.update({
     status: 'approved',
-    approvedBy: request.auth.uid,
+    approvedBy: req.auth.uid,
     approvedAt: F.serverTimestamp(),
   });
 
   return { runId, status: 'approved' };
 });
 
-// ─── Cloud Function 6: getPayslip ────────────────────────────────────────────
+// â”€â”€â”€ Cloud Function 6: getPayslip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Retrieve a payslip for a staff member (own record or admin/manager).
@@ -767,12 +768,12 @@ const approvePayrollRun = onCall(OPT, async (request) => {
  * @param {string} data.staffId
  * @returns {object} Payslip data
  */
-const getPayslip = onCall(OPT, async (request) => {
-  if (!request.auth) {
+const getPayslip = onCall(OPT, _h.getPayslip = async (req) => {
+  if (!req.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
 
-  const { runId, staffId } = request.data;
+  const { runId, staffId } = req.data;
   if (!runId || !staffId) {
     throw new HttpsError('invalid-argument', 'runId and staffId are required.');
   }
@@ -784,9 +785,9 @@ const getPayslip = onCall(OPT, async (request) => {
   }
 
   const staff = staffSnap.data();
-  const callerUid = request.auth.uid;
+  const callerUid = req.auth.uid;
   const isOwner = staff.uid && staff.uid === callerUid;
-  const isPrivileged = request.auth.token.admin || request.auth.token.manager;
+  const isPrivileged = req.auth.token.admin || req.auth.token.manager;
 
   if (!isOwner && !isPrivileged) {
     throw new HttpsError(
@@ -807,7 +808,7 @@ const getPayslip = onCall(OPT, async (request) => {
   return payslipSnap.data();
 });
 
-// ─── Cloud Function 7: getPayrollSummary ─────────────────────────────────────
+// â”€â”€â”€ Cloud Function 7: getPayrollSummary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Get full payroll run summary including all payslips.
@@ -817,10 +818,10 @@ const getPayslip = onCall(OPT, async (request) => {
  * @param {string} data.period - 'YYYY-MM'
  * @returns {{ run: object, payslips: Array }}
  */
-const getPayrollSummary = onCall(OPT, async (request) => {
-  assertAdminOrManager(request.auth);
+const getPayrollSummary = onCall(OPT, _h.getPayrollSummary = async (req) => {
+  assertAdminOrManager(req.auth);
 
-  const { merchantId, period } = request.data;
+  const { merchantId, period } = req.data;
   if (!merchantId || !period) {
     throw new HttpsError(
       'invalid-argument',
@@ -855,7 +856,7 @@ const getPayrollSummary = onCall(OPT, async (request) => {
   return { run: { id: runId, ...runDoc.data() }, payslips };
 });
 
-// ─── Cloud Function 8: requestLeave ──────────────────────────────────────────
+// â”€â”€â”€ Cloud Function 8: requestLeave â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Submit a leave request for a staff member.
@@ -869,14 +870,14 @@ const getPayrollSummary = onCall(OPT, async (request) => {
  * @param {string} data.reason
  * @returns {{ leaveId: string, leaveDays: number }}
  */
-const requestLeave = onCall(OPT, async (request) => {
-  if (!request.auth) {
+const requestLeave = onCall(OPT, _h.requestLeave = async (req) => {
+  if (!req.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
 
   const ALLOWED_TYPES = ['annual', 'sick', 'maternity', 'paternity', 'unpaid'];
   const { staffId, merchantId, type, startDate, endDate, reason } =
-    request.data;
+    req.data;
 
   if (!staffId || !merchantId || !type || !startDate || !endDate) {
     throw new HttpsError(
@@ -923,7 +924,7 @@ const requestLeave = onCall(OPT, async (request) => {
     reason: reason || '',
     status: 'pending',
     requestedAt: F.serverTimestamp(),
-    requestedBy: request.auth.uid,
+    requestedBy: req.auth.uid,
   });
 
   // Notify manager/admin
@@ -951,10 +952,10 @@ const requestLeave = onCall(OPT, async (request) => {
   return { leaveId, leaveDays };
 });
 
-// ─── Cloud Function 9: approveLeave ──────────────────────────────────────────
+// â”€â”€â”€ Cloud Function 9: approveLeave â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
- * Approve or reject a pending leave request.
+ * Approve or reject a pending leave req.
  *
  * @param {object} data
  * @param {string} data.leaveId
@@ -962,10 +963,10 @@ const requestLeave = onCall(OPT, async (request) => {
  * @param {string} [data.notes]
  * @returns {{ leaveId: string, status: 'approved'|'rejected' }}
  */
-const approveLeave = onCall(OPT, async (request) => {
-  assertAdminOrManager(request.auth);
+const approveLeave = onCall(OPT, _h.approveLeave = async (req) => {
+  assertAdminOrManager(req.auth);
 
-  const { leaveId, approved, notes } = request.data;
+  const { leaveId, approved, notes } = req.data;
   if (!leaveId || typeof approved !== 'boolean') {
     throw new HttpsError(
       'invalid-argument',
@@ -993,7 +994,7 @@ const approveLeave = onCall(OPT, async (request) => {
 
   batch.update(leaveRef, {
     status: newStatus,
-    approvedBy: request.auth.uid,
+    approvedBy: req.auth.uid,
     approvedAt: F.serverTimestamp(),
     notes: notes || '',
   });
@@ -1005,7 +1006,7 @@ const approveLeave = onCall(OPT, async (request) => {
     staffId: leaveData.staffId,
     type: 'leave_decision',
     title: `Leave Request ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
-    body: `Your ${leaveData.type} leave request (${leaveData.leaveDays} day${leaveData.leaveDays !== 1 ? 's' : ''}, ${leaveData.startDate} – ${leaveData.endDate}) has been ${newStatus}.`,
+    body: `Your ${leaveData.type} leave request (${leaveData.leaveDays} day${leaveData.leaveDays !== 1 ? 's' : ''}, ${leaveData.startDate} â€“ ${leaveData.endDate}) has been ${newStatus}.`,
     notes: notes || '',
     read: false,
     createdAt: F.serverTimestamp(),
@@ -1016,7 +1017,7 @@ const approveLeave = onCall(OPT, async (request) => {
   return { leaveId, status: newStatus };
 });
 
-// ─── Cloud Function 10: assignTraining ───────────────────────────────────────
+// â”€â”€â”€ Cloud Function 10: assignTraining â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Create and assign a training module to one or more staff members.
@@ -1029,10 +1030,10 @@ const approveLeave = onCall(OPT, async (request) => {
  * @param {string} data.dueDate - ISO date string
  * @returns {{ trainingId: string, assignedCount: number }}
  */
-const assignTraining = onCall(OPT, async (request) => {
-  assertAdminOrManager(request.auth);
+const assignTraining = onCall(OPT, _h.assignTraining = async (req) => {
+  assertAdminOrManager(req.auth);
 
-  const { merchantId, title, description, assignedTo, dueDate } = request.data;
+  const { merchantId, title, description, assignedTo, dueDate } = req.data;
 
   if (!merchantId || !title || !dueDate) {
     throw new HttpsError(
@@ -1065,7 +1066,7 @@ const assignTraining = onCall(OPT, async (request) => {
     completedBy: [],
     dueDate,
     status: 'active',
-    createdBy: request.auth.uid,
+    createdBy: req.auth.uid,
     createdAt: F.serverTimestamp(),
   });
 
@@ -1088,7 +1089,7 @@ const assignTraining = onCall(OPT, async (request) => {
   return { trainingId, assignedCount: assignedTo.length };
 });
 
-// ─── Cloud Function 11: markTrainingComplete ─────────────────────────────────
+// â”€â”€â”€ Cloud Function 11: markTrainingComplete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Mark a staff member's training as completed.
@@ -1099,12 +1100,12 @@ const assignTraining = onCall(OPT, async (request) => {
  * @param {string} data.staffId
  * @returns {{ trainingId: string, staffId: string, allCompleted: boolean }}
  */
-const markTrainingComplete = onCall(OPT, async (request) => {
-  if (!request.auth) {
+const markTrainingComplete = onCall(OPT, _h.markTrainingComplete = async (req) => {
+  if (!req.auth) {
     throw new HttpsError('unauthenticated', 'Authentication required.');
   }
 
-  const { trainingId, staffId } = request.data;
+  const { trainingId, staffId } = req.data;
   if (!trainingId || !staffId) {
     throw new HttpsError(
       'invalid-argument',
@@ -1132,8 +1133,8 @@ const markTrainingComplete = onCall(OPT, async (request) => {
   const staffSnap = await db.collection('hrStaff').doc(staffId).get();
   if (staffSnap.exists) {
     const staff = staffSnap.data();
-    const isOwner = staff.uid && staff.uid === request.auth.uid;
-    const isPrivileged = request.auth.token.admin || request.auth.token.manager;
+    const isOwner = staff.uid && staff.uid === req.auth.uid;
+    const isPrivileged = req.auth.token.admin || req.auth.token.manager;
     if (!isOwner && !isPrivileged) {
       throw new HttpsError(
         'permission-denied',
@@ -1169,7 +1170,7 @@ const markTrainingComplete = onCall(OPT, async (request) => {
   return { trainingId, staffId, allCompleted };
 });
 
-// ─── Cloud Function 12: getStaffDashboard ────────────────────────────────────
+// â”€â”€â”€ Cloud Function 12: getStaffDashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Return aggregated HR dashboard statistics for a merchant.
@@ -1185,17 +1186,17 @@ const markTrainingComplete = onCall(OPT, async (request) => {
  *   today: string
  * }}
  */
-const getStaffDashboard = onCall(OPT, async (request) => {
-  assertAdminOrManager(request.auth);
+const getStaffDashboard = onCall(OPT, _h.getStaffDashboard = async (req) => {
+  assertAdminOrManager(req.auth);
 
-  const { merchantId } = request.data;
+  const { merchantId } = req.data;
   if (!merchantId) {
     throw new HttpsError('invalid-argument', 'merchantId is required.');
   }
 
   const today = getNairobiDateString();
 
-  // ── Fire all queries in parallel ──
+  // â”€â”€ Fire all queries in parallel â”€â”€
   const [
     activeStaffSnap,
     attendanceTodaySnap,
@@ -1255,9 +1256,10 @@ const getStaffDashboard = onCall(OPT, async (request) => {
   };
 });
 
-// ─── Module Exports ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Module Exports â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 module.exports = {
+  _h,
   addStaffMember,
   recordAttendance,
   getAttendanceReport,

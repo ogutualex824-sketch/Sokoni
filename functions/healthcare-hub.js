@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Healthcare Hub v1.0 — SOKONI Platform
+ * Healthcare Hub v1.0 â€” SOKONI Platform
  * Provider registration, appointment booking, health records, prescriptions
  * 15 Cloud Functions | enforceAppCheck: true | region: us-central1
  */
@@ -13,6 +13,7 @@ const CF_OPTS = { region: REGION, enforceAppCheck: true };
 const db = () => admin.firestore();
 const auth = () => admin.auth();
 const FieldValue = admin.firestore.FieldValue;
+exports._h = {};
 
 function requireAuth(req) {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Authentication required');
@@ -30,8 +31,8 @@ const SPECIALIZATIONS = [
   'nutrition', 'pharmacy', 'laboratory', 'radiology', 'oncology', 'other',
 ];
 
-/* ── 1. registerHealthProvider ── */
-exports.registerHealthProvider = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 1. registerHealthProvider â”€â”€ */
+exports.registerHealthProvider = onCall(CF_OPTS, exports._h.registerHealthProvider = async (req) => {
   const uid = requireAuth(req);
   const { name, specialization, bio, qualifications, licenseNumber, clinic,
           address, city, county, phone, consultationFee, currency,
@@ -72,8 +73,8 @@ exports.registerHealthProvider = onCall(CF_OPTS, async (req) => {
   return { providerId: uid, status: 'pending' };
 });
 
-/* ── 2. approveHealthProvider ── */
-exports.approveHealthProvider = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 2. approveHealthProvider â”€â”€ */
+exports.approveHealthProvider = onCall(CF_OPTS, exports._h.approveHealthProvider = async (req) => {
   const uid = requireAuth(req);
   const role = await getRole(uid);
   if (role < 4) throw new HttpsError('permission-denied', 'Admin required');
@@ -93,8 +94,8 @@ exports.approveHealthProvider = onCall(CF_OPTS, async (req) => {
   return { ok: true };
 });
 
-/* ── 3. getHealthProviders ── */
-exports.getHealthProviders = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 3. getHealthProviders â”€â”€ */
+exports.getHealthProviders = onCall(CF_OPTS, exports._h.getHealthProviders = async (req) => {
   const { specialization, city, isOnline, limit = 24, cursor } = req.data;
 
   let q = db().collection('healthProviders')
@@ -136,8 +137,8 @@ exports.getHealthProviders = onCall(CF_OPTS, async (req) => {
   return { providers, nextCursor };
 });
 
-/* ── 4. getHealthProvider ── */
-exports.getHealthProvider = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 4. getHealthProvider â”€â”€ */
+exports.getHealthProvider = onCall(CF_OPTS, exports._h.getHealthProvider = async (req) => {
   const { providerId } = req.data;
   if (!providerId) throw new HttpsError('invalid-argument', 'providerId required');
   const snap = await db().collection('healthProviders').doc(providerId).get();
@@ -145,8 +146,8 @@ exports.getHealthProvider = onCall(CF_OPTS, async (req) => {
   return snap.data();
 });
 
-/* ── 5. bookAppointment ── */
-exports.bookAppointment = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 5. bookAppointment â”€â”€ */
+exports.bookAppointment = onCall(CF_OPTS, exports._h.bookAppointment = async (req) => {
   const uid = requireAuth(req);
   const { providerId, dateTime, reason, isOnline, idempotencyKey } = req.data;
   if (!providerId || !dateTime || !idempotencyKey) {
@@ -164,7 +165,7 @@ exports.bookAppointment = onCall(CF_OPTS, async (req) => {
   const prov = provSnap.data();
   if (new Date(dateTime) < new Date()) throw new HttpsError('invalid-argument', 'Appointment must be in the future');
 
-  // Slot conflict check (same provider ± 30 min)
+  // Slot conflict check (same provider Â± 30 min)
   const apptTime = new Date(dateTime);
   const slotStart = new Date(apptTime.getTime() - 30 * 60000).toISOString();
   const slotEnd = new Date(apptTime.getTime() + 30 * 60000).toISOString();
@@ -197,8 +198,8 @@ exports.bookAppointment = onCall(CF_OPTS, async (req) => {
   return { appointmentId: ref.id, status: 'pending' };
 });
 
-/* ── 6. getMyAppointments (patient) ── */
-exports.getMyAppointments = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 6. getMyAppointments (patient) â”€â”€ */
+exports.getMyAppointments = onCall(CF_OPTS, exports._h.getMyAppointments = async (req) => {
   const uid = requireAuth(req);
   const { status, limit = 20 } = req.data;
   let q = db().collection('healthAppointments')
@@ -210,8 +211,8 @@ exports.getMyAppointments = onCall(CF_OPTS, async (req) => {
   return { appointments: snap.docs.map(d => d.data()) };
 });
 
-/* ── 7. getProviderAppointments ── */
-exports.getProviderAppointments = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 7. getProviderAppointments â”€â”€ */
+exports.getProviderAppointments = onCall(CF_OPTS, exports._h.getProviderAppointments = async (req) => {
   const uid = requireAuth(req);
   const { date, status, limit = 50 } = req.data;
   const role = await getRole(uid);
@@ -230,8 +231,8 @@ exports.getProviderAppointments = onCall(CF_OPTS, async (req) => {
   return { appointments: appts };
 });
 
-/* ── 8. updateAppointmentStatus ── */
-exports.updateAppointmentStatus = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 8. updateAppointmentStatus â”€â”€ */
+exports.updateAppointmentStatus = onCall(CF_OPTS, exports._h.updateAppointmentStatus = async (req) => {
   const uid = requireAuth(req);
   const { appointmentId, status, notes } = req.data;
   if (!appointmentId || !status) throw new HttpsError('invalid-argument', 'appointmentId and status required');
@@ -264,8 +265,8 @@ exports.updateAppointmentStatus = onCall(CF_OPTS, async (req) => {
   return { ok: true };
 });
 
-/* ── 9. createHealthRecord (provider only) ── */
-exports.createHealthRecord = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 9. createHealthRecord (provider only) â”€â”€ */
+exports.createHealthRecord = onCall(CF_OPTS, exports._h.createHealthRecord = async (req) => {
   const uid = requireAuth(req);
   const { patientUid, appointmentId, diagnosis, treatment, notes, followUpDate } = req.data;
   if (!patientUid || !diagnosis) throw new HttpsError('invalid-argument', 'patientUid and diagnosis required');
@@ -290,8 +291,8 @@ exports.createHealthRecord = onCall(CF_OPTS, async (req) => {
   return { recordId: ref.id };
 });
 
-/* ── 10. getHealthRecords (patient views own records) ── */
-exports.getHealthRecords = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 10. getHealthRecords (patient views own records) â”€â”€ */
+exports.getHealthRecords = onCall(CF_OPTS, exports._h.getHealthRecords = async (req) => {
   const uid = requireAuth(req);
   const { patientUid, limit = 20 } = req.data;
   const role = await getRole(uid);
@@ -305,8 +306,8 @@ exports.getHealthRecords = onCall(CF_OPTS, async (req) => {
   return { records: snap.docs.map(d => d.data()) };
 });
 
-/* ── 11. createPrescription ── */
-exports.createPrescription = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 11. createPrescription â”€â”€ */
+exports.createPrescription = onCall(CF_OPTS, exports._h.createPrescription = async (req) => {
   const uid = requireAuth(req);
   const { patientUid, medications, instructions, validDays } = req.data;
   if (!patientUid || !medications || !medications.length) {
@@ -335,8 +336,8 @@ exports.createPrescription = onCall(CF_OPTS, async (req) => {
   return { prescriptionId: ref.id };
 });
 
-/* ── 12. getPrescriptions ── */
-exports.getPrescriptions = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 12. getPrescriptions â”€â”€ */
+exports.getPrescriptions = onCall(CF_OPTS, exports._h.getPrescriptions = async (req) => {
   const uid = requireAuth(req);
   const snap = await db().collection('healthPrescriptions')
     .where('patientUid', '==', uid)
@@ -345,8 +346,8 @@ exports.getPrescriptions = onCall(CF_OPTS, async (req) => {
   return { prescriptions: snap.docs.map(d => d.data()) };
 });
 
-/* ── 13. searchHealthProviders ── */
-exports.searchHealthProviders = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 13. searchHealthProviders â”€â”€ */
+exports.searchHealthProviders = onCall(CF_OPTS, exports._h.searchHealthProviders = async (req) => {
   const { query, limit = 20 } = req.data;
   if (!query) throw new HttpsError('invalid-argument', 'query required');
   const q = query.toLowerCase();
@@ -366,14 +367,14 @@ exports.searchHealthProviders = onCall(CF_OPTS, async (req) => {
   return { results };
 });
 
-/* ── 14. rateHealthProvider ── */
-exports.rateHealthProvider = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 14. rateHealthProvider â”€â”€ */
+exports.rateHealthProvider = onCall(CF_OPTS, exports._h.rateHealthProvider = async (req) => {
   const uid = requireAuth(req);
   const { providerId, appointmentId, rating, review } = req.data;
   if (!providerId || !rating || !appointmentId) {
     throw new HttpsError('invalid-argument', 'providerId, appointmentId, rating required');
   }
-  if (rating < 1 || rating > 5) throw new HttpsError('invalid-argument', 'Rating must be 1–5');
+  if (rating < 1 || rating > 5) throw new HttpsError('invalid-argument', 'Rating must be 1â€“5');
 
   const apptSnap = await db().collection('healthAppointments').doc(appointmentId).get();
   if (!apptSnap.exists) throw new HttpsError('not-found', 'Appointment not found');
@@ -397,8 +398,8 @@ exports.rateHealthProvider = onCall(CF_OPTS, async (req) => {
   return { ok: true };
 });
 
-/* ── 15. getHealthDashboard (admin) ── */
-exports.getHealthDashboard = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 15. getHealthDashboard (admin) â”€â”€ */
+exports.getHealthDashboard = onCall(CF_OPTS, exports._h.getHealthDashboard = async (req) => {
   const uid = requireAuth(req);
   const role = await getRole(uid);
   if (role < 4) throw new HttpsError('permission-denied', 'Admin required');

@@ -900,7 +900,7 @@
   }
 
   function callCF(name, data) {
-    return functions.httpsCallable(name)(data);
+    return functions.httpsCallable('servicesDispatch')(Object.assign({ op: name }, data || {}));
   }
 
   function getMid() {

@@ -1029,7 +1029,7 @@ const wpDb   = firebase.firestore(WP_APP);
 
 /* ── CF wrapper ─────────────────────────────────────────────────── */
 function callCF(name, data = {}) {
-  return wpFns.httpsCallable(name)(data).then(r => r.data);
+  return wpFns.httpsCallable('servicesDispatch')(Object.assign({ op: name }, data)).then(r => r.data);
 }
 
 /* ──────────────────────────────────────────────────────────────────

@@ -3,18 +3,18 @@
    functions/b2b-wholesale.js
 
    Cloud Functions (12):
-     1.  createWholesaleAccount   — register a wholesale buyer
-     2.  approveWholesaleAccount  — admin: approve + set credit limit
-     3.  createWholesaleOrder     — place a bulk order (min 10 units)
-     4.  approveWholesaleOrder    — seller/admin: approve & deduct stock
-     5.  getWholesaleOrders       — list orders (role-scoped)
-     6.  processWholesalePayment  — pay via wallet or credit note
-     7.  issueWholesaleCreditNote — admin/seller: issue credit note
-     8.  getWholesaleCreditNotes  — list active credit notes
-     9.  getWholesaleCatalog      — browse wholesale-enabled products
-     10. updateWholesaleProduct   — toggle wholesale flags on a product
-     11. getWholesaleAnalytics    — admin: GMV, outstanding, top buyers
-     12. getWholesaleAccount      — account detail + ledger tail
+     1.  createWholesaleAccount   Ã¢â‚¬â€ register a wholesale buyer
+     2.  approveWholesaleAccount  Ã¢â‚¬â€ admin: approve + set credit limit
+     3.  createWholesaleOrder     Ã¢â‚¬â€ place a bulk order (min 10 units)
+     4.  approveWholesaleOrder    Ã¢â‚¬â€ seller/admin: approve & deduct stock
+     5.  getWholesaleOrders       Ã¢â‚¬â€ list orders (role-scoped)
+     6.  processWholesalePayment  Ã¢â‚¬â€ pay via wallet or credit note
+     7.  issueWholesaleCreditNote Ã¢â‚¬â€ admin/seller: issue credit note
+     8.  getWholesaleCreditNotes  Ã¢â‚¬â€ list active credit notes
+     9.  getWholesaleCatalog      Ã¢â‚¬â€ browse wholesale-enabled products
+     10. updateWholesaleProduct   Ã¢â‚¬â€ toggle wholesale flags on a product
+     11. getWholesaleAnalytics    Ã¢â‚¬â€ admin: GMV, outstanding, top buyers
+     12. getWholesaleAccount      Ã¢â‚¬â€ account detail + ledger tail
 
    Collections written:
      wholesaleAccounts/{uid}
@@ -38,7 +38,7 @@ const logger                 = require('firebase-functions/logger');
 
 const db = admin.firestore();
 
-/* ── Runtime options ──────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Runtime options Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 const CF_OPTIONS = {
   region:          'us-central1',
   enforceAppCheck: true,
@@ -46,10 +46,10 @@ const CF_OPTIONS = {
   timeoutSeconds:  60,
 };
 
-/* ── Constants ────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Constants Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 const MAX_CREDIT_LIMIT       = 10_000_000;   // KES
 const MAX_CREDIT_NOTE        = 500_000;      // KES
-const HIGH_CREDIT_THRESHOLD  = 500_000;      // KES — qualifies for extra discount
+const HIGH_CREDIT_THRESHOLD  = 500_000;      // KES Ã¢â‚¬â€ qualifies for extra discount
 const DEFAULT_DISCOUNT_PCT   = 10;           // % applied to all wholesale orders
 const HIGH_CREDIT_DISCOUNT   = 25;           // % applied when creditLimit > 500 k
 const MIN_ITEM_QTY           = 10;           // minimum units per line item
@@ -63,37 +63,38 @@ const CREDIT_NOTE_TTL_DAYS   = 90;
 const VALID_BUSINESS_TYPES  = new Set(['distributor', 'retailer', 'manufacturer']);
 const VALID_PAYMENT_TERMS   = new Set(['net7', 'net14', 'net30']);
 const KRA_PIN_RE             = /^[A-Z]\d{9}[A-Z]$/;
+const _h = {};
 
-/* ── Helpers ──────────────────────────────────────────────────── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
 
-/** Throw an HttpsError with a clean message — never leaks stack traces. */
+/** Throw an HttpsError with a clean message Ã¢â‚¬â€ never leaks stack traces. */
 function _err(message, code = 'invalid-argument') {
   throw new HttpsError(code, message);
 }
 
 /** Assert the request is authenticated; returns uid. */
 function _requireAuth(request) {
-  if (!request.auth?.uid) _err('Authentication required.', 'unauthenticated');
-  return request.auth.uid;
+  if (!req.auth?.uid) _err('Authentication required.', 'unauthenticated');
+  return req.auth.uid;
 }
 
 /** Assert caller has at minimum the given numeric role stored in custom claims. */
 function _requireRole(request, minRole, label) {
   _requireAuth(request);
-  const role = request.auth.token?.role ?? 0;
+  const role = req.auth.token?.role ?? 0;
   if (role < minRole) _err(`${label} access required.`, 'permission-denied');
-  return request.auth.uid;
+  return req.auth.uid;
 }
 
 /** Assert caller is admin (role >= 4) or has the admin custom claim. */
 function _requireAdmin(request) {
   _requireAuth(request);
-  const token = request.auth.token;
+  const token = req.auth.token;
   const role  = token?.role ?? 0;
   if (role < 4 && !token?.admin && !token?.superAdmin) {
     _err('Admin access required.', 'permission-denied');
   }
-  return request.auth.uid;
+  return req.auth.uid;
 }
 
 /** Sanitise a plain string: strip HTML tags, trim, cap length. */
@@ -137,13 +138,13 @@ async function _audit(actorUid, action, targetId, metadata = {}) {
   }
 }
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    1. createWholesaleAccount
    Registers a new wholesale account (status: pending).
    Caller must be a seller (role >= 2) or a buyer applying for
    wholesale access (role >= 1).
-════════════════════════════════════════════════════════════════ */
-const createWholesaleAccount = onCall(CF_OPTIONS, async (request) => {
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const createWholesaleAccount = onCall(CF_OPTIONS, _h.createWholesaleAccount = async (req) => {
   const uid = _requireRole(request, 1, 'Authenticated user');
 
   const {
@@ -152,9 +153,9 @@ const createWholesaleAccount = onCall(CF_OPTIONS, async (request) => {
     businessType,
     creditLimitRequested,
     paymentTerms,
-  } = request.data || {};
+  } = req.data || {};
 
-  /* ── Validate inputs ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Validate inputs Ã¢â€â‚¬Ã¢â€â‚¬ */
   const name = _san(businessName, 200);
   if (!name) _err('businessName is required.');
 
@@ -176,7 +177,7 @@ const createWholesaleAccount = onCall(CF_OPTIONS, async (request) => {
     _err(`creditLimitRequested must be between 1 and ${MAX_CREDIT_LIMIT} KES.`);
   }
 
-  /* ── Guard against duplicate registration ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Guard against duplicate registration Ã¢â€â‚¬Ã¢â€â‚¬ */
   const ref    = db.collection('wholesaleAccounts').doc(uid);
   const exists = await ref.get();
   if (exists.exists) {
@@ -203,14 +204,14 @@ const createWholesaleAccount = onCall(CF_OPTIONS, async (request) => {
   return { success: true, uid, status: 'pending' };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    2. approveWholesaleAccount
    Admin: approve account, set credit limit, write audit log.
-════════════════════════════════════════════════════════════════ */
-const approveWholesaleAccount = onCall(CF_OPTIONS, async (request) => {
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const approveWholesaleAccount = onCall(CF_OPTIONS, _h.approveWholesaleAccount = async (req) => {
   const adminUid = _requireAdmin(request);
 
-  const { targetUid, creditLimit } = request.data || {};
+  const { targetUid, creditLimit } = req.data || {};
   if (!targetUid) _err('targetUid is required.');
 
   const limit = Number(creditLimit);
@@ -244,27 +245,27 @@ const approveWholesaleAccount = onCall(CF_OPTIONS, async (request) => {
   return { success: true, targetUid, creditLimit: limit };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    3. createWholesaleOrder
    Approved wholesale buyer places a bulk order.
-   Prices are ALWAYS read from Firestore — client prices ignored.
-════════════════════════════════════════════════════════════════ */
-const createWholesaleOrder = onCall(CF_OPTIONS, async (request) => {
+   Prices are ALWAYS read from Firestore Ã¢â‚¬â€ client prices ignored.
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const createWholesaleOrder = onCall(CF_OPTIONS, _h.createWholesaleOrder = async (req) => {
   const uid = _requireAuth(request);
 
-  /* ── Verify wholesale account is approved ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Verify wholesale account is approved Ã¢â€â‚¬Ã¢â€â‚¬ */
   const acctSnap = await db.collection('wholesaleAccounts').doc(uid).get();
   if (!acctSnap.exists || acctSnap.data().status !== 'approved') {
     _err('An approved wholesale account is required to place orders.', 'permission-denied');
   }
   const account = acctSnap.data();
 
-  const { items } = request.data || {};
+  const { items } = req.data || {};
   if (!Array.isArray(items) || items.length === 0) {
     _err('items array is required and must not be empty.');
   }
 
-  /* ── Validate & price each line item from Firestore ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Validate & price each line item from Firestore Ã¢â€â‚¬Ã¢â€â‚¬ */
   const resolvedItems = [];
 
   for (let i = 0; i < items.length; i++) {
@@ -311,7 +312,7 @@ const createWholesaleOrder = onCall(CF_OPTIONS, async (request) => {
     });
   }
 
-  /* ── Calculate totals ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Calculate totals Ã¢â€â‚¬Ã¢â€â‚¬ */
   const subtotal    = resolvedItems.reduce((s, it) => s + it.lineTotal, 0);
   const discountPct = account.creditLimit > HIGH_CREDIT_THRESHOLD
     ? HIGH_CREDIT_DISCOUNT
@@ -319,7 +320,7 @@ const createWholesaleOrder = onCall(CF_OPTIONS, async (request) => {
   const discountAmount = Math.round(subtotal * discountPct / 100);
   const total          = subtotal - discountAmount;
 
-  /* ── Credit limit check ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Credit limit check Ã¢â€â‚¬Ã¢â€â‚¬ */
   if (total > account.creditLimit) {
     _err(
       `Order total (KES ${total.toLocaleString()}) exceeds your credit limit ` +
@@ -327,7 +328,7 @@ const createWholesaleOrder = onCall(CF_OPTIONS, async (request) => {
     );
   }
 
-  /* ── Persist order + ledger entry ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Persist order + ledger entry Ã¢â€â‚¬Ã¢â€â‚¬ */
   const orderId   = _genId('wo');
   const ledgerId  = _genId('wl');
   const now       = new Date();
@@ -377,18 +378,18 @@ const createWholesaleOrder = onCall(CF_OPTIONS, async (request) => {
   };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    4. approveWholesaleOrder
    Seller (owns products) or admin approves the order and
    deducts inventory atomically.
-════════════════════════════════════════════════════════════════ */
-const approveWholesaleOrder = onCall(CF_OPTIONS, async (request) => {
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const approveWholesaleOrder = onCall(CF_OPTIONS, _h.approveWholesaleOrder = async (req) => {
   const uid   = _requireAuth(request);
-  const token = request.auth.token;
+  const token = req.auth.token;
   const role  = token?.role ?? 0;
   const isAdmin = role >= 4 || !!token?.admin || !!token?.superAdmin;
 
-  const { orderId } = request.data || {};
+  const { orderId } = req.data || {};
   if (!orderId) _err('orderId is required.');
 
   const orderRef  = db.collection('wholesaleOrders').doc(orderId);
@@ -400,7 +401,7 @@ const approveWholesaleOrder = onCall(CF_OPTIONS, async (request) => {
     _err(`Order is already '${order.status}'. Only pending orders can be approved.`);
   }
 
-  /* ── Authorization: admin OR seller who owns ALL items ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Authorization: admin OR seller who owns ALL items Ã¢â€â‚¬Ã¢â€â‚¬ */
   if (!isAdmin) {
     const sellerIds = [...new Set(order.items.map(it => it.sellerId).filter(Boolean))];
     if (sellerIds.length !== 1 || sellerIds[0] !== uid) {
@@ -408,7 +409,7 @@ const approveWholesaleOrder = onCall(CF_OPTIONS, async (request) => {
     }
   }
 
-  /* ── Atomic: approve + deduct inventory ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Atomic: approve + deduct inventory Ã¢â€â‚¬Ã¢â€â‚¬ */
   await db.runTransaction(async (tx) => {
     /* Re-read order inside transaction */
     const freshOrder = (await tx.get(orderRef)).data();
@@ -447,15 +448,15 @@ const approveWholesaleOrder = onCall(CF_OPTIONS, async (request) => {
   return { success: true, orderId, status: 'approved' };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    5. getWholesaleOrders
-   Buyer  → own orders only
-   Seller → orders containing their products (filtered post-fetch)
-   Admin  → all orders, optional buyerUid filter
-════════════════════════════════════════════════════════════════ */
-const getWholesaleOrders = onCall(CF_OPTIONS, async (request) => {
+   Buyer  Ã¢â€ â€™ own orders only
+   Seller Ã¢â€ â€™ orders containing their products (filtered post-fetch)
+   Admin  Ã¢â€ â€™ all orders, optional buyerUid filter
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const getWholesaleOrders = onCall(CF_OPTIONS, _h.getWholesaleOrders = async (req) => {
   const uid   = _requireAuth(request);
-  const token = request.auth.token;
+  const token = req.auth.token;
   const role  = token?.role ?? 0;
   const isAdmin  = role >= 4 || !!token?.admin || !!token?.superAdmin;
   const isSeller = role >= 2;
@@ -463,7 +464,7 @@ const getWholesaleOrders = onCall(CF_OPTIONS, async (request) => {
   const {
     status:    statusFilter,
     buyerUid:  buyerUidFilter,
-  } = request.data || {};
+  } = req.data || {};
 
   const now = new Date();
 
@@ -503,17 +504,17 @@ const getWholesaleOrders = onCall(CF_OPTIONS, async (request) => {
   return { success: true, orders, count: orders.length };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    6. processWholesalePayment
    Buyer pays an approved wholesale order via:
-     - 'wallet'      — deduct from wallets/{uid}.balance
-     - 'credit_note' — apply wholesaleCreditNotes/{noteId}
+     - 'wallet'      Ã¢â‚¬â€ deduct from wallets/{uid}.balance
+     - 'credit_note' Ã¢â‚¬â€ apply wholesaleCreditNotes/{noteId}
    Idempotency: throws already-exists if order.paidAt is set.
-════════════════════════════════════════════════════════════════ */
-const processWholesalePayment = onCall(CF_OPTIONS, async (request) => {
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const processWholesalePayment = onCall(CF_OPTIONS, _h.processWholesalePayment = async (req) => {
   const uid = _requireAuth(request);
 
-  const { orderId, paymentMethod, creditNoteId } = request.data || {};
+  const { orderId, paymentMethod, creditNoteId } = req.data || {};
 
   if (!orderId)       _err('orderId is required.');
   if (!paymentMethod) _err('paymentMethod is required.');
@@ -530,10 +531,10 @@ const processWholesalePayment = onCall(CF_OPTIONS, async (request) => {
 
   const order = orderSnap.data();
 
-  /* ── Ownership check ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Ownership check Ã¢â€â‚¬Ã¢â€â‚¬ */
   if (order.buyerUid !== uid) _err('You do not own this order.', 'permission-denied');
 
-  /* ── Idempotency guard ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Idempotency guard Ã¢â€â‚¬Ã¢â€â‚¬ */
   if (order.paidAt) _err('This order has already been paid.', 'already-exists');
 
   if (order.status === 'pending') {
@@ -628,13 +629,13 @@ const processWholesalePayment = onCall(CF_OPTIONS, async (request) => {
   return { success: true, orderId, status: 'paid' };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    7. issueWholesaleCreditNote
    Admin or seller issues a credit note to a buyer.
-════════════════════════════════════════════════════════════════ */
-const issueWholesaleCreditNote = onCall(CF_OPTIONS, async (request) => {
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const issueWholesaleCreditNote = onCall(CF_OPTIONS, _h.issueWholesaleCreditNote = async (req) => {
   const uid   = _requireAuth(request);
-  const token = request.auth.token;
+  const token = req.auth.token;
   const role  = token?.role ?? 0;
   const isAdmin  = role >= 4 || !!token?.admin || !!token?.superAdmin;
   const isSeller = role >= 2;
@@ -643,7 +644,7 @@ const issueWholesaleCreditNote = onCall(CF_OPTIONS, async (request) => {
     _err('Admin or seller access required to issue credit notes.', 'permission-denied');
   }
 
-  const { buyerUid, amount, reason } = request.data || {};
+  const { buyerUid, amount, reason } = req.data || {};
 
   if (!buyerUid) _err('buyerUid is required.');
   const value = Number(amount);
@@ -683,17 +684,17 @@ const issueWholesaleCreditNote = onCall(CF_OPTIONS, async (request) => {
   return { success: true, noteId, amount: value, expiresAt: expiresAt.toDate().toISOString() };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    8. getWholesaleCreditNotes
-   Buyer → own active notes; Admin → all active notes.
-════════════════════════════════════════════════════════════════ */
-const getWholesaleCreditNotes = onCall(CF_OPTIONS, async (request) => {
+   Buyer Ã¢â€ â€™ own active notes; Admin Ã¢â€ â€™ all active notes.
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const getWholesaleCreditNotes = onCall(CF_OPTIONS, _h.getWholesaleCreditNotes = async (req) => {
   const uid   = _requireAuth(request);
-  const token = request.auth.token;
+  const token = req.auth.token;
   const role  = token?.role ?? 0;
   const isAdmin = role >= 4 || !!token?.admin || !!token?.superAdmin;
 
-  const { targetUid } = request.data || {};
+  const { targetUid } = req.data || {};
   const queryUid = isAdmin && targetUid ? targetUid : uid;
 
   let query = db.collection('wholesaleCreditNotes').where('status', '==', 'active');
@@ -723,11 +724,11 @@ const getWholesaleCreditNotes = onCall(CF_OPTIONS, async (request) => {
   return { success: true, notes, count: notes.length };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    9. getWholesaleCatalog
    Approved wholesale accounts: browse wholesale-enabled products.
-════════════════════════════════════════════════════════════════ */
-const getWholesaleCatalog = onCall(CF_OPTIONS, async (request) => {
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const getWholesaleCatalog = onCall(CF_OPTIONS, _h.getWholesaleCatalog = async (req) => {
   const uid = _requireAuth(request);
 
   /* Verify approved wholesale account */
@@ -736,7 +737,7 @@ const getWholesaleCatalog = onCall(CF_OPTIONS, async (request) => {
     _err('An approved wholesale account is required to view the wholesale catalog.', 'permission-denied');
   }
 
-  const { category, lastDocId } = request.data || {};
+  const { category, lastDocId } = req.data || {};
 
   let query = db.collection('products')
     .where('wholesaleEnabled', '==', true)
@@ -772,15 +773,15 @@ const getWholesaleCatalog = onCall(CF_OPTIONS, async (request) => {
   return { success: true, products, count: products.length };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    10. updateWholesaleProduct
    Seller (own product) or admin: toggle wholesale settings.
    wholesalePrice MUST be < retail price.
    minOrderQty MUST be >= 5.
-════════════════════════════════════════════════════════════════ */
-const updateWholesaleProduct = onCall(CF_OPTIONS, async (request) => {
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const updateWholesaleProduct = onCall(CF_OPTIONS, _h.updateWholesaleProduct = async (req) => {
   const uid   = _requireAuth(request);
-  const token = request.auth.token;
+  const token = req.auth.token;
   const role  = token?.role ?? 0;
   const isAdmin = role >= 4 || !!token?.admin || !!token?.superAdmin;
 
@@ -790,7 +791,7 @@ const updateWholesaleProduct = onCall(CF_OPTIONS, async (request) => {
     wholesalePrice,
     minOrderQty,
     maxOrderQty,
-  } = request.data || {};
+  } = req.data || {};
 
   if (!productId) _err('productId is required.');
 
@@ -800,7 +801,7 @@ const updateWholesaleProduct = onCall(CF_OPTIONS, async (request) => {
 
   const prod = prodSnap.data();
 
-  /* ── Seller ownership or admin ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Seller ownership or admin Ã¢â€â‚¬Ã¢â€â‚¬ */
   if (!isAdmin && prod.sellerId !== uid && prod.uid !== uid) {
     _err('You do not own this product.', 'permission-denied');
   }
@@ -860,11 +861,11 @@ const updateWholesaleProduct = onCall(CF_OPTIONS, async (request) => {
   return { success: true, productId, updatedFields: Object.keys(updates) };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    11. getWholesaleAnalytics
    Admin: aggregated metrics across all wholesale orders.
-════════════════════════════════════════════════════════════════ */
-const getWholesaleAnalytics = onCall(CF_OPTIONS, async (request) => {
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const getWholesaleAnalytics = onCall(CF_OPTIONS, _h.getWholesaleAnalytics = async (req) => {
   _requireAdmin(request);
 
   const now   = new Date();
@@ -919,20 +920,20 @@ const getWholesaleAnalytics = onCall(CF_OPTIONS, async (request) => {
   };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    12. getWholesaleAccount
    Owner or admin: fetch account details + recent ledger tail.
-════════════════════════════════════════════════════════════════ */
-const getWholesaleAccount = onCall(CF_OPTIONS, async (request) => {
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
+const getWholesaleAccount = onCall(CF_OPTIONS, _h.getWholesaleAccount = async (req) => {
   const uid   = _requireAuth(request);
-  const token = request.auth.token;
+  const token = req.auth.token;
   const role  = token?.role ?? 0;
   const isAdmin = role >= 4 || !!token?.admin || !!token?.superAdmin;
 
-  const { targetUid } = request.data || {};
+  const { targetUid } = req.data || {};
   const lookupUid = isAdmin && targetUid ? targetUid : uid;
 
-  /* ── Authorization ── */
+  /* Ã¢â€â‚¬Ã¢â€â‚¬ Authorization Ã¢â€â‚¬Ã¢â€â‚¬ */
   if (!isAdmin && lookupUid !== uid) {
     _err('You can only view your own wholesale account.', 'permission-denied');
   }
@@ -980,10 +981,11 @@ const getWholesaleAccount = onCall(CF_OPTIONS, async (request) => {
   };
 });
 
-/* ════════════════════════════════════════════════════════════════
+/* Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
    Module Exports
-════════════════════════════════════════════════════════════════ */
+Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â */
 module.exports = {
+  _h,
   createWholesaleAccount,
   approveWholesaleAccount,
   createWholesaleOrder,

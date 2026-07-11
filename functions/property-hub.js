@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Property Hub v1.0 — SOKONI Platform
+ * Property Hub v1.0 â€” SOKONI Platform
  * Property listings, enquiries, viewings, agent management
  * 12 Cloud Functions | enforceAppCheck: true | region: us-central1
  */
@@ -13,6 +13,7 @@ const CF_OPTS = { region: REGION, enforceAppCheck: true };
 const db = () => admin.firestore();
 const auth = () => admin.auth();
 const FieldValue = admin.firestore.FieldValue;
+exports._h = {};
 
 function requireAuth(req) {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Authentication required');
@@ -27,8 +28,8 @@ function san(s, max = 200) { return s == null ? '' : String(s).trim().slice(0, m
 const PROPERTY_TYPES = ['apartment', 'house', 'townhouse', 'villa', 'land', 'commercial', 'office', 'warehouse', 'bedsitter', 'studio', 'other'];
 const LISTING_TYPES = ['for_sale', 'for_rent', 'short_let'];
 
-/* ── 1. createPropertyListing ── */
-exports.createPropertyListing = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 1. createPropertyListing â”€â”€ */
+exports.createPropertyListing = onCall(CF_OPTS, exports._h.createPropertyListing = async (req) => {
   const uid = requireAuth(req);
   const role = await getRole(uid);
   if (role < 2) throw new HttpsError('permission-denied', 'Seller role required to list property');
@@ -71,8 +72,8 @@ exports.createPropertyListing = onCall(CF_OPTS, async (req) => {
   return { listingId: ref.id, status: 'draft' };
 });
 
-/* ── 2. updatePropertyListing ── */
-exports.updatePropertyListing = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 2. updatePropertyListing â”€â”€ */
+exports.updatePropertyListing = onCall(CF_OPTS, exports._h.updatePropertyListing = async (req) => {
   const uid = requireAuth(req);
   const { listingId, ...fields } = req.data;
   if (!listingId) throw new HttpsError('invalid-argument', 'listingId required');
@@ -94,8 +95,8 @@ exports.updatePropertyListing = onCall(CF_OPTS, async (req) => {
   return { ok: true };
 });
 
-/* ── 3. publishPropertyListing ── */
-exports.publishPropertyListing = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 3. publishPropertyListing â”€â”€ */
+exports.publishPropertyListing = onCall(CF_OPTS, exports._h.publishPropertyListing = async (req) => {
   const uid = requireAuth(req);
   const { listingId } = req.data;
   if (!listingId) throw new HttpsError('invalid-argument', 'listingId required');
@@ -111,8 +112,8 @@ exports.publishPropertyListing = onCall(CF_OPTS, async (req) => {
   return { ok: true, status: 'active' };
 });
 
-/* ── 4. deactivatePropertyListing ── */
-exports.deactivatePropertyListing = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 4. deactivatePropertyListing â”€â”€ */
+exports.deactivatePropertyListing = onCall(CF_OPTS, exports._h.deactivatePropertyListing = async (req) => {
   const uid = requireAuth(req);
   const { listingId, reason } = req.data;
   if (!listingId) throw new HttpsError('invalid-argument', 'listingId required');
@@ -131,8 +132,8 @@ exports.deactivatePropertyListing = onCall(CF_OPTS, async (req) => {
   return { ok: true };
 });
 
-/* ── 5. getProperty ── */
-exports.getProperty = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 5. getProperty â”€â”€ */
+exports.getProperty = onCall(CF_OPTS, exports._h.getProperty = async (req) => {
   const { listingId } = req.data;
   if (!listingId) throw new HttpsError('invalid-argument', 'listingId required');
   const snap = await db().collection('propertyListings').doc(listingId).get();
@@ -147,8 +148,8 @@ exports.getProperty = onCall(CF_OPTS, async (req) => {
   return listing;
 });
 
-/* ── 6. listProperties ── */
-exports.listProperties = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 6. listProperties â”€â”€ */
+exports.listProperties = onCall(CF_OPTS, exports._h.listProperties = async (req) => {
   const { propertyType, listingType, city, county, minPrice, maxPrice,
           minBedrooms, limit = 24, cursor } = req.data;
 
@@ -201,8 +202,8 @@ exports.listProperties = onCall(CF_OPTS, async (req) => {
   return { listings, nextCursor };
 });
 
-/* ── 7. searchProperties ── */
-exports.searchProperties = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 7. searchProperties â”€â”€ */
+exports.searchProperties = onCall(CF_OPTS, exports._h.searchProperties = async (req) => {
   const { query, limit = 20 } = req.data;
   if (!query) throw new HttpsError('invalid-argument', 'query required');
   const q = query.toLowerCase();
@@ -223,8 +224,8 @@ exports.searchProperties = onCall(CF_OPTS, async (req) => {
   return { results };
 });
 
-/* ── 8. submitPropertyEnquiry ── */
-exports.submitPropertyEnquiry = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 8. submitPropertyEnquiry â”€â”€ */
+exports.submitPropertyEnquiry = onCall(CF_OPTS, exports._h.submitPropertyEnquiry = async (req) => {
   const uid = requireAuth(req);
   const { listingId, message, phone, moveInDate, budget } = req.data;
   if (!listingId || !message) throw new HttpsError('invalid-argument', 'listingId and message required');
@@ -249,8 +250,8 @@ exports.submitPropertyEnquiry = onCall(CF_OPTS, async (req) => {
   return { enquiryId: ref.id };
 });
 
-/* ── 9. getPropertyEnquiries (agent) ── */
-exports.getPropertyEnquiries = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 9. getPropertyEnquiries (agent) â”€â”€ */
+exports.getPropertyEnquiries = onCall(CF_OPTS, exports._h.getPropertyEnquiries = async (req) => {
   const uid = requireAuth(req);
   const { listingId } = req.data;
   if (!listingId) throw new HttpsError('invalid-argument', 'listingId required');
@@ -266,8 +267,8 @@ exports.getPropertyEnquiries = onCall(CF_OPTS, async (req) => {
   return { enquiries: snap.docs.map(d => d.data()) };
 });
 
-/* ── 10. scheduleViewing ── */
-exports.scheduleViewing = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 10. scheduleViewing â”€â”€ */
+exports.scheduleViewing = onCall(CF_OPTS, exports._h.scheduleViewing = async (req) => {
   const uid = requireAuth(req);
   const { listingId, preferredDate, preferredTime, notes } = req.data;
   if (!listingId || !preferredDate) throw new HttpsError('invalid-argument', 'listingId and preferredDate required');
@@ -292,8 +293,8 @@ exports.scheduleViewing = onCall(CF_OPTS, async (req) => {
   return { viewingId: ref.id };
 });
 
-/* ── 11. getViewings (agent or buyer) ── */
-exports.getViewings = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 11. getViewings (agent or buyer) â”€â”€ */
+exports.getViewings = onCall(CF_OPTS, exports._h.getViewings = async (req) => {
   const uid = requireAuth(req);
   const { asAgent } = req.data;
   const field = asAgent ? 'agentUid' : 'buyerUid';
@@ -303,8 +304,8 @@ exports.getViewings = onCall(CF_OPTS, async (req) => {
   return { viewings: snap.docs.map(d => d.data()) };
 });
 
-/* ── 12. getPropertyAnalytics (agent) ── */
-exports.getPropertyAnalytics = onCall(CF_OPTS, async (req) => {
+/* â”€â”€ 12. getPropertyAnalytics (agent) â”€â”€ */
+exports.getPropertyAnalytics = onCall(CF_OPTS, exports._h.getPropertyAnalytics = async (req) => {
   const uid = requireAuth(req);
   const snap = await db().collection('propertyListings')
     .where('agentUid', '==', uid).orderBy('createdAt', 'desc').limit(100).get();

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * SOKONI Jobs Marketplace — Cloud Functions
+ * SOKONI Jobs Marketplace â€” Cloud Functions
  * Gen2 Firebase Functions, Node.js 22
  *
  * Collections:
@@ -10,13 +10,13 @@
  *   jobSeekerProfiles/{uid}
  *   savedJobs/{uid_jobId}
  *
- * Index policy: ONLY single-field where() clauses — NO composite indexes.
+ * Index policy: ONLY single-field where() clauses â€” NO composite indexes.
  */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function _requireAuth(ctx) {
   if (!ctx.auth) throw new HttpsError('unauthenticated', 'Login required');
@@ -71,9 +71,11 @@ function _isActive(data) {
   return true;
 }
 
-// ─── 1. createJob ────────────────────────────────────────────────────────────
+// â”€â”€â”€ 1. createJob â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.createJob = onCall({ cors: true }, async (req) => {
+exports._h = {};
+
+exports.createJob = onCall({ cors: true }, exports._h.createJob = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -90,7 +92,7 @@ exports.createJob = onCall({ cors: true }, async (req) => {
     expiresInDays,
   } = req.data || {};
 
-  // ── Validation ──
+  // â”€â”€ Validation â”€â”€
   const cleanTitle = _san(title, 100);
   if (!cleanTitle || cleanTitle.length < 3) {
     throw new HttpsError('invalid-argument', 'title must be 3-100 characters');
@@ -113,7 +115,7 @@ exports.createJob = onCall({ cors: true }, async (req) => {
   const cleanRequirements = _san(requirements, 3000);
   const days              = Number(expiresInDays) || 30;
 
-  // ── Resolve company name ──
+  // â”€â”€ Resolve company name â”€â”€
   let companyName = 'Company';
   try {
     const shopSnap = await db.collection('shops').doc(uid).get();
@@ -147,9 +149,9 @@ exports.createJob = onCall({ cors: true }, async (req) => {
   return { jobId: ref.id, job: { ..._publicJobFields(ref.id, job), employerUid: uid } };
 });
 
-// ─── 2. updateJob ────────────────────────────────────────────────────────────
+// â”€â”€â”€ 2. updateJob â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.updateJob = onCall({ cors: true }, async (req) => {
+exports.updateJob = onCall({ cors: true }, exports._h.updateJob = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -205,9 +207,9 @@ exports.updateJob = onCall({ cors: true }, async (req) => {
   return { success: true };
 });
 
-// ─── 3. closeJob ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ 3. closeJob â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.closeJob = onCall({ cors: true }, async (req) => {
+exports.closeJob = onCall({ cors: true }, exports._h.closeJob = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -224,10 +226,10 @@ exports.closeJob = onCall({ cors: true }, async (req) => {
   return { success: true };
 });
 
-// ─── 4. listJobs ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ 4. listJobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.listJobs = onCall({ cors: true }, async (req) => {
-  // Public — no auth required
+exports.listJobs = onCall({ cors: true }, exports._h.listJobs = async (req) => {
+  // Public â€” no auth required
   const db = getFirestore();
 
   const {
@@ -273,10 +275,10 @@ exports.listJobs = onCall({ cors: true }, async (req) => {
   };
 });
 
-// ─── 5. getJob ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ 5. getJob â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.getJob = onCall({ cors: true }, async (req) => {
-  // Public — no auth required
+exports.getJob = onCall({ cors: true }, exports._h.getJob = async (req) => {
+  // Public â€” no auth required
   const db     = getFirestore();
   const uid    = req.auth?.uid || null;
   const { jobId } = req.data || {};
@@ -310,9 +312,9 @@ exports.getJob = onCall({ cors: true }, async (req) => {
   return result;
 });
 
-// ─── 6. applyForJob ──────────────────────────────────────────────────────────
+// â”€â”€â”€ 6. applyForJob â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.applyForJob = onCall({ cors: true }, async (req) => {
+exports.applyForJob = onCall({ cors: true }, exports._h.applyForJob = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -364,9 +366,9 @@ exports.applyForJob = onCall({ cors: true }, async (req) => {
   return { success: true, applicationId };
 });
 
-// ─── 7. getJobApplications ───────────────────────────────────────────────────
+// â”€â”€â”€ 7. getJobApplications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.getJobApplications = onCall({ cors: true }, async (req) => {
+exports.getJobApplications = onCall({ cors: true }, exports._h.getJobApplications = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -392,7 +394,7 @@ exports.getJobApplications = onCall({ cors: true }, async (req) => {
   const profileMap   = {};
 
   if (seekerUids.length > 0) {
-    // Firestore batch get — doc lookups, not queries
+    // Firestore batch get â€” doc lookups, not queries
     const profileRefs = seekerUids.map(u => db.collection('jobSeekerProfiles').doc(u));
     const profileSnaps = await db.getAll(...profileRefs);
     profileSnaps.forEach(snap => {
@@ -426,9 +428,9 @@ exports.getJobApplications = onCall({ cors: true }, async (req) => {
   return { applications: enriched };
 });
 
-// ─── 8. updateApplicationStatus ──────────────────────────────────────────────
+// â”€â”€â”€ 8. updateApplicationStatus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.updateApplicationStatus = onCall({ cors: true }, async (req) => {
+exports.updateApplicationStatus = onCall({ cors: true }, exports._h.updateApplicationStatus = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -450,9 +452,9 @@ exports.updateApplicationStatus = onCall({ cors: true }, async (req) => {
   return { success: true };
 });
 
-// ─── 9. getMyApplications ────────────────────────────────────────────────────
+// â”€â”€â”€ 9. getMyApplications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.getMyApplications = onCall({ cors: true }, async (req) => {
+exports.getMyApplications = onCall({ cors: true }, exports._h.getMyApplications = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -502,9 +504,9 @@ exports.getMyApplications = onCall({ cors: true }, async (req) => {
   return { applications: enriched };
 });
 
-// ─── 10. saveJobSeekerProfile ─────────────────────────────────────────────────
+// â”€â”€â”€ 10. saveJobSeekerProfile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.saveJobSeekerProfile = onCall({ cors: true }, async (req) => {
+exports.saveJobSeekerProfile = onCall({ cors: true }, exports._h.saveJobSeekerProfile = async (req) => {
   _requireAuth(req);
   const uid = req.auth.uid;
   const db  = getFirestore();
@@ -522,7 +524,7 @@ exports.saveJobSeekerProfile = onCall({ cors: true }, async (req) => {
     availability,
   } = req.data || {};
 
-  // ── Validation ──
+  // â”€â”€ Validation â”€â”€
   const cleanName = _san(name, 100);
   if (!cleanName || cleanName.length < 2) {
     throw new HttpsError('invalid-argument', 'name must be 2-100 characters');
@@ -553,9 +555,9 @@ exports.saveJobSeekerProfile = onCall({ cors: true }, async (req) => {
   return { success: true };
 });
 
-// ─── 11. getJobSeekerProfile ──────────────────────────────────────────────────
+// â”€â”€â”€ 11. getJobSeekerProfile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.getJobSeekerProfile = onCall({ cors: true }, async (req) => {
+exports.getJobSeekerProfile = onCall({ cors: true }, exports._h.getJobSeekerProfile = async (req) => {
   _requireAuth(req);
   const callerUid = req.auth.uid;
   const db        = getFirestore();
@@ -564,7 +566,7 @@ exports.getJobSeekerProfile = onCall({ cors: true }, async (req) => {
   const targetUid = req.data?.uid ? String(req.data.uid) : callerUid;
 
   // Seeker profiles are semi-public for any authenticated user.
-  // (Composite index would be required to verify employer relationship — avoided.)
+  // (Composite index would be required to verify employer relationship â€” avoided.)
   const snap = await db.collection('jobSeekerProfiles').doc(targetUid).get();
   if (!snap.exists) return { profile: null };
 
@@ -592,10 +594,10 @@ exports.getJobSeekerProfile = onCall({ cors: true }, async (req) => {
   };
 });
 
-// ─── 12. getFeaturedJobs ─────────────────────────────────────────────────────
+// â”€â”€â”€ 12. getFeaturedJobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-exports.getFeaturedJobs = onCall({ cors: true }, async (req) => {
-  // Public — no auth required
+exports.getFeaturedJobs = onCall({ cors: true }, exports._h.getFeaturedJobs = async (req) => {
+  // Public â€” no auth required
   const db  = getFirestore();
   const now = Date.now();
 

@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    KASS — SOKONI Admin AI Agent
    Firebase Cloud Function (Gen 2)
    Uses Claude claude-sonnet-4-6 with tool use to manage the marketplace
@@ -7973,6 +7973,17 @@ exports.fosGetAuditTrail       = finosAutomation.fosGetAuditTrail;
    the sokoni-settlement.js client wrapper. No individual settlement CFs are
    exported. Auth/App Check enforced per handler (unchanged). ── */
 
+/* ── SmartPOS Cash Drawer v1.0 ───────────────────────────────────────── */
+const posCashDrawer = require('./pos-cash-drawer');
+exports.cdOpenDrawer        = posCashDrawer.cdOpenDrawer;
+exports.cdGetAuditLog       = posCashDrawer.cdGetAuditLog;
+exports.cdGetConfig         = posCashDrawer.cdGetConfig;
+exports.cdSetConfig         = posCashDrawer.cdSetConfig;
+exports.cdRecordCashEvent   = posCashDrawer.cdRecordCashEvent;
+exports.cdGetShiftSummary   = posCashDrawer.cdGetShiftSummary;
+exports.cdGetReconciliation = posCashDrawer.cdGetReconciliation;
+exports.cdGetDiagnostics    = posCashDrawer.cdGetDiagnostics;
+
 /* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
 const trustSafety = require('./trust-safety');
 exports.tsReportContent       = trustSafety.tsReportContent;
@@ -8170,6 +8181,9 @@ exports.adminResolveDispute     = disputes.adminResolveDispute;
 /* DISPATCH CONSOLIDATION: 75 onCall CFs → 1 commerceDispatch */
 const commerceDispatcher = require('./commerce-dispatch');
 exports.commerceDispatch = commerceDispatcher.commerceDispatch;
+const servicesDisp         = require('./services-dispatch');
+exports.servicesDispatch    = servicesDisp.servicesDispatch;
+
 /* merchant-success: all 17 onCall — fully consolidated */
 
 /* ── Navigation & Intelligent Dispatch v2.0 ────────────────────────────── */
@@ -8225,19 +8239,6 @@ exports.refundToWallet           = wallet.refundToWallet;
 exports.sweepStaleWalletTopUps   = wallet.sweepStaleWalletTopUps;
 
 /* ── Jobs Marketplace v1.0 ───────────────────────────────────────────────── */
-const jobs = require('./jobs');
-exports.createJob               = jobs.createJob;
-exports.updateJob               = jobs.updateJob;
-exports.closeJob                = jobs.closeJob;
-exports.listJobs                = jobs.listJobs;
-exports.getJob                  = jobs.getJob;
-exports.applyForJob             = jobs.applyForJob;
-exports.getJobApplications      = jobs.getJobApplications;
-exports.updateApplicationStatus = jobs.updateApplicationStatus;
-exports.getMyApplications       = jobs.getMyApplications;
-exports.saveJobSeekerProfile    = jobs.saveJobSeekerProfile;
-exports.getJobSeekerProfile     = jobs.getJobSeekerProfile;
-exports.getFeaturedJobs         = jobs.getFeaturedJobs;
 
 /* ── Education Hub ─────────────────────────────────────────────── */
 const education = require('./education');
@@ -8431,21 +8432,6 @@ exports.asyncCleanup       = asyncJobs.asyncCleanup;
 exports.getQueueDepth      = asyncJobs.getQueueDepth;
 
 /* -- Security 6.0 -- Enterprise Identity (MFA + Passkeys + Device Trust) -- */
-const secIdentity = require('./security-identity');
-exports.initiateTOTPEnrollment        = secIdentity.initiateTOTPEnrollment;
-exports.verifyTOTPEnrollment          = secIdentity.verifyTOTPEnrollment;
-exports.verifyTOTP                    = secIdentity.verifyTOTP;
-exports.disableMFA                    = secIdentity.disableMFA;
-exports.getMFAStatus                  = secIdentity.getMFAStatus;
-exports.regenerateBackupCodes         = secIdentity.regenerateBackupCodes;
-exports.initiatePasskeyRegistration   = secIdentity.initiatePasskeyRegistration;
-exports.verifyPasskeyRegistration     = secIdentity.verifyPasskeyRegistration;
-exports.initiatePasskeyAuthentication = secIdentity.initiatePasskeyAuthentication;
-exports.verifyPasskeyAuthentication   = secIdentity.verifyPasskeyAuthentication;
-exports.secRegisterDevice             = secIdentity.registerDevice;
-exports.getDevices                    = secIdentity.getDevices;
-exports.removeDevice                  = secIdentity.removeDevice;
-exports.updateDeviceTrustScore        = secIdentity.updateDeviceTrustScore;
 
 /* -- Security 6.0 -- Audit Log + Scorecard + Pen Test -------------------- */
 const secAudit = require('./security-audit');
@@ -8503,19 +8489,6 @@ exports.runWeeklyChaosTest           = drModule.runWeeklyChaosTest;
 exports.getChaosTestReports          = drModule.getChaosTestReports;
 
 /* ── B2B / Wholesale Commerce v1.0 ─────────────────────────────────────── */
-const b2bWholesale = require('./b2b-wholesale');
-exports.createWholesaleAccount   = b2bWholesale.createWholesaleAccount;
-exports.approveWholesaleAccount  = b2bWholesale.approveWholesaleAccount;
-exports.createWholesaleOrder     = b2bWholesale.createWholesaleOrder;
-exports.approveWholesaleOrder    = b2bWholesale.approveWholesaleOrder;
-exports.getWholesaleOrders       = b2bWholesale.getWholesaleOrders;
-exports.processWholesalePayment  = b2bWholesale.processWholesalePayment;
-exports.issueWholesaleCreditNote = b2bWholesale.issueWholesaleCreditNote;
-exports.getWholesaleCreditNotes  = b2bWholesale.getWholesaleCreditNotes;
-exports.getWholesaleCatalog      = b2bWholesale.getWholesaleCatalog;
-exports.updateWholesaleProduct   = b2bWholesale.updateWholesaleProduct;
-exports.getWholesaleAnalytics    = b2bWholesale.getWholesaleAnalytics;
-exports.getWholesaleAccount      = b2bWholesale.getWholesaleAccount;
 
 /* ── Release Readiness Certification v1.0 + Production Cert Runner v1.0 ── */
 const relReadiness = require('./release-readiness');
@@ -8559,37 +8532,8 @@ exports.processDataExport   = dataExport.processDataExport;
 exports.autoEndEvents          = eventHub.autoEndEvents;
 
 /* ── Healthcare Hub v1.0 ────────────────────────────────────────────────── */
-const healthcareHub = require('./healthcare-hub');
-exports.registerHealthProvider  = healthcareHub.registerHealthProvider;
-exports.approveHealthProvider   = healthcareHub.approveHealthProvider;
-exports.getHealthProviders      = healthcareHub.getHealthProviders;
-exports.getHealthProvider       = healthcareHub.getHealthProvider;
-exports.bookAppointment         = healthcareHub.bookAppointment;
-exports.getMyAppointments       = healthcareHub.getMyAppointments;
-exports.getProviderAppointments = healthcareHub.getProviderAppointments;
-exports.updateAppointmentStatus = healthcareHub.updateAppointmentStatus;
-exports.createHealthRecord      = healthcareHub.createHealthRecord;
-exports.getHealthRecords        = healthcareHub.getHealthRecords;
-exports.createPrescription      = healthcareHub.createPrescription;
-exports.getPrescriptions        = healthcareHub.getPrescriptions;
-exports.searchHealthProviders   = healthcareHub.searchHealthProviders;
-exports.rateHealthProvider      = healthcareHub.rateHealthProvider;
-exports.getHealthDashboard      = healthcareHub.getHealthDashboard;
 
 /* ── Property Hub v1.0 ──────────────────────────────────────────────────── */
-const propertyHub = require('./property-hub');
-exports.createPropertyListing    = propertyHub.createPropertyListing;
-exports.updatePropertyListing    = propertyHub.updatePropertyListing;
-exports.publishPropertyListing   = propertyHub.publishPropertyListing;
-exports.deactivatePropertyListing= propertyHub.deactivatePropertyListing;
-exports.getProperty              = propertyHub.getProperty;
-exports.listProperties           = propertyHub.listProperties;
-exports.searchProperties         = propertyHub.searchProperties;
-exports.submitPropertyEnquiry    = propertyHub.submitPropertyEnquiry;
-exports.getPropertyEnquiries     = propertyHub.getPropertyEnquiries;
-exports.scheduleViewing          = propertyHub.scheduleViewing;
-exports.getViewings              = propertyHub.getViewings;
-exports.getPropertyAnalytics     = propertyHub.getPropertyAnalytics;
 
 /* ── Vehicle Hub v1.0 ───────────────────────────────────────────────────── */
 const vehicleHub = require('./vehicle-hub');
@@ -8688,19 +8632,6 @@ exports.computeAllHealthScores          = bizHealth.computeAllHealthScores;
 exports.getMultibranchHealthComparison  = bizHealth.getMultibranchHealthComparison;
 
 /* ── HR & Payroll Engine v1.0 ───────────────────────────────────────────── */
-const hrPayroll = require('./hr-payroll');
-exports.addStaffMember                  = hrPayroll.addStaffMember;
-exports.recordAttendance                = hrPayroll.recordAttendance;
-exports.getAttendanceReport             = hrPayroll.getAttendanceReport;
-exports.runPayroll                      = hrPayroll.runPayroll;
-exports.approvePayrollRun               = hrPayroll.approvePayrollRun;
-exports.getPayslip                      = hrPayroll.getPayslip;
-exports.getPayrollSummary               = hrPayroll.getPayrollSummary;
-exports.requestLeave                    = hrPayroll.requestLeave;
-exports.approveLeave                    = hrPayroll.approveLeave;
-exports.assignTraining                  = hrPayroll.assignTraining;
-exports.markTrainingComplete            = hrPayroll.markTrainingComplete;
-exports.getStaffDashboard               = hrPayroll.getStaffDashboard;
 
 /* ── Advanced BI — Branch Comparison + Marketing ROI v1.0 ───────────────── */
 const biAdvanced = require('./bi-advanced');

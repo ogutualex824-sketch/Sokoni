@@ -113,12 +113,10 @@ window.SokoniJobs = (() => {
     } catch(_) { return ''; }
   }
 
-  /** Get/cache a Firebase callable function */
+  let _sdDispatch = null;
   function _callable(name) {
-    if (!_callableCache[name]) {
-      _callableCache[name] = firebase.functions().httpsCallable(name);
-    }
-    return _callableCache[name];
+    if (!_sdDispatch) _sdDispatch = firebase.functions().httpsCallable('servicesDispatch');
+    return (data) => _sdDispatch(Object.assign({ op: name }, data || {}));
   }
 
   /** Capitalise first letter */
