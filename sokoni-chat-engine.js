@@ -337,7 +337,7 @@ function sendMessage(conversationId, payload) {
   if (!conversationId) return Promise.reject(new Error('conversationId required'));
 
   var type = payload.type || 'text';
-  var callSendMessage = _fns().httpsCallable('sendMessage');
+  var callSendMessage = function(d) { return _cfMsg('sendMessage', d); };
 
   /* Text and location go directly to the CF */
   if (type === 'text' || type === 'location') {
@@ -473,9 +473,14 @@ function handleTyping(conversationId) {
 
 /* ─────────────────────────────────────────────────────────────
    CALLABLE CF WRAPPERS
+   All ops route through messagesDispatch to reduce Cloud Run services.
 ──────────────────────────────────────────────────────────────*/
+function _cfMsg(op, data) {
+  return _fns().httpsCallable('messagesDispatch')({ op: op, ...(data || {}) });
+}
+
 function createConversation(transactionType, transactionId, participantUids, metadata) {
-  return _fns().httpsCallable('createConversation')({
+  return _cfMsg('createConversation', {
     transactionType: transactionType,
     transactionId:   transactionId,
     participantUids: participantUids,
@@ -484,13 +489,13 @@ function createConversation(transactionType, transactionId, participantUids, met
 }
 
 function markRead(conversationId) {
-  return _fns().httpsCallable('markRead')({ conversationId: conversationId })
+  return _cfMsg('markRead', { conversationId: conversationId })
     .then(function(r) { return r.data; })
     .catch(function(e) { console.warn('[chat] markRead', e.message); });
 }
 
 function reportConversation(conversationId, reason, details) {
-  return _fns().httpsCallable('reportConversation')({
+  return _cfMsg('reportConversation', {
     conversationId: conversationId,
     reason:         reason,
     details:        details || null,
@@ -509,7 +514,7 @@ function getConversation(conversationId) {
 }
 
 function editMessage(conversationId, messageId, newText) {
-  return _fns().httpsCallable('editMessage')({
+  return _cfMsg('editMessage', {
     conversationId: conversationId,
     messageId:      messageId,
     newText:        newText,
@@ -517,12 +522,12 @@ function editMessage(conversationId, messageId, newText) {
 }
 
 function getConversationContext(conversationId) {
-  return _fns().httpsCallable('getConversationContext')({ conversationId: conversationId })
+  return _cfMsg('getConversationContext', { conversationId: conversationId })
     .then(function(r) { return r.data; });
 }
 
 function searchConversations(query, transactionType, cursor) {
-  return _fns().httpsCallable('searchConversations')({
+  return _cfMsg('searchConversations', {
     query:           query           || '',
     transactionType: transactionType || null,
     cursor:          cursor          || null,
@@ -530,7 +535,7 @@ function searchConversations(query, transactionType, cursor) {
 }
 
 function updateConversationStatus(conversationId, newStatus, systemMessage) {
-  return _fns().httpsCallable('updateConversationStatus')({
+  return _cfMsg('updateConversationStatus', {
     conversationId: conversationId,
     newStatus:      newStatus,
     systemMessage:  systemMessage || null,

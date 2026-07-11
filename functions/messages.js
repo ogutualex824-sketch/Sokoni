@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI — Business Communication System  v2.0
    15 Cloud Functions: transaction-gated messaging, context fetching,
    search, edit, status sync, moderation, lifecycle, admin controls.
@@ -13,6 +13,8 @@ const logger                   = require('firebase-functions/logger');
 const admin                    = require('firebase-admin');
 
 const REGION = 'us-central1';
+
+exports._h = {}; // handler registry for messagesDispatch
 
 function _db()     { return admin.firestore(); }
 function _now()    { return admin.firestore.FieldValue.serverTimestamp(); }
@@ -90,7 +92,7 @@ async function _sendFcm(token, title, body, data) {
 /* ═══════════════════════════════════════════════════════════════
    1. createConversation
 ═══════════════════════════════════════════════════════════════ */
-exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, async (req) => {
+exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, exports._h.createConversation = async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
   const uid = req.auth.uid;
   const { transactionType, transactionId, participantUids, metadata } = req.data;
@@ -193,7 +195,7 @@ exports.createConversation = onCall({ region: REGION, timeoutSeconds: 30 }, asyn
 /* ═══════════════════════════════════════════════════════════════
    2. markRead
 ═══════════════════════════════════════════════════════════════ */
-exports.markRead = onCall({ region: REGION, timeoutSeconds: 15 }, async (req) => {
+exports.markRead = onCall({ region: REGION, timeoutSeconds: 15 }, exports._h.markRead = async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
   const uid  = req.auth.uid;
   const { conversationId } = req.data;
@@ -227,7 +229,7 @@ exports.markRead = onCall({ region: REGION, timeoutSeconds: 15 }, async (req) =>
 /* ═══════════════════════════════════════════════════════════════
    3. reportConversation
 ═══════════════════════════════════════════════════════════════ */
-exports.reportConversation = onCall({ region: REGION, timeoutSeconds: 15 }, async (req) => {
+exports.reportConversation = onCall({ region: REGION, timeoutSeconds: 15 }, exports._h.reportConversation = async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
   const uid = req.auth.uid;
   const { conversationId, reason, details } = req.data;
@@ -255,7 +257,7 @@ exports.reportConversation = onCall({ region: REGION, timeoutSeconds: 15 }, asyn
 /* ═══════════════════════════════════════════════════════════════
    4. adminGetReports
 ═══════════════════════════════════════════════════════════════ */
-exports.adminGetReports = onCall({ region: REGION, timeoutSeconds: 30 }, async (req) => {
+exports.adminGetReports = onCall({ region: REGION, timeoutSeconds: 30 }, exports._h.adminGetReports = async (req) => {
   if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) throw new HttpsError('permission-denied', 'Admin only');
   const { status = 'pending', cursor } = req.data || {};
   let q = _db().collection('moderationQueue')
@@ -270,7 +272,7 @@ exports.adminGetReports = onCall({ region: REGION, timeoutSeconds: 30 }, async (
 /* ═══════════════════════════════════════════════════════════════
    5. adminReviewReport
 ═══════════════════════════════════════════════════════════════ */
-exports.adminReviewReport = onCall({ region: REGION, timeoutSeconds: 30 }, async (req) => {
+exports.adminReviewReport = onCall({ region: REGION, timeoutSeconds: 30 }, exports._h.adminReviewReport = async (req) => {
   if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) throw new HttpsError('permission-denied', 'Admin only');
   const { reportId, action, note } = req.data;
   if (!reportId || !action) throw new HttpsError('invalid-argument', 'reportId and action required');
@@ -318,7 +320,7 @@ exports.adminReviewReport = onCall({ region: REGION, timeoutSeconds: 30 }, async
 /* ═══════════════════════════════════════════════════════════════
    6. adminUpdateChatPolicy
 ═══════════════════════════════════════════════════════════════ */
-exports.adminUpdateChatPolicy = onCall({ region: REGION, timeoutSeconds: 15 }, async (req) => {
+exports.adminUpdateChatPolicy = onCall({ region: REGION, timeoutSeconds: 15 }, exports._h.adminUpdateChatPolicy = async (req) => {
   if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) throw new HttpsError('permission-denied', 'Admin only');
   const allowed  = ['maxImageSizeMB','maxPdfSizeMB','maxVoiceSeconds','readOnlyAfterDays','voiceRetentionDays','imageRetentionDays','tempRetentionDays','allowedMimeTypes'];
   const filtered = Object.fromEntries(Object.entries(req.data || {}).filter(([k]) => allowed.includes(k)));
@@ -330,7 +332,7 @@ exports.adminUpdateChatPolicy = onCall({ region: REGION, timeoutSeconds: 15 }, a
 /* ═══════════════════════════════════════════════════════════════
    7. adminGetChatStats
 ═══════════════════════════════════════════════════════════════ */
-exports.adminGetChatStats = onCall({ region: REGION, timeoutSeconds: 30 }, async (req) => {
+exports.adminGetChatStats = onCall({ region: REGION, timeoutSeconds: 30 }, exports._h.adminGetChatStats = async (req) => {
   if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) throw new HttpsError('permission-denied', 'Admin only');
   const db = _db();
   const [active, pending, flagged] = await Promise.all([
@@ -525,7 +527,7 @@ exports.cleanupChatStorage = onSchedule(
    Reads the source transaction document and returns normalised
    context fields for the chat header (title, status, key metadata).
 ═══════════════════════════════════════════════════════════════ */
-exports.getConversationContext = onCall({ region: REGION, timeoutSeconds: 20 }, async (req) => {
+exports.getConversationContext = onCall({ region: REGION, timeoutSeconds: 20 }, exports._h.getConversationContext = async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
   const uid = req.auth.uid;
   const { conversationId } = req.data;
@@ -569,7 +571,7 @@ exports.getConversationContext = onCall({ region: REGION, timeoutSeconds: 20 }, 
    Searches a user's conversation index by title / participant name.
    Full-text search delegates to Firestore prefix match on title.
 ═══════════════════════════════════════════════════════════════ */
-exports.searchConversations = onCall({ region: REGION, timeoutSeconds: 20 }, async (req) => {
+exports.searchConversations = onCall({ region: REGION, timeoutSeconds: 20 }, exports._h.searchConversations = async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
   const uid   = req.auth.uid;
   const { query = '', transactionType, cursor } = req.data || {};
@@ -596,7 +598,7 @@ exports.searchConversations = onCall({ region: REGION, timeoutSeconds: 20 }, asy
    14. editMessage
    Allows a sender to edit their own text message within 15 minutes.
 ═══════════════════════════════════════════════════════════════ */
-exports.editMessage = onCall({ region: REGION, timeoutSeconds: 15 }, async (req) => {
+exports.editMessage = onCall({ region: REGION, timeoutSeconds: 15 }, exports._h.editMessage = async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
   const uid = req.auth.uid;
   const { conversationId, messageId, newText } = req.data;
@@ -638,7 +640,7 @@ const VALID_STATUSES = new Set([
    Called by order / booking Cloud Functions when a transaction
    status changes. Posts a system message and updates conversation.
 ═══════════════════════════════════════════════════════════════ */
-exports.updateConversationStatus = onCall({ region: REGION, timeoutSeconds: 20 }, async (req) => {
+exports.updateConversationStatus = onCall({ region: REGION, timeoutSeconds: 20 }, exports._h.updateConversationStatus = async (req) => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
   const { conversationId, newStatus, systemMessage } = req.data;
   if (!conversationId || !newStatus) {
@@ -717,7 +719,7 @@ const _ALLOWED_MSG_TYPES = new Set(['text','image','video','voice','audio','file
 
 exports.sendMessage = onCall(
   { region: REGION, timeoutSeconds: 30, enforceAppCheck: true },
-  async (req) => {
+  exports._h.sendMessage = async (req) => {
     if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
 
     const {
@@ -900,3 +902,4 @@ exports.onFoodOrderStatusChanged = onDocumentUpdated(
     return null;
   }
 );
+

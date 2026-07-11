@@ -623,7 +623,9 @@ var _auditEntries=[];
 
 function _cf(name){
   if(!_fns)_fns=firebase.functions();
-  return _fns.httpsCallable(name);
+  // Route through single messagesDispatch CF to reduce Cloud Run services
+  var dispatch = _fns.httpsCallable('messagesDispatch');
+  return function(data) { return dispatch(Object.assign({ op: name }, data || {})); };
 }
 
 /* ── Navigation ── */

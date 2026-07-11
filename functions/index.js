@@ -7854,30 +7854,22 @@ exports.getWalletStatement      = finos.getWalletStatement;
 exports.calculateTaxBreakdown   = finos.calculateTaxBreakdown;
 
 /* ══════════════════════════════════════════════════════════════════
-   SOKONI Business Communication System  v1.0
-   11 Cloud Functions: transaction-gated messaging, real-time inbox,
-   auto-moderation, abuse reporting, admin review, lifecycle cleanup.
+   SOKONI Business Communication System v2.0
+   DISPATCH CONSOLIDATION: 12 onCall CFs → 1 messagesDispatch.
+   Clients route via sokoni-chat-engine.js (_cfMsg) and admin-messages.html (_cf).
+   7 event-triggered CFs (2 onSchedule, 2 onDocumentCreated, 3 onDocumentUpdated) remain.
 ══════════════════════════════════════════════════════════════════ */
-const messages = require("./messages");
-
-exports.createConversation          = messages.createConversation;
-exports.markRead                    = messages.markRead;
-exports.reportConversation          = messages.reportConversation;
-exports.adminGetReports             = messages.adminGetReports;
-exports.adminReviewReport           = messages.adminReviewReport;
-exports.adminUpdateChatPolicy       = messages.adminUpdateChatPolicy;
-exports.adminGetChatStats           = messages.adminGetChatStats;
-exports.onMessageCreated            = messages.onMessageCreated;
-exports.moderateMessage             = messages.moderateMessage;
-exports.archiveCompletedConversations = messages.archiveCompletedConversations;
-exports.cleanupChatStorage          = messages.cleanupChatStorage;
-exports.getConversationContext      = messages.getConversationContext;
-exports.searchConversations         = messages.searchConversations;
-exports.editMessage                 = messages.editMessage;
-exports.updateConversationStatus    = messages.updateConversationStatus;
-exports.onOrderStatusChanged        = messages.onOrderStatusChanged;
-exports.onBookingStatusChanged      = messages.onBookingStatusChanged;
-exports.onFoodOrderStatusChanged    = messages.onFoodOrderStatusChanged;
+const messagesDispatcher = require('./messages-dispatch');
+exports.messagesDispatch = messagesDispatcher.messagesDispatch;
+/* Event-triggered CFs — cannot be dispatched */
+const _messagesMod = require('./messages');
+exports.onMessageCreated              = _messagesMod.onMessageCreated;
+exports.moderateMessage               = _messagesMod.moderateMessage;
+exports.archiveCompletedConversations = _messagesMod.archiveCompletedConversations;
+exports.cleanupChatStorage            = _messagesMod.cleanupChatStorage;
+exports.onOrderStatusChanged          = _messagesMod.onOrderStatusChanged;
+exports.onBookingStatusChanged        = _messagesMod.onBookingStatusChanged;
+exports.onFoodOrderStatusChanged      = _messagesMod.onFoodOrderStatusChanged;
 
 /* ══════════════════════════════════════════════════════════════════
    SOKONI SmartPOS Retail Cloud Functions  v2.0
@@ -7993,6 +7985,17 @@ const settlementEngine = require('./settlement-engine');
 exports.settlementGetContext   = settlementEngine.settlementGetContext;
 exports.settlementPreview      = settlementEngine.settlementPreview;
 exports.settlementGetDashboard = settlementEngine.settlementGetDashboard;
+
+/* ── Settlement Migration Phase 2 — routing flags, payment config, validation ── */
+const settlementRouting = require('./settlement-routing');
+exports.settlementGetRoutingConfig = settlementRouting.settlementGetRoutingConfig;
+exports.settlementSetRoutingConfig = settlementRouting.settlementSetRoutingConfig;
+const paymentConfig = require('./payment-config');
+exports.getCheckoutPaymentConfig = paymentConfig.getCheckoutPaymentConfig;
+exports.adminGetPaymentConfig    = paymentConfig.adminGetPaymentConfig;
+exports.adminSetPaymentConfig    = paymentConfig.adminSetPaymentConfig;
+const settlementValidation = require('./settlement-validation');
+exports.settlementValidatePath = settlementValidation.settlementValidatePath;
 
 /* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
 const trustSafety = require('./trust-safety');
