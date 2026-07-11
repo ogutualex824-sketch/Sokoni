@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Floor — SOKONI SmartPOS</title>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#050505;--sur:#0d0d0d;--sur2:#141414;--g:#71ff00;--ga:rgba(113,255,0,.12);
+      --bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;
+      --blue:#1565c0;--red:#c62828;--orange:#e65100;--teal:#00796b;--amber:#f9a825}
+body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,system-ui,sans-serif;
+     font-size:14px;min-height:100vh}
+
+/* ── Topbar ── */
+.topbar{background:var(--blue);color:#fff;height:52px;display:flex;align-items:center;
+        padding:0 16px;gap:12px;flex-shrink:0}
+.topbar h1{font-size:16px;font-weight:800}
+.topbar h1 span{color:var(--g);margin-right:6px}
+.topbar-spacer{flex:1}
+.live-dot{width:9px;height:9px;border-radius:50%;background:var(--g);
+          animation:pulse 1.8s ease-in-out infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
+.topbar-ts{font-size:12px;opacity:.7;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;font-size:12px;
+     font-weight:700;cursor:pointer;border:none;text-decoration:none;transition:opacity .15s}
+.btn-secondary{background:rgba(255,255,255,.1);color:#fff}
+.btn:hover{opacity:.8}
+
+/* ── Layout ── */
+.wrap{max-width:1440px;margin:0 auto;padding:20px 16px 80px}
+
+/* ── KPI row ── */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--sur);border:1px solid var(--bor);border-radius:13px;padding:14px 16px;position:relative}
+.kpi-label{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.kpi-value{font-size:26px;font-weight:800;margin-top:6px;letter-spacing:-.03em;transition:color .4s}
+.kpi-sub{font-size:11px;color:var(--sub);margin-top:3px}
+.kpi-value.g{color:var(--g)}.kpi-value.b{color:#42a5f5}
+.kpi-value.o{color:#ff9800}.kpi-value.r{color:#ef5350}
+
+/* ── Section header ── */
+.sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.sec-title{font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.07em}
+.sec-right{display:flex;align-items:center;gap:10px}
+.filter-chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:4px 11px;border-radius:999px;border:1px solid var(--bor2);font-size:12px;
+       font-weight:600;cursor:pointer;background:var(--sur2);color:var(--sub);transition:all .15s}
+.chip.active,.chip:hover{border-color:var(--g);color:var(--g);background:var(--ga)}
+
+/* ── Till grid ── */
+.till-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+
+/* ── Till card ── */
+.till-card{background:var(--sur);border:1px solid var(--bor);border-radius:14px;
+           padding:16px;display:flex;flex-direction:column;gap:10px;
+           transition:border-color .3s}
+.till-card.state-active {border-color:rgba(113,255,0,.35)}
+.till-card.state-idle   {border-color:rgba(255,152,0,.2)}
+.till-card.state-offline{border-color:rgba(239,83,80,.25)}
+.till-card.state-payment{border-color:rgba(66,165,245,.35)}
+
+.till-header{display:flex;align-items:center;justify-content:space-between}
+.till-name{font-weight:800;font-size:15px}
+.till-cashier{font-size:12px;color:var(--sub);margin-top:2px}
+
+.state-badge{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;flex-shrink:0}
+.state-badge.ACTIVE     {background:rgba(113,255,0,.15);color:var(--g)}
+.state-badge.PAYMENT    {background:rgba(66,165,245,.15);color:#42a5f5}
+.state-badge.IDLE       {background:rgba(255,152,0,.1);color:#ff9800}
+.state-badge.OFFLINE    {background:rgba(239,83,80,.12);color:#ef5350}
+.state-badge.CHECKOUT   {background:rgba(113,255,0,.15);color:var(--g)}
+.state-badge.SUSPENDED  {background:rgba(239,83,80,.12);color:#ef5350}
+
+/* Cart preview bar */
+.cart-bar-wrap{background:var(--sur2);border-radius:7px;height:7px;overflow:hidden;margin:2px 0}
+.cart-bar{height:100%;background:var(--g);border-radius:7px;transition:width .5s}
+
+.till-rows{display:flex;flex-direction:column;gap:5px}
+.till-row{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.till-row strong{color:var(--txt)}
+.till-row.hilight strong{color:var(--g)}
+
+/* Devices */
+.dev-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.dev-chip{font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--bor2);color:var(--sub)}
+.dev-chip.ok{border-color:rgba(113,255,0,.3);color:var(--g)}
+.dev-chip.err{border-color:rgba(239,83,80,.3);color:#ef5350}
+
+/* Alert banner */
+.alert-banner{background:rgba(239,83,80,.1);border:1px solid rgba(239,83,80,.25);
+              border-radius:9px;padding:8px 12px;font-size:12px;color:#ef5350;font-weight:600}
+
+/* Last-seen */
+.last-seen{font-size:11px;color:var(--sub);text-align:right}
+
+/* Empty / loading */
+.empty{text-align:center;padding:56px 0;color:var(--sub)}
+.empty .icon{font-size:36px;margin-bottom:12px}
+
+/* Activity feed */
+.feed{background:var(--sur);border:1px solid var(--bor);border-radius:13px;
+      max-height:340px;overflow-y:auto;margin-top:24px}
+.feed-header{padding:12px 16px;font-size:12px;font-weight:700;color:var(--sub);
+             text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--bor);
+             position:sticky;top:0;background:var(--sur)}
+.feed-item{padding:10px 16px;border-bottom:1px solid var(--bor);font-size:12px;display:flex;
+           align-items:flex-start;gap:10px}
+.feed-item:last-child{border:none}
+.feed-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.feed-dot.info   {background:#42a5f5}
+.feed-dot.warning{background:#ff9800}
+.feed-dot.error  {background:#ef5350}
+.feed-dot.success{background:var(--g)}
+.feed-body{flex:1}.feed-msg{color:var(--txt)}
+.feed-ts{font-size:11px;color:var(--sub)}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+       background:var(--sur);border:1px solid var(--bor);border-radius:10px;
+       padding:10px 18px;font-size:13px;font-weight:600;z-index:9999;
+       opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+
+@media(max-width:600px){
+  .kpi-row{grid-template-columns:repeat(2,1fr)}
+  .till-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="live-dot"></div>
+  <h1><span>POS</span> Live Floor</h1>
+  <div class="topbar-ts" id="last-updated">Connecting…</div>
+  <div class="topbar-spacer"></div>
+  <a href="pos-till-manager.html" class="btn btn-secondary">&#x1F6E0; Manage Registers</a>
+  <a href="pos.html"              class="btn btn-secondary">&#x2190; POS</a>
+</div>
+
+<div class="wrap">
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">Online Tills</div>
+      <div class="kpi-value g" id="kpi-online">—</div></div>
+    <div class="kpi"><div class="kpi-label">Active</div>
+      <div class="kpi-value b" id="kpi-active">—</div></div>
+    <div class="kpi"><div class="kpi-label">Idle</div>
+      <div class="kpi-value o" id="kpi-idle">—</div></div>
+    <div class="kpi"><div class="kpi-label">Offline</div>
+      <div class="kpi-value r" id="kpi-offline">—</div></div>
+    <div class="kpi"><div class="kpi-label">Session Revenue</div>
+      <div class="kpi-value g" id="kpi-revenue">KES 0</div></div>
+    <div class="kpi"><div class="kpi-label">Session Sales</div>
+      <div class="kpi-value b" id="kpi-sales">0</div></div>
+    <div class="kpi"><div class="kpi-label">Top Cashier</div>
+      <div class="kpi-value" style="font-size:18px" id="kpi-top">—</div>
+      <div class="kpi-sub" id="kpi-top-sub"></div></div>
+    <div class="kpi"><div class="kpi-label">Alerts</div>
+      <div class="kpi-value r" id="kpi-alerts">0</div></div>
+  </div>
+
+  <!-- Filter chips -->
+  <div class="sec-header">
+    <div class="sec-title">Till Status</div>
+    <div class="sec-right">
+      <div class="filter-chips">
+        <span class="chip active" data-f="all"   onclick="setFilter('all',this)">All</span>
+        <span class="chip"        data-f="active" onclick="setFilter('active',this)">Active</span>
+        <span class="chip"        data-f="idle"   onclick="setFilter('idle',this)">Idle</span>
+        <span class="chip"        data-f="offline"onclick="setFilter('offline',this)">Offline</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Till grid -->
+  <div class="till-grid" id="till-grid">
+    <div class="empty"><div class="icon">📡</div><div>Connecting to floor…</div></div>
+  </div>
+
+  <!-- Activity feed -->
+  <div class="feed" id="activity-feed">
+    <div class="feed-header">Activity Feed</div>
+    <div id="feed-items">
+      <div class="feed-item"><div class="feed-body"><div class="feed-msg" style="color:var(--sub)">Waiting for events…</div></div></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="firebase.js"></script>
+<script>
+'use strict';
+
+const app  = firebase.apps[0] || firebase.initializeApp(window.__sokoniConfig || {});
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const fn   = firebase.functions();
+
+let _merchantId   = null;
+let _tills        = {};        // registerId → till state
+let _currentFilter= 'all';
+let _alerts       = 0;
+let _floorUnsub   = null;
+let _eventsUnsub  = null;
+
+/* ── Auth guard ── */
+auth.onAuthStateChanged(async u => {
+  if (!u) { window.location.href = 'pos.html'; return; }
+  const token = await u.getIdTokenResult();
+  if (!token.claims.admin && !token.claims.superAdmin && !token.claims.manager && !token.claims.supervisor) {
+    window.location.href = 'pos.html'; return;
+  }
+  _merchantId = token.claims.merchantId || localStorage.getItem('sokoni_merchant_id') || u.uid;
+  startFloorWatch();
+  startActivityFeed();
+});
+
+/* ── Live floor listener ── */
+function startFloorWatch() {
+  if (_floorUnsub) _floorUnsub();
+  const cutoff = Date.now() - 300000;
+  _floorUnsub = db.collection('posTillState')
+    .where('merchantId', '==', _merchantId)
+    .where('clientTs', '>=', cutoff)
+    .onSnapshot(snap => {
+      snap.docChanges().forEach(ch => {
+        if (ch.type === 'removed') {
+          delete _tills[ch.doc.data().registerId];
+        } else {
+          const d = ch.doc.data();
+          _tills[d.registerId] = { id: ch.doc.id, ...d };
+        }
+      });
+      renderTills();
+      updateKPIs();
+      document.getElementById('last-updated').textContent =
+        'Updated ' + new Date().toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }, err => {
+      console.error('[Floor] listener error', err);
+      _toast('Floor connection lost. Retrying…', true);
+      setTimeout(startFloorWatch, 8000);
+    });
+}
+
+/* ── Activity feed (posTillEvents last 50) ── */
+function startActivityFeed() {
+  if (_eventsUnsub) _eventsUnsub();
+  _eventsUnsub = db.collection('posTillEvents')
+    .where('merchantId', '==', _merchantId)
+    .orderBy('ts', 'desc')
+    .limit(50)
+    .onSnapshot(snap => {
+      const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderFeed(items);
+    }, () => {});
+}
+
+/* ── Filter logic ── */
+function _tillCategory(t) {
+  if (!t.online || (Date.now() - t.clientTs) > 300000) return 'offline';
+  const s = (t.currentState || '').toUpperCase();
+  if (s === 'IDLE' || s === '') return 'idle';
+  return 'active';
+}
+
+function setFilter(f, el) {
+  _currentFilter = f;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderTills();
+}
+
+/* ── Render tills ── */
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _fmtKES(cents) {
+  return 'KES ' + ((cents||0)/100).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function _fmtAge(ts) {
+  if (!ts) return 'never';
+  const sec = Math.floor((Date.now() - ts) / 1000);
+  if (sec < 60) return sec + 's ago';
+  if (sec < 3600) return Math.floor(sec/60) + 'm ago';
+  return Math.floor(sec/3600) + 'h ago';
+}
+
+function _stateLabel(t) {
+  if (!t.online || (Date.now() - t.clientTs) > 300000) return 'OFFLINE';
+  return (t.currentState || 'IDLE').toUpperCase();
+}
+
+function renderTills() {
+  const all  = Object.values(_tills);
+  const grid = document.getElementById('till-grid');
+  const maxCart = Math.max(...all.map(t => t.cartTotal || 0), 1);
+
+  const filtered = all.filter(t => {
+    const cat = _tillCategory(t);
+    if (_currentFilter === 'all') return true;
+    return cat === _currentFilter;
+  }).sort((a, b) => {
+    // Sort: active first, then idle, then offline
+    const order = { active: 0, idle: 1, offline: 2 };
+    return (order[_tillCategory(a)]||3) - (order[_tillCategory(b)]||3);
+  });
+
+  if (!filtered.length) {
+    const msg = _currentFilter === 'all'
+      ? 'No tills broadcasting. Open POS on a register to see it here.'
+      : `No ${_currentFilter} tills right now.`;
+    grid.innerHTML = `<div class="empty"><div class="icon">🖥️</div><div>${msg}</div></div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(t => {
+    const cat    = _tillCategory(t);
+    const label  = _stateLabel(t);
+    const cartPct= Math.min(100, Math.round(((t.cartTotal||0)/maxCart)*100));
+    const printer = t.printerStatus || 'unknown';
+    const drawer  = t.drawerStatus  || 'unknown';
+    const hasAlert= (cat === 'offline') || printer === 'error' || drawer === 'error';
+    return `
+      <div class="till-card state-${cat}">
+        <div class="till-header">
+          <div>
+            <div class="till-name">${_esc(t.registerName || t.registerId)}</div>
+            <div class="till-cashier">&#x1F464; ${_esc(t.cashierName || 'No cashier')}</div>
+          </div>
+          <span class="status-badge ${_esc(label)}">${_esc(label)}</span>
+        </div>
+        ${hasAlert ? `<div class="alert-banner">&#x26A0;&#xFE0F; ${cat==='offline'?'Till offline':'Device error'}</div>` : ''}
+        <div class="till-rows">
+          <div class="till-row hilight"><span>Session Revenue</span><strong>${_fmtKES(t.salesTotal)}</strong></div>
+          <div class="till-row"><span>Sales Count</span><strong>${(t.salesCount||0).toLocaleString()}</strong></div>
+          <div class="till-row"><span>Cart Now</span><strong>${_fmtKES(t.cartTotal)} (${t.cartItemCount||0} items)</strong></div>
+        </div>
+        <div class="cart-bar-wrap"><div class="cart-bar" style="width:${cartPct}%"></div></div>
+        <div class="dev-row">
+          <span class="dev-chip ${printer==='ok'?'ok':printer==='error'?'err':''}">&#x1F5A8; ${_esc(printer)}</span>
+          <span class="dev-chip ${drawer==='ok'?'ok':drawer==='error'?'err':''}">&#x1F4B0; ${_esc(drawer)}</span>
+          <span class="dev-chip ${t.online?'ok':'err'}">&#x1F4F6; ${t.online?'online':'offline'}</span>
+        </div>
+        <div class="last-seen">Last seen ${_fmtAge(t.clientTs)}</div>
+      </div>`;
+  }).join('');
+}
+
+/* ── KPIs ── */
+function updateKPIs() {
+  const all = Object.values(_tills);
+  const now = Date.now();
+  const online  = all.filter(t => t.online && (now - t.clientTs) < 300000);
+  const active  = online.filter(t => !['IDLE','','OFFLINE'].includes((t.currentState||'').toUpperCase()));
+  const idle    = online.filter(t => ['IDLE',''].includes((t.currentState||'').toUpperCase()));
+  const offline = all.filter(t => !t.online || (now - t.clientTs) >= 300000);
+  const revenue = all.reduce((s,t) => s + (t.salesTotal||0), 0);
+  const sales   = all.reduce((s,t) => s + (t.salesCount||0), 0);
+  const top     = [...all].sort((a,b) => (b.salesTotal||0)-(a.salesTotal||0))[0];
+  _alerts       = offline.length + all.filter(t => t.printerStatus==='error'||t.drawerStatus==='error').length;
+
+  document.getElementById('kpi-online').textContent  = online.length;
+  document.getElementById('kpi-active').textContent  = active.length;
+  document.getElementById('kpi-idle').textContent    = idle.length;
+  document.getElementById('kpi-offline').textContent = offline.length;
+  document.getElementById('kpi-revenue').textContent = _fmtKES(revenue);
+  document.getElementById('kpi-sales').textContent   = sales.toLocaleString();
+  document.getElementById('kpi-alerts').textContent  = _alerts;
+  if (top) {
+    document.getElementById('kpi-top').textContent     = top.cashierName || '—';
+    document.getElementById('kpi-top-sub').textContent = _fmtKES(top.salesTotal);
+  }
+}
+
+/* ── Activity feed ── */
+function renderFeed(items) {
+  if (!items.length) return;
+  const container = document.getElementById('feed-items');
+  const sev = { info: 'info', warning: 'warning', error: 'error', success: 'success' };
+  container.innerHTML = items.map(e => {
+    const ts = e.clientTs ? new Date(e.clientTs).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '';
+    const dot = sev[e.severity] || 'info';
+    const label = (e.type||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    return `
+      <div class="feed-item">
+        <div class="feed-dot ${dot}"></div>
+        <div class="feed-body">
+          <div class="feed-msg"><strong>${_esc(e.registerName || e.registerId || '—')}</strong> — ${_esc(label)} ${e.cashierName ? '('+_esc(e.cashierName)+')':''}</div>
+          ${e.note ? `<div style="color:var(--sub);font-size:11px;margin-top:2px">${_esc(e.note)}</div>` : ''}
+          <div class="feed-ts">${ts}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ── Toast ── */
+function _toast(msg, isErr = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = isErr ? 'rgba(239,83,80,.4)' : 'rgba(113,255,0,.3)';
+  t.style.color = isErr ? '#ef5350' : '#71ff00';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+/* ── Re-query on stale tills (onSnapshot window limited to clientTs>=cutoff at start, won't auto-extend) ── */
+setInterval(() => {
+  if (_merchantId) {
+    // Re-subscribe every 4 min to refresh the 5-min cutoff window
+    startFloorWatch();
+  }
+}, 240000);
+</script>
+</body>
+</html>

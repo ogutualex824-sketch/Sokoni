@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Register Manager — SOKONI SmartPOS</title>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#050505;--sur:#0d0d0d;--sur2:#141414;--g:#71ff00;--ga:rgba(113,255,0,.1);
+      --bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;
+      --blue:#1565c0;--red:#c62828;--orange:#e65100;--yellow:#f9a825;--teal:#00796b}
+body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,system-ui,sans-serif;
+     font-size:14px;min-height:100vh}
+.topbar{background:var(--blue);color:#fff;height:52px;display:flex;align-items:center;
+        padding:0 16px;gap:14px;flex-shrink:0}
+.topbar h1{font-size:16px;font-weight:800;letter-spacing:-.01em}
+.topbar h1 span{color:var(--g);margin-right:6px}
+.topbar-spacer{flex:1}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;font-size:13px;
+     font-weight:700;cursor:pointer;border:none;text-decoration:none;transition:opacity .15s}
+.btn-g{background:var(--g);color:#000}
+.btn-secondary{background:var(--sur2);color:var(--txt);border:1px solid var(--bor2)}
+.btn:hover{opacity:.85}
+.wrap{max-width:1280px;margin:0 auto;padding:20px 16px 80px}
+/* KPIs */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--sur);border:1px solid var(--bor);border-radius:13px;padding:14px 16px}
+.kpi-label{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.kpi-value{font-size:28px;font-weight:800;margin-top:6px;letter-spacing:-.03em}
+.kpi-value.g{color:var(--g)}.kpi-value.b{color:#42a5f5}.kpi-value.o{color:#ff9800}.kpi-value.r{color:#ef5350}
+/* Header row */
+.sec-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.sec-title{font-size:13px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.07em}
+/* Register grid */
+.reg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.reg-card{background:var(--sur);border:1px solid var(--bor);border-radius:13px;padding:16px;
+          display:flex;flex-direction:column;gap:10px}
+.reg-card.offline{border-color:rgba(239,83,80,.3)}
+.reg-card.active {border-color:rgba(113,255,0,.3)}
+.reg-card.idle   {border-color:var(--bor)}
+.reg-header{display:flex;align-items:center;justify-content:space-between}
+.reg-name{font-weight:800;font-size:15px}
+.reg-id{font-size:11px;color:var(--sub);margin-top:2px}
+.status-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px}
+.status-badge.active {background:rgba(113,255,0,.12);color:var(--g)}
+.status-badge.idle   {background:rgba(255,152,0,.1);color:#ff9800}
+.status-badge.offline{background:rgba(239,83,80,.12);color:#ef5350}
+.status-badge.inactive{background:rgba(136,136,136,.12);color:var(--sub)}
+.reg-row{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);padding:4px 0;
+          border-bottom:1px solid var(--bor)}
+.reg-row:last-of-type{border:none}
+.reg-row strong{color:var(--txt)}
+.reg-devices{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.dev-chip{font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid var(--bor2);color:var(--sub)}
+.dev-chip.ok{border-color:rgba(113,255,0,.3);color:var(--g)}
+.reg-actions{display:flex;gap:6px;margin-top:4px}
+.reg-actions button{flex:1;padding:7px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--bor2);background:var(--sur2);color:var(--txt);transition:border-color .15s}
+.reg-actions button:hover{border-color:var(--g);color:var(--g)}
+.reg-actions button.del:hover{border-color:var(--red);color:var(--red)}
+/* Modal */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;
+          align-items:center;justify-content:center;padding:16px}
+.overlay.open{display:flex}
+.modal{background:var(--sur);border:1px solid var(--bor);border-radius:16px;padding:22px;
+       width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:800;margin-bottom:16px}
+.form-group{margin-bottom:14px}
+.form-label{font-size:12px;color:var(--sub);font-weight:600;margin-bottom:5px;display:block}
+.form-input{width:100%;background:var(--sur2);border:1px solid var(--bor2);border-radius:9px;
+            padding:9px 12px;color:var(--txt);font-size:13px;outline:none}
+.form-input:focus{border-color:var(--g)}
+.form-select{width:100%;background:var(--sur2);border:1px solid var(--bor2);border-radius:9px;
+             padding:9px 12px;color:var(--txt);font-size:13px;outline:none}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+/* Search bar */
+.filter-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.filter-bar input{flex:1;min-width:200px;background:var(--sur2);border:1px solid var(--bor2);
+                  border-radius:9px;padding:8px 12px;color:var(--txt);font-size:13px;outline:none}
+.filter-bar input:focus{border-color:var(--g)}
+/* Empty state */
+.empty{text-align:center;padding:48px 0;color:var(--sub)}
+.empty .icon{font-size:36px;margin-bottom:12px}
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+       background:var(--sur);border:1px solid var(--bor);border-radius:10px;
+       padding:10px 18px;font-size:13px;font-weight:600;z-index:9999;
+       opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1><span>POS</span> Register Manager</h1>
+  <div class="topbar-spacer"></div>
+  <a href="pos-live-floor.html" class="btn btn-secondary">&#x1F4CA; Live Floor</a>
+  <a href="pos.html" class="btn btn-secondary">&#x2190; Back to POS</a>
+</div>
+
+<div class="wrap">
+  <!-- KPIs -->
+  <div class="kpi-row" id="kpi-row">
+    <div class="kpi"><div class="kpi-label">Total Registers</div><div class="kpi-value g" id="kpi-total">—</div></div>
+    <div class="kpi"><div class="kpi-label">Active Now</div><div class="kpi-value b" id="kpi-active">—</div></div>
+    <div class="kpi"><div class="kpi-label">Online</div><div class="kpi-value g" id="kpi-online">—</div></div>
+    <div class="kpi"><div class="kpi-label">Offline / Error</div><div class="kpi-value r" id="kpi-offline">—</div></div>
+  </div>
+
+  <!-- Registers -->
+  <div class="sec-header">
+    <div class="sec-title">All Registers</div>
+    <button class="btn btn-g" onclick="openCreate()">+ Add Register</button>
+  </div>
+  <div class="filter-bar">
+    <input type="search" id="reg-search" placeholder="Search by name or ID…" oninput="filterRegs()">
+    <select class="form-select" style="width:auto;min-width:140px" id="status-filter" onchange="filterRegs()">
+      <option value="">All Statuses</option>
+      <option value="active">Active</option>
+      <option value="idle">Idle</option>
+      <option value="offline">Offline</option>
+      <option value="inactive">Inactive</option>
+    </select>
+  </div>
+  <div class="reg-grid" id="reg-grid">
+    <div class="empty"><div class="icon">🖥️</div><div>Loading registers…</div></div>
+  </div>
+</div>
+
+<!-- Create / Edit Modal -->
+<div class="overlay" id="reg-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">New Register</div>
+    <input type="hidden" id="edit-id">
+    <div class="form-group">
+      <label class="form-label">Register ID *</label>
+      <input class="form-input" id="f-reg-id" placeholder="e.g. REG001" maxlength="32">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Register Name *</label>
+      <input class="form-input" id="f-reg-name" placeholder="e.g. Till 1 — Main Entrance" maxlength="128">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Branch ID</label>
+      <input class="form-input" id="f-branch-id" placeholder="default">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Status</label>
+      <select class="form-select" id="f-status">
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+        <option value="maintenance">Maintenance</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Device Notes (optional)</label>
+      <input class="form-input" id="f-devices-note" placeholder="e.g. Epson TM-T82 + Honeywell scanner">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-g" id="modal-save-btn" onclick="saveRegister()">Create Register</button>
+    </div>
+  </div>
+</div>
+
+<!-- Assign Cashier Modal -->
+<div class="overlay" id="assign-modal">
+  <div class="modal">
+    <div class="modal-title">Assign Cashier</div>
+    <input type="hidden" id="assign-reg-id">
+    <div class="form-group">
+      <label class="form-label">Cashier Name</label>
+      <input class="form-input" id="f-cashier-name" placeholder="Full name">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cashier UID (optional)</label>
+      <input class="form-input" id="f-cashier-uid" placeholder="Firebase UID">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeAssignModal()">Cancel</button>
+      <button class="btn btn-g" onclick="saveAssignment()">Assign</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="firebase.js"></script>
+<script>
+'use strict';
+
+const app  = firebase.apps[0] || firebase.initializeApp(window.__sokoniConfig || {});
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const fn   = firebase.functions();
+
+let _merchantId = null;
+let _allRegs    = [];
+let _liveStates = {};
+
+/* ── Auth guard ── */
+auth.onAuthStateChanged(async u => {
+  if (!u) { window.location.href = 'pos.html'; return; }
+  const token = await u.getIdTokenResult();
+  if (!token.claims.admin && !token.claims.superAdmin && !token.claims.manager) {
+    window.location.href = 'pos.html'; return;
+  }
+  _merchantId = token.claims.merchantId || localStorage.getItem('sokoni_merchant_id') || u.uid;
+  await loadRegisters();
+  watchTillStates();
+});
+
+/* ── Load registers ── */
+async function loadRegisters() {
+  try {
+    const cf = fn.httpsCallable('mtRegisterList');
+    const res = await cf({ merchantId: _merchantId, includeInactive: true });
+    _allRegs = res.data.registers || [];
+    renderRegs(_allRegs);
+    updateKPIs();
+  } catch (err) {
+    _toast('Failed to load registers: ' + err.message, true);
+  }
+}
+
+/* ── Live till states (onSnapshot) ── */
+function watchTillStates() {
+  const cutoff = Date.now() - 300000;
+  db.collection('posTillState')
+    .where('merchantId', '==', _merchantId)
+    .where('clientTs', '>=', cutoff)
+    .onSnapshot(snap => {
+      snap.docs.forEach(d => { _liveStates[d.data().registerId] = d.data(); });
+      renderRegs(_allRegs);
+      updateKPIs();
+    });
+}
+
+/* ── KPIs ── */
+function updateKPIs() {
+  const states = Object.values(_liveStates);
+  const now    = Date.now();
+  const active  = states.filter(s => s.currentState !== 'IDLE' && s.currentState !== 'OFFLINE' && (now - s.clientTs) < 300000);
+  const online  = states.filter(s => s.online && (now - s.clientTs) < 300000);
+  const offline = _allRegs.filter(r => !_liveStates[r.registerId] || !_liveStates[r.registerId].online);
+  document.getElementById('kpi-total').textContent   = _allRegs.length;
+  document.getElementById('kpi-active').textContent  = active.length;
+  document.getElementById('kpi-online').textContent  = online.length;
+  document.getElementById('kpi-offline').textContent = offline.length;
+}
+
+/* ── Render ── */
+function _regStatus(reg) {
+  const state = _liveStates[reg.registerId];
+  if (!state || (Date.now() - state.clientTs) > 300000) return reg.status === 'active' ? 'idle' : reg.status;
+  if (!state.online) return 'offline';
+  if (state.currentState && state.currentState !== 'IDLE') return 'active';
+  return 'idle';
+}
+
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderRegs(regs) {
+  const query  = (document.getElementById('reg-search').value || '').toLowerCase().trim();
+  const filter = document.getElementById('status-filter').value;
+  const grid   = document.getElementById('reg-grid');
+
+  const filtered = regs.filter(r => {
+    const s = _regStatus(r);
+    if (filter && s !== filter) return false;
+    if (query && !r.registerName.toLowerCase().includes(query) && !r.registerId.toLowerCase().includes(query)) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    grid.innerHTML = `<div class="empty"><div class="icon">🖥️</div><div>${regs.length ? 'No registers match your filter' : 'No registers yet — create the first one'}</div></div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(r => {
+    const s     = _regStatus(r);
+    const state = _liveStates[r.registerId];
+    const cashier = state?.cashierName || r.assignedCashierName || '—';
+    const total   = state?.salesTotal || 0;
+    const count   = state?.salesCount || 0;
+    const printer = state?.printerStatus || '—';
+    const hasDevs = r.devices && Object.values(r.devices).some(Boolean);
+    return `
+      <div class="reg-card ${_esc(s)}">
+        <div class="reg-header">
+          <div>
+            <div class="reg-name">${_esc(r.registerName)}</div>
+            <div class="reg-id">ID: ${_esc(r.registerId)}</div>
+          </div>
+          <span class="status-badge ${_esc(s)}">${s.charAt(0).toUpperCase()+s.slice(1)}</span>
+        </div>
+        <div class="reg-row"><span>Cashier</span><strong>${_esc(cashier)}</strong></div>
+        <div class="reg-row"><span>Branch</span><strong>${_esc(r.branchId||'default')}</strong></div>
+        <div class="reg-row"><span>Session Sales</span><strong>KES ${(total/100).toFixed(2)} (${count} items)</strong></div>
+        <div class="reg-row"><span>Printer</span><strong>${_esc(printer)}</strong></div>
+        ${hasDevs ? `<div class="reg-devices">${Object.entries(r.devices||{}).filter(([,v])=>v).map(([k])=>`<span class="dev-chip ok">${_esc(k)}</span>`).join('')}</div>` : ''}
+        <div class="reg-actions">
+          <button onclick="openEdit('${_esc(r.registerId)}')">&#x270E; Edit</button>
+          <button onclick="openAssign('${_esc(r.registerId)}')">&#x1F464; Assign</button>
+          <button class="del" onclick="deleteReg('${_esc(r.registerId)}')">&#x1F5D1;</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function filterRegs() { renderRegs(_allRegs); }
+
+/* ── Create / Edit ── */
+function openCreate() {
+  document.getElementById('edit-id').value    = '';
+  document.getElementById('f-reg-id').value   = '';
+  document.getElementById('f-reg-name').value = '';
+  document.getElementById('f-branch-id').value= '';
+  document.getElementById('f-status').value   = 'active';
+  document.getElementById('f-devices-note').value = '';
+  document.getElementById('modal-title').textContent = 'New Register';
+  document.getElementById('modal-save-btn').textContent = 'Create Register';
+  document.getElementById('f-reg-id').removeAttribute('disabled');
+  document.getElementById('reg-modal').classList.add('open');
+  setTimeout(() => document.getElementById('f-reg-id').focus(), 80);
+}
+
+function openEdit(regId) {
+  const r = _allRegs.find(x => x.registerId === regId);
+  if (!r) return;
+  document.getElementById('edit-id').value    = regId;
+  document.getElementById('f-reg-id').value   = r.registerId;
+  document.getElementById('f-reg-name').value = r.registerName;
+  document.getElementById('f-branch-id').value= r.branchId || '';
+  document.getElementById('f-status').value   = r.status || 'active';
+  document.getElementById('f-devices-note').value = r.devicesNote || '';
+  document.getElementById('modal-title').textContent = 'Edit Register';
+  document.getElementById('modal-save-btn').textContent = 'Save Changes';
+  document.getElementById('f-reg-id').setAttribute('disabled', true);
+  document.getElementById('reg-modal').classList.add('open');
+  setTimeout(() => document.getElementById('f-reg-name').focus(), 80);
+}
+
+async function saveRegister() {
+  const editId     = document.getElementById('edit-id').value.trim();
+  const registerId = document.getElementById('f-reg-id').value.trim();
+  const name       = document.getElementById('f-reg-name').value.trim();
+  const branchId   = document.getElementById('f-branch-id').value.trim() || 'default';
+  const status     = document.getElementById('f-status').value;
+  if (!name || (!editId && !registerId)) { _toast('Register ID and Name are required', true); return; }
+
+  const btn = document.getElementById('modal-save-btn');
+  btn.textContent = 'Saving…'; btn.disabled = true;
+
+  try {
+    if (editId) {
+      const cf = fn.httpsCallable('mtRegisterUpdate');
+      await cf({ merchantId: _merchantId, registerId: editId, patch: { registerName: name, status, branchId } });
+      _toast('Register updated');
+    } else {
+      const cf = fn.httpsCallable('mtRegisterCreate');
+      await cf({ merchantId: _merchantId, branchId, registerId, registerName: name });
+      _toast('Register created');
+    }
+    closeModal();
+    await loadRegisters();
+  } catch (err) {
+    _toast(err.message || 'Save failed', true);
+  } finally {
+    btn.textContent = editId ? 'Save Changes' : 'Create Register'; btn.disabled = false;
+  }
+}
+
+async function deleteReg(regId) {
+  if (!confirm(`Delete register "${regId}"? This cannot be undone.`)) return;
+  try {
+    const cf = fn.httpsCallable('mtRegisterDelete');
+    await cf({ merchantId: _merchantId, registerId: regId });
+    _toast('Register deleted');
+    _allRegs = _allRegs.filter(r => r.registerId !== regId);
+    renderRegs(_allRegs);
+    updateKPIs();
+  } catch (err) { _toast(err.message || 'Delete failed', true); }
+}
+
+function closeModal() { document.getElementById('reg-modal').classList.remove('open'); }
+
+/* ── Assign Cashier ── */
+function openAssign(regId) {
+  document.getElementById('assign-reg-id').value = regId;
+  const r = _allRegs.find(x => x.registerId === regId);
+  document.getElementById('f-cashier-name').value = r?.assignedCashierName || '';
+  document.getElementById('f-cashier-uid').value  = r?.assignedCashierId   || '';
+  document.getElementById('assign-modal').classList.add('open');
+  setTimeout(() => document.getElementById('f-cashier-name').focus(), 80);
+}
+
+async function saveAssignment() {
+  const regId = document.getElementById('assign-reg-id').value;
+  const name  = document.getElementById('f-cashier-name').value.trim();
+  const uid   = document.getElementById('f-cashier-uid').value.trim();
+  if (!regId) return;
+  try {
+    const cf = fn.httpsCallable('mtRegisterAssign');
+    await cf({ merchantId: _merchantId, registerId: regId, cashierId: uid || null, cashierName: name || null });
+    _toast('Cashier assigned');
+    closeAssignModal();
+    await loadRegisters();
+  } catch (err) { _toast(err.message || 'Assignment failed', true); }
+}
+
+function closeAssignModal() { document.getElementById('assign-modal').classList.remove('open'); }
+
+/* ── Toast ── */
+function _toast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = isError ? 'rgba(239,83,80,.4)' : 'rgba(113,255,0,.3)';
+  t.style.color = isError ? '#ef5350' : '#71ff00';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ── Close on backdrop ── */
+['reg-modal','assign-modal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    if (e.target === e.currentTarget) { e.currentTarget.classList.remove('open'); }
+  });
+});
+</script>
+</body>
+</html>

@@ -1490,6 +1490,8 @@ body.queue-mode .hotkey-bar      { display: none; }
 <script src="pos-customers.js"></script>
 <script src="pos-loyalty-engine.js"></script>
 <script src="sokoni-universal-printer.js"></script>
+<script src="sokoni-pos-performance.js"></script>
+<script src="pos-multi-till.js"></script>
 <script src="sokoni-cash-drawer.js" defer></script>
 <script src="pos-manager-auth.js" defer></script>
 <script src="pos-resilience.js"></script>
@@ -1557,6 +1559,17 @@ const Checkout = (() => {
     if (msg)   msg.textContent   = def.label;
     /* Broadcast to customer display */
     if (_s.displayChannel) _s.displayChannel.postMessage({ type: 'state', data: { state: key, label: def.label } });
+    /* Broadcast live till state to floor dashboard */
+    if (window.PosMultiTill) {
+      PosMultiTill.broadcastState({
+        cashierId:    _s.cashierId,
+        cashierName:  _s.cashierName,
+        shiftId:      _s.shiftId,
+        currentState: key,
+        cartItemCount: _s.items ? _s.items.reduce((s,i) => s + i.qty, 0) : 0,
+        cartTotal:    _s.items ? _s.items.reduce((s,i) => s + i.unitPrice * i.qty, 0) : 0,
+      });
+    }
   }
 
   /* ── Init ── */
@@ -1575,7 +1588,8 @@ const Checkout = (() => {
       _s.cashierId   = u.uid;
       _s.cashierName = u.displayName || u.email || 'Cashier';
       document.getElementById('topbar-cashier').textContent = _s.cashierName;
-      if (window.CashDrawer) CashDrawer.updateContext({ cashierId: _s.cashierId, cashierName: _s.cashierName });
+      if (window.CashDrawer)   CashDrawer.updateContext({ cashierId: _s.cashierId, cashierName: _s.cashierName });
+      if (window.PosMultiTill) PosMultiTill.broadcastState({ cashierId: _s.cashierId, cashierName: _s.cashierName, currentState: 'IDLE' });
       /* Check for active shift; prompt to open if none */
       await _checkShiftStatus();
     });
@@ -1643,6 +1657,16 @@ const Checkout = (() => {
     /* Cash drawer SDK — init with store context */
     if (window.CashDrawer) {
       CashDrawer.init({ merchantId: _s.merchantId, branchId: _s.branchId }).catch(() => {});
+    }
+
+    /* Multi-till broadcasting */
+    if (window.PosMultiTill) {
+      await PosMultiTill.init({ merchantId: _s.merchantId, branchId: _s.branchId }).catch(() => {});
+    }
+
+    /* Performance engine — warm in-memory product index from IDB */
+    if (window.PosPerf) {
+      PosPerf.init().then(n => { if (n > 0) console.log('[PosPerf] Warmed', n, 'products'); }).catch(() => {});
     }
 
     _s.saleStartTs = Date.now();
@@ -1742,7 +1766,10 @@ const Checkout = (() => {
       gr.style.display = '';
       return;
     }
-    const results = await PosInventory.search(q.trim(), 20);
+    /* PosPerf (in-memory index) is sub-100ms; fall back to PosInventory (IDB) if not ready */
+    const results = (window.PosPerf && PosPerf.ready)
+      ? PosPerf.search(q.trim(), 20)
+      : await PosInventory.search(q.trim(), 20);
     sr.innerHTML = '';
     gr.style.display = 'none';
     sr.classList.add('visible');
@@ -1824,7 +1851,9 @@ const Checkout = (() => {
     if (detected.type === 'phone') {
       lookupCustomer(detected.value); return;
     }
-    /* Try as product barcode */
+    /* Try as product barcode — PosPerf is O(1), IDB is fallback */
+    const perfHit = (window.PosPerf && PosPerf.ready) ? PosPerf.barcode(raw) : null;
+    if (perfHit) { addItem(perfHit); return; }
     try {
       const prod = await PosInventory.byBarcode(raw);
       if (prod) { addItem(prod); return; }
@@ -2527,6 +2556,8 @@ const Checkout = (() => {
         idempotencyKey,
         merchantId:    _s.merchantId,
         branchId:      _s.branchId,
+        registerId:    (window.PosMultiTill && PosMultiTill.getRegisterId()) || null,
+        registerName:  (window.PosMultiTill && PosMultiTill.getRegisterName()) || null,
         items:         _s.items.map(i => ({ productId:i.productId, qty:i.qty, unitPrice:i.unitPrice, name:i.name })),
         customer:      _s.customer ? { id:_s.customer.id, name:_s.customer.name, phone:_s.customer.phone } : null,
         payments,
@@ -2541,6 +2572,8 @@ const Checkout = (() => {
 
       const { receipt, loyaltyAwarded } = res.data;
       _s.lastPayments = payments;
+      /* Record sale in multi-till session counters */
+      if (window.PosMultiTill) PosMultiTill.recordSale(totals.total);
       _setState('SUCCESS');
       _broadcastThankYou({ customerName: _s.customer?.name, loyaltyEarned: loyaltyAwarded });
 

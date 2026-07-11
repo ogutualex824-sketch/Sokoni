@@ -579,6 +579,35 @@ firebase deploy --only functions:cdOpenDrawer,functions:cdGetAuditLog,functions:
 
 ---
 
+## SmartPOS Multi-Till System v1.0 — 9 CFs (QUOTA BLOCKED)
+
+**Added:** 2026-07-11
+**File:** `functions/pos-multi-till.js`
+
+| CF | Auth | Purpose |
+|---|---|---|
+| `mtRegisterCreate` | admin | Create a register config doc |
+| `mtRegisterUpdate` | admin | Update name / status / devices |
+| `mtRegisterDelete` | admin | Soft-delete (status: deleted) |
+| `mtRegisterList` | manager+ | List all registers for a merchant |
+| `mtRegisterAssign` | manager+ | Assign/unassign cashier to till |
+| `mtGetLiveFloor` | manager+ | Server snapshot of active tills |
+| `mtGetFloorSummary` | manager+ | Aggregated store KPIs |
+| `mtGetRegisterStats` | manager+ | Per-register config + live state |
+| `mtRecordTillEvent` | cashier+ | Log a floor event |
+
+**Hosting deploy (do now — no quota needed):**
+```bash
+firebase deploy --only hosting
+```
+
+**CF deploy command (run once quota clears):**
+```bash
+firebase deploy --only functions:mtRegisterCreate,functions:mtRegisterUpdate,functions:mtRegisterDelete,functions:mtRegisterList,functions:mtRegisterAssign,functions:mtGetLiveFloor,functions:mtGetFloorSummary,functions:mtGetRegisterStats,functions:mtRecordTillEvent
+```
+
+---
+
 ## ▶ AUTHORITATIVE PENDING SNAPSHOT — 2026-07-11 (updated)
 _Supersedes the older per-batch counts below (14/23, 0/143 were partial views)._
 
