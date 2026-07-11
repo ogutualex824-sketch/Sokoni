@@ -1,4 +1,47 @@
-﻿## [2026-07-12] — Premium Provider Cards: Full Sizing, Visible Buttons, Premium Layout
+﻿## [2026-07-12] — Universal Enterprise Onboarding Engine (UEOE) + Provider Dashboard
+
+### Summary
+Replaced all independent onboarding flows with a single unified system supporting 20 roles under one SOKONI account. Users can hold multiple roles (merchant + provider + driver, etc.) without re-authenticating. The wizard auto-routes to the right step sequence per role, saves drafts on every step, and activates the account profile + subscription atomically on completion. A dedicated provider dashboard gives service providers a full post-onboarding ops centre: KPI cards, today's schedule, pending request queue, earnings with SVG bar chart, reviews with reply functionality, and 7-tab settings.
+
+### Files Changed
+- `onboarding.html` — REBUILT: 3-phase wizard (Auth → Role Selection → 20-role dynamic wizard); 20 role cards with icons; data-driven `FLOWS` object; 6 step renderers for merchant, 8 for provider, 6 for rider, 3 for buyer; 14 remaining roles use generic `_gen` 5-step flow; plan selection + billing toggle; draft auto-save; `W._activate()` calls `activateRole + activateSubscription` atomically
+- `provider-dashboard.html` — NEW: 5-panel enterprise dashboard (Overview, Bookings, Earnings, Reviews, Settings); KPI cards; subscription status + profile completion bar; booking confirm/decline/complete actions; SVG earnings chart; payout request flow; 7-tab settings (Profile, Availability, Pricing, Payment, Notifications, Subscription, Verification); premium dark layout, sidebar+bottom-nav responsive
+- `functions/index.js` — added `exports.onboardingDispatch` wiring 12-op Universal Onboarding dispatcher
+- `firestore.rules` — added CF-only rules for: `accounts/{uid}`, `accountDrafts/{draftId}`, `accountProfiles/{profileId}`, `accountSubscriptions/{subId}`, `accountHandles/{handle}`
+- `firestore.indexes.json` — added 4 composite indexes: accountProfiles(accountId+role), accountProfiles(accountId+status+createdAt), accountSubscriptions(accountId+role+status), accountSubscriptions(accountId+renewalAt)
+
+### Architecture
+- One `accounts/{uid}` master doc: `roles[]`, `profiles{}` map, `currentRole`, `currentProfileId`
+- `accountProfiles/{profileId}`: role-agnostic; `role`, `accountId`, `status`, `data` (role-specific payload)
+- `accountDrafts/{uid}_{role}`: per-role draft with merge writes per step
+- `accountSubscriptions/{SUB-XXXXXXXX}`: cross-role subscription with full lifecycle (trialing→active→grace→expired)
+- ID prefixes: BUY/BIZ/PRV/RDR/DRV/CUR/PRP/HTL/RST/PHM/EVT/EMP/FRL/DST/WSL/MFR/NGO/SCH/MED/FIN + SUB
+- `DASHBOARD_MAP`: role → HTML file routing after activation
+- Custom Firebase Auth claims per role: `{ [role]: true, [role+'Id']: profileId }`
+
+### Security Implications
+- All account writes are CF-only (`allow write: if false` in Firestore rules)
+- `enforceAppCheck: true` on `onboardingDispatch` dispatcher
+- Firebase Auth custom claims set server-side only via `onbActivateRole`
+- `accountSubscriptions` readable only by owner or admin; no client write path
+
+### Performance Implications
+- `onboardingDispatch` lazy-loads `universal-onboarding._h` — cold start loads handler module once
+- 4 new Firestore composite indexes cover all expected query patterns for account/subscription lookups
+- Provider dashboard uses a single `providerGetDashboard` call to populate all KPI data; no N+1 reads
+
+### Deploy Steps
+1. `firebase deploy --only functions:onboardingDispatch`
+2. `firebase deploy --only firestore:rules`
+3. `firebase deploy --only firestore:indexes`
+4. `firebase deploy --only hosting`
+
+### Breaking Changes
+None — existing role-specific onboarding pages remain functional; UEOE is the new unified entry point.
+
+---
+
+## [2026-07-12] — Premium Provider Cards: Full Sizing, Visible Buttons, Premium Layout
 
 ### Summary
 Service provider cards across all hub pages (services.html, cleaning.html, electrical.html, plumbing.html, phone-repair.html, car-rental.html, legal-hub.html) were cramped and unreadable — `compact-grid.css` and `premium.css` were forcing 4-6 column grids with 9-11px text and 8px button padding. Fixed comprehensively: provider cards now use `auto-fill minmax(260-300px)` grids (2-3 columns on desktop), full-width Book buttons with 14px font and 48px min-height, 16px provider names, 20px rate prices, 13px bio text, 52-56px avatars. Three-layer fix covers: `premium.css` base rules, `compact-grid.css` mobile-only breakpoint, and `sokoni-platform-override.css` final-cascade anchor rules so no subsequent injection can crush the sizes again. Lawyer cards in legal-hub.html upgraded identically. SW bumped to v26.
