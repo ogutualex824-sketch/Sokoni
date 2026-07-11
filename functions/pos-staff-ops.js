@@ -1,9 +1,11 @@
-'use strict';
+﻿'use strict';
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 if (!admin.apps.length) admin.initializeApp();
+
+exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
 const db = admin.firestore();
 
 const _CF = { region: 'us-central1', enforceAppCheck: true };
@@ -63,7 +65,7 @@ function _round2(n) {
  *
  * Input: { sellerId, openingCash, branchId, cashierName }
  */
-exports.openShift = onCall(_CF, async (req) => {
+exports.openShift = onCall(_CF, exports._h.openShift = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
   const sellerId = _requireSeller(data);
@@ -124,7 +126,7 @@ exports.openShift = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, closingCash, notes }
  */
-exports.closeShift = onCall(_CF, async (req) => {
+exports.closeShift = onCall(_CF, exports._h.closeShift = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
   const sellerId = _requireSeller(data);
@@ -221,7 +223,7 @@ exports.closeShift = onCall(_CF, async (req) => {
  *
  * Input: { sellerId }
  */
-exports.getCurrentShift = onCall(_CF, async (req) => {
+exports.getCurrentShift = onCall(_CF, exports._h.getCurrentShift = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
   const sellerId = _requireSeller(data);
@@ -246,7 +248,7 @@ exports.getCurrentShift = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, cashierUid?, startDate?, endDate?, limit? }
  */
-exports.getShiftHistory = onCall(_CF, async (req) => {
+exports.getShiftHistory = onCall(_CF, exports._h.getShiftHistory = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
@@ -284,7 +286,7 @@ exports.getShiftHistory = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, cashierName, expectedStartTime? (HH:MM, default '08:00') }
  */
-exports.clockIn = onCall(_CF, async (req) => {
+exports.clockIn = onCall(_CF, exports._h.clockIn = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
   const sellerId = _requireSeller(data);
@@ -345,7 +347,7 @@ exports.clockIn = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, notes? }
  */
-exports.clockOut = onCall(_CF, async (req) => {
+exports.clockOut = onCall(_CF, exports._h.clockOut = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
   const sellerId = _requireSeller(data);
@@ -387,7 +389,7 @@ exports.clockOut = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, cashierUid?, startDate, endDate }
  */
-exports.getAttendance = onCall(_CF, async (req) => {
+exports.getAttendance = onCall(_CF, exports._h.getAttendance = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
@@ -414,7 +416,7 @@ exports.getAttendance = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, period (YYYY-MM) }
  */
-exports.getAttendanceSummary = onCall(_CF, async (req) => {
+exports.getAttendanceSummary = onCall(_CF, exports._h.getAttendanceSummary = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
@@ -481,7 +483,7 @@ exports.getAttendanceSummary = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, cashierUid? (omit for default), rate (percentage 0-100) }
  */
-exports.setCommissionRate = onCall(_CF, async (req) => {
+exports.setCommissionRate = onCall(_CF, exports._h.setCommissionRate = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
   const { data } = req;
@@ -513,7 +515,7 @@ exports.setCommissionRate = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, cashierUid }
  */
-exports.getCommissionRate = onCall(_CF, async (req) => {
+exports.getCommissionRate = onCall(_CF, exports._h.getCommissionRate = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
@@ -540,7 +542,7 @@ exports.getCommissionRate = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, cashierUid, month (YYYY-MM) }
  */
-exports.calculateMonthlyCommission = onCall(_CF, async (req) => {
+exports.calculateMonthlyCommission = onCall(_CF, exports._h.calculateMonthlyCommission = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
@@ -646,7 +648,7 @@ exports.calculateMonthlyCommission = onCall(_CF, async (req) => {
  *
  * Input: { commissionId, paidAt? }
  */
-exports.approveCommission = onCall(_CF, async (req) => {
+exports.approveCommission = onCall(_CF, exports._h.approveCommission = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
   const { data } = req;
@@ -676,7 +678,7 @@ exports.approveCommission = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, month (YYYY-MM) }
  */
-exports.getCommissionsSummary = onCall(_CF, async (req) => {
+exports.getCommissionsSummary = onCall(_CF, exports._h.getCommissionsSummary = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
@@ -708,7 +710,7 @@ exports.getCommissionsSummary = onCall(_CF, async (req) => {
  *   type: 'discount' | 'refund' | 'void' | 'price_override' | 'drawer_open'
  *   requestData: { amount?, reason?, saleId?, ... }
  */
-exports.createApprovalRequest = onCall(_CF, async (req) => {
+exports.createApprovalRequest = onCall(_CF, exports._h.createApprovalRequest = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
   const sellerId = _requireSeller(data);
@@ -754,7 +756,7 @@ exports.createApprovalRequest = onCall(_CF, async (req) => {
  *
  * Input: { approvalId, decision ('approved'|'rejected'), notes? }
  */
-exports.reviewApproval = onCall(_CF, async (req) => {
+exports.reviewApproval = onCall(_CF, exports._h.reviewApproval = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'supervisor');
   const { data } = req;
@@ -794,7 +796,7 @@ exports.reviewApproval = onCall(_CF, async (req) => {
  *
  * Input: { sellerId }
  */
-exports.getPendingApprovals = onCall(_CF, async (req) => {
+exports.getPendingApprovals = onCall(_CF, exports._h.getPendingApprovals = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'supervisor');
   const { data } = req;
@@ -825,7 +827,7 @@ exports.getPendingApprovals = onCall(_CF, async (req) => {
  *
  * Input: { approvalId }
  */
-exports.checkApproval = onCall(_CF, async (req) => {
+exports.checkApproval = onCall(_CF, exports._h.checkApproval = async (req) => {
   _requireAuth(req);
   const { data } = req;
   if (!data.approvalId) throw new HttpsError('invalid-argument', 'approvalId is required');
@@ -863,7 +865,7 @@ exports.checkApproval = onCall(_CF, async (req) => {
  *   denominations?: [{ denomination: number, count: number }]
  * }
  */
-exports.submitCashCount = onCall(_CF, async (req) => {
+exports.submitCashCount = onCall(_CF, exports._h.submitCashCount = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
   const sellerId = _requireSeller(data);
@@ -943,7 +945,7 @@ exports.submitCashCount = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, startDate?, endDate?, limit? }
  */
-exports.getCashReconciliation = onCall(_CF, async (req) => {
+exports.getCashReconciliation = onCall(_CF, exports._h.getCashReconciliation = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
@@ -969,7 +971,7 @@ exports.getCashReconciliation = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, startDate, endDate }
  */
-exports.getCashVarianceSummary = onCall(_CF, async (req) => {
+exports.getCashVarianceSummary = onCall(_CF, exports._h.getCashVarianceSummary = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
@@ -1036,7 +1038,7 @@ exports.getCashVarianceSummary = onCall(_CF, async (req) => {
  *
  * Input: { sellerId, period (YYYY-MM) }
  */
-exports.getStaffPerformanceDashboard = onCall(_CF, async (req) => {
+exports.getStaffPerformanceDashboard = onCall(_CF, exports._h.getStaffPerformanceDashboard = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;

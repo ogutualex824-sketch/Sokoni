@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * SOKONI — SmartPOS Completeness Engine (Sprint 4.1)
  * Gift Cards • Layaway • Park & Suspend Sales • KDS • Cycle Count • Multi-Currency
@@ -6,6 +6,8 @@
  */
 const { onCall } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+
+exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -55,7 +57,7 @@ async function _assertAdmin(auth) {
 // ─── GIFT CARDS ──────────────────────────────────────────────────────────────
 // Collections: giftCards/{code}
 
-exports.giftCardIssue = onCall({ enforceAppCheck: true }, async (req) => {
+exports.giftCardIssue = onCall({ enforceAppCheck: true }, exports._h.giftCardIssue = async (req) => {
   const { shopId, amount, pin, recipientName } = req.data;
   await _assertPOS(req.auth, shopId);
   if (!amount || amount <= 0 || amount > 100000) throw new Error('invalid-amount');
@@ -90,7 +92,7 @@ exports.giftCardIssue = onCall({ enforceAppCheck: true }, async (req) => {
   return { code, amount, expiryDate: expiryDate.toISOString() };
 });
 
-exports.giftCardRedeem = onCall({ enforceAppCheck: true }, async (req) => {
+exports.giftCardRedeem = onCall({ enforceAppCheck: true }, exports._h.giftCardRedeem = async (req) => {
   const { shopId, code, pin, amount } = req.data;
   await _assertPOS(req.auth, shopId);
   if (!code || !amount || amount <= 0) throw new Error('invalid-input');
@@ -122,7 +124,7 @@ exports.giftCardRedeem = onCall({ enforceAppCheck: true }, async (req) => {
   });
 });
 
-exports.giftCardBalance = onCall({ enforceAppCheck: true }, async (req) => {
+exports.giftCardBalance = onCall({ enforceAppCheck: true }, exports._h.giftCardBalance = async (req) => {
   const { code } = req.data;
   if (!code || !req.auth) throw new Error('invalid-input');
   const snap = await _db().collection('giftCards')
@@ -139,7 +141,7 @@ exports.giftCardBalance = onCall({ enforceAppCheck: true }, async (req) => {
   };
 });
 
-exports.giftCardVoid = onCall({ enforceAppCheck: true }, async (req) => {
+exports.giftCardVoid = onCall({ enforceAppCheck: true }, exports._h.giftCardVoid = async (req) => {
   const { shopId, code, reason } = req.data;
   await _assertPOS(req.auth, shopId);
   const ref = _db().collection('giftCards')
@@ -158,7 +160,7 @@ exports.giftCardVoid = onCall({ enforceAppCheck: true }, async (req) => {
   return { success: true };
 });
 
-exports.giftCardList = onCall({ enforceAppCheck: true }, async (req) => {
+exports.giftCardList = onCall({ enforceAppCheck: true }, exports._h.giftCardList = async (req) => {
   const { shopId, status } = req.data;
   await _assertPOS(req.auth, shopId);
   const snap = await _db().collection('giftCards')
@@ -177,7 +179,7 @@ exports.giftCardList = onCall({ enforceAppCheck: true }, async (req) => {
 // Collections: layaways/{id}
 // Payments stored as array in doc (avoids subcollection + no extra index)
 
-exports.layawayCreate = onCall({ enforceAppCheck: true }, async (req) => {
+exports.layawayCreate = onCall({ enforceAppCheck: true }, exports._h.layawayCreate = async (req) => {
   const {
     shopId, customerName, customerPhone, items,
     depositAmount, totalAmount, depositMethod, dueDate, notes,
@@ -216,7 +218,7 @@ exports.layawayCreate = onCall({ enforceAppCheck: true }, async (req) => {
   return { layawayId: id, balanceDue: totalAmount - depositAmount };
 });
 
-exports.layawayAddPayment = onCall({ enforceAppCheck: true }, async (req) => {
+exports.layawayAddPayment = onCall({ enforceAppCheck: true }, exports._h.layawayAddPayment = async (req) => {
   const { layawayId, shopId, amount, method } = req.data;
   await _assertPOS(req.auth, shopId);
   if (!amount || amount <= 0) throw new Error('invalid-amount');
@@ -243,7 +245,7 @@ exports.layawayAddPayment = onCall({ enforceAppCheck: true }, async (req) => {
   });
 });
 
-exports.layawayFulfill = onCall({ enforceAppCheck: true }, async (req) => {
+exports.layawayFulfill = onCall({ enforceAppCheck: true }, exports._h.layawayFulfill = async (req) => {
   const { layawayId, shopId, finalAmount, finalMethod } = req.data;
   await _assertPOS(req.auth, shopId);
 
@@ -280,7 +282,7 @@ exports.layawayFulfill = onCall({ enforceAppCheck: true }, async (req) => {
   });
 });
 
-exports.layawayCancel = onCall({ enforceAppCheck: true }, async (req) => {
+exports.layawayCancel = onCall({ enforceAppCheck: true }, exports._h.layawayCancel = async (req) => {
   const { layawayId, shopId, reason } = req.data;
   await _assertPOS(req.auth, shopId);
 
@@ -305,7 +307,7 @@ exports.layawayCancel = onCall({ enforceAppCheck: true }, async (req) => {
   return { success: true, refundablePaid: amountPaid };
 });
 
-exports.layawayList = onCall({ enforceAppCheck: true }, async (req) => {
+exports.layawayList = onCall({ enforceAppCheck: true }, exports._h.layawayList = async (req) => {
   const { shopId, status } = req.data;
   await _assertPOS(req.auth, shopId);
   const snap = await _db().collection('layaways')
@@ -325,7 +327,7 @@ exports.layawayList = onCall({ enforceAppCheck: true }, async (req) => {
 // Multi-cashier: stored in Firestore so any cashier can retrieve
 // Offline fallback: caller can cache in IndexedDB if CF fails
 
-exports.salePark = onCall({ enforceAppCheck: true }, async (req) => {
+exports.salePark = onCall({ enforceAppCheck: true }, exports._h.salePark = async (req) => {
   const { shopId, slotName, cart, total, discount, customerId, customerName, notes } = req.data;
   await _assertPOS(req.auth, shopId);
   if (!cart || cart.length === 0) throw new Error('empty-cart');
@@ -352,7 +354,7 @@ exports.salePark = onCall({ enforceAppCheck: true }, async (req) => {
   return { parkId: id };
 });
 
-exports.saleRetrieve = onCall({ enforceAppCheck: true }, async (req) => {
+exports.saleRetrieve = onCall({ enforceAppCheck: true }, exports._h.saleRetrieve = async (req) => {
   const { parkId, shopId } = req.data;
   await _assertPOS(req.auth, shopId);
 
@@ -375,7 +377,7 @@ exports.saleRetrieve = onCall({ enforceAppCheck: true }, async (req) => {
   };
 });
 
-exports.saleListParked = onCall({ enforceAppCheck: true }, async (req) => {
+exports.saleListParked = onCall({ enforceAppCheck: true }, exports._h.saleListParked = async (req) => {
   const { shopId } = req.data;
   await _assertPOS(req.auth, shopId);
   const snap = await _db().collection('parkedSales')
@@ -398,7 +400,7 @@ exports.saleListParked = onCall({ enforceAppCheck: true }, async (req) => {
   return { parkedSales: sales };
 });
 
-exports.saleDiscardParked = onCall({ enforceAppCheck: true }, async (req) => {
+exports.saleDiscardParked = onCall({ enforceAppCheck: true }, exports._h.saleDiscardParked = async (req) => {
   const { parkId, shopId } = req.data;
   await _assertPOS(req.auth, shopId);
   const ref = _db().collection('parkedSales').doc(parkId);
@@ -414,7 +416,7 @@ exports.saleDiscardParked = onCall({ enforceAppCheck: true }, async (req) => {
 // Real-time via onSnapshot on shopId (single-field index — no composite needed)
 // Status flow: pending → preparing → ready → bumped
 
-exports.kdsSubmitOrder = onCall({ enforceAppCheck: true }, async (req) => {
+exports.kdsSubmitOrder = onCall({ enforceAppCheck: true }, exports._h.kdsSubmitOrder = async (req) => {
   const { shopId, stationId, items, orderId, orderRef, customerName, tableNumber, notes, priority } = req.data;
   await _assertPOS(req.auth, shopId);
   if (!items || items.length === 0) throw new Error('no-items');
@@ -439,7 +441,7 @@ exports.kdsSubmitOrder = onCall({ enforceAppCheck: true }, async (req) => {
   return { kdsOrderId: id };
 });
 
-exports.kdsUpdateItem = onCall({ enforceAppCheck: true }, async (req) => {
+exports.kdsUpdateItem = onCall({ enforceAppCheck: true }, exports._h.kdsUpdateItem = async (req) => {
   const { kdsOrderId, shopId, itemIndex, itemStatus } = req.data;
   await _assertPOS(req.auth, shopId);
   const VALID = ['preparing', 'ready'];
@@ -471,7 +473,7 @@ exports.kdsUpdateItem = onCall({ enforceAppCheck: true }, async (req) => {
   });
 });
 
-exports.kdsGetQueue = onCall({ enforceAppCheck: true }, async (req) => {
+exports.kdsGetQueue = onCall({ enforceAppCheck: true }, exports._h.kdsGetQueue = async (req) => {
   const { shopId, stationId } = req.data;
   await _assertPOS(req.auth, shopId);
   const snap = await _db().collection('kdsOrders')
@@ -490,7 +492,7 @@ exports.kdsGetQueue = onCall({ enforceAppCheck: true }, async (req) => {
   return { orders };
 });
 
-exports.kdsBump = onCall({ enforceAppCheck: true }, async (req) => {
+exports.kdsBump = onCall({ enforceAppCheck: true }, exports._h.kdsBump = async (req) => {
   const { kdsOrderId, shopId } = req.data;
   await _assertPOS(req.auth, shopId);
   const ref = _db().collection('kdsOrders').doc(kdsOrderId);
@@ -509,7 +511,7 @@ exports.kdsBump = onCall({ enforceAppCheck: true }, async (req) => {
 // Collections: cycleCounts/{id}, inventoryAdjustments/{id}
 // All product fetches single-field only (shopId)
 
-exports.cycleCountCreate = onCall({ enforceAppCheck: true }, async (req) => {
+exports.cycleCountCreate = onCall({ enforceAppCheck: true }, exports._h.cycleCountCreate = async (req) => {
   const { shopId, warehouseId, productIds, notes } = req.data;
   await _assertPOS(req.auth, shopId);
 
@@ -556,7 +558,7 @@ exports.cycleCountCreate = onCall({ enforceAppCheck: true }, async (req) => {
   return { cycleCountId: id, itemCount: items.length };
 });
 
-exports.cycleCountUpdateItem = onCall({ enforceAppCheck: true }, async (req) => {
+exports.cycleCountUpdateItem = onCall({ enforceAppCheck: true }, exports._h.cycleCountUpdateItem = async (req) => {
   const { cycleCountId, shopId, productId, countedQty } = req.data;
   await _assertPOS(req.auth, shopId);
   if (countedQty == null || countedQty < 0) throw new Error('invalid-qty');
@@ -581,7 +583,7 @@ exports.cycleCountUpdateItem = onCall({ enforceAppCheck: true }, async (req) => 
   });
 });
 
-exports.cycleCountComplete = onCall({ enforceAppCheck: true }, async (req) => {
+exports.cycleCountComplete = onCall({ enforceAppCheck: true }, exports._h.cycleCountComplete = async (req) => {
   const { cycleCountId, shopId, adjustInventory } = req.data;
   await _assertPOS(req.auth, shopId);
 
@@ -646,7 +648,7 @@ exports.cycleCountComplete = onCall({ enforceAppCheck: true }, async (req) => {
   };
 });
 
-exports.cycleCountList = onCall({ enforceAppCheck: true }, async (req) => {
+exports.cycleCountList = onCall({ enforceAppCheck: true }, exports._h.cycleCountList = async (req) => {
   const { shopId } = req.data;
   await _assertPOS(req.auth, shopId);
   const snap = await _db().collection('cycleCounts')
@@ -673,7 +675,7 @@ exports.cycleCountList = onCall({ enforceAppCheck: true }, async (req) => {
   return { cycleCounts: counts };
 });
 
-exports.cycleCountGet = onCall({ enforceAppCheck: true }, async (req) => {
+exports.cycleCountGet = onCall({ enforceAppCheck: true }, exports._h.cycleCountGet = async (req) => {
   const { cycleCountId, shopId } = req.data;
   await _assertPOS(req.auth, shopId);
   const snap = await _db().collection('cycleCounts').doc(cycleCountId).get();
@@ -697,7 +699,7 @@ const DEFAULT_RATES_TO_KES = {
   ETB: 2.24, ZAR: 6.8, NGN: 0.08, AED: 34.8,
 };
 
-exports.currencyGetRates = onCall({ enforceAppCheck: true }, async (req) => {
+exports.currencyGetRates = onCall({ enforceAppCheck: true }, exports._h.currencyGetRates = async (req) => {
   const { shopId } = req.data;
   if (!req.auth) throw new Error('unauthenticated');
   const snap = await _db().collection('currencyRates').doc(shopId).get();
@@ -710,7 +712,7 @@ exports.currencyGetRates = onCall({ enforceAppCheck: true }, async (req) => {
   };
 });
 
-exports.currencySetRate = onCall({ enforceAppCheck: true }, async (req) => {
+exports.currencySetRate = onCall({ enforceAppCheck: true }, exports._h.currencySetRate = async (req) => {
   const { shopId, currency, rateToKES } = req.data;
   await _assertPOS(req.auth, shopId);
   if (!SUPPORTED_CURRENCIES.includes(currency)) throw new Error('unsupported-currency');

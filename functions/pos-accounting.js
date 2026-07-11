@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    SOKONI SmartPOS — Accounting Engine v1.0
    Firebase Gen2 Cloud Functions
 
@@ -30,6 +30,8 @@ const admin  = require('firebase-admin');
 const crypto = require('crypto');
 
 if (!admin.apps.length) admin.initializeApp();
+
+exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
 const db = admin.firestore();
 
 /* ── Config ─────────────────────────────────────────────────── */
@@ -315,7 +317,7 @@ async function _getAccountBalance(sellerId, accountCode) {
  * Seeds the standard Kenyan double-entry chart for a seller.
  * Skips accounts that already exist (idempotent).
  */
-exports.initializeChartOfAccounts = onCall(_CF, async (req) => {
+exports.initializeChartOfAccounts = onCall(_CF, exports._h.initializeChartOfAccounts = async (req) => {
   const auth     = _requireAuth(req);
   _requireRole(auth, 'owner');
 
@@ -365,7 +367,7 @@ exports.initializeChartOfAccounts = onCall(_CF, async (req) => {
  * getChartOfAccounts
  * Returns all accounts for a seller grouped by type.
  */
-exports.getChartOfAccounts = onCall(_CF, async (req) => {
+exports.getChartOfAccounts = onCall(_CF, exports._h.getChartOfAccounts = async (req) => {
   const auth = _requireAuth(req);
 
   const { sellerId } = req.data;
@@ -406,7 +408,7 @@ exports.getChartOfAccounts = onCall(_CF, async (req) => {
  * Role: manager+
  * Creates a custom account outside the standard chart.
  */
-exports.createAccount = onCall(_CF, async (req) => {
+exports.createAccount = onCall(_CF, exports._h.createAccount = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -457,7 +459,7 @@ exports.createAccount = onCall(_CF, async (req) => {
  * Public callable for manual journal entries.
  * Enforces double-entry balance rule.
  */
-exports.createJournalEntry = onCall(_CF, async (req) => {
+exports.createJournalEntry = onCall(_CF, exports._h.createJournalEntry = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -496,7 +498,7 @@ exports.createJournalEntry = onCall(_CF, async (req) => {
  * getJournalEntries
  * Query by sellerId, optional date range, optional reference.
  */
-exports.getJournalEntries = onCall(_CF, async (req) => {
+exports.getJournalEntries = onCall(_CF, exports._h.getJournalEntries = async (req) => {
   const auth = _requireAuth(req);
 
   const { sellerId, startDate, endDate, reference, limit: lim = 100 } = req.data;
@@ -535,7 +537,7 @@ exports.getJournalEntries = onCall(_CF, async (req) => {
  * Role: owner
  * Creates a reversing entry (swaps debit/credit). Marks original as voided.
  */
-exports.voidJournalEntry = onCall(_CF, async (req) => {
+exports.voidJournalEntry = onCall(_CF, exports._h.voidJournalEntry = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 
@@ -599,7 +601,7 @@ exports.voidJournalEntry = onCall(_CF, async (req) => {
  * getProfitAndLoss
  * Aggregates revenue, COGS and expenses for a date range.
  */
-exports.getProfitAndLoss = onCall(_CF, async (req) => {
+exports.getProfitAndLoss = onCall(_CF, exports._h.getProfitAndLoss = async (req) => {
   const auth = _requireAuth(req);
 
   const { sellerId, startDate, endDate } = req.data;
@@ -727,7 +729,7 @@ exports.getProfitAndLoss = onCall(_CF, async (req) => {
  * Role: manager+
  * Reads posAccountBalances to produce a balance sheet as of a date.
  */
-exports.getBalanceSheet = onCall(_CF, async (req) => {
+exports.getBalanceSheet = onCall(_CF, exports._h.getBalanceSheet = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -823,7 +825,7 @@ exports.getBalanceSheet = onCall(_CF, async (req) => {
  * Role: manager+
  * Indirect method cash flow for the given period.
  */
-exports.getCashFlow = onCall(_CF, async (req) => {
+exports.getCashFlow = onCall(_CF, exports._h.getCashFlow = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -945,7 +947,7 @@ exports.getCashFlow = onCall(_CF, async (req) => {
  * KRA VAT3 return data for a given period (YYYY-MM).
  * KES VAT is 16% tax-inclusive.
  */
-exports.getVATReport = onCall(_CF, async (req) => {
+exports.getVATReport = onCall(_CF, exports._h.getVATReport = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -1080,7 +1082,7 @@ const PAYMENT_METHODS_EXPENSE = ['cash', 'mpesa', 'bank', 'card'];
  * Role: manager+
  * Creates expense record and auto-posts double-entry journal.
  */
-exports.createExpense = onCall(_CF, async (req) => {
+exports.createExpense = onCall(_CF, exports._h.createExpense = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -1186,7 +1188,7 @@ exports.createExpense = onCall(_CF, async (req) => {
  * getExpenses
  * Query by sellerId with optional category + date range.
  */
-exports.getExpenses = onCall(_CF, async (req) => {
+exports.getExpenses = onCall(_CF, exports._h.getExpenses = async (req) => {
   const auth = _requireAuth(req);
 
   const { sellerId, category, startDate, endDate, limit: lim = 100 } = req.data;
@@ -1225,7 +1227,7 @@ exports.getExpenses = onCall(_CF, async (req) => {
  * Role: manager+
  * Update allowed fields only.
  */
-exports.updateExpense = onCall(_CF, async (req) => {
+exports.updateExpense = onCall(_CF, exports._h.updateExpense = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -1270,7 +1272,7 @@ exports.updateExpense = onCall(_CF, async (req) => {
  * Role: owner
  * Soft delete.
  */
-exports.deleteExpense = onCall(_CF, async (req) => {
+exports.deleteExpense = onCall(_CF, exports._h.deleteExpense = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 
@@ -1300,7 +1302,7 @@ exports.deleteExpense = onCall(_CF, async (req) => {
  * getExpenseSummary
  * Returns total expenses by category for a date range.
  */
-exports.getExpenseSummary = onCall(_CF, async (req) => {
+exports.getExpenseSummary = onCall(_CF, exports._h.getExpenseSummary = async (req) => {
   const auth = _requireAuth(req);
 
   const { sellerId, startDate, endDate } = req.data;
@@ -1363,7 +1365,7 @@ exports.getExpenseSummary = onCall(_CF, async (req) => {
  * Marks a period closed, preventing further journal entries.
  * Creates a retained earnings closing entry.
  */
-exports.closeAccountingPeriod = onCall(_CF, async (req) => {
+exports.closeAccountingPeriod = onCall(_CF, exports._h.closeAccountingPeriod = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 
@@ -1491,7 +1493,7 @@ exports.closeAccountingPeriod = onCall(_CF, async (req) => {
  * getAccountingPeriods
  * Returns list of accounting periods with status.
  */
-exports.getAccountingPeriods = onCall(_CF, async (req) => {
+exports.getAccountingPeriods = onCall(_CF, exports._h.getAccountingPeriods = async (req) => {
   const auth = _requireAuth(req);
 
   const { sellerId } = req.data;
@@ -1540,7 +1542,7 @@ const QB_COLUMNS = [
  * Returns journal entries + P&L as structured data for download.
  * format = 'csv' | 'json'
  */
-exports.exportAccountingData = onCall(_CF, async (req) => {
+exports.exportAccountingData = onCall(_CF, exports._h.exportAccountingData = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 

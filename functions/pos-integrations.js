@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI SmartPOS — Integrations, Webhooks & API Layer  v1.0
    Firebase Gen2 Cloud Functions
 
@@ -66,6 +66,8 @@ const admin  = require('firebase-admin');
 const crypto = require('crypto');
 
 if (!admin.apps.length) admin.initializeApp();
+
+exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
 const db = admin.firestore();
 
 /* ── Runtime options ─────────────────────────────────────────────────────── */
@@ -155,7 +157,7 @@ function _randomHex(bytes) {
 ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── A1. registerWebhook ───────────────────────────────────────────────── */
-exports.registerWebhook = onCall(_CF, async (req) => {
+exports.registerWebhook = onCall(_CF, exports._h.registerWebhook = async (req) => {
   const auth     = _requireAuth(req);
   const sellerId = _validateSellerId(req.data?.sellerId);
   _requireRole(auth, 'owner');
@@ -217,7 +219,7 @@ exports.registerWebhook = onCall(_CF, async (req) => {
 });
 
 /* ── A2. deleteWebhook ─────────────────────────────────────────────────── */
-exports.deleteWebhook = onCall(_CF, async (req) => {
+exports.deleteWebhook = onCall(_CF, exports._h.deleteWebhook = async (req) => {
   const auth      = _requireAuth(req);
   const sellerId  = _validateSellerId(req.data?.sellerId);
   const webhookId = req.data?.webhookId;
@@ -243,7 +245,7 @@ exports.deleteWebhook = onCall(_CF, async (req) => {
 });
 
 /* ── A3. listWebhooks ──────────────────────────────────────────────────── */
-exports.listWebhooks = onCall(_CF, async (req) => {
+exports.listWebhooks = onCall(_CF, exports._h.listWebhooks = async (req) => {
   const auth     = _requireAuth(req);
   const sellerId = _validateSellerId(req.data?.sellerId);
   _requireRole(auth, 'manager');
@@ -273,7 +275,7 @@ exports.listWebhooks = onCall(_CF, async (req) => {
 });
 
 /* ── A4. testWebhook ───────────────────────────────────────────────────── */
-exports.testWebhook = onCall(_CF, async (req) => {
+exports.testWebhook = onCall(_CF, exports._h.testWebhook = async (req) => {
   const auth      = _requireAuth(req);
   const sellerId  = _validateSellerId(req.data?.sellerId);
   const webhookId = req.data?.webhookId;
@@ -346,7 +348,7 @@ exports.testWebhook = onCall(_CF, async (req) => {
  * Called by other CFs (sale processing, inventory, shift management).
  * Implements circuit-breaker: disables webhook after MAX_WEBHOOK_FAILURES consecutive failures.
  */
-exports.deliverWebhookEvent = onCall(_CF, async (req) => {
+exports.deliverWebhookEvent = onCall(_CF, exports._h.deliverWebhookEvent = async (req) => {
   const auth = _requireAuth(req);
   // Internal CF: accept calls from authenticated server-side callers
   // In production, further lock down by verifying a service account claim if needed.
@@ -461,7 +463,7 @@ exports.deliverWebhookEvent = onCall(_CF, async (req) => {
 ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── B1. createAPIKey ──────────────────────────────────────────────────── */
-exports.createAPIKey = onCall(_CF, async (req) => {
+exports.createAPIKey = onCall(_CF, exports._h.createAPIKey = async (req) => {
   const auth     = _requireAuth(req);
   const sellerId = _validateSellerId(req.data?.sellerId);
   _requireRole(auth, 'owner');
@@ -522,7 +524,7 @@ exports.createAPIKey = onCall(_CF, async (req) => {
 });
 
 /* ── B2. revokeAPIKey ──────────────────────────────────────────────────── */
-exports.revokeAPIKey = onCall(_CF, async (req) => {
+exports.revokeAPIKey = onCall(_CF, exports._h.revokeAPIKey = async (req) => {
   const auth     = _requireAuth(req);
   const sellerId = _validateSellerId(req.data?.sellerId);
   const keyId    = req.data?.keyId;
@@ -553,7 +555,7 @@ exports.revokeAPIKey = onCall(_CF, async (req) => {
 });
 
 /* ── B3. listAPIKeys ───────────────────────────────────────────────────── */
-exports.listAPIKeys = onCall(_CF, async (req) => {
+exports.listAPIKeys = onCall(_CF, exports._h.listAPIKeys = async (req) => {
   const auth     = _requireAuth(req);
   const sellerId = _validateSellerId(req.data?.sellerId);
   _requireRole(auth, 'owner');
@@ -588,7 +590,7 @@ exports.listAPIKeys = onCall(_CF, async (req) => {
  * Called by external systems (not from browser AppCheck context).
  * Validates an API key by hash lookup, updates lastUsedAt.
  */
-exports.validateAPIKey = onCall(_CF_NOCHECK, async (req) => {
+exports.validateAPIKey = onCall(_CF_NOCHECK, exports._h.validateAPIKey = async (req) => {
   const { apiKey } = req.data;
 
   if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 10)
@@ -626,7 +628,7 @@ exports.validateAPIKey = onCall(_CF_NOCHECK, async (req) => {
 ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── C1. getPOSSaleForETIMS ────────────────────────────────────────────── */
-exports.getPOSSaleForETIMS = onCall(_CF, async (req) => {
+exports.getPOSSaleForETIMS = onCall(_CF, exports._h.getPOSSaleForETIMS = async (req) => {
   const auth   = _requireAuth(req);
   const saleId = req.data?.saleId;
   _requireRole(auth, 'manager');
@@ -696,7 +698,7 @@ exports.getPOSSaleForETIMS = onCall(_CF, async (req) => {
 });
 
 /* ── C2. markSaleSubmittedToETIMS ──────────────────────────────────────── */
-exports.markSaleSubmittedToETIMS = onCall(_CF, async (req) => {
+exports.markSaleSubmittedToETIMS = onCall(_CF, exports._h.markSaleSubmittedToETIMS = async (req) => {
   const auth     = _requireAuth(req);
   const saleId   = req.data?.saleId;
   const etimsRef = req.data?.etimsRef;
@@ -738,7 +740,7 @@ exports.markSaleSubmittedToETIMS = onCall(_CF, async (req) => {
 ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── D1. exportToAccountingFormat ──────────────────────────────────────── */
-exports.exportToAccountingFormat = onCall(_CF, async (req) => {
+exports.exportToAccountingFormat = onCall(_CF, exports._h.exportToAccountingFormat = async (req) => {
   const auth     = _requireAuth(req);
   const sellerId = _validateSellerId(req.data?.sellerId);
   _requireRole(auth, 'owner');
@@ -943,7 +945,7 @@ exports.exportToAccountingFormat = onCall(_CF, async (req) => {
 ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── E1. importBankStatement ───────────────────────────────────────────── */
-exports.importBankStatement = onCall(_CF, async (req) => {
+exports.importBankStatement = onCall(_CF, exports._h.importBankStatement = async (req) => {
   const auth         = _requireAuth(req);
   const sellerId     = _validateSellerId(req.data?.sellerId);
   const transactions = req.data?.transactions;
@@ -1057,7 +1059,7 @@ exports.importBankStatement = onCall(_CF, async (req) => {
 ══════════════════════════════════════════════════════════════════════════ */
 
 /* ── F1. getPOSSystemHealth ────────────────────────────────────────────── */
-exports.getPOSSystemHealth = onCall(_CF, async (req) => {
+exports.getPOSSystemHealth = onCall(_CF, exports._h.getPOSSystemHealth = async (req) => {
   const auth     = _requireAuth(req);
   const sellerId = _validateSellerId(req.data?.sellerId);
   _requireRole(auth, 'manager');
@@ -1159,7 +1161,7 @@ exports.getPOSSystemHealth = onCall(_CF, async (req) => {
 });
 
 /* ── F2. getPOSAlertHistory ────────────────────────────────────────────── */
-exports.getPOSAlertHistory = onCall(_CF, async (req) => {
+exports.getPOSAlertHistory = onCall(_CF, exports._h.getPOSAlertHistory = async (req) => {
   const auth     = _requireAuth(req);
   const sellerId = _validateSellerId(req.data?.sellerId);
   _requireRole(auth, 'manager');

@@ -230,7 +230,7 @@ onAuthStateChanged(auth, async user => {
   loadStats();
 });
 
-function _call(name, data={}) { return httpsCallable(fn, name)(data).then(r => r.data); }
+function _call(name, data={}) { return httpsCallable(fn, 'smartPosDispatch')({ op: name, ...data }).then(r => r.data); }
 function _ts(ms){ return ms ? new Date(ms).toLocaleString('en-KE',{timeZone:'Africa/Nairobi',hour12:false,month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'; }
 function _esc(s){ return String(s||'').replace(/[<>"'&]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','&':'&amp;'}[c])); }
 

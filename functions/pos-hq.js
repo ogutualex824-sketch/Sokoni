@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * pos-hq.js
@@ -15,6 +15,8 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 if (!admin.apps.length) admin.initializeApp();
+
+exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
 const db = admin.firestore();
 
 // ─────────────────────────────────────────────
@@ -135,7 +137,7 @@ function _log(severity, msg, extra = {}) {
  * Output:
  *   { id, sellerId, productId, price, updatedAt }
  */
-exports.setCentralPrice = onCall(_CF, async (req) => {
+exports.setCentralPrice = onCall(_CF, exports._h.setCentralPrice = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 
@@ -206,7 +208,7 @@ exports.setCentralPrice = onCall(_CF, async (req) => {
  * Output:
  *   { prices: [...], count: number }
  */
-exports.getCentralPrices = onCall(_CF, async (req) => {
+exports.getCentralPrices = onCall(_CF, exports._h.getCentralPrices = async (req) => {
   const auth = _requireAuth(req);
 
   const sid = _req(req.data?.sellerId, 'sellerId');
@@ -243,7 +245,7 @@ exports.getCentralPrices = onCall(_CF, async (req) => {
  * Output:
  *   { updated: number, failed: number, skipped: number, errors: string[] }
  */
-exports.pushPricesToBranches = onCall(_CF, async (req) => {
+exports.pushPricesToBranches = onCall(_CF, exports._h.pushPricesToBranches = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 
@@ -356,7 +358,7 @@ exports.pushPricesToBranches = onCall(_CF, async (req) => {
  * Output:
  *   { deleted: boolean, id: string }
  */
-exports.removeCentralPrice = onCall(_CF, async (req) => {
+exports.removeCentralPrice = onCall(_CF, exports._h.removeCentralPrice = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 
@@ -402,7 +404,7 @@ exports.removeCentralPrice = onCall(_CF, async (req) => {
  * Output:
  *   { synced: number, skipped: number, catalogVersion: number, syncedAt: string }
  */
-exports.syncCatalogToBranch = onCall(_CF, async (req) => {
+exports.syncCatalogToBranch = onCall(_CF, exports._h.syncCatalogToBranch = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -507,7 +509,7 @@ exports.syncCatalogToBranch = onCall(_CF, async (req) => {
  * Output:
  *   { version, productCount, branches: { [branchId]: { lastSyncAt, syncedBy, productsSynced } } }
  */
-exports.getSharedCatalogStatus = onCall(_CF, async (req) => {
+exports.getSharedCatalogStatus = onCall(_CF, exports._h.getSharedCatalogStatus = async (req) => {
   const auth = _requireAuth(req);
 
   const sid = _req(req.data?.sellerId, 'sellerId');
@@ -550,7 +552,7 @@ exports.getSharedCatalogStatus = onCall(_CF, async (req) => {
  * Output:
  *   { version: number, branchesMarked: number, publishedAt: string }
  */
-exports.publishCatalogUpdate = onCall(_CF, async (req) => {
+exports.publishCatalogUpdate = onCall(_CF, exports._h.publishCatalogUpdate = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 
@@ -626,7 +628,7 @@ exports.publishCatalogUpdate = onCall(_CF, async (req) => {
  * Output:
  *   { productId, results: [{ branchId, branchName, stock, reserved, available }], totalStock }
  */
-exports.checkStockAcrossBranches = onCall(_CF, async (req) => {
+exports.checkStockAcrossBranches = onCall(_CF, exports._h.checkStockAcrossBranches = async (req) => {
   const auth = _requireAuth(req);
 
   const sid = _req(req.data?.sellerId, 'sellerId');
@@ -709,7 +711,7 @@ exports.checkStockAcrossBranches = onCall(_CF, async (req) => {
  * Output:
  *   { transferId, status, createdAt }
  */
-exports.createCrossBranchFulfillment = onCall(_CF, async (req) => {
+exports.createCrossBranchFulfillment = onCall(_CF, exports._h.createCrossBranchFulfillment = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -811,7 +813,7 @@ exports.createCrossBranchFulfillment = onCall(_CF, async (req) => {
  * Output:
  *   { transfers: [...], count: number }
  */
-exports.getCrossBranchFulfillments = onCall(_CF, async (req) => {
+exports.getCrossBranchFulfillments = onCall(_CF, exports._h.getCrossBranchFulfillments = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -866,7 +868,7 @@ exports.getCrossBranchFulfillments = onCall(_CF, async (req) => {
  * Output:
  *   { products: [...], totalBranches, generatedAt }
  */
-exports.getHQInventoryOverview = onCall(_CF, async (req) => {
+exports.getHQInventoryOverview = onCall(_CF, exports._h.getHQInventoryOverview = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 
@@ -974,7 +976,7 @@ exports.getHQInventoryOverview = onCall(_CF, async (req) => {
  * Output:
  *   { created: number, failed: number, transferIds: string[], errors: string[] }
  */
-exports.createMasterInventoryTransfer = onCall(_CF, async (req) => {
+exports.createMasterInventoryTransfer = onCall(_CF, exports._h.createMasterInventoryTransfer = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 
@@ -1065,7 +1067,7 @@ exports.createMasterInventoryTransfer = onCall(_CF, async (req) => {
  *     generatedAt
  *   }
  */
-exports.getRegionalReport = onCall(_CF, async (req) => {
+exports.getRegionalReport = onCall(_CF, exports._h.getRegionalReport = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
 

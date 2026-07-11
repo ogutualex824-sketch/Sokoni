@@ -660,8 +660,9 @@ onAuthStateChanged(auth, async user => {
   }
 });
 
-// ─── Cloud Function refs ──────────────────────────────────────────────────────
-const CF = name => httpsCallable(fns, name);
+// ─── Cloud Function refs — routes through smartPosDispatch ───────────────────
+const _spDispatch = () => httpsCallable(fns, 'smartPosDispatch');
+const CF = name => (data) => _spDispatch()({ op: name, ...(data || {}) });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const kes = n => {

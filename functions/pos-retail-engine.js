@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * SOKONI SmartPOS 2.1 — Retail Engine Cloud Functions
  *
@@ -19,6 +19,8 @@ const admin                   = require('firebase-admin');
 
 const SENDGRID_KEY = defineSecret('SENDGRID_API_KEY');
 const { COMPANY }  = require('./company-identity');
+
+exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
 
 const db   = admin.firestore;
 const now  = () => admin.firestore.FieldValue.serverTimestamp();
@@ -103,9 +105,9 @@ function _calcPoints(amount) { return Math.floor(amount / 10); }
  * CF: getPOSCustomer — look up by phone or customerId
  * Returns customer profile + loyalty status
  */
-exports.getPOSCustomer = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCustomer = async (req) => {
   _adminOrSeller(request);
-  const { phone, customerId } = request.data || {};
+  const { phone, customerId } = req.data || {};
 
   let snap;
   if (customerId) {
@@ -130,9 +132,9 @@ exports.getPOSCustomer = onCall({ enforceAppCheck: true }, async (request) => {
 /**
  * CF: upsertPOSCustomer — create or update customer profile
  */
-exports.upsertPOSCustomer = onCall({ enforceAppCheck: true }, async (request) => {
+exports.upsertPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.upsertPOSCustomer = async (req) => {
   _adminOrSeller(request);
-  const { customerId, phone, name, email } = request.data || {};
+  const { customerId, phone, name, email } = req.data || {};
 
   const normalized = _normalizePhone(phone);
   if (!normalized) throw new HttpsError('invalid-argument', 'Invalid phone number');
@@ -180,7 +182,7 @@ exports.upsertPOSCustomer = onCall({ enforceAppCheck: true }, async (request) =>
  * CF: recordPOSSale — record a completed POS sale
  * Generates receipt, awards loyalty points, updates inventory
  */
-exports.recordPOSSale = onCall({ enforceAppCheck: true }, async (request) => {
+exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSale = async (req) => {
   const auth = _adminOrSeller(request);
   const {
     sellerId, sessionId, branchId,
@@ -189,7 +191,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, async (request) => {
     customerId, customerPhone,
     cashierName, cashierUid,
     discountTotal,
-  } = request.data || {};
+  } = req.data || {};
 
   if (!items || !items.length) throw new HttpsError('invalid-argument', 'items required');
   if (!payment || !payment.amount) throw new HttpsError('invalid-argument', 'payment required');
@@ -370,9 +372,9 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, async (request) => {
 /**
  * CF: getPOSSale — retrieve a single sale record
  */
-exports.getPOSSale = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getPOSSale = onCall({ enforceAppCheck: true }, exports._h.getPOSSale = async (req) => {
   _adminOrSeller(request);
-  const { saleId } = request.data || {};
+  const { saleId } = req.data || {};
   if (!saleId) throw new HttpsError('invalid-argument', 'saleId required');
 
   const snap = await admin.firestore().collection('posSales').doc(_san(saleId, 40)).get();
@@ -384,14 +386,14 @@ exports.getPOSSale = onCall({ enforceAppCheck: true }, async (request) => {
 /**
  * CF: voidPOSSale — void a completed sale (manager permission required)
  */
-exports.voidPOSSale = onCall({ enforceAppCheck: true }, async (request) => {
-  const auth   = _authRequired(request);
+exports.voidPOSSale = onCall({ enforceAppCheck: true }, exports._h.voidPOSSale = async (req) => {
+  const auth   = _authRequired(req);
   const claims = auth.token || {};
   const canVoid = claims.admin || claims.role === 'admin' || claims.posRole === 'manager'
                || claims.posRole === 'supervisor' || claims.posRole === 'owner';
   if (!canVoid) throw new HttpsError('permission-denied', 'Manager permission required to void sales');
 
-  const { saleId, reason } = request.data || {};
+  const { saleId, reason } = req.data || {};
   if (!saleId)  throw new HttpsError('invalid-argument', 'saleId required');
   if (!reason)  throw new HttpsError('invalid-argument', 'void reason required');
 
@@ -435,8 +437,8 @@ exports.voidPOSSale = onCall({ enforceAppCheck: true }, async (request) => {
  * CF: getReceipt — public receipt verification (no auth required)
  * Used by mysokoni.co.ke/receipt/{receiptId}
  */
-exports.getReceipt = onCall({}, async (request) => {
-  const { receiptId } = request.data || {};
+exports.getReceipt = onCall({}, exports._h.getReceipt = async (req) => {
+  const { receiptId } = req.data || {};
   if (!receiptId) throw new HttpsError('invalid-argument', 'receiptId required');
 
   const snap = await admin.firestore().collection('receipts').doc(_san(receiptId, 40)).get();
@@ -460,9 +462,9 @@ exports.getReceipt = onCall({}, async (request) => {
  */
 exports.emailReceipt = onCall(
   { enforceAppCheck: true, secrets: [SENDGRID_KEY] },
-  async (request) => {
-    _authRequired(request);
-    const { receiptId, email } = request.data || {};
+  exports._h.emailReceipt = async (req) => {
+    _authRequired(req);
+    const { receiptId, email } = req.data || {};
     if (!receiptId) throw new HttpsError('invalid-argument', 'receiptId required');
     if (!email)     throw new HttpsError('invalid-argument', 'email required');
 
@@ -534,9 +536,9 @@ exports.emailReceipt = onCall(
 /**
  * CF: getInventoryAlerts — low stock, expiry, overstock alerts
  */
-exports.getInventoryAlerts = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getInventoryAlerts = onCall({ enforceAppCheck: true }, exports._h.getInventoryAlerts = async (req) => {
   const auth = _adminOrSeller(request);
-  const { sellerId, branchId, limit: lim = 50 } = request.data || {};
+  const { sellerId, branchId, limit: lim = 50 } = req.data || {};
   const sid = sellerId || auth.uid;
 
   const fdb = admin.firestore();
@@ -600,9 +602,9 @@ exports.getInventoryAlerts = onCall({ enforceAppCheck: true }, async (request) =
 /**
  * CF: getInventoryInsights — fast movers, slow movers, dead stock
  */
-exports.getInventoryInsights = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getInventoryInsights = onCall({ enforceAppCheck: true }, exports._h.getInventoryInsights = async (req) => {
   const auth = _adminOrSeller(request);
-  const { sellerId, days = 30, limit: lim = 20 } = request.data || {};
+  const { sellerId, days = 30, limit: lim = 20 } = req.data || {};
   const sid = sellerId || auth.uid;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
@@ -660,9 +662,9 @@ exports.getInventoryInsights = onCall({ enforceAppCheck: true }, async (request)
 /**
  * CF: getReorderSuggestions — AI-powered reorder recommendations
  */
-exports.getReorderSuggestions = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getReorderSuggestions = onCall({ enforceAppCheck: true }, exports._h.getReorderSuggestions = async (req) => {
   const auth = _adminOrSeller(request);
-  const { sellerId } = request.data || {};
+  const { sellerId } = req.data || {};
   const sid = sellerId || auth.uid;
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -725,9 +727,9 @@ exports.getReorderSuggestions = onCall({ enforceAppCheck: true }, async (request
 /**
  * CF: getPOSAnalytics — revenue, profit, transactions for a date range
  */
-exports.getPOSAnalytics = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getPOSAnalytics = onCall({ enforceAppCheck: true }, exports._h.getPOSAnalytics = async (req) => {
   const auth = _adminOrSeller(request);
-  const { sellerId, branchId, startDate, endDate, groupBy = 'day' } = request.data || {};
+  const { sellerId, branchId, startDate, endDate, groupBy = 'day' } = req.data || {};
   const sid = sellerId || auth.uid;
 
   const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -827,9 +829,9 @@ exports.getPOSAnalytics = onCall({ enforceAppCheck: true }, async (request) => {
 /**
  * CF: getLivePOSMetrics — today's real-time metrics (Redis-first, Firestore fallback)
  */
-exports.getLivePOSMetrics = onCall({ enforceAppCheck: true }, async (request) => {
+exports.getLivePOSMetrics = onCall({ enforceAppCheck: true }, exports._h.getLivePOSMetrics = async (req) => {
   const auth = _adminOrSeller(request);
-  const { sellerId } = request.data || {};
+  const { sellerId } = req.data || {};
   const sid = sellerId || auth.uid;
 
   const todayStart = new Date();
@@ -893,9 +895,9 @@ const PERMISSIONS = {
 /**
  * CF: getStaffPermissions — return the permission set for a role
  */
-exports.getStaffPermissions = onCall({ enforceAppCheck: true }, async (request) => {
-  _authRequired(request);
-  const { role } = request.data || {};
+exports.getStaffPermissions = onCall({ enforceAppCheck: true }, exports._h.getStaffPermissions = async (req) => {
+  _authRequired(req);
+  const { role } = req.data || {};
   const r = _san(role || 'cashier', 20).toLowerCase();
   return { role: r, permissions: PERMISSIONS[r] || PERMISSIONS.cashier };
 });
@@ -903,9 +905,9 @@ exports.getStaffPermissions = onCall({ enforceAppCheck: true }, async (request) 
 /**
  * CF: recordAuditEvent — log sensitive POS action
  */
-exports.recordAuditEvent = onCall({ enforceAppCheck: true }, async (request) => {
-  const auth = _authRequired(request);
-  const { action, details, saleId, targetUid } = request.data || {};
+exports.recordAuditEvent = onCall({ enforceAppCheck: true }, exports._h.recordAuditEvent = async (req) => {
+  const auth = _authRequired(req);
+  const { action, details, saleId, targetUid } = req.data || {};
   if (!action) throw new HttpsError('invalid-argument', 'action required');
 
   await admin.firestore().collection('posAuditLog').add({
@@ -923,14 +925,14 @@ exports.recordAuditEvent = onCall({ enforceAppCheck: true }, async (request) => 
 /**
  * CF: getAuditLog — retrieve audit trail (manager+ only)
  */
-exports.getAuditLog = onCall({ enforceAppCheck: true }, async (request) => {
-  const auth   = _authRequired(request);
+exports.getAuditLog = onCall({ enforceAppCheck: true }, exports._h.getAuditLog = async (req) => {
+  const auth   = _authRequired(req);
   const claims = auth.token || {};
   const canView = claims.admin || claims.posRole === 'manager'
                || claims.posRole === 'owner'  || claims.role === 'admin';
   if (!canView) throw new HttpsError('permission-denied', 'Manager access required');
 
-  const { sellerId, limit: lim = 50, startAfter } = request.data || {};
+  const { sellerId, limit: lim = 50, startAfter } = req.data || {};
   let q = admin.firestore().collection('posAuditLog')
     .orderBy('timestamp', 'desc')
     .limit(Math.min(lim, 200));
@@ -942,9 +944,9 @@ exports.getAuditLog = onCall({ enforceAppCheck: true }, async (request) => {
 /**
  * CF: getShiftSummary — end-of-shift report for cashier
  */
-exports.getShiftSummary = onCall({ enforceAppCheck: true }, async (request) => {
-  const auth = _authRequired(request);
-  const { cashierUid, shiftStart, shiftEnd } = request.data || {};
+exports.getShiftSummary = onCall({ enforceAppCheck: true }, exports._h.getShiftSummary = async (req) => {
+  const auth = _authRequired(req);
+  const { cashierUid, shiftStart, shiftEnd } = req.data || {};
   const uid   = cashierUid || auth.uid;
   const start = shiftStart ? new Date(shiftStart) : (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
   const end   = shiftEnd   ? new Date(shiftEnd)   : new Date();
@@ -988,13 +990,13 @@ exports.getShiftSummary = onCall({ enforceAppCheck: true }, async (request) => {
 /**
  * CF: getBranchComparison — HQ cross-branch revenue comparison
  */
-exports.getBranchComparison = onCall({ enforceAppCheck: true }, async (request) => {
-  const auth   = _authRequired(request);
+exports.getBranchComparison = onCall({ enforceAppCheck: true }, exports._h.getBranchComparison = async (req) => {
+  const auth   = _authRequired(req);
   const claims = auth.token || {};
   const isAdmin = claims.admin || claims.role === 'admin' || claims.posRole === 'owner';
   if (!isAdmin) throw new HttpsError('permission-denied', 'Owner access required');
 
-  const { sellerId, days = 30 } = request.data || {};
+  const { sellerId, days = 30 } = req.data || {};
   const sid   = sellerId || auth.uid;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
@@ -1039,9 +1041,9 @@ exports.getBranchComparison = onCall({ enforceAppCheck: true }, async (request) 
 /**
  * CF: initiateInventoryTransfer — request stock transfer between branches
  */
-exports.initiateInventoryTransfer = onCall({ enforceAppCheck: true }, async (request) => {
-  const auth = _authRequired(request);
-  const { fromBranchId, toBranchId, items, sellerId } = request.data || {};
+exports.initiateInventoryTransfer = onCall({ enforceAppCheck: true }, exports._h.initiateInventoryTransfer = async (req) => {
+  const auth = _authRequired(req);
+  const { fromBranchId, toBranchId, items, sellerId } = req.data || {};
 
   if (!fromBranchId || !toBranchId) throw new HttpsError('invalid-argument', 'fromBranchId and toBranchId required');
   if (!items || !items.length)       throw new HttpsError('invalid-argument', 'items required');

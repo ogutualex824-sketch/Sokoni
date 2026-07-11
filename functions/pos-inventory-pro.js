@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * pos-inventory-pro.js
@@ -20,6 +20,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 if (!admin.apps.length) admin.initializeApp();
+
+exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
 const db = admin.firestore();
 
 // ─────────────────────────────────────────────
@@ -183,7 +185,7 @@ async function _updateAVCO(sellerId, productId, incomingQty, incomingCost) {
  *
  * Writes to: posBatches/{batchId}
  */
-exports.createBatch = onCall(_CF, async (req) => {
+exports.createBatch = onCall(_CF, exports._h.createBatch = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -256,7 +258,7 @@ exports.createBatch = onCall(_CF, async (req) => {
  *
  * Input: sellerId, productId (optional), status (optional)
  */
-exports.getBatches = onCall(_CF, async (req) => {
+exports.getBatches = onCall(_CF, exports._h.getBatches = async (req) => {
   _requireAuth(req);
 
   const { sellerId, productId, status } = req.data || {};
@@ -298,7 +300,7 @@ exports.getBatches = onCall(_CF, async (req) => {
  * Input: sellerId, productId, quantity
  * Returns: array of {batchId, lotNumber, took}
  */
-exports.consumeBatch = onCall(_CF, async (req) => {
+exports.consumeBatch = onCall(_CF, exports._h.consumeBatch = async (req) => {
   _requireAuth(req);
 
   const { sellerId, productId, quantity } = req.data || {};
@@ -376,7 +378,7 @@ exports.consumeBatch = onCall(_CF, async (req) => {
  * Input: sellerId, productId, serialNumber, batchId (optional), warehouseId (optional)
  * Writes to: posSerials/{serialId}
  */
-exports.registerSerial = onCall(_CF, async (req) => {
+exports.registerSerial = onCall(_CF, exports._h.registerSerial = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -439,7 +441,7 @@ exports.registerSerial = onCall(_CF, async (req) => {
  *
  * Input: sellerId, serialNumber
  */
-exports.getSerial = onCall(_CF, async (req) => {
+exports.getSerial = onCall(_CF, exports._h.getSerial = async (req) => {
   _requireAuth(req);
 
   const { sellerId, serialNumber } = req.data || {};
@@ -468,7 +470,7 @@ exports.getSerial = onCall(_CF, async (req) => {
  *
  * Input: serialId, status, note (optional), saleId (optional), customerId (optional)
  */
-exports.updateSerialStatus = onCall(_CF, async (req) => {
+exports.updateSerialStatus = onCall(_CF, exports._h.updateSerialStatus = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'supervisor');
 
@@ -520,7 +522,7 @@ exports.updateSerialStatus = onCall(_CF, async (req) => {
  * Input: sellerId, name, location, type (main|branch|transit|returns)
  * Writes to: posWarehouses/{id}
  */
-exports.createWarehouse = onCall(_CF, async (req) => {
+exports.createWarehouse = onCall(_CF, exports._h.createWarehouse = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -556,7 +558,7 @@ exports.createWarehouse = onCall(_CF, async (req) => {
  *
  * Input: sellerId
  */
-exports.getWarehouses = onCall(_CF, async (req) => {
+exports.getWarehouses = onCall(_CF, exports._h.getWarehouses = async (req) => {
   _requireAuth(req);
 
   const { sellerId } = req.data || {};
@@ -580,7 +582,7 @@ exports.getWarehouses = onCall(_CF, async (req) => {
  * Uses posWarehouseStock docs keyed: {sellerId}_{warehouseId}_{productId}
  * Also writes a record to: inventoryTransfers/{id}
  */
-exports.transferWarehouseStock = onCall(_CF, async (req) => {
+exports.transferWarehouseStock = onCall(_CF, exports._h.transferWarehouseStock = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -680,7 +682,7 @@ exports.transferWarehouseStock = onCall(_CF, async (req) => {
  *        expectedDelivery (ISO string, optional), notes (optional)
  * Writes to: posPurchaseOrders/{id}
  */
-exports.createPurchaseOrder = onCall(_CF, async (req) => {
+exports.createPurchaseOrder = onCall(_CF, exports._h.createPurchaseOrder = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -749,7 +751,7 @@ exports.createPurchaseOrder = onCall(_CF, async (req) => {
  *
  * Input: poId, receivedItems[{productId, quantity, unitCost, lotNumber, expiryDate (optional), warehouseId}]
  */
-exports.receivePurchaseOrder = onCall(_CF, async (req) => {
+exports.receivePurchaseOrder = onCall(_CF, exports._h.receivePurchaseOrder = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -872,7 +874,7 @@ exports.receivePurchaseOrder = onCall(_CF, async (req) => {
  *
  * Input: poId, status
  */
-exports.updatePurchaseOrderStatus = onCall(_CF, async (req) => {
+exports.updatePurchaseOrderStatus = onCall(_CF, exports._h.updatePurchaseOrderStatus = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -917,7 +919,7 @@ exports.updatePurchaseOrderStatus = onCall(_CF, async (req) => {
  * Input: sellerId, status (optional), supplierId (optional)
  * Returns: list ordered by createdAt desc, limit 50
  */
-exports.getPurchaseOrders = onCall(_CF, async (req) => {
+exports.getPurchaseOrders = onCall(_CF, exports._h.getPurchaseOrders = async (req) => {
   _requireAuth(req);
 
   const { sellerId, status, supplierId } = req.data || {};
@@ -949,7 +951,7 @@ exports.getPurchaseOrders = onCall(_CF, async (req) => {
  *        notes, supplierId (optional for update)
  * Writes to: posSuppliers/{id}
  */
-exports.upsertSupplier = onCall(_CF, async (req) => {
+exports.upsertSupplier = onCall(_CF, exports._h.upsertSupplier = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -1021,7 +1023,7 @@ exports.upsertSupplier = onCall(_CF, async (req) => {
  *
  * Input: sellerId
  */
-exports.getSuppliers = onCall(_CF, async (req) => {
+exports.getSuppliers = onCall(_CF, exports._h.getSuppliers = async (req) => {
   _requireAuth(req);
 
   const { sellerId } = req.data || {};
@@ -1044,7 +1046,7 @@ exports.getSuppliers = onCall(_CF, async (req) => {
  *
  * Input: sellerId, supplierId
  */
-exports.deleteSupplier = onCall(_CF, async (req) => {
+exports.deleteSupplier = onCall(_CF, exports._h.deleteSupplier = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -1082,7 +1084,7 @@ exports.deleteSupplier = onCall(_CF, async (req) => {
  *
  * Input: sellerId
  */
-exports.getReorderQueue = onCall(_CF, async (req) => {
+exports.getReorderQueue = onCall(_CF, exports._h.getReorderQueue = async (req) => {
   _requireAuth(req);
 
   const { sellerId } = req.data || {};
@@ -1106,7 +1108,7 @@ exports.getReorderQueue = onCall(_CF, async (req) => {
  *
  * Input: sellerId, reorderItemId
  */
-exports.dismissReorderItem = onCall(_CF, async (req) => {
+exports.dismissReorderItem = onCall(_CF, exports._h.dismissReorderItem = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -1140,7 +1142,7 @@ exports.dismissReorderItem = onCall(_CF, async (req) => {
  * Input: sellerId, supplierId
  * Returns: { poId, poNumber, itemCount }
  */
-exports.createAutoReorderPO = onCall(_CF, async (req) => {
+exports.createAutoReorderPO = onCall(_CF, exports._h.createAutoReorderPO = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
 
@@ -1225,7 +1227,7 @@ exports.createAutoReorderPO = onCall(_CF, async (req) => {
  *
  * Input: sellerId, productId (optional)
  */
-exports.getStockValuation = onCall(_CF, async (req) => {
+exports.getStockValuation = onCall(_CF, exports._h.getStockValuation = async (req) => {
   _requireAuth(req);
 
   const { sellerId, productId } = req.data || {};
@@ -1272,7 +1274,7 @@ exports.getStockValuation = onCall(_CF, async (req) => {
  *          daysOfStock, stockoutDate, urgency (critical|low|ok)
  *          Sorted by urgency (critical first) then daysOfStock asc.
  */
-exports.getInventoryForecast = onCall(_CF, async (req) => {
+exports.getInventoryForecast = onCall(_CF, exports._h.getInventoryForecast = async (req) => {
   _requireAuth(req);
 
   const { sellerId } = req.data || {};

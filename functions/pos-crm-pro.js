@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * pos-crm-pro.js — SOKONI SmartPOS CRM Pro Engine
@@ -24,6 +24,8 @@ const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const admin                  = require('firebase-admin');
 
 if (!admin.apps.length) admin.initializeApp();
+
+exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
 const db = admin.firestore();
 
 // ─── Shared config ────────────────────────────────────────────────────────────
@@ -95,7 +97,7 @@ function _walletId(sellerId, phone) {
  * getWalletBalance
  * Returns the customer wallet balance and last 10 transactions.
  */
-exports.getWalletBalance = onCall(_CF, async (req) => {
+exports.getWalletBalance = onCall(_CF, exports._h.getWalletBalance = async (req) => {
   _requireAuth(req);
   const { sellerId, phone } = req.data;
   _requireFields(req.data, ['sellerId', 'phone']);
@@ -122,7 +124,7 @@ exports.getWalletBalance = onCall(_CF, async (req) => {
  * topUpWallet
  * Role: manager+. Credits funds to a customer wallet.
  */
-exports.topUpWallet = onCall(_CF, async (req) => {
+exports.topUpWallet = onCall(_CF, exports._h.topUpWallet = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId, phone, amount, method, ref } = req.data;
@@ -166,7 +168,7 @@ exports.topUpWallet = onCall(_CF, async (req) => {
  * Deducts funds from customer wallet for a POS sale.
  * Runs inside a Firestore transaction to guarantee balance safety.
  */
-exports.deductWallet = onCall(_CF, async (req) => {
+exports.deductWallet = onCall(_CF, exports._h.deductWallet = async (req) => {
   _requireAuth(req);
   const { sellerId, phone, amount, saleId } = req.data;
   _requireFields(req.data, ['sellerId', 'phone', 'amount', 'saleId']);
@@ -206,7 +208,7 @@ exports.deductWallet = onCall(_CF, async (req) => {
  * refundToWallet
  * Role: manager+. Refunds an amount back to the customer wallet.
  */
-exports.refundToWallet = onCall(_CF, async (req) => {
+exports.refundToWallet = onCall(_CF, exports._h.refundToWallet = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId, phone, amount, saleId, reason } = req.data;
@@ -244,7 +246,7 @@ exports.refundToWallet = onCall(_CF, async (req) => {
  * getWalletTransactions
  * Returns the last 50 wallet transactions for a customer.
  */
-exports.getWalletTransactions = onCall(_CF, async (req) => {
+exports.getWalletTransactions = onCall(_CF, exports._h.getWalletTransactions = async (req) => {
   _requireAuth(req);
   const { sellerId, phone } = req.data;
   _requireFields(req.data, ['sellerId', 'phone']);
@@ -282,7 +284,7 @@ function _generateGiftCardCode() {
  * issueGiftCard
  * Role: manager+. Creates a new gift card with a unique 12-char code.
  */
-exports.issueGiftCard = onCall(_CF, async (req) => {
+exports.issueGiftCard = onCall(_CF, exports._h.issueGiftCard = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId, amount, recipientName, recipientPhone } = req.data;
@@ -325,7 +327,7 @@ exports.issueGiftCard = onCall(_CF, async (req) => {
  * redeemGiftCard
  * Validates and redeems a gift card at checkout.
  */
-exports.redeemGiftCard = onCall(_CF, async (req) => {
+exports.redeemGiftCard = onCall(_CF, exports._h.redeemGiftCard = async (req) => {
   _requireAuth(req);
   const { sellerId, code, amount, saleId } = req.data;
   _requireFields(req.data, ['sellerId', 'code', 'amount', 'saleId']);
@@ -376,7 +378,7 @@ exports.redeemGiftCard = onCall(_CF, async (req) => {
  * checkGiftCardBalance
  * No auth required — cashier can scan QR to check balance.
  */
-exports.checkGiftCardBalance = onCall({ region: 'us-central1', enforceAppCheck: true }, async (req) => {
+exports.checkGiftCardBalance = onCall({ region: 'us-central1', enforceAppCheck: true }, exports._h.checkGiftCardBalance = async (req) => {
   const { code } = req.data;
   if (!code) throw new HttpsError('invalid-argument', 'Gift card code required');
 
@@ -395,7 +397,7 @@ exports.checkGiftCardBalance = onCall({ region: 'us-central1', enforceAppCheck: 
  * getGiftCards
  * Role: manager+. List gift cards for seller, optionally filtered by status.
  */
-exports.getGiftCards = onCall(_CF, async (req) => {
+exports.getGiftCards = onCall(_CF, exports._h.getGiftCards = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId, status } = req.data;
@@ -420,7 +422,7 @@ exports.getGiftCards = onCall(_CF, async (req) => {
  * issueStoreCredit
  * Role: manager+. Add store credit to a customer account.
  */
-exports.issueStoreCredit = onCall(_CF, async (req) => {
+exports.issueStoreCredit = onCall(_CF, exports._h.issueStoreCredit = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId, phone, amount, reason } = req.data;
@@ -452,7 +454,7 @@ exports.issueStoreCredit = onCall(_CF, async (req) => {
  * useStoreCredit
  * Deducts store credit at checkout. Runs in a Firestore transaction.
  */
-exports.useStoreCredit = onCall(_CF, async (req) => {
+exports.useStoreCredit = onCall(_CF, exports._h.useStoreCredit = async (req) => {
   _requireAuth(req);
   const { sellerId, phone, amount, saleId } = req.data;
   _requireFields(req.data, ['sellerId', 'phone', 'amount', 'saleId']);
@@ -490,7 +492,7 @@ exports.useStoreCredit = onCall(_CF, async (req) => {
  * getStoreCreditBalance
  * Returns a customer's current store credit balance.
  */
-exports.getStoreCreditBalance = onCall(_CF, async (req) => {
+exports.getStoreCreditBalance = onCall(_CF, exports._h.getStoreCreditBalance = async (req) => {
   _requireAuth(req);
   const { sellerId, phone } = req.data;
   _requireFields(req.data, ['sellerId', 'phone']);
@@ -538,7 +540,7 @@ function _isWithinBirthdayWindow(birthdayMonth, birthdayDay) {
  * Awards 200 bonus points if today is within 7 days of customer birthday
  * and reward hasn't been given this calendar year.
  */
-exports.checkBirthdayReward = onCall(_CF, async (req) => {
+exports.checkBirthdayReward = onCall(_CF, exports._h.checkBirthdayReward = async (req) => {
   _requireAuth(req);
   const { sellerId, phone } = req.data;
   _requireFields(req.data, ['sellerId', 'phone']);
@@ -590,7 +592,7 @@ exports.checkBirthdayReward = onCall(_CF, async (req) => {
  * getBirthdayCustomers
  * Role: manager+. Returns customers with birthdays in the next 30 days.
  */
-exports.getBirthdayCustomers = onCall(_CF, async (req) => {
+exports.getBirthdayCustomers = onCall(_CF, exports._h.getBirthdayCustomers = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId } = req.data;
@@ -658,7 +660,7 @@ const REFERRAL_POINTS = 500;
  * recordReferral
  * Records the referral intent. Points are awarded only on first purchase.
  */
-exports.recordReferral = onCall(_CF, async (req) => {
+exports.recordReferral = onCall(_CF, exports._h.recordReferral = async (req) => {
   _requireAuth(req);
   const { sellerId, referrerPhone, referredPhone } = req.data;
   _requireFields(req.data, ['sellerId', 'referrerPhone', 'referredPhone']);
@@ -698,7 +700,7 @@ exports.recordReferral = onCall(_CF, async (req) => {
  * Role: manager+. Called when referred customer completes first purchase.
  * Awards REFERRAL_POINTS to the referrer.
  */
-exports.completeReferralReward = onCall(_CF, async (req) => {
+exports.completeReferralReward = onCall(_CF, exports._h.completeReferralReward = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId, referredPhone, saleId } = req.data;
@@ -753,7 +755,7 @@ exports.completeReferralReward = onCall(_CF, async (req) => {
  * getReferralStats
  * Returns referral count and total points earned for a customer.
  */
-exports.getReferralStats = onCall(_CF, async (req) => {
+exports.getReferralStats = onCall(_CF, exports._h.getReferralStats = async (req) => {
   _requireAuth(req);
   const { sellerId, phone } = req.data;
   _requireFields(req.data, ['sellerId', 'phone']);
@@ -793,7 +795,7 @@ const TIER_ORDER           = ['Bronze', 'Silver', 'Gold', 'Platinum'];
  * createOffer
  * Role: manager+. Create a personalized offer for a seller's customers.
  */
-exports.createOffer = onCall(_CF, async (req) => {
+exports.createOffer = onCall(_CF, exports._h.createOffer = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const {
@@ -846,7 +848,7 @@ exports.createOffer = onCall(_CF, async (req) => {
  * getActiveOffers
  * Returns offers the given customer is currently eligible for.
  */
-exports.getActiveOffers = onCall(_CF, async (req) => {
+exports.getActiveOffers = onCall(_CF, exports._h.getActiveOffers = async (req) => {
   _requireAuth(req);
   const { sellerId, customerTier, customerSpend } = req.data;
   _requireFields(req.data, ['sellerId']);
@@ -898,7 +900,7 @@ exports.getActiveOffers = onCall(_CF, async (req) => {
  * getOffers
  * Role: manager+. Returns all offers for a seller.
  */
-exports.getOffers = onCall(_CF, async (req) => {
+exports.getOffers = onCall(_CF, exports._h.getOffers = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId, status } = req.data;
@@ -920,7 +922,7 @@ exports.getOffers = onCall(_CF, async (req) => {
  * toggleOffer
  * Role: manager+. Activate or deactivate an offer.
  */
-exports.toggleOffer = onCall(_CF, async (req) => {
+exports.toggleOffer = onCall(_CF, exports._h.toggleOffer = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { offerId, isActive } = req.data;
@@ -974,7 +976,7 @@ function _classifyCustomer(c) {
  * getCustomerSegments
  * Role: manager+. Segments all customers for a seller.
  */
-exports.getCustomerSegments = onCall(_CF, async (req) => {
+exports.getCustomerSegments = onCall(_CF, exports._h.getCustomerSegments = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId } = req.data;
@@ -1027,7 +1029,7 @@ exports.getCustomerSegments = onCall(_CF, async (req) => {
  * getCustomerInsights
  * Full 360° profile for a single customer: purchases, basket, favourites, loyalty, wallet, credit.
  */
-exports.getCustomerInsights = onCall(_CF, async (req) => {
+exports.getCustomerInsights = onCall(_CF, exports._h.getCustomerInsights = async (req) => {
   _requireAuth(req);
   const { sellerId, phone } = req.data;
   _requireFields(req.data, ['sellerId', 'phone']);
@@ -1118,7 +1120,7 @@ exports.getCustomerInsights = onCall(_CF, async (req) => {
  * upgradeMembershipTier
  * Role: manager+. Manually override a customer's tier with a reason.
  */
-exports.upgradeMembershipTier = onCall(_CF, async (req) => {
+exports.upgradeMembershipTier = onCall(_CF, exports._h.upgradeMembershipTier = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId, phone, newTier, reason } = req.data;
@@ -1158,7 +1160,7 @@ exports.upgradeMembershipTier = onCall(_CF, async (req) => {
  * getMembershipStats
  * Role: manager+. Returns count of customers per tier and revenue by tier.
  */
-exports.getMembershipStats = onCall(_CF, async (req) => {
+exports.getMembershipStats = onCall(_CF, exports._h.getMembershipStats = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { sellerId } = req.data;
