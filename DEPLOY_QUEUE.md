@@ -27,20 +27,16 @@ do not exist (were never individually deployed; they were quota-blocked from day
    - Find functions deployed but no longer needed (old features, replaced by dispatchers)
    - `firebase functions:delete functionName --region us-central1 --force`
 
-### Pending deploys (5 functions — failed batch deploy 2026-07-11)
+### Pending deploys
 
+All functions current as of 2026-07-11. Deploy one at a time when adding new CFs:
 ```bash
-# Deploy one at a time until quota is available:
-firebase deploy --only functions:platformInfraDispatch
-firebase deploy --only functions:obsCheckAlerts
-firebase deploy --only functions:obsHealthProbe
-firebase deploy --only functions:relScheduledHealthCheck
-firebase deploy --only functions:webhookRetryProcessor
+firebase deploy --only functions:newFunctionName
 ```
 
 ---
 
-## Phase-3 Infrastructure — platformInfraDispatch — 2026-07-11 — ⏳ PENDING (quota)
+## Phase-3 Infrastructure — platformInfraDispatch — 2026-07-11 — ✅ DEPLOYED
 
 28 onCall CFs (obs 7 + rel 7 + webhook 7 + tq 5 + api-gateway 2) consolidated into
 `platformInfraDispatch` via `_h` lazy-load pattern. 9 scheduled/onRequest kept individual.
