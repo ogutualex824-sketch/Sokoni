@@ -454,6 +454,9 @@
       return _cf('cmGetEndOfDay', { merchantId, branchId, dateStr });
     },
 
+    /* ── Queue sync (called externally on reconnect) ─────────────── */
+    syncQueue: _syncQueue,
+
     /* ── Event subscriptions ──────────────────────────────────────── */
     on (ev, fn) { (_ls[ev] = _ls[ev] || []).push(fn); return this; },
     off(ev, fn) {

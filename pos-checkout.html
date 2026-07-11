@@ -1539,7 +1539,7 @@ body.queue-mode .hotkey-bar      { display: none; }
         <span id="scw-counted-total" style="color:var(--txt)">KES 0.00</span>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" onclick="window._shiftClosing=false;Checkout.closeModal('shift-close-overlay')">Cancel</button>
+        <button class="btn-secondary" onclick="Checkout.closeModal('shift-close-overlay')">Cancel</button>
         <button class="btn-primary" onclick="Checkout._scwStep(2)" style="background:var(--red)">Compare &#x2192;</button>
       </div>
     </div>
@@ -1646,6 +1646,39 @@ const Checkout = (() => {
     _aiSuggestion:     null,
   };
 
+  /* ── Cloud Function dispatcher ── */
+  const _posDispatch = (op, data) =>
+    firebase.functions().httpsCallable('smartPosDispatch')({ op, ...(data || {}) }).then(r => r.data);
+
+  /* Offline-safe drawer event logger.
+     Online → fires immediately.
+     Offline → writes to sokoni_cash_mgr_v1 IDB queue so PosRegister.syncQueue()
+     replays it on next reconnect (same queue used by cash events). */
+  function _logDrawerEvent(payload) {
+    if (navigator.onLine) {
+      _posDispatch('cmLogDrawerOpen', payload).catch(() => {});
+      return;
+    }
+    const req = indexedDB.open('sokoni_cash_mgr_v1', 1);
+    req.onsuccess = e => {
+      try {
+        const tx = e.target.result.transaction('queue', 'readwrite');
+        tx.objectStore('queue').add({
+          cfName: 'smartPosDispatch',
+          data: { op: 'cmLogDrawerOpen', ...payload },
+          ts: Date.now(),
+        });
+      } catch (_) {}
+    };
+  }
+
+  /* ── Multi-tab shift lock ── */
+  let _shiftLockChannel = null;
+  function _setShiftLock(locked) {
+    window._shiftClosing = locked;
+    try { _shiftLockChannel && _shiftLockChannel.postMessage({ type: 'SHIFT_LOCK', locked }); } catch (_) {}
+  }
+
   /* ── State machine ── */
   function _setState(key) {
     _s.currentState = key;
@@ -1699,7 +1732,10 @@ const Checkout = (() => {
     _updateClock();
 
     /* Connectivity */
-    window.addEventListener('online',  () => _setOnline(true));
+    window.addEventListener('online', () => {
+      _setOnline(true);
+      if (window.PosRegister) PosRegister.syncQueue();
+    });
     window.addEventListener('offline', () => _setOnline(false));
     _setOnline(navigator.onLine);
 
@@ -1745,6 +1781,17 @@ const Checkout = (() => {
     /* Open customer display channel */
     if ('BroadcastChannel' in window) {
       _s.displayChannel = new BroadcastChannel('sokoni_pos_display');
+    }
+
+    /* Shift-lock channel — propagates hard-lock across all same-origin tabs */
+    if ('BroadcastChannel' in window) {
+      _shiftLockChannel = new BroadcastChannel('sokoni_pos_shift_lock');
+      _shiftLockChannel.onmessage = e => {
+        if (e.data?.type !== 'SHIFT_LOCK') return;
+        window._shiftClosing = e.data.locked;
+        if (e.data.locked)
+          _toast('Register closing in another session — new sales temporarily blocked', 'warning');
+      };
     }
 
     /* Preferred payment method */
@@ -2735,11 +2782,11 @@ const Checkout = (() => {
           cashierId: _s.cashierId, cashierName: _s.cashierName,
           merchantId: _s.merchantId, branchId: _s.branchId,
         }).catch(() => {});
-        _posDispatch('cmLogDrawerOpen', {
+        _logDrawerEvent({
           merchantId: _s.merchantId, registerId: _s.registerId || 'default',
           reason: 'payment', branch: _s.branchId || '', role: _s.role || 'cashier',
           deviceId: (navigator.userAgent || '').slice(0, 64),
-        }).catch(() => {});
+        });
       }
 
       /* Offer WhatsApp receipt while printing — non-blocking */
@@ -2800,11 +2847,11 @@ const Checkout = (() => {
           cashierId: _s.cashierId, cashierName: _s.cashierName,
           merchantId: _s.merchantId, branchId: _s.branchId,
         }).catch(() => {});
-        _posDispatch('cmLogDrawerOpen', {
+        _logDrawerEvent({
           merchantId: _s.merchantId, registerId: _s.registerId || 'default',
           reason: 'payment', branch: _s.branchId || '', role: _s.role || 'cashier',
           deviceId: (navigator.userAgent || '').slice(0, 64),
-        }).catch(() => {});
+        });
       }
     }
   }
@@ -3139,7 +3186,7 @@ const Checkout = (() => {
 
   function openCloseShift() {
     if (!_s.shiftId) { _toast('No active shift', 'warning'); return; }
-    window._shiftClosing = true; /* hard-block new sales while wizard is open */
+    _setShiftLock(true); /* hard-block new sales in this tab and all same-origin tabs */
     _buildDenomGrid('scw-denom-grid', 'scw-counted-total', 'Checkout._scwCalcTotal');
     _scwCalcTotal();
     ['scw-step1','scw-step2','scw-step3'].forEach(id => {
@@ -3282,15 +3329,15 @@ const Checkout = (() => {
         await PosSales.closeShift(_s.cashierId, (variance.countedCents || 0) / 100).catch(() => {});
       }
       /* Log drawer open for register close event */
-      _posDispatch('cmLogDrawerOpen', {
+      _logDrawerEvent({
         merchantId: _s.merchantId, registerId: _s.registerId || 'default',
         reason: 'register_close', branch: _s.branchId || '', role: _s.role || 'cashier',
-      }).catch(() => {});
+      });
 
       _s.shiftId = null;
       _s._scwVariance = null;
       _s._scwApprovalId = null;
-      window._shiftClosing = false;
+      _setShiftLock(false);
       document.getElementById('topbar-shift').textContent = 'No shift';
       closeModal('shift-close-overlay');
       _toast('Register closed successfully', 'success');
@@ -3455,11 +3502,11 @@ const Checkout = (() => {
   function closeModal(id) {
     document.getElementById(id).classList.remove('visible');
     /* Closing the shift-close wizard must always release the hard lock */
-    if (id === 'shift-close-overlay') window._shiftClosing = false;
+    if (id === 'shift-close-overlay') _setShiftLock(false);
   }
   function closeAllModals() {
     document.querySelectorAll('.overlay.visible').forEach(o => o.classList.remove('visible'));
-    window._shiftClosing = false; /* Escape clears lock for all modals including close wizard */
+    _setShiftLock(false); /* Escape releases lock in this tab and broadcasts unlock to all tabs */
     if (_cameraStream) closeCamera();
   }
 
@@ -3529,11 +3576,11 @@ const Checkout = (() => {
       return;
     }
     if (result?.success) {
-      _posDispatch('cmLogDrawerOpen', {
+      _logDrawerEvent({
         merchantId: _s.merchantId, registerId: _s.registerId || 'default',
         reason: 'manual', branch: _s.branchId || '', role: _s.role || 'cashier',
         deviceId: (navigator.userAgent || '').slice(0, 64),
-      }).catch(() => {});
+      });
       _toast('Cash drawer opened', 'success');
     } else _toast('Drawer open failed — check connection', 'error');
   }
