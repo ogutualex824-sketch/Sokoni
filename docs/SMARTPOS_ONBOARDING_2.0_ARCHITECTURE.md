@@ -43,7 +43,23 @@ No breaking changes — additive. `createBusiness` writes: `businesses` (+ `stor
 `functions/business-bootstrap.js` (6 handlers + ID/defaults/progress), `functions/smartpos-dispatch.js` (merge), `pos-setup.html` (auto-detect + create form + pairing), `scripts/verify-architecture.js` (registry). Commits `c997aac`, `61632b7`.
 
 ## 10. Backend changes
-6 dispatcher ops: `getMyBusinesses`, `createBusiness`, `pairDevice`, `regeneratePairingQR`, `saveOnboardingProgress`, `getOnboardingProgress`. Full ID set + per-type intelligent defaults. All deployed via `smartPosDispatch`.
+**8 dispatcher ops** (all via `smartPosDispatch`, 0 new CFs): `getMyBusinesses`, `createBusiness`, `pairDevice`, `regeneratePairingQR`, `saveOnboardingProgress`, `getOnboardingProgress`, **`getSetupStatus`**, **`markSetupStep`**. Full ID set + per-type intelligent defaults + auto free-trial.
+
+### Mandatory first-run resume logic + completion checklist (`getSetupStatus`)
+Computes the checklist from **real Firestore state** (not just a cached step), so resume is authoritative and production-ready is never premature:
+
+| Checklist item | Source of truth |
+|----------------|-----------------|
+| authenticated / businessCreated / merchantIdGenerated | auth + `businesses` doc |
+| subscription | `subscriptions` active/trialing (auto free-trial on create) |
+| branchCreated | `branches` for merchantId (default main) |
+| taxesConfigured | `taxConfig` doc (country defaults auto-loaded) |
+| inventoryReady | `posProducts` exist OR `markSetupStep('inventoryReady')` |
+| hardwareConnected | `posDevices` exist OR skipped via `markSetupStep` |
+| testSaleSuccessful | `markSetupStep('testSaleSuccessful')` |
+| staff | optional |
+
+`getSetupStatus` returns `{ checklist, nextStep, productionReady }` → the wizard **resumes at `nextStep`** (first incomplete) and only enters live production mode when `productionReady` (all required complete). `markSetupStep` records non-inferable completions and flips `productionReady`.
 
 ## 11. Frontend changes (shipped)
 `SPOS()` dispatcher wrapper; auto-detect discovery; "Create Your Business" form (name/category/country/county/phone); manual entry re-scoped to additional-device pairing.
