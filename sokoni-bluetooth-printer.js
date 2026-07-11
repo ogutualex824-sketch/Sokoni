@@ -448,6 +448,115 @@ class P58EService {
   }
 
   /* ─────────────────────────────────────────────────────────────
+     DEMO RECEIPT  — exact format per SOKONI SmartPOS spec
+  ───────────────────────────────────────────────────────────── */
+  async printDemoReceipt () {
+    if (!window.SokoniPrinter?.connected) throw new Error('Printer not connected — pair the P58E first.');
+
+    const now      = new Date();
+    const dateStr  = now.toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timeStr  = now.toLocaleTimeString('en-KE', { hour12: false });
+
+    await SokoniPrinter.print('custom', {
+      build (enc, W) {
+        const eq   = '='.repeat(W);
+        const dash = '-'.repeat(W);
+        const c    = s => {
+          const str = String(s).slice(0, W);
+          return ' '.repeat(Math.max(0, Math.floor((W - str.length) / 2))) + str;
+        };
+        const row  = (label, value) => {
+          const v = String(value);
+          return String(label).slice(0, W - v.length - 1).padEnd(W - v.length - 1) + ' ' + v;
+        };
+        const price = n => 'KES ' + n.toFixed(2);
+
+        /* ══ Header ══ */
+        enc.al().text(eq).lf()
+           .ac().bold(true).sz('big').text('SOKONI').lf()
+           .sz('normal').text('SMARTPOS DEMO RECEIPT').lf().bold(false)
+           .al().text(eq).lf().lf();
+
+        /* ── Text logo (bitmap printing not supported on P58E via Web BT) ── */
+        enc.ac()
+           .bold(true).text('[ S O K O N I ]').lf().bold(false)
+           .lf();
+
+        /* ── Store details ── */
+        enc.al()
+           .text('Store:').lf()
+           .bold(true).text('SOKONI Demo Store').lf().bold(false)
+           .lf()
+           .text('Branch:').lf()
+           .bold(true).text('Head Office').lf().bold(false)
+           .lf()
+           .text(row('Receipt No:', 'DEMO-000001')).lf()
+           .text(row('Date:', dateStr)).lf()
+           .text(row('Time:', timeStr)).lf()
+           .text(row('Cashier:', 'Administrator')).lf()
+           .text(row('Till:', 'Register 01')).lf()
+           .text(dash).lf();
+
+        /* ── Line items ── */
+        const items = [
+          { name: 'Milk 500ml',   qty: 1, price: 120.00 },
+          { name: 'Bread Large',  qty: 1, price:  85.00 },
+          { name: 'Sugar 2kg',    qty: 1, price: 350.00 },
+        ];
+
+        const pW = 10, nW = W - pW - 1;
+        for (const it of items) {
+          const pStr = price(it.qty * it.price);
+          enc.text(String(it.name).slice(0, nW).padEnd(nW) + pStr.padStart(pW)).lf();
+        }
+
+        const subtotal = 555.00;
+        const vat      =  88.80;
+        const total    = 643.80;
+        const cash     = 700.00;
+        const change   =  56.20;
+
+        /* ── Totals ── */
+        enc.text(dash).lf()
+           .text(row('Subtotal', price(subtotal))).lf()
+           .text(row('VAT', price(vat))).lf()
+           .lf()
+           .bold(true).sz('tall').text(row('TOTAL', price(total))).lf().sz('normal').bold(false)
+           .lf()
+           .text(row('Cash', price(cash))).lf()
+           .lf()
+           .bold(true).text(row('CHANGE', price(change))).lf().bold(false)
+           .text(dash).lf();
+
+        /* ── Footer ── */
+        enc.ac()
+           .lf()
+           .bold(true).text('Payment Successful').lf().bold(false)
+           .lf()
+           .text('Thank you for shopping!').lf()
+           .lf()
+           .text('www.mysokoni.co.ke').lf()
+           .lf();
+
+        /* ── QR code ── */
+        enc.bold(true).text('Scan QR Code').lf().bold(false);
+        enc.qr('https://mysokoni.co.ke', 5).lf();
+
+        /* ── Barcode ── */
+        enc.al().text(c('DEMO-000001')).lf();
+        enc.barcode('DEMO-000001').lf();
+
+        /* ── Final separator ── */
+        enc.al().text(eq).lf().lf(3);
+      },
+    });
+
+    this._markCheck('receipt');
+    this._markCheck('qrcode');
+    this._markCheck('barcode');
+  }
+
+  /* ─────────────────────────────────────────────────────────────
      CASH DRAWER KICK (ESC p pin time1 time2)
   ───────────────────────────────────────────────────────────── */
   async openCashDrawer () {

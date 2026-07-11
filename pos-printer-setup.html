@@ -452,9 +452,10 @@ input:checked+.slider:before{transform:translateX(18px)}
       <div class="card-title">&#9989; Connected Printer</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="p58eDeviceInfo"></div>
       <div class="actions-row" style="margin-top:14px">
-        <button class="btn btn-sm btn-green" onclick="showPanel(document.querySelector('[data-panel=hardware]'))">&#128424; Hardware Tests</button>
+        <button class="btn btn-sm btn-green" onclick="hwDemoReceipt()">&#128424; Print Demo Receipt</button>
         <button class="btn btn-sm btn-outline" onclick="p58eOpenCashDrawer()">&#128218; Test Cash Drawer</button>
         <button class="btn btn-sm btn-outline" onclick="p58ePaperFeed()">&#8659; Paper Feed</button>
+        <button class="btn btn-sm btn-outline" onclick="showPanel(document.querySelector('[data-panel=hardware]'))">All Tests</button>
       </div>
     </div>
   </div>
@@ -581,9 +582,16 @@ input:checked+.slider:before{transform:translateX(18px)}
 
         <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
           <div style="font-size:26px;margin-bottom:6px">&#128424;</div>
-          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Test Receipt</div>
-          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">Full P58E diagnostic print</div>
-          <button class="btn btn-primary btn-sm" style="width:100%" onclick="hwTestReceipt()">Print</button>
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Demo Receipt</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">SOKONI SmartPOS demo receipt</div>
+          <button class="btn btn-primary btn-sm" style="width:100%" onclick="hwDemoReceipt()">Print</button>
+        </div>
+
+        <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
+          <div style="font-size:26px;margin-bottom:6px">&#128300;</div>
+          <div style="font-size:12px;font-weight:700;margin-bottom:4px">Diagnostic Receipt</div>
+          <div style="font-size:10px;color:var(--sub);margin-bottom:8px">Full P58E hardware diagnostic</div>
+          <button class="btn btn-outline btn-sm" style="width:100%" onclick="hwTestReceipt()">Print</button>
         </div>
 
         <div style="border:1px solid var(--bor);border-radius:8px;padding:14px 12px;text-align:center;background:var(--bg3)">
@@ -1303,7 +1311,8 @@ async function hwRun (label, fn) {
   }
 }
 
-function hwTestReceipt    () { hwRun('Test Receipt', () => P58EPrinter.printTestReceipt()); }
+function hwTestReceipt    () { hwRun('Test Receipt',   () => P58EPrinter.printTestReceipt()); }
+function hwDemoReceipt    () { hwRun('Demo Receipt',   () => P58EPrinter.printDemoReceipt()); }
 function hwTestDrawer     () { hwRun('Cash Drawer',  () => P58EPrinter.openCashDrawer()); }
 function hwTestFeed       () { hwRun('Paper Feed',   () => P58EPrinter.paperFeed(5)); }
 
