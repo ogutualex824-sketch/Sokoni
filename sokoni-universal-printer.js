@@ -1086,34 +1086,81 @@ class UsbAdapter {
 }
 
 class SerialAdapter {
-  constructor () { this.ok = false; this._writer = null; this._port = null; }
+  constructor () { this.ok = false; this._writer = null; this._port = null; this._baudRate = 9600; }
   get type () { return 'serial'; }
   get avail () { return !!navigator.serial; }
 
-  async discover () {
+  /* Return already-permitted ports first (no user gesture needed),
+     then optionally request a new port via picker.
+     Mode 'list'    → return already-permitted ports only.
+     Mode 'request' (default) → open picker to add a new port.        */
+  async discover (mode = 'request') {
     if (!this.avail) return [];
     try {
+      if (mode === 'list') {
+        const ports = await navigator.serial.getPorts();
+        return ports.map((p, i) => this._portInfo(p, i));
+      }
+      /* Request: open browser port picker (requires user gesture) */
       const p = await navigator.serial.requestPort({ filters: [] });
-      const info = await p.getInfo();
-      return [{ id: String(info.usbVendorId || 'serial'), name: 'Serial / COM Printer', type: 'serial', _port: p }];
+      return [this._portInfo(p, 0)];
     } catch(e) { return []; }
   }
 
+  _portInfo (port, idx) {
+    const info = port.getInfo ? port.getInfo() : {};
+    const label = (info.usbVendorId ? `USB ${info.usbVendorId.toString(16).toUpperCase()}` : 'Bluetooth COM');
+    return { id: 'serial-' + idx, name: label + ' Port ' + (idx + 1), type: 'serial', _port: port,
+             usbVendorId: info.usbVendorId, usbProductId: info.usbProductId };
+  }
+
   async connect (info) {
+    if (!info)        throw new Error('Serial device info is undefined');
+    if (!info._port)  throw new Error('Serial port object (_port) missing — please scan again');
     const p = info._port;
-    await p.open({ baudRate: 9600 });
-    this._port = p; this._writer = p.writable.getWriter(); this.ok = true;
+
+    /* P58E via Bluetooth SPP: try 9600 first (P58E default), fall back to 115200 */
+    const baudRates = info.baudRate ? [info.baudRate] : [9600, 115200];
+    let lastErr;
+    for (const baud of baudRates) {
+      try {
+        if (p.readable || p.writable) {
+          /* Port may still be open from a previous session — close and reopen */
+          try { await p.close(); } catch(e) {}
+        }
+        await p.open({ baudRate: baud, dataBits: 8, stopBits: 1, parity: 'none',
+                       flowControl: 'none', bufferSize: 16384 });
+        this._baudRate = baud;
+        console.log('[SerialAdapter] Opened at', baud, 'baud');
+        break;
+      } catch(e) {
+        lastErr = e;
+        console.log('[SerialAdapter] Failed at', baud, 'baud:', e.message);
+      }
+    }
+    if (!p.writable) throw new Error('Could not open serial port: ' + (lastErr?.message || 'unknown error'));
+
+    this._port   = p;
+    this._writer = p.writable.getWriter();
+    this.ok      = true;
+    console.log('[SerialAdapter] Ready at', this._baudRate, 'baud');
   }
 
   async disconnect () {
-    try { await this._writer?.releaseLock(); } catch(e) {}
+    try { this._writer?.releaseLock(); } catch(e) {}
+    this._writer = null;
     try { await this._port?.close(); } catch(e) {}
+    this._port = null;
     this.ok = false;
   }
 
   async write (data) {
     if (!this.ok || !this._writer) throw Object.assign(new Error('Serial printer not connected'), { code: PRINTER_ERRORS.OFFLINE });
-    await this._writer.write(data);
+    /* Write in 4 KB chunks — avoids overwhelming the BT SPP buffer */
+    const CHUNK = 4096;
+    for (let i = 0; i < data.length; i += CHUNK) {
+      await this._writer.write(data.slice(i, i + CHUNK));
+    }
   }
 }
 
@@ -1269,6 +1316,12 @@ class SPEngine {
     return results;
   }
   async discoverBy (type) {
+    /* 'serial-list' returns already-permitted ports without a picker dialog */
+    if (type === 'serial-list') {
+      const a = this._adapters['serial'];
+      if (!a) throw new Error('Serial adapter not available');
+      return a.discover('list');
+    }
     const a = this._adapters[type];
     if (!a) throw new Error('Unknown transport: ' + type);
     return a.discover();

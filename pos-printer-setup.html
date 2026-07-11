@@ -86,6 +86,7 @@ body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;backg
 .transport-btn .t-sub{font-size:10px;color:var(--sub);margin-top:2px}
 .transport-btn.unavail{opacity:.4;cursor:default}
 .transport-btn.active-transport{border-color:var(--acc);background:rgba(109,92,255,.15)}
+.transport-btn.recommended-transport{border-color:rgba(113,255,0,.4);background:rgba(113,255,0,.06)}
 
 /* ── Device list ── */
 .device-list{display:flex;flex-direction:column;gap:8px}
@@ -740,19 +741,21 @@ function toast (msg, dur = 2500) {
 
 /* ── Transport definitions ── */
 const TRANSPORTS = [
-  { id: 'bluetooth', icon: '&#128268;', label: 'Bluetooth',   sub: 'Web Bluetooth API', badge: 'bt' },
-  { id: 'usb',       icon: '&#128268;', label: 'USB / OTG',   sub: 'WebUSB API', badge: 'usb' },
-  { id: 'serial',    icon: '&#128268;', label: 'Serial / COM', sub: 'Web Serial API', badge: 'ser' },
-  { id: 'network',   icon: '&#127760;', label: 'Network / Wi-Fi', sub: 'HTTP · WebSocket', badge: 'net' },
-  { id: 'browser',   icon: '&#128196;', label: 'Browser / PDF', sub: 'System print dialog', badge: '' },
+  { id: 'serial-list', icon: '&#9654;',   label: 'BT COM Port',   sub: 'Paired via Windows BT', badge: 'com', recommended: true },
+  { id: 'serial',      icon: '&#128268;', label: 'Serial / COM',  sub: 'Web Serial — pick port', badge: 'ser' },
+  { id: 'bluetooth',   icon: '&#128268;', label: 'BLE Bluetooth', sub: 'Web Bluetooth API', badge: 'bt' },
+  { id: 'usb',         icon: '&#128268;', label: 'USB / OTG',     sub: 'WebUSB API', badge: 'usb' },
+  { id: 'network',     icon: '&#127760;', label: 'Network / Wi-Fi', sub: 'HTTP · WebSocket', badge: 'net' },
+  { id: 'browser',     icon: '&#128196;', label: 'Browser / PDF', sub: 'System print dialog', badge: '' },
 ];
 
 const AVAIL = {
-  bluetooth: !!navigator.bluetooth,
-  usb:       !!navigator.usb,
-  serial:    !!navigator.serial,
-  network:   true,
-  browser:   true,
+  'serial-list': !!navigator.serial,
+  bluetooth:     !!navigator.bluetooth,
+  usb:           !!navigator.usb,
+  serial:        !!navigator.serial,
+  network:       true,
+  browser:       true,
 };
 
 /* ── Build transport grid ── */
@@ -760,12 +763,18 @@ const AVAIL = {
   const g = document.getElementById('transportGrid');
   TRANSPORTS.forEach(t => {
     const el = document.createElement('div');
-    el.className = 'transport-btn' + (AVAIL[t.id] ? '' : ' unavail');
+    el.className = 'transport-btn' + (AVAIL[t.id] ? '' : ' unavail') + (t.recommended ? ' recommended-transport' : '');
     el.dataset.transport = t.id;
-    el.innerHTML = `<span class="t-icon">${t.icon}</span><div class="t-label">${t.label}</div><div class="t-sub">${AVAIL[t.id] ? t.sub : 'Not supported'}</div>`;
+    const badge = t.recommended ? '<div style="font-size:9px;font-weight:700;color:var(--green);letter-spacing:.5px;margin-top:2px">✓ USE THIS</div>' : '';
+    el.innerHTML = `<span class="t-icon">${t.icon}</span><div class="t-label">${t.label}</div><div class="t-sub">${AVAIL[t.id] ? t.sub : 'Not supported'}</div>${badge}`;
     if (AVAIL[t.id]) el.onclick = () => scan(t.id);
     g.appendChild(el);
   });
+  /* Also inject a clear notice for users who already paired via Windows BT */
+  const notice = document.createElement('div');
+  notice.style.cssText = 'grid-column:1/-1;padding:8px 12px;background:rgba(113,255,0,.06);border:1px solid rgba(113,255,0,.2);border-radius:6px;font-size:11px;color:var(--sub)';
+  notice.innerHTML = '&#9432; P58E already paired via Windows? Click <b style="color:var(--txt)">BT COM Port</b> to connect without re-pairing.';
+  g.prepend(notice);
 })();
 
 /* ── Build test document grid ── */
@@ -855,7 +864,50 @@ async function scan (type) {
 
   try {
     _dbg('Scan started', { type });
-    _dbg(navigator.bluetooth ? 'Web Bluetooth: available' : 'Web Bluetooth: NOT available');
+
+    /* For BT COM Port (serial-list): list already-permitted ports, no picker */
+    if (type === 'serial-list') {
+      let permitted = await SokoniPrinter.discoverBy('serial-list');
+      _dbg('Permitted serial ports found:', permitted.length);
+
+      if (!permitted.length) {
+        /* No permitted ports yet — prompt user to select one */
+        title.textContent = 'No COM ports authorised yet';
+        list.innerHTML = `
+          <div style="font-size:12px;color:var(--sub);margin-bottom:10px">
+            No Bluetooth COM ports have been permitted in this browser yet.<br>
+            Click the button below, then select the <b style="color:var(--txt)">outgoing</b> COM port for your P58E.
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="scan('serial')">Select P58E COM Port</button>`;
+        updateStatusBar();
+        return;
+      }
+
+      title.textContent = permitted.length + ' COM port' + (permitted.length > 1 ? 's' : '') + ' available';
+      list.innerHTML = '';
+      permitted.forEach(d => {
+        const key = _cacheDevice(d);
+        const el  = document.createElement('div');
+        el.className = 'device-item';
+        el.innerHTML = `
+          <div class="device-icon">&#128268;</div>
+          <div>
+            <div class="device-name">${_esc(d.name || 'Serial Port')}</div>
+            <div class="device-sub">Bluetooth COM (SPP) · Baud: 9600 / 115200 auto</div>
+          </div>
+          <div class="device-actions">
+            <button class="btn btn-sm btn-primary" onclick="connectDevice('${key}')">Connect</button>
+          </div>`;
+        list.appendChild(el);
+      });
+      /* Always offer to add another port */
+      const add = document.createElement('div');
+      add.style.cssText = 'margin-top:8px';
+      add.innerHTML = `<button class="btn btn-outline" style="width:100%;font-size:11px" onclick="scan('serial')">+ Select a different COM port</button>`;
+      list.appendChild(add);
+      updateStatusBar();
+      return;
+    }
 
     const devices = await SokoniPrinter.discoverBy(type);
     _dbg('Devices found', devices.length);
