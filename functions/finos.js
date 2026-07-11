@@ -431,6 +431,25 @@ exports.processPendingPayouts = onSchedule(
       /* Skip if retry hold not yet passed */
       if (payout.retryAt && payout.retryAt.toMillis() > Date.now()) continue;
 
+      /* ── MANDATORY duplicate-payout protection ──────────────────────────
+         Orders settled via NATIVE SPLIT are paid directly by the payment
+         gateway (seller net → seller account, commission → Bravilex) and MUST
+         NEVER enter the B2C payout queue. Split-settled orders normally never
+         create a payout doc at all; this is the defense-in-depth guard that
+         quarantines any that slip through, guaranteeing exactly one settlement
+         path per transaction. DO NOT REMOVE. */
+      if (payout.settlementMethod === 'split' || payout.splitSettled === true) {
+        await doc.ref.update({
+          status:        'skipped_split',
+          skippedReason: 'split-settled — paid directly by gateway; B2C payout suppressed',
+          skippedAt:     _now(),
+        }).catch(() => {});
+        logger.warn('[finos] Duplicate-payout guard: skipped B2C for split-settled order', {
+          payoutId: doc.id, orderId: payout.orderId || null,
+        });
+        continue;
+      }
+
       try {
         await doc.ref.update({ status: 'processing', processingAt: _now() });
         const resp = await U.intasendB2C(privKey, {

@@ -111,6 +111,12 @@ function buildSettlementRecord({ breakdown, decision, orderId, sellerId, provide
     provider,
     settlementMethod: decision.method,          // 'split' | 'collect_then_payout'
     methodReason: decision.reason,
+    settlementStatus: 'settled',
+    /* Payout diagnostics: split settles directly at the gateway (never enters the
+       B2C payout queue — see the duplicate-payout guard in finos.processPendingPayouts). */
+    payoutStatus: decision.method === 'split' ? 'direct' : 'via_queue',
+    settlementRef: orderId ? `STL-${orderId}` : null,
+    providerRef: null,                          // set from the gateway response on split execution
     merchantOfRecord: SA.ACCOUNT_NAME,
     collectionAccount: SA.getSettlementAccountMasked(),
     grossCents: breakdown.gross,
@@ -141,9 +147,11 @@ async function executeSettlement(db, { adapter, provider, breakdown, orderId, se
         phone, amountKES: _kes(breakdown.gross), ref, narrative: 'SOKONI', splits: instructions,
       });
       if (!result || !result.success) throw new Error(result?.error || 'split call failed');
+      const rec = buildSettlementRecord({ breakdown, decision, orderId, sellerId, provider, splitMasked: masked });
+      rec.providerRef = result.splitId || null;   // gateway settlement reference
       return {
         settlementMethod: 'split',
-        record: buildSettlementRecord({ breakdown, decision, orderId, sellerId, provider, splitMasked: masked }),
+        record: rec,
         ledgerPlan: buildLedgerPlan(breakdown, 'split', { sellerId }),
         providerRef: result.splitId || null,
       };

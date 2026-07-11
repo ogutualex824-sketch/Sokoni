@@ -239,10 +239,18 @@ exports.settlementGetDashboard = onCall(
       },
       recentSettlements: settleDocs ? settleDocs.docs.map((d) => {
         const x = d.data();
+        const method = x.settlementMethod || 'collect_then_payout';
         return {
           id: d.id, sellerId: x.sellerId || null,
-          amountCents: x.amountCents || x.netCents || 0,
+          amountCents: x.amountCents || x.sellerNetCents || x.netCents || 0,
           status: x.status || 'settled',
+          /* Admin-only settlement diagnostics (not customer-facing). */
+          settlementMethod: method,                                  // 'split' | 'collect_then_payout'
+          provider:         x.provider || null,                      // e.g. 'intasend'
+          settlementStatus: x.settlementStatus || x.status || 'settled',
+          payoutStatus:     x.payoutStatus || (method === 'split' ? 'direct' : (x.payout?.status || 'via_queue')),
+          settlementRef:    x.settlementRef || d.id,                 // our reference
+          providerRef:      x.providerRef || (x.split && x.split.providerRef) || null, // gateway reference
           createdAt: x.createdAt?.toMillis?.() || null,
         };
       }) : [],
