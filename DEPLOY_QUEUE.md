@@ -1,11 +1,46 @@
 # SOKONI CF Deploy Queue
 
-All Cloud Functions below are code-complete and hosted. They are waiting for
-Cloud Run quota to clear (quota typically resets within 24 hours).
+## Quota Reality (2026-07-11)
+
+**1175 Cloud Run services are currently deployed** in us-central1. The project has hit
+the GCP "Total allowable CPU per project per region" quota ceiling. This causes new
+Cloud Run service creations and even existing-service updates to fail with:
+> *Container Healthcheck failed. Quota exceeded for total allowable CPU per project per region.*
+
+**Orphan reclamation is NOT applicable** — previous diagnosis that ~443 orphan services
+existed was incorrect. `firebase functions:delete` confirmed admin-os and redis orphans
+do not exist (were never individually deployed; they were quota-blocked from day one).
+
+### Fix options (in order of preference)
+
+1. **Request quota increase** (permanent fix)
+   - GCP Console → IAM & Admin → Quotas → Cloud Run API → filter "CPU" → request increase
+   - Ask for: **Total CPU (vCPU·s per 60 s)** → target 2000 vCPU·s (from default 1000)
+   - OR: **Maximum number of deployed Cloud Run instances per region** increase
+   - Approval typically within 24–48 hours.
+
+2. **One-at-a-time deploy** (workaround while awaiting quota increase)
+   - Deploy only 1 function at a time; each deploy uses one revision slot
+   - `firebase deploy --only functions:functionName`
+
+3. **Delete unused live functions** (free quota permanently)
+   - Find functions deployed but no longer needed (old features, replaced by dispatchers)
+   - `firebase functions:delete functionName --region us-central1 --force`
+
+### Pending deploys (5 functions — failed batch deploy 2026-07-11)
+
+```bash
+# Deploy one at a time until quota is available:
+firebase deploy --only functions:platformInfraDispatch
+firebase deploy --only functions:obsCheckAlerts
+firebase deploy --only functions:obsHealthProbe
+firebase deploy --only functions:relScheduledHealthCheck
+firebase deploy --only functions:webhookRetryProcessor
+```
 
 ---
 
-## Phase-3 Infrastructure — platformInfraDispatch — 2026-07-11 — ✅ DEPLOYED
+## Phase-3 Infrastructure — platformInfraDispatch — 2026-07-11 — ⏳ PENDING (quota)
 
 28 onCall CFs (obs 7 + rel 7 + webhook 7 + tq 5 + api-gateway 2) consolidated into
 `platformInfraDispatch` via `_h` lazy-load pattern. 9 scheduled/onRequest kept individual.
