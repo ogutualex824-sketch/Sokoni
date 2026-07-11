@@ -7984,17 +7984,8 @@ exports.cdGetShiftSummary   = posCashDrawer.cdGetShiftSummary;
 exports.cdGetReconciliation = posCashDrawer.cdGetReconciliation;
 exports.cdGetDiagnostics    = posCashDrawer.cdGetDiagnostics;
 
-/* ── SmartPOS Multi-Till v1.0 ────────────────────────────────────────── */
-const posMultiTill = require('./pos-multi-till');
-exports.mtRegisterCreate   = posMultiTill.mtRegisterCreate;
-exports.mtRegisterUpdate   = posMultiTill.mtRegisterUpdate;
-exports.mtRegisterDelete   = posMultiTill.mtRegisterDelete;
-exports.mtRegisterList     = posMultiTill.mtRegisterList;
-exports.mtRegisterAssign   = posMultiTill.mtRegisterAssign;
-exports.mtGetLiveFloor     = posMultiTill.mtGetLiveFloor;
-exports.mtGetFloorSummary  = posMultiTill.mtGetFloorSummary;
-exports.mtGetRegisterStats = posMultiTill.mtGetRegisterStats;
-exports.mtRecordTillEvent  = posMultiTill.mtRecordTillEvent;
+/* ── SmartPOS Multi-Till + Cash Manager → smartPosDispatch ──────────── */
+/* mt* and cm* ops are routed via smartPosDispatch({op:'...',...})       */
 
 /* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
 const trustSafety = require('./trust-safety');

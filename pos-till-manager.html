@@ -193,6 +193,8 @@ const app  = firebase.apps[0] || firebase.initializeApp(window.__sokoniConfig ||
 const auth = firebase.auth();
 const db   = firebase.firestore();
 const fn   = firebase.functions();
+const _posDispatch = (op, data) =>
+  fn.httpsCallable('smartPosDispatch')({ op, ...(data || {}) }).then(r => r.data);
 
 let _merchantId = null;
 let _allRegs    = [];
@@ -213,9 +215,8 @@ auth.onAuthStateChanged(async u => {
 /* ── Load registers ── */
 async function loadRegisters() {
   try {
-    const cf = fn.httpsCallable('mtRegisterList');
-    const res = await cf({ merchantId: _merchantId, includeInactive: true });
-    _allRegs = res.data.registers || [];
+    const res = await _posDispatch('mtRegisterList', { merchantId: _merchantId, includeInactive: true });
+    _allRegs = res.registers || [];
     renderRegs(_allRegs);
     updateKPIs();
   } catch (err) {
@@ -356,12 +357,10 @@ async function saveRegister() {
 
   try {
     if (editId) {
-      const cf = fn.httpsCallable('mtRegisterUpdate');
-      await cf({ merchantId: _merchantId, registerId: editId, patch: { registerName: name, status, branchId } });
+      await _posDispatch('mtRegisterUpdate', { merchantId: _merchantId, registerId: editId, patch: { registerName: name, status, branchId } });
       _toast('Register updated');
     } else {
-      const cf = fn.httpsCallable('mtRegisterCreate');
-      await cf({ merchantId: _merchantId, branchId, registerId, registerName: name });
+      await _posDispatch('mtRegisterCreate', { merchantId: _merchantId, branchId, registerId, registerName: name });
       _toast('Register created');
     }
     closeModal();
@@ -376,8 +375,7 @@ async function saveRegister() {
 async function deleteReg(regId) {
   if (!confirm(`Delete register "${regId}"? This cannot be undone.`)) return;
   try {
-    const cf = fn.httpsCallable('mtRegisterDelete');
-    await cf({ merchantId: _merchantId, registerId: regId });
+    await _posDispatch('mtRegisterDelete', { merchantId: _merchantId, registerId: regId });
     _toast('Register deleted');
     _allRegs = _allRegs.filter(r => r.registerId !== regId);
     renderRegs(_allRegs);
@@ -403,8 +401,7 @@ async function saveAssignment() {
   const uid   = document.getElementById('f-cashier-uid').value.trim();
   if (!regId) return;
   try {
-    const cf = fn.httpsCallable('mtRegisterAssign');
-    await cf({ merchantId: _merchantId, registerId: regId, cashierId: uid || null, cashierName: name || null });
+    await _posDispatch('mtRegisterAssign', { merchantId: _merchantId, registerId: regId, cashierId: uid || null, cashierName: name || null });
     _toast('Cashier assigned');
     closeAssignModal();
     await loadRegisters();

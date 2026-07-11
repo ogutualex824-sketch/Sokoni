@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cash Office — SOKONI SmartPOS</title>
+<script src="security.js"></script>
+<script src="shared-header.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#050505;--sur:#0d0d0d;--sur2:#141414;--g:#71ff00;--ga:rgba(113,255,0,.1);
+      --bor:#1a1a1a;--bor2:#222;--txt:#e8e8e8;--sub:#888;
+      --blue:#1565c0;--red:#c62828;--orange:#e65100;--amber:#f9a825;--teal:#00796b}
+body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,system-ui,sans-serif;
+     font-size:14px;min-height:100vh}
+.topbar{background:var(--blue);color:#fff;height:52px;display:flex;align-items:center;
+        padding:0 16px;gap:12px;flex-shrink:0}
+.topbar h1{font-size:16px;font-weight:800}
+.topbar h1 span{color:var(--g);margin-right:5px}
+.topbar-spacer{flex:1}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:9px;
+     font-size:12px;font-weight:700;cursor:pointer;border:none;text-decoration:none;transition:opacity .15s}
+.btn-g{background:var(--g);color:#000}.btn-secondary{background:rgba(255,255,255,.12);color:#fff}
+.btn:hover{opacity:.8}
+/* Tabs */
+.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--bor);background:var(--sur);
+         overflow-x:auto;flex-shrink:0}
+.tab{padding:13px 20px;font-size:13px;font-weight:600;color:var(--sub);cursor:pointer;
+     border-bottom:3px solid transparent;white-space:nowrap;transition:color .15s}
+.tab.active{color:var(--g);border-color:var(--g)}
+.tab:hover:not(.active){color:var(--txt)}
+.tab-panel{display:none;padding:20px 16px 80px;max-width:1400px;margin:0 auto}
+.tab-panel.active{display:block}
+/* KPIs */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--sur);border:1px solid var(--bor);border-radius:13px;padding:14px 16px}
+.kpi-label{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.kpi-value{font-size:26px;font-weight:800;margin-top:6px;letter-spacing:-.03em}
+.kpi-sub{font-size:11px;color:var(--sub);margin-top:3px}
+.kpi-value.g{color:var(--g)}.kpi-value.b{color:#42a5f5}
+.kpi-value.o{color:#ff9800}.kpi-value.r{color:#ef5350}
+/* Section header */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sec-title{font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.07em}
+/* Cards */
+.card{background:var(--sur);border:1px solid var(--bor);border-radius:13px;padding:16px}
+.card-title{font-size:13px;font-weight:800;margin-bottom:12px}
+/* Table */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;padding:9px 12px;font-size:11px;color:var(--sub);
+        text-transform:uppercase;letter-spacing:.06em;font-weight:600;
+        border-bottom:1px solid var(--bor)}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--bor)}
+.tbl tr:last-child td{border:none}
+.tbl tr:hover td{background:rgba(255,255,255,.03)}
+/* Till cards */
+.till-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.till-card{background:var(--sur);border:1px solid var(--bor);border-radius:13px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.till-card.open{border-color:rgba(113,255,0,.3)}.till-card.closed{border-color:var(--bor)}
+.till-hdr{display:flex;align-items:center;justify-content:space-between}
+.till-name{font-weight:800;font-size:15px}
+.till-cashier{font-size:12px;color:var(--sub);margin-top:2px}
+.sb{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px}
+.sb-open{background:rgba(113,255,0,.12);color:var(--g)}
+.sb-closed{background:rgba(136,136,136,.1);color:var(--sub)}
+.bal-rows{display:flex;flex-direction:column;gap:4px}
+.bal-row{display:flex;justify-content:space-between;font-size:12px;color:var(--sub)}
+.bal-row strong{color:var(--txt)}
+.bal-row.hilight strong{color:var(--g);font-size:13px}
+.variance-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:7px}
+.variance-balanced{background:rgba(113,255,0,.1);color:var(--g)}
+.variance-over{background:rgba(66,165,245,.1);color:#42a5f5}
+.variance-short{background:rgba(239,83,80,.1);color:#ef5350}
+/* EOD table */
+.eod-section{background:var(--sur);border:1px solid var(--bor);border-radius:13px;padding:16px;margin-bottom:16px}
+.eod-section-title{font-size:12px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px}
+.eod-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bor);font-size:13px}
+.eod-row:last-child{border:none}
+.eod-row.total{font-weight:700;font-size:14px;border-top:1px solid var(--bor2)}
+.eod-row.total .eod-val{color:var(--g)}
+/* Filters */
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.filter-bar input,.filter-bar select{background:var(--sur2);border:1px solid var(--bor2);border-radius:9px;
+  padding:8px 12px;color:var(--txt);font-size:13px;outline:none}
+.filter-bar input:focus,.filter-bar select:focus{border-color:var(--g)}
+/* Badge */
+.badge{display:inline-flex;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+.badge-sale{background:rgba(113,255,0,.1);color:var(--g)}
+.badge-refund{background:rgba(239,83,80,.1);color:#ef5350}
+.badge-drop{background:rgba(66,165,245,.1);color:#42a5f5}
+.badge-in{background:rgba(0,150,136,.1);color:#26a69a}
+.badge-out{background:rgba(255,152,0,.1);color:#ff9800}
+.badge-open{background:rgba(113,255,0,.1);color:var(--g)}
+.badge-close{background:rgba(136,136,136,.1);color:var(--sub)}
+/* Scrollable tables */
+.tbl-wrap{overflow-x:auto}
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+       background:var(--sur);border:1px solid var(--bor);border-radius:10px;
+       padding:10px 18px;font-size:13px;font-weight:600;z-index:9999;
+       opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+/* Empty */
+.empty{text-align:center;padding:48px 0;color:var(--sub)}
+/* Print */
+@media print{
+  .topbar,.tab-bar,.filter-bar{display:none!important}
+  .tab-panel:not(.active){display:none}
+  body{background:#fff;color:#000}
+  .card,.till-card,.eod-section{border:1px solid #ccc!important;background:#fff!important}
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1><span>POS</span> Cash Office</h1>
+  <div class="topbar-spacer"></div>
+  <a href="pos-live-floor.html" class="btn btn-secondary">&#x1F4CA; Floor</a>
+  <a href="pos-till-manager.html" class="btn btn-secondary">&#x1F6E0; Registers</a>
+  <a href="pos.html" class="btn btn-secondary">&#x2190; POS</a>
+</div>
+
+<div class="tab-bar">
+  <div class="tab active" onclick="switchTab('overview',this)">Overview</div>
+  <div class="tab" onclick="switchTab('tills',this)">Live Tills</div>
+  <div class="tab" onclick="switchTab('movements',this)">Movements</div>
+  <div class="tab" onclick="switchTab('eod',this)">EOD Report</div>
+  <div class="tab" onclick="switchTab('audit',this)">Audit Trail</div>
+</div>
+
+<!-- ══ OVERVIEW ══════════════════════════════════════════════════ -->
+<div class="tab-panel active" id="tab-overview">
+  <div class="kpi-row" id="ov-kpi-row">
+    <div class="kpi"><div class="kpi-label">Open Sessions</div><div class="kpi-value g" id="ov-open">—</div></div>
+    <div class="kpi"><div class="kpi-label">Expected Cash</div><div class="kpi-value g" id="ov-expected">—</div></div>
+    <div class="kpi"><div class="kpi-label">Total Cash Sales</div><div class="kpi-value b" id="ov-sales">—</div></div>
+    <div class="kpi"><div class="kpi-label">Safe Drops</div><div class="kpi-value o" id="ov-drops">—</div></div>
+    <div class="kpi"><div class="kpi-label">Pending Approvals</div><div class="kpi-value r" id="ov-approvals">—</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Pending Manager Approvals</div>
+    <div id="approval-list"><div class="empty">No pending approvals.</div></div>
+  </div>
+</div>
+
+<!-- ══ LIVE TILLS ═════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-tills">
+  <div class="sec-hdr">
+    <div class="sec-title">All Till Sessions Today</div>
+    <button class="btn btn-g" onclick="loadTills()">&#x21BB; Refresh</button>
+  </div>
+  <div class="till-grid" id="till-grid">
+    <div class="empty">Loading…</div>
+  </div>
+</div>
+
+<!-- ══ MOVEMENTS ═════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-movements">
+  <div class="filter-bar">
+    <select id="mv-type" onchange="loadMovements()">
+      <option value="">All Types</option>
+      <option value="cash_in">Cash In</option>
+      <option value="cash_out">Cash Out</option>
+      <option value="safe_drop">Safe Drop</option>
+      <option value="cash_refund">Refund</option>
+    </select>
+    <input type="date" id="mv-date" onchange="loadMovements()">
+    <button class="btn btn-g" onclick="loadMovements()">Filter</button>
+  </div>
+  <div class="card">
+    <div class="tbl-wrap">
+      <table class="tbl" id="mv-table">
+        <thead><tr>
+          <th>Time</th><th>Type</th><th>Cashier</th><th>Register</th>
+          <th>Category</th><th style="text-align:right">Amount</th><th>Note</th>
+        </tr></thead>
+        <tbody id="mv-body"><tr><td colspan="7" style="text-align:center;color:var(--sub);padding:32px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ EOD REPORT ════════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-eod">
+  <div class="filter-bar">
+    <input type="date" id="eod-date">
+    <button class="btn btn-g" onclick="loadEOD()">Generate Report</button>
+    <button class="btn btn-secondary" onclick="window.print()">&#x1F5A8; Print</button>
+  </div>
+
+  <div id="eod-report">
+    <div class="empty">Select a date and generate the report.</div>
+  </div>
+</div>
+
+<!-- ══ AUDIT TRAIL ═══════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-audit">
+  <div class="filter-bar">
+    <input type="text"   id="au-cashier" placeholder="Cashier UID…">
+    <select id="au-type" style="min-width:160px">
+      <option value="">All Event Types</option>
+      <option value="register_open">Register Open</option>
+      <option value="register_close">Register Close</option>
+      <option value="cash_sale">Cash Sale</option>
+      <option value="cash_refund">Cash Refund</option>
+      <option value="cash_in">Cash In</option>
+      <option value="cash_out">Cash Out</option>
+      <option value="safe_drop">Safe Drop</option>
+      <option value="float_adjustment">Float Adjustment</option>
+    </select>
+    <input type="date" id="au-from">
+    <input type="date" id="au-to">
+    <button class="btn btn-g" onclick="loadAudit()">Search</button>
+  </div>
+  <div class="card">
+    <div class="tbl-wrap">
+      <table class="tbl" id="au-table">
+        <thead><tr>
+          <th>Timestamp</th><th>Type</th><th>Cashier</th><th>Register</th>
+          <th style="text-align:right">Amount</th><th>Reason / Note</th><th>Approved By</th>
+        </tr></thead>
+        <tbody id="au-body"><tr><td colspan="7" style="text-align:center;color:var(--sub);padding:32px">Search to view records.</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="firebase.js"></script>
+<script>
+'use strict';
+
+const app  = firebase.apps[0] || firebase.initializeApp(window.__sokoniConfig || {});
+const auth = firebase.auth();
+const db   = firebase.firestore();
+const fn   = firebase.functions();
+const _posDispatch = (op, data) =>
+  fn.httpsCallable('smartPosDispatch')({ op, ...(data || {}) }).then(r => r.data);
+
+let _merchantId = null;
+let _isManager  = false;
+
+/* ── Auth ── */
+auth.onAuthStateChanged(async u => {
+  if (!u) { window.location.href = 'pos.html'; return; }
+  const token = await u.getIdTokenResult();
+  _isManager  = !!(token.claims.admin || token.claims.superAdmin ||
+                   token.claims.manager || token.claims.supervisor);
+  if (!_isManager) { window.location.href = 'pos.html'; return; }
+  _merchantId = token.claims.merchantId || localStorage.getItem('sokoni_merchant_id') || u.uid;
+  loadOverview();
+  setDefaultDates();
+});
+
+/* ── Helpers ── */
+function _kes(cents) {
+  return 'KES ' + ((cents||0)/100).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function _ts(clientTs) {
+  if (!clientTs) return '—';
+  return new Date(clientTs).toLocaleString('en-KE',{
+    day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _typeBadge(type) {
+  const map = {
+    cash_sale:'sale',cash_refund:'refund',safe_drop:'drop',cash_in:'in',
+    cash_out:'out',register_open:'open',register_close:'close',
+  };
+  const cls = 'badge-' + (map[type]||'');
+  return `<span class="badge ${cls}">${_esc((type||'').replace(/_/g,' '))}</span>`;
+}
+
+function setDefaultDates() {
+  const today = new Date().toISOString().slice(0, 10);
+  const els = ['mv-date','eod-date','au-from','au-to'];
+  els.forEach(id => { const el = document.getElementById(id); if(el) el.value = today; });
+}
+
+/* ── Tab switching ── */
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  el.classList.add('active');
+  if (tab === 'tills')     loadTills();
+  if (tab === 'movements') loadMovements();
+  if (tab === 'audit')     loadAudit();
+}
+
+/* ── Overview ── */
+async function loadOverview() {
+  try {
+    // Load today's sessions
+    const today = new Date().toLocaleDateString('en-CA');
+    const [y,m,d] = today.split('-').map(Number);
+    const dayStart = new Date(Date.UTC(y,m-1,d,-3,0,0)).getTime();
+
+    const snap = await db.collection('posCashSessions')
+      .where('merchantId','==',_merchantId)
+      .get();
+
+    const sessions  = snap.docs.map(d => d.data());
+    const open      = sessions.filter(s => s.status === 'open');
+
+    // Pending approvals
+    const apRes   = await _posDispatch('cmGetManagerQueue', { merchantId: _merchantId });
+    const pending  = apRes?.items || [];
+
+    // Quick KPIs from events today
+    const evSnap = await db.collection('posCashEvents')
+      .where('merchantId','==',_merchantId)
+      .where('clientTs','>=', dayStart)
+      .get();
+    const events = evSnap.docs.map(d => d.data());
+    const cashSales = events.filter(e=>e.type==='cash_sale').reduce((s,e)=>s+e.amountCents,0);
+    const drops     = events.filter(e=>e.type==='safe_drop').reduce((s,e)=>s+e.amountCents,0);
+    // Rough expected
+    const expected  = events.reduce((s,e)=>{
+      switch(e.type){
+        case 'register_open': return s + e.amountCents;
+        case 'cash_sale':     return s + e.amountCents;
+        case 'cash_refund':   return s - e.amountCents;
+        case 'cash_in':       return s + e.amountCents;
+        case 'cash_out': case 'safe_drop': return s - e.amountCents;
+        default: return s;
+      }
+    }, 0);
+
+    document.getElementById('ov-open').textContent     = open.length;
+    document.getElementById('ov-expected').textContent = _kes(expected);
+    document.getElementById('ov-sales').textContent    = _kes(cashSales);
+    document.getElementById('ov-drops').textContent    = _kes(drops);
+    document.getElementById('ov-approvals').textContent= pending.length;
+
+    const list = document.getElementById('approval-list');
+    if (!pending.length) {
+      list.innerHTML = '<div class="empty">No pending approvals.</div>';
+    } else {
+      list.innerHTML = `<table class="tbl"><thead><tr>
+        <th>Time</th><th>Type</th><th>Cashier</th><th>Register</th>
+        <th style="text-align:right">Amount</th><th>Action</th></tr></thead>
+        <tbody>${pending.map(p=>`<tr>
+          <td>${_ts(p.clientTs)}</td>
+          <td>${_typeBadge(p.type)}</td>
+          <td>${_esc(p.cashierName)}</td>
+          <td>${_esc(p.registerId)}</td>
+          <td style="text-align:right;font-weight:700">${_kes(p.amountCents)}</td>
+          <td><button class="btn btn-g" onclick="approveItem('${_esc(p.id)}')">Approve</button></td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+  } catch(err) { _toast('Overview load failed: ' + err.message, true); }
+}
+
+async function approveItem(id) {
+  _toast('Approving…');
+  // For now just mark approved in events collection
+  try {
+    await db.collection('posCashEvents').doc(id).update({ approved: true, approvedBy: auth.currentUser?.uid });
+    _toast('Approved');
+    loadOverview();
+  } catch(e) { _toast(e.message, true); }
+}
+
+/* ── Live Tills ── */
+async function loadTills() {
+  const grid = document.getElementById('till-grid');
+  grid.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const snap = await db.collection('posCashSessions')
+      .where('merchantId','==',_merchantId)
+      .orderBy('openedAt','desc')
+      .limit(50).get();
+
+    const sessions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!sessions.length) {
+      grid.innerHTML = '<div class="empty">No sessions found. Open a register in POS to begin.</div>';
+      return;
+    }
+    grid.innerHTML = sessions.map(s => {
+      const varCents = s.varianceCents || 0;
+      const varClass = varCents === 0 ? 'variance-balanced' : varCents > 0 ? 'variance-over' : 'variance-short';
+      const varLabel = varCents === 0 ? '✓ Balanced' : (varCents > 0 ? '▲ Over ' : '▼ Short ') + _kes(Math.abs(varCents));
+      return `
+        <div class="till-card ${s.status}">
+          <div class="till-hdr">
+            <div><div class="till-name">${_esc(s.registerId)}</div>
+              <div class="till-cashier">&#x1F464; ${_esc(s.cashierName||'—')}</div></div>
+            <span class="sb sb-${_esc(s.status)}">${s.status==='open'?'OPEN':'CLOSED'}</span>
+          </div>
+          <div class="bal-rows">
+            <div class="bal-row"><span>Opening Float</span><strong>${_kes(s.openingFloatCents)}</strong></div>
+            ${s.status==='closed'?`
+            <div class="bal-row hilight"><span>Counted</span><strong>${_kes(s.closingCountedCents||0)}</strong></div>
+            <div class="bal-row"><span>Variance</span>
+              <strong><span class="variance-chip ${varClass}">${_esc(varLabel)}</span></strong>
+            </div>` : ''}
+          </div>
+          ${s.status==='closed' && s.varianceExplanation?
+            `<div style="font-size:11px;color:var(--sub);border-top:1px solid var(--bor);padding-top:8px">"${_esc(s.varianceExplanation)}"</div>`:''
+          }
+        </div>`;
+    }).join('');
+  } catch(err) { grid.innerHTML = '<div class="empty">Failed to load: ' + _esc(err.message) + '</div>'; }
+}
+
+/* ── Cash Movements ── */
+async function loadMovements() {
+  const body = document.getElementById('mv-body');
+  body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--sub);padding:24px">Loading…</td></tr>';
+  try {
+    const type = document.getElementById('mv-type').value;
+    const date = document.getElementById('mv-date').value;
+    const [y,m,d] = (date || new Date().toISOString().slice(0,10)).split('-').map(Number);
+    const dayStart = new Date(Date.UTC(y,m-1,d,-3,0,0)).getTime();
+    const dayEnd   = dayStart + 86400000;
+
+    const res = await _posDispatch('cmGetAuditTrail', {
+      merchantId: _merchantId,
+      type: type || undefined,
+      dateFrom: dayStart, dateTo: dayEnd, limit: 200,
+    });
+    const events = (res?.events||[]).filter(e =>
+      ['cash_in','cash_out','safe_drop','cash_refund'].includes(e.type) || !type);
+
+    if (!events.length) {
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--sub);padding:32px">No movements found.</td></tr>';
+      return;
+    }
+    body.innerHTML = events.map(e => `
+      <tr>
+        <td style="white-space:nowrap">${_ts(e.clientTs)}</td>
+        <td>${_typeBadge(e.type)}</td>
+        <td>${_esc(e.cashierName||'—')}</td>
+        <td>${_esc(e.registerId||'—')}</td>
+        <td>${_esc(e.category||'—')}</td>
+        <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums">${_kes(e.amountCents)}</td>
+        <td style="color:var(--sub);max-width:200px;overflow:hidden;text-overflow:ellipsis">${_esc(e.note||e.reason||'—')}</td>
+      </tr>`).join('');
+  } catch(err) {
+    body.innerHTML = `<tr><td colspan="7" style="color:var(--red);padding:24px">${_esc(err.message)}</td></tr>`;
+  }
+}
+
+/* ── EOD Report ── */
+async function loadEOD() {
+  const date = document.getElementById('eod-date').value || new Date().toISOString().slice(0,10);
+  const wrap  = document.getElementById('eod-report');
+  wrap.innerHTML = '<div class="empty">Generating report…</div>';
+  try {
+    const res = await _posDispatch('cmGetEndOfDay', { merchantId: _merchantId, dateStr: date });
+    const { tills = [], summary = {}, date: reportDate } = res || {};
+
+    // Per-till cards
+    const tillsHTML = tills.map(t => {
+      const b = t.balance || {};
+      const v = t.varianceCents || 0;
+      const vc = v === 0 ? 'variance-balanced' : v > 0 ? 'variance-over' : 'variance-short';
+      return `
+        <div class="eod-section">
+          <div class="eod-section-title">Register: ${_esc(t.registerId)} &mdash; ${_esc(t.cashierName)}</div>
+          <div class="eod-row"><span>Opening Float</span><span class="eod-val">${_kes(b.openingFloat)}</span></div>
+          <div class="eod-row"><span>Cash Sales</span><span class="eod-val">${_kes(b.cashSales)}</span></div>
+          <div class="eod-row"><span>Cash Refunds</span><span class="eod-val">&minus;${_kes(b.cashRefunds)}</span></div>
+          <div class="eod-row"><span>Cash In</span><span class="eod-val">+${_kes(b.cashIn)}</span></div>
+          <div class="eod-row"><span>Cash Out</span><span class="eod-val">&minus;${_kes(b.cashOut)}</span></div>
+          <div class="eod-row"><span>Safe Drops</span><span class="eod-val">&minus;${_kes(b.safeDrops)}</span></div>
+          <div class="eod-row total"><span>Expected in Drawer</span><span class="eod-val">${_kes(b.expected)}</span></div>
+          ${t.closed ? `<div class="eod-row" style="margin-top:8px">
+            <span>Variance</span>
+            <span class="variance-chip ${vc}">${v===0?'Balanced':v>0?'+'+_kes(v):'–'+_kes(Math.abs(v))}</span>
+          </div>` : '<div class="eod-row"><span style="color:var(--amber)">&#x26A0; Till not closed</span></div>'}
+        </div>`;
+    }).join('');
+
+    const s = summary;
+    wrap.innerHTML = `
+      <div class="eod-section">
+        <div class="eod-section-title">Branch Summary &mdash; ${_esc(reportDate)}</div>
+        <div class="eod-row"><span>Total Tills</span><span>${s.tillCount||0} (${s.closedCount||0} closed)</span></div>
+        <div class="eod-row"><span>Total Cash Sales</span><span class="eod-val">${_kes(s.totalCashSales)}</span></div>
+        <div class="eod-row"><span>Total Refunds</span><span class="eod-val">&minus;${_kes(s.totalCashRefunds)}</span></div>
+        <div class="eod-row"><span>Total Safe Drops</span><span class="eod-val">&minus;${_kes(s.totalSafeDrops)}</span></div>
+        <div class="eod-row total"><span>Net Variance (All Tills)</span>
+          <span class="eod-val" style="color:${s.totalVariance===0?'var(--g)':s.totalVariance>0?'#42a5f5':'#ef5350'}">${s.totalVariance===0?'Balanced':(s.totalVariance>0?'Over ':'Short ')+_kes(Math.abs(s.totalVariance))}</span>
+        </div>
+      </div>
+      ${tillsHTML}`;
+  } catch(err) {
+    wrap.innerHTML = `<div class="empty" style="color:var(--red)">${_esc(err.message)}</div>`;
+  }
+}
+
+/* ── Audit Trail ── */
+async function loadAudit() {
+  const body = document.getElementById('au-body');
+  body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--sub);padding:24px">Loading…</td></tr>';
+  try {
+    const type     = document.getElementById('au-type').value;
+    const cashier  = document.getElementById('au-cashier').value.trim();
+    const fromDate = document.getElementById('au-from').value;
+    const toDate   = document.getElementById('au-to').value;
+    const parseDay = (d, end) => {
+      if (!d) return undefined;
+      const [y,m,dy] = d.split('-').map(Number);
+      return new Date(Date.UTC(y,m-1,dy,-3,0,0)).getTime() + (end ? 86399999 : 0);
+    };
+
+    const res = await _posDispatch('cmGetAuditTrail', {
+      merchantId: _merchantId,
+      type: type || undefined,
+      cashierId: cashier || undefined,
+      dateFrom: parseDay(fromDate, false),
+      dateTo:   parseDay(toDate,   true),
+      limit: 200,
+    });
+    const events = res?.events || [];
+    if (!events.length) {
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--sub);padding:32px">No records found.</td></tr>';
+      return;
+    }
+    body.innerHTML = events.map(e => `
+      <tr>
+        <td style="white-space:nowrap;font-size:12px">${_ts(e.clientTs)}</td>
+        <td>${_typeBadge(e.type)}</td>
+        <td>${_esc(e.cashierName||'—')}</td>
+        <td>${_esc(e.registerId||'—')}</td>
+        <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums">
+          ${['float_adjustment'].includes(e.type)?_kes(Math.abs(e.adjustmentCents||0)):_kes(e.amountCents)}</td>
+        <td style="color:var(--sub);max-width:200px;overflow:hidden;text-overflow:ellipsis">
+          ${_esc(e.reason||e.note||e.category||'—')}</td>
+        <td style="font-size:12px">${_esc(e.approvedBy||'—')}</td>
+      </tr>`).join('');
+  } catch(err) {
+    body.innerHTML = `<tr><td colspan="7" style="color:var(--red);padding:24px">${_esc(err.message)}</td></tr>`;
+  }
+}
+
+/* ── Toast ── */
+function _toast(msg, isErr = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = isErr ? 'rgba(239,83,80,.4)' : 'rgba(113,255,0,.3)';
+  t.style.color = isErr ? '#ef5350' : '#71ff00';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

@@ -1,18 +1,19 @@
 'use strict';
 /**
- * SOKONI SmartPOS Dispatcher â€” 154 onCall CFs â†’ 1 Cloud Run service.
+ * SOKONI SmartPOS Dispatcher — 173 onCall handlers → 1 Cloud Run service.
  *
  * Modules merged:
- *   pos-crm-pro.js       â€” 25 handlers  (wallet, CRM, customer history â€¦)
- *   pos-completeness.js  â€” 25 handlers  (gift cards, layaway, KDS, cycle count â€¦)
- *   pos-staff-ops.js     â€” 21 handlers  (shifts, payroll, permissions â€¦)
- *   pos-inventory-pro.js â€” 21 handlers  (batches, FEFO, expiry, transfers â€¦)
- *   pos-accounting.js    â€” 18 handlers  (chart of accounts, journal, P&L â€¦)
- *   pos-retail-engine.js â€” 18 handlers  (customer engine, sale recording, analytics â€¦)
- *   pos-integrations.js  â€” 15 handlers  (webhooks, API keys, bank reconciliation â€¦)
- *   pos-hq.js            â€” 13 handlers  (central pricing, HQ dashboard, broadcasts â€¦)
+ *   pos-crm-pro.js       — 25 handlers  (wallet, CRM, customer history)
+ *   pos-completeness.js  — 25 handlers  (gift cards, layaway, KDS, cycle count)
+ *   pos-staff-ops.js     — 21 handlers  (shifts, payroll, permissions)
+ *   pos-inventory-pro.js — 21 handlers  (batches, FEFO, expiry, transfers)
+ *   pos-accounting.js    — 18 handlers  (chart of accounts, journal, P&L)
+ *   pos-retail-engine.js — 18 handlers  (customer engine, sale recording, analytics)
+ *   pos-integrations.js  — 15 handlers  (webhooks, API keys, bank reconciliation)
+ *   pos-hq.js            — 13 handlers  (central pricing, HQ dashboard, broadcasts)
+ *   pos-multi-till.js    —  9 handlers  (mt* register lifecycle + live floor)
+ *   pos-cash-manager.js  —  8 handlers  (cm* cash sessions, balance, EOD, audit)
  *
- * Cloud Run reduction: 154 â†’ 1.
  * Secret: SENDGRID_API_KEY required by pos-retail-engine emailReceipt.
  */
 
@@ -29,6 +30,8 @@ const posAccounting  = require('./pos-accounting');
 const posRetailEngine= require('./pos-retail-engine');
 const posIntegrations= require('./pos-integrations');
 const posHq          = require('./pos-hq');
+const posMultiTill   = require('./pos-multi-till');
+const posCashManager = require('./pos-cash-manager');
 
 function _merge() {
   const seen = {}, result = {};
@@ -48,7 +51,9 @@ const _H = _merge(
   posAccounting._h,
   posRetailEngine._h,
   posIntegrations._h,
-  posHq._h
+  posHq._h,
+  posMultiTill._h,
+  posCashManager._h
 );
 
 const _OPTS = {

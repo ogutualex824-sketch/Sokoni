@@ -1,16 +1,17 @@
 /* ================================================================
-   SOKONI SmartPOS — Multi-Till Cloud Functions v1.0
+   SOKONI SmartPOS — Multi-Till handlers v1.0
    functions/pos-multi-till.js
 
-   9 Cloud Functions for register lifecycle management, live floor
+   9 handlers for register lifecycle management, live floor
    monitoring, and per-till performance reporting.
+   Consumed by smartpos-dispatch.js via exports._h.
 
    Collections:
      posRegisters/{merchantId}_{registerId}  — static register config
      posTillState/{merchantId}_{registerId}  — live till heartbeat (client-written)
      posTillEvents/{id}                      — significant floor events
 
-   Exports:
+   Handlers (op names):
      mtRegisterCreate      — create a register (admin)
      mtRegisterUpdate      — update register config (admin)
      mtRegisterDelete      — soft-delete (admin)
@@ -23,12 +24,9 @@
 ================================================================ */
 'use strict';
 
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const logger                 = require('firebase-functions/logger');
-const admin                  = require('firebase-admin');
-
-const REGION = 'us-central1';
-const OPTS   = { region: REGION, enforceAppCheck: true };
+const { HttpsError } = require('firebase-functions/v2/https');
+const logger         = require('firebase-functions/logger');
+const admin          = require('firebase-admin');
 
 function _db()  { return admin.firestore(); }
 function _now() { return admin.firestore.FieldValue.serverTimestamp(); }
@@ -61,7 +59,7 @@ const VALID_EVENT_TYPES = new Set([
 /* ════════════════════════════════════════════════════════════════════
    mtRegisterCreate — create a new register (admin only)
 ════════════════════════════════════════════════════════════════════ */
-exports.mtRegisterCreate = onCall(OPTS, async (req) => {
+async function mtRegisterCreate(req) {
   _auth(req);
   if (!_isAdmin(req)) throw new HttpsError('permission-denied', 'Admin access required.');
 
@@ -98,12 +96,12 @@ exports.mtRegisterCreate = onCall(OPTS, async (req) => {
   await _db().collection('posRegisters').doc(docId).set(doc);
   logger.info('[MultiTill] Register created', { docId, by: req.auth.uid });
   return { id: docId, registerId, ok: true };
-});
+}
 
 /* ════════════════════════════════════════════════════════════════════
    mtRegisterUpdate — update register config (admin only)
 ════════════════════════════════════════════════════════════════════ */
-exports.mtRegisterUpdate = onCall(OPTS, async (req) => {
+async function mtRegisterUpdate(req) {
   _auth(req);
   if (!_isAdmin(req)) throw new HttpsError('permission-denied', 'Admin access required.');
 
@@ -135,12 +133,12 @@ exports.mtRegisterUpdate = onCall(OPTS, async (req) => {
   await _db().collection('posRegisters').doc(docId).update(clean);
   logger.info('[MultiTill] Register updated', { docId, by: req.auth.uid });
   return { ok: true };
-});
+}
 
 /* ════════════════════════════════════════════════════════════════════
    mtRegisterDelete — soft-delete a register (admin only)
 ════════════════════════════════════════════════════════════════════ */
-exports.mtRegisterDelete = onCall(OPTS, async (req) => {
+async function mtRegisterDelete(req) {
   _auth(req);
   if (!_isAdmin(req)) throw new HttpsError('permission-denied', 'Admin access required.');
 
@@ -157,12 +155,12 @@ exports.mtRegisterDelete = onCall(OPTS, async (req) => {
 
   logger.info('[MultiTill] Register deleted', { docId, by: req.auth.uid });
   return { ok: true };
-});
+}
 
 /* ════════════════════════════════════════════════════════════════════
    mtRegisterList — list all registers for a merchant (manager+)
 ════════════════════════════════════════════════════════════════════ */
-exports.mtRegisterList = onCall(OPTS, async (req) => {
+async function mtRegisterList(req) {
   _auth(req);
   if (!_isManager(req)) throw new HttpsError('permission-denied', 'Manager access required.');
 
@@ -175,12 +173,12 @@ exports.mtRegisterList = onCall(OPTS, async (req) => {
 
   const snap = await q.orderBy('registerName').get();
   return { registers: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
-});
+}
 
 /* ════════════════════════════════════════════════════════════════════
    mtRegisterAssign — assign (or unassign) a cashier to a register
 ════════════════════════════════════════════════════════════════════ */
-exports.mtRegisterAssign = onCall(OPTS, async (req) => {
+async function mtRegisterAssign(req) {
   _auth(req);
   if (!_isManager(req)) throw new HttpsError('permission-denied', 'Manager access required.');
 
@@ -201,7 +199,7 @@ exports.mtRegisterAssign = onCall(OPTS, async (req) => {
 
   logger.info('[MultiTill] Register assigned', { docId, cashierId, by: req.auth.uid });
   return { ok: true };
-});
+}
 
 /* ════════════════════════════════════════════════════════════════════
    mtGetLiveFloor — all active till states (manager+)
@@ -209,7 +207,7 @@ exports.mtRegisterAssign = onCall(OPTS, async (req) => {
    This CF provides a server-authoritative snapshot (useful for reporting,
    alerts, and clients without Firestore real-time access).
 ════════════════════════════════════════════════════════════════════ */
-exports.mtGetLiveFloor = onCall(OPTS, async (req) => {
+async function mtGetLiveFloor(req) {
   _auth(req);
   if (!_isManager(req)) throw new HttpsError('permission-denied', 'Manager access required.');
 
@@ -250,12 +248,12 @@ exports.mtGetLiveFloor = onCall(OPTS, async (req) => {
       offline: tills.filter(t => !t.online).length,
     },
   };
-});
+}
 
 /* ════════════════════════════════════════════════════════════════════
    mtGetFloorSummary — aggregated KPIs for the store floor (manager+)
 ════════════════════════════════════════════════════════════════════ */
-exports.mtGetFloorSummary = onCall(OPTS, async (req) => {
+async function mtGetFloorSummary(req) {
   _auth(req);
   if (!_isManager(req)) throw new HttpsError('permission-denied', 'Manager access required.');
 
@@ -292,12 +290,12 @@ exports.mtGetFloorSummary = onCall(OPTS, async (req) => {
     topCashier,
     asOf:          now,
   };
-});
+}
 
 /* ════════════════════════════════════════════════════════════════════
    mtGetRegisterStats — per-register performance report (manager+)
 ════════════════════════════════════════════════════════════════════ */
-exports.mtGetRegisterStats = onCall(OPTS, async (req) => {
+async function mtGetRegisterStats(req) {
   _auth(req);
   if (!_isManager(req)) throw new HttpsError('permission-denied', 'Manager access required.');
 
@@ -330,12 +328,12 @@ exports.mtGetRegisterStats = onCall(OPTS, async (req) => {
       drawerStatus:  state.drawerStatus  || 'unknown',
     },
   };
-});
+}
 
 /* ════════════════════════════════════════════════════════════════════
    mtRecordTillEvent — log a floor event (cashier+)
 ════════════════════════════════════════════════════════════════════ */
-exports.mtRecordTillEvent = onCall(OPTS, async (req) => {
+async function mtRecordTillEvent(req) {
   const auth = _auth(req);
   const { type, merchantId, branchId, registerId, cashierId, cashierName, note, severity = 'info' } = req.data || {};
 
@@ -359,4 +357,16 @@ exports.mtRecordTillEvent = onCall(OPTS, async (req) => {
 
   const ref = await _db().collection('posTillEvents').add(doc);
   return { id: ref.id, ok: true };
-});
+}
+
+exports._h = {
+  mtRegisterCreate,
+  mtRegisterUpdate,
+  mtRegisterDelete,
+  mtRegisterList,
+  mtRegisterAssign,
+  mtGetLiveFloor,
+  mtGetFloorSummary,
+  mtGetRegisterStats,
+  mtRecordTillEvent,
+};
