@@ -78,8 +78,27 @@ window.SokoniAOS = (() => {
     loaders[s]?.();
   }
 
+  // Admin-OS ops whitelist — routes through adminOsDispatch to reduce Cloud Run services
+  const _ADMIN_OS_OPS = new Set([
+    'adminApprovePayouts','adminCreateSupportTicket','adminDeleteBanner','adminDeleteFaq',
+    'adminGetAiStats','adminGetAnnouncements','adminGetAuditLogs','adminGetBanners',
+    'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
+    'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFraudAlerts',
+    'adminGetOrders','adminGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
+    'adminGetPosDevices','adminGetProducts','adminGetRecentNotifications','adminGetReviews',
+    'adminGetSearchStats','adminGetSupportTickets','adminGetUser','adminRemoveReview',
+    'adminResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
+    'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
+    'adminUpdatePlatformSettings','adminUpdateProductStatus','adminUpdateUserRole',
+    'adminUpsertCategory','adminUpsertFaq',
+  ]);
+
   // ── CF caller ─────────────────────────────────────────────────────────────────
   async function _call(name, data = {}) {
+    if (_ADMIN_OS_OPS.has(name)) {
+      const r = await _fn.httpsCallable('adminOsDispatch')({ op: name, ...data });
+      return r.data;
+    }
     const fn = _fn.httpsCallable(name);
     const r  = await fn(data);
     return r.data;

@@ -8009,48 +8009,12 @@ exports.tsGetBannedTerms      = trustSafety.tsGetBannedTerms;
 exports.tsManageBannedTerm    = trustSafety.tsManageBannedTerm;
 exports.tsGetTrustDashboard   = trustSafety.tsGetTrustDashboard;
 
-/* ── Admin OS v1.0 ────────────────────────────────────────────────────── */
-const adminOs = require('./admin-os');
-exports.adminGetPlatformOverview    = adminOs.adminGetPlatformOverview;
-exports.adminSearchUsers            = adminOs.adminSearchUsers;
-exports.adminGetUser                = adminOs.adminGetUser;
-exports.adminUpdateUserRole         = adminOs.adminUpdateUserRole;
-exports.adminGetPlatformSettings    = adminOs.adminGetPlatformSettings;
-exports.adminUpdatePlatformSettings = adminOs.adminUpdatePlatformSettings;
-exports.adminGetFeatureFlags        = adminOs.adminGetFeatureFlags;
-exports.adminUpdateFeatureFlag      = adminOs.adminUpdateFeatureFlag;
-exports.adminCreateSupportTicket    = adminOs.adminCreateSupportTicket;
-exports.adminGetSupportTickets      = adminOs.adminGetSupportTickets;
-exports.adminResolveSupportTicket   = adminOs.adminResolveSupportTicket;
-exports.adminGetCategories          = adminOs.adminGetCategories;
-exports.adminUpsertCategory         = adminOs.adminUpsertCategory;
-exports.adminGetExecutiveDashboard  = adminOs.adminGetExecutiveDashboard;
-exports.adminGetOrders              = adminOs.adminGetOrders;
-exports.adminUpdateOrderStatus      = adminOs.adminUpdateOrderStatus;
-exports.adminGetProducts            = adminOs.adminGetProducts;
-exports.adminUpdateProductStatus    = adminOs.adminUpdateProductStatus;
-exports.adminGetBookings            = adminOs.adminGetBookings;
-exports.adminGetDeliveryStats       = adminOs.adminGetDeliveryStats;
-exports.adminOsGetPendingPayouts    = adminOs.adminGetPendingPayouts;
-exports.adminApprovePayouts         = adminOs.adminApprovePayouts;
-exports.adminGetDisputes            = adminOs.adminGetDisputes;
-exports.adminGetReviews             = adminOs.adminGetReviews;
-exports.adminRemoveReview           = adminOs.adminRemoveReview;
-exports.adminSendPushNotification   = adminOs.adminSendPushNotification;
-exports.adminGetRecentNotifications = adminOs.adminGetRecentNotifications;
-exports.adminGetBanners             = adminOs.adminGetBanners;
-exports.adminSaveBanner             = adminOs.adminSaveBanner;
-exports.adminDeleteBanner           = adminOs.adminDeleteBanner;
-exports.adminGetFaqs                = adminOs.adminGetFaqs;
-exports.adminUpsertFaq              = adminOs.adminUpsertFaq;
-exports.adminDeleteFaq              = adminOs.adminDeleteFaq;
-exports.adminGetAnnouncements       = adminOs.adminGetAnnouncements;
-exports.adminSaveAnnouncement       = adminOs.adminSaveAnnouncement;
-exports.adminGetPosDevices          = adminOs.adminGetPosDevices;
-exports.adminGetAiStats             = adminOs.adminGetAiStats;
-exports.adminGetSearchStats         = adminOs.adminGetSearchStats;
-exports.adminGetFraudAlerts         = adminOs.adminGetFraudAlerts;
-exports.adminGetAuditLogs           = adminOs.adminGetAuditLogs;
+/* ── Admin OS v2.0 ────────────────────────────────────────────────────── */
+/* DISPATCH CONSOLIDATION: 41 onCall CFs → 1 adminOsDispatch.
+   sokoni-aos.js routes calls via ADMIN_OS_OPS whitelist in _call() helper.
+   Cloud Run services: 41 → 1. */
+const adminOsDispatcher = require('./admin-os-dispatch');
+exports.adminOsDispatch = adminOsDispatcher.adminOsDispatch;
 
 /* ── Universal Availability & Scheduling Engine v1.0 ─────────────────── */
 const availability = require("./availability");

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const { onCall } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -11,10 +11,14 @@ function _requireSuperAdmin(req) {
   if (!req.auth?.token?.superAdmin) throw new Error('superAdmin required');
 }
 
+
+// Handler registry — consumed by admin-os-dispatch.js
+exports._h = {};
+
 /* ─────────────────────────────────────────────────────────────────────────
    Platform Overview
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetPlatformOverview = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetPlatformOverview = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPlatformOverview = async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
   const { Timestamp } = require('firebase-admin/firestore');
@@ -49,7 +53,7 @@ exports.adminGetPlatformOverview = onCall({ region: 'us-central1', maxInstances:
 /* ─────────────────────────────────────────────────────────────────────────
    User Management
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminSearchUsers = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminSearchUsers = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminSearchUsers = async (req) => {
   _requireAdmin(req);
   const { query, role, status, limit: lim } = req.data;
 
@@ -87,7 +91,7 @@ exports.adminSearchUsers = onCall({ region: 'us-central1', maxInstances: 10, enf
   };
 });
 
-exports.adminGetUser = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetUser = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetUser = async (req) => {
   _requireAdmin(req);
   const { uid } = req.data;
   if (!uid) throw new Error('uid required');
@@ -124,7 +128,7 @@ exports.adminGetUser = onCall({ region: 'us-central1', maxInstances: 10, enforce
   };
 });
 
-exports.adminUpdateUserRole = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminUpdateUserRole = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpdateUserRole = async (req) => {
   _requireSuperAdmin(req);
   const { uid, role, additionalClaims } = req.data;
   if (!uid || !role) throw new Error('uid, role required');
@@ -169,7 +173,7 @@ exports.adminUpdateUserRole = onCall({ region: 'us-central1', maxInstances: 10, 
 /* ─────────────────────────────────────────────────────────────────────────
    Platform Settings
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetPlatformSettings = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetPlatformSettings = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPlatformSettings = async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
   const snap = await db.collection('platformSettings').get();
@@ -219,7 +223,7 @@ exports.adminGetPlatformSettings = onCall({ region: 'us-central1', maxInstances:
   return { settings };
 });
 
-exports.adminUpdatePlatformSettings = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminUpdatePlatformSettings = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpdatePlatformSettings = async (req) => {
   _requireSuperAdmin(req);
   const { category, updates } = req.data;
   if (!category || !updates || typeof updates !== 'object') throw new Error('category and updates required');
@@ -248,7 +252,7 @@ exports.adminUpdatePlatformSettings = onCall({ region: 'us-central1', maxInstanc
 /* ─────────────────────────────────────────────────────────────────────────
    Feature Flags
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetFeatureFlags = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetFeatureFlags = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetFeatureFlags = async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
   const snap = await db.collection('featureFlags').limit(200).get();
@@ -280,7 +284,7 @@ exports.adminGetFeatureFlags = onCall({ region: 'us-central1', maxInstances: 10,
   return { flags };
 });
 
-exports.adminUpdateFeatureFlag = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminUpdateFeatureFlag = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpdateFeatureFlag = async (req) => {
   _requireSuperAdmin(req);
   const { key, enabled, rolloutPct, enabledForRoles, description } = req.data;
   if (!key) throw new Error('key required');
@@ -302,7 +306,7 @@ exports.adminUpdateFeatureFlag = onCall({ region: 'us-central1', maxInstances: 1
 /* ─────────────────────────────────────────────────────────────────────────
    Support Tickets
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminCreateSupportTicket = onCall({ region: 'us-central1', enforceAppCheck: true, maxInstances: 30 }, async (req) => {
+exports.adminCreateSupportTicket = onCall({ region: 'us-central1', enforceAppCheck: true, maxInstances: 30 }, exports._h.adminCreateSupportTicket = async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new Error('auth/unauthenticated');
   const { category, subject, message, priority } = req.data;
@@ -331,7 +335,7 @@ exports.adminCreateSupportTicket = onCall({ region: 'us-central1', enforceAppChe
   return { ticketId: ref.id };
 });
 
-exports.adminGetSupportTickets = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetSupportTickets = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetSupportTickets = async (req) => {
   _requireAdmin(req);
   const { status, priority, category, limit: lim } = req.data;
 
@@ -354,7 +358,7 @@ exports.adminGetSupportTickets = onCall({ region: 'us-central1', maxInstances: 1
   return { tickets };
 });
 
-exports.adminResolveSupportTicket = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminResolveSupportTicket = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminResolveSupportTicket = async (req) => {
   _requireAdmin(req);
   const { ticketId, resolution, status, assignedTo } = req.data;
   if (!ticketId) throw new Error('ticketId required');
@@ -375,7 +379,7 @@ exports.adminResolveSupportTicket = onCall({ region: 'us-central1', maxInstances
 /* ─────────────────────────────────────────────────────────────────────────
    Categories
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetCategories = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetCategories = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetCategories = async (req) => {
   _requireAdmin(req);
   const { hubType } = req.data;
   const db = getFirestore();
@@ -390,7 +394,7 @@ exports.adminGetCategories = onCall({ region: 'us-central1', maxInstances: 10, e
   return { categories };
 });
 
-exports.adminUpsertCategory = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminUpsertCategory = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpsertCategory = async (req) => {
   _requireAdmin(req);
   const { categoryId, name, hubType, parentId, description, icon, active } = req.data;
   if (!name || !hubType) throw new Error('name, hubType required');
@@ -420,7 +424,7 @@ exports.adminUpsertCategory = onCall({ region: 'us-central1', maxInstances: 10, 
 /* ─────────────────────────────────────────────────────────────────────────
    Executive Dashboard (extended KPIs)
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetExecutiveDashboard = async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
   const { Timestamp } = require('firebase-admin/firestore');
@@ -462,7 +466,7 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
 /* ─────────────────────────────────────────────────────────────────────────
    Orders
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetOrders = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetOrders = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetOrders = async (req) => {
   _requireAdmin(req);
   const { status, hubType, limit: lim } = req.data;
   const db = getFirestore();
@@ -474,7 +478,7 @@ exports.adminGetOrders = onCall({ region: 'us-central1', maxInstances: 10, enfor
   return { orders };
 });
 
-exports.adminUpdateOrderStatus = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminUpdateOrderStatus = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpdateOrderStatus = async (req) => {
   _requireAdmin(req);
   const { orderId, status, note } = req.data;
   if (!orderId || !status) throw new Error('orderId and status required');
@@ -487,7 +491,7 @@ exports.adminUpdateOrderStatus = onCall({ region: 'us-central1', maxInstances: 1
 /* ─────────────────────────────────────────────────────────────────────────
    Marketplace (Products)
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetProducts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetProducts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetProducts = async (req) => {
   _requireAdmin(req);
   const { status, query, limit: lim } = req.data;
   const db = getFirestore();
@@ -499,7 +503,7 @@ exports.adminGetProducts = onCall({ region: 'us-central1', maxInstances: 10, enf
   return { products: items };
 });
 
-exports.adminUpdateProductStatus = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminUpdateProductStatus = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpdateProductStatus = async (req) => {
   _requireAdmin(req);
   const { productId, status, featured, reason } = req.data;
   if (!productId || !status) throw new Error('productId and status required');
@@ -515,7 +519,7 @@ exports.adminUpdateProductStatus = onCall({ region: 'us-central1', maxInstances:
 /* ─────────────────────────────────────────────────────────────────────────
    Bookings
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetBookings = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetBookings = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetBookings = async (req) => {
   _requireAdmin(req);
   const { status, limit: lim } = req.data;
   const db = getFirestore();
@@ -528,7 +532,7 @@ exports.adminGetBookings = onCall({ region: 'us-central1', maxInstances: 10, enf
 /* ─────────────────────────────────────────────────────────────────────────
    Delivery Operations
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetDeliveryStats = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetDeliveryStats = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetDeliveryStats = async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
   const { Timestamp } = require('firebase-admin/firestore');
@@ -549,13 +553,13 @@ exports.adminGetDeliveryStats = onCall({ region: 'us-central1', maxInstances: 10
 /* ─────────────────────────────────────────────────────────────────────────
    Payouts
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetPendingPayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetPendingPayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPendingPayouts = async (req) => {
   _requireAdmin(req);
   const snap = await getFirestore().collection('payouts').where('status', '==', 'pending').orderBy('createdAt', 'desc').limit(100).get().catch(() => ({ docs: [] }));
   return { payouts: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
 });
 
-exports.adminApprovePayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminApprovePayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminApprovePayouts = async (req) => {
   _requireSuperAdmin(req);
   const { payoutIds } = req.data;
   if (!Array.isArray(payoutIds) || !payoutIds.length) throw new Error('payoutIds array required');
@@ -570,7 +574,7 @@ exports.adminApprovePayouts = onCall({ region: 'us-central1', maxInstances: 10, 
 /* ─────────────────────────────────────────────────────────────────────────
    Disputes
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetDisputes = async (req) => {
   _requireAdmin(req);
   const { status, limit: lim } = req.data;
   const db = getFirestore();
@@ -580,7 +584,7 @@ exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10, enf
   return { disputes: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
 });
 
-exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminResolveDispute = async (req) => {
   _requireAdmin(req);
   const { disputeId, resolution, favorBuyer } = req.data;
   if (!disputeId || !resolution) throw new Error('disputeId and resolution required');
@@ -593,7 +597,7 @@ exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10, 
 /* ─────────────────────────────────────────────────────────────────────────
    Reviews
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetReviews = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetReviews = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetReviews = async (req) => {
   _requireAdmin(req);
   const { flagged, limit: lim } = req.data;
   const db = getFirestore();
@@ -604,7 +608,7 @@ exports.adminGetReviews = onCall({ region: 'us-central1', maxInstances: 10, enfo
   return { reviews: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
 });
 
-exports.adminRemoveReview = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminRemoveReview = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminRemoveReview = async (req) => {
   _requireAdmin(req);
   const { reviewId, reason } = req.data;
   if (!reviewId) throw new Error('reviewId required');
@@ -617,7 +621,7 @@ exports.adminRemoveReview = onCall({ region: 'us-central1', maxInstances: 10, en
 /* ─────────────────────────────────────────────────────────────────────────
    Push Notifications
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminSendPushNotification = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminSendPushNotification = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminSendPushNotification = async (req) => {
   _requireAdmin(req);
   const { title, body, targetRole, targetAll, data: extraData, imageUrl } = req.data;
   if (!title || !body) throw new Error('title and body required');
@@ -632,7 +636,7 @@ exports.adminSendPushNotification = onCall({ region: 'us-central1', maxInstances
   return { success: true, notificationId: doc.id };
 });
 
-exports.adminGetRecentNotifications = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetRecentNotifications = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetRecentNotifications = async (req) => {
   _requireAdmin(req);
   const snap = await getFirestore().collection('platformNotifications').orderBy('createdAt', 'desc').limit(30).get().catch(() => ({ docs: [] }));
   return { notifications: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
@@ -641,13 +645,13 @@ exports.adminGetRecentNotifications = onCall({ region: 'us-central1', maxInstanc
 /* ─────────────────────────────────────────────────────────────────────────
    Banners / Content
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetBanners = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetBanners = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetBanners = async (req) => {
   _requireAdmin(req);
   const snap = await getFirestore().collection('banners').orderBy('order').limit(50).get().catch(() => ({ docs: [] }));
   return { banners: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
 });
 
-exports.adminSaveBanner = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminSaveBanner = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminSaveBanner = async (req) => {
   _requireAdmin(req);
   const { id, title, imageUrl, linkUrl, active, order: ord, hub, subtitle } = req.data;
   if (!title || !imageUrl) throw new Error('title and imageUrl required');
@@ -659,7 +663,7 @@ exports.adminSaveBanner = onCall({ region: 'us-central1', maxInstances: 10, enfo
   return { id: ref.id };
 });
 
-exports.adminDeleteBanner = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminDeleteBanner = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminDeleteBanner = async (req) => {
   _requireAdmin(req);
   const { id } = req.data;
   if (!id) throw new Error('id required');
@@ -670,13 +674,13 @@ exports.adminDeleteBanner = onCall({ region: 'us-central1', maxInstances: 10, en
 /* ─────────────────────────────────────────────────────────────────────────
    FAQs
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetFaqs = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetFaqs = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetFaqs = async (req) => {
   _requireAdmin(req);
   const snap = await getFirestore().collection('faqs').orderBy('order').limit(200).get().catch(() => ({ docs: [] }));
   return { faqs: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
 });
 
-exports.adminUpsertFaq = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminUpsertFaq = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminUpsertFaq = async (req) => {
   _requireAdmin(req);
   const { id, question, answer, category, order: ord, active } = req.data;
   if (!question || !answer) throw new Error('question and answer required');
@@ -688,7 +692,7 @@ exports.adminUpsertFaq = onCall({ region: 'us-central1', maxInstances: 10, enfor
   return { id: ref.id };
 });
 
-exports.adminDeleteFaq = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminDeleteFaq = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminDeleteFaq = async (req) => {
   _requireAdmin(req);
   const { id } = req.data;
   if (!id) throw new Error('id required');
@@ -699,13 +703,13 @@ exports.adminDeleteFaq = onCall({ region: 'us-central1', maxInstances: 10, enfor
 /* ─────────────────────────────────────────────────────────────────────────
    Announcements
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetAnnouncements = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetAnnouncements = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetAnnouncements = async (req) => {
   _requireAdmin(req);
   const snap = await getFirestore().collection('announcements').orderBy('createdAt', 'desc').limit(50).get().catch(() => ({ docs: [] }));
   return { announcements: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
 });
 
-exports.adminSaveAnnouncement = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminSaveAnnouncement = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminSaveAnnouncement = async (req) => {
   _requireAdmin(req);
   const { id, title, body, targetRole, active, urgent } = req.data;
   if (!title || !body) throw new Error('title and body required');
@@ -720,7 +724,7 @@ exports.adminSaveAnnouncement = onCall({ region: 'us-central1', maxInstances: 10
 /* ─────────────────────────────────────────────────────────────────────────
    SmartPOS
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetPosDevices = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetPosDevices = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPosDevices = async (req) => {
   _requireAdmin(req);
   const snap = await getFirestore().collection('posDevices').orderBy('lastSeen', 'desc').limit(100).get().catch(() => ({ docs: [] }));
   return { devices: snap.docs.map(d => ({ id: d.id, ...d.data(), lastSeen: d.data().lastSeen?.toDate?.()?.toISOString() || null })) };
@@ -729,7 +733,7 @@ exports.adminGetPosDevices = onCall({ region: 'us-central1', maxInstances: 10, e
 /* ─────────────────────────────────────────────────────────────────────────
    AI Operations
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetAiStats = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetAiStats = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetAiStats = async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
   const usageSnap = await db.collection('aiUsage').orderBy('date', 'desc').limit(14).get().catch(() => ({ docs: [] }));
@@ -740,7 +744,7 @@ exports.adminGetAiStats = onCall({ region: 'us-central1', maxInstances: 10, enfo
 /* ─────────────────────────────────────────────────────────────────────────
    Search Management
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetSearchStats = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetSearchStats = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetSearchStats = async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
   const [trendingSnap, queueSnap] = await Promise.all([
@@ -753,7 +757,7 @@ exports.adminGetSearchStats = onCall({ region: 'us-central1', maxInstances: 10, 
 /* ─────────────────────────────────────────────────────────────────────────
    Fraud Center
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetFraudAlerts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetFraudAlerts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetFraudAlerts = async (req) => {
   _requireAdmin(req);
   const db = getFirestore();
   const [riskSnap, chargebackSnap, dupSnap] = await Promise.all([
@@ -771,7 +775,7 @@ exports.adminGetFraudAlerts = onCall({ region: 'us-central1', maxInstances: 10, 
 /* ─────────────────────────────────────────────────────────────────────────
    Audit Logs
 ──────────────────────────────────────────────────────────────────────────── */
-exports.adminGetAuditLogs = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (req) => {
+exports.adminGetAuditLogs = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetAuditLogs = async (req) => {
   _requireAdmin(req);
   const { action, limit: lim } = req.data;
   const db = getFirestore();
