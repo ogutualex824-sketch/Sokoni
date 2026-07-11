@@ -240,6 +240,138 @@ function _checkBackupCode(submittedCode, storedHashes = []) {
 }
 
 /* ============================================================================
+   BASE32 ENCODER (RFC 4648)
+   Required by the otpauth:// URI spec — all authenticator apps expect Base32.
+   ============================================================================ */
+
+function _encodeBase32(buf) {
+  const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0, value = 0, output = '';
+  for (let i = 0; i < buf.length; i++) {
+    value = (value << 8) | buf[i];
+    bits += 8;
+    while (bits >= 5) { output += alpha[(value >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  if (bits > 0) output += alpha[(value << (5 - bits)) & 31];
+  return output;
+}
+
+/* ============================================================================
+   MINIMAL CBOR DECODER + WEBAUTHN P-256 HELPERS
+   Supports only the types needed for WebAuthn attestationObject and COSE keys:
+     uint(0), nint(1), bstr(2), tstr(3), array(4), map(5)
+   ============================================================================ */
+
+function _cborRead(buf, offset) {
+  const byte  = buf[offset];
+  const major = (byte >> 5) & 0x07;
+  const info  = byte & 0x1f;
+  offset++;
+  let extra;
+  if      (info <  24) extra = info;
+  else if (info === 24) { extra = buf[offset++]; }
+  else if (info === 25) { extra = buf.readUInt16BE(offset); offset += 2; }
+  else if (info === 26) { extra = buf.readUInt32BE(offset); offset += 4; }
+  else throw new Error('CBOR: unsupported additional info ' + info);
+
+  if (major === 0) return { v: extra, o: offset };
+  if (major === 1) return { v: -(extra + 1), o: offset };
+  if (major === 2) return { v: buf.slice(offset, offset + extra), o: offset + extra };
+  if (major === 3) return { v: buf.slice(offset, offset + extra).toString('utf8'), o: offset + extra };
+  if (major === 4) {
+    const arr = [];
+    for (let i = 0; i < extra; i++) { const r = _cborRead(buf, offset); arr.push(r.v); offset = r.o; }
+    return { v: arr, o: offset };
+  }
+  if (major === 5) {
+    const map = {};
+    for (let i = 0; i < extra; i++) {
+      const k = _cborRead(buf, offset); offset = k.o;
+      const v = _cborRead(buf, offset); offset = v.o;
+      map[k.v] = v.v;
+    }
+    return { v: map, o: offset };
+  }
+  throw new Error('CBOR: unsupported major type ' + major);
+}
+
+// Fixed DER prefix for P-256 SPKI key (algorithm OID + curve OID + BIT STRING header)
+const _P256_SPKI_PREFIX = Buffer.from(
+  '3059301306072a8648ce3d020106082a8648ce3d030107034200', 'hex'
+);
+
+let _RP_ID_HASH = null;
+function _getRpIdHash() {
+  if (!_RP_ID_HASH) _RP_ID_HASH = crypto.createHash('sha256').update(RELYING_PARTY_ID).digest();
+  return _RP_ID_HASH;
+}
+
+/**
+ * Parse a WebAuthn attestationObject (base64url) and extract the P-256 public key.
+ * Returns { x, y } (hex strings, 32 bytes each) and the credentialId (base64url).
+ * Throws HttpsError for unsupported algorithms.
+ */
+function _extractCOSEPublicKey(attestationObjectBase64url) {
+  let attestation;
+  try {
+    attestation = _cborRead(Buffer.from(attestationObjectBase64url, 'base64url'), 0).v;
+  } catch { _err('Malformed attestationObject.', 'invalid-argument'); }
+
+  const authDataBuf = attestation['authData'];
+  if (!Buffer.isBuffer(authDataBuf) || authDataBuf.length < 55) {
+    _err('authData missing or too short.', 'invalid-argument');
+  }
+  if (!crypto.timingSafeEqual(authDataBuf.slice(0, 32), _getRpIdHash())) {
+    _err('rpIdHash mismatch — credential bound to a different relying party.', 'permission-denied');
+  }
+  if (!((authDataBuf[32] >> 6) & 1)) _err('No attested credential data (AT flag not set).', 'invalid-argument');
+
+  const credIdLen  = authDataBuf.readUInt16BE(53);
+  const credId     = authDataBuf.slice(55, 55 + credIdLen);
+
+  let coseKey;
+  try { coseKey = _cborRead(authDataBuf, 55 + credIdLen).v; }
+  catch { _err('Malformed COSE key in authData.', 'invalid-argument'); }
+
+  if (coseKey[3] !== -7) {
+    _err('Only ES256 (P-256) passkeys are supported. Got COSE alg: ' + coseKey[3], 'unimplemented');
+  }
+  const x = coseKey[-2], y = coseKey[-3];
+  if (!Buffer.isBuffer(x) || x.length !== 32 || !Buffer.isBuffer(y) || y.length !== 32) {
+    _err('P-256 x/y coordinates are invalid.', 'invalid-argument');
+  }
+  return { x: x.toString('hex'), y: y.toString('hex'), alg: 'ES256', credentialIdFromAuthData: credId.toString('base64url') };
+}
+
+/**
+ * Verify a WebAuthn ES256 signature.
+ * signedData = authenticatorData || SHA256(clientDataJSON)  (per WebAuthn spec §6.3.3)
+ */
+function _verifyES256Signature(pubKeyRecord, authenticatorDataB64url, clientDataJSONB64url, signatureB64url) {
+  try {
+    const authDataBuf    = Buffer.from(authenticatorDataB64url, 'base64url');
+    const clientDataHash = crypto.createHash('sha256')
+      .update(Buffer.from(clientDataJSONB64url, 'base64url')).digest();
+    const signedData = Buffer.concat([authDataBuf, clientDataHash]);
+
+    const xBuf = Buffer.from(pubKeyRecord.x, 'hex');
+    const yBuf = Buffer.from(pubKeyRecord.y, 'hex');
+    const spki = Buffer.concat([_P256_SPKI_PREFIX, Buffer.from([0x04]), xBuf, yBuf]);
+    const pubKey = crypto.createPublicKey({ key: spki, format: 'der', type: 'spki' });
+
+    return crypto.createVerify('SHA256').update(signedData)
+      .verify(pubKey, Buffer.from(signatureB64url, 'base64url'));
+  } catch { return false; }
+}
+
+/* ============================================================================
+   TOTP RATE-LIMITING CONSTANTS
+   ============================================================================ */
+
+const TOTP_MAX_ATTEMPTS  = 5;
+const TOTP_LOCK_DURATION = 30 * 60 * 1000; // 30 minutes in ms
+
+/* ============================================================================
    TOTP MFA Ã¢â‚¬â€ CLOUD FUNCTIONS
    ============================================================================ */
 
@@ -263,29 +395,33 @@ const initiateTOTPEnrollment = onCall(CF_OPTIONS, _h.initiateTOTPEnrollment = as
   }
 
   /* Generate 20-byte (160-bit) TOTP secret Ã¢â‚¬â€ RFC 4226 recommended minimum */
-  const secret = crypto.randomBytes(20).toString('base64');
+  // Generate 20-byte (160-bit) TOTP secret — RFC 4226 recommended minimum
+  const rawBytes  = crypto.randomBytes(20);
+  const secret    = rawBytes.toString('base64');    // stored in Firestore; decoded by _verifyTOTP
+  const secretB32 = _encodeBase32(rawBytes);        // Base32 required by otpauth:// spec
 
-  /* Store pending enrollment */
   await db.collection(COL.MFA).doc(uid).set({
     secret,
-    pending:   true,
-    method:    'totp',
-    createdAt: FieldValue.serverTimestamp(),
+    pending:        true,
+    method:         'totp',
+    failedAttempts: 0,
+    createdAt:      FieldValue.serverTimestamp(),
     uid,
   });
 
-  /* Build otpauth URI for QR code rendering (RFC 6238 / Google Authenticator format) */
+  // secret MUST be Base32 in the QR URI — authenticator apps reject Base64
   const qrUri =
     'otpauth://totp/' +
     encodeURIComponent(TOTP_ISSUER + ':' + email) +
-    '?secret=' + secret +
+    '?secret=' + secretB32 +
     '&issuer=' + encodeURIComponent(TOTP_ISSUER) +
     '&algorithm=SHA1&digits=6&period=30';
 
   _log('INFO', 'TOTP enrollment initiated', { uid });
   await _audit('totp.enrollment.initiated', uid);
 
-  return { secret, qrUri };
+  // Return secretB32 so client can display it for manual entry in authenticator apps
+  return { secret: secretB32, qrUri };
 });
 
 /* Ã¢â€â‚¬Ã¢â€â‚¬ 2. verifyTOTPEnrollment Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
@@ -316,16 +452,27 @@ const verifyTOTPEnrollment = onCall(CF_OPTIONS, _h.verifyTOTPEnrollment = async 
     _err('TOTP is already enrolled.', 'failed-precondition');
   }
 
-  /* Enforce 10-minute TTL on pending enrollment */
+  // Enforce 10-minute TTL on pending enrollment
   const createdMs = mfaData.createdAt?.toMillis?.() || 0;
   if (Date.now() - createdMs > ENROLLMENT_TTL_MS) {
     await mfaRef.delete();
     _err('Enrollment session expired. Please restart enrollment.', 'deadline-exceeded');
   }
 
-  /* Verify submitted code against pending secret */
+  // Rate-limit enrollment attempts to prevent brute-force of the QR secret
+  if (mfaData.lockedUntil && mfaData.lockedUntil.toMillis() > Date.now()) {
+    const mins = Math.ceil((mfaData.lockedUntil.toMillis() - Date.now()) / 60000);
+    _err(`Too many failed attempts. Try again in ${mins} minute(s).`, 'resource-exhausted');
+  }
+
   if (!_verifyTOTP(mfaData.secret, code)) {
-    await _audit('totp.enrollment.failed', uid, { reason: 'invalid_code' });
+    const attempts = (mfaData.failedAttempts || 0) + 1;
+    const upd = { failedAttempts: attempts, updatedAt: FieldValue.serverTimestamp() };
+    if (attempts >= TOTP_MAX_ATTEMPTS) {
+      upd.lockedUntil = admin.firestore.Timestamp.fromDate(new Date(Date.now() + TOTP_LOCK_DURATION));
+    }
+    await mfaRef.update(upd);
+    await _audit('totp.enrollment.failed', uid, { reason: 'invalid_code', attempts });
     _err('Invalid TOTP code.', 'invalid-argument');
   }
 
@@ -373,15 +520,21 @@ const verifyTOTP = onCall(CF_OPTIONS, _h.verifyTOTP = async ({ data, auth }) => 
   }
 
   const mfaData = mfaSnap.data();
-  let   verified = false;
-  let   usedBackup = false;
 
-  /* 1. Try live TOTP code */
+  // Check lockout before any verification attempt
+  if (mfaData.lockedUntil && mfaData.lockedUntil.toMillis() > Date.now()) {
+    const mins = Math.ceil((mfaData.lockedUntil.toMillis() - Date.now()) / 60000);
+    _err(`Too many failed attempts. Account locked. Try again in ${mins} minute(s).`, 'resource-exhausted');
+  }
+
+  let verified = false, usedBackup = false;
+
+  // 1. Try live TOTP code
   if (_verifyTOTP(mfaData.secret, code)) {
     verified = true;
   }
 
-  /* 2. Try backup code (remaining hashes only Ã¢â‚¬â€ used hashes excluded) */
+  // 2. Try backup code (remaining hashes only Ã¢â‚¬â€ used hashes excluded) */
   if (!verified) {
     const remainingHashes = (mfaData.backupCodeHashes || []).filter(
       (h, idx) => !(mfaData.backupCodesUsed || []).includes(idx)
@@ -402,22 +555,27 @@ const verifyTOTP = onCall(CF_OPTIONS, _h.verifyTOTP = async ({ data, auth }) => 
     }
   }
 
-  await _audit(
-    verified ? 'totp.verified' : 'totp.verify.failed',
-    uid,
-    {
-      usedBackupCode: usedBackup,
-      challengeId:    data?.challengeId || null,
-    }
-  );
+  const mfaRef = db.collection(COL.MFA).doc(uid);
 
   if (!verified) {
-    _log('WARNING', 'TOTP verification failed', { uid });
-  } else {
-    _log('INFO', 'TOTP verified', { uid, usedBackup });
+    // Increment failure counter; lock after max attempts
+    const attempts = (mfaData.failedAttempts || 0) + 1;
+    const upd = { failedAttempts: attempts, updatedAt: FieldValue.serverTimestamp() };
+    if (attempts >= TOTP_MAX_ATTEMPTS) {
+      upd.lockedUntil = admin.firestore.Timestamp.fromDate(new Date(Date.now() + TOTP_LOCK_DURATION));
+    }
+    await mfaRef.update(upd);
+    await _audit('totp.verify.failed', uid, { attempts, challengeId: data?.challengeId || null });
+    _log('WARNING', 'TOTP verification failed', { uid, attempts });
+    return { verified: false };
   }
 
-  return { verified };
+  // Success — reset failure counter
+  await mfaRef.update({ failedAttempts: 0, lockedUntil: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
+  await _audit('totp.verified', uid, { usedBackupCode: usedBackup, challengeId: data?.challengeId || null });
+  _log('INFO', 'TOTP verified', { uid, usedBackup });
+
+  return { verified: true };
 });
 
 /* Ã¢â€â‚¬Ã¢â€â‚¬ 4. disableMFA Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ */
@@ -689,27 +847,34 @@ const verifyPasskeyRegistration = onCall(CF_OPTIONS, _h.verifyPasskeyRegistratio
     _err('Challenge mismatch.', 'permission-denied');
   }
 
-  /* Mark challenge as consumed (single-use) */
-  await challengeRef.update({ used: true, usedAt: FieldValue.serverTimestamp() });
+  // Extract P-256 public key from attestationObject — this is what we sign-verify against later
+  const extractedKey = _extractCOSEPublicKey(attestationObject);
 
-  /* Persist the credential */
+  // Validate that the credentialId the client sent matches the one in authData
+  if (extractedKey.credentialIdFromAuthData !== credentialId) {
+    await _audit('passkey.registration.failed', uid, { reason: 'credentialId_mismatch', challengeId });
+    _err('credentialId does not match the attested credential.', 'permission-denied');
+  }
+
+  // Mark challenge consumed (single-use) and store credential atomically
   const label = _sanitize(deviceLabel || challengeData.deviceLabel || 'Passkey', 64);
-
-  await db
-    .collection(COL.PASSKEYS)
-    .doc(uid)
-    .collection('credentials')
-    .doc(credentialId)
-    .set({
+  const batch = db.batch();
+  batch.update(challengeRef, { used: true, usedAt: FieldValue.serverTimestamp() });
+  batch.set(
+    db.collection(COL.PASSKEYS).doc(uid).collection('credentials').doc(credentialId),
+    {
       credentialId,
-      deviceLabel:      label,
-      publicKey:        attestationObject,   // raw attestation stored for later assertion checks
-      counter:          0,
+      deviceLabel: label,
+      // Store extracted x/y coordinates — used for signature verification on each auth
+      publicKey:   { x: extractedKey.x, y: extractedKey.y, alg: extractedKey.alg },
+      counter:     0,
       uid,
-      createdAt:        FieldValue.serverTimestamp(),
-      lastUsedAt:       null,
-      trusted:          true,
-    });
+      createdAt:   FieldValue.serverTimestamp(),
+      lastUsedAt:  null,
+      trusted:     true,
+    }
+  );
+  await batch.commit();
 
   _log('INFO', 'Passkey registered', { uid, credentialId });
   await _audit('passkey.registered', uid, { credentialId, deviceLabel: label });
@@ -850,19 +1015,29 @@ const verifyPasskeyAuthentication = onCall(CF_OPTIONS, _h.verifyPasskeyAuthentic
     _err('Credential is not trusted.', 'permission-denied');
   }
 
-  /* Parse counter from authenticatorData (bytes 33-36, big-endian uint32) */
+  // Cryptographic signature verification — WebAuthn spec §7.2 step 20
+  // signedData = authenticatorData || SHA256(clientDataJSON)
+  if (credData.publicKey && credData.publicKey.alg === 'ES256') {
+    if (!_verifyES256Signature(credData.publicKey, authenticatorData, clientDataJSON, signature)) {
+      await _audit('passkey.auth.failed', uid, { reason: 'signature_invalid', challengeId, credentialId });
+      _err('Passkey signature verification failed.', 'permission-denied');
+    }
+  } else {
+    // No extractable public key — credential was registered before the sig-extract fix
+    await _audit('passkey.auth.failed', uid, { reason: 'no_verifiable_public_key', credentialId });
+    _err('Passkey must be re-registered to comply with updated security requirements.', 'failed-precondition');
+  }
+
+  // Parse signCount from authenticatorData (bytes 33-36, big-endian uint32)
   let incomingCounter = 0;
   try {
     const authDataBuf = Buffer.from(authenticatorData, 'base64url');
-    // authenticatorData layout: rpIdHash(32) | flags(1) | signCount(4) | ...
-    if (authDataBuf.length >= 37) {
-      incomingCounter = authDataBuf.readUInt32BE(33);
-    }
+    if (authDataBuf.length >= 37) incomingCounter = authDataBuf.readUInt32BE(33);
   } catch {
-    _log('WARNING', 'Could not parse authenticatorData counter', { uid, credentialId });
+    _log('WARNING', 'Could not parse authenticatorData signCount', { uid, credentialId });
   }
 
-  /* Replay attack prevention: counter must advance (0 means authenticator does not support it) */
+  // Counter must advance — protects against credential cloning and replay
   if (incomingCounter !== 0 && incomingCounter <= credData.counter) {
     await _audit('passkey.auth.replay', uid, {
       credentialId,
@@ -872,7 +1047,7 @@ const verifyPasskeyAuthentication = onCall(CF_OPTIONS, _h.verifyPasskeyAuthentic
     _err('Counter regression detected Ã¢â‚¬â€ possible credential cloning or replay.', 'permission-denied');
   }
 
-  /* Mark challenge consumed and update credential metadata atomically */
+  // Mark challenge consumed and advance counter atomically
   const batch = db.batch();
   batch.update(challengeRef, { used: true, usedAt: FieldValue.serverTimestamp() });
   batch.update(credRef, {
