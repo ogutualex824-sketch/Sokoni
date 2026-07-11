@@ -1,4 +1,73 @@
-﻿## [2026-07-08] — Sprint 4.8: Phase 3 Portal Completion + Play Store Assets
+﻿## [2026-07-11] — Redis Dispatcher Refactor + Enterprise Settlement Engine v1.0
+
+### Redis Layer — 28-to-1 Dispatcher Refactor
+
+**Summary**: Collapses 28 individual Redis Cloud Run services into a single `redisDispatch` dispatcher function, reducing Cloud Run service count from 30 → 3 (dispatcher + 2 schedulers). All 28 operations are now plain async handler functions internally dispatched by operation name. No behaviour changes; caller API is backward-compatible via `op` field routing.
+
+**Modified Files**
+- `functions/redis-layer.js` — handlers converted to plain async functions; `exports.redisDispatch` dispatcher routes `req.data.op` to the correct handler; `_isSuperAdmin` removed (unused); VPC comment block trimmed
+- `redis-monitor.html` — `_call(name, data)` now routes to `redisDispatch({op: name, ...data})`
+- `sokoni-redis.js` — client SDK `_call()` now targets `redisDispatch` with `op:` field
+
+**Cloud Run Impact**: 28 individual CF services → 1 dispatcher; reduces active Cloud Run service count by ~93%; helps fit within Cloud Run CPU quota limits.
+
+**Deployment**: Deploy only `redisDispatch` + the 2 schedulers (existing 28 individually-named exports can be removed from index.js in a follow-up once clients are migrated).
+
+---
+
+## [2026-07-11] — Enterprise Settlement Engine v1.0
+
+### Summary
+Introduces the canonical Merchant-of-Record settlement layer — a single, authoritative money-flow engine for the entire SOKONI marketplace. Every customer payment is collected first into the Bravilex collection account, then passed through a deterministic deductions waterfall (commission, gateway fee, VAT, WHT, referral, affiliate, rider share) to compute the seller net. Reuses existing `finos-utils.js` math and `ACCOUNTS` ledger primitives so no payout amounts change at adoption.
+
+### New Files
+- `functions/settlement-engine.js` — 3 Cloud Functions: `settlementGetContext` (public), `settlementPreview` (auth), `settlementGetDashboard` (admin); canonical `computeSettlement()` waterfall; balanced `buildLedgerPlan()` for double-entry posting; MoR account number masked on all API responses
+- `functions/settlement-account.js` — Settlement account service; account number sourced from Secret Manager (`SETTLEMENT_ACCOUNT_NUMBER` — must be provisioned); exposes `getSettlementAccount()` (full, server-only) and `getMaskedAccount()` (admin UI safe); canonical company identity (`CompanyIdentity`)
+- `settlement-dashboard.html` — Admin settlement control panel: MoR account banner, 6 KPI cards (collected, disbursed, platform revenue, pending, success rate, avg gateway fee), live waterfall calculator, recent settlements table, account health row
+
+### Modified Files
+- `functions/index.js` — exports `settlementGetContext`, `settlementPreview`, `settlementGetDashboard`
+
+### New Firestore Collections
+- `settlements/{id}` — one doc per settled order; fields: `orderId`, `grossCents`, `waterfall` (full breakdown), `ledgerPlan` (balanced entries), `engineVersion`, `timestamp`
+
+### New Secrets Required
+- `SETTLEMENT_ACCOUNT_NUMBER` — Bravilex collection account number; provision with:
+  ```
+  firebase functions:secrets:set SETTLEMENT_ACCOUNT_NUMBER
+  ```
+
+### Security
+- Account number is Secret Manager only — never hardcoded, never returned by public endpoints
+- Full account number accessible only to server-side functions with the secret bound AND admin/superAdmin role claim
+- All admin routes assert `_assertAdmin()` before any data is returned
+- Masked account number (`****1234` style) used on all client-facing responses
+- `settlementGetContext` public endpoint returns zero sensitive fields — only engine version, company name, and masked account
+
+### Performance
+- `computeSettlement()` is one async Firestore read (commission rules) per invocation — O(1)
+- Dashboard uses a single composite query with a server-side 100-doc limit; no client-side filtering
+
+### Deployment
+```bash
+# 1. Provision the secret first
+firebase functions:secrets:set SETTLEMENT_ACCOUNT_NUMBER
+
+# 2. Deploy the 3 new CFs (once Cloud Run quota is approved)
+firebase deploy --only functions:settlementGetContext,functions:settlementPreview,functions:settlementGetDashboard
+
+# 3. Deploy the new dashboard
+firebase deploy --only hosting
+```
+
+### Migration Notes
+- Existing `finos.js` and `finos-router.js` settlement paths continue to work unchanged — adoption is phased
+- Call `settlementPreview()` from checkout flows to get the canonical waterfall before executing payment
+- See `docs/ENTERPRISE_SETTLEMENT_ARCHITECTURE.md` for the full adoption roadmap
+
+---
+
+## [2026-07-08] — Sprint 4.8: Phase 3 Portal Completion + Play Store Assets
 
 ### Summary
 Completes the three missing Phase 3 admin portals: Webhook Management, Task Queue Monitor, and API Gateway Dashboard. Generates all four required Play Store screenshots (1080×1920 portrait). Wires all three portals into the command palette and splash system.

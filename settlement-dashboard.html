@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Settlement Engine — SOKONI</title>
+<script src="shared-header.js"></script>
+<style>
+  :root{--bg:#050505;--card:#0e0e0e;--card2:#141414;--line:#1e1e1e;--txt:#f4f4f4;--mut:#8a8a8a;
+        --g:#71ff00;--b:#00d4ff;--o:#ff9500;--r:#ff4444;--p:#a855f7;--y:#fbbf24;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,system-ui,sans-serif;
+       -webkit-font-smoothing:antialiased;min-height:100vh}
+  .wrap{max-width:1240px;margin:0 auto;padding:20px 16px 80px}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:6px 0 20px}
+  h1{font-size:22px;font-weight:800;letter-spacing:-.02em}
+  h1 span{color:var(--g)}
+  .sub{color:var(--mut);font-size:13px;margin-top:2px}
+  .btn{background:var(--g);color:#000;border:0;border-radius:10px;padding:10px 16px;font-weight:700;
+       font-size:14px;cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  /* MoR account banner */
+  .mor{background:linear-gradient(135deg,#0e0e0e,#141414);border:1px solid var(--line);border-left:3px solid var(--g);
+       border-radius:14px;padding:16px 18px;margin-bottom:22px;display:flex;justify-content:space-between;
+       align-items:center;gap:14px;flex-wrap:wrap}
+  .mor .lbl{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+  .mor .val{font-size:17px;font-weight:800;margin-top:3px}
+  .mor .flow{color:var(--mut);font-size:12px;max-width:520px;line-height:1.5}
+  .pill{display:inline-block;background:rgba(113,255,0,.12);color:var(--g);border:1px solid rgba(113,255,0,.3);
+        border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 18px}
+  .kpi .k{color:var(--mut);font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .kpi .v{font-size:26px;font-weight:800;margin-top:8px;letter-spacing:-.02em}
+  .kpi .v small{font-size:13px;color:var(--mut);font-weight:600}
+  .kpi.acc-g{border-top:2px solid var(--g)} .kpi.acc-b{border-top:2px solid var(--b)}
+  .kpi.acc-o{border-top:2px solid var(--o)} .kpi.acc-r{border-top:2px solid var(--r)}
+  .kpi.acc-p{border-top:2px solid var(--p)} .kpi.acc-y{border-top:2px solid var(--y)}
+  .sec{margin:26px 0 12px;font-size:13px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.08em}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.two{grid-template-columns:1fr}}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--mut);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  .st{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .st.ok{background:rgba(113,255,0,.12);color:var(--g)} .st.pend{background:rgba(255,149,0,.12);color:var(--o)}
+  .st.fail{background:rgba(255,68,68,.12);color:var(--r)}
+  input,select{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:9px;color:var(--txt);
+        padding:11px 12px;font-size:16px;margin-top:6px}
+  label{font-size:12px;color:var(--mut);font-weight:600}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .wf{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--line);font-size:14px}
+  .wf.tot{border-bottom:0;border-top:2px solid var(--g);margin-top:6px;padding-top:12px;font-weight:800;font-size:16px}
+  .wf .neg{color:var(--r)} .wf .pos{color:var(--g)}
+  .muted{color:var(--mut);font-size:12px}
+  .loading{color:var(--mut);padding:24px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Settlement <span>Engine</span></h1>
+      <div class="sub">Enterprise Marketplace Settlement · Merchant-of-Record · <span class="pill">Bravilex</span></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn ghost" onclick="location.href='financial-os.html'">Financial OS</button>
+      <button class="btn" id="refreshBtn" onclick="loadAll()">Refresh</button>
+    </div>
+  </header>
+
+  <!-- Merchant-of-Record collection account (masked) -->
+  <div class="mor">
+    <div>
+      <div class="lbl">Primary Collection Account · Merchant of Record</div>
+      <div class="val" id="morName">—</div>
+      <div class="muted" id="morAcc">Account ••••••••</div>
+    </div>
+    <div class="flow" id="morFlow">Every customer payment is collected here first; the engine calculates deductions and settles the seller net.</div>
+  </div>
+
+  <div class="sec">Revenue</div>
+  <div class="grid" id="revGrid"><div class="loading">Loading…</div></div>
+
+  <div class="sec">Settlements &amp; Queues</div>
+  <div class="grid" id="queueGrid"></div>
+
+  <div class="two" style="margin-top:26px">
+    <div>
+      <div class="sec">Settlement Calculator <span class="muted">(canonical waterfall preview)</span></div>
+      <div class="card">
+        <div class="row">
+          <div><label>Gross amount (KES)</label><input id="cGross" type="number" value="1000" min="0"></div>
+          <div><label>Category</label>
+            <select id="cCat">
+              <option value="marketplace">Marketplace (10%)</option>
+              <option value="services">Services (15%)</option>
+              <option value="food_delivery">Food delivery (8%)</option>
+              <option value="bookings">Bookings (12%)</option>
+              <option value="digital">Digital (20%)</option>
+              <option value="property">Property (3%)</option>
+              <option value="vehicles">Vehicles (5%)</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div><label>Gateway fee (KES)</label><input id="cGw" type="number" value="30" min="0"></div>
+          <div><label>Delivery fee (KES)</label><input id="cDel" type="number" value="200" min="0"></div>
+        </div>
+        <button class="btn" style="width:100%" onclick="calc()">Compute settlement</button>
+        <div id="wf" style="margin-top:16px"></div>
+      </div>
+    </div>
+    <div>
+      <div class="sec">Recent Settlements</div>
+      <div class="card" style="padding:8px 12px">
+        <table><thead><tr><th>ID</th><th>Seller</th><th>Amount</th><th>Status</th></tr></thead>
+          <tbody id="recentBody"><tr><td colspan="4" class="loading">Loading…</td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-check-compat.js"></script>
+<script src="firebase.js"></script>
+<script src="sokoni-appcheck.js"></script>
+<script>
+(function(){
+  'use strict';
+  var _fns=null;
+  function cf(n){ if(!_fns)_fns=firebase.functions(); return _fns.httpsCallable(n); }
+  function kes(cents){ return 'KES '+((Number(cents)||0)/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0}); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  firebase.auth().onAuthStateChanged(function(u){
+    if(!u){ location.href='login.html?redirect=settlement-dashboard.html'; return; }
+    u.getIdTokenResult().then(function(t){
+      if(!t.claims.admin && !t.claims.superAdmin){ location.href='index.html'; return; }
+      loadAll();
+    });
+  });
+
+  window.loadAll=function(){
+    var b=document.getElementById('refreshBtn'); b.textContent='Loading…'; b.disabled=true;
+    Promise.all([ cf('settlementGetContext')({}), cf('settlementGetDashboard')({}) ])
+      .then(function(res){
+        renderContext(res[0].data); renderDashboard(res[1].data);
+      })
+      .catch(function(e){ console.error(e); alert('Load failed: '+(e.message||e)); })
+      .finally(function(){ b.textContent='Refresh'; b.disabled=false; });
+  };
+
+  function renderContext(c){
+    if(!c) return;
+    document.getElementById('morName').textContent = c.merchantOfRecord || 'Bravilex International Co. Ltd';
+    var acc = c.collectionAccount||{};
+    document.getElementById('morAcc').textContent = 'Account '+(acc.numberMasked||'••••')+' · '+(acc.currency||'KES')+(acc.configured?'':' · ⚠ not configured');
+    if(c.note) document.getElementById('morFlow').textContent = c.note;
+  }
+
+  function kpi(k,val,acc,note){
+    return '<div class="kpi acc-'+acc+'"><div class="k">'+esc(k)+'</div><div class="v">'+val+
+           (note?' <small>'+esc(note)+'</small>':'')+'</div></div>';
+  }
+
+  function renderDashboard(d){
+    if(!d){ return; }
+    var r=d.revenue||{}, q=d.queues||{};
+    document.getElementById('revGrid').innerHTML =
+      kpi('Gross Revenue', kes(r.grossRevenueCents),'g') +
+      kpi('Platform Revenue', kes(r.platformRevenueCents),'b') +
+      kpi('Gateway Charges', kes(r.gatewayChargesCents),'o') +
+      kpi('Tax Collected', kes(r.taxCollectedCents),'y') +
+      kpi('Net Profit', kes(r.netProfitCents),'g');
+    document.getElementById('queueGrid').innerHTML =
+      kpi('Pending Settlements', q.pendingSettlements||0,'o') +
+      kpi('Completed Settlements', q.completedSettlements||0,'g') +
+      kpi('Failed Settlements', q.failedSettlements||0,'r') +
+      kpi('Escrow Held (Settlement Queue)', q.escrowHeld||0,'p');
+
+    var rows=(d.recentSettlements||[]);
+    var tb=document.getElementById('recentBody');
+    if(!rows.length){ tb.innerHTML='<tr><td colspan="4" class="muted" style="padding:16px">No recent settlements.</td></tr>'; return; }
+    tb.innerHTML = rows.map(function(s){
+      var cls = s.status==='completed'||s.status==='settled'?'ok':(s.status==='failed'?'fail':'pend');
+      return '<tr><td>'+esc(String(s.id).slice(0,10))+'…</td><td>'+esc((s.sellerId||'—').slice(0,10))+
+             '</td><td>'+kes(s.amountCents)+'</td><td><span class="st '+cls+'">'+esc(s.status)+'</span></td></tr>';
+    }).join('');
+  }
+
+  window.calc=function(){
+    var payload={
+      grossCents: Math.round((Number(document.getElementById('cGross').value)||0)*100),
+      category: document.getElementById('cCat').value,
+      sellerId: 'preview-seller',
+      gatewayFeeCents: Math.round((Number(document.getElementById('cGw').value)||0)*100),
+      deliveryFeeCents: Math.round((Number(document.getElementById('cDel').value)||0)*100),
+      riderId: 'preview-rider'
+    };
+    var wf=document.getElementById('wf'); wf.innerHTML='<div class="loading">Computing…</div>';
+    cf('settlementPreview')(payload).then(function(res){
+      var b=res.data;
+      wf.innerHTML =
+        line('Gross (collected to Bravilex)', kes(b.gross),'') +
+        line('− Platform commission ('+b.commission.rate+'%)', '−'+kes(b.commission.cents),'neg') +
+        line('− Gateway / processing fee', '−'+kes(b.gatewayFee),'neg') +
+        line('VAT on commission (platform)', kes(b.tax.vatCents),'') +
+        line('Rider allocation', kes(b.delivery.riderNetCents),'') +
+        line('Platform net (Bravilex retains)', kes(b.platformNetCents),'pos') +
+        line('Seller Net Payable', kes(b.netPayable),'') +
+        '<div class="wf tot"><span>Seller receives after WHT</span><span>'+kes(b.sellerAfterWhtCents)+'</span></div>'+
+        '<div class="muted" style="margin-top:8px">Ledger plan: '+b.ledgerPlan.length+' balanced double-entry postings · engine v'+esc(b.engineVersion)+'</div>';
+    }).catch(function(e){ wf.innerHTML='<div class="muted">Error: '+esc(e.message||e)+'</div>'; });
+  };
+  function line(k,v,cls){ return '<div class="wf"><span>'+esc(k)+'</span><span class="'+cls+'">'+v+'</span></div>'; }
+})();
+</script>
+</body>
+</html>
