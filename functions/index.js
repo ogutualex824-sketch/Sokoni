@@ -7980,29 +7980,14 @@ exports.fosGetSettlementConfig = finosAutomation.fosGetSettlementConfig;
 exports.fosSetSettlementConfig = finosAutomation.fosSetSettlementConfig;
 exports.fosGetAuditTrail       = finosAutomation.fosGetAuditTrail;
 
-/* ── Enterprise Settlement Engine — canonical MoR layer (additive) ───── */
-const settlementEngine = require('./settlement-engine');
-exports.settlementGetContext   = settlementEngine.settlementGetContext;
-exports.settlementPreview      = settlementEngine.settlementPreview;
-exports.settlementGetDashboard = settlementEngine.settlementGetDashboard;
-
-/* ── Settlement Migration Phase 2 — routing flags, payment config, validation ── */
-const settlementRouting = require('./settlement-routing');
-exports.settlementGetRoutingConfig = settlementRouting.settlementGetRoutingConfig;
-exports.settlementSetRoutingConfig = settlementRouting.settlementSetRoutingConfig;
-const paymentConfig = require('./payment-config');
-exports.getCheckoutPaymentConfig = paymentConfig.getCheckoutPaymentConfig;
-exports.adminGetPaymentConfig    = paymentConfig.adminGetPaymentConfig;
-exports.adminSetPaymentConfig    = paymentConfig.adminSetPaymentConfig;
-const settlementValidation = require('./settlement-validation');
-exports.settlementValidatePath = settlementValidation.settlementValidatePath;
-
-/* ── Settlement Phase 3 — split settlement + per-gateway provider abstraction ── */
-const settlementProviders = require('./settlement-providers');
-exports.settlementGetProviders = settlementProviders.settlementGetProviders;
-exports.settlementSetProvider  = settlementProviders.settlementSetProvider;
-const settlementExecutor = require('./settlement-executor');
-exports.settlementPreviewMethod = settlementExecutor.settlementPreviewMethod;
+/* ── Enterprise Settlement — CONSOLIDATED into ONE dispatcher (quota-optimized).
+   All 12 settlement ops (Phase 1 engine + Phase 2 flags/config/validation +
+   Phase 3 split/providers) route through settlementDispatch({op,...}) — see
+   settlement-dispatch.js. Individual CFs are intentionally NOT exported so only
+   a single Cloud Run service is created. Auth/App Check unchanged (enforced per
+   handler). Client wrapper: sokoni-settlement.js. ── */
+const settlementDispatcher = require('./settlement-dispatch');
+exports.settlementDispatch = settlementDispatcher.settlementDispatch;
 
 /* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
 const trustSafety = require('./trust-safety');

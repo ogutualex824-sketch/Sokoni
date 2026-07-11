@@ -180,9 +180,10 @@ function getSettlementContext() {
 ──────────────────────────────────────────────────────────────── */
 
 /* Masked settlement account + rules. NEVER returns the full account number. */
+exports._h = exports._h || {};   // handler registry consumed by settlementDispatch
 exports.settlementGetContext = onCall(
   { region: REGION, secrets: [SA.SETTLEMENT_ACCOUNT_NUMBER], enforceAppCheck: true },
-  async (req) => {
+  exports._h.settlementGetContext = async (req) => {
     _assertAuth(req); _assertAdmin(req);
     let rules = {};
     try { rules = (await _db().doc('finosConfig/settlementRules').get()).data() || {}; } catch (_) {}
@@ -193,7 +194,7 @@ exports.settlementGetContext = onCall(
 /* Admin preview of the canonical waterfall for a hypothetical payment. */
 exports.settlementPreview = onCall(
   { region: REGION, secrets: [SA.SETTLEMENT_ACCOUNT_NUMBER], enforceAppCheck: true },
-  async (req) => {
+  exports._h.settlementPreview = async (req) => {
     _assertAuth(req); _assertAdmin(req);
     const breakdown = await computeSettlement(_db(), req.data || {});
     assertBalanced(breakdown.ledgerPlan);
@@ -204,7 +205,7 @@ exports.settlementPreview = onCall(
 /* Aggregated metrics for the Settlement Dashboard (reads existing collections). */
 exports.settlementGetDashboard = onCall(
   { region: REGION, secrets: [SA.SETTLEMENT_ACCOUNT_NUMBER], enforceAppCheck: true, timeoutSeconds: 60 },
-  async (req) => {
+  exports._h.settlementGetDashboard = async (req) => {
     _assertAuth(req); _assertAdmin(req);
     const db = _db();
 

@@ -168,9 +168,10 @@ async function executeSettlement(db, { adapter, provider, breakdown, orderId, se
 }
 
 /* ── Admin preview CF (no money movement) ──────────────────────── */
+exports._h = exports._h || {};   // handler registry consumed by settlementDispatch
 exports.settlementPreviewMethod = onCall(
   { region: REGION, secrets: [SA.SETTLEMENT_ACCOUNT_NUMBER], enforceAppCheck: true },
-  async (req) => {
+  exports._h.settlementPreviewMethod = async (req) => {
     _assertAdmin(req);
     const { grossCents, category, sellerId, provider, sellerPayoutAccount, gatewayFeeCents, deliveryFeeCents, riderId } = req.data || {};
     if (!provider) throw new HttpsError('invalid-argument', 'provider required');

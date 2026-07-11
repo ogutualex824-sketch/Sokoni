@@ -68,9 +68,10 @@ function _publicView(cfg) {
 
 /* PUBLIC callable — checkout pages fetch collection info here instead of
    hardcoding it. Returns only checkout-necessary fields. */
+exports._h = exports._h || {};   // handler registry consumed by settlementDispatch
 exports.getCheckoutPaymentConfig = onCall(
   { region: REGION, enforceAppCheck: true },
-  async () => {
+  exports._h.getCheckoutPaymentConfig = async () => {
     const cfg = await _load(_db());
     return _publicView(cfg);
   },
@@ -79,7 +80,7 @@ exports.getCheckoutPaymentConfig = onCall(
 /* Admin — read full config. */
 exports.adminGetPaymentConfig = onCall(
   { region: REGION, enforceAppCheck: true },
-  async (req) => {
+  exports._h.adminGetPaymentConfig = async (req) => {
     _assertAdmin(req);
     return { config: await _load(_db()), configPath: CONFIG_PATH };
   },
@@ -88,7 +89,7 @@ exports.adminGetPaymentConfig = onCall(
 /* Admin — update collection identifiers (audited, never destructive). */
 exports.adminSetPaymentConfig = onCall(
   { region: REGION, enforceAppCheck: true },
-  async (req) => {
+  exports._h.adminSetPaymentConfig = async (req) => {
     _assertAdmin(req);
     const { commissionPaybill, commissionAccountFormat, currency } = req.data || {};
     const update = { updatedAt: _now(), updatedBy: req.auth.uid };

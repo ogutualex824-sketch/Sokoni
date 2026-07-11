@@ -77,9 +77,10 @@ async function getProviderSettlement(db, provider) {
 
 /* ── Admin CFs ─────────────────────────────────────────────────── */
 
+exports._h = exports._h || {};   // handler registry consumed by settlementDispatch
 exports.settlementGetProviders = onCall(
   { region: REGION, enforceAppCheck: true },
-  async (req) => {
+  exports._h.settlementGetProviders = async (req) => {
     _assertAdmin(req);
     return { providers: await _load(_db()), configPath: CONFIG_PATH };
   },
@@ -87,7 +88,7 @@ exports.settlementGetProviders = onCall(
 
 exports.settlementSetProvider = onCall(
   { region: REGION, enforceAppCheck: true },
-  async (req) => {
+  exports._h.settlementSetProvider = async (req) => {
     _assertAdmin(req);
     const { provider, splitEnabled } = req.data || {};
     const def = _defaults();

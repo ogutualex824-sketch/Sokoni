@@ -133,8 +133,14 @@
 <script>
 (function(){
   'use strict';
-  var _fns=null;
-  function cf(n){ if(!_fns)_fns=firebase.functions(); return _fns.httpsCallable(n); }
+  var _fns=null, _disp=null;
+  /* Route every settlement op through the consolidated settlementDispatch CF.
+     Call sites keep the cf('opName')(payload) shape and the {data} response. */
+  function cf(op){
+    if(!_fns)_fns=firebase.functions();
+    if(!_disp)_disp=_fns.httpsCallable('settlementDispatch');
+    return function(payload){ return _disp(Object.assign({op:op}, payload||{})); };
+  }
   function kes(cents){ return 'KES '+((Number(cents)||0)/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0}); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 

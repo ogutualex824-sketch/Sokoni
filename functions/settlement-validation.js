@@ -149,9 +149,10 @@ async function runValidation(db, method) {
   };
 }
 
+exports._h = exports._h || {};   // handler registry consumed by settlementDispatch
 exports.settlementValidatePath = onCall(
   { region: REGION, enforceAppCheck: true, timeoutSeconds: 60 },
-  async (req) => {
+  exports._h.settlementValidatePath = async (req) => {
     _assertAdmin(req);
     const method = (req.data || {}).method || null;
     if (method && !SR.METHODS.includes(method))

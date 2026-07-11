@@ -103,9 +103,10 @@ async function resolveRoute(db, method, ctx = {}) {
 
 /* ── Admin CFs ─────────────────────────────────────────────────── */
 
+exports._h = exports._h || {};   // handler registry consumed by settlementDispatch
 exports.settlementGetRoutingConfig = onCall(
   { region: REGION, enforceAppCheck: true },
-  async (req) => {
+  exports._h.settlementGetRoutingConfig = async (req) => {
     _assertAdmin(req);
     const cfg = await _loadConfig(_db());
     return { config: cfg, methods: METHODS, modes: MODES, configPath: CONFIG_PATH };
@@ -114,7 +115,7 @@ exports.settlementGetRoutingConfig = onCall(
 
 exports.settlementSetRoutingConfig = onCall(
   { region: REGION, enforceAppCheck: true },
-  async (req) => {
+  exports._h.settlementSetRoutingConfig = async (req) => {
     _assertAdmin(req);
     const { method, mode, rolloutPct, allowlist, killSwitch } = req.data || {};
     const db = _db();
