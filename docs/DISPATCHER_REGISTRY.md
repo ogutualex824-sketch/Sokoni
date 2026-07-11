@@ -55,7 +55,27 @@ These are legitimately individual and are excluded from the dispatcher model.
 
 ## Open architecture debt (guard-surfaced, 2026-07-11)
 
-13 ops are currently **both dispatched and individually exported** (wasted services) — to be resolved by removing the individual `index.js` export (keeping the dispatcher handler) once each op's clients are confirmed on the dispatcher:
-`adminGetPendingPayouts`, `adminResolveDispute` (admin); `registerDevice` (services); `getWalletBalance`, `refundToWallet`, `getWalletTransactions`, `currencyGetRates`, `createPurchaseOrder`, `getAuditLog`, `registerWebhook`, `deleteWebhook`, `listWebhooks`, `testWebhook` (smartPos).
+13 ops are **both dispatched and individually exported** (each wastes one Cloud Run service). Resolution = remove the individual `index.js` export (keep the dispatcher handler) + delete the deployed individual CF. Client-caller analysis classifies each precisely:
+
+**Group A — pure duplicates (all callers already on the dispatcher OR none): safe to de-export + delete now.**
+| Op | Dispatcher | Evidence |
+|----|-----------|----------|
+| `registerWebhook` | smartPos | partner-portal migrated (commit eff7903) |
+| `testWebhook` | smartPos | partner-portal migrated |
+| `createPurchaseOrder` | smartPos | procurement migrated |
+| `refundToWallet` | smartPos | only caller pos-crm-pro `cf`→smartPosDispatch |
+| `getAuditLog` | smartPos | no client caller found |
+| `registerDevice` | services | no client caller found |
+| `deleteWebhook`, `listWebhooks` | smartPos | verify partner-portal routing (likely migrated) |
+
+**Group B — still has a DIRECT caller: migrate the caller to the dispatcher first, then de-export.**
+| Op | Dispatcher | Direct caller to migrate |
+|----|-----------|--------------------------|
+| `adminGetPendingPayouts` | admin | `super-admin.html:1175` (direct `httpsCallable`) |
+| `adminResolveDispute` | admin | `trust-safety.html:557` (`_cf` direct) — note `sokoni-aos.js` already uses `adminOsDispatch` |
+| `currencyGetRates` | smartPos | `pos-completeness.html:949` (`_cf` direct) |
+| `getWalletBalance`, `getWalletTransactions` | smartPos | `sokoni-wallet.js` `_cf` (confirm target) — pos-crm-pro already on dispatcher |
+
+**Procedure per op (same as the reclamation campaign):** migrate any Group-B caller → remove `exports.<op>` from `index.js` → `firebase functions:delete <op>` → guard passes. Not executed in this turn to avoid conflicting with a concurrent index.js editor and to hold the sprint's zero-regression rule.
 
 Related: [[ORPHAN_RECLAMATION_CAMPAIGN]] · [[SETTLEMENT_DISPATCHER_CONSOLIDATION]]
