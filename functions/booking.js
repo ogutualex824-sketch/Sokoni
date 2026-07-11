@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI Universal Venue & Resource Booking — Cloud Functions v1.0
    14 functions — server-authoritative, Firestore-transactional
 ================================================================ */
@@ -9,6 +9,8 @@ if (!admin.apps.length) admin.initializeApp();
 
 const db   = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
+
+exports._h = {}; // handler registry — consumed by booking-dispatch.js
 
 /* ─── Helpers ───────────────────────────────────────────── */
 function _uid()      { return db.collection('_').doc().id; }
@@ -105,7 +107,7 @@ async function _hasOverlap(venueId, startTs, endTs, excludeBookingId=null) {
 ═══════════════════════════════════════════════════════════ */
 exports.bookingSearchVenues = onCall(
   { region: 'us-central1', maxInstances: 80, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingSearchVenues = async (req) => {
     const { type, city, area, date, minCapacity, maxPrice, amenities, indoor, limit = 24, offset = 0 } = req.data || {};
 
     let query = db.collection('venues').where('status', '==', 'active');
@@ -147,7 +149,7 @@ function _getLiveStatus(venue, dateStr) {
 ═══════════════════════════════════════════════════════════ */
 exports.bookingGetVenue = onCall(
   { region: 'us-central1', maxInstances: 50, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingGetVenue = async (req) => {
     const { venueId } = req.data || {};
     if (!venueId) throw new HttpsError('invalid-argument','venueId required');
     const snap = await db.collection('venues').doc(venueId).get();
@@ -161,7 +163,7 @@ exports.bookingGetVenue = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingGetAvailability = onCall(
   { region: 'us-central1', maxInstances: 100, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingGetAvailability = async (req) => {
     const { venueId, date } = req.data || {};
     if (!venueId || !date) throw new HttpsError('invalid-argument','venueId and date required');
 
@@ -258,7 +260,7 @@ exports.bookingGetAvailability = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingHoldSlot = onCall(
   { region: 'us-central1', maxInstances: 100, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingHoldSlot = async (req) => {
     const uid = _authRequired(req);
     const { venueId, startTs, endTs, holdId } = req.data || {};
     if (!venueId || !startTs || !endTs) throw new HttpsError('invalid-argument','venueId, startTs, endTs required');
@@ -314,7 +316,7 @@ exports.bookingHoldSlot = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingReleaseHold = onCall(
   { region: 'us-central1', maxInstances: 50, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingReleaseHold = async (req) => {
     _authRequired(req);
     const { holdId } = req.data || {};
     if (!holdId) throw new HttpsError('invalid-argument','holdId required');
@@ -328,7 +330,7 @@ exports.bookingReleaseHold = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingCreate = onCall(
   { region: 'us-central1', maxInstances: 50, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingCreate = async (req) => {
     const uid = _authRequired(req);
     const { venueId, holdId, date, startTime, endTime, addOns = [], notes, paymentId, idempotencyKey } = req.data || {};
     if (!venueId || !date || !startTime || !endTime) {
@@ -535,7 +537,7 @@ exports.bookingCreate = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingCancel = onCall(
   { region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingCancel = async (req) => {
     const uid = _authRequired(req);
     const { bookingId, reason } = req.data || {};
     if (!bookingId) throw new HttpsError('invalid-argument','bookingId required');
@@ -590,7 +592,7 @@ exports.bookingCancel = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingReschedule = onCall(
   { region: 'us-central1', maxInstances: 20, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingReschedule = async (req) => {
     const uid = _authRequired(req);
     const { bookingId, newDate, newStartTime, newEndTime } = req.data || {};
     if (!bookingId || !newDate || !newStartTime || !newEndTime) {
@@ -633,7 +635,7 @@ exports.bookingReschedule = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingCheckIn = onCall(
   { region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingCheckIn = async (req) => {
     const uid = _authRequired(req);
     const { bookingId, method, time } = req.data || {};
     const bookingRef = db.collection('bookings').doc(bookingId);
@@ -657,7 +659,7 @@ exports.bookingCheckIn = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingCheckOut = onCall(
   { region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingCheckOut = async (req) => {
     const uid = _authRequired(req);
     const { bookingId, time } = req.data || {};
     const bookingRef = db.collection('bookings').doc(bookingId);
@@ -681,7 +683,7 @@ exports.bookingCheckOut = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingGetMyBookings = onCall(
   { region: 'us-central1', maxInstances: 50, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingGetMyBookings = async (req) => {
     const uid = _authRequired(req);
     const { status } = req.data || {};
     let query = db.collection('bookings').where('customerId','==',uid).orderBy('startTs','desc').limit(50);
@@ -696,7 +698,7 @@ exports.bookingGetMyBookings = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingGetCalendar = onCall(
   { region: 'us-central1', maxInstances: 30, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingGetCalendar = async (req) => {
     const uid = _authRequired(req);
     const { venueId, from, until } = req.data || {};
     if (!venueId || !from || !until) throw new HttpsError('invalid-argument','venueId, from, until required');
@@ -731,7 +733,7 @@ exports.bookingGetCalendar = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingBlockSlots = onCall(
   { region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingBlockSlots = async (req) => {
     const uid = _authRequired(req);
     const { venueId, startTs, endTs, reason, note } = req.data || {};
     if (!venueId || !startTs || !endTs) throw new HttpsError('invalid-argument','venueId, startTs, endTs required');
@@ -756,7 +758,7 @@ exports.bookingBlockSlots = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingSaveVenue = onCall(
   { region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingSaveVenue = async (req) => {
     const uid = _authRequired(req);
     const { id, ...data } = req.data || {};
 
@@ -805,7 +807,7 @@ exports.bookingSaveVenue = onCall(
 ═══════════════════════════════════════════════════════════ */
 exports.bookingApprove = onCall(
   { region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingApprove = async (req) => {
     const uid = _authRequired(req);
     const { bookingId } = req.data || {};
     const snap = await db.collection('bookings').doc(bookingId).get();
@@ -825,7 +827,7 @@ exports.bookingApprove = onCall(
 
 exports.bookingReject = onCall(
   { region: 'us-central1', maxInstances: 10, cors: true, enforceAppCheck: true },
-  async (req) => {
+  exports._h.bookingReject = async (req) => {
     const uid = _authRequired(req);
     const { bookingId, reason } = req.data || {};
     const snap = await db.collection('bookings').doc(bookingId).get();

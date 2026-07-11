@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <script src="security.js"></script>
@@ -266,6 +266,13 @@
 // Firebase compat SDK is loaded by shared-header.js
 // db = firebase.firestore() available globally
 // firebase.auth(), firebase.functions().httpsCallable(name) available
+
+/* ── Booking dispatcher helper ───────────────────────────────────────── */
+var _vbDispatch = null;
+function _vb(op, data) {
+  if (!_vbDispatch) _vbDispatch = firebase.functions().httpsCallable('bookingDispatch');
+  return _vbDispatch(Object.assign({ op: op }, data || {}));
+}
 
 /* ── State ──────────────────────────────────────────────────────────────── */
 var S = {
@@ -541,7 +548,7 @@ function loadSlots() {
   var grid = document.getElementById('slot-grid');
   clearEl(grid); grid.appendChild(mkSpinner());
   var date = document.getElementById('slot-date').value;
-  firebase.functions().httpsCallable('venueGetAvailability')({ venueId: S.venue.id, startDate: date, days: 1 })
+  _vb('venueGetAvailability', { venueId: S.venue.id, startDate: date, days: 1 })
     .then(function(res) {
       var slots = (res.data && res.data.slots) || [];
       renderSlots(grid, slots, date);
@@ -585,7 +592,7 @@ function selectSlot(slot, date, btn) {
 }
 
 function calcPrice(slot, date) {
-  firebase.functions().httpsCallable('venueCalculatePrice')({
+  _vb('venueCalculatePrice', {
     venueId: S.venue.id, date: date, startTime: slot.startTime, durationMins: slot.durationMins || 60
   }).then(function(res) {
     S.priceCalc = res.data || {};
@@ -666,7 +673,7 @@ function submitBooking() {
   var btn = document.getElementById('confirm-btn');
   btn.disabled = true; btn.textContent = 'Processing…';
   var notes = (document.getElementById('booking-notes').value || '').trim().slice(0, 500);
-  firebase.functions().httpsCallable('venueCreateBooking')({
+  _vb('venueCreateBooking', {
     venueId: S.venue.id,
     date: S.slot.date,
     startTime: S.slot.startTime,
@@ -693,7 +700,7 @@ function loadMyBookings() {
   var list = document.getElementById('bk-list');
   clearEl(list); list.appendChild(mkSpinner());
   if (!S.user) { clearEl(list); list.appendChild(mkAuthPrompt()); return; }
-  firebase.functions().httpsCallable('venueGetMyBookings')({})
+  _vb('venueGetMyBookings', {})
     .then(function(res) {
       var bks = (res.data && res.data.bookings) || [];
       clearEl(list);

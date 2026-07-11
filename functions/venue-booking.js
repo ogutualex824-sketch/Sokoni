@@ -35,6 +35,8 @@ const FP = admin.firestore.FieldPath;
 const CF_OPTS = { region: 'us-central1', enforceAppCheck: true };
 const CF_PUB  = { region: 'us-central1', enforceAppCheck: false }; // public reads
 
+exports._h = {}; // handler registry — consumed by booking-dispatch.js
+
 /* ── Constants ────────────────────────────────────────────────────────────── */
 
 const DAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
@@ -266,7 +268,7 @@ function _defaultSchedule() {
    CF 1 — venueCreate
    Owner or admin creates a new venue / bookable resource.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueCreate = onCall(CF_OPTS, async (request) => {
+exports.venueCreate = onCall(CF_OPTS, exports._h.venueCreate = async (req) => {
   const uid = _uid(request);
   const d   = request.data || {};
 
@@ -324,7 +326,7 @@ exports.venueCreate = onCall(CF_OPTS, async (request) => {
    CF 2 — venueUpdate
    Owner updates venue config. Only allowed keys are patched.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueUpdate = onCall(CF_OPTS, async (request) => {
+exports.venueUpdate = onCall(CF_OPTS, exports._h.venueUpdate = async (req) => {
   const uid   = _uid(request);
   const d     = request.data || {};
   const venue = await _venueOrThrow(d.venueId);
@@ -354,7 +356,7 @@ exports.venueUpdate = onCall(CF_OPTS, async (request) => {
    CF 3 — venueGetPublic
    Public read of venue profile (no owner fields exposed).
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueGetPublic = onCall(CF_PUB, async (request) => {
+exports.venueGetPublic = onCall(CF_PUB, exports._h.venueGetPublic = async (req) => {
   const venue = await _venueOrThrow(request.data?.venueId);
   const { ownerId: _o, ...pub } = venue; // strip private field
   return pub;
@@ -366,7 +368,7 @@ exports.venueGetPublic = onCall(CF_PUB, async (request) => {
    Reads blockouts + existing bookings via sub-collection doc-ID prefix ranges
    (no composite indexes needed).
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueGetAvailability = onCall(CF_PUB, async (request) => {
+exports.venueGetAvailability = onCall(CF_PUB, exports._h.venueGetAvailability = async (req) => {
   const d         = request.data || {};
   const { venueId, startDate, days = 7 } = d;
   const venue     = await _venueOrThrow(venueId);
@@ -430,7 +432,7 @@ exports.venueGetAvailability = onCall(CF_PUB, async (request) => {
    CF 5 — venueCalculatePrice
    Dynamic price breakdown for a proposed booking.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueCalculatePrice = onCall(CF_PUB, async (request) => {
+exports.venueCalculatePrice = onCall(CF_PUB, exports._h.venueCalculatePrice = async (req) => {
   const d = request.data || {};
   if (!d.venueId || !d.date || !d.startTime || !d.durationMins) {
     throw new HttpsError('invalid-argument', 'venueId, date, startTime, durationMins required.');
@@ -444,7 +446,7 @@ exports.venueCalculatePrice = onCall(CF_PUB, async (request) => {
    Atomic slot reservation — uses runTransaction() to prevent double-booking.
    Creates booking in sub-collection (slot lock) + top-level (customer queries).
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueCreateBooking = onCall(CF_OPTS, async (request) => {
+exports.venueCreateBooking = onCall(CF_OPTS, exports._h.venueCreateBooking = async (req) => {
   const uid = _uid(request);
   const d   = request.data || {};
 
@@ -583,7 +585,7 @@ exports.venueCreateBooking = onCall(CF_OPTS, async (request) => {
    CF 7 — venueCancelBooking
    Cancel with cancellation fee applied per policy.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueCancelBooking = onCall(CF_OPTS, async (request) => {
+exports.venueCancelBooking = onCall(CF_OPTS, exports._h.venueCancelBooking = async (req) => {
   const uid     = _uid(request);
   const d       = request.data || {};
   const booking = await _bookingOrThrow(d.bookingId);
@@ -629,7 +631,7 @@ exports.venueCancelBooking = onCall(CF_OPTS, async (request) => {
    CF 8 — venueConfirmBooking
    Venue owner or admin confirms a pending booking.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueConfirmBooking = onCall(CF_OPTS, async (request) => {
+exports.venueConfirmBooking = onCall(CF_OPTS, exports._h.venueConfirmBooking = async (req) => {
   const uid     = _uid(request);
   const d       = request.data || {};
   const booking = await _bookingOrThrow(d.bookingId);
@@ -655,7 +657,7 @@ exports.venueConfirmBooking = onCall(CF_OPTS, async (request) => {
    CF 9 — venueCheckIn
    Mark a confirmed booking as checked-in.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueCheckIn = onCall(CF_OPTS, async (request) => {
+exports.venueCheckIn = onCall(CF_OPTS, exports._h.venueCheckIn = async (req) => {
   const uid     = _uid(request);
   const d       = request.data || {};
   const booking = await _bookingOrThrow(d.bookingId);
@@ -681,7 +683,7 @@ exports.venueCheckIn = onCall(CF_OPTS, async (request) => {
    CF 10 — venueCheckOut
    Complete a booking — marks the slot as available again.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueCheckOut = onCall(CF_OPTS, async (request) => {
+exports.venueCheckOut = onCall(CF_OPTS, exports._h.venueCheckOut = async (req) => {
   const uid     = _uid(request);
   const d       = request.data || {};
   const booking = await _bookingOrThrow(d.bookingId);
@@ -707,7 +709,7 @@ exports.venueCheckOut = onCall(CF_OPTS, async (request) => {
    CF 11 — venueMarkNoShow
    Owner marks a no-show (booking started but customer never arrived).
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueMarkNoShow = onCall(CF_OPTS, async (request) => {
+exports.venueMarkNoShow = onCall(CF_OPTS, exports._h.venueMarkNoShow = async (req) => {
   const uid     = _uid(request);
   const d       = request.data || {};
   const booking = await _bookingOrThrow(d.bookingId);
@@ -736,7 +738,7 @@ exports.venueMarkNoShow = onCall(CF_OPTS, async (request) => {
    CF 12 — venueGetBooking
    Fetch a single booking — customer (own) or venue owner or admin.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueGetBooking = onCall(CF_OPTS, async (request) => {
+exports.venueGetBooking = onCall(CF_OPTS, exports._h.venueGetBooking = async (req) => {
   const uid     = _uid(request);
   const booking = await _bookingOrThrow(request.data?.bookingId);
 
@@ -752,7 +754,7 @@ exports.venueGetBooking = onCall(CF_OPTS, async (request) => {
    Customer's booking history — paginated, most-recent first.
    Uses composite index: venueBookings { customerId ASC, createdAt DESC }
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueGetMyBookings = onCall(CF_OPTS, async (request) => {
+exports.venueGetMyBookings = onCall(CF_OPTS, exports._h.venueGetMyBookings = async (req) => {
   const uid  = _uid(request);
   const d    = request.data || {};
   const lim  = _clamp(d.limit, 1, 50, 20);
@@ -784,7 +786,7 @@ exports.venueGetMyBookings = onCall(CF_OPTS, async (request) => {
    Owner calendar view — returns bookings and blockouts for a date range.
    Uses doc-ID prefix range queries — no composite indexes needed.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueGetCalendar = onCall(CF_OPTS, async (request) => {
+exports.venueGetCalendar = onCall(CF_OPTS, exports._h.venueGetCalendar = async (req) => {
   const uid   = _uid(request);
   const d     = request.data || {};
   const venue = await _venueOrThrow(d.venueId);
@@ -819,7 +821,7 @@ exports.venueGetCalendar = onCall(CF_OPTS, async (request) => {
    CF 15 — venueBlockDates
    Block a date range for maintenance, private events, holidays, or cleaning.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueBlockDates = onCall(CF_OPTS, async (request) => {
+exports.venueBlockDates = onCall(CF_OPTS, exports._h.venueBlockDates = async (req) => {
   const uid   = _uid(request);
   const d     = request.data || {};
   const venue = await _venueOrThrow(d.venueId);
@@ -857,7 +859,7 @@ exports.venueBlockDates = onCall(CF_OPTS, async (request) => {
    CF 16 — venueRemoveBlock
    Remove a blockout. Automatically makes those dates bookable again.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueRemoveBlock = onCall(CF_OPTS, async (request) => {
+exports.venueRemoveBlock = onCall(CF_OPTS, exports._h.venueRemoveBlock = async (req) => {
   const uid   = _uid(request);
   const d     = request.data || {};
   const venue = await _venueOrThrow(d.venueId);
@@ -873,7 +875,7 @@ exports.venueRemoveBlock = onCall(CF_OPTS, async (request) => {
    CF 17 — venueGetStats
    30-day analytics for the venue owner: revenue, utilisation, peak hours.
 ═══════════════════════════════════════════════════════════════════════════ */
-exports.venueGetStats = onCall(CF_OPTS, async (request) => {
+exports.venueGetStats = onCall(CF_OPTS, exports._h.venueGetStats = async (req) => {
   const uid   = _uid(request);
   const d     = request.data || {};
   const venue = await _venueOrThrow(d.venueId);

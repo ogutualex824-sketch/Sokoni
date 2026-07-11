@@ -32,17 +32,16 @@ window.SokoniBooking = (() => {
   function _nowMins() { const n = new Date(); return n.getHours()*60 + n.getMinutes(); }
   function _uid()     { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 
-  /* ── Firebase callable wrapper ── */
-  let _callableFn = null;
+  /* ── Firebase callable wrapper — routes all ops through bookingDispatch ── */
+  let _dispatchFn = null;
   function _call(name, data) {
     if (typeof firebase !== 'undefined' && firebase.functions) {
-      if (!_callableFn) _callableFn = {};
-      if (!_callableFn[name]) _callableFn[name] = firebase.functions().httpsCallable(name);
-      return _callableFn[name](data).then(r => r.data);
+      if (!_dispatchFn) _dispatchFn = firebase.functions().httpsCallable('bookingDispatch');
+      return _dispatchFn(Object.assign({ op: name }, data || {})).then(r => r.data);
     }
-    return fetch(`${CF_BASE}/${name}`, {
+    return fetch(`${CF_BASE}/bookingDispatch`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data }),
+      body: JSON.stringify({ data: Object.assign({ op: name }, data || {}) }),
     }).then(r => r.json()).then(r => r.result || r);
   }
 

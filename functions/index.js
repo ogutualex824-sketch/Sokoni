@@ -8009,21 +8009,10 @@ const adminOsDispatcher = require('./admin-os-dispatch');
 exports.adminOsDispatch = adminOsDispatcher.adminOsDispatch;
 
 /* ── Universal Availability & Scheduling Engine v1.0 ─────────────────── */
+/* DISPATCH CONSOLIDATION: 12 onCall CFs → bookingDispatch (below); 2 remain individual */
 const availability = require("./availability");
-exports.setProviderAvailability          = availability.setProviderAvailability;
-exports.setLiveStatus                    = availability.setLiveStatus;
-exports.getAvailabilitySlots             = availability.getAvailabilitySlots;
-exports.reserveSlot                      = availability.reserveSlot;
-exports.releaseSlot                      = availability.releaseSlot;
-exports.getProviderAvailability          = availability.getProviderAvailability;
-exports.scheduledAvailabilityMaintenance = availability.scheduledAvailabilityMaintenance;
-exports.setVacationMode                  = availability.setVacationMode;
-exports.addAvailabilityOverride          = availability.addAvailabilityOverride;
-exports.removeAvailabilityOverride       = availability.removeAvailabilityOverride;
-exports.listAvailabilityOverrides        = availability.listAvailabilityOverrides;
-exports.setMarketplaceAvailability       = availability.setMarketplaceAvailability;
-exports.checkProviderAvailability        = availability.checkProviderAvailability;
-exports.getNextAvailableSlot             = availability.getNextAvailableSlot;
+exports.getProviderAvailability          = availability.getProviderAvailability;          /* onRequest — stays individual */
+exports.scheduledAvailabilityMaintenance = availability.scheduledAvailabilityMaintenance; /* scheduled */
 
 /* ── Reviews & Ratings Engine v1.0 ───────────────────────────────────── */
 const reviews = require("./reviews");
@@ -8033,27 +8022,14 @@ exports.flagReview           = reviews.flagReview;
 exports.markReviewHelpful    = reviews.markReviewHelpful;
 exports.adminModerateReview  = reviews.adminModerateReview;
 
-/* ── Venue & Resource Booking Engine v1.0 ────────────────────────────── */
-const booking = require('./booking');
-exports.bookingSearchVenues  = booking.bookingSearchVenues;
-exports.bookingGetVenue      = booking.bookingGetVenue;
-exports.bookingGetAvailability= booking.bookingGetAvailability;
-exports.bookingHoldSlot      = booking.bookingHoldSlot;
-exports.bookingReleaseHold   = booking.bookingReleaseHold;
-exports.bookingCreate        = booking.bookingCreate;
-exports.bookingCancel        = booking.bookingCancel;
-exports.bookingReschedule    = booking.bookingReschedule;
-exports.bookingCheckIn       = booking.bookingCheckIn;
-exports.bookingCheckOut      = booking.bookingCheckOut;
-exports.bookingGetMyBookings = booking.bookingGetMyBookings;
-exports.bookingGetCalendar   = booking.bookingGetCalendar;
-exports.bookingBlockSlots    = booking.bookingBlockSlots;
-exports.bookingSaveVenue     = booking.bookingSaveVenue;
-exports.bookingApprove       = booking.bookingApprove;
-exports.bookingReject        = booking.bookingReject;
-exports.bookingSendReminders = booking.bookingSendReminders;
-exports.bookingCleanupHolds  = booking.bookingCleanupHolds;
-exports.bookingAutoComplete  = booking.bookingAutoComplete;
+/* ── Booking Domain Dispatcher — booking + venue-booking + availability → 1 Cloud Run ── */
+/* DISPATCH CONSOLIDATION: 45 onCall CFs → 1 bookingDispatch + 3 scheduled + 1 onRequest */
+const bookingDispatcher = require('./booking-dispatch');
+exports.bookingDispatch = bookingDispatcher.bookingDispatch;
+const _bookingMod = require('./booking');
+exports.bookingSendReminders = _bookingMod.bookingSendReminders; /* scheduled */
+exports.bookingCleanupHolds  = _bookingMod.bookingCleanupHolds;  /* scheduled */
+exports.bookingAutoComplete  = _bookingMod.bookingAutoComplete;  /* scheduled */
 
 /* ── Referral Tracking Engine v1.0 ──────────────────────────────────── */
 const referral = require("./referral");
@@ -9230,25 +9206,8 @@ exports.approveWithdrawal   = commission.approveWithdrawal;
 exports.rejectWithdrawal    = commission.rejectWithdrawal;
 exports.getWithdrawals      = commission.getWithdrawals;
 
-/* ── Venue, Facility & Resource Booking Engine v1.0 — 17 CFs ── */
-const venueBooking = require('./venue-booking');
-exports.venueCreate             = venueBooking.venueCreate;
-exports.venueUpdate             = venueBooking.venueUpdate;
-exports.venueGetPublic          = venueBooking.venueGetPublic;
-exports.venueGetAvailability    = venueBooking.venueGetAvailability;
-exports.venueCalculatePrice     = venueBooking.venueCalculatePrice;
-exports.venueCreateBooking      = venueBooking.venueCreateBooking;
-exports.venueCancelBooking      = venueBooking.venueCancelBooking;
-exports.venueConfirmBooking     = venueBooking.venueConfirmBooking;
-exports.venueCheckIn            = venueBooking.venueCheckIn;
-exports.venueCheckOut           = venueBooking.venueCheckOut;
-exports.venueMarkNoShow         = venueBooking.venueMarkNoShow;
-exports.venueGetBooking         = venueBooking.venueGetBooking;
-exports.venueGetMyBookings      = venueBooking.venueGetMyBookings;
-exports.venueGetCalendar        = venueBooking.venueGetCalendar;
-exports.venueBlockDates         = venueBooking.venueBlockDates;
-exports.venueRemoveBlock        = venueBooking.venueRemoveBlock;
-exports.venueGetStats           = venueBooking.venueGetStats;
+/* ── Venue Booking — consolidated into bookingDispatch above ── */
+/* All 17 venueBooking onCall CFs are routed through bookingDispatch. No exports needed here. */
 
 /* ── Platform Hub Engine v1.0 — 10 CFs ── */
 const platformHub = require('./platform-hub');
