@@ -344,7 +344,7 @@
 (function(){
 var _autoTimer = null;
 
-function _cf(n){ return firebase.functions().httpsCallable(n); }
+function _cf(n){ var d=firebase.functions().httpsCallable('analyticsDispatch'); return function(data){ return d(Object.assign({op:n},data||{})); }; }
 function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function _fmt(n){ return Number(n||0).toLocaleString(); }
 function _toast(msg,type){ var el=document.getElementById('toast'); el.textContent=msg; el.className='show '+(type||''); clearTimeout(el._t); el._t=setTimeout(function(){ el.className=''; }, 3500); }

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * SOKONI Analytics Engine — Sprint 4.5
  * 34 Cloud Functions across 6 modules:
@@ -19,6 +19,9 @@ function _esc(s){ return String(s||'').replace(/[<>"']/g,''); }
 function _san(v,max){ return String(v||'').slice(0,max); }
 
 const _CALL = { region: 'us-central1', enforceAppCheck: true };
+
+// Handler registry — consumed by analytics-dispatch.js
+exports._h = {};
 
 /** Resolve a period string → { fromMs, toMs } */
 function _period(period, customFrom, customTo) {
@@ -101,7 +104,7 @@ function _clampInt(v, lo, hi, def) { const n = parseInt(v); return isNaN(n) ? de
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** salesGetSummary — revenue, orders, AOV, refunds for a shop/period */
-exports.salesGetSummary = onCall(_CALL, async req => {
+exports.salesGetSummary = onCall(_CALL, exports._h.salesGetSummary = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d', customFrom, customTo } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -150,7 +153,7 @@ exports.salesGetSummary = onCall(_CALL, async req => {
 });
 
 /** salesGetTimeSeries — revenue + order count bucketed by day/week/month */
-exports.salesGetTimeSeries = onCall(_CALL, async req => {
+exports.salesGetTimeSeries = onCall(_CALL, exports._h.salesGetTimeSeries = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d', customFrom, customTo, granularity } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -184,7 +187,7 @@ exports.salesGetTimeSeries = onCall(_CALL, async req => {
 });
 
 /** salesGetByCategory — revenue breakdown by product category */
-exports.salesGetByCategory = onCall(_CALL, async req => {
+exports.salesGetByCategory = onCall(_CALL, exports._h.salesGetByCategory = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d', customFrom, customTo } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -213,7 +216,7 @@ exports.salesGetByCategory = onCall(_CALL, async req => {
 });
 
 /** salesGetByChannel — marketplace vs POS vs API vs WhatsApp */
-exports.salesGetByChannel = onCall(_CALL, async req => {
+exports.salesGetByChannel = onCall(_CALL, exports._h.salesGetByChannel = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -242,7 +245,7 @@ exports.salesGetByChannel = onCall(_CALL, async req => {
 });
 
 /** salesGetPaymentMethodBreakdown — M-Pesa vs card vs cash vs wallet */
-exports.salesGetPaymentMethodBreakdown = onCall(_CALL, async req => {
+exports.salesGetPaymentMethodBreakdown = onCall(_CALL, exports._h.salesGetPaymentMethodBreakdown = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -273,7 +276,7 @@ exports.salesGetPaymentMethodBreakdown = onCall(_CALL, async req => {
 });
 
 /** salesGetTopProducts — top N products by revenue, units, or orders */
-exports.salesGetTopProducts = onCall(_CALL, async req => {
+exports.salesGetTopProducts = onCall(_CALL, exports._h.salesGetTopProducts = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d', metric = 'revenue', limit: lim } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -301,7 +304,7 @@ exports.salesGetTopProducts = onCall(_CALL, async req => {
 });
 
 /** salesGetHourlyHeatmap — order volume by day-of-week × hour-of-day */
-exports.salesGetHourlyHeatmap = onCall(_CALL, async req => {
+exports.salesGetHourlyHeatmap = onCall(_CALL, exports._h.salesGetHourlyHeatmap = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -329,7 +332,7 @@ exports.salesGetHourlyHeatmap = onCall(_CALL, async req => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** analyticsTrackEvent — client-side event ingestion (page views, clicks, etc.) */
-exports.analyticsTrackEvent = onCall({ region: 'us-central1', enforceAppCheck: true }, async req => {
+exports.analyticsTrackEvent = onCall({ region: 'us-central1', enforceAppCheck: true }, exports._h.analyticsTrackEvent = async req => {
   const uid = req.auth?.uid || null;
   const { shopId, eventType, properties = {} } = req.data || {};
   if (!shopId || !eventType) throw new Error('shopId and eventType required');
@@ -351,7 +354,7 @@ exports.analyticsTrackEvent = onCall({ region: 'us-central1', enforceAppCheck: t
 });
 
 /** analyticsGetFunnel — conversion rates across a defined funnel */
-exports.analyticsGetFunnel = onCall(_CALL, async req => {
+exports.analyticsGetFunnel = onCall(_CALL, exports._h.analyticsGetFunnel = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d', funnelSteps } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -393,7 +396,7 @@ exports.analyticsGetFunnel = onCall(_CALL, async req => {
 });
 
 /** analyticsGetTopPages — most visited pages/products */
-exports.analyticsGetTopPages = onCall(_CALL, async req => {
+exports.analyticsGetTopPages = onCall(_CALL, exports._h.analyticsGetTopPages = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '7d', limit: lim } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -423,7 +426,7 @@ exports.analyticsGetTopPages = onCall(_CALL, async req => {
 });
 
 /** analyticsGetSearchTerms — what customers search for in your shop */
-exports.analyticsGetSearchTerms = onCall(_CALL, async req => {
+exports.analyticsGetSearchTerms = onCall(_CALL, exports._h.analyticsGetSearchTerms = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d', limit: lim } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -449,7 +452,7 @@ exports.analyticsGetSearchTerms = onCall(_CALL, async req => {
 });
 
 /** analyticsGetCartAbandonment — sessions that added to cart but didn't checkout */
-exports.analyticsGetCartAbandonment = onCall(_CALL, async req => {
+exports.analyticsGetCartAbandonment = onCall(_CALL, exports._h.analyticsGetCartAbandonment = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -482,7 +485,7 @@ exports.analyticsGetCartAbandonment = onCall(_CALL, async req => {
 });
 
 /** analyticsGetTrafficSources — referrer breakdown (direct, social, search, etc.) */
-exports.analyticsGetTrafficSources = onCall(_CALL, async req => {
+exports.analyticsGetTrafficSources = onCall(_CALL, exports._h.analyticsGetTrafficSources = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -516,7 +519,7 @@ exports.analyticsGetTrafficSources = onCall(_CALL, async req => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** cohortGetRetention — classic N-day cohort retention matrix */
-exports.cohortGetRetention = onCall(_CALL, async req => {
+exports.cohortGetRetention = onCall(_CALL, exports._h.cohortGetRetention = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, cohortMonths = 3 } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -565,7 +568,7 @@ exports.cohortGetRetention = onCall(_CALL, async req => {
 });
 
 /** cohortGetLTV — average lifetime value by acquisition month */
-exports.cohortGetLTV = onCall(_CALL, async req => {
+exports.cohortGetLTV = onCall(_CALL, exports._h.cohortGetLTV = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, cohortMonths = 6 } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -606,7 +609,7 @@ exports.cohortGetLTV = onCall(_CALL, async req => {
 });
 
 /** cohortGetNewVsReturning — new vs returning buyer ratio */
-exports.cohortGetNewVsReturning = onCall(_CALL, async req => {
+exports.cohortGetNewVsReturning = onCall(_CALL, exports._h.cohortGetNewVsReturning = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -645,7 +648,7 @@ exports.cohortGetNewVsReturning = onCall(_CALL, async req => {
 });
 
 /** cohortGetChurn — buyers who haven't ordered in N days */
-exports.cohortGetChurn = onCall(_CALL, async req => {
+exports.cohortGetChurn = onCall(_CALL, exports._h.cohortGetChurn = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, inactiveDays = 60 } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -677,7 +680,7 @@ exports.cohortGetChurn = onCall(_CALL, async req => {
 });
 
 /** cohortGetTopBuyers — highest-value customers for a shop */
-exports.cohortGetTopBuyers = onCall(_CALL, async req => {
+exports.cohortGetTopBuyers = onCall(_CALL, exports._h.cohortGetTopBuyers = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '90d', limit: lim } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -711,7 +714,7 @@ exports.cohortGetTopBuyers = onCall(_CALL, async req => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** productGetSalesVelocity — units/day sold per product */
-exports.productGetSalesVelocity = onCall(_CALL, async req => {
+exports.productGetSalesVelocity = onCall(_CALL, exports._h.productGetSalesVelocity = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d', limit: lim } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -741,7 +744,7 @@ exports.productGetSalesVelocity = onCall(_CALL, async req => {
 });
 
 /** productGetReturnRate — refund/return count per product */
-exports.productGetReturnRate = onCall(_CALL, async req => {
+exports.productGetReturnRate = onCall(_CALL, exports._h.productGetReturnRate = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -775,7 +778,7 @@ exports.productGetReturnRate = onCall(_CALL, async req => {
 });
 
 /** productGetReviewSentiment — avg rating and review count per product */
-exports.productGetReviewSentiment = onCall(_CALL, async req => {
+exports.productGetReviewSentiment = onCall(_CALL, exports._h.productGetReviewSentiment = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, limit: lim } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -804,7 +807,7 @@ exports.productGetReviewSentiment = onCall(_CALL, async req => {
 });
 
 /** productGetMarginAnalysis — revenue vs cost for products with cost data */
-exports.productGetMarginAnalysis = onCall(_CALL, async req => {
+exports.productGetMarginAnalysis = onCall(_CALL, exports._h.productGetMarginAnalysis = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d', limit: lim } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -841,7 +844,7 @@ exports.productGetMarginAnalysis = onCall(_CALL, async req => {
 });
 
 /** productGetInventoryTurnover — turnover ratio per product */
-exports.productGetInventoryTurnover = onCall(_CALL, async req => {
+exports.productGetInventoryTurnover = onCall(_CALL, exports._h.productGetInventoryTurnover = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -882,7 +885,7 @@ exports.productGetInventoryTurnover = onCall(_CALL, async req => {
 });
 
 /** productGetSlowMovers — products sold fewer than N units in period */
-exports.productGetSlowMovers = onCall(_CALL, async req => {
+exports.productGetSlowMovers = onCall(_CALL, exports._h.productGetSlowMovers = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d', threshold = 3 } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -916,7 +919,7 @@ exports.productGetSlowMovers = onCall(_CALL, async req => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** analyticsGetRealtimeSnapshot — live counters for admin dashboard */
-exports.analyticsGetRealtimeSnapshot = onCall(_CALL, async req => {
+exports.analyticsGetRealtimeSnapshot = onCall(_CALL, exports._h.analyticsGetRealtimeSnapshot = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -954,7 +957,7 @@ exports.analyticsGetRealtimeSnapshot = onCall(_CALL, async req => {
 });
 
 /** analyticsGetPlatformSnapshot — platform-wide metrics (admin only) */
-exports.analyticsGetPlatformSnapshot = onCall(_CALL, async req => {
+exports.analyticsGetPlatformSnapshot = onCall(_CALL, exports._h.analyticsGetPlatformSnapshot = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   await _assertAdmin(uid);
 
@@ -987,7 +990,7 @@ exports.analyticsGetPlatformSnapshot = onCall(_CALL, async req => {
 });
 
 /** analyticsGetOrderStatusBreakdown — current order status distribution */
-exports.analyticsGetOrderStatusBreakdown = onCall(_CALL, async req => {
+exports.analyticsGetOrderStatusBreakdown = onCall(_CALL, exports._h.analyticsGetOrderStatusBreakdown = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '7d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -1014,7 +1017,7 @@ exports.analyticsGetOrderStatusBreakdown = onCall(_CALL, async req => {
 });
 
 /** analyticsGetAverageDeliveryTime — mean minutes from order creation to delivered */
-exports.analyticsGetAverageDeliveryTime = onCall(_CALL, async req => {
+exports.analyticsGetAverageDeliveryTime = onCall(_CALL, exports._h.analyticsGetAverageDeliveryTime = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -1048,7 +1051,7 @@ exports.analyticsGetAverageDeliveryTime = onCall(_CALL, async req => {
 });
 
 /** analyticsGetStaffPerformance — orders processed per staff member */
-exports.analyticsGetStaffPerformance = onCall(_CALL, async req => {
+exports.analyticsGetStaffPerformance = onCall(_CALL, exports._h.analyticsGetStaffPerformance = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, period = '30d' } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -1079,7 +1082,7 @@ exports.analyticsGetStaffPerformance = onCall(_CALL, async req => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** reportCreate — save a custom report definition */
-exports.reportCreate = onCall(_CALL, async req => {
+exports.reportCreate = onCall(_CALL, exports._h.reportCreate = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, name, description, metrics = [], filters = {}, schedule } = req.data || {};
   if (!shopId || !name) throw new Error('shopId and name required');
@@ -1102,7 +1105,7 @@ exports.reportCreate = onCall(_CALL, async req => {
 });
 
 /** reportList — list saved reports for a shop */
-exports.reportList = onCall(_CALL, async req => {
+exports.reportList = onCall(_CALL, exports._h.reportList = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId } = req.data || {};
   if (!shopId) throw new Error('shopId required');
@@ -1113,7 +1116,7 @@ exports.reportList = onCall(_CALL, async req => {
 });
 
 /** reportDelete — delete a saved report */
-exports.reportDelete = onCall(_CALL, async req => {
+exports.reportDelete = onCall(_CALL, exports._h.reportDelete = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, reportId } = req.data || {};
   if (!shopId || !reportId) throw new Error('shopId and reportId required');
@@ -1126,7 +1129,7 @@ exports.reportDelete = onCall(_CALL, async req => {
 });
 
 /** analyticsExport — export a date-range data dump (CSV-format rows returned) */
-exports.analyticsExport = onCall(_CALL, async req => {
+exports.analyticsExport = onCall(_CALL, exports._h.analyticsExport = async req => {
   const uid = req.auth?.uid; if (!uid) throw new Error('Unauthenticated');
   const { shopId, dataType = 'orders', period = '30d', customFrom, customTo } = req.data || {};
   if (!shopId) throw new Error('shopId required');

@@ -7997,6 +7997,13 @@ exports.adminSetPaymentConfig    = paymentConfig.adminSetPaymentConfig;
 const settlementValidation = require('./settlement-validation');
 exports.settlementValidatePath = settlementValidation.settlementValidatePath;
 
+/* ── Settlement Phase 3 — split settlement + per-gateway provider abstraction ── */
+const settlementProviders = require('./settlement-providers');
+exports.settlementGetProviders = settlementProviders.settlementGetProviders;
+exports.settlementSetProvider  = settlementProviders.settlementSetProvider;
+const settlementExecutor = require('./settlement-executor');
+exports.settlementPreviewMethod = settlementExecutor.settlementPreviewMethod;
+
 /* ── Trust & Safety Engine v1.0 ──────────────────────────────────────── */
 const trustSafety = require('./trust-safety');
 exports.tsReportContent       = trustSafety.tsReportContent;
@@ -9423,39 +9430,10 @@ exports.tqWorkerProcessor   = tq.tqWorkerProcessor;
 exports.tqScheduledCleanup  = tq.tqScheduledCleanup;
 exports.tqBulkEnqueue       = tq.tqBulkEnqueue;
 
-/* ── Analytics Engine (34 CFs) ───────────────────────────────────────────── */
-const ae = require('./analytics-engine');
-exports.salesGetSummary                  = ae.salesGetSummary;
-exports.salesGetTimeSeries               = ae.salesGetTimeSeries;
-exports.salesGetByCategory               = ae.salesGetByCategory;
-exports.salesGetByChannel                = ae.salesGetByChannel;
-exports.salesGetPaymentMethodBreakdown   = ae.salesGetPaymentMethodBreakdown;
-exports.salesGetTopProducts              = ae.salesGetTopProducts;
-exports.salesGetHourlyHeatmap            = ae.salesGetHourlyHeatmap;
-exports.analyticsTrackEvent              = ae.analyticsTrackEvent;
-exports.analyticsGetFunnel               = ae.analyticsGetFunnel;
-exports.analyticsGetTopPages             = ae.analyticsGetTopPages;
-exports.analyticsGetSearchTerms          = ae.analyticsGetSearchTerms;
-exports.analyticsGetCartAbandonment      = ae.analyticsGetCartAbandonment;
-exports.analyticsGetTrafficSources       = ae.analyticsGetTrafficSources;
-exports.cohortGetRetention               = ae.cohortGetRetention;
-exports.cohortGetLTV                     = ae.cohortGetLTV;
-exports.cohortGetNewVsReturning          = ae.cohortGetNewVsReturning;
-exports.cohortGetChurn                   = ae.cohortGetChurn;
-exports.cohortGetTopBuyers               = ae.cohortGetTopBuyers;
-exports.productGetSalesVelocity          = ae.productGetSalesVelocity;
-exports.productGetReturnRate             = ae.productGetReturnRate;
-exports.productGetReviewSentiment        = ae.productGetReviewSentiment;
-exports.productGetMarginAnalysis         = ae.productGetMarginAnalysis;
-exports.productGetInventoryTurnover      = ae.productGetInventoryTurnover;
-exports.productGetSlowMovers             = ae.productGetSlowMovers;
-exports.analyticsGetRealtimeSnapshot     = ae.analyticsGetRealtimeSnapshot;
-exports.analyticsGetPlatformSnapshot     = ae.analyticsGetPlatformSnapshot;
-exports.analyticsGetOrderStatusBreakdown = ae.analyticsGetOrderStatusBreakdown;
-exports.analyticsGetAverageDeliveryTime  = ae.analyticsGetAverageDeliveryTime;
-exports.analyticsGetStaffPerformance     = ae.analyticsGetStaffPerformance;
-exports.reportCreate                     = ae.reportCreate;
-exports.reportList                       = ae.reportList;
-exports.reportDelete                     = ae.reportDelete;
-exports.analyticsExport                  = ae.analyticsExport;
-exports.analyticsSnapshotDaily           = ae.analyticsSnapshotDaily;
+/* ── Analytics Engine — DISPATCH CONSOLIDATION: 33 onCall → 1 analyticsDispatch ── */
+/* analytics.html routes via _cf() wrapper. 1 scheduled CF remains. Cloud Run: 33→1. */
+const aeDispatcher = require('./analytics-dispatch');
+exports.analyticsDispatch = aeDispatcher.analyticsDispatch;
+/* Scheduled — cannot be dispatched */
+const _aeMod = require('./analytics-engine');
+exports.analyticsSnapshotDaily = _aeMod.analyticsSnapshotDaily;
