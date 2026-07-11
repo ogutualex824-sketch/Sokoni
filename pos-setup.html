@@ -1951,11 +1951,24 @@ document.getElementById('tab-email').addEventListener('click', () => {
 
 /* ── Phone OTP ── */
 function ensureRecaptcha() {
+  const container = document.getElementById('recaptcha-container');
+  console.log('[PhoneAuth] recaptcha-container in DOM:', !!container, container);
   if (!_recaptchaVerifier) {
-    _recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-      size: 'invisible',
-      callback: () => {},
-    });
+    console.log('[PhoneAuth] Creating new RecaptchaVerifier on element "recaptcha-container"');
+    try {
+      _recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+        size: 'invisible',
+        callback: (token) => { console.log('[PhoneAuth] reCAPTCHA callback fired — token length:', token?.length); },
+        'expired-callback': () => { console.warn('[PhoneAuth] reCAPTCHA token expired'); },
+        'error-callback': (err) => { console.error('[PhoneAuth] reCAPTCHA error-callback:', err); },
+      });
+      console.log('[PhoneAuth] RecaptchaVerifier created successfully:', _recaptchaVerifier);
+    } catch (initErr) {
+      console.error('[PhoneAuth] RecaptchaVerifier constructor threw:', initErr);
+      throw initErr;
+    }
+  } else {
+    console.log('[PhoneAuth] Reusing existing RecaptchaVerifier');
   }
   return _recaptchaVerifier;
 }
@@ -2005,9 +2018,13 @@ document.getElementById('btn-send-otp').addEventListener('click', async () => {
   }
 
   showAuthSpinner(true);
+  console.log('[PhoneAuth] Attempting signInWithPhoneNumber with:', phone);
+  console.log('[PhoneAuth] App Check active:', typeof firebase.appCheck === 'function');
   try {
-    const verifier        = ensureRecaptcha();
+    const verifier = ensureRecaptcha();
+    console.log('[PhoneAuth] Calling signInWithPhoneNumber NOW…');
     _confirmationResult   = await _auth.signInWithPhoneNumber(phone, verifier);
+    console.log('[PhoneAuth] signInWithPhoneNumber SUCCEEDED — confirmationResult:', _confirmationResult);
     _otpSent              = true;
     showAuthSpinner(false);
     document.getElementById('otp-row').style.display = 'block';
@@ -2016,19 +2033,21 @@ document.getElementById('btn-send-otp').addEventListener('click', async () => {
     toast('Code sent! Check your SMS.', 'success');
   } catch (err) {
     showAuthSpinner(false);
+    /* ── DEBUG: expose the raw Firebase error — DO NOT genericise during debugging ── */
+    console.error('[PhoneAuth] signInWithPhoneNumber FAILED');
+    console.error('[PhoneAuth] err.code       :', err.code);
+    console.error('[PhoneAuth] err.message    :', err.message);
+    console.error('[PhoneAuth] err.customData :', err.customData);
+    console.error('[PhoneAuth] full error     :', err);
+    console.error('[PhoneAuth] stack          :', err.stack);
     if (_recaptchaVerifier) {
       try { _recaptchaVerifier.clear(); } catch (_) {}
       _recaptchaVerifier = null;
     }
-    if (err.code === 'auth/invalid-phone-number') {
-      showAuthError('Invalid phone number format. Please use format: 07XX XXX XXX.');
-    } else if (err.code === 'auth/too-many-requests') {
-      showAuthError('Too many attempts. Please wait a few minutes and try again.');
-    } else if (err.code === 'auth/network-request-failed') {
-      showAuthError('Network error. Please check your connection and try again.');
-    } else {
-      showAuthError('Could not send verification code. Please try again.');
-    }
+    /* Show raw Firebase error code so it can be diagnosed */
+    showAuthError(
+      '[DEBUG] ' + (err.code || 'unknown-code') + '\n' + (err.message || String(err))
+    );
   }
 });
 

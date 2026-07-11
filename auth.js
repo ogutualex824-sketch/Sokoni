@@ -1072,19 +1072,37 @@ async function sendPhoneOTP() {
     const btn = document.getElementById('sendOtpBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 
+    console.log('[PhoneAuth] sendPhoneOTP called for:', fullPhone);
+    console.log('[PhoneAuth] firebaseAuth ready:', !!window.firebaseAuth);
     try {
+        console.log('[PhoneAuth] Importing firebase-auth module…');
         const { signInWithPhoneNumber, RecaptchaVerifier } = await import(
             'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
         );
+        console.log('[PhoneAuth] firebase-auth imported OK');
 
+        const sendOtpBtn = document.getElementById('sendOtpBtn');
+        console.log('[PhoneAuth] sendOtpBtn element in DOM:', !!sendOtpBtn);
         if (!_recaptchaVerifier) {
-            _recaptchaVerifier = new RecaptchaVerifier(window.firebaseAuth, 'sendOtpBtn', {
-                size: 'invisible',
-                callback: function() {},
-            });
+            console.log('[PhoneAuth] Creating RecaptchaVerifier on "sendOtpBtn"…');
+            try {
+                _recaptchaVerifier = new RecaptchaVerifier(window.firebaseAuth, 'sendOtpBtn', {
+                    size: 'invisible',
+                    callback: function(token) { console.log('[PhoneAuth] reCAPTCHA callback — token length:', token?.length); },
+                    'expired-callback': function() { console.warn('[PhoneAuth] reCAPTCHA token expired'); },
+                });
+                console.log('[PhoneAuth] RecaptchaVerifier created:', _recaptchaVerifier);
+            } catch (rcErr) {
+                console.error('[PhoneAuth] RecaptchaVerifier constructor failed:', rcErr);
+                throw rcErr;
+            }
+        } else {
+            console.log('[PhoneAuth] Reusing existing RecaptchaVerifier');
         }
 
+        console.log('[PhoneAuth] Calling signInWithPhoneNumber NOW for:', fullPhone);
         _phoneConfirmResult = await signInWithPhoneNumber(window.firebaseAuth, fullPhone, _recaptchaVerifier);
+        console.log('[PhoneAuth] signInWithPhoneNumber SUCCEEDED:', _phoneConfirmResult);
 
         const otpEntry = document.getElementById('otpEntry');
         if (otpEntry) otpEntry.style.display = 'block';
@@ -1097,13 +1115,14 @@ async function sendPhoneOTP() {
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
         _recaptchaVerifier = null;
-        showAuthMsg(
-            err.code === 'auth/invalid-phone-number' ? 'Invalid phone number. Use full format e.g. +254700000000.' :
-            err.code === 'auth/too-many-requests'    ? 'Too many SMS requests. Please wait a few minutes.' :
-            err.code === 'auth/captcha-check-failed' ? 'Security check failed. Please try again.' :
-            'Failed to send OTP. Check the number and try again.',
-            'error'
-        );
+        /* ── DEBUG: expose raw Firebase error — DO NOT genericise during debugging ── */
+        console.error('[PhoneAuth] sendPhoneOTP FAILED');
+        console.error('[PhoneAuth] err.code       :', err.code);
+        console.error('[PhoneAuth] err.message    :', err.message);
+        console.error('[PhoneAuth] err.customData :', err.customData);
+        console.error('[PhoneAuth] full error     :', err);
+        console.error('[PhoneAuth] stack          :', err.stack);
+        showAuthMsg('[DEBUG] ' + (err.code || 'unknown-code') + ' — ' + (err.message || String(err)), 'error');
     }
 }
 
@@ -1130,10 +1149,19 @@ async function verifyPhoneOTP() {
         await _handleOAuthResult(result, 'Phone');
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = 'Verify →'; }
+        console.error('[PhoneAuth] confirm() FAILED');
+        console.error('[PhoneAuth] err.code       :', err.code);
+        console.error('[PhoneAuth] err.message    :', err.message);
+        console.error('[PhoneAuth] err.customData :', err.customData);
+        console.error('[PhoneAuth] full error     :', err);
+        /* Known codes get a human message + the raw code appended */
+        const known =
+            err.code === 'auth/invalid-verification-code' ? 'Incorrect code.' :
+            err.code === 'auth/code-expired'              ? 'Code expired — request a new OTP.' : null;
         showAuthMsg(
-            err.code === 'auth/invalid-verification-code' ? 'Incorrect code. Please check and try again.' :
-            err.code === 'auth/code-expired'              ? 'Code expired. Please request a new OTP.' :
-            'Verification failed. Please try again.',
+            known
+              ? known + ' [' + err.code + ']'
+              : '[DEBUG] ' + (err.code || 'unknown-code') + ' — ' + (err.message || String(err)),
             'error'
         );
     }
