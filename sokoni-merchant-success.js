@@ -76,6 +76,11 @@ window.SokoniMerchantSuccess = (() => {
   }
 
   function _cf(name) {
+    /* getInventoryInsights is a SmartPOS op — route via smartPosDispatch. */
+    if (name === 'getInventoryInsights') {
+      var _d = firebase.functions().httpsCallable('smartPosDispatch');
+      return function (data) { return _d(Object.assign({ op: name }, data || {})); };
+    }
     return firebase.functions().httpsCallable(name);
   }
 

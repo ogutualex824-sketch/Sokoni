@@ -2469,7 +2469,7 @@ window.SPosCustomer = (function () {
       : (window.SPos && window.SPos._cfns ? window.SPos._cfns : null));
 
     if (!cfFn) return;
-    cfFn.httpsCallable('getPOSCustomer')({ phone: phone })
+    cfFn.httpsCallable('smartPosDispatch')({ op: 'getPOSCustomer', phone: phone })
       .then(function (res) {
         if (res && res.data && res.data.id) {
           _applyCustomer(res.data);

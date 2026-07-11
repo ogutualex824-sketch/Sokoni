@@ -19,6 +19,11 @@ window.SokonPOSAnalytics = (function () {
         : (window.SPos && window.SPos._firebase ? window.SPos._firebase.functions() : null);
     }
     if (!_cfFn) throw new Error('Firebase not ready');
+    /* SmartPOS ops are consolidated into smartPosDispatch — route transparently. */
+    if (name === 'getPOSAnalytics' || name === 'getLivePOSMetrics') {
+      var _d = _cfFn.httpsCallable('smartPosDispatch');
+      return function (data) { return _d(Object.assign({ op: name }, data || {})); };
+    }
     return _cfFn.httpsCallable(name);
   }
 

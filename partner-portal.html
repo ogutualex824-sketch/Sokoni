@@ -552,14 +552,14 @@ function registerWebhook(e) {
   e.preventDefault();
   const url    = document.getElementById('wh-url').value.trim();
   const events = [...document.querySelectorAll('#wh-modal input[type=checkbox]:checked')].map(c => c.value);
-  fns.httpsCallable('registerWebhook')({url, events}).then(() => {
+  fns.httpsCallable('smartPosDispatch')({op:'registerWebhook', url, events}).then(() => {
     closeEl('wh-modal'); toast('Endpoint registered'); loadWebhooks();
   }).catch(err => toast('Error: ' + err.message));
 }
 
 function testWH(id) {
   toast('Sending test payload...');
-  fns.httpsCallable('testWebhook')({webhookId: id})
+  fns.httpsCallable('smartPosDispatch')({op:'testWebhook', webhookId: id})
     .then(r => toast('Test result: ' + (r.data.statusCode||'200')))
     .catch(err => toast('Test failed: ' + err.message));
 }
