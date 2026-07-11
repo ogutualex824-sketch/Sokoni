@@ -534,7 +534,8 @@
   const fn   = getFunctions(app, 'us-central1');
   const db   = getFirestore(app);
 
-  const _call = (name, data = {}) => httpsCallable(fn, name)(data).then(r => r.data);
+  // Route all Redis operations through the single dispatcher CF
+  const _call = (name, data = {}) => httpsCallable(fn, 'redisDispatch')({ op: name, ...data }).then(r => r.data);
 
   function _esc(s) {
     if (s == null) return '—';

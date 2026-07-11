@@ -42,8 +42,10 @@
 
   let _callRetries = {};
   async function _call(name, data, opts = {}) {
+    // All Redis ops route through the single redisDispatch Cloud Function
+    // to minimise Cloud Run service count. The "op" field identifies the operation.
     try {
-      const res = await _cf(name)(data);
+      const res = await _cf('redisDispatch')({ op: name, ...(data || {}) });
       _callRetries[name] = 0;
       return res.data;
     } catch (err) {
