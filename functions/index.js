@@ -8922,57 +8922,27 @@ exports.logisticsPlusDispatch = logPlusDispatcher.logisticsPlusDispatch;
      tq*   — Task Queue
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Observability Engine (10 CFs) ─────────────────────────────────────── */
-const obsEng = require('./observability-engine');
-exports.obsIngestTelemetry      = obsEng.obsIngestTelemetry;
-exports.obsGetErrorReport       = obsEng.obsGetErrorReport;
-exports.obsGetPerformanceReport = obsEng.obsGetPerformanceReport;
-exports.obsGetRealTimeMetrics   = obsEng.obsGetRealTimeMetrics;
-exports.obsScheduledAggregation = obsEng.obsScheduledAggregation;
-exports.obsGetAuditLog          = obsEng.obsGetAuditLog;
-exports.obsCreateAlert          = obsEng.obsCreateAlert;
-exports.obsCheckAlerts          = obsEng.obsCheckAlerts;
-exports.obsDistributedTrace     = obsEng.obsDistributedTrace;
-exports.obsHealthProbe          = obsEng.obsHealthProbe;
-
-/* ── Reliability Engine (9 CFs) ─────────────────────────────────────────── */
-const rel = require('./reliability-engine');
-exports.relEnqueueTask              = rel.relEnqueueTask;
-exports.relGetDeadLetterQueue       = rel.relGetDeadLetterQueue;
-exports.relRetryDeadLetter          = rel.relRetryDeadLetter;
-exports.relPurgeDeadLetter          = rel.relPurgeDeadLetter;
-exports.relCircuitBreakerState      = rel.relCircuitBreakerState;
-exports.relHealthProbeAll           = rel.relHealthProbeAll;
-exports.relScheduledHealthCheck     = rel.relScheduledHealthCheck;
-exports.relScheduledRetryProcessor  = rel.relScheduledRetryProcessor;
-exports.relGetSystemMetrics         = rel.relGetSystemMetrics;
-
-/* ── API Gateway (3 CFs) ─────────────────────────────────────────────────── */
-const gw = require('./api-gateway');
-exports.sokoniAPIGateway  = gw.sokoniAPIGateway;
-exports.gwGetMetrics      = gw.gwGetMetrics;
-exports.gwManageRateLimit = gw.gwManageRateLimit;
-
-/* ── Webhook Engine (8 CFs) ─────────────────────────────────────────────── */
-const wh = require('./webhook-engine');
-exports.webhookRegister      = wh.webhookRegister;
-exports.webhookList          = wh.webhookList;
-exports.webhookDelete        = wh.webhookDelete;
-exports.webhookDeliver       = wh.webhookDeliver;
-exports.webhookRetryProcessor = wh.webhookRetryProcessor;
-exports.webhookGetDeliveries = wh.webhookGetDeliveries;
-exports.webhookTestEndpoint  = wh.webhookTestEndpoint;
-exports.webhookGetStats      = wh.webhookGetStats;
-
-/* ── Task Queue (7 CFs) ──────────────────────────────────────────────────── */
-const tq = require('./task-queue');
-exports.tqEnqueue           = tq.tqEnqueue;
-exports.tqGetStatus         = tq.tqGetStatus;
-exports.tqCancelTask        = tq.tqCancelTask;
-exports.tqGetQueueStats     = tq.tqGetQueueStats;
-exports.tqWorkerProcessor   = tq.tqWorkerProcessor;
-exports.tqScheduledCleanup  = tq.tqScheduledCleanup;
-exports.tqBulkEnqueue       = tq.tqBulkEnqueue;
+/* ── Platform Infrastructure (obs + rel + webhook + tq + api-gateway)
+   28 onCall ops → platformInfraDispatch; schedules + onRequest kept individual. ── */
+const _piMods = {
+  obs: require('./observability-engine'),
+  rel: require('./reliability-engine'),
+  gw:  require('./api-gateway'),
+  wh:  require('./webhook-engine'),
+  tq:  require('./task-queue'),
+};
+const _piDisp = require('./platform-infra-dispatch');
+exports.platformInfraDispatch = _piDisp.platformInfraDispatch;
+// Scheduled / onRequest exports that cannot go through an onCall dispatcher:
+exports.obsScheduledAggregation    = _piMods.obs.obsScheduledAggregation;
+exports.obsCheckAlerts             = _piMods.obs.obsCheckAlerts;
+exports.obsHealthProbe             = _piMods.obs.obsHealthProbe;
+exports.relScheduledHealthCheck    = _piMods.rel.relScheduledHealthCheck;
+exports.relScheduledRetryProcessor = _piMods.rel.relScheduledRetryProcessor;
+exports.sokoniAPIGateway           = _piMods.gw.sokoniAPIGateway;
+exports.webhookRetryProcessor      = _piMods.wh.webhookRetryProcessor;
+exports.tqWorkerProcessor          = _piMods.tq.tqWorkerProcessor;
+exports.tqScheduledCleanup         = _piMods.tq.tqScheduledCleanup;
 
 /* ── Analytics Engine — DISPATCH CONSOLIDATION: 33 onCall → 1 analyticsDispatch ── */
 /* analytics.html routes via _cf() wrapper. 1 scheduled CF remains. Cloud Run: 33→1. */

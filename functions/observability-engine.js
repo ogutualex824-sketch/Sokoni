@@ -194,6 +194,8 @@ function isValidEvent(event) {
   return true;
 }
 
+const _h = {};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. obsIngestTelemetry — onCall
 //    Accepts a batch of events, validates, fans out to specialized collections.
@@ -201,7 +203,7 @@ function isValidEvent(event) {
 
 const obsIngestTelemetry = onCall(
   { region: REGION, maxInstances: 50, enforceAppCheck: true },
-  async (request) => {
+  _h.obsIngestTelemetry = async (request) => {
     const { data, auth } = request;
 
     // Allow authenticated or unauthenticated (public telemetry)
@@ -277,7 +279,7 @@ const obsIngestTelemetry = onCall(
 
 const obsGetErrorReport = onCall(
   { region: REGION, maxInstances: 10, enforceAppCheck: true },
-  async (request) => {
+  _h.obsGetErrorReport = async (request) => {
     await assertAdmin(request.auth);
     const data = request.data || {};
 
@@ -378,7 +380,7 @@ const obsGetErrorReport = onCall(
 
 const obsGetPerformanceReport = onCall(
   { region: REGION, maxInstances: 10, enforceAppCheck: true },
-  async (request) => {
+  _h.obsGetPerformanceReport = async (request) => {
     await assertAdmin(request.auth);
     const data = request.data || {};
 
@@ -465,7 +467,7 @@ const obsGetPerformanceReport = onCall(
 
 const obsGetRealTimeMetrics = onCall(
   { region: REGION, maxInstances: 20, enforceAppCheck: true },
-  async (request) => {
+  _h.obsGetRealTimeMetrics = async (request) => {
     await assertAdmin(request.auth);
 
     const windowStart = new Date(Date.now() - REALTIME_WINDOW_MS).toISOString();
@@ -701,7 +703,7 @@ async function _deleteOldDocs(colName, cutoffISO) {
 
 const obsGetAuditLog = onCall(
   { region: REGION, maxInstances: 10, enforceAppCheck: true },
-  async (request) => {
+  _h.obsGetAuditLog = async (request) => {
     await assertAdmin(request.auth);
     const data = request.data || {};
 
@@ -761,7 +763,7 @@ const VALID_COMPARISONS = ['gt', 'lt', 'gte', 'lte', 'eq'];
 
 const obsCreateAlert = onCall(
   { region: REGION, maxInstances: 5, enforceAppCheck: true },
-  async (request) => {
+  _h.obsCreateAlert = async (request) => {
     await assertAdmin(request.auth);
     const data = request.data || {};
 
@@ -948,7 +950,7 @@ const obsCheckAlerts = onSchedule(
 
 const obsDistributedTrace = onCall(
   { region: REGION, maxInstances: 30, enforceAppCheck: true },
-  async (request) => {
+  _h.obsDistributedTrace = async (request) => {
     assertAuth(request.auth);
     const data = request.data || {};
 
@@ -1076,6 +1078,7 @@ const obsHealthProbe = onRequest(
 // ─────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
+  _h,
   obsIngestTelemetry,
   obsGetErrorReport,
   obsGetPerformanceReport,

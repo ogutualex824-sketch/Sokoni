@@ -35,6 +35,8 @@ if (!admin.apps.length) admin.initializeApp();
 const db     = () => admin.firestore();
 const logger = functions.logger;
 
+const _h = {};
+
 /* ── Region & project ───────────────────────────────────────────── */
 const REGION     = 'us-central1';
 const PROJECT_ID = 'sokoni-aeb26';
@@ -697,7 +699,7 @@ exports.sokoniAPIGateway = onRequest(
 ═══════════════════════════════════════════════════════════════ */
 exports.gwGetMetrics = onCall(
   { region: REGION, timeoutSeconds: 60, memory: '512MiB', enforceAppCheck: true },
-  async req => {
+  _h.gwGetMetrics = async req => {
     if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) {
       throw new HttpsError('permission-denied', 'Admin access required.');
     }
@@ -806,7 +808,7 @@ exports.gwGetMetrics = onCall(
 ═══════════════════════════════════════════════════════════════ */
 exports.gwManageRateLimit = onCall(
   { region: REGION, timeoutSeconds: 30, memory: '256MiB', enforceAppCheck: true },
-  async req => {
+  _h.gwManageRateLimit = async req => {
     if (!req.auth?.token?.admin && !req.auth?.token?.superAdmin) {
       throw new HttpsError('permission-denied', 'Admin access required.');
     }
@@ -891,3 +893,5 @@ exports.gwManageRateLimit = onCall(
     }
   }
 );
+
+exports._h = _h;

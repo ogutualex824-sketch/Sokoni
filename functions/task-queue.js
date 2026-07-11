@@ -43,6 +43,8 @@ if (!admin.apps.length) admin.initializeApp();
 const db     = () => admin.firestore();
 const logger = functions.logger;
 
+const _h = {};
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Firestore collection names */
@@ -589,7 +591,7 @@ const HANDLERS = Object.freeze({
  * Request  { type, payload?, priority?, scheduledFor?, maxRetries?, tags? }
  * Response { taskId, type, priority, scheduledFor, status }
  */
-exports.tqEnqueue = onCall(CALL_OPTS, async ({ data, auth }) => {
+exports.tqEnqueue = onCall(CALL_OPTS, _h.tqEnqueue = async ({ data, auth }) => {
   _requireAuth(auth);
 
   const {
@@ -684,7 +686,7 @@ exports.tqEnqueue = onCall(CALL_OPTS, async ({ data, auth }) => {
  * Request  { taskId }
  * Response  task document (payload redacted for non-admins)
  */
-exports.tqGetStatus = onCall(CALL_OPTS, async ({ data, auth }) => {
+exports.tqGetStatus = onCall(CALL_OPTS, _h.tqGetStatus = async ({ data, auth }) => {
   _requireAuth(auth);
 
   const { taskId } = data || {};
@@ -722,7 +724,7 @@ exports.tqGetStatus = onCall(CALL_OPTS, async ({ data, auth }) => {
  * Request  { taskId }
  * Response { taskId, status, cancelledAt }
  */
-exports.tqCancelTask = onCall(CALL_OPTS, async ({ data, auth }) => {
+exports.tqCancelTask = onCall(CALL_OPTS, _h.tqCancelTask = async ({ data, auth }) => {
   _requireAuth(auth);
 
   const { taskId } = data || {};
@@ -778,7 +780,7 @@ exports.tqCancelTask = onCall(CALL_OPTS, async ({ data, auth }) => {
  * Response { generatedAt, statusCounts, priorityCounts, throughput,
  *            averageWaitMs, averageWaitSeconds, deadLetter }
  */
-exports.tqGetQueueStats = onCall(CALL_OPTS, async ({ auth }) => {
+exports.tqGetQueueStats = onCall(CALL_OPTS, _h.tqGetQueueStats = async ({ auth }) => {
   _requireAdmin(auth);
 
   const now        = Date.now();
@@ -1144,7 +1146,7 @@ exports.tqScheduledCleanup = onSchedule(
  * Request  { tasks: Array<{ type, payload?, priority?, scheduledFor?, maxRetries?, tags? }> }
  * Response { taskIds[], count, enqueuedBy }
  */
-exports.tqBulkEnqueue = onCall(CALL_OPTS, async ({ data, auth }) => {
+exports.tqBulkEnqueue = onCall(CALL_OPTS, _h.tqBulkEnqueue = async ({ data, auth }) => {
   _requireAdmin(auth);
 
   const { tasks } = data || {};
@@ -1229,3 +1231,5 @@ exports.tqBulkEnqueue = onCall(CALL_OPTS, async ({ data, auth }) => {
     enqueuedBy:  auth.uid,
   };
 });
+
+exports._h = _h;

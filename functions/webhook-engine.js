@@ -54,6 +54,8 @@ if (!admin.apps.length) admin.initializeApp();
 const db     = () => admin.firestore();
 const logger = functions.logger;
 
+const _h = {};
+
 /* ── Region ───────────────────────────────────────────────────── */
 const REGION = 'us-central1';
 
@@ -343,7 +345,7 @@ async function _recordDeliveryAttempt(deliveryRef, subRef, result, prevAttempts)
    Sends a synchronous ping verification delivery (fire-and-forget).
    Returns { subscriptionId, secret } — secret is shown only once.
 ═══════════════════════════════════════════════════════════════ */
-exports.webhookRegister = onCall(CF_OPTS, async req => {
+exports.webhookRegister = onCall(CF_OPTS, _h.webhookRegister = async req => {
   const uid = _assertAuth(req);
   const { url, events, secret: clientSecret } = req.data || {};
 
@@ -446,7 +448,7 @@ exports.webhookRegister = onCall(CF_OPTS, async req => {
    Returns all subscriptions owned by the caller, including
    a preview of the most recent delivery for each.
 ═══════════════════════════════════════════════════════════════ */
-exports.webhookList = onCall(CF_OPTS, async req => {
+exports.webhookList = onCall(CF_OPTS, _h.webhookList = async req => {
   const uid = _assertAuth(req);
 
   const snap = await db().collection('webhookSubscriptions')
@@ -509,7 +511,7 @@ exports.webhookList = onCall(CF_OPTS, async req => {
    Soft-delete a subscription (marks inactive, preserves history).
    Admins may delete any subscription; users may only delete their own.
 ═══════════════════════════════════════════════════════════════ */
-exports.webhookDelete = onCall(CF_OPTS, async req => {
+exports.webhookDelete = onCall(CF_OPTS, _h.webhookDelete = async req => {
   const uid = _assertAuth(req);
   const { subscriptionId } = req.data || {};
 
@@ -552,7 +554,7 @@ exports.webhookDelete = onCall(CF_OPTS, async req => {
 ═══════════════════════════════════════════════════════════════ */
 exports.webhookDeliver = onCall(
   { ...CF_OPTS, timeoutSeconds: 120, memory: '512MiB' },
-  async req => {
+  _h.webhookDeliver = async req => {
     _assertAdmin(req);
 
     const { event, payload, targetSubscriptionId } = req.data || {};
@@ -785,7 +787,7 @@ exports.webhookRetryProcessor = onSchedule(
    Paginated delivery history for a single subscription.
    Caller must own the subscription (or be admin).
 ═══════════════════════════════════════════════════════════════ */
-exports.webhookGetDeliveries = onCall(CF_OPTS, async req => {
+exports.webhookGetDeliveries = onCall(CF_OPTS, _h.webhookGetDeliveries = async req => {
   const uid = _assertAuth(req);
   const { subscriptionId, cursor, limit: lim = 25 } = req.data || {};
 
@@ -855,7 +857,7 @@ exports.webhookGetDeliveries = onCall(CF_OPTS, async req => {
    Send a test ping to a subscription's URL without creating a
    permanent delivery record.  Returns live HTTP response details.
 ═══════════════════════════════════════════════════════════════ */
-exports.webhookTestEndpoint = onCall(CF_OPTS, async req => {
+exports.webhookTestEndpoint = onCall(CF_OPTS, _h.webhookTestEndpoint = async req => {
   const uid = _assertAuth(req);
   const { subscriptionId } = req.data || {};
 
@@ -924,7 +926,7 @@ exports.webhookTestEndpoint = onCall(CF_OPTS, async req => {
    Platform-wide webhook delivery statistics.
    Uses Firestore count() for totals (no full collection scans).
 ═══════════════════════════════════════════════════════════════ */
-exports.webhookGetStats = onCall(CF_OPTS, async req => {
+exports.webhookGetStats = onCall(CF_OPTS, _h.webhookGetStats = async req => {
   _assertAdmin(req);
 
   const firestore = db();
@@ -1027,3 +1029,5 @@ exports.webhookGetStats = onCall(CF_OPTS, async req => {
     generatedAt:   new Date().toISOString(),
   };
 });
+
+exports._h = _h;

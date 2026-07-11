@@ -62,6 +62,8 @@ const _cfgSched = {
   memory:   '256MiB',
 };
 
+const _h = {};
+
 /* ── Admin assertion ─────────────────────────────────────────── */
 function _assertAdmin(req) {
   if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Authentication required.');
@@ -226,7 +228,7 @@ async function _runAllChecks() {
    Input:  { taskType, payload, priority, maxRetries, scheduleFor }
    Output: { taskId }
 ================================================================ */
-exports.relEnqueueTask = onCall(_cfg, async req => {
+exports.relEnqueueTask = onCall(_cfg, _h.relEnqueueTask = async req => {
   if (!req.auth) throw new HttpsError('unauthenticated', 'Authentication required.');
 
   const {
@@ -276,7 +278,7 @@ exports.relEnqueueTask = onCall(_cfg, async req => {
    Filter by taskType, from, to.  Cursor pagination via pageToken.
    Output: { tasks[], total, hasMore, nextPageToken }
 ================================================================ */
-exports.relGetDeadLetterQueue = onCall(_cfg, async req => {
+exports.relGetDeadLetterQueue = onCall(_cfg, _h.relGetDeadLetterQueue = async req => {
   _assertAdmin(req);
 
   const {
@@ -332,7 +334,7 @@ exports.relGetDeadLetterQueue = onCall(_cfg, async req => {
    Input:  { taskId }
    Output: { taskId, requeued: true }
 ================================================================ */
-exports.relRetryDeadLetter = onCall(_cfg, async req => {
+exports.relRetryDeadLetter = onCall(_cfg, _h.relRetryDeadLetter = async req => {
   const adminUid = _assertAdmin(req);
   const { taskId } = req.data || {};
 
@@ -372,7 +374,7 @@ exports.relRetryDeadLetter = onCall(_cfg, async req => {
    Input:  { olderThan }  ISO timestamp
    Output: { deleted: N }
 ================================================================ */
-exports.relPurgeDeadLetter = onCall(_cfgHeavy, async req => {
+exports.relPurgeDeadLetter = onCall(_cfgHeavy, _h.relPurgeDeadLetter = async req => {
   const adminUid = _assertAdmin(req);
   const { olderThan } = req.data || {};
 
@@ -417,7 +419,7 @@ exports.relPurgeDeadLetter = onCall(_cfgHeavy, async req => {
    Output GET:  { breakers[] }
    Output POST: { name, action, success: true }
 ================================================================ */
-exports.relCircuitBreakerState = onCall(_cfg, async req => {
+exports.relCircuitBreakerState = onCall(_cfg, _h.relCircuitBreakerState = async req => {
   const adminUid = _assertAdmin(req);
   const { name, action } = req.data || {};
 
@@ -483,7 +485,7 @@ exports.relCircuitBreakerState = onCall(_cfg, async req => {
    Output: { firestore, redis, intasend, anthropic } each with
            { status, latencyMs[, error] }
 ================================================================ */
-exports.relHealthProbeAll = onCall(_cfgHeavy, async req => {
+exports.relHealthProbeAll = onCall(_cfgHeavy, _h.relHealthProbeAll = async req => {
   _assertAdmin(req);
   const results = await _runAllChecks();
   logger.info('[rel] Health probe completed', results);
@@ -711,7 +713,7 @@ exports.relScheduledRetryProcessor = onSchedule(
    • Circuit breaker state summary
    • Last 24 h health check history
 ================================================================ */
-exports.relGetSystemMetrics = onCall(_cfgHeavy, async req => {
+exports.relGetSystemMetrics = onCall(_cfgHeavy, _h.relGetSystemMetrics = async req => {
   _assertAdmin(req);
 
   const statuses = ['pending', 'processing', 'completed', 'dead_letter'];
@@ -775,3 +777,5 @@ exports.relGetSystemMetrics = onCall(_cfgHeavy, async req => {
     })),
   };
 });
+
+exports._h = _h;
