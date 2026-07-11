@@ -9313,52 +9313,13 @@ exports.seoGetProductMeta      = mktExt.seoGetProductMeta;
 exports.seoGetShopMeta         = mktExt.seoGetShopMeta;
 exports.seoGetSitemap          = mktExt.seoGetSitemap;
 
-/* ── Finance OS Sprint 4.3 — Budgeting | Expenses | Bank Recon | Tax Calendar | Statements | Petty Cash | Invoices ── */
-const finOS43 = require('./finance-os-sprint43');
-/* Budgeting */
-exports.budgetCreate          = finOS43.budgetCreate;
-exports.budgetUpdate          = finOS43.budgetUpdate;
-exports.budgetGet             = finOS43.budgetGet;
-exports.budgetList            = finOS43.budgetList;
-exports.budgetRecordExpense   = finOS43.budgetRecordExpense;
-exports.budgetGetAlerts       = finOS43.budgetGetAlerts;
-/* Expense Management */
-exports.expenseCreate         = finOS43.expenseCreate;
-exports.expenseApprove        = finOS43.expenseApprove;
-exports.expenseReject         = finOS43.expenseReject;
-exports.expenseMarkPaid       = finOS43.expenseMarkPaid;
-exports.expenseGetMine        = finOS43.expenseGetMine;
-exports.expenseGetPending     = finOS43.expenseGetPending;
-exports.expenseList           = finOS43.expenseList;
-/* Bank Reconciliation */
-exports.reconImportStatement  = finOS43.reconImportStatement;
-exports.reconGetUnmatched     = finOS43.reconGetUnmatched;
-exports.reconMatchTransaction = finOS43.reconMatchTransaction;
-exports.reconMarkExternal     = finOS43.reconMarkExternal;
-exports.reconGetSummary       = finOS43.reconGetSummary;
-/* Tax Filing Calendar */
-exports.taxFilingCreate       = finOS43.taxFilingCreate;
-exports.taxFilingMarkFiled    = finOS43.taxFilingMarkFiled;
-exports.taxFilingGetDue       = finOS43.taxFilingGetDue;
-exports.taxFilingGetHistory   = finOS43.taxFilingGetHistory;
-/* Financial Statements */
-exports.finStmtGetPL          = finOS43.finStmtGetPL;
-exports.finStmtGetBalanceSheet = finOS43.finStmtGetBalanceSheet;
-exports.finStmtGetCashFlow    = finOS43.finStmtGetCashFlow;
-exports.finStmtExport         = finOS43.finStmtExport;
-/* Petty Cash */
-exports.pettyCashCreate       = finOS43.pettyCashCreate;
-exports.pettyCashDisburse     = finOS43.pettyCashDisburse;
-exports.pettyCashReplenish    = finOS43.pettyCashReplenish;
-exports.pettyCashGetBalance   = finOS43.pettyCashGetBalance;
-exports.pettyCashReconcile    = finOS43.pettyCashReconcile;
-/* Invoices */
-exports.invoiceCreate         = finOS43.invoiceCreate;
-exports.invoiceSend           = finOS43.invoiceSend;
-exports.invoiceMarkPaid       = finOS43.invoiceMarkPaid;
-exports.invoiceVoid           = finOS43.invoiceVoid;
-exports.invoiceGet            = finOS43.invoiceGet;
-exports.invoiceList           = finOS43.invoiceList;
+/* ── Finance OS Sprint 4.3 — Budgeting | Expenses | Recon | Tax | Statements | Petty Cash | Invoices ── */
+/* DISPATCH CONSOLIDATION: 37 onCall CFs → 1 financeSprintDispatch.
+   Clients (finance-budget.html, finance-expenses.html, finance-reconcile.html)
+   route via _cf() which wraps financeSprintDispatch({op:name,...data}).
+   Cloud Run: 37 → 1. */
+const finSprintDispatcher = require('./finance-sprint-dispatch');
+exports.financeSprintDispatch = finSprintDispatcher.financeSprintDispatch;
 
 /* ── Logistics+ Sprint 4.4 — Fleet | Route Planning | Warehouse | Delivery Zones | Cargo & Freight | Logistics Reports ── */
 const logPlus = require('./logistics-plus');

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * SOKONI Finance OS — Sprint 4.3
  * Budgeting | Expense Management | Bank Reconciliation |
@@ -45,12 +45,15 @@ async function _assertShopManager(uid, shopId) {
 
 const _CALL = { region: 'us-central1', enforceAppCheck: true };
 
+// Handler registry — consumed by finance-sprint-dispatch.js
+exports._h = {};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // BUDGETING  (6 CFs)
 // Collections: budgets/{id}
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.budgetCreate = onCall(_CALL, async (req) => {
+exports.budgetCreate = onCall(_CALL, exports._h.budgetCreate = async (req) => {
   const uid = _uid(req);
   const { shopId, name, period, startDate, endDate, totalAmount, categories, currency } = req.data;
   await _assertShopManager(uid, shopId);
@@ -71,7 +74,7 @@ exports.budgetCreate = onCall(_CALL, async (req) => {
   return { budgetId: id };
 });
 
-exports.budgetUpdate = onCall(_CALL, async (req) => {
+exports.budgetUpdate = onCall(_CALL, exports._h.budgetUpdate = async (req) => {
   const uid = _uid(req);
   const { budgetId, shopId } = req.data;
   await _assertShopManager(uid, shopId);
@@ -86,7 +89,7 @@ exports.budgetUpdate = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.budgetGet = onCall(_CALL, async (req) => {
+exports.budgetGet = onCall(_CALL, exports._h.budgetGet = async (req) => {
   const uid = _uid(req);
   const { budgetId, shopId } = req.data;
   await _assertShop(uid, shopId);
@@ -97,7 +100,7 @@ exports.budgetGet = onCall(_CALL, async (req) => {
   return { budget: { ...b, totalSpent, remaining: b.totalAmount - totalSpent } };
 });
 
-exports.budgetList = onCall(_CALL, async (req) => {
+exports.budgetList = onCall(_CALL, exports._h.budgetList = async (req) => {
   const uid = _uid(req);
   const { shopId, status } = req.data;
   await _assertShop(uid, shopId);
@@ -112,7 +115,7 @@ exports.budgetList = onCall(_CALL, async (req) => {
   return { budgets };
 });
 
-exports.budgetRecordExpense = onCall(_CALL, async (req) => {
+exports.budgetRecordExpense = onCall(_CALL, exports._h.budgetRecordExpense = async (req) => {
   const uid = _uid(req);
   const { budgetId, shopId, categoryName, amount } = req.data;
   await _assertShop(uid, shopId);
@@ -129,7 +132,7 @@ exports.budgetRecordExpense = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.budgetGetAlerts = onCall(_CALL, async (req) => {
+exports.budgetGetAlerts = onCall(_CALL, exports._h.budgetGetAlerts = async (req) => {
   const uid = _uid(req);
   const { shopId } = req.data;
   await _assertShop(uid, shopId);
@@ -156,7 +159,7 @@ exports.budgetGetAlerts = onCall(_CALL, async (req) => {
 // Collections: expenseClaims/{id}
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.expenseCreate = onCall(_CALL, async (req) => {
+exports.expenseCreate = onCall(_CALL, exports._h.expenseCreate = async (req) => {
   const uid = _uid(req);
   const { shopId, amount, category, description, receiptUrl, date, currency } = req.data;
   await _assertShop(uid, shopId);
@@ -178,7 +181,7 @@ exports.expenseCreate = onCall(_CALL, async (req) => {
   return { expenseId: id };
 });
 
-exports.expenseApprove = onCall(_CALL, async (req) => {
+exports.expenseApprove = onCall(_CALL, exports._h.expenseApprove = async (req) => {
   const uid = _uid(req);
   const { shopId, expenseId, note } = req.data;
   await _assertShopManager(uid, shopId);
@@ -193,7 +196,7 @@ exports.expenseApprove = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.expenseReject = onCall(_CALL, async (req) => {
+exports.expenseReject = onCall(_CALL, exports._h.expenseReject = async (req) => {
   const uid = _uid(req);
   const { shopId, expenseId, reason } = req.data;
   await _assertShopManager(uid, shopId);
@@ -208,7 +211,7 @@ exports.expenseReject = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.expenseMarkPaid = onCall(_CALL, async (req) => {
+exports.expenseMarkPaid = onCall(_CALL, exports._h.expenseMarkPaid = async (req) => {
   const uid = _uid(req);
   const { shopId, expenseId, paymentRef, paymentMethod } = req.data;
   await _assertShopManager(uid, shopId);
@@ -225,7 +228,7 @@ exports.expenseMarkPaid = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.expenseGetMine = onCall(_CALL, async (req) => {
+exports.expenseGetMine = onCall(_CALL, exports._h.expenseGetMine = async (req) => {
   const uid = _uid(req);
   const { shopId, status } = req.data;
   await _assertShop(uid, shopId);
@@ -236,7 +239,7 @@ exports.expenseGetMine = onCall(_CALL, async (req) => {
   return { expenses };
 });
 
-exports.expenseGetPending = onCall(_CALL, async (req) => {
+exports.expenseGetPending = onCall(_CALL, exports._h.expenseGetPending = async (req) => {
   const uid = _uid(req);
   const { shopId } = req.data;
   await _assertShopManager(uid, shopId);
@@ -247,7 +250,7 @@ exports.expenseGetPending = onCall(_CALL, async (req) => {
   return { expenses };
 });
 
-exports.expenseList = onCall(_CALL, async (req) => {
+exports.expenseList = onCall(_CALL, exports._h.expenseList = async (req) => {
   const uid = _uid(req);
   const { shopId, status, limit: lim } = req.data;
   await _assertShopManager(uid, shopId);
@@ -263,7 +266,7 @@ exports.expenseList = onCall(_CALL, async (req) => {
 // Collections: bankStatements/{id}, bankStatementEntries/{id}
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.reconImportStatement = onCall(_CALL, async (req) => {
+exports.reconImportStatement = onCall(_CALL, exports._h.reconImportStatement = async (req) => {
   const uid = _uid(req);
   const { shopId, bankName, periodStart, periodEnd, entries } = req.data;
   await _assertShopManager(uid, shopId);
@@ -295,7 +298,7 @@ exports.reconImportStatement = onCall(_CALL, async (req) => {
   return { statementId: statId, entryCount: entries.length };
 });
 
-exports.reconGetUnmatched = onCall(_CALL, async (req) => {
+exports.reconGetUnmatched = onCall(_CALL, exports._h.reconGetUnmatched = async (req) => {
   const uid = _uid(req);
   const { shopId, statementId } = req.data;
   await _assertShop(uid, shopId);
@@ -308,7 +311,7 @@ exports.reconGetUnmatched = onCall(_CALL, async (req) => {
   return { entries };
 });
 
-exports.reconMatchTransaction = onCall(_CALL, async (req) => {
+exports.reconMatchTransaction = onCall(_CALL, exports._h.reconMatchTransaction = async (req) => {
   const uid = _uid(req);
   const { shopId, entryId, transactionId } = req.data;
   await _assertShopManager(uid, shopId);
@@ -324,7 +327,7 @@ exports.reconMatchTransaction = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.reconMarkExternal = onCall(_CALL, async (req) => {
+exports.reconMarkExternal = onCall(_CALL, exports._h.reconMarkExternal = async (req) => {
   const uid = _uid(req);
   const { shopId, entryId, note } = req.data;
   await _assertShopManager(uid, shopId);
@@ -335,7 +338,7 @@ exports.reconMarkExternal = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.reconGetSummary = onCall(_CALL, async (req) => {
+exports.reconGetSummary = onCall(_CALL, exports._h.reconGetSummary = async (req) => {
   const uid = _uid(req);
   const { shopId, statementId } = req.data;
   await _assertShop(uid, shopId);
@@ -366,7 +369,7 @@ exports.reconGetSummary = onCall(_CALL, async (req) => {
 
 const _TAX_TYPES = ['vat', 'paye', 'withholding', 'corporate', 'rental', 'turnover', 'other'];
 
-exports.taxFilingCreate = onCall(_CALL, async (req) => {
+exports.taxFilingCreate = onCall(_CALL, exports._h.taxFilingCreate = async (req) => {
   const uid = _uid(req);
   const { shopId, type, period, dueDate, amount, description } = req.data;
   await _assertShopManager(uid, shopId);
@@ -386,7 +389,7 @@ exports.taxFilingCreate = onCall(_CALL, async (req) => {
   return { filingId: id };
 });
 
-exports.taxFilingMarkFiled = onCall(_CALL, async (req) => {
+exports.taxFilingMarkFiled = onCall(_CALL, exports._h.taxFilingMarkFiled = async (req) => {
   const uid = _uid(req);
   const { shopId, filingId, reference, amount } = req.data;
   await _assertShopManager(uid, shopId);
@@ -403,7 +406,7 @@ exports.taxFilingMarkFiled = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.taxFilingGetDue = onCall(_CALL, async (req) => {
+exports.taxFilingGetDue = onCall(_CALL, exports._h.taxFilingGetDue = async (req) => {
   const uid = _uid(req);
   const { shopId, daysAhead } = req.data;
   await _assertShop(uid, shopId);
@@ -422,7 +425,7 @@ exports.taxFilingGetDue = onCall(_CALL, async (req) => {
   return { filings };
 });
 
-exports.taxFilingGetHistory = onCall(_CALL, async (req) => {
+exports.taxFilingGetHistory = onCall(_CALL, exports._h.taxFilingGetHistory = async (req) => {
   const uid = _uid(req);
   const { shopId, type } = req.data;
   await _assertShop(uid, shopId);
@@ -440,7 +443,7 @@ exports.taxFilingGetHistory = onCall(_CALL, async (req) => {
 
 const _REVENUE_KEYWORDS = ['sales', 'revenue', 'income', 'commission_income', 'service_revenue', 'interest_income'];
 
-exports.finStmtGetPL = onCall(_CALL, async (req) => {
+exports.finStmtGetPL = onCall(_CALL, exports._h.finStmtGetPL = async (req) => {
   const uid = _uid(req);
   const { shopId, startDate, endDate } = req.data;
   await _assertShopManager(uid, shopId);
@@ -478,7 +481,7 @@ exports.finStmtGetPL = onCall(_CALL, async (req) => {
   };
 });
 
-exports.finStmtGetBalanceSheet = onCall(_CALL, async (req) => {
+exports.finStmtGetBalanceSheet = onCall(_CALL, exports._h.finStmtGetBalanceSheet = async (req) => {
   const uid = _uid(req);
   const { shopId, asOfDate } = req.data;
   await _assertShopManager(uid, shopId);
@@ -515,7 +518,7 @@ exports.finStmtGetBalanceSheet = onCall(_CALL, async (req) => {
   };
 });
 
-exports.finStmtGetCashFlow = onCall(_CALL, async (req) => {
+exports.finStmtGetCashFlow = onCall(_CALL, exports._h.finStmtGetCashFlow = async (req) => {
   const uid = _uid(req);
   const { shopId, startDate, endDate } = req.data;
   await _assertShopManager(uid, shopId);
@@ -553,7 +556,7 @@ exports.finStmtGetCashFlow = onCall(_CALL, async (req) => {
   };
 });
 
-exports.finStmtExport = onCall(_CALL, async (req) => {
+exports.finStmtExport = onCall(_CALL, exports._h.finStmtExport = async (req) => {
   const uid = _uid(req);
   const { shopId, type, startDate, endDate } = req.data;
   await _assertShopManager(uid, shopId);
@@ -571,7 +574,7 @@ exports.finStmtExport = onCall(_CALL, async (req) => {
 // Collections: pettyCashFunds/{id}, pettyCashTransactions/{id}
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.pettyCashCreate = onCall(_CALL, async (req) => {
+exports.pettyCashCreate = onCall(_CALL, exports._h.pettyCashCreate = async (req) => {
   const uid = _uid(req);
   const { shopId, name, openingBalance, currency } = req.data;
   await _assertShopManager(uid, shopId);
@@ -592,7 +595,7 @@ exports.pettyCashCreate = onCall(_CALL, async (req) => {
   return { fundId: id };
 });
 
-exports.pettyCashDisburse = onCall(_CALL, async (req) => {
+exports.pettyCashDisburse = onCall(_CALL, exports._h.pettyCashDisburse = async (req) => {
   const uid = _uid(req);
   const { shopId, fundId, amount, description, category, receiptRef } = req.data;
   await _assertShop(uid, shopId);
@@ -614,7 +617,7 @@ exports.pettyCashDisburse = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.pettyCashReplenish = onCall(_CALL, async (req) => {
+exports.pettyCashReplenish = onCall(_CALL, exports._h.pettyCashReplenish = async (req) => {
   const uid = _uid(req);
   const { shopId, fundId, amount, reference } = req.data;
   await _assertShopManager(uid, shopId);
@@ -633,7 +636,7 @@ exports.pettyCashReplenish = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.pettyCashGetBalance = onCall(_CALL, async (req) => {
+exports.pettyCashGetBalance = onCall(_CALL, exports._h.pettyCashGetBalance = async (req) => {
   const uid = _uid(req);
   const { shopId, fundId } = req.data;
   await _assertShop(uid, shopId);
@@ -645,7 +648,7 @@ exports.pettyCashGetBalance = onCall(_CALL, async (req) => {
   return { fund: fundSnap.data(), transactions };
 });
 
-exports.pettyCashReconcile = onCall(_CALL, async (req) => {
+exports.pettyCashReconcile = onCall(_CALL, exports._h.pettyCashReconcile = async (req) => {
   const uid = _uid(req);
   const { shopId, fundId, physicalCount, note } = req.data;
   await _assertShopManager(uid, shopId);
@@ -691,7 +694,7 @@ async function _nextInvoiceNumber(shopId) {
   return 'INV-' + shopId.slice(0, 4).toUpperCase() + '-' + String(number).padStart(6, '0');
 }
 
-exports.invoiceCreate = onCall(_CALL, async (req) => {
+exports.invoiceCreate = onCall(_CALL, exports._h.invoiceCreate = async (req) => {
   const uid = _uid(req);
   const { shopId, clientName, clientEmail, clientPhone, items, taxRate, dueDate, notes, currency } = req.data;
   await _assertShop(uid, shopId);
@@ -724,7 +727,7 @@ exports.invoiceCreate = onCall(_CALL, async (req) => {
   return { invoiceId: id, invoiceNumber };
 });
 
-exports.invoiceSend = onCall({ ..._CALL, secrets: [SENDGRID_KEY] }, async (req) => {
+exports.invoiceSend = onCall({ ..._CALL, secrets: [SENDGRID_KEY] }, exports._h.invoiceSend = async (req) => {
   const uid = _uid(req);
   const { shopId, invoiceId } = req.data;
   await _assertShop(uid, shopId);
@@ -764,7 +767,7 @@ exports.invoiceSend = onCall({ ..._CALL, secrets: [SENDGRID_KEY] }, async (req) 
   return { success: true };
 });
 
-exports.invoiceMarkPaid = onCall(_CALL, async (req) => {
+exports.invoiceMarkPaid = onCall(_CALL, exports._h.invoiceMarkPaid = async (req) => {
   const uid = _uid(req);
   const { shopId, invoiceId, paymentRef, paymentMethod } = req.data;
   await _assertShop(uid, shopId);
@@ -783,7 +786,7 @@ exports.invoiceMarkPaid = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.invoiceVoid = onCall(_CALL, async (req) => {
+exports.invoiceVoid = onCall(_CALL, exports._h.invoiceVoid = async (req) => {
   const uid = _uid(req);
   const { shopId, invoiceId, reason } = req.data;
   await _assertShopManager(uid, shopId);
@@ -799,7 +802,7 @@ exports.invoiceVoid = onCall(_CALL, async (req) => {
   return { success: true };
 });
 
-exports.invoiceGet = onCall(_CALL, async (req) => {
+exports.invoiceGet = onCall(_CALL, exports._h.invoiceGet = async (req) => {
   const uid = _uid(req);
   const { shopId, invoiceId } = req.data;
   await _assertShop(uid, shopId);
@@ -808,7 +811,7 @@ exports.invoiceGet = onCall(_CALL, async (req) => {
   return { invoice: snap.data() };
 });
 
-exports.invoiceList = onCall(_CALL, async (req) => {
+exports.invoiceList = onCall(_CALL, exports._h.invoiceList = async (req) => {
   const uid = _uid(req);
   const { shopId, status, limit: lim } = req.data;
   await _assertShop(uid, shopId);

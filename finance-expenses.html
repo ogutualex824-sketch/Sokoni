@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <script src="security.js"></script>
@@ -190,7 +190,10 @@
 'use strict';
 (function () {
 var _uid = null, _pendingRejectId = null, _pendingRejectShop = null;
-function _cf(n) { return firebase.functions().httpsCallable(n); }
+function _cf(n) {
+  var d = firebase.functions().httpsCallable('financeSprintDispatch');
+  return function(data) { return d(Object.assign({ op: n }, data || {})); };
+}
 function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function _fmt(n) { return 'KES ' + Number(n||0).toLocaleString('en-KE'); }
 function _toast(msg, type) {
@@ -303,3 +306,4 @@ window._submitExpense = function() {
 </script>
 </body>
 </html>
+
