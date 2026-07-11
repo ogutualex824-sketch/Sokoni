@@ -5,6 +5,27 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
+## Enterprise Settlement (Phase 2 + Phase 3) — 2026-07-11 — ⛔ QUOTA-BLOCKED
+
+9 NEW callable CFs failed creation with HTTP 429 "insufficient quota" (Cloud Run
+CPU ceiling on a 1900-CF codebase). Code committed (b8b37b0, b10c4b0); hosting
+already deployed. Deploy once Cloud Run quota is increased:
+
+```bash
+firebase deploy --only "functions:settlementGetRoutingConfig,functions:settlementSetRoutingConfig,functions:getCheckoutPaymentConfig,functions:adminGetPaymentConfig,functions:adminSetPaymentConfig,functions:settlementValidatePath,functions:settlementGetProviders,functions:settlementSetProvider,functions:settlementPreviewMethod"
+```
+- **Phase 2:** settlementGetRoutingConfig, settlementSetRoutingConfig, getCheckoutPaymentConfig, adminGetPaymentConfig, adminSetPaymentConfig, settlementValidatePath
+- **Phase 3:** settlementGetProviders, settlementSetProvider, settlementPreviewMethod
+
+Quota increase: https://console.cloud.google.com/iam-admin/quotas?project=sokoni-aeb26
+(request "Cloud Run Admin API — CPU allocation, us-central1"). All are inert by
+default (flags off / split disabled) — safe to deploy anytime.
+
+Prior settlement CFs already LIVE: settlementGetContext, settlementPreview,
+settlementGetDashboard (deployed earlier this session).
+
+---
+
 ## Sprint 4.8 — Phase 3 Portal Completion — 2026-07-08
 
 **No new Cloud Functions.** All backing CFs were deployed in Phase 3.
