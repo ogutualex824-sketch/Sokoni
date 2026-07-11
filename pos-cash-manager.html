@@ -435,6 +435,8 @@ async function loadOverview() {
 
     const snap = await db.collection('posCashSessions')
       .where('merchantId','==',_merchantId)
+      .orderBy('openedAt','desc')
+      .limit(50) /* avoid unbounded full-collection scan */
       .get();
 
     const sessions  = snap.docs.map(d => d.data());
@@ -702,7 +704,8 @@ async function loadCashierPerf() {
       dateTo:   parseDay(toDate, true),
     });
     _lastPerfData = res;
-    const { cashiers = [] } = res || {};
+    const { cashiers = [], truncated } = res || {};
+    if (truncated) _toast('Warning: data volume exceeded 5,000 events — period totals may be understated.', true);
     if (!cashiers.length) {
       body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--sub);padding:32px">No data for this period.</td></tr>';
       return;
@@ -856,17 +859,18 @@ async function approveClose(id) {
   try {
     await _posDispatch('cmApproveRegisterClose', { approvalId: id, merchantId: _merchantId, approved: true });
     _toast('Register close approved', false);
-    loadCloseApprovals();
   } catch(err) { _toast(err.message, true); }
+  finally { loadCloseApprovals(); }
 }
 
 async function rejectClose(id) {
-  const note = prompt('Reason for rejection (optional):') || '';
+  const note = prompt('Reason for rejection (optional):');
+  if (note === null) return; /* Escape / Cancel = manager aborted, do nothing */
   try {
-    await _posDispatch('cmApproveRegisterClose', { approvalId: id, merchantId: _merchantId, approved: false, note });
+    await _posDispatch('cmApproveRegisterClose', { approvalId: id, merchantId: _merchantId, approved: false, note: note || '' });
     _toast('Register close rejected', false);
-    loadCloseApprovals();
   } catch(err) { _toast(err.message, true); }
+  finally { loadCloseApprovals(); }
 }
 
 /* ── Drawer History ── */
@@ -933,11 +937,12 @@ async function loadBranchSummary() {
   try {
     const res = await _posDispatch('cmGetBranchSummary', { merchantId: _merchantId, branch, date });
     _lastBranchData = res;
-    const { registers = [], totals = {} } = res;
+    const { registers = [], totals = {}, truncated } = res;
     if (!registers.length) {
       body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--sub)">No data for this date/branch.</td></tr>';
       return;
     }
+    if (truncated) _toast('Warning: event volume exceeded 10,000 — report may be incomplete. Contact support to run a full export.', true);
     /* KPI row */
     document.getElementById('bs-kpi-row').innerHTML = `
       <div class="kpi"><div class="kpi-label">Registers</div><div class="kpi-value g">${registers.length}</div></div>

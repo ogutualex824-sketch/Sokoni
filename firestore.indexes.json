@@ -2963,7 +2963,70 @@
         { "fieldPath": "category",  "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
-    }
+    },
+
+    { "collectionGroup": "posCashEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "shiftId",    "order": "ASCENDING" },
+                 { "fieldPath": "ts",         "order": "ASCENDING" }] },
+
+    { "collectionGroup": "posCashEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "clientTs",   "order": "ASCENDING" }] },
+
+    { "collectionGroup": "posCashEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "branchId",   "order": "ASCENDING" },
+                 { "fieldPath": "clientTs",   "order": "ASCENDING" }] },
+
+    { "collectionGroup": "posCashEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId",      "order": "ASCENDING" },
+                 { "fieldPath": "approvalRequired", "order": "ASCENDING" },
+                 { "fieldPath": "approved",         "order": "ASCENDING" },
+                 { "fieldPath": "ts",               "order": "DESCENDING" }] },
+
+    { "collectionGroup": "posCashEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "registerId", "order": "ASCENDING" },
+                 { "fieldPath": "clientTs",   "order": "DESCENDING" }] },
+
+    { "collectionGroup": "posCashEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "cashierId",  "order": "ASCENDING" },
+                 { "fieldPath": "clientTs",   "order": "DESCENDING" }] },
+
+    { "collectionGroup": "posCashEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "type",       "order": "ASCENDING" },
+                 { "fieldPath": "clientTs",   "order": "DESCENDING" }] },
+
+    { "collectionGroup": "posCashEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "clientTs",   "order": "DESCENDING" }] },
+
+    { "collectionGroup": "posDrawerEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "ts",         "order": "DESCENDING" }] },
+
+    { "collectionGroup": "posDrawerEvents", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "registerId", "order": "ASCENDING" },
+                 { "fieldPath": "ts",         "order": "DESCENDING" }] },
+
+    { "collectionGroup": "posCloseApprovals", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId",   "order": "ASCENDING" },
+                 { "fieldPath": "status",        "order": "ASCENDING" },
+                 { "fieldPath": "requestedAt",   "order": "DESCENDING" }] },
+
+    { "collectionGroup": "posCashSessions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "openedAt",   "order": "DESCENDING" }] },
+
+    { "collectionGroup": "posCloseApprovals", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "merchantId", "order": "ASCENDING" },
+                 { "fieldPath": "registerId", "order": "ASCENDING" },
+                 { "fieldPath": "status",     "order": "ASCENDING" },
+                 { "fieldPath": "requestedAt","order": "DESCENDING" }] }
   ],
   "fieldOverrides": [
     {

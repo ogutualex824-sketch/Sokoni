@@ -166,7 +166,7 @@ async function cmRecordCashEvent(req) {
       openedAt:            now(),
       status:              'open',
       updatedAt:           now(),
-    }, { merge: false });
+    }, { merge: true }); /* merge:true preserves data from crashes/interrupted closes */
   }
 
   if (type === 'register_close') {
@@ -271,13 +271,13 @@ async function cmGetLiveTillBalance(req) {
   if (!_isManager(req)) throw new HttpsError('permission-denied', 'Manager access required.');
 
   const { merchantId, registerId, shiftId } = req.data || {};
-  if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId required.');
+  if (!merchantId || !shiftId) throw new HttpsError('invalid-argument', 'merchantId and shiftId required.');
 
   let q = db().collection('posCashEvents')
-    .where('merchantId', '==', _san(merchantId, 64));
-  if (shiftId)    q = q.where('shiftId',    '==', _san(shiftId, 128));
+    .where('merchantId', '==', _san(merchantId, 64))
+    .where('shiftId',    '==', _san(shiftId, 128));
   if (registerId) q = q.where('registerId', '==', _san(registerId, 32));
-  q = q.orderBy('ts');
+  q = q.orderBy('ts').limit(2000);
 
   const snap  = await q.get();
   const evts  = snap.docs.map(d => d.data());
@@ -500,10 +500,11 @@ async function cmGetCashierPerformance(req) {
   if (branchId)  q = q.where('branchId',  '==', _san(branchId, 64));
   if (dateFrom)  q = q.where('clientTs',  '>=', Number(dateFrom));
   if (dateTo)    q = q.where('clientTs',  '<=', Number(dateTo));
-  q = q.orderBy('clientTs').limit(2000);
+  q = q.orderBy('clientTs').limit(5000);
 
-  const snap   = await q.get();
-  const events = snap.docs.map(d => d.data());
+  const snap      = await q.get();
+  const truncated = snap.size === 5000;
+  const events    = snap.docs.map(d => d.data());
 
   const cashiers = {};
   for (const ev of events) {
@@ -530,6 +531,7 @@ async function cmGetCashierPerformance(req) {
   return {
     cashiers: Object.values(cashiers).sort((a, b) => b.cashSales - a.cashSales),
     eventCount: events.length,
+    truncated,
     asOf: Date.now(),
   };
 }
@@ -549,7 +551,8 @@ async function cmLogDrawerOpen(req) {
   if (!merchantId || !registerId) throw new HttpsError('invalid-argument', 'merchantId and registerId required.');
   if (!VALID_DRAWER_REASONS.has(reason)) throw new HttpsError('invalid-argument', `Invalid reason. Valid: ${[...VALID_DRAWER_REASONS].join(', ')}`);
 
-  const id = `drevt_${_san(merchantId,32)}_${_san(registerId,32)}_${Date.now()}`;
+  const rnd = Math.random().toString(36).slice(2, 7);
+  const id  = `drevt_${_san(merchantId,32)}_${_san(registerId,32)}_${Date.now()}_${rnd}`;
   await db().collection('posDrawerEvents').doc(id).set({
     id,
     merchantId:  _san(merchantId, 64),
@@ -596,21 +599,25 @@ async function cmGetBranchSummary(req) {
   const { merchantId, branch = '', date } = req.data || {};
   if (!merchantId || !date) throw new HttpsError('invalid-argument', 'merchantId and date required.');
 
-  const dayStart = new Date(date + 'T00:00:00.000Z').getTime();
-  const dayEnd   = new Date(date + 'T23:59:59.999Z').getTime();
+  /* Use EAT (UTC+3) midnight to match cmGetEndOfDay day boundaries */
+  const [y, m, d2] = date.split('-').map(Number);
+  const dayStart = new Date(Date.UTC(y, m - 1, d2, -3, 0, 0)).getTime();
+  const dayEnd   = new Date(Date.UTC(y, m - 1, d2, 20, 59, 59, 999)).getTime();
+  const LIMIT    = 10000;
 
   let q = db().collection('posCashEvents')
     .where('merchantId', '==', _san(merchantId, 64))
     .where('clientTs',   '>=', dayStart)
-    .where('clientTs',   '<=', dayEnd)
-    .limit(5000);
+    .where('clientTs',   '<=', dayEnd);
+  if (branch) q = q.where('branchId', '==', _san(branch, 128)); /* push filter into query */
+  q = q.limit(LIMIT);
 
-  const snap = await q.get();
+  const snap     = await q.get();
+  const truncated = snap.size === LIMIT;
   const registers = {};
 
   for (const doc of snap.docs) {
     const ev = doc.data();
-    if (branch && ev.branchId !== branch) continue;
     const rid = ev.registerId || 'unknown';
     if (!registers[rid]) registers[rid] = {
       registerId: rid, branch: ev.branchId || '', cashierName: ev.cashierName || '',
@@ -642,6 +649,7 @@ async function cmGetBranchSummary(req) {
     branch: branch || 'All',
     date,
     registers: rows,
+    truncated,
     totals: {
       openingFloat: tot('openingFloat'), cashSales: tot('cashSales'),
       cashRefunds: tot('cashRefunds'),   cashIn: tot('cashIn'),
@@ -659,6 +667,18 @@ async function cmRequestCloseApproval(req) {
   _auth(req);
   const { merchantId, registerId, countedCents, varianceCents, varianceExplanation = '' } = req.data || {};
   if (!merchantId || !registerId) throw new HttpsError('invalid-argument', 'merchantId and registerId required.');
+
+  /* Idempotency: return existing pending request if one already exists */
+  const existing = await db().collection('posCloseApprovals')
+    .where('merchantId', '==', _san(merchantId, 64))
+    .where('registerId', '==', _san(registerId, 64))
+    .where('status',     '==', 'pending')
+    .limit(1)
+    .get();
+  if (!existing.empty) {
+    const doc = existing.docs[0].data();
+    return { ok: true, id: doc.id, reused: true };
+  }
 
   const id  = `clappr_${_san(merchantId,32)}_${_san(registerId,32)}_${Date.now()}`;
   await db().collection('posCloseApprovals').doc(id).set({

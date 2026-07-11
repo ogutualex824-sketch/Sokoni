@@ -3452,9 +3452,14 @@ const Checkout = (() => {
 
   /* ── Modal helpers ── */
   function openModal(id) { document.getElementById(id).classList.add('visible'); }
-  function closeModal(id) { document.getElementById(id).classList.remove('visible'); }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('visible');
+    /* Closing the shift-close wizard must always release the hard lock */
+    if (id === 'shift-close-overlay') window._shiftClosing = false;
+  }
   function closeAllModals() {
     document.querySelectorAll('.overlay.visible').forEach(o => o.classList.remove('visible'));
+    window._shiftClosing = false; /* Escape clears lock for all modals including close wizard */
     if (_cameraStream) closeCamera();
   }
 

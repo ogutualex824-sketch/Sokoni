@@ -4105,5 +4105,35 @@ service cloud.firestore {
       allow write: if false; // CF-only — runProductionCertification
     }
 
+    // ── SmartPOS Cash Management ──────────────────────────────────────────
+    match /posCashSessions/{sessionId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.token.merchantId)
+                   || (isAuthed() && resource.data.cashierId  == request.auth.uid);
+      allow write: if false; // CF-only — cmRecordCashEvent
+    }
+
+    match /posCashEvents/{eventId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.token.merchantId);
+      allow write: if false; // CF-only — cmRecordCashEvent, cmSafeDrop
+    }
+
+    match /posDrawerEvents/{eventId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.token.merchantId);
+      allow write: if false; // CF-only — cmLogDrawerOpen
+    }
+
+    match /posCloseApprovals/{approvalId} {
+      // Cashier who submitted the request can read their own; managers can read all for their merchant
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.merchantId == request.auth.token.merchantId
+                       && (resource.data.requestedBy == request.auth.uid
+                           || request.auth.token.get('manager', false)
+                           || request.auth.token.get('supervisor', false)));
+      allow write: if false; // CF-only — cmRequestCloseApproval, cmApproveRegisterClose
+    }
+
   }
 }
