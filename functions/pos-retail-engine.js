@@ -18,6 +18,7 @@ const { defineSecret }        = require('firebase-functions/params');
 const admin                   = require('firebase-admin');
 
 const SENDGRID_KEY = defineSecret('SENDGRID_API_KEY');
+const { COMPANY }  = require('./company-identity');
 
 const db   = admin.firestore;
 const now  = () => admin.firestore.FieldValue.serverTimestamp();
@@ -504,7 +505,7 @@ exports.emailReceipt = onCall(
     <p style="font-size:12px;color:#999">Scan to verify: <a href="${r.verifyUrl}">${r.verifyUrl}</a></p>
   </div>
   <hr>
-  <p style="text-align:center;color:#999;font-size:12px">Powered by SOKONI • mysokoni.co.ke<br>Operated by Bravilex International Co. Limited</p>
+  <p style="text-align:center;color:#999;font-size:12px">Powered by SOKONI • mysokoni.co.ke<br>${COMPANY.operatedBy}</p>
 </body></html>`;
 
     const sgKey = SENDGRID_KEY.value();

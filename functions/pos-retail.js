@@ -13,6 +13,7 @@ const admin      = require('firebase-admin');
 
 const SENDGRID_SK = defineSecret('SENDGRID_API_KEY');
 const sokoniAt    = require('./sokoni-at');
+const { COMPANY } = require('./company-identity');
 
 /* Guard against double-init in monorepo */
 if (!admin.apps.length) admin.initializeApp();
@@ -160,7 +161,7 @@ exports.sendPOSReceipt = onCall(
             </table>
             ${(sale.payments||[]).map(p=>`<p style="font-size:13px;color:#555;margin:4px 0">Payment: ${p.method} — ${_kes(p.amount)}</p>`).join('')}
             ${sale.loyaltyEarned>0?`<p style="font-size:13px;color:#4db800">⭐ You earned ${sale.loyaltyEarned} loyalty points!</p>`:''}
-            <p style="text-align:center;color:#888;font-size:12px;margin-top:20px">Thank you for shopping at ${shopName}!<br>Powered by SOKONI SmartPOS<br>Operated by Bravilex International Co. Limited</p>
+            <p style="text-align:center;color:#888;font-size:12px;margin-top:20px">Thank you for shopping at ${shopName}!<br>Powered by SOKONI SmartPOS<br>${COMPANY.operatedBy}</p>
           </div>
         </div>
       </body></html>`;

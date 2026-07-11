@@ -39,6 +39,13 @@
     rt.src = base + 'realtime.js';
     document.head.appendChild(rt);
   }
+  /* Company identity single-source-of-truth (window.SOKONI_COMPANY) — used by
+     client-rendered receipts/invoices/footers so literals aren't duplicated. */
+  if (!window.SOKONI_COMPANY && !document.querySelector('script[src*="sokoni-company"]')) {
+    var co = document.createElement('script');
+    co.src = base + 'sokoni-company.js';
+    document.head.appendChild(co);
+  }
   /* P1-9 (Phase 4 audit): load DOMPurify so SokoniSecurity.safeHTML() sanitizes with a
      real, spec-aware library instead of the bypassable regex fallback. Deferred + from
      cdnjs (allowed by CSP script-src). safeHTML falls back to regex until this loads. */

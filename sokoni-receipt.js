@@ -96,9 +96,10 @@
 
     /* Centralized company KRA PIN — never hardcoded here. Prefer the value the server
        put in the receipt payload (sourced from Secret Manager ETIMS_PLATFORM_PIN);
-       fall back to a single client config global for offline-rendered receipts. */
+       fall back to the single client company config (sokoni-company.js) for
+       offline / on-device SmartPOS receipts. */
     const _companyPin = companyPin
-      || (typeof window !== 'undefined' && (window.SOKONI_COMPANY_KRA_PIN || (window.SOKONI_CONFIG && window.SOKONI_CONFIG.companyKraPin)))
+      || (typeof window !== 'undefined' && window.SOKONI_COMPANY && window.SOKONI_COMPANY.kraPin)
       || '';
 
     const typeLabelMap = { sale: 'RECEIPT', refund: 'REFUND', quote: 'QUOTATION', delivery: 'DELIVERY NOTE' };

@@ -32,6 +32,7 @@ const admin   = require("firebase-admin");
 const crypto  = require("crypto");
 const https   = require("https");
 const emailSvc = require("./email-service");
+const { COMPANY }                       = require("./company-identity");
 
 const db = admin.firestore();
 
@@ -388,9 +389,9 @@ ${invoice.orderId?`<p style="font-size:10px;color:#666;margin:0 0 10px">Order re
 
 <div class="foot">
   This is an official KRA eTIMS fiscal receipt valid as a VAT invoice under the Tax Procedures Act, 2015.
-  The KRA Control Unit Number and digital signature confirm authenticity. For queries: support@mysokoni.co.ke
-  &nbsp;|&nbsp; <b>mysokoni.co.ke</b>
-  <br>Operated by Bravilex International Co. Limited
+  The KRA Control Unit Number and digital signature confirm authenticity. For queries: ${COMPANY.supportEmail}
+  &nbsp;|&nbsp; <b>${COMPANY.website}</b>
+  <br>${COMPANY.operatedBy}
 </div>
 
 </body></html>`;
@@ -524,7 +525,7 @@ async function emailBuyer({ invoice, profile, buyer }) {
         ${invoice.pdfUrl?`<p><a href="${invoice.pdfUrl}" style="background:#003366;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:700">📄 View / Download Invoice</a></p>`:""}
         ${invoice.verificationUrl?`<p style="font-size:11px;color:#666">Verify at KRA: <a href="${invoice.verificationUrl}">${invoice.verificationUrl}</a></p>`:""}
         <p style="font-size:11px;color:#999;margin-top:20px">Powered by SOKONI | mysokoni.co.ke</p>
-        <p style="font-size:11px;color:#999;margin-top:2px">SOKONI — Powered by Bravilex International Co. Limited</p>
+        <p style="font-size:11px;color:#999;margin-top:2px">SOKONI — ${COMPANY.poweredBy}</p>
       </div>`,
     });
     await db.collection("etimsInvoices").doc(invoice.invoiceId).update({ emailSentAt: new Date().toISOString() });
@@ -961,7 +962,7 @@ const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: tr
   const invNo  = `SOKONI-${String(invcNo).padStart(6,"0")}`;
   const now    = new Date().toISOString();
 
-  const platProfile = { kraPin:platPin, businessName:"SOKONI Ltd", branchId:"00", vatStatus:"registered", address:"Nairobi, Kenya", invoicePrefix:"SOKONI" };
+  const platProfile = { kraPin:platPin, businessName:COMPANY.legalName, branchId:"00", vatStatus:"registered", address:COMPANY.address, invoicePrefix:"SOKONI" };
   const lineItems   = [{ name: FEE_LABELS[feeType]+(description?`: ${description}`:""), quantity:1, unitPrice:amount, discountRate:0 }];
   const kraLines    = lineItems.map((it,i) => calcLine({...it,seq:i+1},"registered"));
   const totals      = calcTotals(kraLines);
@@ -983,7 +984,7 @@ const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: tr
     buyerUid:null, billToSellerUid:sellerUid||null,
     invoiceNumber:invNo, internalSequence:invcNo,
     isPlatformInvoice:true, platformFeeType:feeType,
-    seller:{kraPin:platPin,name:"SOKONI Ltd",branchId:"00"},
+    seller:{kraPin:platPin,name:COMPANY.legalName,branchId:"00"},
     buyer: buyer||{name:"Platform Client"},
     lineItems:kraLines, totals, currency:"KES",
     receiptNumber:null,controlUnitNumber:null,qrCode:null,
@@ -1084,7 +1085,7 @@ const etimsDownloadReceipt = onRequest({ secrets: _ALL_SECRETS }, async (req, re
 
     const profSnap = await db.collection("etimsProfiles").doc(inv.sellerUid).get();
     const profile  = profSnap.exists ? profSnap.data()
-      : { businessName:"SOKONI Ltd", kraPin:"", branchId:"00", vatStatus:"registered", address:"Nairobi, Kenya" };
+      : { businessName:"SOKONI Ltd", kraPin:"", branchId:"00", vatStatus:"registered", address:COMPANY.address };
 
     const html = buildReceiptHtml({ invoice: inv, profile, buyer: inv.buyer });
     res.setHeader("Content-Type","text/html; charset=utf-8");

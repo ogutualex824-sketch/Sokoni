@@ -6,6 +6,7 @@
 "use strict";
 
 const { FROM } = require("./email-service");
+const { COMPANY } = require("./company-identity");
 
 const LOGO_URL    = "https://mysokoni.co.ke/assets/Sokonilogo2.png";
 const BASE_URL    = "https://mysokoni.co.ke";
@@ -105,10 +106,10 @@ ${hidden}
       <a href="${esc(UNSUB_URL)}" style="color:rgba(255,255,255,0.25);text-decoration:none;">Unsubscribe</a>
     </p>
     <p style="margin:0 0 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.2);letter-spacing:0.03em;">
-      SOKONI — Powered by Bravilex International Co. Limited
+      SOKONI — ${COMPANY.poweredBy}
     </p>
     <p style="margin:0;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.15);">
-      &copy; ${YEAR} SOKONI · A product of Bravilex International Co. Limited. All rights reserved.
+      &copy; ${YEAR} SOKONI · A product of ${COMPANY.legalName}. All rights reserved.
     </p>
   </td></tr>
 
