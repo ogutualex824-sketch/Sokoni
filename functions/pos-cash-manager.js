@@ -444,6 +444,88 @@ async function cmGetManagerQueue(req) {
   return { items: snap.docs.map(d => ({ id: d.id, ...d.data() })), count: snap.size };
 }
 
+/* ════════════════════════════════════════════════════════════════
+   cmApprovePendingEvent — manager approves a pending safe drop / float
+════════════════════════════════════════════════════════════════ */
+async function cmApprovePendingEvent(req) {
+  _auth(req);
+  if (!_isManager(req)) throw new HttpsError('permission-denied', 'Manager access required.');
+
+  const { eventId, merchantId, note = '' } = req.data || {};
+  if (!eventId || !merchantId) throw new HttpsError('invalid-argument', 'eventId and merchantId required.');
+
+  const ref  = db().collection('posCashEvents').doc(_san(eventId, 128));
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Event not found.');
+
+  const data = snap.data();
+  if (data.merchantId !== _san(merchantId, 64))
+    throw new HttpsError('permission-denied', 'Cross-merchant access denied.');
+  if (!data.approvalRequired)
+    throw new HttpsError('failed-precondition', 'Event does not require approval.');
+  if (data.approved)
+    throw new HttpsError('already-exists', 'Event already approved.');
+
+  await ref.update({
+    approved:   true,
+    approvedBy: req.auth.uid,
+    approvedAt: now(),
+    approvalNote: _san(note, 256),
+  });
+
+  logger.info('[CashMgr] event approved', { eventId, by: req.auth.uid });
+  return { ok: true };
+}
+
+/* ════════════════════════════════════════════════════════════════
+   cmGetCashierPerformance — per-cashier summary for a date range
+════════════════════════════════════════════════════════════════ */
+async function cmGetCashierPerformance(req) {
+  _auth(req);
+  if (!_isManager(req)) throw new HttpsError('permission-denied', 'Manager access required.');
+
+  const { merchantId, branchId, dateFrom, dateTo } = req.data || {};
+  if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId required.');
+
+  let q = db().collection('posCashEvents')
+    .where('merchantId', '==', _san(merchantId, 64));
+  if (branchId)  q = q.where('branchId',  '==', _san(branchId, 64));
+  if (dateFrom)  q = q.where('clientTs',  '>=', Number(dateFrom));
+  if (dateTo)    q = q.where('clientTs',  '<=', Number(dateTo));
+  q = q.orderBy('clientTs').limit(2000);
+
+  const snap   = await q.get();
+  const events = snap.docs.map(d => d.data());
+
+  const cashiers = {};
+  for (const ev of events) {
+    const key  = ev.cashierId || ev.uid || 'unknown';
+    const name = ev.cashierName || key;
+    if (!cashiers[key]) cashiers[key] = {
+      cashierId: key, cashierName: name, registerId: ev.registerId,
+      cashSales: 0, cashRefunds: 0, cashIn: 0, cashOut: 0,
+      safeDrops: 0, registerOpens: 0, registerCloses: 0,
+      variance: 0, sessionCount: 0,
+    };
+    const c = cashiers[key];
+    switch (ev.type) {
+      case 'cash_sale':      c.cashSales    += ev.amountCents || 0; break;
+      case 'cash_refund':    c.cashRefunds  += ev.amountCents || 0; break;
+      case 'cash_in':        c.cashIn       += ev.amountCents || 0; break;
+      case 'cash_out':       c.cashOut      += ev.amountCents || 0; break;
+      case 'safe_drop':      c.safeDrops    += ev.amountCents || 0; break;
+      case 'register_open':  c.registerOpens++; c.sessionCount++; break;
+      case 'register_close': c.registerCloses++; c.variance += (ev.varianceCents || 0); break;
+    }
+  }
+
+  return {
+    cashiers: Object.values(cashiers).sort((a, b) => b.cashSales - a.cashSales),
+    eventCount: events.length,
+    asOf: Date.now(),
+  };
+}
+
 exports._h = {
   cmRecordCashEvent,
   cmApproveFloat,
@@ -453,4 +535,6 @@ exports._h = {
   cmGetEndOfDay,
   cmGetAuditTrail,
   cmGetManagerQueue,
+  cmApprovePendingEvent,
+  cmGetCashierPerformance,
 };

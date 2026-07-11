@@ -12,7 +12,7 @@
  *   pos-integrations.js  — 15 handlers  (webhooks, API keys, bank reconciliation)
  *   pos-hq.js            — 13 handlers  (central pricing, HQ dashboard, broadcasts)
  *   pos-multi-till.js    —  9 handlers  (mt* register lifecycle + live floor)
- *   pos-cash-manager.js  —  8 handlers  (cm* cash sessions, balance, EOD, audit)
+ *   pos-cash-manager.js  — 10 handlers  (cm* cash sessions, balance, EOD, audit, perf, approvals)
  *
  * Secret: SENDGRID_API_KEY required by pos-retail-engine emailReceipt.
  */

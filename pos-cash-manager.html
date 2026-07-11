@@ -125,6 +125,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,sys
   <div class="tab" onclick="switchTab('tills',this)">Live Tills</div>
   <div class="tab" onclick="switchTab('movements',this)">Movements</div>
   <div class="tab" onclick="switchTab('eod',this)">EOD Report</div>
+  <div class="tab" onclick="switchTab('performance',this)">Cashier Performance</div>
   <div class="tab" onclick="switchTab('audit',this)">Audit Trail</div>
 </div>
 
@@ -184,12 +185,46 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,sys
 <div class="tab-panel" id="tab-eod">
   <div class="filter-bar">
     <input type="date" id="eod-date">
+    <input type="text" id="eod-branch" placeholder="Branch ID (optional)…" style="max-width:200px">
     <button class="btn btn-g" onclick="loadEOD()">Generate Report</button>
     <button class="btn btn-secondary" onclick="window.print()">&#x1F5A8; Print</button>
+    <button class="btn btn-secondary" id="eod-csv-btn" onclick="downloadEODCSV()" style="display:none">&#x2B07; CSV</button>
   </div>
-
   <div id="eod-report">
     <div class="empty">Select a date and generate the report.</div>
+  </div>
+</div>
+
+<!-- ══ CASHIER PERFORMANCE ═══════════════════════════════════════ -->
+<div class="tab-panel" id="tab-performance">
+  <div class="filter-bar">
+    <input type="date" id="cp-from">
+    <input type="date" id="cp-to">
+    <input type="text" id="cp-branch" placeholder="Branch ID (optional)…" style="max-width:200px">
+    <button class="btn btn-g" onclick="loadCashierPerf()">Generate</button>
+    <button class="btn btn-secondary" id="cp-csv-btn" onclick="downloadPerfCSV()" style="display:none">&#x2B07; CSV</button>
+  </div>
+  <div id="cp-kpi-row" class="kpi-row" style="display:none">
+    <div class="kpi"><div class="kpi-label">Cashiers</div><div class="kpi-value g" id="cp-count">—</div></div>
+    <div class="kpi"><div class="kpi-label">Total Cash Sales</div><div class="kpi-value b" id="cp-total-sales">—</div></div>
+    <div class="kpi"><div class="kpi-label">Total Safe Drops</div><div class="kpi-value o" id="cp-total-drops">—</div></div>
+    <div class="kpi"><div class="kpi-label">Net Variance</div><div class="kpi-value" id="cp-total-variance">—</div></div>
+  </div>
+  <div class="card">
+    <div class="tbl-wrap">
+      <table class="tbl" id="cp-table">
+        <thead><tr>
+          <th>Cashier</th><th>Register</th><th>Sessions</th>
+          <th style="text-align:right">Cash Sales</th>
+          <th style="text-align:right">Refunds</th>
+          <th style="text-align:right">Cash In</th>
+          <th style="text-align:right">Cash Out</th>
+          <th style="text-align:right">Safe Drops</th>
+          <th style="text-align:right">Variance</th>
+        </tr></thead>
+        <tbody id="cp-body"><tr><td colspan="9" style="text-align:center;color:var(--sub);padding:32px">Select a date range and generate.</td></tr></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -276,8 +311,15 @@ function _typeBadge(type) {
 
 function setDefaultDates() {
   const today = new Date().toISOString().slice(0, 10);
+  /* Month start for performance date range */
+  const monthStart = new Date(); monthStart.setDate(1);
+  const monthStartStr = monthStart.toISOString().slice(0, 10);
   const els = ['mv-date','eod-date','au-from','au-to'];
   els.forEach(id => { const el = document.getElementById(id); if(el) el.value = today; });
+  const cpFrom = document.getElementById('cp-from');
+  const cpTo   = document.getElementById('cp-to');
+  if (cpFrom) cpFrom.value = monthStartStr;
+  if (cpTo)   cpTo.value   = today;
 }
 
 /* ── Tab switching ── */
@@ -286,9 +328,10 @@ function switchTab(tab, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
   el.classList.add('active');
-  if (tab === 'tills')     loadTills();
-  if (tab === 'movements') loadMovements();
-  if (tab === 'audit')     loadAudit();
+  if (tab === 'tills')       loadTills();
+  if (tab === 'movements')   loadMovements();
+  if (tab === 'audit')       loadAudit();
+  if (tab === 'performance') loadCashierPerf();
 }
 
 /* ── Overview ── */
@@ -357,9 +400,8 @@ async function loadOverview() {
 
 async function approveItem(id) {
   _toast('Approving…');
-  // For now just mark approved in events collection
   try {
-    await db.collection('posCashEvents').doc(id).update({ approved: true, approvedBy: auth.currentUser?.uid });
+    await _posDispatch('cmApprovePendingEvent', { eventId: id, merchantId: _merchantId });
     _toast('Approved');
     loadOverview();
   } catch(e) { _toast(e.message, true); }
@@ -446,12 +488,16 @@ async function loadMovements() {
 }
 
 /* ── EOD Report ── */
+let _lastEODData = null;
 async function loadEOD() {
-  const date = document.getElementById('eod-date').value || new Date().toISOString().slice(0,10);
-  const wrap  = document.getElementById('eod-report');
+  const date     = document.getElementById('eod-date').value || new Date().toISOString().slice(0,10);
+  const branchId = document.getElementById('eod-branch')?.value?.trim() || undefined;
+  const wrap     = document.getElementById('eod-report');
   wrap.innerHTML = '<div class="empty">Generating report…</div>';
+  document.getElementById('eod-csv-btn').style.display = 'none';
   try {
-    const res = await _posDispatch('cmGetEndOfDay', { merchantId: _merchantId, dateStr: date });
+    const res = await _posDispatch('cmGetEndOfDay', { merchantId: _merchantId, dateStr: date, branchId });
+    _lastEODData = res;
     const { tills = [], summary = {}, date: reportDate } = res || {};
 
     // Per-till cards
@@ -489,9 +535,130 @@ async function loadEOD() {
         </div>
       </div>
       ${tillsHTML}`;
+    document.getElementById('eod-csv-btn').style.display = '';
   } catch(err) {
     wrap.innerHTML = `<div class="empty" style="color:var(--red)">${_esc(err.message)}</div>`;
   }
+}
+
+/* ── EOD CSV Export ── */
+function downloadEODCSV() {
+  if (!_lastEODData) return;
+  const { tills = [], summary = {}, date: reportDate } = _lastEODData;
+  const rows = [
+    ['Register','Cashier','Opening Float','Cash Sales','Cash Refunds','Cash In','Cash Out','Safe Drops','Expected','Counted','Variance','Status'],
+    ...tills.map(t => {
+      const b = t.balance || {};
+      return [
+        t.registerId, t.cashierName,
+        (b.openingFloat/100).toFixed(2), (b.cashSales/100).toFixed(2),
+        (b.cashRefunds/100).toFixed(2),  (b.cashIn/100).toFixed(2),
+        (b.cashOut/100).toFixed(2),      (b.safeDrops/100).toFixed(2),
+        (b.expected/100).toFixed(2),
+        t.closed ? ((t.varianceCents!==undefined) ? ((b.expected + t.varianceCents)/100).toFixed(2) : '') : '',
+        t.closed ? (t.varianceCents/100).toFixed(2) : '',
+        t.closed ? 'Closed' : 'Open',
+      ];
+    }),
+    [],
+    ['SUMMARY'],
+    ['Total Cash Sales', (summary.totalCashSales/100).toFixed(2)],
+    ['Total Refunds',    (summary.totalCashRefunds/100).toFixed(2)],
+    ['Total Safe Drops', (summary.totalSafeDrops/100).toFixed(2)],
+    ['Net Variance',     (summary.totalVariance/100).toFixed(2)],
+    ['Till Count',       summary.tillCount || 0],
+    ['Closed Tills',     summary.closedCount || 0],
+  ];
+  _csvDownload(rows, `EOD_${reportDate||'report'}.csv`);
+}
+
+function _csvDownload(rows, filename) {
+  const csv = rows.map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+/* ── Cashier Performance ── */
+let _lastPerfData = null;
+async function loadCashierPerf() {
+  const body    = document.getElementById('cp-body');
+  const kpiRow  = document.getElementById('cp-kpi-row');
+  const csvBtn  = document.getElementById('cp-csv-btn');
+  body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--sub);padding:24px">Loading…</td></tr>';
+  kpiRow.style.display = 'none';
+  csvBtn.style.display = 'none';
+  const parseDay = (d, end) => {
+    if (!d) return undefined;
+    const [y,m,dy] = d.split('-').map(Number);
+    return new Date(Date.UTC(y,m-1,dy,-3,0,0)).getTime() + (end ? 86399999 : 0);
+  };
+  const fromDate = document.getElementById('cp-from')?.value;
+  const toDate   = document.getElementById('cp-to')?.value;
+  const branchId = document.getElementById('cp-branch')?.value?.trim() || undefined;
+
+  try {
+    const res = await _posDispatch('cmGetCashierPerformance', {
+      merchantId: _merchantId,
+      branchId,
+      dateFrom: parseDay(fromDate, false),
+      dateTo:   parseDay(toDate, true),
+    });
+    _lastPerfData = res;
+    const { cashiers = [] } = res || {};
+    if (!cashiers.length) {
+      body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--sub);padding:32px">No data for this period.</td></tr>';
+      return;
+    }
+
+    const totSales = cashiers.reduce((s,c)=>s+c.cashSales,0);
+    const totDrops = cashiers.reduce((s,c)=>s+c.safeDrops,0);
+    const totVar   = cashiers.reduce((s,c)=>s+c.variance,0);
+
+    document.getElementById('cp-count').textContent        = cashiers.length;
+    document.getElementById('cp-total-sales').textContent  = _kes(totSales);
+    document.getElementById('cp-total-drops').textContent  = _kes(totDrops);
+    const varEl = document.getElementById('cp-total-variance');
+    varEl.textContent = totVar === 0 ? 'Balanced' : (totVar > 0 ? '+' : '') + _kes(totVar);
+    varEl.style.color = totVar === 0 ? 'var(--g)' : totVar > 0 ? '#42a5f5' : '#ef5350';
+    kpiRow.style.display = '';
+
+    body.innerHTML = cashiers.map(c => {
+      const varClass = c.variance === 0 ? 'var(--sub)' : c.variance > 0 ? '#42a5f5' : '#ef5350';
+      return `<tr>
+        <td style="font-weight:700">${_esc(c.cashierName)}</td>
+        <td>${_esc(c.registerId||'—')}</td>
+        <td style="text-align:center">${c.sessionCount}</td>
+        <td style="text-align:right;font-weight:700;color:var(--g)">${_kes(c.cashSales)}</td>
+        <td style="text-align:right;color:#ef5350">${_kes(c.cashRefunds)}</td>
+        <td style="text-align:right">${_kes(c.cashIn)}</td>
+        <td style="text-align:right">${_kes(c.cashOut)}</td>
+        <td style="text-align:right;color:var(--amber)">${_kes(c.safeDrops)}</td>
+        <td style="text-align:right;font-weight:700;color:${varClass}">
+          ${c.variance===0?'—':(c.variance>0?'+':'')+_kes(c.variance)}</td>
+      </tr>`;
+    }).join('');
+
+    csvBtn.style.display = '';
+  } catch(err) {
+    body.innerHTML = `<tr><td colspan="9" style="color:var(--red);padding:24px">${_esc(err.message)}</td></tr>`;
+  }
+}
+
+function downloadPerfCSV() {
+  if (!_lastPerfData?.cashiers?.length) return;
+  const rows = [
+    ['Cashier','Register','Sessions','Cash Sales','Refunds','Cash In','Cash Out','Safe Drops','Variance'],
+    ..._lastPerfData.cashiers.map(c => [
+      c.cashierName, c.registerId||'', c.sessionCount,
+      (c.cashSales/100).toFixed(2),   (c.cashRefunds/100).toFixed(2),
+      (c.cashIn/100).toFixed(2),      (c.cashOut/100).toFixed(2),
+      (c.safeDrops/100).toFixed(2),   (c.variance/100).toFixed(2),
+    ]),
+  ];
+  _csvDownload(rows, 'CashierPerformance.csv');
 }
 
 /* ── Audit Trail ── */

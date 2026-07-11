@@ -1018,6 +1018,8 @@ body.queue-mode .hotkey-bar      { display: none; }
   <div class="topbar-info" id="topbar-cashier">Cashier</div>
   <div class="topbar-sep"></div>
   <div class="topbar-info" id="topbar-shift">No shift</div>
+  <div class="topbar-sep"></div>
+  <div class="topbar-info" id="topbar-balance" style="color:var(--green);font-variant-numeric:tabular-nums" title="Expected cash in drawer"></div>
   <div class="topbar-spacer"></div>
   <div class="topbar-status">
     <div class="status-dot online" id="status-dot"></div>
@@ -2253,6 +2255,11 @@ const Checkout = (() => {
   /* ── Payment ── */
   function pay(method, giftCode) {
     if (!_s.items.length) { _toast('Add items to the cart first', 'warning'); return; }
+    /* Warn (not block) if no active shift — cashier may have forgotten to open */
+    if (!_s.shiftId && window.PosRegister) {
+      _toast('No active shift — open the register first (End Shift button)', 'warning');
+      /* Still allow sale but log it — some merchants run without shift tracking */
+    }
     const totals = _updateTotals();
     if (totals.total <= 0) { _finalize('loyalty_full', [], totals); return; }
 
@@ -2682,9 +2689,19 @@ const Checkout = (() => {
       _s.lastPayments = payments;
       /* Record sale in multi-till session counters */
       if (window.PosMultiTill) PosMultiTill.recordSale(totals.total);
-      /* Record cash sale in enterprise cash manager */
-      if (window.PosRegister && method === 'cash') {
-        PosRegister.recordCashSale(Math.round(totals.total * 100), receipt?.receiptNo).catch(() => {});
+      /* Record cash component in enterprise cash manager */
+      if (window.PosRegister) {
+        let cashAmountCents = 0;
+        if (method === 'cash') {
+          cashAmountCents = Math.round(totals.total * 100);
+        } else if (method === 'split') {
+          /* Extract cash leg from split payments array */
+          cashAmountCents = payments
+            .filter(p => p.method === 'cash')
+            .reduce((s, p) => s + Math.round((p.amount || 0) * 100), 0);
+        }
+        if (cashAmountCents > 0)
+          PosRegister.recordCashSale(cashAmountCents, receipt?.receiptNo).catch(() => {});
       }
       _setState('SUCCESS');
       _broadcastThankYou({ customerName: _s.customer?.name, loyaltyEarned: loyaltyAwarded });
@@ -3419,33 +3436,46 @@ const Checkout = (() => {
     await refreshDiag();
   }
 
+  function _setCashEventModal(type, title, desc, cats, showSafeDrop) {
+    _cashEventType = type;
+    document.getElementById('cash-event-title').textContent = title;
+    document.getElementById('cash-event-desc').textContent  = desc;
+    document.getElementById('cash-event-amount').value  = '';
+    document.getElementById('cash-event-note').value    = '';
+    document.getElementById('cash-event-reason').value  = '';
+    /* Category dropdown */
+    const sel = document.getElementById('cash-event-category');
+    const catLabels = window.PosRegister?.CAT_LABELS || {};
+    sel.innerHTML = cats.length
+      ? cats.map(c => `<option value="${c}">${catLabels[c] || c.replace(/_/g,' ')}</option>`).join('')
+      : '<option value="">N/A</option>';
+    sel.closest('div').style.display = cats.length ? '' : 'none';
+    /* Safe-drop extra fields */
+    const sdf = document.getElementById('safe-drop-fields');
+    if (sdf) sdf.style.display = showSafeDrop ? '' : 'none';
+    if (showSafeDrop) {
+      document.getElementById('safe-location').value = '';
+      document.getElementById('safe-witness').value  = '';
+    }
+  }
+
   function openCashIn() {
-    _cashEventType = 'cash_in';
-    document.getElementById('cash-event-title').textContent = '➕ Cash In';
-    document.getElementById('cash-event-desc').textContent  = 'Enter the amount being added to the till (e.g. starting float top-up).';
-    document.getElementById('cash-event-amount').value = '';
-    document.getElementById('cash-event-note').value   = '';
+    const cats = window.PosRegister?.CASH_IN_CATS || ['float_topup','petty_cash_return','bank_change','misc_deposit','other'];
+    _setCashEventModal('cash_in','➕ Cash In','Enter the amount being added to the till (e.g. float top-up, petty cash returned).',cats,false);
     closeModal('drawer-diag-overlay');
     openModal('cash-event-overlay');
     setTimeout(() => document.getElementById('cash-event-amount').focus(), 80);
   }
 
   function openCashOut() {
-    _cashEventType = 'cash_out';
-    document.getElementById('cash-event-title').textContent = '➖ Cash Out';
-    document.getElementById('cash-event-desc').textContent  = 'Enter the amount being removed from the till for expenses.';
-    document.getElementById('cash-event-amount').value = '';
-    document.getElementById('cash-event-note').value   = '';
+    const cats = window.PosRegister?.CASH_OUT_CATS || ['petty_cash','supplier_payment','safe_drop','bank_deposit','emergency','other'];
+    _setCashEventModal('cash_out','➖ Cash Out','Enter the amount being removed from the till for expenses or payments.',cats,false);
     openModal('cash-event-overlay');
     setTimeout(() => document.getElementById('cash-event-amount').focus(), 80);
   }
 
   function openSafeDrop() {
-    _cashEventType = 'safe_drop';
-    document.getElementById('cash-event-title').textContent = '💸 Safe Drop';
-    document.getElementById('cash-event-desc').textContent  = 'Enter the amount being moved from the till to the safe.';
-    document.getElementById('cash-event-amount').value = '';
-    document.getElementById('cash-event-note').value   = '';
+    _setCashEventModal('safe_drop','💸 Safe Drop','Count and remove cash from the till to the safe. A receipt will be printed.',['safe_drop'],true);
     closeModal('drawer-diag-overlay');
     openModal('cash-event-overlay');
     setTimeout(() => document.getElementById('cash-event-amount').focus(), 80);
@@ -3455,43 +3485,81 @@ const Checkout = (() => {
     _cashEventType = 'cash_pickup';
     document.getElementById('cash-event-title').textContent = '🏦 Cash Pickup';
     document.getElementById('cash-event-desc').textContent  = 'Enter the amount being picked up by management or deposited.';
-    document.getElementById('cash-event-amount').value = '';
-    document.getElementById('cash-event-note').value   = '';
+    document.getElementById('cash-event-amount').value  = '';
+    document.getElementById('cash-event-note').value    = '';
+    document.getElementById('cash-event-reason').value  = '';
+    const sdf = document.getElementById('safe-drop-fields');
+    if (sdf) sdf.style.display = 'none';
+    const sel = document.getElementById('cash-event-category');
+    sel.innerHTML = '<option value="">Cash Pickup</option>';
+    sel.closest('div').style.display = 'none';
     openModal('cash-event-overlay');
     setTimeout(() => document.getElementById('cash-event-amount').focus(), 80);
   }
 
   async function confirmCashEvent() {
     const amount   = parseFloat(document.getElementById('cash-event-amount').value) || 0;
+    const reason   = (document.getElementById('cash-event-reason')?.value || '').trim();
     const note     = (document.getElementById('cash-event-note').value || '').trim();
     const category = document.getElementById('cash-event-category')?.value || '';
     if (amount <= 0) { _toast('Enter a valid amount', 'warning'); return; }
-    closeModal('cash-event-overlay');
 
     const amountCents = Math.round(amount * 100);
     const meta = { cashierId: _s.cashierId, cashierName: _s.cashierName,
-                   merchantId: _s.merchantId, branchId: _s.branchId, shiftId: _s.shiftId, note };
+                   merchantId: _s.merchantId, branchId: _s.branchId, shiftId: _s.shiftId, note, reason };
+    const loc     = document.getElementById('safe-location')?.value?.trim() || '';
+    const witness = document.getElementById('safe-witness')?.value?.trim() || '';
 
-    /* Route through PosRegister (enterprise cash manager) when available */
-    if (window.PosRegister) {
-      const cat = category || undefined;
-      if (_cashEventType === 'cash_in')
-        PosRegister.cashIn(amountCents, { category: cat, note }).catch(() => {});
-      else if (_cashEventType === 'cash_out')
-        PosRegister.cashOut(amountCents, { category: cat, note }).catch(() => {});
-      else if (_cashEventType === 'safe_drop') {
-        const loc     = document.getElementById('safe-location')?.value || '';
-        const witness = document.getElementById('safe-witness')?.value || '';
-        PosRegister.safeDrop(amountCents, { safeLocation: loc, witness, note }).catch(() => {});
-      }
+    /* Validate safe drop has location */
+    if (_cashEventType === 'safe_drop' && !loc) {
+      _toast('Enter the safe/deposit location.', 'warning'); return;
     }
-    /* Also route through legacy CashDrawer for hardware drawer events */
+
+    closeModal('cash-event-overlay');
+
+    /* Route through PosRegister (enterprise cash manager) */
+    if (window.PosRegister) {
+      const cat = category || 'other';
+      try {
+        if (_cashEventType === 'cash_in')
+          await PosRegister.cashIn(amountCents, { category: cat, reason, note });
+        else if (_cashEventType === 'cash_out')
+          await PosRegister.cashOut(amountCents, { category: cat, reason, note });
+        else if (_cashEventType === 'safe_drop')
+          await PosRegister.safeDrop(amountCents, { safeLocation: loc, witness, reason, note });
+      } catch (e) { console.warn('[CashMgr]', e.message); }
+    }
+    /* Also route through legacy CashDrawer for hardware drawer audit */
     if (window.CashDrawer)
       CashDrawer.recordCashEvent(_cashEventType, amountCents, meta).catch(() => {});
+
+    /* Print safe-drop receipt */
+    if (_cashEventType === 'safe_drop') _printSafeDropReceipt({ amount, amountCents, loc, witness, reason, note });
 
     const labels = { cash_in:'Cash In', cash_out:'Cash Out', safe_drop:'Safe Drop', cash_pickup:'Cash Pickup' };
     _toast(`${labels[_cashEventType] || 'Event'} recorded — KES ${amount.toFixed(2)}`, 'success');
     _renderLiveBalance();
+  }
+
+  function _printSafeDropReceipt({ amount, loc, witness, reason }) {
+    if (!window.SokoniPrinter) return;
+    const now = new Date().toLocaleString('en-KE', { hour12:false });
+    SokoniPrinter.printText([
+      { type:'header', text:'SOKONI POS' },
+      { type:'line',   text:'SAFE DROP RECEIPT' },
+      { type:'divider' },
+      { type:'row', label:'Cashier',   value: _s.cashierName },
+      { type:'row', label:'Register',  value: _s.registerId || 'Default' },
+      { type:'row', label:'Branch',    value: _s.branchId || '-' },
+      { type:'row', label:'Amount',    value: 'KES ' + amount.toFixed(2) },
+      { type:'row', label:'Location',  value: loc || '-' },
+      { type:'row', label:'Witness',   value: witness || '-' },
+      { type:'row', label:'Reason',    value: reason || '-' },
+      { type:'row', label:'Date/Time', value: now },
+      { type:'divider' },
+      { type:'line', text:'Cashier signature: _______________' },
+      { type:'line', text:'Witness signature: _______________' },
+    ]).catch(() => {});
   }
 
   /* ── Public API ── */
