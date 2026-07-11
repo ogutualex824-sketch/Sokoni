@@ -1027,6 +1027,7 @@ body.queue-mode .hotkey-bar      { display: none; }
   <button class="topbar-btn" onclick="Checkout.parkSale()">Park</button>
   <button class="topbar-btn" onclick="Checkout.openParked()">Retrieve</button>
   <button class="topbar-btn" onclick="Checkout.openRefund()">Refund</button>
+  <button class="topbar-btn" id="drawer-btn" onclick="Checkout.openDrawerManual()" title="Open cash drawer (authorized users only)">&#x1F4B0; Drawer</button>
   <button class="topbar-btn" id="end-shift-btn" onclick="Checkout.openCloseShift()" title="Close current shift">End Shift</button>
   <button class="topbar-btn" id="queue-btn" onclick="Checkout.toggleQueueMode()" title="Ctrl+Q — Toggle Queue Mode">Queue</button>
   <button class="topbar-btn" onclick="window.location.href='pos.html'">&#9776; Menu</button>
@@ -1402,6 +1403,44 @@ body.queue-mode .hotkey-bar      { display: none; }
   </div>
 </div>
 
+<!-- Cash drawer diagnostics modal -->
+<div class="overlay" id="drawer-diag-overlay">
+  <div class="modal" style="max-width:480px;max-height:90vh;overflow-y:auto">
+    <div class="modal-title">&#x1F4B0; Cash Drawer Diagnostics</div>
+    <div id="drawer-diag-body" style="font-size:13px;line-height:1.7">
+      <div style="color:var(--muted);text-align:center;padding:24px 0">Loading…</div>
+    </div>
+    <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
+      <button class="btn-secondary" onclick="Checkout.closeModal('drawer-diag-overlay')">Close</button>
+      <button class="btn-secondary" onclick="Checkout.testDrawerOpen()">&#x1F9EA; Test Open</button>
+      <button class="btn-secondary" onclick="Checkout.openCashIn()">&#x2795; Cash In</button>
+      <button class="btn-secondary" onclick="Checkout.openSafeDrop()">&#x1F4B8; Safe Drop</button>
+      <button class="btn-primary"   onclick="Checkout.refreshDiag()">&#x21BB; Refresh</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cash event modal (cash in / cash out / safe drop / pickup) -->
+<div class="overlay" id="cash-event-overlay">
+  <div class="modal">
+    <div class="modal-title" id="cash-event-title">Cash In</div>
+    <div class="modal-body" id="cash-event-desc">Enter the amount being added to the till.</div>
+    <div style="margin-top:12px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Amount (KES)</div>
+      <input type="number" class="shift-cash-input" id="cash-event-amount" placeholder="0.00" min="0" step="any">
+    </div>
+    <div style="margin-top:8px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Note (optional)</div>
+      <input type="text" id="cash-event-note" placeholder="Reason or reference…" maxlength="120"
+        style="width:100%;background:var(--sur2);border:1px solid var(--bor2);border-radius:8px;padding:8px 10px;color:var(--txt);font-size:13px">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="Checkout.closeModal('cash-event-overlay')">Cancel</button>
+      <button class="btn-primary" id="cash-event-confirm" onclick="Checkout.confirmCashEvent()">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <!-- Shift open modal -->
 <div class="overlay" id="shift-open-overlay">
   <div class="modal">
@@ -1451,6 +1490,8 @@ body.queue-mode .hotkey-bar      { display: none; }
 <script src="pos-customers.js"></script>
 <script src="pos-loyalty-engine.js"></script>
 <script src="sokoni-universal-printer.js"></script>
+<script src="sokoni-cash-drawer.js" defer></script>
+<script src="pos-manager-auth.js" defer></script>
 <script src="pos-resilience.js"></script>
 
 <script>
@@ -1498,6 +1539,7 @@ const Checkout = (() => {
     mpesaCountdownId:  null,       /* interval handle for countdown bar */
     lastPaymentTotals: null,       /* kept for retry */
     lastPaymentMethod: null,
+    lastPayments:      null,       /* payments array, used by cash drawer */
     note:              '',          /* sale note — printed on receipt */
     _aiSuggestion:     null,
   };
@@ -1533,6 +1575,7 @@ const Checkout = (() => {
       _s.cashierId   = u.uid;
       _s.cashierName = u.displayName || u.email || 'Cashier';
       document.getElementById('topbar-cashier').textContent = _s.cashierName;
+      if (window.CashDrawer) CashDrawer.updateContext({ cashierId: _s.cashierId, cashierName: _s.cashierName });
       /* Check for active shift; prompt to open if none */
       await _checkShiftStatus();
     });
@@ -1596,6 +1639,11 @@ const Checkout = (() => {
 
     /* Queue mode from settings */
     if (settings.queueModeDefault === true) toggleQueueMode();
+
+    /* Cash drawer SDK — init with store context */
+    if (window.CashDrawer) {
+      CashDrawer.init({ merchantId: _s.merchantId, branchId: _s.branchId }).catch(() => {});
+    }
 
     _s.saleStartTs = Date.now();
     _setState('IDLE');
@@ -2492,8 +2540,19 @@ const Checkout = (() => {
       });
 
       const { receipt, loyaltyAwarded } = res.data;
+      _s.lastPayments = payments;
       _setState('SUCCESS');
       _broadcastThankYou({ customerName: _s.customer?.name, loyaltyEarned: loyaltyAwarded });
+
+      /* Cash drawer — open immediately after payment (before receipt) */
+      if (window.CashDrawer && CashDrawer.getConfig().openMode === 'after_payment') {
+        CashDrawer.openAfterSale({
+          payments, method, receiptNo: receipt.receiptNo,
+          amount: totals.total, shiftId: _s.shiftId,
+          cashierId: _s.cashierId, cashierName: _s.cashierName,
+          merchantId: _s.merchantId, branchId: _s.branchId,
+        }).catch(() => {});
+      }
 
       /* Offer WhatsApp receipt while printing — non-blocking */
       if (_s.customer?.phone) {
@@ -2537,6 +2596,22 @@ const Checkout = (() => {
         await UniversalPrinter.printReceipt({ type:'sale', ...receipt });
       }
     } catch (_) {}
+
+    /* Cash drawer — open after receipt (default mode) */
+    if (window.CashDrawer) {
+      const mode = CashDrawer.getConfig().openMode;
+      if (mode === 'after_receipt' || mode === 'before_receipt') {
+        CashDrawer.openAfterSale({
+          payments: _s.lastPayments,
+          method: _s.lastPaymentMethod,
+          receiptNo: receipt?.receiptNo,
+          amount: receipt?.grandTotal,
+          shiftId: _s.shiftId,
+          cashierId: _s.cashierId, cashierName: _s.cashierName,
+          merchantId: _s.merchantId, branchId: _s.branchId,
+        }).catch(() => {});
+      }
+    }
   }
 
   function _printReceiptLocal(totals, method) {
@@ -2549,6 +2624,7 @@ const Checkout = (() => {
       paymentMethod: method,
       timestamp: new Date().toISOString(),
     };
+    _s.lastPaymentMethod = method;
     _printReceipt(receipt);
   }
 
@@ -2758,6 +2834,13 @@ const Checkout = (() => {
         const now = new Date().toLocaleTimeString('en-KE', { hour12:false, hour:'2-digit', minute:'2-digit' });
         document.getElementById('topbar-shift').textContent = `Shift since ${now}`;
         _toast(`Shift opened — float: KES ${cash.toFixed(2)}`, 'success');
+        if (window.CashDrawer) {
+          CashDrawer.resetShift();
+          CashDrawer.recordCashEvent('opening_float', cash, {
+            shiftId, cashierId: _s.cashierId, cashierName: _s.cashierName,
+            merchantId: _s.merchantId, branchId: _s.branchId, note: 'Opening float',
+          }).catch(() => {});
+        }
       })
       .catch(() => _toast('Shift open failed — continuing anyway', 'warning'));
   }
@@ -2778,6 +2861,12 @@ const Checkout = (() => {
     if (typeof PosSales?.closeShift !== 'function') { _toast('Shift close not available', 'warning'); return; }
     PosSales.closeShift(_s.cashierId, cash)
       .then(() => {
+        if (window.CashDrawer) {
+          CashDrawer.recordCashEvent('closing_float', cash, {
+            shiftId: _s.shiftId, cashierId: _s.cashierId, cashierName: _s.cashierName,
+            merchantId: _s.merchantId, branchId: _s.branchId, note: 'Closing float',
+          }).catch(() => {});
+        }
         _s.shiftId = null;
         document.getElementById('topbar-shift').textContent = 'No shift';
         _toast(`Shift closed — closing float: KES ${cash.toFixed(2)}`, 'success');
@@ -2982,6 +3071,142 @@ const Checkout = (() => {
     setTimeout(() => { if (btn.parentNode) btn.remove(); }, 7000);
   }
 
+  /* ── Cash Drawer functions ── */
+
+  let _cashEventType = 'cash_in';
+
+  async function openDrawerManual() {
+    if (!window.CashDrawer) { _toast('Cash drawer SDK not loaded', 'warning'); return; }
+    const result = await CashDrawer.openManual({
+      cashierId: _s.cashierId, cashierName: _s.cashierName,
+      role: _s.role || 'cashier',
+      merchantId: _s.merchantId, branchId: _s.branchId,
+      shiftId: _s.shiftId, reason: 'manual',
+    });
+    if (result?.skipped) {
+      if (result.reason === 'auth_denied') _toast('Drawer open denied — manager authorization required', 'warning');
+      else if (result.reason === 'role_not_permitted') _toast('Your role is not permitted to open the drawer', 'warning');
+      return;
+    }
+    if (result?.success) _toast('Cash drawer opened', 'success');
+    else _toast('Drawer open failed — check connection', 'error');
+  }
+
+  async function openDrawerDiagnostics() {
+    if (!window.CashDrawer) { _toast('Cash drawer SDK not loaded', 'warning'); return; }
+    openModal('drawer-diag-overlay');
+    await refreshDiag();
+  }
+
+  async function refreshDiag() {
+    if (!window.CashDrawer) return;
+    const el = document.getElementById('drawer-diag-body');
+    try {
+      const d = await CashDrawer.getDiagnostics();
+      const shift = await CashDrawer.getShiftSummary();
+      const fmt = ts => ts ? new Date(ts).toLocaleTimeString('en-KE', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' }) : '—';
+      const _okColor = ok => ok === true ? '#71ff00' : ok === false ? 'var(--red)' : 'var(--txt)';
+      const _row = (label, val, ok) =>
+        `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bor)">
+          <span style="color:var(--muted)">${label}</span>
+          <span style="color:${_okColor(ok)};font-weight:600">${val}</span>
+        </div>`;
+      el.innerHTML = `
+        <div style="margin-bottom:12px;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em">Connection</div>
+        ${_row('Type', d.connectionType, null)}
+        ${_row('Drawer Ready', d.drawerReady ? 'Yes' : 'No', d.drawerReady)}
+        ${d.connectionType === 'printer' ? _row('Printer Connected', d.printerConnected ? 'Yes' : 'No', d.printerConnected) : ''}
+        ${_row('Open Mode', d.openMode, null)}
+        <div style="margin:14px 0 8px;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em">Activity</div>
+        ${_row('Last Success', fmt(d.lastSuccess), null)}
+        ${_row('Session Opens', d.sessionOpenCount, null)}
+        ${_row('Pending Sync', d.pendingSync, d.pendingSync === 0)}
+        <div style="margin:14px 0 8px;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em">Shift Cash</div>
+        ${_row('Opening Float', 'KES ' + (shift.openingFloat / 100).toFixed(2), null)}
+        ${_row('Cash Sales', 'KES ' + (shift.cashSales / 100).toFixed(2), null)}
+        ${_row('Expected in Drawer', 'KES ' + (shift.expectedCash / 100).toFixed(2), null)}
+        <div style="margin:14px 0 8px;font-weight:700;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em">Browser Support</div>
+        ${_row('Web HID (USB)', d.browserSupport.webHID ? 'Supported' : 'Not supported', d.browserSupport.webHID)}
+        ${_row('Web Serial', d.browserSupport.webSerial ? 'Supported' : 'Not supported', d.browserSupport.webSerial)}
+        ${_row('Web Bluetooth', d.browserSupport.webBluetooth ? 'Supported' : 'Not supported', d.browserSupport.webBluetooth)}
+        ${d.recentErrors.length ? `
+          <div style="margin:14px 0 8px;font-weight:700;color:var(--red);font-size:11px;text-transform:uppercase;letter-spacing:.07em">Recent Errors</div>
+          ${d.recentErrors.map(e => `<div style="font-size:12px;color:var(--red);padding:4px 0">${fmt(e.ts)} — ${e.error || 'Unknown error'}</div>`).join('')}
+        ` : ''}
+      `;
+    } catch (err) {
+      el.innerHTML = `<div style="color:var(--red);padding:16px 0">Diagnostics unavailable: ${err.message}</div>`;
+    }
+  }
+
+  async function testDrawerOpen() {
+    if (!window.CashDrawer) return;
+    const result = await CashDrawer.testOpen({
+      cashierId: _s.cashierId, cashierName: _s.cashierName,
+      merchantId: _s.merchantId, branchId: _s.branchId,
+    });
+    if (result?.success) _toast(`Test open OK (${result.elapsed}ms)`, 'success');
+    else _toast(`Test open failed: ${result?.error || 'Unknown error'}`, 'error');
+    await refreshDiag();
+  }
+
+  function openCashIn() {
+    _cashEventType = 'cash_in';
+    document.getElementById('cash-event-title').textContent = '➕ Cash In';
+    document.getElementById('cash-event-desc').textContent  = 'Enter the amount being added to the till (e.g. starting float top-up).';
+    document.getElementById('cash-event-amount').value = '';
+    document.getElementById('cash-event-note').value   = '';
+    closeModal('drawer-diag-overlay');
+    openModal('cash-event-overlay');
+    setTimeout(() => document.getElementById('cash-event-amount').focus(), 80);
+  }
+
+  function openCashOut() {
+    _cashEventType = 'cash_out';
+    document.getElementById('cash-event-title').textContent = '➖ Cash Out';
+    document.getElementById('cash-event-desc').textContent  = 'Enter the amount being removed from the till for expenses.';
+    document.getElementById('cash-event-amount').value = '';
+    document.getElementById('cash-event-note').value   = '';
+    openModal('cash-event-overlay');
+    setTimeout(() => document.getElementById('cash-event-amount').focus(), 80);
+  }
+
+  function openSafeDrop() {
+    _cashEventType = 'safe_drop';
+    document.getElementById('cash-event-title').textContent = '💸 Safe Drop';
+    document.getElementById('cash-event-desc').textContent  = 'Enter the amount being moved from the till to the safe.';
+    document.getElementById('cash-event-amount').value = '';
+    document.getElementById('cash-event-note').value   = '';
+    closeModal('drawer-diag-overlay');
+    openModal('cash-event-overlay');
+    setTimeout(() => document.getElementById('cash-event-amount').focus(), 80);
+  }
+
+  function openCashPickup() {
+    _cashEventType = 'cash_pickup';
+    document.getElementById('cash-event-title').textContent = '🏦 Cash Pickup';
+    document.getElementById('cash-event-desc').textContent  = 'Enter the amount being picked up by management or deposited.';
+    document.getElementById('cash-event-amount').value = '';
+    document.getElementById('cash-event-note').value   = '';
+    openModal('cash-event-overlay');
+    setTimeout(() => document.getElementById('cash-event-amount').focus(), 80);
+  }
+
+  async function confirmCashEvent() {
+    if (!window.CashDrawer) return;
+    const amount = parseFloat(document.getElementById('cash-event-amount').value) || 0;
+    const note   = (document.getElementById('cash-event-note').value || '').trim();
+    if (amount <= 0) { _toast('Enter a valid amount', 'warning'); return; }
+    closeModal('cash-event-overlay');
+    await CashDrawer.recordCashEvent(_cashEventType, amount * 100, {
+      cashierId: _s.cashierId, cashierName: _s.cashierName,
+      merchantId: _s.merchantId, branchId: _s.branchId,
+      shiftId: _s.shiftId, note,
+    });
+    const labels = { cash_in:'Cash In', cash_out:'Cash Out', safe_drop:'Safe Drop', cash_pickup:'Cash Pickup' };
+    _toast(`${labels[_cashEventType] || 'Event'} recorded — KES ${amount.toFixed(2)}`, 'success');
+  }
+
   /* ── Public API ── */
   return {
     init,
@@ -3016,6 +3241,9 @@ const Checkout = (() => {
     confirmGiftCard,
     /* Shift management */
     confirmOpenShift, openCloseShift, confirmCloseShift,
+    /* Cash drawer */
+    openDrawerManual, openDrawerDiagnostics, refreshDiag, testDrawerOpen,
+    openCashIn, openCashOut, openSafeDrop, openCashPickup, confirmCashEvent,
     /* Modal */
     openModal, closeModal,
     /* Loader */

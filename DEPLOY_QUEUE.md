@@ -551,11 +551,39 @@ Use `functions:awardLoyaltyPoints` in all deploy commands (not `earnLoyaltyPoint
 
 ---
 
-## ▶ AUTHORITATIVE PENDING SNAPSHOT — 2026-07-08 (updated)
+## SmartPOS Cash Drawer v1.0 — 2026-07-11 — ⛔ QUOTA-BLOCKED
+
+**8 new Cloud Functions — quota-blocked. Hosting-only deploy available now.**
+
+New CFs in `functions/pos-cash-drawer.js`:
+| CF | Auth | Purpose |
+|---|---|---|
+| `cdOpenDrawer` | cashier+ | Log every drawer event |
+| `cdGetAuditLog` | manager+ | Query audit log |
+| `cdGetConfig` | any auth | Per-register config |
+| `cdSetConfig` | admin | Update drawer config |
+| `cdRecordCashEvent` | cashier+ | Till movements |
+| `cdGetShiftSummary` | manager+ | Expected vs actual |
+| `cdGetReconciliation` | manager+ | Full shift detail |
+| `cdGetDiagnostics` | admin | 24h error rate |
+
+**Hosting deploy (do now — no quota needed):**
+```bash
+npx firebase-tools@latest deploy --only hosting
+```
+
+**CF deploy command (run once quota clears):**
+```bash
+firebase deploy --only functions:cdOpenDrawer,functions:cdGetAuditLog,functions:cdGetConfig,functions:cdSetConfig,functions:cdRecordCashEvent,functions:cdGetShiftSummary,functions:cdGetReconciliation,functions:cdGetDiagnostics
+```
+
+---
+
+## ▶ AUTHORITATIVE PENDING SNAPSHOT — 2026-07-11 (updated)
 _Supersedes the older per-batch counts below (14/23, 0/143 were partial views)._
 
 Ground truth: `firebase functions:list` (1512 live) vs trigger exports loaded from
-`index.js` (1698). **187 functions are in code but NOT deployed**, all blocked by the
+`index.js` (1698+). **195+ functions are in code but NOT deployed**, all blocked by the
 same hard **Cloud Run CPU quota ceiling** in `us-central1` (HTTP 429). Confirmed by 3
 dry auto-retries returning 0 created; freeing 14 slots earlier let in exactly 14 — a
 1:1 hard ceiling that does NOT reset on a timer.

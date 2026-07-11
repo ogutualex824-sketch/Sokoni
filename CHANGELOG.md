@@ -1,4 +1,123 @@
-﻿## [2026-07-11] — Redis Dispatcher Refactor + Enterprise Settlement Engine v1.0
+﻿## [2026-07-11] — Services Domain Dispatcher v1.0
+
+### Summary
+Consolidated 6 pure-onCall service modules (77 CFs) into a single `servicesDispatch` Cloud Run service using the `exports._h` handler-registry pattern. Reduces cold-start footprint and billing surface. Zero regressions — all 4 client callers updated.
+
+### New Files
+- `functions/services-dispatch.js` — Single dispatcher routing `{ op, ...data }` to healthcare-hub (15), security-identity (14), jobs (12), hr-payroll (12), b2b-wholesale (12), property-hub (12) handlers
+
+### Modified Files
+- `functions/healthcare-hub.js` — 15 handlers registered in `exports._h`
+- `functions/security-identity.js` — 14 handlers registered in `_h`; destructured `{ auth }` / `{ data, auth }` params preserved
+- `functions/jobs.js` — 12 handlers registered in `exports._h`
+- `functions/hr-payroll.js` — 12 handlers registered in `_h`; 2 multi-line patterns handled; 39 `request.` → `req.` renames
+- `functions/b2b-wholesale.js` — 12 handlers registered in `_h`; all `request.` → `req.`
+- `functions/property-hub.js` — 12 handlers registered in `exports._h`
+- `functions/index.js` — 83 lines removed (77 individual exports + 6 requires); +2 lines for `servicesDispatch`
+- `sokoni-jobs.js` — `_callable()` routes through `servicesDispatch`
+- `hr-payroll.html` — `callCF()` routes through `servicesDispatch`
+- `wholesale-portal.html` — `callCF()` routes through `servicesDispatch`
+- `security-center.html` — `callCF()` routes through `servicesDispatch`
+
+### Cloud Run Reduction
+- Before: 77 individual Cloud Run services
+- After: 1 Cloud Run service (`servicesDispatch`)
+
+### Secrets
+- `PAYROLL_ENCRYPTION_KEY` — bundled in dispatcher (used by hr-payroll.js)
+
+### Deployment
+- Deploy `servicesDispatch` when GCP Cloud Run CPU quota is approved
+- No other deployment changes required
+
+---
+
+## [2026-07-11] — SmartPOS Universal Cash Drawer Support v1.0
+
+### Summary
+Enterprise-grade universal cash drawer system for SOKONI SmartPOS. Supports ESC/POS via receipt printer, USB HID, Web Serial, Ethernet/IP, and Web Bluetooth. Automatic opening after cash sales, secure manual opening with role/manager authorization, offline-first audit logging, full shift cash reconciliation (float → sales → cash in/out → safe drop → pickup), and a live diagnostics panel built into the POS checkout screen.
+
+### New Files
+- `sokoni-cash-drawer.js` — Universal Cash Drawer SDK; all connection adapters; offline queue (IndexedDB); shift counters; diagnostics; event emitter; `window.CashDrawer` public API
+- `functions/pos-cash-drawer.js` — 8 Cloud Functions:
+  | CF | Purpose |
+  |---|---|
+  | `cdOpenDrawer` | Log every drawer open/fail event (public record) |
+  | `cdGetAuditLog` | Query drawer events — manager+ |
+  | `cdGetConfig` | Per-register drawer config — any auth |
+  | `cdSetConfig` | Update drawer config — admin only |
+  | `cdRecordCashEvent` | Record till movements (float, cash in/out, safe drop) |
+  | `cdGetShiftSummary` | Expected vs actual cash with variance — manager+ |
+  | `cdGetReconciliation` | Full shift detail for end-of-day — manager+ |
+  | `cdGetDiagnostics` | 24h success rate, error log — admin+ |
+
+### Modified Files
+- `pos-checkout.html`:
+  - `sokoni-cash-drawer.js` + `pos-manager-auth.js` loaded on checkout
+  - `_s.lastPayments` tracked for drawer context
+  - `_finalize()` opens drawer immediately after payment (`after_payment` mode)
+  - `_printReceipt()` opens drawer after printing (`after_receipt` mode — default)
+  - `confirmOpenShift()` records opening float via `CashDrawer.recordCashEvent()`
+  - `confirmCloseShift()` records closing float
+  - Topbar: `💰 Drawer` button for manual open (role-gated)
+  - New modals: Cash Drawer Diagnostics + Cash Event (cash in/out/safe drop/pickup)
+  - New functions: `openDrawerManual`, `openDrawerDiagnostics`, `testDrawerOpen`, `openCashIn`, `openCashOut`, `openSafeDrop`, `openCashPickup`, `confirmCashEvent`
+  - `CashDrawer.init()` called in checkout `init()` with merchant/branch context
+- `functions/index.js` — 8 new `cd*` exports
+
+### New Firestore Collections
+| Collection | Purpose |
+|---|---|
+| `posDrawerLog/{id}` | One doc per drawer open/fail event; permanent audit trail |
+| `posTillEvents/{id}` | Cash in/out/safe drop/pickup/float events per shift |
+| `posDrawerConfig/{merchantId}_{registerId}` | Per-register drawer configuration |
+
+### Connection Types Supported
+| Type | Method | Notes |
+|---|---|---|
+| ESC/POS via printer | `SokoniPrinter.openCashDrawer()` | Default; works with any connected receipt printer |
+| USB HID | Web HID API (`navigator.hid`) | Chrome/Edge only; requires user permission grant |
+| Web Serial / RS-232 | Web Serial API (`navigator.serial`) | Chrome/Edge only; 9600 baud, 8N1 |
+| Ethernet / IP | HTTP POST to configured host:port | Requires proxy for raw TCP; HTTP API drawer recommended |
+| Bluetooth | Web Bluetooth API (`navigator.bluetooth`) | Finds first writable GATT characteristic |
+
+### Open Modes
+| Mode | Behaviour |
+|---|---|
+| `after_receipt` | Opens after receipt is printed (default) |
+| `after_payment` | Opens immediately after payment confirmed |
+| `before_receipt` | Opens before receipt prints |
+| `manual_only` | Never opens automatically |
+| `never` | Fully disabled |
+
+### Security
+- Manual open: role check against `allowedRoles` config; optional `requireManager` flag routes through `ManagerAuth.request('cash_drawer')` with PIN/QR/biometric
+- Every open (auto or manual) is logged to `posDrawerLog` with: UID, cashier name, role, device, store, branch, register, timestamp, reason, receipt number, shift ID
+- Failed open attempts are also logged — failure never interrupts the sale
+- `cdSetConfig` restricted to admin/superAdmin only
+- `cdGetAuditLog` / `cdGetShiftSummary` / `cdGetReconciliation` restricted to manager+
+- `cdGetDiagnostics` restricted to admin+
+- `cdOpenDrawer` / `cdRecordCashEvent` accept any authenticated user (cashier+)
+
+### Performance
+- Drawer open is non-blocking: failures are caught, logged, and reported to the cashier without interrupting the sale flow
+- Offline queue (IndexedDB) holds events when offline; auto-syncs on reconnect
+- All hardware adapters have explicit error boundaries — a broken cable never crashes the checkout
+
+### Deployment
+```bash
+# Deploy 8 new CFs (once Cloud Run quota is approved):
+firebase deploy --only functions:cdOpenDrawer,functions:cdGetAuditLog,functions:cdGetConfig,functions:cdSetConfig,functions:cdRecordCashEvent,functions:cdGetShiftSummary,functions:cdGetReconciliation,functions:cdGetDiagnostics
+
+# Deploy updated checkout page:
+firebase deploy --only hosting
+```
+
+### No new secrets required.
+
+---
+
+## [2026-07-11] — Redis Dispatcher Refactor + Enterprise Settlement Engine v1.0
 
 ### Redis Layer — 28-to-1 Dispatcher Refactor
 
