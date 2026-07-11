@@ -287,6 +287,41 @@
       border-color: var(--sk-accent);
     }
 
+    /* ── Setup guide task cards ── */
+    .btn-muted-cta { opacity: .82; }
+    .setup-item {
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: border-color .2s, background .2s;
+    }
+    .setup-item.is-next { box-shadow: 0 0 0 1px rgba(113,255,0,.12); }
+    .setup-item-head { display: flex; align-items: center; gap: 8px; }
+    .setup-tick { width: 16px; text-align: center; font-weight: 800; flex-shrink: 0; }
+    .setup-label { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+    .setup-next-tag {
+      font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+      color: #050505; background: var(--sk-green, #71ff00);
+      padding: 1px 6px; border-radius: 999px;
+    }
+    .setup-desc { font-size: 12px; line-height: 1.45; color: var(--sk-text-muted); padding-left: 24px; }
+    .setup-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 24px; margin-top: 2px; }
+    .setup-act {
+      font-size: 12.5px; font-weight: 700; padding: 8px 14px; border-radius: 9px;
+      cursor: pointer; transition: filter .15s, background .15s, border-color .15s;
+      min-height: 36px;
+    }
+    .setup-act:disabled { opacity: .6; cursor: default; }
+    .setup-act-primary { background: var(--sk-green, #71ff00); color: #050505; border: none; }
+    .setup-act-primary:hover:not(:disabled) { filter: brightness(1.05); }
+    .setup-act-skip {
+      background: transparent; color: var(--sk-text-muted);
+      border: 1px solid var(--sk-border);
+    }
+    .setup-act-skip:hover:not(:disabled) { border-color: var(--sk-accent); color: var(--sk-text); }
+
     .btn-ghost {
       background: none;
       color: var(--sk-text-muted);
@@ -2738,47 +2773,160 @@ function initReadyStep() {
   renderSetupChecklist();
 }
 
-/* Render the setup checklist from authoritative backend state. Informational —
-   it never blocks the Ready screen; it shows what remains + production status. */
+/* ═══════════════════════════════════════════════════════════════
+   SETUP GUIDE — actionable, one-task-at-a-time completion checklist.
+   Renders authoritative backend state (getSetupStatus) as tasks; each
+   incomplete REQUIRED task exposes an inline action wired to the deployed
+   backend (markSetupStep) or a real feature page. Production mode is gated
+   on productionReady. Nothing is hard-locked — the merchant can still open
+   the POS — matching the mandatory first-run spec (guide, not a wall).
+════════════════════════════════════════════════════════════════ */
+let _setupStatus = null;
+
+function _setupMerchantId() {
+  return WIZ.selectedMerchantId
+      || (WIZ.selectedBiz && (WIZ.selectedBiz.merchantId || WIZ.selectedBiz.id))
+      || (_setupStatus && _setupStatus.merchantId)
+      || null;
+}
+
+/* Task catalogue. `fixed` items are provisioned automatically (no action).
+   `mark` → markSetupStep key (a user choice/confirmation). `href` → real page. */
+const SETUP_TASKS = [
+  { key: 'authenticated',      label: 'Account',      required: true,  fixed: true },
+  { key: 'businessCreated',    label: 'Business',     required: true,  fixed: true },
+  { key: 'merchantIdGenerated',label: 'Merchant ID',  required: true,  fixed: true },
+  { key: 'subscription',       label: 'Subscription', required: true,
+    desc: 'Your 14-day free trial is included. Confirm to continue.',
+    primary: { text: 'Activate free trial', mark: 'subscription' } },
+  { key: 'branchCreated',      label: 'Branch',       required: true,  fixed: true },
+  { key: 'taxesConfigured',    label: 'Taxes',        required: true,
+    desc: 'Set how VAT shows on receipts. Kenya default is 16% VAT.',
+    primary: { text: 'Use Kenya default (16% VAT)', mark: 'taxesConfigured' } },
+  { key: 'inventoryReady',     label: 'Inventory',    required: true,
+    desc: 'Add your products now, or start with an empty catalogue.',
+    primary: { text: 'Add products', href: 'pos-inventory.html' },
+    skip:    { text: 'Skip — add later', mark: 'inventoryReady' } },
+  { key: 'hardwareConnected',  label: 'Hardware',     required: true,
+    desc: 'Connect a printer, scanner or cash drawer — or just use this device.',
+    primary: { text: 'Set up hardware', href: 'pos-hardware-wizard.html' },
+    skip:    { text: 'Use this device only', mark: 'hardwareConnected' } },
+  { key: 'testSaleSuccessful', label: 'Test sale',    required: true,
+    desc: 'Run one practice sale so you know the flow before your first customer.',
+    primary: { text: 'Run a test sale', href: 'pos-checkout.html' },
+    skip:    { text: 'Mark as done', mark: 'testSaleSuccessful' } },
+  { key: 'staff',              label: 'Staff (optional)', required: false,
+    desc: 'Optional — invite cashiers or managers anytime.',
+    skip:    { text: 'Skip for now', mark: 'staff' } },
+];
+
+/* Render the setup guide from authoritative backend state. */
 async function renderSetupChecklist() {
   const wrap  = document.getElementById('setup-checklist-wrap');
   const list  = document.getElementById('setup-checklist');
   const badge = document.getElementById('setup-ready-badge');
-  const mid   = WIZ.selectedMerchantId || (WIZ.selectedBiz && WIZ.selectedBiz.merchantId);
+  const mid   = _setupMerchantId();
   if (!wrap || !list || !mid) return;
   try {
     const res = await SPOS('getSetupStatus')({ merchantId: mid });
-    const s   = res.data || {};
-    const cl  = s.checklist || {};
-    const items = [
-      ['Authentication', cl.authenticated,      true],
-      ['Business created', cl.businessCreated,   true],
-      ['Merchant ID', cl.merchantIdGenerated,    true],
-      ['Subscription', cl.subscription,          true],
-      ['Branch', cl.branchCreated,               true],
-      ['Taxes', cl.taxesConfigured,              true],
-      ['Inventory', cl.inventoryReady,           true],
-      ['Hardware', cl.hardwareConnected,         true],
-      ['Test sale', cl.testSaleSuccessful,       true],
-      ['Staff (optional)', cl.staff,             false],
-    ];
-    list.innerHTML = items.map(([label, ok, required]) => {
-      const done = !!ok;
-      const icon = done ? '✓' : (required ? '○' : '–');
-      const col  = done ? 'var(--sk-green)' : 'var(--sk-text-muted)';
-      return '<div role="listitem" style="display:flex;align-items:center;gap:8px;font-size:13px;color:' + (done ? 'var(--sk-text)' : 'var(--sk-text-muted)') + ';">' +
-        '<span style="width:16px;text-align:center;font-weight:800;color:' + col + '">' + icon + '</span>' +
-        '<span>' + esc(label) + '</span></div>';
-    }).join('');
-    if (s.productionReady) {
-      badge.textContent = 'Production ready';
-      badge.style.background = 'rgba(113,255,0,.14)'; badge.style.color = 'var(--sk-green)';
-    } else {
-      badge.textContent = 'Setup in progress';
-      badge.style.background = 'rgba(255,149,0,.14)'; badge.style.color = '#ff9500';
-    }
+    _setupStatus = res.data || {};
+    _paintSetupGuide(_setupStatus);
     wrap.style.display = 'block';
+    _syncReadyCTA(_setupStatus);
   } catch (_) { /* informational only — never block Ready */ }
+}
+
+function _paintSetupGuide(s) {
+  const list  = document.getElementById('setup-checklist');
+  const badge = document.getElementById('setup-ready-badge');
+  const cl    = s.checklist || {};
+  const next  = s.nextStep;
+  /* Map getSetupStatus.nextStep (business/subscription/branch/taxes/inventory/
+     hardware/testSale) onto the task key that should be highlighted. */
+  const NEXT_TO_KEY = {
+    business: 'businessCreated', subscription: 'subscription', branch: 'branchCreated',
+    taxes: 'taxesConfigured', inventory: 'inventoryReady', hardware: 'hardwareConnected',
+    testSale: 'testSaleSuccessful',
+  };
+  const nextKey = NEXT_TO_KEY[next] || null;
+
+  list.innerHTML = SETUP_TASKS.map((t) => {
+    const done   = !!cl[t.key];
+    const isNext = !done && t.key === nextKey;
+    const icon   = done ? '✓' : (t.required ? '○' : '–');
+    const col    = done ? 'var(--sk-green)' : (isNext ? 'var(--sk-green)' : 'var(--sk-text-muted)');
+    const border = isNext ? 'border:1px solid rgba(113,255,0,.35);background:rgba(113,255,0,.06);'
+                          : 'border:1px solid var(--sk-border,rgba(255,255,255,.08));';
+    let actions = '';
+    if (!done && !t.fixed) {
+      const btns = [];
+      if (t.primary) {
+        const attr = t.primary.mark ? `data-mark="${t.primary.mark}"` : `data-href="${t.primary.href}"`;
+        btns.push(`<button class="setup-act setup-act-primary" ${attr}>${esc(t.primary.text)}</button>`);
+      }
+      if (t.skip) {
+        btns.push(`<button class="setup-act setup-act-skip" data-mark="${t.skip.mark}">${esc(t.skip.text)}</button>`);
+      }
+      actions = `<div class="setup-actions">${btns.join('')}</div>`;
+    }
+    const desc = (!done && t.desc) ? `<div class="setup-desc">${esc(t.desc)}</div>` : '';
+    return `<div role="listitem" class="setup-item${isNext ? ' is-next' : ''}" style="${border}">
+      <div class="setup-item-head">
+        <span class="setup-tick" style="color:${col}">${icon}</span>
+        <span class="setup-label" style="color:${done ? 'var(--sk-text)' : 'var(--sk-text-muted)'}">${esc(t.label)}${isNext ? ' <span class="setup-next-tag">Next</span>' : ''}</span>
+      </div>${desc}${actions}
+    </div>`;
+  }).join('');
+
+  /* Wire actions (delegated once per paint). */
+  list.querySelectorAll('.setup-act').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.href) { window.location.href = btn.dataset.href; return; }
+      if (btn.dataset.mark) _completeSetupStep(btn.dataset.mark, btn);
+    });
+  });
+
+  if (s.productionReady) {
+    badge.textContent = 'Production ready';
+    badge.style.background = 'rgba(113,255,0,.14)'; badge.style.color = 'var(--sk-green)';
+  } else {
+    const remaining = SETUP_TASKS.filter((t) => t.required && !cl[t.key]).length;
+    badge.textContent = remaining + ' step' + (remaining === 1 ? '' : 's') + ' left';
+    badge.style.background = 'rgba(255,149,0,.14)'; badge.style.color = '#ff9500';
+  }
+}
+
+/* Record a non-inferable step via the deployed markSetupStep op, then re-paint. */
+async function _completeSetupStep(step, btn) {
+  const mid = _setupMerchantId();
+  if (!mid) return;
+  if (btn) { btn.disabled = true; btn.dataset._t = btn.textContent; btn.textContent = 'Saving…'; }
+  try {
+    const res = await SPOS('markSetupStep')({ merchantId: mid, step, value: true });
+    const r = res.data || {};
+    /* Refresh authoritative state so inferred items stay in sync. */
+    await renderSetupChecklist();
+    if (r.productionReady) {
+      toast('Setup complete — you\'re production ready! 🎉', 'success');
+      try { localStorage.setItem('sokoni_setup_complete', '1'); } catch (_) {}
+    }
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset._t || 'Retry'; }
+    toast((e && e.message) || 'Could not save. Please try again.', 'error');
+  }
+}
+
+/* Ready-screen primary CTA reflects gating: when required setup is incomplete the
+   CTA nudges toward finishing; the merchant can still open the POS (never locked). */
+function _syncReadyCTA(s) {
+  const open = document.getElementById('btn-open-pos');
+  if (!open) return;
+  if (s && s.hasBusiness && !s.productionReady) {
+    open.innerHTML = 'Open POS anyway';
+    open.classList.add('btn-muted-cta');
+  } else {
+    open.classList.remove('btn-muted-cta');
+  }
 }
 
 document.getElementById('btn-open-pos').addEventListener('click', () => {

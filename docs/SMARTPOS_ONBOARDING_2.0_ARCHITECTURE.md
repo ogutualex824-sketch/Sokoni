@@ -85,11 +85,13 @@ Single-batch provisioning; `bootstrapCache` cache-first bootstrap; indexed doc-i
 | Phase | Scope | Backend ready? |
 |-------|-------|----------------|
 | **1 — Foundation (DONE ✅)** | Auto-detect, create + full ID set, intelligent defaults, QR, pairing, resumable state | ✅ deployed |
-| 2 — Wizard shell | 12-step premium wizard UI (progress, resume, animations, dark/light, a11y) wired to `save/getOnboardingProgress` | ✅ |
+| **2 — Wizard shell (DONE ✅)** | 7-step premium wizard (progress dots, single-active-panel isolation, animations, dark, a11y) + boot resume gate | ✅ deployed |
+| **5 — Actionable Setup Guide (DONE ✅)** | Ready screen renders `getSetupStatus` as a **one-task-at-a-time** guide: each incomplete required task (subscription, taxes, inventory, hardware, test sale) has an inline action wired to `markSetupStep` or a real feature page (`pos-inventory.html`, `pos-hardware-wizard.html`, `pos-checkout.html`); `Next` task highlighted; badge shows steps-left; **Production Ready gated** on `productionReady`; POS never hard-locked (guide, not a wall) | ✅ deployed |
 | 3 — Device & pairing UX | Camera QR scanner, printer/scanner detection UI, NFC/BT/LAN discovery, test print | partial (pairDevice ✅) |
-| 4 — Business Settings & switcher | Merchant/Business/Store IDs panel, QR copy/share/download/print, regenerate; multi-business switcher | ✅ |
-| 5 — Test sale & inventory import | Guided test sale, CSV/Excel import, demo inventory | reuse POS ops |
+| 4 — Business Settings & switcher | Merchant/Business/Store IDs panel, QR copy/share/download/print, regenerate; multi-business switcher | backend ✅ |
 | 6 — Admin dashboards | Businesses/devices/QRs/branches/staff/subscriptions views | reuse admin/pos ops |
+
+**Setup Guide design note (Phase 5):** rather than force a returning merchant back through a 14-screen linear gauntlet, the completion checklist itself became the actionable surface (Square/Shopify pattern). It is driven entirely by authoritative backend state (`getSetupStatus` infers subscription/branch/taxes/inventory/hardware from real Firestore data; `markSetupStep` records the non-inferable choices — subscription confirm, tax default, inventory-later, hardware-skip, test-sale-done, staff-skip). No business logic changed; the working single-active-panel wizard structure is untouched.
 
 Each phase is a self-contained PR gated by the architecture guard. **Acceptance criterion already met for the core:** a first-time merchant creates a business and receives an auto-generated Merchant ID without ever being asked for one.
 
