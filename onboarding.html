@@ -1,242 +1,440 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
 <head>
-<script src="security.js"></script>
-<script src="shared-header.js"></script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Get Started — SOKONI</title>
-  <meta name="description" content="Choose how you want to get started on SOKONI — Kenya's all-in-one marketplace.">
-  <meta name="robots" content="noindex">
-  <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="assets/logosokoni.png">
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#71ff00">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="SOKONI">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Get Started — SOKONI</title>
 <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="mobile.css">
-  <link rel="stylesheet" href="premium.css">
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;min-height:100vh;padding-bottom:60px;}
-
-    /* ── Top Bar ── */
-    .ob-topbar{display:flex;align-items:center;padding:16px 20px;background:rgba(10,10,10,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
-    .ob-back{background:none;border:none;color:rgba(255,255,255,0.6);font-size:22px;cursor:pointer;padding:4px 10px 4px 0;line-height:1;display:flex;align-items:center;gap:6px;font-family:inherit;}
-    .ob-back:hover{color:#fff;}
-    .ob-logo{height:30px;margin-left:4px;}
-    .ob-nav-wordmark{font-size:15px;font-weight:900;letter-spacing:1px;color:#71ff00;margin-left:8px;}
-
-    /* ── Hero ── */
-    .ob-hero{padding:48px 24px 32px;text-align:center;background:linear-gradient(160deg,rgba(113,255,0,0.06) 0%,transparent 60%);}
-    .ob-hero-logo{height:56px;margin-bottom:18px;filter:drop-shadow(0 0 20px rgba(113,255,0,0.35));}
-    .ob-hero h1{font-size:clamp(24px,6vw,40px);font-weight:900;line-height:1.15;margin-bottom:10px;}
-    .ob-hero h1 span{color:#71ff00;}
-    .ob-hero p{color:rgba(255,255,255,0.5);font-size:15px;max-width:360px;margin:0 auto 16px;}
-    .ob-user-greeting{display:inline-flex;align-items:center;gap:8px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:24px;padding:8px 16px;font-size:13px;font-weight:700;color:#71ff00;margin-top:4px;}
-    .ob-user-greeting span{color:rgba(255,255,255,0.7);}
-
-    /* ── Role Cards ── */
-    .ob-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;padding:24px 18px;max-width:640px;margin:0 auto;}
-    @media(max-width:400px){.ob-grid{grid-template-columns:1fr;}}
-    .ob-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:22px 18px 20px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;cursor:pointer;transition:all .22s;position:relative;overflow:hidden;text-decoration:none;color:inherit;}
-    .ob-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(113,255,0,0.05),transparent);opacity:0;transition:opacity .2s;}
-    .ob-card:hover,.ob-card:focus-visible{border-color:rgba(113,255,0,0.35);transform:translateY(-2px);box-shadow:0 12px 40px rgba(113,255,0,0.1);}
-    .ob-card:hover::before{opacity:1;}
-    .ob-card-icon{font-size:32px;line-height:1;margin-bottom:2px;}
-    .ob-card-title{font-size:16px;font-weight:900;color:#fff;}
-    .ob-card-sub{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.4;}
-    .ob-card-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#71ff00;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);border-radius:8px;padding:3px 8px;margin-top:4px;}
-
-    /* Progress bar */
-    .ob-progress-wrap{width:100%;margin-top:8px;}
-    .ob-progress-label{font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:4px;display:flex;justify-content:space-between;}
-    .ob-progress-track{height:4px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;}
-    .ob-progress-fill{height:100%;background:#71ff00;border-radius:4px;transition:width .5s;}
-
-    /* CTA button inside card */
-    .ob-card-btn{margin-top:10px;width:100%;padding:11px 16px;background:linear-gradient(135deg,#71ff00,#4dcc00);border:none;border-radius:12px;color:#050505;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;letter-spacing:0.3px;transition:filter .15s;}
-    .ob-card-btn:hover{filter:brightness(1.08);}
-    .ob-card-btn.secondary{background:rgba(255,255,255,0.07);color:#fff;border:1px solid rgba(255,255,255,0.12);}
-
-    /* ── Footer links ── */
-    .ob-footer{padding:20px 24px 32px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;}
-    .ob-dashboard-link{display:inline-flex;align-items:center;gap:8px;color:rgba(255,255,255,0.55);font-size:13px;font-weight:600;text-decoration:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 20px;transition:all .2s;}
-    .ob-dashboard-link:hover{color:#fff;border-color:rgba(255,255,255,0.25);}
-
-    .ob-trust-row{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;}
-    .ob-trust-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:6px 12px;}
-    .ob-trust-badge .dot{color:#71ff00;font-size:14px;}
-  </style>
+<link rel="stylesheet" href="premium.css">
+<script src="security.js"></script>
+<style>
+:root{--bg:#050505;--surf:#0d0d0d;--surf2:#141414;--border:#1a1a1a;--acc:#71ff00;--acc-dim:rgba(113,255,0,.12);--acc-glow:0 0 18px rgba(113,255,0,.28);--text:#e8e8e8;--sub:#888;--err:#ff4d4d;--warn:#ffb800;--r:10px;--t:.3s ease}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:16px}
+a{color:var(--acc);text-decoration:none}
+.onb-wrap{min-height:100vh;display:flex;flex-direction:column}
+.onb-top{position:sticky;top:0;z-index:100;background:rgba(5,5,5,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 20px;height:60px;display:flex;align-items:center;gap:14px}
+.onb-logo{display:flex;align-items:center;gap:8px;font-weight:800;font-size:1.15rem;color:var(--acc);letter-spacing:-.5px;text-decoration:none;flex-shrink:0}
+.onb-logo img{height:26px}
+.onb-prog{flex:1;display:none;flex-direction:column;gap:3px}
+.onb-prog.vis{display:flex}
+.step-lbl{font-size:.75rem;color:var(--sub)}
+.step-lbl strong{color:var(--text);font-weight:600}
+.prog-bar{height:3px;background:var(--border);border-radius:99px;overflow:hidden}
+.prog-fill{height:100%;background:var(--acc);border-radius:99px;transition:width var(--t)}
+.u-chip{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--sub);flex-shrink:0}
+.u-chip .ini{width:26px;height:26px;border-radius:50%;background:var(--acc-dim);color:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.68rem}
+.onb-phase{flex:1;display:none;padding:28px 16px 96px}
+.onb-phase.active{display:block}
+/* Auth */
+.auth-card{max-width:420px;margin:0 auto;background:var(--surf);border:1px solid var(--border);border-radius:16px;padding:32px 28px}
+.auth-hero{text-align:center;margin-bottom:24px}
+.auth-hero h1{font-size:1.6rem;font-weight:800;line-height:1.2}
+.auth-hero h1 .ac{color:var(--acc)}
+.auth-hero p{color:var(--sub);margin-top:5px;font-size:.88rem}
+.auth-tabs{display:flex;background:var(--surf2);border-radius:var(--r);padding:4px;gap:4px;margin-bottom:20px}
+.atab{flex:1;padding:8px;border:none;background:transparent;color:var(--sub);border-radius:8px;cursor:pointer;font-size:.88rem;font-weight:600;transition:all var(--t)}
+.atab.on{background:var(--surf);color:var(--text)}
+.aform{display:none;flex-direction:column;gap:13px}
+.aform.on{display:flex}
+.sk-in,.sk-sel,.sk-ta{width:100%;padding:12px 13px;font-size:16px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);outline:none;transition:border-color var(--t)}
+.sk-in:focus,.sk-sel:focus,.sk-ta:focus{border-color:var(--acc)}
+.sk-lbl{font-size:.8rem;color:var(--sub);margin-bottom:4px;display:block}
+.fg{display:flex;flex-direction:column}
+.err-m{font-size:.72rem;color:var(--err);margin-top:3px;display:none}
+.fg.has-err .sk-in,.fg.has-err .sk-sel{border-color:var(--err)}
+.fg.has-err .err-m{display:block}
+.btn{padding:11px 18px;border-radius:var(--r);border:none;cursor:pointer;font-size:.88rem;font-weight:600;transition:all var(--t);line-height:1}
+.btn-p{background:var(--acc);color:#000}
+.btn-p:hover{box-shadow:var(--acc-glow)}
+.btn-s{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
+.btn-g{background:transparent;color:var(--sub)}
+.btn-f{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.divline{text-align:center;color:var(--sub);font-size:.78rem;margin:10px 0;position:relative}
+.divline::before,.divline::after{content:'';position:absolute;top:50%;width:44%;height:1px;background:var(--border)}
+.divline::before{left:0}.divline::after{right:0}
+.btn-goo{width:100%;padding:11px;background:var(--surf2);border:1px solid var(--border);color:var(--text);border-radius:var(--r);cursor:pointer;font-size:.86rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:9px;transition:border-color var(--t)}
+.btn-goo:hover{border-color:var(--sub)}
+.prow{display:flex;gap:8px}
+.ppfx{padding:12px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);color:var(--sub);font-size:.88rem;white-space:nowrap}
+.otp-boxes{display:flex;gap:7px;justify-content:center;margin:6px 0}
+.otp-b{width:42px;height:50px;text-align:center;font-size:1.25rem;font-weight:700;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);outline:none}
+.otp-b:focus{border-color:var(--acc)}
+/* Roles */
+.rh{text-align:center;max-width:540px;margin:0 auto 28px}
+.rh h2{font-size:1.5rem;font-weight:800}
+.rh p{color:var(--sub);margin-top:7px;font-size:.88rem}
+.roles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(188px,1fr));gap:12px;max-width:840px;margin:0 auto}
+.rc{background:var(--surf);border:1px solid var(--border);border-radius:13px;padding:18px 14px;cursor:pointer;transition:all var(--t);text-align:center;position:relative}
+.rc:hover{border-color:var(--acc);background:var(--surf2);transform:translateY(-2px)}
+.rc.rc-on{border-color:var(--acc)}
+.r-ico{font-size:1.9rem;margin-bottom:7px;display:block}
+.r-nm{font-weight:700;font-size:.88rem;margin-bottom:3px}
+.r-dsc{font-size:.73rem;color:var(--sub);line-height:1.4}
+.rbadge{position:absolute;top:9px;right:9px;font-size:.62rem;font-weight:700;padding:2px 6px;border-radius:99px}
+.rb-a{background:var(--acc);color:#000}
+.rb-r{background:var(--warn);color:#000}
+.more-t{text-align:center;margin:18px auto}
+.more-t button{background:transparent;border:1px solid var(--border);color:var(--sub);padding:7px 18px;border-radius:99px;cursor:pointer;font-size:.8rem}
+/* Wizard */
+.wbody{max-width:620px;margin:0 auto}
+.wnav{position:fixed;bottom:0;left:0;right:0;z-index:90;background:rgba(5,5,5,.95);backdrop-filter:blur(12px);border-top:1px solid var(--border);padding:11px 16px;display:flex;align-items:center;gap:10px}
+.sc{padding-bottom:12px}
+.st-h{font-size:1.25rem;font-weight:800;margin-bottom:4px}
+.st-s{color:var(--sub);font-size:.86rem;margin-bottom:20px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:500px){.fgrid{grid-template-columns:1fr}}
+.ff{grid-column:1/-1}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{padding:6px 13px;border-radius:99px;font-size:.8rem;font-weight:600;border:1px solid var(--border);background:var(--surf2);color:var(--sub);cursor:pointer;transition:all var(--t);user-select:none}
+.chip.on{background:var(--acc-dim);border-color:var(--acc);color:var(--acc)}
+.bt{display:flex;gap:8px;margin-bottom:18px}
+.btg{padding:6px 16px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--sub);cursor:pointer;font-size:.8rem}
+.btg.on{background:var(--acc);color:#000;border-color:var(--acc)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:11px}
+.pc{background:var(--surf);border:1px solid var(--border);border-radius:13px;padding:16px 13px;cursor:pointer;transition:all var(--t);position:relative}
+.pc:hover,.pc.on{border-color:var(--acc);background:var(--surf2)}
+.pc.on::after{content:'✓';position:absolute;top:9px;right:9px;color:var(--acc);font-weight:800}
+.ppop{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--acc);color:#000;font-size:.62rem;font-weight:800;padding:2px 7px;border-radius:99px;white-space:nowrap}
+.pn{font-weight:800;font-size:.92rem;margin-bottom:3px}
+.pp{font-size:1.05rem;font-weight:700;color:var(--acc);margin-bottom:2px}
+.pyr{font-size:.73rem;color:var(--sub);margin-bottom:8px}
+.pcom{font-size:.7rem;background:var(--surf2);color:var(--sub);padding:2px 7px;border-radius:99px;display:inline-block;margin-bottom:7px}
+.pft{list-style:none;padding:0}
+.pft li{font-size:.73rem;color:var(--sub);padding:1px 0}
+.pft li::before{content:'✓ ';color:var(--acc)}
+.ugrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:11px;margin-top:14px}
+.uc{background:var(--surf);border:2px dashed var(--border);border-radius:11px;padding:16px 11px;text-align:center;cursor:pointer;transition:border-color var(--t)}
+.uc:hover,.uc.done{border-color:var(--acc);border-style:solid}
+.ui{font-size:1.5rem;margin-bottom:5px}
+.ul{font-size:.78rem;font-weight:600;margin-bottom:2px}
+.uh{font-size:.68rem;color:var(--sub)}
+.us{font-size:.7rem;color:var(--acc);margin-top:3px;display:none}
+.uc.done .us{display:block}
+.sscreen{text-align:center;padding:28px 14px}
+.scheck{width:76px;height:76px;border-radius:50%;background:var(--acc-dim);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:2rem;animation:pop .5s ease}
+@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+.st-ttl{font-size:1.7rem;font-weight:800;margin-bottom:6px}
+.st-ttl .ac{color:var(--acc)}
+.icard{display:inline-block;background:var(--surf);border:1px solid var(--border);border-radius:13px;padding:18px 26px;margin:18px auto;min-width:220px}
+.icard .il{font-size:.7rem;color:var(--sub);text-transform:uppercase;letter-spacing:1px}
+.icard .id{font-size:1.35rem;font-weight:900;color:var(--acc);letter-spacing:2px;margin:3px 0}
+.slinks{display:flex;gap:11px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+.info-b{background:var(--surf2);border-left:3px solid var(--acc);border-radius:0 8px 8px 0;padding:11px 14px;font-size:.83rem;color:var(--sub);margin:11px 0}
+.nspc{flex:1}
+.tc{position:fixed;top:76px;right:14px;z-index:9999;display:flex;flex-direction:column;gap:7px}
+.toast{padding:11px 16px;border-radius:9px;font-size:.83rem;font-weight:600;color:#000;animation:sIn .3s ease;max-width:300px}
+.t-ok{background:var(--acc)}.t-err{background:var(--err);color:#fff}
+@keyframes sIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.lov{position:fixed;inset:0;z-index:9998;background:rgba(5,5,5,.8);display:none;align-items:center;justify-content:center;flex-direction:column;gap:11px}
+.lov.vis{display:flex}
+.spin{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.lmsg{font-size:.85rem;color:var(--sub)}
+</style>
 </head>
 <body>
+<div class="onb-wrap">
 
-  <!-- Top bar -->
-  <div class="ob-topbar">
-    <button class="ob-back" onclick="window.location.href='index.html'" aria-label="Back to home">&#8592;</button>
-    <img src="assets/logosokoni.png" alt="SOKONI" class="ob-logo">
-    <span class="ob-nav-wordmark">SOKONI</span>
+<div class="onb-top">
+  <a href="index.html" class="onb-logo">
+    <img src="assets/logo.svg" alt="" onerror="this.style.display='none'">SOKONI
+  </a>
+  <div class="onb-prog" id="progArea">
+    <div class="step-lbl">Step <span id="sCur">1</span> of <span id="sTot">5</span><strong> — <span id="sTitle">Loading</span></strong></div>
+    <div class="prog-bar"><div class="prog-fill" id="pFill"></div></div>
   </div>
+  <div class="u-chip" id="uChip" style="display:none"></div>
+</div>
 
-  <!-- Hero -->
-  <div class="ob-hero">
-    <img src="assets/Sokonilogo2.png" alt="SOKONI" class="ob-hero-logo" onerror="this.style.display='none'">
-    <h1>Welcome to <span>SOKONI</span></h1>
-    <p>Choose how you want to get started on Kenya's #1 marketplace</p>
-    <div class="ob-user-greeting" id="obGreeting" style="display:none;">
-      <span>Signed in as</span> <strong id="obUserName"></strong>
+<div class="lov" id="lov"><div class="spin"></div><div class="lmsg" id="lmsg">Please wait…</div></div>
+<div class="tc" id="tc"></div>
+
+<!-- Phase A: Auth -->
+<div class="onb-phase active" id="phA">
+  <div class="auth-card">
+    <div class="auth-hero"><h1>Join <span class="ac">SOKONI</span></h1><p>One account for every role — shop, sell, drive, serve, and more.</p></div>
+    <div class="auth-tabs">
+      <button class="atab on" onclick="A.tab('si',this)">Sign In</button>
+      <button class="atab" onclick="A.tab('su',this)">Create Account</button>
     </div>
-  </div>
-
-  <!-- Role cards -->
-  <div class="ob-grid">
-
-    <!-- Seller -->
-    <div class="ob-card" id="cardSeller" tabindex="0" role="button" aria-label="Start Selling">
-      <div class="ob-card-icon">🛍️</div>
-      <div class="ob-card-title">Seller</div>
-      <div class="ob-card-sub">List products and start earning today</div>
-      <div class="ob-progress-wrap" id="progressSeller">
-        <div class="ob-progress-label"><span>Setup progress</span><span id="pctSeller">0%</span></div>
-        <div class="ob-progress-track"><div class="ob-progress-fill" id="fillSeller" style="width:0%"></div></div>
+    <form class="aform on" id="fSi" onsubmit="A.emailSI(event)">
+      <div class="fg"><label class="sk-lbl">Email</label><input class="sk-in" type="email" id="siE" placeholder="you@example.com" required></div>
+      <div class="fg"><label class="sk-lbl">Password</label><input class="sk-in" type="password" id="siP" placeholder="••••••••" required></div>
+      <div style="text-align:right"><a href="forgot-password.html" style="font-size:.78rem">Forgot password?</a></div>
+      <button type="submit" class="btn btn-p btn-f">Sign In</button>
+    </form>
+    <form class="aform" id="fSu" onsubmit="A.emailSU(event)">
+      <div class="fgrid">
+        <div class="fg"><label class="sk-lbl">First name</label><input class="sk-in" type="text" id="suF" placeholder="Alex" required></div>
+        <div class="fg"><label class="sk-lbl">Last name</label><input class="sk-in" type="text" id="suL" placeholder="Ogutu" required></div>
       </div>
-      <div id="sellerDone" class="ob-card-badge" style="display:none;">✅ Setup complete</div>
-      <button class="ob-card-btn" onclick="window.location.href='onboarding-seller.html'">Start Selling</button>
-    </div>
-
-    <!-- Business -->
-    <div class="ob-card" tabindex="0" role="button" aria-label="Register Business">
-      <div class="ob-card-icon">🏢</div>
-      <div class="ob-card-title">Business</div>
-      <div class="ob-card-sub">Register your shop or company on SOKONI</div>
-      <button class="ob-card-btn" onclick="openBusinessReg()">Register Business</button>
-    </div>
-
-    <!-- Driver -->
-    <div class="ob-card" id="cardDriver" tabindex="0" role="button" aria-label="Become a Driver">
-      <div class="ob-card-icon">🏍️</div>
-      <div class="ob-card-title">Driver</div>
-      <div class="ob-card-sub">Join as a delivery driver or boda rider</div>
-      <div class="ob-progress-wrap" id="progressDriver">
-        <div class="ob-progress-label"><span>Setup progress</span><span id="pctDriver">0%</span></div>
-        <div class="ob-progress-track"><div class="ob-progress-fill" id="fillDriver" style="width:0%"></div></div>
+      <div class="fg"><label class="sk-lbl">Email</label><input class="sk-in" type="email" id="suE" placeholder="you@example.com" required></div>
+      <div class="fg"><label class="sk-lbl">Password</label><input class="sk-in" type="password" id="suP" placeholder="Min 8 characters" required minlength="8"></div>
+      <button type="submit" class="btn btn-p btn-f">Create Account</button>
+    </form>
+    <div class="divline" style="margin:14px 0"><span>or</span></div>
+    <button class="btn-goo" onclick="A.google()">
+      <svg width="17" height="17" viewBox="0 0 18 18"><path d="M17.64 9.2a10.34 10.34 0 0 0-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+      Continue with Google
+    </button>
+    <button class="btn btn-s btn-f" style="margin-top:9px" onclick="A.phoneToggle()">📱 Continue with Phone</button>
+    <div id="phoneSec" style="display:none;margin-top:14px">
+      <div class="fg"><label class="sk-lbl">Phone number</label>
+        <div class="prow"><span class="ppfx">🇰🇪 +254</span><input class="sk-in" type="tel" id="pNum" placeholder="7XXXXXXXX" maxlength="9"></div>
       </div>
-      <button class="ob-card-btn" onclick="window.location.href='onboarding-driver.html'">Become a Driver</button>
-    </div>
-
-    <!-- Professional -->
-    <div class="ob-card" id="cardPro" tabindex="0" role="button" aria-label="Join as Professional">
-      <div class="ob-card-icon">👔</div>
-      <div class="ob-card-title">Professional</div>
-      <div class="ob-card-sub">Doctors, Lawyers, Agents, Consultants</div>
-      <div class="ob-progress-wrap" id="progressPro">
-        <div class="ob-progress-label"><span>Setup progress</span><span id="pctPro">0%</span></div>
-        <div class="ob-progress-track"><div class="ob-progress-fill" id="fillPro" style="width:0%"></div></div>
+      <button class="btn btn-p btn-f" style="margin-top:8px" onclick="A.sendOTP()">Send OTP</button>
+      <div id="otpSec" style="display:none;margin-top:14px">
+        <label class="sk-lbl" style="text-align:center;display:block;margin-bottom:7px">Enter the 6-digit code</label>
+        <div class="otp-boxes" id="otpB">
+          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
+          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
+          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
+          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
+          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
+          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
+        </div>
+        <button class="btn btn-p btn-f" style="margin-top:8px" onclick="A.verifyOTP()">Verify Code</button>
       </div>
-      <button class="ob-card-btn" onclick="window.location.href='onboarding-professional.html'">Join as Professional</button>
     </div>
-
+    <div id="rcap"></div>
   </div>
+</div>
 
-  <!-- Footer -->
-  <div class="ob-footer">
-    <a href="index.html" class="ob-dashboard-link">🏠 Already set up? Go to Dashboard</a>
-    <div class="ob-trust-row">
-      <div class="ob-trust-badge"><span class="dot">●</span> 256-bit encrypted</div>
-      <div class="ob-trust-badge"><span class="dot">●</span> Verified by SOKONI</div>
-      <div class="ob-trust-badge"><span class="dot">●</span> KES protected</div>
-    </div>
+<!-- Phase B: Roles -->
+<div class="onb-phase" id="phB">
+  <div class="rh"><h2>What would you like to do?</h2><p>Select a role to get started. You can add more roles anytime.</p></div>
+  <div class="roles-grid" id="rGrid"></div>
+  <div class="more-t" id="moreT" style="display:none"><button onclick="R.more()">+ Show more roles</button></div>
+</div>
+
+<!-- Phase C: Wizard -->
+<div class="onb-phase" id="phC">
+  <div class="wbody"><div class="sc" id="sContent"></div></div>
+  <div class="wnav">
+    <button class="btn btn-s" id="bBack" onclick="W.back()">← Back</button>
+    <div class="nspc"></div>
+    <button class="btn btn-g" id="bSkip" style="display:none" onclick="W.skip()">Skip</button>
+    <button class="btn btn-p" id="bNext" onclick="W.next()">Save & Continue →</button>
   </div>
+</div>
 
-  <script type="module" src="firebase.js"></script>
-  <script src="sokoni-trust.js" defer></script>
-  <script src="kass-widget.js" defer></script>
-  <script src="scroll-top.js" defer></script>
-  <script>
-    /* ── Keyboard nav for cards ── */
-    document.querySelectorAll('.ob-card').forEach(function(c){
-      c.addEventListener('keydown', function(e){
-        if(e.key==='Enter'||e.key===' '){
-          var btn = c.querySelector('.ob-card-btn');
-          if(btn) btn.click();
-        }
-      });
+</div>
+
+<script src="shared-header.js" defer></script>
+<script src="sokoni-onboarding.js" defer></script>
+<script>
+/* ── Data ─────────────────────────────────────────────────────────────────── */
+const COUNTIES=['Nairobi','Mombasa','Kwale','Kilifi','Tana River','Lamu','Taita-Taveta','Garissa','Wajir','Mandera','Marsabit','Isiolo','Meru','Tharaka-Nithi','Embu','Kitui','Machakos','Makueni','Nyandarua','Nyeri','Kirinyaga',"Murang'a",'Kiambu','Turkana','West Pokot','Samburu','Trans-Nzoia','Uasin Gishu','Elgeyo-Marakwet','Nandi','Baringo','Laikipia','Nakuru','Narok','Kajiado','Kericho','Bomet','Kakamega','Vihiga','Bungoma','Busia','Siaya','Kisumu','Homa Bay','Migori','Kisii','Nyamira'];
+const PCATS={'Home Services':['Electrician','Plumber','Carpenter','Painter','Welder','Cleaner','Gardener','Pest Control','Appliance Repair','HVAC','Mover'],'Security':['Security Guard','CCTV Installation','Access Control'],'Education':['Tutor','Private Teacher','Skills Trainer','Music Teacher','Language Teacher'],'Creative & Media':['Photographer','Videographer','Graphic Designer','Content Creator','DJ','MC'],'Technology':['Software Developer','Web Designer','IT Support','Network Engineer','Data Analyst'],'Business Services':['Marketing Agency','PR Consultant','Business Consultant','Accountant','Bookkeeper'],'Legal':['Lawyer','Legal Consultant','Notary'],'Healthcare':['Doctor','Nurse','Clinical Officer','Dentist','Therapist','Physiotherapist','Nutritionist'],'Beauty & Wellness':['Salon','Barber','Makeup Artist','Nail Technician','Spa Therapist'],'Fashion & Textiles':['Tailor','Fashion Designer','Laundry Service','Dry Cleaner'],'Construction & Design':['Architect','Interior Designer','Structural Engineer','Quantity Surveyor'],'Events':['Event Planner','Caterer','Decorator','Sound Engineer','Lighting Technician'],'Logistics':['Delivery Service','Courier','Freight Agent'],'Freelance':['Virtual Assistant','Copywriter','Translator','Research Analyst','Data Entry']};
+const BCAT=['Fashion & Clothing','Electronics','Food & Beverages','Health & Beauty','Home & Living','Sports & Outdoor','Books & Education','Automotive','Agriculture','Other'];
+const VTYPES=['Motorbike','Tuk-tuk','Bicycle','Car','Van','Truck'];
+const MTYPE=['Sole Trader','Partnership','Limited Company','Non-Profit','Cooperative'];
+
+const PLANS={
+  buyer:[{t:'free',l:'Free',p:'Free',c:'0%',pop:0,ft:['Browse & Buy','Order Tracking','Reviews']},{t:'plus',l:'Plus',p:'KSh 299/mo',c:'0%',pop:0,ft:['Priority Support','Exclusive Deals']},{t:'premium',l:'Premium',p:'KSh 599/mo',c:'0%',pop:1,ft:['Free Delivery','5% Cashback','Concierge']}],
+  merchant:[{t:'free_trial',l:'Free Trial',p:'Free (14 days)',c:'20%',pop:0,ft:['1 Branch','Basic POS']},{t:'starter',l:'Starter',p:'KSh 999/mo',c:'15%',pop:0,ft:['2 Branches','SmartPOS','Reports']},{t:'professional',l:'Professional',p:'KSh 2,499/mo',c:'10%',pop:1,ft:['5 Branches','AI','eTIMS','Analytics']},{t:'business',l:'Business',p:'KSh 4,999/mo',c:'7%',pop:0,ft:['20 Branches','Priority Support']},{t:'enterprise',l:'Enterprise',p:'KSh 9,999/mo',c:'5%',pop:0,ft:['Unlimited','White-label','API']}],
+  provider:[{t:'free_trial',l:'Free Trial',p:'Free (14 days)',c:'20%',pop:0,ft:['1 Listing','5 Leads/mo']},{t:'starter',l:'Starter',p:'KSh 999/mo',c:'15%',pop:0,ft:['3 Listings','20 Leads','Calendar']},{t:'professional',l:'Professional',p:'KSh 2,499/mo',c:'10%',pop:1,ft:['10 Listings','AI Matching','Portfolio']},{t:'business',l:'Business',p:'KSh 4,999/mo',c:'7%',pop:0,ft:['25 Listings','Featured','Analytics']},{t:'enterprise',l:'Enterprise',p:'KSh 9,999/mo',c:'5%',pop:0,ft:['Unlimited','API','White-label']}],
+  rider:[{t:'basic',l:'Basic',p:'Free',c:'25%',pop:0,ft:['Unlimited Deliveries','Basic Support']},{t:'standard',l:'Standard',p:'KSh 499/mo',c:'20%',pop:0,ft:['Priority Dispatch','Earnings Dashboard']},{t:'premium',l:'Premium',p:'KSh 999/mo',c:'15%',pop:1,ft:['Top Priority','Insurance','Fuel Discount']}],
+  _def:[{t:'starter',l:'Starter',p:'KSh 999/mo',c:'5%',pop:0,ft:['Core Features','Analytics']},{t:'professional',l:'Professional',p:'KSh 2,499/mo',c:'4%',pop:1,ft:['All Starter','AI Tools','Priority Support']},{t:'enterprise',l:'Enterprise',p:'KSh 4,999/mo',c:'3%',pop:0,ft:['Unlimited','API']}]
+};
+PLANS.driver=PLANS.rider; PLANS.courier=PLANS.rider;
+
+/* ── Flows ─────────────────────────────────────────────────────────────────── */
+const FLOWS={
+  buyer:   [{t:'Interests',f:'rBuyerPrefs',skip:1},{t:'Location',f:'rLoc',skip:1},{t:'All Set!',f:'rReady',fin:1}],
+  merchant:[{t:'Business Details',f:'rMerchBiz'},{t:'Merchant ID',f:'rMerchID'},{t:'Choose Plan',f:'rSub'},{t:'First Branch',f:'rMerchBranch'},{t:'Tax Setup',f:'rMerchTax',skip:1},{t:'Launch!',f:'rReady',fin:1}],
+  provider:[{t:'Service Profile',f:'rProvProfile'},{t:'Coverage',f:'rProvCov'},{t:'Availability',f:'rProvAvail'},{t:'Pricing',f:'rProvPrice'},{t:'Choose Plan',f:'rSub'},{t:'Verification',f:'rVerif',skip:1},{t:'Payment Setup',f:'rPay'},{t:'Go Live!',f:'rReady',fin:1}],
+  rider:   [{t:'Personal Info',f:'rRiderPers'},{t:'Vehicle',f:'rRiderVeh'},{t:'Licence',f:'rRiderLic',skip:1},{t:'Choose Plan',f:'rSub'},{t:'Payment',f:'rPay'},{t:'Go Online!',f:'rReady',fin:1}],
+};
+FLOWS.driver=FLOWS.rider; FLOWS.courier=FLOWS.rider;
+const _gen=[{t:'Your Profile',f:'rGenProf'},{t:'Location',f:'rLoc'},{t:'Choose Plan',f:'rSub',skip:1},{t:'Payment',f:'rPay',skip:1},{t:'All Set!',f:'rReady',fin:1}];
+['property','hotel','restaurant','pharmacy','events','employer','freelancer','distributor','wholesaler','manufacturer','ngo','school','healthcare','finance'].forEach(r=>FLOWS[r]=_gen);
+
+/* ── Utils ─────────────────────────────────────────────────────────────────── */
+const _q=id=>document.getElementById(id);
+const _qv=id=>(_q(id)||{}).value||'';
+const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function _fld(id,lbl,type,o={}){const{ph='',req=0,val='',extra=''}=o;return`<div class="fg"><label class="sk-lbl">${lbl}${req?'<span style="color:var(--acc)">*</span>':''}</label><input class="sk-in" type="${type}" id="${id}" placeholder="${ph}" value="${_esc(val)}"${req?' required':''} ${extra}></div>`}
+function _sel(id,lbl,opts,v='',o={}){const oh=opts.map(x=>{const a=typeof x==='string'?x:x.value,b=typeof x==='string'?x:x.label;return`<option value="${_esc(a)}"${a===v?' selected':''}>${_esc(b)}</option>`}).join('');return`<div class="fg"><label class="sk-lbl">${lbl}${o.req?'<span style="color:var(--acc)">*</span>':''}</label><select class="sk-in sk-sel" id="${id}"${o.req?' required':''}><option value="">Select…</option>${oh}</select></div>`}
+function _ta(id,lbl,val='',ph=''){return`<div class="fg ff"><label class="sk-lbl">${lbl}</label><textarea class="sk-in sk-ta" id="${id}" rows="3" placeholder="${ph}">${_esc(val)}</textarea></div>`}
+function _chips(nm,items,sel=[],multi=1){return`<div class="chips" id="chips_${nm}">${items.map(i=>`<span class="chip${sel.includes(i)?' on':''}" onclick="_tc(this,'${nm}',${multi})">${_esc(i)}</span>`).join('')}</div>`}
+function _tc(el,nm,multi){if(!multi)document.querySelectorAll(`#chips_${nm} .chip`).forEach(c=>c.classList.remove('on'));el.classList.toggle('on')}
+function _cv(nm){return[...document.querySelectorAll(`#chips_${nm} .chip.on`)].map(c=>c.textContent)}
+function _planCards(role){
+  const ps=PLANS[role]||PLANS._def;
+  return`<div class="bt"><button class="btg on" id="btMo" onclick="W.billing('monthly')">Monthly</button><button class="btg" id="btYr" onclick="W.billing('yearly')">Yearly <span style="font-size:.6rem;background:var(--acc);color:#000;padding:1px 5px;border-radius:99px;margin-left:3px">20% off</span></button></div>
+  <div class="pgrid">${ps.map(p=>`<div class="pc${W._t===p.t?' on':''}" id="pc_${p.t}" onclick="W.plan('${p.t}',this)" data-t="${p.t}" data-p="${p.p}">${p.pop?'<div class="ppop">POPULAR</div>':''}<div class="pn">${p.l}</div><div class="pp">${p.p}</div><div class="pyr" id="pyr_${p.t}"></div><div class="pcom">${p.c} commission</div><ul class="pft">${p.ft.map(f=>`<li>${f}</li>`).join('')}</ul></div>`).join('')}</div>`;
+}
+
+function showLoad(m='Please wait…'){_q('lov').classList.add('vis');_q('lmsg').textContent=m}
+function hideLoad(){_q('lov').classList.remove('vis')}
+function toast(m,t='ok',ms=3500){const d=document.createElement('div');d.className=`toast t-${t}`;d.textContent=m;_q('tc').appendChild(d);setTimeout(()=>d.remove(),ms)}
+function showPh(id){document.querySelectorAll('.onb-phase').forEach(p=>p.classList.remove('active'));_q(id).classList.add('active')}
+function markUp(card){card.classList.add('done')}
+
+/* ── Auth ──────────────────────────────────────────────────────────────────── */
+const A=(()=>{
+  let _conf=null;
+  function tab(t,btn){document.querySelectorAll('.atab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.aform').forEach(f=>f.classList.remove('on'));btn.classList.add('on');_q(t==='si'?'fSi':'fSu').classList.add('on')}
+  async function emailSI(e){e.preventDefault();showLoad('Signing in…');try{await firebase.auth().signInWithEmailAndPassword(_qv('siE'),_qv('siP'))}catch(err){hideLoad();toast(_ae(err),'err')}}
+  async function emailSU(e){e.preventDefault();showLoad('Creating account…');try{const c=await firebase.auth().createUserWithEmailAndPassword(_qv('suE'),_qv('suP'));await c.user.updateProfile({displayName:(_qv('suF')+' '+_qv('suL')).trim()})}catch(err){hideLoad();toast(_ae(err),'err')}}
+  async function google(){showLoad('Signing in…');try{await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider())}catch(err){hideLoad();toast(_ae(err),'err')}}
+  function phoneToggle(){const s=_q('phoneSec');s.style.display=s.style.display==='none'?'block':'none'}
+  async function sendOTP(){const n='+254'+_qv('pNum').replace(/\D/g,'');if(n.length<13)return toast('Enter a valid Kenyan number','err');showLoad('Sending OTP…');try{if(!window._rv)window._rv=new firebase.auth.RecaptchaVerifier('rcap',{size:'invisible'});_conf=await firebase.auth().signInWithPhoneNumber(n,window._rv);hideLoad();_q('otpSec').style.display='block';toast('OTP sent!');_q('otpB').querySelectorAll('.otp-b')[0].focus()}catch(err){hideLoad();toast(_ae(err),'err')}}
+  async function verifyOTP(){const code=[..._q('otpB').querySelectorAll('.otp-b')].map(b=>b.value).join('');if(code.length<6)return toast('Enter all 6 digits','err');showLoad('Verifying…');try{await _conf.confirm(code)}catch(err){hideLoad();toast('Invalid code.','err')}}
+  function _ae(e){const m={'auth/wrong-password':'Incorrect password.','auth/user-not-found':'No account found.','auth/email-already-in-use':'Email already in use.','auth/weak-password':'Password must be 8+ characters.','auth/invalid-email':'Invalid email.','auth/too-many-requests':'Too many attempts — try later.'};return m[e.code]||e.message}
+  document.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('.otp-b').forEach((b,i,a)=>{b.addEventListener('input',()=>{if(b.value&&a[i+1])a[i+1].focus()});b.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!b.value&&a[i-1])a[i-1].focus()})})});
+  return{tab,emailSI,emailSU,google,phoneToggle,sendOTP,verifyOTP};
+})();
+
+/* ── Roles ─────────────────────────────────────────────────────────────────── */
+const R=(()=>{
+  const PRI=['buyer','merchant','provider','rider','driver','property','hotel','restaurant','healthcare','employer','freelancer','events'];
+  const MORE=['courier','pharmacy','distributor','wholesaler','manufacturer','ngo','school','finance'];
+  let _acc=null,_more=0;
+  function render(acc){
+    _acc=acc;
+    const rl=acc?.roles||[];
+    function card(r){
+      const m=typeof SokoniOnboarding!=='undefined'?SokoniOnboarding.metaFor(r):{label:r,icon:'🔲',desc:''};
+      const act=rl.includes(r);
+      return`<div class="rc${act?' rc-on':''}" onclick="R.pick('${r}')">${act?'<span class="rbadge rb-a">✓ Active</span>':''}<span class="r-ico">${m.icon}</span><div class="r-nm">${m.label}</div><div class="r-dsc">${m.desc}</div></div>`;
+    }
+    _q('rGrid').innerHTML=PRI.map(card).join('')+MORE.map(r=>`<div id="mr_${r}" style="display:none">${card(r)}</div>`).join('');
+    if(MORE.length)_q('moreT').style.display='block';
+  }
+  function more(){_more=!_more;MORE.forEach(r=>{const e=_q(`mr_${r}`);if(e)e.style.display=_more?'block':'none'});_q('moreT').querySelector('button').textContent=_more?'− Show fewer roles':'+ Show more roles'}
+  async function pick(r){
+    const act=(_acc?.roles||[]).includes(r);
+    if(act){showLoad('Loading dashboard…');try{const d=await _sdk.switchRole(r);window.location.href=d.dashboard}catch(e){hideLoad();toast(e.message,'err')}return}
+    W.start(r);
+  }
+  return{render,more,pick};
+})();
+
+/* ── Wizard ─────────────────────────────────────────────────────────────────── */
+const W=(()=>{
+  let _r=null,_s=0,_fl=[],_bill='monthly',_pid=null;
+  let _draft={};
+  let _t=null; // selected plan tier
+
+  function start(r){_r=r;_s=0;_fl=FLOWS[r]||_gen;_draft={};_pid=null;_t=null;_loadDraft();showPh('phC');_q('progArea').classList.add('vis');_rnd()}
+  async function _loadDraft(){try{const d=await _sdk.getDraft(_r);if(d&&!d.completed){_draft=d.stepData||{};_s=d.currentStep||0;_t=_draft.tier||null;_rnd()}}catch(e){}}
+  function _rnd(){
+    const s=_fl[_s];if(!s)return;
+    _q('sCur').textContent=_s+1;_q('sTot').textContent=_fl.length;_q('sTitle').textContent=s.t;
+    _q('pFill').style.width=`${((_s+1)/_fl.length)*100}%`;
+    _q('bSkip').style.display=s.skip?'inline-block':'none';
+    _q('bBack').style.display=_s===0?'none':'inline-block';
+    _q('bNext').textContent=s.fin?'Publish →':'Save & Continue →';
+    const fn=window[s.f];
+    _q('sContent').innerHTML=fn?fn(_r,_draft[`s${_s}`]||{}):`<div class="st-h">${s.t}</div>`;
+    document.documentElement.scrollTop=0;
+  }
+  async function next(){
+    const s=_fl[_s];if(!s)return;
+    const data=_collect();if(data===null)return;
+    showLoad('Saving…');
+    try{await _sdk.saveDraft(_r,_s,data);_draft[`s${_s}`]=data;if(_t)_draft.tier=_t;
+      if(s.fin){await _activate();return}
+      _s++;hideLoad();_rnd();
+    }catch(e){hideLoad();toast(e.message,'err')}
+  }
+  function back(){if(_s===0){showPh('phB');_q('progArea').classList.remove('vis');return}_s--;_rnd()}
+  function skip(){_draft[`s${_s}`]={};_s++;_rnd()}
+  async function _activate(){
+    showLoad('Activating your profile…');
+    try{
+      const all=Object.assign({},..._fl.map((_,i)=>_draft[`s${i}`]||{}));all.role=_r;
+      const res=await _sdk.activateRole(_r,all);_pid=res.profileId;
+      await _sdk.activateSubscription(_r,_t||'free_trial',_bill,_pid,null,null);
+      hideLoad();
+      _q('bNext').style.display='none';_q('bBack').style.display='none';_q('bSkip').style.display='none';
+      _q('sContent').innerHTML=rReady(_r,{profileId:_pid});
+      _q('sTitle').textContent='Profile Live!';_q('pFill').style.width='100%';
+    }catch(e){hideLoad();toast(e.message,'err')}
+  }
+  function _collect(){
+    const s=_fl[_s];if(!s)return{};
+    const data={};
+    _q('sContent').querySelectorAll('[id]').forEach(el=>{
+      if(['INPUT','SELECT','TEXTAREA'].includes(el.tagName))data[el.id]=el.type==='checkbox'?el.checked:el.value;
     });
+    if(_t)data.tier=_t;
+    return data;
+  }
+  function plan(t,el){document.querySelectorAll('.pc').forEach(c=>c.classList.remove('on'));el.classList.add('on');_t=t}
+  function billing(b){_bill=b;_q('btMo').classList.toggle('on',b==='monthly');_q('btYr').classList.toggle('on',b==='yearly')}
 
-    /* ── Update progress bars ── */
-    function updateProgress() {
-      if (!window.SokoniOnboarding) return;
-      var roles = [
-        { role:'seller',       pct:'pctSeller', fill:'fillSeller', prog:'progressSeller', steps:4 },
-        { role:'driver',       pct:'pctDriver', fill:'fillDriver', prog:'progressDriver', steps:4 },
-        { role:'professional', pct:'pctPro',    fill:'fillPro',    prog:'progressPro',    steps:4 }
-      ];
-      roles.forEach(function(r){
-        var pct = SokoniOnboarding.getProgress(r.role, r.steps);
-        var state = SokoniOnboarding.getState(r.role);
-        var fillEl  = document.getElementById(r.fill);
-        var pctEl   = document.getElementById(r.pct);
-        if(fillEl)  fillEl.style.width = pct + '%';
-        if(pctEl)   pctEl.textContent  = pct + '%';
-        if(pct === 0 || pct === 100){
-          var progEl = document.getElementById(r.prog);
-          if(progEl && pct === 0) progEl.style.display = 'none';
-        }
-      });
+  return{start,next,back,skip,plan,billing,get _t(){return _t},get _draft(){return _draft}};
+})();
 
-      /* Check if seller is done via legacy key */
-      var providerProfile = localStorage.getItem('sokoniProviderProfile');
-      var sellerOnboard   = localStorage.getItem('sokoniSellerOnboarding');
-      if(providerProfile || sellerOnboard){
-        var doneEl = document.getElementById('sellerDone');
-        if(doneEl) doneEl.style.display = 'inline-flex';
-        var progEl = document.getElementById('progressSeller');
-        if(progEl) progEl.style.display = 'none';
-      }
-    }
+/* ── Step Renderers ─────────────────────────────────────────────────────────── */
+function rBuyerPrefs(r,d){return`<div class="st-h">Your Interests</div><p class="st-s">Personalise your shopping experience.</p><label class="sk-lbl" style="margin-bottom:8px;display:block">Categories you're interested in</label>${_chips('bCats',BCAT,d.categories||[],1)}${_fld('bCity','Your city','text',{ph:'e.g. Nairobi',val:d.city||''})}`}
 
-    /* ── Auth greeting ── */
-    function initGreeting() {
-      var auth = window.firebaseAuth;
-      if(!auth) return;
-      auth.onAuthStateChanged(function(user){
-        if(user){
-          var greet = document.getElementById('obGreeting');
-          var name  = document.getElementById('obUserName');
-          if(greet) greet.style.display = 'inline-flex';
-          if(name){
-            var dn = user.displayName || user.email || 'User';
-            name.textContent = dn.replace(/&/g,'').replace(/</g,'').replace(/>/g,'');
-          }
-        }
-      });
-    }
+function rMerchBiz(r,d){return`<div class="st-h">Your Business</div><p class="st-s">Tell us about the business you're registering.</p><div class="fgrid">${_fld('bNm','Business Name','text',{ph:'e.g. Acme Traders',req:1,val:d.bNm||''})}${_sel('bTy','Business Type',MTYPE,d.bTy||'',{req:1})}${_sel('bCt','Main Category',BCAT,d.bCt||'',{req:1})}${_fld('kraPIN','KRA PIN (optional)','text',{ph:'P051XXXXXXXXX',val:d.kraPIN||''})}</div>${_ta('bDs','Business Description',d.bDs||'','What does your business sell or do?')}`}
 
-    /* ── Business registration ── */
-    function openBusinessReg() {
-      if(window.HubRegister && typeof HubRegister.open === 'function'){
-        HubRegister.open();
-      } else {
-        window.location.href = 'offer.html';
-      }
-    }
+function rMerchID(r,d){return`<div class="st-h">Your Merchant ID</div><p class="st-s">Your ID is auto-generated when you publish.</p><div class="icard" style="display:block;margin:22px auto;text-align:center"><div class="il">Merchant ID</div><div class="id">BIZ-••••••••</div></div><div class="info-b">Your Merchant ID is permanent. Keep it safe — you'll use it at POS, for settlements, and when contacting support.</div><div class="fgrid">${_fld('mcPh','Business Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.mcPh||''})}${_fld('mcEm','Business Email','email',{ph:'business@example.com',val:d.mcEm||''})}</div>`}
 
-    /* ── Init ── */
-    window.addEventListener('load', function(){
-      updateProgress();
-      initGreeting();
-    });
+function rMerchBranch(r,d){return`<div class="st-h">First Branch</div><p class="st-s">Set up your primary location.</p><div class="fgrid">${_fld('brNm','Branch Name','text',{ph:'Main Branch',req:1,val:d.brNm||''})}${_sel('brCo','County',COUNTIES.map(c=>({value:c,label:c})),d.brCo||'',{req:1})}${_fld('brCi','City / Town','text',{ph:'Nairobi CBD',req:1,val:d.brCi||''})}${_fld('brAd','Street Address','text',{ph:'Moi Avenue, Suite 4',val:d.brAd||''})}${_fld('brOp','Opens At','time',{val:d.brOp||'08:00'})}${_fld('brCl','Closes At','time',{val:d.brCl||'18:00'})}</div>`}
 
-    /* Also try after trust.js loads */
-    document.addEventListener('sokoniTrustReady', updateProgress);
-    setTimeout(updateProgress, 800);
-  </script>
-  <!-- Enterprise v2.0: core stack -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
+function rMerchTax(r,d){return`<div class="st-h">Tax Setup</div><p class="st-s">Configure tax settings — editable anytime.</p><div class="fgrid"><div class="fg"><label class="sk-lbl">VAT Status</label><select class="sk-in sk-sel" id="vatS"><option value="none"${(d.vatS||'none')==='none'?' selected':''}>Not VAT Registered</option><option value="reg"${d.vatS==='reg'?' selected':''}>VAT Registered</option></select></div>${_fld('vatN','VAT Number (if registered)','text',{ph:'V########',val:d.vatN||''})}${_fld('kra2','KRA PIN','text',{ph:'P051XXXXXXXXX',val:d.kra2||''})}</div><div class="info-b">eTIMS integration available on Professional plan and above.</div>`}
+
+function rProvProfile(r,d){
+  const cats=Object.keys(PCATS);const sc=d.pCat?PCATS[d.pCat]||[]:[];
+  return`<div class="st-h">Service Profile</div><p class="st-s">Help customers find and trust you.</p><div class="fgrid">${_fld('pNm','Professional / Business Name','text',{ph:'e.g. John Doe Electricals',req:1,val:d.pNm||''})}${_sel('pCat','Primary Category',cats,d.pCat||'',{req:1})}<div class="fg" id="scWrap"${sc.length?'':' style="display:none"'}><label class="sk-lbl">Subcategory</label><select class="sk-in sk-sel" id="pSub">${sc.map(s=>`<option value="${s}"${s===d.pSub?' selected':''}>${s}</option>`).join('')}</select></div>${_sel('pExp','Experience',[{value:'<1',label:'< 1 year'},{value:'1-2',label:'1-2 years'},{value:'3-5',label:'3-5 years'},{value:'6-10',label:'6-10 years'},{value:'10+',label:'10+ years'}],d.pExp||'')}</div>${_ta('pBio','Bio / Description',d.pBio||','Describe your services and expertise…')}<label class="sk-lbl" style="margin:10px 0 6px;display:block">Languages</label>${_chips('pLng',['English','Swahili','Kikuyu','Luo','Luhya','Kamba','Other'],d.languages||['English','Swahili'],1)}<script>document.getElementById('pCat').addEventListener('change',function(){const sc=PCATS[this.value]||[];const w=document.getElementById('scWrap');const s=document.getElementById('pSub');w.style.display=sc.length?'':'none';s.innerHTML=sc.map(x=>'<option>'+x+'</option>').join('')});<\/script>`;
+}
+
+function rProvCov(r,d){return`<div class="st-h">Coverage Area</div><p class="st-s">Tell customers where you operate.</p><label class="sk-lbl" style="margin-bottom:7px;display:block">Service type</label>${_chips('covT',['On-site','Remote / Online','Hybrid'],d.covT?[d.covT]:['On-site'],0)}<div class="fgrid" style="margin-top:14px">${_sel('covCo','County',COUNTIES.map(c=>({value:c,label:c})),d.county||'')}${_fld('covCi','City / Town','text',{ph:'e.g. Westlands',val:d.city||''})}${_fld('covNb','Neighbourhood','text',{ph:'Optional',val:d.nb||''})}</div><label class="sk-lbl" style="margin-top:10px;display:block">Service radius: <strong id="rV">${d.radius||20} km</strong></label><input type="range" id="covR" min="5" max="100" step="5" value="${d.radius||20}" style="width:100%;margin-top:5px;accent-color:var(--acc)" oninput="document.getElementById('rV').textContent=this.value+' km'"><div style="display:flex;gap:20px;margin-top:12px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="covNat"${d.nationwide?' checked':''}> Serve Nationwide</label><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="covRem"${d.remote?' checked':''}> Remote / Online</label></div>`}
+
+function rProvAvail(r,d){const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];return`<div class="st-h">Availability</div><p class="st-s">Set your regular working schedule.</p><label class="sk-lbl" style="margin-bottom:7px;display:block">Working days</label>${_chips('avD',days,d.days||['Mon','Tue','Wed','Thu','Fri'],1)}<div class="fgrid" style="margin-top:14px">${_fld('avF','Working Hours: From','time',{val:d.from||'08:00'})}${_fld('avT','To','time',{val:d.to||'17:00'})}${_fld('avBF','Break: From','time',{val:d.breakFrom||''})}${_fld('avBT','Break: To','time',{val:d.breakTo||''})}${_sel('avLd','Lead Time',[{value:'1h',label:'1 hour'},{value:'2h',label:'2 hours'},{value:'4h',label:'4 hours'},{value:'same',label:'Same day'},{value:'1d',label:'1 day'},{value:'2d',label:'2 days'},{value:'1w',label:'1 week'}],d.lead||'2h')}</div><div style="display:flex;gap:20px;margin-top:12px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="avEm"${d.emergency?' checked':''}> Emergency / 24-7</label><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="avHol"${d.holidays?' checked':''}> Available on Holidays</label></div>`}
+
+function rProvPrice(r,d){return`<div class="st-h">Your Pricing</div><p class="st-s">Set your rates — you can update them anytime.</p><div class="fgrid">${_fld('prH','Hourly Rate (KSh)','number',{ph:'e.g. 1500',val:d.hourly||''})}${_fld('prF','Fixed Price (KSh)','number',{ph:'e.g. 5000',val:d.fixed||''})}${_fld('prI','Inspection Fee (KSh)','number',{ph:'e.g. 500',val:d.inspection||''})}${_fld('prE','Emergency Fee (KSh)','number',{ph:'e.g. 2000',val:d.emergency||''})}${_fld('prTr','Travel Fee (KSh/km)','number',{ph:'e.g. 50',val:d.travel||''})}</div><div style="margin-top:10px"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="prQ"${d.quote?' checked':''}> Also accept quotation requests</label></div>`}
+
+function rSub(r,d){return`<div class="st-h">Choose Your Plan</div><p class="st-s">Start free, upgrade anytime. Cancel whenever.</p>${_planCards(r)}`}
+
+function rVerif(r,d){return`<div class="st-h">Identity Verification</div><p class="st-s">Verified profiles get 3× more bookings. Skip and verify later.</p><div class="ugrid"><div class="uc" onclick="_q('uNID').click()"><div class="ui">🪪</div><div class="ul">National ID / Passport</div><div class="uh">Front & back</div><div class="us">Uploaded ✓</div><input type="file" id="uNID" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uBR').click()"><div class="ui">📋</div><div class="ul">Business Registration</div><div class="uh">If company</div><div class="us">Uploaded ✓</div><input type="file" id="uBR" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uPL').click()"><div class="ui">📜</div><div class="ul">Professional Licence</div><div class="uh">Optional</div><div class="us">Uploaded ✓</div><input type="file" id="uPL" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uSel').click()"><div class="ui">🤳</div><div class="ul">Verification Selfie</div><div class="uh">Hold ID next to face</div><div class="us">Uploaded ✓</div><input type="file" id="uSel" accept="image/*" capture="user" style="display:none" onchange="markUp(this.parentElement)"></div></div>`}
+
+function rPay(r,d){return`<div class="st-h">Payment Setup</div><p class="st-s">Connect a payment method to receive earnings.</p><div class="fgrid">${_fld('pmMp','M-PESA Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.mpesa||''})}${_sel('pmBk','Bank (optional)',[{value:'',label:'None'},{value:'KCB',label:'KCB'},{value:'Equity',label:'Equity Bank'},{value:'Cooperative',label:'Co-operative Bank'},{value:'Absa',label:'Absa'},{value:'NCBA',label:'NCBA'},{value:'DTB',label:'DTB'},{value:'Family',label:'Family Bank'},{value:'PostBank',label:'PostBank'},{value:'Other',label:'Other'}],d.bank||'')}${_fld('pmAc','Account Number (if bank)','text',{ph:'XXXXXXXXXXXXXXXX',val:d.acc||''})}</div><div class="info-b">Payouts every Monday. Minimum payout KSh 100. SOKONI Wallet auto-created on activation.</div>`}
+
+function rRiderPers(r,d){return`<div class="st-h">Personal Information</div><p class="st-s">Required for background verification and payouts.</p><div class="fgrid">${_fld('rdF','First Name','text',{ph:'John',req:1,val:d.first||''})}${_fld('rdL','Last Name','text',{ph:'Mwangi',req:1,val:d.last||''})}${_fld('rdDOB','Date of Birth','date',{req:1,val:d.dob||''})}${_sel('rdG','Gender',[{value:'male',label:'Male'},{value:'female',label:'Female'},{value:'pnts',label:'Prefer not to say'}],d.gender||'')}${_fld('rdID','National ID Number','text',{ph:'XXXXXXXX',req:1,val:d.idNum||''})}${_fld('rdPh','Phone Number','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.phone||''})}${_sel('rdCo','County of Residence',COUNTIES.map(c=>({value:c,label:c})),d.county||'')}</div>`}
+
+function rRiderVeh(r,d){return`<div class="st-h">Your Vehicle</div><p class="st-s">Register the vehicle you'll use for deliveries.</p><div class="fgrid">${_sel('vhT','Vehicle Type',VTYPES,d.type||'Motorbike',{req:1})}${_fld('vhMk','Make','text',{ph:'Honda',req:1,val:d.make||''})}${_fld('vhMo','Model','text',{ph:'CG 125',val:d.model||''})}${_fld('vhYr','Year','number',{ph:'2020',val:d.year||''})}${_fld('vhPl','Number Plate','text',{ph:'KBZ 123A',req:1,val:d.plate||''})}${_fld('vhCo','Color','text',{ph:'Red',val:d.color||''})}</div>`}
+
+function rRiderLic(r,d){return`<div class="st-h">Driving Licence</div><p class="st-s">Upload both sides of your valid licence.</p><div class="fgrid">${_fld('lcN','Licence Number','text',{ph:'DL XXXXXXXX',val:d.num||''})}${_sel('lcC','Class',[{value:'B',label:'Class B - Cars'},{value:'A',label:'Class A - Motorcycles'},{value:'CE',label:'Class C/E - Trucks'}],d.cls||'')}${_fld('lcE','Expiry Date','date',{val:d.expiry||''})}</div><div class="ugrid" style="margin-top:14px"><div class="uc" onclick="_q('uLF').click()"><div class="ui">📄</div><div class="ul">Licence Front</div><div class="us">Uploaded ✓</div><input type="file" id="uLF" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uLB').click()"><div class="ui">📄</div><div class="ul">Licence Back</div><div class="us">Uploaded ✓</div><input type="file" id="uLB" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div></div>`}
+
+function rGenProf(r,d){
+  const m=typeof SokoniOnboarding!=='undefined'?SokoniOnboarding.metaFor(r):{label:r,icon:'🔲'};
+  const types={property:['Residential','Commercial','Mixed-use','Land'],hotel:['Hotel','Motel','Guesthouse','Airbnb','Hostel','Resort'],restaurant:['Restaurant','Cafe','Fast Food','Bar','Catering','Food Truck'],healthcare:['Clinic','Hospital','Pharmacy','Lab','Dental','Therapy Center'],employer:['Company','NGO','Government','SME','Startup'],events:['Event Company','Venue','Individual Planner'],pharmacy:['Community','Hospital Pharmacy','Online'],ngo:['Charity','Foundation','Community Group','Faith-based'],school:['Primary','Secondary','College','Training Center','Online'],finance:['Microfinance','SACCO','Insurance','Investment','Digital Lender'],freelancer:['Designer','Developer','Writer','Consultant','Analyst'],courier:['Express','Same-day','International'],distributor:['FMCG','Pharmaceutical','Electronics','Other'],wholesaler:['Food & Beverages','Electronics','Clothing','Building Materials'],manufacturer:['Consumer Goods','Industrial','Food Processing','Textile']};
+  const tl=types[r]||[];
+  return`<div class="st-h">${m.icon} ${m.label} Profile</div><p class="st-s">Create your ${m.label.toLowerCase()} profile.</p><div class="fgrid">${_fld('gNm','Name','text',{ph:`Your ${m.label} name`,req:1,val:d.name||''})}${tl.length?_sel('gTy','Type',tl,d.type||''):''}${_fld('gPh','Contact Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.phone||''})}${_fld('gEm','Contact Email','email',{ph:'info@example.com',val:d.email||''})}</div>${_ta('gDs','Description',d.desc||,'Describe what you do or offer…')}`;
+}
+
+function rLoc(r,d){return`<div class="st-h">Location</div><p class="st-s">Set your primary location.</p><div class="fgrid">${_sel('loCo','County',COUNTIES.map(c=>({value:c,label:c})),d.county||'',{req:1})}${_fld('loCi','City / Town','text',{ph:'e.g. Nairobi CBD',req:1,val:d.city||''})}${_fld('loAd','Street Address','text',{ph:'Building, Street',val:d.addr||''})}</div>`}
+
+function rReady(r,d){
+  const m=typeof SokoniOnboarding!=='undefined'?SokoniOnboarding.metaFor(r):{label:r,icon:'🎉'};
+  const pid=d?.profileId||'';
+  const dash={merchant:'pos.html',provider:'provider-dashboard.html',rider:'rider-dashboard.html',driver:'driver-dashboard.html',buyer:'index.html'};
+  return`<div class="sscreen"><div class="scheck">${m.icon}</div><h2 class="st-ttl">You're live on <span class="ac">SOKONI</span>!</h2><p style="color:var(--sub);margin-bottom:14px">Your ${m.label} profile is active and ready.</p>${pid?`<div class="icard"><div class="il">${m.label} ID</div><div class="id">${_esc(pid)}</div></div>`:''}<div class="slinks"><a href="${dash[r]||'index.html'}" class="btn btn-p">Go to Dashboard →</a><a href="onboarding.html" class="btn btn-s">Add Another Role</a></div></div>`;
+}
+
+/* ── Init ──────────────────────────────────────────────────────────────────── */
+let _sdk=null;
+function _uChip(u){const c=_q('uChip');if(!u){c.style.display='none';return}c.style.display='flex';const ini=(u.displayName||u.email||'U').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();c.innerHTML=`<div class="ini">${_esc(ini)}</div>`}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  firebase.auth().onAuthStateChanged(async u=>{
+    hideLoad();_uChip(u);
+    if(!u){showPh('phA');return}
+    if(!_sdk)_sdk=new SokoniOnboarding();
+    showLoad('Loading your account…');
+    try{const{account}=await _sdk.getAccount();hideLoad();showPh('phB');R.render(account)}
+    catch(e){hideLoad();showPh('phB');R.render({})}
+  });
+});
+</script>
 </body>
 </html>

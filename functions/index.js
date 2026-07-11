@@ -8955,3 +8955,7 @@ exports.analyticsSnapshotDaily = _aeMod.analyticsSnapshotDaily;
 /* ── Provider Onboarding & Dashboard — 19 onCall ops → 1 providerDispatch ── */
 const provDisp = require('./provider-dispatch');
 exports.providerDispatch = provDisp.providerDispatch;
+
+/* ── Universal Enterprise Onboarding Engine — 12 ops → 1 onboardingDispatch ── */
+const onbDisp = require('./onboarding-dispatch');
+exports.onboardingDispatch = onbDisp.onboardingDispatch;

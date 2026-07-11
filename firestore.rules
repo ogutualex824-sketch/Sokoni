@@ -4183,5 +4183,33 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── Universal Onboarding Engine — account collections ──────────────────
+
+    match /accounts/{uid} {
+      allow read:  if isAuthed() && request.auth.uid == uid;
+      allow write: if false; // CF-only — onboardingDispatch
+    }
+
+    match /accountDrafts/{draftId} {
+      allow read:  if isAuthed() && resource.data.accountId == request.auth.uid;
+      allow write: if false; // CF-only
+    }
+
+    match /accountProfiles/{profileId} {
+      // Owners read own profile; public can read for discovery
+      allow read:  if true;
+      allow write: if false; // CF-only — onboardingDispatch
+    }
+
+    match /accountSubscriptions/{subId} {
+      allow read:  if isAdmin() || (isAuthed() && resource.data.accountId == request.auth.uid);
+      allow write: if false; // CF-only
+    }
+
+    match /accountHandles/{handle} {
+      allow read:  if true; // public — handle availability check
+      allow write: if false;
+    }
+
   }
 }

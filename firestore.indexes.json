@@ -3045,7 +3045,16 @@
     { "collectionGroup": "providerPayouts", "queryScope": "COLLECTION",
       "fields": [{ "fieldPath": "providerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
     { "collectionGroup": "providerReviews", "queryScope": "COLLECTION",
-      "fields": [{ "fieldPath": "providerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] }
+      "fields": [{ "fieldPath": "providerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+
+    { "collectionGroup": "accountProfiles", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "accountId", "order": "ASCENDING" }, { "fieldPath": "role", "order": "ASCENDING" }] },
+    { "collectionGroup": "accountProfiles", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "accountId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "accountSubscriptions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "accountId", "order": "ASCENDING" }, { "fieldPath": "role", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }] },
+    { "collectionGroup": "accountSubscriptions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "accountId", "order": "ASCENDING" }, { "fieldPath": "renewalAt", "order": "ASCENDING" }] }
   ],
   "fieldOverrides": [
     {

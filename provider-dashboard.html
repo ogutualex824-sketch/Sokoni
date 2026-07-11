@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-require-auth="true">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Provider Dashboard — SOKONI</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<script src="security.js"></script>
+<style>
+:root{--bg:#050505;--surf:#0d0d0d;--surf2:#141414;--border:#1a1a1a;--acc:#71ff00;--acc-dim:rgba(113,255,0,.12);--acc-glow:0 0 16px rgba(113,255,0,.25);--text:#e8e8e8;--sub:#888;--err:#ff4d4d;--warn:#ffb800;--ok:#71ff00;--r:10px;--t:.25s ease}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:15px;overflow-x:hidden}
+a{color:var(--acc);text-decoration:none}
+.btn{padding:10px 17px;border-radius:var(--r);border:none;cursor:pointer;font-size:.85rem;font-weight:600;transition:all var(--t);line-height:1}
+.btn-p{background:var(--acc);color:#000}.btn-p:hover{box-shadow:var(--acc-glow)}
+.btn-s{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
+.btn-g{background:transparent;color:var(--sub);border:1px solid var(--border)}
+.btn-sm{padding:7px 12px;font-size:.78rem}
+.btn-ok{background:var(--ok);color:#000}
+.btn-err{background:var(--err);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* Layout */
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:240px;flex-shrink:0;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto}
+.sb-logo{padding:20px 18px 14px;display:flex;align-items:center;gap:9px;font-weight:800;color:var(--acc);font-size:1.05rem;letter-spacing:-.3px}
+.sb-logo img{height:24px}
+.sb-provider{padding:12px 16px;border-bottom:1px solid var(--border)}
+.sb-avatar{width:44px;height:44px;border-radius:50%;background:var(--acc-dim);display:flex;align-items:center;justify-content:center;font-size:1.1rem;margin-bottom:7px}
+.sb-name{font-weight:700;font-size:.88rem;margin-bottom:2px}
+.sb-plan{display:inline-block;font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--acc);color:#000}
+.sb-nav{flex:1;padding:10px 0}
+.sb-item{display:flex;align-items:center;gap:10px;padding:10px 18px;cursor:pointer;color:var(--sub);font-size:.87rem;transition:all var(--t)}
+.sb-item:hover,.sb-item.active{color:var(--text);background:var(--surf2)}
+.sb-item.active{border-left:3px solid var(--acc);padding-left:15px}
+.sb-icon{font-size:1rem;width:20px;text-align:center}
+.sb-foot{padding:14px 16px;border-top:1px solid var(--border)}
+.main{flex:1;overflow-y:auto;padding-bottom:80px}
+@media(max-width:768px){
+  .sidebar{display:none}
+  .bn{display:flex}
+  .main{padding-bottom:72px}
+}
+.bn{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(5,5,5,.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);height:58px}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--sub);font-size:.6rem;font-weight:600;transition:color var(--t)}
+.bn-item.active{color:var(--acc)}
+.bn-icon{font-size:1.2rem}
+
+/* Header */
+.pg-header{padding:20px 22px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.pg-title{font-size:1.2rem;font-weight:800}
+.pg-sub{font-size:.8rem;color:var(--sub);margin-top:1px}
+
+/* Panels */
+.panel{display:none;padding:18px 20px}
+.panel.active{display:block}
+
+/* KPI cards */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.kpi{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.kpi-ico{font-size:1.3rem;margin-bottom:6px}
+.kpi-val{font-size:1.4rem;font-weight:800;color:var(--acc)}
+.kpi-lbl{font-size:.72rem;color:var(--sub);margin-top:2px}
+.kpi-sub{font-size:.7rem;color:var(--sub)}
+
+/* Sub cards */
+.card{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+.card-title{font-size:.9rem;font-weight:700;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.card-empty{color:var(--sub);font-size:.83rem;padding:20px 0;text-align:center}
+
+/* Booking item */
+.booking-item{padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
+.booking-item:last-child{border-bottom:none}
+.b-ava{width:38px;height:38px;border-radius:50%;background:var(--surf2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;color:var(--sub);flex-shrink:0}
+.b-info{flex:1}
+.b-name{font-weight:600;font-size:.87rem}
+.b-meta{font-size:.75rem;color:var(--sub);margin-top:2px}
+.b-acts{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
+.chip-status{display:inline-block;padding:2px 9px;border-radius:99px;font-size:.65rem;font-weight:700}
+.cs-pending{background:rgba(255,184,0,.15);color:var(--warn)}
+.cs-confirmed{background:rgba(0,120,255,.15);color:#60aaff}
+.cs-completed{background:var(--acc-dim);color:var(--acc)}
+.cs-cancelled{background:rgba(255,77,77,.15);color:var(--err)}
+.cs-inprog{background:rgba(255,140,0,.15);color:#ffaa33}
+
+/* Filter tabs */
+.ftabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px}
+.ftab{padding:6px 14px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--sub);cursor:pointer;font-size:.78rem;font-weight:600;white-space:nowrap;transition:all var(--t)}
+.ftab.on{background:var(--acc);color:#000;border-color:var(--acc)}
+
+/* Chart */
+.chart-wrap{background:var(--surf2);border-radius:10px;padding:14px;overflow-x:auto}
+.chart-svg{display:block}
+
+/* Earnings summary */
+.earn-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:14px}
+.earn-box{background:var(--surf2);border-radius:10px;padding:12px 14px;text-align:center}
+.eb-val{font-size:1.15rem;font-weight:800;color:var(--acc)}
+.eb-lbl{font-size:.7rem;color:var(--sub);margin-top:2px}
+
+/* Payout row */
+.payout-row{padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-size:.82rem}
+.payout-row:last-child{border-bottom:none}
+.pr-ico{font-size:1.1rem;width:24px;text-align:center}
+.pr-info{flex:1}
+.pr-net{font-weight:700;color:var(--acc)}
+
+/* Reviews */
+.rating-big{font-size:2.8rem;font-weight:800;color:var(--acc);line-height:1}
+.stars-row{display:flex;gap:3px;margin:6px 0}
+.star{color:var(--acc);font-size:1rem}
+.star-e{color:var(--border)}
+.rating-bars{margin-top:12px}
+.rbar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:.75rem;color:var(--sub)}
+.rbar{flex:1;height:6px;background:var(--border);border-radius:99px;overflow:hidden}
+.rbar-fill{height:100%;background:var(--acc);border-radius:99px}
+.review-item{padding:14px 0;border-bottom:1px solid var(--border)}
+.review-item:last-child{border-bottom:none}
+.rv-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.rv-name{font-weight:600;font-size:.85rem}
+.rv-date{font-size:.72rem;color:var(--sub)}
+.rv-stars{display:flex;gap:2px;margin-bottom:5px}
+.rv-text{font-size:.83rem;color:var(--sub);line-height:1.5}
+.rv-reply{margin-top:8px;background:var(--surf2);border-radius:8px;padding:10px 12px;font-size:.8rem}
+
+/* Settings */
+.stabs{display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;border-bottom:1px solid var(--border);padding-bottom:0}
+.stab{padding:9px 14px;border:none;background:transparent;color:var(--sub);cursor:pointer;font-size:.83rem;font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
+.stab.on{color:var(--acc);border-bottom-color:var(--acc)}
+.stpanel{display:none}.stpanel.on{display:block}
+.sk-lbl{font-size:.78rem;color:var(--sub);margin-bottom:4px;display:block}
+.sk-in,.sk-sel,.sk-ta{width:100%;padding:10px 12px;font-size:15px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);outline:none;transition:border-color var(--t)}
+.sk-in:focus,.sk-sel:focus{border-color:var(--acc)}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+@media(max-width:520px){.fgrid{grid-template-columns:1fr}}
+.fg{display:flex;flex-direction:column}
+
+/* Subscription card */
+.sub-badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:.72rem;font-weight:700}
+.sub-active{background:var(--acc);color:#000}
+.sub-trial{background:var(--warn);color:#000}
+.sub-expired{background:var(--err);color:#fff}
+.plan-feat-list{list-style:none;margin-top:8px}
+.plan-feat-list li{font-size:.8rem;color:var(--sub);padding:3px 0}
+.plan-feat-list li::before{content:'✓ ';color:var(--acc)}
+
+/* Profile complete bar */
+.complete-bar-wrap{margin-bottom:14px}
+.complete-bar{height:6px;background:var(--border);border-radius:99px;overflow:hidden}
+.complete-fill{height:100%;background:var(--acc);border-radius:99px;transition:width .6s ease}
+.complete-items{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.ci{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--sub)}
+.ci-ok{color:var(--acc)}.ci-todo{color:var(--warn)}
+
+/* Loading & toast */
+.lov{position:fixed;inset:0;z-index:9998;background:rgba(5,5,5,.8);display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px}
+.lov.vis{display:flex}
+.spin{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.tc{position:fixed;top:14px;right:14px;z-index:9999;display:flex;flex-direction:column;gap:7px}
+.toast{padding:10px 15px;border-radius:9px;font-size:.82rem;font-weight:600;animation:sIn .3s ease;max-width:280px}
+.t-ok{background:var(--acc);color:#000}.t-err{background:var(--err);color:#fff}
+@keyframes sIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.sk-select option{background:var(--surf2)}
+</style>
+</head>
+<body>
+<div class="lov" id="lov"><div class="spin"></div><div style="font-size:.83rem;color:var(--sub)" id="lmsg">Loading…</div></div>
+<div class="tc" id="tc"></div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sb-logo"><img src="assets/logo.svg" alt="" onerror="this.style.display='none'">SOKONI</div>
+    <div class="sb-provider" id="sbProv">
+      <div class="sb-avatar" id="sbAva">🔧</div>
+      <div class="sb-name" id="sbName">Loading…</div>
+      <span class="sb-plan" id="sbPlan">Free Trial</span>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-item active" onclick="P.show('overview',this)"><span class="sb-icon">🏠</span>Overview</div>
+      <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
+      <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Earnings</div>
+      <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
+      <div class="sb-item" onclick="P.show('settings',this)"><span class="sb-icon">⚙️</span>Settings</div>
+    </nav>
+    <div class="sb-foot">
+      <a href="onboarding.html" class="btn btn-s btn-sm" style="display:block;text-align:center;margin-bottom:8px">+ Add Another Role</a>
+      <button class="btn btn-g btn-sm" style="width:100%" onclick="firebase.auth().signOut().then(()=>location.href='login.html')">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main" id="main">
+
+    <!-- ── Overview ──────────────────────────────────────────────────── -->
+    <div class="panel active" id="panel-overview">
+      <div class="pg-header">
+        <div><div class="pg-title" id="greetTitle">Good morning!</div><div class="pg-sub" id="greetDate"></div></div>
+        <button class="btn btn-p btn-sm" onclick="location.href='provider-onboarding.html'">Edit Profile</button>
+      </div>
+      <div style="padding:18px 20px">
+        <!-- KPIs -->
+        <div class="kpi-row" id="kpiRow">
+          <div class="kpi"><div class="kpi-ico">📅</div><div class="kpi-val" id="kpiTodayBk">—</div><div class="kpi-lbl">Today's Bookings</div><div class="kpi-sub" id="kpiPending">— pending</div></div>
+          <div class="kpi"><div class="kpi-ico">💰</div><div class="kpi-val" id="kpiEarnings">KSh —</div><div class="kpi-lbl">This Month</div><div class="kpi-sub">Net earnings</div></div>
+          <div class="kpi"><div class="kpi-ico">⭐</div><div class="kpi-val" id="kpiRating">—</div><div class="kpi-lbl">Rating</div><div class="kpi-sub" id="kpiRevCount">0 reviews</div></div>
+          <div class="kpi"><div class="kpi-ico">👁️</div><div class="kpi-val" id="kpiViews">—</div><div class="kpi-lbl">Profile Views</div><div class="kpi-sub">This week</div></div>
+        </div>
+
+        <!-- Subscription status -->
+        <div class="card" id="subStatusCard">
+          <div class="card-title">Subscription <span class="sub-badge sub-active" id="subStatusBadge">Active</span></div>
+          <div style="font-size:.82rem;color:var(--sub)">Plan: <strong id="subPlanName" style="color:var(--text)">—</strong> &bull; Renews: <span id="subRenews">—</span></div>
+          <button class="btn btn-p btn-sm" style="margin-top:10px" onclick="P.show('settings',null,'sub')">Manage Subscription</button>
+        </div>
+
+        <!-- Profile completion -->
+        <div class="card" id="profileComplCard" style="display:none">
+          <div class="card-title">Complete Your Profile</div>
+          <div class="complete-bar-wrap">
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--sub);margin-bottom:5px"><span>Profile completion</span><span id="complPct">0%</span></div>
+            <div class="complete-bar"><div class="complete-fill" id="complFill" style="width:0%"></div></div>
+          </div>
+          <div class="complete-items" id="complItems"></div>
+        </div>
+
+        <!-- Today's schedule -->
+        <div class="card">
+          <div class="card-title">Today's Schedule</div>
+          <div id="todayList"><div class="card-empty">No bookings today. Your profile is live — customers can discover you.</div></div>
+        </div>
+
+        <!-- Pending requests -->
+        <div class="card" id="pendCard">
+          <div class="card-title">Pending Requests <span id="pendCount" style="font-size:.72rem;background:var(--warn);color:#000;padding:1px 7px;border-radius:99px;display:none">0</span></div>
+          <div id="pendList"><div class="card-empty">No pending requests.</div></div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="card">
+          <div class="card-title">Quick Actions</div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+            <button class="btn btn-s" onclick="P.show('settings',null,'avail')" style="display:flex;align-items:center;gap:7px;justify-content:center">🕐 Update Availability</button>
+            <button class="btn btn-s" onclick="P.show('settings',null,'pricing')" style="display:flex;align-items:center;gap:7px;justify-content:center">💳 Update Pricing</button>
+            <button class="btn btn-s" onclick="P.show('bookings',null)" style="display:flex;align-items:center;gap:7px;justify-content:center">📅 View All Bookings</button>
+            <button class="btn btn-s" onclick="P.show('earnings',null)" style="display:flex;align-items:center;gap:7px;justify-content:center">📊 View Earnings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Bookings ───────────────────────────────────────────────────── -->
+    <div class="panel" id="panel-bookings">
+      <div class="pg-header"><div><div class="pg-title">Bookings</div></div></div>
+      <div style="padding:14px 20px">
+        <div class="ftabs">
+          <button class="ftab on" onclick="B.filter('all',this)">All</button>
+          <button class="ftab" onclick="B.filter('pending',this)">Pending</button>
+          <button class="ftab" onclick="B.filter('confirmed',this)">Confirmed</button>
+          <button class="ftab" onclick="B.filter('in_progress',this)">In Progress</button>
+          <button class="ftab" onclick="B.filter('completed',this)">Completed</button>
+          <button class="ftab" onclick="B.filter('cancelled',this)">Cancelled</button>
+        </div>
+        <div id="bkList"><div class="card-empty" style="padding:30px;text-align:center">Loading bookings…</div></div>
+        <div id="bkMore" style="text-align:center;margin-top:14px;display:none">
+          <button class="btn btn-s" onclick="B.loadMore()">Load More</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Earnings ──────────────────────────────────────────────────── -->
+    <div class="panel" id="panel-earnings">
+      <div class="pg-header">
+        <div><div class="pg-title">Earnings</div></div>
+        <select class="sk-in sk-sel" id="earnPeriod" style="width:auto;padding:7px 12px;font-size:.82rem" onchange="E.load()">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </div>
+      <div style="padding:14px 20px">
+        <div class="earn-row">
+          <div class="earn-box"><div class="eb-val" id="eGross">KSh 0</div><div class="eb-lbl">Gross Earnings</div></div>
+          <div class="earn-box"><div class="eb-val" style="color:var(--err)" id="eComm">KSh 0</div><div class="eb-lbl">Commission</div></div>
+          <div class="earn-box"><div class="eb-val" id="eNet">KSh 0</div><div class="eb-lbl">Net Earnings</div></div>
+          <div class="earn-box"><div class="eb-val" style="color:var(--warn)" id="ePending">KSh 0</div><div class="eb-lbl">Pending Payout</div></div>
+          <div class="earn-box"><div class="eb-val" id="ePaid">KSh 0</div><div class="eb-lbl">Total Paid Out</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Revenue Trend</div>
+          <div class="chart-wrap" id="chartWrap">
+            <svg class="chart-svg" id="earnChart" width="540" height="120" viewBox="0 0 540 120" style="max-width:100%">
+              <text x="270" y="65" text-anchor="middle" fill="#888" font-size="13">Loading chart…</text>
+            </svg>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Payout History</div>
+          <div id="payoutList"><div class="card-empty">No payouts yet.</div></div>
+        </div>
+        <div id="reqPayoutWrap" style="display:none">
+          <button class="btn btn-p" onclick="E.requestPayout()">Request Payout →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Reviews ──────────────────────────────────────────────────── -->
+    <div class="panel" id="panel-reviews">
+      <div class="pg-header"><div><div class="pg-title">Reviews</div></div></div>
+      <div style="padding:14px 20px">
+        <div class="card">
+          <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+            <div style="text-align:center">
+              <div class="rating-big" id="avgRating">—</div>
+              <div class="stars-row" id="ratingStars" style="justify-content:center"></div>
+              <div style="font-size:.75rem;color:var(--sub)" id="totalRevs">0 reviews</div>
+            </div>
+            <div class="rating-bars" id="ratingBars" style="flex:1;min-width:160px"></div>
+          </div>
+        </div>
+        <div id="reviewsList"><div class="card-empty" style="padding:20px;text-align:center">No reviews yet. Complete your first booking to receive reviews.</div></div>
+      </div>
+    </div>
+
+    <!-- ── Settings ─────────────────────────────────────────────────── -->
+    <div class="panel" id="panel-settings">
+      <div class="pg-header"><div><div class="pg-title">Settings</div></div></div>
+      <div style="padding:14px 20px">
+        <div class="stabs" id="stTabsRow">
+          <button class="stab on" onclick="S.tab('profile',this)">Profile</button>
+          <button class="stab" id="stabAvail" onclick="S.tab('avail',this)">Availability</button>
+          <button class="stab" id="stabPricing" onclick="S.tab('pricing',this)">Pricing</button>
+          <button class="stab" id="stabPayment" onclick="S.tab('payment',this)">Payment</button>
+          <button class="stab" onclick="S.tab('notif',this)">Notifications</button>
+          <button class="stab" id="stabSub" onclick="S.tab('sub',this)">Subscription</button>
+          <button class="stab" onclick="S.tab('verif',this)">Verification</button>
+        </div>
+        <!-- Profile tab -->
+        <div class="stpanel on" id="st-profile">
+          <div class="card">
+            <div class="card-title">Service Profile <button class="btn btn-p btn-sm" onclick="S.saveProfile()">Save</button></div>
+            <div class="fgrid">
+              <div class="fg"><label class="sk-lbl">Professional Name</label><input class="sk-in" id="sName" type="text"></div>
+              <div class="fg"><label class="sk-lbl">Category</label><input class="sk-in" id="sCat" type="text" readonly></div>
+            </div>
+            <div class="fg" style="margin-top:12px"><label class="sk-lbl">Bio / Description</label><textarea class="sk-in sk-ta" id="sBio" rows="4"></textarea></div>
+            <div class="fgrid" style="margin-top:12px">
+              <div class="fg"><label class="sk-lbl">Contact Phone</label><input class="sk-in" id="sPhone" type="tel"></div>
+              <div class="fg"><label class="sk-lbl">Contact Email</label><input class="sk-in" id="sEmail" type="email"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Availability tab -->
+        <div class="stpanel" id="st-avail">
+          <div class="card">
+            <div class="card-title">Working Schedule <button class="btn btn-p btn-sm" onclick="S.saveAvail()">Save</button></div>
+            <div id="availContent" style="color:var(--sub);font-size:.83rem">Loading availability…</div>
+          </div>
+        </div>
+        <!-- Pricing tab -->
+        <div class="stpanel" id="st-pricing">
+          <div class="card">
+            <div class="card-title">Your Rates <button class="btn btn-p btn-sm" onclick="S.savePricing()">Save</button></div>
+            <div class="fgrid">
+              <div class="fg"><label class="sk-lbl">Hourly Rate (KSh)</label><input class="sk-in" id="pHour" type="number"></div>
+              <div class="fg"><label class="sk-lbl">Fixed Price (KSh)</label><input class="sk-in" id="pFixed" type="number"></div>
+              <div class="fg"><label class="sk-lbl">Inspection Fee (KSh)</label><input class="sk-in" id="pInsp" type="number"></div>
+              <div class="fg"><label class="sk-lbl">Emergency Fee (KSh)</label><input class="sk-in" id="pEmrg" type="number"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Payment tab -->
+        <div class="stpanel" id="st-payment">
+          <div class="card">
+            <div class="card-title">Payment Methods <button class="btn btn-p btn-sm" onclick="S.savePayment()">Save</button></div>
+            <div class="fgrid">
+              <div class="fg"><label class="sk-lbl">M-PESA Phone</label><input class="sk-in" id="pmMpesa" type="tel"></div>
+            </div>
+            <div class="info-b" style="background:var(--surf2);border-left:3px solid var(--acc);border-radius:0 8px 8px 0;padding:10px 13px;font-size:.8rem;color:var(--sub);margin-top:12px">Payouts processed every Monday. Minimum payout KSh 100.</div>
+          </div>
+        </div>
+        <!-- Notifications tab -->
+        <div class="stpanel" id="st-notif">
+          <div class="card">
+            <div class="card-title">Notification Preferences <button class="btn btn-p btn-sm" onclick="S.saveNotif()">Save</button></div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+                <div><div style="font-weight:600;font-size:.87rem">📱 SMS</div><div style="font-size:.75rem;color:var(--sub)">Booking alerts and reminders</div></div>
+                <input type="checkbox" id="nSMS" checked style="width:18px;height:18px;accent-color:var(--acc)">
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+                <div><div style="font-weight:600;font-size:.87rem">📧 Email</div><div style="font-size:.75rem;color:var(--sub)">Booking confirmations and invoices</div></div>
+                <input type="checkbox" id="nEmail" checked style="width:18px;height:18px;accent-color:var(--acc)">
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer">
+                <div><div style="font-weight:600;font-size:.87rem">🔔 Push Notifications</div><div style="font-size:.75rem;color:var(--sub)">Real-time alerts</div></div>
+                <input type="checkbox" id="nPush" checked style="width:18px;height:18px;accent-color:var(--acc)">
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;opacity:.5;pointer-events:none">
+                <div><div style="font-weight:600;font-size:.87rem">💬 WhatsApp <span style="font-size:.65rem;background:var(--surf2);padding:1px 6px;border-radius:99px;color:var(--sub)">Coming soon</span></div><div style="font-size:.75rem;color:var(--sub)">Booking messages via WhatsApp</div></div>
+                <input type="checkbox" id="nWA" style="width:18px;height:18px;accent-color:var(--acc)">
+              </label>
+            </div>
+          </div>
+        </div>
+        <!-- Subscription tab -->
+        <div class="stpanel" id="st-sub">
+          <div class="card" id="subCard">
+            <div class="card-title">Current Plan</div>
+            <div id="subDetails" style="color:var(--sub);font-size:.83rem">Loading plan…</div>
+          </div>
+        </div>
+        <!-- Verification tab -->
+        <div class="stpanel" id="st-verif">
+          <div class="card">
+            <div class="card-title">Identity Verification</div>
+            <div id="verifStatus" style="color:var(--sub);font-size:.83rem">Loading verification status…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- .main -->
+
+  <!-- Bottom nav (mobile) -->
+  <div class="bn">
+    <div class="bn-item active" onclick="P.show('overview',this)"><span class="bn-icon">🏠</span>Home</div>
+    <div class="bn-item" onclick="P.show('bookings',this)"><span class="bn-icon">📅</span>Bookings</div>
+    <div class="bn-item" onclick="P.show('earnings',this)"><span class="bn-icon">💰</span>Earnings</div>
+    <div class="bn-item" onclick="P.show('reviews',this)"><span class="bn-icon">⭐</span>Reviews</div>
+    <div class="bn-item" onclick="P.show('settings',this)"><span class="bn-icon">⚙️</span>Settings</div>
+  </div>
+</div><!-- .app -->
+
+<script src="shared-header.js" defer></script>
+<script src="sokoni-provider.js" defer></script>
+<script>
+const _q=id=>document.getElementById(id);
+const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const _fmt=n=>Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:0,maximumFractionDigits:0});
+function showLoad(m='Loading…'){_q('lov').classList.add('vis');_q('lmsg').textContent=m}
+function hideLoad(){_q('lov').classList.remove('vis')}
+function toast(m,t='ok',ms=3500){const d=document.createElement('div');d.className=`toast t-${t}`;d.textContent=m;_q('tc').appendChild(d);setTimeout(()=>d.remove(),ms)}
+
+let _sdk=null,_data=null,_bkFilter='all',_bkDocs=[];
+
+/* ── Panel switcher ─────────────────────────────────────────────────────── */
+const P={
+  show(id,el,subTab){
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    _q(`panel-${id}`).classList.add('active');
+    document.querySelectorAll('.sb-item,.bn-item').forEach(i=>i.classList.remove('active'));
+    if(el)el.classList.add('active');
+    if(subTab)setTimeout(()=>S.tab(subTab,_q(`stab${subTab.charAt(0).toUpperCase()+subTab.slice(1)}`)||null),50);
+    if(id==='bookings'&&!_bkDocs.length)B.load();
+    if(id==='earnings')E.load();
+    if(id==='reviews')Rv.load();
+  }
+};
+
+/* ── Bookings ────────────────────────────────────────────────────────────── */
+const B={
+  filter(f,el){_bkFilter=f;document.querySelectorAll('.ftab').forEach(t=>t.classList.remove('on'));if(el)el.classList.add('on');B.load()},
+  async load(){
+    _q('bkList').innerHTML='<div class="card-empty" style="padding:30px;text-align:center">Loading…</div>';
+    try{
+      const opts=_bkFilter!=='all'?{status:_bkFilter}:{};
+      const res=await _sdk.getBookings(opts);_bkDocs=res.bookings||[];
+      B.render();
+    }catch(e){_q('bkList').innerHTML=`<div class="card-empty" style="padding:20px">${_esc(e.message)}</div>`}
+  },
+  render(){
+    if(!_bkDocs.length){_q('bkList').innerHTML='<div class="card-empty" style="padding:24px;text-align:center">No bookings found.</div>';return}
+    _q('bkList').innerHTML=_bkDocs.map(b=>B.card(b)).join('');
+  },
+  card(b){
+    const sc={pending:'cs-pending',confirmed:'cs-confirmed',in_progress:'cs-inprog',completed:'cs-completed',cancelled:'cs-cancelled'};
+    const sl={pending:'Pending',confirmed:'Confirmed',in_progress:'In Progress',completed:'Completed',cancelled:'Cancelled'};
+    const ini=(b.customerName||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const acts=b.status==='pending'
+      ?`<button class="btn btn-ok btn-sm" onclick="B.confirm('${b.id}')">Confirm</button><button class="btn btn-err btn-sm" onclick="B.decline('${b.id}')">Decline</button>`
+      :b.status==='confirmed'
+      ?`<button class="btn btn-p btn-sm" onclick="B.complete('${b.id}')">Mark Complete</button>`
+      :'';
+    const dt=b.scheduledAt?.toDate?new Date(b.scheduledAt.toDate()):b.scheduledAt?new Date(b.scheduledAt):null;
+    const dtStr=dt?dt.toLocaleString('en-KE',{dateStyle:'medium',timeStyle:'short'}):'—';
+    return`<div class="booking-item"><div class="b-ava">${_esc(ini)}</div><div class="b-info"><div class="b-name">${_esc(b.customerName||'Customer')} <span class="chip-status ${sc[b.status]||''}">${sl[b.status]||b.status}</span></div><div class="b-meta">${_esc(b.service||'')} • ${dtStr}</div>${b.price?`<div class="b-meta" style="color:var(--acc);margin-top:2px">KSh ${_fmt(b.price/100)}</div>`:''}</div><div class="b-acts">${acts}</div></div>`;
+  },
+  async confirm(id){showLoad('Confirming…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerConfirmBooking',bookingId:id});toast('Booking confirmed!');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async decline(id){showLoad('Declining…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerDeclineBooking',bookingId:id});toast('Booking declined.');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async complete(id){showLoad('Updating…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerCompleteBooking',bookingId:id});toast('Marked as complete!');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  loadMore(){},
+};
+
+/* ── Earnings ────────────────────────────────────────────────────────────── */
+const E={
+  async load(){
+    const days=parseInt(_q('earnPeriod').value)||30;
+    try{
+      const fn=firebase.functions().httpsCallable('providerDispatch');
+      const res=await fn({op:'providerGetEarnings',days});
+      const d=res.data||{};
+      _q('eGross').textContent='KSh '+_fmt((d.gross||0)/100);
+      _q('eComm').textContent='− KSh '+_fmt((d.commission||0)/100);
+      _q('eNet').textContent='KSh '+_fmt((d.net||0)/100);
+      _q('ePending').textContent='KSh '+_fmt((d.pending||0)/100);
+      _q('ePaid').textContent='KSh '+_fmt((d.paid||0)/100);
+      if(d.pending>0)_q('reqPayoutWrap').style.display='block';
+      E.renderChart(d.dailyRevenue||[]);
+      E.renderPayouts(d.payouts||[]);
+    }catch(e){/* earnings not yet loaded */}
+  },
+  renderChart(daily){
+    const svg=_q('earnChart');const W=540,H=110,pad=30;
+    if(!daily.length){svg.innerHTML=`<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#888" font-size="13">No data yet</text>`;return}
+    const vals=daily.map(d=>d.net||0);const mx=Math.max(...vals,1);
+    const bw=(W-pad*2)/vals.length-3;
+    let bars='',labels='';
+    vals.forEach((v,i)=>{
+      const h=Math.max(2,(v/mx)*(H-pad));const x=pad+i*(bw+3);const y=H-pad-h;
+      bars+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="2" fill="rgba(113,255,0,.7)"/>`;
+      if(i===0||i===vals.length-1){const lbl=daily[i].date||'';labels+=`<text x="${x+bw/2}" y="${H-4}" text-anchor="middle" fill="#666" font-size="9">${_esc(lbl)}</text>`;}
+    });
+    svg.innerHTML=bars+labels;
+  },
+  renderPayouts(payouts){
+    if(!payouts.length){_q('payoutList').innerHTML='<div class="card-empty">No payouts yet.</div>';return}
+    _q('payoutList').innerHTML=payouts.map(p=>{
+      const m={'mpesa':'📱','bank':'🏦','wallet':'👛'};
+      const dt=p.createdAt?.toDate?new Date(p.createdAt.toDate()):p.createdAt?new Date(p.createdAt):null;
+      return`<div class="payout-row"><div class="pr-ico">${m[p.method]||'💰'}</div><div class="pr-info"><div style="font-weight:600;font-size:.83rem">${_esc(p.reference||'Payout')}</div><div style="font-size:.72rem;color:var(--sub)">${dt?dt.toLocaleDateString('en-KE'):''}</div></div><div class="pr-net">KSh ${_fmt((p.net||0)/100)}</div></div>`;
+    }).join('');
+  },
+  async requestPayout(){showLoad('Requesting payout…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerRequestPayout'});toast('Payout requested! Processed next Monday.');E.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}}
+};
+
+/* ── Reviews ─────────────────────────────────────────────────────────────── */
+const Rv={
+  async load(){
+    try{
+      const fn=firebase.functions().httpsCallable('providerDispatch');
+      const res=await fn({op:'providerGetReviews'});const d=res.data||{};
+      const avg=d.averageRating||0;_q('avgRating').textContent=avg>0?avg.toFixed(1):'—';
+      _q('ratingStars').innerHTML=Rv.stars(avg);
+      _q('totalRevs').textContent=(d.total||0)+' reviews';
+      Rv.renderBars(d.distribution||{});
+      Rv.renderList(d.reviews||[]);
+    }catch(e){}
+  },
+  stars(r){let h='';for(let i=1;i<=5;i++)h+=`<span class="${i<=Math.round(r)?'star':'star-e'}">★</span>`;return h},
+  renderBars(dist){
+    const bars=[5,4,3,2,1].map(s=>{const n=dist[s]||0;const tot=Object.values(dist).reduce((a,b)=>a+b,0)||1;const pct=Math.round((n/tot)*100);return`<div class="rbar-row"><span style="width:12px;text-align:right">${s}★</span><div class="rbar"><div class="rbar-fill" style="width:${pct}%"></div></div><span style="width:28px">${pct}%</span></div>`}).join('');
+    _q('ratingBars').innerHTML=bars;
+  },
+  renderList(reviews){
+    if(!reviews.length){_q('reviewsList').innerHTML='<div class="card-empty" style="padding:20px;text-align:center">No reviews yet.</div>';return}
+    _q('reviewsList').innerHTML=reviews.map(rv=>{
+      const dt=rv.createdAt?.toDate?new Date(rv.createdAt.toDate()):rv.createdAt?new Date(rv.createdAt):null;
+      return`<div class="review-item"><div class="rv-head"><div class="b-ava" style="width:32px;height:32px;font-size:.75rem">${(rv.customerName||'?')[0].toUpperCase()}</div><div><div class="rv-name">${_esc(rv.customerName||'Customer')}</div><div class="rv-date">${dt?dt.toLocaleDateString('en-KE'):''}</div></div></div><div class="rv-stars">${Rv.stars(rv.rating||0)}</div><div class="rv-text">${_esc(rv.text||'')}</div>${rv.reply?`<div class="rv-reply"><strong style="color:var(--acc)">Your reply:</strong> ${_esc(rv.reply)}</div>`:`<div style="margin-top:6px"><button class="btn btn-g btn-sm" onclick="Rv.replyPrompt('${rv.id}',this)">Reply</button></div>`}</div>`;
+    }).join('');
+  },
+  replyPrompt(id,btn){
+    const wrap=btn.parentElement;wrap.innerHTML=`<textarea class="sk-in sk-ta" id="rvRep_${id}" rows="2" placeholder="Write a professional reply…" style="margin-bottom:6px"></textarea><button class="btn btn-p btn-sm" onclick="Rv.reply('${id}')">Submit Reply</button>`;
+  },
+  async reply(id){
+    const text=(_q(`rvRep_${id}`)||{}).value||'';if(!text.trim())return;
+    showLoad('Saving reply…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerReplyReview',reviewId:id,reply:text});toast('Reply saved!');Rv.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}
+  }
+};
+
+/* ── Settings ────────────────────────────────────────────────────────────── */
+const S={
+  tab(t,btn){document.querySelectorAll('.stpanel').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.stab').forEach(b=>b.classList.remove('on'));_q(`st-${t}`).classList.add('on');if(btn)btn.classList.add('on');if(t==='sub')S.loadSub();if(t==='verif')S.loadVerif();if(t==='avail'&&_data)S.loadAvail()},
+  loadAvail(){
+    const av=_data?.availability||{};
+    _q('availContent').innerHTML=`<div style="font-size:.83rem;color:var(--sub)">Days: <strong style="color:var(--text)">${(av.days||[]).join(', ')||'Not set'}</strong><br>Hours: <strong style="color:var(--text)">${av.from||'—'} – ${av.to||'—'}</strong><br>Lead time: <strong style="color:var(--text)">${av.leadTime||'—'}</strong></div><div style="margin-top:10px"><a href="provider-onboarding.html#step6" class="btn btn-p btn-sm">Update Availability</a></div>`;
+  },
+  async saveProfile(){
+    showLoad('Saving…');try{
+      const fn=firebase.functions().httpsCallable('providerDispatch');
+      await fn({op:'providerUpdateProfile',section:'profile',data:{name:(_q('sName')||{}).value,bio:(_q('sBio')||{}).value,phone:(_q('sPhone')||{}).value,email:(_q('sEmail')||{}).value}});
+      toast('Profile saved!');
+    }catch(e){toast(e.message,'err')}finally{hideLoad()}
+  },
+  async savePricing(){showLoad('Saving…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerUpdatePricing',data:{hourly:parseInt(_q('pHour').value)||0,fixed:parseInt(_q('pFixed').value)||0,inspection:parseInt(_q('pInsp').value)||0,emergency:parseInt(_q('pEmrg').value)||0}});toast('Pricing saved!');}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async savePayment(){showLoad('Saving…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerConnectPayment',method:'mpesa',details:{phone:(_q('pmMpesa')||{}).value}});toast('Payment method saved!');}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async saveNotif(){showLoad('Saving…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerUpdateNotifications',sms:_q('nSMS').checked,email:_q('nEmail').checked,push:_q('nPush').checked});toast('Preferences saved!');}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async saveAvail(){toast('Use the Availability tab in onboarding to update your schedule.','ok')},
+  async loadSub(){
+    const sub=_data?.subscription;if(!sub){_q('subDetails').innerHTML='<div class="card-empty">No active subscription found.</div>';return}
+    const st={trialing:'sub-trial',active:'sub-active',expired:'sub-expired',cancelled:'sub-expired'};
+    const renew=sub.renewalAt?.toDate?new Date(sub.renewalAt.toDate()):sub.renewalAt?new Date(sub.renewalAt):null;
+    _q('subDetails').innerHTML=`<div style="margin-bottom:12px"><span class="sub-badge ${st[sub.status]||'sub-active'}">${sub.status}</span></div>
+    <div style="font-size:.85rem;margin-bottom:8px"><strong>${(sub.tier||'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</strong> plan</div>
+    <div style="font-size:.8rem;color:var(--sub)">Commission rate: ${((sub.commissionRate||0)*100).toFixed(0)}%</div>
+    <div style="font-size:.8rem;color:var(--sub);margin-top:3px">Renewal: ${renew?renew.toLocaleDateString('en-KE'):'—'}</div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <a href="provider-onboarding.html#step8" class="btn btn-p btn-sm">Upgrade Plan</a>
+      <button class="btn btn-g btn-sm" onclick="S.cancelSub()">Cancel Subscription</button>
+    </div>`;
+  },
+  async loadVerif(){
+    try{const fn=firebase.functions().httpsCallable('providerDispatch');const r=await fn({op:'providerGetProfile'});const v=r.data?.verification;_q('verifStatus').innerHTML=v&&v.status==='verified'?`<div style="color:var(--acc);font-weight:700;font-size:.9rem">✓ Verified</div><div style="font-size:.8rem;color:var(--sub);margin-top:4px">Your identity has been verified.</div>`:`<div style="color:var(--warn);font-weight:700;font-size:.9rem">⏳ Pending / Not Submitted</div><div style="font-size:.8rem;color:var(--sub);margin-top:4px">Upload your ID documents to get verified.</div><div style="margin-top:10px"><a href="provider-onboarding.html#step9" class="btn btn-p btn-sm">Upload Documents</a></div>`;}catch(e){_q('verifStatus').innerHTML='<div class="card-empty">Unable to load verification status.</div>'}
+  },
+  cancelSub(){if(confirm('Cancel your subscription? You will keep access until the renewal date.'))toast('Cancellation scheduled. Contact support@mysokoni.co.ke for assistance.','ok')}
+};
+
+/* ── Bootstrap ───────────────────────────────────────────────────────────── */
+async function loadDashboard(user){
+  if(!_sdk)_sdk=new SokoniProvider();
+  showLoad('Loading your dashboard…');
+  try{
+    const res=await _sdk.getDashboard();_data=res;
+    hideLoad();
+    // Provider info
+    const p=res.profile||{};
+    const sub=res.subscription||{};
+    _q('sbName').textContent=p.name||user.displayName||'Provider';
+    _q('sbPlan').textContent=(sub.tier||'free').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    _q('sbAva').textContent=p.category?'🔧':SokoniProvider?'🔧':'🔧';
+    // Greeting
+    const hr=new Date().getHours();
+    _q('greetTitle').textContent=(hr<12?'Good morning':hr<17?'Good afternoon':'Good evening')+', '+(p.name||user.displayName||'there').split(' ')[0]+'!';
+    _q('greetDate').textContent=new Date().toLocaleDateString('en-KE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    // KPIs
+    const a=res.analytics||{};
+    _q('kpiTodayBk').textContent=res.todayBookings?.length||0;
+    _q('kpiPending').textContent=(res.pendingRequests?.length||0)+' pending';
+    _q('kpiEarnings').textContent='KSh '+_fmt((a.monthEarnings||0)/100);
+    _q('kpiRating').textContent=p.rating>0?(p.rating||0).toFixed(1):'—';
+    _q('kpiRevCount').textContent=(p.reviewCount||0)+' reviews';
+    _q('kpiViews').textContent=a.weekViews||'—';
+    // Subscription bar
+    _q('subPlanName').textContent=(sub.tier||'free').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    const ren=sub.renewalAt?.toDate?new Date(sub.renewalAt.toDate()):sub.renewalAt?new Date(sub.renewalAt):null;
+    _q('subRenews').textContent=ren?ren.toLocaleDateString('en-KE'):'—';
+    _q('subStatusBadge').textContent=sub.status||'active';
+    _q('subStatusBadge').className='sub-badge '+(sub.status==='trialing'?'sub-trial':sub.status==='expired'?'sub-expired':'sub-active');
+    // Today's schedule
+    const today=res.todayBookings||[];
+    _q('todayList').innerHTML=today.length?today.map(b=>B.card(b)).join(''):'<div class="card-empty">No bookings today. Your profile is live — customers can discover you.</div>';
+    // Pending requests
+    const pend=res.pendingRequests||[];
+    if(pend.length){_q('pendCount').style.display='inline-block';_q('pendCount').textContent=pend.length;_q('pendList').innerHTML=pend.map(b=>B.card(b)).join('')}
+    // Profile completion
+    const compl=p.completionScore||0;
+    if(compl<80){
+      _q('profileComplCard').style.display='block';
+      _q('complPct').textContent=compl+'%';
+      _q('complFill').style.width=compl+'%';
+      const missing=res.missingItems||[];
+      _q('complItems').innerHTML=missing.map(m=>`<div class="ci"><span class="ci-todo">○</span><a href="provider-onboarding.html" style="color:var(--sub);font-size:.8rem">${_esc(m)}</a></div>`).join('');
+    }
+    // Populate settings fields
+    if(_q('sName'))_q('sName').value=p.name||'';
+    if(_q('sCat'))_q('sCat').value=(p.category||'')+(p.subcategory?' — '+p.subcategory:'');
+    if(_q('sBio'))_q('sBio').value=p.bio||p.description||'';
+    if(_q('sPhone'))_q('sPhone').value=p.phone||'';
+    if(_q('sEmail'))_q('sEmail').value=p.email||'';
+    if(_q('pHour'))_q('pHour').value=p.hourlyRate||'';
+    if(_q('pFixed'))_q('pFixed').value=p.fixedPrice||'';
+    if(_q('pmMpesa'))_q('pmMpesa').value=p.mpesaPhone||'';
+  }catch(e){
+    hideLoad();
+    if(e.code==='functions/not-found'||e.message?.includes('not-found')){
+      window.location.href='provider-onboarding.html';return;
+    }
+    toast('Failed to load dashboard: '+e.message,'err');
+  }
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  firebase.auth().onAuthStateChanged(async user=>{
+    if(!user){window.location.href='login.html';return}
+    await loadDashboard(user);
+  });
+});
+</script>
+</body>
+</html>
