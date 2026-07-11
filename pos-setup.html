@@ -1612,6 +1612,15 @@
           </div>
         </div>
 
+        <!-- Setup checklist — production-readiness gate (getSetupStatus) -->
+        <div id="setup-checklist-wrap" style="width:100%;margin:6px 0 14px;text-align:left;display:none;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:13px;font-weight:800;color:var(--sk-text);">Setup checklist</span>
+            <span id="setup-ready-badge" style="font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px;"></span>
+          </div>
+          <div id="setup-checklist" role="list" style="display:flex;flex-direction:column;gap:6px;"></div>
+        </div>
+
         <button class="btn-primary" id="btn-open-pos" aria-label="Open the POS and start selling">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="2" y="3" width="20" height="14" rx="2"/>
@@ -2715,6 +2724,52 @@ function initReadyStep() {
     if (paymentsEl)  paymentsEl.textContent  = pmCount;
     if (loyaltyEl)   loyaltyEl.textContent   = loyaltyOn ? 'On' : 'Off';
   }
+
+  // Mandatory setup checklist + production-readiness gate (getSetupStatus).
+  renderSetupChecklist();
+}
+
+/* Render the setup checklist from authoritative backend state. Informational —
+   it never blocks the Ready screen; it shows what remains + production status. */
+async function renderSetupChecklist() {
+  const wrap  = document.getElementById('setup-checklist-wrap');
+  const list  = document.getElementById('setup-checklist');
+  const badge = document.getElementById('setup-ready-badge');
+  const mid   = WIZ.selectedMerchantId || (WIZ.selectedBiz && WIZ.selectedBiz.merchantId);
+  if (!wrap || !list || !mid) return;
+  try {
+    const res = await SPOS('getSetupStatus')({ merchantId: mid });
+    const s   = res.data || {};
+    const cl  = s.checklist || {};
+    const items = [
+      ['Authentication', cl.authenticated,      true],
+      ['Business created', cl.businessCreated,   true],
+      ['Merchant ID', cl.merchantIdGenerated,    true],
+      ['Subscription', cl.subscription,          true],
+      ['Branch', cl.branchCreated,               true],
+      ['Taxes', cl.taxesConfigured,              true],
+      ['Inventory', cl.inventoryReady,           true],
+      ['Hardware', cl.hardwareConnected,         true],
+      ['Test sale', cl.testSaleSuccessful,       true],
+      ['Staff (optional)', cl.staff,             false],
+    ];
+    list.innerHTML = items.map(([label, ok, required]) => {
+      const done = !!ok;
+      const icon = done ? '✓' : (required ? '○' : '–');
+      const col  = done ? 'var(--sk-green)' : 'var(--sk-text-muted)';
+      return '<div role="listitem" style="display:flex;align-items:center;gap:8px;font-size:13px;color:' + (done ? 'var(--sk-text)' : 'var(--sk-text-muted)') + ';">' +
+        '<span style="width:16px;text-align:center;font-weight:800;color:' + col + '">' + icon + '</span>' +
+        '<span>' + esc(label) + '</span></div>';
+    }).join('');
+    if (s.productionReady) {
+      badge.textContent = 'Production ready';
+      badge.style.background = 'rgba(113,255,0,.14)'; badge.style.color = 'var(--sk-green)';
+    } else {
+      badge.textContent = 'Setup in progress';
+      badge.style.background = 'rgba(255,149,0,.14)'; badge.style.color = '#ff9500';
+    }
+    wrap.style.display = 'block';
+  } catch (_) { /* informational only — never block Ready */ }
 }
 
 document.getElementById('btn-open-pos').addEventListener('click', () => {
