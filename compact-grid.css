@@ -1184,20 +1184,16 @@
 }
 
 /* ════════════════════════════════════════════════════════
-   SERVICE CARDS
+   SERVICE CARDS — premium; sizing handled by premium.css
+   compact-grid.css must NOT override those values here.
 ════════════════════════════════════════════════════════ */
-.sv-grid {
-  grid-template-columns: repeat(4, 1fr) !important;
-}
-.sv-card-emoji { height: 80px !important; font-size: 36px !important; }
-.sv-card-title { font-size: 11px !important; }
-.sv-card-seller{ font-size: 9px !important; }
-.sv-card-price { font-size: 12px !important; margin-bottom: 6px !important; }
-.sv-book-btn   { padding: 8px !important; font-size: 11px !important; }
-
-@media (max-width: 600px) {
-  .sv-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 6px !important; padding: 4px 10px 12px !important; }
-  .sv-card-emoji { height: 64px !important; font-size: 28px !important; }
+/* Mobile breakpoint only — 2 columns below 520px */
+@media (max-width: 520px) {
+  .sv-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    padding: 4px 12px 16px !important;
+  }
 }
 
 /* ════════════════════════════════════════════════════════

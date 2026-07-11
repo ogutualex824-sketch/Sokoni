@@ -68,8 +68,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="application-name" content="SOKONI">
   <meta name="apple-mobile-web-app-title" content="SOKONI">
-  <link rel="icon" type="image/png" sizes="96x96" href="assets/icons/icon-96.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
+  <link rel="icon" type="image/x-icon" href="assets/icons/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/icon-180.png">
 
   <!-- --- JSON-LD Structured Data --- -->
@@ -213,9 +214,10 @@
     Refreshing…
   </div>
   <!-- GLASS HERO BANNER -->
-
-  <section class="glass-hero">
-    <div class="glass-hero-bg" style="position:absolute;inset:0;background:url('assets/backG1.jpeg') center/cover no-repeat;filter:brightness(1);transform:scale(1.04);transition:transform 8s ease;pointer-events:none;z-index:0;"></div>
+  <!-- Negative margin pulls the hero behind the transparent floating nav.
+       Extra padding-top inside ensures content clears the nav height. -->
+  <section class="glass-hero" style="margin-top:-64px;padding-top:calc(64px + 24px);box-sizing:border-box;">
+    <div class="glass-hero-bg" style="position:absolute;inset:0;background:url('assets/backG1.jpeg') center/cover no-repeat;filter:brightness(0.82);transform:scale(1.04);transition:transform 8s ease;pointer-events:none;z-index:0;"></div>
     <div class="glass-hero-card">
       <p class="glass-hero-badge" style="display:inline-flex;align-items:center;gap:6px;"><span style="font-size:20px;line-height:1;flex-shrink:0;">🇰🇪</span> Kenya's #1 Marketplace</p>
       <h1>Shop Smarter on <span class="hero-brand-gradient">SOKONI</span></h1>

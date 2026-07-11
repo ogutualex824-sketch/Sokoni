@@ -19,8 +19,11 @@
 /* ── ISSUE 6: Eliminate horizontal overflow globally ─────────────────────
    Use max-width:100% instead of 100vw wherever possible.
    The html/body clip stops overflow from scrolling horizontally.        */
-html, body {
-  overflow-x: hidden;
+body {
+  /* overflow-x:clip avoids creating a scroll container — setting it on html
+     too (as overflow-x:hidden) is the #1 cause of broken vertical scroll on iOS.
+     clip prevents horizontal overflow without blocking touch-scroll events. */
+  overflow-x: clip;
   max-width: 100%;
 }
 

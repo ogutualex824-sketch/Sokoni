@@ -425,19 +425,36 @@
     }
     #sk-skip-nav:focus { top: 0; }
 
-    /* ── Shared top header ── */
+    /* ── Shared top header — floats transparently over the hero, darkens on scroll ── */
     #sk-top-nav {
       position: fixed; top: 0; left: 0; right: 0; z-index: 100001;
       height: 64px;
       display: flex; align-items: center; gap: 10px; padding: 0 18px;
-      background: rgba(10,10,10,0.97);
-      backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-      border-bottom: 1px solid rgba(255,255,255,0.07);
-      box-shadow: 0 2px 24px rgba(0,0,0,0.5);
+      background: transparent;
+      backdrop-filter: none; -webkit-backdrop-filter: none;
+      border-bottom: none;
+      box-shadow: none;
       will-change: transform;
       transform: translateZ(0);
       -webkit-transform: translateZ(0);
+      transition: background .28s ease, backdrop-filter .28s ease,
+                  box-shadow .28s ease, border-color .28s ease;
     }
+    /* Subtle gradient veil at top so logo/icons read on any background */
+    #sk-top-nav::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 100%);
+      pointer-events: none; z-index: -1;
+    }
+    /* Darkens once the user scrolls past the hero */
+    #sk-top-nav.sk-scrolled {
+      background: rgba(5,5,5,0.94);
+      backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      box-shadow: 0 2px 24px rgba(0,0,0,0.55);
+    }
+    #sk-top-nav.sk-scrolled::before { display: none; }
     /* ── Hide page-specific navs — preserve .sk-sub-nav tab bars ── */
     body > nav:not(#sk-top-nav):not(.bottom-nav):not(.sk-sub-nav),
     body > [role="navigation"]:not(#sk-top-nav):not(.bottom-nav):not(.sk-sub-nav),
@@ -465,14 +482,13 @@
       display: flex; align-items: center; flex-shrink: 0; text-decoration: none;
     }
     #sk-nav-logo img {
-      height: 44px; width: auto; object-fit: contain; display: block;
-      /* mix-blend-mode:screen makes the black PNG background transparent on dark surfaces */
-      mix-blend-mode: screen;
-      filter: drop-shadow(0 0 10px rgba(113,255,0,0.28));
+      height: 40px; width: auto; object-fit: contain; display: block;
+      /* Strong dark halo ensures the logo reads on ANY page background (hero images, light sections) */
+      filter: drop-shadow(0 1px 10px rgba(0,0,0,0.9)) drop-shadow(0 0 4px rgba(0,0,0,0.8));
       transition: filter .25s, transform .2s;
     }
     #sk-nav-logo:hover img {
-      filter: drop-shadow(0 0 16px rgba(113,255,0,0.48));
+      filter: drop-shadow(0 1px 14px rgba(0,0,0,0.95)) brightness(1.06);
       transform: scale(1.04);
     }
     #sk-nav-logo-text {
@@ -548,6 +564,33 @@
       transition: background .15s;
     }
     .sk-nav-icon-btn:hover { background: rgba(255,255,255,0.08); }
+
+    /* ── Transparent-nav state: icons need a dark backdrop to read over any hero image ── */
+    #sk-top-nav:not(.sk-scrolled) .sk-nav-icon-btn {
+      background: rgba(0,0,0,0.32);
+      /* text-shadow helps emoji render with contrast on bright backgrounds */
+      text-shadow: 0 1px 8px rgba(0,0,0,0.9), 0 0 3px rgba(0,0,0,0.7);
+    }
+    #sk-top-nav:not(.sk-scrolled) .sk-nav-icon-btn:hover {
+      background: rgba(0,0,0,0.55);
+    }
+    /* Search bar: more opaque when floating over hero */
+    #sk-top-nav:not(.sk-scrolled) #sk-nav-search {
+      background: rgba(0,0,0,0.42);
+      border-color: rgba(255,255,255,0.22);
+    }
+    #sk-top-nav:not(.sk-scrolled) #sk-nav-search::placeholder {
+      color: rgba(255,255,255,0.48);
+    }
+    /* Cart pill and avatar: keep their own brand colours on transparent nav */
+    #sk-top-nav:not(.sk-scrolled) #sk-nav-cart {
+      background: rgba(0,0,0,0.35);
+      border-color: rgba(113,255,0,0.35);
+    }
+    #sk-top-nav:not(.sk-scrolled) #sk-nav-avatar {
+      background: rgba(0,0,0,0.4);
+      border-color: rgba(113,255,0,0.45);
+    }
 
     /* ── Theme toggle specific ── */
     #sk-theme-btn { font-size: 16px; }
@@ -641,9 +684,12 @@
     .sk-theme-chip.active { background: rgba(113,255,0,0.12); border-color: rgba(113,255,0,0.35); color: #71ff00; }
 
     /* ── Light-mode header overrides ── */
-    body.light-mode #sk-top-nav {
+    body.light-mode #sk-top-nav::before {
+      background: linear-gradient(to bottom, rgba(255,255,255,0.55) 0%, transparent 100%);
+    }
+    body.light-mode #sk-top-nav.sk-scrolled {
       background: rgba(255,255,255,0.97);
-      border-bottom-color: rgba(0,0,0,0.08);
+      border-bottom: 1px solid rgba(0,0,0,0.08);
       box-shadow: 0 2px 16px rgba(0,0,0,0.08);
     }
     body.light-mode #sk-nav-search {
@@ -721,6 +767,24 @@
   styleEl.id = 'sk-header-styles';
   styleEl.textContent = CSS;
   (document.head || document.documentElement).appendChild(styleEl);
+
+  /* ── Favicon injection — canonical SOKONI favicon on every page ── */
+  (function _injectFavicon() {
+    var head = document.head || document.documentElement;
+    /* Remove any existing icon links so we don't stack duplicates */
+    head.querySelectorAll('link[rel*="icon"]').forEach(function(l) { l.remove(); });
+    var favicons = [
+      { rel: 'icon',             type: 'image/x-icon',  href: 'assets/icons/favicon.ico' },
+      { rel: 'icon',             type: 'image/png',     href: 'assets/icons/favicon-32x32.png', sizes: '32x32' },
+      { rel: 'icon',             type: 'image/png',     href: 'assets/icons/favicon-16x16.png', sizes: '16x16' },
+      { rel: 'apple-touch-icon', type: 'image/png',     href: 'assets/icons/icon-180.png',      sizes: '180x180' },
+    ];
+    favicons.forEach(function(f) {
+      var l = document.createElement('link');
+      Object.keys(f).forEach(function(k) { l.setAttribute(k, f[k]); });
+      head.appendChild(l);
+    });
+  }());
 
   /* Apply sk-has-search immediately after CSS injection — prevents body padding
      from flickering from 60px→120px when _inject() runs later on DOMContentLoaded. */
@@ -1417,6 +1481,23 @@
 
     /* Wire real-time counts (fallback when notif engine not yet loaded) */
     _waitForAuth();
+
+    /* ── Transparent-to-dark scroll behaviour ───────────────────────────
+       The nav starts transparent so the hero shows through it.
+       Once the user scrolls > 60px the nav darkens to remain readable. */
+    (function _wireScroll() {
+      var nav = document.getElementById('sk-top-nav');
+      if (!nav) return;
+      var _ticking = false;
+      function _update() {
+        nav.classList.toggle('sk-scrolled', window.scrollY > 60);
+        _ticking = false;
+      }
+      window.addEventListener('scroll', function() {
+        if (!_ticking) { requestAnimationFrame(_update); _ticking = true; }
+      }, { passive: true });
+      _update(); /* run once immediately */
+    }());
 
     /* Listen for cart/auth changes from other tabs */
     window.addEventListener('storage', function (e) {

@@ -2718,27 +2718,6 @@ service cloud.firestore {
       allow read:  if request.auth != null && request.auth.uid == uid;
     }
 
-    match /providerAvailability/{uid} {
-      allow read:  if request.auth != null &&
-                      (request.auth.uid == uid || isAdmin());
-    }
-    match /providerAvailability/{uid}/overrides/{date} {
-      allow read:  if request.auth != null &&
-                      (request.auth.uid == uid || isAdmin());
-
-      allow write: if request.auth != null && request.auth.uid == uid &&
-                      date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}');
-      allow delete: if request.auth != null &&
-                       (request.auth.uid == uid || isAdmin());
-    }
-    match /providerAvailability/{uid}/bookings/{slotId} {
-
-      allow read: if request.auth != null &&
-                     (request.auth.uid == uid ||
-                      resource.data.customerUid == request.auth.uid ||
-                      isAdmin());
-    }
-
     match /availabilityStatus/{uid} {
       allow read:  if true;
     }
@@ -4133,6 +4112,75 @@ service cloud.firestore {
                            || request.auth.token.get('manager', false)
                            || request.auth.token.get('supervisor', false)));
       allow write: if false; // CF-only — cmRequestCloseApproval, cmApproveRegisterClose
+    }
+
+    // ── Provider Onboarding & Dashboard ──────────────────────────────────────
+
+    match /providerProfiles/{uid} {
+      allow read:  if isAuthed() && request.auth.uid == uid;
+      allow write: if false; // CF-only — providerDispatch
+    }
+
+    match /providerSubscriptions/{uid} {
+      allow read:  if isAuthed() && request.auth.uid == uid;
+      allow write: if false; // CF-only — providerDispatch
+    }
+
+    match /providerAvailability/{uid} {
+      allow read:  if isAuthed();    // customers may read to check availability
+      allow write: if false;
+    }
+
+    match /providerPortfolio/{uid} {
+      allow read:  if isAuthed();
+      allow write: if false;
+    }
+
+    match /providerBookings/{bookingId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && (resource.data.providerId == request.auth.uid
+                                      || resource.data.customerId == request.auth.uid));
+      allow write: if false;
+    }
+
+    match /providerReviews/{reviewId} {
+      allow read:  if true;          // public — ratings visible to all
+      allow write: if false;
+    }
+
+    match /providerVerification/{uid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write: if false;
+    }
+
+    match /providerSettings/{uid} {
+      allow read:  if isAuthed() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /providerNotifications/{uid} {
+      allow read:  if isAuthed() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /providerPayouts/{payoutId} {
+      allow read:  if isAdmin() || (isAuthed() && resource.data.providerId == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /providerAnalytics/{uid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write: if false;
+    }
+
+    match /providerCalendar/{uid} {
+      allow read:  if isAuthed();
+      allow write: if false;
+    }
+
+    match /providerServices/{uid} {
+      allow read:  if isAuthed();
+      allow write: if false;
     }
 
   }

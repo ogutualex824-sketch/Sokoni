@@ -3027,6 +3027,25 @@
                  { "fieldPath": "registerId", "order": "ASCENDING" },
                  { "fieldPath": "status",     "order": "ASCENDING" },
                  { "fieldPath": "requestedAt","order": "DESCENDING" }] }
+    ,
+    { "collectionGroup": "providerProfiles", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "category", "order": "ASCENDING" }, { "fieldPath": "rating", "order": "DESCENDING" }] },
+    { "collectionGroup": "providerProfiles", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "category", "order": "ASCENDING" }, { "fieldPath": "subcategory", "order": "ASCENDING" }, { "fieldPath": "rating", "order": "DESCENDING" }] },
+    { "collectionGroup": "providerProfiles", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "searchable", "order": "ASCENDING" }, { "fieldPath": "rating", "order": "DESCENDING" }] },
+    { "collectionGroup": "providerProfiles", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "verified", "order": "ASCENDING" }, { "fieldPath": "rating", "order": "DESCENDING" }] },
+    { "collectionGroup": "providerProfiles", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "featured", "order": "ASCENDING" }, { "fieldPath": "rating", "order": "DESCENDING" }] },
+    { "collectionGroup": "providerBookings", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "providerId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "scheduledAt", "order": "ASCENDING" }] },
+    { "collectionGroup": "providerBookings", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "providerId", "order": "ASCENDING" }, { "fieldPath": "scheduledAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "providerPayouts", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "providerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "providerReviews", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "providerId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] }
   ],
   "fieldOverrides": [
     {

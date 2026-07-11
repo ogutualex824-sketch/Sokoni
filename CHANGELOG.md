@@ -1,4 +1,48 @@
-﻿## [2026-07-11] — platformInfraDispatch — 28 onCall CFs → 1 Cloud Run Service (Quota Relief)
+﻿## [2026-07-12] — Premium Provider Cards: Full Sizing, Visible Buttons, Premium Layout
+
+### Summary
+Service provider cards across all hub pages (services.html, cleaning.html, electrical.html, plumbing.html, phone-repair.html, car-rental.html, legal-hub.html) were cramped and unreadable — `compact-grid.css` and `premium.css` were forcing 4-6 column grids with 9-11px text and 8px button padding. Fixed comprehensively: provider cards now use `auto-fill minmax(260-300px)` grids (2-3 columns on desktop), full-width Book buttons with 14px font and 48px min-height, 16px provider names, 20px rate prices, 13px bio text, 52-56px avatars. Three-layer fix covers: `premium.css` base rules, `compact-grid.css` mobile-only breakpoint, and `sokoni-platform-override.css` final-cascade anchor rules so no subsequent injection can crush the sizes again. Lawyer cards in legal-hub.html upgraded identically. SW bumped to v26.
+
+### Files Changed
+- `premium.css` — SERVICE CARDS section rewritten: `.sv-grid minmax(260px)`, `.sv-card` premium background/border, image 160px, emoji 140px, all text sizes lifted; `.pg-provider-card`/`.cl-provider-card` block added (20px radius, 22px padding, all prov-* text sizes lifted); `.lawyer-card` / `.lc-*` section upgraded (18px radius, 52px avatar, 15px name, 14px book btn full-width); desktop @media `.sv-grid` changed from 165px → 260px; lawyers-grid changed from `repeat(4,1fr)` → `minmax(300px,1fr)`
+- `compact-grid.css` — SERVICE CARDS section replaced: removed 4-column forced layout and font-size crushers; only mobile 2-column breakpoint retained
+- `sokoni-platform-override.css` — Added post-generic-card overrides for `.pg-provider-card`, `.cl-provider-card`, `.sv-card`, `.lawyer-card`, book buttons, and text elements so the final-injected CSS doesn't revert premium.css sizing
+- `service-worker.js` — CACHE_VERSION bumped `v25→v26`
+
+### Security Implications
+None — CSS/layout changes only.
+
+### Performance Implications
+Provider cards are less dense (3 vs 6 per row), slightly more DOM height, but this is an intentional UX improvement. No JS changes.
+
+### Breaking Changes
+None — visual upgrade only.
+
+---
+
+## [2026-07-11] — Premium UI Polish: Theme Lightening, Transparent-Nav Icons & Favicon Standardisation
+
+### Summary
+Addressed three visible UI quality issues: (1) the platform dark palette was too heavy/green-tinted — lifted to neutral premium dark (`--bg:#0a0a0a`, `--surf:#141414`, `--panel:#1a1a1a`); (2) the transparent floating nav left emoji icon buttons invisible over hero images — added dark pill backdrops and text-shadow so notification, messages, activity, cart and avatar controls read clearly on any background; (3) the favicon was inconsistent across pages — shared-header.js now injects a canonical `.ico` + `32×32` + `16×16` + `apple-touch-icon` set globally so every page shows the correct SOKONI icon. Service Worker bumped to v25 to force cache refresh.
+
+### Files Changed
+- `sokoni-platform-override.css` — `--bg` `#050505→#0a0a0a`; `--surf` `#0d1a0d→#141414` (neutral, no green tint); `--panel` `#0f200f→#1a1a1a`; `--surf2/3` and border tokens lifted proportionally
+- `shared-header.js` — Transparent-nav `.sk-nav-icon-btn` dark backdrop `rgba(0,0,0,0.32)` + emoji `text-shadow`; search bar `rgba(0,0,0,0.42)` + `border-color` when floating; cart/avatar dark backing on transparent nav; `_injectFavicon()` added — overwrites any page's existing `<link rel="icon">` set with canonical `assets/icons/favicon.ico` + `favicon-32x32.png` + `favicon-16x16.png` + `icon-180.png`
+- `index.html` — static `<link rel="icon">` updated from `icon-96.png/icon-192.png` to proper `favicon.ico` + `favicon-32x32.png` + `favicon-16x16.png`
+- `service-worker.js` — `CACHE_VERSION` bumped `v24→v25`
+
+### Security Implications
+None — cosmetic and favicon changes only.
+
+### Performance Implications
+The favicon inject is 4 DOM operations on page load (before DOMContentLoaded); negligible. Theme token changes use existing CSS custom properties — zero runtime cost.
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-07-11] — platformInfraDispatch — 28 onCall CFs → 1 Cloud Run Service (Quota Relief)
 
 ### Summary
 Consolidated the 28 individually-exported Phase-3 onCall Cloud Functions (observability, reliability, webhooks, task queue, API gateway) into a single `platformInfraDispatch` Cloud Run service using the `_h` lazy-load dispatcher pattern. Freed 27 Cloud Run quota slots, enabling future Phase-3 function deployments without requesting a quota increase. 9 scheduled/onRequest exports remain individual (they cannot route through an onCall dispatcher).

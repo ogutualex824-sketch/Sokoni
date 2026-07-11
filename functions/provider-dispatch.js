@@ -1,0 +1,58 @@
+'use strict';
+/**
+ * SOKONI Provider Dispatcher — 19 onCall ops → 1 Cloud Run service.
+ * All provider onboarding, dashboard, and profile management ops route here.
+ *
+ * Client: firebase.functions().httpsCallable('providerDispatch')({ op, ...data })
+ */
+
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+
+const _OPTS = {
+  region:          'us-central1',
+  enforceAppCheck: true,
+  timeoutSeconds:  120,
+  memory:          '512MiB',
+};
+
+let _mod;
+function _h() { return _mod || (_mod = require('./provider-onboarding')._h); }
+
+const ROUTES = [
+  'providerSaveDraft',
+  'providerGetDraft',
+  'providerSelectPlan',
+  'providerActivateSubscription',
+  'providerPublish',
+  'providerGetProfile',
+  'providerUpdateProfile',
+  'providerDashboard',
+  'providerGetBookings',
+  'providerUpdateAvailability',
+  'providerUpdatePricing',
+  'providerConnectPayment',
+  'providerUpdateNotifications',
+  'providerGenerateQR',
+  'providerSubmitVerification',
+  'providerGetPublicProfile',
+  'providerSearchProviders',
+  'providerGetAnalytics',
+  'providerGetPlans',
+];
+
+const VALID_OPS = ROUTES.sort().join(', ');
+
+exports.providerDispatch = onCall(_OPTS, async (req) => {
+  const op = req.data?.op;
+  if (!op || typeof op !== 'string') {
+    throw new HttpsError('invalid-argument', `"op" field is required. Valid ops: ${VALID_OPS}`);
+  }
+  if (!ROUTES.includes(op)) {
+    throw new HttpsError('not-found', `Unknown op: "${op}". Valid ops: ${VALID_OPS}`);
+  }
+  const handler = _h()[op];
+  if (!handler) {
+    throw new HttpsError('internal', `Handler for "${op}" not found in provider-onboarding._h`);
+  }
+  return handler(req);
+});

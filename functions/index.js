@@ -8951,3 +8951,7 @@ exports.analyticsDispatch = aeDispatcher.analyticsDispatch;
 /* Scheduled — cannot be dispatched */
 const _aeMod = require('./analytics-engine');
 exports.analyticsSnapshotDaily = _aeMod.analyticsSnapshotDaily;
+
+/* ── Provider Onboarding & Dashboard — 19 onCall ops → 1 providerDispatch ── */
+const provDisp = require('./provider-dispatch');
+exports.providerDispatch = provDisp.providerDispatch;
