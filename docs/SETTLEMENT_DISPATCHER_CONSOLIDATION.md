@@ -75,6 +75,20 @@ Provider abstraction · split settlement · automatic fallback to collect-then-p
 - Commits: `c7f1ff9` (consolidation), `a899e87` (host-in-finance).
 - Final Cloud Run footprint for the entire settlement subsystem: **0 additional services** (was 12).
 
+## 6b. DEPLOYED — orphan-reclamation pilot (2026-07-11)
+
+The project was at the Cloud Run vCPU ceiling: 1512 functions deployed, but index.js only exports 1294 → **482 orphans** (old individual CFs whose dispatchers were written + clients migrated, but the dispatcher never deployed). These orphans occupied the slots the pending dispatchers needed.
+
+**Pilot executed (safe, verified):**
+- Finance had **no** deployed orphans (already clean) — so the reclaim came from **loyalty**.
+- Identified **38 loyalty orphans** = orphan ∩ `loyaltyDispatch` handler set (provably superseded).
+- Verified **zero direct client callers** (all loyalty pages route through `loyaltyDispatch`).
+- **Deleted the 38** → freed slots → **deployed `loyaltyDispatch` + `financeSprintDispatch`** (which now hosts the 12 settlement ops) + hosting. Both `Successful create`.
+
+**Result:** deployed 1512 → **1475**, orphans 482 → **443**, net **−37 services**. **Settlement is LIVE** (12 ops via `financeSprintDispatch`); loyalty + finance restored (were broken with dispatchers down).
+
+**Repeatable pattern (go-list for remaining 443 orphans):** for each consolidated subsystem — (1) `orphans ∩ dispatcher._h` = safe set, (2) confirm no direct client `httpsCallable` of those names, (3) `functions:delete` the set, (4) deploy the dispatcher. Largest remaining buckets: **admin ~43** (`adminOsDispatch`), **redis ~28** (`redisDispatch`), **search ~19**, **booking ~16** (`bookingDispatch`), **pos ~9**. Each pass reclaims dozens of slots with no customer-facing risk.
+
 ## 7. Remaining operational prerequisites
 
 - Native split stays **disabled** per gateway (Phase 3) until the IntaSend Wallets/split capability is verified in sandbox (see `INTASEND_SETTLEMENT_AUDIT.md`).

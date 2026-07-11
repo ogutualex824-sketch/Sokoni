@@ -5,24 +5,24 @@ Cloud Run quota to clear (quota typically resets within 24 hours).
 
 ---
 
-## Enterprise Settlement (Phase 2 + Phase 3) — 2026-07-11 — ⛔ QUOTA-BLOCKED
+## Enterprise Settlement (Phase 2 + Phase 3) — 2026-07-11 — ✅ DEPLOYED
 
-9 NEW callable CFs failed creation with HTTP 429 "insufficient quota" (Cloud Run
-CPU ceiling on a 1900-CF codebase). Code committed (b8b37b0, b10c4b0); hosting
-already deployed. Deploy once Cloud Run quota is increased:
+All 12 settlement ops are LIVE, consolidated into a single dispatcher and hosted
+inside `financeSprintDispatch` (finance domain) — **zero dedicated settlement
+services**. Deployed via the orphan-reclamation pilot: deleted 38 superseded
+loyalty orphans to free Cloud Run headroom, then created `loyaltyDispatch` +
+`financeSprintDispatch`. No quota increase used.
 
-```bash
-firebase deploy --only "functions:settlementGetRoutingConfig,functions:settlementSetRoutingConfig,functions:getCheckoutPaymentConfig,functions:adminGetPaymentConfig,functions:adminSetPaymentConfig,functions:settlementValidatePath,functions:settlementGetProviders,functions:settlementSetProvider,functions:settlementPreviewMethod"
-```
-- **Phase 2:** settlementGetRoutingConfig, settlementSetRoutingConfig, getCheckoutPaymentConfig, adminGetPaymentConfig, adminSetPaymentConfig, settlementValidatePath
-- **Phase 3:** settlementGetProviders, settlementSetProvider, settlementPreviewMethod
+Callers: `financeSprintDispatch({op,...})` via `sokoni-settlement.js`. Ops:
+settlementGetContext/Preview/GetDashboard, settlementGet/SetRoutingConfig,
+getCheckout/adminGet/adminSetPaymentConfig, settlementValidatePath,
+settlementGet/SetProviders (settlementGetProviders/settlementSetProvider),
+settlementPreviewMethod.
 
-Quota increase: https://console.cloud.google.com/iam-admin/quotas?project=sokoni-aeb26
-(request "Cloud Run Admin API — CPU allocation, us-central1"). All are inert by
-default (flags off / split disabled) — safe to deploy anytime.
-
-Prior settlement CFs already LIVE: settlementGetContext, settlementPreview,
-settlementGetDashboard (deployed earlier this session).
+### Quota reclamation — remaining (443 orphans) — repeatable pattern
+For each subsystem: `orphans ∩ dispatcher._h` → confirm no direct client caller →
+`functions:delete` set → deploy dispatcher. Buckets: admin ~43 (adminOsDispatch),
+redis ~28 (redisDispatch), search ~19, booking ~16 (bookingDispatch), pos ~9.
 
 ---
 
