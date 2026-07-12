@@ -9307,3 +9307,13 @@ exports.smsGetPreferences   = _sms.smsGetPreferences;
 exports.smsSetPreferences   = _sms.smsSetPreferences;
 exports.smsDeliveryWebhook  = _sms.smsDeliveryWebhook;
 exports.smsStats            = _sms.smsStats;
+
+/* ══════════════════════════════════════════════════════════════
+   NOTIFICATION ENGINE — the ONE entry point for push/in-app/SMS/email.
+   Callers declare INTENT (a type); the engine picks the channels.
+══════════════════════════════════════════════════════════════ */
+const _notify = require("./notify");
+exports.notifySend           = _notify.notifySend;
+exports.notifyGetPreferences = _notify.notifyGetPreferences;
+exports.notifySetPreferences = _notify.notifySetPreferences;
+exports.notifyStats          = _notify.notifyStats;
