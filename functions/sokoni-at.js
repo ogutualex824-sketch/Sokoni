@@ -53,6 +53,33 @@ const AFRICASTALKING_USERNAME = defineSecret('AFRICASTALKING_USERNAME');
    ─────────────────────────────────────────────────────────────────────────── */
 const AT_ENV = defineString('AT_ENV', { default: 'sandbox' });
 
+/* ── Sender ID (branded "SOKONI") ────────────────────────────────────────────
+   Africa's Talking sender IDs need operator approval, which is pending. So the
+   sender is CONFIGURABLE, not hardcoded:
+
+     AT_SENDER_ID unset  → send with no sender ID (AT uses the shared shortcode).
+     AT_SENDER_ID=SOKONI → send branded, the moment approval lands.
+
+   Switching is a .env change and a redeploy of the SMS functions — no code edit,
+   no logic change. That was the requirement: "automatically switch to SOKONI once
+   approved, without requiring code changes."
+   ─────────────────────────────────────────────────────────────────────────── */
+const AT_SENDER_ID = defineString('AT_SENDER_ID', { default: '' });
+
+/* ── API base URL — MUST follow AT_ENV ───────────────────────────────────────
+   This was the bug that broke ALL SMS on the platform: the module resolved SANDBOX
+   credentials (AT_ENV=sandbox) but posted them to the PRODUCTION endpoint, which
+   returns 401. Sandbox and production are different hosts and the credential for one
+   is rejected by the other. Every SMS — OTP, delivery, rider, merchant — was failing
+   with 401, and the failure was only logged, never surfaced.
+   ─────────────────────────────────────────────────────────────────────────── */
+function atBaseUrl() {
+  const env = String(AT_ENV.value() || 'sandbox').toLowerCase();
+  return env === 'production'
+    ? 'https://api.africastalking.com/version1/messaging'
+    : 'https://api.sandbox.africastalking.com/version1/messaging';
+}
+
 /**
  * Resolves AT credentials at CF runtime.
  *
@@ -123,15 +150,20 @@ async function atSendSMS(to, message, from) {
     ? to.slice(0, 100).map(_normalisePhone).join(',')
     : _normalisePhone(String(to));
 
+  /* Explicit `from` wins; otherwise fall back to the configured sender ID. Once the
+     branded sender is approved, set AT_SENDER_ID=SOKONI and every message becomes
+     branded — no call site changes. */
+  const sender = from || String(AT_SENDER_ID.value() || '').trim();
+
   const params = new URLSearchParams({
     username,
     to:      recipients,
     message: String(message).slice(0, 918),
-    ...(from ? { from } : {}),
+    ...(sender ? { from: sender } : {}),
   });
 
   try {
-    const res = await fetch('https://api.africastalking.com/version1/messaging', {
+    const res = await fetch(atBaseUrl(), {
       method:  'POST',
       headers: {
         apiKey,
@@ -196,6 +228,8 @@ function _logTag(recipients) {
    ─────────────────────────────────────────────────────────────────────────── */
 module.exports = {
   AFRICASTALKING_API_KEY,
+  AT_SENDER_ID,
+  atBaseUrl,
   AFRICASTALKING_USERNAME,
   secrets: [AFRICASTALKING_API_KEY, AFRICASTALKING_USERNAME],
   AT_ENV,

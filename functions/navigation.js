@@ -19,6 +19,27 @@ const FieldValue = admin.firestore.FieldValue;
 const AFRICASTALKING_API_KEY  = defineSecret('AFRICASTALKING_API_KEY');
 const AFRICASTALKING_USERNAME = defineSecret('AFRICASTALKING_USERNAME');
 
+/* Central SMS module — the ONLY Africa's Talking client in the codebase.
+   navigation.js used to build its own, pointed at the production endpoint while the
+   rest of the platform honoured AT_ENV. One client, one credential resolver. */
+const { atSendSMS } = require('./sokoni-at');
+
+/* Branded OTP body. Kept here as one function so the wording, expiry and warning are
+   identical everywhere — a user who sees two different OTP formats from the same brand
+   is being trained to trust a phishing SMS. */
+function _smsBody(otp) {
+  return [
+    'SOKONI',
+    '',
+    `Your verification code is: ${otp}`,
+    '',
+    'Expires in 30 minutes.',
+    'Never share this code with anyone.',
+    '',
+    'mysokoni.co.ke',
+  ].join('\n');
+}
+
 /* ── Constants ─────────────────────────────────────────────────────────── */
 const TRIP_STATUSES  = ['pending','assigned','en_route_pickup','arrived_pickup','en_route_delivery','arrived_delivery','completed','cancelled'];
 const VALID_VEHICLES = ['motorcycle','car','bicycle','tuktuk','van','pickup','truck'];
@@ -872,25 +893,26 @@ exports.navGenerateDeliveryOTP = onCall(
     if (phone) {
       maskedPhone = String(phone).slice(-4);
       try {
-        const apiKey   = AFRICASTALKING_API_KEY.value();
-        const username = AFRICASTALKING_USERNAME.value();
-        const message  = `Your SOKONI delivery OTP is: ${otp}. Valid for 30 minutes. Do not share this code.`;
-        const res      = await fetch('https://api.africastalking.com/version1/messaging', {
-          method:  'POST',
-          headers: {
-            apiKey,
-            Accept:          'application/json',
-            'Content-Type':  'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({ username, to: phone, message }).toString(),
-        });
-        smsSent = res.ok;
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          console.error(`navGenerateDeliveryOTP: AT SMS failed status=${res.status} body=${errText}`);
+        /* Route through the CENTRAL SMS module (sokoni-at.js) — do not build a second
+           Africa's Talking client here.
+
+           This block previously POSTed straight to the PRODUCTION endpoint
+           (api.africastalking.com) while the central module honours AT_ENV. With
+           AT_ENV=sandbox and a sandbox key, that meant every delivery-OTP SMS hit the
+           production API with a sandbox credential and returned 401 — silently, because
+           the failure was only console.error'd. Rider/customer delivery OTPs were not
+           being delivered.
+
+           Using atSendSMS() means one client, one credential resolver, one environment
+           switch, and one place to add a new provider. */
+        const message = _smsBody(otp);
+        const result  = await atSendSMS(phone, message);
+        smsSent = !!(result && result.ok !== false);
+        if (!smsSent) {
+          console.error('navGenerateDeliveryOTP: SMS send failed', result && result.error);
         }
       } catch (smsErr) {
-        console.error('navGenerateDeliveryOTP: AT SMS error', smsErr.message);
+        console.error('navGenerateDeliveryOTP: SMS error', smsErr.message);
       }
     }
 
