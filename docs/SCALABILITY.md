@@ -751,7 +751,7 @@ When CF invocations hit quota limits:
 
 ### 8.2 Scaling Firestore (index overflow)
 
-When primary Firestore DB hits 200 index limit:
+When primary Firestore DB crosses 80% of its live quota limit (read from the quota API; currently 284/1000):
 1. Run `firebase firestore:indexes --project sokoni-aeb26 > current-indexes.json`
 2. Identify analytical queries in `current-indexes.json` (high-cardinality, admin-only)
 3. For each candidate: update the query to use `sokoni-ops` Firestore client

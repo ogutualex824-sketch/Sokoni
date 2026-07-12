@@ -8,7 +8,7 @@
 ## 1. Firestore
 
 ### Current state
-- 190/200 composite indexes — **10 slots remaining**
+- 284/1000 composite indexes (live quota) — **716 slots remaining**
 - Primary concern: index pressure as platform expands
 
 ### Scaling well
@@ -112,7 +112,7 @@
 
 | Component | Current Capacity | Next Review Trigger |
 |-----------|----------------|-------------------|
-| Firestore | ✅ Healthy (190/200 indexes) | When catalogue > 5k products |
+| Firestore | ✅ Healthy (284/1000 indexes) | When catalogue > 5k products |
 | Cloud Functions | ✅ Healthy | When monthly invocations > 500k |
 | Algolia | ✅ Healthy | When catalogue > 10k records |
 | Storage | ✅ Healthy | When storage > 5GB |

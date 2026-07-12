@@ -31,13 +31,33 @@ Previous revisions of this document stated a **200-index hard limit** (*"Current
 
 ---
 
-## 🚨 Deploy landmine — read before touching indexes
+## ✅ Index drift — RECONCILED (2026-07-12)
 
-`firestore.indexes.json` declares **212** indexes. **266** are deployed.
+Source previously declared **212** indexes while **284** were deployed. A plain `firebase deploy --only firestore:indexes` would have offered to **prune the 72 untracked ones**, dropping live indexes and breaking the queries behind them.
 
-A plain `firebase deploy --only firestore:indexes` will offer to **prune the 54 deployed indexes the file does not track**. Accepting that prompt drops live indexes and breaks the queries behind them.
+**Resolved by synchronising source with production — production was never pruned.**
 
-**Before any index deploy:** reconcile the file against the deployed set, or explicitly review the prune list. **Never accept the prompt blind.**
+| | Before | After |
+|---|---:|---:|
+| Deployed (production) | 284 | 284 |
+| Tracked in `firestore.indexes.json` | 212 | **284** |
+| Untracked (a deploy would DELETE) | **72** | **0** |
+| Orphan definitions (a deploy would CREATE) | 0 | 0 |
+| Duplicate definitions | 0 | 0 |
+
+```bash
+node scripts/reconcile-indexes.js            # report drift (read-only)
+node scripts/reconcile-indexes.js --sync     # adopt production into source
+node scripts/reconcile-indexes.js --verify   # assert a deploy deletes NOTHING (CI gate)
+```
+
+`--verify` is wired into `predeploy` and exits non-zero if any deployed index is untracked. **A `firestore:indexes` deploy is now safe** — verified to delete nothing.
+
+**Policy: synchronize source with production. Never prune production to match source.**
+
+### Attribution backlog (not a blocker)
+
+Of the 284 registry entries, **30 are fully documented** and **54 are flagged `needsAttribution`** — adopted from production, so their collection and fields are known, but their *owning feature*, *originating query* and *reason for existence* still need code attribution. Work these off opportunistically; the governance gate does not fail on them.
 
 ---
 
@@ -150,8 +170,9 @@ An index is **pure derived data** — deleting one destroys no documents. But it
 
 ## Migration plan — operational collections → `sokoni-ops`
 
-> **Status: PLAN ONLY. Do not execute.**
-> Capacity is at **27%**. There is **currently no reason to run this.** Retained as a v1.1+ contingency for when `(default)` crosses the 80% WARN threshold.
+> **Status: PLAN ONLY. DO NOT EXECUTE.**
+> **Reclassified as: Version 1.1 Infrastructure Optimization.**
+> **Trigger:** only when capacity crosses the 80% governance threshold (read live from the quota API). Capacity is currently ~28% — there is **no reason to run this**, and it is **not** a v1.0.0 item.
 
 **Candidates** (operational only, no product surface):
 `_sokoniTaskQueue` (5 indexes) · `_sokoniPerf` (1) · `_sokoniErrors` (1) · `webhookDeliveries` (2) — **9 indexes**, ~1% of the limit. The payoff is small, which is a further reason not to rush it.

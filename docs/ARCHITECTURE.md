@@ -680,11 +680,11 @@ Counters in use:
 
 ### 3.3 Index Strategy
 
-All queries have a matching composite index. Index budget: 200 indexes maximum (Firebase limit).
+All queries have a matching composite index. Index budget: **read live from the quota API** (currently 1000 per database; 284 in use). The former "200 maximum" was incorrect.
 
 **Current state:** 197+ composite indexes deployed.
 
-**Overflow strategy:** When the 200 index limit is reached, new indexes go to `sokoni-ops` (second Firestore database). High-cardinality analytical queries are the first candidates for migration.
+**Overflow strategy:** There is no near-term overflow (284/1000). If usage crosses the 80% governance threshold, move *operational* collections to the `sokoni-ops` database — see [[FIRESTORE-INDEX-ARCHITECTURE]].
 
 **Governance rule:** Never drop an existing index. Dropping an index breaks all clients that haven't been updated. Add only; remove never.
 
@@ -1397,7 +1397,7 @@ Non-critical CFs remain at `minInstances: 0` (scale-to-zero) to minimise cost.
 
 **Index governance:** Indexes are never dropped (see `feedback_index_management.md`). Only add indexes. Track all indexes in `docs/FIRESTORE-INDEX-ARCHITECTURE.md`.
 
-**When to re-evaluate:** When `sokoni-ops` also approaches 200 indexes, evaluate BigQuery for analytical workloads.
+**When to re-evaluate:** When either database crosses 80% of its live quota limit, evaluate BigQuery for analytical workloads.
 
 ### 8.4 Firebase Hosting — Bandwidth Costs at Scale
 

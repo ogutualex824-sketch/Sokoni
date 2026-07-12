@@ -694,5 +694,419 @@
     "owner": "Platform/Infra",
     "dateAdded": "2026-07-12",
     "expectedLifespan": "permanent"
+  },
+  "adminAlerts|resolved:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "adminAlerts|resolved:ASCENDING,resolvedAt:ASCENDING": {
+    "purpose": "Purge resolved admin alerts",
+    "feature": "Admin/Ops",
+    "query": "typesenseMonitorCleanup: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "aiSubscriptions|pendingAt:ASCENDING,pendingPlan:ASCENDING": {
+    "purpose": "Apply pending plan changes at period rollover",
+    "feature": "AI Subscriptions",
+    "query": "selfHealSubscriptions: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "algoliaQueue|status:ASCENDING,nextAttemptAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "algoliaQueue|status:ASCENDING,updatedAt:ASCENDING": {
+    "purpose": "Detect stalled Algolia sync items",
+    "feature": "Search",
+    "query": "algoliaQueueMonitor: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "asyncJobs|status:ASCENDING,createdAt:ASCENDING": {
+    "purpose": "Purge completed async jobs",
+    "feature": "Async Jobs",
+    "query": "asyncCleanup: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "bookingFees|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "bookingHolds|venueId:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "deliveryLocations|riderId:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "deliveryProofs|deliveryId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "eccAuditLog|action:ASCENDING,ts:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "eccIncidents|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "emailLogs|status:ASCENDING,sentAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "emailLogs|status:ASCENDING,sentAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "emailQueue|status:ASCENDING,nextAttempt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "etimsAlerts|sellerUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "etimsQueue|invoiceId:ASCENDING,status:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "etimsQueue|status:ASCENDING,nextRetryAt:ASCENDING,priority:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "events|status:ASCENDING,startDate:ASCENDING": {
+    "purpose": "Auto-end events past their start window",
+    "feature": "Event Hub",
+    "query": "autoEndEvents: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "feedback|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "feedback|type:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "flags|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "foundationRecurring|status:ASCENDING,nextPaymentDate:ASCENDING": {
+    "purpose": "Charge recurring Impact/Foundation donations",
+    "feature": "Impact",
+    "query": "foundationScheduledRecurring: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "gipAlerts|assetId:ASCENDING,resolved:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "gipAlerts|resolved:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "gipAssets|region:ASCENDING,module:ASCENDING,status:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "gipAssets|uid:ASCENDING,isOnline:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "gipDispatch|module:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "gipLocations|region:ASCENDING,isOnline:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "gipLocations|region:ASCENDING,status:ASCENDING,isOnline:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "gipRoutes|module:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "healthSnapshots|timestamp:ASCENDING,status:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "homeServiceBookings|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "hubInvoiceQueue|hubId:ASCENDING,status:ASCENDING,nextRetryAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "inventory_requisitions|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "inventory_shelf_scans|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "loyaltyLedger|expired:ASCENDING,type:ASCENDING,expiresAt:ASCENDING": {
+    "purpose": "Expire loyalty points past their expiry",
+    "feature": "Loyalty",
+    "query": "processExpiringPoints: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "moderationQueue|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "monthly|status:ASCENDING,lastUpdated:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "notificationQueue|channel:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "ops_reports|type:ASCENDING,date:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "platformEvents|status:ASCENDING,createdAt:ASCENDING": {
+    "purpose": "Prune processed platform events",
+    "feature": "Event Bus",
+    "query": "eventBusCleanup: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "posBatches|status:ASCENDING,expiryDate:ASCENDING": {
+    "purpose": "Alert on stock batches nearing expiry (FEFO)",
+    "feature": "SmartPOS Inventory",
+    "query": "batchExpiryAlertSweep: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "posCashEvents|merchantId:ASCENDING,approvalRequired:ASCENDING,approved:ASCENDING,ts:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCashEvents|merchantId:ASCENDING,branchId:ASCENDING,clientTs:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCashEvents|merchantId:ASCENDING,cashierId:ASCENDING,clientTs:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCashEvents|merchantId:ASCENDING,clientTs:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCashEvents|merchantId:ASCENDING,clientTs:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCashEvents|merchantId:ASCENDING,registerId:ASCENDING,clientTs:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCashEvents|merchantId:ASCENDING,shiftId:ASCENDING,ts:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCashEvents|merchantId:ASCENDING,type:ASCENDING,clientTs:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCashSessions|merchantId:ASCENDING,openedAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCloseApprovals|merchantId:ASCENDING,registerId:ASCENDING,status:ASCENDING,requestedAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posCloseApprovals|merchantId:ASCENDING,status:ASCENDING,requestedAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posDevices|status:ASCENDING,lastSeenAt:ASCENDING": {
+    "purpose": "Retire POS devices that stopped reporting",
+    "feature": "SmartPOS",
+    "query": "cleanupStaleDevices: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "posDrawerEvents|merchantId:ASCENDING,registerId:ASCENDING,ts:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posDrawerEvents|merchantId:ASCENDING,ts:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "priceAlerts|productId:ASCENDING,status:ASCENDING,targetPrice:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "priceAlerts|uid:ASCENDING,status:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "productPriceHistory|productId:ASCENDING,changedAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "products|stockAlert:ASCENDING,stock:ASCENDING": {
+    "purpose": "Raise low-stock alerts",
+    "feature": "Inventory",
+    "query": "inventoryAlertSweep: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "sasosDunning|status:ASCENDING,nextRetryDate:ASCENDING": {
+    "purpose": "Drive the dunning retry cycle",
+    "feature": "Billing (SASOS)",
+    "query": "sasosDunningCycle: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "sasosSubscriptions|products.marketplace.status:ASCENDING,products.marketplace.periodEnd:ASCENDING": {
+    "purpose": "Renew marketplace subscriptions at period end",
+    "feature": "Subscriptions (SASOS)",
+    "query": "sasosProcessRenewals: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "sasosSubscriptions|products.marketplace.status:ASCENDING,products.marketplace.trialEnd:ASCENDING": {
+    "purpose": "Expire marketplace trials",
+    "feature": "Subscriptions (SASOS)",
+    "query": "sasosExpireTrials: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "securitySessions|isRevoked:ASCENDING,lastActivity:ASCENDING": {
+    "purpose": "Clean up idle/expired security sessions",
+    "feature": "Security",
+    "query": "scheduledSessionCleanup: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "subscriptions|status:ASCENDING,failedAttempts:ASCENDING": {
+    "purpose": "Retry subscriptions with failed payments",
+    "feature": "Subscriptions",
+    "query": "subRetryFailedPayments: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "trending|hub:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "tsBackupMeta|type:ASCENDING,createdAt:ASCENDING": {
+    "purpose": "Rotate Typesense backup snapshots",
+    "feature": "Search",
+    "query": "typesenseBackupCleanup: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "typesenseQueue|collection:ASCENDING,status:ASCENDING,nextAttemptAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "typesenseQueue|status:ASCENDING,nextAttemptAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "typesenseQueue|status:ASCENDING,processingStartedAt:ASCENDING": {
+    "purpose": "Detect Typesense queue items stuck in processing",
+    "feature": "Search",
+    "query": "typesenseQueueMonitor: scheduled sweep (see function source)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "voucherRedemptions|uid:ASCENDING,redeemedAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
   }
 }

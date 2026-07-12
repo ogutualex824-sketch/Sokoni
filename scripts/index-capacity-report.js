@@ -24,8 +24,31 @@ const { execSync } = require('child_process');
 
 const PROJECT = 'sokoni-aeb26';
 const DATABASES = ['(default)', 'sokoni-ops'];
-const LIMIT = 1000;                 // verified via serviceusage consumerQuotaMetrics
 const WARN = 0.80, HIGH = 0.90, CRITICAL = 0.95;
+
+/* The limit is ALWAYS read live from the quota API — never hardcoded.
+   A hardcoded "200" was wrong for months and drove index deletions and a migration
+   that were never needed. If the quota cannot be read, this script fails loudly
+   rather than guessing. */
+function fetchLimit(at) {
+  const out = execSync(
+    `curl -s -H "Authorization: Bearer ${at}" ` +
+    `"https://serviceusage.googleapis.com/v1beta1/projects/${PROJECT}/services/firestore.googleapis.com/consumerQuotaMetrics"`,
+    { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 }
+  );
+  const j = JSON.parse(out);
+  if (j.error) throw new Error('quota API: ' + j.error.message);
+  for (const m of j.metrics || []) {
+    if (!/composite index/i.test(m.displayName || '')) continue;
+    for (const l of m.consumerQuotaLimits || []) {
+      for (const b of l.quotaBuckets || []) {
+        const v = Number(b.effectiveLimit);
+        if (Number.isFinite(v) && v > 0) return v;
+      }
+    }
+  }
+  throw new Error('Could not read "Composite Indexes Per Database" from the quota API');
+}
 
 /* Operational/internal collections — infrastructure, not product surface. */
 const OPERATIONAL = [
@@ -76,8 +99,10 @@ const bar = (pct, w = 40) => {
 
 (async () => {
   const at = token();
-  const report = { limit: LIMIT, generated: new Date().toISOString(), databases: {} };
+  const LIMIT = fetchLimit(at);          // live quota — never hardcoded
+  const report = { limit: LIMIT, limitSource: 'serviceusage.googleapis.com (live)', generated: new Date().toISOString(), databases: {} };
   let critical = false;
+  if (!process.argv.includes('--json')) console.log(`\nComposite-index limit (live quota API): ${LIMIT}`);
 
   for (const db of DATABASES) {
     const ix = await listIndexes(at, db);
@@ -118,8 +143,8 @@ const bar = (pct, w = 40) => {
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify(report, null, 2));
   } else {
-    console.log(`\nThresholds (% of the REAL ${LIMIT}-index limit): WARN ${WARN * 100}% · HIGH ${HIGH * 100}% · CRITICAL ${CRITICAL * 100}%`);
-    console.log('Note: the "200 hard cap" in older docs was incorrect. Verified limit is 1000.\n');
+    console.log(`\nThresholds (% of the live ${LIMIT}-index limit): WARN ${WARN * 100}% · HIGH ${HIGH * 100}% · CRITICAL ${CRITICAL * 100}%`);
+    console.log('Limit is read from the quota API on every run — never hardcoded.\n');
   }
 
   process.exit(critical ? 1 : 0);

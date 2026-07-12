@@ -1,5 +1,8 @@
 # Phase 4 — FAANG-Level Architecture Audit
 
+> ⚠️ **CORRECTED 2026-07-12:** the "200 composite index hard limit" stated below is **FALSE**. The live quota API (`serviceusage`) reports **1000** composite indexes per database; production holds **284**, all READY. Never hardcode this limit — read it live. See [[FIRESTORE-INDEX-ARCHITECTURE]].
+
+
 **Reviewer role:** Principal Software Architect (distributed systems & platform engineering)
 **Date:** 2026-07-08
 **Scope:** Entire SOKONI platform (web PWA, ~1,800 Cloud Functions, Firestore ×2, Redis, CI/CD)
