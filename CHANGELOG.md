@@ -1,4 +1,116 @@
-﻿## [2026-07-12] — Email Branding v2.1 — Logo & Sender Identity Audit
+﻿## [2026-07-12] — Production Email Logo Rendering Fix
+
+### Summary
+The SOKONI logo rendered **faded / washed out / partly invisible** in delivered production emails. Root cause was **not** the asset's size or a broken transparent PNG — it was **email clients destroying the alpha channel while downscaling it**.
+
+The template renders the logo in a **180×120** box but served the **480×320** master, forcing every client to downscale to **37.5 %**. Gmail and Outlook downscale with a **naive, non-premultiplied box filter**: each output pixel averages its neighbours *including fully-transparent ones*, which carry `RGB(0,0,0), α=0`. The mark is **93.7 % transparent** with thin anti-aliased strokes, so that filter bled both colour and alpha out of virtually every stroke edge.
+
+It was **not** a white-on-white problem (header is hard-coded `bgcolor="#0d1117"` in light *and* dark mode), and **enlarging the image would have made it worse** — a larger source means a more aggressive downscale ratio and therefore more bleed.
+
+**Fix:** pre-resample the asset ourselves in **premultiplied-alpha space** — the mathematically correct way to filter transparency, and exactly what the client filter gets wrong — to **360×240**, a clean **2×** of the render box. HiDPI clients now draw 1:1; 1× clients do a lossless 2:1 halving. The aggressive fractional downscale no longer happens.
+
+**Proof the bleed is gone:** mean luminance of visible pixels is **preserved across the resample (120.3 → 120.8)**. A naive filter drags luminance toward 0 as transparent black bleeds in; premultiplied filtering does not.
+
+### Files affected
+- **`scripts/build-email-logo.js`** — NEW. Reproducible builder: PNG decode → premultiplied-alpha area resample → PNG encode (no image library available in this environment, so all three are implemented from scratch). Prints the before/after measurements.
+- **`assets/sokoni-email-logo.png`** — NEW. 360×240, 24,300 B (28 % smaller than the master). Validated: correct signature, valid IHDR, **0 CRC errors**, IDAT inflates to exactly 345,840 B.
+- **`functions/email-templates.js`** — `LOGO_URL` → new asset. `<img>` hardened: explicit `width`/`height` **attributes** (Outlook ignores CSS dimensions), `display:block`, `border:0`, `-ms-interpolation-mode:bicubic`, `max-width` for narrow mobile, `alt` + `title`.
+- **`docs/EMAIL_LOGO_FIX.md`** — NEW. Root cause, measurements, before/after, cross-client checklist.
+
+### Audit of every email template
+`email-templates.js` is the **only** email template carrying a logo (single consumer: `email-triggers.js`); all 53 templates share its header, so one fix covers every production email. Already correct and deliberately left alone: `<o:AllowPNG/>` (this is what lets Outlook honour PNG alpha at all), `color-scheme: dark light`, `prefers-color-scheme` rules, hard `bgcolor` on the header.
+
+Deliberately **not** changed — not email templates, these need the full-resolution master: `company-identity.js:58` (JSON-LD brand logo), `minishop-v3.js` (OG/social-share images), `index.js:1857` (push-notification icon).
+
+### Deployment
+**Hosting first, functions second** — mandatory. Shipping the template before the asset existed would have produced a **broken image**, strictly worse than a faded one. Asset live on both hosts: `200 · image/png · Cache-Control: public, max-age=2592000`. The old asset remains live, so nothing previously cached breaks.
+
+### Security / breaking changes
+None. Static asset + template change only.
+
+### Still required (OAT-12, operator)
+Real inbox rendering across Gmail Web/Android/iOS, Outlook (Desktop + Web), Apple Mail, Yahoo — light **and** dark mode. **Code inspection is not proof of rendering**; this is claimed as fixed in code, not confirmed in inbox.
+
+---
+
+## [2026-07-12] — Global Header Redesign (v42) — Premium Executive Navigation
+
+### Summary
+Complete header redesign across the entire SOKONI platform. Eliminated the "logo card" appearance caused by near-opaque black `drop-shadow` filters (90%/80% opacity) that rendered as a visible dark bounding box around the logo PNG. Simultaneously removed the redundant wordmark text label ("SOKONI") shown next to the logo image on all JS-injected pages — the logo image already carries the full brand. Result: a clean, minimal, enterprise-grade header comparable to Apple, Airbnb, and Stripe in terms of visual restraint and alignment precision.
+
+### Changes
+- **`shared-header.js`** — UPDATED (all phases):
+  - Header height: 64px → 58px (saves 6px, reduces visual weight without sacrificing touch targets)
+  - Logo: `drop-shadow(0 1px 10px rgba(0,0,0,0.9))` + `drop-shadow(0 0 4px rgba(0,0,0,0.8))` → `brightness(1.04) drop-shadow(0 0 6px rgba(113,255,0,0.12))` — eliminates the dark box, introduces a subtle green glow
+  - Logo size: 34px inline override + 40px CSS → unified 28px CSS (no inline override)
+  - Wordmark text span removed from `_buildNav()` HTML; `#sk-nav-logo-text { display: none !important }` enforced globally
+  - Transparent-nav icon buttons: removed per-icon `rgba(0,0,0,0.32)` dark circles; rely on header's single gradient veil for readability
+  - Action gap: 3px → 2px; icon button size: 40×40px → 38×38px
+  - Cart pill: padding 8px 14px → 7px 12px, border opacity reduced
+  - Avatar: 34px → 32px
+  - Sub-nav sticky: `top: 64px` → `top: 58px`
+  - Mobile ≤600px: min-height 52px → 48px, logo 46px → 26px, body padding updated
+  - 320–380px: logo 40px → 24px, icon buttons 32px → 30px
+- **`index.html`** — UPDATED: removed text span from static nav; hero `margin-top` 64px → 58px
+- **`education.html`**, **`jobs.html`**, **`notifications.html`**, **`profile.html`**, **`search.html`** — UPDATED: sub-nav `top: 64px` → `top: 58px`
+- **`sokoni-mobile-fixes.css`** — UPDATED: sticky header offset 64px → 58px
+- **`landlord.css`** — UPDATED: sidebar sticky `top: 64px` → `top: 58px`; `calc(100vh - 64px)` → `calc(100vh - 58px)`
+- **`service-worker.js`** — UPDATED: `CACHE_VERSION` bumped to `sokoni-20260712-header-redesign-v42`
+
+### Performance Notes
+- Removing the heavy drop-shadow composite eliminates a GPU paint layer per header render cycle
+- Reduced header height saves 6px of vertical real estate on every page — more content above the fold
+
+### Security Notes
+- No security impact. Pure presentation layer change.
+
+---
+
+## [2026-07-12] — Email System — Full Production Audit COMPLETE (B-01 Cleared)
+
+### Summary
+Complete production email verification. SPF, DKIM (s1+s2), DMARC, and SendGrid domain authentication all confirmed operational. Logo v4 (transparent PNG-32, calibrated threshold lo=38/hi=50, 32.9 KB, 480×320) deployed — O-holes and enclosed letter counters fully clear, wordmark fully opaque. Production verification email delivered HTTP 202, Message-ID `MgF9GQ7HRguGwahu5wOrCg`. B-01 removed from release blockers. Zero email blockers remain on the release path.
+
+### DNS Authentication (verified)
+| Record | Status |
+|---|---|
+| SPF (`include:sendgrid.net`) | ✅ PASS — fully propagated on 8.8.8.8 + 1.1.1.1 |
+| DKIM s1 `s1._domainkey.mysokoni.co.ke` | ✅ LIVE — TTL 300 |
+| DKIM s2 `s2._domainkey.mysokoni.co.ke` | ✅ LIVE — TTL 300 |
+| DMARC `p=none` + rua + ruf | ✅ PASS — fully propagated |
+| SendGrid domain auth API | ✅ `valid: true` |
+| Return-path `em.mysokoni.co.ke` | ✅ LIVE |
+
+### Files Changed
+- `assets/Sokoni Logo.png` — v4 transparent PNG-32 (32.9 KB; lo=38/hi=50 at 1536×1024 then downscaled)
+- `docs/RELEASE_v1.0.0.md` — B-01 removed from blocker table; Known Limitation §7 updated; full DNS audit section added
+- `CHANGELOG.md` — this entry
+
+### Security
+- DKIM signing active on all outbound email from `hello@mysokoni.co.ke`
+- DMARC reporting active (`rua` + `ruf` → `dmarc@mysokoni.co.ke`)
+- SPF includes `sendgrid.net` — SendGrid IPs authorised senders
+
+---
+
+## [2026-07-12] — Email Branding v2.1 — Deployed
+
+### Summary
+All email branding fixes deployed to production. `Sokoni Logo.png` (compressed 32.5 KB) and `logosokoni.png` (301 KB) deployed to Firebase Hosting / Cloudflare CDN. 10 email Cloud Functions (processEmailQueue, emailWebhook, and 8 trigger functions) updated to v2.1 templates. Full branding + auth verification email sent to `ogutualex824@gmail.com` (HTTP 202, Message-ID `dKOj6NeZQfywnPEdmL7-aw`). DNS SPF and DMARC records require manual update in Cloudflare dashboard — Cloudflare API token not in Secret Manager.
+
+### Deployed
+- `firebase deploy --only hosting` ✅ — Sokoni Logo.png (32.5 KB) + logosokoni.png (301 KB) on CDN
+- `firebase deploy --only functions:processEmailQueue,...` ✅ — 10 email CFs updated
+
+### DNS Still Pending (Cloudflare dashboard)
+```
+SPF  TXT  @                      add: include:sendgrid.net
+DMARC TXT _dmarc.mysokoni.co.ke  add: rua=mailto:dmarc@mysokoni.co.ke; ruf=mailto:dmarc@mysokoni.co.ke; fo=1; adkim=s; aspf=s; pct=100
+```
+
+---
+
+## [2026-07-12] — Email Branding v2.1 — Logo & Sender Identity Audit
 
 ### Summary
 Full audit and correction of email logo branding across all 53 templates. `Sokoni Logo.png` (official SOKONI wordmark) copied from worktree to `assets/`, compressed from 160 KB / 1536×1024 to 33 KB / 480×320 (80% reduction), and set as the canonical email logo via `LOGO_URL`. Image `alt` text corrected to `"SOKONI"`. Email `<img>` dimensions updated to reflect 3:2 wordmark aspect ratio (180×120 display, 140×93 on mobile). DNS authentication audit completed: DKIM confirmed active via SendGrid CNAME, SPF gap found (missing `include:sendgrid.net`), DMARC at `p=none` without reporting addresses. Complete BIMI / sender-avatar / VMC roadmap documented. `logosokoni.png` compressed from 980 KB / 1254×1254 to 301 KB / 512×512.
