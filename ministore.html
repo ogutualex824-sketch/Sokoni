@@ -923,7 +923,7 @@ function renderProdList(){
     return `
     <div class="ms-prod-row">
       ${p.image&&!p.image.startsWith("data:")
-        ?`<img class="ms-prod-thumb" src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:""}
+        ?`<img class="ms-prod-thumb" src="${p.image}" alt="${p.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling&&(this.nextElementSibling.style.display='flex'))">`:""}
       <div class="ms-prod-thumb" ${p.image&&!p.image.startsWith("data:")?"style='display:none'":''}>${emoji}</div>
       <div class="ms-prod-info">
         <div class="ms-prod-name">${p.name}</div>

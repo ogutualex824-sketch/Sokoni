@@ -295,7 +295,7 @@
       const emoji = CAT_EMOJI[e.category] || '📌';
       const dateStr = e.startDate ? new Date(e.startDate).toLocaleDateString('en-KE', { weekday:'short', day:'numeric', month:'short', year:'numeric' }) : '';
       const img = e.bannerImageUrl
-        ? `<img class="event-banner" src="${esc(e.bannerImageUrl)}" alt="${esc(e.title)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        ? `<img class="event-banner" src="${esc(e.bannerImageUrl)}" alt="${esc(e.title)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling&&(this.nextElementSibling.style.display='flex'))">`
         : '';
       const ph = `<div class="event-banner-ph" ${e.bannerImageUrl ? 'style="display:none"' : ''}>${emoji}</div>`;
       card.innerHTML = `
@@ -335,7 +335,7 @@
     const dateStr = ev.startDate ? new Date(ev.startDate).toLocaleDateString('en-KE', { weekday:'long', day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
     const endStr = ev.endDate ? ' → ' + new Date(ev.endDate).toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' }) : '';
     const img = ev.bannerImageUrl
-      ? `<img class="modal-banner" src="${esc(ev.bannerImageUrl)}" alt="${esc(ev.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      ? `<img class="modal-banner" src="${esc(ev.bannerImageUrl)}" alt="${esc(ev.title)}" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling&&(this.nextElementSibling.style.display='flex'))">`
       : '';
     const ph = `<div class="modal-banner-ph" ${ev.bannerImageUrl ? 'style="display:none"' : ''}>${emoji}</div>`;
 
