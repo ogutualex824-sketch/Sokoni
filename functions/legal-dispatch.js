@@ -15,6 +15,7 @@ const ROUTES = [
   'legalPublishAgreement', 'legalArchiveAgreement', 'legalVersionHistory',
   'legalSearchAcceptances', 'legalGetStats',
   'legalSetEnforcement', 'legalComplianceReport',
+  'legalGetPendingUpdates', 'legalExportAcceptances',
 ];
 const VALID = ROUTES.join(', ');
 

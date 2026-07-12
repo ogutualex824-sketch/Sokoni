@@ -225,6 +225,7 @@ exports._h.providerActivateSubscription = _h.providerActivateSubscription = asyn
 /* ── 5. providerPublish ──────────────────────────────────────────────────────── */
 exports._h.providerPublish = _h.providerPublish = async (req) => {
   const uid = _uid(req);
+  await require('./legal-agreements').assertLegalCompliance(uid, 'provider'); // publish profile — dark-launched
   const snap = await _db().collection('providerProfiles').doc(uid).get();
   if (!snap.exists) throw new HttpsError('not-found', 'No draft profile found. Complete the onboarding first.');
 

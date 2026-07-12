@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Legal &amp; Agreements</title>
+  <meta name="description" content="View the SOKONI agreements you have accepted, their versions, acceptance dates, and any pending updates.">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <script src="security.js"></script>
+  <link rel="stylesheet" href="style.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+  <script src="sokoni-legal-gate.js" defer></script>
+  <script src="shared-header.js" defer></script>
+
+  <style>
+    :root { --bg:#050505; --sur:#0d0d0d; --g:#71ff00; --bor:#1e1e1e; --txt:#e8e8e8; --sub:#8a8a8a; }
+    body { background:var(--bg); color:var(--txt); margin:0; }
+    .lc-wrap { max-width:760px; margin:0 auto; padding:24px 16px 96px; }
+    .lc-title { font-size:22px; font-weight:800; margin:8px 0 4px; }
+    .lc-sub { font-size:13px; color:var(--sub); margin-bottom:18px; }
+    .lc-card { background:var(--sur); border:1px solid var(--bor); border-radius:14px; padding:16px; margin-bottom:16px; }
+    .lc-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+    .lc-in, .lc-sel {
+      flex:1 1 160px; min-height:44px; font-size:16px; padding:10px 12px;
+      background:#111; color:var(--txt); border:1px solid var(--bor); border-radius:10px;
+    }
+    .lc-btn {
+      min-height:44px; padding:10px 16px; font-size:13px; font-weight:700; cursor:pointer;
+      background:transparent; color:var(--g); border:1px solid var(--bor); border-radius:10px;
+    }
+    .lc-btn:hover { border-color:var(--g); }
+    .lc-sec { font-size:13px; font-weight:800; margin:0 0 8px; }
+    .lc-empty { font-size:13px; color:var(--sub); padding:10px 0; }
+    @media (max-width:420px){ .lc-bar{flex-direction:column} }
+  </style>
+</head>
+<body>
+  <div class="lc-wrap">
+    <h1 class="lc-title">Legal &amp; Agreements</h1>
+    <p class="lc-sub">The SOKONI agreements you've accepted, their versions and dates — plus anything that needs your attention.</p>
+
+    <!-- Pending updates — mounts the SAME universal gate used in onboarding -->
+    <div class="lc-card" id="lc-pending-card" style="display:none">
+      <div class="lc-sec">Action needed</div>
+      <div id="lc-gate"></div>
+    </div>
+
+    <div class="lc-card">
+      <div class="lc-bar">
+        <select class="lc-sel" id="lc-role" aria-label="Role">
+          <option value="">Core (all users)</option>
+          <option value="merchant">Merchant</option>
+          <option value="provider">Service Provider</option>
+          <option value="driver">Driver</option>
+          <option value="rider">Rider</option>
+          <option value="property">Property</option>
+          <option value="hotel">Hotel</option>
+          <option value="restaurant">Restaurant</option>
+          <option value="healthcare">Healthcare</option>
+          <option value="employer">Employer</option>
+        </select>
+        <input class="lc-in" id="lc-search" type="search" placeholder="Search agreements…" aria-label="Search agreements">
+        <button class="lc-btn" id="lc-export">Download record</button>
+      </div>
+      <div class="lc-sec">Your agreements</div>
+      <div id="lc-list"></div>
+      <div class="lc-empty" id="lc-loading">Loading…</div>
+    </div>
+  </div>
+
+<script>
+'use strict';
+const FB_CFG = {
+  apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE', authDomain:'sokoni-aeb26.firebaseapp.com',
+  projectId:'sokoni-aeb26', storageBucket:'sokoni-aeb26.firebasestorage.app',
+  messagingSenderId:'24799054989', appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4',
+};
+const _app  = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(FB_CFG);
+const _auth = firebase.auth(_app);
+const _fns  = firebase.functions(_app);
+
+const LEGAL = (op, data) =>
+  _fns.httpsCallable('legalDispatch', { timeout: 30000 })(Object.assign({ op }, data || {}))
+      .then(r => r.data);
+
+let _role = '';
+
+/* Render the agreements list (accepted + pending) — reuses SokoniLegalGate.docFor for links. */
+async function render() {
+  const list = document.getElementById('lc-list');
+  const load = document.getElementById('lc-loading');
+  load.style.display = 'block';
+  try {
+    const [ag, acc] = await Promise.all([
+      LEGAL('legalGetAgreements', { role: _role }),
+      LEGAL('legalGetMyAcceptances', {}),
+    ]);
+    const required = (ag.core || []).concat(ag.roleSpecific || []);
+    const mine = {};
+    (acc.acceptances || []).forEach(a => { if (a.accepted) mine[a.agreementId] = a; });
+
+    const docFor = (window.SokoniLegalGate && window.SokoniLegalGate.docFor) || (() => 'legal-hub.html');
+    window._lcRows = required.map(a => {
+      const m = mine[a.id];
+      const ok = m && m.version === a.version;
+      const when = m && m.acceptedAt && m.acceptedAt._seconds
+        ? new Date(m.acceptedAt._seconds * 1000).toLocaleDateString('en-KE') : '';
+      return { name: a.name, id: a.id, version: a.version, ok, when,
+               accepted: m ? m.version : null, href: docFor(a.id) };
+    });
+    paint();
+    await checkPending();
+  } catch (e) {
+    list.innerHTML = '<div class="lc-empty">Could not load agreements. Please sign in and try again.</div>';
+  } finally { load.style.display = 'none'; }
+}
+
+/* Paint with the current search filter applied. */
+function paint() {
+  const q = (document.getElementById('lc-search').value || '').toLowerCase().trim();
+  const rows = (window._lcRows || []).filter(r => !q || r.name.toLowerCase().includes(q));
+  const list = document.getElementById('lc-list');
+  if (!rows.length) { list.innerHTML = '<div class="lc-empty">No agreements match.</div>'; return; }
+  list.innerHTML = rows.map(r =>
+    '<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--bor)">' +
+      '<div style="min-width:0">' +
+        '<a href="' + r.href + '" target="_blank" rel="noopener" style="color:var(--txt);text-decoration:underline">' + esc(r.name) + '</a>' +
+        '<div style="font-size:11.5px;color:var(--sub);margin-top:2px">v' + esc(r.version) +
+          (r.when ? ' · accepted ' + esc(r.when) : '') +
+          (r.accepted && !r.ok ? ' · you have v' + esc(r.accepted) : '') + '</div>' +
+      '</div>' +
+      '<span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;white-space:nowrap;' +
+        (r.ok ? 'background:rgba(113,255,0,.14);color:var(--g)">Accepted'
+              : 'background:rgba(255,149,0,.16);color:#ff9500">' + (r.accepted ? 'Update needed' : 'Pending')) +
+      '</span>' +
+    '</div>'
+  ).join('');
+}
+
+/* If anything is pending/outdated, mount the SAME universal gate to resolve it. */
+async function checkPending() {
+  try {
+    const p = await LEGAL('legalGetPendingUpdates', { role: _role });
+    const card = document.getElementById('lc-pending-card');
+    if (p.hasPending && window.SokoniLegalGate) {
+      card.style.display = 'block';
+      window.SokoniLegalGate.mount(document.getElementById('lc-gate'), {
+        role: _role, onComplete: (ok) => { if (ok) { card.style.display = 'none'; render(); } },
+      });
+    } else { card.style.display = 'none'; }
+  } catch (_) {}
+}
+
+/* Download the user's acceptance record (JSON — printable/archivable). */
+async function exportRecord() {
+  try {
+    const acc = await LEGAL('legalGetMyAcceptances', {});
+    const blob = new Blob([JSON.stringify(acc.acceptances || [], null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sokoni-legal-acceptances.json';
+    a.click(); URL.revokeObjectURL(a.href);
+  } catch (_) { alert('Could not export right now.'); }
+}
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+document.getElementById('lc-search').addEventListener('input', paint);
+document.getElementById('lc-role').addEventListener('change', (e) => { _role = e.target.value; render(); });
+document.getElementById('lc-export').addEventListener('click', exportRecord);
+
+_auth.onAuthStateChanged((u) => {
+  if (!u) { document.getElementById('lc-loading').textContent = 'Please sign in to view your agreements.'; return; }
+  render();
+});
+</script>
+</body>
+</html>

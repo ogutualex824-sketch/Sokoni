@@ -58,6 +58,7 @@ exports._h = _h;
    pending → confirmed. Also mirrors the slot into providerCalendar. */
 _h.providerConfirmBooking = async (req) => {
   const uid = _uid(req);
+  await legal.assertLegalCompliance(uid, 'provider'); // receive booking — dark-launched
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
   if (!['pending', 'requested'].includes(data.status)) {
     throw new HttpsError('failed-precondition', `Cannot confirm a booking that is "${data.status}".`);
@@ -96,6 +97,7 @@ _h.providerDeclineBooking = async (req) => {
    This is the enforcement point for commissionRate. Idempotent per booking. */
 _h.providerCompleteBooking = async (req) => {
   const uid = _uid(req);
+  await legal.assertLegalCompliance(uid, 'provider'); // receive settlement — dark-launched
   const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
   if (data.status === 'completed') return { success: true, status: 'completed', alreadyDone: true };
   if (!['confirmed', 'in_progress', 'pending'].includes(data.status)) {

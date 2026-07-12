@@ -95,14 +95,22 @@ function _hash(agreementId, version) {
   return crypto.createHash('sha256').update(`${agreementId}:${version}`).digest('hex').slice(0, 32);
 }
 
+/* Version-override cache — agreement versions change rarely; cache 5 min to avoid
+   re-reading legalAgreements on every compliance check (performance requirement). */
+let _catCache = null, _catAt = 0;
+async function _versionOverrides(ids) {
+  if (_catCache && (Date.now() - _catAt) < 300000) return _catCache;
+  const overrides = {};
+  const snaps = await Promise.all(ids.map((id) => _db().collection('legalAgreements').doc(id).get().catch(() => null)));
+  snaps.forEach((s) => { if (s && s.exists) overrides[s.id] = s.data(); });
+  _catCache = overrides; _catAt = Date.now();
+  return overrides;
+}
+
 /* Merge catalogue defaults with any admin-published version overrides. */
 async function _catalogueFor(role) {
   const list = [...CORE, ...(ROLE_AGREEMENTS[role] || [])];
-  const ids = list.map((a) => a.id);
-  const overrides = {};
-  // Fetch published version docs (batched by id; small N).
-  const snaps = await Promise.all(ids.map((id) => _db().collection('legalAgreements').doc(id).get().catch(() => null)));
-  snaps.forEach((s) => { if (s && s.exists) overrides[s.id] = s.data(); });
+  const overrides = await _versionOverrides(list.map((a) => a.id));
   return list.map((a) => {
     const o = overrides[a.id] || {};
     if (o.status === 'archived') return null;
@@ -259,6 +267,7 @@ _h.legalPublishAgreement = async (req) => {
     version, status: 'active', publishedDate: _ts(), effectiveDate: d.effectiveDate || null,
     hash: _hash(id, version), updatedAt: _ts(),
   }, { merge: true });
+  _catCache = null; // bust version cache so the new version is served immediately
   return { ok: true, agreementId: id, version };
 };
 
@@ -268,6 +277,7 @@ _h.legalArchiveAgreement = async (req) => {
   const id = _san(req.data?.agreementId, 100);
   if (!id) throw new HttpsError('invalid-argument', 'agreementId is required.');
   await _db().collection('legalAgreements').doc(id).set({ status: 'archived', updatedAt: _ts() }, { merge: true });
+  _catCache = null;
   return { ok: true, agreementId: id };
 };
 
@@ -311,6 +321,44 @@ _h.legalGetStats = async (req) => {
   return { total: snap.size, sampled: snap.size >= 5000, byAgreement, byVersion, byRole };
 };
 
+/* ── legalGetPendingUpdates({role}) — user's agreements needing (re-)acceptance ──
+   Powers the "pending updates" prompt: outdated version OR never accepted. */
+_h.legalGetPendingUpdates = async (req) => {
+  const uid  = _uid(req);
+  const role = _san(req.data?.role || '', 40);
+  const [required, accSnap] = await Promise.all([
+    _catalogueFor(role),
+    _db().collection('legalAcceptances').where('userId', '==', uid).limit(500).get(),
+  ]);
+  const accepted = {};
+  accSnap.docs.forEach((d) => { const a = d.data(); if (a.accepted) accepted[a.agreementId] = a.version; });
+  const pending = required.filter((a) => accepted[a.id] !== a.version).map((a) => ({
+    agreementId: a.id, name: a.name, currentVersion: a.version,
+    acceptedVersion: accepted[a.id] || null,
+    reason: accepted[a.id] ? 'version_updated' : 'never_accepted',
+  }));
+  return { role: role || null, hasPending: pending.length > 0, pending };
+};
+
+/* ── Admin: export acceptance records as CSV (audit) ── */
+_h.legalExportAcceptances = async (req) => {
+  _assertAdmin(req);
+  const d = req.data || {};
+  let q = _db().collection('legalAcceptances');
+  if (d.agreementId) q = q.where('agreementId', '==', _san(d.agreementId, 100));
+  else if (d.userId) q = q.where('userId', '==', _san(d.userId, 128));
+  const snap = await q.limit(Math.min(Number(d.limit) || 5000, 10000)).get();
+  const cols = ['userId', 'role', 'agreementId', 'agreementName', 'version', 'acceptedAt', 'acceptedFrom', 'country', 'language', 'agreementHash', 'acceptanceMethod'];
+  const escCsv = (v) => { const s = String(v == null ? '' : v).replace(/"/g, '""'); return /[",\n]/.test(s) ? `"${s}"` : s; };
+  const rows = [cols.join(',')];
+  snap.docs.forEach((x) => {
+    const a = x.data();
+    const at = a.acceptedAt && a.acceptedAt._seconds ? new Date(a.acceptedAt._seconds * 1000).toISOString() : '';
+    rows.push(cols.map((c) => escCsv(c === 'acceptedAt' ? at : a[c])).join(','));
+  });
+  return { csv: rows.join('\n'), count: snap.size, filename: `legal-acceptances-${d.agreementId || d.userId || 'all'}.csv` };
+};
+
 /* ── Admin: toggle server-side enforcement per role (dark-launch control) ── */
 _h.legalSetEnforcement = async (req) => {
   _assertAdmin(req);
@@ -335,10 +383,20 @@ _h.legalComplianceReport = async (req) => {
     versionAdoption[`${a.agreementId}@${a.version}`] = (versionAdoption[`${a.agreementId}@${a.version}`] || 0) + 1;
   });
   const flags = await _enforcementFlags();
+  // Latest-version adoption %: of everyone who accepted an agreement, how many are on its current version.
+  const overrides = await _versionOverrides([...CORE, ...Object.values(ROLE_AGREEMENTS).flat()].map((a) => a.id));
+  const latestVersionAdoption = {};
+  Object.keys(byAgreement).forEach((id) => {
+    const current = (overrides[id] && overrides[id].version) || DEFAULT_VERSION;
+    const onCurrent = versionAdoption[`${id}@${current}`] || 0;
+    const total = byAgreement[id];
+    latestVersionAdoption[id] = { currentVersion: current, onCurrent, total,
+      adoptionPct: total ? Math.round((onCurrent / total) * 100) : 0 };
+  });
   return {
     totalAcceptanceRecords: snap.size, sampled: snap.size >= 5000,
     distinctUsers: users.size, byAgreement, byRole, versionAdoption,
-    enforcement: flags,
+    latestVersionAdoption, enforcement: flags,
   };
 };
 
