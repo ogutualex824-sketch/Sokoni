@@ -30,7 +30,7 @@
 ═════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const CORPUS_VERSION = 1;
+const CORPUS_VERSION = 2;   /* v2: +47 counties, escrow/settlement, verification, subscriptions, AI search */
 
 const CORPUS = [
 
@@ -452,6 +452,74 @@ Repeat customers cost nothing to reacquire. Deliver on time, message clearly, re
 Arguing with a buyer in reviews is commercially self-destructive — it is read by every future buyer. A calm, specific, remedy-focused reply to a bad review often converts better than a wall of five-star ones.
 
 Where the merchant is genuinely at fault, the cheapest fix is usually the fastest one: replace, refund, or deliver again. The lost margin costs less than the lost reputation.`,
+  },
+  /* ══════════════════════════════════════════════════════════
+     EXTENDED PACK — modules and reference not covered above
+  ══════════════════════════════════════════════════════════ */
+  {
+    slug: 'kenya-counties-all',
+    title: 'All 47 counties',
+    category: 'kenya',
+    tags: ['county', 'counties', 'kaunti', 'coverage', 'deliver'],
+    questions: ['which counties do you cover', 'do you deliver to my county', 'list the counties'],
+    content:
+`Kenya's 47 counties: Mombasa, Kwale, Kilifi, Tana River, Lamu, Taita-Taveta, Garissa, Wajir, Mandera, Marsabit, Isiolo, Meru, Tharaka-Nithi, Embu, Kitui, Machakos, Makueni, Nyandarua, Nyeri, Kirinyaga, Murang'a, Kiambu, Turkana, West Pokot, Samburu, Trans Nzoia, Uasin Gishu, Elgeyo-Marakwet, Nandi, Baringo, Laikipia, Nakuru, Narok, Kajiado, Kericho, Bomet, Kakamega, Vihiga, Bungoma, Busia, Siaya, Kisumu, Homa Bay, Migori, Kisii, Nyamira, Nairobi.
+
+Each county is subdivided into constituencies, then wards — that hierarchy is how addresses and government services are organised.
+
+Delivery reality, and be honest about it: Nairobi and the major towns are fast; remote counties (Turkana, Mandera, Wajir, Marsabit, Lamu) take longer and some routes are seasonal. Never promise a national same-day timeline you cannot see — read the actual delivery options for that address.`,
+  },
+  {
+    slug: 'platform-escrow-settlement',
+    title: 'Escrow, settlement and how a seller actually gets paid',
+    category: 'platform',
+    tags: ['escrow', 'settlement', 'settle', 'payout', 'earnings', 'withdraw', 'malipo'],
+    questions: ['when do I get my money', 'pesa yangu iko wapi', 'how does escrow work', 'when is settlement'],
+    content:
+`The buyer pays through SOKONI checkout. The money is HELD (escrow) rather than passed straight to the seller, then settled to the seller's SOKONI wallet under the platform's settlement rules. From the wallet the seller can withdraw.
+
+This is precisely why paying inside SOKONI protects a buyer and paying a personal M-PESA number does not: off-platform money never enters escrow and cannot be reversed by SOKONI.
+
+Do NOT state a settlement delay, payout schedule or withdrawal fee unless it is in your knowledge — these are configured, not fixed. If a seller asks "when exactly", read their real state or send them to Seller Dashboard → Earnings.`,
+  },
+  {
+    slug: 'platform-verification',
+    title: 'Business and identity verification',
+    category: 'platform',
+    tags: ['verification', 'verify', 'verified', 'kyc', 'identity', 'uthibitisho', 'badge'],
+    questions: ['how do I get verified', 'what is a verified seller', 'is this seller verified'],
+    content:
+`Verification raises trust, and trust is what turns a stranger into a buyer. Verified sellers and businesses carry a badge buyers can see.
+
+If asked WHICH DOCUMENTS are required, or how long it takes — do not guess. Requirements change, and a wrong list wastes a seller's time. Point them to the verification step in onboarding, or to support.
+
+Never tell a user a seller is trustworthy because they seem legitimate. Verified status is a fact you can check with a tool; a vibe is not evidence.`,
+  },
+  {
+    slug: 'platform-subscriptions-giftcards',
+    title: 'Subscriptions, plans and gift cards',
+    category: 'platform',
+    tags: ['subscription', 'plan', 'renewal', 'trial', 'cancel', 'giftcard', 'voucher'],
+    questions: ['how do I cancel my subscription', 'what plans are there', 'was I charged', 'do you have gift cards'],
+    content:
+`SOKONI runs subscription plans (including merchant and AI plans) and gift cards. Subscriptions renew at period end; cancelling stops future billing and access ends when the paid period ends.
+
+Do NOT quote a plan price, trial length or renewal date unless it is in your knowledge or you read it from a tool.
+
+If a user asks "was I charged?" — READ IT. Never reassure them from memory. Telling someone they weren't billed when they were is the fastest way to lose them.`,
+  },
+  {
+    slug: 'platform-ai-search',
+    title: 'AI search, recommendations and AI shopping',
+    category: 'platform',
+    tags: ['recommend', 'recommendation', 'suggest', 'pendekezo', 'search', 'tafuta'],
+    questions: ['recommend something', 'nipe pendekezo', 'what should I buy', 'find me something'],
+    content:
+`Search first, then talk. A recommendation is only useful if it is grounded: recommend from real listings that actually exist and are in stock.
+
+Never invent a product. The moment the user searches for the thing you described and it isn't there, you have wasted their time and destroyed their trust in everything else you said.
+
+Personalise from what you legitimately know — their categories, county, trusted sellers — never from assumptions about who they are.`,
   },
 ];
 

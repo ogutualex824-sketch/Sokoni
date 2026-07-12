@@ -30,6 +30,8 @@ const SOKONI_HMAC_KEY      = defineSecret("SOKONI_HMAC_KEY");
    single source of truth. Never duplicate corporate-metadata literals. */
 const { COMPANY }          = require("./company-identity");
 const _kassKnowledge       = require("./kass-knowledge");   /* KASS retrieval: knowledge is data, not prompt */
+const _kassModes           = require("./kass-modes");       /* automatic expertise routing */
+const _kassMemory          = require("./kass-memory");      /* derived preferences only — no transcripts */
 const logger              = require("firebase-functions/logger");
 
 /* ── Structured logging utility ─────────────────────────────────────────────
@@ -1789,7 +1791,62 @@ policies, fees or rules from memory — help with actions and general advice onl
 and hand off to support for policy questions.`;
     }
 
-    const finalSystemPrompt = systemPrompt + knowledgePrompt;
+    /* ── EXPERT MODE (automatic) ──────────────────────────────────────────
+       The user never selects a mode. Detection is lexical and runs in-process —
+       an LLM classifier here would add a round-trip before every single reply and
+       blow the latency budget for something a word list decides correctly.
+       The mode changes the LENS, never the facts: facts come only from retrieved
+       knowledge and tools. */
+    let modePrompt = "";
+    let modeKey = "concierge";
+    try {
+      const mode = _kassModes.detect(_kassQuery);
+      modeKey = mode.key;
+      modePrompt = `\n\n━━━ ACTIVE EXPERTISE: ${mode.label} ━━━\n${mode.lens}\n
+Do not announce the mode or mention switching. The user should experience one
+assistant that happens to know their subject — not a menu of departments.`;
+    } catch (err) {
+      logger.warn("[KASS] mode detection failed", { error: err.message });
+    }
+
+    /* ── MEMORY ───────────────────────────────────────────────────────────
+       Authenticated users only — no profiling of guests. Derived preferences
+       only; never transcripts, never PII. Memory is convenience, not authority:
+       order/payment state is always read live from a tool. */
+    let memoryPrompt = "";
+    try {
+      memoryPrompt = await _kassMemory.loadForPrompt(uid);
+    } catch (err) {
+      logger.warn("[KASS] memory load failed", { error: err.message });
+    }
+
+    /* Learn from what they actually did, not from what the model decides to store.
+       Fire-and-forget: memory must never delay a reply, and must never fail one. */
+    if (uid) {
+      try {
+        const patch = {};
+
+        /* Preferred language, observed rather than asked. Kenyan users code-mix, so
+           "mixed" is a real answer — forcing en/sw would mislabel most of them. */
+        const t = String(_kassQuery || "").toLowerCase();
+        const sw = /\b(nataka|natafuta|nipe|habari|asante|bei|pesa|nyumba|kazi|simu|ngapi|sasa|poa|manze|buda)\b/.test(t);
+        const en = /\b(the|and|how|what|please|want|need|price|delivery)\b/.test(t);
+        if (sw && en)      patch.preferredLanguage = "mixed";
+        else if (sw)       patch.preferredLanguage = "sw";
+        else if (en)       patch.preferredLanguage = "en";
+
+        /* Recent searches — only for genuinely commercial turns. Storing every
+           utterance would quietly turn this into a transcript log, which is exactly
+           what the memory design refuses to be. */
+        if ((modeKey === "shopping" || modeKey === "merchant") && _kassQuery) {
+          patch.recentSearches = [String(_kassQuery).slice(0, 60)];
+        }
+
+        if (Object.keys(patch).length) _kassMemory.remember(uid, patch);
+      } catch (_) { /* never break a chat for memory */ }
+    }
+
+    const finalSystemPrompt = systemPrompt + knowledgePrompt + modePrompt + memoryPrompt;
 
     const collectedResults = [];
     const collectedActions = [];
@@ -9220,3 +9277,8 @@ exports.kassKnowledgeArchive = _kassKB.kassKnowledgeArchive;
 exports.kassKnowledgeSeed    = _kassKB.kassKnowledgeSeed;
 exports.kassKnowledgeStats   = _kassKB.kassKnowledgeStats;
 exports.kassFeedback         = _kassKB.kassFeedback;
+
+const _kassMem = require("./kass-memory");
+exports.kassMemoryGet    = _kassMem.kassMemoryGet;
+exports.kassMemorySet    = _kassMem.kassMemorySet;
+exports.kassMemoryForget = _kassMem.kassMemoryForget;   /* Kenya DPA 2019: real erasure, not a flag */

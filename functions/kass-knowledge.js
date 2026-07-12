@@ -399,5 +399,8 @@ exports.kassKnowledgeStats = onCall({ region: REGION }, async (request) => {
 });
 
 /* Internal API for sokoniChat */
+/* Shared so kass-modes.js routes on the SAME normalised tokens the retriever scores on —
+   otherwise a query could retrieve payments knowledge while routing to the shopping lens. */
+module.exports.tokens = _tokens;
 module.exports.retrieve = retrieve;
 module.exports.logUnanswered = logUnanswered;
