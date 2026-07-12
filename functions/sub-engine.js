@@ -648,27 +648,24 @@ exports.subCheckFeature = onCall(
       }
     }
 
-    /* 2. Full lookup: subscriptions collection */
-    let q = fsdb.collection('subscriptions').where('uid', '==', uid);
-    if (hubType) q = q.where('hubType', '==', hubType);
-    const snaps = await q.orderBy('updatedAt', 'desc').limit(1).get();
-
-    if (snaps.empty) {
-      return { hasFeature: false, value: false, planId: null, hubType: hubType || null, status: 'none', source: 'firestore' };
+    /* 2. Canonical lookup across ALL subscription stores (accountSubscriptions,
+       providerSubscriptions, subscriptions, aiSubscriptions) via subscription-core
+       — so users onboarded through the UEOE or the provider hub are no longer
+       invisible to feature-gates. Status is recomputed from dates. Index-free. */
+    const subCore = require('./subscription-core');
+    const c = await subCore.resolveSubscription(uid, { hubType, role: hubType });
+    if (!c.found) {
+      return { hasFeature: false, value: false, planId: null, hubType: hubType || null, status: 'none', source: 'canonical' };
     }
-
-    const sub = snaps.docs[0].data();
-    const val = sub.features?.[featureKey];
-    const activeStatuses = new Set(['trialing', 'active', 'grace']);
-    const isActive = activeStatuses.has(sub.status);
-
+    const val    = c.features?.[featureKey];
+    const active = subCore.isActive(c.status);
     return {
-      hasFeature: isActive && val !== false && val !== 0 && val !== undefined,
-      value:  isActive ? (val ?? false) : false,
-      planId: sub.planId   || null,
-      hubType: sub.hubType || null,
-      status: sub.status   || 'unknown',
-      source: 'firestore',
+      hasFeature: active && val !== false && val !== 0 && val !== undefined,
+      value:  active ? (val ?? false) : false,
+      planId: c.product || c.tier || null,
+      hubType: c.hubType || hubType || null,
+      status: c.status || 'unknown',
+      source: 'canonical:' + c.source,
     };
   }
 );
