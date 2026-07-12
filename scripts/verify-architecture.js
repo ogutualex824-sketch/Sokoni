@@ -50,14 +50,30 @@ const DISPATCHERS = {
 const errors = [];
 const warnings = [];
 
-/* ── Parse index.js exports ─────────────────────────────────────── */
+/* ── index.js exports ────────────────────────────────────────────────────
+   CANONICAL: the real export set is obtained by RUNTIME ENUMERATION. index.js
+   generates most exports dynamically (the algoliaSync, searchSync and ts_
+   trigger factories), so a static regex under-counts by ~147 and would make the
+   CF budget/quota check read far below reality. Regex is retained ONLY to detect
+   duplicate literal `exports.X =` lines (source hygiene), never for inventory. */
 const indexSrc = fs.readFileSync(INDEX, 'utf8');
-const exportNames = (indexSrc.match(/^exports\.[A-Za-z0-9_]+/gm) || []).map((s) => s.replace('exports.', ''));
+const literalExports = (indexSrc.match(/^exports\.[A-Za-z0-9_]+/gm) || []).map((s) => s.replace('exports.', ''));
 
-/* 1. Duplicate exports */
+/* 1. Duplicate LITERAL exports (source hygiene — a later line silently shadows an earlier one) */
 const seen = new Set(), dups = new Set();
-for (const n of exportNames) { if (seen.has(n)) dups.add(n); else seen.add(n); }
+for (const n of literalExports) { if (seen.has(n)) dups.add(n); else seen.add(n); }
 if (dups.size) errors.push(`Duplicate exports in index.js: ${[...dups].join(', ')}`);
+
+/* Canonical inventory — runtime enumeration (never regex). */
+let exportNames;
+try {
+  process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'sokoni-aeb26';
+  process.env.FIREBASE_CONFIG = process.env.FIREBASE_CONFIG || JSON.stringify({ projectId: 'sokoni-aeb26' });
+  exportNames = Object.keys(require(INDEX));
+} catch (e) {
+  errors.push(`Could not load functions/index.js for runtime export enumeration: ${e.message}`);
+  exportNames = literalExports; // degraded fallback; the error above already fails the run
+}
 
 const exportSet = new Set(exportNames);
 

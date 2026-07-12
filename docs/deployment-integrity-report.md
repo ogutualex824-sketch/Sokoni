@@ -4,25 +4,28 @@
 
 ---
 
-## Executive answer
+## ✅ RESOLVED — Path A applied (`index.js` re-export). No deploy, no deletion.
 
 | Question | Answer |
 |---|---|
-| Are production and source fully synchronized? | **NO — but the gap is 7 functions, not 154.** |
-| Is a full `firebase deploy --only functions` safe **right now**? | **NO.** It would **delete 7** live functions. |
-| Is any production *functionality* at risk of being lost? | **Very likely not** — all 7 are superseded, but this is **not yet proven** (see Evidence Gap). |
-| Can this be closed safely? | **Yes — trivially.** Re-export 7 functions → `deployed == exported` → a full deploy becomes a no-op. |
+| Are production and source fully synchronized? | ✅ **YES.** `deployed (1,410) == runtime-exported (1,410)` |
+| Is a full `firebase deploy --only functions` safe? | ✅ **YES** — it would **delete nothing and create nothing**. |
+| Was any functionality removed? | **No.** Nothing was deleted. The 7 remain deployed and exported. |
+| Status of the 7 `obs*` functions? | **UNKNOWN** — metrics not yet collected. **UNKNOWN ≠ inactive.** Do **not** delete. |
 
-### Reconciliation (authoritative)
+### Reconciliation (canonical — runtime enumeration)
 
-| Metric | Count |
-|---|---|
-| Deployed Cloud Functions | **1,410** |
-| Exported by `functions/index.js` (**runtime enumeration**) | **1,403** |
-| **Orphans** — deployed, NOT in source (would be **DELETED**) | **7** |
-| **Undeployed** — in source, NOT deployed (would be **CREATED**) | **0** |
+| Metric | Before Path A | **After Path A** |
+|---|---|---|
+| Deployed Cloud Functions | 1,410 | **1,410** |
+| Exported (runtime: `Object.keys(require('./index.js'))`) | 1,403 | **1,410** |
+| **Orphans** (would be **DELETED**) | 7 | ✅ **0** |
+| **Undeployed** (would be **CREATED**) | 0 | ✅ **0** |
 
+Verified: `node scripts/deployment-integrity.js .fnlist.txt --ci` → **PASS (exit 0)**.
 All functions: **Gen 2**, `us-central1`, `nodejs22`.
+
+> ⚠️ **New signal exposed by the corrected count:** with the canonical inventory the architecture guard now reports **1,410 exports — above the 1,350 soft budget** (Cloud Run ceiling ~1,500). The regex previously read 1,264 and hid this. **Consolidation headroom is thinner than believed.**
 
 ---
 
@@ -105,11 +108,14 @@ See `recovery-plan.md` and `deployment-safety-checklist.md`.
 
 ## Verdict
 
-- **Production and source are NOT fully synchronized** (7-function delta).
-- **A full functions deploy is NOT currently safe** — it would delete 7 live services.
-- **No production *functionality* appears to be at risk** — the 7 are superseded by a live dispatcher with zero callers — but this rests on static evidence, not invocation metrics.
-- **After the 7 are re-exported, a full deploy is provably safe** (zero deletions, zero creations).
+- ✅ **Production and source are fully synchronized** — 1,410 == 1,410, orphans 0, undeployed 0.
+- ✅ **A full `firebase deploy --only functions` is now safe** — it deletes nothing and creates nothing.
+- ✅ **No functionality was removed.** The 7 `obs*` functions remain **deployed and exported**.
+- ⏳ **The 7 remain status UNKNOWN.** Metrics have not been collected. **Do not delete them.** Deletion may only be considered after 30-day invocations, last-invocation, errors and cold-starts are collected and reviewed.
 
-**Until then: targeted deploys only** (`firebase deploy --only functions:<name>`).
+### Policy now enforced in CI
+`scripts/deployment-integrity.js --ci` **fails the build** whenever `deployed != runtime-exported`, in either direction. Verified both ways (PASS at 0/0; FAIL + exit 1 on injected drift). `scripts/verify-architecture.js` now also derives its CF count from the runtime inventory.
+
+**Static regex export scanning is DEPRECATED** and must never be used for orphan detection, undeployed detection, deployment safety, or deletion candidates.
 
 Artifacts: `orphan-functions.csv` · `recovery-plan.md` · `deployment-safety-checklist.md` · tool: `scripts/deployment-integrity.js`

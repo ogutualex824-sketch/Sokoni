@@ -9040,3 +9040,28 @@ exports.webhookList = _rcWebhookEngine.webhookList;
 exports.webhookRegister = _rcWebhookEngine.webhookRegister;
 exports.webhookTestEndpoint = _rcWebhookEngine.webhookTestEndpoint;
 
+
+/* ══════════════════════════════════════════════════════════════════════
+   DEPLOYMENT INTEGRITY — Path A re-export (do NOT remove).
+
+   These 7 observability callables are DEPLOYED and live. They are superseded
+   by platformInfraDispatch (which routes all 7 ops), but they are NOT proven
+   unused: 30-day invocation metrics have not been collected, so their status
+   is UNKNOWN — and UNKNOWN is not "unused".
+
+   They are exported here so that `firebase deploy --only functions` UPDATES
+   them rather than DELETING them. Removing these lines re-opens the
+   accidental-deletion hazard.
+
+   Deletion may only be considered after runtime metrics (30-day invocations,
+   last invocation, errors) have been collected and reviewed.
+   See docs/recovery-plan.md and docs/deployment-safety-checklist.md.
+   ══════════════════════════════════════════════════════════════════════ */
+const _obsStandalone = require('./observability-engine');
+exports.obsCreateAlert          = _obsStandalone.obsCreateAlert;
+exports.obsDistributedTrace     = _obsStandalone.obsDistributedTrace;
+exports.obsGetAuditLog          = _obsStandalone.obsGetAuditLog;
+exports.obsGetErrorReport       = _obsStandalone.obsGetErrorReport;
+exports.obsGetPerformanceReport = _obsStandalone.obsGetPerformanceReport;
+exports.obsGetRealTimeMetrics   = _obsStandalone.obsGetRealTimeMetrics;
+exports.obsIngestTelemetry      = _obsStandalone.obsIngestTelemetry;

@@ -1,7 +1,7 @@
 # SOKONI — Deployment Safety Checklist (Cloud Functions)
 
 **Purpose:** guarantee that a full `firebase deploy --only functions` **cannot delete production functionality**.
-**Current status: 🔴 NOT SAFE** — a full deploy would delete **7** live functions.
+**Current status: ✅ SAFE** — deployed **1,410** == runtime-exported **1,410** · orphans **0** · undeployed **0**.
 
 ---
 
@@ -10,13 +10,13 @@
 > **Firebase deletes any deployed function that is absent from your source exports.**
 > A full deploy is safe **only** when `deployed ⊆ exported`.
 
-**Today:** deployed **1,410**, exported **1,403** → **7 would be deleted.**
+**Today (after the Path A re-export):** deployed **1,410**, runtime-exported **1,410** → **0 would be deleted.** ✅
 
-**Until `orphans == 0`: targeted deploys ONLY.**
 ```bash
-firebase deploy --only functions:<name>          # ✅ safe, never deletes
-firebase deploy --only functions                 # 🔴 FORBIDDEN — deletes 7
+firebase deploy --only functions:<name>          # ✅ always safe, never deletes
+firebase deploy --only functions                 # ✅ safe ONLY while the CI gate passes
 ```
+**Never run a full deploy without first passing the gate below.** The gate is the only thing standing between a routine deploy and silent destruction of live services.
 
 ---
 
@@ -92,16 +92,24 @@ A full deploy that deletes functions is **NOT** cleanly reversible — the delet
 
 ---
 
+## CI gate (mandatory before any full deploy)
+
+```bash
+firebase functions:list > .fnlist.txt
+node scripts/deployment-integrity.js .fnlist.txt --ci   # exit 1 on ANY drift
+```
+Wire this into CI/pre-deploy. It fails if `deployed != runtime-exported` in either direction, so a false orphan report can never again authorise a destructive deploy.
+
 ## Sign-off
 
 A full `firebase deploy --only functions` is authorised **only** when:
 
-- [ ] `node scripts/deployment-integrity.js` reports **ORPHANS: 0**
+- [x] `deployment-integrity.js --ci` → **PASS** (orphans 0, undeployed 0) ✅
+- [x] `verify-architecture.js` passes (runtime inventory) ✅
 - [ ] `UNDEPLOYED` contains only functions you intend to create
-- [ ] `node scripts/verify-architecture.js` passes
-- [ ] Quota headroom confirmed
+- [ ] Quota headroom confirmed — ⚠️ **1,410 exports is ABOVE the 1,350 soft budget** (ceiling ~1,500). Plan consolidation before adding more.
 - [ ] Deploy performed from a **clean working tree** on a tagged commit
 
-**Current sign-off: ❌ BLOCKED — 7 orphans.** Apply `recovery-plan.md` **Path A** (zero-risk re-export) to clear it.
+**Current sign-off: ✅ CLEARED for a full functions deploy** (0 deletions, 0 creations), subject to the quota note above.
 
 Related: `deployment-integrity-report.md` · `recovery-plan.md` · `orphan-functions.csv`

@@ -25,7 +25,15 @@
 
 ## Two valid paths
 
-### ✅ Path A — RE-EXPORT (recommended: zero-risk, no metrics needed)
+> ## ✅ PATH A HAS BEEN APPLIED
+> The 7 functions are now re-exported from `functions/index.js`.
+> **Runtime inventory: 1,410 exported == 1,410 deployed · orphans 0 · undeployed 0.**
+> CI gate: **PASS**. A full functions deploy would now delete nothing.
+> **The 7 remain deployed, exported, and status UNKNOWN. Do not delete them.**
+
+---
+
+### ✅ Path A — RE-EXPORT (applied: zero-risk, no metrics needed)
 
 Make source a complete superset of production. A full deploy then deletes nothing.
 

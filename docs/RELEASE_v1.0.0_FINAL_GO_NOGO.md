@@ -2,13 +2,27 @@
 
 **Date:** 2026-07-12 · **HEAD:** `70e684d` · **Branch:** `main`
 
-# 🔴 VERDICT: **NO-GO**
+# 🟡 VERDICT: **CONDITIONAL GO** — CB1 is RESOLVED
 
-**One Critical blocker remains.** Everything else is green or resolved. The blocker is bounded and cheap to close — but it must not be waved through, because the failure mode is silent destruction of production infrastructure.
+> ## ⚠️ CB1 SUPERSEDED — the "154 orphans" figure was a MEASUREMENT ERROR and is retracted.
+>
+> The orphan count was produced by a **static regex** export scan. `index.js` creates most of its exports **dynamically** (the `algoliaSync`, `searchSync` and `ts_` trigger factories), which a regex cannot see — **54 + 18 + 75 = 147 phantom orphans**.
+>
+> **Canonical inventory is runtime enumeration** (`Object.keys(require('./index.js'))`) → **1,403 exported**, not 1,257. The 147 Firestore triggers were **always managed by source and never at risk**. Deleting them on the regex reading would have destroyed the entire Algolia/Firestore search-sync layer.
+>
+> **True delta was 7**, all `obs*` callables. **Path A applied** (re-exported, nothing deleted):
+> **deployed 1,410 == runtime-exported 1,410 · orphans 0 · undeployed 0 · CI gate PASS.**
+> **A full `firebase deploy --only functions` is now safe.** The 7 remain **UNKNOWN** status (metrics uncollected) — **not deleted, not classified inactive**.
+>
+> Enforcement: `scripts/deployment-integrity.js --ci` fails CI on any drift; `verify-architecture.js` now uses the runtime inventory. Static regex inventory is **deprecated**.
+>
+> **New signal:** the corrected count shows **1,410 exports — above the 1,350 soft budget** (Cloud Run ceiling ~1,500). The regex had hidden this. Consolidation headroom is thinner than believed.
+
+**No Critical blockers remain.** Remaining gates are the human-verifiable set (payments E2E, PWA, accessibility, monitoring drill) and the High items below.
 
 ---
 
-## 🔴 CRITICAL BLOCKER — CB1: 154 live Cloud Functions are not managed by source
+## ~~🔴 CRITICAL BLOCKER — CB1: 154 live Cloud Functions are not managed by source~~ → ✅ RESOLVED (retracted; see above)
 
 **Finding.** The deployed backend does not match the repository. **1,410 functions are deployed; 1,257 are exported from `index.js`.** The remaining **154 are live, billing, and invisible to source control.**
 

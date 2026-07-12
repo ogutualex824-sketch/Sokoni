@@ -10,25 +10,40 @@
 
    Usage:
      firebase functions:list > .fnlist.txt      # raw table (ANSI-stripped)
-     node scripts/deployment-integrity.js .fnlist.txt
+     node scripts/deployment-integrity.js .fnlist.txt          # report
+     node scripts/deployment-integrity.js .fnlist.txt --ci     # CI GATE (exit 1 on drift)
 
    Emits: docs/orphan-functions.csv  (+ summary to stdout)
+
+   ── CANONICAL INVENTORY RULE ────────────────────────────────────────────
+   The source export set is obtained by RUNTIME ENUMERATION only:
+       Object.keys(require('./functions/index.js'))
+   Static regex scanning (/^exports\.NAME/) is DEPRECATED and MUST NEVER be
+   used to determine orphans, undeployed functions, deployment safety, or
+   deletion candidates. index.js generates most exports DYNAMICALLY
+   (algoliaSync_* / searchSync_* / ts_* factories), so a regex under-counts by
+   ~147 and produces phantom orphans. Acting on that false reading would have
+   deleted the entire Algolia/Firestore search-sync layer.
+   ────────────────────────────────────────────────────────────────────────
 
    Evidence used per orphan:
      • trigger type   — an onCall DISPATCHER cannot replace an EVENT trigger
                         (firestore/scheduler/pubsub/eventarc). Event-triggered
                         orphans therefore CANNOT have been "consolidated away".
-     • source present — is `exports.<name>` still defined in functions/*.js?
+     • replacement dispatcher (deployed AND exported?) and client callers.
      • generation / region / runtime.
-   Invocation counts are NOT available here (no Cloud Monitoring credentials);
-   every metric-dependent decision is left as INVESTIGATE, never SAFE_DELETE.
+
+   Invocation counts are NOT collected here. Status is therefore UNKNOWN —
+   which is NOT "inactive" and NOT "unused". SAFE_DELETE is never issued
+   without 30-day metrics. Evidence takes precedence over assumptions.
 ================================================================ */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 
 const listFile = process.argv[2];
-if (!listFile) { console.error('usage: deployment-integrity.js <firebase-functions-list.txt>'); process.exit(1); }
+const CI = process.argv.includes('--ci');
+if (!listFile) { console.error('usage: deployment-integrity.js <firebase-functions-list.txt> [--ci]'); process.exit(1); }
 
 /* ── 1. Parse the deployed inventory ─────────────────────────────── */
 const raw = fs.readFileSync(listFile, 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
@@ -169,3 +184,32 @@ if (eventNoSrc.length > 12) console.log('    … +' + (eventNoSrc.length - 12) +
 console.log('\nSAFE_DELETE issued:', rows.filter((r) => r.recommendation === 'SAFE_DELETE').length,
   '— none can be issued without invocation metrics.');
 console.log('\nCSV → docs/orphan-functions.csv');
+
+/* ── 8. CI GATE ──────────────────────────────────────────────────────────
+   Fails the build when production and source have drifted, so a full
+   `firebase deploy --only functions` can never silently delete a function. */
+if (CI) {
+  const problems = [];
+  if (orphans.length > 0) {
+    problems.push(
+      `${orphans.length} DEPLOYED function(s) are NOT exported by index.js. ` +
+      `A full deploy would DELETE them: ${orphans.map((o) => o.name).join(', ')}. ` +
+      `Re-export them (docs/recovery-plan.md Path A) — do NOT delete on assumption.`);
+  }
+  if (undeployed.length > 0) {
+    problems.push(
+      `${undeployed.length} function(s) are exported but NOT deployed: ${undeployed.join(', ')}. ` +
+      `If intentional (new functions), confirm Cloud Run quota headroom and re-baseline.`);
+  }
+  console.log('\n──────── CI DEPLOYMENT-INTEGRITY GATE ────────');
+  if (problems.length) {
+    console.error('❌ FAIL — production and source have DRIFTED.\n');
+    problems.forEach((p) => console.error('  • ' + p + '\n'));
+    console.error('  A full `firebase deploy --only functions` is FORBIDDEN until this is 0/0.');
+    console.error('  Use targeted deploys: firebase deploy --only functions:<name>');
+    process.exit(1);
+  }
+  console.log('✅ PASS — deployed (' + deployed.length + ') == runtime exported (' + exported.size + ').');
+  console.log('   A full `firebase deploy --only functions` would delete nothing and create nothing.');
+  process.exit(0);
+}
