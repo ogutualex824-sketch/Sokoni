@@ -17,6 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
 <script src="/sokoni-appcheck.js"></script>
+  <script src="sokoni-legal-certificate.js"></script>
   <script src="sokoni-legal-sign.js"></script>
 <script src="sokoni-legal-gate.js" defer></script>
   <script src="shared-header.js" defer></script>
@@ -74,6 +75,19 @@
       <div class="lc-sec">Your agreements</div>
       <div id="lc-list"></div>
       <div class="lc-empty" id="lc-loading">Loading…</div>
+    </div>
+
+    <!-- Certificates · signature history · declaration history.
+         Wired to the DEPLOYED ops legalMyCertificates / legalGetCertificate.
+         No backend API is added or changed. -->
+    <div class="lc-card">
+      <div class="lc-bar">
+        <div class="lc-sec" style="margin:0;flex:1">Certificates &amp; signatures</div>
+        <input class="lc-in" id="lc-certsearch" type="search"
+               placeholder="Search by ID, role or name…" aria-label="Search certificates">
+      </div>
+      <div id="lc-certs"></div>
+      <div class="lc-empty" id="lc-certloading">Loading…</div>
     </div>
   </div>
 
@@ -174,13 +188,149 @@ async function exportRecord() {
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+/* ── Certificates · signature history · declaration history ──────────────────
+   Reads legalMyCertificates (deployed). Each row is one signing event, so the
+   list IS the signature history and — where a declaration was made — the
+   declaration history too. Nothing new is stored or requested. */
+let _certs = [];
+
+function tsOf(ts) {
+  if (!ts) return 0;
+  return ts._seconds ? ts._seconds * 1000 : (ts.seconds ? ts.seconds * 1000 : (Number(ts) || 0));
+}
+function fmt(ts) {
+  const ms = tsOf(ts);
+  return ms ? new Date(ms).toLocaleString('en-KE') : 'Recorded server-side';
+}
+
+async function loadCerts() {
+  const box  = document.getElementById('lc-certs');
+  const load = document.getElementById('lc-certloading');
+  load.style.display = 'block';
+  try {
+    const res = await LEGAL('legalMyCertificates', {});
+    _certs = res.certificates || [];
+    paintCerts();
+  } catch (e) {
+    box.innerHTML = '<div class="lc-empty">Could not load certificates.</div>';
+  } finally { load.style.display = 'none'; }
+}
+
+function paintCerts() {
+  const q = (document.getElementById('lc-certsearch').value || '').toLowerCase().trim();
+  const rows = _certs.filter(c => !q ||
+    (c.id || '').toLowerCase().includes(q) ||
+    (c.role || '').toLowerCase().includes(q) ||
+    (c.signedName || '').toLowerCase().includes(q));
+  const box = document.getElementById('lc-certs');
+
+  if (!rows.length) {
+    box.innerHTML = '<div class="lc-empty">' +
+      (_certs.length ? 'No certificates match.' : 'No certificates yet. One is issued when you sign your agreements.') +
+      '</div>';
+    return;
+  }
+
+  box.innerHTML = rows.map((c, i) =>
+    '<div style="padding:12px 0;border-bottom:1px solid var(--bor)">' +
+      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="font-weight:800;font-size:13px">' + esc(c.role || 'Account') + ' certificate</div>' +
+          '<div style="font-size:11.5px;color:var(--sub);margin-top:3px;word-break:break-all">' +
+            esc(c.id) + '</div>' +
+          '<div style="font-size:11.5px;color:var(--sub);margin-top:3px">' +
+            'Signed by <strong>' + esc(c.signedName || '') + '</strong> · ' +
+            esc(c.signatureType || '') + ' signature · ' + fmt(c.issuedAt) +
+            (c.country ? ' · ' + esc(c.country) : '') + '</div>' +
+          '<div style="font-size:11.5px;color:var(--sub);margin-top:3px">' +
+            (c.agreements || []).length + ' agreement(s)' +
+            (c.declarationAccepted ? ' · Professional Declaration accepted' : '') + '</div>' +
+        '</div>' +
+        '<span style="font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;white-space:nowrap;' +
+          'background:rgba(113,255,0,.14);color:var(--g)">' + esc((c.status || 'valid').toUpperCase()) + '</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
+        '<button class="lc-btn" data-view="' + i + '" style="min-height:44px">View details</button>' +
+        '<button class="lc-btn" data-pdf="' + i + '" style="min-height:44px">Download PDF</button>' +
+      '</div>' +
+      '<div id="lc-cd-' + i + '" style="display:none;margin-top:10px;font-size:11.5px;color:var(--sub);' +
+        'background:rgba(255,255,255,.03);border:1px solid var(--bor);border-radius:10px;padding:10px"></div>' +
+    '</div>'
+  ).join('');
+
+  box.querySelectorAll('[data-view]').forEach(b =>
+    b.addEventListener('click', () => viewCert(rows[+b.dataset.view], +b.dataset.view)));
+  box.querySelectorAll('[data-pdf]').forEach(b =>
+    b.addEventListener('click', () => downloadCert(rows[+b.dataset.pdf], b)));
+}
+
+/* Full record — fetched via legalGetCertificate so the user sees exactly what the
+   SERVER holds, not a client-side reconstruction of it. */
+async function viewCert(c, i) {
+  const pane = document.getElementById('lc-cd-' + i);
+  if (pane.style.display === 'block') { pane.style.display = 'none'; return; }
+  pane.style.display = 'block';
+  pane.textContent = 'Loading…';
+  try {
+    const res  = await LEGAL('legalGetCertificate', { certificateId: c.id });
+    const cert = res.certificate || {};
+    const row  = (k, v) => '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0">' +
+      '<span>' + esc(k) + '</span><strong style="color:var(--txt);text-align:right;word-break:break-all">' +
+      esc(v == null || v === '' ? '—' : v) + '</strong></div>';
+    pane.innerHTML =
+      row('Acceptance ID', cert.acceptanceId || cert.certificateId) +
+      row('Signature type', cert.signatureType) +
+      row('Signature hash', cert.signatureHash) +
+      row('Country', (cert.country || '') + (cert.countrySource ? ' (' + cert.countrySource + ')' : '')) +
+      row('IP address', cert.ipAddress) +
+      row('Server timestamp', fmt(cert.issuedAt)) +
+      row('Declaration', cert.declarationAccepted
+        ? 'Accepted (v' + (cert.declarationVersion || '1.0') + ')' : 'Not applicable') +
+      '<div style="margin-top:8px"><strong style="color:var(--txt)">Agreement versions</strong></div>' +
+      (cert.agreements || []).map(a =>
+        '<div style="padding:2px 0">• ' + esc(a.agreementId || a.id) + ' v' + esc(a.version) + '</div>').join('') +
+      (cert.declarationAccepted && Array.isArray(cert.declarationText)
+        ? '<div style="margin-top:8px"><strong style="color:var(--txt)">Declaration made</strong></div>' +
+          cert.declarationText.map(s => '<div style="padding:2px 0">• ' + esc(s) + '</div>').join('')
+        : '');
+    c._full = cert;                      // reuse for the PDF — avoids a second round trip
+  } catch (e) {
+    pane.textContent = (e && e.message) || 'Could not load this certificate.';
+  }
+}
+
+async function downloadCert(c, btn) {
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Preparing…';
+  try {
+    /* Always render the SERVER's copy, never the list summary. */
+    const full = c._full || (await LEGAL('legalGetCertificate', { certificateId: c.id })).certificate;
+    await window.SokoniLegalCertificate.download(full);
+  } catch (e) {
+    alert((e && e.message) || 'Could not generate the certificate PDF.');
+  } finally { btn.disabled = false; btn.textContent = label; }
+}
+
 document.getElementById('lc-search').addEventListener('input', paint);
+document.getElementById('lc-certsearch').addEventListener('input', paintCerts);
 document.getElementById('lc-role').addEventListener('change', (e) => { _role = e.target.value; render(); });
 document.getElementById('lc-export').addEventListener('click', exportRecord);
 
+/* Deep link from the signing flow: legal-centre.html?certificate=<id> */
+const _want = new URLSearchParams(location.search).get('certificate');
+
 _auth.onAuthStateChanged((u) => {
-  if (!u) { document.getElementById('lc-loading').textContent = 'Please sign in to view your agreements.'; return; }
+  if (!u) {
+    document.getElementById('lc-loading').textContent = 'Please sign in to view your agreements.';
+    document.getElementById('lc-certloading').textContent = '';
+    return;
+  }
   render();
+  loadCerts().then(() => {
+    if (!_want) return;
+    const i = _certs.findIndex(c => c.id === _want);
+    if (i >= 0) { document.getElementById('lc-certsearch').value = _want; paintCerts(); viewCert(_certs[i], 0); }
+  });
 });
 </script>
 </body>
