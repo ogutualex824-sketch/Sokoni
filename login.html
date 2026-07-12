@@ -37,35 +37,47 @@
   <section class="auth-page">
     <div class="auth-card">
 
-      <div class="auth-logo-wrap">
-        <img loading="lazy" src="assets/Sokoni Logo.png" class="auth-logo" alt="SOKONI">
+      <div class="auth-brand">
+        <img src="assets/sokoni-icon.svg" class="auth-brand-icon" alt="SOKONI" width="54" height="54" draggable="false">
+        <span class="auth-brand-word">SOKONI</span>
+        <span class="auth-brand-tag">Kenya's Super Platform</span>
       </div>
 
       <!-- Security trust strip -->
-      <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:18px;">
-        <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.18);border-radius:20px;font-size:10px;font-weight:700;color:rgba(113,255,0,0.85);letter-spacing:0.4px;">🔒 256-bit SSL</span>
-        <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(0,180,255,0.07);border:1px solid rgba(0,180,255,0.18);border-radius:20px;font-size:10px;font-weight:700;color:rgba(0,180,255,0.85);letter-spacing:0.4px;">🔐 Firebase Auth</span>
-        <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:20px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.45);letter-spacing:0.4px;">🛡️ Privacy Protected</span>
+      <div class="auth-trust">
+        <span class="auth-trust-badge trust-green">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+          256-bit SSL
+        </span>
+        <span class="auth-trust-badge trust-blue">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5 2.5 4v4c0 3.2 2.3 5.6 5.5 6.5 3.2-.9 5.5-3.3 5.5-6.5V4L8 1.5Z"/></svg>
+          Firebase Auth
+        </span>
+        <span class="auth-trust-badge trust-muted">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5 2.5 4v4c0 3.2 2.3 5.6 5.5 6.5 3.2-.9 5.5-3.3 5.5-6.5V4L8 1.5Z"/></svg>
+          Kenya DPA 2019
+        </span>
       </div>
 
-      <h2 class="auth-title">👋 Welcome Back</h2>
-      <p class="auth-sub">Sign in to your SOKONI account</p>
+      <h2 class="auth-title">Welcome Back</h2>
+      <p class="auth-sub">Sign in to continue to SOKONI</p>
 
       <div id="authMsg" class="auth-msg"></div>
 
       <!-- Email + Password -->
       <div class="auth-field">
-        📧
+        <i class="fas fa-envelope" aria-hidden="true"></i>
         <input type="email" id="loginEmail" placeholder="Email address"
                autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
       </div>
 
       <div class="auth-field" style="position:relative;">
-        🔒
+        <i class="fas fa-lock" aria-hidden="true"></i>
         <input type="password" id="loginPassword" placeholder="Password"
                autocomplete="current-password" onkeydown="if(event.key==='Enter')loginUser()" style="padding-right:44px;">
-        <button type="button" onclick="toggleLoginPw()" tabindex="-1"
-          style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:16px;padding:4px;" title="Show/hide password">👁</button>
+        <button type="button" onclick="toggleLoginPw()" tabindex="-1" class="auth-pw-toggle" title="Show/hide password">
+          <i class="fas fa-eye" aria-hidden="true"></i>
+        </button>
       </div>
 
       <!-- Remember Me + Forgot -->
@@ -114,12 +126,12 @@
 
       <!-- Phone OTP section (collapsible) -->
       <div id="phoneAuthSection">
-        <p class="phone-section-label">📱 Phone Sign In</p>
+        <p class="phone-section-label">Phone Sign In</p>
         <div class="phone-row">
           <input type="text" class="phone-code-input" id="phoneCountryCode" value="+254" maxlength="5"
                  inputmode="tel" aria-label="Country code">
           <div class="auth-field" style="flex:1;margin:0;">
-            <span>📱</span>
+            <i class="fas fa-mobile-alt" aria-hidden="true"></i>
             <input type="tel" id="phoneNumber" placeholder="7XX XXX XXX" inputmode="numeric"
                    onkeydown="if(event.key==='Enter')sendPhoneOTP()">
           </div>
@@ -155,16 +167,18 @@
         Don't have an account? <a href="signup.html">Create Account</a>
       </p>
 
-      <a href="index.html" class="auth-skip">🏪 Continue as Guest</a>
+      <a href="index.html" class="auth-skip">
+        <i class="fas fa-store" aria-hidden="true"></i> Continue as Guest
+      </a>
 
       <!-- Employee Access -->
-      <div style="margin:22px 0 0;border-top:1px solid rgba(255,255,255,0.07);padding-top:18px;text-align:center;">
-        <p style="font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:10px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">Employee Access</p>
-        <div style="background:rgba(0,180,255,0.06);border:1px solid rgba(0,180,255,0.18);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;text-align:left;">
-          <span style="font-size:22px;line-height:1;">🪪</span>
+      <div style="margin:16px 0 0;border-top:1px solid rgba(255,255,255,0.07);padding-top:16px;text-align:center;">
+        <p style="font-size:11px;color:rgba(255,255,255,0.28);margin-bottom:8px;letter-spacing:0.5px;text-transform:uppercase;font-weight:600;">Employee Access</p>
+        <div style="background:rgba(0,180,255,0.06);border:1px solid rgba(0,180,255,0.15);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px;text-align:left;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(0,180,255,0.75)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h.01M10 15h4"/></svg>
           <div>
             <p style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);margin:0 0 3px;">Shop Employee?</p>
-            <p style="font-size:12px;color:rgba(255,255,255,0.4);margin:0;line-height:1.4;">Use the email &amp; password your shop owner created for you. You'll be taken directly to your store dashboard.</p>
+            <p style="font-size:12px;color:rgba(255,255,255,0.38);margin:0;line-height:1.4;">Use the email &amp; password your shop owner created for you. You'll be taken directly to your store dashboard.</p>
           </div>
         </div>
       </div>
