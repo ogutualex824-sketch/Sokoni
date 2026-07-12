@@ -236,6 +236,35 @@
   /* ── Notification permission prompt ── */
   function _showNotificationPrompt() {
     if (document.getElementById("sokoniNotifPrompt")) return;
+
+    /* NEVER cover the privacy / cookie consent banner.
+       Measured on a 375px viewport: this prompt (position:fixed, z-index 999997)
+       rendered directly on top of #_sokoniPrivacyBanner, and elementFromPoint at
+       the centre of the banner's "Privacy Policy" and "Cookie Policy" links
+       returned this prompt instead of the links. They were not merely small —
+       they were UNCLICKABLE. Obscuring a consent notice is a compliance problem,
+       not a cosmetic one.
+
+       Consent is legally required and must come first; a notification opt-in is
+       not. So wait for the banner to be dismissed, then ask. */
+    /* NB: do NOT test offsetParent here. The banner is position:fixed, and
+       offsetParent is ALWAYS null for a fixed element — that check silently
+       reported "not visible" for a banner that was plainly on screen. */
+    const consent = document.getElementById("_sokoniPrivacyBanner");
+    const consentUp = !!consent &&
+      consent.getBoundingClientRect().height > 0 &&
+      getComputedStyle(consent).visibility !== "hidden" &&
+      getComputedStyle(consent).display !== "none";
+    if (consentUp) {
+      const obs = new MutationObserver(() => {
+        if (!document.getElementById("_sokoniPrivacyBanner")) {
+          obs.disconnect();
+          setTimeout(_showNotificationPrompt, 800);   /* let the banner finish leaving */
+        }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      return;
+    }
     if (window.matchMedia("(display-mode: standalone)").matches) {
       Notification.requestPermission().then(perm => {
         if (perm === "granted") _setupPushAfterPermission();

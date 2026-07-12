@@ -652,7 +652,7 @@ window.handleError       = SokoniSecurity.handleError;
     var shield = document.createElement('div');
     shield.id  = 'sokoniPageShield';
     shield.innerHTML =
-      '<img src="assets/Sokoni Logo.png" alt="SOKONI" onerror="this.style.display=\'none\'">' +
+      '<img src="assets/sokoni-icon.svg" alt="SOKONI" onerror="this.style.display=\'none\'">' +
       '<div class="sk-ring"></div>';
     /* Insert at very top of body */
     if(document.body){

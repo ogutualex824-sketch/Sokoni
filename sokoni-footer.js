@@ -262,6 +262,17 @@
 
 /* Mobile — single column, centred, zero horizontal overflow */
 @media(max-width:768px){
+  /* Touch targets. Footer links measured 32px tall and social buttons 38px — both
+     under the 44px Apple-HIG / WCAG 2.5.5 minimum for a finger. They escaped the
+     first sweep only because the footer sits below the fold, not because they
+     passed. On desktop a mouse is precise and 32px already clears WCAG 2.5.8 (AA,
+     24px), so the taller rows apply on touch viewports ONLY — the footer stays
+     elegant on desktop rather than becoming a ladder. */
+  .skf-col a{min-height:44px;align-items:center}
+  .skf-contact a{min-height:44px}
+  .skf-social a{width:44px;height:44px}
+  .skf-status{min-height:44px}
+
   .sk-footer{
     padding:48px 18px 0;
     /* Clear the fixed bottom-nav + KASS FAB above it */

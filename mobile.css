@@ -851,7 +851,12 @@ img { max-width: 100%; height: auto; }
 
 /* Tablet sellers: 4 per row */
 @media (min-width: 601px) and (max-width: 900px) {
-  .seller-container { grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; }
+  /* minmax(0,1fr), NOT 1fr. A grid item defaults to min-width:auto, so a plain
+     1fr track refuses to shrink below its content: measured on an 820px iPad the
+     four tracks each swelled to 200px, giving 4x200 + 3x8 gap + 32 padding =
+     856px in an 820px viewport. The last card ("Become a seller") hung 20px off
+     the edge and its button was cut off. minmax(0,1fr) lets the tracks shrink. */
+  .seller-container { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 8px !important; }
 }
 
 /* Phone sellers: 3 per row — compact avatar-style */

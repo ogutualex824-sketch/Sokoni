@@ -19,6 +19,20 @@
     }
     #sokoniScrollTop.first-show { animation: sstPop 0.65s ease-out; }
 
+    /* The .visible class was ADDED by the scroll handler but STYLED NOWHERE, so
+       the button never came back from its hidden inline state
+       (opacity:0; pointer-events:none; transform:scale(0.65)).
+       Measured: after scrolling 1500px it was still opacity=0, pointer-events=none.
+       Back-to-top was dead on every page. This is the missing rule.
+
+       It also restores the full 46x46 size, which clears the 44px minimum tap
+       target — the "30x30" the audit saw was just the hidden 0.65 scale. */
+    #sokoniScrollTop.visible {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      transform: scale(1) translateY(0) !important;
+    }
+
     /* ── Horizontal scroll fade edges ── */
     .h-scroll-wrap { position: relative; }
     .h-scroll-wrap::after {

@@ -15979,3 +15979,19 @@ select.p10-valid {
     border-radius: 14px;
   }
 }
+
+/* ── Avatar images must never distort ────────────────────────────────────────
+   .seller-avatar is a fixed square (56x56 / 48x48 on mobile) but its <img> had
+   no object-fit, so a non-square source was stretched to fill it. Measured on a
+   393px viewport: a 3:2 logo rendered 42x42 — visibly squashed.
+
+   object-fit:cover makes the box crop rather than stretch, whatever the source
+   aspect ratio. Fixing the fallback image alone would only have hidden this. */
+.seller-avatar img,
+.seller-avatar > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: inherit;
+}

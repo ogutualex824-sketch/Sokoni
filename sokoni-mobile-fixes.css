@@ -429,3 +429,40 @@ table {
   h1 { font-size: clamp(1.4rem, 7vw, 2rem) !important; }
   h2 { font-size: clamp(1.2rem, 5.5vw, 1.6rem) !important; }
 }
+
+/* ── Touch targets for inline links (WCAG 2.5.5 / Apple HIG: 44x44) ──────────
+   Measured on a 375px viewport, these rendered only 16px tall — failing even the
+   24px WCAG 2.5.8 (AA) floor:
+     • #_sokoniPrivacyBanner "Privacy Policy" / "Cookie Policy"  (71x16, 70x16)
+     • the "All services ›" section link                        (68x16)
+
+   These sit inside running text and a section header, so padding them to 44px
+   would break the surrounding layout. Instead expand the HIT AREA with an
+   invisible centred pseudo-element: the text stays exactly where it is, only the
+   tappable region grows. Same technique as the header icon buttons.
+
+   Scoped by WIDTH, not (pointer:coarse). A pointer-media query cannot be
+   exercised in headless Chrome, so it would be unverifiable — and an
+   accessibility fix I cannot test is a fix I cannot claim. Width matches the
+   breakpoint convention used everywhere else in this codebase. */
+@media (max-width: 820px) {
+  #_sokoniPrivacyBanner a,
+  .hubs-hscroll-section > div > a,
+  a.see-all-link {
+    position: relative;
+    display: inline-block;
+  }
+  #_sokoniPrivacyBanner a::after,
+  .hubs-hscroll-section > div > a::after,
+  a.see-all-link::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

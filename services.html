@@ -114,7 +114,9 @@
 
     .sv-cat-pill {
       flex-shrink: 0; scroll-snap-align: start;
-      padding: 8px 14px; min-height: 38px; border-radius: 999px;
+      /* 38px was below the 44px WCAG 2.5.8 / Apple HIG minimum tap size. */
+      padding: 8px 14px; min-height: 44px; border-radius: 999px;
+      display: inline-flex; align-items: center;
       border: 1px solid rgba(255,255,255,0.09);
       background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.55);
       font-size: 12px; font-weight: 700; cursor: pointer; transition: all .18s;
@@ -312,11 +314,17 @@
     .pv-name {
       font-size: 14px; font-weight: 800; color: white; margin-bottom: 3px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      /* A flex child defaults to min-width:auto, i.e. it refuses to shrink below
+         its content. With nowrap text that made the whole row — and the Verified
+         badge inside it — overflow the viewport by up to 80px on a 375px phone.
+         min-width:0 lets it shrink so the ellipsis can actually do its job. */
+      flex: 1 1 auto;
+      min-width: 0;
     }
     .pv-verified {
       display: inline-block; font-size: 9px; background: rgba(113,255,0,0.1); color: #71ff00;
       padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(113,255,0,0.22);
-      margin-left: 5px; vertical-align: middle; font-weight: 800;
+      margin-left: 5px; flex-shrink: 0; vertical-align: middle; font-weight: 800;
     }
     .pv-cat  { font-size: 11px; color: rgba(255,255,255,0.38); margin-bottom: 5px; line-height: 1.4; }
     .pv-stars {
@@ -393,7 +401,7 @@
 
 
 <div role="navigation" class="sv-nav sk-sub-nav">
-  <a href="index.html"><img loading="eager" fetchpriority="high" src="assets/Sokoni Logo.png" class="sv-nav-logo" alt="Sokoni"></a>
+  <a href="index.html"><img loading="eager" fetchpriority="high" src="assets/sokoni-icon.svg" class="sv-nav-logo" alt="Sokoni"></a>
 
   <!-- Desktop centre navigation (hidden on mobile — bottom nav covers it) -->
   <div class="sv-nav-links">
@@ -1132,7 +1140,13 @@ function renderProviders(){
       </div>
       <div class="pv-body">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px;">
-          <div class="pv-name" style="margin-bottom:0;">${p.name}${p.verified?`<span class="pv-verified">✅ Verified</span>`:""}</div>
+          <!-- The Verified badge is a SIBLING of .pv-name, not a child. Inside it,
+               the badge inherited nowrap+overflow:hidden and was silently clipped
+               away on any long provider name — the trust signal vanished exactly
+               where it mattered. As a sibling with flex-shrink:0 it always shows;
+               the name truncates with an ellipsis instead. -->
+          <div class="pv-name" style="margin-bottom:0;">${p.name}</div>
+          ${p.verified?`<span class="pv-verified">✅ Verified</span>`:""}
           <div data-avail-provider="${pid}" style="flex-shrink:0;"></div>
         </div>
         <div class="pv-cat">${CAT_EMOJI[p.category]||"🛠️"} ${CAT_LABEL[p.category]||p.category} · 📍 ${locLabel}</div>

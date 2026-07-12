@@ -924,12 +924,28 @@ html, body {
 
 /* ── 430px: iPhone 14/15 Plus ───────────────────────────── */
 @media (max-width: 430px) {
-  /* Floating action buttons clear bottom nav */
-  #sokoniScrollTop, #kassBtn, #sokoni-wa-support,
-  .back-to-top-btn, .sk-fab, [class*="float-btn"], .fab {
+  /* Floating action buttons clear bottom nav.
+
+     This rule used to pin EVERY FAB to the same spot (right:14px, bottom:86px),
+     so #kassBtn, #sokoniScrollTop and #sokoni-wa-support stacked on top of one
+     another in one 46x46 square. Measured: back-to-top and KASS both sat at
+     (333,720); KASS won on z-index (9999 vs 9989) and back-to-top was
+     unclickable. It also overrode scroll-top.js's own left:14px, which had
+     deliberately kept them on opposite sides.
+
+     Right rail  = KASS + WhatsApp (primary actions).
+     Left  rail  = back-to-top (secondary, thumb-reachable, never collides). */
+  #kassBtn, #sokoni-wa-support,
+  .sk-fab, [class*="float-btn"], .fab {
     bottom: max(86px, calc(env(safe-area-inset-bottom, 0px) + 86px)) !important;
     right: 14px !important;
     left: auto !important;
+  }
+
+  #sokoniScrollTop, .back-to-top-btn {
+    bottom: max(86px, calc(env(safe-area-inset-bottom, 0px) + 86px)) !important;
+    left: 14px !important;
+    right: auto !important;
   }
 
   /* Modal/paywall: prevent overflow */
