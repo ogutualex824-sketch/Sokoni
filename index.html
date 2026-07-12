@@ -8,6 +8,7 @@
   <title>SOKONI — Kenya's #1 Online Marketplace | Buy & Sell Products</title>
 
   <script src="security.js"></script>
+  <script src="splash.js"></script>
   <script>/* Capture ?ref=CODE from referral links — runs before any other JS */
   (function(){try{var p=new URLSearchParams(location.search),c=p.get('ref');if(c&&/^SKN[A-Z0-9]{7}$/.test(c)&&!localStorage.getItem('sokoniReferredBy')){var own=localStorage.getItem('sokoniReferralCode')||'';if(c!==own){localStorage.setItem('sokoniReferredBy',c);}}}catch(e){}})()</script>
   <script src="seo.js" defer></script>
@@ -138,7 +139,6 @@
 
 <body class="sk-has-search">
 
-  <!-- Premium splash injected by shared-header.js (#sk-splash) — no page-level splash needed -->
   <style>
     /* Home-page accent colours — used by hero/sections, NOT by splash */
     :root {
@@ -2539,103 +2539,7 @@
   </section>
 
   <!-- PREMIUM FOOTER -->
-  <footer class="footer">
-    <div class="footer-container">
-
-      <!-- BRAND -->
-      <div class="footer-brand">
-        <img loading="lazy" decoding="async" src="assets/Sokoni Logo.png" alt="Sokoni" class="footer-logo" width="52" height="52">
-        <p>Kenya's #1 marketplace — buy, sell and grow with Sokoni. Connecting buyers, sellers and service providers nationwide.</p>
-        <div class="socials">
-          <a href="https://facebook.com/SokoniKe" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
-          <a href="https://twitter.com/SokoniKe" target="_blank" title="Twitter / X"><i class="fab fa-x-twitter"></i></a>
-          <a href="https://instagram.com/sokoni.ke" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
-          <a href="https://tiktok.com/@sokoni.ke" target="_blank" title="TikTok"><i class="fab fa-tiktok"></i></a>
-          <a href="https://youtube.com/@SokoniKenya" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
-          <a href="https://wa.me/254705726803" target="_blank" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
-        </div>
-      </div>
-
-      <!-- MARKETPLACE LINKS -->
-      <div class="footer-links">
-        <h3>Marketplace</h3>
-        <a href="category.html?cat=all">🏪 Shop All</a>
-        <a href="category.html?cat=fashion">👗 Fashion</a>
-        <a href="category.html?cat=electronics">📱 Electronics</a>
-        <a href="category.html?cat=food">🛒 Groceries</a>
-        <a href="flashsale.html">⚡ Flash Sales</a>
-        <a href="bnb-hub.html">🏨 BnB & Stays</a>
-        <a href="digital-esoko.html">📦 Digital Esoko</a>
-        <a href="property-hub.html">🏠 Properties</a>
-        <a href="car-hub.html">🚗 Cars</a>
-      </div>
-
-      <!-- SELLER LINKS -->
-      <div class="footer-links">
-        <h3>Sell on Sokoni</h3>
-        <a href="seller.html">➕ Start Selling</a>
-        <a href="ministore.html">🏪 My Store</a>
-        <a href="seller.html#boosts">📢 Boost Product</a>
-        <a href="seller.html#flash-sales">⚡ Flash Sale</a>
-        <a href="seller.html#tax">🧾 KRA Tax</a>
-        <a href="delivery.html">🚛 Delivery</a>
-        <a href="subscriptions.html">👑 Go Premium</a>
-      </div>
-
-      <!-- SUPPORT LINKS -->
-      <div class="footer-links">
-        <h3>Support</h3>
-        <a href="track.html">📦 Track Order</a>
-        <a href="cart.html">🛒 My Cart</a>
-        <a href="wishlist.html">❤️ Wishlist</a>
-        <a href="messages.html">💬 Messages</a>
-        <a href="profile.html">👤 My Account</a>
-        <a href="dispute.html">⚖️ File Dispute</a>
-        <a href="help.html">❓ Help Center</a>
-        <a href="trust.html">🛡️ Trust & Safety</a>
-        <a href="legal.html">📋 Legal</a>
-      </div>
-
-      <!-- CONTACT -->
-      <div class="footer-links">
-        <h3>Contact Us</h3>
-        <a href="https://maps.google.com/?q=Nairobi,Kenya" target="_blank">📍 Nairobi, Kenya</a>
-        <a href="https://wa.me/254705726803?text=Hello%20SOKONI%2C%20I%20have%20an%20enquiry" target="_blank">📧 info@sokoni.co.ke</a>
-        <a href="tel:+254705726803">📞 +254 705 726 803</a>
-        <a href="https://wa.me/254705726803" target="_blank"><i class="fab fa-whatsapp fa-fw"></i> WhatsApp Us</a>
-        <a href="https://instagram.com/sokoni.ke" target="_blank"><i class="fab fa-instagram fa-fw"></i> @sokoni.ke</a>
-        <a href="services.html">🛠️ Services Hub</a>
-      </div>
-
-    </div>
-
-    <!-- DIVIDER -->
-    <div style="border-top:1px solid rgba(255,255,255,0.06);margin:36px 0 24px;position:relative;z-index:2;"></div>
-
-    <!-- BOTTOM BAR -->
-    <div class="footer-bottom">
-      <p>&copy; <span id="footer-year">2026</span> SOKONI &middot; A product of Bravilex International Co. Limited &middot; All Rights Reserved.</p>
-
-      <div class="footer-legal-links">
-        <a href="legal.html#privacy">🔒 Privacy</a>
-        <span>·</span>
-        <a href="legal.html#terms">📋 Terms</a>
-        <span>·</span>
-        <a href="legal.html#cookies">🍪 Cookies</a>
-        <span>·</span>
-        <a href="legal.html#data">🛡️ Data</a>
-      </div>
-
-      <div class="payments">
-        <img loading="lazy" decoding="async" src="assets/mpesa.PNG" alt="M-Pesa" width="48" height="30">
-        <img loading="lazy" decoding="async" src="assets/visa.PNG" alt="Visa" width="48" height="30">
-        <img loading="lazy" decoding="async" src="assets/mastercard.PNG" alt="Mastercard" width="48" height="30">
-        <img loading="lazy" decoding="async" src="assets/paypal.PNG" alt="PayPal" width="48" height="30">
-      </div>
-
-      <p class="footer-credit">Made by <span>Kass.</span> 🔌</p>
-    </div>
-  </footer>
+  <!-- footer: injected by sokoni-footer.js (universal component) -->
 
   <!-- BOTTOM NAVIGATION -->
   <nav class="bottom-nav">

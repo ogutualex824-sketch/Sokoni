@@ -29,7 +29,7 @@
   (function _splash() {
     if (document.documentElement.dataset.noSplash === 'true') return;
     if (window.self !== window.top) return; // no splash inside iframes
-    if (document.getElementById('splashScreen')) return; // splash.js already rendered; skip duplicate overlay
+    if (window.SokoniSplash) return; // splash.js (v2) already rendered; skip duplicate overlay
 
     const _pg = (location.pathname.split('/').pop().split('?')[0] || 'index.html').toLowerCase();
 
@@ -212,6 +212,10 @@
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-quality.css' }, 'sk-quality-link');
   /* UI library — shared toast / modal / spinner / skeleton */
   _injectAsset('script', { src: 'sokoni-ui.js', defer: true }, 'sk-ui-script');
+  /* Universal footer — ONE footer for the whole platform. Loading it here means
+     every page with the SOKONI header gets the SOKONI footer, with no
+     page-specific markup. It removes any legacy <footer class="footer"> it finds. */
+  _injectAsset('script', { src: 'sokoni-footer.js', defer: true }, 'sk-footer-script');
   /* Layout manager — resolves floating element overlaps, sets CSS vars */
   _injectAsset('script', { src: 'sokoni-layout.js', defer: true }, 'sk-layout-script');
   /* Notification engine — real-time engine, preferences, grouping */
@@ -1551,5 +1555,17 @@
   } else {
     _inject();
   }
+
+  /* ── GLOBAL FOOTER — auto-injected on every page that loads shared-header.js ─
+     sokoni-footer.js is idempotent (window.__SOKONI_FOOTER__ guard) and
+     excludes POS/kiosk pages via its own EXCLUDE regex. No per-page markup needed.
+     Use <body data-no-footer> to opt a page out. */
+  (function _footer() {
+    if (window.__SOKONI_FOOTER__) return;
+    var s = document.createElement('script');
+    s.src = 'sokoni-footer.js';
+    s.async = true;
+    (document.head || document.documentElement).appendChild(s);
+  }());
 
 })();
