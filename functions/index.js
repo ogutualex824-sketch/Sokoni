@@ -29,6 +29,8 @@ const SOKONI_HMAC_KEY      = defineSecret("SOKONI_HMAC_KEY");
 /* Canonical corporate identity (legal name, address, copyright, ownership) — the
    single source of truth. Never duplicate corporate-metadata literals. */
 const { COMPANY }          = require("./company-identity");
+const _kassKnowledge       = require("./kass-knowledge");   /* KASS retrieval: knowledge is data, not prompt */
+const logger              = require("firebase-functions/logger");
 
 /* ── Structured logging utility ─────────────────────────────────────────────
    Creates a scoped logger that prefixes every message with a unique
@@ -1726,6 +1728,69 @@ For ride booking → get_page_url to ride.html.
 For event tickets → get_page_url to events.html.
 For car hire → get_page_url to car-rental.html.`;
 
+    /* ── KASS KNOWLEDGE RETRIEVAL ─────────────────────────────────────────
+       Knowledge is NOT baked into the prompt above — that prompt is BEHAVIOUR
+       (persona, tools, routing). Facts, policies, prices and Kenya reference are
+       retrieved per-turn from the admin-managed `kassKnowledge` collection, so a
+       business change is a Firestore write rather than a redeploy.
+
+       `grounded === false` means we found nothing solid. We say so explicitly
+       rather than letting the model improvise a plausible answer — an invented
+       commission rate or refund policy is worse than "I don't know". */
+    /* Retrieve against the user's LATEST turn. sokoniChat receives a `messages`
+       array (not a single `message`), so take the last user turn — that is the
+       question being asked. Falling back to the whole transcript would retrieve
+       against stale context and surface the wrong knowledge. */
+    const _lastUserTurn = [...history].reverse().find(m => m.role === "user");
+    const _kassQuery = (_lastUserTurn && _lastUserTurn.content) || "";
+
+    let knowledgePrompt = "";
+    let retrievedIds = [];
+    try {
+      const kb = await _kassKnowledge.retrieve(_kassQuery);
+      retrievedIds = (kb.entries || []).map(e => e.id);
+
+      if (kb.grounded) {
+        knowledgePrompt =
+`\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERIFIED SOKONI KNOWLEDGE (retrieved for this question)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Treat the following as authoritative and answer FROM it. It outranks your general
+impressions. If it contradicts what you assumed, the knowledge is right.
+
+${kb.block}
+
+If the answer is not fully contained above, say what you do know from it and be
+explicit about what you don't — do not fill the gap with a guess.`;
+      } else {
+        knowledgePrompt =
+`\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NO VERIFIED KNOWLEDGE MATCHED THIS QUESTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+You may still use your tools (search, order lookup) and general commercial judgement,
+and you may help with anything that is plainly a marketplace action.
+
+But you have NO verified SOKONI policy for this. So:
+• Do NOT state a SOKONI fee, commission, refund rule, payout timing or policy.
+• Label general advice as advice, not policy.
+• If they asked for a specific SOKONI rule you don't have, say honestly that you
+  don't want to guess, and offer to hand off to support.`;
+
+        /* The backlog for the next knowledge update: what users ask that we cannot ground. */
+        _kassKnowledge.logUnanswered({ query: _kassQuery, uid, sessionId: null, reason: "no_knowledge_match" });
+      }
+    } catch (err) {
+      /* Knowledge is an enhancement — if retrieval fails, KASS must still answer,
+         but it must not pretend to authority it no longer has. */
+      logger.warn("[KASS] knowledge retrieval failed", { error: err.message });
+      knowledgePrompt =
+`\n\nNOTE: verified-knowledge lookup is unavailable this turn. Do not state SOKONI
+policies, fees or rules from memory — help with actions and general advice only,
+and hand off to support for policy questions.`;
+    }
+
+    const finalSystemPrompt = systemPrompt + knowledgePrompt;
+
     const collectedResults = [];
     const collectedActions = [];
     const ctx = {
@@ -1744,7 +1809,7 @@ For car hire → get_page_url to car-rental.html.`;
         const aiRes = await anthropic.messages.create({
           model: "claude-haiku-4-5-20251001",
           max_tokens: 1024,
-          system: systemPrompt,
+          system: finalSystemPrompt,
           tools: _CHAT_TOOLS,
           messages: currentMessages,
         });
@@ -9141,3 +9206,17 @@ exports.obsGetErrorReport       = _obsStandalone.obsGetErrorReport;
 exports.obsGetPerformanceReport = _obsStandalone.obsGetPerformanceReport;
 exports.obsGetRealTimeMetrics   = _obsStandalone.obsGetRealTimeMetrics;
 exports.obsIngestTelemetry      = _obsStandalone.obsIngestTelemetry;
+
+/* ══════════════════════════════════════════════════════════════
+   KASS KNOWLEDGE ENGINE — admin-managed, versioned knowledge.
+   Knowledge is DATA (Firestore), not prompt. Updating what KASS
+   knows is a Firestore write, not a redeploy of the assistant.
+══════════════════════════════════════════════════════════════ */
+const _kassKB = require("./kass-knowledge");
+exports.kassKnowledgeUpsert  = _kassKB.kassKnowledgeUpsert;
+exports.kassKnowledgePublish = _kassKB.kassKnowledgePublish;
+exports.kassKnowledgeList    = _kassKB.kassKnowledgeList;
+exports.kassKnowledgeArchive = _kassKB.kassKnowledgeArchive;
+exports.kassKnowledgeSeed    = _kassKB.kassKnowledgeSeed;
+exports.kassKnowledgeStats   = _kassKB.kassKnowledgeStats;
+exports.kassFeedback         = _kassKB.kassFeedback;

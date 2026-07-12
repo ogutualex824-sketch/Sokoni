@@ -1313,5 +1313,20 @@
     "legacy": true,
     "adoptedFromProduction": "2026-07-12",
     "needsAttribution": true
+  },
+  "kassKnowledge|status:ASCENDING,category:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "kassUnanswered|resolved:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "kassUnanswered|resolved:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
   }
 }

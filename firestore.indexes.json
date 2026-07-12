@@ -2311,6 +2311,48 @@
       ]
     },
     {
+      "collectionGroup": "kassKnowledge",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "category",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "kassUnanswered",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "resolved",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "kassUnanswered",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "resolved",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "ledgerEntries",
       "queryScope": "COLLECTION",
       "fields": [
