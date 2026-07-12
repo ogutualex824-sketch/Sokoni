@@ -322,6 +322,23 @@
     }
     .setup-act-skip:hover:not(:disabled) { border-color: var(--sk-accent); color: var(--sk-text); }
 
+    /* ── Legal agreements gate ── */
+    .legal-head { font-size: 13px; font-weight: 800; color: var(--sk-text); margin-bottom: 2px; }
+    .legal-sub { font-size: 12px; color: var(--sk-text-muted); margin-bottom: 10px; }
+    .legal-done {
+      font-size: 13px; font-weight: 700; color: var(--sk-green, #71ff00);
+      padding: 10px 12px; border: 1px solid rgba(113,255,0,.3);
+      background: rgba(113,255,0,.06); border-radius: 12px;
+    }
+    #legal-list { display: flex; flex-direction: column; gap: 8px; }
+    .legal-item {
+      display: flex; align-items: flex-start; gap: 10px; font-size: 13px;
+      color: var(--sk-text); line-height: 1.4; cursor: pointer;
+      padding: 8px 10px; border: 1px solid var(--sk-border); border-radius: 10px;
+    }
+    .legal-item input[type="checkbox"] { width: 18px; height: 18px; margin-top: 1px; flex-shrink: 0; accent-color: var(--sk-green, #71ff00); }
+    .legal-item a { color: var(--sk-accent); text-decoration: underline; }
+
     .btn-ghost {
       background: none;
       color: var(--sk-text-muted);
@@ -1653,6 +1670,9 @@
           </div>
         </div>
 
+        <!-- Legal agreements gate (legalDispatch) — required before opening POS -->
+        <div id="legal-gate" style="width:100%;margin:6px 0 14px;text-align:left;display:none;"></div>
+
         <!-- Setup checklist — production-readiness gate (getSetupStatus) -->
         <div id="setup-checklist-wrap" style="width:100%;margin:6px 0 14px;text-align:left;display:none;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -2771,6 +2791,97 @@ function initReadyStep() {
 
   // Mandatory setup checklist + production-readiness gate (getSetupStatus).
   renderSetupChecklist();
+
+  // Legal agreements gate — merchant must accept required agreements (legalDispatch).
+  renderLegalGate();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LEGAL AGREEMENTS GATE (legalDispatch) — merchant onboarding.
+   Every merchant must explicitly accept the core + merchant agreements
+   before opening the POS. No pre-checked boxes; Open POS is gated until
+   compliant. Backend records the acceptance (versioned + auditable).
+════════════════════════════════════════════════════════════════ */
+let _legalOk = false;
+
+function LEGAL(op) {
+  const disp = _fns.httpsCallable('legalDispatch', { timeout: 30000 });
+  return (data) => disp(Object.assign({ op: op }, data || {}));
+}
+
+/* Map agreement ids → existing SOKONI legal doc pages (reuse, no new pages). */
+const LEGAL_DOC = {
+  'terms-of-service': 'terms.html', 'privacy-policy': 'privacy.html',
+  'cookie-policy': 'cookie-policy.html', 'community-standards': 'community-guidelines.html',
+  'acceptable-use': 'trust-and-safety.html',
+  'merchant-agreement': 'seller-terms.html', 'marketplace-seller-terms': 'seller-terms.html',
+  'returns-refund-policy': 'returns-policy.html', 'data-processing-agreement': 'privacy.html',
+};
+const _legalDocFor = (id) => LEGAL_DOC[id] || 'legal-hub.html';
+
+async function renderLegalGate() {
+  const wrap = document.getElementById('legal-gate');
+  if (!wrap) return;
+  try {
+    const comp = (await LEGAL('legalCheckCompliance')({ role: 'merchant' })).data || {};
+    if (comp.compliant) {
+      _legalOk = true;
+      wrap.innerHTML = '<div class="legal-done">✓ Legal agreements accepted</div>';
+      wrap.style.display = 'block';
+      _syncOpenGate();
+      return;
+    }
+    const ag  = (await LEGAL('legalGetAgreements')({ role: 'merchant' })).data || {};
+    const all = [...(ag.core || []), ...(ag.roleSpecific || [])];
+    if (!all.length) { _legalOk = true; _syncOpenGate(); return; }
+
+    wrap.innerHTML =
+      '<div class="legal-head">Review &amp; accept to continue</div>' +
+      '<div class="legal-sub">Required before you open the POS. Tap a name to read it.</div>' +
+      '<div id="legal-list">' + all.map((a, i) =>
+        '<label class="legal-item">' +
+          '<input type="checkbox" class="legal-cb" data-id="' + esc(a.id) + '" data-ver="' + esc(a.version) + '">' +
+          '<span>I agree to the <a href="' + _legalDocFor(a.id) + '" target="_blank" rel="noopener">' + esc(a.name) + '</a></span>' +
+        '</label>'
+      ).join('') + '</div>' +
+      '<button class="setup-act setup-act-primary" id="btn-legal-accept" disabled style="margin-top:8px;width:100%">Accept &amp; Continue</button>';
+    wrap.style.display = 'block';
+
+    const cbs = wrap.querySelectorAll('.legal-cb');
+    const btn = wrap.querySelector('#btn-legal-accept');
+    const refresh = () => { btn.disabled = ![...cbs].every((c) => c.checked); };
+    cbs.forEach((c) => c.addEventListener('change', refresh));
+    btn.addEventListener('click', () => _acceptLegal(all, btn));
+    _legalOk = false;
+    _syncOpenGate();
+  } catch (_) { /* non-blocking: if legal service is unavailable, don't trap the user */ _legalOk = true; _syncOpenGate(); }
+}
+
+async function _acceptLegal(all, btn) {
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await LEGAL('legalAccept')({
+      role: 'merchant',
+      acceptances: all.map((a) => ({ agreementId: a.id, version: a.version })),
+      meta: { device: navigator.userAgent, browser: navigator.userAgent,
+              language: navigator.language || '', country: '' },
+    });
+    _legalOk = true;
+    toast('Agreements accepted', 'success');
+    renderLegalGate();
+    _syncOpenGate();
+  } catch (e) {
+    btn.disabled = false; btn.textContent = 'Accept & Continue';
+    toast((e && e.message) || 'Could not save. Please try again.', 'error');
+  }
+}
+
+/* Open POS stays gated until legal agreements are accepted. */
+function _syncOpenGate() {
+  const open = document.getElementById('btn-open-pos');
+  if (!open) return;
+  open.setAttribute('aria-disabled', _legalOk ? 'false' : 'true');
+  open.style.opacity = _legalOk ? '' : '0.55';
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2930,6 +3041,12 @@ function _syncReadyCTA(s) {
 }
 
 document.getElementById('btn-open-pos').addEventListener('click', () => {
+  if (!_legalOk) {
+    toast('Please accept the required agreements first.', 'error');
+    const g = document.getElementById('legal-gate');
+    if (g) g.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
   window.location.href = 'pos.html';
 });
 
