@@ -124,8 +124,16 @@ try {
 
 /* 4. CF budget */
 const total = exportNames.length;
-if (total > CF_BUDGET_HARD) errors.push(`CF export count ${total} exceeds hard budget ${CF_BUDGET_HARD} — consolidate before deploying.`);
-else if (total > CF_BUDGET_WARN) warnings.push(`CF export count ${total} above warn budget ${CF_BUDGET_WARN} — plan consolidation.`);
+if (total > CF_BUDGET_HARD) {
+  errors.push(`CF export count ${total} exceeds HARD budget ${CF_BUDGET_HARD} — consolidate before deploying.`);
+} else if (total > CF_BUDGET_WARN) {
+  /* CAPACITY WATCH — an architectural signal, NOT a deployment failure.
+     Deployment safety is governed solely by scripts/deployment-integrity.js
+     (deployed == runtime-exported). This never blocks a deploy. */
+  warnings.push(`CAPACITY WATCH: ${total} CF exports, above the ${CF_BUDGET_WARN} soft budget `
+    + `(Cloud Run ceiling ~1500; headroom ~${1500 - total}). Architectural signal only — `
+    + `NOT a deployment blocker. Track growth; plan consolidation. See docs/CAPACITY_WATCH.md`);
+}
 
 /* ── Report ─────────────────────────────────────────────────────── */
 console.log(`SOKONI architecture guard — ${total} CF exports, ${Object.keys(DISPATCHERS).length} domain dispatchers, handler-collision check ${handlerCheckRan ? 'ran' : 'skipped'}.`);
