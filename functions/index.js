@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    KASS — SOKONI Admin AI Agent
    Firebase Cloud Function (Gen 2)
    Uses Claude claude-sonnet-4-6 with tool use to manage the marketplace
@@ -1854,8 +1854,8 @@ exports.onSellerBroadcast = onDocumentCreated(
         },
         webpush: {
           notification: {
-            icon:  "https://mysokoni.co.ke/assets/logosokoni.png",
-            badge: "https://mysokoni.co.ke/assets/logosokoni.png",
+            icon:  "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
+            badge: "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
             requireInteraction: false,
           },
           fcmOptions: { link: data.url || "https://mysokoni.co.ke/" },
@@ -1887,8 +1887,8 @@ async function sendFcm(token, title, body, relUrl) {
     notification: { title, body },
     webpush: {
       notification: {
-        icon:  "https://mysokoni.co.ke/assets/logosokoni.png",
-        badge: "https://mysokoni.co.ke/assets/logosokoni.png",
+        icon:  "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
+        badge: "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
         requireInteraction: false,
       },
       fcmOptions: { link: "https://mysokoni.co.ke/" + (relUrl || "") },
@@ -3317,34 +3317,62 @@ exports.onSellerPaymentCreated = onDocumentCreated(
     const paymentId = event.params.paymentId;
     const period    = new Date().toISOString().slice(0, 7); // "2026-06"
 
-    /* Write commission ledger entry */
-    await db.collection("commissionLedger").add({
-      sellerUid,
-      paymentId,
-      orderId:    orderId   || null,
-      mpesaCode:  mpesaCode || null,
-      hub,
-      grossAmount,
-      commissionPct: pct,
-      fixedFee:   fixedKES,
-      commissionKES,
-      totalOwed,
-      status: "pending",
-      invoiceId: null,
-      period,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    /* P0-3: Firestore triggers are AT-LEAST-ONCE — this handler can legitimately be
+       invoked more than once for the same sellerPayments document. The previous code
+       was doubly non-idempotent on redelivery:
+         1. commissionLedger.add()      → AUTO-ID, so a redelivery wrote a SECOND
+                                          commission entry for one payment.
+         2. FieldValue.increment(...)   → NOT idempotent, so a redelivery DOUBLE-CHARGED
+                                          the seller's monthly commission and gross totals.
+       Net effect: the seller could be billed commission twice for a single payment.
 
-    /* Increment monthly billing totals for this seller */
+       Fix: derive the ledger id deterministically from the source payment
+       (commissionLedger/{paymentId} — one entry per payment, by construction) and
+       perform the existence check + ledger write + billing increments inside ONE
+       transaction. The transaction reads the ledger doc first; if it already exists the
+       event is a redelivery and we return without incrementing anything. This makes the
+       whole handler exactly-once with respect to money. */
+    const ledgerRef  = db.collection("commissionLedger").doc(paymentId);
     const billingRef = db.collection("sellerBilling").doc(sellerUid)
       .collection("monthly").doc(period);
-    await billingRef.set({
-      totalCommissionKES: admin.firestore.FieldValue.increment(totalOwed),
-      grossSalesKES:      admin.firestore.FieldValue.increment(grossAmount),
-      transactionCount:   admin.firestore.FieldValue.increment(1),
-      lastUpdated:        admin.firestore.FieldValue.serverTimestamp(),
-      status: "open",
-    }, { merge: true });
+
+    const applied = await db.runTransaction(async (txn) => {
+      const existing = await txn.get(ledgerRef);
+      if (existing.exists) return false;   /* redelivery — already accounted for */
+
+      txn.set(ledgerRef, {
+        sellerUid,
+        paymentId,
+        orderId:    orderId   || null,
+        mpesaCode:  mpesaCode || null,
+        hub,
+        grossAmount,
+        commissionPct: pct,
+        fixedFee:   fixedKES,
+        commissionKES,
+        totalOwed,
+        status: "pending",
+        invoiceId: null,
+        period,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      /* Increments are safe here: they run at most once, guarded by the ledger check. */
+      txn.set(billingRef, {
+        totalCommissionKES: admin.firestore.FieldValue.increment(totalOwed),
+        grossSalesKES:      admin.firestore.FieldValue.increment(grossAmount),
+        transactionCount:   admin.firestore.FieldValue.increment(1),
+        lastUpdated:        admin.firestore.FieldValue.serverTimestamp(),
+        status: "open",
+      }, { merge: true });
+
+      return true;
+    });
+
+    if (!applied) {
+      console.log(`[revenue] duplicate trigger delivery ignored payment=${paymentId}`);
+      return;
+    }
 
     console.log(`[revenue] commission recorded seller=${(sellerUid||'').slice(0,8)}… payment=${paymentId}`);
   }
@@ -5461,19 +5489,29 @@ async function _processWebhook(req, res, opts) {
     }
   }
 
-  /* 3. Idempotency â€” skip if already processed */
-  const idemRef  = db.collection("webhookIdempotency").doc(provider + "::" + eventId);
-  const idemSnap = await idemRef.get().catch(() => null);
-  if (idemSnap && idemSnap.exists) {
-    console.log("[Webhook:" + provider + "] Duplicate skipped: " + eventId);
-    return;
-  }
+  /* 3+4. P0-4: ATOMIC idempotency claim.
+     Previously this was get() -> if(exists) return -> set(), a non-atomic
+     read-check-write. Two concurrent deliveries of the SAME eventId (providers retry
+     on timeout/5xx, and load balancers can fan out) could both read "not exists" and
+     both proceed to onSuccess() — processing one payment event twice.
 
-  /* 4. Mark as processing */
-  await idemRef.set({
-    provider, eventId, status: "processing",
-    ts: admin.firestore.FieldValue.serverTimestamp(),
-  }).catch(() => {});
+     create() is an atomic set-if-not-exists: exactly one caller wins, the loser gets
+     ALREADY_EXISTS (gRPC code 6) and bails. This is the same pattern already used
+     correctly by financial-os.js fosSecureWebhook. Shared by webhookIntasend /
+     webhookMpesa / webhookStripe / webhookSmartpos. */
+  const idemRef = db.collection("webhookIdempotency").doc(provider + "::" + eventId);
+  try {
+    await idemRef.create({
+      provider, eventId, status: "processing",
+      ts: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    if (e && (e.code === 6 || /already exists/i.test(e.message || ""))) {
+      console.log("[Webhook:" + provider + "] Duplicate skipped (raced): " + eventId);
+      return;
+    }
+    throw e;   /* a real infra error — let it surface so the provider retries */
+  }
 
   /* 5. Parse and handle */
   try {
