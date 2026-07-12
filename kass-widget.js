@@ -101,11 +101,14 @@
   /* ── Inject styles ── */
   var _styleEl = document.createElement('style');
   _styleEl.textContent = [
-    /* FAB */
-    '#kassBtn{position:fixed;bottom:80px;right:16px;width:52px;height:52px;border-radius:50%;',
+    /* FAB — positioned above the bottom nav; cleared via CSS variable set by
+       sokoni-responsive.css so pages with / without the nav both work correctly */
+    '#kassBtn{position:fixed;',
+    /* 86px default: 64px bottom-nav + 22px breathing room above it */
+    'bottom:var(--sk-kass-bottom,86px);right:16px;width:52px;height:52px;border-radius:50%;',
     'background:#0f0f0f;border:2px solid #71ff00;cursor:pointer;z-index:9999;',
     'display:flex;align-items:center;justify-content:center;overflow:visible;',
-    'box-shadow:0 4px 20px rgba(113,255,0,0.3);transition:transform .2s;}',
+    'box-shadow:0 4px 20px rgba(113,255,0,0.3);transition:transform .2s,bottom .2s;}',
     '#kassBtn:hover{transform:scale(1.08);}',
     '#kassUnread{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;',
     'border-radius:10px;padding:0 5px;',

@@ -72,6 +72,8 @@ v1.0.0 is the first production-ready release, covering:
 | v41 | Header redesign |
 | v42 | Email logo premultiplied-alpha fix (`sokoni-email-logo.png` 360×240) |
 | v43 | PWA connectivity detection hardening — `_doProbe()` response type check; `_setBar()` cross-clear; initial probe 8 s → 3 s; `SokoniOffline.hide()` public API |
+| v44 | Splash screen unified v2.0 — singleton `splash.js`, inline SVG basket icon, shared-header guard |
+| — | **Email enterprise redesign v3.0** — white canvas, CSS brand header, 53 templates; statusCard/metricCard/codeBlock helpers; dark mode; Outlook VML buttons; enterprise footer |
 
 ---
 
@@ -151,7 +153,7 @@ All fixes applied in this sprint resolve production blockers identified during t
 | Reply-To | ✅ `support@mysokoni.co.ke` | Set on every send |
 | Footer & legal links | ✅ Present | Website · Support · Privacy Policy · Terms · Unsubscribe |
 | Responsive layout | ✅ Confirmed | `@media (max-width:599px)` collapses to 100% width |
-| 53 templates | ✅ All v2.1 | `base()` in `email-templates.js` shared; confirmed via grep count |
+| 53 templates | ✅ All v3.0 | `base()` enterprise redesign — white canvas, CSS brand icon, status/metric/code/alert helpers; dark mode |
 | 10 email CFs | ✅ Deployed | All updated to v2.1 branding; running in `us-central1` |
 | processEmailQueue CF | ✅ Running | 5-minute Cloud Scheduler; no errors |
 | Spam classification | ✅ Not spam | Delivered to primary inbox (Gmail) with DKIM + SPF pass |

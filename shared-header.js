@@ -848,9 +848,9 @@
     const themeIcon = themeMode === 'light' ? '☀️' : themeMode === 'auto' ? '⚙️' : '🌙';
 
     nav.innerHTML =
-      /* Logo — image only; text fallback suppressed via CSS */
+      /* Logo — transparent SVG icon; no card, no dark rectangle background */
       '<a href="/" id="sk-nav-logo" aria-label="SOKONI Home">' +
-        '<img src="assets/Sokoni Logo.png" alt="SOKONI">' +
+        '<img src="assets/sokoni-icon.svg" alt="SOKONI">' +
       '</a>' +
 
       /* Search */
