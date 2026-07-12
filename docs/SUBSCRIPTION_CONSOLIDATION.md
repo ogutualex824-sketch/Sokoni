@@ -45,7 +45,7 @@ if (await subCore.hasFeature(uid, { role: 'provider' }, 'analytics')) { … }
 
 ## Migration path (incremental, safe)
 1. ✅ **Seam built + live** — canonical read/enforce available now.
-2. **Point readers at the seam** — replace direct `.collection('providerSubscriptions'|'accountSubscriptions'|…)` reads with `subCore.resolveSubscription`. (provider-ops done; do sub-engine feature-checks, role-ops modules next.)
+2. **Point readers at the seam** — replace direct `.collection('providerSubscriptions'|'accountSubscriptions'|…)` reads with `subCore.resolveSubscription`. **Done so far:** `provider-ops.js` commission (`bd53fb1`); `sub-engine.js` `subCheckFeature` feature-gate (`3088589`) — now sees all 5 stores instead of only the mirror + `subscriptions`. **Next readers:** `subscription-os` marketplace-view reads, and each new role-ops module.
 3. **Unify writes last** — once all readers use the seam, converge writers onto one collection + `uid`-based key convention, and make `users.subscription` the authoritative mirror for all hubs. This is a data migration; do it only after readers are seam-only, behind a flag.
 4. **Retire the orphan** — `sokoni-subscription.js` (System 5) has 0 callers; delete after confirming.
 
