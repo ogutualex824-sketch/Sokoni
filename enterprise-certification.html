@@ -6,7 +6,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Enterprise Certification Report — SOKONI</title>
-<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
 <meta name="color-scheme" content="dark">
 <script src="sokoni-config.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -517,8 +517,8 @@ input[type="checkbox"] { width:16px; height:16px; accent-color:var(--g); cursor:
       sev:'MEDIUM', lik:'LOW',    status:'mitigated',
       mitigation:'Second Firestore database (sokoni-ops) configured per index governance rule.' },
     { risk:'SendGrid production API key missing',
-      sev:'MEDIUM', lik:'HIGH',   status:'open',
-      mitigation:'53 email templates ready; SENDGRID_API_KEY placeholder in Secret Manager.' },
+      sev:'MEDIUM', lik:'LOW',    status:'resolved',
+      mitigation:'RESOLVED — live SENDGRID_API_KEY is in Secret Manager and validated against the SendGrid API (mail.send granted; noreply@mysokoni.co.ke verified sender). 56 Cloud Functions bind the secret.' },
     { risk:'GCP quota increase approval lead time',
       sev:'HIGH',   lik:'HIGH',   status:'in-progress',
       mitigation:'Console request submitted; critical paths served by existing 636 CFs.' },
@@ -537,10 +537,10 @@ input[type="checkbox"] { width:16px; height:16px; accent-color:var(--g); cursor:
       desc:'STK push has been validated on Safaricom sandbox only. Live payment flow requires Safaricom business verification and a production round-trip test before general availability.' },
     { title:'eTIMS — KRA Production Registration Pending',
       desc:'KRA eTIMS sandbox validation is complete. Production onboarding requires formal KRA registration and receipt of Control Unit (CU) serial numbers from the Revenue Authority.' },
-    { title:'Email Delivery — SENDGRID_API_KEY Placeholder',
-      desc:'All 53 transactional email templates are built and tested. The SENDGRID_API_KEY in Secret Manager is a placeholder; all email delivery will fail until replaced with the production key.' },
-    { title:'Firestore Index Budget at 197 / 200',
-      desc:'Three index slots remain before hitting the per-database limit. New indexes will use the sokoni-ops second Firestore database per the documented index governance rule.' },
+    { title:'Email Delivery — SendGrid key LIVE',
+      desc:'All 53 transactional email templates are built and tested. The production SENDGRID_API_KEY is live in Secret Manager, validated against the SendGrid API (mail.send granted, noreply@mysokoni.co.ke a verified sender), and bound by 56 Cloud Functions.' },
+    { title:'Firestore Indexes — 266 deployed, all healthy',
+      desc:'The (default) database has 266 composite indexes (254 READY + 12 newly added for the scheduled-sweep queries); sokoni-ops holds 28. The previously assumed 200 hard cap does not apply — there is headroom. Note: firestore.indexes.json tracks 212 of the 266, so a blind index deploy could prune the untracked ones. Reconcile the file before any firestore:indexes deploy.' },
     { title:'LOYALTY_HMAC_SECRET — Rotation Runbook Required',
       desc:'Secret is stored in Secret Manager. A key-rotation runbook has been documented, but the first scheduled rotation has not yet been performed in production.' },
   ];
@@ -756,7 +756,6 @@ input[type="checkbox"] { width:16px; height:16px; accent-color:var(--g); cursor:
         'Deploy 23 pending Cloud Functions once GCP Cloud Run CPU quota increase is approved.',
         'Complete M-PESA production STK push end-to-end testing after Safaricom business verification.',
         'Register with KRA for eTIMS production onboarding; obtain Control Unit serial numbers.',
-        'Replace SENDGRID_API_KEY placeholder in Secret Manager with the live production key.',
       ];
       conds.innerHTML = items.map(function (c) {
         return '<div class="cond-row"><span class="cond-icon">⚠</span><span>' + esc(c) + '</span></div>';

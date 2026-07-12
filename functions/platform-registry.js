@@ -369,7 +369,9 @@ const platformGetCapabilityMatrix = onCall(
    Marks services as 'stale' if no heartbeat in 5+ minutes.
 ================================================================ */
 const platformHealthSweep = onSchedule(
-  { schedule: 'every 1 hours', region: 'us-central1', memory: '128MiB', timeoutSeconds: 60 },
+  /* 128MiB OOM'd in production (138MiB used) — the container failed its readiness
+     probe and every run errored. 256MiB is the next tier and leaves headroom. */
+  { schedule: 'every 1 hours', region: 'us-central1', memory: '256MiB', timeoutSeconds: 60 },
   async () => {
     const staleThreshold = Date.now() - 300000; /* 5 min */
     const snap = await db().collection('platformHealth')
