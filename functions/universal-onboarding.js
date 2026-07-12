@@ -34,17 +34,23 @@ const ID_PREFIX = {
 };
 const VALID_ROLES = new Set(Object.keys(ID_PREFIX));
 
+/* Post-onboarding landing page per role.
+   RC1 STABILITY FIX: 12 of these previously pointed at *-dashboard.html files that
+   DO NOT EXIST (hotel/restaurant/pharmacy/driver/courier/employer/freelancer/
+   healthcare/manufacturer/ngo/school/finance), so those roles completed onboarding
+   and landed on a 404 — a dead-end journey. Every entry below is now an EXISTING
+   page. When a purpose-built dashboard ships, point the role back at it. */
 const DASHBOARD_MAP = {
   buyer: 'index.html', merchant: 'pos.html', provider: 'provider-dashboard.html',
-  rider: 'rider-dashboard.html', driver: 'driver-dashboard.html',
-  courier: 'courier-dashboard.html', property: 'property-dashboard.html',
-  hotel: 'hotel-dashboard.html', restaurant: 'restaurant-dashboard.html',
-  pharmacy: 'pharmacy-dashboard.html', events: 'event-manager.html',
-  employer: 'employer-dashboard.html', freelancer: 'freelancer-dashboard.html',
+  rider: 'rider-dashboard.html', driver: 'driver.html',
+  courier: 'driver.html', property: 'property-dashboard.html',
+  hotel: 'bnb-manage.html', restaurant: 'pos.html',
+  pharmacy: 'pos.html', events: 'event-manager.html',
+  employer: 'job-post.html', freelancer: 'jobs.html',
   distributor: 'pos.html', wholesaler: 'pos.html',
-  manufacturer: 'manufacturer-dashboard.html', ngo: 'ngo-dashboard.html',
-  school: 'school-dashboard.html', healthcare: 'healthcare-dashboard.html',
-  finance: 'finance-dashboard.html',
+  manufacturer: 'business-os.html', ngo: 'business-os.html',
+  school: 'education.html', healthcare: 'healthcare.html',
+  finance: 'business-os.html',
 };
 
 const CLAIM_KEY = {
