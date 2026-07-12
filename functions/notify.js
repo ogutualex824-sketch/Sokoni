@@ -7,16 +7,19 @@
    ── Why this exists (measured, not assumed) ──────────────────────────────
    Before this: 8 modules sent push directly, 19 wrote the notifications
    collection directly, and there was no shared helper. That fragmentation had
-   already produced a silent production bug:
+   already produced a silent production failure:
 
-     the client writes  user.fcmToken   (singular)
-     loyalty.js reads   user.fcmTokens  (plural)
-     redis-jobs.js reads user.fcmTokens (plural)
+     the client WRITES    users/{uid}.fcmToken      ← a FIELD on the user doc
+     loyalty.js READ      collection('fcmTokens')   ← a top-level COLLECTION
+     redis-jobs.js READ   users/{uid}/fcmTokens     ← a SUBCOLLECTION
 
-   Those two modules were reading a field that does not exist, so their push
-   notifications never reached a single user — and nothing failed loudly enough
-   for anyone to notice. That is what a missing seam costs. This engine reads
-   BOTH shapes, so no user is unreachable while the data is normalised.
+   Nothing ever wrote either collection (redis-jobs only ever *deactivated* rows in
+   one). So both queries always came back EMPTY, and push from those two modules
+   never reached a single user — silently, for as long as they have existed.
+
+   Three different ideas about where a push token lives, in one codebase, is what a
+   missing seam costs. This engine is the ONE token source: it reads the user-doc
+   field and tolerates the array shape, so nobody is unreachable.
 
    ── Routing policy ──────────────────────────────────────────────────────
    The CALLER declares intent (a type). The ENGINE decides channels. A caller
@@ -473,7 +476,99 @@ exports.notifyStats = onCall({ region: REGION }, async (request) => {
   };
 });
 
+/* ══════════════════════════════════════════════════════════════════════════
+   ORDER TIMELINE — the 11 customer-facing stages of an order.
+
+   Stages are DATA. Adding one is a registry entry, not a code change.
+
+   Two properties the customer actually feels:
+
+   MONOTONIC — advancing to a stage already passed is a no-op. A retried Cloud
+   Function or a duplicate courier webhook must never rewind "Delivered" back to
+   "On The Way". An order that jumps backwards is worse than one that says nothing.
+
+   QUIET WHERE IT SHOULD BE — a stage with type:null updates the timeline and the
+   map but does not buzz the phone. Eleven pushes per order is how a premium
+   experience becomes a muted app.
+═════════════════════════════════════════════════════════════════════════ */
+const ORDER_TIMELINE = [
+  { key: 'received',  label: 'Order Received',    type: 'order_placed',     milestone: true  },
+  { key: 'paid',      label: 'Payment Confirmed', type: 'payment_success',  milestone: true  },
+  { key: 'accepted',  label: 'Seller Accepted',   type: 'order_accepted',   milestone: true  },
+  { key: 'preparing', label: 'Preparing Order',   type: 'order_preparing',  milestone: false },
+  { key: 'ready',     label: 'Package Ready',     type: 'order_ready',      milestone: false },
+  { key: 'assigned',  label: 'Rider Assigned',    type: 'rider_assigned',   milestone: true  },
+  { key: 'picked_up', label: 'Picked Up',         type: 'order_dispatched', milestone: true  },
+  { key: 'halfway',   label: 'On The Way',        type: null,               milestone: false },
+  { key: 'near',      label: 'Near You',          type: 'rider_nearby',     milestone: false },
+  { key: 'delivered', label: 'Delivered',         type: 'order_delivered',  milestone: true  },
+  { key: 'completed', label: 'Completed',         type: null,               milestone: false },
+];
+const STAGE_INDEX = Object.fromEntries(ORDER_TIMELINE.map((s, i) => [s.key, i]));
+
+async function advanceOrder({ orderId, stage, uid, phone, title, body, image, deepLink, vars }) {
+  const idx = STAGE_INDEX[stage];
+  if (idx === undefined) throw new HttpsError('invalid-argument', 'Unknown order stage: ' + stage);
+
+  const ref  = db().collection('orders').doc(String(orderId));
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
+
+  const order   = snap.data() || {};
+  const current = STAGE_INDEX[order.timelineStage];
+  const at      = (current === undefined) ? -1 : current;
+
+  if (idx <= at) return { ok: true, unchanged: true, stage: order.timelineStage };
+
+  const st  = ORDER_TIMELINE[idx];
+  const who = uid || order.uid || order.buyerId;
+
+  await ref.update({
+    timelineStage: st.key,
+    timelineIndex: idx,
+    timeline: admin.firestore.FieldValue.arrayUnion({ key: st.key, label: st.label, at: Date.now() }),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  let notified = null;
+  if (st.type && who) {
+    notified = await notify({
+      uid: who,
+      type: st.type,
+      phone,
+      title: title || st.label,
+      body:  body  || ('Order ' + orderId + ': ' + st.label.toLowerCase() + '.'),
+      image,
+      deepLink:  deepLink || ('/track?order=' + orderId),
+      group:     'order:' + orderId,              /* every update for one order collapses into one thread */
+      dedupeKey: 'order:' + orderId + ':' + st.key, /* one notification per stage, ever */
+      vars: vars || {},
+      data: { orderId: String(orderId), stage: st.key },
+    });
+  }
+
+  return { ok: true, stage: st.key, index: idx, milestone: st.milestone, notified };
+}
+
+/* Callable form. Only the seller/rider/admin side advances an order, so this
+   requires auth; the buyer's client only ever READS the timeline. */
+exports.orderAdvance = onCall(
+  { region: REGION, secrets: sokoniAt.secrets },
+  async (request) => {
+    if (!(request.auth && request.auth.uid)) throw new HttpsError('unauthenticated', 'Sign in required.');
+    return advanceOrder(request.data || {});
+  }
+);
+
+/* Exported so legacy push senders can migrate onto the ONE token source without a
+   full rewrite. loyalty.js and redis-jobs.js were each querying an fcmTokens
+   COLLECTION that nothing ever writes — the client writes users/{uid}.fcmToken, a
+   FIELD. Both therefore pushed to nobody, silently. */
+module.exports.collectTokens = collectTokens;
+module.exports.sendPush = sendPush;
 module.exports.notify = notify;
+module.exports.advanceOrder = advanceOrder;
+module.exports.ORDER_TIMELINE = ORDER_TIMELINE;
 module.exports.TYPES = TYPES;
 module.exports.CATEGORIES = CATEGORIES;
 module.exports.resolveChannels = resolveChannels;

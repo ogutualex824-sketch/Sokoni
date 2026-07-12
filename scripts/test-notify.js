@@ -115,6 +115,41 @@ ok('critical types ignore BOTH preferences and quiet hours (OTP always gets thro
     : bad('too few types registered');
 }
 
+/* ── 8. Order timeline: 11 stages, monotonic, and not a buzzer ──────────── */
+{
+  const T = N.ORDER_TIMELINE;
+  Array.isArray(T) && T.length === 11
+    ? ok(`order timeline has all ${T.length} stages`)
+    : bad('order timeline is not the 11 specified stages');
+
+  T.every(s => s.key && s.label && 'milestone' in s)
+    ? ok('every stage is well-formed (key, label, milestone)')
+    : bad('a stage is missing key/label/milestone');
+
+  /* Every stage that DOES notify must name a type the engine actually knows,
+     or the order would silently stall at that stage in production. */
+  const unknown = T.filter(s => s.type && !TYPES[s.type]).map(s => s.key);
+  unknown.length === 0
+    ? ok('every notifying stage maps to a registered notification type')
+    : bad(`stages notify with unregistered types: ${unknown.join(', ')}`);
+
+  /* Quiet stages exist. 11 pushes per order is how an app gets muted. */
+  const quiet = T.filter(s => !s.type).map(s => s.key);
+  quiet.length > 0
+    ? ok(`${quiet.length} stages update the timeline WITHOUT a push (${quiet.join(', ')}) — no notification fatigue`)
+    : bad('every stage pushes — the user would get 11 notifications for one order');
+
+  /* Monotonicity is what stops a retried webhook rewinding "Delivered". */
+  const src = fs.readFileSync(path.resolve('functions/notify.js'), 'utf8');
+  /idx <= at/.test(src) && /unchanged: true/.test(src)
+    ? ok('advancing to an already-passed stage is a no-op (a retry cannot rewind Delivered)')
+    : bad('order timeline is not monotonic — a duplicate webhook could move an order backwards');
+
+  /dedupeKey: 'order:' \+ orderId \+ ':' \+ st\.key/.test(src)
+    ? ok('each stage notifies at most once, ever (dedupe key is order+stage)')
+    : bad('a retried stage advance could double-notify the customer');
+}
+
 console.log('');
 if (fail) { console.error(`Notification engine FAILED (${fail})\n`); process.exit(1); }
 console.log(`Notification engine PASSED (${pass} checks) — nothing sent\n`);

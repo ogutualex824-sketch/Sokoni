@@ -344,7 +344,14 @@
           '</a>' +
           '<p class="skf-tag">Kenya’s marketplace for everything — shop, sell, book and ' +
             'get paid. Built for buyers, sellers, service providers and riders nationwide.</p>' +
-          '<p class="skf-by">Powered by <strong>Bravilex International Company Limited</strong></p>' +
+          /* Legal entity — the ONE customer-facing place the legal name may appear.
+             Read from the canonical CompanyIdentity rather than hardcoded: this literal
+             had already drifted to a name that is NOT the registered entity. A legal
+             entity name is not a string to retype — get it wrong and the footer
+             misstates who the contracting party is. */
+          '<p class="skf-by">Powered by <strong>' +
+            ((window.SOKONI_COMPANY && window.SOKONI_COMPANY.legalName) || 'Bravilex International Co. Limited') +
+          '</strong></p>' +
           '<div class="skf-social">' + social() + '</div>' +
         '</div>' +
         cols() +

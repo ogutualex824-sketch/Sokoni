@@ -28,6 +28,7 @@ const { onCall, HttpsError }    = require('firebase-functions/v2/https');
 const { onSchedule }            = require('firebase-functions/v2/scheduler');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const admin                     = require('firebase-admin');
+const _notifyEngine = require('./notify');   /* ONE push-token source */
 const crypto                    = require('crypto');
 const { defineSecret }          = require('firebase-functions/params');
 const { logger }                = require('firebase-functions');
@@ -187,9 +188,14 @@ async function _getRules() {
 
 async function _notify(uid, title, body, data = {}) {
   try {
-    const snap = await _db().collection('fcmTokens').where('uid', '==', uid).limit(5).get();
-    if (snap.empty) return;
-    const tokens = snap.docs.map(d => d.data().token).filter(Boolean);
+    /* Token source is the notification engine — the ONE place that knows where a push
+       token lives.
+
+       This used to query a top-level collection('fcmTokens'). NOTHING in the codebase
+       ever wrote that collection: the client writes users/{uid}.fcmToken, a FIELD on the
+       user document. So this query always returned empty and every loyalty push silently
+       reached nobody, for as long as this function has existed. */
+    const tokens = await _notifyEngine.collectTokens(uid);
     if (!tokens.length) return;
     await admin.messaging().sendEachForMulticast({
       tokens,

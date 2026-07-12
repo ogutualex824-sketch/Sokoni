@@ -18,6 +18,7 @@
  */
 
 const admin     = require('firebase-admin');
+const _notifyEngine = require('./notify');   /* ONE push-token source */
 const { defineSecret } = require('firebase-functions/params');
 
 const SENDGRID_API_KEY  = defineSecret('SENDGRID_API_KEY');
@@ -108,10 +109,15 @@ async function handleNotification(job) {
   } else if (job.topic) {
     targets = [{ type: 'topic', value: job.topic }];
   } else if (job.uid) {
-    /* Look up all FCM tokens for this user */
-    const snap = await db().collection('users').doc(job.uid)
-      .collection('fcmTokens').where('active', '==', true).limit(5).get();
-    targets = snap.docs.map(d => ({ type: 'token', value: d.id }));
+    /* Token source is the notification engine — the ONE place that knows where a push
+       token lives.
+
+       This used to read users/{uid}/fcmTokens, a SUBCOLLECTION that nothing ever
+       created (the only write in this file *deactivates* rows in it). The client writes
+       users/{uid}.fcmToken, a FIELD on the user document. So this lookup always returned
+       zero targets and every queued push silently reached nobody. */
+    const tokens = await _notifyEngine.collectTokens(job.uid);
+    targets = tokens.map(t => ({ type: 'token', value: t }));
   }
 
   if (!targets.length) {
@@ -138,10 +144,22 @@ async function handleNotification(job) {
       }
       sent++;
     } catch (err) {
-      /* Remove invalid tokens */
-      if (err.code === 'messaging/registration-token-not-registered' && job.uid) {
-        await db().collection('users').doc(job.uid)
-          .collection('fcmTokens').doc(target.value).update({ active: false }).catch(() => {});
+      /* Prune invalid tokens from where they ACTUALLY live.
+         This used to update users/{uid}/fcmTokens — the same phantom subcollection the
+         lookup above read from — so the "cleanup" wrote to a document that never
+         existed and dead tokens were never removed. Tokens live on the user doc. */
+      if ((err.code === 'messaging/registration-token-not-registered' ||
+           err.code === 'messaging/invalid-registration-token') && job.uid) {
+        const ref = db().collection('users').doc(job.uid);
+        await ref.update({
+          fcmTokens: admin.firestore.FieldValue.arrayRemove(target.value),
+        }).catch(() => {});
+        /* If the dead token is the singular field, clear it too. */
+        await ref.get().then(s => {
+          if (s.exists && s.data().fcmToken === target.value) {
+            return ref.update({ fcmToken: admin.firestore.FieldValue.delete() });
+          }
+        }).catch(() => {});
       }
       _log('ERROR', 'FCM send failed', { target: target.value, error: err.message });
     }

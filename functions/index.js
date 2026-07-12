@@ -9317,3 +9317,4 @@ exports.notifySend           = _notify.notifySend;
 exports.notifyGetPreferences = _notify.notifyGetPreferences;
 exports.notifySetPreferences = _notify.notifySetPreferences;
 exports.notifyStats          = _notify.notifyStats;
+exports.orderAdvance         = _notify.orderAdvance;   /* 11-stage order timeline */
