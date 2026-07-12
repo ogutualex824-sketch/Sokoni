@@ -113,8 +113,6 @@
     .hlp-contact-btn:hover{filter:brightness(1.1);}
 
     /* ── Scrolled back to top ── */
-    .hlp-back-top{position:fixed;bottom:110px;right:20px;width:44px;height:44px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;transition:all .2s;z-index:50;text-decoration:none;}
-    .hlp-back-top:hover{background:rgba(113,255,0,0.2);}
   </style>
 </head>
 <body>
@@ -329,7 +327,7 @@
   </div>
 
   <!-- Back to top -->
-  <a href="javascript:void(0)" class="hlp-back-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top" title="Back to top">↑</a>
+  <!-- page-specific back-to-top removed: duplicated the global #sokoniScrollTop and collided with #kassBtn on the right rail -->
 
   <script type="module" src="firebase.js"></script>
   <script src="sokoni-trust.js" defer></script>
