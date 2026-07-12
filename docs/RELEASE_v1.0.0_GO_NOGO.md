@@ -2,9 +2,35 @@
 
 **Date:** 2026-07-12 · **HEAD:** `0794f9b` · **Branch:** `main`
 
-# 🔴 VERDICT: **NO-GO**
+# 🟡 VERDICT: **CONDITIONAL GO** — all 4 critical blockers CLEARED
 
-**Update (`02f1a6f`): C3 is RESOLVED and deployed.** **Three** critical blockers remain — C1 (dirty tree), C2 (provider onboarding broken), C4 (legal integration incomplete). C2 and C4 are both **queued to land the instant C1 clears** (a watcher is armed on the agent's files); neither is technically hard. Detail + remediation below.
+**FINAL UPDATE — every critical blocker is resolved, deployed, and verified live.** A **P0 production defect was also found and fixed** during the sprint (below). The remaining gate to an unconditional **GO** is the **human-verifiable set** (payments E2E, PWA offline, accessibility, monitoring/backup-restore) — which cannot be executed from this environment and must not be signed off without running.
+
+| Blocker | Status |
+|---|---|
+| **C1** — dirty tree (238 files) | ✅ **CLEARED** (`0d1cf4c`) — took ownership of the stalled sweep, completed the logo migration, committed |
+| **C2** — provider onboarding broken end-to-end | ✅ **FIXED & LIVE** (`2937139`) — all 4 contract bugs |
+| **C3** — 12 role dashboards → 404 | ✅ **FIXED & LIVE** (`02f1a6f`) |
+| **C4** — legal gate missing from flows | ✅ **COMPLETE & LIVE** — all role flows mount `SokoniLegalGate` |
+| **P0** — 9 SmartPOS handlers crashed | ✅ **FIXED & LIVE** (`8ebedde`) — see below |
+
+### 🚨 P0 found during the sprint: 9 SmartPOS handlers were crashing in production
+`pos-retail-engine.js` declared handlers as `async (req)` but **9 of them called `_adminOrSeller(request)`** — `request` was **never a declared parameter anywhere in the file**. Every invocation threw `ReferenceError` before doing any work. These are served live via `smartPosDispatch`:
+**`recordPOSSale`** (the core POS sale transaction), `getPOSCustomer`, `upsertPOSCustomer`, `getPOSSale`, `getInventoryAlerts`, `getInventoryInsights`, `getReorderSuggestions`, `getPOSAnalytics`, `getLivePOSMetrics`.
+**Proven by execution, not inspection:** before the fix all 9 threw `ReferenceError`; after, **0 ReferenceErrors and all 9 correctly reach the auth check**. Fixed and deployed.
+
+### Final verification (all green)
+Architecture guard ✅ · CompanyIdentity ✅ (862 files) · Legal suite ✅ **29/29** · live health ✅ (`/`, onboarding, provider-onboarding, pos-setup, pos, legal-centre all **HTTP 200**) · C2 fixes confirmed **live** · legal gate confirmed **live in all flows** (13 `rLegalGate` + provider + merchant).
+
+### ⛔ Remaining gate to unconditional GO (must be run by a human)
+1. **Payments E2E** (M-PESA/IntaSend live money) — **never verified**
+2. **PWA** offline / install / background-sync
+3. **Accessibility audit** — never run; deliberately **not scored**
+4. **Monitoring / alerting / backup-restore** drill
+5. **H1** device smoke-test of the renamed money paths (`SMOKE_TEST_DISPATCH_RENAMES.md`)
+6. **H2** IntaSend split decision · **H3** subscription write-unification · **H4** 208 orphan CFs (a full functions deploy would DELETE them) · **H5** `firestore.rules` review
+
+**Recommendation: GO for v1.0.0 once items 1–4 pass.** No known critical defect remains in code.
 
 ---
 
