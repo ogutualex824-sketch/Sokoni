@@ -162,7 +162,7 @@
     el.innerHTML =
       '<div class="sk-sp-inner">' +
         '<div class="sk-sp-logo-frame">' +
-          '<img class="sk-sp-logo" src="assets/Sokoni Logo.png" alt="">' +
+          '<img class="sk-sp-logo" src="assets/sokoni-icon.svg" alt="">' +
           '<div class="sk-sp-wm">SOKO<em>NI</em></div>' +
         '</div>' +
         '<div class="sk-sp-line">' + cfg.line + '</div>' +
@@ -340,6 +340,16 @@
     (document.head || document.documentElement).appendChild(drawScript);
   }
 
+  /* Promotion renderer — pages opt in with <div data-promo="home_hero"></div>.
+     One injection point, so no page needs editing to receive promotions. */
+  if (!document.getElementById('sk-promo-script')) {
+    const promoJs = document.createElement('script');
+    promoJs.id = 'sk-promo-script';
+    promoJs.src = 'sokoni-promotions.js';
+    promoJs.defer = true;
+    (document.head || document.documentElement).appendChild(promoJs);
+  }
+
   /* Smart offline detection — shows banner only when truly offline */
   if (!document.getElementById('sk-offline-script')) {
     const offlineJs = document.createElement('script');
@@ -413,12 +423,16 @@
   const EXCLUDED = [
     'pos.html', 'seller.html', 'login.html', 'signup.html',
     'register.html', 'success.html', 'offline.html',
+    /* cleanUrls:true strips .html — also match extension-free variants */
+    'pos', 'seller', 'login', 'signup', 'register', 'success', 'offline',
     /* Profile has its own fully-featured .upn navigation bar */
-    'profile.html',
+    'profile.html', 'profile',
     /* Enterprise full-screen dashboards — have their own specialized nav */
     'ecc.html', 'wap.html', 'gip.html', 'platform.html',
     'sasos-admin.html', 'pos-kiosk.html', 'superadmin.html',
     'monitor.html', 'moderation.html', 'verification-admin.html',
+    'ecc', 'wap', 'gip', 'platform', 'sasos-admin', 'pos-kiosk',
+    'superadmin', 'monitor', 'moderation', 'verification-admin',
   ];
   const page = location.pathname.split('/').pop().split('?')[0] || 'index.html';
   if (EXCLUDED.includes(page)) return;
@@ -593,10 +607,11 @@
        Enlarging the boxes would fatten the bar and undo the 64->58px premium
        header. Instead, extend the HIT AREA with an invisible centred pseudo-
        element. The visual design is unchanged; only the tappable region grows. */
-    .sk-nav-icon-btn, #sk-nav-cart, #sk-nav-avatar { position: relative; }
+    .sk-nav-icon-btn, #sk-nav-cart, #sk-nav-avatar, #sk-nav-logo { position: relative; }
     .sk-nav-icon-btn::after,
     #sk-nav-cart::after,
-    #sk-nav-avatar::after {
+    #sk-nav-avatar::after,
+    #sk-nav-logo::after {
       content: '';
       position: absolute;
       left: 50%; top: 50%;
@@ -980,7 +995,7 @@
       /* Drawer header — logo + close button */
       '<div class="sk-drawer-header">' +
         '<div style="display:flex;align-items:center;gap:9px;margin-left:4px">' +
-          '<img src="assets/Sokoni Logo.png" alt="" style="height:32px;width:auto">' +
+          '<img src="assets/sokoni-icon.svg" alt="" style="height:32px;width:auto">' +
           '<span style="font-size:19px;font-weight:900;letter-spacing:.04em;color:#fff;line-height:1">SOKO<em style="font-style:normal;color:#71ff00">NI</em></span>' +
         '</div>' +
         '<button class="sk-drawer-close" type="button" aria-label="Close menu">✕</button>' +

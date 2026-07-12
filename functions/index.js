@@ -9282,3 +9282,16 @@ const _kassMem = require("./kass-memory");
 exports.kassMemoryGet    = _kassMem.kassMemoryGet;
 exports.kassMemorySet    = _kassMem.kassMemorySet;
 exports.kassMemoryForget = _kassMem.kassMemoryForget;   /* Kenya DPA 2019: real erasure, not a flag */
+
+/* ══════════════════════════════════════════════════════════════
+   PROMOTION ENGINE — campaigns are DATA, not code.
+   The engine never branches on campaign type, so a new one
+   (seasonal_ramadan, sponsored_service…) is a Firestore write.
+══════════════════════════════════════════════════════════════ */
+const _promos = require("./promotions");
+exports.getPromotions    = _promos.getPromotions;
+exports.trackPromotion   = _promos.trackPromotion;
+exports.promotionUpsert  = _promos.promotionUpsert;
+exports.promotionPublish = _promos.promotionPublish;
+exports.promotionList    = _promos.promotionList;
+exports.promotionArchive = _promos.promotionArchive;
