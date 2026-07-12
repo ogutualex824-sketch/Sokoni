@@ -7743,10 +7743,23 @@ async function _runEPRAScraper(db) {
   }
 }
 
-/* Scheduled: every 4 hours (Africa/Nairobi) */
+/* Scheduled: every 4 hours (Africa/Nairobi)
+   EPRA is a third-party website we scrape; it goes down and restructures its URLs
+   without notice (as of 2026-07-12 the maximum-pump-prices pages return 404 while
+   epra.go.ke itself is up). An unreachable source is NOT a platform failure, so this
+   must not throw: throwing marked the scheduled job FAILED every 4 hours and generated
+   permanent alert noise. The last successfully scraped prices remain in
+   sysConfig/fuelPrices and continue to serve clients, so degrading is safe.
+   Genuine platform faults still surface — we log at error level. */
 exports.fetchEPRAFuelPrices = onSchedule(
   { schedule: "0 */4 * * *", timeZone: "Africa/Nairobi", timeoutSeconds: 60 },
-  async () => { await _runEPRAScraper(admin.firestore()); }
+  async () => {
+    try {
+      await _runEPRAScraper(admin.firestore());
+    } catch (err) {
+      console.error("[EPRA] scrape failed — retaining last known prices:", err && err.message);
+    }
+  }
 );
 
 /* Callable: admin panel or driver refresh button */

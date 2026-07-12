@@ -2,7 +2,7 @@
    SOKONI Email Template Library  v2.0
    60+ responsive HTML templates — Outlook · Gmail · Apple Mail · Yahoo
    SOKONI brand: dark theme · #71ff00 green · #00d4ff cyan
-   v2.1 — Logo: logosokoni.png (transparent bg, 80×80 display); alt="SOKONI";
+   v2.1 — Logo: Sokoni Logo.png (wordmark, 180×120 display, 33 KB); alt="SOKONI";
            all 53 templates confirmed base() inheritance
 ============================================================ */
 "use strict";
@@ -10,9 +10,9 @@
 const { FROM } = require("./email-service");
 const { COMPANY } = require("./company-identity");
 
-/* logosokoni.png — official square shield icon, transparent background.
+/* Sokoni Logo.png — official SOKONI wordmark (480×320 px, 33 KB, 3:2 aspect ratio).
    Firebase Hosting / Cloudflare CDN → permanent HTTPS URL, reliable in all email clients. */
-const LOGO_URL    = "https://mysokoni.co.ke/assets/logosokoni.png";
+const LOGO_URL    = "https://mysokoni.co.ke/assets/Sokoni%20Logo.png";
 const BASE_URL    = "https://mysokoni.co.ke";
 const SUPPORT_URL = `${BASE_URL}/support.html`;
 const PRIVACY_URL = `${BASE_URL}/trust.html`;
@@ -96,7 +96,7 @@ a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important
   .eml-hpad {padding:22px 20px 18px!important;}
   .eml-bpad {padding:24px 20px 12px!important;}
   .eml-fpad {padding:18px 20px 22px!important;}
-  .eml-logo {width:64px!important;height:64px!important;}
+  .eml-logo {width:140px!important;height:93px!important;}
   .hide-mob {display:none!important;max-height:0!important;overflow:hidden!important;}
 }
 </style>
@@ -118,10 +118,10 @@ ${hidden}
            border-right:1px solid rgba(113,255,0,0.14);">
     <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
       <tr><td align="center" style="padding-bottom:14px;">
-        <!-- Logo: logosokoni.png — square shield icon, transparent bg -->
-        <img src="${LOGO_URL}" width="80" height="80" class="eml-logo"
+        <!-- Logo: Sokoni Logo.png — official wordmark, 3:2 ratio -->
+        <img src="${LOGO_URL}" width="180" height="120" class="eml-logo"
           alt="SOKONI"
-          style="width:80px;height:80px;display:block;margin:0 auto;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
+          style="width:180px;height:120px;display:block;margin:0 auto;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
         <!-- Wordmark -->
         <p style="margin:12px 0 3px;font-family:Arial,Helvetica,sans-serif;font-size:24px;
                   font-weight:900;letter-spacing:0.1em;color:#ffffff;text-align:center;
