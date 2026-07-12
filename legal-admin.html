@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Legal Administration</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <meta name="theme-color" content="#71ff00">
+  <script src="security.js"></script>
+  <link rel="stylesheet" href="style.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-functions-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check-compat.js"></script>
+  <script src="/sokoni-appcheck.js"></script>
+  <script src="shared-header.js" defer></script>
+
+  <style>
+    :root { --bg:#050505; --sur:#0d0d0d; --g:#71ff00; --bor:#1e1e1e; --txt:#e8e8e8; --sub:#8a8a8a; --warn:#ff9500; }
+    body { background:var(--bg); color:var(--txt); margin:0; }
+    .la-wrap { max-width:900px; margin:0 auto; padding:24px 16px 96px; }
+    .la-title { font-size:22px; font-weight:800; margin:8px 0 4px; }
+    .la-sub { font-size:13px; color:var(--sub); margin-bottom:18px; }
+    .la-card { background:var(--sur); border:1px solid var(--bor); border-radius:14px; padding:16px; margin-bottom:16px; }
+    .la-sec { font-size:13px; font-weight:800; margin:0 0 12px; }
+    .la-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .la-in, .la-sel {
+      flex:1 1 150px; min-height:44px; font-size:16px; padding:10px 12px;
+      background:#111; color:var(--txt); border:1px solid var(--bor); border-radius:10px;
+    }
+    .la-btn {
+      min-height:44px; padding:10px 16px; font-size:13px; font-weight:700; cursor:pointer;
+      background:transparent; color:var(--g); border:1px solid var(--bor); border-radius:10px;
+    }
+    .la-btn:hover:not(:disabled) { border-color:var(--g); }
+    .la-btn:disabled { opacity:.45; cursor:not-allowed; }
+    .la-btn.danger { color:var(--warn); }
+    .la-btn.danger:hover:not(:disabled) { border-color:var(--warn); }
+    .la-out {
+      font-size:12px; color:var(--sub); background:#0a0a0a; border:1px solid var(--bor);
+      border-radius:10px; padding:12px; margin-top:10px; white-space:pre-wrap; word-break:break-word;
+      max-height:340px; overflow:auto; font-family:ui-monospace,Menlo,Consolas,monospace;
+    }
+    .la-row { display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--bor); font-size:12.5px; }
+    .la-row:last-child { border-bottom:none; }
+    .la-row b { color:var(--txt); }
+    .la-warn { font-size:12px; color:var(--warn); margin-top:8px; }
+    .la-note { font-size:11.5px; color:var(--sub); margin-top:6px; line-height:1.5; }
+    .la-deny { padding:40px 16px; text-align:center; color:var(--sub); font-size:14px; }
+    @media (max-width:520px){ .la-bar{flex-direction:column} }
+  </style>
+</head>
+<body>
+  <div class="la-wrap">
+    <h1 class="la-title">Legal Administration</h1>
+    <p class="la-sub">Preview, publish, schedule and roll back agreement versions · search acceptances · adoption · audit export.</p>
+
+    <div id="la-app" style="display:none">
+
+      <!-- PREVIEW ------------------------------------------------------------ -->
+      <div class="la-card">
+        <div class="la-sec">Preview agreements</div>
+        <div class="la-bar">
+          <select class="la-sel" id="pv-role" aria-label="Role">
+            <option value="">Core (buyer)</option>
+            <option value="merchant">Merchant</option>
+            <option value="provider">Provider</option>
+            <option value="driver">Driver</option>
+            <option value="rider">Rider</option>
+            <option value="property">Property</option>
+            <option value="hotel">Hotel</option>
+            <option value="restaurant">Restaurant</option>
+            <option value="healthcare">Healthcare</option>
+            <option value="employer">Employer</option>
+          </select>
+          <input class="la-in" id="pv-at" type="datetime-local" aria-label="Preview at (optional future time)">
+          <button class="la-btn" id="pv-go">Preview</button>
+        </div>
+        <p class="la-note">Leave the time blank to see what the role sees right now. Set a future time to
+          confirm what a <strong>scheduled</strong> change will actually do — before it goes live.</p>
+        <div class="la-out" id="pv-out">—</div>
+      </div>
+
+      <!-- PUBLISH / SCHEDULE / ROLLBACK -------------------------------------- -->
+      <div class="la-card">
+        <div class="la-sec">Publish · schedule · roll back</div>
+        <div class="la-bar">
+          <input class="la-in" id="vr-id" placeholder="Agreement ID (e.g. merchant-agreement)" aria-label="Agreement ID">
+          <input class="la-in" id="vr-ver" placeholder="Version (e.g. 1.1)" aria-label="Version">
+        </div>
+        <div class="la-bar">
+          <input class="la-in" id="vr-when" type="datetime-local" aria-label="Effective from (schedule only)">
+          <button class="la-btn" id="vr-publish">Publish now</button>
+          <button class="la-btn" id="vr-schedule">Schedule</button>
+          <button class="la-btn danger" id="vr-rollback">Roll back</button>
+        </div>
+        <div class="la-bar">
+          <button class="la-btn" id="vr-history">Version history</button>
+        </div>
+        <p class="la-note">
+          Publishing a new version never deactivates an account — users are asked to re-accept before
+          using the affected feature. A scheduled version activates itself on the <strong>server</strong>
+          clock. Rollback only accepts a version that was <strong>actually published</strong>, and it
+          cancels any pending schedule. History is never deleted.
+        </p>
+        <div class="la-out" id="vr-out">—</div>
+      </div>
+
+      <!-- ADOPTION ----------------------------------------------------------- -->
+      <div class="la-card">
+        <div class="la-sec">Adoption</div>
+        <div class="la-bar">
+          <button class="la-btn" id="ad-go">Load adoption &amp; compliance</button>
+        </div>
+        <div id="ad-rows"></div>
+        <div class="la-out" id="ad-out" style="display:none">—</div>
+      </div>
+
+      <!-- SEARCH ------------------------------------------------------------- -->
+      <div class="la-card">
+        <div class="la-sec">Search acceptances</div>
+        <div class="la-bar">
+          <input class="la-in" id="sr-user" placeholder="User ID (optional)" aria-label="User ID">
+          <input class="la-in" id="sr-agr" placeholder="Agreement ID (optional)" aria-label="Agreement ID">
+        </div>
+        <div class="la-bar">
+          <input class="la-in" id="sr-role" placeholder="Role (optional)" aria-label="Role">
+          <input class="la-in" id="sr-ver" placeholder="Version (optional)" aria-label="Version">
+          <button class="la-btn" id="sr-go">Search</button>
+        </div>
+        <div class="la-out" id="sr-out">—</div>
+      </div>
+
+      <!-- EXPORT ------------------------------------------------------------- -->
+      <div class="la-card">
+        <div class="la-sec">Export audit log</div>
+        <div class="la-bar">
+          <button class="la-btn" id="ex-json">Export JSON</button>
+          <button class="la-btn" id="ex-csv">Export CSV</button>
+        </div>
+        <p class="la-note">Exports the acceptance records the server holds. The export is a copy —
+          the authoritative record stays server-side and append-only.</p>
+        <div class="la-out" id="ex-out">—</div>
+      </div>
+
+    </div>
+
+    <div class="la-deny" id="la-deny">Checking access…</div>
+  </div>
+
+<script>
+'use strict';
+const FB_CFG = {
+  apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE', authDomain:'sokoni-aeb26.firebaseapp.com',
+  projectId:'sokoni-aeb26', storageBucket:'sokoni-aeb26.firebasestorage.app',
+  messagingSenderId:'24799054989', appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4',
+};
+const _app  = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(FB_CFG);
+const _auth = firebase.auth(_app);
+const _fns  = firebase.functions(_app);
+
+/* Every call goes through the SAME legalDispatch. No new API is introduced here —
+   this page is a thin client over ops that are already deployed. */
+const LEGAL = (op, data) =>
+  _fns.httpsCallable('legalDispatch', { timeout: 30000 })(Object.assign({ op }, data || {}))
+      .then(r => r.data);
+
+const $ = (id) => document.getElementById(id);
+const show = (id, v) => { $(id).textContent = typeof v === 'string' ? v : JSON.stringify(v, null, 2); };
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* Run an op with the button disabled — a double-click must not publish twice. */
+async function run(btn, outId, fn) {
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Working…';
+  try { show(outId, await fn()); }
+  catch (e) { show(outId, 'ERROR: ' + ((e && e.message) || 'failed')); }
+  finally { btn.disabled = false; btn.textContent = label; }
+}
+
+const msOf = (id) => { const v = $(id).value; return v ? new Date(v).getTime() : null; };
+
+/* ── Preview ── */
+$('pv-go').addEventListener('click', (e) => run(e.target, 'pv-out', async () => {
+  const at = msOf('pv-at');
+  const res = await LEGAL('legalPreviewAgreements', { role: $('pv-role').value, at: at || undefined });
+  return (res.agreements || []).map(a =>
+    (a.changesAtPreviewTime ? '~ ' : '  ') + a.id + '  v' + a.version +
+    (a.changesAtPreviewTime ? '   (currently v' + (a.currentVersion || '?') + ')' : '')
+  ).join('\n') + '\n\n' + (res.agreements || []).filter(a => a.changesAtPreviewTime).length +
+    ' agreement(s) change at the previewed time.';
+}));
+
+/* ── Publish / schedule / rollback ── */
+$('vr-publish').addEventListener('click', (e) => {
+  const id = $('vr-id').value.trim(), v = $('vr-ver').value.trim();
+  if (!id || !v) return show('vr-out', 'Agreement ID and version are required.');
+  if (!confirm('Publish "' + id + '" v' + v + ' NOW?\n\nEvery user of the affected roles will be asked to re-accept before using the feature. No account is deactivated.')) return;
+  run(e.target, 'vr-out', () => LEGAL('legalPublishAgreement', { agreementId: id, version: v }));
+});
+
+$('vr-schedule').addEventListener('click', (e) => {
+  const id = $('vr-id').value.trim(), v = $('vr-ver').value.trim(), when = msOf('vr-when');
+  if (!id || !v) return show('vr-out', 'Agreement ID and version are required.');
+  if (!when) return show('vr-out', 'Pick a future date/time to schedule.');
+  run(e.target, 'vr-out', () => LEGAL('legalScheduleVersion', { agreementId: id, version: v, effectiveFrom: when }));
+});
+
+$('vr-rollback').addEventListener('click', (e) => {
+  const id = $('vr-id').value.trim(), v = $('vr-ver').value.trim();
+  if (!id || !v) return show('vr-out', 'Agreement ID and the version to roll back TO are required.');
+  if (!confirm('Roll "' + id + '" back to v' + v + '?\n\nOnly a version that was actually published can be restored. Any pending schedule is cancelled. History is not deleted.')) return;
+  run(e.target, 'vr-out', () => LEGAL('legalRollbackVersion', { agreementId: id, version: v }));
+});
+
+$('vr-history').addEventListener('click', (e) => {
+  const id = $('vr-id').value.trim();
+  if (!id) return show('vr-out', 'Agreement ID is required.');
+  run(e.target, 'vr-out', () => LEGAL('legalVersionHistory', { agreementId: id }));
+});
+
+/* ── Adoption ── */
+$('ad-go').addEventListener('click', (e) => run(e.target, 'ad-out', async () => {
+  const [stats, report] = await Promise.all([
+    LEGAL('legalGetStats', {}),
+    LEGAL('legalComplianceReport', {}).catch(() => null),
+  ]);
+  const rows = [
+    ['Total acceptances', stats.total],
+    ['Distinct users', stats.distinctUsers],
+    ['On the latest version', stats.latestVersionAdoption != null ? stats.latestVersionAdoption : '—'],
+  ];
+  $('ad-rows').innerHTML = rows.map(r =>
+    '<div class="la-row"><span>' + esc(r[0]) + '</span><b>' + esc(r[1] == null ? '—' : r[1]) + '</b></div>').join('') +
+    (stats.enforcement ? '<div class="la-row"><span>Enforcement flags</span><b>' +
+      esc(JSON.stringify(stats.enforcement)) + '</b></div>' : '');
+  $('ad-out').style.display = 'block';
+  return { byAgreement: stats.byAgreement, byRole: stats.byRole,
+           versionAdoption: stats.versionAdoption, complianceReport: report };
+}));
+
+/* ── Search ── */
+$('sr-go').addEventListener('click', (e) => run(e.target, 'sr-out', async () => {
+  const q = {};
+  if ($('sr-user').value.trim()) q.userId = $('sr-user').value.trim();
+  if ($('sr-agr').value.trim())  q.agreementId = $('sr-agr').value.trim();
+  if ($('sr-role').value.trim()) q.role = $('sr-role').value.trim();
+  if ($('sr-ver').value.trim())  q.version = $('sr-ver').value.trim();
+  const res = await LEGAL('legalSearchAcceptances', q);
+  const list = res.acceptances || res.results || [];
+  if (!list.length) return 'No acceptances match.';
+  return list.length + ' result(s)\n\n' + list.map(a =>
+    [a.userId, a.role || '-', a.agreementId, 'v' + a.version,
+     a.signatureType || a.acceptanceMethod || '-', a.country || '-'].join('  ·  ')
+  ).join('\n');
+}));
+
+/* ── Export ── */
+function saveBlob(text, type, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+async function doExport(asCsv) {
+  const res = await LEGAL('legalExportAcceptances', {});
+  const rows = res.acceptances || res.rows || [];
+  if (!rows.length) return 'Nothing to export.';
+  if (!asCsv) {
+    saveBlob(JSON.stringify(rows, null, 2), 'application/json', 'sokoni-legal-audit.json');
+    return 'Exported ' + rows.length + ' record(s) as JSON.';
+  }
+  const cols = ['userId','businessId','role','agreementId','version','signatureType','signedName','signatureHash','country','countrySource','acceptedFrom','acceptedAt'];
+  const cell = (v) => '"' + String(v == null ? '' : (v && v._seconds ? new Date(v._seconds * 1000).toISOString() : v)).replace(/"/g, '""') + '"';
+  const csv = cols.join(',') + '\n' + rows.map(r => cols.map(c => cell(r[c])).join(',')).join('\n');
+  saveBlob(csv, 'text/csv', 'sokoni-legal-audit.csv');
+  return 'Exported ' + rows.length + ' record(s) as CSV.';
+}
+$('ex-json').addEventListener('click', (e) => run(e.target, 'ex-out', () => doExport(false)));
+$('ex-csv').addEventListener('click',  (e) => run(e.target, 'ex-out', () => doExport(true)));
+
+/* ── Access ──────────────────────────────────────────────────────────────────
+   Hiding the UI is a courtesy, not the control. Every op re-checks admin on the
+   SERVER (_assertAdmin), so a user who forces this page open can still do nothing. */
+_auth.onAuthStateChanged(async (u) => {
+  if (!u) { $('la-deny').textContent = 'Please sign in as an administrator.'; return; }
+  const tok = await u.getIdTokenResult().catch(() => null);
+  const claims = (tok && tok.claims) || {};
+  if (!claims.admin && !claims.superAdmin) {
+    $('la-deny').textContent = 'Administrator access required.';
+    return;
+  }
+  $('la-deny').style.display = 'none';
+  $('la-app').style.display = 'block';
+});
+</script>
+</body>
+</html>
