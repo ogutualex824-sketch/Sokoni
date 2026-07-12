@@ -129,9 +129,15 @@ exports.sendPOSReceipt = onCall(
         `Thank you for shopping at ${shopName}!`,
       ].filter(Boolean).join('\n').slice(0, 320);
 
-      const at = sokoniAt.atBuildClient();
-      await at.SMS.send({ to: [phone], message: smsBody, from: 'SOKONI' });
-      result = { sent: true, channel: 'sms', to: phone };
+      /* Route through the central sender. This previously called the AT SDK directly
+         with a HARDCODED from:'SOKONI' — a sender ID that is still PENDING operator
+         approval, so Africa's Talking would reject the message. The sender must come
+         from AT_SENDER_ID (empty until approved), never from a literal. */
+      const smsRes = await sokoniAt.atSendSMSWithRetry(phone, smsBody);
+      if (!smsRes || !smsRes.ok) {
+        throw new HttpsError('unavailable', 'Receipt SMS could not be sent.');
+      }
+      result = { sent: true, channel: 'sms', to: phone, messageId: (smsRes.results || [])[0]?.messageId || null };
 
     } else if (channel === 'email' && email) {
       const sgMail = require('@sendgrid/mail');

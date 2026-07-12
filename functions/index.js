@@ -9295,3 +9295,15 @@ exports.promotionUpsert  = _promos.promotionUpsert;
 exports.promotionPublish = _promos.promotionPublish;
 exports.promotionList    = _promos.promotionList;
 exports.promotionArchive = _promos.promotionArchive;
+
+/* ══════════════════════════════════════════════════════════════
+   SMS PLATFORM — templates, idempotent queue, DLQ, preferences,
+   delivery reports. Provider stays behind sokoni-at.js.
+══════════════════════════════════════════════════════════════ */
+const _sms = require("./sms-service");
+exports.smsQueueWorker      = _sms.smsQueueWorker;
+exports.smsEnqueue          = _sms.smsEnqueue;
+exports.smsGetPreferences   = _sms.smsGetPreferences;
+exports.smsSetPreferences   = _sms.smsSetPreferences;
+exports.smsDeliveryWebhook  = _sms.smsDeliveryWebhook;
+exports.smsStats            = _sms.smsStats;

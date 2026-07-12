@@ -22,7 +22,8 @@
     "monitor": "node scripts/setup-monitoring.js",
     "test:kass": "node scripts/test-kass-retrieval.js",
     "test:kass-modes": "node scripts/test-kass-modes-memory.js",
-    "test:promotions": "node scripts/test-promotions.js"
+    "test:promotions": "node scripts/test-promotions.js",
+    "test:sms": "node scripts/test-sms.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",
