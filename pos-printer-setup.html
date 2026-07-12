@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
@@ -194,6 +194,10 @@ input:checked+.slider:before{transform:translateX(18px)}
   <div class="tab" data-panel="config" onclick="showPanel(this)">Configuration</div>
   <div class="tab" data-panel="queue" onclick="showPanel(this)">Queue</div>
   <div class="tab" data-panel="history" onclick="showPanel(this)">History</div>
+  <div class="tab" data-panel="print-history" onclick="showPanel(this)">&#128196; Print Log</div>
+  <div class="tab" data-panel="autoprint" onclick="showPanel(this)">&#9881; Auto-Print</div>
+  <div class="tab" data-panel="info" onclick="showPanel(this)">&#129518; Printer Info</div>
+  <div class="tab" data-panel="diagnostics" onclick="showPanel(this)">&#128300; Diagnostics</div>
 </div>
 
 <!-- ═══ DISCOVER ═══ -->
@@ -485,19 +489,19 @@ input:checked+.slider:before{transform:translateX(18px)}
           <div class="t-label">Auto-connect on page load</div>
           <div class="t-sub">Reconnects to the paired printer when this page opens (requires Chrome 85+)</div>
         </div>
-        <label class="toggle"><input type="checkbox" id="p58eAutoConnect" onchange="P58EPrinter.updateSettings({autoConnect:this.checked})"><span class="slider"></span></label>
+        <label class="toggle"><input type="checkbox" id="p58eAutoConnect" onchange="PrinterManager.p58e.updateSettings({autoConnect:this.checked})"><span class="slider"></span></label>
       </div>
       <div class="toggle-row">
         <div class="toggle-info">
           <div class="t-label">Cash drawer connected through printer</div>
           <div class="t-sub">Enable to show cash drawer test buttons in Hardware Tests</div>
         </div>
-        <label class="toggle"><input type="checkbox" id="p58eDrawer" onchange="P58EPrinter.updateSettings({drawerEnabled:this.checked})"><span class="slider"></span></label>
+        <label class="toggle"><input type="checkbox" id="p58eDrawer" onchange="PrinterManager.p58e.updateSettings({drawerEnabled:this.checked})"><span class="slider"></span></label>
       </div>
       <div class="actions-row" style="margin-top:12px">
         <div class="form-group" style="flex:1">
           <label>Paper Width</label>
-          <select id="p58ePaperWidth" onchange="SokoniPrinter.setConfig({paperWidth:this.value});toast('Paper width saved')">
+          <select id="p58ePaperWidth" onchange="PrinterManager.setConfig({paperWidth:this.value});toast('Paper width saved')">
             <option value="58mm" selected>58mm (32 chars) — P58E standard</option>
             <option value="76mm">76mm (42 chars)</option>
             <option value="80mm">80mm (48 chars)</option>
@@ -657,7 +661,7 @@ input:checked+.slider:before{transform:translateX(18px)}
     <div class="card-body">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div class="card-title" style="margin-bottom:0">&#9989; Production Readiness Checklist</div>
-        <button class="btn btn-sm btn-danger" onclick="P58EPrinter.resetChecklist();renderChecklist()">Reset All</button>
+        <button class="btn btn-sm btn-danger" onclick="PrinterManager.p58e.resetChecklist();renderChecklist()">Reset All</button>
       </div>
       <div id="hwChecklist" style="display:flex;flex-direction:column;gap:6px"></div>
       <div id="hwChecklistScore" style="margin-top:12px;font-size:12px;color:var(--sub)"></div>
@@ -697,6 +701,221 @@ input:checked+.slider:before{transform:translateX(18px)}
   </div>
 </div>
 
+<!-- ═══ PRINT LOG ═══ -->
+<div class="panel" id="panel-print-history">
+  <div class="card">
+    <div class="card-top" style="background:linear-gradient(90deg,#1a73e8,#6d5cff)"></div>
+    <div class="card-body">
+      <div class="card-title">&#128196; Print History Log</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input id="histSearchInput" type="search" placeholder="Search by receipt ID, type, cashier…"
+          style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid var(--bor);background:var(--bg3);color:var(--txt);font-size:12px"
+          oninput="renderPrintHistory(this.value)">
+        <button class="btn btn-outline" onclick="renderPrintHistory('')">All</button>
+      </div>
+      <div id="printHistoryTable"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-outline" style="flex:1" onclick="renderPrintHistory('')">&#8635; Refresh</button>
+        <button class="btn btn-outline" style="flex:1" onclick="_exportPrintHistory()">&#128229; Export CSV</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">&#128202; Print Metrics</div>
+      <div id="printMetricsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ AUTO-PRINT SETTINGS ═══ -->
+<div class="panel" id="panel-autoprint">
+  <div class="card">
+    <div class="card-top" style="background:linear-gradient(90deg,#71ff00,#1a73e8)"></div>
+    <div class="card-body">
+      <div class="card-title">&#9881; Auto-Print Behaviour</div>
+
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Auto-print after every sale</div><div class="t-sub">Triggers immediately when payment is confirmed</div></div>
+        <label class="toggle"><input type="checkbox" id="apAutoAfterSale" checked onchange="_saveAutoSettings()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Auto-print after every refund</div><div class="t-sub">Prints refund receipt immediately</div></div>
+        <label class="toggle"><input type="checkbox" id="apAutoAfterRefund" checked onchange="_saveAutoSettings()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Auto-print kitchen tickets</div><div class="t-sub">Sends kitchen ticket on food orders</div></div>
+        <label class="toggle"><input type="checkbox" id="apAutoKitchen" onchange="_saveAutoSettings()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Ask before printing</div><div class="t-sub">Shows a confirm prompt before every print job</div></div>
+        <label class="toggle"><input type="checkbox" id="apAskBefore" onchange="_saveAutoSettings()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Silent mode (no dialogs)</div><div class="t-sub">Print jobs run silently in background — recommended for production</div></div>
+        <label class="toggle"><input type="checkbox" id="apSilent" checked onchange="_saveAutoSettings()"><span class="slider"></span></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">&#128203; Copies & Layout</div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Customer copy</div><div class="t-sub">Print one copy for the customer</div></div>
+        <label class="toggle"><input type="checkbox" id="apCustomerCopy" checked onchange="_saveAutoSettings()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Merchant copy</div><div class="t-sub">Print a second copy for your records</div></div>
+        <label class="toggle"><input type="checkbox" id="apMerchantCopy" onchange="_saveAutoSettings()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Kitchen copy on food orders</div><div class="t-sub">Separate kitchen ticket when items have a kitchen flag</div></div>
+        <label class="toggle"><input type="checkbox" id="apKitchenCopy" onchange="_saveAutoSettings()"><span class="slider"></span></label>
+      </div>
+      <div class="form-row" style="margin-top:12px">
+        <div class="form-group">
+          <label>Default Copies</label>
+          <select id="apCopies" onchange="_saveAutoSettings()">
+            <option value="1">1 copy</option>
+            <option value="2">2 copies</option>
+            <option value="3">3 copies</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">&#128682; Cash Drawer Triggers</div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Open drawer on cash payment</div><div class="t-sub">Fires ESC/POS drawer pulse after cash transaction</div></div>
+        <label class="toggle"><input type="checkbox" id="apDrawerCash" checked onchange="_saveAutoSettings()"><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><div class="t-label">Open drawer on refund</div><div class="t-sub">Opens drawer when a refund is processed</div></div>
+        <label class="toggle"><input type="checkbox" id="apDrawerRefund" onchange="_saveAutoSettings()"><span class="slider"></span></label>
+      </div>
+      <div style="margin-top:10px">
+        <button class="btn btn-outline" style="width:100%" onclick="_testDrawer()">&#128682; Test Cash Drawer Now</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">&#128268; Multi-Till Configuration</div>
+      <p style="font-size:12px;color:var(--sub);margin-bottom:12px">Each register remembers its own printer settings. Connect a printer while logged into a specific till to save it automatically.</p>
+      <div id="tillConfigGrid"></div>
+      <button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="renderTillConfig()">&#8635; Refresh</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PRINTER INFO ═══ -->
+<div class="panel" id="panel-info">
+
+  <!-- Detected Printer Profile -->
+  <div class="card">
+    <div class="card-top" style="background:linear-gradient(90deg,#71ff00,#00e676)"></div>
+    <div class="card-body">
+      <div class="card-title">&#129518; Detected Printer Profile</div>
+      <div id="infoProfile" style="font-size:12px;line-height:1.9;color:var(--sub)">
+        Connect a printer to see its brand profile.
+      </div>
+      <div style="margin-top:12px">
+        <div class="card-title" style="font-size:11px;margin-bottom:6px">CAPABILITIES</div>
+        <div id="infoCaps" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Print Statistics -->
+  <div class="card">
+    <div class="card-top" style="background:linear-gradient(90deg,#6d5cff,#1a73e8)"></div>
+    <div class="card-body">
+      <div class="card-title">&#128202; Print Statistics</div>
+      <div id="infoStats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"></div>
+      <button class="btn btn-outline" style="width:100%" onclick="_resetStats()">&#128473; Reset Statistics</button>
+    </div>
+  </div>
+
+  <!-- Cash Drawer Event Log -->
+  <div class="card">
+    <div class="card-top" style="background:linear-gradient(90deg,#e67c00,#ff9800)"></div>
+    <div class="card-body">
+      <div class="card-title">&#128682; Cash Drawer Event Log</div>
+      <div id="infoDrawerLog" style="font-size:12px;color:var(--sub)">No drawer events recorded.</div>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button class="btn btn-outline" style="flex:1" onclick="renderPrinterInfo()">&#8635; Refresh</button>
+        <button class="btn btn-outline" style="flex:1" onclick="_clearDrawerLog()">&#128473; Clear Log</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Supported Printer Matrix -->
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">&#128247; Supported Printer Matrix</div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="infoMatrix">
+          <thead>
+            <tr>
+              <th>Brand</th><th>Model</th><th>Width</th><th>Language</th>
+              <th>Cut</th><th>Drawer</th><th>QR</th><th>Barcode</th>
+            </tr>
+          </thead>
+          <tbody id="infoMatrixBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Language Driver Status -->
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">&#9881; Language Driver Status</div>
+      <div id="infoDrivers" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ DIAGNOSTICS ═══ -->
+<div class="panel" id="panel-diagnostics">
+  <div class="card">
+    <div class="card-top" style="background:linear-gradient(90deg,#6d5cff,#00e676)"></div>
+    <div class="card-body">
+      <div class="card-title">&#128300; Platform Diagnostics</div>
+      <div id="diagGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px"></div>
+      <button class="btn btn-outline" style="width:100%;margin-bottom:8px" onclick="renderDiagnostics()">&#8635; Refresh</button>
+      <button class="btn btn-outline" style="width:100%" onclick="_copyDiag()">&#128203; Copy to Clipboard</button>
+    </div>
+  </div>
+  <div class="card" id="diagP58eCard">
+    <div class="card-top" style="background:linear-gradient(90deg,#1a73e8,#6d5cff)"></div>
+    <div class="card-body">
+      <div class="card-title">&#128268; P58E Detection</div>
+      <div id="diagP58eInfo" style="font-size:12px;color:var(--sub);line-height:1.8"></div>
+      <div class="actions-row" style="margin-top:12px" id="diagP58eActions"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-top"></div>
+    <div class="card-body">
+      <div class="card-title">&#128204; Recommended Transport for This Device</div>
+      <div id="diagRecommend" style="font-size:13px;line-height:1.8"></div>
+    </div>
+  </div>
+</div>
+
 <div id="toast">Ready</div>
 
 <!-- Firebase compat SDK -->
@@ -704,8 +923,12 @@ input:checked+.slider:before{transform:translateX(18px)}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
+<script src="/sokoni-appcheck.js"></script>
 <script src="sokoni-universal-printer.js"></script>
 <script src="sokoni-bluetooth-printer.js"></script>
+<script src="sokoni-printer-manager.js"></script>
+<script src="sokoni-pos-print-service.js"></script>
 <script>
 /* ── Firebase init ── */
 if (!firebase.apps.length) {
@@ -739,42 +962,151 @@ function toast (msg, dur = 2500) {
   clearTimeout(_toastT); _toastT = setTimeout(() => el.classList.remove('show'), dur);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   PLATFORM DETECTION
+   Detect OS, browser, and API availability so we show only the transports
+   that actually work on this device+browser combination.
+══════════════════════════════════════════════════════════════════════════ */
+const PLATFORM = (function () {
+  const ua  = navigator.userAgent || '';
+  const pl  = navigator.platform  || '';
+  // iOS: real devices say "iPhone"/"iPad"; iPad with desktop mode says "MacIntel" but has touch
+  const ios = /iP(hone|od|ad)/.test(ua) || (pl === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const android = /Android/.test(ua);
+  const windows = /Windows NT/.test(ua) || pl.startsWith('Win');
+  const macos   = /Macintosh/.test(ua) && !ios;
+  // Browser
+  const edge    = /Edg\//.test(ua);
+  const chrome  = /Chrome\//.test(ua) && !edge;
+  const samsung = /SamsungBrowser/.test(ua);
+  const safari  = /Safari\//.test(ua) && !chrome && !edge && !samsung;
+  const firefox = /Firefox\//.test(ua);
+  // API presence (browser must have exposed the API; Safari blocks BT even when navigator.bluetooth exists on some versions)
+  const hasBT     = !!navigator.bluetooth;
+  const hasSerial = !!navigator.serial;
+  const hasUSB    = !!navigator.usb;
+  // Effective support per platform
+  const supportsBT     = hasBT  && !ios && !firefox;
+  const supportsSerial = hasSerial && !ios && !android && !samsung && (chrome || edge);
+  const supportsUSB    = hasUSB  && !ios && (chrome || edge || samsung);
+  const os      = ios ? 'iOS / iPadOS' : android ? 'Android' : windows ? 'Windows' : macos ? 'macOS' : 'Unknown OS';
+  const browser = edge ? 'Microsoft Edge' : chrome ? 'Google Chrome' : samsung ? 'Samsung Internet' : safari ? 'Safari' : firefox ? 'Firefox' : 'Unknown Browser';
+  return { ios, android, windows, macos, chrome, edge, safari, firefox, samsung,
+           hasBT, hasSerial, hasUSB, supportsBT, supportsSerial, supportsUSB, os, browser };
+}());
+
+/* ── Friendly error messages ── */
+function _friendlyError (e) {
+  const raw = (e?.message || String(e) || '').toLowerCase();
+  if (!raw || raw === 'undefined') return 'No printer selected. Click a transport tile and choose your printer.';
+  if (raw.includes('user cancel') || raw.includes('no device selected by user') || raw.includes('chosen by user'))
+    return 'Selection cancelled. Click the transport tile again to retry.';
+  if (raw.includes('permission') || raw.includes('security') || raw.includes('blocked'))
+    return 'Permission denied. Click Allow when the browser asks for Bluetooth / Serial access.';
+  if (raw.includes('gatt') || raw.includes('server'))
+    return 'Bluetooth connection failed. Ensure the printer is powered on and not connected to another device.';
+  if (raw.includes('in use') || raw.includes('already open') || raw.includes('resource busy'))
+    return 'Port is in use by another app. Close the other app or browser tab using this port, then retry.';
+  /* Only fire the "no COM port" message on very specific serial-port errors — NOT on every error
+     that happens to contain the word "serial", which would mask real root causes. */
+  if (raw.includes('no port') || raw.includes('failed to open') || raw.includes('cannot open port') || raw.includes('com port not found'))
+    return 'Could not open the COM port. Check it exists in Device Manager → Bluetooth → Outgoing COM Ports.';
+  if (raw.includes('network') || raw.includes('fetch') || raw.includes('offline'))
+    return 'Printer offline or unreachable. Check the printer is powered on and on the same Wi-Fi network.';
+  if (raw.includes('not found') || raw.includes('no service') || raw.includes('characteristic'))
+    return 'Device not recognised as an ESC/POS printer. Check printer model (P58E / P58K / similar).';
+  if (raw.includes('timeout'))
+    return 'Connection timed out. Move closer to the printer and try again.';
+  if (raw.includes('disconnected') || raw.includes('disconnect'))
+    return 'Printer disconnected unexpectedly. Check battery / USB cable and reconnect.';
+  if (raw.includes('not supported') || raw.includes('undefined is not'))
+    return 'This browser does not support this transport. Use Chrome or Edge on desktop.';
+  return e?.message || 'Connection failed. Verify the printer is on and in range, then retry.';
+}
+
+/* ── Last-transport persistence ── */
+const _LS_TRANSPORT = 'sokoni_printer_last_transport';
+const _LS_LAST_PRINT = 'sokoni_printer_last_print';
+function _saveTransport (t) { try { localStorage.setItem(_LS_TRANSPORT, t); } catch(_){} }
+function _loadTransport ()  { try { return localStorage.getItem(_LS_TRANSPORT); } catch(_){ return null; } }
+function _saveLastPrint (d) { try { localStorage.setItem(_LS_LAST_PRINT, JSON.stringify({ ...d, at: Date.now() })); } catch(_){} }
+function _loadLastPrint ()  { try { return JSON.parse(localStorage.getItem(_LS_LAST_PRINT) || 'null'); } catch(_){ return null; } }
+
 /* ── Transport definitions ── */
 const TRANSPORTS = [
-  { id: 'serial-list', icon: '&#9654;',   label: 'BT COM Port',   sub: 'Paired via Windows BT', badge: 'com', recommended: true },
-  { id: 'serial',      icon: '&#128268;', label: 'Serial / COM',  sub: 'Web Serial — pick port', badge: 'ser' },
-  { id: 'bluetooth',   icon: '&#128268;', label: 'BLE Bluetooth', sub: 'Web Bluetooth API', badge: 'bt' },
-  { id: 'usb',         icon: '&#128268;', label: 'USB / OTG',     sub: 'WebUSB API', badge: 'usb' },
-  { id: 'network',     icon: '&#127760;', label: 'Network / Wi-Fi', sub: 'HTTP · WebSocket', badge: 'net' },
-  { id: 'browser',     icon: '&#128196;', label: 'Browser / PDF', sub: 'System print dialog', badge: '' },
+  { id: 'serial-list', icon: '&#9654;',   label: 'BT COM Port',   sub: 'Paired via Windows BT',  badge: 'com',
+    platforms: ['windows'], browsers: ['chrome','edge'] },
+  { id: 'serial',      icon: '&#128455;', label: 'Serial / COM',  sub: 'Web Serial — pick port', badge: 'ser',
+    platforms: ['windows','macos'], browsers: ['chrome','edge'] },
+  { id: 'bluetooth',   icon: '&#128268;', label: 'BLE Bluetooth', sub: 'Web Bluetooth API',       badge: 'bt',
+    platforms: ['windows','android','macos'], browsers: ['chrome','edge','samsung'] },
+  { id: 'usb',         icon: '&#128268;', label: 'USB / OTG',     sub: 'WebUSB API',              badge: 'usb',
+    platforms: ['windows','android','macos'], browsers: ['chrome','edge','samsung'] },
+  { id: 'network',     icon: '&#127760;', label: 'Network / Wi-Fi', sub: 'HTTP · WebSocket',      badge: 'net',
+    platforms: ['windows','android','macos','ios'], browsers: ['chrome','edge','safari','firefox','samsung'] },
+  { id: 'browser',     icon: '&#128196;', label: 'Browser / AirPrint', sub: 'System print dialog', badge: '',
+    platforms: ['windows','android','macos','ios'], browsers: ['chrome','edge','safari','firefox','samsung'] },
 ];
 
+/* Which transports are API-available on this device */
 const AVAIL = {
-  'serial-list': !!navigator.serial,
-  bluetooth:     !!navigator.bluetooth,
-  usb:           !!navigator.usb,
-  serial:        !!navigator.serial,
+  'serial-list': PLATFORM.supportsSerial,
+  bluetooth:     PLATFORM.supportsBT,
+  usb:           PLATFORM.supportsUSB,
+  serial:        PLATFORM.supportsSerial,
   network:       true,
   browser:       true,
 };
 
+/* Which transports are relevant for this platform (visible in the grid) */
+function _transportVisible (t) {
+  const pKey = PLATFORM.ios ? 'ios' : PLATFORM.android ? 'android' : PLATFORM.windows ? 'windows' : PLATFORM.macos ? 'macos' : null;
+  if (!pKey) return true;
+  return t.platforms.includes(pKey);
+}
+
 /* ── Build transport grid ── */
 (function buildTransportGrid () {
   const g = document.getElementById('transportGrid');
+
+  /* iOS/Safari — informational banner first */
+  if (PLATFORM.ios) {
+    const ios = document.createElement('div');
+    ios.style.cssText = 'grid-column:1/-1;padding:14px 16px;background:rgba(255,171,64,.07);border:1px solid rgba(255,171,64,.3);border-radius:10px;font-size:12px;line-height:1.7;color:var(--sub);margin-bottom:4px';
+    ios.innerHTML = '<b style="color:var(--amber)">&#9888; Safari on iPhone / iPad</b><br>' +
+      'Safari does not support Web Bluetooth or Web Serial. Only <b style="color:var(--txt)">Network (Wi-Fi)</b> and <b style="color:var(--txt)">Browser / AirPrint</b> printing are available.<br>' +
+      'For full Bluetooth printing support, open this page in <b style="color:var(--txt)">Chrome for iOS</b> (still limited) or use a Wi-Fi printer on the same network.';
+    g.appendChild(ios);
+  }
+
+  /* Windows + Chrome/Edge — BT COM Port reminder */
+  if (PLATFORM.windows && (PLATFORM.chrome || PLATFORM.edge)) {
+    const notice = document.createElement('div');
+    notice.style.cssText = 'grid-column:1/-1;padding:8px 12px;background:rgba(113,255,0,.06);border:1px solid rgba(113,255,0,.2);border-radius:6px;font-size:11px;color:var(--sub);margin-bottom:4px';
+    notice.innerHTML = '&#9432; P58E already paired via Windows? Click <b style="color:var(--txt)">BT COM Port</b> to connect without re-pairing.';
+    g.appendChild(notice);
+  }
+
+  /* Determine last successful transport for auto-highlight */
+  const lastT = _loadTransport();
+
   TRANSPORTS.forEach(t => {
+    if (!_transportVisible(t)) return;   /* skip irrelevant transports on this platform */
+    const avail = AVAIL[t.id];
+    const isLast = t.id === lastT && avail;
     const el = document.createElement('div');
-    el.className = 'transport-btn' + (AVAIL[t.id] ? '' : ' unavail') + (t.recommended ? ' recommended-transport' : '');
+    el.className = 'transport-btn' +
+      (avail ? '' : ' unavail') +
+      (isLast ? ' recommended-transport' : '');
     el.dataset.transport = t.id;
-    const badge = t.recommended ? '<div style="font-size:9px;font-weight:700;color:var(--green);letter-spacing:.5px;margin-top:2px">✓ USE THIS</div>' : '';
-    el.innerHTML = `<span class="t-icon">${t.icon}</span><div class="t-label">${t.label}</div><div class="t-sub">${AVAIL[t.id] ? t.sub : 'Not supported'}</div>${badge}`;
-    if (AVAIL[t.id]) el.onclick = () => scan(t.id);
+    const badge = isLast
+      ? '<div style="font-size:9px;font-weight:700;color:var(--green);letter-spacing:.5px;margin-top:2px">&#10003; LAST USED</div>'
+      : (!avail ? '<div style="font-size:9px;color:var(--red);margin-top:2px">Not available</div>' : '');
+    el.innerHTML = `<span class="t-icon">${t.icon}</span><div class="t-label">${t.label}</div>` +
+      `<div class="t-sub">${avail ? t.sub : 'Not supported in ' + PLATFORM.browser}</div>${badge}`;
+    if (avail) el.onclick = () => scan(t.id);
     g.appendChild(el);
   });
-  /* Also inject a clear notice for users who already paired via Windows BT */
-  const notice = document.createElement('div');
-  notice.style.cssText = 'grid-column:1/-1;padding:8px 12px;background:rgba(113,255,0,.06);border:1px solid rgba(113,255,0,.2);border-radius:6px;font-size:11px;color:var(--sub)';
-  notice.innerHTML = '&#9432; P58E already paired via Windows? Click <b style="color:var(--txt)">BT COM Port</b> to connect without re-pairing.';
-  g.prepend(notice);
 })();
 
 /* ── Build test document grid ── */
@@ -793,6 +1125,16 @@ const DOC_TYPES = [
   { type:'service_confirmation', icon:'&#128295;', label:'Service Order' },
   { type:'daily_summary',        icon:'&#128202;', label:'Daily Summary' },
   { type:'monthly_summary',      icon:'&#128198;', label:'Monthly Summary' },
+  /* Enterprise document types — added in PrinterManager v2.0 */
+  { type:'packing_slip',         icon:'&#128218;', label:'Packing Slip' },
+  { type:'invoice',              icon:'&#128190;', label:'Tax Invoice' },
+  { type:'quotation',            icon:'&#128196;', label:'Quotation' },
+  { type:'gift_receipt',         icon:'&#127873;', label:'Gift Receipt' },
+  { type:'etims_receipt',        icon:'&#127968;', label:'eTIMS Receipt' },
+  { type:'price_tag',            icon:'&#127991;', label:'Price Tag' },
+  { type:'barcode_label',        icon:'&#9647;',   label:'Barcode Label' },
+  { type:'qr_label',             icon:'&#128269;', label:'QR Label' },
+  { type:'returns_receipt',      icon:'&#8617;',   label:'Returns Receipt' },
 ];
 
 (function buildDocGrid () {
@@ -814,7 +1156,7 @@ function updateStatusBar () {
   const text   = document.getElementById('statusText');
   const badge  = document.getElementById('transportBadge');
   const discBtn= document.getElementById('btnDisconnect');
-  const ok = SokoniPrinter.connected;
+  const ok = PrinterManager.connected;
   dot.className = 'status-dot ' + (ok ? 'connected' : 'disconnected');
   text.textContent = ok
     ? 'Connected: ' + (_connectedDevice?.name || 'Printer')
@@ -867,18 +1209,50 @@ async function scan (type) {
 
     /* For BT COM Port (serial-list): list already-permitted ports, no picker */
     if (type === 'serial-list') {
-      let permitted = await SokoniPrinter.discoverBy('serial-list');
+      let permitted = await PrinterManager.discoverBy('serial-list');
       _dbg('Permitted serial ports found:', permitted.length);
 
       if (!permitted.length) {
-        /* No permitted ports yet — prompt user to select one */
-        title.textContent = 'No COM ports authorised yet';
+        /* No COM ports permitted yet in this browser.
+           Two possible causes:
+           (a) Chrome has never been granted access — fix: call requestPort() to let user pick
+           (b) Windows hasn't created an SPP Outgoing COM port yet — fix: add one in BT settings
+           We try (a) first. If the picker is empty, the user knows (b) is needed. */
+        title.textContent = 'No COM port selected yet';
         list.innerHTML = `
-          <div style="font-size:12px;color:var(--sub);margin-bottom:10px">
-            No Bluetooth COM ports have been permitted in this browser yet.<br>
-            Click the button below, then select the <b style="color:var(--txt)">outgoing</b> COM port for your P58E.
+          <div style="font-size:12px;color:var(--sub);line-height:1.7;margin-bottom:12px">
+            Chrome has not been granted access to a COM port yet.<br>
+            Click <b style="color:var(--txt)">Select COM Port</b> — a browser picker will open showing all Serial / COM ports on your PC.<br>
+            Look for a port named <b style="color:var(--txt)">P58E</b>, <b style="color:var(--txt)">Bluetooth Serial</b>, or the COM number assigned in Windows (e.g. <b style="color:var(--txt)">COM4</b>).
           </div>
-          <button class="btn btn-primary" style="width:100%" onclick="scan('serial')">Select P58E COM Port</button>`;
+          <button class="btn btn-primary" style="width:100%;margin-bottom:8px" id="btnPickPort">&#128268; Select COM Port &rarr;</button>
+          <div style="padding:10px;background:var(--bg3);border:1px solid var(--bor);border-radius:8px;font-size:11px;color:var(--sub);line-height:1.7">
+            <b style="color:var(--txt)">Port not in the list?</b> The COM port may not exist yet.<br>
+            Open <b style="color:var(--txt)">Bluetooth Settings → More Bluetooth settings → COM Ports → Add → Outgoing</b>,
+            select your P58E, click OK, then retry.
+          </div>`;
+        document.getElementById('btnPickPort').onclick = async function () {
+          this.disabled = true; this.textContent = 'Opening picker…';
+          try {
+            /* requestPort() opens the browser port picker — user selects the P58E COM port */
+            const port = await navigator.serial.requestPort({});
+            /* Wrap in the format discoverBy() returns so connectDevice() can use it */
+            const info = { type: 'serial', _port: port, name: port?.getInfo?.()?.usbProductId ? 'P58E USB' : 'Bluetooth COM Port' };
+            const key = _cacheDevice(info);
+            title.textContent = 'Port selected — connecting…';
+            list.innerHTML = `<div style="font-size:12px;color:var(--sub);padding:8px 0">Connecting to selected port…</div>`;
+            await connectDevice(key);
+          } catch (ex) {
+            if ((ex?.message || '').toLowerCase().includes('cancel') || ex?.name === 'NotFoundError') {
+              this.disabled = false; this.textContent = '↺ Try Again';
+              title.textContent = 'Selection cancelled';
+              list.querySelector('div').textContent = 'No port was selected. Click "Select COM Port" to try again.';
+            } else {
+              title.textContent = 'Connection failed';
+              list.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px 0">${_esc(_friendlyError(ex))}</div>`;
+            }
+          }
+        };
         updateStatusBar();
         return;
       }
@@ -909,7 +1283,7 @@ async function scan (type) {
       return;
     }
 
-    const devices = await SokoniPrinter.discoverBy(type);
+    const devices = await PrinterManager.discoverBy(type);
     _dbg('Devices found', devices.length);
 
     if (!devices.length) {
@@ -938,7 +1312,7 @@ async function scan (type) {
   } catch (e) {
     _dbg('Scan error', e.message);
     title.textContent = 'Scan failed';
-    list.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px 0">${_esc(e.message)}</div>`;
+    list.innerHTML = `<div style="color:var(--red);font-size:12px;padding:8px 0">${_esc(_friendlyError(e))}</div>`;
   }
   updateStatusBar();
 }
@@ -981,21 +1355,26 @@ async function connectDevice (keyOrInfo) {
 
   try {
     _dbg('Creating transport…');
-    await SokoniPrinter.connect(info);
+    await PrinterManager.connect(info);
     _dbg('Connected ✓');
     _connectedDevice = info;
+    _saveTransport(info.type);                             /* remember for auto-highlight */
     updateStatusBar();
     toast('Connected to ' + (info.name || 'printer'));
-    await SokoniPrinter.detectCapabilities().then(renderCapabilities).catch(() => {});
+    await PrinterManager.detectCapabilities().then(renderCapabilities).catch(() => {});
     if (info.type === 'bluetooth') renderP58EPanel();
+    /* Re-highlight the last-used transport tile */
+    document.querySelectorAll('.transport-btn').forEach(b => b.classList.remove('recommended-transport'));
+    const usedBtn = document.querySelector(`[data-transport="${info.type}"]`);
+    if (usedBtn) usedBtn.classList.add('recommended-transport');
   } catch (e) {
     _dbg('Connection failed', e.message, e.stack);
-    toast('Connection failed: ' + e.message, 5000);
+    toast(_friendlyError(e), 6000);
   }
 }
 
 async function disconnectPrinter () {
-  await SokoniPrinter.disconnect();
+  await PrinterManager.disconnect();
   _connectedDevice = null;
   updateStatusBar();
   toast('Disconnected');
@@ -1006,7 +1385,7 @@ function addNetworkPrinter () {
   const ep   = document.getElementById('netEndpoint').value.trim();
   const name = document.getElementById('netName').value.trim() || 'Network Printer';
   if (!ep) { toast('Enter an endpoint URL'); return; }
-  SokoniPrinter.saveNetworkPrinter(name, ep);
+  PrinterManager.saveNetworkPrinter(name, ep);
   document.getElementById('netEndpoint').value = '';
   document.getElementById('netName').value = '';
   renderNetPrinters();
@@ -1036,17 +1415,17 @@ function renderNetPrinters () {
   });
 }
 function removeNet (ep) {
-  SokoniPrinter.removeNetworkPrinter(ep);
+  PrinterManager.removeNetworkPrinter(ep);
   renderNetPrinters();
 }
 renderNetPrinters();
 
 /* ── Capabilities ── */
 async function detectCaps () {
-  if (!SokoniPrinter.connected) { toast('Connect a printer first'); return; }
+  if (!PrinterManager.connected) { toast('Connect a printer first'); return; }
   toast('Detecting capabilities…');
   try {
-    await SokoniPrinter.detectCapabilities();
+    await PrinterManager.detectCapabilities();
     renderCapabilities();
     toast('Capabilities updated');
   } catch (e) {
@@ -1055,7 +1434,7 @@ async function detectCaps () {
 }
 
 function renderCapabilities () {
-  const caps = SokoniPrinter.getCapabilities();
+  const caps = PrinterManager.getCapabilities();
   const g = document.getElementById('capGrid');
   const fields = [
     { key: 'qrSupport',      label: 'QR Code' },
@@ -1089,33 +1468,33 @@ function renderCapabilities () {
 }
 
 function savePaperWidth (w) {
-  SokoniPrinter.setConfig({ paperWidth: w });
+  PrinterManager.setConfig({ paperWidth: w });
   toast('Paper width set to ' + w);
 }
 function saveThreshold (v) {
   const n = parseInt(v, 10);
   if (isNaN(n) || n < 50 || n > 250) return;
-  SokoniPrinter.setConfig({ imageThreshold: n });
+  PrinterManager.setConfig({ imageThreshold: n });
 }
 
 /* ── Test print ── */
 async function runTestPrint () {
-  if (!SokoniPrinter.connected) { toast('No printer connected — showing preview'); testDoc('sale'); return; }
-  try { await SokoniPrinter.testPrint(); toast('Test print sent'); } catch (e) { toast('Error: ' + e.message, 4000); }
+  if (!PrinterManager.connected) { toast('No printer connected — showing preview'); testDoc('sale'); return; }
+  try { await PrinterManager.testPrint(); toast('Test print sent'); } catch (e) { toast('Error: ' + e.message, 4000); }
 }
 
 async function testDoc (docType) {
   const data = _dummyData(docType);
   /* Show preview */
-  const html = SokoniPrinter.preview(docType, data);
+  const html = PrinterManager.preview(docType, data);
   document.getElementById('previewCard').style.display = '';
   document.getElementById('previewBox').innerHTML = html;
   /* Scroll to preview */
   document.getElementById('previewCard').scrollIntoView({ behavior: 'smooth' });
   /* Print if connected */
-  if (SokoniPrinter.connected) {
+  if (PrinterManager.connected) {
     try {
-      await SokoniPrinter.printNow(docType, data);
+      await PrinterManager.printNow(docType, data);
       toast('Printed: ' + docType);
     } catch (e) { toast('Print error: ' + e.message, 4000); }
   } else {
@@ -1125,7 +1504,7 @@ async function testDoc (docType) {
 
 /* ── Configuration ── */
 function loadConfig () {
-  const c = SokoniPrinter.getConfig();
+  const c = PrinterManager.getConfig();
   document.getElementById('cfgLogoText').value          = c.logoText || '';
   document.getElementById('cfgLogoUrl').value           = c.logoUrl  || '';
   document.getElementById('cfgFooter').value            = c.footer   || '';
@@ -1144,7 +1523,7 @@ function loadConfig () {
 }
 
 function saveConfig () {
-  SokoniPrinter.setConfig({
+  PrinterManager.setConfig({
     logoText:              document.getElementById('cfgLogoText').value.trim(),
     logoUrl:               document.getElementById('cfgLogoUrl').value.trim(),
     footer:                document.getElementById('cfgFooter').value.trim(),
@@ -1168,7 +1547,7 @@ async function syncConfigToCloud () {
   if (!user) { toast('Sign in to sync to cloud'); return; }
   try {
     const setPrinterConfig = fn.httpsCallable('setPrinterConfig');
-    await setPrinterConfig({ config: SokoniPrinter.getConfig() });
+    await setPrinterConfig({ config: PrinterManager.getConfig() });
     toast('Synced to cloud');
   } catch (e) { toast('Sync failed: ' + e.message, 4000); }
 }
@@ -1176,20 +1555,20 @@ async function syncConfigToCloud () {
 /* ── Queue ── */
 let _queuePaused = false;
 function pauseQueue () {
-  SokoniPrinter.pauseQueue(); _queuePaused = true;
+  PrinterManager.pauseQueue(); _queuePaused = true;
   document.getElementById('btnPause').style.display = 'none';
   document.getElementById('btnResume').style.display = '';
   toast('Queue paused');
 }
 function resumeQueue () {
-  SokoniPrinter.resumeQueue(); _queuePaused = false;
+  PrinterManager.resumeQueue(); _queuePaused = false;
   document.getElementById('btnResume').style.display = 'none';
   document.getElementById('btnPause').style.display = '';
   toast('Queue resumed');
 }
 
 function renderQueue () {
-  const jobs = SokoniPrinter.getQueue();
+  const jobs = PrinterManager.getQueue();
   const el   = document.getElementById('queueContent');
   if (!jobs.length) { el.innerHTML = '<div class="empty-state"><span class="empty-icon">&#128424;</span>Queue is empty</div>'; return; }
   el.innerHTML = `<table class="data-table">
@@ -1202,7 +1581,7 @@ function renderQueue () {
         <td><span class="chip ${_esc(j.status)}">${_esc(j.status.toUpperCase())}</span></td>
         <td style="color:var(--sub)">${new Date(j.createdAt).toLocaleTimeString('en-KE')}</td>
         <td style="text-align:right">
-          <button class="btn btn-sm btn-danger" onclick="SokoniPrinter.cancelJob('${_esc(j.id)}');renderQueue()">Cancel</button>
+          <button class="btn btn-sm btn-danger" onclick="PrinterManager.cancelJob('${_esc(j.id)}');renderQueue()">Cancel</button>
         </td>
       </tr>`).join('')}
     </tbody>
@@ -1210,7 +1589,7 @@ function renderQueue () {
 }
 
 function renderHistory () {
-  const hist = SokoniPrinter.getHistory().slice(0, 100);
+  const hist = PrinterManager.getHistory().slice(0, 100);
   const el   = document.getElementById('historyContent');
   if (!hist.length) { el.innerHTML = '<div class="empty-state"><span class="empty-icon">&#128196;</span>No print history yet</div>'; return; }
   el.innerHTML = `<table class="data-table">
@@ -1223,7 +1602,7 @@ function renderHistory () {
         <td>${_esc(j.attempts)}</td>
         <td style="color:var(--sub)">${new Date(j.updatedAt).toLocaleString('en-KE')}</td>
         <td style="text-align:right">
-          ${j.status === 'failed' ? `<button class="btn btn-sm btn-outline" onclick="SokoniPrinter.retryJob('${_esc(j.id)}');renderHistory()">Retry</button>` : ''}
+          ${j.status === 'failed' ? `<button class="btn btn-sm btn-outline" onclick="PrinterManager.retryJob('${_esc(j.id)}');renderHistory()">Retry</button>` : ''}
         </td>
       </tr>`).join('')}
     </tbody>
@@ -1279,18 +1658,20 @@ function _dbg (...args) {
 }
 
 /* ── Printer events ── */
-SokoniPrinter.on('connected',    () => { updateStatusBar(); toast('Printer connected'); });
-SokoniPrinter.on('disconnected', () => { updateStatusBar(); toast('Printer disconnected'); });
-SokoniPrinter.on('printed',      j  => { toast('Printed: ' + j.docType); renderQueue(); });
-SokoniPrinter.on('error',        ev => { toast('Print error: ' + ev.error, 4000); renderQueue(); });
+PrinterManager.on('connected',    () => { updateStatusBar(); toast('Printer connected'); });
+PrinterManager.on('disconnected', () => { updateStatusBar(); toast('Printer disconnected'); });
+PrinterManager.on('printed',      j  => { toast('Printed: ' + j.docType); renderQueue(); _saveLastPrint({ docType: j.docType, transport: _connectedDevice?.type }); });
+PrinterManager.on('error',        ev => { toast('Print error: ' + ev.error, 4000); renderQueue(); });
 
 /* ═══════════════════════════════════════════════════════
    P58E SETUP PANEL — handlers
 ═══════════════════════════════════════════════════════ */
 
 function renderP58EPanel () {
-  /* Compatibility check */
-  const compat = P58EService.checkCompatibility();
+  /* Compatibility check.
+     P58EService is IIFE-private; PrinterManager.p58e.checkCompatibility() is an instance proxy
+     added to sokoni-bluetooth-printer.js that delegates to the static method safely. */
+  const compat = PrinterManager.p58e.checkCompatibility?.() || { supported: true, issues: [] };
   const notice = document.getElementById('p58eBrowserNotice');
   if (!compat.supported) {
     notice.style.display = '';
@@ -1300,14 +1681,14 @@ function renderP58EPanel () {
   }
 
   /* Settings toggles */
-  const s = P58EPrinter.settings;
+  const s = PrinterManager.p58e.settings;
   document.getElementById('p58eAutoConnect').checked = !!s.autoConnect;
   document.getElementById('p58eDrawer').checked      = !!s.drawerEnabled;
-  document.getElementById('p58ePaperWidth').value    = SokoniPrinter.getConfig().paperWidth || '58mm';
+  document.getElementById('p58ePaperWidth').value    = PrinterManager.getConfig().paperWidth || '58mm';
 
   /* Pair / forget buttons */
-  const paired  = P58EPrinter.paired;
-  const connected = P58EPrinter.isConnected;
+  const paired  = PrinterManager.p58e.paired;
+  const connected = PrinterManager.p58e.isConnected;
 
   document.getElementById('btnForgetP58E').style.display    = paired     ? '' : 'none';
   document.getElementById('btnReconnectP58E').style.display = (paired && !connected) ? '' : 'none';
@@ -1315,10 +1696,10 @@ function renderP58EPanel () {
   /* Connected device card */
   const devCard   = document.getElementById('p58eDeviceCard');
   const savedCard = document.getElementById('p58eSavedCard');
-  if (connected && P58EPrinter.info) {
+  if (connected && PrinterManager.p58e.info) {
     devCard.style.display   = '';
     savedCard.style.display = 'none';
-    const info = P58EPrinter.info;
+    const info = PrinterManager.p58e.info;
     document.getElementById('p58eDeviceInfo').innerHTML = [
       ['Model',        info.name || 'Bluetooth Printer'],
       ['BT Device ID', (info.id || 'N/A').slice(0, 32)],
@@ -1343,7 +1724,7 @@ async function pairP58E () {
   const btn = document.getElementById('btnPairP58E');
   btn.disabled = true; btn.textContent = 'Opening picker…';
   try {
-    const info = await P58EPrinter.requestAndPair();
+    const info = await PrinterManager.p58e.requestAndPair();
     if (info) {
       toast('Connected to ' + info.name);
       _connectedDevice = { name: info.name, type: 'bluetooth' };
@@ -1364,10 +1745,10 @@ async function reconnectP58E () {
   const btn = document.getElementById('btnReconnectP58E');
   btn.disabled = true; btn.textContent = 'Reconnecting…';
   try {
-    const ok = await P58EPrinter.autoConnect();
+    const ok = await PrinterManager.p58e.autoConnect();
     if (ok) {
-      toast('Reconnected to ' + P58EPrinter.info?.name);
-      _connectedDevice = { name: P58EPrinter.info?.name, type: 'bluetooth' };
+      toast('Reconnected to ' + PrinterManager.p58e.info?.name);
+      _connectedDevice = { name: PrinterManager.p58e.info?.name, type: 'bluetooth' };
       updateStatusBar();
       renderP58EPanel();
     } else {
@@ -1382,7 +1763,7 @@ async function reconnectP58E () {
 
 async function forgetP58E () {
   if (!confirm('Remove saved printer? You will need to pair again next time.')) return;
-  P58EPrinter.forget();
+  PrinterManager.p58e.forget();
   _connectedDevice = null;
   updateStatusBar();
   renderP58EPanel();
@@ -1391,7 +1772,7 @@ async function forgetP58E () {
 
 async function p58eOpenCashDrawer () {
   try {
-    await P58EPrinter.openCashDrawer();
+    await PrinterManager.p58e.openCashDrawer();
     hwLog('Cash drawer kick sent ✓');
     toast('Cash drawer command sent');
     renderChecklist();
@@ -1402,7 +1783,7 @@ async function p58eOpenCashDrawer () {
 
 async function p58ePaperFeed () {
   try {
-    await P58EPrinter.paperFeed(5);
+    await PrinterManager.p58e.paperFeed(5);
     hwLog('Paper feed (5 lines) sent ✓');
     toast('Paper fed 5 lines');
   } catch(e) {
@@ -1411,11 +1792,11 @@ async function p58ePaperFeed () {
 }
 
 /* Wire P58EPrinter events */
-P58EPrinter.on('connected',       info => { _connectedDevice = { name: info.name, type: 'bluetooth' }; updateStatusBar(); renderP58EPanel(); toast('P58E connected: ' + info.name); });
-P58EPrinter.on('disconnected',    ()   => { updateStatusBar(); renderP58EPanel(); toast('P58E disconnected'); });
-P58EPrinter.on('reconnecting',    ev   => { document.getElementById('statusDot').className = 'status-dot scanning'; document.getElementById('statusText').textContent = 'Reconnecting… attempt ' + ev.attempt + '/' + ev.max; });
-P58EPrinter.on('reconnect_failed',()   => { updateStatusBar(); toast('Could not reconnect — power the printer on and click Reconnect.', 5000); });
-P58EPrinter.on('checklist',       ()   => renderChecklist());
+PrinterManager.p58e.on('connected',       info => { _connectedDevice = { name: info.name, type: 'bluetooth' }; updateStatusBar(); renderP58EPanel(); toast('P58E connected: ' + info.name); });
+PrinterManager.p58e.on('disconnected',    ()   => { updateStatusBar(); renderP58EPanel(); toast('P58E disconnected'); });
+PrinterManager.p58e.on('reconnecting',    ev   => { document.getElementById('statusDot').className = 'status-dot scanning'; document.getElementById('statusText').textContent = 'Reconnecting… attempt ' + ev.attempt + '/' + ev.max; });
+PrinterManager.p58e.on('reconnect_failed',()   => { updateStatusBar(); toast('Could not reconnect — power the printer on and click Reconnect.', 5000); });
+PrinterManager.p58e.on('checklist',       ()   => renderChecklist());
 
 /* ═══════════════════════════════════════════════════════
    HARDWARE TESTS PANEL — handlers
@@ -1442,38 +1823,38 @@ async function hwRun (label, fn) {
   }
 }
 
-function hwTestReceipt    () { hwRun('Test Receipt',   () => P58EPrinter.printTestReceipt()); }
-function hwDemoReceipt    () { hwRun('Demo Receipt',   () => P58EPrinter.printDemoReceipt()); }
-function hwTestDrawer     () { hwRun('Cash Drawer',  () => P58EPrinter.openCashDrawer()); }
-function hwTestFeed       () { hwRun('Paper Feed',   () => P58EPrinter.paperFeed(5)); }
+function hwTestReceipt    () { hwRun('Test Receipt',   () => PrinterManager.p58e.printTestReceipt()); }
+function hwDemoReceipt    () { hwRun('Demo Receipt',   () => PrinterManager.p58e.printDemoReceipt()); }
+function hwTestDrawer     () { hwRun('Cash Drawer',  () => PrinterManager.p58e.openCashDrawer()); }
+function hwTestFeed       () { hwRun('Paper Feed',   () => PrinterManager.p58e.paperFeed(5)); }
 
 async function hwTestBarcode () {
   await hwRun('Barcode Print', async () => {
-    if (!SokoniPrinter?.connected) throw new Error('Printer not connected');
-    await SokoniPrinter.print('custom', {
+    if (!PrinterManager.connected) throw new Error('Printer not connected');
+    await PrinterManager.print('custom', {
       build (enc, W) {
         enc.ac().bold(true).text('BARCODE TEST').lf().bold(false);
         enc.barcode('1234567890').lf();
         enc.text('Code 128 — 1234567890').lf().lf(2);
       }
     });
-    P58EPrinter.markChecklistItem('barcode', true);
+    PrinterManager.p58e.markChecklistItem('barcode', true);
   });
 }
 
 async function hwTestQR () {
   await hwRun('QR Code Print', async () => {
-    if (!SokoniPrinter?.connected) throw new Error('Printer not connected');
-    await SokoniPrinter.printQR('https://sokoni.co.ke/', { label: 'sokoni.co.ke', size: 5 });
-    P58EPrinter.markChecklistItem('qrcode', true);
+    if (!PrinterManager.connected) throw new Error('Printer not connected');
+    await PrinterManager.printQR('https://sokoni.co.ke/', { label: 'sokoni.co.ke', size: 5 });
+    PrinterManager.p58e.markChecklistItem('qrcode', true);
   });
 }
 
 async function hwTestConsecutive () {
   await hwRun('Consecutive ×3', async () => {
-    if (!SokoniPrinter?.connected) throw new Error('Printer not connected');
+    if (!PrinterManager.connected) throw new Error('Printer not connected');
     for (let i = 1; i <= 3; i++) {
-      await SokoniPrinter.print('custom', {
+      await PrinterManager.print('custom', {
         build (enc, W) {
           enc.ac().bold(true).sz('tall').text('RECEIPT ' + i + ' OF 3').lf().sz('normal').bold(false)
              .text('Consecutive print test — SmartPOS').lf().lf(3);
@@ -1482,20 +1863,20 @@ async function hwTestConsecutive () {
       hwLog('Receipt ' + i + '/3 queued');
       await new Promise(r => setTimeout(r, 800));
     }
-    P58EPrinter.markChecklistItem('consecutive', true);
+    PrinterManager.p58e.markChecklistItem('consecutive', true);
     renderChecklist();
   });
 }
 
 async function hwTestLarge () {
   await hwRun('Large Receipt (12 items)', async () => {
-    if (!SokoniPrinter?.connected) throw new Error('Printer not connected');
+    if (!PrinterManager.connected) throw new Error('Printer not connected');
     const items = Array.from({ length: 12 }, (_, i) => ({
       name: 'Test Product ' + (i + 1).toString().padStart(2, '0'),
       quantity: Math.ceil(Math.random() * 5),
       unitPrice: Math.round((Math.random() * 500 + 50) / 10) * 10,
     }));
-    await SokoniPrinter.print('sale', {
+    await PrinterManager.print('sale', {
       businessName: 'SOKONI SmartPOS', cashierName: 'Stress Test',
       receiptNumber: 'LARGE-TEST-001',
       items,
@@ -1506,14 +1887,14 @@ async function hwTestLarge () {
       },
       payment: { method: 'M-Pesa' },
     });
-    P58EPrinter.markChecklistItem('large', true);
+    PrinterManager.p58e.markChecklistItem('large', true);
     renderChecklist();
   });
 }
 
 /* Checklist render */
 function renderChecklist () {
-  const list  = P58EPrinter.checklist;
+  const list  = PrinterManager.p58e.checklist;
   const done  = list.filter(i => i.done).length;
   const el    = document.getElementById('hwChecklist');
   const score = document.getElementById('hwChecklistScore');
@@ -1527,7 +1908,7 @@ function renderChecklist () {
     <div style="margin-bottom:8px">
       <div style="font-size:10px;font-weight:700;color:var(--sub);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px;padding:0 2px">${_esc(catLabels[cat] || cat)}</div>
       ${items.map(i => `
-        <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--bg3);border:1px solid ${i.done ? 'rgba(0,230,118,.3)' : 'var(--bor)'};border-radius:6px;margin-bottom:4px;cursor:pointer" onclick="P58EPrinter.markChecklistItem('${_esc(i.id)}',${!i.done});renderChecklist()">
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--bg3);border:1px solid ${i.done ? 'rgba(0,230,118,.3)' : 'var(--bor)'};border-radius:6px;margin-bottom:4px;cursor:pointer" onclick="PrinterManager.p58e.markChecklistItem('${_esc(i.id)}',${!i.done});renderChecklist()">
           <div style="width:18px;height:18px;border-radius:4px;border:2px solid ${i.done ? 'var(--green)' : 'var(--bor2)'};background:${i.done ? 'var(--green)' : 'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#000">
             ${i.done ? '&#10003;' : ''}
           </div>
@@ -1539,20 +1920,439 @@ function renderChecklist () {
     (done === list.length ? ' — <span style="color:var(--green);font-weight:700">&#9989; Production Ready</span>' : '');
 }
 
-/* Panel routing — extend to handle p58e + hardware */
+/* ═══════════════════════════════════════════════════════
+   DIAGNOSTICS PANEL
+═══════════════════════════════════════════════════════ */
+function _diagRow (label, value, ok) {
+  const icon = ok === true ? '&#9989;' : ok === false ? '&#10060;' : '&#8505;';
+  return `<div style="background:var(--bg3);border:1px solid var(--bor);border-radius:6px;padding:8px 10px">` +
+    `<div style="font-size:10px;color:var(--sub);font-weight:700;letter-spacing:.3px;margin-bottom:2px">${label}</div>` +
+    `<div style="font-size:12px;font-weight:600">${icon} ${_esc(String(value))}</div></div>`;
+}
+
+async function renderDiagnostics () {
+  const grid = document.getElementById('diagGrid');
+  const p58eInfo = document.getElementById('diagP58eInfo');
+  const p58eAct  = document.getElementById('diagP58eActions');
+  const rec      = document.getElementById('diagRecommend');
+
+  /* ── Basic OS / browser / API rows ── */
+  const lp = _loadLastPrint();
+  const lpStr = lp ? new Date(lp.at).toLocaleString('en-KE') + ' (' + (lp.docType || '?') + ' via ' + (lp.transport || '?') + ')' : 'No prints recorded';
+  grid.innerHTML =
+    _diagRow('Operating System',        PLATFORM.os,      null) +
+    _diagRow('Browser',                 PLATFORM.browser, null) +
+    _diagRow('Web Bluetooth API',       PLATFORM.hasBT     ? 'Available' : 'Not in this browser', PLATFORM.hasBT) +
+    _diagRow('Web Serial API',          PLATFORM.hasSerial ? 'Available' : 'Not in this browser', PLATFORM.hasSerial) +
+    _diagRow('WebUSB API',              PLATFORM.hasUSB    ? 'Available' : 'Not in this browser', PLATFORM.hasUSB) +
+    _diagRow('Bluetooth usable',        PLATFORM.supportsBT     ? 'Yes' : 'No — unsupported on this platform/browser', PLATFORM.supportsBT) +
+    _diagRow('Serial/COM usable',       PLATFORM.supportsSerial ? 'Yes' : 'No — Chrome/Edge on desktop only',          PLATFORM.supportsSerial) +
+    _diagRow('USB usable',              PLATFORM.supportsUSB    ? 'Yes' : 'No — Chrome/Edge required',                 PLATFORM.supportsUSB) +
+    _diagRow('Current connection',      PrinterManager.connected ? ('Connected — ' + (_connectedDevice?.name || _connectedDevice?.type || '?')) : 'Not connected', PrinterManager.connected) +
+    _diagRow('Last successful print',   lpStr, lp ? true : null) +
+    _diagRow('Last used transport',     _loadTransport() || 'None', null) +
+    _diagRow('Hosting',                 location.protocol === 'https:' ? 'HTTPS ✓' : location.protocol + ' (Web BT/Serial require HTTPS)', location.protocol === 'https:') +
+    _diagRow('Secure context',          window.isSecureContext ? 'Yes ✓' : 'No — Web BT/Serial will not work', window.isSecureContext) +
+    _diagRow('SokoniPrinter engine',    !!window.SokoniPrinter ? 'Loaded ✓' : 'Not loaded ✗', !!window.SokoniPrinter) +
+    _diagRow('P58E BLE engine',         !!window.P58EPrinter  ? 'Loaded ✓' : 'Not loaded ✗', !!window.P58EPrinter) +
+    _diagRow('PrinterManager v2.0',     !!window.PrinterManager ? 'Loaded ✓' : 'Not loaded ✗', !!window.PrinterManager) +
+    _diagRow('Active transport',        PrinterManager?._activeTransport || 'None', null) +
+    _diagRow('Detected printer profile', PrinterManager?.profile ? (PrinterManager.profile.brand + ' ' + PrinterManager.profile.model) : 'None', null) +
+    _diagRow('Print language',          PrinterManager?.profile?.lang?.toUpperCase() || 'ESC/POS', null) +
+    _diagRow('Total prints this session', (PrinterManager?.stats?.get()?.total ?? '—').toString(), null);
+
+  /* ── P58E detection via Web Bluetooth getDevices() ── */
+  p58eInfo.innerHTML = 'Checking for paired P58E…';
+  p58eAct.innerHTML  = '';
+  try {
+    if (!navigator.bluetooth) throw new Error('Web Bluetooth not available');
+    const devices = await navigator.bluetooth.getDevices();
+    if (!devices.length) {
+      p58eInfo.innerHTML = '&#10060; No Bluetooth devices previously permitted in this browser.<br>' +
+        '<span style="color:var(--sub)">Go to <b style="color:var(--txt)">P58E Setup</b> tab and click <b style="color:var(--txt)">Pair P58E Printer</b>.</span>';
+    } else {
+      const p58e = devices.find(d => /p58|esc|pos|printer|thermal/i.test(d.name || ''));
+      if (p58e) {
+        p58eInfo.innerHTML = `&#9989; Detected: <b style="color:var(--green)">${_esc(p58e.name)}</b><br>` +
+          `<span style="color:var(--sub)">This device has been permitted before — no picker needed.</span>`;
+        p58eAct.innerHTML = '<button class="btn btn-primary" onclick="reconnectP58E();showPanel(document.querySelector(\'[data-panel=p58e]\'))">&#8635; Reconnect Now</button>';
+      } else {
+        p58eInfo.innerHTML = `&#8505; ${devices.length} Bluetooth device(s) permitted but none look like a P58E:<br>` +
+          devices.map(d => `<span style="color:var(--txt)">• ${_esc(d.name || 'Unknown')}</span>`).join('<br>') +
+          '<br><span style="color:var(--sub)">If your printer has a different name, use the <b style="color:var(--txt)">BLE Bluetooth</b> tile to scan.</span>';
+        p58eAct.innerHTML = '<button class="btn btn-outline" onclick="showPanel(document.querySelector(\'[data-panel=discover]\'))">&#8592; Go to Discover</button>';
+      }
+    }
+  } catch (ex) {
+    if (PLATFORM.ios) {
+      p58eInfo.innerHTML = '&#10060; <b style="color:var(--amber)">Safari on iOS does not support Web Bluetooth.</b><br>' +
+        'Use Network / Wi-Fi printing or AirPrint instead.';
+    } else {
+      p58eInfo.innerHTML = '&#10060; Could not query Bluetooth devices: ' + _esc(ex.message) + '<br>' +
+        '<span style="color:var(--sub)">Ensure you are using Chrome or Edge over HTTPS.</span>';
+    }
+  }
+
+  /* ── Check COM ports (Web Serial) ── */
+  if (PLATFORM.supportsSerial) {
+    try {
+      const ports = await navigator.serial.getPorts();
+      grid.innerHTML += _diagRow('Permitted COM ports', ports.length ? ports.length + ' port(s) accessible' : 'None (click BT COM Port tile to add)', ports.length > 0);
+    } catch(_) {}
+  }
+
+  /* ── Recommendation ── */
+  let recHtml = '';
+  if (PLATFORM.ios) {
+    recHtml = '<b style="color:var(--amber)">iOS / iPadOS:</b> Use <b>Network / Wi-Fi</b> (connect printer to same Wi-Fi) or <b>Browser / AirPrint</b>. Bluetooth and Serial are not available in Safari.';
+  } else if (PLATFORM.windows && (PLATFORM.chrome || PLATFORM.edge)) {
+    recHtml = '<b style="color:var(--green)">Windows + Chrome/Edge (optimal):</b><br>' +
+      '1. Pair P58E in Windows Bluetooth settings using PIN <b>0000</b>.<br>' +
+      '2. Click <b>BT COM Port</b> tile → Connect to the outgoing COM port — no re-pairing needed.<br>' +
+      '3. If BT COM Port shows no ports, click <b>Serial / COM</b> to manually select the port.<br>' +
+      '4. Alternatively, click <b>BLE Bluetooth</b> → Pair P58E Printer for a Web Bluetooth connection.';
+  } else if (PLATFORM.android) {
+    recHtml = '<b style="color:var(--green)">Android + Chrome:</b> Use <b>BLE Bluetooth</b> tile → Pair P58E Printer. USB OTG works too if you have a USB-C to USB-A adapter.';
+  } else if (PLATFORM.macos && (PLATFORM.chrome || PLATFORM.edge)) {
+    recHtml = '<b style="color:var(--green)">macOS + Chrome/Edge:</b> Use <b>BLE Bluetooth</b> tile. Web Serial is also available for USB-connected printers.';
+  } else if (PLATFORM.safari) {
+    recHtml = '<b style="color:var(--amber)">Safari (non-iOS):</b> Web Bluetooth and Serial are not fully supported. Use <b>Network / Wi-Fi</b> or switch to Chrome/Edge for full support.';
+  } else {
+    recHtml = 'Use <b>Network / Wi-Fi</b> for the broadest compatibility, or switch to Chrome / Edge for Bluetooth and Serial support.';
+  }
+  rec.innerHTML = recHtml;
+}
+
+async function _copyDiag () {
+  const lp = _loadLastPrint();
+  const text = [
+    'SOKONI SmartPOS — Printer Diagnostics',
+    '======================================',
+    'OS:            ' + PLATFORM.os,
+    'Browser:       ' + PLATFORM.browser,
+    'Web Bluetooth: ' + (PLATFORM.hasBT ? 'Available' : 'Not available'),
+    'Web Serial:    ' + (PLATFORM.hasSerial ? 'Available' : 'Not available'),
+    'WebUSB:        ' + (PLATFORM.hasUSB ? 'Available' : 'Not available'),
+    'BT usable:     ' + (PLATFORM.supportsBT ? 'Yes' : 'No'),
+    'Serial usable: ' + (PLATFORM.supportsSerial ? 'Yes' : 'No'),
+    'Connected:     ' + (PrinterManager.connected ? (_connectedDevice?.name || _connectedDevice?.type || 'Yes') : 'No'),
+    'Last transport:' + (_loadTransport() || 'None'),
+    'Last print:    ' + (lp ? new Date(lp.at).toLocaleString('en-KE') + ' / ' + lp.docType : 'None'),
+    'HTTPS:         ' + (location.protocol === 'https:' ? 'Yes' : 'No'),
+    'Secure ctx:    ' + (window.isSecureContext ? 'Yes' : 'No'),
+  ].join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Diagnostics copied to clipboard');
+  } catch(_) {
+    toast('Copy failed — please screenshot this page');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PRINT HISTORY LOG  (PosPrintService.history)
+══════════════════════════════════════════════════════════════════════ */
+function renderPrintHistory (query = '') {
+  const el   = document.getElementById('printHistoryTable');
+  const mel  = document.getElementById('printMetricsGrid');
+  const svc  = window.PosPrintService;
+  if (!svc) { if (el) el.innerHTML = '<div class="empty-state">PosPrintService not loaded.</div>'; return; }
+
+  const entries = query ? svc.history.search(query) : svc.history.getAll(50);
+  if (!entries.length) {
+    if (el) el.innerHTML = '<div class="empty-state"><span class="empty-icon">&#128196;</span>No print history yet</div>';
+  } else {
+    if (el) el.innerHTML = `<div style="overflow-x:auto"><table class="data-table">
+      <thead><tr><th>Receipt</th><th>Type</th><th>Time</th><th>Printer</th><th>Status</th><th>ms</th><th></th></tr></thead>
+      <tbody>` +
+      entries.map(h =>
+        `<tr>
+          <td><code style="font-size:10px">${_esc(h.receiptId || '—')}</code></td>
+          <td style="color:var(--sub)">${_esc(h.docType || '—')}</td>
+          <td>${h.printedAt ? new Date(h.printedAt).toLocaleTimeString('en-KE') : '—'}</td>
+          <td>${_esc(h.printer || '—')}</td>
+          <td>${h.status === 'success' ? '<span style="color:var(--green)">&#9989;</span>' : '<span style="color:#ef4444">&#10060;</span>'}</td>
+          <td style="color:var(--sub)">${h.durationMs || '—'}</td>
+          <td>
+            <button style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--bor);background:var(--bg3);color:var(--txt);cursor:pointer"
+              onclick="_downloadReceiptPDF('${h.historyId}')">PDF</button>
+          </td>
+        </tr>`
+      ).join('') +
+      `</tbody></table></div>`;
+  }
+
+  /* Metrics */
+  if (mel) {
+    const m = svc.metrics.summary();
+    mel.innerHTML =
+      _diagRow('Total samples',    m.samples         ?? '—',  null) +
+      _diagRow('Avg receipt gen',  m.avgReceiptMs != null ? m.avgReceiptMs + ' ms' : '—', m.avgReceiptMs && m.avgReceiptMs < 100) +
+      _diagRow('Avg print time',   m.avgPrintMs   != null ? m.avgPrintMs   + ' ms' : '—', m.avgPrintMs   && m.avgPrintMs   < 1000) +
+      _diagRow('Avg total',        m.avgTotalMs   != null ? m.avgTotalMs   + ' ms' : '—', m.avgTotalMs   && m.avgTotalMs   < 2000) +
+      _diagRow('Avg connect time', m.avgConnectMs != null ? m.avgConnectMs + ' ms' : '—', m.avgConnectMs && m.avgConnectMs < 2000);
+  }
+}
+
+function _downloadReceiptPDF (historyId) {
+  if (window.PosPrintService) PosPrintService.downloadPDF(historyId);
+}
+
+function _exportPrintHistory () {
+  if (!window.PosPrintService) { toast('PosPrintService not loaded'); return; }
+  PosPrintService.downloadHistory();
+  toast('CSV export downloaded');
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   AUTO-PRINT SETTINGS
+══════════════════════════════════════════════════════════════════════ */
+function renderAutoSettings () {
+  const svc = window.PosPrintService;
+  if (!svc) return;
+  const s = svc.settings.get();
+
+  const _el = elId => document.getElementById(elId);
+  if (_el('apAutoAfterSale'))   _el('apAutoAfterSale').checked   = !!s.autoAfterSale;
+  if (_el('apAutoAfterRefund')) _el('apAutoAfterRefund').checked = !!s.autoAfterRefund;
+  if (_el('apAutoKitchen'))     _el('apAutoKitchen').checked     = !!s.autoKitchenPrint;
+  if (_el('apAskBefore'))       _el('apAskBefore').checked       = !!s.askBefore;
+  if (_el('apSilent'))          _el('apSilent').checked          = !!s.silentMode;
+  if (_el('apCustomerCopy'))    _el('apCustomerCopy').checked    = !!s.customerCopy;
+  if (_el('apMerchantCopy'))    _el('apMerchantCopy').checked    = !!s.merchantCopy;
+  if (_el('apKitchenCopy'))     _el('apKitchenCopy').checked     = !!s.kitchenCopy;
+  if (_el('apCopies'))          _el('apCopies').value            = String(s.copies || 1);
+  if (_el('apDrawerCash'))      _el('apDrawerCash').checked      = !!(s.cashDrawerMethods || ['cash']).includes('cash');
+  if (_el('apDrawerRefund'))    _el('apDrawerRefund').checked    = !!(s.cashDrawerMethods || []).includes('refund');
+
+  renderTillConfig();
+}
+
+function _saveAutoSettings () {
+  const svc = window.PosPrintService;
+  if (!svc) return;
+  const val = elId => document.getElementById(elId);
+  const drawMethods = [];
+  if (val('apDrawerCash')?.checked)   drawMethods.push('cash');
+  if (val('apDrawerRefund')?.checked) drawMethods.push('refund');
+
+  svc.settings.update({
+    autoAfterSale:     !!val('apAutoAfterSale')?.checked,
+    autoAfterRefund:   !!val('apAutoAfterRefund')?.checked,
+    autoKitchenPrint:  !!val('apAutoKitchen')?.checked,
+    askBefore:         !!val('apAskBefore')?.checked,
+    silentMode:        !!val('apSilent')?.checked,
+    customerCopy:      !!val('apCustomerCopy')?.checked,
+    merchantCopy:      !!val('apMerchantCopy')?.checked,
+    kitchenCopy:       !!val('apKitchenCopy')?.checked,
+    copies:            parseInt(val('apCopies')?.value || '1', 10),
+    cashDrawerMethods: drawMethods,
+  });
+  toast('Auto-print settings saved');
+}
+
+function _testDrawer () {
+  if (!PrinterManager.connected) { toast('Connect a printer first', 2500); return; }
+  PrinterManager.openDrawer('test', 'Setup Page').then(() => {
+    toast('Cash drawer command sent'); renderAutoSettings();
+  }).catch(e => toast(e.message || 'Drawer command failed'));
+}
+
+function renderTillConfig () {
+  const el  = document.getElementById('tillConfigGrid');
+  const svc = window.PosPrintService;
+  if (!el || !svc) return;
+  const all = svc.till.getAll();
+  const keys = Object.keys(all);
+  if (!keys.length) { el.innerHTML = '<div style="font-size:12px;color:var(--sub)">No till configurations saved yet. They are created automatically when you connect a printer while a till is active.</div>'; return; }
+  el.innerHTML = `<table class="data-table"><thead><tr><th>Register</th><th>Printer</th><th>Transport</th><th>Paper</th><th>Copies</th></tr></thead><tbody>` +
+    keys.map(k => {
+      const c = all[k];
+      return `<tr>
+        <td><b>${_esc(k)}</b></td>
+        <td>${_esc(c.lastConnectedName || '—')}</td>
+        <td>${_esc(c.printerTransport || '—')}</td>
+        <td>${_esc(c.paperWidth || '—')}</td>
+        <td>${c.defaultCopies || 1}</td>
+      </tr>`;
+    }).join('') +
+    `</tbody></table>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   PRINTER INFO PANEL — brand profile, stats, drawer log, matrix
+══════════════════════════════════════════════════════════════════════ */
+function renderPrinterInfo () {
+  _renderInfoProfile();
+  _renderInfoStats();
+  _renderDrawerLog();
+  _renderPrinterMatrix();
+  _renderDriverStatus();
+}
+
+function _renderInfoProfile () {
+  const el   = document.getElementById('infoProfile');
+  const caps = document.getElementById('infoCaps');
+  const pm   = window.PrinterManager;
+  if (!pm) { el.textContent = 'PrinterManager not loaded.'; caps.innerHTML = ''; return; }
+
+  const profile = pm.profile;
+  if (!profile) {
+    el.innerHTML = '<span style="color:var(--sub)">&#128268; Connect a printer to detect its profile.</span>';
+    caps.innerHTML = '';
+    return;
+  }
+
+  el.innerHTML =
+    `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">` +
+    `<div><span style="color:var(--sub)">Brand</span><br><b style="color:var(--txt)">${_esc(profile.brand)}</b></div>` +
+    `<div><span style="color:var(--sub)">Model</span><br><b style="color:var(--txt)">${_esc(profile.model)}</b></div>` +
+    `<div><span style="color:var(--sub)">Paper Width</span><br><b style="color:var(--acc2)">${_esc(profile.width)}</b></div>` +
+    `<div><span style="color:var(--sub)">Print Language</span><br><b style="color:var(--acc2)">${_esc((profile.lang || 'escpos').toUpperCase())}</b></div>` +
+    `<div><span style="color:var(--sub)">Char Width</span><br><b>${profile.chars || '—'} chars</b></div>` +
+    `<div><span style="color:var(--sub)">Pixel Width</span><br><b>${profile.px || '—'} px</b></div>` +
+    `</div>`;
+
+  const capFlags = [
+    { k:'cut',     l:'Auto-cut',   v:profile.cut     },
+    { k:'drawer',  l:'Cash Drawer',v:profile.drawer  },
+    { k:'qr',      l:'QR Code',    v:profile.qr      },
+    { k:'barcode', l:'Barcode',    v:profile.barcode },
+    { k:'img',     l:'Image Print',v:profile.img     },
+  ];
+  caps.innerHTML = capFlags.map(c =>
+    `<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;` +
+    `background:${c.v ? 'rgba(113,255,0,.12)' : 'rgba(255,255,255,.05)'};` +
+    `color:${c.v ? 'var(--green)' : 'var(--sub)'};">` +
+    `${c.v ? '&#9989;' : '&#10060;'} ${c.l}</span>`
+  ).join('');
+}
+
+function _renderInfoStats () {
+  const el = document.getElementById('infoStats');
+  const pm = window.PrinterManager;
+  if (!pm) { el.innerHTML = ''; return; }
+  const s = pm.stats.get();
+  const rows = [
+    ['Total Prints',   s.total,                                   null],
+    ['Errors',         s.errors,                                  s.errors === 0 ? true : (s.errors < 3 ? null : false)],
+    ['Success Rate',   s.successRate + '%',                       s.successRate >= 95 ? true : s.successRate >= 80 ? null : false],
+    ['Avg Print Time', s.avgPrintMs ? s.avgPrintMs + ' ms' : '—', s.avgPrintMs && s.avgPrintMs < 1000 ? true : null],
+    ['Longest Print',  s.longestPrintMs ? s.longestPrintMs + ' ms' : '—', null],
+    ['First Print',    s.firstPrintAt ? new Date(s.firstPrintAt).toLocaleDateString('en-KE') : '—', null],
+    ['Last Print',     s.lastPrintAt  ? new Date(s.lastPrintAt).toLocaleString('en-KE') : '—', null],
+  ];
+  el.innerHTML = rows.map(([label, value, ok]) => _diagRow(label, value, ok)).join('');
+}
+
+function _renderDrawerLog () {
+  const el = document.getElementById('infoDrawerLog');
+  const pm = window.PrinterManager;
+  if (!pm) return;
+  const events = pm.drawer.getLast(10).reverse();
+  if (!events.length) { el.textContent = 'No drawer open events recorded this session.'; return; }
+  el.innerHTML = `<table class="data-table" style="margin-top:4px">
+    <thead><tr><th>Time</th><th>Reason</th><th>User</th><th>Transport</th></tr></thead>
+    <tbody>` +
+    events.map(e =>
+      `<tr><td>${new Date(e.at).toLocaleTimeString('en-KE')}</td>` +
+      `<td>${_esc(e.reason)}</td>` +
+      `<td>${_esc(e.user)}</td>` +
+      `<td>${_esc(e.transport)}</td></tr>`
+    ).join('') +
+    `</tbody></table>`;
+}
+
+function _renderPrinterMatrix () {
+  const pm = window.PrinterManager;
+  if (!pm) return;
+  const printers = pm.getSupportedPrinters();
+  const body = document.getElementById('infoMatrixBody');
+  if (!body) return;
+  body.innerHTML = printers.map(p =>
+    `<tr>
+      <td><b>${_esc(p.brand)}</b></td>
+      <td style="color:var(--sub)">${_esc(p.model)}</td>
+      <td>${_esc(p.width)}</td>
+      <td><code style="font-size:10px;background:rgba(255,255,255,.06);padding:2px 5px;border-radius:4px">${_esc(p.language.toUpperCase())}</code></td>
+      <td>${p.cut     ? '&#9989;' : '&#10060;'}</td>
+      <td>${p.drawer  ? '&#9989;' : '&#10060;'}</td>
+      <td>${p.qr      ? '&#9989;' : '&#10060;'}</td>
+      <td>${p.barcode ? '&#9989;' : '&#10060;'}</td>
+    </tr>`
+  ).join('');
+}
+
+function _renderDriverStatus () {
+  const el = document.getElementById('infoDrivers');
+  if (!el) return;
+  const pm = window.PrinterManager;
+  const drivers = [
+    { name:'ESC/POS', key:'escpos', desc:'Thermal receipt printers. Full implementation via SokoniPrinter.', status: !!window.SokoniPrinter },
+    { name:'TSPL',    key:'tspl',   desc:'TSC label printers. Commands implemented; physical verification required.', status: true },
+    { name:'ZPL',     key:'zpl',    desc:'Zebra printers. Commands implemented; physical verification required.',     status: true },
+    { name:'CPCL',    key:'cpcl',   desc:'Zebra/Honeywell mobile. Commands implemented; physical verification required.', status: true },
+  ];
+  el.innerHTML = drivers.map(d =>
+    `<div style="background:var(--bg3);border:1px solid var(--bor);border-radius:8px;padding:10px">` +
+    `<div style="font-weight:700;font-size:12px;margin-bottom:3px">` +
+    `${d.status ? '&#9989;' : '&#10060;'} ${d.name}</div>` +
+    `<div style="font-size:11px;color:var(--sub);line-height:1.5">${d.desc}</div>` +
+    `</div>`
+  ).join('');
+}
+
+function _resetStats () {
+  if (!window.PrinterManager) return;
+  if (!confirm('Reset all print statistics? This cannot be undone.')) return;
+  PrinterManager.stats.reset();
+  _renderInfoStats();
+  toast('Statistics reset');
+}
+
+function _clearDrawerLog () {
+  if (!window.PrinterManager) return;
+  if (!confirm('Clear the cash drawer event log?')) return;
+  PrinterManager.drawer.clear();
+  _renderDrawerLog();
+  toast('Drawer log cleared');
+}
+
+/* Panel routing — extend to handle p58e + hardware + diagnostics + info */
 const _origShowPanel = showPanel;
 showPanel = function (el) {
   _origShowPanel(el);
-  if (el.dataset.panel === 'p58e')     { renderP58EPanel(); }
-  if (el.dataset.panel === 'hardware') { renderChecklist(); document.getElementById('hwLog').style.display = 'none'; }
+  if (el.dataset.panel === 'p58e')        { renderP58EPanel(); }
+  if (el.dataset.panel === 'hardware')    { renderChecklist(); document.getElementById('hwLog').style.display = 'none'; }
+  if (el.dataset.panel === 'diagnostics')   { renderDiagnostics(); }
+  if (el.dataset.panel === 'info')          { renderPrinterInfo(); }
+  if (el.dataset.panel === 'print-history') { renderPrintHistory(''); }
+  if (el.dataset.panel === 'autoprint')     { renderAutoSettings(); }
 };
+
+/* ── Auto-detect P58E on Windows Chrome/Edge at page load ── */
+(async function _autoDetectWindows () {
+  if (!PLATFORM.windows) return;
+  if (!PLATFORM.chrome && !PLATFORM.edge) return;
+  if (!PLATFORM.supportsSerial) return;
+  try {
+    const ports = await navigator.serial.getPorts();
+    if (ports.length && !PrinterManager.connected) {
+      const notice = document.createElement('div');
+      notice.style.cssText = 'grid-column:1/-1;padding:8px 12px;background:rgba(109,92,255,.08);border:1px solid rgba(109,92,255,.3);border-radius:6px;font-size:11px;color:var(--sub);margin-bottom:4px;cursor:pointer';
+      notice.innerHTML = `&#9654; Found ${ports.length} permitted COM port(s). <b style="color:var(--txt)">Click here to connect P58E automatically.</b>`;
+      notice.onclick = () => scan('serial-list');
+      document.getElementById('transportGrid').prepend(notice);
+    }
+  } catch(_) {}
+}());
 
 /* ── Init ── */
 loadConfig();
 updateStatusBar();
 renderP58EPanel();
 renderChecklist();
-SokoniPrinter.autoReconnect().then(ok => { if (ok) updateStatusBar(); });
+PrinterManager.autoReconnect().then(ok => { if (ok) updateStatusBar(); });
 </script>
 </body>
 </html>

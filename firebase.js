@@ -3,19 +3,42 @@
    Auth · Firestore · Storage · Cloud Messaging (FCM)
 ================================================================ */
 
-import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
 import {
   getAuth,
   onAuthStateChanged,
   signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  signInWithPhoneNumber,
+  signInWithRedirect,
+  sendPasswordResetEmail,
+  RecaptchaVerifier,
+  updateProfile,
+  sendEmailVerification,
   GoogleAuthProvider,
   FacebookAuthProvider,
   getRedirectResult,
   linkWithCredential,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore }    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage }      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+import {
+  getFirestore,
+  collection, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
+  query, where, orderBy, limit, limitToLast,
+  startAfter, startAt, endAt, endBefore,
+  onSnapshot, writeBatch, runTransaction,
+  serverTimestamp, increment, arrayUnion, arrayRemove, deleteField,
+  Timestamp, FieldPath, documentId,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes, uploadString,
+  getDownloadURL, deleteObject,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import {
   getMessaging,
   getToken,
@@ -35,10 +58,28 @@ const firebaseConfig = {
 /* ── Initialize ── */
 const app = initializeApp(firebaseConfig);
 
-/* ── App Check — must be before any Firebase service ── */
+/* ── App Check — must be initialised before any other Firebase service ──
+   Production (mysokoni.co.ke, sokoni-aeb26.web.app) uses reCAPTCHA v3 attestation
+   with no debug token. Localhost uses a debug token that MUST already be registered
+   in Firebase Console → App Check → Manage debug tokens.
+
+   Pin the registered token per browser, once:
+     localStorage.setItem('SOKONI_APPCHECK_DEBUG_TOKEN', '<uuid-from-console>')
+
+   Do not rely on the `true` fallback: it makes the SDK mint a NEW random token that
+   is not registered, so attestation returns 403 — and a failed App Check token fetch
+   blocks every Firebase Auth request before it is sent (verified: sign-in, phone OTP
+   and password reset all fail with auth/network-request-failed). The fallback exists
+   only to print a fresh token on first run so it can be registered. */
+const IS_LOCALHOST = ['localhost', '127.0.0.1', '[::1]', ''].includes(location.hostname);
 try {
-  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  if (IS_LOCALHOST) {
+    let pinned = null;
+    try { pinned = localStorage.getItem('SOKONI_APPCHECK_DEBUG_TOKEN'); } catch (_) {}
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = pinned || true;
+    if (!pinned) {
+      console.warn('[SOKONI] App Check: no registered debug token pinned. A new token will be printed below — register it in Firebase Console, then run:\n  localStorage.setItem(\'SOKONI_APPCHECK_DEBUG_TOKEN\', \'<that-token>\')');
+    }
   }
   initializeAppCheck(app, {
     provider: new ReCaptchaV3Provider('6Lf93TktAAAAAIqCj8l3YM3dIoS1MIXpilsdnsxj'),
@@ -48,9 +89,10 @@ try {
   console.error('[SOKONI] App Check init failed:', e.message);
 }
 
-const auth    = getAuth(app);
-const db      = getFirestore(app);
-const storage = getStorage(app);
+const auth      = getAuth(app);
+const db        = getFirestore(app);
+const storage   = getStorage(app);
+const functions = getFunctions(app);
 let messaging = null;
 
 if (typeof window !== "undefined") {
@@ -64,10 +106,173 @@ if (typeof window !== "undefined") {
 }
 
 /* ── Expose globals for non-module scripts ── */
-window.firebaseApp     = app;
-window.firebaseAuth    = auth;
-window.firebaseDB      = db;
-window.firebaseStorage = storage;
+window.firebaseApp       = app;
+window.firebaseAuth      = auth;
+window.firebaseDB        = db;
+window.firebaseStorage   = storage;
+window.firebaseFunctions = functions;
+
+/* sokoniCallable(name) — synchronous replacement for firebase.functions().httpsCallable(name) */
+window.sokoniCallable = (name) => httpsCallable(functions, name);
+
+/* firebaseSDK — bound auth helpers so non-module pages never touch the compat namespace */
+window.firebaseSDK = {
+  auth,
+  signInWithEmailAndPassword:    (e, p)       => signInWithEmailAndPassword(auth, e, p),
+  createUserWithEmailAndPassword:(e, p)       => createUserWithEmailAndPassword(auth, e, p),
+  signInWithPopup:               (provider)   => signInWithPopup(auth, provider),
+  signInWithPhoneNumber:         (phone, ver) => signInWithPhoneNumber(auth, phone, ver),
+  signOut:                       ()           => signOut(auth),
+  onAuthStateChanged:            (cb)         => onAuthStateChanged(auth, cb),
+  updateProfile,
+  sendEmailVerification: () => auth.currentUser ? sendEmailVerification(auth.currentUser) : Promise.reject(new Error('No user')),
+  GoogleAuthProvider,
+  FacebookAuthProvider,
+  RecaptchaVerifier,
+};
+
+/* ════════════════════════════════════════════════════════════════════════
+   LEGACY COMPAT SHIM  —  window.firebase
+   Backs the compat namespace with the modular SDK so pages that call
+   firebase.auth() / firebase.firestore() / firebase.functions() work
+   without loading firebase-*-compat.js CDN scripts.
+   Guard: pages that DO load compat scripts keep their own window.firebase.
+════════════════════════════════════════════════════════════════════════ */
+if (!window.firebase) {
+
+  /* ── Snapshot wrappers ─────────────────────────────────────────────── */
+  function _wd(snap) {
+    return {
+      id: snap.id, ref: snap.ref, exists: snap.exists(),
+      data: () => snap.data(), get: (f) => (snap.data() || {})[f],
+    };
+  }
+  function _ws(snap) {
+    const docs = snap.docs.map(_wd);
+    return { empty: snap.empty, size: snap.size, docs, forEach: (cb) => docs.forEach(cb) };
+  }
+
+  /* ── Firestore collection shim ─────────────────────────────────────── */
+  class _CS {
+    constructor(path, c) {
+      this._p = path;
+      this._r = collection(db, path);
+      this._c = c || [];
+    }
+    _cl(x)         { return new _CS(this._p, [...this._c, x]); }
+    _bq()          { return this._c.length ? query(this._r, ...this._c) : this._r; }
+    doc(id)        { return new _DS(`${this._p}/${id || doc(this._r).id}`); }
+    add(d)         { return addDoc(this._r, d); }
+    where(f,op,v)  { return this._cl(where(f,op,v)); }
+    orderBy(f,d)   { return this._cl(orderBy(f,d||'asc')); }
+    limit(n)       { return this._cl(limit(n)); }
+    limitToLast(n) { return this._cl(limitToLast(n)); }
+    startAfter(s)  { return this._cl(startAfter(s)); }
+    startAt(s)     { return this._cl(startAt(s)); }
+    endBefore(s)   { return this._cl(endBefore(s)); }
+    endAt(s)       { return this._cl(endAt(s)); }
+    get()          { return getDocs(this._bq()).then(_ws); }
+    onSnapshot(o,c){ const fn=typeof o==='function'?o:c; return onSnapshot(this._bq(),s=>fn(_ws(s))); }
+  }
+
+  /* ── Firestore document shim ───────────────────────────────────────── */
+  class _DS {
+    constructor(path) {
+      this._p = path;
+      this._r = doc(db, ...path.split('/').filter(Boolean));
+    }
+    collection(p)  { return new _CS(`${this._p}/${p}`); }
+    set(d,o)       { return setDoc(this._r, d, o||{}); }
+    update(d)      { return updateDoc(this._r, d); }
+    delete()       { return deleteDoc(this._r); }
+    get()          { return getDoc(this._r).then(_wd); }
+    onSnapshot(o,c){ const fn=typeof o==='function'?o:c; return onSnapshot(this._r,s=>fn(_wd(s))); }
+    get id()       { return this._r.id; }
+    get path()     { return this._r.path; }
+  }
+
+  /* ── Storage ref shim ──────────────────────────────────────────────── */
+  class _SR {
+    constructor(path) { this._r = storageRef(storage, path||''); this._p = path||''; }
+    child(p)          { return new _SR(`${this._p}/${p}`); }
+    put(d,m)          { return uploadBytes(this._r, d, m); }
+    putString(s,f,m)  { return uploadString(this._r, s, f, m); }
+    getDownloadURL()  { return getDownloadURL(this._r); }
+    delete()          { return deleteObject(this._r); }
+    get fullPath()    { return this._r.fullPath; }
+    get name()        { return this._r.name; }
+  }
+
+  /* ── Firestore db ops object ───────────────────────────────────────── */
+  const _fso = {
+    collection: (p) => new _CS(p),
+    doc:        (p) => new _DS(p),
+    batch:      ()  => writeBatch(db),
+    runTransaction: (cb) => runTransaction(db, async (t) => cb({
+      get:    (r) => t.get(r._r||r).then(_wd),
+      set:    (r,d,o) => t.set(r._r||r, d, o||{}),
+      update: (r,d)   => t.update(r._r||r, d),
+      delete: (r)     => t.delete(r._r||r),
+    })),
+  };
+
+  /* ── Auth function with static class properties ────────────────────── */
+  const _af = Object.assign(
+    function(_app) {
+      return {
+        get currentUser()                 { return auth.currentUser; },
+        onAuthStateChanged:               (cb,e,c) => onAuthStateChanged(auth,cb,e,c),
+        signInWithEmailAndPassword:       (e,p)    => signInWithEmailAndPassword(auth,e,p),
+        createUserWithEmailAndPassword:   (e,p)    => createUserWithEmailAndPassword(auth,e,p),
+        signInWithPopup:                  (p)      => signInWithPopup(auth,p),
+        signInWithRedirect:               (p)      => signInWithRedirect(auth,p),
+        signInWithPhoneNumber:            (ph,v)   => signInWithPhoneNumber(auth,ph,v),
+        signOut:                          ()       => signOut(auth),
+        sendPasswordResetEmail:           (e,c)    => sendPasswordResetEmail(auth,e,c),
+        sendEmailVerification:            (u)      => sendEmailVerification(u||auth.currentUser),
+      };
+    },
+    { GoogleAuthProvider, FacebookAuthProvider, RecaptchaVerifier }
+  );
+
+  /* ── Firestore function: callable + direct-access + static helpers ─── */
+  const _ff = Object.assign(function(_app) { return _fso; }, _fso, {
+    FieldValue: {
+      serverTimestamp: ()    => serverTimestamp(),
+      increment:       (n)   => increment(n),
+      arrayUnion:      (...a)=> arrayUnion(...a),
+      arrayRemove:     (...a)=> arrayRemove(...a),
+      delete:          ()    => deleteField(),
+    },
+    Timestamp,
+    FieldPath: { documentId: () => documentId() },
+  });
+
+  /* ── Functions shim ────────────────────────────────────────────────── */
+  const _fnShim = (_app) => ({ httpsCallable: (n,o) => httpsCallable(functions,n,o) });
+
+  /* ── App shim ──────────────────────────────────────────────────────── */
+  const _appShim = (name) => ({
+    name:      name||'[DEFAULT]',
+    functions: (r) => _fnShim(r),
+    auth:      ()  => _af(),
+    firestore: ()  => _fso,
+    storage:   ()  => ({ ref: (p) => new _SR(p||'') }),
+  });
+
+  window.firebase = {
+    get apps()    { return getApps(); },
+    app:          (name) => _appShim(name),
+    auth:         _af,
+    firestore:    _ff,
+    functions:    _fnShim,
+    storage:      (_app) => ({ ref: (p) => new _SR(p||'') }),
+    initializeApp:(cfg, name) => {
+      if (!name) return app;
+      return getApps().find(a => a.name === name) || initializeApp(cfg, name);
+    },
+  };
+}
 
 /* ══════════════════════════════════════════════════════════════════
    GOOGLE REDIRECT RESULT
@@ -495,9 +700,9 @@ function _showSokoniPushToast(title, body, icon, url) {
   style.textContent = "@keyframes sokoniToastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}";
 
   const img = document.createElement("img");
-  img.src    = "assets/logosokoni.png"; /* safe default */
+  img.src    = "assets/Sokoni Logo.png"; /* safe default */
   img.style.cssText = "width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;";
-  img.onerror = () => { img.src = "assets/logosokoni.png"; };
+  img.onerror = () => { img.src = "assets/Sokoni Logo.png"; };
   /* Only set src from icon if it is a same-origin or HTTPS URL */
   if (icon && /^https:\/\//.test(icon)) img.src = icon;
 
@@ -550,7 +755,7 @@ function _showSokoniPushToast(title, body, icon, url) {
 ══════════════════════════════════════════════════════════════════ */
 (function _initIdleTimeout() {
   const IDLE_MS_STANDARD = 30 * 60 * 1000; // 30 min
-  const IDLE_MS_ADMIN    = 60 * 60 * 1000; // 60 min
+  const IDLE_MS_ADMIN    = 20 * 60 * 1000; // 20 min — tighter window for high-privilege sessions
 
   let _idleTimer = null;
 

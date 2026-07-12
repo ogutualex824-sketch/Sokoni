@@ -17,9 +17,20 @@
     }
   }
 
-  /* Debug token for localhost — must be set before activate() */
-  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-    try { self.FIREBASE_APPCHECK_DEBUG_TOKEN = true; } catch (_) {}
+  /* Debug token for localhost — must be set before activate().
+     Production sends no debug token and attests via reCAPTCHA v3.
+     The token must already be registered in Firebase Console; pin it once with
+       localStorage.setItem('SOKONI_APPCHECK_DEBUG_TOKEN', '<uuid-from-console>')
+     The `true` fallback mints an unregistered token (403), which blocks Firebase
+     Auth entirely — it exists only to print a token to register on first run.
+     Kept in lock-step with the modular path in firebase.js. */
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '[::1]') {
+    try {
+      var pinned = localStorage.getItem('SOKONI_APPCHECK_DEBUG_TOKEN');
+      self.FIREBASE_APPCHECK_DEBUG_TOKEN = pinned || true;
+    } catch (_) {
+      self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
   }
 
   /* Run immediately — compat scripts are synchronous so firebase is ready */

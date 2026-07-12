@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SOKONI Age Gate — blocks access for users under 18
  * Runs on every page. Once verified, stores a 30-day pass in localStorage.
  * DOB is never sent anywhere — checked client-side only.
@@ -85,7 +85,7 @@
 
         /* ── Verify screen ── */
         '<div id="sk-verify">',
-          '<img id="sk-age-logo" src="assets/Sokonilogo2.png" alt="SOKONI">',
+          '<img id="sk-age-logo" src="assets/Sokoni Logo.png" alt="SOKONI">',
           '<div id="sk-age-badge">🔒 Age Verification</div>',
           '<div id="sk-age-title">You must be<br><span style="background:linear-gradient(135deg,#71ff00,#4fc800);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">18 or older</span><br>to use SOKONI</div>',
           '<div id="sk-age-sub">SOKONI connects buyers, sellers, service providers and financial institutions across Kenya. This platform is for adults only.</div>',

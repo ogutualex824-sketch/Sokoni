@@ -26,8 +26,6 @@ const functions      = require('firebase-functions/v2');
 const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin          = require('firebase-admin');
 const crypto         = require('crypto');
-const https          = require('https');
-const { URL }        = require('url');
 const { FieldValue } = require('firebase-admin/firestore');
 
 if (!admin.apps.length) admin.initializeApp();
@@ -39,8 +37,6 @@ const _h = {};
 
 /* ── Region & project ───────────────────────────────────────────── */
 const REGION     = 'us-central1';
-const PROJECT_ID = 'sokoni-aeb26';
-const CF_BASE    = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
 
 /* ── CORS ─────────────────────────────────────────────────────────
    Order matters: most-specific first.
@@ -361,58 +357,252 @@ function _error(res, httpStatus, code, message, { version = 'v1', requestId, sta
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   UPSTREAM PROXY HELPER
-   Forwards the request to another Cloud Function's HTTP endpoint.
-   Propagates the Authorization header so the downstream CF can
-   authenticate the original caller.
+   INLINE ROUTE HELPERS
+   All business logic runs inside this process — no outbound
+   CF-to-CF HTTP calls. This is the billing-safe pattern.
 ═══════════════════════════════════════════════════════════════ */
-async function _proxyToFunction(functionName, req) {
-  return new Promise((resolve, reject) => {
-    try {
-      const targetUrl = `${CF_BASE}/${functionName}`;
-      const u         = new URL(targetUrl);
-      const method    = req.method.toUpperCase();
-      const hasBody   = ['POST', 'PUT', 'PATCH'].includes(method);
-      const bodyStr   = hasBody ? JSON.stringify(req.body || {}) : null;
 
-      const headers = {
-        'Content-Type'     : 'application/json',
-        'User-Agent'       : 'SOKONI-Gateway/1.0',
-        'X-Forwarded-For'  : _clientIp(req),
-        'X-Gateway-Origin' : 'sokoniAPIGateway',
-      };
-      if (req.headers.authorization) headers['Authorization'] = req.headers.authorization;
-      if (bodyStr) headers['Content-Length'] = Buffer.byteLength(bodyStr);
+/**
+ * Sanitize a raw search query string.
+ * Strips control characters and caps at 256 chars.
+ * @param {string} raw
+ * @returns {string}
+ */
+function _sanitizeSearchQuery(raw) {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/[\x00-\x1F\x7F]/g, '').slice(0, 256).trim();
+}
 
-      /* Append original query string */
-      const queryStr = new URLSearchParams(req.query || {}).toString();
-      const path     = u.pathname + (queryStr ? `?${queryStr}` : '');
+/**
+ * GET /api/v1/search — inline Firestore product search.
+ *
+ * Query params:
+ *   q        {string}  — keyword to match against product name (optional)
+ *   category {string}  — filter by category slug (optional)
+ *   limit    {number}  — page size, 1–50, default 24
+ *   cursor   {string}  — document ID of last item from previous page
+ *
+ * Strategy: query products with status=active + optional category filter,
+ * ordered by createdAt desc, then apply in-memory name substring filter
+ * when `q` is present. This avoids composite-index requirements while
+ * keeping all logic inside one CF invocation (no double billing).
+ *
+ * @param {object} req  — Express request (gateway-augmented)
+ * @param {object} opts — { version, requestId, startTime }
+ * @param {object} res  — Express response
+ */
+async function _handleSearch(req, res, opts) {
+  const { version, requestId, startTime } = opts;
+  const firestore = db();
 
-      const proxyReq = https.request(
-        { hostname: u.hostname, port: 443, path, method, headers },
-        proxyRes => {
-          let raw = '';
-          proxyRes.setEncoding('utf8');
-          proxyRes.on('data', c => { raw += c; });
-          proxyRes.on('end', () => {
-            let body;
-            try { body = JSON.parse(raw); } catch { body = { raw: raw.slice(0, 1024) }; }
-            resolve({ statusCode: proxyRes.statusCode || 200, body });
-          });
-        }
-      );
+  try {
+    const rawQ     = _sanitizeSearchQuery(req.query.q || '');
+    const category = typeof req.query.category === 'string'
+      ? req.query.category.trim().slice(0, 100)
+      : null;
+    const pageSize = Math.min(Math.max(1, parseInt(req.query.limit || '24', 10)), 50);
 
-      proxyReq.setTimeout(15_000, () => {
-        proxyReq.destroy(new Error('Upstream request timed out'));
-      });
-      proxyReq.on('error', reject);
+    /* Fetch a larger set so in-memory keyword filtering still fills the page.
+       Cap the fetch at 3× the requested page size to limit read cost. */
+    const fetchLimit = rawQ ? Math.min(pageSize * 3, 150) : pageSize + 1;
 
-      if (bodyStr) proxyReq.write(bodyStr);
-      proxyReq.end();
-    } catch (err) {
-      reject(err);
+    let query = firestore.collection('products')
+      .where('status', '==', 'active')
+      .orderBy('createdAt', 'desc')
+      .limit(fetchLimit);
+
+    if (category) {
+      query = query.where('category', '==', category);
     }
-  });
+
+    if (req.query.cursor) {
+      const cursorDoc = await firestore.collection('products').doc(req.query.cursor).get();
+      if (cursorDoc.exists) query = query.startAfter(cursorDoc);
+    }
+
+    const snap  = await query.get();
+    let   docs  = snap.docs;
+
+    /* In-memory keyword filter — case-insensitive substring match */
+    if (rawQ) {
+      const lower = rawQ.toLowerCase();
+      docs = docs.filter(d => {
+        const name = (d.data().name || '').toLowerCase();
+        const desc = (d.data().description || '').toLowerCase();
+        const tags = ((d.data().tags || []).join(' ')).toLowerCase();
+        return name.includes(lower) || desc.includes(lower) || tags.includes(lower);
+      });
+    }
+
+    const hasMore = !rawQ && snap.size > pageSize;
+    const items   = docs.slice(0, pageSize).map(d => {
+      const data = d.data();
+      return {
+        id:       d.id,
+        name:     data.name     || '',
+        slug:     data.slug     || d.id,
+        price:    data.price    ?? null,
+        currency: data.currency || 'KES',
+        category: data.category || null,
+        images:   Array.isArray(data.images) ? data.images.slice(0, 5) : [],
+        shopId:   data.shopId   || null,
+        rating:   data.rating   ?? null,
+        inStock:  data.inStock  !== false,
+      };
+    });
+
+    return _success(res,
+      {
+        query:      rawQ || null,
+        category:   category || null,
+        results:    items,
+        count:      items.length,
+        hasMore,
+        nextCursor: hasMore && docs.length > 0
+          ? docs[Math.min(pageSize, docs.length) - 1].id
+          : null,
+      },
+      { version, requestId, startTime, cacheControl: 'public, max-age=30, s-maxage=60' }
+    );
+  } catch (err) {
+    logger.error('[gateway] inline search error', { requestId, error: err.message });
+    return _error(res, 500, 'gateway/internal-error',
+      'Search is temporarily unavailable. Please try again.',
+      { version, requestId, startTime }
+    );
+  }
+}
+
+/**
+ * POST /api/v1/orders — inline order creation (auth required).
+ *
+ * Body shape:
+ *   items           {Array}  — [{ productId, shopId, name, quantity, unitPrice }]
+ *   deliveryAddress {object} — { street, city, county, lat?, lng? }
+ *   paymentMethod   {string} — 'mpesa' | 'card' | 'wallet'
+ *   note            {string} — optional buyer note (max 500 chars)
+ *
+ * Creates a Firestore order document with status 'pending_payment'.
+ * Payment confirmation must flow through the checkout / payment-orchestrator
+ * callable — this endpoint only records the buyer's intent.
+ *
+ * @param {object} req   — Express request (gateway-augmented)
+ * @param {object} opts  — { version, requestId, startTime, auth }
+ * @param {object} res   — Express response
+ */
+async function _handleCreateOrder(req, res, opts) {
+  const { version, requestId, startTime, auth } = opts;
+  const firestore = db();
+  const body      = req.body || {};
+
+  /* ── Input validation ───────────────────────────────────────── */
+  if (!Array.isArray(body.items) || body.items.length === 0) {
+    return _error(res, 400, 'orders/invalid-items',
+      '"items" must be a non-empty array.',
+      { version, requestId, startTime }
+    );
+  }
+  if (body.items.length > 50) {
+    return _error(res, 400, 'orders/too-many-items',
+      '"items" must contain 50 or fewer entries.',
+      { version, requestId, startTime }
+    );
+  }
+  if (!body.deliveryAddress || typeof body.deliveryAddress !== 'object') {
+    return _error(res, 400, 'orders/missing-address',
+      '"deliveryAddress" object is required.',
+      { version, requestId, startTime }
+    );
+  }
+  const VALID_PAYMENT_METHODS = new Set(['mpesa', 'card', 'wallet']);
+  if (!VALID_PAYMENT_METHODS.has(body.paymentMethod)) {
+    return _error(res, 400, 'orders/invalid-payment-method',
+      `"paymentMethod" must be one of: ${[...VALID_PAYMENT_METHODS].join(', ')}.`,
+      { version, requestId, startTime }
+    );
+  }
+
+  /* ── Sanitize items ─────────────────────────────────────────── */
+  const items = body.items.map(item => ({
+    productId:  String(item.productId  || '').slice(0, 128),
+    shopId:     String(item.shopId     || '').slice(0, 128),
+    name:       String(item.name       || '').replace(/[<>"']/g, '').slice(0, 256),
+    quantity:   Math.max(1, Math.floor(Number(item.quantity)  || 1)),
+    unitPrice:  Math.max(0, Number(item.unitPrice) || 0),
+  })).filter(i => i.productId);
+
+  if (items.length === 0) {
+    return _error(res, 400, 'orders/invalid-items',
+      'No valid items found. Each item must have a "productId".',
+      { version, requestId, startTime }
+    );
+  }
+
+  /* ── Sanitize delivery address ──────────────────────────────── */
+  const addr = {
+    street: String(body.deliveryAddress.street || '').slice(0, 256),
+    city:   String(body.deliveryAddress.city   || '').slice(0, 128),
+    county: String(body.deliveryAddress.county || '').slice(0, 128),
+  };
+  if (typeof body.deliveryAddress.lat === 'number' && isFinite(body.deliveryAddress.lat)) {
+    addr.lat = body.deliveryAddress.lat;
+  }
+  if (typeof body.deliveryAddress.lng === 'number' && isFinite(body.deliveryAddress.lng)) {
+    addr.lng = body.deliveryAddress.lng;
+  }
+
+  /* ── Compute totals ─────────────────────────────────────────── */
+  const subtotal = items.reduce((sum, i) => sum + (i.unitPrice * i.quantity), 0);
+
+  /* ── Write order document ───────────────────────────────────── */
+  try {
+    const orderRef = firestore.collection('orders').doc();
+    const orderDoc = {
+      orderId:         orderRef.id,
+      buyerId:         auth.uid,
+      status:          'pending_payment',
+      items,
+      subtotal,
+      currency:        'KES',
+      deliveryAddress: addr,
+      paymentMethod:   body.paymentMethod,
+      note:            typeof body.note === 'string'
+        ? body.note.replace(/[<>"']/g, '').slice(0, 500)
+        : null,
+      source:          'api-gateway',
+      requestId,
+      createdAt:       FieldValue.serverTimestamp(),
+      updatedAt:       FieldValue.serverTimestamp(),
+    };
+
+    await orderRef.set(orderDoc);
+
+    logger.info('[gateway] order created', {
+      requestId,
+      orderId: orderRef.id,
+      buyerId: auth.uid,
+      itemCount: items.length,
+    });
+
+    return _success(res,
+      {
+        orderId:       orderRef.id,
+        status:        'pending_payment',
+        itemCount:     items.length,
+        subtotal,
+        currency:      'KES',
+        paymentMethod: body.paymentMethod,
+        message:       'Order created. Complete payment via the checkout flow to confirm.',
+      },
+      { version, requestId, startTime, status: 201, cacheControl: 'no-store' }
+    );
+  } catch (err) {
+    logger.error('[gateway] order creation failed', { requestId, error: err.message });
+    return _error(res, 500, 'gateway/internal-error',
+      'Failed to create order. Please try again.',
+      { version, requestId, startTime }
+    );
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -433,31 +623,12 @@ async function _handleRoute(req, res, { routePath, version, requestId, auth, sta
       );
     }
 
-    /* GET /api/v1/search → proxy to sokoniSearch CF */
+    /* GET /api/v1/search — inline Firestore search (single CF invocation, no proxy) */
     if (method === 'GET' && routePath === '/search') {
-      try {
-        const upstream = await _proxyToFunction('sokoniSearch', req);
-        if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
-          logger.warn('[gateway] sokoniSearch upstream error', { requestId, statusCode: upstream.statusCode });
-          return _error(res, upstream.statusCode, 'gateway/upstream-error',
-            upstream.body?.error?.message || upstream.body?.message || 'Upstream service error',
-            { version, requestId, startTime }
-          );
-        }
-        return _success(res, upstream.body,
-          { version, requestId, startTime,
-            cacheControl: 'public, max-age=30, s-maxage=60' }
-        );
-      } catch (err) {
-        logger.error('[gateway] sokoniSearch proxy error', { requestId, error: err.message });
-        return _error(res, 503, 'gateway/upstream-unavailable',
-          'Search service is temporarily unavailable. Please try again.',
-          { version, requestId, startTime }
-        );
-      }
+      return _handleSearch(req, res, { version, requestId, startTime });
     }
 
-    /* POST /api/v1/orders → proxy to createOrder CF (auth required) */
+    /* POST /api/v1/orders — inline order creation (auth required, single CF invocation) */
     if (method === 'POST' && routePath === '/orders') {
       if (!isAuthed) {
         return _error(res, 401, 'auth/unauthenticated',
@@ -465,25 +636,7 @@ async function _handleRoute(req, res, { routePath, version, requestId, auth, sta
           { version, requestId, startTime }
         );
       }
-      try {
-        const upstream = await _proxyToFunction('createOrder', req);
-        if (upstream.statusCode < 200 || upstream.statusCode >= 300) {
-          logger.warn('[gateway] createOrder upstream error', { requestId, statusCode: upstream.statusCode });
-          return _error(res, upstream.statusCode, 'gateway/upstream-error',
-            upstream.body?.error?.message || upstream.body?.message || 'Upstream service error',
-            { version, requestId, startTime }
-          );
-        }
-        return _success(res, upstream.body,
-          { version, requestId, startTime, cacheControl: 'no-store' }
-        );
-      } catch (err) {
-        logger.error('[gateway] createOrder proxy error', { requestId, error: err.message });
-        return _error(res, 503, 'gateway/upstream-unavailable',
-          'Order service is temporarily unavailable. Please try again.',
-          { version, requestId, startTime }
-        );
-      }
+      return _handleCreateOrder(req, res, { version, requestId, startTime, auth });
     }
 
     /* GET /api/v1/products → serve from Firestore with pagination */

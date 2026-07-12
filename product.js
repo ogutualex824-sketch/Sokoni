@@ -1,4 +1,4 @@
-/* Resolve product: prefer URL ?id= param, fall back to localStorage */
+﻿/* Resolve product: prefer URL ?id= param, fall back to localStorage */
 const _urlId = new URLSearchParams(window.location.search).get("id");
 let product = null;
 try{ product = JSON.parse(localStorage.getItem("selectedProduct")); }catch(e){}
@@ -28,7 +28,7 @@ if(product){
         "@type": "Product",
         "name": product.name,
         "description": product.description || '',
-        "image": product.image || 'https://mysokoni.co.ke/assets/Sokonilogo2.png',
+        "image": product.image || 'https://mysokoni.co.ke/assets/Sokoni%20Logo.png',
         "sku": product.id || '',
         "brand": {"@type":"Brand","name": product.sellerName || 'SOKONI Seller'},
         "offers": {

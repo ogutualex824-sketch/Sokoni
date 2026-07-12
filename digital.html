@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Freelancer Marketplace — SOKONI</title>
   <meta name="description" content="Hire top Kenyan freelancers or sell your digital services. Software, design, marketing, writing, AI & more on SOKONI.">
-  <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#71ff00">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -172,7 +172,7 @@
 <script src="splash.js"></script>
 
 <nav class="fl-nav">
-  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="fl-nav-logo" alt="Sokoni"></a>
+  <a href="index.html"><img loading="lazy" src="assets/Sokoni Logo.png" class="fl-nav-logo" alt="Sokoni"></a>
   <div class="fl-nav-right">
     <button class="fl-nb" onclick="toggleNotifDrawer()" style="position:relative">🔔<span id="flNotifBadge" style="display:none;position:absolute;top:5px;right:5px;background:#ff4444;border-radius:50%;width:8px;height:8px"></span></button>
     <button class="fl-nb" onclick="flShowTab('messages')">💬 <span id="flMsgCount"></span></button>
@@ -684,6 +684,9 @@ var _flNotifs = [];
 var _currentJobId = null;
 var _currentContractId = null;
 var _currentChatId = null;
+/* Listener unsubscribe handles — one per data collection + one for the active chat */
+var _chatUnsub = null;        /* active chat modal listener */
+var _flDataUnsubs = [];       /* flLoadAll collection listeners */
 var _flStarRating = 0;
 var _reviewRefId = null;
 
@@ -740,25 +743,27 @@ async function flLoadAll(){
 
   var db = await _getDb();
   if(!db) return;
+  /* Cancel any existing collection listeners before (re-)subscribing */
+  _flDataUnsubs.forEach(function(u){if(u)u();}); _flDataUnsubs=[];
   try{
     var mod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
     var {collection, query, orderBy, limit, onSnapshot} = mod;
 
-    onSnapshot(query(collection(db,'digitalGigs'), orderBy('createdAt','desc'), limit(100)), snap=>{
+    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalGigs'), orderBy('createdAt','desc'), limit(100)), snap=>{
       _flGigs = snap.docs.map(d=>({id:d.id,...d.data()}));
       _lsSet('flGigs',_flGigs);
       flBuildFreelancerList();
       flUpdateStats();
       flRenderGigs();
       if(_activeTab==='talent') flRenderTalent();
-    });
-    onSnapshot(query(collection(db,'digitalJobs'), orderBy('createdAt','desc'), limit(100)), snap=>{
+    }, function(err){console.warn('[digital] gigs listener error:',err);}));
+    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalJobs'), orderBy('createdAt','desc'), limit(100)), snap=>{
       _flJobs = snap.docs.map(d=>({id:d.id,...d.data()}));
       _lsSet('flJobs',_flJobs);
       flUpdateStats();
       if(_activeTab==='jobs') flRenderJobs();
-    });
-    onSnapshot(query(collection(db,'digitalProposals'), orderBy('createdAt','desc'), limit(200)), snap=>{
+    }, function(err){console.warn('[digital] jobs listener error:',err);}));
+    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalProposals'), orderBy('createdAt','desc'), limit(200)), snap=>{
       var prev = _flProposals.map(p=>p.id);
       _flProposals = snap.docs.map(d=>({id:d.id,...d.data()}));
       _lsSet('flProposals',_flProposals);
@@ -767,8 +772,8 @@ async function flLoadAll(){
       _flProposals.filter(p=>!prev.includes(p.id)&&myJobIds.includes(p.jobId)).forEach(p=>{
         flPushNotif('📨 New proposal from '+p.freelancerName+' — KES '+Number(p.bid).toLocaleString(),'proposal');
       });
-    });
-    onSnapshot(query(collection(db,'digitalContracts'), orderBy('createdAt','desc'), limit(50)), snap=>{
+    }, function(err){console.warn('[digital] proposals listener error:',err);}));
+    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalContracts'), orderBy('createdAt','desc'), limit(50)), snap=>{
       var prev = _flContracts.map(c=>c.id);
       _flContracts = snap.docs.map(d=>({id:d.id,...d.data()}));
       _lsSet('flContracts',_flContracts);
@@ -777,17 +782,17 @@ async function flLoadAll(){
         flPushNotif('🎉 Contract awarded: '+c.title+' — KES '+Number(c.amount).toLocaleString(),'contract');
       });
       if(_activeTab==='dashboard') flDash(_activeDashSub);
-    });
-    onSnapshot(query(collection(db,'digitalReviews'), orderBy('createdAt','desc'), limit(200)), snap=>{
+    }, function(err){console.warn('[digital] contracts listener error:',err);}));
+    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalReviews'), orderBy('createdAt','desc'), limit(200)), snap=>{
       var prev = _flReviews.map(r=>r.id);
       _flReviews = snap.docs.map(d=>({id:d.id,...d.data()}));
       _lsSet('flReviews',_flReviews);
       _flReviews.filter(r=>!prev.includes(r.id)&&r.sellerUid===_uid()).forEach(r=>{
         flPushNotif('⭐ New '+(r.rating)+'-star review from '+r.reviewerName,'review');
       });
-    });
+    }, function(err){console.warn('[digital] reviews listener error:',err);}));
     /* messages listener — load all chats involving current user */
-    onSnapshot(query(collection(db,'digitalMessages'), orderBy('ts','asc'), limit(500)), snap=>{
+    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalMessages'), orderBy('ts','asc'), limit(500)), snap=>{
       var uid=_uid();
       var byChat={};
       snap.docs.forEach(d=>{var m={id:d.id,...d.data()};if(!byChat[m.chatId])byChat[m.chatId]=[];byChat[m.chatId].push(m);});
@@ -804,7 +809,7 @@ async function flLoadAll(){
       var mc=document.getElementById('flMsgCount'); if(mc) mc.textContent=unread||'';
       if(_activeTab==='messages') flRenderConvos();
       if(document.getElementById('chatModal').classList.contains('open')&&_currentChatId) _renderMsgs(_flMessages[_currentChatId]||[]);
-    });
+    }, function(err){console.warn('[digital] messages listener error:',err);}));
   }catch(e){}
 }
 
@@ -1338,15 +1343,21 @@ async function _openChat(uidA,uidB,ctx,subject,titleLabel){
   var msgs=_flMessages[_currentChatId]||[];
   _renderMsgs(msgs);
   openModal('chatModal');
+  /* Cancel previous chat listener before registering a new one — prevents listener stacking */
+  if(_chatUnsub){_chatUnsub();_chatUnsub=null;}
   var db=await _getDb();
   if(db){try{
     var m=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
     var {collection,query,orderBy,limit,onSnapshot}=m;
-    onSnapshot(query(collection(db,'digitalMessages'),orderBy('ts','asc'),limit(200)), snap=>{
-      var all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.chatId===_currentChatId);
-      _flMessages[_currentChatId]=all;
-      if(document.getElementById('chatModal').classList.contains('open')) _renderMsgs(all);
-    });
+    _chatUnsub=onSnapshot(
+      query(collection(db,'digitalMessages'),orderBy('ts','asc'),limit(200)),
+      snap=>{
+        var all=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.chatId===_currentChatId);
+        _flMessages[_currentChatId]=all;
+        if(document.getElementById('chatModal').classList.contains('open')) _renderMsgs(all);
+      },
+      function(err){console.warn('[digital] chat listener error:',err);_chatUnsub=null;}
+    );
   }catch(e){}}
 }
 

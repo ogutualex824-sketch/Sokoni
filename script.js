@@ -2369,7 +2369,7 @@ function showAbandonedCartReminder(count){
   if("Notification" in window && Notification.permission === "granted"){
     new Notification("🛒 You left items in your cart!", {
       body: `You have ${count} item${count>1?"s":""} waiting. Complete your purchase before they sell out!`,
-      icon: "assets/logosokoni.png"
+      icon: "assets/Sokoni Logo.png"
     });
   }
 
@@ -2644,7 +2644,7 @@ function showPromoToast(msg){
     toast.className = "sokoni-promo-toast";
     toast.innerHTML = `
         <div class="spt-inner">
-            <img src="assets/logosokoni.png" class="spt-logo">
+            <img src="assets/Sokoni Logo.png" class="spt-logo">
             <span>${msg}</span>
             <button onclick="this.parentElement.parentElement.remove()">✕</button>
         </div>
@@ -2660,7 +2660,7 @@ function showWelcomePopup(){
     pop.innerHTML = `
         <div class="mkt-popup-box">
             <button class="mkt-close" onclick="document.getElementById('welcomePopup').remove()">✕</button>
-            <img src="assets/Sokonilogo2.png" class="mkt-popup-logo">
+            <img src="assets/Sokoni Logo.png" class="mkt-popup-logo">
             <h2>Welcome to Sokoni! 🎉</h2>
             <p>Kenya's global marketplace — buy, sell, rent, book and more.</p>
             <div class="mkt-popup-perks">

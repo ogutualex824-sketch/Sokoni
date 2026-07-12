@@ -17,11 +17,36 @@
 | Legal Compliance test suite | ✅ **29/29 PASS** (`node scripts/test-legal-compliance.js`) |
 | Live entry points (15 pages: home, login, signup, onboarding, pos-setup, pos, provider-dashboard, legal-centre, checkout, wallet, search, jobs, property, healthcare, admin-os) | ✅ **all HTTP 200** |
 | Critical dispatchers live | ✅ 7/7 (smartPos, provider, onboarding, subscriptions, legal, adminOs, services) |
+| **Authentication + App Check** (browser E2E, live project) | ✅ **PASS — production-ready.** See section below |
 | Cloud Function inventory | 1410 deployed · 1203 exported · **208 orphans** · 1 non-function export (`COLLECTION_REGISTRY`, benign) |
 | Composite indexes | 226 defined (4 uncommitted/undeployed) |
 
 ### ⚠️ NOT verified (cannot be, from this environment — do not read as passing)
 Payments E2E (M-PESA/IntaSend live money), PWA offline/install/background-sync, accessibility audit, dark/light-mode visual pass, search ranking/perf under load, monitoring/alerting/backup restore, cold-start latency, bundle size. **These require a device, emulator, or load harness.** They must be executed before GO.
+
+---
+
+## ✅ Authentication & App Check — PRODUCTION-READY (verified 2026-07-12)
+
+Verified in a real Chromium against the **live `sokoni-aeb26` project** (Playwright, not static analysis). A root-cause defect was found and fixed: `FIREBASE_APPCHECK_DEBUG_TOKEN = true` minted a **new random, unregistered** debug token per browser profile → `403 App attestation failed` → and a failed App Check token fetch **aborts every Firebase Auth request before it is sent**. Proven by A/B: with App Check on, `identitytoolkit` received **zero** requests and all methods returned `auth/network-request-failed`; with it off, the identical calls succeeded. Fix: the *registered* token is now pinned from `localStorage` on localhost (`firebase.js`, `sokoni-appcheck.js`).
+
+| Check | Result |
+|---|---|
+| App Check `exchangeDebugToken` (localhost) | ✅ **200** — App Check JWT issued (`"provider":"debug"`, TTL 3600s) |
+| App Check token generation + **refresh** | ✅ 930-char token; forced refresh issues a new token |
+| App Check init **before** Auth | ✅ `initializeAppCheck()` precedes `getAuth()` — [firebase.js:84-92](../firebase.js#L84-L92) |
+| Production attestation (`mysokoni.co.ke`) | ✅ **no** debug token set; attests via `exchangeRecaptchaV3Token` |
+| Remaining HTTP 403s | ✅ **ZERO** across App Check, Auth and Firestore |
+| Email/Password E2E (create → sign-in → delete) | ✅ PASS — real account created, signed in, deleted |
+| Password Reset | ✅ PASS — `sendOobCode` 200, reset email sent |
+| Email Verification | ✅ PASS — verification email sent |
+| Google OAuth | ✅ Popup opens to `/__/auth/handler`; localhost + prod are authorized domains, provider enabled |
+| Phone OTP | ✅ Invisible reCAPTCHA renders; `recaptchaParams` 200 |
+| Temporary debug code removed | ✅ `security.js` `AUTH DEBUG` block deleted; rejection suppression restored |
+
+**Residual manual steps (cannot be automated — require a human, not defects):** completing a Google login needs real Google credentials, and receiving an OTP needs a real handset. Both were driven to the provider handoff successfully. **Developer note:** each dev must pin the registered token once per browser — `localStorage.setItem('SOKONI_APPCHECK_DEBUG_TOKEN', '<uuid>')`.
+
+This section **does not change the overall verdict** — C1/C2/C4 below are unrelated to authentication and remain open.
 
 ---
 
@@ -59,7 +84,8 @@ Only the **merchant** flow uses `SokoniLegalGate`. Buyer/Provider/Driver/Rider/P
 
 | Dimension | Score | Basis |
 |---|---:|---|
-| Security | **82** | App Check + guards + server-side legal enforcement (no forged acceptance, server timestamps/IP, immutable audit) + ownership checks. Deducted: rules uncommitted/unreviewed (H5). |
+| Security | **85** | App Check **now verified working end-to-end** (was silently 403-ing and blocking all auth) + guards + server-side legal enforcement (no forged acceptance, server timestamps/IP, immutable audit) + ownership checks. Deducted: rules uncommitted/unreviewed (H5). |
+| Authentication | **95** | Email/Password, Password Reset, Email Verification, Google OAuth and Phone OTP all verified against the live project; App Check attests with zero 403s. Deducted: final Google-login and OTP-SMS steps need a human. |
 | Performance | **78** | Dispatcher consolidation, index-free queries, version/flag caching. Deducted: 208 orphan services, cold starts & bundle size unmeasured. |
 | Reliability | **62** | Guards green, 29/29 tests, all entry points 200. Deducted heavily: provider onboarding broken (C2), 12 dead dashboards (C3). |
 | Scalability | **85** | One-service-per-domain dispatcher architecture; quota headroom reclaimed. |

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
@@ -6,11 +6,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Plans & Pricing — SOKONI</title>
-<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
 <link rel="manifest" href="manifest.json">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
+<script src="/sokoni-appcheck.js"></script>
 <script src="sokoni-config.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -168,7 +170,7 @@ td:first-child{color:var(--sub)}
 <div id="toast"></div>
 
 <script>
-firebase.initializeApp(window.SOKONI_CONFIG || {});
+if(!firebase.apps.length)firebase.initializeApp(window.SOKONI_CONFIG || {});
 const auth = firebase.auth();
 const fns  = firebase.app().functions('us-central1');
 

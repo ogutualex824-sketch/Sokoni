@@ -8,8 +8,8 @@
   <title>Driver Registration — SOKONI</title>
   <meta name="description" content="Join SOKONI as a delivery driver or boda rider. Apply in 4 easy steps.">
   <meta name="robots" content="noindex">
-  <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#71ff00">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -134,7 +134,7 @@
   <!-- Top bar -->
   <div class="wiz-topbar">
     <button class="wiz-back" onclick="goBack()" aria-label="Back">&#8592;</button>
-    <img src="assets/logosokoni.png" alt="SOKONI" class="wiz-topbar-logo">
+    <img src="assets/Sokoni Logo.png" alt="SOKONI" class="wiz-topbar-logo">
     <span class="wiz-topbar-title">Driver Application</span>
     <span class="wiz-step-counter" id="stepCounter">Step 1 of 4</span>
   </div>
@@ -318,11 +318,8 @@
       </div>
     </div>
 
-    <label class="wiz-check-label">
-      <input type="checkbox" id="drvAgree">
-      I agree to the SOKONI Driver Terms and Code of Conduct. I understand that maintaining a rating above 4.0 is required to stay active.
-    </label>
-    <div class="wiz-error" id="errDrvAgree" style="margin-top:8px;">Please agree to the driver terms.</div>
+    <div id="legal-gate-drv"></div>
+    <div class="wiz-error" id="errDrvAgree" style="margin-top:8px;display:none;">Please review and accept the legal agreements to continue.</div>
 
     <div class="wiz-btn-row">
       <button class="wiz-btn ghost" onclick="goToStep(2)">&#8592; Back</button>
@@ -344,6 +341,7 @@
   </div>
 
   <script type="module" src="firebase.js"></script>
+  <script src="sokoni-legal-gate.js" defer></script>
   <script src="sokoni-trust.js" defer></script>
   <script src="kass-widget.js" defer></script>
   <script src="scroll-top.js" defer></script>
@@ -352,6 +350,7 @@
     var TOTAL_STEPS = 4;
     var driverData  = {};
     var gpsEnabled  = false;
+    var _legalOk    = false;
 
     /* ── Populate year select ── */
     (function(){
@@ -399,6 +398,13 @@
       updateProgressUI();
       window.scrollTo({top:0,behavior:'smooth'});
       if(window.SokoniOnboarding) SokoniOnboarding.setStep('driver', n, driverData);
+      if(n===3){
+        var wrap=document.getElementById('legal-gate-drv');
+        if(wrap&&window.SokoniLegalGate&&!wrap.dataset.mounted){
+          wrap.dataset.mounted='1';
+          window.SokoniLegalGate.mount(wrap,{role:'driver',onComplete:function(ok){_legalOk=!!ok;}});
+        } else if(!window.SokoniLegalGate){_legalOk=true;}
+      }
     }
 
     function goBack(){
@@ -485,11 +491,10 @@
         return;
       }
       var mpesa  = document.getElementById('drvMpesa').value.trim();
-      var agree  = document.getElementById('drvAgree').checked;
       var valid  = true;
       var payout = driverData.payoutFrequency || 'daily';
       if(!/^(07|01)\d{8}$/.test(mpesa)){ showErr('errDrvMpesa',true); markInvalid('drvMpesa',true); valid=false; } else { showErr('errDrvMpesa',false); markInvalid('drvMpesa',false); }
-      if(!agree){ showErr('errDrvAgree',true); valid=false; } else showErr('errDrvAgree',false);
+      if(!_legalOk){ showErr('errDrvAgree',true); valid=false; } else showErr('errDrvAgree',false);
       if(!valid) return;
 
       driverData.mpesa           = mpesa;

@@ -1580,7 +1580,7 @@ body.queue-mode .hotkey-bar      { display: none; }
   </div>
 </div>
 
-<script src="firebase.js"></script>
+<script type="module" src="firebase.js"></script>
 <script src="pos-db.js"></script>
 <script src="pos-sync.js"></script>
 <script src="pos-scanner.js"></script>
@@ -1589,6 +1589,9 @@ body.queue-mode .hotkey-bar      { display: none; }
 <script src="pos-customers.js"></script>
 <script src="pos-loyalty-engine.js"></script>
 <script src="sokoni-universal-printer.js"></script>
+<script src="sokoni-bluetooth-printer.js"></script>
+<script src="sokoni-printer-manager.js"></script>
+<script src="sokoni-pos-print-service.js"></script>
 <script src="pos-cash-manager.js"></script>
 <script src="sokoni-pos-performance.js"></script>
 <script src="pos-multi-till.js"></script>
@@ -2826,50 +2829,93 @@ const Checkout = (() => {
   }
 
   async function _printReceipt(receipt) {
-    try {
-      if (window.SokoniPrinter?.connected) {
-        await SokoniPrinter.print('sale', {
-          ...receipt,
-          cashierName: _s.cashierName,
-          tillNumber:  _s.registerId || 'Default',
-          branchId:    _s.branchId,
+    /* Route all print jobs through the production print service.
+       PosPrintService handles: auto-print settings, offline queue,
+       cash drawer, audit logging, performance metrics, history. */
+    if (window.PosPrintService) {
+      try {
+        await PosPrintService.printAfterSale(receipt, {
+          cashierName:  _s.cashierName,
+          registerName: _s.registerName || _s.registerId || 'Default',
+          registerId:   _s.registerId   || 'default',
+          branchId:     _s.branchId     || '',
+          merchantId:   _s.merchantId   || '',
+          method:       _s.lastPaymentMethod || '',
+          payments:     _s.lastPayments || [],
+          loyalty:      receipt.loyalty || {},
+          store: {
+            businessName: _s.merchantName || 'SOKONI SmartPOS',
+            branchName:   _s.branchName   || _s.branchId || '',
+            address:      _s.address      || 'Nairobi, Kenya',
+            phone:        _s.phone        || '',
+            kraPin:       _s.kraPin       || '',
+          },
         });
+      } catch (err) {
+        /* Silent fallback — never block checkout for a printer failure */
+        console.warn('[POS] PosPrintService.printAfterSale failed, trying raw fallback:', err?.message);
+        try {
+          if (window.SokoniPrinter?.connected) {
+            await SokoniPrinter.print('sale', {
+              ...receipt,
+              cashierName: _s.cashierName,
+              tillNumber:  _s.registerId || 'Default',
+              branchId:    _s.branchId,
+            });
+          }
+        } catch (_) {}
       }
-    } catch (_) {}
+    } else {
+      /* Legacy fallback — PosPrintService not loaded */
+      try {
+        if (window.SokoniPrinter?.connected) {
+          await SokoniPrinter.print('sale', {
+            ...receipt,
+            cashierName: _s.cashierName,
+            tillNumber:  _s.registerId || 'Default',
+            branchId:    _s.branchId,
+          });
+        }
+      } catch (_) {}
 
-    /* Cash drawer — open after receipt (default mode) */
-    if (window.CashDrawer) {
-      const mode = CashDrawer.getConfig().openMode;
-      const hasCashLeg = (_s.lastPaymentMethod === 'cash') ||
-        (_s.lastPayments || []).some(p => p.method === 'cash');
-      if (hasCashLeg && (mode === 'after_receipt' || mode === 'before_receipt')) {
-        CashDrawer.openAfterSale({
-          payments: _s.lastPayments,
-          method: _s.lastPaymentMethod,
-          receiptNo: receipt?.receiptNo,
-          amount: receipt?.grandTotal,
-          shiftId: _s.shiftId,
-          cashierId: _s.cashierId, cashierName: _s.cashierName,
-          merchantId: _s.merchantId, branchId: _s.branchId,
-        }).catch(() => {});
-        _logDrawerEvent({
-          merchantId: _s.merchantId, registerId: _s.registerId || 'default',
-          reason: 'payment', branch: _s.branchId || '', role: _s.role || 'cashier',
-          deviceId: (navigator.userAgent || '').slice(0, 64),
-        });
+      /* Legacy cash drawer — handled by PosPrintService.openDrawer when loaded */
+      if (window.CashDrawer) {
+        const mode = CashDrawer.getConfig().openMode;
+        const hasCashLeg = (_s.lastPaymentMethod === 'cash') ||
+          (_s.lastPayments || []).some(p => p.method === 'cash');
+        if (hasCashLeg && (mode === 'after_receipt' || mode === 'before_receipt')) {
+          CashDrawer.openAfterSale({
+            payments: _s.lastPayments,
+            method: _s.lastPaymentMethod,
+            receiptNo: receipt?.receiptNo,
+            amount: receipt?.grandTotal,
+            shiftId: _s.shiftId,
+            cashierId: _s.cashierId, cashierName: _s.cashierName,
+            merchantId: _s.merchantId, branchId: _s.branchId,
+          }).catch(() => {});
+          _logDrawerEvent({
+            merchantId: _s.merchantId, registerId: _s.registerId || 'default',
+            reason: 'payment', branch: _s.branchId || '', role: _s.role || 'cashier',
+            deviceId: (navigator.userAgent || '').slice(0, 64),
+          });
+        }
       }
     }
   }
 
   function _printReceiptLocal(totals, method) {
     const receipt = {
-      receiptNo: Date.now().toString(36).slice(-6).toUpperCase(),
-      items: _s.items,
-      subtotal: totals.subtotal,
-      tax: totals.tax,
-      total: totals.total,
+      receiptNo:     Date.now().toString(36).slice(-6).toUpperCase(),
+      items:         _s.items,
+      subtotal:      totals.subtotal,
+      tax:           totals.tax,
+      total:         totals.total,
+      grandTotal:    totals.total,
       paymentMethod: method,
-      timestamp: new Date().toISOString(),
+      payments:      _s.lastPayments || [{ method, amount: totals.total }],
+      cashierName:   _s.cashierName,
+      timestamp:     new Date().toISOString(),
+      _offline:      true,
     };
     _s.lastPaymentMethod = method;
     _printReceipt(receipt);

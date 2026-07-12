@@ -94,18 +94,18 @@ body{
 }
 
 @keyframes logoPop{
-    0%  { transform:scale(1)    drop-shadow(0 0 0px rgba(113,255,0,0)); }
-    35% { transform:scale(1.09) drop-shadow(0 0 18px rgba(113,255,0,0.35)); }
-    55% { transform:scale(0.97) drop-shadow(0 0 8px  rgba(113,255,0,0.15)); }
-    75% { transform:scale(1.04) drop-shadow(0 0 12px rgba(113,255,0,0.2)); }
-    100%{ transform:scale(1)    drop-shadow(0 0 0px rgba(113,255,0,0)); }
+    0%  { transform:scale(1); }
+    35% { transform:scale(1.07); }
+    55% { transform:scale(0.97); }
+    75% { transform:scale(1.03); }
+    100%{ transform:scale(1); }
 }
 
 .auth-logo{
-    width:150px;
+    width:180px;
     height:auto;
     display:block;
-    filter:drop-shadow(0 4px 16px rgba(113,255,0,0.2));
+    border-radius:8px;
 }
 
 /* TITLE */
@@ -252,14 +252,14 @@ body{
 
 @media(max-width:480px){
     .auth-card{ padding:32px 22px; }
-    .auth-logo{ width:120px; }
+    .auth-logo{ width:150px; }
 }
 
 /* ── Auth pages extra breakpoints ── */
 @media(max-width:600px){
   .auth-page{padding:20px 12px 80px;}
   .auth-card{margin:0 auto;border-radius:20px;padding:28px 18px;}
-  .auth-logo{width:130px;}
+  .auth-logo{width:150px;}
   .auth-title{font-size:22px;}
   .auth-input{padding:13px 14px;font-size:16px;}
   .auth-btn{padding:14px;font-size:15px;}

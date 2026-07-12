@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    SOKONI Email Template Library  v1.0
    60+ responsive HTML templates — Outlook · Gmail · Apple Mail · Yahoo
    SOKONI brand: dark theme · #71ff00 green · #00d4ff cyan
@@ -8,7 +8,7 @@
 const { FROM } = require("./email-service");
 const { COMPANY } = require("./company-identity");
 
-const LOGO_URL    = "https://mysokoni.co.ke/assets/Sokonilogo2.png";
+const LOGO_URL    = "https://mysokoni.co.ke/assets/Sokoni%20Logo.png";
 const BASE_URL    = "https://mysokoni.co.ke";
 const SUPPORT_URL = `${BASE_URL}/support.html`;
 const PRIVACY_URL = `${BASE_URL}/trust.html`;

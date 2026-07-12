@@ -145,46 +145,66 @@
   if (!document.getElementById('splashScreen')) {
     document.write(
       '<style id="splashPageStyle">' +
-        /* ── Base layout — self-contained so pages without style.css still work ── */
         '.splash-screen{position:fixed;top:0;left:0;width:100%;height:100vh;' +
           'display:flex;flex-direction:column;justify-content:center;align-items:center;' +
           'z-index:999999;overflow:hidden;}' +
         '#splashCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;}' +
         '.splash-content{position:relative;z-index:2;display:flex;flex-direction:column;' +
           'align-items:center;justify-content:center;text-align:center;color:white;' +
-          'width:100%;max-width:340px;padding:0 16px;}' +
-        '.splash-logo{width:220px;max-width:68vw;height:auto;display:block;' +
-          'margin:0 auto 16px;animation:splashLogoIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both,' +
-          'splashLogoPulse 2.4s ease-in-out 0.7s infinite;}' +
-        '@keyframes splashLogoIn{from{opacity:0;transform:scale(0.8) translateY(14px);}to{opacity:1;transform:scale(1) translateY(0);}}' +
-        '@keyframes splashLogoPulse{0%,100%{filter:drop-shadow(0 0 10px ' + glow + ');}50%{filter:drop-shadow(0 0 22px ' + glow + ');}}' +
-        '.loader-ring{width:52px;height:52px;border-radius:50%;border:3px solid rgba(255,255,255,0.08);' +
-          'border-top-color:' + color + ';box-shadow:0 0 22px ' + glow + ';' +
-          'animation:splashSpin 0.85s linear infinite;margin:0 auto 12px;}' +
-        '@keyframes splashSpin{to{transform:rotate(360deg);}}' +
-        '.splash-tagline{font-size:11px;font-weight:800;letter-spacing:2.5px;' +
-          'color:rgba(255,255,255,0.75);text-transform:uppercase;' +
-          'animation:splashFadeUp 0.6s ease 0.4s both;}' +
-        '@keyframes splashFadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}' +
-        /* ── Per-page accent overrides ── */
+          'width:100%;max-width:380px;padding:0 20px;}' +
         '#splashScreen{' +
-          'background:radial-gradient(ellipse at 50% 42%,' + bg1 + ' 0%,' + bg2 + ' 72%) !important;}' +
-        '#splashBadge{' +
-          'display:inline-flex;align-items:center;justify-content:center;' +
-          'width:58px;height:58px;border-radius:16px;font-size:28px;' +
-          'background:' + glow + ';border:1px solid ' + color + '44;' +
-          'margin:0 auto 14px;' +
-          'animation:splashBadgePulse 2s ease-in-out infinite,splashLogoIn 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.2s both;}' +
-        '@keyframes splashBadgePulse{' +
-          '0%,100%{transform:scale(1);box-shadow:0 0 0 0 ' + color + '33;}' +
-          '50%{transform:scale(1.08);box-shadow:0 0 0 10px ' + color + '00;}}' +
-        '#splashHub{' +
-          'color:' + color + ';font-size:11px;font-weight:800;letter-spacing:1.5px;' +
-          'text-transform:uppercase;margin-top:6px;' +
-          'animation:splashFadeUp 0.6s ease 0.5s both;}' +
-        '#splashBar{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);' +
-          'width:130px;height:2px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden;z-index:3;}' +
-        '#splashBarFill{height:100%;width:0;background:linear-gradient(90deg,' + color + '99,' + color + ');border-radius:2px;' +
+          'background:' +
+            'radial-gradient(ellipse 90% 80% at 50% 44%,' + bg1 + ' 0%,' + bg2 + ' 50%,#111111 100%),' +
+            'radial-gradient(ellipse 55% 55% at 16% 84%,' + glow + ' 0%,transparent 55%),' +
+            'radial-gradient(ellipse 55% 55% at 84% 16%,' + glow + ' 0%,transparent 55%) !important;}' +
+        '.splash-logo-frame{display:flex;align-items:center;gap:14px;margin:0 auto 22px;}' +
+        '.splash-logo{width:min(62px,17vw);height:auto;display:block;flex-shrink:0;' +
+          'animation:splashLogoIn 0.72s cubic-bezier(0.34,1.48,0.64,1) both,' +
+          'splashLogoBreathe 3.8s ease-in-out 0.9s infinite,' +
+          'splashLogoGlow 2.8s ease-in-out 0.9s infinite;}' +
+        '.splash-logo-wm{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;' +
+          'font-size:clamp(26px,7.5vw,38px);font-weight:900;letter-spacing:0.04em;' +
+          'color:#fff;line-height:1;' +
+          'animation:splashLogoIn 0.72s cubic-bezier(0.34,1.48,0.64,1) 0.06s both;}' +
+        '.splash-logo-wm em{font-style:normal;color:' + color + ';}' +
+        '@keyframes splashLogoIn{' +
+          'from{opacity:0;transform:scale(0.70) translateY(22px);filter:blur(6px) brightness(1.4);}' +
+          'to{opacity:1;transform:scale(1) translateY(0);filter:blur(0) brightness(1);}}' +
+        '@keyframes splashLogoBreathe{0%,100%{transform:scale(1);}50%{transform:scale(1.022);}}' +
+        '@keyframes splashLogoGlow{' +
+          '0%,100%{filter:drop-shadow(0 0 12px ' + glow + ') drop-shadow(0 0 22px ' + glow + ');}' +
+          '50%{filter:drop-shadow(0 0 28px ' + glow + ') drop-shadow(0 0 48px ' + glow + ');}}' +
+        '#splashBadge{display:inline-flex;align-items:center;justify-content:center;' +
+          'width:64px;height:64px;border-radius:20px;font-size:30px;' +
+          'background:' + glow + ';border:1px solid ' + color + '40;' +
+          'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);' +
+          'box-shadow:0 8px 28px ' + color + '22,inset 0 1px 0 rgba(255,255,255,0.09);' +
+          'margin:0 auto 18px;' +
+          'animation:splashBadgeFloat 2.5s ease-in-out 0.3s infinite alternate,' +
+            'splashLogoIn 0.55s cubic-bezier(0.34,1.5,0.64,1) 0.16s both;}' +
+        '@keyframes splashBadgeFloat{' +
+          'from{transform:translateY(0) scale(1);}to{transform:translateY(-6px) scale(1.05);}}' +
+        '.loader-outer{width:56px;height:56px;position:relative;margin:0 auto 20px;}' +
+        '.loader-ring-a{position:absolute;inset:0;border-radius:50%;' +
+          'border:2px solid rgba(255,255,255,0.06);border-top-color:' + color + ';' +
+          'box-shadow:0 0 16px ' + glow + ';animation:splashSpin 1.25s linear infinite;}' +
+        '.loader-ring-b{position:absolute;inset:10px;border-radius:50%;' +
+          'border:2px solid rgba(255,255,255,0.04);border-bottom-color:' + color + '99;' +
+          'animation:splashSpinRev 0.68s linear infinite;}' +
+        '@keyframes splashSpin{to{transform:rotate(360deg);}}' +
+        '@keyframes splashSpinRev{to{transform:rotate(-360deg);}}' +
+        '.splash-tagline{font-size:9.5px;font-weight:900;letter-spacing:3.2px;text-transform:uppercase;' +
+          'background:linear-gradient(90deg,rgba(255,255,255,0.55),' + color + ',rgba(255,255,255,0.55));' +
+          'background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;' +
+          'animation:splashFadeUp 0.65s ease 0.45s both;}' +
+        '@keyframes splashFadeUp{from{opacity:0;transform:translateY(9px);}to{opacity:1;transform:translateY(0);}}' +
+        '#splashHub{color:' + color + ';font-size:10.5px;font-weight:800;letter-spacing:1.6px;' +
+          'text-transform:uppercase;margin-top:9px;min-height:15px;' +
+          'animation:splashFadeUp 0.65s ease 0.58s both;}' +
+        '#splashBar{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);' +
+          'width:160px;height:2.5px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;z-index:3;}' +
+        '#splashBarFill{height:100%;width:0;' +
+          'background:linear-gradient(90deg,' + color + '70,' + color + ');border-radius:2px;' +
           'transition:width ' + MIN + 'ms linear;}' +
       '</style>'
     );
@@ -192,9 +212,15 @@
       '<div id="splashScreen" class="splash-screen">' +
         '<canvas id="splashCanvas"></canvas>' +
         '<div class="splash-content" style="position:relative;z-index:2;">' +
-          '<img src="assets/Sokonilogo2.png" class="splash-logo" alt="SOKONI">' +
+          '<div class="splash-logo-frame">' +
+            '<img src="assets/Sokoni Logo.png" class="splash-logo" alt="">' +
+            '<div class="splash-logo-wm">SOKO<em>NI</em></div>' +
+          '</div>' +
           '<div id="splashBadge">' + emoji + '</div>' +
-          '<div class="loader-ring"></div>' +
+          '<div class="loader-outer">' +
+            '<div class="loader-ring-a"></div>' +
+            '<div class="loader-ring-b"></div>' +
+          '</div>' +
           '<div class="splash-tagline">KENYA\'S GLOBAL MARKETPLACE</div>' +
           '<div id="splashHub">' + hub + '</div>' +
         '</div>' +
@@ -257,22 +283,41 @@
             pts.push({
               x:      Math.random() * canvas.width,
               y:      Math.random() * canvas.height,
-              r:      Math.random() * 2.8 + 0.6,
-              dx:     (Math.random() - 0.5) * 1.4,
-              dy:     (Math.random() - 0.5) * 1.4,
-              a:      Math.random() * 0.6 + 0.2,
-              accent: Math.random() > 0.4
+              r:      Math.random() * 2.4 + 0.4,
+              dx:     (Math.random() - 0.5) * 1.1,
+              dy:     (Math.random() - 0.5) * 1.1,
+              a:      Math.random() * 0.55 + 0.15,
+              accent: Math.random() > 0.38
             });
           }
           var animId;
           function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            /* Constellation lines between nearby particles */
+            for (var ii = 0; ii < pts.length - 1; ii++) {
+              for (var jj = ii + 1; jj < pts.length; jj++) {
+                var ddx = pts[ii].x - pts[jj].x;
+                var ddy = pts[ii].y - pts[jj].y;
+                var dist = Math.sqrt(ddx * ddx + ddy * ddy);
+                if (dist < 110) {
+                  var la = (1 - dist / 110) * 0.055;
+                  ctx.beginPath();
+                  ctx.moveTo(pts[ii].x, pts[ii].y);
+                  ctx.lineTo(pts[jj].x, pts[jj].y);
+                  ctx.strokeStyle = (pts[ii].accent || pts[jj].accent)
+                    ? 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + la + ')'
+                    : 'rgba(255,255,255,' + (la * 0.3) + ')';
+                  ctx.lineWidth = 0.5;
+                  ctx.stroke();
+                }
+              }
+            }
             pts.forEach(function (p) {
               ctx.beginPath();
               ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
               ctx.fillStyle = p.accent
                 ? 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + p.a + ')'
-                : 'rgba(255,255,255,' + (p.a * 0.25) + ')';
+                : 'rgba(255,255,255,' + (p.a * 0.22) + ')';
               ctx.fill();
               p.x += p.dx; p.y += p.dy;
               if (p.x < 0 || p.x > canvas.width)  p.dx *= -1;

@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI Auth Guard — auth-guard.js
    Runs synchronously in <head> on every page that has
    data-require-auth="true" on <html>.
@@ -81,7 +81,7 @@
 
     /* Logo */
     var logo = document.createElement('img');
-    logo.src = 'assets/Sokonilogo2.png';
+    logo.src = 'assets/Sokoni Logo.png';
     logo.className = 'sg-logo';
     logo.alt = 'SOKONI';
     logo.onerror = function(){ this.style.display = 'none'; };

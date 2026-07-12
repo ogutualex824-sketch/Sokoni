@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SOKONI SECURITY MODULE
  * Provides XSS prevention, input sanitisation, payment validation,
  * and Content Security Policy for all pages.
@@ -652,7 +652,7 @@ window.handleError       = SokoniSecurity.handleError;
     var shield = document.createElement('div');
     shield.id  = 'sokoniPageShield';
     shield.innerHTML =
-      '<img src="assets/logosokoni.png" alt="SOKONI" onerror="this.style.display=\'none\'">' +
+      '<img src="assets/Sokoni Logo.png" alt="SOKONI" onerror="this.style.display=\'none\'">' +
       '<div class="sk-ring"></div>';
     /* Insert at very top of body */
     if(document.body){
@@ -703,12 +703,12 @@ window.handleError       = SokoniSecurity.handleError;
   window.addEventListener('unhandledrejection', function(e){
     var reason = e.reason;
     var msg = reason && (reason.message || reason.code || String(reason));
-    /* ⚠️ AUTH DEBUG: suppression disabled — all Firebase/network errors now visible in console.
-       Re-enable e.preventDefault() once root cause is confirmed and fixed. */
-    console.error('[SOKONI] Unhandled rejection (auth debug):', msg, reason);
-    // if(!msg || /network|quota|offline|unavailable|aborted|fetch|firebase/i.test(msg)){
-    //   e.preventDefault();
-    // }
+    /* Auth/App Check errors are surfaced by their own handlers, so a benign transient
+       rejection here must not crash the page. Swallow known-transient classes only —
+       anything else still propagates so real bugs stay visible. */
+    if(!msg || /network|quota|offline|unavailable|aborted|fetch|firebase/i.test(msg)){
+      e.preventDefault();
+    }
   });
 
   /* 2. Passive touch/scroll listeners — eliminates scroll jank on mobile */

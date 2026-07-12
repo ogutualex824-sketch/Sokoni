@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SOKONI Payment Gateway — Universal Commission & Booking Deposit System
  * Every booking, WhatsApp connect, and service interaction passes through here.
  * SOKONI earns its cut whether payment happens on-platform or off.
@@ -182,7 +182,7 @@ function showGateway(options){
 
         <!-- SOKONI branding -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-          <img src="assets/Sokonilogo2.png" style="height:28px;" onerror="this.style.display='none'">
+          <img src="assets/Sokoni Logo.png" style="height:28px;" onerror="this.style.display='none'">
           <div style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.7);text-transform:uppercase;letter-spacing:.08em;">Secure Booking</div>
         </div>
 

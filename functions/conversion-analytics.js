@@ -17,7 +17,6 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule }        = require("firebase-functions/v2/scheduler");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 
-const HEALTH_URL   = "https://us-central1-sokoni-aeb26.cloudfunctions.net/systemHealthCheck";
 const FUNNEL_STEPS = ["addToCart", "checkoutStarted", "paymentAttempted"];
 
 function requireAdmin(request) {
@@ -119,8 +118,70 @@ exports.getFunnelMetrics = onCall(
   }
 );
 
+/* ── _runInlineHealthCheck ───────────────────────────────────────
+   CF-02 fix: runs the three core health probes in-process instead of
+   making an outbound HTTP call to systemHealthCheck (which would bill
+   two CF invocations per hourly schedule tick).
+   Returns { status, httpCode, checks } — same shape as the HTTP
+   response so the healthSnapshots schema is unchanged.
+═══════════════════════════════════════════════════════════════════ */
+async function _runInlineHealthCheck(db) {
+  async function _timed(fn) {
+    const t = Date.now();
+    try {
+      const detail = await Promise.race([
+        fn(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 4000)),
+      ]);
+      return { status: "ok", latencyMs: Date.now() - t, detail: detail || null };
+    } catch (e) {
+      return { status: "error", latencyMs: Date.now() - t, error: e.message };
+    }
+  }
+
+  const [firestoreResult, emailQueueResult, algoliaResult] = await Promise.all([
+    _timed(async () => {
+      const probe  = db.collection("_healthcheck").doc("probe");
+      const marker = Date.now();
+      await probe.set({ ts: marker, checkedAt: FieldValue.serverTimestamp() }, { merge: true });
+      const snap = await probe.get();
+      if (!snap.exists || snap.data().ts !== marker) throw new Error("round-trip mismatch");
+      return { write: "ok", read: "ok" };
+    }),
+    _timed(async () => {
+      const snap  = await db.collection("emailQueue")
+        .where("status", "==", "pending").count().get();
+      const depth = snap.data().count;
+      if (depth > 500) throw new Error(`queue depth critical: ${depth}`);
+      return { depth, threshold: 500, status: depth > 100 ? "warn" : "ok" };
+    }),
+    _timed(async () => {
+      const appId = process.env.ALGOLIA_APP_ID || "FF2WSTR4YC";
+      const r = await fetch(`https://${appId}-dsn.algolia.net/1/isalive`);
+      if (!r.ok && r.status !== 401) throw new Error(`Algolia HTTP ${r.status}`);
+      return { reachable: true, status: r.status };
+    }),
+  ]);
+
+  const checks = { firestore: firestoreResult, emailQueue: emailQueueResult, algolia: algoliaResult };
+
+  const errorKeys = Object.entries(checks)
+    .filter(([, v]) => v.status === "error").map(([k]) => k);
+  const warnKeys  = Object.entries(checks)
+    .filter(([, v]) => v.status === "warn").map(([k])  => k);
+
+  const isCritical    = errorKeys.includes("firestore");
+  const overallStatus = isCritical          ? "unhealthy"
+    : errorKeys.length > 0                  ? "degraded"
+    : warnKeys.length  > 0                  ? "degraded"
+    :                                          "healthy";
+  const httpCode = isCritical ? 503 : overallStatus === "degraded" ? 206 : 200;
+
+  return { status: overallStatus, httpCode, checks };
+}
+
 /* ── recordHealthSnapshot ────────────────────────────────────────
-   Runs every hour. Fetches systemHealthCheck, stores result.
+   Runs every hour. Runs inline health probes, stores result.
    Prunes snapshots older than 30 days to control storage cost.
 ═══════════════════════════════════════════════════════════════════ */
 exports.recordHealthSnapshot = onSchedule(
@@ -131,25 +192,21 @@ exports.recordHealthSnapshot = onSchedule(
 
     let snapshotData;
     try {
-      const res  = await fetch(HEALTH_URL, {
-        signal: AbortSignal.timeout(12000),
-        cache:  "no-store",
-      });
-      const data = await res.json();
+      const { status, httpCode, checks } = await _runInlineHealthCheck(db);
 
       snapshotData = {
         timestamp:        Timestamp.fromDate(ts),
-        status:           data.status || "unknown",
-        httpCode:         res.status,
-        firestoreLatency: data.checks?.firestore?.latencyMs || null,
-        algoliaLatency:   data.checks?.algolia?.latencyMs   || null,
-        emailQueueDepth:  data.checks?.emailQueue?.detail?.depth ?? null,
+        status,
+        httpCode,
+        firestoreLatency: checks.firestore?.latencyMs        || null,
+        algoliaLatency:   checks.algolia?.latencyMs          || null,
+        emailQueueDepth:  checks.emailQueue?.detail?.depth   ?? null,
         checks: Object.fromEntries(
-          Object.entries(data.checks || {}).map(([k, v]) => [k, v.status])
+          Object.entries(checks).map(([k, v]) => [k, v.status])
         ),
       };
     } catch (e) {
-      console.error("[HealthSnapshot] Fetch failed:", e.message);
+      console.error("[HealthSnapshot] Health check failed:", e.message);
       snapshotData = {
         timestamp: Timestamp.fromDate(ts),
         status:    "unreachable",

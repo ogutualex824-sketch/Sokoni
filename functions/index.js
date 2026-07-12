@@ -1854,8 +1854,8 @@ exports.onSellerBroadcast = onDocumentCreated(
         },
         webpush: {
           notification: {
-            icon:  "https://mysokoni.co.ke/assets/logosokoni.png",
-            badge: "https://mysokoni.co.ke/assets/logosokoni.png",
+            icon:  "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
+            badge: "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
             requireInteraction: false,
           },
           fcmOptions: { link: data.url || "https://mysokoni.co.ke/" },
@@ -1887,8 +1887,8 @@ async function sendFcm(token, title, body, relUrl) {
     notification: { title, body },
     webpush: {
       notification: {
-        icon:  "https://mysokoni.co.ke/assets/logosokoni.png",
-        badge: "https://mysokoni.co.ke/assets/logosokoni.png",
+        icon:  "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
+        badge: "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
         requireInteraction: false,
       },
       fcmOptions: { link: "https://mysokoni.co.ke/" + (relUrl || "") },

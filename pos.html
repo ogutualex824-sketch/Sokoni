@@ -1,13 +1,14 @@
 ﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-no-header="true">
 <head><script src="security.js"></script>
+<script type="module" src="firebase.js"></script>
 <script src="shared-header.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#050505">
   <title>SOKONI SmartPOS</title>
-  <link rel="icon" href="assets/logosokoni.png">
+  <link rel="icon" href="assets/Sokoni Logo.png">
   <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="pos.css">
   <link rel="stylesheet" href="pos-bos.css">
@@ -66,7 +67,7 @@
   <div class="wizard-box">
     <a href="seller.html" class="wiz-close-btn" title="Back to Seller Dashboard" aria-label="Close setup">✕</a>
     <div class="wizard-logo">
-      <img src="assets/Sokonilogo2.png" alt="SOKONI" onerror="this.style.display='none'">
+      <img src="assets/Sokoni Logo.png" alt="SOKONI" onerror="this.style.display='none'">
       <h1>SmartPOS</h1>
       <p class="wiz-tagline">Kenya's most powerful point of sale system</p>
     </div>
@@ -249,7 +250,7 @@
 
   <header class="pos-header" role="banner">
     <a href="seller.html" class="pos-header-back" title="Back to Seller Dashboard" aria-label="Back to Seller Dashboard">←</a>
-    <img src="assets/logosokoni.png" class="pos-header-logo" alt="" onerror="this.style.display='none'">
+    <img src="assets/Sokoni Logo.png" class="pos-header-logo" alt="" onerror="this.style.display='none'">
     <div>
       <div class="pos-brand" id="hdr-biz-name">SOKONI SmartPOS</div>
       <div class="pos-branch" id="branch-name-el" onclick="SPosBranch.openSelector()" title="Switch branch" style="cursor:pointer;display:flex;align-items:center;gap:4px;">
@@ -271,6 +272,12 @@
       <!-- SmartPOS 2.0: customer display toggle -->
       <button class="pos-header-btn" id="btn-customer-display" onclick="SPos.customerDisplay.toggle()" title="Customer Display" aria-label="Open customer display" style="position:relative;">
         🖥️<span id="customer-display-dot" style="position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:50%;background:#34d399;display:none;box-shadow:0 0 6px #34d399;"></span>
+      </button>
+      <!-- Printer health chip — injected by PosPrintService at runtime; fallback static button -->
+      <button class="pos-header-btn" id="pps-printer-chip"
+        onclick="window.open('pos-printer-setup.html','_blank','width=560,height=900')"
+        title="Printer not connected — click to set up" style="font-size:13px">
+        ⚪ 🖨️
       </button>
       <!-- SmartPOS 2.0: device hub status -->
       <button class="pos-header-btn" id="btn-device-hub" onclick="SPos.deviceHub.showPanel()" title="Peripherals" aria-label="Peripheral devices" style="position:relative;">
@@ -1432,6 +1439,9 @@
 <script src="sokoni-receipt-engine.js"></script>
 <script src="sokoni-label-engine.js"></script>
 <script src="sokoni-pos-print.js"></script>
+<script src="sokoni-bluetooth-printer.js"></script>
+<script src="sokoni-printer-manager.js"></script>
+<script src="sokoni-pos-print-service.js"></script>
 <script src="pos-manager-auth.js"></script>
 <script src="pos-terminals.js"></script>
 <script src="pos-device-manager.js"></script>

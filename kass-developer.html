@@ -534,6 +534,8 @@ a{color:var(--acc);text-decoration:none}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
+<script src="/sokoni-appcheck.js"></script>
 <script src="sokoni-config.js"></script>
 <script>
 'use strict';
@@ -547,7 +549,7 @@ const ROLE_CONTEXT = 'You are KASS, SOKONI\'s AI assistant for platform develope
 const ROLE_ID      = 'developer';
 
 // â”€â”€ Firebase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-firebase.initializeApp(window.SOKONI_CONFIG || {});
+if(!firebase.apps.length)firebase.initializeApp(window.SOKONI_CONFIG || {});
 const auth       = firebase.auth();
 const db         = firebase.firestore();
 const sokoniChat = firebase.app().functions('us-central1').httpsCallable('sokoniChat');

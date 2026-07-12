@@ -49,8 +49,8 @@
 
     _call(op, data = {}) {
       if (!this._fn) {
-        if (typeof firebase === 'undefined') throw new Error('Firebase not loaded.');
-        this._fn = firebase.functions().httpsCallable('onboardingDispatch');
+        if (!window.sokoniCallable) throw new Error('Firebase SDK not ready.');
+        this._fn = window.sokoniCallable('onboardingDispatch');
       }
       return this._fn({ op, ...data }).then(r => r.data);
     }

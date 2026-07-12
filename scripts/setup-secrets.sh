@@ -105,6 +105,35 @@ fi
 _set_secret "SOKONI_HMAC_KEY" "${SOKONI_HMAC_KEY:-}" \
   "Platform HMAC key for webhook verification and internal signing"
 
+# ── COMMERCE OS ───────────────────────────────────────────────────────────────
+echo ""
+echo "── Commerce OS Secrets ───────────────────────────────────"
+if [ -z "${PAYMENT_HMAC_SECRET:-}" ]; then
+  PAYMENT_HMAC_SECRET=$(openssl rand -hex 32)
+  echo "  Generated random PAYMENT_HMAC_SECRET: ${PAYMENT_HMAC_SECRET}"
+fi
+_set_secret "PAYMENT_HMAC_SECRET" "${PAYMENT_HMAC_SECRET:-}" \
+  "HMAC secret for payment state-machine event signing"
+
+if [ -z "${PAYROLL_ENCRYPTION_KEY:-}" ]; then
+  PAYROLL_ENCRYPTION_KEY=$(openssl rand -hex 32)
+  echo "  Generated random PAYROLL_ENCRYPTION_KEY: ${PAYROLL_ENCRYPTION_KEY}"
+fi
+_set_secret "PAYROLL_ENCRYPTION_KEY" "${PAYROLL_ENCRYPTION_KEY:-}" \
+  "AES-256 key for encrypting payroll data at rest"
+
+# ── eTIMS / KRA ───────────────────────────────────────────────────────────────
+echo ""
+echo "── eTIMS / KRA (Tax Compliance) ──────────────────────────"
+_set_secret "ETIMS_CLIENT_ID" "${ETIMS_CLIENT_ID:-}" \
+  "KRA eTIMS client ID — from KRA eTIMS registration portal"
+
+_set_secret "ETIMS_CLIENT_SECRET" "${ETIMS_CLIENT_SECRET:-}" \
+  "KRA eTIMS client secret — from KRA eTIMS registration portal"
+
+_set_secret "KRA_PIN" "${KRA_PIN:-}" \
+  "Bravilex Systems Ltd KRA PIN — for eTIMS and tax filing"
+
 # ── VERIFICATION ──────────────────────────────────────────────────────────────
 echo ""
 echo "── Verifying secrets ─────────────────────────────────────"
@@ -114,6 +143,11 @@ REQUIRED=(
   ANTHROPIC_API_KEY
   INTASEND_API_KEY
   INTASEND_PRIVATE_KEY
+  PAYMENT_HMAC_SECRET
+  PAYROLL_ENCRYPTION_KEY
+  ETIMS_CLIENT_ID
+  ETIMS_CLIENT_SECRET
+  KRA_PIN
 )
 ALL_OK=true
 for secret in "${REQUIRED[@]}"; do

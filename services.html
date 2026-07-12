@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-splash="1">
 <head>
   <meta charset="UTF-8">
@@ -7,9 +7,9 @@
   <meta name="description" content="Book professional services on SOKONI — doctors, lawyers, mechanics, cleaners and more across Kenya.">
   <meta property="og:title" content="Services — SOKONI">
   <meta property="og:description" content="Find and book verified service providers on SOKONI — Kenya's #1 marketplace.">
-  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
-  <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
+  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
@@ -393,7 +393,7 @@
 
 
 <div role="navigation" class="sv-nav sk-sub-nav">
-  <a href="index.html"><img loading="eager" fetchpriority="high" src="assets/Sokonilogo2.png" class="sv-nav-logo" alt="Sokoni"></a>
+  <a href="index.html"><img loading="eager" fetchpriority="high" src="assets/Sokoni Logo.png" class="sv-nav-logo" alt="Sokoni"></a>
 
   <!-- Desktop centre navigation (hidden on mobile — bottom nav covers it) -->
   <div class="sv-nav-links">
@@ -1259,7 +1259,7 @@ function submitBooking(){
     window.sokoniNotify(
       `📩 New Booking — ${p.name}`,
       `${name} wants to book ${CAT_LABEL[p.category]||p.category} on ${date}`,
-      "/assets/logosokoni.png",
+      "/assets/Sokoni Logo.png",
       "/services.html"
     );
   }
@@ -1380,7 +1380,7 @@ function confirmJob(id){
   saveBookings(all);
   renderProviderJobs();
   /* Notify client */
-  if(window.sokoniNotify) window.sokoniNotify("✅ Booking Confirmed!", `${bk.providerName} confirmed your booking for ${bk.scheduledDate}${quote > 0 ? ` — KES ${quote.toLocaleString()}` : ""}`, "/assets/logosokoni.png", "/services.html");
+  if(window.sokoniNotify) window.sokoniNotify("✅ Booking Confirmed!", `${bk.providerName} confirmed your booking for ${bk.scheduledDate}${quote > 0 ? ` — KES ${quote.toLocaleString()}` : ""}`, "/assets/Sokoni Logo.png", "/services.html");
 }
 
 function declineJob(id){
@@ -1430,7 +1430,7 @@ function updateJobStatus(id, status){
   saveBookings(all);
   renderProviderJobs();
   if(window.sokoniNotify && status==="completed")
-    window.sokoniNotify("🎉 Job Completed!", `${bk.jobDesc.substring(0,40)} — marked complete.`, "/assets/logosokoni.png", "/services.html");
+    window.sokoniNotify("🎉 Job Completed!", `${bk.jobDesc.substring(0,40)} — marked complete.`, "/assets/Sokoni Logo.png", "/services.html");
 }
 
 /* ════════════════════════════════════════════════════════════

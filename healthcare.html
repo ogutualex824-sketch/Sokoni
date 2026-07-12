@@ -7,9 +7,9 @@
   <meta name="description" content="Find hospitals, clinics, pharmacies and healthcare providers near you in Kenya on SOKONI.">
   <meta property="og:title" content="SOKONI Healthcare — Hospitals, Clinics, Pharmacy & More">
   <meta property="og:description" content="Book doctors, find pharmacies and access healthcare services across Kenya on SOKONI.">
-  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
-  <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
+  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
   <script src="security.js"></script><link rel="stylesheet" href="style.css">
   <script src="sokoni-permissions.js"></script>
 
@@ -181,7 +181,7 @@
 <script src="market-actions.js" defer></script>
 <script src="inventory-manager.js" defer></script>
 <script src="sokoni-pay.js" defer></script>
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"MedicalOrganization","name":"SOKONI Healthcare Hub","description":"Find hospitals, clinics, dentists, pharmacies and labs in Nairobi, Mombasa and across Kenya. Book doctor appointments online, order medicine delivered.","url":"https://mysokoni.co.ke/healthcare.html","logo":"https://mysokoni.co.ke/assets/Sokonilogo2.png","telephone":"+254705726803","areaServed":{"@type":"Country","name":"Kenya"},"medicalSpecialty":["GeneralPractice","EmergencyMedicine","Pharmacy","Dentistry"],"availableService":[{"@type":"MedicalProcedure","name":"Book Doctor Appointment"},{"@type":"MedicalProcedure","name":"Order Medicine Delivery"},{"@type":"MedicalProcedure","name":"Home Lab Tests"},{"@type":"MedicalProcedure","name":"Emergency Services"}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"MedicalOrganization","name":"SOKONI Healthcare Hub","description":"Find hospitals, clinics, dentists, pharmacies and labs in Nairobi, Mombasa and across Kenya. Book doctor appointments online, order medicine delivered.","url":"https://mysokoni.co.ke/healthcare.html","logo":"https://mysokoni.co.ke/assets/Sokoni%20Logo.png","telephone":"+254705726803","areaServed":{"@type":"Country","name":"Kenya"},"medicalSpecialty":["GeneralPractice","EmergencyMedicine","Pharmacy","Dentistry"],"availableService":[{"@type":"MedicalProcedure","name":"Book Doctor Appointment"},{"@type":"MedicalProcedure","name":"Order Medicine Delivery"},{"@type":"MedicalProcedure","name":"Home Lab Tests"},{"@type":"MedicalProcedure","name":"Emergency Services"}]}</script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
   <script type="module" src="firebase.js"></script>
@@ -192,7 +192,7 @@
 
 <!--  Navbar  -->
 <div role="navigation" class="hc-nav sk-sub-nav">
-  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="hc-nav-logo" alt="Sokoni"></a>
+  <a href="index.html"><img loading="lazy" src="assets/Sokoni Logo.png" class="hc-nav-logo" alt="Sokoni"></a>
   <div class="hc-nav-right">
     <a href="javascript:history.back()" class="hc-nav-link">← Back</a>
     <a href="index.html" class="hc-nav-link">🏠 Home</a>
@@ -830,7 +830,7 @@ function renderProviders(){
               <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'hc_${p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'Healthcare: ${p.name.replace(/'/g,"\\'")}'}):window.location.href='messages.html'">💬 Message</button>
               <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'hc_'+p.id,name:p.name,category:p.type,tagline:p.desc,rating:p.rating,type:'service'})">📣 Share</button>
               <button type="button" class="hc-book-btn" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.55);" id="_fhc${p.id}" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('hc_${p.id}','${p.name.replace(/'/g,"\\'")}',this,'hospital')">❤ Follow</button>
-              ${typeof SokoniMarket!=="undefined"?SokoniMarket.btnHTML({id:p.id,name:p.name,price:0,image:'assets/logosokoni.png',category:p.type,source:'healthcare',sellerName:p.name}):""}
+              ${typeof SokoniMarket!=="undefined"?SokoniMarket.btnHTML({id:p.id,name:p.name,price:0,image:'assets/Sokoni Logo.png',category:p.type,source:'healthcare',sellerName:p.name}):""}
             </div>
           </div>
         </div>

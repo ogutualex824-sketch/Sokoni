@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260711-recovery-v26";
+const CACHE_VERSION = "sokoni-20260712-prod-readiness-v39";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -59,7 +59,8 @@ const PRECACHE_PAGES = [
   "/growth-dashboard",
   "/seller-analytics", "/business-analytics", "/customer-analytics",
   "/monitor", "/email-center",
-  "/onboarding", "/onboarding-seller", "/onboarding-driver", "/onboarding-professional",
+  "/onboarding", "/provider-onboarding", "/provider-dashboard",
+  "/onboarding-seller", "/onboarding-driver", "/onboarding-professional",
   "/help", "/moderation",
   "/beta", "/beta-dashboard",
   "/seller-success", "/driver-success", "/join", "/support", "/launch-metrics", "/launch-readiness", "/merchant-pipeline",
@@ -154,7 +155,7 @@ const PRECACHE_PAGES = [
 
 const PRECACHE_STATIC = [
   "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js", "/sokoni-quality.css",
-  "/manifest.json", "/assets/logosokoni.png", "/assets/Sokonilogo2.png",
+  "/manifest.json", "/assets/Sokoni Logo.png", "/assets/Sokoni%20Logo.png",
   "/auth.css", "/checkout.css", "/premium.css",
   "/product.css", "/profile.css", "/seller.css",
   "/landlord.css", "/compact-grid.css", "/sokoni-premium-v2.css",
@@ -187,7 +188,8 @@ const PRECACHE_STATIC = [
   "/etims.js", "/inspiq.js",
   /* SmartPOS core modules */
   "/pos.css", "/pos-bos.css", "/pos-mobile.css",
-  "/pos.js", "/pos-db.js", "/pos-printer.js", "/sokoni-print-engine.js", "/sokoni-universal-printer.js", "/pos-health.js", "/pos-idempotency.js", "/pos-sync.js", "/sokoni-pos-resilience.js", "/pos-omni.js", "/pos-barcode.js",
+  "/sokoni-profile-switcher.js", "/sokoni-provider.js",
+  "/pos.js", "/pos-db.js", "/pos-printer.js", "/sokoni-print-engine.js", "/sokoni-universal-printer.js", "/sokoni-bluetooth-printer.js", "/sokoni-printer-manager.js", "/sokoni-pos-print-service.js", "/pos-health.js", "/pos-idempotency.js", "/pos-sync.js", "/sokoni-pos-resilience.js", "/pos-omni.js", "/pos-barcode.js",
   "/pos-ai.js", "/pos-analytics.js", "/pos-boss.js", "/pos-plugins.js",
   "/pos-voice.js", "/pos-ai-engine.js", "/pos-finance.js", "/pos-audit.js",
   "/pos-modules.js", "/pos-scanner.js", "/pos-mobile.js",
@@ -538,13 +540,13 @@ async function cacheFirstImage(request) {
 /* â"€â"€ PUSH NOTIFICATIONS â"€â"€ */
 self.addEventListener("push", event => {
   if (!event.data) return;
-  let data = { title: "SOKONI", body: "You have a new notification!", icon: "/assets/logosokoni.png" };
+  let data = { title: "SOKONI", body: "You have a new notification!", icon: "/assets/Sokoni Logo.png" };
   try { data = { ...data, ...event.data.json() }; } catch {}
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || "/assets/logosokoni.png",
-      badge: "/assets/logosokoni.png",
+      icon: data.icon || "/assets/Sokoni Logo.png",
+      badge: "/assets/Sokoni Logo.png",
       vibrate: [200, 100, 200],
       data: { url: data.url || "/" },
       actions: [
@@ -598,21 +600,21 @@ async function _checkScheduledNotifications() {
         title: "âš¡ Daily Deals on SOKONI",
         body:  "New products & flash sales added today - check what's new!",
         url:   "/flashsale",
-        icon:  "/assets/logosokoni.png",
+        icon:  "/assets/Sokoni Logo.png",
       },
       {
         id:    "sell-reminder",
         title: "ðŸª Got something to sell?",
         body:  "List it on SOKONI for FREE and reach thousands of Kenyan buyers today.",
         url:   "/seller",
-        icon:  "/assets/logosokoni.png",
+        icon:  "/assets/Sokoni Logo.png",
       },
       {
         id:    "cart-reminder",
         title: "ðŸ›' Items waiting in your cart!",
         body:  "Complete your purchase before items sell out.",
         url:   "/cart",
-        icon:  "/assets/logosokoni.png",
+        icon:  "/assets/Sokoni Logo.png",
       },
     ];
 
@@ -622,7 +624,7 @@ async function _checkScheduledNotifications() {
     await self.registration.showNotification(n.title, {
       body:    n.body,
       icon:    n.icon,
-      badge:   "/assets/logosokoni.png",
+      badge:   "/assets/Sokoni Logo.png",
       vibrate: [100, 50, 100],
       tag:     "sokoni-" + n.id,
       data:    { url: n.url },

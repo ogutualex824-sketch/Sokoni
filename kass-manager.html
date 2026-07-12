@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
@@ -496,6 +496,8 @@ a{color:var(--g);text-decoration:none}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
+<script src="/sokoni-appcheck.js"></script>
 <script src="sokoni-config.js"></script>
 <script>
 'use strict';
@@ -509,7 +511,7 @@ const ROLE_CONTEXT = "You are KASS, SOKONI's AI assistant for store and branch m
 const ROLE_ID      = 'manager';
 
 // ── Firebase ─────────────────────────────────────────────────────────
-firebase.initializeApp(window.SOKONI_CONFIG || {});
+if(!firebase.apps.length)firebase.initializeApp(window.SOKONI_CONFIG || {});
 const auth       = firebase.auth();
 const db         = firebase.firestore();
 const sokoniChat = firebase.app().functions('us-central1').httpsCallable('sokoniChat');

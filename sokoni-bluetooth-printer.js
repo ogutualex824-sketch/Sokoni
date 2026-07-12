@@ -172,6 +172,15 @@ class P58EService {
     this._setStatus('connecting');
     this._emit('connecting', { name: device.name || 'Bluetooth Printer' });
 
+    /* Root cause of "Cannot read properties of undefined (reading 'connect')":
+       BluetoothDevice.gatt is normally always present, but can be null on some
+       Android firmware builds or when the device handle has been invalidated
+       by a system BT stack reset.  Guard defensively before calling .connect(). */
+    if (!device?.gatt) {
+      this._setStatus('error');
+      throw new Error('Bluetooth GATT interface not available on this device. Ensure the printer is powered on, in range, and not connected to another device.');
+    }
+
     try {
       const gatt = await device.gatt.connect();
 
@@ -217,18 +226,27 @@ class P58EService {
         this._save(KEY_DEVICE, this._paired);
       }
 
-      /* — GATT disconnect handler — */
-      device.addEventListener('gattserverdisconnected', () => {
+      /* — GATT disconnect handler — deduplicated to prevent listener accumulation on reconnect — */
+      const disconnectHandler = () => {
         this._setStatus('reconnecting');
         this._emit('disconnected', this._info);
         this._scheduleReconnect(device);
-      });
+      };
+      if (this._gattDisconnectHandler) {
+        device.removeEventListener('gattserverdisconnected', this._gattDisconnectHandler);
+      }
+      this._gattDisconnectHandler = disconnectHandler;
+      device.addEventListener('gattserverdisconnected', disconnectHandler);
 
       /* — Wire SokoniPrinter to this device for queue/render support — */
       if (window.SokoniPrinter) {
         try {
           await SokoniPrinter.connect({ type: 'bluetooth', name: device.name, id: device.id, _dev: device });
-        } catch(e) { /* already managed — ignore */ }
+        } catch(e) {
+          if (!/already (connected|managed)/i.test(e?.message || '')) {
+            console.warn('[P58E] SokoniPrinter.connect failed during BLE pair:', e?.message);
+          }
+        }
       }
 
       this._setStatus('connected');
@@ -307,10 +325,10 @@ class P58EService {
     this._emit('disconnected', null);
   }
 
-  forget () {
+  async forget () {
     this._paired = null;
     localStorage.removeItem(KEY_DEVICE);
-    this.disconnect();
+    await this.disconnect();
     this._emit('forgotten', null);
   }
 
@@ -652,6 +670,10 @@ class P58EService {
     }
     return { supported: issues.length === 0, issues };
   }
+
+  /* Instance proxy — allows external code to call P58EPrinter.checkCompatibility()
+     without needing access to the IIFE-private P58EService class. */
+  checkCompatibility () { return P58EService.checkCompatibility(); }
 }
 
 /* ─────────────────────────────────────────────────────────────────

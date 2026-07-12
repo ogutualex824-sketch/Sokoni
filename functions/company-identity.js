@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI — CompanyIdentity Service (canonical source, server-side)
    functions/company-identity.js
 
@@ -55,7 +55,7 @@ const COMPANY = Object.freeze({
   website:          'mysokoni.co.ke',
   websiteUrl:       'https://mysokoni.co.ke',
   domain:           'mysokoni.co.ke',
-  logoUrl:          'https://mysokoni.co.ke/assets/Sokonilogo2.png',
+  logoUrl:          'https://mysokoni.co.ke/assets/Sokoni%20Logo.png',
 
   /* Reusable legal strings (avoid drift across documents) */
   footerCopyright:  '© 2026 SOKONI · A product of Bravilex International Co. Limited · All Rights Reserved.',

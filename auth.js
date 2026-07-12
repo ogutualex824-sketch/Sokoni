@@ -30,8 +30,12 @@
     function _getIdleLimit(){
         try {
             const u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
-            const role = u?.role || '';
-            return (role === 'admin' || role === 'superAdmin') ? IDLE_MS_ADMIN : IDLE_MS_USER;
+            if(!u) return IDLE_MS_USER;
+            const roles = u.roles || [];
+            const role  = u.role  || '';
+            const isAdmin = roles.includes('admin') || roles.includes('superAdmin') ||
+                            role === 'admin' || role === 'superAdmin';
+            return isAdmin ? IDLE_MS_ADMIN : IDLE_MS_USER;
         } catch(e){ return IDLE_MS_USER; }
     }
 
@@ -386,7 +390,7 @@ async function _doSignup(name, email, password){
     }
 
     try {
-        const { createUserWithEmailAndPassword, updateProfile } = await import(
+        const { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } = await import(
             "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"
         );
         const { doc, setDoc, serverTimestamp } = await import(
@@ -396,6 +400,8 @@ async function _doSignup(name, email, password){
         /* Create Firebase Auth account */
         const cred = await createUserWithEmailAndPassword(window.firebaseAuth, email, password);
         await updateProfile(cred.user, { displayName: name });
+        /* Send email verification — non-blocking; failure does not abort signup */
+        sendEmailVerification(cred.user).catch(function(){});
 
         /* Build the profile object stored in both Firestore and localStorage */
         const dobStr = `${dobYear}-${String(dobMonth).padStart(2,'0')}-${String(dobDay).padStart(2,'0')}`;
@@ -1072,37 +1078,24 @@ async function sendPhoneOTP() {
     const btn = document.getElementById('sendOtpBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 
-    console.log('[PhoneAuth] sendPhoneOTP called for:', fullPhone);
-    console.log('[PhoneAuth] firebaseAuth ready:', !!window.firebaseAuth);
     try {
-        console.log('[PhoneAuth] Importing firebase-auth module…');
         const { signInWithPhoneNumber, RecaptchaVerifier } = await import(
             'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
         );
-        console.log('[PhoneAuth] firebase-auth imported OK');
 
         const sendOtpBtn = document.getElementById('sendOtpBtn');
-        console.log('[PhoneAuth] sendOtpBtn element in DOM:', !!sendOtpBtn);
         if (!_recaptchaVerifier) {
-            console.log('[PhoneAuth] Creating RecaptchaVerifier on "sendOtpBtn"…');
             try {
                 _recaptchaVerifier = new RecaptchaVerifier(window.firebaseAuth, 'sendOtpBtn', {
                     size: 'invisible',
-                    callback: function(token) { console.log('[PhoneAuth] reCAPTCHA callback — token length:', token?.length); },
-                    'expired-callback': function() { console.warn('[PhoneAuth] reCAPTCHA token expired'); },
+                    'expired-callback': function() { _recaptchaVerifier = null; },
                 });
-                console.log('[PhoneAuth] RecaptchaVerifier created:', _recaptchaVerifier);
             } catch (rcErr) {
-                console.error('[PhoneAuth] RecaptchaVerifier constructor failed:', rcErr);
                 throw rcErr;
             }
-        } else {
-            console.log('[PhoneAuth] Reusing existing RecaptchaVerifier');
         }
 
-        console.log('[PhoneAuth] Calling signInWithPhoneNumber NOW for:', fullPhone);
         _phoneConfirmResult = await signInWithPhoneNumber(window.firebaseAuth, fullPhone, _recaptchaVerifier);
-        console.log('[PhoneAuth] signInWithPhoneNumber SUCCEEDED:', _phoneConfirmResult);
 
         const otpEntry = document.getElementById('otpEntry');
         if (otpEntry) otpEntry.style.display = 'block';
@@ -1115,14 +1108,14 @@ async function sendPhoneOTP() {
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
         _recaptchaVerifier = null;
-        /* ── DEBUG: expose raw Firebase error — DO NOT genericise during debugging ── */
-        console.error('[PhoneAuth] sendPhoneOTP FAILED');
-        console.error('[PhoneAuth] err.code       :', err.code);
-        console.error('[PhoneAuth] err.message    :', err.message);
-        console.error('[PhoneAuth] err.customData :', err.customData);
-        console.error('[PhoneAuth] full error     :', err);
-        console.error('[PhoneAuth] stack          :', err.stack);
-        showAuthMsg('[DEBUG] ' + (err.code || 'unknown-code') + ' — ' + (err.message || String(err)), 'error');
+        const _phoneErrMap = {
+            'auth/invalid-phone-number':    'Invalid phone number. Please use the format +254 7XX XXX XXX.',
+            'auth/too-many-requests':        'Too many attempts. Please try again later.',
+            'auth/captcha-check-failed':     'Verification failed. Please refresh and try again.',
+            'auth/quota-exceeded':           'SMS quota exceeded. Please try again later.',
+            'auth/user-disabled':            'This account has been disabled.',
+        };
+        showAuthMsg(_phoneErrMap[err.code] || 'Could not send OTP. Please try again.', 'error');
     }
 }
 
@@ -1149,21 +1142,12 @@ async function verifyPhoneOTP() {
         await _handleOAuthResult(result, 'Phone');
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = 'Verify →'; }
-        console.error('[PhoneAuth] confirm() FAILED');
-        console.error('[PhoneAuth] err.code       :', err.code);
-        console.error('[PhoneAuth] err.message    :', err.message);
-        console.error('[PhoneAuth] err.customData :', err.customData);
-        console.error('[PhoneAuth] full error     :', err);
-        /* Known codes get a human message + the raw code appended */
-        const known =
-            err.code === 'auth/invalid-verification-code' ? 'Incorrect code.' :
-            err.code === 'auth/code-expired'              ? 'Code expired — request a new OTP.' : null;
-        showAuthMsg(
-            known
-              ? known + ' [' + err.code + ']'
-              : '[DEBUG] ' + (err.code || 'unknown-code') + ' — ' + (err.message || String(err)),
-            'error'
-        );
+        const _otpErrMap = {
+            'auth/invalid-verification-code': 'Incorrect code. Please check and try again.',
+            'auth/code-expired':              'Code expired. Please request a new OTP.',
+            'auth/too-many-requests':         'Too many attempts. Please request a new OTP.',
+        };
+        showAuthMsg(_otpErrMap[err.code] || 'Verification failed. Please try again.', 'error');
     }
 }
 

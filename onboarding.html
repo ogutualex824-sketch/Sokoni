@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="premium.css">
 <script src="security.js"></script>
+<script src="sokoni-legal-gate.js" defer></script>
 <style>
 :root{--bg:#050505;--surf:#0d0d0d;--surf2:#141414;--border:#1a1a1a;--acc:#71ff00;--acc-dim:rgba(113,255,0,.12);--acc-glow:0 0 18px rgba(113,255,0,.28);--text:#e8e8e8;--sub:#888;--err:#ff4d4d;--warn:#ffb800;--r:10px;--t:.3s ease}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -26,7 +27,6 @@ a{color:var(--acc);text-decoration:none}
 .u-chip .ini{width:26px;height:26px;border-radius:50%;background:var(--acc-dim);color:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.68rem}
 .onb-phase{flex:1;display:none;padding:28px 16px 96px}
 .onb-phase.active{display:block}
-/* Auth */
 .auth-card{max-width:420px;margin:0 auto;background:var(--surf);border:1px solid var(--border);border-radius:16px;padding:32px 28px}
 .auth-hero{text-align:center;margin-bottom:24px}
 .auth-hero h1{font-size:1.6rem;font-weight:800;line-height:1.2}
@@ -42,11 +42,10 @@ a{color:var(--acc);text-decoration:none}
 .sk-lbl{font-size:.8rem;color:var(--sub);margin-bottom:4px;display:block}
 .fg{display:flex;flex-direction:column}
 .err-m{font-size:.72rem;color:var(--err);margin-top:3px;display:none}
-.fg.has-err .sk-in,.fg.has-err .sk-sel{border-color:var(--err)}
+.fg.has-err .sk-in{border-color:var(--err)}
 .fg.has-err .err-m{display:block}
 .btn{padding:11px 18px;border-radius:var(--r);border:none;cursor:pointer;font-size:.88rem;font-weight:600;transition:all var(--t);line-height:1}
-.btn-p{background:var(--acc);color:#000}
-.btn-p:hover{box-shadow:var(--acc-glow)}
+.btn-p{background:var(--acc);color:#000}.btn-p:hover{box-shadow:var(--acc-glow)}
 .btn-s{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
 .btn-g{background:transparent;color:var(--sub)}
 .btn-f{width:100%}
@@ -61,7 +60,6 @@ a{color:var(--acc);text-decoration:none}
 .otp-boxes{display:flex;gap:7px;justify-content:center;margin:6px 0}
 .otp-b{width:42px;height:50px;text-align:center;font-size:1.25rem;font-weight:700;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);outline:none}
 .otp-b:focus{border-color:var(--acc)}
-/* Roles */
 .rh{text-align:center;max-width:540px;margin:0 auto 28px}
 .rh h2{font-size:1.5rem;font-weight:800}
 .rh p{color:var(--sub);margin-top:7px;font-size:.88rem}
@@ -74,10 +72,8 @@ a{color:var(--acc);text-decoration:none}
 .r-dsc{font-size:.73rem;color:var(--sub);line-height:1.4}
 .rbadge{position:absolute;top:9px;right:9px;font-size:.62rem;font-weight:700;padding:2px 6px;border-radius:99px}
 .rb-a{background:var(--acc);color:#000}
-.rb-r{background:var(--warn);color:#000}
 .more-t{text-align:center;margin:18px auto}
 .more-t button{background:transparent;border:1px solid var(--border);color:var(--sub);padding:7px 18px;border-radius:99px;cursor:pointer;font-size:.8rem}
-/* Wizard */
 .wbody{max-width:620px;margin:0 auto}
 .wnav{position:fixed;bottom:0;left:0;right:0;z-index:90;background:rgba(5,5,5,.95);backdrop-filter:blur(12px);border-top:1px solid var(--border);padding:11px 16px;display:flex;align-items:center;gap:10px}
 .sc{padding-bottom:12px}
@@ -136,18 +132,14 @@ a{color:var(--acc);text-decoration:none}
 </head>
 <body>
 <div class="onb-wrap">
-
 <div class="onb-top">
-  <a href="index.html" class="onb-logo">
-    <img src="assets/logo.svg" alt="" onerror="this.style.display='none'">SOKONI
-  </a>
+  <a href="index.html" class="onb-logo"><img src="assets/logo.svg" alt="" onerror="this.style.display='none'">SOKONI</a>
   <div class="onb-prog" id="progArea">
     <div class="step-lbl">Step <span id="sCur">1</span> of <span id="sTot">5</span><strong> — <span id="sTitle">Loading</span></strong></div>
     <div class="prog-bar"><div class="prog-fill" id="pFill"></div></div>
   </div>
   <div class="u-chip" id="uChip" style="display:none"></div>
 </div>
-
 <div class="lov" id="lov"><div class="spin"></div><div class="lmsg" id="lmsg">Please wait…</div></div>
 <div class="tc" id="tc"></div>
 
@@ -219,108 +211,203 @@ a{color:var(--acc);text-decoration:none}
     <button class="btn btn-p" id="bNext" onclick="W.next()">Save & Continue →</button>
   </div>
 </div>
-
 </div>
 
 <script src="shared-header.js" defer></script>
 <script src="sokoni-onboarding.js" defer></script>
 <script>
-/* ── Data ─────────────────────────────────────────────────────────────────── */
+/* ── Data ──────────────────────────────────────────────────────────────── */
 const COUNTIES=['Nairobi','Mombasa','Kwale','Kilifi','Tana River','Lamu','Taita-Taveta','Garissa','Wajir','Mandera','Marsabit','Isiolo','Meru','Tharaka-Nithi','Embu','Kitui','Machakos','Makueni','Nyandarua','Nyeri','Kirinyaga',"Murang'a",'Kiambu','Turkana','West Pokot','Samburu','Trans-Nzoia','Uasin Gishu','Elgeyo-Marakwet','Nandi','Baringo','Laikipia','Nakuru','Narok','Kajiado','Kericho','Bomet','Kakamega','Vihiga','Bungoma','Busia','Siaya','Kisumu','Homa Bay','Migori','Kisii','Nyamira'];
 const PCATS={'Home Services':['Electrician','Plumber','Carpenter','Painter','Welder','Cleaner','Gardener','Pest Control','Appliance Repair','HVAC','Mover'],'Security':['Security Guard','CCTV Installation','Access Control'],'Education':['Tutor','Private Teacher','Skills Trainer','Music Teacher','Language Teacher'],'Creative & Media':['Photographer','Videographer','Graphic Designer','Content Creator','DJ','MC'],'Technology':['Software Developer','Web Designer','IT Support','Network Engineer','Data Analyst'],'Business Services':['Marketing Agency','PR Consultant','Business Consultant','Accountant','Bookkeeper'],'Legal':['Lawyer','Legal Consultant','Notary'],'Healthcare':['Doctor','Nurse','Clinical Officer','Dentist','Therapist','Physiotherapist','Nutritionist'],'Beauty & Wellness':['Salon','Barber','Makeup Artist','Nail Technician','Spa Therapist'],'Fashion & Textiles':['Tailor','Fashion Designer','Laundry Service','Dry Cleaner'],'Construction & Design':['Architect','Interior Designer','Structural Engineer','Quantity Surveyor'],'Events':['Event Planner','Caterer','Decorator','Sound Engineer','Lighting Technician'],'Logistics':['Delivery Service','Courier','Freight Agent'],'Freelance':['Virtual Assistant','Copywriter','Translator','Research Analyst','Data Entry']};
 const BCAT=['Fashion & Clothing','Electronics','Food & Beverages','Health & Beauty','Home & Living','Sports & Outdoor','Books & Education','Automotive','Agriculture','Other'];
 const VTYPES=['Motorbike','Tuk-tuk','Bicycle','Car','Van','Truck'];
 const MTYPE=['Sole Trader','Partnership','Limited Company','Non-Profit','Cooperative'];
+const BANKS=[{value:'',label:'None'},{value:'KCB',label:'KCB'},{value:'Equity',label:'Equity Bank'},{value:'Coop',label:'Co-operative Bank'},{value:'Absa',label:'Absa'},{value:'NCBA',label:'NCBA'},{value:'DTB',label:'DTB'},{value:'Family',label:'Family Bank'},{value:'PostBank',label:'PostBank'},{value:'Other',label:'Other'}];
 
 const PLANS={
   buyer:[{t:'free',l:'Free',p:'Free',c:'0%',pop:0,ft:['Browse & Buy','Order Tracking','Reviews']},{t:'plus',l:'Plus',p:'KSh 299/mo',c:'0%',pop:0,ft:['Priority Support','Exclusive Deals']},{t:'premium',l:'Premium',p:'KSh 599/mo',c:'0%',pop:1,ft:['Free Delivery','5% Cashback','Concierge']}],
   merchant:[{t:'free_trial',l:'Free Trial',p:'Free (14 days)',c:'20%',pop:0,ft:['1 Branch','Basic POS']},{t:'starter',l:'Starter',p:'KSh 999/mo',c:'15%',pop:0,ft:['2 Branches','SmartPOS','Reports']},{t:'professional',l:'Professional',p:'KSh 2,499/mo',c:'10%',pop:1,ft:['5 Branches','AI','eTIMS','Analytics']},{t:'business',l:'Business',p:'KSh 4,999/mo',c:'7%',pop:0,ft:['20 Branches','Priority Support']},{t:'enterprise',l:'Enterprise',p:'KSh 9,999/mo',c:'5%',pop:0,ft:['Unlimited','White-label','API']}],
   provider:[{t:'free_trial',l:'Free Trial',p:'Free (14 days)',c:'20%',pop:0,ft:['1 Listing','5 Leads/mo']},{t:'starter',l:'Starter',p:'KSh 999/mo',c:'15%',pop:0,ft:['3 Listings','20 Leads','Calendar']},{t:'professional',l:'Professional',p:'KSh 2,499/mo',c:'10%',pop:1,ft:['10 Listings','AI Matching','Portfolio']},{t:'business',l:'Business',p:'KSh 4,999/mo',c:'7%',pop:0,ft:['25 Listings','Featured','Analytics']},{t:'enterprise',l:'Enterprise',p:'KSh 9,999/mo',c:'5%',pop:0,ft:['Unlimited','API','White-label']}],
   rider:[{t:'basic',l:'Basic',p:'Free',c:'25%',pop:0,ft:['Unlimited Deliveries','Basic Support']},{t:'standard',l:'Standard',p:'KSh 499/mo',c:'20%',pop:0,ft:['Priority Dispatch','Earnings Dashboard']},{t:'premium',l:'Premium',p:'KSh 999/mo',c:'15%',pop:1,ft:['Top Priority','Insurance','Fuel Discount']}],
+  property:[{t:'starter',l:'Starter',p:'KSh 999/mo',c:'5%',pop:0,ft:['10 Units','Rent Collection','Tenants']},{t:'professional',l:'Professional',p:'KSh 2,499/mo',c:'4%',pop:1,ft:['50 Units','AI Insights','Maintenance']},{t:'enterprise',l:'Enterprise',p:'KSh 4,999/mo',c:'3%',pop:0,ft:['Unlimited','Multi-property','API']}],
+  hotel:[{t:'starter',l:'Starter',p:'KSh 1,499/mo',c:'8%',pop:0,ft:['20 Rooms','Booking Calendar','Payments']},{t:'professional',l:'Professional',p:'KSh 2,999/mo',c:'6%',pop:1,ft:['Unlimited Rooms','Channel Manager','Analytics']},{t:'enterprise',l:'Enterprise',p:'KSh 5,999/mo',c:'4%',pop:0,ft:['All Features','API','White-label']}],
+  restaurant:[{t:'starter',l:'Starter',p:'KSh 999/mo',c:'8%',pop:0,ft:['Online Menu','Orders','Basic POS']},{t:'professional',l:'Professional',p:'KSh 2,499/mo',c:'6%',pop:1,ft:['Delivery','Tables','Analytics','eTIMS']},{t:'enterprise',l:'Enterprise',p:'KSh 4,999/mo',c:'4%',pop:0,ft:['Multi-branch','API','White-label']}],
+  healthcare:[{t:'starter',l:'Starter',p:'KSh 1,999/mo',c:'5%',pop:0,ft:['5 Doctors','Appointments','Basic Billing']},{t:'professional',l:'Professional',p:'KSh 3,999/mo',c:'4%',pop:1,ft:['20 Doctors','Medical Records','AI']},{t:'enterprise',l:'Enterprise',p:'KSh 7,999/mo',c:'3%',pop:0,ft:['Unlimited','Lab Integration','API']}],
+  employer:[{t:'starter',l:'Starter',p:'KSh 999/mo',c:'0%',pop:0,ft:['5 Active Jobs','100 Applicants']},{t:'professional',l:'Professional',p:'KSh 2,499/mo',c:'0%',pop:1,ft:['20 Active Jobs','AI Matching','Analytics']},{t:'enterprise',l:'Enterprise',p:'KSh 4,999/mo',c:'0%',pop:0,ft:['Unlimited Jobs','API','ATS Integration']}],
   _def:[{t:'starter',l:'Starter',p:'KSh 999/mo',c:'5%',pop:0,ft:['Core Features','Analytics']},{t:'professional',l:'Professional',p:'KSh 2,499/mo',c:'4%',pop:1,ft:['All Starter','AI Tools','Priority Support']},{t:'enterprise',l:'Enterprise',p:'KSh 4,999/mo',c:'3%',pop:0,ft:['Unlimited','API']}]
 };
 PLANS.driver=PLANS.rider; PLANS.courier=PLANS.rider;
 
-/* ── Flows ─────────────────────────────────────────────────────────────────── */
+/* ── Flows ─────────────────────────────────────────────────────────────── */
 const FLOWS={
-  buyer:   [{t:'Interests',f:'rBuyerPrefs',skip:1},{t:'Location',f:'rLoc',skip:1},{t:'All Set!',f:'rReady',fin:1}],
-  merchant:[{t:'Business Details',f:'rMerchBiz'},{t:'Merchant ID',f:'rMerchID'},{t:'Choose Plan',f:'rSub'},{t:'First Branch',f:'rMerchBranch'},{t:'Tax Setup',f:'rMerchTax',skip:1},{t:'Launch!',f:'rReady',fin:1}],
-  provider:[{t:'Service Profile',f:'rProvProfile'},{t:'Coverage',f:'rProvCov'},{t:'Availability',f:'rProvAvail'},{t:'Pricing',f:'rProvPrice'},{t:'Choose Plan',f:'rSub'},{t:'Verification',f:'rVerif',skip:1},{t:'Payment Setup',f:'rPay'},{t:'Go Live!',f:'rReady',fin:1}],
-  rider:   [{t:'Personal Info',f:'rRiderPers'},{t:'Vehicle',f:'rRiderVeh'},{t:'Licence',f:'rRiderLic',skip:1},{t:'Choose Plan',f:'rSub'},{t:'Payment',f:'rPay'},{t:'Go Online!',f:'rReady',fin:1}],
+  buyer:[{t:'Interests',f:'rBuyerPrefs',skip:1},{t:'Location',f:'rLoc',skip:1},{t:'Legal Agreements',f:'rLegalGate'},{t:'All Set!',f:'rReady',fin:1}],
+
+  merchant:[
+    {t:'Business Details',f:'rMerchBiz'},
+    {t:'Merchant ID',f:'rMerchID'},
+    {t:'Choose Plan',f:'rSub'},
+    {t:'First Branch',f:'rMerchBranch'},
+    {t:'Tax Setup',f:'rMerchTax',skip:1},
+    {t:'Inventory',f:'rMerchInv',skip:1},
+    {t:'Hardware',f:'rMerchHW',skip:1},
+    {t:'Test Sale',f:'rMerchTest',skip:1},
+    {t:'Legal Agreements',f:'rLegalGate'},
+    {t:'Launch!',f:'rReady',fin:1}
+  ],
+
+  provider:[
+    {t:'Service Profile',f:'rProvProfile'},
+    {t:'Coverage',f:'rProvCov'},
+    {t:'Availability',f:'rProvAvail'},
+    {t:'Pricing',f:'rProvPrice'},
+    {t:'Choose Plan',f:'rSub'},
+    {t:'Verification',f:'rVerif',skip:1},
+    {t:'Payment Setup',f:'rPay'},
+    {t:'Portfolio',f:'rProvPortfolio',skip:1},
+    {t:'Bookings',f:'rProvBook',skip:1},
+    {t:'Legal Agreements',f:'rLegalGate'},
+    {t:'Go Live!',f:'rReady',fin:1}
+  ],
+
+  rider:[
+    {t:'Personal Info',f:'rRiderPers'},
+    {t:'Your Vehicle',f:'rRiderVeh'},
+    {t:'Driving Licence',f:'rRiderLic',skip:1},
+    {t:'Insurance',f:'rRiderIns',skip:1},
+    {t:'Background Check',f:'rRiderBG',skip:1},
+    {t:'Payment Account',f:'rPay'},
+    {t:'Choose Plan',f:'rSub'},
+    {t:'Training',f:'rRiderTrain',skip:1},
+    {t:'Legal Agreements',f:'rLegalGate'},
+    {t:'Go Online!',f:'rReady',fin:1}
+  ],
+
+  property:[
+    {t:'Company Details',f:'rPropComp'},
+    {t:'Properties',f:'rPropProp'},
+    {t:'Units',f:'rPropUnits'},
+    {t:'Rent Rules',f:'rPropRent'},
+    {t:'Payments',f:'rPay'},
+    {t:'Maintenance',f:'rPropMaint',skip:1},
+    {t:'Choose Plan',f:'rSub'},
+    {t:'Legal Agreements',f:'rLegalGate'},
+    {t:'Ready!',f:'rReady',fin:1}
+  ],
+
+  hotel:[
+    {t:'Hotel Profile',f:'rHotelProf'},
+    {t:'Rooms',f:'rHotelRooms'},
+    {t:'Pricing',f:'rHotelPricing'},
+    {t:'Amenities',f:'rHotelAmen'},
+    {t:'Bookings Policy',f:'rHotelBook'},
+    {t:'Payments',f:'rPay'},
+    {t:'Choose Plan',f:'rSub'},
+    {t:'Legal Agreements',f:'rLegalGate'},
+    {t:'Ready!',f:'rReady',fin:1}
+  ],
+
+  restaurant:[
+    {t:'Restaurant Profile',f:'rRestProf'},
+    {t:'Menu',f:'rRestMenu'},
+    {t:'Kitchen',f:'rRestKitchen'},
+    {t:'Tables',f:'rRestTables'},
+    {t:'Delivery',f:'rRestDel'},
+    {t:'Payments',f:'rPay'},
+    {t:'Printer',f:'rRestPrint',skip:1},
+    {t:'Legal Agreements',f:'rLegalGate'},
+    {t:'Ready!',f:'rReady',fin:1}
+  ],
+
+  healthcare:[
+    {t:'Facility',f:'rHealthFacility'},
+    {t:'Departments',f:'rHealthDepts'},
+    {t:'Doctors',f:'rHealthDocs'},
+    {t:'Appointments',f:'rHealthAppt'},
+    {t:'Billing',f:'rHealthBill'},
+    {t:'Medical Records',f:'rHealthRec',skip:1},
+    {t:'Choose Plan',f:'rSub'},
+    {t:'Legal Agreements',f:'rLegalGate'},
+    {t:'Ready!',f:'rReady',fin:1}
+  ],
+
+  employer:[
+    {t:'Company Profile',f:'rEmpComp'},
+    {t:'Choose Plan',f:'rSub'},
+    {t:'Post First Job',f:'rEmpJob',skip:1},
+    {t:'Legal Agreements',f:'rLegalGate'},
+    {t:'Ready!',f:'rReady',fin:1}
+  ],
+
+  freelancer:[
+    {t:'Your Profile',f:'rFreelProf'},
+    {t:'Skills & Portfolio',f:'rFreelSkills'},
+    {t:'Pricing',f:'rProvPrice'},
+    {t:'Verification',f:'rVerif',skip:1},
+    {t:'Legal Agreements',f:'rLegalGate'},
+    {t:'Ready!',f:'rReady',fin:1}
+  ]
 };
 FLOWS.driver=FLOWS.rider; FLOWS.courier=FLOWS.rider;
-const _gen=[{t:'Your Profile',f:'rGenProf'},{t:'Location',f:'rLoc'},{t:'Choose Plan',f:'rSub',skip:1},{t:'Payment',f:'rPay',skip:1},{t:'All Set!',f:'rReady',fin:1}];
-['property','hotel','restaurant','pharmacy','events','employer','freelancer','distributor','wholesaler','manufacturer','ngo','school','healthcare','finance'].forEach(r=>FLOWS[r]=_gen);
+const _gen=[{t:'Your Profile',f:'rGenProf'},{t:'Location',f:'rLoc'},{t:'Choose Plan',f:'rSub',skip:1},{t:'Payment',f:'rPay',skip:1},{t:'Legal Agreements',f:'rLegalGate'},{t:'All Set!',f:'rReady',fin:1}];
+['pharmacy','events','distributor','wholesaler','manufacturer','ngo','school','finance'].forEach(r=>FLOWS[r]=_gen);
 
-/* ── Utils ─────────────────────────────────────────────────────────────────── */
+/* ── Utils ──────────────────────────────────────────────────────────────── */
 const _q=id=>document.getElementById(id);
 const _qv=id=>(_q(id)||{}).value||'';
 const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 function _fld(id,lbl,type,o={}){const{ph='',req=0,val='',extra=''}=o;return`<div class="fg"><label class="sk-lbl">${lbl}${req?'<span style="color:var(--acc)">*</span>':''}</label><input class="sk-in" type="${type}" id="${id}" placeholder="${ph}" value="${_esc(val)}"${req?' required':''} ${extra}></div>`}
 function _sel(id,lbl,opts,v='',o={}){const oh=opts.map(x=>{const a=typeof x==='string'?x:x.value,b=typeof x==='string'?x:x.label;return`<option value="${_esc(a)}"${a===v?' selected':''}>${_esc(b)}</option>`}).join('');return`<div class="fg"><label class="sk-lbl">${lbl}${o.req?'<span style="color:var(--acc)">*</span>':''}</label><select class="sk-in sk-sel" id="${id}"${o.req?' required':''}><option value="">Select…</option>${oh}</select></div>`}
-function _ta(id,lbl,val='',ph=''){return`<div class="fg ff"><label class="sk-lbl">${lbl}</label><textarea class="sk-in sk-ta" id="${id}" rows="3" placeholder="${ph}">${_esc(val)}</textarea></div>`}
-function _chips(nm,items,sel=[],multi=1){return`<div class="chips" id="chips_${nm}">${items.map(i=>`<span class="chip${sel.includes(i)?' on':''}" onclick="_tc(this,'${nm}',${multi})">${_esc(i)}</span>`).join('')}</div>`}
+function _ta(id,lbl,val,ph){return`<div class="fg ff"><label class="sk-lbl">${lbl}</label><textarea class="sk-in sk-ta" id="${id}" rows="3" placeholder="${ph||''}">${_esc(val||'')}</textarea></div>`}
+function _chips(nm,items,sel,multi){sel=sel||[];multi=multi!==false;return`<div class="chips" id="chips_${nm}">${items.map(i=>`<span class="chip${sel.includes(i)?' on':''}" onclick="_tc(this,'${nm}',${multi})">${_esc(i)}</span>`).join('')}</div>`}
 function _tc(el,nm,multi){if(!multi)document.querySelectorAll(`#chips_${nm} .chip`).forEach(c=>c.classList.remove('on'));el.classList.toggle('on')}
 function _cv(nm){return[...document.querySelectorAll(`#chips_${nm} .chip.on`)].map(c=>c.textContent)}
 function _planCards(role){
   const ps=PLANS[role]||PLANS._def;
   return`<div class="bt"><button class="btg on" id="btMo" onclick="W.billing('monthly')">Monthly</button><button class="btg" id="btYr" onclick="W.billing('yearly')">Yearly <span style="font-size:.6rem;background:var(--acc);color:#000;padding:1px 5px;border-radius:99px;margin-left:3px">20% off</span></button></div>
-  <div class="pgrid">${ps.map(p=>`<div class="pc${W._t===p.t?' on':''}" id="pc_${p.t}" onclick="W.plan('${p.t}',this)" data-t="${p.t}" data-p="${p.p}">${p.pop?'<div class="ppop">POPULAR</div>':''}<div class="pn">${p.l}</div><div class="pp">${p.p}</div><div class="pyr" id="pyr_${p.t}"></div><div class="pcom">${p.c} commission</div><ul class="pft">${p.ft.map(f=>`<li>${f}</li>`).join('')}</ul></div>`).join('')}</div>`;
+  <div class="pgrid">${ps.map(p=>`<div class="pc${W._t===p.t?' on':''}" id="pc_${p.t}" onclick="W.plan('${p.t}',this)" data-t="${p.t}">${p.pop?'<div class="ppop">POPULAR</div>':''}<div class="pn">${p.l}</div><div class="pp">${p.p}</div><div class="pcom">${p.c} commission</div><ul class="pft">${p.ft.map(f=>`<li>${f}</li>`).join('')}</ul></div>`).join('')}</div>`;
 }
-
-function showLoad(m='Please wait…'){_q('lov').classList.add('vis');_q('lmsg').textContent=m}
+function showLoad(m){_q('lov').classList.add('vis');_q('lmsg').textContent=m||'Please wait…'}
 function hideLoad(){_q('lov').classList.remove('vis')}
-function toast(m,t='ok',ms=3500){const d=document.createElement('div');d.className=`toast t-${t}`;d.textContent=m;_q('tc').appendChild(d);setTimeout(()=>d.remove(),ms)}
+function toast(m,t,ms){const d=document.createElement('div');d.className='toast t-'+(t||'ok');d.textContent=m;_q('tc').appendChild(d);setTimeout(()=>d.remove(),ms||3500)}
 function showPh(id){document.querySelectorAll('.onb-phase').forEach(p=>p.classList.remove('active'));_q(id).classList.add('active')}
 function markUp(card){card.classList.add('done')}
 
-/* ── Auth ──────────────────────────────────────────────────────────────────── */
+/* ── Auth ───────────────────────────────────────────────────────────────── */
 const A=(()=>{
   let _conf=null;
   function tab(t,btn){document.querySelectorAll('.atab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.aform').forEach(f=>f.classList.remove('on'));btn.classList.add('on');_q(t==='si'?'fSi':'fSu').classList.add('on')}
-  async function emailSI(e){e.preventDefault();showLoad('Signing in…');try{await firebase.auth().signInWithEmailAndPassword(_qv('siE'),_qv('siP'))}catch(err){hideLoad();toast(_ae(err),'err')}}
-  async function emailSU(e){e.preventDefault();showLoad('Creating account…');try{const c=await firebase.auth().createUserWithEmailAndPassword(_qv('suE'),_qv('suP'));await c.user.updateProfile({displayName:(_qv('suF')+' '+_qv('suL')).trim()})}catch(err){hideLoad();toast(_ae(err),'err')}}
-  async function google(){showLoad('Signing in…');try{await firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider())}catch(err){hideLoad();toast(_ae(err),'err')}}
+  async function emailSI(e){e.preventDefault();showLoad('Signing in…');try{await window.firebaseSDK.signInWithEmailAndPassword(_qv('siE'),_qv('siP'))}catch(err){hideLoad();toast(_ae(err),'err')}}
+  async function emailSU(e){e.preventDefault();showLoad('Creating account…');try{const c=await window.firebaseSDK.createUserWithEmailAndPassword(_qv('suE'),_qv('suP'));await window.firebaseSDK.updateProfile(c.user,{displayName:(_qv('suF')+' '+_qv('suL')).trim()})}catch(err){hideLoad();toast(_ae(err),'err')}}
+  async function google(){showLoad('Signing in…');try{await window.firebaseSDK.signInWithPopup(new window.firebaseSDK.GoogleAuthProvider())}catch(err){hideLoad();toast(_ae(err),'err')}}
   function phoneToggle(){const s=_q('phoneSec');s.style.display=s.style.display==='none'?'block':'none'}
-  async function sendOTP(){const n='+254'+_qv('pNum').replace(/\D/g,'');if(n.length<13)return toast('Enter a valid Kenyan number','err');showLoad('Sending OTP…');try{if(!window._rv)window._rv=new firebase.auth.RecaptchaVerifier('rcap',{size:'invisible'});_conf=await firebase.auth().signInWithPhoneNumber(n,window._rv);hideLoad();_q('otpSec').style.display='block';toast('OTP sent!');_q('otpB').querySelectorAll('.otp-b')[0].focus()}catch(err){hideLoad();toast(_ae(err),'err')}}
+  async function sendOTP(){const n='+254'+_qv('pNum').replace(/\D/g,'');if(n.length<13)return toast('Enter a valid Kenyan number','err');showLoad('Sending OTP…');try{if(!window._rv)window._rv=new window.firebaseSDK.RecaptchaVerifier(window.firebaseSDK.auth,'rcap',{size:'invisible'});_conf=await window.firebaseSDK.signInWithPhoneNumber(n,window._rv);hideLoad();_q('otpSec').style.display='block';toast('OTP sent!');_q('otpB').querySelectorAll('.otp-b')[0].focus()}catch(err){hideLoad();toast(_ae(err),'err')}}
   async function verifyOTP(){const code=[..._q('otpB').querySelectorAll('.otp-b')].map(b=>b.value).join('');if(code.length<6)return toast('Enter all 6 digits','err');showLoad('Verifying…');try{await _conf.confirm(code)}catch(err){hideLoad();toast('Invalid code.','err')}}
   function _ae(e){const m={'auth/wrong-password':'Incorrect password.','auth/user-not-found':'No account found.','auth/email-already-in-use':'Email already in use.','auth/weak-password':'Password must be 8+ characters.','auth/invalid-email':'Invalid email.','auth/too-many-requests':'Too many attempts — try later.'};return m[e.code]||e.message}
   document.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('.otp-b').forEach((b,i,a)=>{b.addEventListener('input',()=>{if(b.value&&a[i+1])a[i+1].focus()});b.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!b.value&&a[i-1])a[i-1].focus()})})});
   return{tab,emailSI,emailSU,google,phoneToggle,sendOTP,verifyOTP};
 })();
 
-/* ── Roles ─────────────────────────────────────────────────────────────────── */
+/* ── Roles ──────────────────────────────────────────────────────────────── */
 const R=(()=>{
   const PRI=['buyer','merchant','provider','rider','driver','property','hotel','restaurant','healthcare','employer','freelancer','events'];
   const MORE=['courier','pharmacy','distributor','wholesaler','manufacturer','ngo','school','finance'];
   let _acc=null,_more=0;
   function render(acc){
-    _acc=acc;
-    const rl=acc?.roles||[];
-    function card(r){
-      const m=typeof SokoniOnboarding!=='undefined'?SokoniOnboarding.metaFor(r):{label:r,icon:'🔲',desc:''};
-      const act=rl.includes(r);
-      return`<div class="rc${act?' rc-on':''}" onclick="R.pick('${r}')">${act?'<span class="rbadge rb-a">✓ Active</span>':''}<span class="r-ico">${m.icon}</span><div class="r-nm">${m.label}</div><div class="r-dsc">${m.desc}</div></div>`;
-    }
+    _acc=acc;const rl=acc?.roles||[];
+    function card(r){const m=typeof SokoniOnboarding!=='undefined'?SokoniOnboarding.metaFor(r):{label:r,icon:'🔲',desc:''};const act=rl.includes(r);return`<div class="rc${act?' rc-on':''}" onclick="R.pick('${r}')">${act?'<span class="rbadge rb-a">✓ Active</span>':''}<span class="r-ico">${m.icon}</span><div class="r-nm">${m.label}</div><div class="r-dsc">${m.desc}</div></div>`}
     _q('rGrid').innerHTML=PRI.map(card).join('')+MORE.map(r=>`<div id="mr_${r}" style="display:none">${card(r)}</div>`).join('');
     if(MORE.length)_q('moreT').style.display='block';
   }
-  function more(){_more=!_more;MORE.forEach(r=>{const e=_q(`mr_${r}`);if(e)e.style.display=_more?'block':'none'});_q('moreT').querySelector('button').textContent=_more?'− Show fewer roles':'+ Show more roles'}
-  async function pick(r){
-    const act=(_acc?.roles||[]).includes(r);
-    if(act){showLoad('Loading dashboard…');try{const d=await _sdk.switchRole(r);window.location.href=d.dashboard}catch(e){hideLoad();toast(e.message,'err')}return}
-    W.start(r);
-  }
+  function more(){_more=!_more;MORE.forEach(r=>{const e=_q('mr_'+r);if(e)e.style.display=_more?'block':'none'});_q('moreT').querySelector('button').textContent=_more?'− Show fewer roles':'+ Show more roles'}
+  async function pick(r){const act=(_acc?.roles||[]).includes(r);if(act){showLoad('Loading dashboard…');try{const d=await _sdk.switchRole(r);window.location.href=d.dashboard}catch(e){hideLoad();toast(e.message,'err')}return}W.start(r)}
   return{render,more,pick};
 })();
 
-/* ── Wizard ─────────────────────────────────────────────────────────────────── */
+/* ── Wizard ─────────────────────────────────────────────────────────────── */
+let _legalOk=false;
 const W=(()=>{
-  let _r=null,_s=0,_fl=[],_bill='monthly',_pid=null;
-  let _draft={};
-  let _t=null; // selected plan tier
-
-  function start(r){_r=r;_s=0;_fl=FLOWS[r]||_gen;_draft={};_pid=null;_t=null;_loadDraft();showPh('phC');_q('progArea').classList.add('vis');_rnd()}
+  let _r=null,_s=0,_fl=[],_bill='monthly',_pid=null,_t=null,_draft={};
+  function start(r){_r=r;_s=0;_fl=FLOWS[r]||_gen;_draft={};_pid=null;_t=null;_legalOk=false;_loadDraft();showPh('phC');_q('progArea').classList.add('vis');_rnd()}
   async function _loadDraft(){try{const d=await _sdk.getDraft(_r);if(d&&!d.completed){_draft=d.stepData||{};_s=d.currentStep||0;_t=_draft.tier||null;_rnd()}}catch(e){}}
   function _rnd(){
     const s=_fl[_s];if(!s)return;
@@ -330,24 +417,25 @@ const W=(()=>{
     _q('bBack').style.display=_s===0?'none':'inline-block';
     _q('bNext').textContent=s.fin?'Publish →':'Save & Continue →';
     const fn=window[s.f];
-    _q('sContent').innerHTML=fn?fn(_r,_draft[`s${_s}`]||{}):`<div class="st-h">${s.t}</div>`;
+    _q('sContent').innerHTML=fn?fn(_r,_draft['s'+_s]||{}):'<div class="st-h">'+s.t+'</div>';
     document.documentElement.scrollTop=0;
   }
   async function next(){
     const s=_fl[_s];if(!s)return;
+    if(s.f==='rLegalGate'&&!_legalOk){toast('Please review and accept the legal agreements to continue.','err');return}
     const data=_collect();if(data===null)return;
     showLoad('Saving…');
-    try{await _sdk.saveDraft(_r,_s,data);_draft[`s${_s}`]=data;if(_t)_draft.tier=_t;
+    try{await _sdk.saveDraft(_r,_s,data);_draft['s'+_s]=data;if(_t)_draft.tier=_t;
       if(s.fin){await _activate();return}
       _s++;hideLoad();_rnd();
     }catch(e){hideLoad();toast(e.message,'err')}
   }
   function back(){if(_s===0){showPh('phB');_q('progArea').classList.remove('vis');return}_s--;_rnd()}
-  function skip(){_draft[`s${_s}`]={};_s++;_rnd()}
+  function skip(){_draft['s'+_s]={};_s++;_rnd()}
   async function _activate(){
     showLoad('Activating your profile…');
     try{
-      const all=Object.assign({},..._fl.map((_,i)=>_draft[`s${i}`]||{}));all.role=_r;
+      const all=Object.assign({},..._fl.map((_,i)=>_draft['s'+i]||{}));all.role=_r;
       const res=await _sdk.activateRole(_r,all);_pid=res.profileId;
       await _sdk.activateSubscription(_r,_t||'free_trial',_bill,_pid,null,null);
       hideLoad();
@@ -357,76 +445,171 @@ const W=(()=>{
     }catch(e){hideLoad();toast(e.message,'err')}
   }
   function _collect(){
-    const s=_fl[_s];if(!s)return{};
     const data={};
-    _q('sContent').querySelectorAll('[id]').forEach(el=>{
-      if(['INPUT','SELECT','TEXTAREA'].includes(el.tagName))data[el.id]=el.type==='checkbox'?el.checked:el.value;
-    });
+    _q('sContent').querySelectorAll('[id]').forEach(el=>{if(['INPUT','SELECT','TEXTAREA'].includes(el.tagName))data[el.id]=el.type==='checkbox'?el.checked:el.value});
     if(_t)data.tier=_t;
     return data;
   }
   function plan(t,el){document.querySelectorAll('.pc').forEach(c=>c.classList.remove('on'));el.classList.add('on');_t=t}
   function billing(b){_bill=b;_q('btMo').classList.toggle('on',b==='monthly');_q('btYr').classList.toggle('on',b==='yearly')}
-
-  return{start,next,back,skip,plan,billing,get _t(){return _t},get _draft(){return _draft}};
+  return{start,next,back,skip,plan,billing,get _t(){return _t}};
 })();
 
-/* ── Step Renderers ─────────────────────────────────────────────────────────── */
-function rBuyerPrefs(r,d){return`<div class="st-h">Your Interests</div><p class="st-s">Personalise your shopping experience.</p><label class="sk-lbl" style="margin-bottom:8px;display:block">Categories you're interested in</label>${_chips('bCats',BCAT,d.categories||[],1)}${_fld('bCity','Your city','text',{ph:'e.g. Nairobi',val:d.city||''})}`}
+/* ══════════════════════════════════════════════════════════════════════════
+   STEP RENDERERS — one function per step, all global so window[name] works
+   ══════════════════════════════════════════════════════════════════════════ */
 
+/* Buyer */
+function rBuyerPrefs(r,d){return`<div class="st-h">Your Interests</div><p class="st-s">Personalise your shopping experience.</p><label class="sk-lbl" style="margin-bottom:8px;display:block">Categories you enjoy</label>${_chips('bCats',BCAT,d.bCats||[])}<div style="margin-top:14px">${_fld('bCity','Your City','text',{ph:'e.g. Nairobi',val:d.bCity||''})}</div>`}
+
+/* ── Merchant ──────────────────────────────────────────────────────────── */
 function rMerchBiz(r,d){return`<div class="st-h">Your Business</div><p class="st-s">Tell us about the business you're registering.</p><div class="fgrid">${_fld('bNm','Business Name','text',{ph:'e.g. Acme Traders',req:1,val:d.bNm||''})}${_sel('bTy','Business Type',MTYPE,d.bTy||'',{req:1})}${_sel('bCt','Main Category',BCAT,d.bCt||'',{req:1})}${_fld('kraPIN','KRA PIN (optional)','text',{ph:'P051XXXXXXXXX',val:d.kraPIN||''})}</div>${_ta('bDs','Business Description',d.bDs||'','What does your business sell or do?')}`}
 
-function rMerchID(r,d){return`<div class="st-h">Your Merchant ID</div><p class="st-s">Your ID is auto-generated when you publish.</p><div class="icard" style="display:block;margin:22px auto;text-align:center"><div class="il">Merchant ID</div><div class="id">BIZ-••••••••</div></div><div class="info-b">Your Merchant ID is permanent. Keep it safe — you'll use it at POS, for settlements, and when contacting support.</div><div class="fgrid">${_fld('mcPh','Business Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.mcPh||''})}${_fld('mcEm','Business Email','email',{ph:'business@example.com',val:d.mcEm||''})}</div>`}
+function rMerchID(r,d){return`<div class="st-h">Your Merchant ID</div><p class="st-s">Your ID is auto-generated when you publish.</p><div class="icard" style="display:block;margin:22px auto;text-align:center"><div class="il">Merchant ID</div><div class="id">BIZ-••••••••</div></div><div class="info-b">Your Merchant ID is permanent. Use it at POS, for settlements, and when contacting support.</div><div class="fgrid">${_fld('mcPh','Business Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.mcPh||''})}${_fld('mcEm','Business Email','email',{ph:'business@example.com',val:d.mcEm||''})}</div>`}
 
 function rMerchBranch(r,d){return`<div class="st-h">First Branch</div><p class="st-s">Set up your primary location.</p><div class="fgrid">${_fld('brNm','Branch Name','text',{ph:'Main Branch',req:1,val:d.brNm||''})}${_sel('brCo','County',COUNTIES.map(c=>({value:c,label:c})),d.brCo||'',{req:1})}${_fld('brCi','City / Town','text',{ph:'Nairobi CBD',req:1,val:d.brCi||''})}${_fld('brAd','Street Address','text',{ph:'Moi Avenue, Suite 4',val:d.brAd||''})}${_fld('brOp','Opens At','time',{val:d.brOp||'08:00'})}${_fld('brCl','Closes At','time',{val:d.brCl||'18:00'})}</div>`}
 
-function rMerchTax(r,d){return`<div class="st-h">Tax Setup</div><p class="st-s">Configure tax settings — editable anytime.</p><div class="fgrid"><div class="fg"><label class="sk-lbl">VAT Status</label><select class="sk-in sk-sel" id="vatS"><option value="none"${(d.vatS||'none')==='none'?' selected':''}>Not VAT Registered</option><option value="reg"${d.vatS==='reg'?' selected':''}>VAT Registered</option></select></div>${_fld('vatN','VAT Number (if registered)','text',{ph:'V########',val:d.vatN||''})}${_fld('kra2','KRA PIN','text',{ph:'P051XXXXXXXXX',val:d.kra2||''})}</div><div class="info-b">eTIMS integration available on Professional plan and above.</div>`}
+function rMerchTax(r,d){return`<div class="st-h">Tax Setup</div><p class="st-s">Configure VAT — editable anytime.</p><div class="fgrid"><div class="fg"><label class="sk-lbl">VAT Status</label><select class="sk-in sk-sel" id="vatS"><option value="none"${(d.vatS||'none')==='none'?' selected':''}>Not VAT Registered</option><option value="reg"${d.vatS==='reg'?' selected':''}>VAT Registered</option></select></div>${_fld('vatN','VAT Number (if registered)','text',{ph:'V########',val:d.vatN||''})}${_fld('kra2','KRA PIN','text',{ph:'P051XXXXXXXXX',val:d.kra2||''})}</div><div class="info-b">eTIMS integration available on Professional plan and above.</div>`}
 
+function rMerchInv(r,d){return`<div class="st-h">Inventory Setup</div><p class="st-s">Configure how you manage stock. You can import products after launch.</p><div class="fgrid"><div class="fg"><label class="sk-lbl">Inventory Management</label><select class="sk-in sk-sel" id="invT"><option value="manual"${(d.invT||'manual')==='manual'?' selected':''}>Manual entry</option><option value="import"${d.invT==='import'?' selected':''}>Import from CSV</option><option value="barcode"${d.invT==='barcode'?' selected':''}>Barcode scanning</option></select></div>${_sel('invAl','Low-stock Alert Threshold',[{value:'0',label:'No alerts'},{value:'5',label:'5 units'},{value:'10',label:'10 units'},{value:'20',label:'20 units'}],d.invAl||'10')}</div><label class="sk-lbl" style="margin-top:12px;display:block">Product Features</label>${_chips('invF',['Variants (sizes/colours)','Expiry dates','Batch tracking','Serial numbers','FEFO'],d.invF||[])}`}
+
+function rMerchHW(r,d){return`<div class="st-h">Hardware</div><p class="st-s">Tell us what devices you'll use. You can add or change these later.</p><label class="sk-lbl" style="margin-bottom:8px;display:block">POS Devices</label>${_chips('hwD',['Tablet','Smartphone','Desktop/Laptop','Barcode Scanner','Receipt Printer','Cash Drawer','Customer Display'],d.hwD||[])}<div class="fgrid" style="margin-top:14px"><div class="fg"><label class="sk-lbl">Printer Type</label><select class="sk-in sk-sel" id="hwPr"><option value="none"${(d.hwPr||'none')==='none'?' selected':''}>No printer</option><option value="thermal"${d.hwPr==='thermal'?' selected':''}>Thermal (USB/Serial)</option><option value="network"${d.hwPr==='network'?' selected':''}>Network printer</option><option value="bluetooth"${d.hwPr==='bluetooth'?' selected':''}>Bluetooth</option></select></div>${_sel('hwPp','Receipt Paper Width',[{value:'58',label:'58mm'},{value:'80',label:'80mm'}],d.hwPp||'80')}</div>`}
+
+function rMerchTest(r,d){return`<div class="st-h">Test Sale</div><p class="st-s">We'll walk you through a quick test sale so your POS is ready on day one.</p><div class="info-b">You'll complete the test sale in your SmartPOS dashboard after launch. This activates your terminal and confirms payment processing.</div><div class="fgrid">${_sel('tsM','Your Primary Payment Method',[{value:'mpesa',label:'M-PESA Paybill / Till'},{value:'cash',label:'Cash only'},{value:'both',label:'Cash + M-PESA'},{value:'card',label:'Card + M-PESA'}],d.tsM||'mpesa')}${_fld('tsMp','M-PESA Till / Paybill','text',{ph:'e.g. 522522 or Till #',val:d.tsMp||''})}</div><label style="display:flex;align-items:center;gap:9px;cursor:pointer;font-size:.88rem;margin-top:12px"><input type="checkbox" id="tsAck"${d.tsAck?' checked':''}> I understand test sales won't deduct real money</label>`}
+
+/* ── Provider ────────────────────────────────────────────────────────────── */
 function rProvProfile(r,d){
   const cats=Object.keys(PCATS);const sc=d.pCat?PCATS[d.pCat]||[]:[];
-  return`<div class="st-h">Service Profile</div><p class="st-s">Help customers find and trust you.</p><div class="fgrid">${_fld('pNm','Professional / Business Name','text',{ph:'e.g. John Doe Electricals',req:1,val:d.pNm||''})}${_sel('pCat','Primary Category',cats,d.pCat||'',{req:1})}<div class="fg" id="scWrap"${sc.length?'':' style="display:none"'}><label class="sk-lbl">Subcategory</label><select class="sk-in sk-sel" id="pSub">${sc.map(s=>`<option value="${s}"${s===d.pSub?' selected':''}>${s}</option>`).join('')}</select></div>${_sel('pExp','Experience',[{value:'<1',label:'< 1 year'},{value:'1-2',label:'1-2 years'},{value:'3-5',label:'3-5 years'},{value:'6-10',label:'6-10 years'},{value:'10+',label:'10+ years'}],d.pExp||'')}</div>${_ta('pBio','Bio / Description',d.pBio||','Describe your services and expertise…')}<label class="sk-lbl" style="margin:10px 0 6px;display:block">Languages</label>${_chips('pLng',['English','Swahili','Kikuyu','Luo','Luhya','Kamba','Other'],d.languages||['English','Swahili'],1)}<script>document.getElementById('pCat').addEventListener('change',function(){const sc=PCATS[this.value]||[];const w=document.getElementById('scWrap');const s=document.getElementById('pSub');w.style.display=sc.length?'':'none';s.innerHTML=sc.map(x=>'<option>'+x+'</option>').join('')});<\/script>`;
+  return`<div class="st-h">Service Profile</div><p class="st-s">Help customers find and trust you.</p><div class="fgrid">${_fld('pNm','Professional / Business Name','text',{ph:'e.g. John Doe Electricals',req:1,val:d.pNm||''})}${_sel('pCat','Primary Category',cats,d.pCat||'',{req:1})}<div class="fg" id="scWrap"${sc.length?'':' style="display:none"'}><label class="sk-lbl">Subcategory</label><select class="sk-in sk-sel" id="pSub">${sc.map(s=>`<option value="${s}"${s===d.pSub?' selected':''}>${s}</option>`).join('')}</select></div>${_sel('pExp','Experience',[{value:'<1',label:'< 1 year'},{value:'1-2',label:'1-2 years'},{value:'3-5',label:'3-5 years'},{value:'6-10',label:'6-10 years'},{value:'10+',label:'10+ years'}],d.pExp||'')}</div>${_ta('pBio','Bio / Description',d.pBio||'','Describe your services and expertise…')}<label class="sk-lbl" style="margin:10px 0 6px;display:block">Languages</label>${_chips('pLng',['English','Swahili','Kikuyu','Luo','Luhya','Kamba','Other'],d.pLng||['English','Swahili'])}<script>document.getElementById('pCat').addEventListener('change',function(){const sc=PCATS[this.value]||[];const w=document.getElementById('scWrap');const s=document.getElementById('pSub');w.style.display=sc.length?'':'none';s.innerHTML=sc.map(x=>'<option>'+x+'<\/option>').join('')});<\/script>`;
 }
 
-function rProvCov(r,d){return`<div class="st-h">Coverage Area</div><p class="st-s">Tell customers where you operate.</p><label class="sk-lbl" style="margin-bottom:7px;display:block">Service type</label>${_chips('covT',['On-site','Remote / Online','Hybrid'],d.covT?[d.covT]:['On-site'],0)}<div class="fgrid" style="margin-top:14px">${_sel('covCo','County',COUNTIES.map(c=>({value:c,label:c})),d.county||'')}${_fld('covCi','City / Town','text',{ph:'e.g. Westlands',val:d.city||''})}${_fld('covNb','Neighbourhood','text',{ph:'Optional',val:d.nb||''})}</div><label class="sk-lbl" style="margin-top:10px;display:block">Service radius: <strong id="rV">${d.radius||20} km</strong></label><input type="range" id="covR" min="5" max="100" step="5" value="${d.radius||20}" style="width:100%;margin-top:5px;accent-color:var(--acc)" oninput="document.getElementById('rV').textContent=this.value+' km'"><div style="display:flex;gap:20px;margin-top:12px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="covNat"${d.nationwide?' checked':''}> Serve Nationwide</label><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="covRem"${d.remote?' checked':''}> Remote / Online</label></div>`}
+function rProvCov(r,d){return`<div class="st-h">Coverage Area</div><p class="st-s">Tell customers where you operate.</p><label class="sk-lbl" style="margin-bottom:7px;display:block">Service type</label>${_chips('covT',['On-site','Remote / Online','Hybrid'],d.covT?[d.covT]:['On-site'],false)}<div class="fgrid" style="margin-top:14px">${_sel('covCo','County',COUNTIES.map(c=>({value:c,label:c})),d.covCo||'')}${_fld('covCi','City / Town','text',{ph:'e.g. Westlands',val:d.covCi||''})}</div><label class="sk-lbl" style="margin-top:10px;display:block">Service radius: <strong id="rV">${d.covR||20} km</strong></label><input type="range" id="covR" min="5" max="100" step="5" value="${d.covR||20}" style="width:100%;margin-top:5px;accent-color:var(--acc)" oninput="document.getElementById('rV').textContent=this.value+' km'"><div style="display:flex;gap:20px;margin-top:12px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="covNat"${d.covNat?' checked':''}> Serve Nationwide</label></div>`}
 
-function rProvAvail(r,d){const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];return`<div class="st-h">Availability</div><p class="st-s">Set your regular working schedule.</p><label class="sk-lbl" style="margin-bottom:7px;display:block">Working days</label>${_chips('avD',days,d.days||['Mon','Tue','Wed','Thu','Fri'],1)}<div class="fgrid" style="margin-top:14px">${_fld('avF','Working Hours: From','time',{val:d.from||'08:00'})}${_fld('avT','To','time',{val:d.to||'17:00'})}${_fld('avBF','Break: From','time',{val:d.breakFrom||''})}${_fld('avBT','Break: To','time',{val:d.breakTo||''})}${_sel('avLd','Lead Time',[{value:'1h',label:'1 hour'},{value:'2h',label:'2 hours'},{value:'4h',label:'4 hours'},{value:'same',label:'Same day'},{value:'1d',label:'1 day'},{value:'2d',label:'2 days'},{value:'1w',label:'1 week'}],d.lead||'2h')}</div><div style="display:flex;gap:20px;margin-top:12px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="avEm"${d.emergency?' checked':''}> Emergency / 24-7</label><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="avHol"${d.holidays?' checked':''}> Available on Holidays</label></div>`}
+function rProvAvail(r,d){const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];return`<div class="st-h">Availability</div><p class="st-s">Set your regular working schedule.</p><label class="sk-lbl" style="margin-bottom:7px;display:block">Working days</label>${_chips('avD',days,d.avD||['Mon','Tue','Wed','Thu','Fri'])}<div class="fgrid" style="margin-top:14px">${_fld('avF','From','time',{val:d.avF||'08:00'})}${_fld('avT','To','time',{val:d.avT||'17:00'})}${_sel('avLd','Lead Time',[{value:'1h',label:'1 hour'},{value:'2h',label:'2 hours'},{value:'4h',label:'4 hours'},{value:'same',label:'Same day'},{value:'1d',label:'1 day'},{value:'2d',label:'2 days'}],d.avLd||'2h')}</div><div style="display:flex;gap:20px;margin-top:12px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="avEm"${d.avEm?' checked':''}> Emergency / 24-7</label><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="avHol"${d.avHol?' checked':''}> Available on Holidays</label></div>`}
 
-function rProvPrice(r,d){return`<div class="st-h">Your Pricing</div><p class="st-s">Set your rates — you can update them anytime.</p><div class="fgrid">${_fld('prH','Hourly Rate (KSh)','number',{ph:'e.g. 1500',val:d.hourly||''})}${_fld('prF','Fixed Price (KSh)','number',{ph:'e.g. 5000',val:d.fixed||''})}${_fld('prI','Inspection Fee (KSh)','number',{ph:'e.g. 500',val:d.inspection||''})}${_fld('prE','Emergency Fee (KSh)','number',{ph:'e.g. 2000',val:d.emergency||''})}${_fld('prTr','Travel Fee (KSh/km)','number',{ph:'e.g. 50',val:d.travel||''})}</div><div style="margin-top:10px"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem"><input type="checkbox" id="prQ"${d.quote?' checked':''}> Also accept quotation requests</label></div>`}
+function rProvPrice(r,d){return`<div class="st-h">Your Pricing</div><p class="st-s">Set your rates — update anytime.</p><div class="fgrid">${_fld('prH','Hourly Rate (KSh)','number',{ph:'e.g. 1500',val:d.prH||''})}${_fld('prF','Fixed Price (KSh)','number',{ph:'e.g. 5000',val:d.prF||''})}${_fld('prI','Inspection Fee (KSh)','number',{ph:'e.g. 500',val:d.prI||''})}${_fld('prE','Emergency Fee (KSh)','number',{ph:'e.g. 2000',val:d.prE||''})}${_fld('prTr','Travel Fee (KSh/km)','number',{ph:'e.g. 50',val:d.prTr||''})}</div><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem;margin-top:10px"><input type="checkbox" id="prQ"${d.prQ?' checked':''}> Also accept quotation requests</label>`}
 
+function rProvPortfolio(r,d){return`<div class="st-h">Portfolio</div><p class="st-s">Showcase your best work. Profiles with portfolios get 3× more bookings.</p><div class="ugrid"><div class="uc" onclick="_q('uPort1').click()"><div class="ui">🖼️</div><div class="ul">Work Photo 1</div><div class="uh">JPG/PNG, max 5MB</div><div class="us">Uploaded ✓</div><input type="file" id="uPort1" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uPort2').click()"><div class="ui">🖼️</div><div class="ul">Work Photo 2</div><div class="uh">Optional</div><div class="us">Uploaded ✓</div><input type="file" id="uPort2" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uPort3').click()"><div class="ui">🖼️</div><div class="ul">Work Photo 3</div><div class="uh">Optional</div><div class="us">Uploaded ✓</div><input type="file" id="uPort3" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div></div><div style="margin-top:14px">${_fld('portWA','WhatsApp Number (for quick quotes)','tel',{ph:'+254 7XX XXX XXX',val:d.portWA||''})}</div>`}
+
+function rProvBook(r,d){return`<div class="st-h">Bookings Settings</div><p class="st-s">Control how customers can book you.</p><div class="fgrid">${_sel('bkMode','Booking Mode',[{value:'instant',label:'Instant — auto-confirm'},{value:'request',label:'Request — you approve'},{value:'quote',label:'Quote first, then book'}],d.bkMode||'request')}${_sel('bkDur','Default Session Duration',[{value:'30',label:'30 min'},{value:'60',label:'1 hour'},{value:'120',label:'2 hours'},{value:'custom',label:'Varies (set per booking)'}],d.bkDur||'60')}${_fld('bkBuf','Buffer Between Bookings (min)','number',{ph:'15',val:d.bkBuf||'15'})}${_sel('bkAdv','Max Advance Booking',[{value:'7',label:'1 week'},{value:'14',label:'2 weeks'},{value:'30',label:'1 month'},{value:'90',label:'3 months'}],d.bkAdv||'30')}</div><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.88rem;margin-top:10px"><input type="checkbox" id="bkDep"${d.bkDep?' checked':''}> Require a deposit to confirm bookings</label>`}
+
+/* ── Rider / Driver / Courier ─────────────────────────────────────────── */
+function rRiderPers(r,d){return`<div class="st-h">Personal Information</div><p class="st-s">Required for background verification and payouts.</p><div class="fgrid">${_fld('rdF','First Name','text',{ph:'John',req:1,val:d.rdF||''})}${_fld('rdL','Last Name','text',{ph:'Mwangi',req:1,val:d.rdL||''})}${_fld('rdDOB','Date of Birth','date',{req:1,val:d.rdDOB||''})}${_sel('rdG','Gender',[{value:'male',label:'Male'},{value:'female',label:'Female'},{value:'pnts',label:'Prefer not to say'}],d.rdG||'')}${_fld('rdID','National ID Number','text',{ph:'XXXXXXXX',req:1,val:d.rdID||''})}${_fld('rdPh','Phone Number','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.rdPh||''})}${_sel('rdCo','County of Residence',COUNTIES.map(c=>({value:c,label:c})),d.rdCo||'')}</div>`}
+
+function rRiderVeh(r,d){return`<div class="st-h">Your Vehicle</div><p class="st-s">Register the vehicle you'll use for deliveries.</p><div class="fgrid">${_sel('vhT','Vehicle Type',VTYPES,d.vhT||'Motorbike',{req:1})}${_fld('vhMk','Make','text',{ph:'Honda',req:1,val:d.vhMk||''})}${_fld('vhMo','Model','text',{ph:'CG 125',val:d.vhMo||''})}${_fld('vhYr','Year','number',{ph:'2020',val:d.vhYr||''})}${_fld('vhPl','Number Plate','text',{ph:'KBZ 123A',req:1,val:d.vhPl||''})}${_fld('vhCo','Colour','text',{ph:'Red',val:d.vhCo||''})}</div>`}
+
+function rRiderLic(r,d){return`<div class="st-h">Driving Licence</div><p class="st-s">Upload both sides of your valid licence.</p><div class="fgrid">${_fld('lcN','Licence Number','text',{ph:'DL XXXXXXXX',val:d.lcN||''})}${_sel('lcC','Class',[{value:'B',label:'Class B - Cars'},{value:'A',label:'Class A - Motorcycles'},{value:'CE',label:'Class C/E - Trucks'}],d.lcC||'')}${_fld('lcE','Expiry Date','date',{val:d.lcE||''})}</div><div class="ugrid" style="margin-top:14px"><div class="uc" onclick="_q('uLF').click()"><div class="ui">📄</div><div class="ul">Licence Front</div><div class="us">Uploaded ✓</div><input type="file" id="uLF" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uLB').click()"><div class="ui">📄</div><div class="ul">Licence Back</div><div class="us">Uploaded ✓</div><input type="file" id="uLB" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div></div>`}
+
+function rRiderIns(r,d){return`<div class="st-h">Insurance</div><p class="st-s">Proof of valid vehicle insurance is required.</p><div class="fgrid">${_fld('insP','Policy Number','text',{ph:'POL-XXXXXXXX',val:d.insP||''})}${_fld('insC','Insurer','text',{ph:'e.g. Jubilee Insurance',val:d.insC||''})}${_fld('insE','Expiry Date','date',{val:d.insE||''})}</div><div class="ugrid" style="margin-top:14px"><div class="uc" onclick="_q('uIns').click()"><div class="ui">📋</div><div class="ul">Insurance Certificate</div><div class="uh">PDF or photo</div><div class="us">Uploaded ✓</div><input type="file" id="uIns" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div></div><div class="info-b">Your insurance details are stored securely and only used for verification.</div>`}
+
+function rRiderBG(r,d){return`<div class="st-h">Background Check</div><p class="st-s">A police clearance certificate is required to carry passengers or parcels.</p><div class="ugrid"><div class="uc" onclick="_q('uPCC').click()"><div class="ui">🔏</div><div class="ul">Police Clearance Certificate</div><div class="uh">PDF or photo</div><div class="us">Uploaded ✓</div><input type="file" id="uPCC" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uNID2').click()"><div class="ui">🪪</div><div class="ul">National ID</div><div class="uh">Front & back</div><div class="us">Uploaded ✓</div><input type="file" id="uNID2" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div></div><div class="info-b">Background checks take 24-48 hours. You can go online once approved.</div>`}
+
+function rRiderTrain(r,d){return`<div class="st-h">Training</div><p class="st-s">Complete a short orientation to activate your account.</p><div style="display:flex;flex-direction:column;gap:14px;margin-top:8px"><label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="tr1"${d.tr1?' checked':''} style="margin-top:2px"> <div><div style="font-weight:600;font-size:.87rem">SOKONI Community Guidelines</div><div style="font-size:.75rem;color:var(--sub)">How to treat customers, handle disputes, and represent the platform</div></div></label><label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="tr2"${d.tr2?' checked':''} style="margin-top:2px"> <div><div style="font-weight:600;font-size:.87rem">Safety & Emergency Procedures</div><div style="font-size:.75rem;color:var(--sub)">Road safety, package handling, and reporting incidents</div></div></label><label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="tr3"${d.tr3?' checked':''} style="margin-top:2px"> <div><div style="font-weight:600;font-size:.87rem">App & Navigation Tutorial</div><div style="font-size:.75rem;color:var(--sub)">Accept rides, mark deliveries, view earnings</div></div></label></div>`}
+
+/* ── Property ────────────────────────────────────────────────────────────── */
+function rPropComp(r,d){return`<div class="st-h">Property Company</div><p class="st-s">Tell us about your property management business.</p><div class="fgrid">${_fld('pcNm','Company Name','text',{ph:'e.g. Ogutu Properties Ltd',req:1,val:d.pcNm||''})}${_sel('pcTy','Company Type',['Sole Proprietor','Limited Company','Real Estate Agency','Individual Landlord'],d.pcTy||'')}${_fld('pcPh','Contact Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.pcPh||''})}${_fld('pcEm','Contact Email','email',{ph:'info@example.com',val:d.pcEm||''})}</div>${_ta('pcBio','About Your Company',d.pcBio||'','Brief description of your portfolio and services…')}`}
+
+function rPropProp(r,d){return`<div class="st-h">Your Properties</div><p class="st-s">Add your first property. You can add more from your dashboard.</p><div class="fgrid">${_fld('ppNm','Property Name','text',{ph:'e.g. Westlands Heights',req:1,val:d.ppNm||''})}${_sel('ppTy','Property Type',['Residential','Commercial','Mixed-use','Land','Short-stay'],d.ppTy||'')}${_sel('ppCo','County',COUNTIES.map(c=>({value:c,label:c})),d.ppCo||'',{req:1})}${_fld('ppAd','Address','text',{ph:'Building name, street',val:d.ppAd||''})}${_fld('ppYr','Year Built','number',{ph:'2015',val:d.ppYr||''})}</div>`}
+
+function rPropUnits(r,d){return`<div class="st-h">Units</div><p class="st-s">Configure the units in your first property.</p><div class="fgrid">${_fld('puCt','Total Units','number',{ph:'e.g. 24',req:1,val:d.puCt||''})}${_sel('puTy','Unit Type',['Studio','1-Bedroom','2-Bedroom','3-Bedroom','4-Bedroom+','Office','Retail','Warehouse'],d.puTy||'')}${_fld('puSz','Unit Size (sq ft avg)','number',{ph:'500',val:d.puSz||''})}<div class="fg"><label class="sk-lbl">Amenities</label>${_chips('puAm',['Parking','Water 24/7','Backup Generator','Borehole','Security','CCTV','Gym','Swimming Pool','Fibre Internet'],d.puAm||[])}</div></div>`}
+
+function rPropRent(r,d){return`<div class="st-h">Rent Rules</div><p class="st-s">Set your rental policy.</p><div class="fgrid">${_fld('prRent','Monthly Rent (KSh)','number',{ph:'e.g. 25000',val:d.prRent||''})}${_fld('prDep','Security Deposit (KSh)','number',{ph:'e.g. 50000',val:d.prDep||''})}${_sel('prDue','Rent Due Date',[{value:'1',label:'1st of the month'},{value:'5',label:'5th of the month'},{value:'15',label:'15th of the month'}],d.prDue||'1')}${_sel('prNotice','Notice Period',[{value:'1',label:'1 month'},{value:'2',label:'2 months'},{value:'3',label:'3 months'}],d.prNotice||'1')}</div><label class="sk-lbl" style="margin-top:12px;display:block">Payment Methods Accepted</label>${_chips('prPay',['M-PESA','Bank Transfer','Cheque','Cash'],d.prPay||['M-PESA'])}`}
+
+function rPropMaint(r,d){return`<div class="st-h">Maintenance</div><p class="st-s">Set up how tenants raise maintenance requests.</p><div class="fgrid">${_sel('pmMode','Request Mode',[{value:'app',label:'Via SOKONI App'},{value:'phone',label:'Phone call'},{value:'both',label:'Both'}],d.pmMode||'app')}${_fld('pmPh','Maintenance Phone','tel',{ph:'+254 7XX XXX XXX',val:d.pmPh||''})}</div><label class="sk-lbl" style="margin-top:12px;display:block">Service Categories You Handle</label>${_chips('pmCat',['Plumbing','Electrical','Painting','Carpentry','HVAC','Cleaning','Security','Landscaping'],d.pmCat||['Plumbing','Electrical'])}`}
+
+/* ── Hotel ────────────────────────────────────────────────────────────────── */
+function rHotelProf(r,d){return`<div class="st-h">Hotel Profile</div><p class="st-s">Create your hotel listing on SOKONI.</p><div class="fgrid">${_fld('htNm','Hotel Name','text',{ph:'e.g. Savannah Grand Hotel',req:1,val:d.htNm||''})}${_sel('htTy','Type',['Hotel','Motel','Guesthouse','Airbnb','Hostel','Resort','Lodge','Serviced Apartments'],d.htTy||'')}${_sel('htCo','County',COUNTIES.map(c=>({value:c,label:c})),d.htCo||'',{req:1})}${_fld('htAd','Address','text',{ph:'Street, area',val:d.htAd||''})}${_fld('htStar','Star Rating','number',{ph:'3',val:d.htStar||'',extra:'min="1" max="5"'})}${_fld('htPh','Contact Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.htPh||''})}</div>${_ta('htDs','Description',d.htDs||'','Describe the hotel, location, and unique features…')}`}
+
+function rHotelRooms(r,d){return`<div class="st-h">Rooms</div><p class="st-s">Configure your room types. Add more from the dashboard.</p><div class="fgrid">${_fld('hrT','Total Rooms','number',{ph:'50',req:1,val:d.hrT||''})}</div><label class="sk-lbl" style="margin-top:14px;margin-bottom:8px;display:block">Room Types Available</label>${_chips('hrTy',['Standard','Deluxe','Executive','Suite','Family','Studio','Penthouse'],d.hrTy||['Standard','Deluxe'])}<div class="fgrid" style="margin-top:14px">${_fld('hrMin','Min Rooms per Booking','number',{ph:'1',val:d.hrMin||'1'})}${_sel('hrChk','Check-in Time',[{value:'12:00',label:'12:00 noon'},{value:'14:00',label:'2:00 PM'},{value:'15:00',label:'3:00 PM'}],d.hrChk||'14:00')}${_sel('hrCko','Check-out Time',[{value:'10:00',label:'10:00 AM'},{value:'11:00',label:'11:00 AM'},{value:'12:00',label:'12:00 noon'}],d.hrCko||'11:00')}</div>`}
+
+function rHotelPricing(r,d){return`<div class="st-h">Room Pricing</div><p class="st-s">Set your base rates per night. You can set seasonal rates in the dashboard.</p><div class="fgrid">${_fld('hpS','Standard Room (KSh/night)','number',{ph:'3500',val:d.hpS||''})}${_fld('hpD','Deluxe Room (KSh/night)','number',{ph:'5500',val:d.hpD||''})}${_fld('hpSu','Suite (KSh/night)','number',{ph:'9000',val:d.hpSu||''})}</div><label class="sk-lbl" style="margin-top:12px;display:block">Inclusions</label>${_chips('hpInc',['Breakfast','Wi-Fi','Parking','Airport Transfer','Pool Access','Gym'],d.hpInc||['Wi-Fi'])}`}
+
+function rHotelAmen(r,d){return`<div class="st-h">Amenities</div><p class="st-s">Select all amenities available at your property.</p>${_chips('haAm',['Swimming Pool','Restaurant','Bar','Gym','Spa','Conference Room','Business Centre','Rooftop','Laundry','Room Service','CCTV','24h Reception','Generator','Parking','Airport Transfer','Kids Club'],d.haAm||[])}`}
+
+function rHotelBook(r,d){return`<div class="st-h">Bookings Policy</div><p class="st-s">Set how bookings are handled.</p><div class="fgrid">${_sel('hbMode','Booking Confirmation',[{value:'instant',label:'Instant confirm'},{value:'request',label:'Request (you approve)'}],d.hbMode||'instant')}${_sel('hbCanc','Cancellation Policy',[{value:'free24',label:'Free cancel 24h before'},{value:'free48',label:'Free cancel 48h before'},{value:'free7d',label:'Free cancel 7 days before'},{value:'none',label:'Non-refundable'}],d.hbCanc||'free24')}${_fld('hbMin','Minimum Stay (nights)','number',{ph:'1',val:d.hbMin||'1'})}</div><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.88rem;margin-top:10px"><input type="checkbox" id="hbDeposit"${d.hbDeposit?' checked':''}> Require advance deposit</label>`}
+
+/* ── Restaurant ───────────────────────────────────────────────────────────── */
+function rRestProf(r,d){return`<div class="st-h">Restaurant Profile</div><p class="st-s">Create your restaurant listing.</p><div class="fgrid">${_fld('rsNm','Restaurant Name','text',{ph:'e.g. Mama Pima Kitchen',req:1,val:d.rsNm||''})}${_sel('rsTy','Type',['Restaurant','Café','Fast Food','Bar & Grill','Catering','Food Truck','Cloud Kitchen','Bakery'],d.rsTy||'')}${_sel('rsCo','County',COUNTIES.map(c=>({value:c,label:c})),d.rsCo||'',{req:1})}${_fld('rsAd','Address','text',{ph:'Building, street',val:d.rsAd||''})}${_fld('rsPh','Contact Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.rsPh||''})}${_fld('rsOp','Opens At','time',{val:d.rsOp||'07:00'})}${_fld('rsCl','Closes At','time',{val:d.rsCl||'22:00'})}</div><label class="sk-lbl" style="margin-top:12px;display:block">Cuisine Types</label>${_chips('rsCu',['Kenyan','Swahili','Indian','Chinese','Italian','BBQ','Seafood','Vegetarian','Vegan','Continental','Fast Food'],d.rsCu||[])}`}
+
+function rRestMenu(r,d){return`<div class="st-h">Menu</div><p class="st-s">You'll add full menu items in your dashboard. Tell us the basics first.</p><label class="sk-lbl" style="margin-bottom:8px;display:block">Menu Categories</label>${_chips('rmCat',['Breakfast','Lunch','Dinner','Drinks','Desserts','Snacks','Kids Menu','Set Meals','Specials'],d.rmCat||['Lunch','Dinner'])}<div class="fgrid" style="margin-top:14px">${_fld('rmItems','Approx. Number of Menu Items','number',{ph:'e.g. 30',val:d.rmItems||''})}</div>${_ta('rmSig','Signature Dishes (one per line)',d.rmSig||'','e.g.\nNyama Choma\nKenyan Pilau\nTilapia Fish Fry')}`}
+
+function rRestKitchen(r,d){return`<div class="st-h">Kitchen</div><p class="st-s">Help us understand your kitchen capacity.</p><div class="fgrid">${_fld('rkCap','Kitchen Capacity (covers/hour)','number',{ph:'e.g. 40',val:d.rkCap||''})}${_sel('rkPOS','POS System',[{value:'sokoni',label:'SOKONI SmartPOS'},{value:'existing',label:'Existing POS'},{value:'none',label:'None yet'}],d.rkPOS||'sokoni')}</div><label class="sk-lbl" style="margin-top:12px;display:block">Kitchen Equipment</label>${_chips('rkEq',['Commercial Oven','Gas Stove','Charcoal Grill','Deep Fryer','Freezer','Cold Room','Dishwasher'],d.rkEq||[])}`}
+
+function rRestTables(r,d){return`<div class="st-h">Tables & Seating</div><p class="st-s">Set up your dining layout.</p><div class="fgrid">${_fld('rtCt','Total Tables','number',{ph:'e.g. 20',val:d.rtCt||''})}${_fld('rtSeat','Total Seating Capacity','number',{ph:'e.g. 80',val:d.rtSeat||''})}</div><label class="sk-lbl" style="margin-top:12px;display:block">Dining Options</label>${_chips('rtOp',['Dine-in','Takeaway','Delivery','Catering','Drive-through','Private Dining'],d.rtOp||['Dine-in','Takeaway'])}<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.88rem;margin-top:12px"><input type="checkbox" id="rtRes"${d.rtRes?' checked':''}> Accept table reservations</label>`}
+
+function rRestDel(r,d){return`<div class="st-h">Delivery</div><p class="st-s">Configure delivery settings.</p><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.9rem;margin-bottom:14px"><input type="checkbox" id="rdlOn"${d.rdlOn?' checked':''} onchange="document.getElementById('rdlFields').style.display=this.checked?'block':'none'"> Enable delivery on SOKONI</label><div id="rdlFields" style="display:${d.rdlOn?'block':'none'}"><div class="fgrid">${_fld('rdlMin','Minimum Order (KSh)','number',{ph:'200',val:d.rdlMin||''})}${_fld('rdlFee','Flat Delivery Fee (KSh)','number',{ph:'100',val:d.rdlFee||''})}${_fld('rdlRad','Delivery Radius (km)','number',{ph:'5',val:d.rdlRad||'5'})}${_sel('rdlEta','Average Delivery Time',[{value:'20',label:'20 min'},{value:'30',label:'30 min'},{value:'45',label:'45 min'},{value:'60',label:'1 hour'}],d.rdlEta||'30')}</div></div>`}
+
+function rRestPrint(r,d){return`<div class="st-h">Printer Setup</div><p class="st-s">Configure receipt and kitchen ticket printing.</p><div class="fgrid"><div class="fg"><label class="sk-lbl">Receipt Printer</label><select class="sk-in sk-sel" id="rpType"><option value="none"${(d.rpType||'none')==='none'?' selected':''}>No printer</option><option value="thermal_usb"${d.rpType==='thermal_usb'?' selected':''}>Thermal USB</option><option value="thermal_bt"${d.rpType==='thermal_bt'?' selected':''}>Thermal Bluetooth</option><option value="network"${d.rpType==='network'?' selected':''}>Network Printer</option></select></div>${_sel('rpW','Paper Width',[{value:'58',label:'58mm'},{value:'80',label:'80mm'}],d.rpW||'80')}</div><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.88rem;margin-top:12px"><input type="checkbox" id="rpKtk"${d.rpKtk?' checked':''}> Print kitchen tickets (separate printer)</label><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.88rem;margin-top:8px"><input type="checkbox" id="rpEtims"${d.rpEtims?' checked':''}> Include KRA eTIMS code on receipts</label>`}
+
+/* ── Healthcare ───────────────────────────────────────────────────────────── */
+function rHealthFacility(r,d){return`<div class="st-h">Your Facility</div><p class="st-s">Register your healthcare facility.</p><div class="fgrid">${_fld('hfNm','Facility Name','text',{ph:'e.g. Nairobi Medical Centre',req:1,val:d.hfNm||''})}${_sel('hfTy','Type',['Clinic','Hospital','Pharmacy','Dental Clinic','Eye Centre','Laboratory','Physiotherapy','Mental Health','Radiology Centre'],d.hfTy||'')}${_sel('hfCo','County',COUNTIES.map(c=>({value:c,label:c})),d.hfCo||'',{req:1})}${_fld('hfAd','Address','text',{ph:'Building, street',val:d.hfAd||''})}${_fld('hfPh','Contact Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.hfPh||''})}${_fld('hfReg','NHIF Provider No.','text',{ph:'Optional',val:d.hfReg||''})}</div>`}
+
+function rHealthDepts(r,d){return`<div class="st-h">Departments</div><p class="st-s">Select all departments your facility offers.</p>${_chips('hdDept',['General Practice','Paediatrics','Gynaecology','Orthopaedics','Cardiology','Dermatology','ENT','Ophthalmology','Neurology','Oncology','Psychiatry','Radiology','Laboratory','Pharmacy','Physiotherapy','Nutrition','Dental'],d.hdDept||[])}<div class="fgrid" style="margin-top:14px">${_fld('hdBeds','Number of Beds / Examination Rooms','number',{ph:'e.g. 10',val:d.hdBeds||''})}</div>`}
+
+function rHealthDocs(r,d){return`<div class="st-h">Doctors & Staff</div><p class="st-s">Add your first doctor profile. You'll manage the full team in the dashboard.</p><div class="fgrid">${_fld('hdocF','First Doctor – First Name','text',{ph:'Dr. Jane',val:d.hdocF||''})}${_fld('hdocL','Last Name','text',{ph:'Wanjiku',val:d.hdocL||''})}${_sel('hdocSpec','Specialisation',['General Practitioner','Gynaecologist','Paediatrician','Orthopaedic Surgeon','Cardiologist','Dermatologist','ENT Specialist','Neurologist','Psychiatrist','Dentist','Physiotherapist','Other'],d.hdocSpec||'')}${_fld('hdocReg','Medical Registration No.','text',{ph:'KMC-XXXXX',val:d.hdocReg||''})}</div>`}
+
+function rHealthAppt(r,d){return`<div class="st-h">Appointments</div><p class="st-s">Configure how patients book appointments.</p><div class="fgrid">${_sel('haMode','Booking Mode',[{value:'online',label:'Online — patients self-book'},{value:'call',label:'Call to book'},{value:'walkin',label:'Walk-in only'},{value:'both',label:'Online + walk-in'}],d.haMode||'online')}${_sel('haSlot','Default Slot Duration',[{value:'15',label:'15 min'},{value:'20',label:'20 min'},{value:'30',label:'30 min'},{value:'60',label:'1 hour'}],d.haSlot||'30')}</div><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.88rem;margin-top:10px"><input type="checkbox" id="haRemind"${d.haRemind?' checked':''} checked> Send SMS reminders to patients</label>`}
+
+function rHealthBill(r,d){return`<div class="st-h">Billing</div><p class="st-s">Set up how patients are billed.</p><label class="sk-lbl" style="margin-bottom:8px;display:block">Accepted Payment Methods</label>${_chips('hbPay',['M-PESA','Cash','NHIF','SHA','Insurance','Bank Transfer'],d.hbPay||['M-PESA','Cash'])}<div class="fgrid" style="margin-top:14px"><div class="fg"><label class="sk-lbl">Consultation Fee (KSh)</label><input class="sk-in" type="number" id="hbFee" placeholder="e.g. 800" value="${_esc(d.hbFee||'')}"></div>${_fld('hbMpesa','M-PESA Paybill / Till','text',{ph:'e.g. 522522',val:d.hbMpesa||''})}</div>`}
+
+function rHealthRec(r,d){return`<div class="st-h">Medical Records</div><p class="st-s">Configure your patient records system.</p><div class="fgrid"><div class="fg"><label class="sk-lbl">Records System</label><select class="sk-in sk-sel" id="hrSystem"><option value="sokoni"${(d.hrSystem||'sokoni')==='sokoni'?' selected':''}>SOKONI Health Records</option><option value="existing"${d.hrSystem==='existing'?' selected':''}>Existing EMR (import later)</option><option value:"paper"${d.hrSystem==='paper'?' selected':''}>Paper-based</option></select></div></div><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.88rem;margin-top:10px"><input type="checkbox" id="hrConsent"${d.hrConsent?' checked':''} checked> Patients consent to digital records</label><div class="info-b">SOKONI Health Records are encrypted and access-controlled per patient.</div>`}
+
+/* ── Employer ─────────────────────────────────────────────────────────────── */
+function rEmpComp(r,d){return`<div class="st-h">Company Profile</div><p class="st-s">Set up your employer profile to start hiring on SOKONI.</p><div class="fgrid">${_fld('ecNm','Company Name','text',{ph:'e.g. Acme Corporation Ltd',req:1,val:d.ecNm||''})}${_sel('ecTy','Company Type',['Private Company','Public Company','NGO/Non-profit','Government','Startup','SME'],d.ecTy||'')}${_sel('ecInd','Industry',['Technology','Finance','Healthcare','Education','Retail','Manufacturing','Construction','Hospitality','Agriculture','Media','Other'],d.ecInd||'')}${_fld('ecEmp','Current Employees','number',{ph:'e.g. 25',val:d.ecEmp||''})}${_fld('ecPh','HR Contact Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.ecPh||''})}${_fld('ecEm','HR Email','email',{ph:'hr@company.com',val:d.ecEm||''})}</div>`}
+
+function rEmpJob(r,d){return`<div class="st-h">Post Your First Job</div><p class="st-s">Get your first listing live. Add more from your employer dashboard.</p><div class="fgrid">${_fld('ejTitle','Job Title','text',{ph:'e.g. Sales Associate',req:1,val:d.ejTitle||''})}${_sel('ejType','Employment Type',[{value:'full',label:'Full-time'},{value:'part',label:'Part-time'},{value:'contract',label:'Contract'},{value:'intern',label:'Internship'},{value:'remote',label:'Remote'}],d.ejType||'full')}${_fld('ejSalMn','Min Salary (KSh/mo)','number',{ph:'30000',val:d.ejSalMn||''})}${_fld('ejSalMx','Max Salary (KSh/mo)','number',{ph:'60000',val:d.ejSalMx||''})}</div>${_ta('ejDesc','Job Description',d.ejDesc||'','Responsibilities, requirements, qualifications…')}`}
+
+/* ── Freelancer ───────────────────────────────────────────────────────────── */
+function rFreelProf(r,d){return`<div class="st-h">Your Freelancer Profile</div><p class="st-s">Build a profile that wins clients.</p><div class="fgrid">${_fld('flNm','Professional Name','text',{ph:'e.g. Alex Ogutu',req:1,val:d.flNm||''})}${_sel('flCat','Primary Category',Object.keys(PCATS),d.flCat||'')}${_fld('flPh','Contact Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.flPh||''})}${_fld('flEm','Contact Email','email',{ph:'you@example.com',val:d.flEm||''})}</div>${_ta('flBio','Professional Summary',d.flBio||'','What do you do, and why should clients hire you?')}<div class="fgrid" style="margin-top:14px">${_fld('flExp','Years of Experience','number',{ph:'3',val:d.flExp||''})}${_sel('flAvail','Availability',[{value:'full',label:'Full-time available'},{value:'part',label:'Part-time (< 20h/wk)'},{value:'weekend',label:'Weekends only'},{value:'project',label:'Project-based'}],d.flAvail||'full')}</div>`}
+
+function rFreelSkills(r,d){return`<div class="st-h">Skills & Portfolio</div><p class="st-s">Showcase your expertise and previous work.</p><div style="margin-bottom:14px">${_ta('flSkills','Your Skills (comma-separated)',d.flSkills||'','e.g. React, Node.js, Figma, Copywriting, SEO')}</div><div class="ugrid"><div class="uc" onclick="_q('uFPort1').click()"><div class="ui">💼</div><div class="ul">Portfolio Item 1</div><div class="uh">Image or PDF</div><div class="us">Uploaded ✓</div><input type="file" id="uFPort1" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uFPort2').click()"><div class="ui">💼</div><div class="ul">Portfolio Item 2</div><div class="uh">Optional</div><div class="us">Uploaded ✓</div><input type="file" id="uFPort2" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div></div>${_fld('flLinked','LinkedIn / Website','text',{ph:'https://linkedin.com/in/yourname',val:d.flLinked||''})}`}
+
+/* ── Legal Gate ───────────────────────────────────────────────────────── */
+function rLegalGate(r,d){
+  requestAnimationFrame(function(){
+    var wrap=document.getElementById('slg-wrap');
+    if(!wrap)return;
+    if(!window.SokoniLegalGate){_legalOk=true;return;}
+    window.SokoniLegalGate.mount(wrap,{
+      role:r,
+      onComplete:function(ok,meta){_legalOk=!!ok;}
+    });
+  });
+  return`<div class="st-h">Legal Agreements</div>`+
+    `<p class="st-s">Review and accept the platform agreements for your ${r} account.</p>`+
+    `<div id="slg-wrap" style="margin-top:4px"></div>`+
+    `<p style="font-size:.75rem;color:var(--sub);margin-top:14px">Once accepted, click <strong style="color:var(--text)">Save &amp; Continue</strong> to proceed.</p>`;
+}
+
+/* ── Common shared steps ──────────────────────────────────────────────── */
 function rSub(r,d){return`<div class="st-h">Choose Your Plan</div><p class="st-s">Start free, upgrade anytime. Cancel whenever.</p>${_planCards(r)}`}
 
 function rVerif(r,d){return`<div class="st-h">Identity Verification</div><p class="st-s">Verified profiles get 3× more bookings. Skip and verify later.</p><div class="ugrid"><div class="uc" onclick="_q('uNID').click()"><div class="ui">🪪</div><div class="ul">National ID / Passport</div><div class="uh">Front & back</div><div class="us">Uploaded ✓</div><input type="file" id="uNID" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uBR').click()"><div class="ui">📋</div><div class="ul">Business Registration</div><div class="uh">If company</div><div class="us">Uploaded ✓</div><input type="file" id="uBR" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uPL').click()"><div class="ui">📜</div><div class="ul">Professional Licence</div><div class="uh">Optional</div><div class="us">Uploaded ✓</div><input type="file" id="uPL" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uSel').click()"><div class="ui">🤳</div><div class="ul">Verification Selfie</div><div class="uh">Hold ID next to face</div><div class="us">Uploaded ✓</div><input type="file" id="uSel" accept="image/*" capture="user" style="display:none" onchange="markUp(this.parentElement)"></div></div>`}
 
-function rPay(r,d){return`<div class="st-h">Payment Setup</div><p class="st-s">Connect a payment method to receive earnings.</p><div class="fgrid">${_fld('pmMp','M-PESA Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.mpesa||''})}${_sel('pmBk','Bank (optional)',[{value:'',label:'None'},{value:'KCB',label:'KCB'},{value:'Equity',label:'Equity Bank'},{value:'Cooperative',label:'Co-operative Bank'},{value:'Absa',label:'Absa'},{value:'NCBA',label:'NCBA'},{value:'DTB',label:'DTB'},{value:'Family',label:'Family Bank'},{value:'PostBank',label:'PostBank'},{value:'Other',label:'Other'}],d.bank||'')}${_fld('pmAc','Account Number (if bank)','text',{ph:'XXXXXXXXXXXXXXXX',val:d.acc||''})}</div><div class="info-b">Payouts every Monday. Minimum payout KSh 100. SOKONI Wallet auto-created on activation.</div>`}
-
-function rRiderPers(r,d){return`<div class="st-h">Personal Information</div><p class="st-s">Required for background verification and payouts.</p><div class="fgrid">${_fld('rdF','First Name','text',{ph:'John',req:1,val:d.first||''})}${_fld('rdL','Last Name','text',{ph:'Mwangi',req:1,val:d.last||''})}${_fld('rdDOB','Date of Birth','date',{req:1,val:d.dob||''})}${_sel('rdG','Gender',[{value:'male',label:'Male'},{value:'female',label:'Female'},{value:'pnts',label:'Prefer not to say'}],d.gender||'')}${_fld('rdID','National ID Number','text',{ph:'XXXXXXXX',req:1,val:d.idNum||''})}${_fld('rdPh','Phone Number','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.phone||''})}${_sel('rdCo','County of Residence',COUNTIES.map(c=>({value:c,label:c})),d.county||'')}</div>`}
-
-function rRiderVeh(r,d){return`<div class="st-h">Your Vehicle</div><p class="st-s">Register the vehicle you'll use for deliveries.</p><div class="fgrid">${_sel('vhT','Vehicle Type',VTYPES,d.type||'Motorbike',{req:1})}${_fld('vhMk','Make','text',{ph:'Honda',req:1,val:d.make||''})}${_fld('vhMo','Model','text',{ph:'CG 125',val:d.model||''})}${_fld('vhYr','Year','number',{ph:'2020',val:d.year||''})}${_fld('vhPl','Number Plate','text',{ph:'KBZ 123A',req:1,val:d.plate||''})}${_fld('vhCo','Color','text',{ph:'Red',val:d.color||''})}</div>`}
-
-function rRiderLic(r,d){return`<div class="st-h">Driving Licence</div><p class="st-s">Upload both sides of your valid licence.</p><div class="fgrid">${_fld('lcN','Licence Number','text',{ph:'DL XXXXXXXX',val:d.num||''})}${_sel('lcC','Class',[{value:'B',label:'Class B - Cars'},{value:'A',label:'Class A - Motorcycles'},{value:'CE',label:'Class C/E - Trucks'}],d.cls||'')}${_fld('lcE','Expiry Date','date',{val:d.expiry||''})}</div><div class="ugrid" style="margin-top:14px"><div class="uc" onclick="_q('uLF').click()"><div class="ui">📄</div><div class="ul">Licence Front</div><div class="us">Uploaded ✓</div><input type="file" id="uLF" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div><div class="uc" onclick="_q('uLB').click()"><div class="ui">📄</div><div class="ul">Licence Back</div><div class="us">Uploaded ✓</div><input type="file" id="uLB" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div></div>`}
+function rPay(r,d){return`<div class="st-h">Payment Setup</div><p class="st-s">Connect a payment method to receive earnings.</p><div class="fgrid">${_fld('pmMp','M-PESA Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.pmMp||''})}${_sel('pmBk','Bank (optional)',BANKS,d.pmBk||'')}${_fld('pmAc','Account Number (if bank)','text',{ph:'XXXXXXXXXXXXXXXX',val:d.pmAc||''})}</div><div class="info-b">Payouts every Monday. Minimum payout KSh 100. SOKONI Wallet auto-created on activation.</div>`}
 
 function rGenProf(r,d){
   const m=typeof SokoniOnboarding!=='undefined'?SokoniOnboarding.metaFor(r):{label:r,icon:'🔲'};
-  const types={property:['Residential','Commercial','Mixed-use','Land'],hotel:['Hotel','Motel','Guesthouse','Airbnb','Hostel','Resort'],restaurant:['Restaurant','Cafe','Fast Food','Bar','Catering','Food Truck'],healthcare:['Clinic','Hospital','Pharmacy','Lab','Dental','Therapy Center'],employer:['Company','NGO','Government','SME','Startup'],events:['Event Company','Venue','Individual Planner'],pharmacy:['Community','Hospital Pharmacy','Online'],ngo:['Charity','Foundation','Community Group','Faith-based'],school:['Primary','Secondary','College','Training Center','Online'],finance:['Microfinance','SACCO','Insurance','Investment','Digital Lender'],freelancer:['Designer','Developer','Writer','Consultant','Analyst'],courier:['Express','Same-day','International'],distributor:['FMCG','Pharmaceutical','Electronics','Other'],wholesaler:['Food & Beverages','Electronics','Clothing','Building Materials'],manufacturer:['Consumer Goods','Industrial','Food Processing','Textile']};
+  const types={pharmacy:['Community Pharmacy','Hospital Pharmacy','Online Pharmacy'],events:['Event Company','Venue','Individual Planner'],ngo:['Charity','Foundation','Community Group','Faith-based'],school:['Primary','Secondary','College','Training Center','Online'],finance:['Microfinance','SACCO','Insurance','Investment','Digital Lender'],courier:['Express','Same-day','International'],distributor:['FMCG','Pharmaceutical','Electronics','Other'],wholesaler:['Food & Beverages','Electronics','Clothing','Building Materials'],manufacturer:['Consumer Goods','Industrial','Food Processing','Textile']};
   const tl=types[r]||[];
-  return`<div class="st-h">${m.icon} ${m.label} Profile</div><p class="st-s">Create your ${m.label.toLowerCase()} profile.</p><div class="fgrid">${_fld('gNm','Name','text',{ph:`Your ${m.label} name`,req:1,val:d.name||''})}${tl.length?_sel('gTy','Type',tl,d.type||''):''}${_fld('gPh','Contact Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.phone||''})}${_fld('gEm','Contact Email','email',{ph:'info@example.com',val:d.email||''})}</div>${_ta('gDs','Description',d.desc||,'Describe what you do or offer…')}`;
+  return`<div class="st-h">${m.icon} ${m.label} Profile</div><p class="st-s">Create your ${m.label.toLowerCase()} profile.</p><div class="fgrid">${_fld('gNm','Name','text',{ph:'Your '+m.label+' name',req:1,val:d.gNm||''})}${tl.length?_sel('gTy','Type',tl,d.gTy||''):''}${_fld('gPh','Contact Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.gPh||''})}${_fld('gEm','Contact Email','email',{ph:'info@example.com',val:d.gEm||''})}</div>${_ta('gDs','Description',d.gDs||'','Describe what you do or offer…')}`;
 }
 
-function rLoc(r,d){return`<div class="st-h">Location</div><p class="st-s">Set your primary location.</p><div class="fgrid">${_sel('loCo','County',COUNTIES.map(c=>({value:c,label:c})),d.county||'',{req:1})}${_fld('loCi','City / Town','text',{ph:'e.g. Nairobi CBD',req:1,val:d.city||''})}${_fld('loAd','Street Address','text',{ph:'Building, Street',val:d.addr||''})}</div>`}
+function rLoc(r,d){return`<div class="st-h">Location</div><p class="st-s">Set your primary location.</p><div class="fgrid">${_sel('loCo','County',COUNTIES.map(c=>({value:c,label:c})),d.loCo||'',{req:1})}${_fld('loCi','City / Town','text',{ph:'e.g. Nairobi CBD',req:1,val:d.loCi||''})}${_fld('loAd','Street Address','text',{ph:'Building, Street',val:d.loAd||''})}</div>`}
 
 function rReady(r,d){
   const m=typeof SokoniOnboarding!=='undefined'?SokoniOnboarding.metaFor(r):{label:r,icon:'🎉'};
-  const pid=d?.profileId||'';
-  const dash={merchant:'pos.html',provider:'provider-dashboard.html',rider:'rider-dashboard.html',driver:'driver-dashboard.html',buyer:'index.html'};
+  const pid=d&&d.profileId?d.profileId:'';
+  const dash={merchant:'pos.html',provider:'provider-dashboard.html',rider:'rider-dashboard.html',driver:'driver-dashboard.html',property:'property-dashboard.html',hotel:'hotel-dashboard.html',restaurant:'restaurant-dashboard.html',healthcare:'healthcare-dashboard.html',employer:'employer-dashboard.html',freelancer:'provider-dashboard.html',buyer:'index.html'};
   return`<div class="sscreen"><div class="scheck">${m.icon}</div><h2 class="st-ttl">You're live on <span class="ac">SOKONI</span>!</h2><p style="color:var(--sub);margin-bottom:14px">Your ${m.label} profile is active and ready.</p>${pid?`<div class="icard"><div class="il">${m.label} ID</div><div class="id">${_esc(pid)}</div></div>`:''}<div class="slinks"><a href="${dash[r]||'index.html'}" class="btn btn-p">Go to Dashboard →</a><a href="onboarding.html" class="btn btn-s">Add Another Role</a></div></div>`;
 }
 
-/* ── Init ──────────────────────────────────────────────────────────────────── */
+/* ── Init ───────────────────────────────────────────────────────────────── */
 let _sdk=null;
 function _uChip(u){const c=_q('uChip');if(!u){c.style.display='none';return}c.style.display='flex';const ini=(u.displayName||u.email||'U').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();c.innerHTML=`<div class="ini">${_esc(ini)}</div>`}
 
 document.addEventListener('DOMContentLoaded',()=>{
-  firebase.auth().onAuthStateChanged(async u=>{
+  window.firebaseSDK.onAuthStateChanged(async u=>{
     hideLoad();_uChip(u);
     if(!u){showPh('phA');return}
     if(!_sdk)_sdk=new SokoniOnboarding();

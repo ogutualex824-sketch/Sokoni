@@ -453,9 +453,10 @@
         disputesSnap, deliveriesSnap, ridesSnap,
         providersSnap, verificationSnap
       ] = await Promise.allSettled([
-        getDocs(collection(_db, "users")),
-        getDocs(collection(_db, "sellers")),
-        getDocs(collection(_db, "products")),
+        // limit(500) added — these are sampled counts; exact totals require server-side aggregation
+        getDocs(query(collection(_db, "users"),    limit(500))),
+        getDocs(query(collection(_db, "sellers"),  limit(500))),
+        getDocs(query(collection(_db, "products"), limit(500))),
         getDocs(query(collection(_db, "orders"), orderBy("createdAt","desc"), limit(500))),
         getDocs(query(collection(_db, "applications"), where("status","==","pending"))),
         getDocs(query(collection(_db, "flags"), where("status","==","open"))),
@@ -485,10 +486,10 @@
 
           <div style="margin-bottom:20px">
             <span style="color:var(--green)">━━ USERS & ACCOUNTS ━━</span><br>
-            Total registered users   : <strong>${v(usersSnap)}</strong><br>
-            Active sellers           : <strong>${v(sellersSnap)}</strong><br>
+            Registered users (≤500)  : <strong>${v(usersSnap)}</strong><br>
+            Active sellers (≤500)    : <strong>${v(sellersSnap)}</strong><br>
             Active providers         : <strong>${v(providersSnap)}</strong><br>
-            Total products listed    : <strong>${v(productsSnap)}</strong><br>
+            Products listed (≤500)   : <strong>${v(productsSnap)}</strong><br>
           </div>
 
           <div style="margin-bottom:20px">

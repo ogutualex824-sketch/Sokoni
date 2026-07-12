@@ -34,6 +34,55 @@
   var DEVICE_TRUST_KEY  = 'sokoni_zt_dt';
   var SESSION_START_KEY = 'sokoni_zt_ss';
 
+  /**
+   * Operations that are classified as financial and must NEVER fail open.
+   * When Firebase or the access-request CF is unreachable, any action whose
+   * name OR resource appears in this set returns {allowed: false} so that
+   * money-movement cannot proceed under degraded-infra or DDoS conditions.
+   *
+   * Extend this list whenever a new money-related action is added to the
+   * platform — never remove entries.
+   */
+  var FINANCIAL_OPERATIONS = new Set([
+    // actions
+    'payment', 'pay', 'checkout', 'checkout_confirm', 'checkout_complete',
+    'wallet', 'wallet_credit', 'wallet_debit', 'wallet_withdraw', 'wallet_transfer',
+    'top_up', 'topup',
+    'refund', 'refund_request', 'refund_approve',
+    'payout', 'payout_request', 'payout_approve',
+    'transfer', 'transfer_funds',
+    'settlement', 'settle', 'settle_batch',
+    'commission', 'commission_disburse',
+    'subscription_charge', 'subscription_renew',
+    'invoice_pay', 'invoice_settle',
+    'escrow', 'escrow_release', 'escrow_fund',
+    // resources
+    'payments', 'wallets', 'payouts', 'settlements', 'commissions',
+    'refunds', 'transfers', 'invoices', 'subscriptions', 'escrow',
+    'financial', 'money', 'mpesa', 'intasend', 'banking',
+  ]);
+
+  /**
+   * Returns true when either the action name or the resource name indicates a
+   * financial operation that must not be allowed through on infra failure.
+   *
+   * @param {string} action
+   * @param {string} resource
+   * @returns {boolean}
+   */
+  function _isFinancialOp(action, resource) {
+    if (!action && !resource) return false;
+    var a = (action   || '').toLowerCase();
+    var r = (resource || '').toLowerCase();
+    // Exact-set membership check
+    if (FINANCIAL_OPERATIONS.has(a) || FINANCIAL_OPERATIONS.has(r)) return true;
+    // Substring check for compound action names (e.g. 'initiate_payment', 'wallet_balance')
+    for (var term of FINANCIAL_OPERATIONS) {
+      if (a.indexOf(term) !== -1 || r.indexOf(term) !== -1) return true;
+    }
+    return false;
+  }
+
   /* ── Module state ──────────────────────────────────────────────────────── */
   var _deviceId          = null;
   var _riskCache         = null;
@@ -613,7 +662,11 @@
       context = context || {};
 
       if (!_getFirebase()) {
-        console.warn('[SokoniZeroTrust] Firebase unavailable — failing open for:', action);
+        if (_isFinancialOp(action, resource)) {
+          console.error('[SokoniZeroTrust] Firebase unavailable — blocking financial op (fail-safe):', action, resource);
+          return { allowed: false, riskScore: 100, reason: 'authorization_service_unavailable' };
+        }
+        console.warn('[SokoniZeroTrust] Firebase unavailable — failing open for non-financial op:', action);
         return { allowed: true, riskScore: 0, failedOpen: true, reason: 'firebase_unavailable' };
       }
 
@@ -645,9 +698,14 @@
         if (err.code === 'unauthenticated' || err.code === 'permission-denied') {
           return { allowed: false, riskScore: 100, reason: err.message };
         }
-        /* Fail open on CF unavailability — never block a user for infra issues */
-        console.warn('[SokoniZeroTrust] evaluateAccessRequest failed — failing open:', err.message);
+        /* Financial ops must never be let through when the auth CF is unreachable */
         _recordEvent('guard_cf_error', { action: action, resource: resource, error: err.message });
+        if (_isFinancialOp(action, resource)) {
+          console.error('[SokoniZeroTrust] evaluateAccessRequest failed — blocking financial op (fail-safe):', action, resource, err.message);
+          return { allowed: false, riskScore: 100, reason: 'authorization_service_unavailable' };
+        }
+        /* Fail open only for non-financial ops — never block a user for infra issues on low-risk actions */
+        console.warn('[SokoniZeroTrust] evaluateAccessRequest failed — failing open for non-financial op:', err.message);
         return { allowed: true, riskScore: 25, failedOpen: true };
       }
 

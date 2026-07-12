@@ -8,9 +8,9 @@
   <meta name="description" content="Complete your SOKONI purchase securely with M-Pesa, Visa, or Mastercard.">
   <meta property="og:title" content="SOKONI — Checkout">
   <meta property="og:description" content="Secure checkout on SOKONI — Kenya's #1 marketplace. Pay with M-Pesa, Visa, or Mastercard.">
-  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
-  <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
+  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
   <meta name="color-scheme" content="dark">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
@@ -836,7 +836,7 @@
 <!-- NAVBAR -->
 <nav class="navbar">
   <div class="logo-section">
-    <img loading="lazy" src="assets/Sokonilogo2.png" class="main-logo" alt="SOKONI">
+    <img loading="lazy" src="assets/Sokoni Logo.png" class="main-logo" alt="SOKONI">
   </div>
   <div class="nav-actions">
     <a href="cart.html" class="cart-btn" style="text-decoration:none">🛒 Cart</a>
@@ -1995,7 +1995,7 @@ async function sendStkPush(){
       btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
       btn.style.color = "black";
       showPushToast("✅ Payment Confirmed", "KES " + orderTotal.toLocaleString() + " received. Order placed!", "green");
-      if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/logosokoni.png"});
+      if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/Sokoni Logo.png"});
       saveAndRedirect(result.tracking_id || phone, "mpesa");
       return;
     }
@@ -2029,7 +2029,7 @@ async function sendStkPush(){
         btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
         btn.style.color = "black";
         showPushToast("✅ Payment Verified", "KES " + orderTotal.toLocaleString() + " confirmed by server.", "green");
-        if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/logosokoni.png"});
+        if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/Sokoni Logo.png"});
         saveAndRedirect(result.tracking_id || phone, "mpesa", verifyData.orderId, verifyData.verificationToken);
       } else {
         showPushToast("❌ Verification Failed", (verifyData.error || "Payment could not be verified.") + " Support ref: " + apiRef, "orange");

@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI MiniShop Engine v3.0
    Firebase Cloud Functions — Gen 2, Node 22
 
@@ -295,8 +295,8 @@ function _buildShellHtml({ shopName, description, coverUrl, shopUrl, schemaStr, 
   <meta name="twitter:title" content="${eName} — SOKONI">
   <meta name="twitter:description" content="${eDesc}">
   <meta name="twitter:image" content="${eCover}">
-  <link rel="icon" type="image/png" href="/assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="/assets/logosokoni.png">
+  <link rel="icon" type="image/png" href="/assets/Sokoni Logo.png">
+  <link rel="apple-touch-icon" href="/assets/Sokoni Logo.png">
   <meta name="theme-color" content="#00bcd4">
   <script type="application/ld+json">${schemaStr}</script>
   <link rel="stylesheet" href="/minishop.css">
@@ -558,7 +558,7 @@ exports.miniShopOGMeta = onRequest(
         200
       );
       const coverUrl   = _san(
-        config.coverUrl || shop.coverUrl || `${BASE_URL}/assets/Sokonilogo2.png`,
+        config.coverUrl || shop.coverUrl || `${BASE_URL}/assets/Sokoni%20Logo.png`,
         500
       );
       const shopUrl    = `${SHOP_URL}${handle}`;
@@ -995,7 +995,7 @@ exports.miniShopShareProduct = onCall(
 
     const encodedText = encodeURIComponent(shareText);
     const encodedUrl  = encodeURIComponent(productUrl);
-    const ogImageUrl  = productImage || (handle ? `${BASE_URL}/og/shop/${handle}.png` : `${BASE_URL}/assets/Sokonilogo2.png`);
+    const ogImageUrl  = productImage || (handle ? `${BASE_URL}/og/shop/${handle}.png` : `${BASE_URL}/assets/Sokoni%20Logo.png`);
 
     return {
       shareText,

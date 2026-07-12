@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Business Messaging — SOKONI B2B</title>
-<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#00aaff">
 <script src="security.js"></script>
@@ -199,8 +199,21 @@ function init() {
     /* On mobile hide chat panel initially */
     if (window.innerWidth<=640) { showSidebar(); }
   }
-  /* Poll for new messages every 20s */
-  _pollTimer = setInterval(()=>{ renderThreads(); if(_activeThread) renderMessages(); }, 20000);
+  /* Poll as a fallback refresh — reduced from 20s to 120s to limit unnecessary reads.
+     Real-time updates fire immediately via sendMsg() / openThread() wherever data changes
+     in-process; this interval only catches changes originating in other tabs/sessions. */
+  _pollTimer = setInterval(()=>{ renderThreads(); if(_activeThread) renderMessages(); }, 120000);
+  /* Re-render when the tab becomes visible again after being backgrounded */
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='visible'){
+      renderThreads();
+      if(_activeThread) renderMessages();
+    }
+  });
+  /* Clean up the poll timer when the page is unloaded */
+  window.addEventListener('beforeunload', function(){
+    if(_pollTimer){ clearInterval(_pollTimer); _pollTimer=null; }
+  });
 }
 
 function renderThreads() {

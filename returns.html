@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
@@ -7,12 +7,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Returns — SOKONI</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
 <link rel="manifest" href="manifest.json">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
+<script src="/sokoni-appcheck.js"></script>
 <style>
 :root{
   --g:#71ff00;--g2:#4fc800;
@@ -187,7 +189,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 
 <!-- TOPBAR -->
 <header class="topbar">
-  <img class="tb-logo" src="assets/logosokoni.png" alt="SOKONI">
+  <img class="tb-logo" src="assets/Sokoni Logo.png" alt="SOKONI">
   <div class="tb-title">Returns &amp; Refunds</div>
   <span class="tb-role buyer" id="tb-role-badge">Buyer</span>
 </header>
@@ -350,7 +352,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 
 <script>
 // ── Firebase init ──────────────────────────────────────────────
-firebase.initializeApp(window.SOKONI_CONFIG || {});
+if(!firebase.apps.length)firebase.initializeApp(window.SOKONI_CONFIG || {});
 const auth = firebase.auth();
 const db   = firebase.firestore();
 const fns  = firebase.app().functions('us-central1');

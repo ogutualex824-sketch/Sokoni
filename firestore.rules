@@ -333,8 +333,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // CONSOLIDATED: Duplicate match /reviews/{reviewId} merged here (was duplicated near line 3119).
+    // Moderation gate enforced: only 'approved' reviews are publicly readable.
+    // Authors and admins may read their own unapproved reviews.
     match /reviews/{reviewId} {
-      allow read:   if true;
+      allow read:   if resource.data.status == "approved"
+                    || (request.auth != null && (request.auth.uid == resource.data.authorUid || isAdmin()));
       allow create: if claimsOwner() && noAdminFields();
       allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin() || isOwner();
@@ -582,7 +586,7 @@ service cloud.firestore {
     }
 
     match /sportsTournamentRegs/{regId} {
-      allow read:   if true;
+      allow read:   if request.auth != null; // PII guard (B-17): phone/captain data requires authentication
       allow create: if claimsOwner()
                     && request.resource.data.keys().hasAll(
                          ['tournamentId','teamName','captain','phone','uid','status','createdAt']);
@@ -702,7 +706,7 @@ service cloud.firestore {
     }
 
     match /fitness_requests/{requestId} {
-      allow read:   if true;
+      allow read:   if request.auth != null; // PII guard (B-17): contact/phone data requires authentication
       allow create: if claimsOwner()
                     && noAdminFields()
                     && request.resource.data.keys().hasAll(['text','uid','ts'])
@@ -731,34 +735,17 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    match /digitalProducts/{productId} {
-      allow read:   if true;
-      allow create: if claimsOwner()
-                    && request.resource.data.keys().hasAll(['id','title','category','price','sellerUid','sellerName','fileURL'])
-                    && request.resource.data.price >= 0
-                    && request.resource.data.sellerUid == request.auth.uid;
-      allow update: if isAdmin()
-                    || (isAuthed() && resource.data.sellerUid == request.auth.uid
-                        && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['title','description','price','category','tags','coverURL','fileURL','fileName','fileSize','active','featured','downloads','rating','updatedAt']));
-      allow delete: if isAdmin() || (isAuthed() && resource.data.sellerUid == request.auth.uid);
-    }
+    // REMOVED (B-17 fix): duplicate match /digitalProducts/{productId} — this block permitted
+    // client-side create/update/delete, bypassing the CF-only intent enforced below.
+    // Firestore OR-merges duplicate match blocks, so the client create here silently defeated
+    // the `allow write: if false` guard in the Digital Products Hub section.
+    // Canonical authoritative block is in the Digital Products Hub section below.
 
-    match /digitalPurchases/{purchaseId} {
-      allow read:   if isAdmin()
-                    || (isAuthed() && resource.data.buyerUid  == request.auth.uid)
-                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
-      // SECURITY: status=completed must be set exclusively by the server-side
-      // verifyIntasendPayment / processFosWebhook Cloud Functions via Admin SDK.
-      // Clients may only create a pending intent; CF upgrades it to completed.
-      allow create: if isAuthed()
-                    && request.resource.data.keys().hasAll(['productId','buyerUid','sellerUid','amount','ref','status'])
-                    && request.resource.data.buyerUid == request.auth.uid
-                    && request.resource.data.status   in ['pending', 'processing']
-                    && request.resource.data.amount    > 0;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
+    // REMOVED (B-17 fix): duplicate match /digitalPurchases/{purchaseId} — this block permitted
+    // client-side creates (pending/processing status), allowing clients to fabricate purchase
+    // records and potentially claim entitlements without completing payment.
+    // All purchase record creation/updates must go through Admin SDK (Cloud Functions).
+    // Canonical authoritative block is in the Digital Products Hub section below.
 
     match /bnbListings/{listingId} {
       allow read:   if true;
@@ -3116,9 +3103,8 @@ service cloud.firestore {
       allow update: if isAdmin();
     }
 
-    match /reviews/{reviewId} {
-      allow read:  if resource.data.status == "approved" || (request.auth != null && (request.auth.uid == resource.data.authorUid || isAdmin()));
-    }
+    // REMOVED (B-17 fix): duplicate match /reviews/{reviewId} — moderation-gated read rule
+    // has been merged into the canonical block earlier in this file (search for CONSOLIDATED reviews).
     match /reviews/{reviewId}/flags/{uid} {
       allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
     }
@@ -3709,15 +3695,24 @@ service cloud.firestore {
     }
 
     /* ── Digital Products Hub v1.0 ───────────────────────────────────────── */
+    // CONSOLIDATED (B-17 fix): Single authoritative block for digitalProducts.
+    // The earlier duplicate block (which permitted client create/update/delete) has been removed.
     match /digitalProducts/{productId} {
       allow read:  if resource.data.status == 'active'
                    || (isAuthed() && resource.data.sellerUid == request.auth.uid)
                    || isAdmin();
-      allow write: if false; // CF-only
+      allow write: if false; // CF-only — all product lifecycle managed by Admin SDK
     }
+    // CONSOLIDATED (B-17 fix): Single authoritative block for digitalPurchases.
+    // The earlier duplicate block (which permitted client creates of pending/processing records)
+    // has been removed. Seller read access retained from the removed block's merged rules.
     match /digitalPurchases/{purchaseId} {
-      allow read:  if isAuthed() && (resource.data.buyerUid == request.auth.uid || isAdmin());
-      allow write: if false; // CF-only
+      allow read:  if isAuthed() && (
+                     resource.data.buyerUid  == request.auth.uid ||
+                     resource.data.sellerUid == request.auth.uid ||
+                     isAdmin()
+                   );
+      allow write: if false; // CF-only — purchase records created/updated by Admin SDK only
     }
     match /digitalPurchaseIdempotency/{key} {
       allow read:  if false;

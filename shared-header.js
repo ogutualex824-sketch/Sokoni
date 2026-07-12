@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI Shared Header  —  shared-header.js
    Phase 1 (ALL pages): inject design tokens + component library
    Phase 2 (non-excluded pages): inject fixed top nav
@@ -29,6 +29,7 @@
   (function _splash() {
     if (document.documentElement.dataset.noSplash === 'true') return;
     if (window.self !== window.top) return; // no splash inside iframes
+    if (document.getElementById('splashScreen')) return; // splash.js already rendered; skip duplicate overlay
 
     const _pg = (location.pathname.split('/').pop().split('?')[0] || 'index.html').toLowerCase();
 
@@ -121,21 +122,35 @@
     const style = document.createElement('style');
     style.id = 'sk-splash-css';
     style.textContent = [
-      '#sk-splash{position:fixed;inset:0;z-index:2147483647;background:#050505;',
+      '#sk-splash{position:fixed;inset:0;z-index:2147483647;',
+        'background:radial-gradient(ellipse 90% 80% at 50% 46%,#131a08 0%,#0d0d0d 55%,#0a0a0a 100%);',
         'display:flex;align-items:center;justify-content:center;',
         'transition:opacity .55s cubic-bezier(.4,0,.2,1);will-change:opacity}',
       '#sk-splash.out{opacity:0;pointer-events:none}',
-      '.sk-sp-inner{text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px}',
-      '.sk-sp-logo{width:min(260px,68vw);height:auto;object-fit:contain;',
-        'animation:skSplashUp .65s cubic-bezier(.22,1,.36,1) both}',
+      '.sk-sp-inner{text-align:center;display:flex;flex-direction:column;align-items:center;gap:20px}',
+      '.sk-sp-logo-frame{display:flex;align-items:center;gap:13px}',
+      '.sk-sp-logo{width:min(58px,16vw);height:auto;object-fit:contain;display:block;flex-shrink:0;',
+        'animation:skSplashUp .68s cubic-bezier(.22,1.4,.36,1) both,',
+          'skLogoBreathe 3.8s ease-in-out .9s infinite,',
+          'skLogoGlow 2.8s ease-in-out .9s infinite}',
+      '.sk-sp-wm{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;',
+        'font-size:clamp(24px,7vw,36px);font-weight:900;letter-spacing:.04em;color:#fff;line-height:1;',
+        'animation:skSplashUp .68s cubic-bezier(.22,1.4,.36,1) .06s both}',
+      '.sk-sp-wm em{font-style:normal;color:#71ff00}',
+      '@keyframes skLogoBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.022)}}',
+      '@keyframes skLogoGlow{',
+        '0%,100%{filter:drop-shadow(0 0 10px rgba(113,255,0,.28)) drop-shadow(0 0 22px rgba(113,255,0,.18))}',
+        '50%{filter:drop-shadow(0 0 26px rgba(113,255,0,.42)) drop-shadow(0 0 46px rgba(113,255,0,.26))}}',
       '.sk-sp-line{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;',
-        'font-size:clamp(12px,2.8vw,15px);font-weight:600;color:rgba(255,255,255,.5);',
-        'letter-spacing:.05em;animation:skSplashUp .7s .18s cubic-bezier(.22,1,.36,1) both}',
-      '.sk-sp-bar{width:min(140px,36vw);height:2px;background:rgba(255,255,255,.07);',
-        'border-radius:2px;overflow:hidden;animation:skSplashUp .6s .08s cubic-bezier(.22,1,.36,1) both}',
+        'font-size:clamp(10px,2.5vw,13px);font-weight:900;letter-spacing:.18em;text-transform:uppercase;',
+        'background:linear-gradient(90deg,rgba(255,255,255,.5),#71ff00,rgba(255,255,255,.5));',
+        'background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;',
+        'animation:skSplashUp .7s .2s cubic-bezier(.22,1,.36,1) both}',
+      '.sk-sp-bar{width:min(150px,38vw);height:2.5px;background:rgba(255,255,255,.06);',
+        'border-radius:2px;overflow:hidden;animation:skSplashUp .6s .1s cubic-bezier(.22,1,.36,1) both}',
       '.sk-sp-fill{height:100%;border-radius:2px;width:0%;',
-        'animation:skFill 1.7s .1s cubic-bezier(.4,0,.2,1) forwards}',
-      '@keyframes skSplashUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}',
+        'animation:skFill 1.8s .12s cubic-bezier(.4,0,.2,1) forwards}',
+      '@keyframes skSplashUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}',
       '@keyframes skFill{to{width:100%}}',
     ].join('');
     (document.head || document.documentElement).appendChild(style);
@@ -146,7 +161,10 @@
     el.setAttribute('aria-hidden', 'true');
     el.innerHTML =
       '<div class="sk-sp-inner">' +
-        '<img class="sk-sp-logo" src="assets/Sokoni Logo.png" alt="SOKONI">' +
+        '<div class="sk-sp-logo-frame">' +
+          '<img class="sk-sp-logo" src="assets/Sokoni Logo.png" alt="">' +
+          '<div class="sk-sp-wm">SOKO<em>NI</em></div>' +
+        '</div>' +
         '<div class="sk-sp-line">' + cfg.line + '</div>' +
         '<div class="sk-sp-bar"><div class="sk-sp-fill" style="background:' + cfg.bar + '"></div></div>' +
       '</div>';
@@ -483,18 +501,17 @@
     }
     #sk-nav-logo img {
       height: 40px; width: auto; object-fit: contain; display: block;
-      /* Strong dark halo ensures the logo reads on ANY page background (hero images, light sections) */
-      filter: drop-shadow(0 1px 10px rgba(0,0,0,0.9)) drop-shadow(0 0 4px rgba(0,0,0,0.8));
+      filter: drop-shadow(0 1px 10px rgba(0,0,0,0.9)) drop-shadow(0 0 4px rgba(0,0,0,0.8))
+              drop-shadow(0 0 12px rgba(113,255,0,0.20));
       transition: filter .25s, transform .2s;
     }
     #sk-nav-logo:hover img {
-      filter: drop-shadow(0 1px 14px rgba(0,0,0,0.95)) brightness(1.06);
+      filter: drop-shadow(0 1px 14px rgba(0,0,0,0.95)) drop-shadow(0 0 18px rgba(113,255,0,0.35)) brightness(1.06);
       transform: scale(1.04);
     }
     #sk-nav-logo-text {
-      font-size: 20px; font-weight: 900; color: #71ff00; letter-spacing: .03em;
+      font-size: 20px; font-weight: 900; color: #fff; letter-spacing: .03em;
       font-family: 'Segoe UI', system-ui, sans-serif;
-      text-shadow: 0 0 12px rgba(113,255,0,0.35);
     }
 
     /* ── Search ── */
@@ -760,6 +777,9 @@
       body { padding-top: max(55px, calc(55px + env(safe-area-inset-top, 0px))) !important; }
       body.sk-has-search { padding-top: max(110px, calc(110px + env(safe-area-inset-top, 0px))) !important; }
     }
+
+    /* ── Global responsive table overflow (applies to all pages) ── */
+    table { display:block; overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch; }
   `;
 
   /* Inject CSS into <head> immediately (before DOM ready) */
@@ -830,9 +850,8 @@
     nav.innerHTML =
       /* Logo */
       '<a href="/" id="sk-nav-logo" aria-label="SOKONI Home">' +
-        '<img src="assets/Sokoni Logo.png" alt="SOKONI" ' +
-          'onerror="this.style.display=\'none\';document.getElementById(\'sk-nav-logo-text\').style.display=\'block\'">' +
-        '<span id="sk-nav-logo-text" style="display:none;">SOKONI</span>' +
+        '<img src="assets/Sokoni Logo.png" alt="" style="height:34px;width:auto;flex-shrink:0">' +
+        '<span id="sk-nav-logo-text">SOKO<em style="font-style:normal;color:#71ff00">NI</em></span>' +
       '</a>' +
 
       /* Search */
@@ -940,9 +959,10 @@
     drawer.innerHTML =
       /* Drawer header — logo + close button */
       '<div class="sk-drawer-header">' +
-        '<img src="assets/Sokonilogo2.png" alt="SOKONI" ' +
-          'style="height:32px;width:auto;object-fit:contain;margin-left:4px;" ' +
-          'onerror="this.style.display=\'none\'">' +
+        '<div style="display:flex;align-items:center;gap:9px;margin-left:4px">' +
+          '<img src="assets/Sokoni Logo.png" alt="" style="height:32px;width:auto">' +
+          '<span style="font-size:19px;font-weight:900;letter-spacing:.04em;color:#fff;line-height:1">SOKO<em style="font-style:normal;color:#71ff00">NI</em></span>' +
+        '</div>' +
         '<button class="sk-drawer-close" type="button" aria-label="Close menu">✕</button>' +
       '</div>' +
       /* Scrollable drawer body */

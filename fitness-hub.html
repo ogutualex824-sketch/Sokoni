@@ -11,10 +11,10 @@
 <meta property="og:url" content="https://mysokoni.co.ke/fitness-hub.html">
 <meta property="og:title" content="SOKONI Fitness Hub — Gyms, Coaches, Workouts & Equipment Kenya">
 <meta property="og:description" content="Find gyms, book fitness coaches, buy & sell equipment, post workouts and manage your gym on SOKONI Fitness Hub Kenya.">
-<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokonilogo2.png">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
 <meta property="og:site_name" content="SOKONI">
 <meta property="og:locale" content="en_KE">
-<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#39ff14">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -148,7 +148,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060b06;color:white;
 <script src="splash.js"></script>
 
 <nav class="fh-nav">
-  <a href="index.html"><img loading="lazy" src="assets/Sokonilogo2.png" class="fh-nav-logo" alt="SOKONI"></a>
+  <a href="index.html"><img loading="lazy" src="assets/Sokoni Logo.png" class="fh-nav-logo" alt="SOKONI"></a>
   <div class="fh-nav-tabs">
     <button type="button" class="fh-nav-tab active" onclick="showFhPanel('gyms',this)">🏋️ Gyms</button>
     <button type="button" class="fh-nav-tab" onclick="showFhPanel('coaches',this)">🏃 Coaches</button>
@@ -1433,7 +1433,7 @@ function scheduleBookingReminder(bk) {
   const ms = new Date(bk.date+'T'+(bk.time||'08:00')).getTime() - Date.now() - 3600000;
   if(ms > 0 && ms < 86400000*7 && 'Notification' in window) {
     Notification.requestPermission().then(p=>{
-      if(p==='granted') setTimeout(()=>new Notification('📅 SOKONI Reminder',{body:'Your '+bk.type+' with '+bk.provider+' starts in 1 hour!',icon:'/assets/Sokonilogo2.png'}), ms);
+      if(p==='granted') setTimeout(()=>new Notification('📅 SOKONI Reminder',{body:'Your '+bk.type+' with '+bk.provider+' starts in 1 hour!',icon:'/assets/Sokoni%20Logo.png'}), ms);
     });
   }
 }

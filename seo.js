@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SOKONI SEO ENGINE
  * Injects dynamic meta tags, Open Graph, Schema.org JSON-LD and Google rich results
  * on every page. Include this script in <head> on every page.
@@ -23,7 +23,7 @@ const SokoniSEO = (() => {
     name:        _CO.brand || "SOKONI",
     legalName:   _CO.legalName || "Bravilex International Co. Limited",
     url:         "https://mysokoni.co.ke",
-    logo:        "https://mysokoni.co.ke/assets/Sokonilogo2.png",
+    logo:        "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
     description: "Kenya's all-in-one marketplace — shop products, book services, find rentals, BnBs, healthcare, entertainment and B2B wholesale. Pay via M-Pesa.",
     phone:       "+254705726803",
     email:       "info@sokoni.co.ke",

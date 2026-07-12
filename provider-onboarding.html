@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Become a Provider — SOKONI</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="premium.css">
+<script src="security.js"></script>
+<script type="module" src="firebase.js"></script>
+<script src="sokoni-legal-gate.js" defer></script>
+<style>
+:root{--bg:#050505;--surf:#0d0d0d;--surf2:#141414;--border:#1a1a1a;--acc:#71ff00;--acc-dim:rgba(113,255,0,.12);--acc-glow:0 0 18px rgba(113,255,0,.28);--text:#e8e8e8;--sub:#888;--err:#ff4d4d;--warn:#ffb800;--r:10px;--t:.3s ease}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:16px}
+a{color:var(--acc);text-decoration:none}
+/* Top bar */
+.top{position:sticky;top:0;z-index:100;background:rgba(5,5,5,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);height:58px;display:flex;align-items:center;padding:0 18px;gap:12px}
+.logo{font-weight:800;font-size:1.1rem;color:var(--acc);letter-spacing:-.4px}
+.logo span{color:var(--sub);font-weight:400;font-size:.78rem;margin-left:6px}
+.prog-area{flex:1;display:none;flex-direction:column;gap:2px}
+.prog-area.vis{display:flex}
+.plbl{font-size:.72rem;color:var(--sub)}
+.plbl strong{color:var(--text);font-weight:600}
+.pbar{height:3px;background:var(--border);border-radius:99px;overflow:hidden}
+.pfill{height:100%;background:var(--acc);border-radius:99px;transition:width .4s ease}
+.uslot{margin-left:auto;display:none;align-items:center;gap:7px;font-size:.8rem;color:var(--sub)}
+.uslot.vis{display:flex}
+.uava{width:26px;height:26px;border-radius:50%;background:var(--acc-dim);color:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.68rem;flex-shrink:0}
+/* Phases */
+.phase{display:none;padding:24px 16px 96px}
+.phase.on{display:block}
+/* Auth card */
+.acard{max-width:400px;margin:0 auto;background:var(--surf);border:1px solid var(--border);border-radius:16px;padding:28px 24px}
+.ahero{text-align:center;margin-bottom:20px}
+.ahero h1{font-size:1.5rem;font-weight:800}.ahero h1 .ac{color:var(--acc)}
+.ahero p{color:var(--sub);font-size:.86rem;margin-top:4px}
+.atabs{display:flex;background:var(--surf2);border-radius:var(--r);padding:3px;gap:3px;margin-bottom:18px}
+.atab{flex:1;padding:8px;border:none;background:transparent;color:var(--sub);border-radius:8px;cursor:pointer;font-size:.86rem;font-weight:600;transition:all var(--t)}
+.atab.on{background:var(--surf);color:var(--text)}
+.aform{display:none;flex-direction:column;gap:12px}.aform.on{display:flex}
+.sk-in,.sk-sel,.sk-ta{width:100%;padding:11px 12px;font-size:16px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);outline:none;transition:border-color var(--t)}
+.sk-in:focus,.sk-sel:focus,.sk-ta:focus{border-color:var(--acc)}
+.sk-lbl{font-size:.79rem;color:var(--sub);margin-bottom:4px;display:block}
+.fg{display:flex;flex-direction:column}
+.btn{padding:11px 17px;border-radius:var(--r);border:none;cursor:pointer;font-size:.87rem;font-weight:600;transition:all var(--t);line-height:1}
+.btn-p{background:var(--acc);color:#000}.btn-p:hover{box-shadow:var(--acc-glow)}
+.btn-s{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
+.btn-g{background:transparent;color:var(--sub)}
+.btn-f{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.dvl{text-align:center;color:var(--sub);font-size:.75rem;margin:10px 0;position:relative}
+.dvl::before,.dvl::after{content:'';position:absolute;top:50%;width:44%;height:1px;background:var(--border)}
+.dvl::before{left:0}.dvl::after{right:0}
+.goo-btn{width:100%;padding:11px;background:var(--surf2);border:1px solid var(--border);color:var(--text);border-radius:var(--r);cursor:pointer;font-size:.85rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:9px;transition:border-color var(--t)}
+.goo-btn:hover{border-color:var(--sub)}
+.prow{display:flex;gap:8px}
+.ppfx{padding:11px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);color:var(--sub);font-size:.87rem;white-space:nowrap}
+.otprow{display:flex;gap:6px;justify-content:center;margin:5px 0}
+.otpb{width:42px;height:50px;text-align:center;font-size:1.2rem;font-weight:700;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);outline:none}
+.otpb:focus{border-color:var(--acc)}
+/* Wizard */
+.wbody{max-width:600px;margin:0 auto}
+.sc{padding-bottom:10px}
+.wnav{position:fixed;bottom:0;left:0;right:0;z-index:90;background:rgba(5,5,5,.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:9px}
+.sh{font-size:1.2rem;font-weight:800;margin-bottom:3px}
+.ss{color:var(--sub);font-size:.84rem;margin-bottom:18px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+@media(max-width:520px){.fgrid{grid-template-columns:1fr}}
+.ff{grid-column:1/-1}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{padding:6px 13px;border-radius:99px;font-size:.79rem;font-weight:600;border:1px solid var(--border);background:var(--surf2);color:var(--sub);cursor:pointer;transition:all var(--t);user-select:none}
+.chip.on{background:var(--acc-dim);border-color:var(--acc);color:var(--acc)}
+.infobox{background:var(--surf2);border-left:3px solid var(--acc);border-radius:0 8px 8px 0;padding:11px 14px;font-size:.82rem;color:var(--sub);margin:11px 0}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.pc{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:14px 12px;cursor:pointer;transition:all var(--t);position:relative}
+.pc:hover,.pc.sel{border-color:var(--acc);background:var(--surf2)}
+.pc.sel::after{content:'✓';position:absolute;top:8px;right:8px;color:var(--acc);font-weight:800}
+.ppop{position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:var(--acc);color:#000;font-size:.6rem;font-weight:800;padding:2px 6px;border-radius:99px;white-space:nowrap}
+.pn{font-weight:800;font-size:.88rem;margin-bottom:2px}
+.pp{font-size:1rem;font-weight:700;color:var(--acc);margin-bottom:1px}
+.pcom{font-size:.68rem;background:var(--surf2);color:var(--sub);padding:2px 7px;border-radius:99px;display:inline-block;margin-bottom:6px}
+.pft{list-style:none;padding:0}.pft li{font-size:.7rem;color:var(--sub);padding:1px 0}.pft li::before{content:'✓ ';color:var(--acc)}
+.ugrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:10px;margin-top:12px}
+.uc{background:var(--surf);border:2px dashed var(--border);border-radius:10px;padding:14px 10px;text-align:center;cursor:pointer;transition:border-color var(--t)}
+.uc:hover,.uc.done{border-color:var(--acc);border-style:solid}
+.ui{font-size:1.4rem;margin-bottom:4px}
+.ul{font-size:.76rem;font-weight:600;margin-bottom:1px}
+.uh{font-size:.66rem;color:var(--sub)}
+.us{font-size:.68rem;color:var(--acc);margin-top:2px;display:none}
+.uc.done .us{display:block}
+/* Preview card */
+.prev-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:360px;margin:0 auto}
+.prev-ava{width:72px;height:72px;border-radius:50%;background:var(--acc-dim);display:flex;align-items:center;justify-content:center;font-size:1.8rem;margin:0 auto 10px}
+.prev-name{font-weight:800;font-size:1.1rem;text-align:center}
+.prev-cat{font-size:.8rem;color:var(--sub);text-align:center;margin-bottom:10px}
+.prev-badge{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:99px}
+.pb-verified{background:rgba(0,120,255,.18);color:#60aaff}
+.pb-online{background:var(--acc-dim);color:var(--acc)}
+.prev-bio{font-size:.8rem;color:var(--sub);line-height:1.5;margin:10px 0;text-align:center}
+.prev-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0}
+.ps{text-align:center;padding:8px 4px;background:var(--surf2);border-radius:9px}
+.ps-v{font-weight:800;font-size:.95rem;color:var(--acc)}
+.ps-l{font-size:.65rem;color:var(--sub)}
+/* Success */
+.sscreen{text-align:center;padding:30px 14px}
+.scheck{width:80px;height:80px;border-radius:50%;background:var(--acc-dim);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:2.2rem;animation:pop .5s ease}
+@keyframes pop{from{transform:scale(.3);opacity:0}to{transform:scale(1);opacity:1}}
+.stitle{font-size:1.7rem;font-weight:800;margin-bottom:6px}
+.stitle .ac{color:var(--acc)}
+.idcard{display:inline-block;background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:16px 24px;margin:16px auto}
+.idcard .il{font-size:.68rem;color:var(--sub);text-transform:uppercase;letter-spacing:1px}
+.idcard .id{font-size:1.3rem;font-weight:900;color:var(--acc);letter-spacing:2px;margin:3px 0}
+.qr-mock{width:96px;height:96px;background:var(--surf2);border-radius:10px;margin:12px auto;display:flex;align-items:center;justify-content:center;font-size:2.5rem}
+.slinks{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+/* Billing toggle */
+.btog{display:flex;gap:8px;margin-bottom:16px}
+.btg{padding:6px 16px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--sub);cursor:pointer;font-size:.79rem}
+.btg.on{background:var(--acc);color:#000;border-color:var(--acc)}
+/* Toast + Overlay */
+.tc{position:fixed;top:68px;right:14px;z-index:9999;display:flex;flex-direction:column;gap:6px}
+.toast{padding:10px 15px;border-radius:9px;font-size:.82rem;font-weight:600;animation:tsIn .3s ease;max-width:280px}
+.t-ok{background:var(--acc);color:#000}.t-err{background:var(--err);color:#fff}
+@keyframes tsIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.lov{position:fixed;inset:0;z-index:9998;background:rgba(5,5,5,.82);display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px}
+.lov.vis{display:flex}
+.spin{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.slbl{font-size:.83rem;color:var(--sub)}
+.nspc{flex:1}
+/* Type cards */
+.tcards{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:400px;margin:0 auto}
+.tcard{background:var(--surf);border:2px solid var(--border);border-radius:14px;padding:22px 16px;text-align:center;cursor:pointer;transition:all var(--t)}
+.tcard:hover,.tcard.sel{border-color:var(--acc);background:var(--surf2);transform:translateY(-2px)}
+.tc-ico{font-size:2rem;margin-bottom:8px}
+.tc-nm{font-weight:800;font-size:.95rem;margin-bottom:4px}
+.tc-ds{font-size:.76rem;color:var(--sub);line-height:1.4}
+</style>
+</head>
+<body>
+<!-- Top bar -->
+<div class="top">
+  <div class="logo">SOKONI<span>Provider Onboarding</span></div>
+  <div class="prog-area" id="progArea">
+    <div class="plbl">Step <span id="sCur">1</span> of 14<strong> — <span id="sTitle"></span></strong></div>
+    <div class="pbar"><div class="pfill" id="pFill"></div></div>
+  </div>
+  <div class="uslot" id="uSlot"></div>
+</div>
+
+<div class="lov" id="lov"><div class="spin"></div><div class="slbl" id="lmsg">Please wait…</div></div>
+<div class="tc" id="tc"></div>
+
+<!-- Phase A: Auth -->
+<div class="phase on" id="phAuth">
+  <div class="acard">
+    <div class="ahero"><h1>Start Earning on <span class="ac">SOKONI</span></h1><p>Set up your provider profile in under 3 minutes.</p></div>
+    <div class="atabs">
+      <button class="atab on" onclick="AU.tab('si',this)">Sign In</button>
+      <button class="atab" onclick="AU.tab('su',this)">Create Account</button>
+    </div>
+    <form class="aform on" id="fSi" onsubmit="AU.emailSI(event)">
+      <div class="fg"><label class="sk-lbl">Email</label><input class="sk-in" type="email" id="siE" placeholder="you@example.com" required></div>
+      <div class="fg"><label class="sk-lbl">Password</label><input class="sk-in" type="password" id="siP" placeholder="••••••••" required></div>
+      <div style="text-align:right"><a href="forgot-password.html" style="font-size:.76rem">Forgot password?</a></div>
+      <button type="submit" class="btn btn-p btn-f">Sign In</button>
+    </form>
+    <form class="aform" id="fSu" onsubmit="AU.emailSU(event)">
+      <div class="fgrid">
+        <div class="fg"><label class="sk-lbl">First name</label><input class="sk-in" type="text" id="suF" placeholder="Alex" required></div>
+        <div class="fg"><label class="sk-lbl">Last name</label><input class="sk-in" type="text" id="suL" placeholder="Ogutu" required></div>
+      </div>
+      <div class="fg"><label class="sk-lbl">Email</label><input class="sk-in" type="email" id="suE" placeholder="you@example.com" required></div>
+      <div class="fg"><label class="sk-lbl">Password</label><input class="sk-in" type="password" id="suP" placeholder="Min 8 characters" required minlength="8"></div>
+      <button type="submit" class="btn btn-p btn-f">Create Account</button>
+    </form>
+    <div class="dvl" style="margin:13px 0"><span>or</span></div>
+    <button class="goo-btn" onclick="AU.google()">
+      <svg width="16" height="16" viewBox="0 0 18 18"><path d="M17.64 9.2a10.34 10.34 0 0 0-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+      Continue with Google
+    </button>
+    <button class="btn btn-s btn-f" style="margin-top:8px" onclick="AU.phoneTog()">📱 Continue with Phone</button>
+    <div id="phoneSec" style="display:none;margin-top:13px">
+      <div class="fg"><label class="sk-lbl">Phone number</label>
+        <div class="prow"><span class="ppfx">🇰🇪 +254</span><input class="sk-in" type="tel" id="pNum" placeholder="7XXXXXXXX" maxlength="9"></div>
+      </div>
+      <button class="btn btn-p btn-f" style="margin-top:7px" onclick="AU.sendOTP()">Send OTP</button>
+      <div id="otpSec" style="display:none;margin-top:12px">
+        <label class="sk-lbl" style="text-align:center;display:block;margin-bottom:6px">Enter the 6-digit code</label>
+        <div class="otprow" id="otpB">
+          <input class="otpb" maxlength="1" type="text" inputmode="numeric">
+          <input class="otpb" maxlength="1" type="text" inputmode="numeric">
+          <input class="otpb" maxlength="1" type="text" inputmode="numeric">
+          <input class="otpb" maxlength="1" type="text" inputmode="numeric">
+          <input class="otpb" maxlength="1" type="text" inputmode="numeric">
+          <input class="otpb" maxlength="1" type="text" inputmode="numeric">
+        </div>
+        <button class="btn btn-p btn-f" style="margin-top:7px" onclick="AU.verifyOTP()">Verify</button>
+      </div>
+    </div>
+    <div id="rcap"></div>
+  </div>
+</div>
+
+<!-- Phase B: 14-step wizard -->
+<div class="phase" id="phWiz">
+  <div class="wbody"><div class="sc" id="sContent"></div></div>
+  <div class="wnav">
+    <button class="btn btn-s" id="bBack" onclick="W.back()">← Back</button>
+    <div class="nspc"></div>
+    <button class="btn btn-g" id="bSkip" style="display:none" onclick="W.skip()">Skip</button>
+    <button class="btn btn-p" id="bNext" onclick="W.next()">Save & Continue →</button>
+  </div>
+</div>
+
+<script src="shared-header.js" defer></script>
+<script src="sokoni-provider.js" defer></script>
+<script>
+/* ── Constants ─────────────────────────────────────────────────────── */
+const COUNTIES=['Nairobi','Mombasa','Kwale','Kilifi','Tana River','Lamu','Taita-Taveta','Garissa','Wajir','Mandera','Marsabit','Isiolo','Meru','Tharaka-Nithi','Embu','Kitui','Machakos','Makueni','Nyandarua','Nyeri','Kirinyaga',"Murang'a",'Kiambu','Turkana','West Pokot','Samburu','Trans-Nzoia','Uasin Gishu','Elgeyo-Marakwet','Nandi','Baringo','Laikipia','Nakuru','Narok','Kajiado','Kericho','Bomet','Kakamega','Vihiga','Bungoma','Busia','Siaya','Kisumu','Homa Bay','Migori','Kisii','Nyamira'];
+const PCATS={'Home Services':['Electrician','Plumber','Carpenter','Painter','Welder','Cleaner','Gardener','Pest Control','Appliance Repair','HVAC','Mover'],'Security':['Security Guard','CCTV Installation','Access Control'],'Education':['Tutor','Private Teacher','Skills Trainer','Music Teacher','Language Teacher'],'Creative & Media':['Photographer','Videographer','Graphic Designer','Content Creator','DJ','MC'],'Technology':['Software Developer','Web Designer','IT Support','Network Engineer','Data Analyst'],'Business Services':['Marketing Agency','PR Consultant','Business Consultant','Accountant','Bookkeeper'],'Legal':['Lawyer','Legal Consultant','Notary'],'Healthcare':['Doctor','Nurse','Clinical Officer','Dentist','Therapist','Physiotherapist','Nutritionist'],'Beauty & Wellness':['Salon','Barber','Makeup Artist','Nail Technician','Spa Therapist'],'Fashion & Textiles':['Tailor','Fashion Designer','Laundry Service','Dry Cleaner'],'Construction & Design':['Architect','Interior Designer','Structural Engineer','Quantity Surveyor'],'Events':['Event Planner','Caterer','Decorator','Sound Engineer','Lighting Technician'],'Logistics':['Delivery Service','Courier','Freight Agent'],'Freelance':['Virtual Assistant','Copywriter','Translator','Research Analyst','Data Entry']};
+const PLANS=[
+  {t:'free_trial',l:'Free Trial',p:'Free',py:'Free',c:'20%',pop:0,lim:'1 listing',ft:['5 Leads/month','Basic profile','Customer messaging']},
+  {t:'starter',l:'Starter',p:'KSh 999',py:'KSh 9,590',c:'15%',pop:0,lim:'3 listings',ft:['20 Leads/month','Calendar','Verified badge','Invoices']},
+  {t:'professional',l:'Professional',p:'KSh 2,499',py:'KSh 23,990',c:'10%',pop:1,lim:'10 listings',ft:['AI Matching','Portfolio showcase','Priority in search','Analytics dashboard','Staff seats: 3']},
+  {t:'business',l:'Business',p:'KSh 4,999',py:'KSh 47,990',c:'7%',pop:0,lim:'25 listings',ft:['Featured placement','Unlimited leads','Custom packages','Priority support','Staff seats: 10']},
+  {t:'enterprise',l:'Enterprise',p:'KSh 9,999',py:'KSh 95,990',c:'5%',pop:0,lim:'Unlimited',ft:['White-label option','API access','Dedicated manager','SLA guarantee','Staff seats: unlimited']}
+];
+
+/* ── Steps (14, auth handled separately) ──────────────────────────── */
+const STEPS=[
+  {t:'Verify Account',   f:'sVerify',    skip:1},
+  {t:'Provider Type',    f:'sType'},
+  {t:'Service Profile',  f:'sProfile'},
+  {t:'Coverage',         f:'sCoverage'},
+  {t:'Availability',     f:'sAvail'},
+  {t:'Pricing',          f:'sPricing'},
+  {t:'Choose Plan',      f:'sSub'},
+  {t:'Verification',     f:'sVerif',     skip:1},
+  {t:'Payments',         f:'sPayment'},
+  {t:'Portfolio',        f:'sPortfolio', skip:1},
+  {t:'Bookings',         f:'sBookings'},
+  {t:'Notifications',    f:'sNotifs'},
+  {t:'Preview',          f:'sPreview'},
+  {t:'Legal Agreements', f:'sLegal'},
+  {t:'Publish!',         f:'sPublish',   fin:1}
+];
+
+/* ── Utils ─────────────────────────────────────────────────────────── */
+const _q=id=>document.getElementById(id);
+const _qv=id=>(_q(id)||{}).value||'';
+const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function _fld(id,lbl,type,o={}){const{ph='',req=0,val=''}=o;return`<div class="fg"><label class="sk-lbl">${lbl}${req?'<span style="color:var(--acc)">*</span>':''}</label><input class="sk-in" type="${type}" id="${id}" placeholder="${ph}" value="${_esc(val)}"${req?' required':''}></div>`}
+function _sel(id,lbl,opts,v='',req=0,onch=''){const oh=opts.map(x=>{const a=typeof x==='string'?x:x.value,b=typeof x==='string'?x:x.label;return`<option value="${_esc(a)}"${a===v?' selected':''}>${_esc(b)}</option>`}).join('');return`<div class="fg"><label class="sk-lbl">${lbl}${req?'<span style="color:var(--acc)">*</span>':''}</label><select class="sk-in sk-sel" id="${id}"${req?' required':''}${onch?` onchange="${onch}"`:''}><option value="">Select…</option>${oh}</select></div>`}
+function _updSub(sel){const sc=PCATS[sel.value]||[];const w=document.getElementById('scWrap');const s=document.getElementById('pSub');w.style.display=sc.length?'':'none';s.innerHTML=sc.map(x=>'<option>'+x+'</option>').join('');}
+function _ta(id,lbl,val,ph){return`<div class="fg ff"><label class="sk-lbl">${lbl}</label><textarea class="sk-in sk-ta" id="${id}" rows="3" placeholder="${ph||''}">${_esc(val||'')}</textarea></div>`}
+function _chips(nm,items,sel,multi){sel=sel||[];multi=multi!==false;return`<div class="chips" id="chips_${nm}">${items.map(i=>`<span class="chip${sel.includes(i)?' on':''}" onclick="_tc(this,'${nm}',${multi})">${_esc(i)}</span>`).join('')}</div>`}
+function _tc(el,nm,multi){if(!multi)document.querySelectorAll(`#chips_${nm} .chip`).forEach(c=>c.classList.remove('on'));el.classList.toggle('on')}
+function _cv(nm){return[...document.querySelectorAll(`#chips_${nm} .chip.on`)].map(c=>c.textContent)}
+function showLoad(m){_q('lov').classList.add('vis');_q('lmsg').textContent=m||'Please wait…'}
+function hideLoad(){_q('lov').classList.remove('vis')}
+function toast(m,t,ms){const d=document.createElement('div');d.className='toast t-'+(t||'ok');d.textContent=m;_q('tc').appendChild(d);setTimeout(()=>d.remove(),ms||3500)}
+function markUp(el){el.classList.add('done')}
+function showPh(id){document.querySelectorAll('.phase').forEach(p=>p.classList.remove('on'));_q(id).classList.add('on')}
+
+/* ── Auth ───────────────────────────────────────────────────────────── */
+const AU=(()=>{
+  let _conf=null;
+  const ae=e=>{const m={'auth/wrong-password':'Incorrect password.','auth/user-not-found':'No account found.','auth/email-already-in-use':'Email already in use.','auth/weak-password':'Min 8 characters.','auth/invalid-email':'Invalid email.','auth/too-many-requests':'Too many attempts.'};return m[e.code]||e.message};
+  function tab(t,btn){document.querySelectorAll('.atab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.aform').forEach(f=>f.classList.remove('on'));btn.classList.add('on');_q(t==='si'?'fSi':'fSu').classList.add('on')}
+  async function emailSI(e){e.preventDefault();showLoad('Signing in…');try{await window.firebaseSDK.signInWithEmailAndPassword(_qv('siE'),_qv('siP'))}catch(err){hideLoad();toast(ae(err),'err')}}
+  async function emailSU(e){e.preventDefault();showLoad('Creating account…');try{const c=await window.firebaseSDK.createUserWithEmailAndPassword(_qv('suE'),_qv('suP'));await window.firebaseSDK.updateProfile(c.user,{displayName:(_qv('suF')+' '+_qv('suL')).trim()})}catch(err){hideLoad();toast(ae(err),'err')}}
+  async function google(){showLoad('Signing in…');try{await window.firebaseSDK.signInWithPopup(new window.firebaseSDK.GoogleAuthProvider())}catch(err){hideLoad();toast(ae(err),'err')}}
+  function phoneTog(){const s=_q('phoneSec');s.style.display=s.style.display==='none'?'block':'none'}
+  async function sendOTP(){const n='+254'+_qv('pNum').replace(/\D/g,'');if(n.length<13)return toast('Enter a valid Kenyan number','err');showLoad('Sending OTP…');try{if(!window._rv)window._rv=new window.firebaseSDK.RecaptchaVerifier(window.firebaseSDK.auth,'rcap',{size:'invisible'});_conf=await window.firebaseSDK.signInWithPhoneNumber(n,window._rv);hideLoad();_q('otpSec').style.display='block';toast('OTP sent!')}catch(err){hideLoad();toast(ae(err),'err')}}
+  async function verifyOTP(){const code=[..._q('otpB').querySelectorAll('.otpb')].map(b=>b.value).join('');if(code.length<6)return toast('Enter all 6 digits','err');showLoad('Verifying…');try{await _conf.confirm(code)}catch(err){hideLoad();toast('Invalid code.','err')}}
+  document.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('.otpb').forEach((b,i,a)=>{b.addEventListener('input',()=>{if(b.value&&a[i+1])a[i+1].focus()});b.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!b.value&&a[i-1])a[i-1].focus()})})});
+  return{tab,emailSI,emailSU,google,phoneTog,sendOTP,verifyOTP};
+})();
+
+/* ── Wizard ─────────────────────────────────────────────────────────── */
+let _legalOk=false;
+const W=(()=>{
+  let _s=0,_draft={},_bill='monthly',_t=null,_pid=null;
+  function init(){
+    _s=0;_draft={};_t=null;_pid=null;_legalOk=false;
+    _loadDraft();
+    _q('progArea').classList.add('vis');
+    showPh('phWiz');
+    _rnd();
+  }
+  async function _loadDraft(){
+    try{
+      const fn=window.sokoniCallable('providerDispatch');
+      const r=await fn({op:'providerGetDraft'});
+      if(r.data&&!r.data.completed){_draft=r.data.stepData||{};_s=r.data.currentStep||0;_t=_draft.tier||null;_rnd()}
+    }catch(e){}
+  }
+  function _rnd(){
+    const s=STEPS[_s];if(!s)return;
+    _q('sCur').textContent=_s+1;
+    _q('sTitle').textContent=s.t;
+    _q('pFill').style.width=`${((_s+1)/STEPS.length)*100}%`;
+    _q('bSkip').style.display=s.skip?'inline-block':'none';
+    _q('bBack').style.display=_s===0?'none':'inline-block';
+    _q('bNext').textContent=s.fin?'Publish My Profile →':'Save & Continue →';
+    const fn=window[s.f];
+    _q('sContent').innerHTML=fn?fn(_draft['s'+_s]||{}):'<div class="sh">'+_esc(s.t)+'</div>';
+    document.documentElement.scrollTop=0;
+  }
+  async function next(){
+    const s=STEPS[_s];if(!s)return;
+    if(s.f==='sLegal'&&!_legalOk){toast('Please review and accept the legal agreements to continue.','err');return}
+    const data=_collect();
+    showLoad('Saving…');
+    try{
+      const fn=window.sokoniCallable('providerDispatch');
+      await fn({op:'providerSaveDraft',step:_s,data});
+      _draft['s'+_s]=data;if(_t)_draft.tier=_t;
+      if(s.fin){await _publish();return}
+      _s++;hideLoad();_rnd();
+    }catch(e){hideLoad();toast(e.message,'err')}
+  }
+  function back(){if(_s===0){showPh('phAuth');_q('progArea').classList.remove('vis');return}_s--;_rnd()}
+  function skip(){_draft['s'+_s]={};_s++;_rnd()}
+  async function _publish(){
+    showLoad('Publishing your profile…');
+    try{
+      const all=Object.assign({},...STEPS.map((_,i)=>_draft['s'+i]||{}));all.tier=_t||'free_trial';all.billingCycle=_bill;
+      const fn=window.sokoniCallable('providerDispatch');
+      const r=await fn({op:'providerPublish',profileData:all});
+      _pid=r.data&&r.data.providerId?r.data.providerId:'';
+      hideLoad();
+      _q('bNext').style.display='none';_q('bBack').style.display='none';_q('bSkip').style.display='none';
+      _q('sContent').innerHTML=sSuccess(_pid);
+      _q('sTitle').textContent='You\'re Live!';_q('pFill').style.width='100%';
+    }catch(e){hideLoad();toast('Publish failed: '+e.message,'err')}
+  }
+  function _collect(){
+    const data={};
+    _q('sContent').querySelectorAll('[id]').forEach(el=>{if(['INPUT','SELECT','TEXTAREA'].includes(el.tagName))data[el.id]=el.type==='checkbox'?el.checked:el.value});
+    _q('sContent').querySelectorAll('.chips[id]').forEach(el=>{data[el.id.replace('chips_','')]=_cv(el.id.replace('chips_',''))});
+    if(_t)data.tier=_t;
+    return data;
+  }
+  function _setType(t,el){document.querySelectorAll('.tcard').forEach(c=>c.classList.remove('sel'));el.classList.add('sel');document.getElementById('provType').value=t;}
+  function plan(t,el){document.querySelectorAll('.pc').forEach(c=>c.classList.remove('sel'));el.classList.add('sel');_t=t}
+  function billing(b){_bill=b;_q('btMo').classList.toggle('on',b==='monthly');_q('btYr').classList.toggle('on',b==='yearly');document.querySelectorAll('.pyr').forEach((el,i)=>{const p=PLANS[i];el.textContent=b==='yearly'?p.py+'/year':p.p+'/month'})}
+  return{init,next,back,skip,plan,billing,_setType,get _t(){return _t},get _draft(){return _draft}};
+})();
+
+/* ══════════════════════════════════════════════════════════════════════
+   STEP RENDERERS
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Step 1: Verify Account */
+function sVerify(d){
+  const u=window.firebaseSDK.auth.currentUser;const email=u?u.email:'';const verified=u&&u.emailVerified;
+  return`<div class="sh">Verify Your Account</div><p class="ss">Confirm your email and optionally link a phone number.</p>${verified?`<div class="infobox">✓ Email <strong>${_esc(email)}</strong> is verified.</div>`:email?`<div class="infobox">A verification email was sent to <strong>${_esc(email)}</strong>. Check your inbox and click the link, then tap Save &amp; Continue.</div><button class="btn btn-s" onclick="window.firebaseSDK.sendEmailVerification().then(()=>toast('Email sent!')).catch(()=>toast('Send failed','err'))">Resend Email</button>`:'<div class="infobox">Sign in to verify your account.</div>'}<div style="margin-top:18px">${_fld('vpPhone','Phone Number (optional)','tel',{ph:'+254 7XX XXX XXX',val:d.vpPhone||''})}</div>`;
+}
+
+/* Step 2: Individual vs Company */
+function sType(d){
+  return`<div class="sh">Provider Type</div><p class="ss">Are you registering as an individual or a company?</p>
+  <div class="tcards">
+    <div class="tcard${d.provType==='individual'?' sel':''}" onclick="W._setType('individual',this)">
+      <div class="tc-ico">👤</div><div class="tc-nm">Individual</div>
+      <div class="tc-ds">A solo professional operating under your own name</div>
+    </div>
+    <div class="tcard${d.provType==='company'?' sel':''}" onclick="W._setType('company',this)">
+      <div class="tc-ico">🏢</div><div class="tc-nm">Company</div>
+      <div class="tc-ds">A registered business with a team</div>
+    </div>
+  </div><input type="hidden" id="provType" value="${_esc(d.provType||'')}">`;
+}
+
+/* Step 3: Service Profile */
+function sProfile(d){
+  const cats=Object.keys(PCATS);const sc=d.pCat?PCATS[d.pCat]||[]:[];
+  return`<div class="sh">Service Profile</div><p class="ss">Create a professional profile that wins customers' trust.</p>
+  <div class="fgrid">
+    ${_fld('pNm','Business / Professional Name','text',{ph:'e.g. Jane Wanjiku Electricals',req:1,val:d.pNm||''})}
+    ${_sel('pCat','Primary Category',cats,d.pCat||'',1,'_updSub(this)')}
+    <div class="fg" id="scWrap"${sc.length?'':' style="display:none"'}>
+      <label class="sk-lbl">Subcategory<span style="color:var(--acc)">*</span></label>
+      <select class="sk-in sk-sel" id="pSub">${sc.map(s=>`<option value="${s}"${s===d.pSub?' selected':''}>${s}</option>`).join('')}</select>
+    </div>
+    ${_sel('pExp','Years of Experience',[{value:'<1',label:'< 1 year'},{value:'1-2',label:'1-2 years'},{value:'3-5',label:'3-5 years'},{value:'6-10',label:'6-10 years'},{value:'10+',label:'10+ years'}],d.pExp||'')}
+  </div>
+  ${_ta('pBio','Professional Description',d.pBio||'','Describe your skills, experience, and why customers should choose you…')}
+  <div class="fgrid" style="margin-top:12px">
+    ${_fld('pQual','Qualifications / Education','text',{ph:'e.g. Diploma in Electrical Engineering',val:d.pQual||''})}
+    ${_fld('pCert','Certifications (optional)','text',{ph:'e.g. EPRA Licensed',val:d.pCert||''})}
+  </div>
+  <label class="sk-lbl" style="margin:12px 0 7px;display:block">Languages</label>
+  ${_chips('pLng',['English','Swahili','Kikuyu','Luo','Luhya','Kamba','Other'],d.pLng||['English','Swahili'])}
+`;
+}
+
+/* Step 4: Coverage */
+function sCoverage(d){
+  return`<div class="sh">Service Coverage</div><p class="ss">Where do you provide your services?</p>
+  <label class="sk-lbl" style="margin-bottom:7px;display:block">Service Type</label>
+  ${_chips('covT',['On-site','Remote / Online','Hybrid'],d.covT?[d.covT]:['On-site'],false)}
+  <div class="fgrid" style="margin-top:14px">
+    ${_sel('covCo','Primary County',COUNTIES.map(c=>({value:c,label:c})),d.covCo||'',1)}
+    ${_fld('covCi','City / Town','text',{ph:'e.g. Westlands',val:d.covCi||''})}
+    ${_fld('covNb','Neighbourhood','text',{ph:'Optional',val:d.covNb||''})}
+  </div>
+  <label class="sk-lbl" style="margin-top:12px;display:block">Service radius: <strong id="rV">${d.covR||20} km</strong></label>
+  <input type="range" id="covR" min="5" max="200" step="5" value="${d.covR||20}" style="width:100%;margin-top:4px;accent-color:var(--acc)" oninput="document.getElementById('rV').textContent=this.value+' km'">
+  <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:12px">
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.86rem"><input type="checkbox" id="covNat"${d.covNat?' checked':''} style="accent-color:var(--acc)"> Serve Nationwide</label>
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.86rem"><input type="checkbox" id="covRem"${d.covRem?' checked':''} style="accent-color:var(--acc)"> Remote / Online only</label>
+  </div>`;
+}
+
+/* Step 5: Availability */
+function sAvail(d){
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  return`<div class="sh">Availability</div><p class="ss">Set your regular schedule. Customers will see your available slots.</p>
+  <label class="sk-lbl" style="margin-bottom:7px;display:block">Working Days</label>
+  ${_chips('avD',days,d.avD||['Mon','Tue','Wed','Thu','Fri'])}
+  <div class="fgrid" style="margin-top:14px">
+    ${_fld('avF','Working Hours: From','time',{val:d.avF||'08:00'})}
+    ${_fld('avT','To','time',{val:d.avT||'17:00'})}
+    ${_fld('avBF','Break: From','time',{val:d.avBF||''})}
+    ${_fld('avBT','Break: To','time',{val:d.avBT||''})}
+    ${_sel('avLd','Booking Lead Time',[{value:'1h',label:'1 hour'},{value:'2h',label:'2 hours'},{value:'4h',label:'4 hours'},{value:'same',label:'Same day'},{value:'1d',label:'1 day'},{value:'2d',label:'2 days'},{value:'1w',label:'1 week'}],d.avLd||'2h')}
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:12px">
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.86rem"><input type="checkbox" id="avEm"${d.avEm?' checked':''} style="accent-color:var(--acc)"> Emergency / 24-7 availability</label>
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:.86rem"><input type="checkbox" id="avHol"${d.avHol?' checked':''} style="accent-color:var(--acc)"> Available on public holidays</label>
+  </div>`;
+}
+
+/* Step 6: Pricing */
+function sPricing(d){
+  return`<div class="sh">Pricing</div><p class="ss">Set your rates — update anytime from your dashboard.</p>
+  <div class="fgrid">
+    ${_fld('prH','Hourly Rate (KSh)','number',{ph:'e.g. 1,500',val:d.prH||''})}
+    ${_fld('prF','Fixed Price (KSh)','number',{ph:'e.g. 5,000',val:d.prF||''})}
+    ${_fld('prI','Inspection / Visit Fee (KSh)','number',{ph:'e.g. 500',val:d.prI||''})}
+    ${_fld('prE','Emergency Fee (KSh)','number',{ph:'e.g. 2,000',val:d.prE||''})}
+    ${_fld('prTr','Travel Fee (KSh/km)','number',{ph:'e.g. 50',val:d.prTr||''})}
+  </div>
+  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.87rem;margin-top:12px"><input type="checkbox" id="prQ"${d.prQ?' checked':''} style="accent-color:var(--acc)"> I also accept quotation requests</label>
+  ${_ta('prPkg','Custom Packages (optional)',d.prPkg||'','e.g.\nBasic Clean – KSh 2,500 (3hr studio)\nDeep Clean – KSh 4,500 (up to 3 bedroom)\nMove-Out – KSh 8,000')}`;
+}
+
+/* Step 7: Subscription */
+function sSub(d){
+  return`<div class="sh">Choose Your Plan</div><p class="ss">Start free for 14 days, upgrade anytime. Cancel whenever.</p>
+  <div class="btog"><button class="btg on" id="btMo" onclick="W.billing('monthly')">Monthly</button><button class="btg" id="btYr" onclick="W.billing('yearly')">Yearly <span style="font-size:.6rem;background:var(--acc);color:#000;padding:1px 5px;border-radius:99px;margin-left:3px">20% off</span></button></div>
+  <div class="pgrid">${PLANS.map(p=>`<div class="pc${W._t===p.t?' sel':''}" onclick="W.plan('${p.t}',this)">${p.pop?'<div class="ppop">POPULAR</div>':''}<div class="pn">${p.l}</div><div class="pp" id="pp_${p.t}">${p.p}/month</div><div class="pcom">${p.c} commission</div><div style="font-size:.7rem;color:var(--sub);margin-bottom:5px">${p.lim}</div><ul class="pft">${p.ft.map(f=>`<li>${f}</li>`).join('')}</ul><div class="pyr" id="pyr_${p.t}"></div></div>`).join('')}</div>`;
+}
+
+/* Step 8: Verification */
+function sVerif(d){
+  return`<div class="sh">Identity Verification</div><p class="ss">Verified providers get 3× more bookings. Skip and verify later.</p>
+  <div class="ugrid">
+    <div class="uc${d.uNID?' done':''}" onclick="_q('uNID').click()"><div class="ui">🪪</div><div class="ul">National ID / Passport</div><div class="uh">Front & back</div><div class="us">Uploaded ✓</div><input type="file" id="uNID" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div>
+    <div class="uc${d.uBR?' done':''}" onclick="_q('uBR').click()"><div class="ui">📋</div><div class="ul">Business Registration</div><div class="uh">If company</div><div class="us">Uploaded ✓</div><input type="file" id="uBR" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div>
+    <div class="uc${d.uPL?' done':''}" onclick="_q('uPL').click()"><div class="ui">📜</div><div class="ul">Professional Licence</div><div class="uh">Where applicable</div><div class="us">Uploaded ✓</div><input type="file" id="uPL" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div>
+    <div class="uc${d.uKRA?' done':''}" onclick="_q('uKRA').click()"><div class="ui">🔏</div><div class="ul">KRA PIN Certificate</div><div class="uh">Optional</div><div class="us">Uploaded ✓</div><input type="file" id="uKRA" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div>
+    <div class="uc${d.uSel?' done':''}" onclick="_q('uSel').click()"><div class="ui">🤳</div><div class="ul">Verification Selfie</div><div class="uh">Hold ID next to face</div><div class="us">Uploaded ✓</div><input type="file" id="uSel" accept="image/*" capture="user" style="display:none" onchange="markUp(this.parentElement)"></div>
+  </div>
+  <div class="infobox" style="margin-top:14px">Documents are encrypted and only used for identity verification. Review takes 24-48 hours.</div>`;
+}
+
+/* Step 9: Payments */
+function sPayment(d){
+  return`<div class="sh">Payment Setup</div><p class="ss">Connect how you'll receive your earnings.</p>
+  <div class="fgrid">
+    ${_fld('pmMp','M-PESA Phone','tel',{ph:'+254 7XX XXX XXX',req:1,val:d.pmMp||''})}
+    ${_sel('pmBk','Bank (optional)',[{value:'',label:'None'},{value:'KCB',label:'KCB'},{value:'Equity',label:'Equity Bank'},{value:'Coop',label:'Co-operative Bank'},{value:'Absa',label:'Absa'},{value:'NCBA',label:'NCBA'},{value:'DTB',label:'DTB'},{value:'Family',label:'Family Bank'},{value:'PostBank',label:'PostBank'},{value:'Other',label:'Other'}],d.pmBk||'')}
+    ${_fld('pmAc','Account Number (if bank)','text',{ph:'XXXXXXXXXXXXXXXX',val:d.pmAc||''})}
+  </div>
+  <label class="sk-lbl" style="margin-top:14px;margin-bottom:7px;display:block">Settlement Preference</label>
+  ${_chips('pmSet',['Weekly (every Monday)','Monthly (1st of month)','On-demand (request anytime)'],d.pmSet?[d.pmSet]:['Weekly (every Monday)'],false)}
+  <div class="infobox" style="margin-top:12px">Payouts via M-PESA are instant. Bank transfers take 1-2 business days. SOKONI Wallet auto-created on activation.</div>`;
+}
+
+/* Step 10: Portfolio */
+function sPortfolio(d){
+  return`<div class="sh">Portfolio</div><p class="ss">Showcase your work. Providers with portfolios win 3× more clients.</p>
+  <div class="ugrid">
+    <div class="uc" onclick="_q('uP1').click()"><div class="ui">🖼️</div><div class="ul">Work Photo 1</div><div class="uh">JPG/PNG max 5MB</div><div class="us">Uploaded ✓</div><input type="file" id="uP1" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div>
+    <div class="uc" onclick="_q('uP2').click()"><div class="ui">🖼️</div><div class="ul">Work Photo 2</div><div class="uh">Optional</div><div class="us">Uploaded ✓</div><input type="file" id="uP2" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div>
+    <div class="uc" onclick="_q('uP3').click()"><div class="ui">🖼️</div><div class="ul">Work Photo 3</div><div class="uh">Optional</div><div class="us">Uploaded ✓</div><input type="file" id="uP3" accept="image/*" style="display:none" onchange="markUp(this.parentElement)"></div>
+    <div class="uc" onclick="_q('uVid').click()"><div class="ui">🎬</div><div class="ul">Short Video</div><div class="uh">MP4 max 30MB</div><div class="us">Uploaded ✓</div><input type="file" id="uVid" accept="video/*" style="display:none" onchange="markUp(this.parentElement)"></div>
+    <div class="uc" onclick="_q('uCert').click()"><div class="ui">🏆</div><div class="ul">Certificates</div><div class="uh">PDF or image</div><div class="us">Uploaded ✓</div><input type="file" id="uCert" accept="image/*,.pdf" style="display:none" onchange="markUp(this.parentElement)"></div>
+  </div>
+  <div class="fgrid" style="margin-top:14px">
+    ${_fld('ptWeb','Website (optional)','url',{ph:'https://yourwebsite.com',val:d.ptWeb||''})}
+    ${_fld('ptLI','LinkedIn (optional)','url',{ph:'https://linkedin.com/in/name',val:d.ptLI||''})}
+    ${_fld('ptIG','Instagram Handle','text',{ph:'@yourhandle',val:d.ptIG||''})}
+    ${_fld('ptWA','WhatsApp Number','tel',{ph:'+254 7XX XXX XXX',val:d.ptWA||''})}
+  </div>`;
+}
+
+/* Step 11: Bookings */
+function sBookings(d){
+  return`<div class="sh">Bookings Configuration</div><p class="ss">Control how customers book and cancel.</p>
+  <div class="fgrid">
+    ${_sel('bkMode','Booking Mode',[{value:'instant',label:'Instant — auto-confirm'},{value:'request',label:'Request — you approve'},{value:'quote',label:'Quote first, then confirm'}],d.bkMode||'request')}
+    ${_sel('bkDur','Default Session Duration',[{value:'30',label:'30 minutes'},{value:'60',label:'1 hour'},{value:'120',label:'2 hours'},{value:'240',label:'4 hours'},{value:'custom',label:'Varies (custom per booking)'}],d.bkDur||'60')}
+    ${_fld('bkMaxDay','Max Bookings per Day','number',{ph:'e.g. 5',val:d.bkMaxDay||''})}
+    ${_fld('bkBuf','Buffer Between Bookings (min)','number',{ph:'15',val:d.bkBuf||'15'})}
+    ${_fld('bkTrav','Max Travel Distance (km)','number',{ph:'e.g. 30',val:d.bkTrav||''})}
+    ${_sel('bkAdv','Max Advance Booking',[{value:'7',label:'1 week'},{value:'14',label:'2 weeks'},{value:'30',label:'1 month'},{value:'90',label:'3 months'},{value:'180',label:'6 months'}],d.bkAdv||'30')}
+  </div>
+  <div class="fgrid" style="margin-top:12px">
+    ${_sel('bkCanc','Cancellation Policy',[{value:'free24h',label:'Free cancel up to 24h before'},{value:'free48h',label:'Free cancel up to 48h before'},{value:'free1w',label:'Free cancel up to 1 week before'},{value:'no_refund',label:'Non-refundable'}],d.bkCanc||'free24h')}
+    ${_sel('bkRes','Reschedule Policy',[{value:'free',label:'Free reschedule anytime'},{value:'once',label:'One free reschedule'},{value:'none',label:'No rescheduling'}],d.bkRes||'free')}
+  </div>
+  <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.87rem;margin-top:12px"><input type="checkbox" id="bkDep"${d.bkDep?' checked':''} style="accent-color:var(--acc)"> Require a deposit to confirm bookings</label>`;
+}
+
+/* Step 12: Notifications */
+function sNotifs(d){
+  return`<div class="sh">Notifications</div><p class="ss">Choose how you'll be alerted about bookings and messages.</p>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:13px 14px">
+      <div><div style="font-weight:600;font-size:.88rem">📱 SMS</div><div style="font-size:.75rem;color:var(--sub)">Booking alerts and reminders</div></div>
+      <input type="checkbox" id="nSMS"${d.nSMS!==false?' checked':''} style="width:18px;height:18px;accent-color:var(--acc)">
+    </label>
+    <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:13px 14px">
+      <div><div style="font-weight:600;font-size:.88rem">📧 Email</div><div style="font-size:.75rem;color:var(--sub)">Confirmations, invoices and summaries</div></div>
+      <input type="checkbox" id="nEmail"${d.nEmail!==false?' checked':''} style="width:18px;height:18px;accent-color:var(--acc)">
+    </label>
+    <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:13px 14px">
+      <div><div style="font-weight:600;font-size:.88rem">🔔 Push Notifications</div><div style="font-size:.75rem;color:var(--sub)">Real-time alerts via the SOKONI app</div></div>
+      <input type="checkbox" id="nPush"${d.nPush!==false?' checked':''} style="width:18px;height:18px;accent-color:var(--acc)">
+    </label>
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:13px 14px;opacity:.5">
+      <div><div style="font-weight:600;font-size:.88rem">💬 WhatsApp <span style="font-size:.62rem;background:var(--surf2);padding:1px 6px;border-radius:99px;color:var(--sub)">Coming soon</span></div><div style="font-size:.75rem;color:var(--sub)">Booking notifications via WhatsApp</div></div>
+      <input type="checkbox" disabled style="width:18px;height:18px">
+    </div>
+  </div>`;
+}
+
+/* Step 13: Preview */
+function sPreview(d){
+  const all=Object.assign({},...STEPS.map((_,i)=>W._draft&&W._draft['s'+i]||{}));
+  const name=all.pNm||all.pNm||'Your Name';
+  const cat=all.pCat||'Service Provider';
+  const sub=all.pSub?` · ${all.pSub}`:'';
+  const bio=all.pBio||'Your professional description will appear here.';
+  const rating='5.0';
+  return`<div class="sh">Profile Preview</div><p class="ss">This is exactly how customers will see you on SOKONI.</p>
+  <div class="prev-card">
+    <div class="prev-ava">🔧</div>
+    <div class="prev-name">${_esc(name)}</div>
+    <div class="prev-cat">${_esc(cat+sub)}</div>
+    <div style="display:flex;gap:6px;justify-content:center;margin-bottom:10px">
+      <span class="prev-badge pb-online">● Available</span>
+      <span class="prev-badge pb-verified">✓ Pending Verification</span>
+    </div>
+    <div class="prev-bio">${_esc(bio.slice(0,140))}${bio.length>140?'…':''}</div>
+    <div class="prev-stats">
+      <div class="ps"><div class="ps-v">${rating}</div><div class="ps-l">Rating</div></div>
+      <div class="ps"><div class="ps-v">New</div><div class="ps-l">Jobs</div></div>
+      <div class="ps"><div class="ps-v">${all.prH?'KSh '+Number(all.prH).toLocaleString()+'/hr':'Quote'}</div><div class="ps-l">Rate</div></div>
+    </div>
+    <button class="btn btn-p btn-f" style="margin-top:4px" disabled>Book Now</button>
+  </div>
+  <button class="btn btn-s btn-f" style="margin-top:14px" onclick="W.back()">← Edit Profile</button>`;
+}
+
+/* Legal Gate */
+function sLegal(d){
+  requestAnimationFrame(function(){
+    var wrap=document.getElementById('slg-pro-wrap');
+    if(!wrap)return;
+    if(!window.SokoniLegalGate){_legalOk=true;return;}
+    window.SokoniLegalGate.mount(wrap,{
+      role:'provider',
+      onComplete:function(ok){_legalOk=!!ok;}
+    });
+  });
+  return`<div class="sh">Legal Agreements</div>`+
+    `<p class="ss">Review and accept the platform agreements before publishing your provider profile.</p>`+
+    `<div id="slg-pro-wrap" style="margin-top:4px"></div>`+
+    `<p style="font-size:.75rem;color:var(--sub);margin-top:14px">Once accepted, click <strong style="color:var(--text)">Save &amp; Continue</strong> to proceed to publish.</p>`;
+}
+
+/* Final: Publish success */
+function sPublish(d){return sSuccess(d&&d.providerId?d.providerId:'')}
+function sSuccess(pid){
+  return`<div class="sscreen">
+    <div class="scheck">🚀</div>
+    <h2 class="stitle">You're live on <span class="ac">SOKONI</span>!</h2>
+    <p style="color:var(--sub);margin-bottom:14px">Your profile is now searchable. Customers can discover and book you.</p>
+    ${pid?`<div class="idcard"><div class="il">Provider ID</div><div class="id">${_esc(pid)}</div></div>`:''}
+    <div class="qr-mock">📱</div>
+    <p style="font-size:.78rem;color:var(--sub);margin-bottom:18px">Your QR code is ready — share it to get bookings instantly</p>
+    <div class="slinks">
+      <a href="provider-dashboard.html" class="btn btn-p">Go to Dashboard →</a>
+      <a href="onboarding.html" class="btn btn-s">Add Another Role</a>
+    </div>
+  </div>`;
+}
+
+/* ── Init ───────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded',()=>{
+  window.firebaseSDK.onAuthStateChanged(async u=>{
+    hideLoad();
+    if(!u){showPh('phAuth');return}
+    // Show user avatar
+    const ini=(u.displayName||u.email||'U').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const sl=_q('uSlot');sl.classList.add('vis');sl.innerHTML=`<div class="uava">${_esc(ini)}</div><span>${_esc((u.displayName||u.email||'').split(' ')[0])}</span>`;
+    // Check if already has a provider profile
+    try{
+      const fn=window.sokoniCallable('providerDispatch');
+      const r=await fn({op:'providerGetProfile'});
+      if(r.data&&r.data.providerId&&r.data.status==='active'){
+        window.location.href='provider-dashboard.html';return;
+      }
+    }catch(e){}
+    W.init();
+  });
+});
+</script>
+</body>
+</html>

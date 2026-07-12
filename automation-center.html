@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
   <script src="security.js"></script>
@@ -575,16 +575,16 @@
 <div id="toast"></div>
 
 <script src="sokoni-config.js"></script>
-<script src="sokoni-appcheck.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
 <script>
 'use strict';
 
 /* ── Init ─────────────────────────────────── */
-firebase.initializeApp(window.SOKONI_CONFIG || window.firebaseConfig || {});
+if(!firebase.apps.length)firebase.initializeApp(window.SOKONI_CONFIG || window.firebaseConfig || {});
 var fn = firebase.app().functions('us-central1');
 function _cf(name) { return fn.httpsCallable(name); }
 

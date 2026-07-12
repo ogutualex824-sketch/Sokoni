@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
 <script src="security.js"></script>
@@ -6,7 +6,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Franchise Portal — SOKONI</title>
-<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
 <link rel="manifest" href="manifest.json">
 <style>
 /* ══════════════════════════════════════════════════════════
@@ -208,7 +208,7 @@ body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,s
   <!-- ── Top Bar ── -->
   <div class="topbar">
     <div class="topbar-logo">
-      <img src="assets/logosokoni.png" alt="SOKONI">
+      <img src="assets/Sokoni Logo.png" alt="SOKONI">
     </div>
     <span class="topbar-title">Franchise Portal</span>
     <span class="topbar-badge" id="roleChip">Franchisee</span>
@@ -496,12 +496,14 @@ body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,s
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
+<script src="/sokoni-appcheck.js"></script>
 
 <script>
 /* ═══════════════════════════════════════════════
    INITIALISATION
 ═══════════════════════════════════════════════ */
-firebase.initializeApp(window.SOKONI_CONFIG || {});
+if(!firebase.apps.length)firebase.initializeApp(window.SOKONI_CONFIG || {});
 const auth      = firebase.auth();
 const db        = firebase.firestore();
 const functions = firebase.functions();

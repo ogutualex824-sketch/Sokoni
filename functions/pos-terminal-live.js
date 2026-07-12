@@ -459,9 +459,28 @@ exports.posInitiateTerminalPayment = onCall(
       vendorRef: vendorResult.ref || null,
     });
 
+    /*
+     * Virtual terminal: complete the full approval chain synchronously inside
+     * the CF execution so no state transition fires after the response is sent
+     * (Cloud Functions freeze the process after returning, making post-response
+     * setTimeout callbacks unreliable / dead).
+     *
+     * Correct state machine path: SENT → PROCESSING → APPROVED
+     * (SENT → APPROVED directly is rejected by _assertTransition)
+     */
+    let finalStatus = TX_STATES.SENT;
+    if (vendorKey.toLowerCase() === 'virtual') {
+      await _transitionTx(txRef.id, TX_STATES.SENT, TX_STATES.PROCESSING, {});
+      await _transitionTx(txRef.id, TX_STATES.PROCESSING, TX_STATES.APPROVED, {
+        approvalCode: `VIRT-${Date.now()}`,
+        receiptData:  { message: 'Virtual approval' },
+      });
+      finalStatus = TX_STATES.APPROVED;
+    }
+
     return {
       transactionId: txRef.id,
-      status:        TX_STATES.SENT,
+      status:        finalStatus,
       vendorRef:     vendorResult.ref || null,
       pollIntervalMs: vendorResult.pollIntervalMs || 3000,
       expiresAt:     txData.expiresAt,
@@ -1046,20 +1065,19 @@ async function _paxPing(terminalId, peripheral) {
 
 /* ── Virtual driver (demo/testing) ─────────────────────────── */
 async function _virtualInitiate(txId, params) {
-  /* Auto-approve after 2s — triggers via Firestore listener on client */
-  setTimeout(async () => {
-    try {
-      const snap = await db().collection('posTerminalTransactions').doc(txId).get();
-      if (!snap.exists) return;
-      const tx = snap.data();
-      if (tx.status === TX_STATES.SENT) {
-        await _transitionTx(txId, TX_STATES.SENT, TX_STATES.APPROVED, {
-          approvalCode: `VIRT-${Date.now()}`,
-          receiptData:  { message: 'Virtual approval' },
-        });
-      }
-    } catch {}
-  }, 2000);
+  /*
+   * NOTE: Auto-approval is NOT performed here with setTimeout.
+   *
+   * Cloud Functions freeze the Node.js process immediately after the
+   * handler returns a response — any pending setTimeout callbacks
+   * would never execute (or would execute inside a frozen process),
+   * leaving the transaction permanently stuck in SENT state.
+   *
+   * The caller (posInitiateTerminalPayment) detects the virtual vendor
+   * and performs the full SENT→PROCESSING→APPROVED transition synchronously
+   * before sending the response.  See the `vendorKey === 'virtual'` block
+   * in that handler.
+   */
   return { ref: `VIRT-${txId}`, pollIntervalMs: 1000 };
 }
 

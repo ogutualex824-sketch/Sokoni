@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI — CompanyIdentity Service (canonical source, client-side)
    sokoni-company.js  →  window.SOKONI_COMPANY
 
@@ -53,7 +53,7 @@
     website:          'mysokoni.co.ke',
     websiteUrl:       'https://mysokoni.co.ke',
     domain:           'mysokoni.co.ke',
-    logoUrl:          'https://mysokoni.co.ke/assets/Sokonilogo2.png',
+    logoUrl:          'https://mysokoni.co.ke/assets/Sokoni%20Logo.png',
 
     /* Reusable legal strings */
     footerCopyright:  '© 2026 SOKONI · A product of Bravilex International Co. Limited · All Rights Reserved.',

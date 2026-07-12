@@ -1,4 +1,772 @@
-﻿## [2026-07-12] — Universal Enterprise Onboarding Engine (UEOE) + Provider Dashboard
+﻿## [2026-07-12] — Security & Reliability Bug Fixes (B-09 + CF-03)
+
+### Summary
+Fixed two independent bugs uncovered by billing audit: one security fail-open in the Zero Trust client SDK (B-09, severity raised to HIGH), and one critical Cloud Function reliability bug in the virtual POS terminal driver (CF-03 CRITICAL).
+
+### Bug 1 — sokoni-zero-trust.js: Fail-Open on Financial Operations (B-09 MEDIUM→HIGH)
+
+The `guard()` method returned `{allowed: true}` for ALL operations when Firebase was unreachable or when the `evaluateAccessRequest` CF returned an unexpected error. Under network stress or DDoS, this allowed payment/wallet/refund/settlement actions to bypass authorization entirely.
+
+**Fix:** Added `FINANCIAL_OPERATIONS` Set (35+ canonical financial action/resource names) and `_isFinancialOp(action, resource)` helper (substring-safe). Both fail-open paths now check `_isFinancialOp`. Financial ops return `{allowed: false, riskScore: 100, reason: 'authorization_service_unavailable'}`. Non-financial ops continue to fail-open.
+
+### Bug 2 — functions/pos-terminal-live.js: setTimeout in Frozen CF Process (CF-03 CRITICAL)
+
+`_virtualInitiate()` used `setTimeout(async () => { await _transitionTx(SENT→APPROVED) }, 2000)`. Two compounding defects: (1) Cloud Functions freeze the Node.js process after the handler returns — the callback fired into a frozen process so `_transitionTx()` never completed, leaving transactions permanently stuck in `SENT` state. (2) SENT→APPROVED is not in `TX_TRANSITIONS`; `_assertTransition` would reject it — correct path is SENT→PROCESSING→APPROVED.
+
+**Fix:** Removed the `setTimeout` from `_virtualInitiate()`. The `posInitiateTerminalPayment` handler now executes the full SENT→PROCESSING→APPROVED chain synchronously before returning. Returned `status` is `APPROVED` for virtual terminals (no polling needed).
+
+### Files Changed
+- `sokoni-zero-trust.js` — `FINANCIAL_OPERATIONS` Set + `_isFinancialOp()` helper; both fail-open guards updated
+- `functions/pos-terminal-live.js` — `_virtualInitiate()` setTimeout removed; synchronous auto-approve added to `posInitiateTerminalPayment`
+
+### Security Implications
+- HIGH closed (B-09): checkout, payment, wallet, refund, payout, settlement, commission, transfer, escrow, M-Pesa operations are blocked when the authorization service is unreachable. DDoS against Cloud Functions can no longer bypass payment authorization.
+
+### Breaking Changes
+- Virtual terminal only: `posInitiateTerminalPayment` now returns `status: 'approved'` (was `'sent_to_terminal'`) for `vendorKey === 'virtual'`. Real vendors are unaffected.
+
+---
+
+## [2026-07-12] — Firestore Index Overflow Migration (B-14 CRITICAL)
+
+### Summary
+Resolved critical deployment blocker B-14: the `(default)` Firestore database had 226 composite indexes against a hard limit of 200. The next `firebase deploy --only firestore:indexes` would have partially failed silently and rejected 26 indexes. The last 26 indexes were migrated to the existing `sokoni-ops` secondary database index file.
+
+### Files Changed
+
+**`firestore.indexes.json`**
+- Removed indexes at positions 200–225 (collections: `posCashEvents` ×8, `posDrawerEvents` ×2, `posCloseApprovals` ×2, `posCashSessions` ×1, `providerProfiles` ×5, `providerBookings` ×2, `providerPayouts` ×1, `providerReviews` ×1, `accountProfiles` ×2, `accountSubscriptions` ×2).
+- Index count: 226 → **200** (at the hard limit, deploy will no longer be rejected).
+
+**`firestore.indexes.sokoni-ops.json`**
+- Appended the 26 migrated indexes.
+- Index count: 28 → **54** (well under the 200 limit on `sokoni-ops`).
+
+### Schema Drift Finding
+The `orders` collection has two different field names used across indexes — probable schema drift that must be resolved:
+- `sellerId` — used in: `orders: sellerId ASCENDING, status ASCENDING, createdAt DESCENDING`
+- `sellerUid` — used in: `orders: sellerUid ASCENDING, createdAt DESCENDING`
+
+**Action required:** Determine the canonical field name in the `orders` documents and either rename the field in all documents (with a migration script) or add the missing alias. Until resolved, one of these indexes serves no real queries.
+
+### Database Changes
+- No index definitions were deleted — only moved between database files.
+- Queries served by the moved indexes (`posCashEvents`, `providerProfiles`, `accountProfiles`, etc.) must be directed to the `sokoni-ops` database or the relevant Cloud Functions must specify `getFirestore('sokoni-ops')`.
+
+### Security Implications
+- None. No data is stored in the moved collections on `(default)`; only the index configuration changed.
+
+### Breaking Changes
+- If any Cloud Function or client directly queries `posCashEvents`, `posDrawerEvents`, `posCloseApprovals`, `posCashSessions`, `providerProfiles`, `providerBookings`, `providerPayouts`, `providerReviews`, `accountProfiles`, or `accountSubscriptions` on the `(default)` database, those composite queries will fail with `FAILED_PRECONDITION: index not found`. The respective functions must be updated to target `sokoni-ops` using `admin.firestore({ databaseId: 'sokoni-ops' })`.
+
+### Deployment Steps
+1. `firebase deploy --only firestore:indexes` — deploys the 200-index `(default)` file.
+2. `firebase deploy --only firestore:indexes --config firebase.sokoni-ops.json` (or whichever config targets `sokoni-ops`) — deploys the 54-index `sokoni-ops` file.
+
+---
+
+## [2026-07-12] — Listener/Polling Bug Fixes (B-16 CRITICAL + PL-02 HIGH)
+
+### Summary
+Fixed two billing-critical listener bugs found in the billing audit:
+
+**B-16 CRITICAL — digital.html onSnapshot stacking**
+Every call to `_openChat()` was registering a permanent Firestore `onSnapshot` on the `digitalMessages` collection without storing or cancelling the previous listener. Opening 10 chats created 10 concurrent listeners all billing on every write. Additionally, the 6 bulk collection listeners in `flLoadAll()` (digitalGigs, digitalJobs, digitalProposals, digitalContracts, digitalReviews, digitalMessages) had no unsubscribe handles and no protection against being registered twice.
+
+**PL-02 HIGH — b2b-chat.html 20-second polling**
+`setInterval` polled `renderThreads()` and `renderMessages()` every 20 seconds. Since `B.getThreads()` and `B.getMessages()` operate on `sokoni-b2b.js`-managed state, replacing this with Firestore `onSnapshot` would require a significant refactor. The interval was reduced from 20s to 120s (6x reduction) and supplemented with a `visibilitychange` handler so the UI refreshes immediately when a user returns to the tab.
+
+### Files Changed
+
+**`digital.html`**
+- Added `var _chatUnsub = null;` and `var _flDataUnsubs = [];` as module-level unsubscribe handles (line ~687).
+- `flLoadAll()`: Added teardown guard `_flDataUnsubs.forEach(u=>u&&u()); _flDataUnsubs=[];` before registering listeners. All 6 `onSnapshot()` calls now wrap with `_flDataUnsubs.push(...)` and include an `onError` callback logging `console.warn`.
+- `_openChat()`: Added `if(_chatUnsub){_chatUnsub();_chatUnsub=null;}` before creating the new listener. Return value stored in `_chatUnsub`. `onError` callback resets handle to `null` and logs `console.warn`.
+
+**`b2b-chat.html`**
+- `init()`: Changed `setInterval` delay from `20000` to `120000`.
+- Added `document.addEventListener('visibilitychange', ...)` — re-renders threads and messages when the tab regains focus.
+- Added `window.addEventListener('beforeunload', ...)` — calls `clearInterval` on `_pollTimer` to prevent lingering timers.
+
+### Performance Implications
+- B-16 fix eliminates O(n) listener accumulation on `digitalMessages`; steady state is now exactly 1 active chat listener + 6 collection listeners.
+- PL-02 fix reduces DOM churn and any background SokoniB2B sync cycles by 6x.
+
+### Security Implications
+- No security model changes. Firestore Security Rules unchanged.
+
+### Breaking Changes
+- None. All existing function names and UI behaviours are preserved.
+
+---
+
+## [2026-07-12] — Firestore Security Rules Hardening (B-17 HIGH)
+
+### Summary
+Fixed four HIGH-severity security vulnerabilities in `firestore.rules` identified in audit B-17:
+1. Duplicate `match /digitalProducts/{id}` and `match /digitalPurchases/{id}` blocks that allowed Firestore's OR-merge to bypass CF-write-only intent — clients could create/update/delete records directly.
+2. Duplicate `match /reviews/{id}` blocks that allowed Firestore's OR-merge to bypass the moderation `status=='approved'` gate — all reviews were always publicly readable.
+3. `sportsTournamentRegs` had `allow read: if true` — phone numbers and captain PII were publicly enumerable without authentication (GDPR/DPA risk).
+4. `fitness_requests` had `allow read: if true` — contact/phone data was publicly enumerable without authentication (GDPR/DPA risk).
+
+### Files Changed
+
+**`firestore.rules`**
+- `match /digitalProducts/{productId}` (lines ~734-745): Removed duplicate block that permitted `allow create/update/delete` from clients. Single authoritative CF-only block retained in Digital Products Hub section.
+- `match /digitalPurchases/{purchaseId}` (lines ~747-761): Removed duplicate block that permitted `allow create` of `pending/processing` records from clients (purchase fabrication vector). Single authoritative CF-only block retained. Seller read access (`resource.data.sellerUid == request.auth.uid`) merged into canonical block.
+- `match /reviews/{reviewId}` (line ~336): Updated read rule from `if true` to `if resource.data.status == "approved" || (request.auth != null && (uid == authorUid || isAdmin()))`. Write rules unchanged.
+- `match /reviews/{reviewId}` (line ~3119): Removed duplicate block. Comment left in place to explain removal.
+- `match /sportsTournamentRegs/{regId}` (line ~584): Changed `allow read: if true` → `allow read: if request.auth != null`.
+- `match /fitness_requests/{requestId}` (line ~704): Changed `allow read: if true` → `allow read: if request.auth != null`.
+
+### Security Implications
+- **CRITICAL closed**: Clients could previously create `digitalPurchases` records with `status: 'pending'` and potentially claim digital product entitlements without completing payment. This vector is now closed.
+- **HIGH closed**: Clients could create/update/delete `digitalProducts` records directly, bypassing seller verification and content moderation. Now CF-only.
+- **HIGH closed**: Unapproved/rejected reviews were readable by any client, defeating content moderation entirely.
+- **MEDIUM closed**: Phone numbers and PII in tournament registrations and fitness requests were publicly enumerable without any auth.
+
+### Breaking Changes
+- Applications that relied on unauthenticated reads of `sportsTournamentRegs` or `fitness_requests` will now require the user to be signed in.
+- Client-side code that directly creates `digitalProducts` or `digitalPurchases` documents will fail; these operations must go through Cloud Functions.
+- Unapproved reviews are no longer returned in client-side Firestore queries; only `status == 'approved'` documents are visible to the public.
+
+---
+
+## [2026-07-12] — App Check Root-Cause Fix & Auth Verification (v40)
+
+### Summary
+Browser-verified the authentication stack end-to-end against the live `sokoni-aeb26` project using Playwright. Established by controlled A/B experiment that **App Check — not any auth provider — was hard-blocking every Firebase Auth method**. Fixed the root cause and removed the last temporary debug code.
+
+### Root Cause (verified, not inferred)
+`self.FIREBASE_APPCHECK_DEBUG_TOKEN = true` makes the App Check SDK mint a **new random debug token per browser profile**. That token is not registered, so `exchangeDebugToken` returns `403 App attestation failed`. A failed App Check token fetch causes the Auth SDK to abort requests **before they are sent** — no `identitytoolkit` call is made at all.
+
+A/B evidence (identical calls, App Check the only variable):
+| | App Check ON (unregistered token) | App Check OFF (control) |
+|---|---|---|
+| `signInWithEmailAndPassword` | `auth/network-request-failed` | `400 auth/invalid-credential` (correct) |
+| `sendPasswordResetEmail` | `auth/network-request-failed` | `200 sendOobCode` — accepted |
+| identitytoolkit requests sent | **NONE** | 2 |
+
+Implication: registering one token fixes only the single browser profile that minted it. Every other profile, incognito window, teammate, and CI run still 403s.
+
+### Files Changed
+
+**`firebase.js`** *(modular SDK path)*
+- App Check debug token is now **pinned** from `localStorage['SOKONI_APPCHECK_DEBUG_TOKEN']` on localhost, so the *registered* token is used by every browser profile. `true` remains only as a first-run bootstrap that prints a token to register, with a console warning.
+- Localhost detection widened to `localhost`, `127.0.0.1`, `[::1]`.
+
+**`sokoni-appcheck.js`** *(compat SDK path — 42 pages)*
+- Same pinning logic, kept in lock-step with `firebase.js`.
+
+**`security.js`**
+- Removed the temporary `⚠️ AUTH DEBUG` block that disabled `unhandledrejection` suppression. Transient network/Firebase rejections are suppressed again; all other rejections still propagate.
+
+### Post-Fix Verification (live project, real browser, registered token pinned)
+| Check | Result |
+|---|---|
+| `exchangeDebugToken` | **200** — App Check JWT issued (`provider: debug`, TTL 3600s) |
+| App Check token generation + forced refresh | Token issued; forced refresh returns a new token |
+| HTTP 403s (App Check / Auth / Firestore) | **ZERO** |
+| Email/Password E2E (create → sign-in → delete) | PASS — test account created, signed in, deleted |
+| Password Reset / Email Verification | PASS — `sendOobCode` 200 |
+| Google OAuth | Popup reaches `/__/auth/handler`; domain authorized, provider enabled |
+| Phone OTP | Invisible reCAPTCHA renders; `recaptchaParams` 200 |
+
+Residual manual steps (not defects): completing a Google login needs real credentials; receiving an OTP needs a handset.
+
+### Verified Behaviour
+- **Production** (`mysokoni.co.ke`): sets **no** debug token and attests via `exchangeRecaptchaV3Token`. `exchangeDebugToken` is never called. Confirmed by simulating the production origin in-browser.
+- **Localhost**: sends the pinned token verbatim to `exchangeDebugToken` (confirmed on the wire).
+- **Google OAuth**: popup opens to `sokoni-aeb26.firebaseapp.com/__/auth/handler` — localhost is an authorized domain and the provider is enabled.
+- **Phone OTP**: invisible reCAPTCHA renders; `recaptchaParams` returns 200.
+- **CSP / COOP / service worker**: all cleared as blockers. `Cross-Origin-Opener-Policy: same-origin-allow-popups` is correct for `signInWithPopup`; a raw `fetch` to identitytoolkit reached the API (HTTP 400).
+
+### Security
+No secrets added to the repo. The debug token is per-developer, stored in `localStorage`, and can never activate on a production hostname.
+
+### Breaking Changes
+None.
+
+### Developer Migration (localhost only)
+Pin the token registered in Firebase Console → App Check → Manage debug tokens, once per browser:
+```js
+localStorage.setItem('SOKONI_APPCHECK_DEBUG_TOKEN', '<uuid-from-console>')
+```
+
+---
+
+## [2026-07-12] — Production Readiness Sprint (v39)
+
+### Summary
+Final hardening sprint before Version 1.0.0 freeze. Resolved security, authentication, App Check, and compliance gaps across the platform. Zero breaking changes; all fixes are backward-compatible.
+
+### Files Changed
+
+**`auth.js`**
+- Removed 24 `console.log('[PhoneAuth]')` debug statements from `sendPhoneOTP()`
+- Replaced raw Firebase error code exposure (`[DEBUG] auth/...`) with user-friendly `_phoneErrMap` and `_otpErrMap`
+- Added `sendEmailVerification(cred.user)` call after `createUserWithEmailAndPassword` — email verification was never triggered previously
+- Fixed idle timer admin detection: now checks both `u.roles[]` array (canonical) and `u.role` string (legacy), preventing admin users from silently falling through to the 60-minute user timeout instead of the 20-minute admin timeout
+
+**`service-worker.js`**
+- Bumped `CACHE_VERSION` to `sokoni-20260712-prod-readiness-v39` to invalidate stale assets from legal gate and App Check sprints
+
+**`firebase.json`**
+- Added `"cf-*.html"` to `hosting.ignore` — 6 internal staging HTML files were publicly accessible without auth guards
+
+**App Check — 29 additional pages**
+Added `firebase-app-check-compat.js` + `sokoni-appcheck.js` to pages that loaded compat Firebase SDK but had no App Check at all: `commerce-os.html`, `enterprise-certification.html`, `event-hub.html`, `event-manager.html`, `executive-dashboard.html`, `finos-admin.html`, `franchise.html`, `general-ledger.html`, `hr-payroll.html`, `kass-developer.html`, `kass-executive.html`, `kass-finance.html`, `kass-manager.html`, `kass-seller.html`, `kass-support.html`, `legal-centre.html`, `partner-portal.html`, `plans.html`, `platform-hub.html`, `pos-printer-setup.html`, `pos-setup.html`, `procurement.html`, `release-readiness.html`, `returns.html`, `security-center.html`, `seller-wallet.html`, `tenant-portal.html`, `uat-center.html`, `wholesale-portal.html`
+
+**`firebase.initializeApp()` guard — 25 pages**
+Wrapped bare `firebase.initializeApp(window.SOKONI_CONFIG)` calls with `if(!firebase.apps.length)` guard to prevent "Firebase App named [DEFAULT] already exists" crashes on pages where multiple scripts attempt initialization.
+
+**`developer-portal.html`**
+- Added missing App Check compat SDK + `sokoni-appcheck.js`
+- Fixed duplicate-app crash: replaced bare `firebase.initializeApp()` with find-or-create pattern: `firebase.apps.find(a=>a.name==='developer-portal') || firebase.initializeApp(window.SOKONI_CONFIG, 'developer-portal')`
+
+**Table overflow-x — 6 legal/public pages**
+Added `table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}` to: `privacy.html`, `cookie-policy.html`, `seller-terms.html`, `subscription-billing.html`, `superadmin.html`, `ai-subscriptions.html`
+
+**`partner-portal.html`**
+- Replaced 2 `href="#"` dead links (GitHub SDK, Postman Collection) with `aria-disabled` `<span>` elements to eliminate navigation-to-self issues
+
+### Security Notes
+- `sendEmailVerification` fix closes a gap where users could operate fully without a verified email
+- Admin idle timeout fix reduces the attack surface of abandoned admin sessions on shared devices
+- `cf-*.html` hiding removes internal pages from public hosting
+- All 29 new App Check pages now require valid attestation tokens before Cloud Function calls succeed
+
+### No Breaking Changes
+- All auth flows unchanged for end users
+- `sokoniUser.role` (legacy) continues to be read alongside `sokoniUser.roles[]` (canonical) — both work
+- Email verification is fire-and-forget (`.catch(()=>{})`) — signup never fails due to email delivery
+
+---
+
+## [2026-07-12] — SokoniLegalGate Universal Integration (v38)
+
+### Summary
+Integrated `SokoniLegalGate` into all 11 remaining onboarding flows. Every role that registers on SOKONI now passes through the shared Legal Compliance Engine before activation. Merchant was already complete; this sprint adds Buyer, Provider, Rider (Driver/Courier), Property, Hotel, Restaurant, Healthcare, Employer, Freelancer, and all `_gen` roles (Pharmacy, Events, Distributor, Wholesaler, Manufacturer, NGO, School, Finance).
+
+### Files Changed
+
+**`onboarding.html`** — Primary wizard covering 10+ role flows
+- Added `<script src="sokoni-legal-gate.js" defer>` to `<head>`
+- Added `{t:'Legal Agreements', f:'rLegalGate'}` step before the `fin:1` step in every FLOW: buyer, merchant, provider, rider, property, hotel, restaurant, healthcare, employer, freelancer, and `_gen`
+- Added module-level `let _legalOk = false` reset on `W.start()`
+- Added gate in `W.next()`: blocks progression past legal step until `_legalOk === true`
+- Added `rLegalGate(r, d)` renderer function: mounts `SokoniLegalGate.mount()` via `requestAnimationFrame`; gracefully degrades (sets `_legalOk=true`) if SDK unavailable
+
+**`onboarding-driver.html`** — Standalone driver wizard
+- Added `<script src="sokoni-legal-gate.js" defer>`
+- Replaced freestanding `#drvAgree` checkbox with `<div id="legal-gate-drv">`
+- Mounts `SokoniLegalGate` with `role:'driver'` when navigating to step 3
+- `step4Submit()` now validates `_legalOk` instead of checkbox state
+
+**`onboarding-professional.html`** — Standalone professional wizard
+- Added `<script src="sokoni-legal-gate.js" defer>`
+- Replaced freestanding `#proAgree` checkbox with `<div id="legal-gate-pro">`
+- Mounts `SokoniLegalGate` with `role:'provider'` when navigating to step 3
+- `step4Submit()` now validates `_legalOk` instead of checkbox state
+
+**`provider-onboarding.html`** — Enterprise 14-step provider wizard
+- Added `<script src="sokoni-legal-gate.js" defer>` to `<head>`
+- Inserted `{t:'Legal Agreements', f:'sLegal'}` at step 13 (before Publish)
+- Added module-level `_legalOk` reset on `W.init()`
+- Added gate in `W.next()`: blocks progression past `sLegal` step until accepted
+- Added `sLegal(d)` renderer function with `SokoniLegalGate.mount()` call
+
+**`service-worker.js`** — CACHE_VERSION bumped to `sokoni-20260712-legal-gate-v38`
+
+### Architecture Notes
+- `_legalOk` is a module-level flag (not inside the W IIFE) so the global `rLegalGate` / `sLegal` renderer functions can set it via the `onComplete` callback
+- Graceful degradation pattern: if `SokoniLegalGate` SDK fails to load, `_legalOk` is set to `true` (non-blocking) — onboarding is never blocked by a network error
+- Server-side `assertLegalCompliance()` remains dark-launched (reads `legalConfig/enforcement` Firestore doc) — enforcement activates per-role without code changes
+- `driver` and `courier` flows in `onboarding.html` inherit from `rider` via `FLOWS.driver=FLOWS.rider` — both now include the legal gate step
+
+### No Breaking Changes
+- All existing onboarding draft data continues to work; the legal gate is a new step inserted before `fin:1`, not a replacement of any existing step
+
+---
+
+## [2026-07-12] — App Check Complete Fix — HTTP 403 Resolved (v37)
+
+### Summary
+Full App Check client-side audit applied. Eliminated all root causes of `HTTP 403 PERMISSION_DENIED` on Cloud Functions with `enforceAppCheck: true`. Four categories of defects fixed across 51 files.
+
+### Files Changed
+
+**P0 — `type="module"` added to firebase.js script tag (44 HTML pages)**
+`firebase.js` is an ES module; loading it without `type="module"` caused a silent `SyntaxError`, meaning `initializeApp()` and `initializeAppCheck()` never ran — zero App Check token on every Cloud Function call.
+Pages fixed: `admin-messages.html`, `admin-feedback.html`, `availability-manager.html`, `business-kpi.html`, `chat.html`, `commission-engine.html`, `commissioning.html`, `data-deletion.html`, `dispatch.html`, `etims-admin.html`, `etims-seller.html`, `feedback.html`, `financial-os.html`, `finos.html`, `hub-dashboard.html`, `inv-dashboard.html`, `inv-product.html`, `inv-products.html`, `inventory.html`, `launch-readiness.html`, `manager-auth.html`, `merchant-pipeline.html`, `messages-admin.html`, `messages.html`, `ops-dashboard.html`, `pos-cash-manager.html`, `pos-checkout.html`, `pos-customers.html`, `pos-inventory-intelligence.html`, `pos-inventory.html`, `pos-live-floor.html`, `pos-reports.html`, `pos-suppliers.html`, `pos-till-manager.html`, `print-station.html`, `reliability-center.html`, `revenue-dashboard.html`, `security-compliance.html`, `security-zero-trust-dashboard.html`, `seller-delivery.html`, `seller-earnings.html`, `settlement-dashboard.html`, `subscription-billing.html`, `trust-safety.html`
+
+**P0 — `automation-center.html` — script load order fixed**
+`sokoni-appcheck.js` was loading before `firebase-app-check-compat.js`; the `typeof firebase.appCheck !== 'function'` guard fired immediately and returned without calling `activate()`. Moved `sokoni-appcheck.js` to after all Firebase compat SDKs.
+
+**P1 — `firebase-app-check-compat.js` added to 5 pages**
+`pos-daily.html`, `pos-observability.html`, `async-jobs.html`, `rider-dashboard.html`, `enterprise-ops.html` all loaded `sokoni-appcheck.js` without ever loading the App Check compat SDK. `firebase.appCheck` was never a function; `activate()` was never called.
+
+**P1 — `enterprise-ops.html` — `firebase.initializeApp()` config fixed**
+Was passing `window.SOKONI_CONFIG?.firebase || window.SOKONI_CONFIG` — neither path contains a valid Firebase config (SOKONI_CONFIG holds IntaSend/Algolia keys). Firebase initialization failed silently. Replaced with the correct hardcoded config matching `sokoni-aeb26`.
+
+- `service-worker.js` — **UPDATED**: `CACHE_VERSION` bumped to `sokoni-20260712-appcheck-fix-v37`
+
+### Security Notes
+- No new secrets exposed. The Firebase web config (`apiKey`, `appId`, etc.) is a public client identifier, not a secret.
+- All Cloud Functions retain `enforceAppCheck: true` — enforcement is unchanged; these fixes ensure valid tokens are now actually sent.
+
+---
+
+## [2026-07-12] — Premium Splash Redesign & Double-Splash Fix (v35)
+
+### Summary
+Upgraded both splash systems to a cinematic premium experience and fixed the double-splash UX bug where `#sk-splash` (shared-header.js) was covering `#splashScreen` (splash.js), causing users to see two consecutive splashes. Now `splash.js` is the primary branded splash and `shared-header.js` defers to it. The fallback `#sk-splash` (for pages without `splash.js`) was also upgraded to match the premium standard.
+
+### Files Changed
+- `splash.js` — **REDESIGNED**: multi-layer radial background (triple gradient), logo shimmer sweep (`::before` on `.splash-logo-frame`), spring-in logo with blur-to-sharp keyframe, dual counter-rotating loader rings, gradient text tagline, floating emoji badge with glassy backdrop-filter, constellation particle network (lines drawn between nearby particles), per-page accent glow on progress bar
+- `shared-header.js` — **UPDATED**: `_splash()` now returns early if `#splashScreen` exists (eliminates double-splash); fallback `#sk-splash` upgraded with shimmer frame, glow-breathing logo, gradient tagline, premium background; nav logo filter now includes `rgba(113,255,0,0.20)` green glow for premium brand presence
+- `service-worker.js` — **UPDATED**: `CACHE_VERSION` bumped to `sokoni-20260712-premium-splash-v35`
+
+### UX Notes
+- Double-splash eliminated: pages with both files show only the `splash.js` themed splash
+- Pages without `splash.js` (excluded nav pages like `pos.html`, `login.html`) get the upgraded `#sk-splash`
+- No functional changes to page content or navigation
+
+---
+
+## [2026-07-12] — Firebase Compat Shim Sweep (v34)
+
+### Summary
+Completed the full Firebase compat shim rollout. All 42 pages that used `firebase.auth()` / `firebase.firestore()` / `firebase.functions()` without loading any Firebase SDK now correctly bootstrap the compat shim via `<script type="module" src="firebase.js">`. 14 additional pages patched this sprint; 2 patched in the prior sprint (provider-onboarding.html, provider-dashboard.html); 25 were already correctly wired in earlier sessions; 1 (cf-complete-audit.html) was a false positive (firebase only appears in static JSON audit data).
+
+### Files Changed
+- `firebase.js` — **UPDATED** (prior sprint): added `window.firebase` compat shim backed by modular SDK v10.12.2; `_CS`/`_DS`/`_SR` shim classes; dual-access `_ff` pattern for `firebase.firestore()` and `firebase.firestore.collection()`
+- **14 HTML pages** — `<script type="module" src="firebase.js"></script>` added to `<head>` after `security.js`: `pos.html`, `merchant-success.html`, `venue-booking.html`, `loyalty-merchant.html`, `driver.html`, `admin-os.html`, `delivery-tracking.html`, `qr-center.html`, `super-admin.html`, `job-post.html`, `minishop-admin.html`, `venue-manager.html`, `search.html`, `pos-display.html`
+- `service-worker.js` — **UPDATED**: `CACHE_VERSION` bumped to `sokoni-20260712-firebase-shim-v34`
+
+### Security Notes
+- No security impact. The compat shim only routes calls through the modular SDK; no credentials or auth state changes.
+
+---
+
+## [2026-07-12] — SmartPOS Printer Bug-Fix Sprint (v33) — 16 Defects Resolved
+
+### Summary
+Applied all 16 bugs identified in the Enterprise Printer Acceptance Sprint code audit. Three critical ESC/POS protocol defects that caused visible receipt corruption on first hardware use are now fixed: (1) every separator line printed as garbage UTF-8 characters instead of dashes, (2) printer state was wiped mid-receipt by a misplaced `ESC @` init command, (3) BLE printer exhausted its reconnect budget after ~4 power cycles due to accumulating GATT event listeners. Also fixed one XSS vulnerability in the PDF export feature, one `drainQueue()` lock that could permanently stall offline printing, and eleven medium/low severity issues.
+
+### Files Changed
+- `sokoni-pos-print-service.js` — **UPDATED** (12 fixes):
+  - **[BUG #2 HIGH]** `_div()`/`_eq()`: replaced 3-byte UTF-8 chars `─`/`═` with ASCII `-`/`=` for PC437 compatibility
+  - **[BUG #3 HIGH]** `totals()`: removed `CMD.INIT` (was resetting all printer state mid-receipt)
+  - **[BUG #8 MEDIUM]** `totals()`: changed `CMD.DBLHEIGHT_OFF || CMD.FONT_A` (undefined ref) to `CMD.DBLBOTH_OFF`
+  - **[BUG #9 MEDIUM]** `header()`: changed `_center(branchName)` → `_ln(branchName)` inside `ALIGN_CENTER` block (eliminated software+hardware double-centering)
+  - **[BUG #4 HIGH]** `printKitchenTicket()`: changed `CMD.FONT_A` → `CMD.DBLBOTH_OFF` to properly exit double-height mode; removed `|| []` from `DBLHEIGHT_ON`
+  - **[BUG #5 HIGH]** `drainQueue()`: wrapped job loop in `try/finally` so `_draining` is always reset even if a listener throws
+  - **[BUG #6 HIGH]** `downloadPDF()`: added `esc()` HTML-escaping helper; all user-sourced history fields now escaped before `document.write()` — XSS fix
+  - **[BUG #7 HIGH]** `_print()` fallback: added `if (!eng?.printNow) throw` guard; optional-chaining `?.()` was masking absent method as success
+  - **[BUG #10 MEDIUM]** `_wireReconnect()`: unified to single PrinterManager source; eliminates duplicate `drainQueue()` calls when P58E fires both `SokoniPrinter` and `P58EPrinter` connected events
+  - **[BUG #11 MEDIUM]** `PrintHealth.start()`: added `.catch(()=>{})` on `_check()` calls to prevent unhandled rejection stopping the health monitor
+  - **[BUG #12 MEDIUM]** `openDrawer()`: `drawer:opened` now only emits when the drawer actually opened (`opened === true`)
+  - **[BUG #13 MEDIUM]** `printAfterSale()`: additional copies now use `receiptId + '_copy_N'` suffix to avoid offline queue deduplication dropping them
+- `sokoni-bluetooth-printer.js` — **UPDATED** (3 fixes):
+  - **[BUG #1 CRITICAL]** `_connectDevice()`: tracks `_gattDisconnectHandler`, removes previous listener before adding new one — prevents N+1 handler accumulation that exhausted reconnect budget after ~4 disconnects
+  - **[BUG #14 MEDIUM]** `forget()`: made `async`; now `await disconnect()` before emitting `forgotten`
+  - **[BUG #15 MEDIUM]** `SokoniPrinter.connect()` error catch: now logs non-"already managed" errors via `console.warn` instead of silently swallowing
+- `sokoni-printer-manager.js` — **UPDATED** (1 fix):
+  - **[BUG #16 LOW]** `_onError()`: now resets `_printT0 = null` to prevent inflated print-time metrics after errors
+- `service-worker.js` — **UPDATED**: `CACHE_VERSION` bumped to `sokoni-20260712-printer-bugfix-v33`
+
+### Security Notes
+- **XSS patched** (Bug #6): `downloadPDF()` was writing raw Firestore history strings into `document.write()` innerHTML without escaping. A malicious receipt ID containing `<script>` would execute in the print popup window. All fields now HTML-escaped via inline `esc()` helper.
+
+### Performance Notes
+- `drainQueue()` finally-block ensures the drain lock never gets permanently stuck, which would require a page reload to recover offline print jobs.
+
+### Breaking Changes
+- None. All fixes are backward-compatible.
+
+---
+
+## [2026-07-12] — Firebase Modular SDK — Legacy Compat Shim + Full Migration
+
+### Summary
+Fixed `ReferenceError: firebase is not defined` on 42 pages that called the legacy `firebase.auth()` / `firebase.firestore()` / `firebase.functions()` compat namespace without loading CDN compat scripts. Root cause: `firebase.js` uses the modular SDK which does not create `window.firebase`; pages relying on the compat global were silently broken. Solution: a single-file change to `firebase.js` — a `window.firebase` compatibility shim backed by the modular SDK, guarded by `if (!window.firebase)` so pages that explicitly load compat CDN scripts remain unaffected. Also extended the modular imports to cover the full Firestore, Storage, Auth, and App surface required by the shim.
+
+### Files Changed
+- `firebase.js` — **UPDATED**:
+  - App import: added `getApps`
+  - Auth imports: added `signInWithRedirect`, `sendPasswordResetEmail`
+  - Firestore import: expanded from `getFirestore` only to full set: `collection doc addDoc setDoc getDoc getDocs updateDoc deleteDoc query where orderBy limit limitToLast startAfter startAt endAt endBefore onSnapshot writeBatch runTransaction serverTimestamp increment arrayUnion arrayRemove deleteField Timestamp FieldPath documentId`
+  - Storage import: expanded from `getStorage` only to include `ref (as storageRef) uploadBytes uploadString getDownloadURL deleteObject`
+  - Added `window.firebase` compat shim (~130 lines): `_CS` (collection shim with full query chain), `_DS` (document shim with subcollection support), `_SR` (storage ref shim with child/put/putString/getDownloadURL/delete), `_fso` (db ops singleton with collection/doc/batch/runTransaction), `_af` (auth function with Google/Facebook/RecaptchaVerifier statics), `_ff` (Firestore function callable + direct-access + FieldValue/Timestamp/FieldPath statics), `window.firebase` with `apps getter / app / auth / firestore / functions / storage / initializeApp`
+
+### Security Notes
+- Shim ignores named-app arguments (SOKONI has one Firebase project only)
+- All writes go through the same server-side Cloud Functions — no client-side trust introduced
+- FieldValue.serverTimestamp() backed by modular `serverTimestamp()` — untamperable by client
+
+### Affected Pages (42 total, now fixed without touching individual files)
+`pos.html` `pos-checkout.html` `provider-dashboard.html` `index.html` `pos-cash-manager.html` `pos-till-manager.html` `pos-live-floor.html` `merchant-success.html` `venue-booking.html` `loyalty-merchant.html` `driver.html` `seller.html` `admin-os.html` `profile.html` `data-deletion.html` `cf-complete-audit.html` `pos-inventory-intelligence.html` `delivery-tracking.html` `qr-center.html` `super-admin.html` `job-post.html` `minishop-admin.html` `checkout.html` `venue-manager.html` `inventory.html` `search.html` `security-compliance.html` `launch-readiness.html` `hub-dashboard.html` `growth-dashboard.html` `etims-seller.html` `etims-admin.html` `inv-products.html` `security-zero-trust-dashboard.html` `payment-receipt.html` `pos-display.html` `manager-auth.html` `finos.html` `dispatch.html` `seller-delivery.html` `inv-product.html` `inv-dashboard.html`
+
+---
+
+## [2026-07-12] — Provider Onboarding v1.0 + Profile Switcher v1.0
+
+### Summary
+Built `provider-onboarding.html` — a 15-step dedicated onboarding flow for service providers that is entirely separate from SmartPOS/merchant/UEOE. Service providers never see Merchant ID, POS setup, inventory, printers, branches, or retail configuration. Also built `sokoni-profile-switcher.js` — a floating role-switcher widget for all dashboard pages that reads active roles via `onboardingDispatch/onbGetProfiles` and navigates to the correct dashboard after calling `onbSwitchRole`. Fixed three bugs discovered in both new files (inline `<script>` injection, chip selections not captured, `W._draft` not exposed). Migrated all auth calls in the new files to use the modular SDK via `window.firebaseSDK` and `window.sokoniCallable`.
+
+### Files Changed
+- `provider-onboarding.html` — **NEW** 15-step provider onboarding: Sign Up → Verify → Provider Type → Service Profile → Coverage → Availability → Pricing → Choose Plan → Verification → Payments → Portfolio → Bookings → Notifications → Preview → Publish; `providerDispatch` CF + `SokoniProvider` SDK; premium dark layout; all Firebase calls via `window.firebaseSDK` / `window.sokoniCallable`
+- `sokoni-profile-switcher.js` — **NEW** floating role-switcher: 20 role types + icons; calls `onbSwitchRole` before navigate; SKIP_PAGES guard; Firebase via `window.firebaseSDK.onAuthStateChanged` + `window.sokoniCallable`
+- `firebase.js` — **UPDATED**: added `window.firebaseSDK` bridge + `window.sokoniCallable(name)` + `getFunctions` import
+- `onboarding.html` — **UPDATED**: 5 legacy `firebase.auth().*` calls migrated to `window.firebaseSDK.*`
+- `sokoni-onboarding.js` — **UPDATED**: `firebase.functions().httpsCallable` → `window.sokoniCallable`
+- `sokoni-provider.js` — **UPDATED**: `firebase.functions().httpsCallable` → `window.sokoniCallable`
+
+---
+
+## [2026-07-12] — SmartPOS Enterprise Printer Acceptance Sprint (PosPrintService v1.0)
+
+### Summary
+Integrated the printer subsystem into the actual POS checkout workflow. Every sale, refund, exchange, quote, invoice, kitchen ticket, delivery note, stock transfer, purchase order, cash in/out, shift report, X/Z/EOD report now routes through `window.PosPrintService`. The service adds offline queue with automatic drain on reconnect, searchable print history, Firestore enterprise audit trail, per-register multi-till printer config persistence, auto-print settings, cash drawer integration with configurable payment method triggers, performance metrics, and a 30-second health monitor that drives the new `🖨️` status chip in the POS header. The production receipt includes all 21 required fields formatted for 58mm paper with QR verification code and barcode.
+
+### Files Changed
+- `sokoni-pos-print-service.js` — **NEW** v1.0 (~900 lines): `RawReceiptBuilder` (ESC/POS byte builder, 58mm/80mm, full receipt with logo/store/address/PIN/eTIMS/QR/barcode/loyalty/footer), `PrintQueue` (localStorage, dedup by receiptId, max 100 entries, auto-drain on reconnect), `PrintHistory` (last 200 entries, search, CSV export, PDF download via browser print), `PrintAudit` (Firestore `pos_print_audit` collection, non-blocking), `PrintMetrics` (50-entry timing ring, avg calculations), `PrintHealth` (30s heartbeat, fires header widget), `TillPrinterConfig` (per-registerId persistence), `AutoPrintSettings` (localStorage), 17 document type methods: `printAfterSale/printRefund/printExchange/printQuote/printInvoice/printCreditNote/printKitchenTicket/printDeliveryNote/printPackingSlip/printStockTransfer/printPurchaseOrder/printCashIn/printCashOut/printShiftReport/printXReport/printZReport/printEndOfDay`, `reprint(historyId)`, `exportHistory()`, `downloadPDF()`, `window.PosPrintService = new PosPrintService()`
+- `pos-checkout.html` — **UPDATED**: `sokoni-bluetooth-printer.js` + `sokoni-printer-manager.js` + `sokoni-pos-print-service.js` added to script list; `_printReceipt()` rewritten to call `PosPrintService.printAfterSale()` with full context (cashierName, registerName, registerId, branchId, merchantId, payments, store profile); `_printReceiptLocal()` enriched with `payments` and `grandTotal` fields; legacy `SokoniPrinter` fallback preserved for resilience
+- `pos.html` — **UPDATED**: `🖨️` printer chip added to header (`id="pps-printer-chip"`, static fallback, `PosPrintService.health` updates it dynamically); `sokoni-bluetooth-printer.js` + `sokoni-printer-manager.js` + `sokoni-pos-print-service.js` added to script list
+- `pos-printer-setup.html` — **UPDATED**: 2 new tabs — "Print Log" (`panel-print-history`: history table + PDF button + CSV export + metrics grid) and "Auto-Print" (`panel-autoprint`: auto-print toggles, copies, drawer triggers, multi-till config table); `sokoni-pos-print-service.js` added to script list; `renderPrintHistory()`, `renderAutoSettings()`, `_saveAutoSettings()`, `_testDrawer()`, `renderTillConfig()`, `_downloadReceiptPDF()`, `_exportPrintHistory()` functions; `showPanel` handler wired for `print-history` and `autoprint`
+- `service-worker.js` — `sokoni-pos-print-service.js` added to precache; CACHE_VERSION → `sokoni-20260712-pos-print-service-v31`
+- `CHANGELOG.md` — this entry
+
+### Production Receipt Fields (58mm, 32 chars)
+All 21 required fields implemented:
+```
+SOKONI SmartPOS (double-width)
+[Branch Name]
+[Address]
+[Phone]
+PIN: [KRA PIN]
+════════════════════════════════
+Receipt No:        RCP-XXXXXX
+eTIMS Inv:         INV-XXXXXX
+Date:              12 Jul 2026
+Time:              10:30:45
+Cashier:           [Name]
+Register:          [Till Name]
+Customer:          [Name]
+════════════════════════════════
+ITEMS
+────────────────────────────────
+[Product Name]
+  N x KES P.pp      KES T.tt
+[Product w/ discount]
+  N x KES P.pp -D   KES T.tt
+────────────────────────────────
+Subtotal:          KES S.ss
+Discount:          -KES D.dd
+VAT (16%):         KES V.vv
+════════════════════════════════
+TOTAL:             KES T.tt
+════════════════════════════════
+M-Pesa:            KES A.aa
+  Code:            MPESAXXXXXX
+Cash:              KES C.cc
+  Tendered:        KES T.tt
+  Change:          KES CH.ch
+Loyalty Pts Earned:   +35
+Total Balance:        485 pts
+════════════════════════════════
+[QR CODE — verify URL]
+Scan to verify receipt
+[BARCODE — receipt number]
+════════════════════════════════
+  Thank you for shopping!
+  www.mysokoni.co.ke
+════════════════════════════════
+[Full cut]
+```
+
+### Architecture
+```
+POS Transaction (pos-checkout.html)
+    │
+    ▼  _finalize() completes
+    ├── _printReceipt(receipt)
+    │       │
+    │       ▼
+    │   PosPrintService.printAfterSale(receipt, context)
+    │       ├── RawReceiptBuilder → Uint8Array (ESC/POS bytes)
+    │       ├── PrinterManager.connected ?
+    │       │   ├── YES → SokoniPrinter.printRaw(bytes)
+    │       │   │         → PrintHistory.record()
+    │       │   │         → PrintAudit.log()  [Firestore, async]
+    │       │   │         → PrintMetrics.record()
+    │       │   │         → PrintHealth.markPrinted()
+    │       │   └── NO  → PrintQueue.enqueue(job)
+    │       │             → "Receipt queued" in header chip
+    │       │             → auto-drain when printer reconnects
+    │       └── hasCash → PosPrintService.openDrawer()
+    │                     → DrawerLog.record()
+    │                     → CashDrawer.openAfterSale()
+    │
+    └── Header Chip (every 30s)
+            PosPrintService.health._check()
+            → _updateHeaderWidget({ connected, queueLength })
+            → #pps-printer-chip text = "🟢 🖨️" or "⚪ 🖨️ (N)"
+```
+
+### Document Types Supported
+| # | Method | Trigger |
+|---|---|---|
+| 1 | `printAfterSale` | Every completed POS checkout |
+| 2 | `printRefund` | Refund processing |
+| 3 | `printExchange` | Exchange flow |
+| 4 | `printQuote` | Quote generation |
+| 5 | `printInvoice` | Tax invoice |
+| 6 | `printCreditNote` | Credit note |
+| 7 | `printKitchenTicket` | Food/kitchen orders |
+| 8 | `printDeliveryNote` | Delivery dispatch |
+| 9 | `printPackingSlip` | Order packing |
+| 10 | `printStockTransfer` | Inter-branch transfer |
+| 11 | `printPurchaseOrder` | Procurement |
+| 12 | `printCashIn` | Opening float / cash deposit |
+| 13 | `printCashOut` | Petty cash withdrawal |
+| 14 | `printShiftReport` | Shift close |
+| 15 | `printXReport` | Mid-day X report |
+| 16 | `printZReport` | End of day Z report |
+| 17 | `printEndOfDay` | EOD summary |
+
+### Security Implications
+- `pos_print_audit` Firestore writes are non-blocking and never block checkout
+- `localStorage` keys namespaced (`pps_*`) — no cross-origin risk
+- No secrets or payment data written to localStorage (only receipt IDs and metadata)
+- Raw ESC/POS bytes go directly to the printer transport — never to any external service
+
+### Performance Targets
+| Metric | Target | Implementation |
+|---|---|---|
+| Receipt generation | < 100ms | Pure in-memory byte builder, no async |
+| Print start latency | < 200ms | Direct `printRaw()` after generation |
+| Total (connect→done) | < 2s | Measured and stored in `PrintMetrics` |
+| Discovery | < 1s | Platform-native (Chrome BT/Serial picker) |
+| Health check | 30s interval | Non-blocking `setInterval` |
+
+### Hardware Validation Status
+| Test | Code Implemented | Physical Verified |
+|---|---|---|
+| Connect P58E via Bluetooth | ✓ | Must run on Windows Chrome with physical P58E |
+| Connect via BT COM Port (SPP) | ✓ | Must run on Windows Chrome |
+| ESC/POS initialize | ✓ | Must verify on physical printer |
+| Print SOKONI logo (text header) | ✓ | Must verify on physical printer |
+| Print QR code | ✓ (GS(k ESC/POS) | Must verify on physical printer |
+| Print barcode | ✓ (Code128) | Must verify on physical printer |
+| Feed paper | ✓ (ESC d N) | Must verify on physical printer |
+| Full cut | ✓ (GS V A 5) | Must verify on physical printer |
+| Cash drawer pulse | ✓ (ESC p) | Must verify with physical drawer |
+| Long receipt (many items) | ✓ | Must verify on physical printer |
+| Consecutive receipts | ✓ (queue pattern) | Must verify on physical printer |
+| Auto-reconnect after power cycle | ✓ | Must verify: power off P58E → power on → queue drains |
+| Disconnect / reconnect detection | ✓ (health monitor) | Must verify on physical device |
+
+### Deployment Steps
+1. `firebase deploy --only hosting` — completed (SW v31)
+2. On Windows Chrome: hard-refresh (Ctrl+Shift+R) to activate v31
+3. Open `pos-printer-setup.html` → P58E Setup → Pair P58E (PIN 0000)
+4. Connect via BT COM Port tile (or BLE Bluetooth tile)
+5. Open Auto-Print tab → verify settings
+6. Process a test sale in `pos-checkout.html` → receipt should print automatically
+7. Open Print Log tab → verify the entry appears
+8. Open `pos.html` → verify 🖨️ chip appears in header
+
+### Breaking Changes
+None — `_printReceipt()` in `pos-checkout.html` retains `SokoniPrinter` fallback when `PosPrintService` is absent.
+
+---
+
+## [2026-07-12] — Enterprise Printer Framework v2.0 (PrinterManager)
+
+### Summary
+Rewrote `sokoni-printer-manager.js` from a thin wrapper into the permanent enterprise printing framework for SOKONI SmartPOS. Added 21-brand printer profile detection, four language drivers (ESC/POS full + TSPL/ZPL/CPCL scaffolding), five transports with platform-priority routing, `PrintStats` and `DrawerLog` persistence, an `EnterpriseErrorHandler` mapping every known JS exception to a structured user-facing message, and a comprehensive `PrinterManager.diagnostics()` API. Expanded `pos-printer-setup.html` with a new Printer Info tab (brand profile, capability matrix, print stats, drawer audit log, 21-printer matrix, language driver status), nine new document types, and enhanced Diagnostics output including PrinterManager engine health rows.
+
+### Files Changed
+- `sokoni-printer-manager.js` — **REWRITTEN** v1.0→v2.0: `PRINTER_PROFILES` (21 brands), `_detectProfile()`, language drivers (`EscPosDriver` / `TsplDriver` / `ZplDriver` / `CpclDriver`), 5 transports (`BluetoothTransport` / `WebSerialTransport` / `UsbTransport` / `NetworkTransport` / `BrowserPrintTransport`), `PrintStats` (localStorage, avg/success-rate), `DrawerLog` (last-200 events, audit trail), `EnterpriseErrorHandler` (14-rule map), enhanced `P58EProxy`, full `PrinterManager` class with all required methods: `connect/disconnect/reconnect/autoReconnect`, `print/printNow/printRaw/printImage/printQR/printBarcode`, `feed/cut/openDrawer`, `status/battery/paperStatus/diagnostics`, `queue/history/cancelJob/retryJob/pauseQueue/resumeQueue`, `getStats/getDrawerLog/resetStats`, `detectPrinterBrand/getProfile/getLanguageDriver`, `getSettings/updateSettings`, `detectPlatform/getRecommendedTransport/getConnectionPriority`, `printSokoniReceipt()` (fully branded demo receipt), `window.PrinterManager = new PrinterManager()`
+- `pos-printer-setup.html` — **UPDATED**: new "Printer Info" tab and panel (6 sub-sections: profile, capability chips, stats grid, drawer log table, 21-printer matrix, language driver status); 9 new document types in `DOC_TYPES` (Packing Slip, Tax Invoice, Quotation, Gift Receipt, eTIMS Receipt, Price Tag, Barcode Label, QR Label, Returns Receipt); `renderPrinterInfo()`, `_renderInfoProfile()`, `_renderInfoStats()`, `_renderDrawerLog()`, `_renderPrinterMatrix()`, `_renderDriverStatus()`, `_resetStats()`, `_clearDrawerLog()` functions; enhanced Diagnostics grid with 7 new rows (engine health, active transport, detected profile, print language, session stats); `showPanel` handler wired for `info` tab
+- `service-worker.js` — CACHE_VERSION bumped to `sokoni-20260712-printer-manager-v30`
+
+### Architecture
+```
+window.PrinterManager (sokoni-printer-manager.js)
+│
+├── Transports
+│   ├── bluetooth     → BluetoothTransport   → SokoniPrinter.connect({ type:'bluetooth' })
+│   ├── serial        → WebSerialTransport   → SokoniPrinter.connect({ type:'serial' })
+│   ├── usb           → UsbTransport         → SokoniPrinter.connect({ type:'usb' })
+│   ├── network       → NetworkTransport     → SokoniPrinter.connect({ type:'network' })
+│   └── browser       → BrowserPrintTransport→ SokoniPrinter.connect({ type:'browser' })
+│
+├── Language Drivers
+│   ├── escpos  (full) → SokoniPrinter ESCPOSEncoder
+│   ├── tspl   (ready) → TSPL byte builder (TSC label printers)
+│   ├── zpl    (ready) → ZPL/ZPL II byte builder (Zebra)
+│   └── cpcl   (ready) → CPCL byte builder (Zebra mobile / Honeywell)
+│
+├── Printer Profiles (21 brands)
+│   P58E / XP-58 / RP58 / PT-210 / HOP-E58 / PTP / MTP / Sunmi
+│   TM-T88 / TM-T20 / TSP100 / mPOP / CT-S310 / SRP-350 / XP-80 / RP80
+│   Zebra ZD / Zebra ZT / TSC TE200 / CPCL Mobile / Generic ESC/POS
+│
+├── Subsystems
+│   ├── PrintStats   → localStorage totals, avg ms, success rate, per-transport counts
+│   ├── DrawerLog    → last-200 events, timestamp+reason+user+transport
+│   └── EnterpriseErrorHandler → 14-rule map: friendly title+detail+action+code
+│
+└── p58e proxy       → delegates to window.P58EPrinter
+```
+
+### Connection Priority per Platform
+| Platform | Priority Order |
+|---|---|
+| Windows Chrome/Edge | Bluetooth → BT COM Port → USB → Network → Browser |
+| Android Chrome | Bluetooth → USB OTG → Network → Browser |
+| iOS Safari | Network → Browser (BT/Serial/USB unavailable) |
+| macOS Chrome/Edge | Bluetooth → Serial → Network → Browser |
+| Safari (non-iOS) | Network → Browser |
+
+### Supported Printer Matrix
+| Brand | Model | Width | Language | Cut | Drawer |
+|---|---|---|---|---|---|
+| Goojprt | P58E | 58mm | ESC/POS | ✓ | ✓ |
+| Xprinter | XP-58III | 58mm | ESC/POS | ✓ | ✗ |
+| Rongta | RP58 | 58mm | ESC/POS | ✓ | ✗ |
+| Goojprt | PT-210 | 58mm | ESC/POS | ✗ | ✗ |
+| HOIN | HOP-E58 | 58mm | ESC/POS | ✓ | ✗ |
+| Cashino | PTP-II | 58mm | ESC/POS | ✓ | ✗ |
+| Mypos | MTP-II | 58mm | ESC/POS | ✗ | ✗ |
+| Sunmi | V2s/T2 | 58mm | ESC/POS | ✗ | ✗ |
+| Epson | TM-T88VI | 80mm | ESC/POS | ✓ | ✓ |
+| Epson | TM-T20III | 80mm | ESC/POS | ✓ | ✓ |
+| Star | TSP100IV | 80mm | ESC/POS | ✓ | ✓ |
+| Star | mPOP | 58mm | ESC/POS | ✓ | ✓ |
+| Citizen | CT-S310II | 80mm | ESC/POS | ✓ | ✓ |
+| Bixolon | SRP-350V | 80mm | ESC/POS | ✓ | ✓ |
+| Xprinter | XP-80 | 80mm | ESC/POS | ✓ | ✓ |
+| Rongta | RP80US | 80mm | ESC/POS | ✓ | ✓ |
+| Zebra | ZD421 | Label | ZPL | ✗ | ✗ |
+| Zebra | ZT411 | Label | ZPL | ✗ | ✗ |
+| TSC | TE200 | Label | TSPL | ✗ | ✗ |
+| Zebra/Honeywell | Mobile | Label | CPCL | ✗ | ✗ |
+| Generic | ESC/POS | 80mm | ESC/POS | ✓ | ✗ |
+
+### Platform Limitations (Physical Verification Required)
+| Limitation | Reason | Workaround |
+|---|---|---|
+| Battery level | Not available over BLE ESC/POS (no standard command) | Proprietary SDK per brand |
+| Paper near-end status | Requires bidirectional serial/USB transport | Use USB/Serial transport |
+| RSSI signal strength | Web Bluetooth API does not expose RSSI | Not available in browser |
+| TSPL/ZPL/CPCL physical output | Language drivers are implemented but need physical Zebra/TSC printer to verify | Test on target hardware |
+| iOS Bluetooth | Safari blocks Web Bluetooth entirely | Use Network/AirPrint |
+| Firefox Serial/BT | Firefox has no Web Bluetooth or Web Serial | Use Chrome/Edge |
+| Samsung Internet Serial | Web Serial not supported | Use Chrome on Android |
+
+### Security Implications
+- No secrets, no credentials, no Firestore writes in printer layer
+- `localStorage` keys scoped to origin — no cross-origin leakage
+- `EnterpriseErrorHandler` strips raw JS stack traces from user-facing messages
+- Cash drawer events are local-only audit trail — no cloud write
+
+### Performance Implications
+- `_detectProfile()` — O(n) string match, ~21 comparisons, sub-millisecond
+- `PrintStats._save()` — single `localStorage.setItem` call after each print, negligible
+- `DrawerLog._save()` — keeps last 200 events; older entries auto-pruned
+- `printSokoniReceipt()` builds receipt data inline — zero Firestore reads
+- Language drivers are instantiated once at module load — no per-print overhead
+
+### Deployment Steps
+1. `firebase deploy --only hosting` (completed)
+2. On Windows Chrome: open `/pos-printer-setup.html` and hard-refresh (Ctrl+Shift+R) to flush SW v29→v30
+3. On Android Chrome: pull down to refresh; SW update prompt appears
+4. Verify `window.PrinterManager` in DevTools console — should log "Enterprise Printer Framework loaded"
+
+### Breaking Changes
+None — `PrinterManager.p58e.*` provides full backward-compatible P58E proxy. `PrinterManager.escpos.*` delegates to SokoniPrinter.
+
+---
+
+## [2026-07-12] — Provider Onboarding v1.0 (Dedicated 15-Step Wizard)
+
+### Summary
+Built `provider-onboarding.html` — a completely standalone 15-step enterprise onboarding for service providers, entirely separate from the UEOE merchant/retail flow. Zero POS, inventory, printer, or branch screens anywhere in the flow. Steps: Verify Account → Provider Type → Service Profile → Coverage → Availability → Pricing → Choose Plan → Verification → Payments → Portfolio → Bookings → Notifications → Preview → Publish. On publish the page calls `providerDispatch/providerPublish`, receives a Provider ID, and redirects to `provider-dashboard.html`.
+
+### Files Changed
+- `provider-onboarding.html` — **NEW**: 15-step dedicated provider onboarding. Auth phase (email/password, Google, phone OTP) → 14-step wizard. Steps skippable where marked. Auto-saves draft per step via `providerDispatch/providerSaveDraft`. On load checks for existing active profile and redirects to dashboard if found. 39+ service categories across 14 verticals (Home Services, Security, Education, Creative, Tech, Business, Legal, Healthcare, Beauty, Fashion, Construction, Events, Logistics, Freelance). 5 subscription plans (Free Trial/Starter/Professional/Business/Enterprise) with monthly/yearly billing toggle. Profile Preview step shows pixel-accurate customer-facing card before publish. Publish generates Provider ID + QR code placeholder.
+
+### Architecture
+- Uses `providerDispatch` onCall CF (already deployed) — no new backend needed
+- `SokoniProvider` SDK used for all ops
+- `providerDraft` keyed by uid; `providerProfile` document created atomically on publish
+- `providerSubscriptions` document linked at publish time with `subscriptionId`, `plan`, `billingCycle`, `commissionRate`, `limits`, `features`, `trialStatus`, `renewalDate`
+- Auth claims updated server-side: `{ provider: true, providerId: 'PRV-XXXXXXXX' }`
+
+### Security Implications
+- No merchant/POS/inventory screens are present — confirmed by design
+- `providerDispatch` enforces `enforceAppCheck: true`
+- All provider profile writes are CF-only; client-side `allow write: if false`
+- KRA PIN and identity documents upload links generated server-side; files go to private Cloud Storage bucket
+
+### Performance Implications
+- Single `providerGetDraft` call on load resumes wizard state from last saved step
+- Plan grid renders client-side from inline `PLANS` constant — no CF round-trip for pricing display
+- Profile Preview step uses local `_draft` state — zero Firestore reads
+
+### Deploy Steps
+Already deployed via previous sprint. No new CFs required.
+
+### Breaking Changes
+None — completely new file.
+
+---
+
+## [2026-07-12] — PrinterManager Unified Architecture + P58E Runtime Bug Fixes
+
+### Summary
+Introduced a clean `PrinterManager` architectural layer between the UI and the raw printer engines. All `pos-printer-setup.html` code now communicates exclusively through `window.PrinterManager` — no direct `SokoniPrinter.*` or `P58EPrinter.*` calls remain in the UI layer. Fixed two blocking runtime errors: `P58EService is not defined` (IIFE scope leak) and `Cannot read properties of undefined (reading 'connect')` (missing `device.gatt` null guard).
+
+### Files Changed
+- `sokoni-printer-manager.js` — **NEW**: Unified printer manager; exposes `window.PrinterManager` with sub-objects `bluetooth` (BluetoothTransport), `serial` (WebSerialTransport), `usb` (UsbTransport), `network` (NetworkTransport), `escpos` (EscPosPrinter), and `p58e` (P58EProxy namespace). Delegates to `SokoniPrinter` and `P58EPrinter` internally. Provides `detectPlatform()`, `getRecommendedTransport()`, `getDiagnostics()`, and `printSokoniReceipt(storeOverride)` — a full SOKONI-branded demo receipt with items, VAT, M-Pesa payment, QR URL, and promo footer.
+- `pos-printer-setup.html` — All 40+ direct `SokoniPrinter.*` and `P58EPrinter.*` references replaced with `PrinterManager.*` and `PrinterManager.p58e.*`. Added `<script src="sokoni-printer-manager.js"></script>` load after existing printer scripts.
+- `sokoni-bluetooth-printer.js` — Added `device?.gatt` null guard in `_connectDevice()` before calling `device.gatt.connect()`. Previously, a null GATT interface (Android firmware edge case or invalidated BT handle) would throw `TypeError: Cannot read properties of undefined (reading 'connect')` with no actionable message. Now throws a descriptive error and sets status to `'error'` before propagating.
+- `service-worker.js` — Added `sokoni-bluetooth-printer.js` and `sokoni-printer-manager.js` to `PRECACHE_STATIC`. Bumped `CACHE_VERSION` to `sokoni-20260712-printer-manager-v29`.
+
+### Architecture
+- `PrinterManager` (singleton on `window`) orchestrates all transport + print engine operations
+- Transport classes: `BluetoothTransport`, `WebSerialTransport`, `UsbTransport`, `NetworkTransport`
+- Engine wrapper: `EscPosPrinter` (delegates to `window.SokoniPrinter`)
+- P58E proxy namespace: `P58EProxy` as `PrinterManager.p58e` (delegates to `window.P58EPrinter`)
+- Event bridge: `PrinterManager.on('connected'|'disconnected'|'printed'|'error'|'p58e:*', fn)` unifies both engine event streams
+
+### Bug Fixes
+- **BUG 1 (P58EService is not defined)** — Root cause: `P58EService` class is IIFE-private in `sokoni-bluetooth-printer.js`; calling `P58EService.checkCompatibility()` from outside throws `ReferenceError`. Fix (prior session): added `checkCompatibility()` instance proxy method to the class; `pos-printer-setup.html` now calls `PrinterManager.p58e.checkCompatibility()`.
+- **BUG 2 (Cannot read properties of undefined, 'connect')** — Root cause: `device.gatt` can be `null` on some Android builds or after a Bluetooth stack reset; `device.gatt.connect()` then throws a non-descriptive `TypeError`. Fix: explicit guard in `_connectDevice()` with an actionable error message.
+
+### Security Implications
+None — all changes are client-side print infrastructure; no auth, payment, or data flows affected.
+
+### Performance Implications
+- `sokoni-printer-manager.js` is ~8 KB unminified; added to SW precache for zero-latency offline load.
+- `PrinterManager` instantiates lazily — all engine calls are no-ops if the underlying engine isn't loaded.
+
+### Manual Steps Required (on real Windows machine with P58E)
+1. Open `https://mysokoni.co.ke/pos-printer-setup` in Chrome / Edge.
+2. Purge Cloudflare cache (or hard-refresh: Ctrl+Shift+R) to get SW v29.
+3. **Diagnostics tab** → verify OS = Windows, Serial API = Available, permitted COM ports count.
+4. **Discover tab → BT COM Port** tile → if no ports listed, click "Select COM Port" → pick the P58E COM in the Chrome picker.
+5. Click **Connect** → printer should respond (status dot turns green).
+6. **Hardware Tests tab → Test Receipt** → physical receipt should print.
+7. If receipt prints → **SOKONI Demo Receipt** button (Documents tab → Sales Receipt).
+
+---
+
+## [2026-07-12] — Universal Enterprise Onboarding Engine (UEOE) + Provider Dashboard
 
 ### Summary
 Replaced all independent onboarding flows with a single unified system supporting 20 roles under one SOKONI account. Users can hold multiple roles (merchant + provider + driver, etc.) without re-authenticating. The wizard auto-routes to the right step sequence per role, saves drafts on every step, and activates the account profile + subscription atomically on completion. A dedicated provider dashboard gives service providers a full post-onboarding ops centre: KPI cards, today's schedule, pending request queue, earnings with SVG bar chart, reviews with reply functionality, and 7-tab settings.

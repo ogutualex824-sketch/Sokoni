@@ -49,7 +49,8 @@
       "decoded",
       "ss_*.png",
       "tmp_*.png",
-      "*.jsonl"
+      "*.jsonl",
+      "cf-*.html"
     ],
     "rewrites": [
       { "source": "/api/chat",                     "function": "sokoniChat",           "region": "us-central1" },

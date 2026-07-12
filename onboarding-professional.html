@@ -8,8 +8,8 @@
   <title>Professional Registration — SOKONI</title>
   <meta name="description" content="Join SOKONI as a verified professional — doctors, lawyers, agents, consultants and more.">
   <meta name="robots" content="noindex">
-  <link rel="icon" type="image/png" href="assets/logosokoni.png">
-  <link rel="apple-touch-icon" href="assets/logosokoni.png">
+  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#71ff00">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -122,7 +122,7 @@
   <!-- Top bar -->
   <div class="wiz-topbar">
     <button class="wiz-back" onclick="goBack()" aria-label="Back">&#8592;</button>
-    <img src="assets/logosokoni.png" alt="SOKONI" class="wiz-topbar-logo">
+    <img src="assets/Sokoni Logo.png" alt="SOKONI" class="wiz-topbar-logo">
     <span class="wiz-topbar-title">Professional Registration</span>
     <span class="wiz-step-counter" id="stepCounter">Step 1 of 4</span>
   </div>
@@ -323,11 +323,8 @@
       I confirm that all credentials and information submitted are genuine and accurate. I understand that SOKONI verifies all professionals with the relevant regulatory bodies, and that providing false information will result in immediate removal and may attract legal consequences under Kenyan law.
     </div>
 
-    <label class="wiz-check-label-full">
-      <input type="checkbox" id="proAgree">
-      I confirm the above and agree to SOKONI's Professional Terms of Service
-    </label>
-    <div class="wiz-error" id="errProAgree" style="margin-top:8px;">Please agree to the terms to continue.</div>
+    <div id="legal-gate-pro"></div>
+    <div class="wiz-error" id="errProAgree" style="margin-top:8px;display:none;">Please review and accept the legal agreements to continue.</div>
 
     <div class="wiz-btn-row">
       <button class="wiz-btn ghost" onclick="goToStep(2)">&#8592; Back</button>
@@ -349,6 +346,7 @@
   </div>
 
   <script type="module" src="firebase.js"></script>
+  <script src="sokoni-legal-gate.js" defer></script>
   <script src="sokoni-trust.js" defer></script>
   <script src="kass-widget.js" defer></script>
   <script src="scroll-top.js" defer></script>
@@ -356,6 +354,7 @@
     var currentStep = 0;
     var TOTAL_STEPS = 4;
     var proData     = {};
+    var _legalOk    = false;
 
     function selectProType(el, type){
       document.querySelectorAll('.pro-type-card').forEach(function(c){ c.classList.remove('selected'); });
@@ -390,6 +389,13 @@
       updateProgressUI();
       window.scrollTo({top:0,behavior:'smooth'});
       if(window.SokoniOnboarding) SokoniOnboarding.setStep('professional', n, proData);
+      if(n===3){
+        var wrap=document.getElementById('legal-gate-pro');
+        if(wrap&&window.SokoniLegalGate&&!wrap.dataset.mounted){
+          wrap.dataset.mounted='1';
+          window.SokoniLegalGate.mount(wrap,{role:'provider',onComplete:function(ok){_legalOk=!!ok;}});
+        } else if(!window.SokoniLegalGate){_legalOk=true;}
+      }
     }
 
     function goBack(){
@@ -458,10 +464,9 @@
         return;
       }
       var services = document.getElementById('servicesText').value.trim();
-      var agree    = document.getElementById('proAgree').checked;
       var valid    = true;
       if(!services){ showErr('errServices',true); markInvalid('servicesText',true); valid=false; } else { showErr('errServices',false); markInvalid('servicesText',false); }
-      if(!agree)   { showErr('errProAgree',true); valid=false; } else showErr('errProAgree',false);
+      if(!_legalOk){ showErr('errProAgree',true); valid=false; } else showErr('errProAgree',false);
       if(!valid) return;
 
       proData.services      = services;

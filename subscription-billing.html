@@ -129,7 +129,8 @@ textarea.fi{resize:vertical;min-height:66px}
 .ftoggle input[type=number]{background:var(--bg);border:1px solid var(--brd2);color:var(--txt);padding:4px 6px;border-radius:5px;width:72px;font-size:12px;font-family:inherit;outline:none}
 
 @media(max-width:768px){.sidebar{display:none}.fg2{grid-template-columns:1fr}}
-</style>
+
+table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}</style>
 </head>
 <body>
 
@@ -412,7 +413,7 @@ textarea.fi{resize:vertical;min-height:66px}
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-check-compat.js"></script>
-<script src="firebase.js"></script>
+<script type="module" src="firebase.js"></script>
 <script src="sokoni-appcheck.js"></script>
 <script>
 (function(){

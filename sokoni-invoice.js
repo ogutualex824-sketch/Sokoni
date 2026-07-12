@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SOKONI Auto-Invoice System
  * Generates and shows a professional invoice modal after any transaction.
  * Saves to localStorage under 'sokoniInvoices'.
@@ -314,7 +314,7 @@
         /* HEADER */
         +'<div class="inv-header">'
           +'<div class="inv-logo-wrap">'
-            +'<img src="assets/Sokonilogo2.png" class="inv-logo" onerror="this.style.display=\'none\'">'
+            +'<img src="assets/Sokoni Logo.png" class="inv-logo" onerror="this.style.display=\'none\'">'
             +'<span class="inv-logo-text">SOKONI</span>'
           +'</div>'
           +'<div class="inv-header-right">'
