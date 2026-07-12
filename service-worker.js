@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260712-connectivity-fix-v43";
+const CACHE_VERSION = "sokoni-20260712-footer-v45";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -163,7 +163,7 @@ const PRECACHE_STATIC = [
   "/auth.js", "/sokoni-db.js", "/sokoni-pay.js", "/sokoni-social.js", "/sokoni-referral.js",
   "/sokoni-desktop.css", "/sokoni-routing.js", "/sokoni-delivery.js", "/sokoni-delivery-pricing.js", "/sokoni-dispatch.js", "/sokoni-logistics.js", "/sokoni-invoice.js", "/sokoni-config.js", "/sokoni-mpesa.js", "/sokoni-revenue.js", "/sokoni-featured.js",
   "/category.js", "/profile.js", "/product.js", "/analytics.js",
-  "/security.js", "/sokoni-company.js", "/nav-active.js", "/splash.js", "/scroll-top.js",
+  "/security.js", "/sokoni-company.js", "/nav-active.js", "/splash.js", "/sokoni-footer.js", "/scroll-top.js",
   "/auth-guard.js", "/shared-header.js", "/entertainment-hub.js", "/delivery-hub.js",
   "/sokoni-carhub-pro.js", "/sokoni-banking-pro.js", "/sokoni-food.js", "/sokoni-security.js", "/sokoni-audit.js", "/sokoni-b2b.js",
   "/sokoni-property.js", "/sokoni-bnb.js", "/sokoni-sports.js", "/sokoni-marketing.js", "/sokoni-inbox.js",

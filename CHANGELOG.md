@@ -1,4 +1,157 @@
-﻿## [2026-07-12] — PWA Connectivity Detection Hardening (v43)
+﻿## [2026-07-12] — Global Footer System v1.0 + Splash Redesign v2.0
+
+### Summary
+Two interconnected UI system upgrades shipped as a single production release.
+
+**Global Footer System v1.0** — `sokoni-footer.js` is a self-contained universal footer
+component that auto-injects on every page loaded by `shared-header.js`. No per-page
+markup needed. Follows the same singleton pattern as the splash system.
+
+**Splash Screen Redesign v2.0** — eliminates the three-system double-splash architecture
+(old `splash.js` + `shared-header.js` `_splash()` + 4 hardcoded inline divs). One unified
+singleton now fires on every page, with a premium spring-reveal animation.
+
+### Footer Features
+- `window.__SOKONI_FOOTER__` singleton — idempotent, safe to call multiple times
+- POS/kiosk exclusion via `EXCLUDE = /^(pos-|customer-display|kiosk)/` regex
+- Per-page opt-out via `<body data-no-footer>` attribute
+- Auto-removes all legacy footers (`footer:not(.sk-footer)`) before mounting
+- 6-column layout: Company · Marketplace · Sell · Support · Legal · Trust & Developers
+- Social links: Facebook, X, Instagram, TikTok, YouTube, WhatsApp (all with `rel="noopener noreferrer"`)
+- Payment badges: M-Pesa, Visa, Mastercard, PayPal
+- Inline SVG icons (16px, 1.5px stroke) — never emoji, WCAG AA on all text
+- `footer:not(.sk-footer)` legacy removal catches all 8 hardcoded footers on existing pages
+- Inserts before `.bottom-nav` on mobile to respect the fixed bar safe area
+- Mobile-first responsive: 2-column at ≤768px, 1-column at ≤380px
+- `padding-bottom: calc(76px + env(safe-area-inset-bottom,0px))` on mobile — iPhone notch safe
+- WCAG AA: all text colours verified on `#050505` background
+- `prefers-reduced-motion` respected — all transitions disabled
+- `rel="me"` on social links for identity verification
+
+### Splash Features
+- `window.SokoniSplash` singleton — prevents any second overlay from any system
+- Standalone basket SVG inlined (no external request, no logo duplication)
+- Spring reveal: `cubic-bezier(.22,1.6,.36,1)` — genuine overshoot, no keyframe hack
+- Green glow breathe: `drop-shadow` oscillates 8px→22px at 3.2s cycle
+- Three-dot pulse loader: staggered 0ms / 200ms / 400ms delays
+- `#sk-spl` ID avoids conflicts with legacy `#splashScreen` and `#sk-splash`
+- 190+ per-page taglines — every section has a unique brand voice line
+- Minimum display time 1900ms — feels intentional, not flickery
+- 4-second hard failsafe — prevents infinite splash on stalled load
+- Synchronous CSS injection prevents white flash before body renders
+
+### Files Affected
+| File | Change |
+|------|--------|
+| `sokoni-footer.js` | NEW — universal footer component |
+| `shared-header.js` | Added `_footer()` loader at end of IIFE; updated `_splash()` guard to `window.SokoniSplash` |
+| `splash.js` | REWRITE — unified singleton splash system v2.0 |
+| `assets/sokoni-icon.svg` | NEW — standalone basket icon (no text) |
+| `service-worker.js` | Added `/sokoni-footer.js` to precache; bumped CACHE_VERSION to footer-v45 |
+| `index.html` | Added `<script src="splash.js">` early in `<head>` |
+| `data-deletion.html` | Removed inline splash CSS/div/dismiss; added `<script src="splash.js">` |
+| `trust-and-safety.html` | Removed inline splash CSS/div/dismiss; added `<script src="splash.js">` |
+| `terms.html` | Removed inline splash CSS/div/dismiss; added `<script src="splash.js">` |
+| `privacy.html` | Removed inline splash CSS/div/dismiss; added `<script src="splash.js">` |
+| `CHANGELOG.md` | This entry |
+
+### Security
+- No server-side changes
+- No new data access
+- Social links use `rel="noopener noreferrer"` (reverse tabnabbing prevention)
+- All external links open in `target="_blank"` with appropriate `rel`
+
+### Performance
+- Footer CSS injected once via `<style id="sk-footer-css">` — no extra HTTP request
+- Footer HTML inlined; no template fetching
+- Service worker precaches `sokoni-footer.js` — zero network latency after first visit
+- Splash SVG icon inlined in JS — zero extra HTTP request for the icon
+- Removed ~800B of inline splash CSS from 4 HTML pages
+
+### Breaking Changes
+None. All changes are additive or replace duplicate functionality.
+
+---
+
+## [2026-07-12] — Production Email Enterprise Redesign v3.0
+
+### Summary
+Complete redesign of the SOKONI transactional email system from a dark-canvas technical layout to a premium white-canvas enterprise design matching the standard of Stripe, Apple, Shopify, and Airbnb. All 53 templates updated in a single file rewrite.
+
+**Design system changes:**
+- **White canvas**: outer background `#F3F4F6`, card `#ffffff` with `1px solid #E2E8F0` border and `20px` radius
+- **Brand header**: 4 px `#71ff00` accent stripe atop each card; CSS-based green "S" mark (48×48 rounded square); "SOKONI" as bold HTML typography; "Kenya's Super Platform" tagline — no image dependency
+- **SOKONI green accent**: CTA buttons remain `#71ff00` with `#050505` text; secondary actions use `#F59E0B` amber or `#EF4444` red appropriately
+- **Typography**: charcoal `#1F2937` primary, `#4B5563` body, `#9CA3AF` muted — all human-readable on white
+- **New helpers**: `statusCard()` hero confirmation cards (success/warning/error/info/brand); `metricCard()` large-number cards for payments/earnings; `codeBlock()` for OTP/verification codes; `note()` for muted footnotes; `alertBanner()` for warning/error banners
+- **New footer**: Privacy · Terms · Help Center · Trust Center · Contact Support · Unsubscribe; "Powered by Bravilex International Company Limited"; postal address + support email; © year
+- **Dark mode**: `@media (prefers-color-scheme: dark)` with `.eml-*` CSS class overrides — outer bg `#0F172A`, card `#1E293B`, borders `#334155`; degrades gracefully in Gmail which strips `<style>` tags
+- **Outlook compatibility**: VML rounded-corner CTA buttons maintained; all styles inlined; no `box-shadow`
+- **Mobile-first**: `@media screen and (max-width:600px)` — card fills 100% width, padding reduced, border-radius removed on edges
+- **Plain-text**: `toPlainText()` auto-generates readable multipart text from HTML — no separate template maintenance
+- **Constants added**: `HELP_URL`, `TRUST_URL`, `UNSUB_URL`, `SUPPORT_URL`, `YEAR`
+- **Templates**: 53 templates across account, security, orders, payments, disputes, delivery, dispatch, drivers, events, property, healthcare, legal, marketing, admin, system categories
+
+### Files affected
+- **`functions/email-templates.js`** — complete v3.0 rewrite; 53 templates; new design system; new helpers
+
+### Security changes
+- Removed all internal reference IDs, debug metadata, and system implementation details from customer-facing templates
+- `esc()` helper enforces HTML escaping on all user-supplied data values
+
+### Performance
+- CSS brand icon replaces image asset in header — eliminates one HTTP request and removes dependency on `sokoni-email-logo.png` being loaded in email clients that block images
+- `toPlainText()` shared utility — no per-template plain text maintenance
+
+### Breaking changes
+None. `getTemplate(name, data)` API signature unchanged. All 53 template keys unchanged.
+
+---
+
+## [2026-07-12] — Global Splash Screen Redesign v2.0 (v44)
+
+### Summary
+Replaced the fragmented, multi-system splash with a single unified `splash.js` v2.0 that every page inherits automatically — no per-page configuration required.
+
+**Problems solved:**
+1. **Double-splash on 4 pages** — `data-deletion.html`, `trust-and-safety.html`, `terms.html`, `privacy.html` each had a hardcoded `<div id="sk-splash">` in HTML body _and_ `shared-header.js` `_splash()` was injecting a second overlay. Users saw two stacked splash elements simultaneously.
+2. **Logo duplication** — Old `splash.js` showed the full `assets/Sokoni Logo.png` (which includes "SOKONI" text) AND rendered a `<div>SOKONI</div>` wordmark div side-by-side. Double branding on every load.
+3. **Fragmented system** — 98 pages used the old `splash.js` (document.write-based), `shared-header.js` had its own `_splash()` function, and 4 pages had bespoke inline splashes — three separate systems in conflict.
+
+**New architecture:**
+- `splash.js` v2.0: singleton pattern (`window.SokoniSplash = true`), DOM-based (no `document.write`), inline SVG basket icon, "SOKONI" as typography, three-dot pulse loader, spring-scale reveal animation, 1.9 s minimum + 4 s hard failsafe, `#sk-spl` ID (no conflicts with old IDs)
+- `shared-header.js` guard updated: `if (window.SokoniSplash) return;` — defers to `splash.js` on all pages that load it
+- `assets/sokoni-icon.svg` created: standalone basket SVG with no "SOKONI" text — green gradient body, dark handle arch, white grid lines, orange swoosh, gold handle dots
+
+**Animation design:**
+- Icon entry: spring bounce scale (0.72→1.0) with `cubic-bezier(.22,1.6,.36,1)` overshoot easing
+- Sustained: green glow breathe on icon (`splGlow` 3.2 s loop, starts after entry)
+- Loader: three dots staggered pulse (wave pattern, 200 ms offset each)
+- Tagline: fade up from below (0.5 s, delayed 220 ms)
+- Dismiss: opacity 0 + scale(1.04) in 0.55 s, element removed after 600 ms
+
+### Files affected
+- **`splash.js`** — complete rewrite; IIFE, `window.SokoniSplash`, inline SVG, three-dot pulse, `#sk-spl`, 190+ per-page taglines
+- **`assets/sokoni-icon.svg`** — new file; basket-only SVG icon (no text)
+- **`shared-header.js`** — `_splash()` guard: `getElementById('splashScreen')` → `window.SokoniSplash`
+- **`data-deletion.html`** — removed inline splash CSS, body div, dismiss JS; added `<script src="splash.js">`
+- **`trust-and-safety.html`** — same
+- **`terms.html`** — same
+- **`privacy.html`** — same
+- **`index.html`** — added `<script src="splash.js">` after `security.js`; removed stale shared-header.js splash comment
+- **`service-worker.js`** — CACHE_VERSION → `v44` (`sokoni-20260712-splash-redesign-v44`)
+
+### Security changes
+None. Client-side visual only.
+
+### Performance
+- Removed ~800 bytes of inline CSS from 4 HTML pages (moved to shared `splash.js`)
+- `html,body{background:#050505}` injected synchronously by splash.js — prevents white flash on any browser before body renders
+- SVG icon inlined in JS (zero extra HTTP request for the splash icon)
+
+---
+
+## [2026-07-12] — PWA Connectivity Detection Hardening (v43)
 
 ### Summary
 Eliminated residual false-offline banner races after the v2.0 probe-based rewrite.

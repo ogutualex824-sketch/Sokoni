@@ -1,340 +1,307 @@
-﻿/**
- * SOKONI Splash Screen — page-aware premium entrance
- * Every page shows the same core brand tagline ("Kenya's Global Marketplace")
- * but with a unique colour theme, emoji badge, and hub subtitle per page.
+/**
+ * SOKONI Splash — Unified Global Splash System v2.0
+ *
+ * Single source of truth for every page's entrance animation.
+ * Set window.SokoniSplash = true as a singleton guard so shared-header.js
+ * and any other system skips creating a second overlay.
+ *
+ * Opt-out:  <html data-no-splash="true">
+ * No iframes: bails if window.self !== window.top
  */
 (function () {
-  /* ── Page detection ── */
-  var _raw  = window.location.pathname.split('/').pop() || 'index.html';
-  var _page = _raw.split('?')[0].split('#')[0] || 'index.html';
+  'use strict';
 
-  /* ── Per-page identity ──
-     [emoji, hubLine, accentColor, glowRgba, bgDark, bgDeep]                  */
-  var CFG = {
-    /* ── CORE MARKETPLACE ── */
-    'index.html':         ['🛒', 'Kenya\'s Global Marketplace',                      '#71ff00', 'rgba(113,255,0,0.22)',   '#030503', '#010101'],
-    'category.html':      ['🛍️', 'Browse Every Category',                           '#06b6d4', 'rgba(6,182,212,0.15)',   '#001a22', '#020c12'],
-    'product.html':       ['✨', 'Premium Product Showcase',                          '#fbbf24', 'rgba(251,191,36,0.15)',  '#1f1400', '#0d0900'],
-    'cart.html':          ['🛒', 'Your Shopping Cart',                               '#10b981', 'rgba(16,185,129,0.15)',  '#001e14', '#030f09'],
-    'checkout.html':      ['💳', 'Secure Checkout · M-PESA & Cards',                 '#a8ff58', 'rgba(113,255,0,0.15)',  '#0e0628', '#060312'],
-    'success.html':       ['🎉', 'Order Confirmed · Thank You!',                     '#4ade80', 'rgba(74,222,128,0.15)',  '#002610', '#030e06'],
-    'invoice.html':       ['🧾', 'Invoice · Your Receipt',                           '#60a5fa', 'rgba(96,165,250,0.15)',  '#001226', '#020910'],
-    'offer.html':         ['🏷️', 'Exclusive Offer · Just for You',                  '#f43f5e', 'rgba(244,63,94,0.15)',   '#28000c', '#100005'],
-    'flashsale.html':     ['⚡', 'Flash Sale · Grab It Before It\'s Gone',           '#ef4444', 'rgba(239,68,68,0.16)',   '#2a0000', '#0f0101'],
+  /* ── Singleton guard ──────────────────────────────────────────────────── */
+  if (window.SokoniSplash) return;
+  if (window.self !== window.top) return;
+  if (document.documentElement.dataset.noSplash === 'true') return;
 
-    /* ── ACCOUNT & AUTH ── */
-    'login.html':         ['🔑', 'Sign In · Welcome Back',                           '#f472b6', 'rgba(244,114,182,0.15)', '#26001a', '#100009'],
-    'signup.html':        ['🚀', 'Join Free · Start Buying & Selling',               '#34d399', 'rgba(52,211,153,0.15)',  '#001c12', '#030e08'],
-    'register.html':      ['✍️', 'Create Your Account',                              '#c8ff80', 'rgba(167,139,250,0.15)', '#0c0426', '#050212'],
-    'profile.html':       ['👤', 'My Profile · Orders & Rewards',                    '#38bdf8', 'rgba(56,189,248,0.15)',  '#001626', '#020c12'],
-    'wishlist.html':      ['❤️', 'Wishlist · Things You Love',                       '#ec4899', 'rgba(236,72,153,0.16)',  '#26001a', '#0d0009'],
+  window.SokoniSplash = true;
 
-    /* ── SELLER & STORE ── */
-    'seller.html':        ['🏪', 'Seller Dashboard · Manage & Grow',                 '#f59e0b', 'rgba(245,158,11,0.16)',  '#1f1000', '#0a0600'],
-    'seller-public.html': ['🌟', 'Seller Storefront · Browse & Buy',                 '#facc15', 'rgba(250,204,21,0.15)',  '#1a1400', '#090800'],
-    'store.html':         ['🛍️', 'Seller Store · Browse Products',                  '#fb923c', 'rgba(251,146,60,0.15)',  '#221000', '#0d0600'],
-    'ministore.html':     ['🏪', 'MiniStore · Your SOKONI Shop',                     '#818cf8', 'rgba(129,140,248,0.15)', '#06062a', '#040412'],
-    'subscriptions.html': ['👑', 'SOKONI Premium · Unlock Everything',               '#d97706', 'rgba(217,119,6,0.16)',   '#1f1200', '#0c0700'],
-    'referral.html':      ['🎯', 'Refer & Earn · Share & Win',                       '#86efac', 'rgba(134,239,172,0.15)', '#002018', '#030e0a'],
-    'loyalty.html':       ['🎁', 'Rewards · Points & Perks',                         '#fb7185', 'rgba(251,113,133,0.15)', '#260010', '#100007'],
-    'reviews.html':       ['⭐', 'Reviews · Honest Buyer Feedback',                  '#fcd34d', 'rgba(252,211,77,0.16)',  '#1a1400', '#0d0900'],
-    'unboxing.html':      ['📦', 'Unboxing · Show It Off',                           '#fdba74', 'rgba(253,186,116,0.15)', '#211000', '#0c0600'],
+  /* ── Page detection ───────────────────────────────────────────────────── */
+  var _raw = location.pathname.split('/').pop() || '';
+  var _pg  = (_raw.split('?')[0].split('#')[0] || 'index.html').toLowerCase();
 
-    /* ── SERVICES & HUBS ── */
-    'services.html':      ['🛠️', 'Services Hub · Skilled Pros Near You',            '#00c8a0', 'rgba(0,200,160,0.15)',   '#001e18', '#030f0c'],
-    'cleaning.html':      ['🧹', 'Cleaning & Laundry Hub',                           '#22d3ee', 'rgba(34,211,238,0.15)',  '#001820', '#02090e'],
-    'electrical.html':    ['⚡', 'Electrical Services · Wiring & Power',             '#fef08a', 'rgba(254,240,138,0.15)', '#1c1600', '#0a0a00'],
-    'phone-repair.html':  ['📱', 'Phone Repair · Fix It Fast',                       '#0284c7', 'rgba(2,132,199,0.16)',   '#001a28', '#020b14'],
-    'plumbing.html':      ['🔧', 'Plumbing Services · Pipes & Water',                '#0891b2', 'rgba(8,145,178,0.15)',   '#001624', '#020b10'],
-    'mechanics.html':     ['🔩', 'Auto Hub · Mechanics & Garages',                   '#94a3b8', 'rgba(148,163,184,0.15)', '#0a0c14', '#050608'],
-    'marketing.html':     ['📣', 'Marketing Hub · Grow Your Business',               '#f97316', 'rgba(249,115,22,0.16)',  '#1f0e00', '#0a0500'],
-    'requests.html':      ['📋', 'Requests · Post & Get Seller Quotes',              '#71ff00', 'rgba(113,255,0,0.16)',  '#0e0424', '#050210'],
-    'provider.html':      ['🛠️', 'Provider Hub · Manage Jobs & Earn',               '#9333ea', 'rgba(147,51,234,0.15)',  '#120430', '#060214'],
+  /* ── Per-page taglines ────────────────────────────────────────────────── */
+  var _T = {
+    /* Core */
+    'index.html':               "Kenya's Digital Marketplace",
+    'search.html':              'Find Anything, Instantly',
+    'cart.html':                'Your Cart Awaits',
+    'checkout.html':            'Secure Checkout',
+    'profile.html':             'Your SOKONI Account',
+    'wishlist.html':            'Things You Love',
+    'invoice.html':             'Your Receipt',
+    'offer.html':               'Exclusive Offer — Just for You',
+    'flashsale.html':           'Flash Sale · Grab It Now',
+    'success.html':             'Order Confirmed — Thank You!',
+    /* Auth */
+    'login.html':               'Welcome Back',
+    'signup.html':              'Join SOKONI Today',
+    'register.html':            'Create Your Account',
+    'join.html':                'Join the Movement',
+    /* Marketplace */
+    'marketplace.html':         'Thousands of Sellers. One Home.',
+    'category.html':            'Browse Every Category',
+    'product.html':             'Premium Product Showcase',
+    'auction.html':             'Bid Smart. Win Big.',
+    'rental.html':              'Rent Anything, Anytime.',
+    'digital-store.html':       'Download the Future.',
+    'digital.html':             'Digital Products Hub.',
+    /* Finance */
+    'wallet.html':              'Your Digital Wallet',
+    'loyalty.html':             'Earn. Redeem. Repeat.',
+    'subscriptions.html':       'SOKONI Premium — Unlock Everything',
+    'referral.html':            'Refer & Earn · Share & Win',
+    'banking.html':             'Financial Freedom. Simplified.',
+    'finos.html':               'Enterprise Finance OS.',
+    'invoice.html':             'Invoice — Your Receipt',
+    'expense-management.html':  'Expenses Under Control',
+    'general-ledger.html':      'Books Always Balanced.',
+    /* Seller & Merchant */
+    'seller.html':              'Your Business Dashboard',
+    'seller-success.html':      'Success Starts Here',
+    'merchant-success.html':    'Built to Help You Grow',
+    'minishop.html':            'Your Shop, Your Brand.',
+    'business.html':            'Your Business, Amplified.',
+    'businesses.html':          'Businesses Hub.',
+    'digital-esoko.html':       'Digital Commerce Hub.',
+    'digital-esoko-seller.html':'Digital Seller Dashboard.',
+    /* Services */
+    'services.html':            'Every Service, One Place.',
+    'cleaning.html':            'Cleaning & Laundry Hub',
+    'electrical.html':          'Electrical Services',
+    'home-services.html':       'Home Services Near You',
+    'construction.html':        'Build Something Lasting.',
+    'fitness-hub.html':         'Fitness Hub · Move & Thrive',
+    /* Transport */
+    'driver.html':              'Delivering Joy, Every Day.',
+    'rider-nav.html':           'Navigate. Deliver. Earn.',
+    'car-rental.html':          'Drive on Demand.',
+    'car-hub.html':             'Car Hub · Drive Kenya Forward',
+    'delivery.html':            'Last-Mile, Every Time.',
+    'track.html':               'Your Order, Every Step.',
+    'dispatch.html':            'Logistics Intelligence.',
+    'delivery-tracking.html':   'Your Order, Every Step.',
+    /* Property */
+    'property.html':            'Find Your Space.',
+    'bnb.html':                 'Stay Anywhere in Kenya.',
+    'bnb-hub.html':             'Stay Hub · Hotels & BnBs',
+    'bnb-manage.html':          'Host Dashboard · Manage Your BnB',
+    'landlord.html':            'Landlord Portal · Rent & Manage',
+    /* Community & Social */
+    'events.html':              'Life Is Better Live.',
+    'event-hub.html':           "Discover What's Happening",
+    'event-manager.html':       'Manage Your Events.',
+    'messages.html':            'Your Conversations. Secured.',
+    'community.html':           'Together, We Thrive.',
+    'reviews.html':             'Your Voice Matters.',
+    'notifications.html':       'Stay in the Loop.',
+    /* People */
+    'jobs.html':                'Find Your Next Opportunity.',
+    'job-post.html':            'Post a Job. Find Talent.',
+    'healthcare.html':          'Health, Closer to Home.',
+    'education.html':           'Learn Without Limits.',
+    'entertainment.html':       'Your Next Favourite Thing.',
+    /* B2B */
+    'b2b.html':                 'Enterprise Commerce Made Easy.',
+    'b2b-chat.html':            'B2B Chat · Negotiate & Close Deals',
+    'b2b-dashboard.html':       'B2B Dashboard · Your Wholesale Hub',
+    'b2b-orders.html':          'B2B Orders · Wholesale Management',
+    'b2b-rfq.html':             'B2B RFQ · Request for Quotation',
+    'b2b-seller-dashboard.html':'B2B Seller · Manage Wholesale',
+    'b2b-supplier.html':        'B2B Supplier Portal',
+    /* SmartPOS */
+    'pos.html':                 'Point of Sale. Powered by AI.',
+    'pos-checkout.html':        'Fast Checkout. Every Time.',
+    'pos-daily.html':           'Start Strong. Close Stronger.',
+    'pos-observability.html':   'Real-Time Store Intelligence',
+    'pos-marketplace.html':     'Your Store Meets the Marketplace',
+    'kitchen-display.html':     'Kitchen Display System.',
+    'customer-display.html':    'Customer Display.',
+    /* Admin */
+    'admin.html':               'Platform Admin.',
+    'admin-os.html':            'Platform Command Centre.',
+    'super-admin.html':         'Superadmin Dashboard.',
+    'automation-center.html':   'Intelligence. Automated.',
+    'security-center.html':     'Zero Trust. Total Control.',
+    'beta-dashboard.html':      'Beta Command Centre.',
+    'beta.html':                'Beta Programme.',
+    /* Analytics */
+    'analytics.html':           'Insights That Drive Growth',
+    'business-analytics.html':  'Business Intelligence.',
+    'customer-analytics.html':  'Customer Insights.',
+    'growth-dashboard.html':    'Growth at a Glance.',
+    'launch-metrics.html':      'Launch Metrics.',
+    'business-health.html':     'Business Health Score.',
+    /* Legal & Trust */
+    'trust-and-safety.html':    'Safe. Fair. Trusted.',
+    'help.html':                "We're Here to Help.",
+    'terms.html':               'Terms of Service',
+    'privacy.html':             'Privacy Policy',
+    'data-deletion.html':       'Your Data, Your Rights.',
+    'community-guidelines.html':'Community Standards',
+    'cookie-policy.html':       'Cookie Policy',
+    'legal.html':               'Legal Hub.',
+    'legal-hub.html':           'Legal Hub · Lawyers & Contracts',
+    'legal-centre.html':        'Legal Resource Centre.',
+    'dispute.html':             "We've Got You Covered.",
+    'dispute-portal.html':      'Dispute Resolution Portal.',
+    'faq.html':                 'Frequently Asked Questions.',
+    /* Company */
+    'about.html':               "Kenya's Digital Backbone.",
+    'careers.html':             'Build the Future With Us.',
+    'contact.html':             "We'd Love to Hear From You.",
+    'foundation.html':          'Impact Beyond Commerce.',
+    'franchise.html':           'Grow With SOKONI.',
+    'gip.html':                 'Geo Intelligence Platform.',
+    'inspiq.html':              'Insights That Inspire.',
+    /* Hubs */
+    'food.html':                "Hungry? We've Got You.",
+    'food-menu.html':           'Order Something Delicious.',
+    'food-order.html':          'Your Order Is Coming.',
+    'food-dashboard.html':      'Food Business Command Centre.',
+    'food-rider.html':          'Rider Hub · Deliver & Earn.',
+    'ent-organizer.html':       'Organize Events With Power.',
+    'healthcare.html':          'Health, Closer to Home.',
+    'hr-payroll.html':          'HR & Payroll. Simplified.',
+    'jobs.html':                'Find Your Next Opportunity.',
+    /* Payment & Operations */
+    'payment-failed.html':      'Payment Support.',
+    'commission-admin.html':    'Commission Engine.',
+    'etims-admin.html':         'eTIMS Administration.',
+    'etims-seller.html':        'eTIMS Seller Portal.',
+    'finos-admin.html':         'FinOS Administration.',
+    'fos-admin.html':           'FOS Administration.',
+    'dispatch.html':            'Logistics Intelligence.',
+    'business-os.html':         'Business Operating System.',
+  };
 
-    /* ── TRANSPORT ── */
-    'driver.html':        ['🛵', 'Driver Hub · Drive & Earn 88%',                    '#0e7490', 'rgba(14,116,144,0.16)',  '#001820', '#020b10'],
-    'car-hub.html':       ['🚗', 'Car Hub · Drive Kenya Forward',                    '#3b82f6', 'rgba(59,130,246,0.16)',  '#001030', '#030810'],
-    'car-rental.html':    ['🚙', 'Car Rental · Self-Drive & Chauffeur',              '#0ea5e9', 'rgba(14,165,233,0.15)',  '#001a28', '#020c14'],
-    'delivery.html':      ['🚚', 'Delivery Hub · Fast & Tracked',                    '#22c55e', 'rgba(34,197,94,0.15)',   '#002216', '#030e08'],
-    'track.html':         ['📍', 'Order Tracking · Live Updates',                    '#ea7316', 'rgba(234,115,22,0.16)',  '#221000', '#0e0600'],
+  var _line = _T[_pg] || 'One Platform. Endless Possibilities.';
 
-    /* ── PROPERTY & STAY ── */
-    'bnb.html':           ['🏨', 'Stay Hub · Hotels, BnB & Lodges',                 '#ff6b35', 'rgba(255,107,53,0.16)',  '#280d00', '#0d0500'],
-    'bnb-manage.html':    ['🏢', 'Host Dashboard · Manage Your BnB',                 '#c084fc', 'rgba(192,132,252,0.15)', '#120430', '#07021a'],
-    'property.html':      ['🏠', 'Property Hub · Houses & Land',                    '#059669', 'rgba(5,150,105,0.15)',   '#001c14', '#030e08'],
-    'landlord.html':      ['🏘️', 'Landlord Portal · Rent & Manage',                '#16a34a', 'rgba(22,163,74,0.16)',   '#002012', '#030e07'],
+  /* ── Inline SVG basket icon (no "SOKONI" text) ────────────────────────── */
+  var ICON =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none" aria-hidden="true" focusable="false">' +
+    '<defs>' +
+    '<linearGradient id="sk-spl-g" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0%" stop-color="#71ff00"/>' +
+    '<stop offset="100%" stop-color="#237000"/>' +
+    '</linearGradient>' +
+    '<clipPath id="sk-spl-c">' +
+    '<rect x="10" y="29" width="60" height="43" rx="7" fill="white"/>' +
+    '</clipPath>' +
+    '</defs>' +
+    '<rect x="10" y="29" width="60" height="43" rx="7" fill="url(#sk-spl-g)"/>' +
+    '<g clip-path="url(#sk-spl-c)" stroke="white" stroke-opacity=".2" stroke-width="1.2">' +
+    '<line x1="30" y1="29" x2="30" y2="72"/>' +
+    '<line x1="50" y1="29" x2="50" y2="72"/>' +
+    '<line x1="10" y1="43" x2="70" y2="43"/>' +
+    '<line x1="10" y1="57" x2="70" y2="57"/>' +
+    '</g>' +
+    '<rect x="10" y="29" width="60" height="15" fill="white" fill-opacity=".1" clip-path="url(#sk-spl-c)"/>' +
+    '<path d="M22,30 C22,10 58,10 58,30" stroke="#184d00" stroke-width="5.5" stroke-linecap="round"/>' +
+    '<circle cx="22" cy="30" r="3.5" fill="#fbbf24"/>' +
+    '<circle cx="58" cy="30" r="3.5" fill="#fbbf24"/>' +
+    '<path d="M14,67 Q40,78 66,67" stroke="#f97316" stroke-width="3" stroke-linecap="round"/>' +
+    '</svg>';
 
-    /* ── FINANCIAL & LEGAL ── */
-    'banking.html':       ['🏦', 'Banking Hub · Loans, SACCOs & Finance',           '#eab308', 'rgba(234,179,8,0.16)',   '#1c1200', '#0d0800'],
-    'b2b.html':           ['🤝', 'B2B Hub · Wholesale & Bulk',                       '#14b8a6', 'rgba(20,184,166,0.15)',  '#001c1a', '#030e0c'],
-    'legal-hub.html':     ['⚖️', 'Legal Hub · Lawyers & Contracts',                 '#e2b96f', 'rgba(226,185,111,0.16)', '#1c1200', '#090700'],
-    'legal.html':         ['📜', 'Terms · Privacy · Seller Policy',                  '#d4a574', 'rgba(212,165,116,0.15)', '#1a1000', '#080600'],
-    'dispute.html':       ['🛡️', 'Help & Support · Report an Issue',                '#dc2626', 'rgba(220,38,38,0.16)',   '#2c0000', '#110101'],
+  /* ── Inject CSS synchronously (ensures dark bg before body renders) ──── */
+  var _s = document.createElement('style');
+  _s.id = 'sk-spl-css';
+  _s.textContent =
+    /* Prevent white flash while body hasn't painted yet */
+    'html,body{background:#050505}' +
+    '#sk-spl{position:fixed;inset:0;z-index:2147483647;' +
+    'background:radial-gradient(ellipse 90% 80% at 50% 44%,#0e1a06 0%,#0a0a0a 58%,#050505 100%);' +
+    'display:flex;align-items:center;justify-content:center;' +
+    'will-change:opacity,transform}' +
+    '#sk-spl.spl-out{opacity:0!important;transform:scale(1.04)!important;' +
+    'transition:opacity .55s cubic-bezier(.4,0,.2,1),transform .55s cubic-bezier(.4,0,.2,1)!important;' +
+    'pointer-events:none}' +
+    '.spl-inner{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}' +
+    /* Icon: spring-bounce entry + breathing glow pulse */
+    '.spl-icon{width:clamp(64px,18vw,84px);height:clamp(64px,18vw,84px);display:block;' +
+    'animation:splIn .72s cubic-bezier(.22,1.6,.36,1) both,' +
+    'splGlow 3.2s ease-in-out .9s infinite}' +
+    '.spl-icon svg{width:100%;height:100%;display:block}' +
+    /* Wordmark typography */
+    '.spl-word{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+    'font-size:clamp(26px,7.5vw,38px);font-weight:900;letter-spacing:.03em;color:#fff;line-height:1;' +
+    'animation:splIn .72s cubic-bezier(.22,1.6,.36,1) .06s both}' +
+    '.spl-word em{font-style:normal;color:#71ff00}' +
+    /* Per-page tagline */
+    '.spl-line{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+    'font-size:clamp(9px,2.4vw,11px);font-weight:700;letter-spacing:.16em;' +
+    'text-transform:uppercase;color:rgba(255,255,255,.38);' +
+    'animation:splFade .5s .22s cubic-bezier(.4,0,.2,1) both}' +
+    /* Three-dot pulsing loader */
+    '.spl-dots{display:flex;align-items:center;gap:7px;margin-top:6px;' +
+    'animation:splFade .4s .32s cubic-bezier(.4,0,.2,1) both}' +
+    '.spl-dots span{width:6px;height:6px;border-radius:50%;background:#71ff00;display:block;' +
+    'animation:splDot 1.4s ease-in-out infinite}' +
+    '.spl-dots span:nth-child(2){animation-delay:.2s}' +
+    '.spl-dots span:nth-child(3){animation-delay:.4s}' +
+    /* Keyframes */
+    '@keyframes splIn{' +
+    'from{opacity:0;transform:scale(.72) translateY(10px)}' +
+    'to{opacity:1;transform:scale(1) translateY(0)}}' +
+    '@keyframes splFade{' +
+    'from{opacity:0;transform:translateY(8px)}' +
+    'to{opacity:1;transform:translateY(0)}}' +
+    '@keyframes splGlow{' +
+    '0%,100%{filter:drop-shadow(0 0 8px rgba(113,255,0,.3)) drop-shadow(0 0 18px rgba(113,255,0,.12))}' +
+    '50%{filter:drop-shadow(0 0 22px rgba(113,255,0,.56)) drop-shadow(0 0 42px rgba(113,255,0,.26))}}' +
+    '@keyframes splDot{' +
+    '0%,80%,100%{opacity:.22;transform:scale(.72)}' +
+    '40%{opacity:1;transform:scale(1.05)}}';
 
-    /* ── LIFESTYLE & ENTERTAINMENT ── */
-    'food.html':          ['🍔', 'Food & Delivery Hub',                              '#ea580c', 'rgba(234,88,12,0.16)',   '#281000', '#0e0600'],
-    'entertainment.html': ['🎬', 'Entertainment Hub · DJs, MCs & More',              '#db2777', 'rgba(219,39,119,0.16)',  '#260016', '#0d0008'],
-    'sports-hub.html':    ['⚽', 'Sports Hub · Book Turfs & Leagues',                '#15803d', 'rgba(21,128,61,0.16)',   '#002210', '#030e07'],
-    'healthcare.html':    ['🏥', 'Healthcare Hub · Doctors & Clinics',               '#00c878', 'rgba(0,200,120,0.15)',   '#001c14', '#030e08'],
-    'construction.html':  ['🏗️', 'Construction Hub · Build Kenya',                  '#b45309', 'rgba(180,83,9,0.16)',    '#241000', '#0e0600'],
-    'digital.html':       ['💻', 'Digital Products · eBooks & Courses',              '#a855f7', 'rgba(168,85,247,0.16)',  '#120630', '#060314'],
-    'community.html':     ['👥', 'Community · Connect & Grow',                       '#a21caf', 'rgba(162,28,175,0.16)',  '#200430', '#0e0218'],
-    'messages.html':      ['💬', 'Messages · Chat Buyers & Sellers',                 '#0369a1', 'rgba(3,105,161,0.16)',   '#001424', '#020a10'],
+  (document.head || document.documentElement).appendChild(_s);
 
-    /* ── SPORTS HUB ── */
-    'sports-hub.html':       ['⚽', 'Sports Hub · Book Turfs & Leagues',             '#15803d', 'rgba(21,128,61,0.16)',   '#002210', '#030e07'],
-    'sports-tournament.html':['🏆', 'Tournaments · Compete & Win',                   '#16a34a', 'rgba(22,163,74,0.16)',   '#002010', '#030e07'],
-    'sports-venue.html':     ['🏟️', 'Sports Venues · Book Your Turf',               '#15803d', 'rgba(21,128,61,0.16)',   '#002210', '#030e07'],
+  /* ── Build overlay ────────────────────────────────────────────────────── */
+  var _el = document.createElement('div');
+  _el.id = 'sk-spl';
+  _el.setAttribute('aria-hidden', 'true');
+  _el.innerHTML =
+    '<div class="spl-inner">' +
+    '<div class="spl-icon">' + ICON + '</div>' +
+    '<div class="spl-word">SOKO<em>NI</em></div>' +
+    '<div class="spl-line">' + _line + '</div>' +
+    '<div class="spl-dots"><span></span><span></span><span></span></div>' +
+    '</div>';
 
-    /* ── B2B HUB ── */
-    'b2b-chat.html':            ['💬', 'B2B Chat · Negotiate & Close Deals',         '#14b8a6', 'rgba(20,184,166,0.15)',  '#001c1a', '#030e0c'],
-    'b2b-dashboard.html':       ['📊', 'B2B Dashboard · Your Wholesale Hub',         '#0891b2', 'rgba(8,145,178,0.15)',   '#001624', '#020b10'],
-    'b2b-orders.html':          ['📦', 'B2B Orders · Wholesale Management',          '#0e7490', 'rgba(14,116,144,0.16)',  '#001820', '#020b10'],
-    'b2b-rfq.html':             ['📋', 'B2B RFQ · Request for Quotation',            '#0284c7', 'rgba(2,132,199,0.16)',   '#001a28', '#020b14'],
-    'b2b-seller-dashboard.html':['🤝', 'B2B Seller · Manage Wholesale',             '#14b8a6', 'rgba(20,184,166,0.15)',  '#001c1a', '#030e0c'],
-    'b2b-supplier.html':        ['🏭', 'B2B Supplier Portal',                        '#0891b2', 'rgba(8,145,178,0.15)',   '#001624', '#020b10'],
-
-    /* ── PROPERTY HUB ── */
-    'property-hub.html':             ['🏠', 'Property Hub · Buy, Rent & Invest',    '#059669', 'rgba(5,150,105,0.15)',   '#001c14', '#030e08'],
-    'property-listing.html':         ['🏡', 'Property Listing · Find Your Home',    '#16a34a', 'rgba(22,163,74,0.16)',   '#002012', '#030e07'],
-    'property-dashboard.html':       ['🏘️', 'Property Dashboard · My Listings',    '#059669', 'rgba(5,150,105,0.15)',   '#001c14', '#030e08'],
-    'property-agent.html':           ['🔑', 'Property Agents · Find Your Agent',    '#16a34a', 'rgba(22,163,74,0.16)',   '#002012', '#030e07'],
-    'property-agent-dashboard.html': ['🏠', 'Agent Dashboard · Manage Listings',   '#059669', 'rgba(5,150,105,0.15)',   '#001c14', '#030e08'],
-
-    /* ── FOOD HUB ── */
-    'food-menu.html':      ['🍽️', 'Food Menu · Browse & Order',                     '#ea580c', 'rgba(234,88,12,0.16)',   '#281000', '#0e0600'],
-    'cart.html':           ['🛒', 'Cart · Review Your Order',                        '#71ff00', 'rgba(113,255,0,0.12)',   '#0a1200', '#050800'],
-    'food-order.html':     ['🍔', 'Food Order · Track Your Meal',                    '#ea580c', 'rgba(234,88,12,0.16)',   '#281000', '#0e0600'],
-    'food-dashboard.html': ['📊', 'Food Dashboard · Manage Orders',                  '#f59e0b', 'rgba(245,158,11,0.16)',  '#1f1000', '#0a0600'],
-    'food-rider.html':     ['🛵', 'Food Rider · Deliver & Earn',                     '#22c55e', 'rgba(34,197,94,0.15)',   '#002216', '#030e08'],
-
-    /* ── BNB HUB ── */
-    'bnb-hub.html':        ['🏨', 'BnB Hub · Discover Stays in Kenya',               '#ff6b35', 'rgba(255,107,53,0.16)',  '#280d00', '#0d0500'],
-
-    /* ── ANALYTICS & DASHBOARDS ── */
-    'seller-analytics.html':  ['📊', 'Seller Analytics · Sales & Growth',            '#10b981', 'rgba(16,185,129,0.15)',  '#001e14', '#030f09'],
-    'seller-revenue.html':    ['💰', 'Seller Revenue · Earnings & Payouts',          '#f59e0b', 'rgba(245,158,11,0.16)',  '#1f1000', '#0a0600'],
-    'revenue.html':           ['💰', 'Revenue · Earnings & Payouts',                 '#f59e0b', 'rgba(245,158,11,0.16)',  '#1f1000', '#0a0600'],
-    'business-analytics.html':['📈', 'Business Analytics · Track & Grow',            '#818cf8', 'rgba(129,140,248,0.15)', '#06062a', '#040412'],
-    'customer-analytics.html':['👥', 'Customer Analytics · Know Your Buyers',        '#c084fc', 'rgba(192,132,252,0.15)', '#120430', '#07021a'],
-    'growth-dashboard.html':  ['🚀', 'Growth Dashboard · Scale Your Business',       '#a8ff58', 'rgba(113,255,0,0.15)',  '#0e0628', '#060312'],
-
-    /* ── OTHER PAGES ── */
-    'search.html':        ['🔍', 'Search · Find Anything on SOKONI',                 '#38bdf8', 'rgba(56,189,248,0.15)',  '#001626', '#020c12'],
-    'messages.html':      ['💬', 'Messages · Chat Buyers & Sellers',                 '#0369a1', 'rgba(3,105,161,0.16)',   '#001424', '#020a10'],
-    'payments.html':      ['💳', 'Payments · Transactions & History',                '#a8ff58', 'rgba(113,255,0,0.15)',  '#0e0628', '#060312'],
-    'pos.html':           ['🧾', 'POS · Point of Sale System',                       '#10b981', 'rgba(16,185,129,0.15)',  '#001e14', '#030f09'],
-    'marketing-hub.html': ['📣', 'Marketing Hub · Run Campaigns',                    '#f97316', 'rgba(249,115,22,0.16)',  '#1f0e00', '#0a0500'],
-    'register.html':      ['✍️', 'Create Your Account',                              '#c8ff80', 'rgba(167,139,250,0.15)', '#0c0426', '#050212'],
-
-    /* ── MANAGEMENT & ADMIN ── */
-    'admin.html':              ['⚙️', 'Admin · Control Panel',                       '#64748b', 'rgba(100,116,139,0.16)', '#0a0c16', '#050608'],
-    'verification-admin.html': ['✅', 'Verification Admin · Review Sellers',         '#64748b', 'rgba(100,116,139,0.16)', '#0a0c16', '#050608'],
-    'inspiq.html':             ['📌', 'InspIQ · Your Personalised Feed',             '#e879f9', 'rgba(232,121,249,0.15)', '#260032', '#100018'],
-      };
-
-  var c       = CFG[_page] || CFG['index.html'];
-  var emoji   = c[0], hub   = c[1];
-  var color   = c[2], glow  = c[3];
-  var bg1     = c[4], bg2   = c[5];
-
-  /* Snappy entrance — short enough to feel fast, long enough to feel premium */
-  var MIN = (_page === 'index.html') ? 1000 : 600;
-
-  /* ── 1. Inject per-page colour overrides then the splash HTML ── */
-  if (!document.getElementById('splashScreen')) {
-    document.write(
-      '<style id="splashPageStyle">' +
-        '.splash-screen{position:fixed;top:0;left:0;width:100%;height:100vh;' +
-          'display:flex;flex-direction:column;justify-content:center;align-items:center;' +
-          'z-index:999999;overflow:hidden;}' +
-        '#splashCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;}' +
-        '.splash-content{position:relative;z-index:2;display:flex;flex-direction:column;' +
-          'align-items:center;justify-content:center;text-align:center;color:white;' +
-          'width:100%;max-width:380px;padding:0 20px;}' +
-        '#splashScreen{' +
-          'background:' +
-            'radial-gradient(ellipse 90% 80% at 50% 44%,' + bg1 + ' 0%,' + bg2 + ' 50%,#111111 100%),' +
-            'radial-gradient(ellipse 55% 55% at 16% 84%,' + glow + ' 0%,transparent 55%),' +
-            'radial-gradient(ellipse 55% 55% at 84% 16%,' + glow + ' 0%,transparent 55%) !important;}' +
-        '.splash-logo-frame{display:flex;align-items:center;gap:14px;margin:0 auto 22px;}' +
-        '.splash-logo{width:min(62px,17vw);height:auto;display:block;flex-shrink:0;' +
-          'animation:splashLogoIn 0.72s cubic-bezier(0.34,1.48,0.64,1) both,' +
-          'splashLogoBreathe 3.8s ease-in-out 0.9s infinite,' +
-          'splashLogoGlow 2.8s ease-in-out 0.9s infinite;}' +
-        '.splash-logo-wm{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;' +
-          'font-size:clamp(26px,7.5vw,38px);font-weight:900;letter-spacing:0.04em;' +
-          'color:#fff;line-height:1;' +
-          'animation:splashLogoIn 0.72s cubic-bezier(0.34,1.48,0.64,1) 0.06s both;}' +
-        '.splash-logo-wm em{font-style:normal;color:' + color + ';}' +
-        '@keyframes splashLogoIn{' +
-          'from{opacity:0;transform:scale(0.70) translateY(22px);filter:blur(6px) brightness(1.4);}' +
-          'to{opacity:1;transform:scale(1) translateY(0);filter:blur(0) brightness(1);}}' +
-        '@keyframes splashLogoBreathe{0%,100%{transform:scale(1);}50%{transform:scale(1.022);}}' +
-        '@keyframes splashLogoGlow{' +
-          '0%,100%{filter:drop-shadow(0 0 12px ' + glow + ') drop-shadow(0 0 22px ' + glow + ');}' +
-          '50%{filter:drop-shadow(0 0 28px ' + glow + ') drop-shadow(0 0 48px ' + glow + ');}}' +
-        '#splashBadge{display:inline-flex;align-items:center;justify-content:center;' +
-          'width:64px;height:64px;border-radius:20px;font-size:30px;' +
-          'background:' + glow + ';border:1px solid ' + color + '40;' +
-          'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);' +
-          'box-shadow:0 8px 28px ' + color + '22,inset 0 1px 0 rgba(255,255,255,0.09);' +
-          'margin:0 auto 18px;' +
-          'animation:splashBadgeFloat 2.5s ease-in-out 0.3s infinite alternate,' +
-            'splashLogoIn 0.55s cubic-bezier(0.34,1.5,0.64,1) 0.16s both;}' +
-        '@keyframes splashBadgeFloat{' +
-          'from{transform:translateY(0) scale(1);}to{transform:translateY(-6px) scale(1.05);}}' +
-        '.loader-outer{width:56px;height:56px;position:relative;margin:0 auto 20px;}' +
-        '.loader-ring-a{position:absolute;inset:0;border-radius:50%;' +
-          'border:2px solid rgba(255,255,255,0.06);border-top-color:' + color + ';' +
-          'box-shadow:0 0 16px ' + glow + ';animation:splashSpin 1.25s linear infinite;}' +
-        '.loader-ring-b{position:absolute;inset:10px;border-radius:50%;' +
-          'border:2px solid rgba(255,255,255,0.04);border-bottom-color:' + color + '99;' +
-          'animation:splashSpinRev 0.68s linear infinite;}' +
-        '@keyframes splashSpin{to{transform:rotate(360deg);}}' +
-        '@keyframes splashSpinRev{to{transform:rotate(-360deg);}}' +
-        '.splash-tagline{font-size:9.5px;font-weight:900;letter-spacing:3.2px;text-transform:uppercase;' +
-          'background:linear-gradient(90deg,rgba(255,255,255,0.55),' + color + ',rgba(255,255,255,0.55));' +
-          'background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;' +
-          'animation:splashFadeUp 0.65s ease 0.45s both;}' +
-        '@keyframes splashFadeUp{from{opacity:0;transform:translateY(9px);}to{opacity:1;transform:translateY(0);}}' +
-        '#splashHub{color:' + color + ';font-size:10.5px;font-weight:800;letter-spacing:1.6px;' +
-          'text-transform:uppercase;margin-top:9px;min-height:15px;' +
-          'animation:splashFadeUp 0.65s ease 0.58s both;}' +
-        '#splashBar{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);' +
-          'width:160px;height:2.5px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;z-index:3;}' +
-        '#splashBarFill{height:100%;width:0;' +
-          'background:linear-gradient(90deg,' + color + '70,' + color + ');border-radius:2px;' +
-          'transition:width ' + MIN + 'ms linear;}' +
-      '</style>'
-    );
-    document.write(
-      '<div id="splashScreen" class="splash-screen">' +
-        '<canvas id="splashCanvas"></canvas>' +
-        '<div class="splash-content" style="position:relative;z-index:2;">' +
-          '<div class="splash-logo-frame">' +
-            '<img src="assets/Sokoni Logo.png" class="splash-logo" alt="">' +
-            '<div class="splash-logo-wm">SOKO<em>NI</em></div>' +
-          '</div>' +
-          '<div id="splashBadge">' + emoji + '</div>' +
-          '<div class="loader-outer">' +
-            '<div class="loader-ring-a"></div>' +
-            '<div class="loader-ring-b"></div>' +
-          '</div>' +
-          '<div class="splash-tagline">KENYA\'S GLOBAL MARKETPLACE</div>' +
-          '<div id="splashHub">' + hub + '</div>' +
-        '</div>' +
-        '<div id="splashBar"><div id="splashBarFill"></div></div>' +
-      '</div>'
-    );
+  /* ── Mount (body may not exist yet when run from <head>) ──────────────── */
+  function _mount() {
+    var t = document.body || document.documentElement;
+    t.insertBefore(_el, t.firstChild);
   }
+  if (document.body) { _mount(); }
+  else { document.addEventListener('DOMContentLoaded', _mount, { once: true }); }
 
-  /* ── 2. Parse accent colour → RGB for particles ── */
-  function hexRgb(h) {
-    var r = /^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);
-    return r ? [parseInt(r[1],16), parseInt(r[2],16), parseInt(r[3],16)] : [113,255,0];
-  }
-  var rgb = hexRgb(color);
+  /* ── Dismiss ──────────────────────────────────────────────────────────── */
+  var _MIN   = 1900;
+  var _start = Date.now();
 
-  /* ── 3. initSplash — after DOMContentLoaded ── */
-  function initSplash() {
-    var splash = document.getElementById('splashScreen');
-    if (!splash) return;
-
-    splash.style.display    = 'flex';
-    splash.style.opacity    = '1';
-    splash.style.transition = 'none';
-
-    /* Start progress bar */
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        var fill = document.getElementById('splashBarFill');
-        if (fill) fill.style.width = '100%';
-      });
-    });
-
-    /* Hide timers set FIRST — canvas errors below can never stop these */
-    var _done = false;
-    function hideSplash() {
-      if (_done) return;
-      _done = true;
-      splash.style.pointerEvents = 'none';
-      document.body.style.overflow = '';
-      splash.style.transition = 'opacity 0.5s cubic-bezier(0.4,0,0.2,1)';
-      splash.style.opacity    = '0';
+  function _dismiss() {
+    var remaining = Math.max(0, _MIN - (Date.now() - _start));
+    setTimeout(function () {
+      _el.classList.add('spl-out');
       setTimeout(function () {
-        splash.style.display = 'none';
-        if (window._splashAnimId) cancelAnimationFrame(window._splashAnimId);
-      }, 550);
-    }
-    setTimeout(hideSplash, MIN);       /* primary — 600 ms            */
-    setTimeout(hideSplash, 3000);      /* hard failsafe — 3 s         */
-
-    /* Particle canvas — in try/catch so any error never aborts initSplash */
-    try {
-      var canvas = document.getElementById('splashCanvas');
-      if (canvas && canvas.getContext) {
-        var ctx = canvas.getContext('2d');
-        if (ctx) {
-          canvas.width  = window.innerWidth;
-          canvas.height = window.innerHeight;
-          var pts = [];
-          for (var i = 0; i < 90; i++) {
-            pts.push({
-              x:      Math.random() * canvas.width,
-              y:      Math.random() * canvas.height,
-              r:      Math.random() * 2.4 + 0.4,
-              dx:     (Math.random() - 0.5) * 1.1,
-              dy:     (Math.random() - 0.5) * 1.1,
-              a:      Math.random() * 0.55 + 0.15,
-              accent: Math.random() > 0.38
-            });
-          }
-          var animId;
-          function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            /* Constellation lines between nearby particles */
-            for (var ii = 0; ii < pts.length - 1; ii++) {
-              for (var jj = ii + 1; jj < pts.length; jj++) {
-                var ddx = pts[ii].x - pts[jj].x;
-                var ddy = pts[ii].y - pts[jj].y;
-                var dist = Math.sqrt(ddx * ddx + ddy * ddy);
-                if (dist < 110) {
-                  var la = (1 - dist / 110) * 0.055;
-                  ctx.beginPath();
-                  ctx.moveTo(pts[ii].x, pts[ii].y);
-                  ctx.lineTo(pts[jj].x, pts[jj].y);
-                  ctx.strokeStyle = (pts[ii].accent || pts[jj].accent)
-                    ? 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + la + ')'
-                    : 'rgba(255,255,255,' + (la * 0.3) + ')';
-                  ctx.lineWidth = 0.5;
-                  ctx.stroke();
-                }
-              }
-            }
-            pts.forEach(function (p) {
-              ctx.beginPath();
-              ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-              ctx.fillStyle = p.accent
-                ? 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + p.a + ')'
-                : 'rgba(255,255,255,' + (p.a * 0.22) + ')';
-              ctx.fill();
-              p.x += p.dx; p.y += p.dy;
-              if (p.x < 0 || p.x > canvas.width)  p.dx *= -1;
-              if (p.y < 0 || p.y > canvas.height)  p.dy *= -1;
-            });
-            animId = requestAnimationFrame(draw);
-            window._splashAnimId = animId;
-          }
-          draw();
-        }
-      }
-    } catch (e) {}
+        if (_el.parentNode) _el.parentNode.removeChild(_el);
+        if (_s.parentNode)  _s.parentNode.removeChild(_s);
+      }, 600);
+    }, remaining);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initSplash);
+  /* Hard failsafe — dismiss after 4 s regardless of page load state */
+  var _failsafe = setTimeout(function () { if (_el.parentNode) _dismiss(); }, 4000);
+
+  if (document.readyState === 'complete') {
+    clearTimeout(_failsafe);
+    _dismiss();
   } else {
-    initSplash();
+    window.addEventListener('load', function () {
+      clearTimeout(_failsafe);
+      _dismiss();
+    }, { once: true });
   }
-})();
+}());

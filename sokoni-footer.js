@@ -367,8 +367,11 @@
   function mount() {
     if (excluded()) return;
 
-    /* Retire any legacy page-specific footer. One component, platform-wide. */
-    var legacy = document.querySelectorAll('footer.footer, footer.site-footer');
+    /* Retire any legacy page-specific footer. One component, platform-wide.
+       :not(.sk-footer) ensures we never remove the global footer itself on
+       a second mount() call. Excluded pages (POS/kiosk) already returned above
+       so we will never accidentally strip an operational screen's own footer. */
+    var legacy = document.querySelectorAll('footer:not(.sk-footer)');
     for (var i = 0; i < legacy.length; i++) legacy[i].remove();
 
     if (document.querySelector('footer.sk-footer')) return;
