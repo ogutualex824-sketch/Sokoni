@@ -61,8 +61,35 @@ if (!compliant) { /* show only `missing` agreements — never re-ask accepted cu
 ## Compatibility & rollback
 Purely additive — no existing collection/flow touched. Reuses existing legal doc pages for the readable text. Rollback: `git revert 3ce32d8` + remove `legalDispatch` (no data migration; acceptance records remain valid).
 
+## Universal Legal Compliance Engine (2026-07-12, `60312b3`)
+
+### Reusable component — `sokoni-legal-gate.js` (the `<LegalAcceptanceGate>`)
+One browser component every role/page uses (no framework; compat or modular Firebase):
+- `SokoniLegalGate.mount(el, { role, onComplete })` — accept-to-continue gate (no pre-checked boxes; Continue disabled until all checked; non-blocking if the service is down).
+- `SokoniLegalGate.settings(el, { role })` — **Account → Legal & Agreements** view (accepted agreements + versions + dates + pending updates).
+- `SokoniLegalGate.check(role)` — compliance helper for gating any client action.
+- Reuses existing legal pages; inherits page tokens (`--sk-green`/`--sk-accent`/`--sk-border`) — no redesign.
+- **`pos-setup.html` retrofitted** to use it (inline logic removed — DRY).
+
+### Server-side enforcement (dark-launched — non-breaking)
+`assertLegalCompliance(uid, role)` (exported from `legal-agreements.js`) is the reusable guard other modules call to protect sensitive ops (payouts, publish, go-online, listings, jobs). **OFF by default per role** (`legalConfig/enforcement`); flip on with `legalSetEnforcement({role,enabled})` once a role's acceptance UI is rolled out — so existing users are never suddenly locked out. Wired (dark) into `provider-ops` `providerRequestPayout` + `providerAddService`.
+
+**Wire it into any sensitive op:** `const legal = require('./legal-agreements'); await legal.assertLegalCompliance(uid, role);`
+
+### `legalAccept` verification (all 5 properties hold)
+- **Idempotent:** deterministic doc id `{uid}_{agreementId}_{version}` + `merge` → re-accepting the same version is a no-op overwrite.
+- **Version-aware:** rejects any version ≠ current catalogue version (`failed-precondition`).
+- **Audit-logged:** immutable `legalAuditLog` entry written in the same batch (append-only).
+- **Transaction-safe:** single atomic `batch.commit()`.
+- **Duplicate-safe:** deterministic id → one record per (user, agreement, version), never duplicated.
+
+### Admin
+`legalComplianceReport` (acceptance rate, distinct users, version adoption, by role, enforcement state) · `legalSetEnforcement` · plus existing `legalGetStats`/`legalSearchAcceptances`/`legalVersionHistory`. New collection `legalAuditLog` (append-only). New config `legalConfig/enforcement`.
+
 ## Pending
-- **UI step** in the onboarding wizard (`onboarding.html` / `provider-onboarding.html`) — blocked on the concurrent agent's active edits; wire per the contract above once the tree is clean.
-- Optionally seed real agreement text/versions via `legalPublishAgreement` (defaults to `1.0` until then).
+- **Provider/unified wizard UI** — drop `SokoniLegalGate.mount(el, { role })` into `onboarding.html` / `provider-onboarding.html` (blocked on the agent's active edits; one-line integration now that the component exists).
+- **Account Settings page** — mount `SokoniLegalGate.settings(el, { role })` (component ready; host page is the agent's).
+- **Enable enforcement per role** via `legalSetEnforcement` once each role's UI is live and existing users prompted.
+- Optionally seed real agreement text/versions via `legalPublishAgreement` (defaults to `1.0`).
 
 Related: [[ONBOARDING_ARCHITECTURE_UPGRADE]] · [[DISPATCHER_REGISTRY]]
