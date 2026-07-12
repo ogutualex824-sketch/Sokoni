@@ -1854,8 +1854,8 @@ exports.onSellerBroadcast = onDocumentCreated(
         },
         webpush: {
           notification: {
-            icon:  "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
-            badge: "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
+            icon:  "https://mysokoni.co.ke/assets/logosokoni.png",
+            badge: "https://mysokoni.co.ke/assets/logosokoni.png",
             requireInteraction: false,
           },
           fcmOptions: { link: data.url || "https://mysokoni.co.ke/" },
@@ -1887,8 +1887,8 @@ async function sendFcm(token, title, body, relUrl) {
     notification: { title, body },
     webpush: {
       notification: {
-        icon:  "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
-        badge: "https://mysokoni.co.ke/assets/Sokoni%20Logo.png",
+        icon:  "https://mysokoni.co.ke/assets/logosokoni.png",
+        badge: "https://mysokoni.co.ke/assets/logosokoni.png",
         requireInteraction: false,
       },
       fcmOptions: { link: "https://mysokoni.co.ke/" + (relUrl || "") },
@@ -4861,13 +4861,36 @@ exports.intasendWebhook = onRequest(
     if (existing.status === "COMPLETE") { res.status(200).send("OK"); return; }
 
     const fsStatus = state === "COMPLETE" ? "COMPLETE" : state === "FAILED" ? "FAILED" : "PENDING";
-    await payRef.update({
-      status:            fsStatus,
-      intasendState:     state,
-      confirmedAmount:   amount,
-      updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
-      webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
+
+    /* P0-2: atomically CLAIM the transition inside a transaction, exactly as the
+       Daraja callback does (P0-1). IntaSend retries webhooks on timeout/5xx, and the
+       previous code was a non-transactional read-check-write followed by
+       commissionLedger.add() (AUTO-ID) — so two concurrent retries could both pass
+       the "already COMPLETE?" check and both append, producing DUPLICATE commission
+       ledger entries for a single payment (corrupting ledger consistency and any
+       settlement/payout derived from it). Only the single winner writes the ledger,
+       and it writes with a DETERMINISTIC doc id so even a re-run overwrites rather
+       than duplicating. */
+    let claimed = false;
+    await db.runTransaction(async (txn) => {
+      const s = await txn.get(payRef);
+      if (!s.exists) return;
+      if (s.data().status === "COMPLETE") return;   /* a concurrent retry already won */
+      txn.update(payRef, {
+        status:            fsStatus,
+        intasendState:     state,
+        confirmedAmount:   amount,
+        updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
+        webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      claimed = true;
     });
+
+    if (!claimed) {
+      console.log(`[intasendWebhook] Already processed (raced): ${apiRef}`);
+      res.status(200).send("OK");
+      return;
+    }
 
     if (fsStatus === "COMPLETE") {
       const payData  = existing;
@@ -4888,7 +4911,9 @@ exports.intasendWebhook = onRequest(
         commissionPct = 10;
         sokoniCut = Math.round(amount * 0.10);
       }
-      await db.collection("commissionLedger").add({
+      /* Deterministic doc id — ONE commission entry per payment reference.
+         .set() (not .add()) so a replay/re-run overwrites rather than duplicating. */
+      await db.collection("commissionLedger").doc(apiRef).set({
         ref: apiRef, checkoutId, uid: payData.uid,
         providerName:  payData.meta?.providerName || "",
         category,
@@ -4899,7 +4924,7 @@ exports.intasendWebhook = onRequest(
         source:        "intasend_webhook",
         confirmedAt:   admin.firestore.FieldValue.serverTimestamp(),
         createdAt:     admin.firestore.FieldValue.serverTimestamp(),
-      }).catch(err => console.error("Commission write failed:", err));
+      }, { merge: true }).catch(err => console.error("Commission write failed:", err));
     }
 
     res.status(200).send("OK");
