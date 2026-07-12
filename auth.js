@@ -442,7 +442,7 @@ async function _doSignup(name, email, password){
         try { msgs = JSON.parse(localStorage.getItem("sokoniMessages")) || []; } catch(e) {}
         msgs.unshift({
             id: "conv_welcome",
-            productName: "Welcome to Sokoni! 🎉",
+            productName: "Welcome to SOKONI! 🎉",
             sellerName: "Sokoni Team",
             messages: [
                 { sender:"seller", text:`Hi ${name}! 👋 Welcome to SOKONI — Kenya's global marketplace! We're excited to have you.\n\n✅ Your account is ready\n⭐ Earn points on every purchase\n📦 Track orders in real-time\n💬 Chat with sellers directly\n\nHappy shopping! 🛍️`, time: new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) }

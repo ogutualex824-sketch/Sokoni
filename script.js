@@ -1616,7 +1616,7 @@ const botResponses = [
     { keys:["hello","hi","hey","hujambo","habari","sasa","niaje","wazzup","howdy"], reply:(() => {
         const h = new Date().getHours();
         const greet = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-        return `${greet}! 👋 Welcome to Sokoni — Kenya's #1 marketplace!<br>How can I help you today? You can ask me about products, delivery, selling, healthcare, events and more! 😊`;
+        return `${greet}! 👋 Welcome to SOKONI — Kenya's #1 marketplace!<br>How can I help you today? You can ask me about products, delivery, selling, healthcare, events and more! 😊`;
     })() },
     { keys:["thank","asante","sawa","okay","ok","nice","great","perfect","awesome"], reply:"You're most welcome! 😊🌟 Happy shopping on Sokoni. Your loyalty points are growing with every purchase. Anything else I can help with?" },
     { keys:["bye","goodbye","later","tutaonana","kwaheri"], reply:"Goodbye! 👋 Come back soon — new products and deals are added every day on Sokoni! See you! 🛍️" },
@@ -2644,7 +2644,7 @@ function showPromoToast(msg){
     toast.className = "sokoni-promo-toast";
     toast.innerHTML = `
         <div class="spt-inner">
-            <img src="assets/Sokoni Logo.png" class="spt-logo">
+            <img src="assets/sokoni-icon.svg" class="spt-logo">
             <span>${msg}</span>
             <button onclick="this.parentElement.parentElement.remove()">✕</button>
         </div>
@@ -2654,14 +2654,43 @@ function showPromoToast(msg){
 }
 
 function showWelcomePopup(){
+    /* LAYER PRIORITY: consent (legally required) -> welcome -> notifications.
+       Measured on real Desktop Chrome: this modal fired at ~11s while the
+       privacy/cookie consent banner was still on screen and rendered over it.
+       A consent notice must never be obscured. Defer until the banner is gone.
+
+       Do NOT test offsetParent — the banner is position:fixed, for which
+       offsetParent is always null. */
+    /* Test VISIBILITY, not existence: the banner may be hidden rather than
+       removed from the DOM, in which case getElementById still finds it and the
+       observer would never fire. */
+    const _consentUp = () => {
+      const e = document.getElementById("_sokoniPrivacyBanner");
+      if (!e) return false;
+      const cs = getComputedStyle(e);
+      return e.getBoundingClientRect().height > 0 &&
+             cs.display !== "none" && cs.visibility !== "hidden" &&
+             parseFloat(cs.opacity) > 0.05;
+    };
+    if (_consentUp()) {
+      const _obs = new MutationObserver(() => {
+        if (!_consentUp()) {
+          _obs.disconnect();
+          setTimeout(showWelcomePopup, 600);
+        }
+      });
+      _obs.observe(document.body, { childList: true, subtree: true });
+      return;
+    }
+    if (document.getElementById("welcomePopup")) return;   /* never mount twice */
     const pop = document.createElement("div");
     pop.className = "mkt-popup-overlay";
     pop.id = "welcomePopup";
     pop.innerHTML = `
         <div class="mkt-popup-box">
             <button class="mkt-close" onclick="document.getElementById('welcomePopup').remove()">✕</button>
-            <img src="assets/Sokoni Logo.png" class="mkt-popup-logo">
-            <h2>Welcome to Sokoni! 🎉</h2>
+            <img src="assets/sokoni-icon.svg" class="mkt-popup-logo">
+            <h2>Welcome to SOKONI! 🎉</h2>
             <p>Kenya's global marketplace — buy, sell, rent, book and more.</p>
             <div class="mkt-popup-perks">
                 <div class="mkt-perk"><i class="fas fa-star"></i> Earn loyalty points on every order</div>

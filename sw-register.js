@@ -247,17 +247,29 @@
 
        Consent is legally required and must come first; a notification opt-in is
        not. So wait for the banner to be dismissed, then ask. */
-    /* NB: do NOT test offsetParent here. The banner is position:fixed, and
+    /* The same applies to the welcome modal: a screenshot on real Desktop Chrome
+       showed this prompt rendered ON TOP of #welcomePopup, covering its
+       "Maybe later" link. So gate on ANY blocking layer, not just the banner —
+       otherwise we fix one collision and ship the next.
+
+       NB: do NOT test offsetParent here. These are position:fixed, and
        offsetParent is ALWAYS null for a fixed element — that check silently
        reported "not visible" for a banner that was plainly on screen. */
-    const consent = document.getElementById("_sokoniPrivacyBanner");
-    const consentUp = !!consent &&
-      consent.getBoundingClientRect().height > 0 &&
-      getComputedStyle(consent).visibility !== "hidden" &&
-      getComputedStyle(consent).display !== "none";
-    if (consentUp) {
+    const BLOCKING = ["_sokoniPrivacyBanner", "welcomePopup"];
+    const onScreen = id => {
+      const e = document.getElementById(id);
+      if (!e) return false;
+      const cs = getComputedStyle(e);
+      return e.getBoundingClientRect().height > 0 &&
+             cs.visibility !== "hidden" && cs.display !== "none" &&
+             parseFloat(cs.opacity) > 0.05;
+    };
+    if (BLOCKING.some(onScreen)) {
       const obs = new MutationObserver(() => {
-        if (!document.getElementById("_sokoniPrivacyBanner")) {
+        /* Wait for EVERY blocking layer to clear, not just the banner. Watching
+             only the banner meant the prompt still fired while the welcome modal
+             was open — precisely the collision being fixed here. */
+          if (!BLOCKING.some(onScreen)) {
           obs.disconnect();
           setTimeout(_showNotificationPrompt, 800);   /* let the banner finish leaving */
         }
@@ -371,7 +383,7 @@
           _showLocalNotification(
             "✅ Order Confirmed!",
             `Order ${latest.id} · KES ${Number(latest.total).toLocaleString()} — processing now`,
-            "/assets/Sokoni Logo.png",
+            "/assets/sokoni-icon.svg",
             "/track.html"
           );
         }
@@ -388,7 +400,7 @@
           _showLocalNotification(
             "💬 New Message",
             `${latest?.sellerName || "Someone"}: new message on Sokoni`,
-            "/assets/Sokoni Logo.png",
+            "/assets/sokoni-icon.svg",
             "/messages.html"
           );
         }
@@ -404,7 +416,7 @@
           _showLocalNotification(
             "⚡ Flash Sale Started!",
             `${active.length} product(s) on sale — grab them before they're gone!`,
-            "/assets/Sokoni Logo.png",
+            "/assets/sokoni-icon.svg",
             "/flashsale.html"
           );
         }
@@ -420,7 +432,7 @@
           _showLocalNotification(
             "🏷️ New Offer Received",
             `Offer of KES ${Number(latest.offerPrice).toLocaleString()} on "${latest.productName}"`,
-            "/assets/Sokoni Logo.png",
+            "/assets/sokoni-icon.svg",
             "/seller.html"
           );
         }
@@ -564,7 +576,7 @@
     b.innerHTML = `
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:12px;padding:14px 14px 12px;border-bottom:1px solid rgba(255,255,255,0.07);">
-        <img src="assets/Sokoni Logo.png" style="width:42px;height:42px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
+        <img src="assets/sokoni-icon.svg" style="width:42px;height:42px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:900;color:#fff;">Install SOKONI</div>
           <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:1px;">Free · Fast · Works offline</div>

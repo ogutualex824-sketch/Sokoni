@@ -978,7 +978,7 @@
     },
     {
       id: "conv_welcome",
-      productName: "Welcome to Sokoni! 🎉",
+      productName: "Welcome to SOKONI! 🎉",
       sellerName: "Sokoni Team",
       messages: [
         { sender:"seller", text:"Hi there! 👋 Welcome to SOKONI — Kenya's global marketplace!\n\n✅ Your account is ready\n⭐ Earn points on every purchase\n📦 Track orders in real-time\n💬 Chat with sellers directly\n🎥 Watch seller stories for deals\n🏠 Find BnBs & rental properties\n\nHappy shopping! 🛍️", time:"08:00" }
