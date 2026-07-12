@@ -8959,3 +8959,7 @@ exports.providerDispatch = provDisp.providerDispatch;
 /* ── Universal Enterprise Onboarding Engine — 12 ops → 1 onboardingDispatch ── */
 const onbDisp = require('./onboarding-dispatch');
 exports.onboardingDispatch = onbDisp.onboardingDispatch;
+
+/* ── Subscription Core — canonical read/enforce across all 5 stores → 1 CF ── */
+const subsCoreDisp = require('./subscriptions-dispatch');
+exports.subscriptionsDispatch = subsCoreDisp.subscriptionsDispatch;

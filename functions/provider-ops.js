@@ -18,6 +18,7 @@
 const { HttpsError }               = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const logger                       = require('firebase-functions/logger');
+const subCore                      = require('./subscription-core');
 
 const _db  = () => getFirestore();
 const _ts  = () => FieldValue.serverTimestamp();
@@ -30,14 +31,11 @@ function _uid(req) {
   return uid;
 }
 
-/* Default commission if a provider somehow has no subscription doc (free-trial rate). */
-const _DEFAULT_COMMISSION = 0.20;
-
-/* Read the provider's effective commission rate from their live subscription. */
+/* Provider's effective commission rate — resolved through the canonical
+   subscription-core seam (unifies providerSubscriptions + accountSubscriptions),
+   so the provider hub and UEOE can never disagree on the rate charged. */
 async function _commissionRate(uid) {
-  const snap = await _db().collection('providerSubscriptions').doc(uid).get();
-  const rate = snap.exists ? Number(snap.data().commissionRate) : NaN;
-  return Number.isFinite(rate) && rate >= 0 && rate <= 1 ? rate : _DEFAULT_COMMISSION;
+  return subCore.getCommissionRate(uid, { role: 'provider' });
 }
 
 /* Load a booking and assert the caller owns it. Returns {ref, data}. */

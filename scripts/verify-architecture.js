@@ -43,6 +43,7 @@ const DISPATCHERS = {
   logisticsPlusDispatch: ['logistics-plus'],
   financeSprintDispatch: ['finance-os-sprint43'],   // + settlement handlers (settlement-dispatch)
   providerDispatch:      ['provider-onboarding', 'provider-ops'],
+  subscriptionsDispatch: ['subscription-core'],
 };
 
 const errors = [];
