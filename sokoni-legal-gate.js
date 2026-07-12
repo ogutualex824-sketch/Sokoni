@@ -88,6 +88,18 @@
         el.innerHTML = '<div class="slg-done">✓ Legal agreements accepted</div>';
         el.style.display = 'block'; done(true, comp); return;
       }
+      /* Not compliant -> hand off to the guided Digital Agreement experience.
+         A DELEGATION, not a rewrite: every existing caller of mount() keeps
+         working, and if sokoni-legal-sign.js is absent we fall through to the
+         original checkbox flow below. Same server contract either way. */
+      if (window.SokoniLegalSign) {
+        el.classList.remove('slg');
+        window.SokoniLegalSign.mount(el, {
+          role: role, businessId: opts.businessId || '',
+          onComplete: function (res) { done(true, res); }
+        });
+        return;
+      }
       return call('legalGetAgreements', { role: role }).then(function (ag) {
         var all = (ag.core || []).concat(ag.roleSpecific || []);
         if (!all.length) { done(true, { compliant: true }); return; }
