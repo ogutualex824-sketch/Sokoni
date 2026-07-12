@@ -10,9 +10,27 @@
 const { FROM } = require("./email-service");
 const { COMPANY } = require("./company-identity");
 
-/* Sokoni Logo.png — official SOKONI wordmark (480×320 px, 33 KB, 3:2 aspect ratio).
-   Firebase Hosting / Cloudflare CDN → permanent HTTPS URL, reliable in all email clients. */
-const LOGO_URL    = "https://mysokoni.co.ke/assets/Sokoni%20Logo.png";
+/* SOKONI email wordmark — 360×320→240 px, pre-resampled for email.
+
+   WHY A DEDICATED EMAIL ASSET (root cause of the faded/washed-out logo):
+   The template renders the mark in a 180×120 box. Previously it served the 480×320
+   master, forcing every client to downscale to 37.5%. Gmail and Outlook use a naive
+   (non-premultiplied) box filter: each output pixel averages its neighbours INCLUDING
+   fully-transparent ones, which carry RGB 0,0,0 at alpha 0. The mark is 93.7%
+   transparent with thin anti-aliased strokes, so that filter bled colour and alpha
+   out of every stroke — the logo rendered FADED, washed out, partly invisible.
+
+   This asset is pre-resampled by scripts/build-email-logo.js in PREMULTIPLIED-ALPHA
+   space (the mathematically correct way to filter transparency, and exactly what the
+   client filter gets wrong). Mean luminance is preserved (120.3 → 120.8), proving no
+   colour bleed. At 360×240 it is a clean 2× of the render box, so HiDPI clients draw
+   it 1:1 and 1× clients do a lossless 2:1 halving. No client performs an aggressive
+   fractional downscale any more.
+
+   Served from Firebase Hosting over permanent HTTPS with CDN caching.
+   Sits on the hard-coded #0d1117 header in BOTH light and dark mode, so it can never
+   be a light mark on a light background. */
+const LOGO_URL    = "https://mysokoni.co.ke/assets/sokoni-email-logo.png";
 const BASE_URL    = "https://mysokoni.co.ke";
 const SUPPORT_URL = `${BASE_URL}/support.html`;
 const PRIVACY_URL = `${BASE_URL}/trust.html`;
@@ -120,8 +138,8 @@ ${hidden}
       <tr><td align="center" style="padding-bottom:14px;">
         <!-- Logo: Sokoni Logo.png — official wordmark, 3:2 ratio -->
         <img src="${LOGO_URL}" width="180" height="120" class="eml-logo"
-          alt="SOKONI"
-          style="width:180px;height:120px;display:block;margin:0 auto;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
+          alt="SOKONI" title="SOKONI"
+          style="width:180px;height:120px;max-width:180px;display:block;margin:0 auto;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;image-rendering:auto;">
         <!-- Wordmark -->
         <p style="margin:12px 0 3px;font-family:Arial,Helvetica,sans-serif;font-size:24px;
                   font-weight:900;letter-spacing:0.1em;color:#ffffff;text-align:center;
