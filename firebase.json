@@ -1,14 +1,15 @@
 {
   "functions": {
-    "source":          "functions",
-    "runtime":         "nodejs22",
-    "concurrency":     80,
-    "minInstances":    0,
-    "maxInstances":    1000,
-    "memory":          "512MiB",
-    "timeoutSeconds":  60
+    "source": "functions",
+    "runtime": "nodejs22",
+    "concurrency": 80,
+    "minInstances": 0,
+    "maxInstances": 1000,
+    "memory": "512MiB",
+    "timeoutSeconds": 60
   },
   "hosting": {
+    "404": "/404.html",
     "site": "sokoni-aeb26",
     "public": ".",
     "ignore": [
@@ -53,196 +54,367 @@
       "cf-*.html"
     ],
     "rewrites": [
-      { "source": "/api/chat",                     "function": "sokoniChat",           "region": "us-central1" },
-      { "source": "/api/facebook/data-deletion",   "function": "facebookDataDeletion", "region": "us-central1" },
-      { "source": "/.well-known/assetlinks.json",  "destination": "/assetlinks.json" },
-      { "source": "/shop/**",                      "destination": "/minishop.html" },
-      { "source": "/@**",                          "destination": "/minishop.html" },
-      { "source": "/card/**",                      "destination": "/minishop-status.html" },
-      { "source": "/pay/**",                       "destination": "/pay.html" }
+      {
+        "source": "/api/chat",
+        "function": "sokoniChat",
+        "region": "us-central1"
+      },
+      {
+        "source": "/api/facebook/data-deletion",
+        "function": "facebookDataDeletion",
+        "region": "us-central1"
+      },
+      {
+        "source": "/.well-known/assetlinks.json",
+        "destination": "/assetlinks.json"
+      },
+      {
+        "source": "/shop/**",
+        "destination": "/minishop.html"
+      },
+      {
+        "source": "/@**",
+        "destination": "/minishop.html"
+      },
+      {
+        "source": "/card/**",
+        "destination": "/minishop-status.html"
+      },
+      {
+        "source": "/pay/**",
+        "destination": "/pay.html"
+      }
     ],
     "cleanUrls": true,
     "trailingSlash": false,
-    "404": "/404.html",
     "headers": [
-
       {
         "source": "/shared-header.js",
         "headers": [
-          { "key": "Cache-Control",                    "value": "public, max-age=3600, must-revalidate" },
-          { "key": "CDN-Cache-Control",                "value": "no-store" },
-          { "key": "Cloudflare-CDN-Cache-Control",     "value": "no-store" },
-          { "key": "Surrogate-Control",                "value": "no-store" }
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600, must-revalidate"
+          },
+          {
+            "key": "CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Cloudflare-CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Surrogate-Control",
+            "value": "no-store"
+          }
         ]
       },
-
+      {
+        "source": "/sokoni-offline.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600, must-revalidate"
+          },
+          {
+            "key": "CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Cloudflare-CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Surrogate-Control",
+            "value": "no-store"
+          }
+        ]
+      },
+      {
+        "source": "/sokoni-ui.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600, must-revalidate"
+          },
+          {
+            "key": "CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Cloudflare-CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Surrogate-Control",
+            "value": "no-store"
+          }
+        ]
+      },
+      {
+        "source": "/sw-register.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600, must-revalidate"
+          },
+          {
+            "key": "CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Cloudflare-CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Surrogate-Control",
+            "value": "no-store"
+          }
+        ]
+      },
       {
         "source": "/service-worker.js",
         "headers": [
-          { "key": "Cache-Control",         "value": "no-cache, no-store, must-revalidate" },
-          { "key": "CDN-Cache-Control",     "value": "no-store" },
-          { "key": "Cloudflare-CDN-Cache-Control", "value": "no-store" },
-          { "key": "Surrogate-Control",     "value": "no-store" },
-          { "key": "Service-Worker-Allowed","value": "/" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          },
+          {
+            "key": "CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Cloudflare-CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Surrogate-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Service-Worker-Allowed",
+            "value": "/"
+          }
         ]
       },
       {
         "source": "/firebase-messaging-sw.js",
         "headers": [
-          { "key": "Cache-Control",         "value": "no-cache, no-store, must-revalidate" },
-          { "key": "CDN-Cache-Control",     "value": "no-store" },
-          { "key": "Cloudflare-CDN-Cache-Control", "value": "no-store" },
-          { "key": "Surrogate-Control",     "value": "no-store" },
-          { "key": "Service-Worker-Allowed","value": "/" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          },
+          {
+            "key": "CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Cloudflare-CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Surrogate-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Service-Worker-Allowed",
+            "value": "/"
+          }
         ]
       },
       {
         "source": "manifest.json",
         "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=86400, must-revalidate" },
-          { "key": "Content-Type",  "value": "application/manifest+json" }
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400, must-revalidate"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/manifest+json"
+          }
         ]
       },
-
       {
         "source": "/.well-known/assetlinks.json",
         "headers": [
-          { "key": "Content-Type",              "value": "application/json" },
-          { "key": "Access-Control-Allow-Origin","value": "*" },
-          { "key": "Cache-Control",             "value": "public, max-age=86400" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400"
+          }
         ]
       },
-
       {
         "source": "/assetlinks.json",
         "headers": [
-          { "key": "Content-Type",              "value": "application/json" },
-          { "key": "Access-Control-Allow-Origin","value": "*" },
-          { "key": "Cache-Control",             "value": "public, max-age=86400" }
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400"
+          }
         ]
       },
-
       {
         "source": "**/*.html",
         "headers": [
-          { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
         ]
       },
       {
         "source": "**/*.@(js|css)",
         "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=604800, stale-while-revalidate=86400" }
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=604800, stale-while-revalidate=86400"
+          }
         ]
       },
       {
         "source": "**/*.@(jpg|jpeg|gif|png|svg|ico|webp|woff2|woff|ttf)",
         "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=2592000" }
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=2592000"
+          }
         ]
       },
-
       {
         "source": "@(login|signup|admin|superadmin).html",
         "headers": [
-          { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, private" },
-          { "key": "Pragma", "value": "no-cache" },
-          { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate, private"
+          },
+          {
+            "key": "Pragma",
+            "value": "no-cache"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
         ]
       },
       {
         "source": "@(login|signup|admin|superadmin)",
         "headers": [
-          { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate, private" },
-          { "key": "Pragma", "value": "no-cache" },
-          { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate, private"
+          },
+          {
+            "key": "Pragma",
+            "value": "no-cache"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
         ]
       },
-
       {
         "source": "@(checkout|payments|wallet|financial-os|finos).html",
         "headers": [
-          { "key": "Cache-Control", "value": "no-store, private" },
-          { "key": "Pragma", "value": "no-cache" }
+          {
+            "key": "Cache-Control",
+            "value": "no-store, private"
+          },
+          {
+            "key": "Pragma",
+            "value": "no-cache"
+          }
         ]
       },
       {
         "source": "@(checkout|payments|wallet|financial-os|finos)",
         "headers": [
-          { "key": "Cache-Control", "value": "no-store, private" },
-          { "key": "Pragma", "value": "no-cache" }
+          {
+            "key": "Cache-Control",
+            "value": "no-store, private"
+          },
+          {
+            "key": "Pragma",
+            "value": "no-cache"
+          }
         ]
       },
-
       {
         "source": "**",
         "headers": [
-          { "key": "X-Permitted-Cross-Domain-Policies", "value": "none" },
-
+          {
+            "key": "X-Permitted-Cross-Domain-Policies",
+            "value": "none"
+          },
           {
             "key": "Content-Security-Policy",
             "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://cdnjs.cloudflare.com https://cdn.intasend.com https://unpkg.com https://cdn.jsdelivr.net https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com https://storage.googleapis.com https://images.unsplash.com https://*.googleusercontent.com https://mysokoni.co.ke https://maps.googleapis.com https://maps.gstatic.com https://*.ggpht.com https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com https://server.arcgisonline.com https://*.arcgisonline.com https://*.opentopomap.org https://opentopomap.org https://www.google.com https://www.gstatic.com https://chart.googleapis.com https://intasend-prod-static.s3.amazonaws.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://fcm.googleapis.com https://firebase.googleapis.com https://firebaseappcheck.googleapis.com https://content-firebaseappcheck.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://www.gstatic.com https://maps.googleapis.com https://maps.gstatic.com https://payment.intasend.com https://api.intasend.com https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://www.google.com https://etims-api.kra.go.ke https://etims-sbx.kra.go.ke https://us-central1-sokoni-aeb26.cloudfunctions.net https://*.algolia.net https://*.algolianet.com https://*.typesense.net; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob: https://firebasestorage.googleapis.com https://storage.googleapis.com; frame-src https://www.google.com https://maps.google.com https://sokoni-aeb26.firebaseapp.com https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://payment.intasend.com; upgrade-insecure-requests; report-uri https://us-central1-sokoni-aeb26.cloudfunctions.net/cspReportCollect"
           },
-
           {
             "key": "Content-Security-Policy-Report-Only",
             "value": "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://cdnjs.cloudflare.com https://cdn.intasend.com https://unpkg.com https://cdn.jsdelivr.net https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net https://maps.googleapis.com https://maps.gstatic.com; script-src-attr 'none'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https://firebasestorage.googleapis.com https://storage.googleapis.com https://images.unsplash.com https://*.googleusercontent.com https://mysokoni.co.ke https://maps.googleapis.com https://maps.gstatic.com https://*.ggpht.com https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://*.basemaps.cartocdn.com https://basemaps.cartocdn.com https://server.arcgisonline.com https://*.arcgisonline.com https://*.opentopomap.org https://opentopomap.org https://www.google.com https://www.gstatic.com https://chart.googleapis.com https://intasend-prod-static.s3.amazonaws.com; connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://fcm.googleapis.com https://firebase.googleapis.com https://firebaseappcheck.googleapis.com https://content-firebaseappcheck.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://www.gstatic.com https://maps.googleapis.com https://maps.gstatic.com https://payment.intasend.com https://api.intasend.com https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://www.google.com https://etims-api.kra.go.ke https://etims-sbx.kra.go.ke https://us-central1-sokoni-aeb26.cloudfunctions.net https://*.algolia.net https://*.algolianet.com https://*.typesense.net; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob: https://firebasestorage.googleapis.com https://storage.googleapis.com; frame-src https://www.google.com https://maps.google.com https://sokoni-aeb26.firebaseapp.com https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://payment.intasend.com; report-uri https://us-central1-sokoni-aeb26.cloudfunctions.net/cspReportCollect"
           },
-
           {
             "key": "Strict-Transport-Security",
             "value": "max-age=63072000; includeSubDomains; preload"
           },
-
           {
             "key": "X-Frame-Options",
             "value": "SAMEORIGIN"
           },
-
           {
             "key": "X-Content-Type-Options",
             "value": "nosniff"
           },
-
           {
             "key": "Report-To",
             "value": "{\"group\":\"csp-violations\",\"max_age\":86400,\"endpoints\":[{\"url\":\"https://us-central1-sokoni-aeb26.cloudfunctions.net/cspReportCollect\"}],\"include_subdomains\":false}"
           },
-
           {
             "key": "Referrer-Policy",
             "value": "strict-origin-when-cross-origin"
           },
-
           {
             "key": "Permissions-Policy",
             "value": "geolocation=(self), camera=(self), microphone=(self), notifications=(self), payment=(self), fullscreen=(self), autoplay=(self), clipboard-write=(self), gyroscope=(), magnetometer=(), accelerometer=()"
           },
-
           {
             "key": "Cross-Origin-Opener-Policy",
             "value": "same-origin-allow-popups"
           },
-
           {
             "key": "Cross-Origin-Resource-Policy",
             "value": "same-site"
           },
-
           {
             "key": "Cross-Origin-Embedder-Policy",
             "value": "unsafe-none"
           },
-
           {
             "key": "X-DNS-Prefetch-Control",
             "value": "off"
           },
-
           {
             "key": "Origin-Agent-Cluster",
             "value": "?1"
           }
-
         ]
       }
     ]
@@ -250,13 +422,13 @@
   "firestore": [
     {
       "database": "(default)",
-      "rules":    "firestore.rules",
-      "indexes":  "firestore.indexes.json"
+      "rules": "firestore.rules",
+      "indexes": "firestore.indexes.json"
     },
     {
       "database": "sokoni-ops",
-      "rules":    "firestore.rules.sokoni-ops",
-      "indexes":  "firestore.indexes.sokoni-ops.json"
+      "rules": "firestore.rules.sokoni-ops",
+      "indexes": "firestore.indexes.sokoni-ops.json"
     }
   ],
   "storage": {
