@@ -4,7 +4,7 @@
 
 # 🔴 VERDICT: **NO-GO**
 
-Four **critical** blockers prevent a v1.0.0 freeze. None are unfixable; three are small, one is a coordination problem. Detail + remediation below.
+**Update (`02f1a6f`): C3 is RESOLVED and deployed.** **Three** critical blockers remain — C1 (dirty tree), C2 (provider onboarding broken), C4 (legal integration incomplete). C2 and C4 are both **queued to land the instant C1 clears** (a watcher is armed on the agent's files); neither is technically hard. Detail + remediation below.
 
 ---
 
@@ -35,9 +35,9 @@ The working tree has **163 modified + 4 untracked files** (a concurrent agent's 
 Audited: the provider wizard **cannot save a draft, cannot activate a subscription, and cannot publish** (4 frontend↔backend contract bugs — draft sends a numeric step where the backend requires a named string; the wizard never calls `providerSelectPlan`/`providerActivateSubscription`, so `providerPublish`'s subscription precondition always fails; publish field-map mismatch; resume shape mismatch). **A service provider literally cannot complete registration.**
 **Remediation:** the 4 fixes are specified with file:line in `PROVIDER_ONBOARDING_GAPS.md` — a ~1-hour pass, blocked only by C1.
 
-### C3 — 12 of 15 role dashboards do not exist
-The UEOE `DASHBOARD_MAP` routes users to `hotel-dashboard.html`, `restaurant-dashboard.html`, `driver-dashboard.html`, `employer-dashboard.html`, `healthcare-dashboard.html`, `pharmacy-dashboard.html`, `courier-`, `freelancer-`, `manufacturer-`, `ngo-`, `school-`, `finance-dashboard.html` — **none of which exist**. Those roles complete onboarding and land on a **404**. The Driver/Hotel/Restaurant/Healthcare/Employer/Property user journeys **dead-end**.
-**Remediation:** build the dashboards, or gate role activation to the roles that have one (Buyer, Merchant, Provider, Rider, Property).
+### ~~C3 — 12 of 15 role dashboards do not exist~~ → ✅ **RESOLVED** (`02f1a6f`, deployed)
+The UEOE `DASHBOARD_MAP` routed 12 roles (hotel/restaurant/pharmacy/driver/courier/employer/freelancer/healthcare/manufacturer/ngo/school/finance) to `*-dashboard.html` pages that **did not exist** — those roles completed onboarding and landed on a **404** dead-end.
+**Fixed:** every entry now routes to an **existing** page (verified: 13 distinct targets, **0 missing**) — driver/courier→`driver.html`, hotel→`bnb-manage.html`, restaurant/pharmacy→`pos.html`, employer→`job-post.html`, freelancer→`jobs.html`, healthcare→`healthcare.html`, school→`education.html`, manufacturer/ngo/finance→`business-os.html`. Respects the feature freeze (a stability fix, **not** 12 new dashboards); point any role back at a purpose-built dashboard when one ships.
 
 ### C4 — Legal compliance integration incomplete
 Only the **merchant** flow uses `SokoniLegalGate`. Buyer/Provider/Driver/Rider/Property/Hotel/Restaurant/Pharmacy/Healthcare/Employer/Admin do not. Per the sprint's own gate ("do not mark complete until all onboarding flows use SokoniLegalGate"), **Legal Compliance must not be marked complete**. Server enforcement covers the 5 provider ops only (and is dark-launched).
