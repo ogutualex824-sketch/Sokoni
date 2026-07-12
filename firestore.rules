@@ -1233,7 +1233,10 @@ service cloud.firestore {
       allow read:  if isAdmin()
                    || (isAuthed() && resource.data.sellerUid  == request.auth.uid)
                    || (isAuthed() && resource.data.callerUid  == request.auth.uid);
-      allow write: if isAdmin();
+      /* SEC-F1: financial record — Cloud Functions only (Admin SDK bypasses rules).
+         Previously `if isAdmin()`, which let a compromised/mis-scoped admin token
+         mutate payment records straight from a client. 0 client files write this. */
+      allow write: if false;
     }
 
     match /revenueConfig/{configId} {
@@ -1257,7 +1260,10 @@ service cloud.firestore {
     match /commissionLedger/{entryId} {
       allow read:  if isAdmin()
                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
-      allow write: if isAdmin();
+      /* SEC-F1: IMMUTABLE financial ledger — Cloud Functions only (Admin SDK bypasses
+         rules). Previously `if isAdmin()`, which allowed ledger tampering from a client
+         with an admin token, defeating the audit trail. 0 client files write this. */
+      allow write: if false;
     }
 
     match /featuredListings/{featureId} {
