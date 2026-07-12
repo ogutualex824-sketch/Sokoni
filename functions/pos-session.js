@@ -482,7 +482,9 @@ exports.listActiveSessions = onCall(
    Scheduled — Clean up stale open sessions (>24h with no activity)
 ════════════════════════════════════════════════════════════ */
 exports.posSessionCleanup = onSchedule(
-  { schedule: 'every 6 hours', region: 'us-central1', memory: '128MiB' },
+  /* 128MiB OOM'd in production ("Memory limit of 128 MiB exceeded with 144 MiB used")
+     and every run failed its readiness probe. 256MiB is the next tier. */
+  { schedule: 'every 6 hours', region: 'us-central1', memory: '256MiB' },
   async () => {
     const cutoff = admin.firestore.Timestamp.fromMillis(Date.now() - 24 * 60 * 60 * 1000);
     const snap   = await fdb().collection('posSessions')

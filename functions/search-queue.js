@@ -36,6 +36,9 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret }       = require('firebase-functions/params');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const admin = require('firebase-admin');
+/* firebase-admin has no .logger export — logger.* threw
+   'Cannot read properties of undefined' on every call. */
+const logger = require('firebase-functions/logger');
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -174,7 +177,7 @@ async function enqueueToAll(item) {
   if (!algoliaOk) {
     const msg = algoliaResult.reason?.message || String(algoliaResult.reason);
     errors.push(`[Algolia] ${msg}`);
-    admin.logger.error('[SearchQueue] Algolia enqueue failed', {
+    logger.error('[SearchQueue] Algolia enqueue failed', {
       collection: item.collection,
       docId:      item.docId,
       error:      msg,
@@ -184,7 +187,7 @@ async function enqueueToAll(item) {
   if (!typesenseOk) {
     const msg = typesenseResult.reason?.message || String(typesenseResult.reason);
     errors.push(`[Typesense] ${msg}`);
-    admin.logger.error('[SearchQueue] Typesense enqueue failed', {
+    logger.error('[SearchQueue] Typesense enqueue failed', {
       collection: item.collection,
       docId:      item.docId,
       error:      msg,
@@ -271,7 +274,7 @@ const getQueueStats = onCall(
     /* Persist latest stats snapshot for dashboard reads without re-querying */
     await db.doc('searchConfig/queueStats').set({ ...stats, updatedAt: FieldValue.serverTimestamp() });
 
-    admin.logger.info('[SearchQueue] Stats snapshot recorded', {
+    logger.info('[SearchQueue] Stats snapshot recorded', {
       combinedPending: combined.pending,
       combinedDlq:     combined.dlq,
     });
@@ -363,7 +366,7 @@ const purgeCompleted = onCall(
 
     await Promise.all(tasks);
 
-    admin.logger.info('[SearchQueue] purgeCompleted', {
+    logger.info('[SearchQueue] purgeCompleted', {
       engine,
       olderThanMs,
       algoliaDeleted,
@@ -418,7 +421,7 @@ const pauseQueue = onCall(
 
     await _db().doc(QUEUE_CONFIG_DOC).set(update, { merge: true });
 
-    admin.logger.warn('[SearchQueue] Queue PAUSED', { engine, reason, pausedBy });
+    logger.warn('[SearchQueue] Queue PAUSED', { engine, reason, pausedBy });
 
     await _db().collection('adminAlerts').add({
       type:      'search_queue_paused',
@@ -479,7 +482,7 @@ const resumeQueue = onCall(
 
     await _db().doc(QUEUE_CONFIG_DOC).set(update, { merge: true });
 
-    admin.logger.info('[SearchQueue] Queue RESUMED', { engine, resumedBy });
+    logger.info('[SearchQueue] Queue RESUMED', { engine, resumedBy });
 
     return { resumed, configPath: QUEUE_CONFIG_DOC };
   }
@@ -538,7 +541,7 @@ const redriveFromDLQ = onCall(
 
     const snap = await query.get();
     if (snap.empty) {
-      admin.logger.info('[SearchQueue] redriveFromDLQ: DLQ is empty', { engine, filterCol });
+      logger.info('[SearchQueue] redriveFromDLQ: DLQ is empty', { engine, filterCol });
       return { requeued: 0, engine };
     }
 
@@ -588,7 +591,7 @@ const redriveFromDLQ = onCall(
       await batch.commit();
     }
 
-    admin.logger.info('[SearchQueue] redriveFromDLQ complete', { engine, filterCol, requeued });
+    logger.info('[SearchQueue] redriveFromDLQ complete', { engine, filterCol, requeued });
 
     return { requeued, engine };
   }

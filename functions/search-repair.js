@@ -50,6 +50,9 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const { defineSecret }       = require('firebase-functions/params');
 const admin                  = require('firebase-admin');
+/* firebase-admin has no .logger export — logger.* threw
+   'Cannot read properties of undefined' on every call. */
+const logger = require('firebase-functions/logger');
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -188,7 +191,7 @@ exports.searchRepairAll = onCall(
     // on their next scheduled run, or an operator can manually trigger them.
     const jobRef = await _db().collection(REPAIR_JOBS_COL).add(jobData);
 
-    admin.logger.info('searchRepairAll: repair job created', {
+    logger.info('searchRepairAll: repair job created', {
       jobId: jobRef.id,
       collection,
       engines: jobData.engines,
@@ -275,7 +278,7 @@ exports.searchVerifyDocument = onCall(
       checkedAt: new Date().toISOString(),
     };
 
-    admin.logger.info('searchVerifyDocument: verification complete', { collection, docId, firestorePresent });
+    logger.info('searchVerifyDocument: verification complete', { collection, docId, firestorePresent });
 
     return result;
   }
@@ -299,7 +302,7 @@ exports.searchFullReindex = onCall(
     if (entry.engine === 'algolia'   || entry.engine === 'both') enginesTargeted.push('algolia');
     if (entry.engine === 'typesense' || entry.engine === 'both') enginesTargeted.push('typesense');
 
-    admin.logger.info('searchFullReindex: starting', { collection, engines: enginesTargeted, uid });
+    logger.info('searchFullReindex: starting', { collection, engines: enginesTargeted, uid });
 
     let enqueued    = 0;
     let lastDocSnap = null;
@@ -330,7 +333,7 @@ exports.searchFullReindex = onCall(
         _enqueueToEngines(entry, doc.id, doc.data(), 'reindex')
           .catch((err) => {
             // Log per-doc errors but don't abort the run
-            admin.logger.warn('searchFullReindex: enqueue failed for doc', {
+            logger.warn('searchFullReindex: enqueue failed for doc', {
               collection,
               docId: doc.id,
               error: err.message,
@@ -344,7 +347,7 @@ exports.searchFullReindex = onCall(
       hasMore      = batchSnap.docs.length === batchSize;
     }
 
-    admin.logger.info('searchFullReindex: complete', { collection, enqueued, engines: enginesTargeted, uid });
+    logger.info('searchFullReindex: complete', { collection, enqueued, engines: enginesTargeted, uid });
 
     // Write an audit entry
     await _db().collection(REPAIR_JOBS_COL).add({
@@ -405,7 +408,7 @@ exports.searchScheduledReconcile = onSchedule(
     const db       = _db();
     const startedAt = new Date().toISOString();
 
-    admin.logger.info('searchScheduledReconcile: starting weekly run', { startedAt });
+    logger.info('searchScheduledReconcile: starting weekly run', { startedAt });
 
     // Mark the run as started
     await db.doc(RECONCILE_LOG_DOC).set({
@@ -497,7 +500,7 @@ exports.searchScheduledReconcile = onSchedule(
         if (alertPromises.length) await Promise.all(alertPromises);
 
       } catch (err) {
-        admin.logger.warn('searchScheduledReconcile: error checking collection', {
+        logger.warn('searchScheduledReconcile: error checking collection', {
           collectionKey,
           error: err.message,
         });
@@ -517,7 +520,7 @@ exports.searchScheduledReconcile = onSchedule(
       updatedAt:   _now(),
     }, { merge: false });
 
-    admin.logger.info('searchScheduledReconcile: complete', {
+    logger.info('searchScheduledReconcile: complete', {
       collectionsChecked: collections.length,
       completedAt,
     });

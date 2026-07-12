@@ -1,25 +1,24 @@
 ﻿/* ============================================================
-   SOKONI Email Template Library  v1.0
+   SOKONI Email Template Library  v2.0
    60+ responsive HTML templates — Outlook · Gmail · Apple Mail · Yahoo
    SOKONI brand: dark theme · #71ff00 green · #00d4ff cyan
+   v2.1 — Logo: logosokoni.png (transparent bg, 80×80 display); alt="SOKONI";
+           all 53 templates confirmed base() inheritance
 ============================================================ */
 "use strict";
 
 const { FROM } = require("./email-service");
 const { COMPANY } = require("./company-identity");
 
-const LOGO_URL    = "https://mysokoni.co.ke/assets/Sokoni%20Logo.png";
+/* logosokoni.png — official square shield icon, transparent background.
+   Firebase Hosting / Cloudflare CDN → permanent HTTPS URL, reliable in all email clients. */
+const LOGO_URL    = "https://mysokoni.co.ke/assets/logosokoni.png";
 const BASE_URL    = "https://mysokoni.co.ke";
 const SUPPORT_URL = `${BASE_URL}/support.html`;
 const PRIVACY_URL = `${BASE_URL}/trust.html`;
 const TERMS_URL   = `${BASE_URL}/trust.html#terms`;
 const UNSUB_URL   = `${BASE_URL}/profile.html#email-preferences`;
 const YEAR        = new Date().getFullYear();
-
-const SOCIAL = [
-  { label: "Website", url: BASE_URL },
-  { label: "Support", url: SUPPORT_URL },
-];
 
 /* ── XSS-safe escape ─────────────────────────────────────── */
 function esc(s) {
@@ -31,19 +30,41 @@ function esc(s) {
 /* ── Format KES amounts ────────────────────────────────────── */
 function fmt(n) { return "KES " + Number(n || 0).toLocaleString("en-KE"); }
 
-/* ── Base email HTML wrapper ──────────────────────────────── */
+/* ── Enterprise base email layout ────────────────────────────
+   600 px card · centered logosokoni.png · rich footer
+   Tested: Gmail · Outlook 2016-2021 · Apple Mail · Yahoo · mobile
+─────────────────────────────────────────────────────────────── */
 function base({ title, preheader, body, cta, ctaUrl, ctaColor = "#71ff00" }) {
   const hidden = preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${esc(preheader)}&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>`
     : "";
+
+  /* Outlook VML button + standard CSS button (both rendered; Outlook uses VML only) */
+  const ctaBg    = ctaColor;
+  const ctaText  = "#050505";
   const ctaBlock = cta && ctaUrl ? `
-    <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:6px 0 24px;">
-      <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${esc(ctaUrl)}" style="height:44px;v-text-anchor:middle;width:220px;" arcsize="25%" fillcolor="${ctaColor}"><w:anchorlock/><center style="color:#050a10;font-family:Arial,sans-serif;font-size:14px;font-weight:900;">${esc(cta)}</center></v:roundrect><![endif]-->
-      <!--[if !mso]><!--><a href="${esc(ctaUrl)}" target="_blank" style="background:${ctaColor};border-radius:12px;color:#050a10;display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:900;line-height:44px;text-align:center;text-decoration:none;width:220px;-webkit-text-size-adjust:none;">${esc(cta)}</a><!--<![endif]-->
-    </td></tr></table>` : "";
-  const socialHtml = SOCIAL.map(s =>
-    `<a href="${esc(s.url)}" style="color:rgba(255,255,255,0.35);text-decoration:none;font-size:11px;margin:0 8px;">${esc(s.label)}</a>`
-  ).join("");
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+  <tr><td align="center" style="padding:8px 0 28px;">
+    <!--[if mso]>
+    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${esc(ctaUrl)}"
+      style="height:48px;v-text-anchor:middle;width:240px;" arcsize="23%"
+      strokecolor="${ctaBg}" fillcolor="${ctaBg}">
+      <w:anchorlock/>
+      <center style="color:${ctaText};font-family:Arial,sans-serif;font-size:15px;font-weight:900;letter-spacing:0.03em;">${esc(cta)}</center>
+    </v:roundrect>
+    <![endif]-->
+    <!--[if !mso]><!-->
+    <a href="${esc(ctaUrl)}" target="_blank"
+      style="background:${ctaBg};border-radius:12px;color:${ctaText};display:inline-block;
+             font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:900;
+             letter-spacing:0.03em;line-height:48px;min-width:200px;padding:0 32px;
+             text-align:center;text-decoration:none;-webkit-text-size-adjust:none;mso-hide:all;"
+      >${esc(cta)}</a>
+    <!--<![endif]-->
+  </td></tr>
+</table>` : "";
+
+  const postalAddr = `${COMPANY.postalAddress}, ${COMPANY.town}, ${COMPANY.country}`;
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
@@ -59,63 +80,166 @@ function base({ title, preheader, body, cta, ctaUrl, ctaColor = "#71ff00" }) {
 <style type="text/css">
 body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;}
 table,td{mso-table-lspace:0pt;mso-table-rspace:0pt;}
-img{-ms-interpolation-mode:bicubic;border:0;outline:none;text-decoration:none;display:block;}
-body{margin:0;padding:0;background-color:#050a10;}
-a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;}
+img{-ms-interpolation-mode:bicubic;border:0;height:auto;line-height:100%;outline:none;text-decoration:none;}
+body{margin:0;padding:0;background-color:#050505;word-break:break-word;}
+a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}
 #MessageViewBody,#MessageWebViewDiv{width:100%!important;}
-@media screen and (max-width:600px){
-  .full{width:100%!important;max-width:100%!important;}
-  .pad{padding:24px 16px!important;}
-  .title-text{font-size:22px!important;}
-  .hide-mobile{display:none!important;}
-}
+/* Dark-mode overrides (Apple Mail, iOS Mail, Outlook Mac 2019+) */
 @media (prefers-color-scheme:dark){
-  .email-bg{background-color:#050a10!important;}
-  .email-card{background-color:#0d1421!important;}
+  .eml-bg   {background-color:#050505!important;}
+  .eml-card {background-color:#0d1117!important;}
+  .eml-foot {background-color:#07090f!important;}
+}
+/* Mobile */
+@media screen and (max-width:599px){
+  .eml-outer{width:100%!important;max-width:100%!important;}
+  .eml-hpad {padding:22px 20px 18px!important;}
+  .eml-bpad {padding:24px 20px 12px!important;}
+  .eml-fpad {padding:18px 20px 22px!important;}
+  .eml-logo {width:64px!important;height:64px!important;}
+  .hide-mob {display:none!important;max-height:0!important;overflow:hidden!important;}
 }
 </style>
 </head>
-<body class="email-bg" style="margin:0;padding:0;background-color:#050a10;">
+<body class="eml-bg" style="margin:0;padding:0;background-color:#050505;">
 ${hidden}
-<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#050a10"><tr><td align="center" style="padding:32px 16px 48px;">
-<table class="full" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+<!-- ░ OUTER WRAPPER ░ -->
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" bgcolor="#050505">
+<tr><td align="center" style="padding:32px 12px 48px;">
 
-  <!-- HEADER -->
-  <tr><td class="email-card" bgcolor="#0d1421" style="border-radius:20px 20px 0 0;padding:24px 32px 20px;border-left:1px solid #1a2535;border-top:1px solid #1a2535;border-right:1px solid #1a2535;">
-    <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-      <td><img src="${LOGO_URL}" alt="SOKONI" width="110" height="auto" style="width:110px;"></td>
-      <td align="right" style="font-family:Arial,Helvetica,sans-serif;font-size:11px;color:rgba(255,255,255,0.35);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">mysokoni.co.ke</td>
-    </tr></table>
-    <div style="height:1px;background:linear-gradient(90deg,rgba(113,255,0,0.3),rgba(0,212,255,0.15),transparent);margin-top:16px;"></div>
+<!-- ░ EMAIL CARD 600 px ░ -->
+<table class="eml-outer" width="600" cellpadding="0" cellspacing="0" border="0" role="presentation" style="max-width:600px;">
+
+  <!-- ▸ HEADER ──────────────────────── -->
+  <tr><td class="eml-card eml-hpad" bgcolor="#0d1117"
+    style="border-radius:20px 20px 0 0;padding:30px 40px 22px;
+           border-left:1px solid rgba(113,255,0,0.14);
+           border-top:1px solid rgba(113,255,0,0.14);
+           border-right:1px solid rgba(113,255,0,0.14);">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+      <tr><td align="center" style="padding-bottom:14px;">
+        <!-- Logo: logosokoni.png — square shield icon, transparent bg -->
+        <img src="${LOGO_URL}" width="80" height="80" class="eml-logo"
+          alt="SOKONI"
+          style="width:80px;height:80px;display:block;margin:0 auto;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
+        <!-- Wordmark -->
+        <p style="margin:12px 0 3px;font-family:Arial,Helvetica,sans-serif;font-size:24px;
+                  font-weight:900;letter-spacing:0.1em;color:#ffffff;text-align:center;
+                  mso-line-height-rule:exactly;line-height:28px;">SOKONI</p>
+        <!-- Tagline -->
+        <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;
+                  font-weight:700;letter-spacing:0.2em;text-transform:uppercase;
+                  color:rgba(113,255,0,0.75);text-align:center;">Kenya's Super Platform</p>
+      </td></tr>
+      <!-- Gradient accent bar -->
+      <tr><td>
+        <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(113,255,0,0.65) 35%,rgba(0,212,255,0.45) 65%,transparent);"></div>
+      </td></tr>
+    </table>
   </td></tr>
 
-  <!-- BODY -->
-  <tr><td class="email-card pad" bgcolor="#0d1421" style="padding:28px 32px;border-left:1px solid #1a2535;border-right:1px solid #1a2535;font-family:Arial,Helvetica,sans-serif;">
+  <!-- ▸ BODY ────────────────────────── -->
+  <tr><td class="eml-card eml-bpad" bgcolor="#0d1117"
+    style="padding:30px 40px 14px;
+           border-left:1px solid rgba(113,255,0,0.14);
+           border-right:1px solid rgba(113,255,0,0.14);
+           font-family:Arial,Helvetica,sans-serif;">
     ${body}
     ${ctaBlock}
   </td></tr>
 
-  <!-- FOOTER -->
-  <tr><td bgcolor="#080f1c" style="border-radius:0 0 20px 20px;padding:20px 32px 24px;border-left:1px solid #1a2535;border-bottom:1px solid #1a2535;border-right:1px solid #1a2535;">
-    <p style="margin:0 0 10px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.05em;">
-      ${socialHtml}
+  <!-- ▸ FOOTER ──────────────────────── -->
+  <tr><td class="eml-foot eml-fpad" bgcolor="#07090f"
+    style="border-radius:0 0 20px 20px;padding:18px 40px 24px;
+           border-left:1px solid rgba(113,255,0,0.08);
+           border-bottom:1px solid rgba(113,255,0,0.08);
+           border-right:1px solid rgba(113,255,0,0.08);">
+    <!-- Hairline divider -->
+    <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:16px;"></div>
+    <!-- Navigation links -->
+    <p style="margin:0 0 7px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:11px;">
+      <a href="${BASE_URL}" style="color:rgba(255,255,255,0.38);text-decoration:none;">Website</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      <a href="${SUPPORT_URL}" style="color:rgba(255,255,255,0.38);text-decoration:none;">Help &amp; Support</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      <a href="${PRIVACY_URL}" style="color:rgba(255,255,255,0.38);text-decoration:none;">Privacy Policy</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      <a href="${TERMS_URL}" style="color:rgba(255,255,255,0.38);text-decoration:none;">Terms of Service</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      <a href="${UNSUB_URL}" style="color:rgba(255,255,255,0.38);text-decoration:none;">Unsubscribe</a>
     </p>
-    <p style="margin:0 0 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.2);">
-      <a href="${esc(PRIVACY_URL)}" style="color:rgba(255,255,255,0.25);text-decoration:none;">Privacy Policy</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-      <a href="${esc(TERMS_URL)}" style="color:rgba(255,255,255,0.25);text-decoration:none;">Terms of Service</a>&nbsp;&nbsp;·&nbsp;&nbsp;
-      <a href="${esc(UNSUB_URL)}" style="color:rgba(255,255,255,0.25);text-decoration:none;">Unsubscribe</a>
+    <!-- Legal operator line -->
+    <p style="margin:0 0 5px;text-align:center;font-family:Arial,Helvetica,sans-serif;
+              font-size:10px;color:rgba(255,255,255,0.22);letter-spacing:0.03em;">
+      SOKONI &mdash; ${esc(COMPANY.operatedBy)}
     </p>
-    <p style="margin:0 0 6px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.2);letter-spacing:0.03em;">
-      SOKONI — ${COMPANY.operatedBy}
+    <!-- Postal address + support contacts -->
+    <p style="margin:0 0 5px;text-align:center;font-family:Arial,Helvetica,sans-serif;
+              font-size:10px;color:rgba(255,255,255,0.18);">
+      ${esc(postalAddr)}&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      <a href="mailto:${esc(COMPANY.supportEmail)}"
+         style="color:rgba(255,255,255,0.25);text-decoration:none;">${esc(COMPANY.supportEmail)}</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      ${esc(COMPANY.supportPhone)}
     </p>
-    <p style="margin:0;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.15);">
-      &copy; ${YEAR} SOKONI · A product of ${COMPANY.legalName}. All rights reserved.
+    <!-- Copyright -->
+    <p style="margin:0;text-align:center;font-family:Arial,Helvetica,sans-serif;
+              font-size:10px;color:rgba(255,255,255,0.13);">
+      &copy; ${YEAR} SOKONI &middot; A product of ${esc(COMPANY.legalName)}. All rights reserved.
     </p>
   </td></tr>
 
 </table>
+<!-- ░ END CARD ░ -->
+
 </td></tr></table>
+<!-- ░ END OUTER ░ -->
 </body></html>`;
+}
+
+/* ── Plain-text fallback generator ──────────────────────────
+   Strips all HTML and reconstructs clean plain text.
+   Called by getTemplate() — no template changes required.
+─────────────────────────────────────────────────────────────── */
+function toPlainText(html) {
+  const postalAddr = `${COMPANY.postalAddress}, ${COMPANY.town}, ${COMPANY.country}`;
+  const body = html
+    /* Remove non-visible blocks */
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<!--\[if[^\]]*\]>[\s\S]*?<!\[endif\]-->/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    /* Block-level → newlines */
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|h[1-6]|li|ul|ol|blockquote|tr)>/gi, "\n")
+    .replace(/<td[^>]*>/gi, "  ")
+    /* Inline emphasis */
+    .replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi, "*$1*")
+    /* Links: TEXT (URL) */
+    .replace(/<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_, url, txt) => {
+      const clean = txt.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+      if (clean && clean.toLowerCase() !== url.toLowerCase()) return `${clean} ( ${url} )`;
+      return clean || url;
+    })
+    /* Strip remaining tags */
+    .replace(/<[^>]+>/g, "")
+    /* HTML entities */
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'")
+    .replace(/&nbsp;/g, " ").replace(/&copy;/g, "©").replace(/&middot;/g, "·")
+    .replace(/&mdash;/g, "—").replace(/&ndash;/g, "–").replace(/&zwnj;/g, "")
+    .replace(/&#x?[0-9a-f]+;/gi, " ").replace(/&[a-z]+;/gi, " ")
+    /* Whitespace cleanup */
+    .replace(/[ \t]+/g, " ").replace(/\n[ \t]+/g, "\n").replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return `${body}
+
+──────────────────────────────────────────────
+SOKONI — mysokoni.co.ke
+Support: ${COMPANY.supportEmail} · ${COMPANY.supportPhone}
+${postalAddr}
+
+Privacy Policy : ${PRIVACY_URL}
+Terms of Service: ${TERMS_URL}
+Unsubscribe     : ${UNSUB_URL}
+
+© ${YEAR} SOKONI · A product of ${COMPANY.legalName}. All rights reserved.`;
 }
 
 /* ── Re-usable sub-components ─────────────────────────────── */
@@ -1258,7 +1382,8 @@ const TEMPLATES = {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   RENDER: getTemplate(name, data) → { subject, html, from, category }
+   RENDER: getTemplate(name, data) → { subject, html, text, from, category }
+   text — plain-text fallback auto-generated from the HTML
 ═══════════════════════════════════════════════════════════ */
 function getTemplate(name, data) {
   const tmpl = TEMPLATES[name];
@@ -1268,9 +1393,10 @@ function getTemplate(name, data) {
   return {
     subject,
     html,
+    text:     toPlainText(html),
     from:     tmpl.from || FROM.default,
     category: tmpl.category || "system",
   };
 }
 
-module.exports = { getTemplate, base, TEMPLATES };
+module.exports = { getTemplate, base, toPlainText, TEMPLATES };

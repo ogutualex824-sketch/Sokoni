@@ -30,6 +30,9 @@ const http  = require('http');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret }       = require('firebase-functions/params');
 const admin                  = require('firebase-admin');
+/* firebase-admin has no .logger export — logger.* threw
+   'Cannot read properties of undefined' on every call. */
+const logger = require('firebase-functions/logger');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -157,7 +160,7 @@ function _audit(action, uid, metadata = {}) {
     category:  'search',
     ...metadata,
     createdAt: _now(),
-  }).catch(err => admin.logger.warn('[SearchAdmin] Audit write failed', { action, error: err.message }));
+  }).catch(err => logger.warn('[SearchAdmin] Audit write failed', { action, error: err.message }));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
@@ -246,7 +249,7 @@ exports.searchSetup = onCall(
           primaryCount++;
         } catch (err) {
           indexResults[key] = { ok: false, error: err.message };
-          admin.logger.error('[SearchSetup] Algolia index config failed', { index: key, error: err.message });
+          logger.error('[SearchSetup] Algolia index config failed', { index: key, error: err.message });
         }
       }
 
@@ -260,7 +263,7 @@ exports.searchSetup = onCall(
           replicaCount++;
         } catch (err) {
           indexResults[replicaIndex] = { ok: false, error: err.message, isVirtualReplica: true };
-          admin.logger.error('[SearchSetup] Algolia replica config failed', { index: replicaIndex, error: err.message });
+          logger.error('[SearchSetup] Algolia replica config failed', { index: replicaIndex, error: err.message });
         }
       }
 
@@ -272,7 +275,7 @@ exports.searchSetup = onCall(
           await algolia.saveSynonyms(idx, GLOBAL_SYNONYMS, true);
           synonymSets++;
         } catch (err) {
-          admin.logger.warn('[SearchSetup] Algolia synonym upload failed', { index: idx, error: err.message });
+          logger.warn('[SearchSetup] Algolia synonym upload failed', { index: idx, error: err.message });
         }
       }
 
@@ -283,7 +286,7 @@ exports.searchSetup = onCall(
           await algolia.saveRules(indexName, rules, true);
           ruleSets++;
         } catch (err) {
-          admin.logger.warn('[SearchSetup] Algolia rule upload failed', { index: indexName, error: err.message });
+          logger.warn('[SearchSetup] Algolia rule upload failed', { index: indexName, error: err.message });
         }
       }
 
@@ -299,7 +302,7 @@ exports.searchSetup = onCall(
       await db.doc('searchConfig/setup').update({ algoliaStatus: 'complete' });
     } catch (err) {
       algoliaResult.error = err.message;
-      admin.logger.error('[SearchSetup] Algolia setup failed', { error: err.message });
+      logger.error('[SearchSetup] Algolia setup failed', { error: err.message });
       await db.doc('searchConfig/setup').update({ algoliaStatus: 'error', algoliaError: err.message }).catch(() => {});
     }
 
@@ -327,7 +330,7 @@ exports.searchSetup = onCall(
           }
         } catch (err) {
           /* Log but do not abort — partial success is still useful */
-          admin.logger.warn('[SearchSetup] Typesense collection error', { collection: name, error: err.message });
+          logger.warn('[SearchSetup] Typesense collection error', { collection: name, error: err.message });
         }
       }
 
@@ -335,7 +338,7 @@ exports.searchSetup = onCall(
       await db.doc('searchConfig/setup').update({ typesenseStatus: 'complete' });
     } catch (err) {
       typesenseResult.error = err.message;
-      admin.logger.error('[SearchSetup] Typesense setup failed', { error: err.message });
+      logger.error('[SearchSetup] Typesense setup failed', { error: err.message });
       await db.doc('searchConfig/setup').update({ typesenseStatus: 'error', typesenseError: err.message }).catch(() => {});
     }
 
@@ -346,7 +349,7 @@ exports.searchSetup = onCall(
 
     _audit('search_setup', uid, { algoliaStatus: algoliaResult.status, typesenseStatus: typesenseResult.status, durationMs });
 
-    admin.logger.info('[SearchSetup] Complete', { algoliaResult, typesenseResult, durationMs });
+    logger.info('[SearchSetup] Complete', { algoliaResult, typesenseResult, durationMs });
 
     return {
       ok:          algoliaResult.status === 'ok' && typesenseResult.status === 'ok',
@@ -403,7 +406,7 @@ exports.searchBackfillAll = onCall(
     for (const key of collectionsToProcess) {
       const entry = COLLECTION_REGISTRY[key];
       if (!entry) {
-        admin.logger.warn('[SearchBackfill] Unknown collection key, skipping', { key });
+        logger.warn('[SearchBackfill] Unknown collection key, skipping', { key });
         continue;
       }
 
@@ -473,7 +476,7 @@ exports.searchBackfillAll = onCall(
           if (snap.size < PAGE_SIZE) hasMore = false;
         }
       } catch (err) {
-        admin.logger.error('[SearchBackfill] Collection error', { collection: fsCol, error: err.message });
+        logger.error('[SearchBackfill] Collection error', { collection: fsCol, error: err.message });
         summary[fsCol] = { enqueued, skipped, error: err.message };
         continue;
       }
@@ -481,7 +484,7 @@ exports.searchBackfillAll = onCall(
       totalEnqueued     += enqueued;
       summary[fsCol]     = { enqueued, skipped, algoliaIndex: entry.algoliaIndex, typesenseCollection: entry.typesenseCollection };
 
-      admin.logger.info('[SearchBackfill] Collection queued', { collection: fsCol, enqueued, skipped });
+      logger.info('[SearchBackfill] Collection queued', { collection: fsCol, enqueued, skipped });
     }
 
     const durationMs = Date.now() - startMs;
@@ -546,7 +549,7 @@ exports.searchSystemReport = onCall(
           : { ok: false, error: r.reason?.message };
       });
     } catch (err) {
-      admin.logger.warn('[SearchReport] Algolia health check failed', { error: err.message });
+      logger.warn('[SearchReport] Algolia health check failed', { error: err.message });
     }
 
     /* ── Algolia queue stats ──────────────────────────────────────── */
@@ -561,7 +564,7 @@ exports.searchSystemReport = onCall(
       algoliaQueue.failed  = failedSnap.data().count;
       algoliaQueue.dlq     = dlqSnap.data().count;
     } catch (err) {
-      admin.logger.warn('[SearchReport] Algolia queue count failed', { error: err.message });
+      logger.warn('[SearchReport] Algolia queue count failed', { error: err.message });
     }
 
     /* ── Typesense node + collection health ───────────────────────── */
@@ -583,7 +586,7 @@ exports.searchSystemReport = onCall(
         });
       }
     } catch (err) {
-      admin.logger.warn('[SearchReport] Typesense health check failed', { error: err.message });
+      logger.warn('[SearchReport] Typesense health check failed', { error: err.message });
     }
 
     /* ── Typesense queue stats ────────────────────────────────────── */
@@ -598,7 +601,7 @@ exports.searchSystemReport = onCall(
       typesenseQueue.failed  = failedSnap.data().count;
       typesenseQueue.dlq     = dlqSnap.data().count;
     } catch (err) {
-      admin.logger.warn('[SearchReport] Typesense queue count failed', { error: err.message });
+      logger.warn('[SearchReport] Typesense queue count failed', { error: err.message });
     }
 
     /* ── Sync lag per collection ──────────────────────────────────── */
@@ -620,7 +623,7 @@ exports.searchSystemReport = onCall(
         };
       });
     } catch (err) {
-      admin.logger.warn('[SearchReport] Sync lag query failed', { error: err.message });
+      logger.warn('[SearchReport] Sync lag query failed', { error: err.message });
     }
 
     /* ── Recent search-category alerts ───────────────────────────── */
@@ -642,7 +645,7 @@ exports.searchSystemReport = onCall(
         });
       });
     } catch (err) {
-      admin.logger.warn('[SearchReport] Alert query failed', { error: err.message });
+      logger.warn('[SearchReport] Alert query failed', { error: err.message });
     }
 
     /* ── Platform config ──────────────────────────────────────────── */
@@ -651,7 +654,7 @@ exports.searchSystemReport = onCall(
       const cfgSnap = await db.doc('searchConfig/settings').get();
       if (cfgSnap.exists) searchConfig = cfgSnap.data();
     } catch (err) {
-      admin.logger.warn('[SearchReport] Config read failed', { error: err.message });
+      logger.warn('[SearchReport] Config read failed', { error: err.message });
     }
 
     /* ── Performance latency (P50 / P95 / P99 from stored analytics) */
@@ -669,7 +672,7 @@ exports.searchSystemReport = onCall(
         });
       }
     } catch (err) {
-      admin.logger.warn('[SearchReport] Latency read failed', { error: err.message });
+      logger.warn('[SearchReport] Latency read failed', { error: err.message });
     }
 
     const generatedAt = new Date().toISOString();

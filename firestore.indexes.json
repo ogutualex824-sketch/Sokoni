@@ -52,6 +52,20 @@
         },
         {
           "fieldPath": "completedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "_sokoniTaskQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "completedAt",
           "order": "DESCENDING"
         }
       ]
@@ -98,6 +112,20 @@
         },
         {
           "fieldPath": "scheduleFor",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "_sokoniWorkers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastHeartbeat",
           "order": "ASCENDING"
         }
       ]
@@ -219,6 +247,20 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "pastDueAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "uid",
           "order": "ASCENDING"
         },
@@ -312,6 +354,38 @@
         },
         {
           "fieldPath": "lockedUntil",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "asyncJobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "priority",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "asyncJobs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scheduledFor",
           "order": "ASCENDING"
         }
       ]
@@ -1237,6 +1311,20 @@
       ]
     },
     {
+      "collectionGroup": "etimsInvoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "etimsQueue",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1801,6 +1889,34 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "available",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiryDate",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "inventory_batches",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "expiryDate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "available",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "inventory_batches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "productId",
           "order": "ASCENDING"
         },
@@ -2351,6 +2467,20 @@
       ]
     },
     {
+      "collectionGroup": "loyaltyDraws",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "endsAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "loyaltyGiftCards",
       "queryScope": "COLLECTION",
       "fields": [
@@ -2471,6 +2601,24 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "mediaType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "storageRef",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -3299,6 +3447,20 @@
       ]
     },
     {
+      "collectionGroup": "posSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastActivityAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "posTransactions",
       "queryScope": "COLLECTION",
       "fields": [
@@ -3649,6 +3811,48 @@
       ]
     },
     {
+      "collectionGroup": "rollbackSnapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "createdBy",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosAuditLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosBillingLedger",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "sasosDunning",
       "queryScope": "COLLECTION",
       "fields": [
@@ -3658,6 +3862,230 @@
         },
         {
           "fieldPath": "nextRetryDate",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.advertising.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.advertising.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.advertising.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.advertising.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.ai.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.ai.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.ai.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.ai.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.analytics.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.analytics.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.analytics.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.analytics.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.business.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.business.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.business.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.business.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.delivery.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.delivery.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.delivery.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.delivery.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.events.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.events.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.events.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.events.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.finance.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.finance.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.finance.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.finance.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.logistics.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.logistics.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.logistics.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.logistics.trialEnd",
           "order": "ASCENDING"
         }
       ]
@@ -3686,6 +4114,132 @@
         },
         {
           "fieldPath": "products.marketplace.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.property.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.property.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.property.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.property.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.smartpos.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.smartpos.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.smartpos.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.smartpos.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.vehicles.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.vehicles.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.vehicles.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.vehicles.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.warehousing.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.warehousing.periodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "sasosSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "products.warehousing.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "products.warehousing.trialEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "securitySessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isRevoked",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAt",
           "order": "ASCENDING"
         }
       ]
@@ -3857,6 +4411,24 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "cancelAtPeriodEnd",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "currentPeriodEnd",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "status",
           "order": "ASCENDING"
         },
@@ -3922,6 +4494,20 @@
         },
         {
           "fieldPath": "nextAttemptAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "typesenseQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "doneAt",
           "order": "ASCENDING"
         }
       ]

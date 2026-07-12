@@ -33,6 +33,7 @@ async function trigger(templateName, data, extraPayload = {}) {
     to:       extraPayload.to   || data.email,
     subject:  tmpl.subject,
     html:     tmpl.html,
+    text:     tmpl.text,
     from:     tmpl.from,
     category: tmpl.category,
     template: templateName,

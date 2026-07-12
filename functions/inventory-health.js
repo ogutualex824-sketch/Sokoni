@@ -140,7 +140,10 @@ exports.inventoryHealthMonitor = sched({
   schedule: 'every 6 hours',
   timeZone: 'Africa/Nairobi',
 }, async () => {
-  const tenantsSnap = await db.collectionGroup('inventory_products').select([]).limit(200).get();
+  /* select() takes varargs field paths, not an array — select([]) threw
+     "Element at index 0 is not a valid field path" on every run. No-arg select()
+     is the documented way to fetch document refs without field data. */
+  const tenantsSnap = await db.collectionGroup('inventory_products').select().limit(200).get();
   const tenantIds   = [...new Set(tenantsSnap.docs.map(d => d.ref.path.split('/')[1]))];
 
   for (const tenantId of tenantIds) {

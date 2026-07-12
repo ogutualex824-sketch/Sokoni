@@ -25,6 +25,9 @@
 const { onRequest }  = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin          = require('firebase-admin');
+/* firebase-admin has no .logger export — logger.* threw
+   'Cannot read properties of undefined' on every call. */
+const logger = require('firebase-functions/logger');
 const https          = require('https');
 const http           = require('http');
 
@@ -203,7 +206,7 @@ exports.searchHealth = onRequest(
       const snap = await _db().doc('searchConfig/engines').get();
       engineConfig = snap.exists ? snap.data() : {};
     } catch (err) {
-      admin.logger.error('searchHealth: failed to read searchConfig/engines', { error: err.message });
+      logger.error('searchHealth: failed to read searchConfig/engines', { error: err.message });
     }
 
     /* ── 2. Read lastSync timestamp ───────────────────────────────────────── */
@@ -284,7 +287,7 @@ exports.searchHealth = onRequest(
       overallStatus === 'ok'       ? 200 :
       overallStatus === 'degraded' ? 206 : 503;
 
-    admin.logger.info('searchHealth', {
+    logger.info('searchHealth', {
       overallStatus,
       algoliaStatus,
       typesenseStatus,

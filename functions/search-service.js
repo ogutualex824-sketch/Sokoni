@@ -38,6 +38,9 @@ const http  = require('http');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret }       = require('firebase-functions/params');
 const admin                  = require('firebase-admin');
+/* firebase-admin has no .logger export — logger.* threw
+   'Cannot read properties of undefined' on every call. */
+const logger = require('firebase-functions/logger');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -725,12 +728,12 @@ exports.searchQuery = onCall(
         result     = await tryAlgolia();
         usedEngine = 'algolia';
       } catch (primaryErr) {
-        admin.logger.warn('[SearchQuery] Algolia failed, trying Typesense fallback', { error: primaryErr.message, index });
+        logger.warn('[SearchQuery] Algolia failed, trying Typesense fallback', { error: primaryErr.message, index });
         try {
           result     = await tryTypesense();
           usedEngine = 'typesense';
         } catch (fallbackErr) {
-          admin.logger.error('[SearchQuery] Both engines failed', { algoliaErr: primaryErr.message, typesenseErr: fallbackErr.message, index });
+          logger.error('[SearchQuery] Both engines failed', { algoliaErr: primaryErr.message, typesenseErr: fallbackErr.message, index });
           throw new HttpsError('unavailable', 'Search is temporarily unavailable. Please try again.');
         }
       }
@@ -739,12 +742,12 @@ exports.searchQuery = onCall(
         result     = await tryTypesense();
         usedEngine = 'typesense';
       } catch (primaryErr) {
-        admin.logger.warn('[SearchQuery] Typesense failed, trying Algolia fallback', { error: primaryErr.message, index });
+        logger.warn('[SearchQuery] Typesense failed, trying Algolia fallback', { error: primaryErr.message, index });
         try {
           result     = await tryAlgolia();
           usedEngine = 'algolia';
         } catch (fallbackErr) {
-          admin.logger.error('[SearchQuery] Both engines failed', { typesenseErr: primaryErr.message, algoliaErr: fallbackErr.message, index });
+          logger.error('[SearchQuery] Both engines failed', { typesenseErr: primaryErr.message, algoliaErr: fallbackErr.message, index });
           throw new HttpsError('unavailable', 'Search is temporarily unavailable. Please try again.');
         }
       }
@@ -853,7 +856,7 @@ exports.searchAutocomplete = onCall(
             return { suggestions: suggestions.slice(0, hitsPerPage), latencyMs: Date.now() - startMs };
           }
         } catch (err) {
-          admin.logger.warn('[SearchAutocomplete] Algolia multi-query failed', { error: err.message });
+          logger.warn('[SearchAutocomplete] Algolia multi-query failed', { error: err.message });
           /* fall through to Typesense */
         }
       }
@@ -916,7 +919,7 @@ exports.searchAutocomplete = onCall(
         }));
         return { suggestions, latencyMs: Date.now() - startMs };
       } catch (err) {
-        admin.logger.warn('[SearchAutocomplete] Algolia single-index failed', { index, error: err.message });
+        logger.warn('[SearchAutocomplete] Algolia single-index failed', { index, error: err.message });
       }
     }
 
@@ -942,7 +945,7 @@ exports.searchAutocomplete = onCall(
         }));
         return { suggestions, latencyMs: Date.now() - startMs };
       } catch (err) {
-        admin.logger.warn('[SearchAutocomplete] Typesense single-index failed', { index, error: err.message });
+        logger.warn('[SearchAutocomplete] Typesense single-index failed', { index, error: err.message });
       }
     }
 
@@ -1027,7 +1030,7 @@ exports.searchNearby = onCall(
         _recordAnalytics(uid, sanitizedQuery, index, 'algolia', result.total, result.latencyMs);
         return result;
       } catch (err) {
-        admin.logger.warn('[SearchNearby] Algolia geo failed', { error: err.message });
+        logger.warn('[SearchNearby] Algolia geo failed', { error: err.message });
       }
     }
 
@@ -1054,7 +1057,7 @@ exports.searchNearby = onCall(
         _recordAnalytics(uid, sanitizedQuery, index, 'typesense', result.total, result.latencyMs);
         return result;
       } catch (err) {
-        admin.logger.warn('[SearchNearby] Typesense geo failed', { error: err.message });
+        logger.warn('[SearchNearby] Typesense geo failed', { error: err.message });
       }
     }
 
@@ -1143,9 +1146,9 @@ exports.searchSimilar = onCall(
             latencyMs: Date.now() - startMs,
           };
         }
-        admin.logger.warn('[SearchSimilar] Algolia Recommend returned non-200', { status: res.status, model });
+        logger.warn('[SearchSimilar] Algolia Recommend returned non-200', { status: res.status, model });
       } catch (err) {
-        admin.logger.warn('[SearchSimilar] Algolia Recommend failed, using category fallback', { error: err.message });
+        logger.warn('[SearchSimilar] Algolia Recommend failed, using category fallback', { error: err.message });
       }
     }
 
@@ -1192,7 +1195,7 @@ exports.searchSimilar = onCall(
         latencyMs: Date.now() - startMs,
       };
     } catch (err) {
-      admin.logger.error('[SearchSimilar] Category fallback failed', { error: err.message });
+      logger.error('[SearchSimilar] Category fallback failed', { error: err.message });
       throw new HttpsError('internal', 'Unable to retrieve recommendations at this time.');
     }
   }
@@ -1275,7 +1278,7 @@ exports.searchPersonalized = onCall(
         _recordAnalytics(uid, sanitizedQuery, index, 'algolia', result.total, result.latencyMs);
         return result;
       } catch (err) {
-        admin.logger.warn('[SearchPersonalized] Algolia failed, falling back to Typesense', { error: err.message });
+        logger.warn('[SearchPersonalized] Algolia failed, falling back to Typesense', { error: err.message });
       }
     }
 
@@ -1297,7 +1300,7 @@ exports.searchPersonalized = onCall(
         _recordAnalytics(uid, sanitizedQuery, index, 'typesense', result.total, result.latencyMs);
         return result;
       } catch (err) {
-        admin.logger.error('[SearchPersonalized] Typesense fallback failed', { error: err.message });
+        logger.error('[SearchPersonalized] Typesense fallback failed', { error: err.message });
       }
     }
 

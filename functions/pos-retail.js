@@ -166,12 +166,17 @@ exports.sendPOSReceipt = onCall(
         </div>
       </body></html>`;
 
-      await sgMail.send({
-        to:      email,
-        from:    { email: 'receipts@mysokoni.co.ke', name: shopName },
-        subject: `Receipt #${receiptNo} — ${shopName}`,
-        html,
-      });
+      try {
+        await sgMail.send({
+          to:      email,
+          from:    { email: 'receipts@mysokoni.co.ke', name: shopName },
+          subject: `Receipt #${receiptNo} — ${shopName}`,
+          html,
+        });
+      } catch (e) {
+        logger.error('sendgrid error', e.message);
+        throw new HttpsError('internal', 'Failed to send receipt email');
+      }
       result = { sent: true, channel: 'email', to: email };
     }
 
@@ -235,12 +240,17 @@ exports.sendPurchaseOrder = onCall(
       </div>
     </body></html>`;
 
-    await sgMail.send({
-      to:      supplierEmail,
-      from:    { email: 'purchasing@mysokoni.co.ke', name: 'SOKONI Purchasing' },
-      subject: `Purchase Order #${po.poNumber}`,
-      html,
-    });
+    try {
+      await sgMail.send({
+        to:      supplierEmail,
+        from:    { email: 'purchasing@mysokoni.co.ke', name: 'SOKONI Purchasing' },
+        subject: `Purchase Order #${po.poNumber}`,
+        html,
+      });
+    } catch (e) {
+      logger.error('sendgrid error', e.message);
+      throw new HttpsError('internal', 'Failed to send receipt email');
+    }
 
     await db.collection('purchaseOrders').doc(poId).update({ status: 'sent', sentAt: Date.now() });
     return { sent: true, to: supplierEmail };

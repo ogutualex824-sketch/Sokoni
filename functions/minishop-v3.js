@@ -1333,6 +1333,10 @@ exports.miniShopScheduledDigest = onSchedule(
   async () => {
     const db     = _db();
     const apiKey = SENDGRID_API_KEY.value();
+    if (!apiKey || apiKey.startsWith('SG.placeholder')) {
+      logger.warn('SendGrid not configured — skipping digest email');
+      return;
+    }
     const sgMail = require('@sendgrid/mail');
     sgMail.setApiKey(apiKey);
 

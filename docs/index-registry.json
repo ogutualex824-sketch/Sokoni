@@ -1108,5 +1108,210 @@
     "legacy": true,
     "adoptedFromProduction": "2026-07-12",
     "needsAttribution": true
+  },
+  "_sokoniTaskQueue|status:ASCENDING,completedAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "_sokoniWorkers|status:ASCENDING,lastHeartbeat:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "aiSubscriptions|status:ASCENDING,pastDueAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "asyncJobs|status:ASCENDING,priority:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "asyncJobs|status:ASCENDING,scheduledFor:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "etimsInvoices|status:ASCENDING,updatedAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "inventory_batches|available:ASCENDING,expiryDate:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "inventory_batches|expiryDate:ASCENDING,available:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "loyaltyDraws|status:ASCENDING,endsAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "messages|mediaType:ASCENDING,storageRef:ASCENDING,timestamp:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "posSessions|status:ASCENDING,lastActivityAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "rollbackSnapshots|createdBy:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosAuditLog|type:ASCENDING,ts:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosBillingLedger|type:ASCENDING,ts:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.advertising.status:ASCENDING,products.advertising.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.advertising.status:ASCENDING,products.advertising.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.ai.status:ASCENDING,products.ai.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.ai.status:ASCENDING,products.ai.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.analytics.status:ASCENDING,products.analytics.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.analytics.status:ASCENDING,products.analytics.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.business.status:ASCENDING,products.business.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.business.status:ASCENDING,products.business.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.delivery.status:ASCENDING,products.delivery.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.delivery.status:ASCENDING,products.delivery.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.events.status:ASCENDING,products.events.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.events.status:ASCENDING,products.events.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.finance.status:ASCENDING,products.finance.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.finance.status:ASCENDING,products.finance.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.logistics.status:ASCENDING,products.logistics.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.logistics.status:ASCENDING,products.logistics.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.property.status:ASCENDING,products.property.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.property.status:ASCENDING,products.property.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.smartpos.status:ASCENDING,products.smartpos.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.smartpos.status:ASCENDING,products.smartpos.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.vehicles.status:ASCENDING,products.vehicles.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.vehicles.status:ASCENDING,products.vehicles.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.warehousing.status:ASCENDING,products.warehousing.periodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "sasosSubscriptions|products.warehousing.status:ASCENDING,products.warehousing.trialEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "securitySessions|isRevoked:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "subscriptions|cancelAtPeriodEnd:ASCENDING,status:ASCENDING,currentPeriodEnd:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "typesenseQueue|status:ASCENDING,doneAt:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
   }
 }

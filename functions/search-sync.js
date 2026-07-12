@@ -40,6 +40,8 @@
 
 const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
+/* firebase-admin has no .logger export. */
+const logger = require('firebase-functions/logger');
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -564,13 +566,13 @@ async function syncDocument(collection, docId, data, op, opts = {}) {
   if (!algoliaOk && entry.algoliaIndex && entry.engine !== 'typesense') {
     const msg = algoliaResult.reason?.message || String(algoliaResult.reason);
     errors.push(`[Algolia] ${collection}/${docId}: ${msg}`);
-    admin.logger.error('[SearchSync] Algolia enqueue failure', { collection, docId, op, error: msg });
+    logger.error('[SearchSync] Algolia enqueue failure', { collection, docId, op, error: msg });
   }
 
   if (!typesenseOk && entry.typesenseCollection && entry.engine !== 'algolia') {
     const msg = typesenseResult.reason?.message || String(typesenseResult.reason);
     errors.push(`[Typesense] ${collection}/${docId}: ${msg}`);
-    admin.logger.error('[SearchSync] Typesense enqueue failure', { collection, docId, op, error: msg });
+    logger.error('[SearchSync] Typesense enqueue failure', { collection, docId, op, error: msg });
   }
 
   return { algolia: algoliaOk, typesense: typesenseOk, errors };
