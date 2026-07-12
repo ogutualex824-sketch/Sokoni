@@ -8,6 +8,72 @@
 
 ---
 
+## Legal Engine — Regression Suite Aligned to the Mandatory Signature Workflow (2026-07-13)
+
+**`test-legal-compliance.js` now validates the mandatory digital-signature workflow. 45 checks, 0 failures.**
+
+### What was wrong
+
+`legalAccept` was correctly hardened to require an electronic signature. The regression
+suite still exercised the **previous** API contract and supplied none, so every acceptance
+call threw `invalid-argument: A digital signature is required`.
+
+**This was test-suite drift, not an application defect.** The implementation was right and
+the tests were stale. `functions/legal-agreements.js` was **not modified** — the signature
+requirement was not relaxed, weakened, or bypassed.
+
+The stale suite was also masking a second drift: it asserted
+`acceptanceMethod === 'checkbox'`, but the field now records the signature *type*
+(`typed-signature` / `drawn-signature` / `stamp-signature`).
+
+### Validation order (verified against the implementation, and intentional)
+
+```
+1. auth                      → unauthenticated
+2. acceptances non-empty     → invalid-argument
+3. signature type valid      → invalid-argument     ← signature is validated
+4. signed name (≥2 chars)    → invalid-argument        BEFORE the catalogue is
+5. confirmed === true        → failed-precondition     even loaded
+6. drawn/stamp data ≥64B     → invalid-argument
+7. professional declaration  → failed-precondition
+8. agreement version matches → failed-precondition  ← version is the LAST gate
+9. idempotent write (deterministic doc id)
+```
+
+A signature is a **precondition for recording anything at all** — it makes no sense to
+validate *which version* of a document someone is signing before establishing *that they
+signed*. This ordering is correct and must not be "fixed".
+
+Consequently the wrong-version test can only observe a version error once it supplies an
+otherwise-valid signature. The old test carried no signature, so it never reached the
+version gate — it was asserting the right error code for the wrong reason.
+
+### Coverage added
+
+**All three lawful signature forms accepted** (Kenya Business Laws (Amendment) Act / ETA):
+typed full legal name, drawn signature, company stamp. Drawn and stamped artefacts are
+stored as a **SHA-256 hash only** — never the raw image, which is large and
+biometric-adjacent personal data. Asserted.
+
+**Rejections (all negative tests retained, eight added):** missing signature · empty
+signature (drawn *and* stamp) · invalid signature type · signed name missing/too short ·
+not confirmed · professional role without the Professional Declaration · unauthenticated
+signer · no acceptances · wrong agreement version · unknown agreement.
+
+**Tampered payload — the client cannot author its own evidence:** a client-supplied
+`signature.hash` is **ignored** (the server recomputes it) and a client-supplied
+`acceptedFrom` IP is **ignored** (the server captures it from the request). Both asserted.
+
+**Duplicate acceptance** is idempotent via a deterministic document id — no duplicate
+records. Asserted.
+
+### CI gates (all passing, 2026-07-13)
+
+`legal-compliance` (45) · `verify-company-identity` (893 files) · `payment-integrity` (17) ·
+`notification` (26) · `SMS` (11) · `promotions` (10) · `App Check`
+
+---
+
 ## Branding Policy — Verified (2026-07-13)
 
 **Status: VERIFIED.** `CompanyIdentity` is the canonical source for legal-entity information.

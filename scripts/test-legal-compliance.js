@@ -100,6 +100,64 @@ async function throws(name, fn, codeMatch) {
 }
 const req = (uid, data, admin) => ({ auth: uid ? { uid, token: admin ? { admin: true } : {} } : null, data, rawRequest: { ip: '1.2.3.4', headers: {} } });
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   DIGITAL SIGNATURE FIXTURES
+
+   legalAccept now REQUIRES an electronic signature. This suite was written against
+   the previous contract and supplied none, so every acceptance call threw. That is
+   test drift, not an application defect — the implementation is right and the tests
+   were stale. They are brought up to the real contract here; the requirement is not
+   relaxed anywhere.
+
+   Three lawful forms under Kenya's Business Laws (Amendment) Act / ETA:
+     typed  — full legal name, typed. No image; the server derives the hash from
+              (uid, name), so the signature is bound to the signer.
+     drawn  — a drawn signature image. Server stores only a SHA-256 of it.
+     stamp  — a company stamp image. Same handling as drawn.
+
+   The server NEVER stores the raw image (biometric-adjacent personal data); the hash
+   is enough to prove the artefact presented at signing has not since been altered.
+
+   ── VALIDATION ORDER (verified against functions/legal-agreements.js) ──────────
+     1. auth                      → unauthenticated
+     2. acceptances non-empty     → invalid-argument
+     3. signature type valid      → invalid-argument      ← signature is checked
+     4. signed name (≥2 chars)    → invalid-argument         BEFORE the catalogue
+     5. confirmed === true        → failed-precondition      is even loaded
+     6. drawn/stamp data ≥64B     → invalid-argument
+     7. professional declaration  → failed-precondition
+     8. agreement version matches → failed-precondition   ← version checked LAST
+     9. idempotent write (deterministic doc id)
+
+   This ordering is INTENTIONAL and must not be "fixed". A signature is a
+   precondition for recording anything at all: it makes no sense to validate which
+   version of a document someone is signing before establishing that they signed.
+   Consequently a wrong-version test can only observe a version error once it
+   supplies an otherwise-valid signature — which is exactly why the old test failed
+   with a signature error instead.
+═════════════════════════════════════════════════════════════════════════════════ */
+const IMG = 'data:image/png;base64,' + 'A'.repeat(120);   /* > 64 bytes, < 400 KB */
+
+/* Fixtures use a FICTIONAL business. A test must never carry the real legal entity's
+   name: it is not a brand surface, the drift guard rightly flags any non-canonical
+   spelling of it, and a fixture is the last place that name should need maintaining. */
+const SIG = {
+  typed: { type: 'typed', name: 'Alex Ochieng',      confirmed: true },
+  drawn: { type: 'drawn', name: 'Alex Ochieng',      confirmed: true, data: IMG },
+  stamp: { type: 'stamp', name: 'Acme Traders Ltd',  confirmed: true, data: IMG },
+};
+const DECL = { accepted: true, version: '1.0' };
+
+/* A complete, valid acceptance payload. Every legalAccept call in this suite builds
+   from this, so if the contract changes again there is ONE place to fix. */
+const accept = (acceptances, sigType, extra) => Object.assign({
+  role: 'merchant',
+  acceptances,
+  signature: SIG[sigType || 'typed'],
+  declaration: DECL,
+  meta: { language: 'en' },
+}, extra || {});
+
 (async () => {
   console.log('\nSOKONI Legal Compliance Engine — integration tests\n');
 
@@ -127,19 +185,77 @@ const req = (uid, data, admin) => ({ auth: uid ? { uid, token: admin ? { admin: 
   ok('all 13 merchant agreements are missing', before.missing.length === 13);
   ok('missing reason = never', before.missing.every((m) => m.reason === 'never'));
 
-  /* 4. Version-awareness — cannot accept a fabricated version */
-  console.log('\nVersion awareness');
-  await throws('rejects wrong version', () =>
-    legal._h.legalAccept(req('u1', { role: 'merchant', acceptances: [{ agreementId: 'terms-of-service', version: '9.9' }] })),
-    'failed-precondition');
-  await throws('rejects unknown agreement only (no valid ones)', () =>
-    legal._h.legalAccept(req('u1', { role: 'merchant', acceptances: [{ agreementId: 'not-a-real-agreement', version: '1.0' }] })),
+  /* 4. DIGITAL SIGNATURE — the mandatory contract.
+        Every one of these must be REJECTED. The requirement is never relaxed. */
+  console.log('\nDigital signature — rejections');
+  const one = [{ agreementId: 'terms-of-service', version: '1.0' }];
+
+  await throws('missing signature entirely', () =>
+    legal._h.legalAccept(req('u1', { role: 'merchant', acceptances: one, declaration: DECL })),
     'invalid-argument');
 
-  /* 5. Accept — records, audit, idempotency, duplicate-safety */
+  await throws('invalid signature type', () =>
+    legal._h.legalAccept(req('u1', accept(one, null, { signature: { type: 'wet-ink', name: 'Alex Ochieng', confirmed: true } }))),
+    'invalid-argument');
+
+  await throws('empty drawn signature (image below minimum size)', () =>
+    legal._h.legalAccept(req('u1', accept(one, null, { signature: { type: 'drawn', name: 'Alex Ochieng', confirmed: true, data: 'x' } }))),
+    'invalid-argument');
+
+  await throws('empty company stamp', () =>
+    legal._h.legalAccept(req('u1', accept(one, null, { signature: { type: 'stamp', name: 'Acme Traders Ltd', confirmed: true, data: '' } }))),
+    'invalid-argument');
+
+  await throws('signed name missing / too short', () =>
+    legal._h.legalAccept(req('u1', accept(one, null, { signature: { type: 'typed', name: 'A', confirmed: true } }))),
+    'invalid-argument');
+
+  await throws('not confirmed — signer did not attest they read the agreements', () =>
+    legal._h.legalAccept(req('u1', accept(one, null, { signature: { type: 'typed', name: 'Alex Ochieng', confirmed: false } }))),
+    'failed-precondition');
+
+  await throws('professional role without the Professional Declaration', () =>
+    legal._h.legalAccept(req('u1', { role: 'merchant', acceptances: one, signature: SIG.typed })),
+    'failed-precondition');
+
+  await throws('unauthenticated cannot sign', () =>
+    legal._h.legalAccept(req(null, accept(one))), 'unauthenticated');
+
+  await throws('no acceptances supplied', () =>
+    legal._h.legalAccept(req('u1', accept([]))), 'invalid-argument');
+
+  /* 5. Version-awareness — now with a VALID signature, so a VERSION error is what
+        surfaces. Previously this call carried no signature at all, so it failed on
+        the signature check and never reached the version check: the test was
+        asserting the right code for the wrong reason. */
+  console.log('\nVersion awareness (signature valid — version is the last gate)');
+  await throws('rejects wrong version', () =>
+    legal._h.legalAccept(req('u1', accept([{ agreementId: 'terms-of-service', version: '9.9' }]))),
+    'failed-precondition');
+  await throws('rejects unknown agreement only (no valid ones)', () =>
+    legal._h.legalAccept(req('u1', accept([{ agreementId: 'not-a-real-agreement', version: '1.0' }]))),
+    'invalid-argument');
+
+  /* 6. TAMPERED PAYLOAD — the client must not be able to author the evidence.
+        The signature hash and the acceptance context are SERVER-derived. A client
+        that supplies its own must be ignored, not trusted. */
+  console.log('\nTampered payload — client cannot author its own evidence');
+  const allT = [...ag.core, ...ag.roleSpecific].map((a) => ({ agreementId: a.id, version: a.version }));
+  await legal._h.legalAccept(req('u9', accept(allT, 'typed', {
+    signature: Object.assign({}, SIG.typed, { hash: 'deadbeef'.repeat(8) }),   /* forged hash */
+    acceptedFrom: '9.9.9.9',                                                    /* forged IP   */
+  })));
+  const tRec = store.get('legalAcceptances/u9_terms-of-service_1.0');
+  const expected = require('crypto').createHash('sha256').update('typed:u9:Alex Ochieng').digest('hex');
+  ok('client-supplied signature hash is IGNORED — server recomputes it',
+     tRec.signatureHash === expected && tRec.signatureHash !== 'deadbeef'.repeat(8));
+  ok('client-supplied IP is IGNORED — server captures it from the request',
+     tRec.acceptedFrom === '1.2.3.4');
+
+  /* 7. Accept — records, audit, idempotency, duplicate-safety */
   console.log('\nAcceptance');
   const all = [...ag.core, ...ag.roleSpecific].map((a) => ({ agreementId: a.id, version: a.version }));
-  const r1 = await legal._h.legalAccept(req('u1', { role: 'merchant', acceptances: all, meta: { language: 'en' } }));
+  const r1 = await legal._h.legalAccept(req('u1', accept(all, 'typed')));
   ok('records all 13 agreements', r1.count === 13);
   const after = await legal._h.legalCheckCompliance(req('u1', { role: 'merchant' }));
   ok('user is now compliant', after.compliant === true);
@@ -149,13 +265,26 @@ const req = (uid, data, admin) => ({ auth: uid ? { uid, token: admin ? { admin: 
   ok('server-captured IP recorded', rec.acceptedFrom === '1.2.3.4');
   ok('server timestamp used', rec.acceptedAt && rec.acceptedAt.__ts === true);
   ok('agreement hash stored', typeof rec.agreementHash === 'string' && rec.agreementHash.length > 0);
-  ok('acceptanceMethod = checkbox', rec.acceptanceMethod === 'checkbox');
+  ok('acceptanceMethod records the signature TYPE (not "checkbox")', rec.acceptanceMethod === 'typed-signature');
+  ok('signature hash stored, raw image never persisted', typeof rec.signatureHash === 'string' && rec.signatureHash.length === 64 && !rec.signatureData);
+  ok('signed name attributed to the signer', rec.signedName === 'Alex Ochieng');
   ok('audit log entry written', [...store.keys()].some((k) => k.startsWith('legalAuditLog/')));
 
+  /* All three lawful signature forms must be accepted. */
+  const dr = await legal._h.legalAccept(req('u7', accept(all, 'drawn')));
+  ok('DRAWN signature accepted', dr.count === 13 &&
+     store.get('legalAcceptances/u7_terms-of-service_1.0').acceptanceMethod === 'drawn-signature');
+  const st = await legal._h.legalAccept(req('u8', accept(all, 'stamp')));
+  ok('COMPANY STAMP accepted', st.count === 13 &&
+     store.get('legalAcceptances/u8_terms-of-service_1.0').acceptanceMethod === 'stamp-signature');
+  ok('drawn/stamp store only a hash, never the image',
+     !store.get('legalAcceptances/u7_terms-of-service_1.0').signatureData &&
+     !store.get('legalAcceptances/u8_terms-of-service_1.0').signatureData);
+
   const countBefore = [...store.keys()].filter((k) => k.startsWith('legalAcceptances/')).length;
-  await legal._h.legalAccept(req('u1', { role: 'merchant', acceptances: all }));
+  await legal._h.legalAccept(req('u1', accept(all, 'typed')));
   const countAfter = [...store.keys()].filter((k) => k.startsWith('legalAcceptances/')).length;
-  ok('re-accepting is idempotent (no duplicate records)', countBefore === countAfter);
+  ok('duplicate acceptance is idempotent (no duplicate records)', countBefore === countAfter);
 
   /* 6. Pending updates after a version bump */
   console.log('\nVersion upgrade workflow');
@@ -178,8 +307,11 @@ const req = (uid, data, admin) => ({ auth: uid ? { uid, token: admin ? { admin: 
 
   // A compliant user still passes while enforcement is ON.
   const pAll = (await legal._h.legalGetAgreements(req('u3', { role: 'provider' })));
-  await legal._h.legalAccept(req('u3', { role: 'provider',
-    acceptances: [...pAll.core, ...pAll.roleSpecific].map((a) => ({ agreementId: a.id, version: a.version })) }));
+  await legal._h.legalAccept(req('u3', accept(
+    [...pAll.core, ...pAll.roleSpecific].map((a) => ({ agreementId: a.id, version: a.version })),
+    'drawn',
+    { role: 'provider' },       /* provider is a PROFESSIONAL role — declaration required */
+  )));
   const g2 = await legal.assertLegalCompliance('u3', 'provider');
   ok('enforcement ON → compliant user passes', g2.enforced === true && g2.compliant === true);
 
