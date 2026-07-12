@@ -44,6 +44,7 @@ const DISPATCHERS = {
   financeSprintDispatch: ['finance-os-sprint43'],   // + settlement handlers (settlement-dispatch)
   providerDispatch:      ['provider-onboarding', 'provider-ops'],
   subscriptionsDispatch: ['subscription-core'],
+  legalDispatch:         ['legal-agreements'],
 };
 
 const errors = [];

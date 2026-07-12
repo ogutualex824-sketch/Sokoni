@@ -8963,3 +8963,7 @@ exports.onboardingDispatch = onbDisp.onboardingDispatch;
 /* ── Subscription Core — canonical read/enforce across all 5 stores → 1 CF ── */
 const subsCoreDisp = require('./subscriptions-dispatch');
 exports.subscriptionsDispatch = subsCoreDisp.subscriptionsDispatch;
+
+/* ── Legal Agreements & Digital Acceptance — versioned, auditable → 1 CF ── */
+const legalDisp = require('./legal-dispatch');
+exports.legalDispatch = legalDisp.legalDispatch;
