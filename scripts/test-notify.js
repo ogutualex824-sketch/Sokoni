@@ -204,6 +204,29 @@ ok('critical types ignore BOTH preferences and quiet hours (OTP always gets thro
     : bad('notification center ignores deepLink — tapping a notification goes nowhere useful');
 }
 
+/* ── 11. Duplicate suppression must actually suppress ───────────────────────
+   The fallback dedupe key was `${type}:${uid}:${Date.now()}` — unique by construction,
+   so it deduplicated NOTHING, while the file header claimed a short-window drop. A
+   dedupe key containing a timestamp is not a dedupe key. It is a UUID with extra steps. */
+{
+  const src = fs.readFileSync(path.resolve('functions/notify.js'), 'utf8');
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+  const keyLine = /const key = dedupeKey \|\|[^\n;]*/.exec(code);
+  keyLine && !/Date\.now\(\)\s*[}`]/.test(keyLine[0])
+    ? ok('the fallback dedupe key is not a timestamp — duplicates are genuinely suppressed')
+    : bad('the fallback dedupe key embeds a raw timestamp — it is unique every call and suppresses nothing');
+
+  keyLine && /_contentHash\(/.test(keyLine[0])
+    ? ok('duplicate = same content, same user, same window (different messages still both arrive)')
+    : bad('duplicate suppression does not consider content — a distinct notification could be swallowed');
+
+  /* Explicit dedupeKey must still win outright — that is idempotency, not suppression. */
+  /const key = dedupeKey \|\|/.test(code)
+    ? ok('an explicit dedupeKey still takes precedence (send-at-most-once, forever)')
+    : bad('explicit dedupeKey no longer honoured — retried functions could double-notify');
+}
+
 console.log('');
 if (fail) { console.error(`Notification engine FAILED (${fail})\n`); process.exit(1); }
 console.log(`Notification engine PASSED (${pass} checks) — nothing sent\n`);

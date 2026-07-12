@@ -124,6 +124,48 @@ and that all three producer/consumer field pairs above still agree.
 
 ---
 
+## Token formats (legacy + current)
+
+Three shapes exist in production. `collectTokens()` reads **all three** and de-duplicates,
+so no existing user becomes unreachable. This is deliberate backward compatibility, not
+indecision — and it is the ONLY place in the codebase that is allowed to know this.
+
+| Field | Shape | Written by | Status |
+| --- | --- | --- | --- |
+| `users/{uid}.fcmToken` | `string` | the web client (current) | **Canonical today.** Single device. |
+| `users/{uid}.fcmTokens` | `string[]` | multi-device writers | **Target for v1.1.** Correct model — a user has many devices. |
+| `users/{uid}.pushToken` | `string` | older clients | Legacy. Read-only; nothing writes it now. |
+
+**Formats that never existed** — and this is the defect that started this work:
+
+- `collection('fcmTokens')` — a top-level collection. `loyalty.js` queried it. Nothing has
+  ever written it.
+- `users/{uid}/fcmTokens` — a subcollection. `redis-jobs.js` queried it, and its dead-token
+  pruning *wrote deactivation flags into it*, which is why it looked plausible. Nothing ever
+  created a row there.
+
+Both queries always returned empty. Push from those two modules reached nobody, silently,
+for as long as they existed.
+
+### v1.1 migration plan (NOT in v1.0)
+
+Goal: one shape — `fcmTokens: string[]` — so a user with a phone and a laptop gets both.
+
+1. **Dual-write.** Client writes `fcmTokens: arrayUnion(token)` *and* keeps setting
+   `fcmToken` for one release. No reader changes. Zero risk.
+2. **Backfill.** One-off script: for every user with `fcmToken` and no `fcmTokens`, set
+   `fcmTokens: [fcmToken]`. Idempotent, resumable, safe to re-run.
+3. **Verify.** `notifyStats` should show no drop in reachable users. Do not proceed until a
+   full week of data confirms it.
+4. **Stop writing `fcmToken`.** Client only writes the array.
+5. **Retire the reads.** Only then remove `fcmToken` / `pushToken` from `collectTokens()`.
+
+Each step is independently reversible. Step 5 is the only irreversible one, and it must not
+happen until step 3 has produced a week of evidence. **Do not compress these steps** — the
+whole reason this bug existed is that someone assumed a token lived somewhere it didn't.
+
+---
+
 ## Known gaps
 
 - Push delivery has **never been proven on a real device**. The token plumbing is now

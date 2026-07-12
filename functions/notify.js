@@ -98,6 +98,15 @@ const TYPES = {
   seller_verified:      { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'seller_verified' },
   merchant_approved:    { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'merchant_approved' },
   rider_approved:       { priority: 'commerce',  category: 'marketplace',   smsTemplate: 'rider_approved' },
+  /* Loyalty & rewards. These reach the user through the engine now, so they get an
+     IN-APP notification as well as a push. Previously loyalty.js pushed directly and
+     wrote no in-app row at all — so when push failed (and it always did: see the
+     fcmTokens note above), the user was told nothing whatsoever. Points arrived in
+     total silence. An unannounced reward is not a reward; it is a database entry. */
+  loyalty_earned:       { priority: 'commerce',  category: 'loyalty',       smsTemplate: null },
+  loyalty_welcome:      { priority: 'commerce',  category: 'loyalty',       smsTemplate: null },
+  birthday_bonus:       { priority: 'marketing', category: 'loyalty',       smsTemplate: null },
+  cashback_received:    { priority: 'commerce',  category: 'loyalty',       smsTemplate: null },
   support_reply:        { priority: 'commerce',  category: 'support',       smsTemplate: null },
   kass_reply:           { priority: 'commerce',  category: 'ai',            smsTemplate: null },
   system_update:        { priority: 'commerce',  category: 'system',        smsTemplate: null },
@@ -109,6 +118,26 @@ const TYPES = {
 };
 
 const CATEGORIES = [...new Set(Object.values(TYPES).map(t => t.category))];
+
+/* Duplicate-suppression window for callers that supply no dedupeKey. 60s is long
+   enough to swallow a double-fired trigger and short enough that a user who
+   legitimately triggers the same message twice (re-requesting an OTP, say) is not
+   left waiting on a notification that was silently dropped. */
+const DEDUPE_WINDOW_MS = 60 * 1000;
+
+/* FNV-1a. Not a security hash — a content fingerprint, so that "same message twice in
+   a minute" can be recognised without storing the message. Collisions are harmless
+   here: the worst case is one duplicate notification suppressed, never a wrong one
+   sent, because the key also carries the type and the uid. */
+function _contentHash(title, body) {
+  const s = String(title || '') + ' ' + String(body || '');
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
 
 /* ── Preferences ──────────────────────────────────────────────────────────
    Per category, per channel. Sensible defaults so a user who never opens
@@ -290,9 +319,23 @@ async function notify({ uid, type, title, body, vars = {}, phone, image, deepLin
   if (!t) throw new HttpsError('invalid-argument', `Unknown notification type "${type}".`);
   if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
 
-  /* Idempotency. A retried Cloud Function, a double-fired trigger, a webhook replay —
-     all of these will call notify() twice. The key makes the second one a no-op. */
-  const key = dedupeKey || `${type}:${uid}:${Date.now()}`;
+  /* Idempotency AND duplicate suppression — two different guarantees.
+
+     IDEMPOTENCY is what a caller asks for explicitly with dedupeKey: "this event has a
+     natural identity (order X reached stage Y), send it at most once, ever." A retried
+     Cloud Function, a double-fired trigger or a webhook replay becomes a no-op.
+
+     DUPLICATE SUPPRESSION is the safety net for callers who pass no key. The fallback
+     key used to be `${type}:${uid}:${Date.now()}`, which is unique by construction — so
+     it deduplicated NOTHING, while the comment above it claimed a short-window drop.
+     A dedupe key containing a timestamp is not a dedupe key.
+
+     The fallback now hashes the CONTENT and buckets it into a 60-second window, which
+     is what "duplicate" actually means: the same message, to the same person, twice in
+     a moment. Two DIFFERENT messages of the same type still both arrive — suppressing
+     those would silently swallow a real notification, which is a worse failure than
+     showing a duplicate. When in doubt, deliver. */
+  const key = dedupeKey || `${type}:${uid}:${_contentHash(title, body)}:${Math.floor(Date.now() / DEDUPE_WINDOW_MS)}`;
   const logRef = db().collection(LOG).doc(key);
   try {
     await logRef.create({
