@@ -1,9 +1,24 @@
 # SOKONI — FINANCIAL TRANSACTION STANDARD
 
-**Status:** MANDATORY for all payment development. **No exceptions.**
-**Enforced by:** `scripts/audit-financial-safety.js --ci` (fails the build on violation).
+**Version:** **1.1.0** · **Effective:** 2026-07-12 · **Status:** MANDATORY. **No exceptions.**
+**Enforced by (both are permanent CI gates):**
+- `scripts/audit-financial-safety.js --ci` — static compliance
+- `scripts/test-financial-idempotency.js` — behavioural proof (25 tests)
 
-Applies to **every** payment rail, webhook, Firestore trigger, settlement, refund, payout, subscription and wallet operation.
+**Any new payment-related code MUST pass both.**
+
+## Scope — this standard governs ALL of:
+**Wallets · Payments · Refunds · Settlements · Subscriptions · Commissions · Payouts · Driver earnings · Merchant balances · Ledger operations**
+…across every payment rail, webhook, Firestore trigger, scheduled job and task queue.
+
+## Version history
+| Version | Date | Change |
+|---|---|---|
+| **1.1.0** | 2026-07-12 | Added: scheduled jobs named as an at-least-once source (P0-6). Added F5 (written-but-never-read guard) and F4 (batch ≠ idempotent). Added the `@financial-safe:` annotation — an explicit, *justified*, **visible** suppression for guards the static tool cannot infer. |
+| **1.0.0** | 2026-07-12 | Initial: 8 invariants, F1–F3, patterns A–D, incident ledger (P0-1…P0-5). |
+
+## Compliance today
+`V1 = 0 · V2 = 11 · V3 = 5 · protected = 57 · annotated = 1` — **zero Critical**. All 16 residual findings are `onCall` (no automatic retry) and are individually assessed in **`RESIDUAL_FINANCIAL_FINDINGS.md`**. They are **not** bulk-refactored.
 
 ---
 

@@ -453,6 +453,9 @@ const sasosResetMonthlyUsage = onSchedule(
         continue;   /* already credited for this period (retry / redelivery) */
       }
 
+      /* @financial-safe: guarded by the lastCreditedPeriod marker READ immediately above
+         (P0-6). A retry finds lastCreditedPeriod === newPeriod and skips this user, so
+         the increment runs at most once per user per period. */
       batch.set(creditRef, {
         uid,
         balance:            FieldValue.increment(plan.limits.ai_credits),

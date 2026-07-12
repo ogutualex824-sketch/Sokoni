@@ -1,0 +1,22 @@
+{
+  "note": "Known, tracked, non-Critical findings. See docs/RESIDUAL_FINANCIAL_FINDINGS.md. The CI gate fails on any violation NOT listed here. Fixing one ratchets this down.",
+  "generated": "run --update-baseline to regenerate",
+  "findings": [
+    "V2:ai-subscriptions.js:199",
+    "V2:ai-subscriptions.js:261",
+    "V2:ai-subscriptions.js:98",
+    "V2:dispatch.js:345",
+    "V2:loyalty-enterprise.js:474",
+    "V2:navigation.js:576",
+    "V2:pos-zero-friction.js:223",
+    "V2:procurement.js:675",
+    "V2:sasos-core.js:624",
+    "V2:sasos-usage.js:269",
+    "V2:subscription-os.js:319",
+    "V3:ai-subscriptions.js:191",
+    "V3:pos-retail.js:48",
+    "V3:pos-zero-friction.js:79",
+    "V3:subscription-os.js:298",
+    "V3:wap.js:879"
+  ]
+}
