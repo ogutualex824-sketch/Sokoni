@@ -30,8 +30,20 @@
  */
 'use strict';
 
-const admin = require('firebase-admin');
-const fs    = require('fs');
+const fs   = require('fs');
+const path = require('path');
+
+/* firebase-admin lives in functions/node_modules, not at the repo root. Resolve it from
+   there explicitly so this runs from anywhere without a second npm install. */
+let admin;
+try {
+  admin = require(require.resolve('firebase-admin', {
+    paths: [path.resolve(__dirname, '..', 'functions', 'node_modules')],
+  }));
+} catch (e) {
+  console.error('\nCannot load firebase-admin. Run from the repo root after:  cd functions && npm install\n');
+  process.exit(1);
+}
 
 if (!admin.apps.length) {
   admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'sokoni-aeb26' });

@@ -1,10 +1,74 @@
 # SOKONI v1.0.0 — Release Notes
 
 **Release Date:** 2026-07-12  
-**Legal Entity:** Bravilex Systems Ltd  
+**Legal Entity:** Bravilex International Co. Limited *(corrected 2026-07-13 — this file said "Bravilex Systems Ltd", which is not the registered entity; canonical source is `CompanyIdentity` / `company-identity.js`)*  
 **Platform URL:** https://mysokoni.co.ke  
 **Release Tag:** v1.0.0  
-**Service Worker:** `sokoni-20260712-connectivity-fix-v43` (current)
+**Service Worker:** `sokoni-20260713-notify-v46` (current)
+
+---
+
+## 🚨 HOTFIX P0-7 — Payment Integrity (2026-07-13)
+
+**Deployed outside the feature freeze. Prevents incorrect financial state.**
+
+| | |
+| --- | --- |
+| **Commits** | `d7a7ac7` · `af2d632` (checkout, hosting) · `2acdbea` (server-side payment gates) |
+| **Deployed** | 2026-07-13 — hosting `af2d632`, functions `2acdbea` |
+| **Regression gate** | `scripts/test-payment-integrity.js` — **17 checks, PASSING**, CI-blocking |
+| **Standard** | `FINANCIAL_TRANSACTION_STANDARD.md` **v1.2.0** — new Invariant 9 (Provider-attested) + F6 |
+
+### Root cause
+
+Checkout had **four** paths that told the customer *"✅ Payment Confirmed"* and wrote a real
+order with `status: "paid"` — the flag a seller reads to decide it is safe to ship — when
+**no money had moved**: `processMobileMoney()` (a 1600 ms timer; six offered providers that
+have **no backend at all**), `_runDemoStkPush()` (a complete fake M-Pesa STK flow, active
+whenever `INTASEND_PUBLIC_KEY` was empty), `_cardFallback()` (*"simulate approval then save
+order"*, reached whenever the IntaSend **script failed to load**), and a branch that trusted
+a client-side `COMPLETE` event. `saveAndRedirect()` hardcoded `status: "paid"` for every
+method.
+
+Two server triggers then fired on order **create** with no payment gate, so an unpaid order
+still reached people: `onNewOrderCreated` told the seller *"Confirm it to begin processing"*,
+and `emailOnOrderCreated` emailed the customer an *"order-confirmation"*.
+
+**The two most dangerous paths were not dead code — they were fallbacks.** The platform was
+one blank config value, or one ad-blocker, away from giving stock away in production.
+
+### Fix (all failing closed)
+
+- Payment status is **derived, never assumed**. Only a provider callback or server-side
+  verification yields `paid`; everything else is `pending_payment` — **DO NOT SHIP**.
+- `escrow.held = 0` when unverified. Escrow holds money, not intent.
+- All simulation paths **deleted**. Payment code has no demo mode.
+- Six unintegrated methods refused and shown "Coming soon", from **one list**.
+- Seller notification and customer confirmation email now require verified payment.
+- Customer sees only neutral states until confirmation.
+
+### Verification evidence (2026-07-13)
+
+- **Production fetch of `https://mysokoni.co.ke/checkout.html`** → HTTP 200. `UNINTEGRATED_PAYMENTS`,
+  `pending_payment` and `paymentVerified` **present**; the live `_cardFallback` body confirmed
+  to fail closed ("*your card has NOT been charged and no order was placed*"); the fabricated
+  "Card Approved" and STK "Payment Confirmed" strings **absent**.
+- `scripts/test-payment-integrity.js` → **17/17 PASS**.
+- Full regression: notify (26), SMS (11), promotions (10), company-identity, App Check → **all PASS**.
+
+### ⚠️ Outstanding — reconciliation NOT yet performed
+
+Historical orders were **not** modified, by design. The audit
+(`scripts/audit-payment-integrity.js`, read-only) **could not be run**: Application Default
+Credentials are stale (`invalid_client`). It requires:
+
+```bash
+gcloud auth application-default login
+node scripts/audit-payment-integrity.js --csv payment-audit.csv
+```
+
+**Until this completes, no revenue, GMV, settlement or commission figure predating
+2026-07-13 can be trusted.** See `RUNBOOK_PAYMENT_INTEGRITY.md`.
 
 ---
 
