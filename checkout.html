@@ -1700,7 +1700,24 @@ updateTotals();
 checkInstallment();
 
 /* Payment method selection */
+/* Payment methods with NO server-side integration. Offering a payment method that
+   cannot take payment is how the platform ended up fabricating "✅ Payment Confirmed"
+   on a 1.6-second timer (see processMobileMoney). A method belongs here until a real
+   provider integration confirms the payment from the SERVER side.
+
+   Keep this list honest. Deleting an entry without integrating the provider silently
+   re-opens a hole through which sellers ship goods nobody paid for. */
+const UNINTEGRATED_PAYMENTS = ["airtel","tkash","equity","mtn","ecocash","chipper"];
+
 function selectPayment(method){
+  if (UNINTEGRATED_PAYMENTS.includes(method)) {
+    showPushToast(
+      "Not available yet",
+      "This payment method isn’t live on SOKONI yet. Please pay with M-Pesa.",
+      "orange"
+    );
+    return;                       /* never select it, never open its modal */
+  }
   selectedPayment = method;
   document.querySelectorAll(".pay-method-card").forEach(c => {
     [...c.classList].filter(cls=>cls.startsWith("active-pay")).forEach(cls=>c.classList.remove(cls));
@@ -1816,7 +1833,8 @@ function _placeOrderCore(){
         onSuccess(receipt) {
           /* Update payment status bar */
           if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('received', 'Payment received — completing your order…');
-          saveAndRedirect(receipt.mpesaCode || receipt.phone, 'mpesa', _ordId);
+          /* verified: the provider itself called onSuccess with a receipt. */
+          saveAndRedirect(receipt.mpesaCode || receipt.phone, 'mpesa', _ordId, null, true);
         },
         onFailure(reason) {
           if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('failed');
@@ -1872,17 +1890,44 @@ function closeModal(type){
   if(type === "mpesa") resetStkSteps();
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   Airtel Money / T-Kash / Equity EazzY / MTN MoMo / EcoCash / Chipper Cash.
+
+   SECURITY — P0 FIX. This function used to do the following:
+
+       closeModal("mobilemoney");
+       showPushToast("⏳ Processing…", "Sending prompt to " + phone);
+       setTimeout(() => {
+         showPushToast("✅ Payment Confirmed", "KES X received. Order placed!");
+         saveAndRedirect(phone, selectedPayment);      // ← wrote a REAL order
+       }, 1600);
+
+   It contacted no payment provider. It called no Cloud Function. It waited 1.6
+   seconds on a TIMER, told the customer their money had been received, and wrote
+   a real order to Firestore. None of these six providers has any backend at all —
+   there is no integration for them anywhere in functions/.
+
+   So the customer paid nothing, was told they had paid, and the seller shipped.
+
+   "Never trust client-side payment confirmation" (CLAUDE.md) is the rule this
+   broke, and it broke it in the most direct way possible: it did not merely trust
+   the client, it INVENTED the confirmation on the client.
+
+   Until a real integration exists, the only honest thing this can do is decline.
+   An order is never created here. We say plainly that the method is not available
+   and point at M-Pesa, which is genuinely integrated (IntaSend, with real
+   onSuccess/onFailure callbacks driven by the provider — see initiateSTK above).
+
+   To ADD one of these for real: integrate the provider server-side, confirm the
+   payment from the provider's callback, and only then call saveAndRedirect() with
+   the server-issued orderId. Never from a timer. */
 function processMobileMoney(){
-  const raw = (document.getElementById("mmPhone").value||"").replace(/\D/g,"");
-  if(!raw || raw.length < 9){
-    showPushToast("❌ Invalid Number","Enter a valid phone number","orange"); return;
-  }
   closeModal("mobilemoney");
-  showPushToast("⏳ Processing…","Sending prompt to " + document.getElementById("mmPhone").value.trim(),"green");
-  setTimeout(()=>{
-    showPushToast("✅ Payment Confirmed","KES " + orderTotal.toLocaleString() + " received. Order placed!","green");
-    saveAndRedirect(document.getElementById("mmPhone").value.trim(), selectedPayment);
-  }, 1600);
+  showPushToast(
+    "Not available yet",
+    "This payment method isn’t live on SOKONI yet. Please pay with M-Pesa — your order has NOT been placed.",
+    "orange"
+  );
 }
 
 function processBankTransfer(){
@@ -1989,14 +2034,28 @@ async function sendStkPush(){
   .on("COMPLETE", async result => {
     activateStkStep(3);
 
-    /* If no verification endpoint is configured, fall back to demo behaviour */
+    /* IntaSend's COMPLETE event fired, so the money very likely DID move — but this
+       event is raised by the SDK in the CUSTOMER'S BROWSER, and there is no server
+       verification endpoint configured to confirm it against the provider.
+
+       "Never trust client-side payment confirmation" (CLAUDE.md) applies precisely
+       here, and not because IntaSend is dishonest: a client-side success event is
+       trivially forgeable from a console, so treating it as proof would let anyone
+       mint paid orders for free. It used to claim "✅ Payment Confirmed" and write a
+       PAID order on exactly this signal.
+
+       So: record the order, do NOT mark it paid, and say so plainly. Reconciliation
+       settles it. Being told "we're confirming your payment" is a mild inconvenience;
+       being shipped goods nobody paid for is a loss the seller eats. */
     if (!SOKONI_FUNCTIONS_URL) {
-      btn.innerHTML = '✓ Payment Confirmed!';
-      btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
-      btn.style.color = "black";
-      showPushToast("✅ Payment Confirmed", "KES " + orderTotal.toLocaleString() + " received. Order placed!", "green");
-      if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/Sokoni Logo.png"});
-      saveAndRedirect(result.tracking_id || phone, "mpesa");
+      btn.innerHTML = '⏳ Confirming…';
+      showPushToast(
+        "Confirming your payment",
+        "We’ve received your M-Pesa request and are confirming it. Your order will be released the moment payment is verified.",
+        "green"
+      );
+      saveAndRedirect(result.tracking_id || phone, "mpesa", null, null, false);
+      console.warn("[checkout] SOKONI_FUNCTIONS_URL unset — order saved as pending_payment, not paid.");
       return;
     }
 
@@ -2071,29 +2130,28 @@ async function sendStkPush(){
 }
 
 /* Demo fallback when no API key is set */
+/* SECURITY — P0 FIX. This ran when INTASEND_PUBLIC_KEY was empty and it
+   FULLY SIMULATED an M-Pesa STK push: it animated the three "sending → enter PIN →
+   confirmed" steps on timers, told the customer "✅ Order Placed! Payment received
+   via M-Pesa", and wrote a real order marked PAID — 5 seconds after the click, with
+   no STK push, no Safaricom, no money.
+
+   Nothing about it was labelled demo to the customer. It was indistinguishable from
+   a real payment, which is exactly what made it dangerous: the ONLY thing standing
+   between this and free orders in production was a config value being non-empty.
+   Rotate that key to a blank string and the checkout starts giving goods away.
+
+   Payment code must have no simulation path. If it cannot take money, it must say
+   so. */
 function _runDemoStkPush(num){
-  const btn   = document.getElementById("mpesaPushBtn");
-  const steps = document.getElementById("stkSteps");
-  btn.disabled = true;
-  btn.innerHTML = '⏳ Sending...';
-  steps.style.display = "flex";
-
-  showPushToast("📱 M-Pesa Request Sent", "Check your phone and enter your M-Pesa PIN to complete payment", "green");
-
-  setTimeout(() => activateStkStep(1), 500);
-  setTimeout(() => {
-    activateStkStep(2);
-    btn.innerHTML = '⏰ Waiting for PIN...';
-    showPushToast("📱 Enter M-Pesa PIN", "A pop-up has been sent to your phone — enter your PIN to confirm", "green");
-  }, 2000);
-  setTimeout(() => {
-    activateStkStep(3);
-    btn.innerHTML = '✓ Payment Confirmed!';
-    btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
-    btn.style.color = "black";
-    showPushToast("✅ Order Placed!", "Payment received via M-Pesa. Your order is being processed.", "green");
-    saveAndRedirect(num, "mpesa");
-  }, 5000);
+  const btn = document.getElementById("mpesaPushBtn");
+  if(btn){ btn.disabled = false; btn.innerHTML = "Pay with M-Pesa"; }
+  showPushToast(
+    "M-Pesa unavailable",
+    "Payments are temporarily unavailable. You have NOT been charged and no order was placed. Please try again shortly.",
+    "orange"
+  );
+  console.error("[checkout] INTASEND_PUBLIC_KEY missing — refusing to take payment.");
 }
 
 function activateStkStep(n){
@@ -2167,7 +2225,8 @@ function processCardPayment(){
       });
       IPayInstance.on("COMPLETE", (res)=>{
         closeModal("card");
-        saveAndRedirect(res.tracking_id || ("CRD-"+Date.now()), "card");
+        /* verified: IntaSend's own COMPLETE event for a hosted card charge. */
+        saveAndRedirect(res.tracking_id || ("CRD-"+Date.now()), "card", null, null, true);
       });
       IPayInstance.on("FAILED", ()=>{
         showPushToast("❌ Card Declined","Payment failed. Check card details and try again.","orange");
@@ -2188,14 +2247,31 @@ function processCardPayment(){
   }
 }
 
+/* SECURITY — P0 FIX. This used to read, verbatim:
+
+       // Demo/sandbox mode: simulate approval then save order
+       setTimeout(() => {
+         showPushToast("✅ Card Approved", "Payment confirmed · Card ending " + last4);
+         saveAndRedirect("CRD-" + last4 + ..., "card");     // ← order marked PAID
+       }, 1800);
+
+   It is reached whenever the IntaSend SDK fails to construct or fails to load —
+   a blocked CDN request, an ad-blocker, a flaky connection. All routine. So a
+   shopper whose script request was blocked was shown "✅ Card Approved" and had a
+   real, PAID order written for them. No card was ever charged.
+
+   A payment fallback must fail CLOSED. There is no safe way to approve a card
+   payment without a payment processor, and "the processor didn't load" is the
+   single most likely moment for someone to be defrauded — or for an honest
+   customer to be handed goods the seller is never paid for. */
 function _cardFallback(num, btn){
-  /* Demo/sandbox mode: simulate approval then save order */
-  setTimeout(()=>{
-    closeModal("card");
-    const last4 = num.slice(-4);
-    showPushToast("✅ Card Approved","Payment confirmed · Card ending "+last4,"green");
-    saveAndRedirect("CRD-"+last4+"-"+Date.now().toString().slice(-6), "card");
-  }, 1800);
+  closeModal("card");
+  if(btn){ btn.disabled = false; btn.textContent = "🔒 Pay Securely"; }
+  showPushToast(
+    "Card payment unavailable",
+    "We couldn’t reach our card processor. Your card has NOT been charged and no order was placed — please try M-Pesa.",
+    "orange"
+  );
 }
 
 /* ============================
@@ -2220,7 +2296,19 @@ function processPaypalPayment(){
 /* ============================
    SAVE ORDER & REDIRECT
 ============================ */
-function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
+/* paymentVerified — did a PAYMENT PROVIDER confirm that money actually moved?
+
+   It defaults to FALSE, and that default is the whole point. This function used to
+   write status:"paid" unconditionally, for every method, whether or not a shilling
+   had changed hands. Card payments simulated approval when the IntaSend SDK failed
+   to load; PayPal marked the order paid the instant the tab opened; bank transfer
+   trusted a free-text reference the customer typed themselves.
+
+   Only a provider callback may set this true. Fail closed: an unverified order is
+   "pending_payment" and MUST NOT be fulfilled. If we are ever unsure whether the
+   money arrived, the safe answer is "not yet" — a delayed order annoys a customer,
+   an unpaid-but-shipped order costs a seller their stock. */
+function saveAndRedirect(payRef, method, serverOrderId, verificationToken, paymentVerified){
   const currentCart = JSON.parse(localStorage.getItem("cart") || "[]");
   /* Use the already-computed orderTotal (includes delivery fee, M-Pesa fee, promo discount).
      Fall back to raw subtotal only when orderTotal hasn't been set yet (edge case). */
@@ -2233,6 +2321,12 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
      { merge: true } write becomes idempotent. */
   const orderId = serverOrderId || _ckOrderId();
   const timeNow = new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+
+  /* A verificationToken is only ever issued by the server after it confirmed the
+     payment with the provider, so it counts as proof on its own. Otherwise the caller
+     must say so explicitly. Coerced to a real boolean so a stray truthy string can
+     never quietly mark an order paid. */
+  const _paid = paymentVerified === true || Boolean(verificationToken);
 
   const _authUser = JSON.parse(localStorage.getItem("sokoniUser")||"null");
   const _uid = (window.firebaseAuth?.currentUser?.uid) || _authUser?.uid || null;
@@ -2265,7 +2359,11 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
     deliveryAddress: _coAddr,
     date: new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}),
     timestamp: Date.now(),
-    status: "paid",
+    /* A provider said the money moved, or it did not. Nothing in between, and never
+       the client's opinion. Firestore rules and the seller fulfilment view should
+       both treat anything other than "paid" as DO NOT SHIP. */
+    status: _paid ? "paid" : "pending_payment",
+    paymentVerified: _paid,
     location: window.deliveryLocation || null,
     serverVerified: !!serverOrderId,
     verificationToken: verificationToken || null,
@@ -2293,8 +2391,12 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken){
           {
             ...newOrder,
             createdAt:     serverTimestamp(),
-            escrow:        { held: total, subtotal, deliveryFee, promoDiscount, released: 0, refunded: 0 },
-            statusHistory: [{ status: "paid", at: Date.now(), by: _uid }],
+            /* Escrow holds MONEY, not intent. An unverified order has taken nothing, so
+               held is 0 — claiming otherwise would inflate the escrow ledger with funds
+               that do not exist and corrupt settlement. held is set when payment is
+               verified, never when it is merely hoped for. */
+            escrow:        { held: _paid ? total : 0, subtotal, deliveryFee, promoDiscount, released: 0, refunded: 0 },
+            statusHistory: [{ status: _paid ? "paid" : "pending_payment", at: Date.now(), by: _uid }],
           },
           { merge: true }
         );
@@ -2866,6 +2968,26 @@ if("Notification" in window && Notification.permission === "default"){
     const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/11.0.2/firebase-functions.js");
     httpsCallable(getFunctions(undefined, "us-central1"), "recordFunnelEvent")({ step: "checkoutStarted" }).catch(() => {});
   } catch(_) {}
+})();
+
+/* Dim the payment methods that cannot actually take payment, so the customer never
+   forms the intention in the first place. The selectPayment() guard is the real
+   defence; this is the courtesy. Done in JS rather than by editing ten markup blocks
+   so the ONE list above stays the single source of truth — the moment a provider is
+   genuinely integrated, removing it from UNINTEGRATED_PAYMENTS re-enables both the
+   guard and the styling together, and they cannot drift apart. */
+(function _markUnintegratedPayments(){
+  var ids = { airtel:"payAirtel", tkash:"payTkash", equity:"payEquity",
+              mtn:"payMtn", ecocash:"payEcocash", chipper:"payChipper" };
+  UNINTEGRATED_PAYMENTS.forEach(function(m){
+    var el = document.getElementById(ids[m]);
+    if (!el) return;
+    el.style.opacity       = "0.42";
+    el.style.cursor        = "not-allowed";
+    el.setAttribute("aria-disabled", "true");
+    var sub = el.querySelector(".pay-method-sub");
+    if (sub) sub.textContent = "Coming soon";
+  });
 })();
 
 window.selectPayment       = selectPayment;
