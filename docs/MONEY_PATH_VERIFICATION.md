@@ -1,147 +1,210 @@
-# CB-M1 — Money Path Verification
+# CB-M1 — Money Path Verification Runbook
 
-**Date:** 2026-07-12 · **Status:** 🔴 **NO-GO — NOT CLEARED**
-
----
-
-## ⚠️ Declaration: the live test has NOT been executed
-
-**I cannot execute this verification.** It requires a live authenticated merchant session, a physical handset to receive an M-PESA STK push and enter a PIN, admin credentials to approve a payout, and real money movement. I have none of these.
-
-**No transaction was performed. No evidence of a live payment exists. Nothing below claims otherwise.**
-
-Fabricating a financial verification would be indistinguishable from a real one in a report and is the single most dangerous thing I could do. **CB-M1 therefore remains NO-GO and is not lowered.**
-
-What follows is (A) what I *could* prove without moving money — a code-level audit of the financial safety invariants, which found and fixed a **real Critical defect** — and (B) the runbook you execute to actually clear CB-M1.
+**Status:** 🔴 **NO-GO — NOT CLEARED.** Severity is **not** lowered.
 
 ---
 
-# PART A — Code-level audit of financial invariants (performed)
+## ⚠️ The live test has NOT been executed
 
-## 🔴 DEFECT FOUND AND FIXED — P0-2: IntaSend webhook wrote duplicate ledger entries
+It requires a live merchant session, a physical handset to accept an M-PESA STK PIN, admin credentials, and real money movement. **No transaction has been performed. No live financial evidence exists.**
 
-**Location:** `functions/index.js` → `intasendWebhook`
-
-**The defect (before):**
-```js
-const snap = await payRef.get();
-if (existing.status === "COMPLETE") return;   // read-check…
-await payRef.update({ status: fsStatus });     // …write  ← NOT a transaction
-await db.collection("commissionLedger").add({ … });  // ← AUTO-ID append
-```
-A non-transactional read-check-write followed by an **auto-ID append**. **IntaSend retries webhooks on timeout/5xx.** Two concurrent retries could **both** pass the "already COMPLETE?" check and **both** append → **duplicate commission ledger entries for a single payment**, corrupting ledger consistency and any settlement/payout derived from it.
-
-**This is the exact bug already fixed on the M-PESA rail** (P0-1, whose own comment reads: *"previously a non-transactional read-check-write + `.add()` (auto-ID), which allowed double seller credits on retries"*). **The fix was never applied to the IntaSend rail.**
-
-**The fix (`44bb12d`, deployed):** mirrors the proven P0-1 pattern —
-1. **Atomically CLAIM** the `pending → COMPLETE` transition inside `runTransaction` — only one concurrent retry proceeds.
-2. Write the ledger with a **deterministic doc id** (`commissionLedger/{apiRef}`) via `.set({merge:true})` instead of `.add()` — **idempotent by construction**; a replay overwrites rather than duplicates.
-
-**Verified:** parses · **0** auto-ID ledger writes remain · architecture guard PASS · deployment integrity PASS (1410 == 1410) · deployed (targeted).
-
-> This defect would have **silently corrupted the ledger during your live test** — and possibly *because* of it, since a slow first webhook is exactly what triggers a provider retry.
+**The only acceptable evidence is a real payment, refund, payout, dispute, subscription and settlement — with captured logs and audit evidence.** Code review, static analysis and reasoning are **not** substitutes and will never clear CB-M1.
 
 ---
 
-## Invariants verified in code
+## What HAS been done (code-level only)
 
-| Requirement | Status | Evidence |
+A static audit of every payment rail found **three Critical duplicate-ledger defects** — all fixed and deployed. **None were caught by tests; all three would have corrupted the ledger silently.**
+
+| ID | Defect | Impact |
 |---|---|---|
-| **No duplicate charges** (M-PESA) | ✅ **SOUND** | `darajaSTKCallback` transactionally **claims** `pending→completed/failed`; only the winner credits. Credit written to `sellerPayments/{checkoutId}` — **deterministic id, idempotent by construction**. |
-| **Replay / spoofing guard** (M-PESA) | ✅ SOUND | Paid amount cross-checked against requested amount; mismatch → `status: failed` + `auditLogs` entry. |
-| **Webhook authenticity** (IntaSend) | ✅ SOUND | **HMAC-SHA256** signature verified against `INTASEND_PRIVATE_KEY` before any processing. |
-| **No duplicate charges** (IntaSend) | ✅ **FIXED** (`44bb12d`) | Was vulnerable (above). Now transactional claim + deterministic ledger id. |
-| **No duplicate refunds** | ✅ SOUND | Refunds keyed by `generateIdempotencyKey(['refund', orderId, amount])`; commission/VAT reversals likewise keyed. |
-| **No duplicate payouts** | ✅ SOUND | `finos.js:442` — payouts with `settlementMethod === 'split'` or `splitSettled === true` are **skipped** (`status: 'skipped_split'`). Exactly one settlement path; split-settled orders can never enter the B2C payout queue. |
-| **Idempotency (payments)** | ✅ SOUND | `payment-orchestrator.js` resolves an `idempotencyKey` and looks up existing payments by it before creating. |
-| **Duplicate in-flight guard (POS)** | ✅ SOUND | `pos-terminal-live.js:406` rejects a new transaction while one is pending/processing for the same order. |
-| **Ledger atomicity** | ✅ SOUND | `finos.js` uses `runTransaction` in **9** places for ledger/balance mutations. |
-| **Server-side validation** | ✅ SOUND | Amounts, ownership and state transitions validated server-side; client-supplied amounts never trusted for settlement. |
+| **P0-2** | `intasendWebhook`: non-transactional read-check-write + auto-ID ledger append | Duplicate commission entries on provider retry |
+| **P0-3** | `onSellerPaymentCreated`: auto-ID append **+ non-idempotent `FieldValue.increment()`** on an **at-least-once** trigger | **Seller billed commission TWICE for one payment** |
+| **P0-4** | Shared webhook wrapper: racy `get()`→`check`→`set()` idempotency claim | One payment event processed twice (4 rails) |
 
-**Conclusion of Part A:** the financial safety model is well-built — a transactional-claim + deterministic-id pattern is used consistently. **One rail (IntaSend) had been missed; it is now fixed.** No other duplicate-credit vector was found by inspection.
+Full analysis: **`PAYMENT_WEBHOOK_STANDARD.md`**. Platform-wide verified: **0** auto-ID money writes, **0** racy idempotency claims.
 
-**This does NOT clear CB-M1.** Code inspection cannot prove that money actually moves correctly end-to-end.
+> ⚠️ P0-2 and P0-3 would most likely have fired **during your live test** — a slow first webhook is exactly what triggers a provider retry.
 
 ---
 
-# PART B — Runbook to clear CB-M1 (execute this)
+# THE RUNBOOK
 
-**Rules:** smallest safe values (**KES 1**). Test accounts only. Capture evidence at **every** step. **Any failure → stop, record, fix, retest.**
+**Rules:** smallest safe values (**KES 1**). Test accounts only. Capture evidence at **every** step.
+**Any failure → STOP. Record. Fix. Retest that flow from the start. Release stays NO-GO.**
 
-## Evidence template (record for EVERY transaction)
+## Evidence to capture (EVERY transaction, no exceptions)
 
 | Field | Value |
 |---|---|
 | Timestamp (UTC) | |
 | Transaction / Order ID | |
-| User ID (redact tail) | `uid_abc…` |
+| User ID (redact tail: `uid_abc…`) | |
 | Amount (KES) | |
 | Status | |
 | Cloud Function invoked | |
-| Firestore doc(s) written | `collection/docId` |
+| Firestore doc(s) written (`collection/docId`) | |
+| **Ledger entry count** (must be **exactly 1**) | |
 | Wallet movement (before → after) | |
-| Settlement / ledger movement | |
+| Settlement movement | |
 | Notification sent? | |
 | Log excerpt / screenshot | |
 
 ---
 
-## B1 — MERCHANT FLOW (payment)
-1. **Merchant login** → session established.
-2. **Create order** (KES 1) → record `orders/{id}`, status.
-3. **Customer payment** → STK push to handset; enter PIN.
-4. **Payment confirmation** → webhook fires.
-   - ✅ `payments/{apiRef}` or `posPayments/{checkoutId}` → `COMPLETE`
-   - ✅ **`commissionLedger/{apiRef}` exists EXACTLY ONCE** ← *the P0-2 fix; verify the doc id is the apiRef, not an auto-id*
-   - ✅ `sellerPayments/{checkoutId}` exists exactly once
-5. **Receipt generation** → receipt doc + delivery (email/SMS).
-6. **Wallet update** → balance increases by the **net** (gross − commission).
-7. **Settlement record** → settlement entry with the correct `settlementMethod`.
-8. **Merchant dashboard** → reflects the order, earnings and balance.
+## S1 — MERCHANT FLOW (payment)
 
-## B2 — REFUND FLOW
-Refund request → approval → **wallet credit** → balance update → **ledger entry (reversal)** → customer notification.
-✅ Assert: exactly **one** refund record; commission/VAT **reversed**; balance nets to zero after a full refund.
+**Prerequisites:** merchant test account + POS access; buyer test account; handset with the M-PESA test line; IntaSend/Daraja credentials live; admin console access.
 
-## B3 — PAYOUT FLOW
-Pending payout → admin review → approval → settlement → ledger update → merchant confirmation.
-✅ Assert: payout appears **once**; a split-settled order is **skipped** (`skipped_split`), never double-paid.
+**Steps:** Merchant login → create order (KES 1) → customer pays → confirmation → receipt → wallet update → settlement record → dashboard.
 
-## B4 — DISPUTE FLOW
-Open dispute → admin resolution → wallet adjustment (if any) → **audit trail** → notifications.
+**Expected result**
+- `orders/{id}` → `paid`
+- `payments/{apiRef}` **or** `posPayments/{checkoutId}` → `COMPLETE`
+- **`commissionLedger/{apiRef}` exists EXACTLY ONCE — and its doc id IS the apiRef, not an auto-id** ← *directly verifies P0-2*
+- `sellerPayments/{checkoutId}` exactly once
+- **`commissionLedger/{paymentId}` exactly once** and `sellerBilling/{seller}/monthly/{period}.totalCommissionKES` increased **exactly once** ← *directly verifies P0-3*
+- Wallet credited by **net = gross − commission**
+- Receipt generated and delivered
 
-## B5 — SUBSCRIPTION FLOW
-Purchase → payment → activation → **feature unlock** → renewal status.
-✅ Assert: exactly **one** subscription record. ⚠️ **Known risk (H2):** subscription **writes** still diverge across 5 stores — check the account does not end up with conflicting records (`getSubscriptionDivergence`).
+**Evidence:** the table above + a screenshot of the ledger doc **id** + the billing doc before/after.
+
+**Rollback:** refund the KES 1 via S2; if state is stuck, an admin can reverse the order. No code rollback needed unless a defect is found.
+
+**Failure handling:** capture the CF logs for the failing step, the Firestore doc state, and the exact error. Do **not** retry blindly — a retry may mask a duplicate-ledger bug (that is the whole point of the test).
+
+**Success criteria:** every expected item present, **ledger entry count == 1**, wallet math balances.
+
+**Known risks:** commission is computed by `finos-utils.calculateCommission` with a **10% fallback** if it throws — verify the applied rate is the *configured* one, not the fallback.
 
 ---
 
-## B6 — ROLLBACK / NEGATIVE TESTS (do not skip — this is where money is lost)
-| Test | Expected |
-|---|---|
-| **Failed payment** (decline PIN) | Order stays unpaid; **no** ledger/wallet movement |
-| **Cancelled payment** (ignore STK) | Times out cleanly; no partial state |
-| **Duplicate webhook** — *replay the same webhook twice* | **Exactly one** `commissionLedger` entry, **one** credit ← **directly tests the P0-2 fix** |
-| **Concurrent webhook retries** | Only one wins (transactional claim); no double credit |
-| **Failed payout** | Marked failed; funds not deducted twice; retry is idempotent |
-| **Duplicate refund attempt** | Second attempt is a no-op (idempotency key) |
+## S2 — REFUND FLOW
 
-## B7 — SECURITY ASSERTIONS
+**Prerequisites:** a completed S1 payment.
+
+**Steps:** refund request → approval → wallet credit → balance update → ledger entry → customer notification.
+
+**Expected result:** exactly **one** refund record; commission **and** VAT reversed; balance nets to zero after a full refund; customer notified.
+
+**Evidence:** refund doc id, reversal ledger entries, wallet before/after, notification proof.
+
+**Rollback:** n/a (the refund *is* the reversal).
+
+**Failure handling:** if the balance does not net to zero, **stop** — that is a ledger-consistency failure. Record and fix before any further testing.
+
+**Success criteria:** wallet returns to its pre-S1 balance; **no duplicate** refund or reversal entries.
+
+**Known risks:** refunds are keyed by `generateIdempotencyKey(['refund', orderId, amount])`. A **partial** refund of the same amount twice would collide on that key — confirm this is intended before allowing repeat partial refunds.
+
+---
+
+## S3 — PAYOUT FLOW
+
+**Prerequisites:** a seller with a positive pending balance (from S1).
+
+**Steps:** pending payout → admin review → approval → settlement → ledger update → merchant confirmation.
+
+**Expected result:** payout appears **once**; settlement recorded; ledger updated; merchant notified. A **split-settled** order is **skipped** (`status: 'skipped_split'`) and never double-paid.
+
+**Evidence:** payout doc, settlement doc, ledger delta, `skipped_split` proof for a split order.
+
+**Rollback:** if funds have left, this is **not** reversible — hence KES 1.
+
+**Failure handling:** on double payout, **halt all payout processing immediately** and reconcile.
+
+**Success criteria:** exactly one payout; ledger balances; the duplicate-payout guard (`finos.js:442`) demonstrably skips split-settled orders.
+
+**Known risks:** **H2 — subscription/settlement write split-brain** (writes still diverge across 5 stores). Confirm the payout used the correct commission rate.
+
+---
+
+## S4 — DISPUTE FLOW
+
+**Prerequisites:** a completed order; admin access.
+
+**Steps:** open dispute → admin resolution → wallet adjustment (if any) → audit trail → notifications.
+
+**Expected result:** dispute state machine advances; any wallet adjustment appears **once**; an immutable audit entry exists; both parties notified.
+
+**Evidence:** dispute doc, audit-log entry, wallet delta, notifications.
+
+**Rollback:** re-open / re-resolve the test dispute.
+
+**Failure handling:** a missing audit entry is a **compliance failure** — record it.
+
+**Success criteria:** exactly one wallet adjustment; audit trail complete.
+
+**Known risks:** `aosResolveDispute` was **renamed** (`8fe29e2`) and has **never** been exercised — this flow tests it for the first time.
+
+---
+
+## S5 — SUBSCRIPTION FLOW
+
+**Prerequisites:** a merchant/provider test account without an active subscription.
+
+**Steps:** purchase → payment → activation → feature unlock → renewal status.
+
+**Expected result:** exactly **one** subscription record; plan active; gated features unlock; renewal date set.
+
+**Evidence:** subscription doc(s), payment doc, feature-gate check, renewal date.
+
+**Rollback:** cancel the test subscription.
+
+**Failure handling:** if **multiple** subscription records appear across stores, that is **H2 manifesting** — record and stop.
+
+**Success criteria:** one active subscription; enforcement reflects the correct tier and commission rate.
+
+**Known risks:** 🔴 **H2 — subscription WRITES still diverge across 5 stores.** Run `getSubscriptionDivergence` for the test account afterwards and assert **`diverges: false`**.
+
+---
+
+# NEGATIVE TESTS (mandatory — this is where money is actually lost)
+
+**Every test below must assert: NO DUPLICATE LEDGER ENTRIES.**
+
+| # | Test | How | Expected |
+|---|---|---|---|
+| **N1** | **Duplicate webhook** | Re-POST the identical webhook payload | Second call is a no-op. **Exactly one** `commissionLedger` doc. ← *verifies P0-2* |
+| **N2** | **Network timeout** | Delay/drop the webhook ACK so the provider retries | One credit only; ledger count unchanged |
+| **N3** | **Retry** | Force the provider's retry path | Idempotent; no second ledger entry |
+| **N4** | **Duplicate callback** | Fire `darajaSTKCallback` twice for one `CheckoutRequestID` | Second is skipped ("Already processed (raced)"); one `sellerPayments/{checkoutId}` |
+| **N5** | **Replay attack** | Re-send an **old** signed webhook (>5 min) | Rejected by the replay window; **no** ledger write |
+| **N6** | **Tampered amount** | Alter the paid amount vs requested | `status: failed` + `auditLogs` entry; **no** credit |
+| **N7** | **Cancelled payment** | Ignore the STK prompt | Order unpaid; **zero** ledger/wallet movement |
+| **N8** | **Failed settlement** | Force a settlement failure | Marked failed; funds **not** deducted twice; retry idempotent |
+| **N9** | **Duplicate refund attempt** | Issue the same refund twice | Second is a no-op (idempotency key); **one** reversal |
+| **N10** | **Double payout attempt** | Approve the same payout twice | Second rejected/skipped; **one** payout |
+| **N11** | **Trigger redelivery** | Re-create the same `sellerPayments` doc / force redelivery | **One** ledger entry AND `totalCommissionKES` **unchanged** on the 2nd delivery ← *verifies P0-3, the seller-double-billing bug* |
+| **N12** | **Concurrent webhook fan-out** | Send 2 identical webhooks simultaneously | Exactly one wins (`create()` ALREADY_EXISTS on the loser) ← *verifies P0-4* |
+
+**Ledger assertion for every test:**
+```
+count(commissionLedger where paymentId == <id>) == 1
+```
+
+---
+
+# SECURITY ASSERTIONS
+
 - [ ] No duplicate charges · [ ] No duplicate refunds · [ ] No duplicate payouts
-- [ ] Server-side validation (client cannot alter settled amount)
-- [ ] **Ledger consistency:** Σ(gross) = Σ(net) + Σ(commission) across the run
-- [ ] **Wallet consistency:** wallet balance == Σ(credits) − Σ(debits)
+- [ ] Server-side validation — a client **cannot** alter the settled amount
+- [ ] **Ledger consistency:** Σ(gross) = Σ(net) + Σ(commission) across the whole run
+- [ ] **Wallet consistency:** balance == Σ(credits) − Σ(debits)
+- [ ] Financial collections remain **client-unwritable** (`SEC-F1`: `commissionLedger`/`sellerPayments` → `write: if false`)
 
 ---
 
-## Exit criteria
+# EXIT CRITERIA — CB-M1 clears ONLY when ALL hold
 
-**CB-M1 is cleared ONLY when:**
-- [ ] B1–B5 each complete end-to-end with captured evidence
-- [ ] B6 negative tests all behave correctly (**especially the duplicate-webhook replay**)
-- [ ] B7 assertions hold
-- [ ] Also run: `docs/SMOKE_TEST_DISPATCH_RENAMES.md` §A — the renamed live handlers (`posRefundToWallet`, `aosGetPendingPayouts`, …) have **never** been exercised
+- [ ] **S1–S5** complete end-to-end with captured evidence
+- [ ] **N1–N12** all behave correctly (**especially N1, N11, N12** — they verify P0-2/3/4)
+- [ ] All security assertions hold
+- [ ] `SMOKE_TEST_DISPATCH_RENAMES.md` §A passes — the renamed live handlers (`posRefundToWallet`, `aosGetPendingPayouts`, `aosResolveDispute`) have **never** been exercised
+- [ ] Every ledger assertion returns **exactly 1**
 
-**If any step fails:** keep NO-GO · document the exact failure · apply the minimum fix · **retest from the start of that flow.**
+**If ANY step fails:** keep **NO-GO** · document the exact failure · apply the **minimum** fix · **retest that flow from the start**.
 
-Related: [[RELEASE_v1.0.0_STATUS]] · [[SMOKE_TEST_DISPATCH_RENAMES]] · [[SUBSCRIPTION_CONSOLIDATION]]
+**Do not lower CB-M1's severity. Do not substitute reasoning for evidence.**
+
+Related: [[PAYMENT_WEBHOOK_STANDARD]] · [[RELEASE_v1.0.0_STATUS]] · [[SMOKE_TEST_DISPATCH_RENAMES]] · [[SECURITY_RULES_REVIEW]]
