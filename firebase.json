@@ -110,69 +110,6 @@
         ]
       },
       {
-        "source": "/sokoni-offline.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=3600, must-revalidate"
-          },
-          {
-            "key": "CDN-Cache-Control",
-            "value": "no-store"
-          },
-          {
-            "key": "Cloudflare-CDN-Cache-Control",
-            "value": "no-store"
-          },
-          {
-            "key": "Surrogate-Control",
-            "value": "no-store"
-          }
-        ]
-      },
-      {
-        "source": "/sokoni-ui.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=3600, must-revalidate"
-          },
-          {
-            "key": "CDN-Cache-Control",
-            "value": "no-store"
-          },
-          {
-            "key": "Cloudflare-CDN-Cache-Control",
-            "value": "no-store"
-          },
-          {
-            "key": "Surrogate-Control",
-            "value": "no-store"
-          }
-        ]
-      },
-      {
-        "source": "/sw-register.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=3600, must-revalidate"
-          },
-          {
-            "key": "CDN-Cache-Control",
-            "value": "no-store"
-          },
-          {
-            "key": "Cloudflare-CDN-Cache-Control",
-            "value": "no-store"
-          },
-          {
-            "key": "Surrogate-Control",
-            "value": "no-store"
-          }
-        ]
-      },
-      {
         "source": "/service-worker.js",
         "headers": [
           {
@@ -284,6 +221,69 @@
           {
             "key": "Cache-Control",
             "value": "public, max-age=604800, stale-while-revalidate=86400"
+          }
+        ]
+      },
+      {
+        "source": "/sokoni-offline.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600, must-revalidate"
+          },
+          {
+            "key": "CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Cloudflare-CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Surrogate-Control",
+            "value": "no-store"
+          }
+        ]
+      },
+      {
+        "source": "/sokoni-ui.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600, must-revalidate"
+          },
+          {
+            "key": "CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Cloudflare-CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Surrogate-Control",
+            "value": "no-store"
+          }
+        ]
+      },
+      {
+        "source": "/sw-register.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600, must-revalidate"
+          },
+          {
+            "key": "CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Cloudflare-CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Surrogate-Control",
+            "value": "no-store"
           }
         ]
       },
