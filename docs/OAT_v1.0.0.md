@@ -1,7 +1,7 @@
 # SOKONI v1.0.0 — Operational Acceptance Testing (OAT)
 
-**Final release gate.** Engineering is complete; nothing below is a code task.
-**Status: 0 of 8 PASSED. Verdict: NO-GO.**
+**Final release gate (RC4).** Engineering is complete; nothing below is a code task.
+**Status: 0 of 12 PASSED. Verdict: NO-GO.**
 
 Related: [[RELEASE_v1.0.0_RC3]] · [[APP_CHECK]] · [[OPERATIONS_GUIDE]]
 
@@ -19,6 +19,8 @@ Therefore **no OAT item is marked PASS here, and none may be** until a person pe
 
 ## Status board
 
+**RC4 — extended to 12 tests.**
+
 | # | Test | Status | Evidence | Owner | Date |
 |---|---|---|---|---|---|
 | OAT-01 | Money Path (end-to-end) | 🔴 **PENDING** | — | | |
@@ -28,9 +30,16 @@ Therefore **no OAT item is marked PASS here, and none may be** until a person pe
 | OAT-05 | Subscription | 🔴 **PENDING** | — | | |
 | OAT-06 | Authentication | 🔴 **PENDING** | — | | |
 | OAT-07 | PWA | 🔴 **PENDING** | — | | |
-| OAT-08 | Accessibility | 🔴 **PENDING** | — | | |
+| OAT-08 | Responsive UI | 🔴 **PENDING** | — | | |
+| OAT-09 | Accessibility | 🔴 **PENDING** | — | | |
+| OAT-10 | Operations (alerts · backup · **restore drill**) | 🔴 **PENDING** | — | | |
+| OAT-11 | Marketplace onboarding (merchant → SmartPOS Ready) | 🔴 **PENDING** | — | | |
+| OAT-12 | Email inbox delivery | 🔴 **PENDING** | — | | |
 
-**GO requires 8/8 PASS with attached real-world evidence.**
+**GO requires 12/12 PASS with attached real-world evidence.**
+**Current: 0 / 12.**
+
+> ⚠️ **Release Manager note (RM-01):** the working tree currently has **204 uncommitted files**. **A release tag cannot be cut and a Deployment Manifest cannot be issued from an unreproducible build.** The operator must commit or revert before OAT evidence is bound to a build. *(RC4 blocker — independent of OAT.)*
 
 ---
 
@@ -226,3 +235,110 @@ The Release Certificate, Production Readiness Certificate, Deployment Manifest, 
 **0 of 8 OAT items have been executed.** Infrastructure is green and every engineering blocker is closed — but the money path has never moved a real shilling, no OTP has reached a real phone, and no screen reader has touched the product.
 
 **GO is granted only when 8/8 pass with real-world evidence attached.**
+
+---
+
+## OAT-08 — Responsive UI
+
+**Prerequisites:** real devices (or Chrome DevTools device emulation for the initial sweep, **but at least one real Android + one real iPhone** for sign-off).
+
+**Breakpoints (all mandatory):** 320 · 360 · 375 · 390 · 414 · 768 · 1024 · 1440 px
+
+**Pages that MUST be checked (the money + onboarding paths):**
+`index` · `category` · `product` · `cart` · `checkout` · `wallet` · `pos-setup` · `pos` · `onboarding` · `provider-onboarding` · `admin-os` · `legal-centre`
+
+**PASS criteria — assert explicitly:**
+- [ ] **No horizontal overflow** at any breakpoint (`document.body.scrollWidth <= window.innerWidth`)
+- [ ] **No clipped content** (text truncated by overflow, not by design)
+- [ ] **No hidden controls** — every primary CTA reachable without zoom
+- [ ] **No broken navigation** — bottom-nav / header usable at 320 px
+- [ ] **No layout shift** on load (CLS)
+
+**Evidence:** screenshot **per page per breakpoint**, or a single scripted screenshot matrix. Note the device + browser.
+
+**FAIL handling:** capture page + breakpoint + screenshot; file under Known Issues; fix only that page.
+
+---
+
+## OAT-10 — Operations
+
+**This is the CB-05 checklist. Execute `CB05_MONITORING_CHECKLIST.md` in full.**
+
+| Item | PASS criteria | Evidence |
+|---|---|---|
+| Notification channel | Verified + **test notification received** | Screenshot of the received message |
+| Alert policies | Payments · auth · scheduler · quota · error-rate · ledger anomaly — exist, enabled, wired to a verified channel | Policy list |
+| **LIVE ALERT TEST** | **A real alert fires AND the notification is received** | **Incident + notification screenshot** |
+| Cloud Logging | Logs queryable; payment logs present | Query screenshot |
+| Backup | PITR/scheduled backup enabled; a backup <24 h old exists | Backup listing |
+| **RESTORE DRILL** | **Restore to a scratch DB completed; data spot-checked** | **Restore job ID + RTO/RPO** |
+| Scheduler | All **158** scheduled jobs enabled; none failing silently | Scheduler listing |
+
+> **Configuration is not evidence — delivery is.** An alert that has never fired is not an alert. **An untested backup is a hypothesis, not a backup.**
+> ⚠️ **Do NOT trip a payment alert to test.** Use a non-financial function.
+
+**PASS criteria:** live alert **received** + restore drill **completed with RTO/RPO recorded**.
+
+---
+
+## OAT-11 — Marketplace Onboarding (merchant → SmartPOS Ready)
+
+**Prerequisites:** a **fresh** account (never onboarded). Real device.
+
+**Flow:** Buyer onboarding · Merchant onboarding · Provider onboarding · Driver onboarding — then the merchant path end-to-end:
+
+Business creation → **Merchant ID auto-generated** → QR generated → Subscription activated → Branch created → Tax configured → Staff created → Product import → POS setup → **Guided test sale** → **SmartPOS Ready**
+
+**PASS criteria — assert explicitly:**
+- [ ] A first-time user is **never asked for a Merchant ID** (it is generated: `SOK-XXXXXX`)
+- [ ] QR pairing code generated and scannable
+- [ ] Subscription activates and **enforces the correct tier/commission**
+- [ ] **Legal gate blocks progress until agreements are accepted** (`SokoniLegalGate`)
+- [ ] Guided test sale completes → **"Production Ready"** state reached
+- [ ] Resume works: kill the app mid-flow, reopen → **resumes at the correct step**
+- [ ] Provider onboarding completes end-to-end (draft → subscription → **publish**) ← *this path was broken (C2) and fixed; it has never been run by a human*
+
+**Evidence:** screenshots per step · generated Merchant ID · Firestore docs (`businesses/{merchantId}`, `providerProfiles/{uid}`) · legal acceptance record.
+
+---
+
+## OAT-12 — Email Inbox Delivery
+
+**This is CB-03. API-key validity is NOT delivery.**
+
+**Send each flow to real inboxes on Gmail · Outlook · Apple Mail · Yahoo:**
+
+| # | Email | PASS criteria |
+|---|---|---|
+| 1 | Email verification | Delivered to **inbox** (not spam); link works |
+| 2 | Password reset | Delivered; link resets the password |
+| 3 | Welcome | Delivered |
+| 4 | Receipt | Delivered; amounts correct |
+| 5 | Refund | Delivered |
+| 6 | Merchant notification | Delivered |
+| 7 | Provider notification | Delivered |
+
+**For every email also assert:**
+- [ ] **Logo renders** (hosted over stable HTTPS — not blocked by the client)
+- [ ] **HTML** version renders correctly on **mobile and desktop**
+- [ ] **Plain-text** alternative present
+- [ ] Footer: company details · support · privacy · terms
+- [ ] **SPF · DKIM · DMARC all PASS** in the received message headers *(check "Show original" in Gmail)*
+- [ ] **Not in spam** on any of the four providers
+
+**Evidence:** **inbox screenshot per email per provider** + the raw header block showing `spf=pass dkim=pass dmarc=pass` + SendGrid Activity/Event export.
+
+**FAIL handling:** a bounce, spam-folder placement, or a failing auth check is a **FAIL**. Capture the header block and SendGrid event.
+
+---
+
+## Sign-off
+
+| Field | Value |
+|---|---|
+| Release | v1.0.0 (RC4) |
+| Tests passed | **0 / 12** |
+| Verdict | 🔴 **NO-GO** |
+| Blocking | All 12 OAT items + **RM-01** (204 uncommitted files → build not reproducible) |
+
+**The Production Release Certificate cannot be issued until 12/12 PASS with attached real-world evidence AND the build is reproducible.**
