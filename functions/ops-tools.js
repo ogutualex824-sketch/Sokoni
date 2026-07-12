@@ -139,7 +139,19 @@ exports.testPushNotification = onCall(
 /* ════════════════════════════════════════════════════════════════
    testEmailDelivery
    Admin-only: sends a real test email to a target address.
-   Verifies SendGrid or SMTP transport is correctly configured.
+
+   Renders through the PRODUCTION template (email-templates.base) — the same
+   header, logo and dark-mode CSS every real SOKONI email uses.
+
+   This matters. The previous version emitted a bare inline <div> with no
+   template and no logo, so it could only prove that SendGrid was reachable.
+   It could not have caught the logo-rendering defect, because it never
+   rendered the logo. A delivery test that does not exercise the production
+   template is not a test of production email.
+
+   Pass `template` to send any of the 53 real templates instead (rendered with
+   representative sample data), so branding can be verified across email
+   classes — not just this one.
 ════════════════════════════════════════════════════════════════ */
 exports.testEmailDelivery = onCall(
   {
@@ -149,38 +161,80 @@ exports.testEmailDelivery = onCall(
   async (request) => {
     requireAdmin(request);
 
-    const { to } = request.data || {};
+    const { to, template } = request.data || {};
     if (!to || !to.includes("@")) throw new HttpsError("invalid-argument", "valid 'to' email required");
 
-    /* Use email-service directly */
     const emailSvc = require("./email-service");
+    const tpl      = require("./email-templates");
     const sentAt   = new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi" });
 
-    const result = await emailSvc.send({
-      to,
-      from:     emailSvc.FROM.tech,
-      subject:  "✅ SOKONI Email Delivery Test",
-      category: "system",
-      html: `
-        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;">
-          <h2 style="color:#71ff00;margin:0 0 16px;">🟢 Email Delivery Confirmed</h2>
-          <p style="color:#333;">This test email was sent from the SOKONI production platform.</p>
-          <table style="width:100%;border-collapse:collapse;margin-top:16px;">
-            <tr><td style="padding:8px;border:1px solid #eee;font-weight:700;">Sent at</td><td style="padding:8px;border:1px solid #eee;">${sentAt} (EAT)</td></tr>
-            <tr><td style="padding:8px;border:1px solid #eee;font-weight:700;">Requested by</td><td style="padding:8px;border:1px solid #eee;">${request.auth.uid}</td></tr>
-            <tr><td style="padding:8px;border:1px solid #eee;font-weight:700;">Project</td><td style="padding:8px;border:1px solid #eee;">sokoni-aeb26</td></tr>
-            <tr><td style="padding:8px;border:1px solid #eee;font-weight:700;">Environment</td><td style="padding:8px;border:1px solid #eee;">Production</td></tr>
-          </table>
-          <p style="color:#888;font-size:12px;margin-top:24px;">
-            If you did not request this test, please contact security@mysokoni.co.ke
-          </p>
-        </div>
-      `,
-      text:     `SOKONI Email Delivery Test — Sent at ${sentAt} EAT by ${request.auth.uid}`,
-    });
+    let payload;
 
-    console.log(`[testEmailDelivery] Sent to ${to} by ${request.auth.uid}`, result);
-    return { success: true, provider: result.provider, messageId: result.messageId || null };
+    if (template) {
+      /* Render a real production template with representative sample data. */
+      if (!tpl.TEMPLATES[template]) {
+        throw new HttpsError(
+          "invalid-argument",
+          `Unknown template "${template}". Available: ${Object.keys(tpl.TEMPLATES).join(", ")}`
+        );
+      }
+      const sample = {
+        name: "SOKONI Test", firstName: "Test", email: to,
+        orderId: "TEST-0000", orderNumber: "TEST-0000",
+        amount: 1, total: 1, currency: "KES",
+        items: [{ name: "Test item", qty: 1, price: 1 }],
+        url: "https://mysokoni.co.ke", link: "https://mysokoni.co.ke",
+        code: "000000", reason: "Delivery test", status: "test",
+        date: sentAt, businessName: "SOKONI Test Merchant",
+      };
+      const r = tpl.getTemplate(template, sample);
+      payload = {
+        to, from: r.from, category: r.category,
+        subject: `[TEST] ${r.subject}`,
+        html: r.html, text: r.text,
+      };
+    } else {
+      /* Default: a branded delivery test rendered through the production base()
+         template — so it carries the real header and the real logo. */
+      const html = tpl.base({
+        title:     "Email Delivery Confirmed",
+        preheader: "SOKONI production email delivery + branding test",
+        body: `
+          <p style="margin:0 0 16px;">This test email was sent from the <strong>SOKONI production platform</strong>.</p>
+          <p style="margin:0 0 20px;">It is rendered with the <strong>real production template</strong>, so the header and
+          logo above are exactly what every SOKONI email shows.</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;">
+            <tr><td style="padding:8px 10px;border:1px solid #2a2f37;font-weight:700;">Sent at</td><td style="padding:8px 10px;border:1px solid #2a2f37;">${sentAt} (EAT)</td></tr>
+            <tr><td style="padding:8px 10px;border:1px solid #2a2f37;font-weight:700;">Requested by</td><td style="padding:8px 10px;border:1px solid #2a2f37;">${request.auth.uid}</td></tr>
+            <tr><td style="padding:8px 10px;border:1px solid #2a2f37;font-weight:700;">Project</td><td style="padding:8px 10px;border:1px solid #2a2f37;">sokoni-aeb26</td></tr>
+            <tr><td style="padding:8px 10px;border:1px solid #2a2f37;font-weight:700;">Environment</td><td style="padding:8px 10px;border:1px solid #2a2f37;">Production</td></tr>
+          </table>
+          <p style="margin:0 0 8px;font-weight:700;">Logo check — the mark above must be:</p>
+          <p style="margin:0 0 20px;">Crisp (not blurry) &middot; fully opaque (not faded or washed out) &middot; complete
+          (no missing strokes) &middot; correctly proportioned. Check this in <strong>both light and dark mode</strong>.</p>
+          <p style="margin:0;font-size:12px;opacity:.7;">If you did not request this test, contact security@mysokoni.co.ke</p>
+        `,
+      });
+      payload = {
+        to,
+        from:     emailSvc.FROM.tech,
+        subject:  "SOKONI — Email Delivery & Branding Test",
+        category: "system",
+        html,
+        text:     tpl.toPlainText(html),
+      };
+    }
+
+    const result = await emailSvc.send(payload);
+
+    console.log(`[testEmailDelivery] to=${to} template=${template || "base"} by=${request.auth.uid}`, result);
+    return {
+      success:   true,
+      provider:  result.provider,
+      messageId: result.messageId || null,
+      template:  template || "base",
+      sentAt,
+    };
   }
 );
 

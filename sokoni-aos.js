@@ -705,6 +705,26 @@ window.SokoniAOS = (() => {
     } else if (tab === "email") {
       body.innerHTML = `
         <div class="compose-form">
+          <h3>&#x2709;&#xFE0F; Send Test Email</h3>
+          <p style="color:var(--aos-muted);font-size:12px;margin:0 0 10px">
+            Sends a real email rendered with the <strong>production template</strong> &mdash; same header, logo
+            and dark-mode CSS as every live SOKONI email. Use it to verify delivery <em>and</em> branding.
+          </p>
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px">
+            <input type="email" id="testEmailTo" placeholder="Recipient email" autocomplete="email">
+            <select id="testEmailTemplate">
+              <option value="">Delivery + branding test</option>
+              <option value="welcome">welcome</option>
+              <option value="email-verify">email-verify</option>
+              <option value="password-reset">password-reset</option>
+              <option value="order-confirmation">order-confirmation</option>
+              <option value="order-shipped">order-shipped</option>
+            </select>
+          </div>
+          <button class="aos-btn success" style="margin-top:10px" onclick="SokoniAOS.sendTestEmail()">&#x1F9EA; Send Test Email</button>
+          <div id="testEmailResult" style="margin-top:10px"></div>
+        </div>
+        <div class="compose-form">
           <h3>&#x1F4E7; Email Blast</h3>
           <input type="text" id="emailSubject" placeholder="Subject line">
           <textarea id="emailHtml" placeholder="Email body (plain text or HTML)&#x2026;" rows="6"></textarea>
@@ -727,6 +747,39 @@ window.SokoniAOS = (() => {
           <p style="color:var(--aos-muted);font-size:11px;margin:8px 0">SMS charges apply. Confirm before sending.</p>
           <button class="aos-btn success" onclick="SokoniAOS.sendSMSBlast()">&#x1F4AC; Send SMS Broadcast</button>
         </div>`;
+    }
+  }
+
+  async function sendTestEmail() {
+    const to   = document.getElementById("testEmailTo")?.value?.trim();
+    const tmpl = document.getElementById("testEmailTemplate")?.value || "";
+    const out  = document.getElementById("testEmailResult");
+    const btn  = document.querySelector('[onclick="SokoniAOS.sendTestEmail()"]');
+
+    if (!to || !to.includes("@")) { _toast("A valid recipient email is required", "error"); return; }
+
+    /* Disable while in flight — a double-click must not send two emails. */
+    if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
+    if (out) out.innerHTML = "";
+
+    try {
+      const r = await _call("testEmailDelivery", tmpl ? { to, template: tmpl } : { to });
+      if (out) out.innerHTML =
+        `<div class="notif-row" style="border-left:3px solid var(--aos-ok,#71ff00)">
+           <span>&#x2705; Sent to <strong>${_esc(to)}</strong></span>
+           <span class="aos-muted">template: ${_esc(r.template || "base")}</span>
+           <span class="aos-muted">via ${_esc(r.provider || "?")}</span>
+         </div>
+         <p class="aos-muted" style="font-size:12px;margin:8px 0 0">
+           Open it and confirm the logo is crisp, fully opaque and complete &mdash; in light <em>and</em> dark mode.
+         </p>`;
+      _toast("Test email sent to " + to, "success");
+    } catch (e) {
+      if (out) out.innerHTML =
+        `<div class="notif-row" style="border-left:3px solid #ff4d4d"><span>&#x274C; ${_esc(e.message || "Send failed")}</span></div>`;
+      _toast(e.message || "Send failed", "error");
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = "&#x1F9EA; Send Test Email"; }
     }
   }
 
@@ -2027,6 +2080,7 @@ window.SokoniAOS = (() => {
     exportFinancialReport,
     // Communications
     commsTab:            _commsTab,
+    sendTestEmail:       sendTestEmail,
     sendEmailBlast,
     sendSMSBlast,
     // Content
