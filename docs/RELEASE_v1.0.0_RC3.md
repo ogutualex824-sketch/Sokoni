@@ -137,6 +137,12 @@ Scores moved **only** where evidence changed.
 
 ---
 
+## Final gate: Operational Acceptance Testing
+
+The remaining gate is now formalised in **[[OAT_v1.0.0]]** — 8 tests, **0 executed**. Every one requires a human (real money, a real handset, real devices, a screen reader). Per the release standard, terminal output and code inspection **must not** substitute for operational proof, so none is marked PASS.
+
+**Release artifacts (certificates, manifests, handbooks) are deliberately NOT produced** until 8/8 pass with attached evidence — producing them now would assert verification that does not exist.
+
 ## Path to GO
 
 1. Execute the **Human Verification Required** checklist above — this is now the *entire* remaining gate.
