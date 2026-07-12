@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260712-footer-v45";
+const CACHE_VERSION = "sokoni-20260713-notify-v46";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -554,13 +554,24 @@ self.addEventListener("push", event => {
   if (!event.data) return;
   let data = { title: "SOKONI", body: "You have a new notification!", icon: "/assets/logosokoni.png" };
   try { data = { ...data, ...event.data.json() }; } catch {}
+
+  /* The notification engine nests its payload under `data` and names the target
+     `deepLink`. Reading only a top-level `url` sent every engine push to the
+     homepage — the notification would be about an order and open nothing. */
+  const d    = data.data || data;
+  const url  = d.deepLink || d.url || data.url || "/";
+  const tag  = d.group || data.tag;
+  const img  = d.image || data.image;
+
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: data.icon || "/assets/logosokoni.png",
       badge: "/assets/logosokoni.png",
+      ...(img ? { image: img } : {}),
+      ...(tag ? { tag, renotify: true } : {}),   /* one thread per order, not eleven */
       vibrate: [200, 100, 200],
-      data: { url: data.url || "/" },
+      data: { ...d, url },
       actions: [
         { action: "open",    title: "Open" },
         { action: "dismiss", title: "Dismiss" },
@@ -652,7 +663,8 @@ async function _checkScheduledNotifications() {
 self.addEventListener("notificationclick", event => {
   /* Handle action buttons on scheduled/push notifications */
   const action = event.action;
-  const url    = event.notification.data?.url || "/";
+  const d      = event.notification.data || {};
+  const url    = d.deepLink || d.url || "/";
 
   event.notification.close();
 

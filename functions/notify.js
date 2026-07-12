@@ -215,9 +215,16 @@ async function sendPush(uid, payload) {
       body: payload.body,
       ...(payload.image ? { imageUrl: payload.image } : {}),
     },
+    /* FCM data values must be STRINGS. `url` is carried alongside `deepLink` because
+       the service workers have always read `url` — sending only `deepLink` would have
+       silently opened the homepage for every push. Same shape of bug as the
+       fcmToken/fcmTokens mismatch above: a key name nobody re-checked. */
     data: {
       type: String(payload.type || ''),
       deepLink: String(payload.deepLink || '/'),      /* opens the exact screen */
+      url: String(payload.deepLink || '/'),
+      ...(payload.group ? { group: String(payload.group) } : {}),
+      ...(payload.image ? { image: String(payload.image) } : {}),
       ...(payload.data || {}),
     },
     android: {
@@ -239,7 +246,14 @@ async function sendPush(uid, payload) {
       },
     },
     webpush: {
-      notification: { icon: '/assets/logosokoni.png', badge: '/assets/logosokoni.png' },
+      notification: {
+        icon: '/assets/logosokoni.png',
+        badge: '/assets/logosokoni.png',
+        ...(payload.image ? { image: payload.image } : {}),
+        /* tag collapses successive updates for the same order into ONE notification
+           instead of stacking eleven. renotify still alerts on each change. */
+        ...(payload.group ? { tag: payload.group, renotify: true } : {}),
+      },
       fcmOptions: { link: payload.deepLink || '/' },
     },
   };

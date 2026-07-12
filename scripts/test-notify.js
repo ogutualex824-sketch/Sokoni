@@ -150,6 +150,35 @@ ok('critical types ignore BOTH preferences and quiet hours (OTP always gets thro
     : bad('a retried stage advance could double-notify the customer');
 }
 
+/* ── 9. The push actually OPENS the thing it is about ───────────────────────
+   The engine sends the target as data.deepLink. Both service workers historically
+   read data.url. A push about an order would have opened the homepage — the exact
+   same shape of failure as the fcmToken/fcmTokens mismatch: a key name that two
+   sides never agreed on, and no test that would notice. */
+{
+  const engine = fs.readFileSync(path.resolve('functions/notify.js'), 'utf8');
+  const fcmSw  = fs.readFileSync(path.resolve('firebase-messaging-sw.js'), 'utf8');
+  const mainSw = fs.readFileSync(path.resolve('service-worker.js'), 'utf8');
+
+  /* Whatever key the engine sends, the workers must read it. */
+  const sendsDeepLink = /deepLink:\s*String\(/.test(engine);
+  const readsDeepLink = sw => /deepLink/.test(sw);
+
+  sendsDeepLink && readsDeepLink(fcmSw) && readsDeepLink(mainSw)
+    ? ok('both service workers read the deepLink the engine sends (push opens the order, not the homepage)')
+    : bad('deep-link key mismatch — pushes would open the homepage instead of the screen they are about');
+
+  /* The engine also sends `url` as an alias, so anything NOT yet migrated still lands. */
+  /url:\s*String\(payload\.deepLink/.test(engine)
+    ? ok('engine also sends the legacy `url` alias — un-migrated senders still deep-link correctly')
+    : bad('engine dropped the legacy `url` alias — older push consumers would break');
+
+  /* Grouping: eleven order updates must collapse into one thread, not stack. */
+  /data\.group \|\| data\.tag/.test(fcmSw) && /renotify/.test(fcmSw)
+    ? ok('order updates collapse into ONE notification thread (not 11 stacked)')
+    : bad('every order stage would stack as a separate notification');
+}
+
 console.log('');
 if (fail) { console.error(`Notification engine FAILED (${fail})\n`); process.exit(1); }
 console.log(`Notification engine PASSED (${pass} checks) — nothing sent\n`);

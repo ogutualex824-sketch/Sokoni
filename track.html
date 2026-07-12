@@ -52,6 +52,9 @@
     @keyframes pls{0%,100%{box-shadow:0 0 0 0 rgba(113,255,0,.4)}50%{box-shadow:0 0 0 6px rgba(113,255,0,0)}}
     .tl-lbl{font-size:9px;color:var(--muted);text-align:center;margin-top:5px;line-height:1.3;max-width:62px}
     .tl-step.done .tl-lbl,.tl-step.active .tl-lbl{color:var(--accent)}
+    /* "Picked up 14:32" — a time is the difference between a status and an answer. */
+    .tl-at{font-size:8px;color:var(--muted);margin-top:2px;min-height:10px;font-variant-numeric:tabular-nums}
+    .tl-step.done .tl-at,.tl-step.active .tl-at{color:rgba(255,255,255,.45)}
     /* ── Bearing rotation ── */
     .rider-marker-inner{transform:rotate(var(--bearing,0deg));transition:transform .5s ease}
     /* ── LIVE badge ── */
@@ -104,13 +107,8 @@
       <div id="riderVehicle"></div>
     </div>
   </div>
-  <div id="timeline">
-    <div class="tl-step done" data-s="confirmed"><div class="tl-dot">✓</div><div class="tl-lbl">Confirmed</div></div>
-    <div class="tl-step"      data-s="assigned"> <div class="tl-dot">🏍</div><div class="tl-lbl">Rider assigned</div></div>
-    <div class="tl-step"      data-s="en_route"> <div class="tl-dot">🚦</div><div class="tl-lbl">On the way</div></div>
-    <div class="tl-step"      data-s="nearby">   <div class="tl-dot">📍</div><div class="tl-lbl">Nearby</div></div>
-    <div class="tl-step"      data-s="delivered"><div class="tl-dot">📦</div><div class="tl-lbl">Delivered</div></div>
-  </div>
+  <!-- Rendered by JS from STAGES so the page cannot drift from the engine's stage list. -->
+  <div id="timeline"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
@@ -123,7 +121,7 @@
 <script>
 'use strict';
 
-var _map=null,_riderM=null,_destM=null,_code=null,_lastStatus=null,_realtimeSetup=false;
+var _map=null,_riderM=null,_destM=null,_code=null,_orderId=null,_lastStatus=null,_realtimeSetup=false;
 var _unsubs=[];
 window.addEventListener('beforeunload',function(){_unsubs.forEach(function(u){if(u)u();});});
 var HAV=function(a,b,c,d){var R=6371,dL=(c-a)*Math.PI/180,dl=(d-b)*Math.PI/180,x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dl/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));};
@@ -156,7 +154,61 @@ function _poll(){
 }
 
 var STATUS_LABELS={pending:'🕐 Finding a rider',assigned:'🏍 Rider assigned',en_route_pickup:'🏍 Heading to pickup',arrived_pickup:'📦 Collecting your order',en_route_delivery:'🏍 On the way to you!',arrived_delivery:'📍 Rider at your door',completed:'✅ Delivered!',cancelled:'❌ Cancelled'};
-var TL_MAP={pending:'confirmed',assigned:'assigned',en_route_pickup:'en_route',arrived_pickup:'en_route',en_route_delivery:'nearby',arrived_delivery:'nearby',completed:'delivered',cancelled:'confirmed'};
+
+/* ── The order journey ────────────────────────────────────────────────────
+   These 11 stages MIRROR functions/notify.js ORDER_TIMELINE — same keys, same
+   order. The server owns the truth (orders/{id}.timelineIndex); this list only
+   supplies the icon and the short label. If the two ever disagree on a key, the
+   step simply renders as not-yet-reached rather than throwing.               */
+var STAGES=[
+  {k:'received', i:'🧾', l:'Order received'},
+  {k:'paid',     i:'✓',  l:'Payment confirmed'},
+  {k:'accepted', i:'🏪', l:'Seller accepted'},
+  {k:'preparing',i:'👨‍🍳', l:'Preparing'},
+  {k:'ready',    i:'📦', l:'Package ready'},
+  {k:'assigned', i:'🏍', l:'Rider assigned'},
+  {k:'picked_up',i:'🛵', l:'Picked up'},
+  {k:'halfway',  i:'🚦', l:'On the way'},
+  {k:'near',     i:'📍', l:'Near you'},
+  {k:'delivered',i:'🎉', l:'Delivered'},
+  {k:'completed',i:'⭐', l:'Completed'}
+];
+var STAGE_IDX={}; STAGES.forEach(function(s,i){STAGE_IDX[s.k]=i;});
+
+/* A delivery TRIP only covers the tail of the journey. When we are tracking by
+   trip (a shared link with no order id) this is the best we can say about where
+   the order as a whole has got to. */
+var TRIP_TO_STAGE={pending:'ready',assigned:'assigned',en_route_pickup:'assigned',arrived_pickup:'ready',
+                   en_route_delivery:'halfway',arrived_delivery:'near',completed:'delivered',cancelled:'accepted'};
+
+/* Timeline is built once, then only classes change — no innerHTML churn on every
+   snapshot, which would otherwise restart the pulse animation each tick. */
+function _buildTimeline(){
+  var el=document.getElementById('timeline');
+  if(el.childElementCount) return;
+  el.innerHTML=STAGES.map(function(s){
+    return '<div class="tl-step" data-s="'+s.k+'"><div class="tl-dot">'+s.i+'</div>'+
+           '<div class="tl-lbl">'+s.l+'</div><div class="tl-at"></div></div>';
+  }).join('');
+}
+
+/* stampsByKey: optional {stageKey: epochMs} so each reached step can show WHEN it
+   happened. "Picked up 14:32" is the difference between a status and an answer. */
+function _renderTimeline(stageKey,stampsByKey){
+  _buildTimeline();
+  var curr=STAGE_IDX[stageKey];
+  if(curr===undefined) curr=0;
+  document.querySelectorAll('.tl-step').forEach(function(el){
+    var i=STAGE_IDX[el.dataset.s];
+    el.classList.toggle('done',   i<curr);
+    el.classList.toggle('active', i===curr);
+    var at=el.querySelector('.tl-at');
+    var ts=stampsByKey&&stampsByKey[el.dataset.s];
+    if(at) at.textContent=(ts&&i<=curr)?new Date(ts).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}):'';
+  });
+  var active=document.querySelector('.tl-step.active');
+  if(active&&active.scrollIntoView) active.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+}
 
 function _render(d){
   var status=d.status||'assigned';
@@ -186,15 +238,8 @@ function _render(d){
     }
   }
 
-  // Timeline
-  var curr=TL_MAP[status]||'confirmed';
-  var order=['confirmed','assigned','en_route','nearby','delivered'];
-  var reached=false;
-  document.querySelectorAll('.tl-step').forEach(function(el){
-    el.classList.remove('done','active');
-    if(el.dataset.s===curr){el.classList.add('active');reached=true;}
-    else if(!reached) el.classList.add('done');
-  });
+  // Timeline — only when the order doc is not already driving it (it is richer).
+  if(!_orderId) _renderTimeline(TRIP_TO_STAGE[status]||'ready',null);
 
   if(status==='completed'){
     _unsubs.forEach(function(u){if(u)u();});_unsubs.length=0;
@@ -275,26 +320,79 @@ function _updateStatus(status,trip){
   if(!_destM&&trip&&trip.dropoffLat&&trip.dropoffLng){
     _destM=L.circleMarker([trip.dropoffLat,trip.dropoffLng],{radius:10,fillColor:'#71ff00',color:'#000',weight:2,fillOpacity:.9}).addTo(_map);
   }
-  // Timeline
-  var curr=TL_MAP[status]||'confirmed';
-  var reached=false;
-  document.querySelectorAll('.tl-step').forEach(function(el){
-    el.classList.remove('done','active');
-    if(el.dataset.s===curr){el.classList.add('active');reached=true;}
-    else if(!reached) el.classList.add('done');
-  });
+  if(!_orderId) _renderTimeline(TRIP_TO_STAGE[status]||'ready',null);
   if(status==='completed'){
     _unsubs.forEach(function(u){if(u)u();});_unsubs.length=0;
     document.getElementById('doneOverlay').classList.add('show');
   }
 }
 
+/* ── Order journey (?order=) ──────────────────────────────────────────────
+   The notification deep-link is /track?order=<id>. This is the buyer's own
+   order, so it is read directly and in real time — no callable, no polling.
+   Firestore rules decide whether the reader owns it; an unauthorised read
+   surfaces as an explicit "can't show this order" rather than a blank page.
+
+   If the order carries a trackingCode we ALSO start the trip/map flow, so the
+   map and the journey are the same screen. If it does not (not dispatched yet)
+   the timeline stands on its own — which is exactly the early half of an order,
+   where the customer has the least information and asks the most questions. */
+function _watchOrder(orderId){
+  var ref=firebase.firestore().collection('orders').doc(orderId);
+  var unsub=ref.onSnapshot(function(snap){
+    document.getElementById('loadScreen').style.display='none';
+    if(!snap.exists){ _fatal('Order not found','Check the link in your confirmation message.'); return; }
+    var o=snap.data()||{};
+
+    var stage=o.timelineStage||'received';
+    var stamps={};
+    (o.timeline||[]).forEach(function(e){ if(e&&e.key) stamps[e.key]=e.at; });
+    _renderTimeline(stage,stamps);
+
+    var st=STAGES[STAGE_IDX[stage]];
+    document.getElementById('hdrStatus').textContent=st?st.i+' '+st.l:stage;
+    document.getElementById('hdrOrder').textContent='Order '+orderId;
+
+    document.getElementById('liveBadge').classList.add('active');
+
+    if(stage==='delivered'||stage==='completed'){
+      document.getElementById('doneOverlay').classList.add('show');
+    }
+
+    /* Hand off to the map once a rider actually exists. Once only. */
+    if(!_realtimeSetup&&o.trackingCode&&!_code){
+      _code=String(o.trackingCode).toUpperCase().trim();
+      _poll();
+    }
+  },function(err){
+    _fatal('Can’t show this order', err.code==='permission-denied'
+      ? 'Sign in with the account that placed it.' : err.message);
+  });
+  _unsubs.push(unsub);
+}
+
+function _fatal(title,detail){
+  document.getElementById('loadScreen').style.display='flex';
+  document.getElementById('loadScreen').innerHTML=
+    '<div style="text-align:center;padding:24px"><p style="font-size:18px;margin-bottom:8px">⚠ '+title+'</p>'+
+    '<p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:14px">'+detail+'</p>'+
+    '<a href="profile.html" style="display:inline-block;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">My Orders</a></div>';
+}
+
 /* ── Bootstrap ── */
 (function(){
   var p=new URLSearchParams(location.search);
+  _orderId=(p.get('order')||'').trim();
   _code=(p.get('code')||p.get('t')||'').toUpperCase().trim();
+
+  _buildTimeline();
+
+  /* An order id is the richer signal — the full 11-stage journey. A tracking code
+     alone still works: it is the shareable link, and it needs no sign-in. */
+  if(_orderId){ _watchOrder(_orderId); return; }
+
   if(!_code||_code.length!==8){
-    document.getElementById('loadScreen').innerHTML='<div style="text-align:center;padding:24px"><p style="font-size:18px;margin-bottom:8px">⚠ Invalid tracking link</p><p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:14px">Check the link in your confirmation message.</p><a href="profile.html" style="display:inline-block;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">My Orders</a></div>';
+    _fatal('Invalid tracking link','Check the link in your confirmation message.');
     return;
   }
   _poll(); // single initial load; real-time takes over via _setupRealtime()
