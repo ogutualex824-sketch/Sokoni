@@ -46,6 +46,39 @@ Verified by execution — every failing job was force-run and its status re-read
 
 ---
 
+## Search subsystem health — VERIFIED (2026-07-12, post-deployment)
+
+A targeted consistency audit and verification of the `admin.logger` fix. **No business logic, query logic, auth, permissions, billing or APIs were touched.**
+
+### Repository scan (all three patterns)
+| Pattern | Occurrences in source |
+|---|---|
+| `admin.logger` | **0** *(4 hits remain, all inside regression-test comments)* |
+| `require('firebase-admin').logger` | **0** |
+| any `.logger` off an admin object | **0** *(same 4 test comments)* |
+| Modules importing `firebase-functions/logger` | **8** |
+
+**Compilation:** all **9** search modules pass `node --check`.
+
+### Deployment scope — already complete, no redeploy required
+41 functions were deployed in `2dd58f5` (23 search callables + 18 `searchSync_*` triggers).
+
+**50 search Cloud Functions are deployed; all 50 are ACTIVE.** 36 carry the fix. The other **14 were last deployed 2026-07-11 and did NOT need it** — evidence: their source files (`search-monitor.js`, `search-worker.js`, `search-insights.js`) were last modified **2026-06-24/25**, *before* that deploy, and contain **zero** `admin.logger` today. Their deployed code therefore already equals their current source. **Redeploying them would have been a no-op**, so it was not done.
+
+### Verification by execution
+| Check | Result |
+|---|---|
+| Search functions ACTIVE | ✅ **50 / 50** |
+| Scheduled search jobs **force-run** | ✅ **28 / 28 HEALTHY**, 0 failing |
+| `searchScheduledReconcile` | ✅ completes, no errors |
+| Logging-caused exceptions (`Cannot read properties of undefined`) platform-wide since deploy | ✅ **ZERO** |
+| New errors in search services since deploy (`searchScheduledReconcile`, `searchSystemHealth`, `searchDLQSweep`, `searchQueueCoordinator`, `processTypesenseQueue`) | ✅ **none** |
+| Platform-wide scheduler | ✅ **158 / 158 healthy** |
+
+Verification run: **241 s**. No new issue was discovered during deployment or verification.
+
+---
+
 ## Corrections to previously-reported facts
 
 Three long-standing "facts" were false. They are corrected because decisions were being made on them:
@@ -91,7 +124,7 @@ Scores moved **only** where evidence changed.
 |---|---:|---:|---|
 | **Authentication** | 95 | **95** | Unchanged — still gated on the human set |
 | **App Check** | 95 | **95** | Unchanged |
-| **Reliability** | 70 | **88** | Scheduled jobs 53 failing → **0**. Backups were silently broken and now run. Two OOM crash-loops fixed. Deducted: EPRA prices static; alert never observed firing |
+| **Reliability** | 70 | **90** | Scheduled jobs 53 failing → **0** (158/158). Backups were silently broken and now run. Two OOM crash-loops fixed. **Search subsystem verified post-deploy: 50/50 ACTIVE, 28/28 scheduled jobs force-run healthy, zero logging exceptions.** Deducted: EPRA prices static; alert never observed firing |
 | **Security** | 85 | **88** | App Check verified; backup SA given a *minimal* role, not Owner. Deducted: `firestore.rules` still unreviewed |
 | Performance | 78 | **78** | Unchanged — cold starts and bundle size still unmeasured |
 | Scalability | 85 | **88** | Index headroom confirmed real (327/1000), not a false ceiling |
@@ -100,7 +133,7 @@ Scores moved **only** where evidence changed.
 | Documentation | 90 | **92** | Three false "facts" corrected at source; index governance + capacity now enforced in CI |
 | **Payments** | — | **—** | **UNVERIFIED — must not be scored** |
 | **Accessibility** | — | **—** | **UNVERIFIED — must not be scored** |
-| **Production readiness** | 72 | **85** | All infrastructure blockers closed; only the human set remains |
+| **Production readiness** | 72 | **86** | All infrastructure blockers closed and the search subsystem verified post-deploy; only the human set remains |
 
 ---
 
