@@ -546,6 +546,20 @@ exports.emailOnOrderCreated = onDocumentCreated(
   async (event) => {
     const d       = event.data.data();
     const orderId = event.params.orderId;
+
+    /* PAYMENT GATE (P0-7). This fires on ANY order creation and emails the customer an
+       "order-confirmation". For an order nobody has paid for, that email IS the false
+       confirmation — the same lie the checkout used to tell on screen, now delivered to
+       the customer's inbox where it looks even more official.
+
+       An order may exist before payment (status: "pending_payment"). It must not be
+       CONFIRMED to anyone before payment. The confirmation email is sent when the order
+       transitions to paid, not when the row appears. Fail closed. */
+    if (d.status !== 'paid' && d.paymentVerified !== true) {
+      console.log(`[emailOnOrderCreated] ${orderId} is ${d.status || 'unpaid'} — no confirmation email until payment is verified.`);
+      return;
+    }
+
     const email   = d.customerEmail || await emailForUid(d.customerId || "");
     if (!email) return;
 

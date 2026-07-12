@@ -2737,6 +2737,26 @@ exports.onNewOrderCreated = onDocumentCreated(
 
     console.log(`[onNewOrderCreated] orderId=${orderId} seller=${(sellerUid||'').slice(0,8)}…`);
 
+    /* ── PAYMENT GATE (P0-7) ────────────────────────────────────────────────
+       This trigger fires on ANY order write. It pushes, SMSs and in-apps the seller
+       with "New Order! ... Confirm it to begin processing" and increments their
+       pendingOrders counter.
+
+       That is a fulfilment prompt. Sending it for an order nobody has paid for is how
+       a seller ends up packing and shipping goods against a payment that never
+       happened — which is exactly what the fabricated checkout confirmations caused.
+
+       Orders may EXIST before payment (status: "pending_payment"). They must not
+       REACH the seller before payment. Nothing downstream — no notification, no SMS,
+       no counter, no fulfilment — may act on an unpaid order.
+
+       The order is not lost: when payment is verified the status transitions to "paid",
+       and onOrderStatusChange picks it up from there. Fail closed. */
+    if (data.status !== 'paid' && data.paymentVerified !== true) {
+      console.log(`[onNewOrderCreated] ${orderId} is ${data.status || 'unpaid'} — seller NOT notified until payment is verified.`);
+      return;
+    }
+
     if (!sellerUid) {
       console.warn("[onNewOrderCreated] No sellerUid on order", orderId);
       return;

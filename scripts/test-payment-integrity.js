@@ -201,6 +201,43 @@ console.log('\nPayment integrity — the money path\n');
     : bad('an unverified order does not warn the customer it will not ship');
 }
 
+/* ── 9. Nothing downstream may act on an UNPAID order ────────────────────────
+   Fixing the checkout UI is only half of it. Two server triggers fired on order
+   CREATE with no payment gate at all:
+
+     onNewOrderCreated    pushed + SMSed + in-apped the seller "New Order! ... Confirm
+                          it to begin processing" and incremented pendingOrders. That is
+                          a FULFILMENT PROMPT. It is how a seller ends up shipping goods
+                          against a payment that never happened.
+
+     emailOnOrderCreated  emailed the customer an "order-confirmation". For an unpaid
+                          order that email IS the false confirmation — the same lie the
+                          checkout told on screen, now in the customer's inbox where it
+                          looks even more official.
+
+   Orders may EXIST before payment. They must not REACH anyone before payment. */
+{
+  const gated = (file, fn) => {
+    const src = fs.readFileSync(path.resolve(file), 'utf8');
+    const at  = src.indexOf(fn);
+    if (at === -1) return null;
+    const body = src.slice(at, at + 2500);
+    return /status\s*!==\s*['"]paid['"][\s\S]{0,80}paymentVerified\s*!==\s*true[\s\S]{0,200}return/.test(body);
+  };
+
+  const checks = [
+    ['functions/index.js',          'exports.onNewOrderCreated',   'the seller is not told to fulfil an unpaid order'],
+    ['functions/email-triggers.js', 'exports.emailOnOrderCreated', 'the customer gets no confirmation email for an unpaid order'],
+  ];
+
+  checks.forEach(([file, fn, what]) => {
+    const g = gated(file, fn);
+    if (g === null)  bad(`${fn} not found in ${file} — the payment gate cannot be verified`);
+    else if (g)      ok(what);
+    else             bad(`${fn} has NO payment gate — it acts on orders that nobody has paid for`);
+  });
+}
+
 console.log('');
 if (fail) {
   console.error(`Payment integrity FAILED (${fail}) — DO NOT SHIP\n`);
