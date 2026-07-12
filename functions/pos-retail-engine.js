@@ -106,7 +106,7 @@ function _calcPoints(amount) { return Math.floor(amount / 10); }
  * Returns customer profile + loyalty status
  */
 exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCustomer = async (req) => {
-  _adminOrSeller(request);
+  _adminOrSeller(req);
   const { phone, customerId } = req.data || {};
 
   let snap;
@@ -133,7 +133,7 @@ exports.getPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.getPOSCust
  * CF: upsertPOSCustomer — create or update customer profile
  */
 exports.upsertPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.upsertPOSCustomer = async (req) => {
-  _adminOrSeller(request);
+  _adminOrSeller(req);
   const { customerId, phone, name, email } = req.data || {};
 
   const normalized = _normalizePhone(phone);
@@ -183,7 +183,7 @@ exports.upsertPOSCustomer = onCall({ enforceAppCheck: true }, exports._h.upsertP
  * Generates receipt, awards loyalty points, updates inventory
  */
 exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSale = async (req) => {
-  const auth = _adminOrSeller(request);
+  const auth = _adminOrSeller(req);
   const {
     sellerId, sessionId, branchId,
     items,         /* [{ productId, name, sku, qty, price, cost, discount, taxRate }] */
@@ -373,7 +373,7 @@ exports.recordPOSSale = onCall({ enforceAppCheck: true }, exports._h.recordPOSSa
  * CF: getPOSSale — retrieve a single sale record
  */
 exports.getPOSSale = onCall({ enforceAppCheck: true }, exports._h.getPOSSale = async (req) => {
-  _adminOrSeller(request);
+  _adminOrSeller(req);
   const { saleId } = req.data || {};
   if (!saleId) throw new HttpsError('invalid-argument', 'saleId required');
 
@@ -513,18 +513,24 @@ exports.emailReceipt = onCall(
     const sgKey = SENDGRID_KEY.value();
     if (!sgKey) throw new HttpsError('unavailable', 'Email service not configured');
 
-    const resp = await fetch('https://api.sendgrid.com/v3/mail/send', {
-      method:  'POST',
-      headers: { 'Authorization': `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: _san(email, 200) }] }],
-        from:    { email: 'receipts@mysokoni.co.ke', name: r.store?.name || 'SOKONI' },
-        subject: `Your receipt from ${r.store?.name || 'SOKONI'} — ${receiptId}`,
-        content: [{ type: 'text/html', value: html }],
-      }),
-    });
-
-    if (!resp.ok) throw new HttpsError('internal', 'Failed to send email');
+    let resp;
+    try {
+      resp = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method:  'POST',
+        headers: { 'Authorization': `Bearer ${sgKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          personalizations: [{ to: [{ email: _san(email, 200) }] }],
+          from:    { email: 'receipts@mysokoni.co.ke', name: r.store?.name || 'SOKONI' },
+          subject: `Your receipt from ${r.store?.name || 'SOKONI'} — ${receiptId}`,
+          content: [{ type: 'text/html', value: html }],
+        }),
+      });
+      if (!resp.ok) throw new HttpsError('internal', 'Email send failed');
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;
+      logger.error('sendgrid fetch error', e.message);
+      throw new HttpsError('internal', 'Email send failed');
+    }
     return { sent: true, email: _san(email, 200) };
   }
 );
@@ -537,7 +543,7 @@ exports.emailReceipt = onCall(
  * CF: getInventoryAlerts — low stock, expiry, overstock alerts
  */
 exports.getInventoryAlerts = onCall({ enforceAppCheck: true }, exports._h.getInventoryAlerts = async (req) => {
-  const auth = _adminOrSeller(request);
+  const auth = _adminOrSeller(req);
   const { sellerId, branchId, limit: lim = 50 } = req.data || {};
   const sid = sellerId || auth.uid;
 
@@ -603,7 +609,7 @@ exports.getInventoryAlerts = onCall({ enforceAppCheck: true }, exports._h.getInv
  * CF: getInventoryInsights — fast movers, slow movers, dead stock
  */
 exports.getInventoryInsights = onCall({ enforceAppCheck: true }, exports._h.getInventoryInsights = async (req) => {
-  const auth = _adminOrSeller(request);
+  const auth = _adminOrSeller(req);
   const { sellerId, days = 30, limit: lim = 20 } = req.data || {};
   const sid = sellerId || auth.uid;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -663,7 +669,7 @@ exports.getInventoryInsights = onCall({ enforceAppCheck: true }, exports._h.getI
  * CF: getReorderSuggestions — AI-powered reorder recommendations
  */
 exports.getReorderSuggestions = onCall({ enforceAppCheck: true }, exports._h.getReorderSuggestions = async (req) => {
-  const auth = _adminOrSeller(request);
+  const auth = _adminOrSeller(req);
   const { sellerId } = req.data || {};
   const sid = sellerId || auth.uid;
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -728,7 +734,7 @@ exports.getReorderSuggestions = onCall({ enforceAppCheck: true }, exports._h.get
  * CF: getPOSAnalytics — revenue, profit, transactions for a date range
  */
 exports.getPOSAnalytics = onCall({ enforceAppCheck: true }, exports._h.getPOSAnalytics = async (req) => {
-  const auth = _adminOrSeller(request);
+  const auth = _adminOrSeller(req);
   const { sellerId, branchId, startDate, endDate, groupBy = 'day' } = req.data || {};
   const sid = sellerId || auth.uid;
 
@@ -830,7 +836,7 @@ exports.getPOSAnalytics = onCall({ enforceAppCheck: true }, exports._h.getPOSAna
  * CF: getLivePOSMetrics — today's real-time metrics (Redis-first, Firestore fallback)
  */
 exports.getLivePOSMetrics = onCall({ enforceAppCheck: true }, exports._h.getLivePOSMetrics = async (req) => {
-  const auth = _adminOrSeller(request);
+  const auth = _adminOrSeller(req);
   const { sellerId } = req.data || {};
   const sid = sellerId || auth.uid;
 
