@@ -233,7 +233,16 @@
 
         text('F2', 15, L, y, 'Certificate of Legal Acceptance');
         y -= 16;
-        text('F1', 9, L, y, 'Issued by SOKONI. Powered by Bravilex International Company Limited.', 0.45);
+        /* BRAND POLICY: the customer-facing issuer is SOKONI, full stop. This line sits
+           directly under the certificate title — the most prominent position on the page —
+           and used to carry a "Powered by <legal entity>" strapline. That breaks the policy
+           twice over: it puts the legal entity in a customer-facing brand slot, and the
+           name it used was not even the registered one.
+
+           The legal entity IS legally required on this document — it issues a legal
+           instrument — so it now appears in the footer with the other regulatory
+           disclosures, which is exactly where the policy permits it. */
+        text('F1', 9, L, y, 'Issued by SOKONI.', 0.45);
         y -= 30;
 
         /* Field table */
@@ -306,12 +315,22 @@
             'The QR is a convenience. Verification is the server confirming this id.', 0.6);
         }
 
-        /* Footer */
+        /* Footer — the ONE place on this document where the legal entity belongs.
+           A certificate of legal acceptance must name the entity that issued it; that is a
+           regulatory disclosure, not branding, and the policy explicitly permits it here.
+
+           The name is read from CompanyIdentity rather than typed, because the literal that
+           was hardcoded above had already drifted from the registered name. A legal document
+           asserting the wrong company name is worse than one asserting none. */
         line(62, 0.88);
         text('F1', 7.4, L, 48,
           'This certificate records an electronic signature made under applicable Kenyan law.', 0.5);
         text('F1', 7.4, L, 38,
           'The authoritative record is held server-side by SOKONI and is append-only.', 0.5);
+        text('F1', 7.4, L, 28,
+          'SOKONI is operated by ' +
+          ((window.SOKONI_COMPANY && window.SOKONI_COMPANY.legalName) || 'Bravilex International Co. Limited') +
+          ', the legal issuer of this certificate.', 0.5);
 
         /* Emit in the SAME order the numbers were allocated: 4,5,6,[7],[8]. */
         var content = out.join('\n');
