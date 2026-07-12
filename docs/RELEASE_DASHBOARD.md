@@ -10,6 +10,49 @@
 
 ---
 
+## Legal Compliance
+
+# 🟡 ENGINEERING COMPLETE — PENDING PHYSICAL DEVICE VALIDATION
+
+**Not** `COMPLETE`. Promotion requires **Android PASS · iPhone PASS · Tablet PASS · controlled enforcement rollout PASS**.
+
+| Component | Status |
+|---|---|
+| Backend · Server validation · Audit trail | ✅ COMPLETE |
+| Digital Signature Engine (draw · typed · stamp) | ✅ COMPLETE |
+| Professional Declaration | ✅ COMPLETE |
+| Agreement versioning (schedule · rollback · preview) | ✅ COMPLETE |
+| UI integration · Legal Centre · Certificate PDF · Admin portal | ✅ COMPLETE |
+| **Device validation** | ⏳ **PENDING** — no physical device testing performed |
+| **Enforcement** | ⏳ **DARK-LAUNCHED (OFF)** — verified against production |
+
+**Enforcement state — verified, not assumed** (production Firestore, 2026-07-13):
+`legalConfig/enforcement` **does not exist** → `assertLegalCompliance()` reads `{}` →
+every role returns `{enforced: false, compliant: true}`. **OFF for all roles.**
+
+### Blast radius of enabling enforcement — measured, 2026-07-13
+
+| Production Firestore | Count |
+|---|---|
+| `users` (total) | **3** — 1 admin, 2 buyers |
+| merchant / provider / driver / seller | **0** |
+| `sellers` · `providers` · `drivers` collections | **0 / 0 / 0** |
+| `legalAcceptances` · `legalCertificates` · `legalAuditLog` | **0 / 0 / 0** |
+
+**There are no professional users. Enabling enforcement today would block nobody.**
+
+I initially flagged the empty acceptance collections as a blocker — that was wrong, and
+the evidence corrects it: with zero professional users, the "existing users negatively
+affected" precondition is satisfied **vacuously**. The blast radius is **0 now and only
+grows** with every merchant who onboards before enforcement is on.
+
+That does **not** promote the status: enforcement still waits on device validation, per
+the release gate. Runbook: `LEGAL_ENFORCEMENT_ROLLOUT.md`.
+
+Device test plan: `LEGAL_DEVICE_OAT.md` · Integration evidence: `LEGAL_INTEGRATION_STATUS.md`
+
+---
+
 ## Blocker board
 
 | ID | Blocker | Owner | Status | Evidence | Risk | ETA | Dependencies | Updated |
