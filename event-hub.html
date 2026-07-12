@@ -193,7 +193,7 @@
 <script src="/sokoni-appcheck.js"></script>
 <script src="/sokoni-config.js"></script>
 <script>
-  const app  = if(!firebase.apps.length)firebase.initializeApp(window.SOKONI_CONFIG, 'event-hub');
+  const app  = firebase.initializeApp(window.SOKONI_CONFIG, 'event-hub');
   const auth = firebase.auth(app);
   const fns  = firebase.functions(app);
   fns.useRegion('us-central1');

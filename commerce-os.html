@@ -990,7 +990,7 @@
           messagingSenderId: '000000000000',
           appId: '1:000000000000:web:placeholder'
         };
-    _app = if(!firebase.apps.length)firebase.initializeApp(cfg, 'commerce-os');
+    _app = firebase.initializeApp(cfg, 'commerce-os');
   }
   const _auth = firebase.auth(_app);
   const _db   = firebase.firestore(_app);

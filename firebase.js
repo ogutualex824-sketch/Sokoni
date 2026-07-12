@@ -4,7 +4,7 @@
 ================================================================ */
 
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
+import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js";
 import {
   getAuth,
   onAuthStateChanged,
@@ -72,21 +72,73 @@ const app = initializeApp(firebaseConfig);
    and password reset all fail with auth/network-request-failed). The fallback exists
    only to print a fresh token on first run so it can be registered. */
 const IS_LOCALHOST = ['localhost', '127.0.0.1', '[::1]', ''].includes(location.hostname);
+const APPCHECK_DEBUG_KEY = 'SOKONI_APPCHECK_DEBUG_TOKEN';
+let _appCheck = null;
+let _pinnedToken = null;
+
 try {
   if (IS_LOCALHOST) {
-    let pinned = null;
-    try { pinned = localStorage.getItem('SOKONI_APPCHECK_DEBUG_TOKEN'); } catch (_) {}
-    self.FIREBASE_APPCHECK_DEBUG_TOKEN = pinned || true;
-    if (!pinned) {
-      console.warn('[SOKONI] App Check: no registered debug token pinned. A new token will be printed below — register it in Firebase Console, then run:\n  localStorage.setItem(\'SOKONI_APPCHECK_DEBUG_TOKEN\', \'<that-token>\')');
+    try { _pinnedToken = localStorage.getItem(APPCHECK_DEBUG_KEY); } catch (_) {}
+
+    /* Pinned token wins and is never overwritten or regenerated. Without one we
+       fall back to `true` purely to BOOTSTRAP: the SDK mints a throwaway token and
+       prints it, so it can be registered once. That bootstrap token is unregistered,
+       so attestation will 403 until it is registered and pinned — we say so loudly
+       rather than failing silently. */
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = _pinnedToken || true;
+
+    if (!_pinnedToken) {
+      console.warn(
+        '%c[SOKONI] App Check — FIRST-RUN BOOTSTRAP (no pinned debug token)',
+        'color:#71ff00;font-weight:bold',
+        '\nThe SDK is minting a TEMPORARY debug token, printed by Firebase just below.' +
+        '\nIt is NOT registered yet, so App Check will return HTTP 403 and Firebase Auth' +
+        '\nwill fail until you complete these two steps:' +
+        '\n  1. Firebase Console -> App Check -> Apps -> Manage debug tokens -> add that token.' +
+        `\n  2. Pin it so it is reused (never regenerated):\n     localStorage.setItem('${APPCHECK_DEBUG_KEY}', '<that-token>')` +
+        '\nSee docs/APP_CHECK.md'
+      );
     }
   }
-  initializeAppCheck(app, {
+
+  _appCheck = initializeAppCheck(app, {
     provider: new ReCaptchaV3Provider('6Lf93TktAAAAAIqCj8l3YM3dIoS1MIXpilsdnsxj'),
     isTokenAutoRefreshEnabled: true,
   });
 } catch (e) {
-  console.error('[SOKONI] App Check init failed:', e.message);
+  /* Never leak internals to end users; developers get the detail. */
+  if (IS_LOCALHOST) console.error('[SOKONI] App Check init failed:', e.message);
+  else console.error('[SOKONI] Security check unavailable. Please refresh and try again.');
+}
+
+/* One-shot health probe. Verifies the token actually exchanges instead of
+   discovering it later as an unexplained auth failure. Runs exactly once — no
+   retry loop — so a bad token can never spin the browser. */
+if (_appCheck) {
+  getAppCheckToken(_appCheck, false)
+    .then(() => { if (IS_LOCALHOST) console.info('[SOKONI] App Check OK — token exchanged.'); })
+    .catch((err) => {
+      if (!IS_LOCALHOST) {
+        /* Production: generic, no internals. */
+        console.error('[SOKONI] Security verification failed. Please refresh and try again.');
+        return;
+      }
+      const pinnedNote = _pinnedToken
+        ? `The pinned debug token is INVALID or NOT REGISTERED:\n  ${_pinnedToken}\n` +
+          `Fix: register it in Firebase Console, or clear it and re-bootstrap:\n` +
+          `  localStorage.removeItem('${APPCHECK_DEBUG_KEY}')  // then reload`
+        : 'No debug token is pinned — this is the expected first-run 403. Register the\n' +
+          'token printed above, then pin it (see the bootstrap message).';
+
+      console.error(
+        '%c[SOKONI] App Check FAILED — Firebase Auth will not work until this is fixed.',
+        'color:#ff5252;font-weight:bold',
+        `\nreason: ${err && (err.code || err.message)}\n${pinnedNote}\n` +
+        'A failed App Check token blocks every Auth request BEFORE it is sent, so\n' +
+        'sign-in/OTP/password-reset surface as auth/network-request-failed.\n' +
+        'Troubleshooting: docs/APP_CHECK.md'
+      );
+    });
 }
 
 const auth      = getAuth(app);

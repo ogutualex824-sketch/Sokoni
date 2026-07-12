@@ -8,8 +8,8 @@
   <title>Wholesale Portal â€” SOKONI B2B</title>
   <meta name="description" content="SOKONI B2B Wholesale Buyer Portal â€” manage orders, catalog, credit notes and payments.">
   <meta name="robots" content="noindex, nofollow">
-  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
-  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0d1117">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1022,7 +1022,7 @@ try {
         messagingSenderId: '24799054989',
         appId:             '1:24799054989:web:e1cf6ca8c281bf1abf26c4'
       };
-  WP_APP = if(!firebase.apps.length)firebase.initializeApp(cfg, 'wholesale-portal');
+  WP_APP = firebase.initializeApp(cfg, 'wholesale-portal');
 }
 
 const wpAuth = firebase.auth(WP_APP);

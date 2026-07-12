@@ -845,7 +845,7 @@
 <script src="/sokoni-config.js"></script>
 <script>
   /* ── Init ── */
-  const app  = if(!firebase.apps.length)firebase.initializeApp(window.SOKONI_CONFIG, 'security-center');
+  const app  = firebase.initializeApp(window.SOKONI_CONFIG, 'security-center');
   const auth = firebase.auth(app);
   const fns  = firebase.functions(app);
   const db   = firebase.firestore(app);
@@ -856,6 +856,14 @@
   let auditPageIdx = 1;
   let unsubscribeAlerts = null;
   let unsubscribeIncidents = null;
+  let _scEventsUnsub = null;
+  let _scAlertsOvUnsub = null;
+  window.addEventListener('beforeunload', () => {
+    if (unsubscribeAlerts) unsubscribeAlerts();
+    if (unsubscribeIncidents) unsubscribeIncidents();
+    if (_scEventsUnsub) _scEventsUnsub();
+    if (_scAlertsOvUnsub) _scAlertsOvUnsub();
+  });
 
   /* ── Clock ── */
   function updateClock() {
@@ -976,9 +984,10 @@
       toast('Error loading overview: ' + e.message);
     }
 
-    // Recent events from Firestore onSnapshot
+    // Recent events from Firestore onSnapshot — teardown previous before re-subscribing
+    if (_scEventsUnsub) { _scEventsUnsub(); _scEventsUnsub = null; }
     const eventsEl = document.getElementById('recentEvents');
-    db.collection('securityEvents')
+    _scEventsUnsub = db.collection('securityEvents')
       .orderBy('timestamp', 'desc')
       .limit(8)
       .onSnapshot(snap => {
@@ -994,9 +1003,10 @@
         }).join('');
       });
 
-    // Recent fraud alerts
+    // Recent fraud alerts — teardown previous before re-subscribing
+    if (_scAlertsOvUnsub) { _scAlertsOvUnsub(); _scAlertsOvUnsub = null; }
     const fraudEl = document.getElementById('recentFraudAlerts');
-    db.collection('securityAlerts')
+    _scAlertsOvUnsub = db.collection('securityAlerts')
       .where('status', '==', 'open')
       .orderBy('timestamp', 'desc')
       .limit(5)

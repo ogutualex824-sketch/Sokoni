@@ -1032,7 +1032,7 @@ function recommendationLabel(rec) {
 // ── Firebase Init ─────────────────────────────────────────────────────────────
 function initFirebase() {
   const config = window.SOKONI_CONFIG || {};
-  app = if(!firebase.apps.length)firebase.initializeApp(config, 'release-readiness');
+  app = firebase.initializeApp(config, 'release-readiness');
   auth = firebase.auth(app);
   db = firebase.firestore(app);
   functions = firebase.functions(app);

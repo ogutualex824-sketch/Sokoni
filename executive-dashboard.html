@@ -1098,7 +1098,7 @@ try {
         messagingSenderId: '000000000000',
         appId:             '1:000000000000:web:placeholder'
       };
-  _fbApp = if(!firebase.apps.length)firebase.initializeApp(cfg, 'executive-dashboard');
+  _fbApp = firebase.initializeApp(cfg, 'executive-dashboard');
 }
 
 const _auth = firebase.auth(_fbApp);
