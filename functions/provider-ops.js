@@ -142,16 +142,17 @@ _h.providerGetEarnings = async (req) => {
   const days = Math.min(365, Math.max(1, Number(req.data?.days) || 30));
   const since = new Date(Date.now() - days * 86400000);
 
+  // Single-field equality (auto-indexed) + in-memory date filter → no composite index.
   const snap = await _db().collection('providerPayouts')
-    .where('providerId', '==', uid)
-    .where('createdAt', '>=', since)
-    .get();
+    .where('providerId', '==', uid).limit(2000).get();
 
   let gross = 0, commission = 0, net = 0, pending = 0, paid = 0;
   const byDay = {};
   const payouts = [];
   for (const doc of snap.docs) {
     const p = doc.data();
+    const created = p.createdAt?.toDate ? p.createdAt.toDate() : null;
+    if (created && created < since) continue;
     gross += p.gross || 0; commission += p.commission || 0; net += p.net || 0;
     if (p.status === 'paid') paid += p.net || 0; else pending += p.net || 0;
     const d = p.createdAt?.toDate ? p.createdAt.toDate() : new Date();
@@ -173,24 +174,26 @@ _h.providerGetEarnings = async (req) => {
 _h.providerRequestPayout = async (req) => {
   const uid = _uid(req);
   const snap = await _db().collection('providerPayouts')
-    .where('providerId', '==', uid).where('status', '==', 'pending').limit(400).get();
-  if (snap.empty) throw new HttpsError('failed-precondition', 'No pending earnings to pay out.');
+    .where('providerId', '==', uid).limit(600).get();
+  const pending = snap.docs.filter((d) => d.data().status === 'pending');
+  if (!pending.length) throw new HttpsError('failed-precondition', 'No pending earnings to pay out.');
 
   const reference = `PO-${uid.slice(0, 6).toUpperCase()}-${new Date().toISOString().slice(0, 10)}`;
   let total = 0;
   const batch = _db().batch();
-  snap.docs.forEach((d) => { total += d.data().net || 0;
+  pending.forEach((d) => { total += d.data().net || 0;
     batch.update(d.ref, { status: 'requested', payoutRef: reference, requestedAt: _ts() }); });
   await batch.commit();
-  return { success: true, reference, amount: total, count: snap.size, currency: 'KES' };
+  return { success: true, reference, amount: total, count: pending.length, currency: 'KES' };
 };
 
 /* ── 6. providerGetReviews ───────────────────────────────────────────────────
    Reviews + rating distribution for the caller's profile. */
 _h.providerGetReviews = async (req) => {
   const uid = _uid(req);
+  // Single-field equality (auto-indexed) + in-memory sort → no composite index.
   const snap = await _db().collection('providerReviews')
-    .where('providerId', '==', uid).orderBy('createdAt', 'desc').limit(100).get();
+    .where('providerId', '==', uid).limit(200).get();
 
   const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let sum = 0;
@@ -201,8 +204,9 @@ _h.providerGetReviews = async (req) => {
     sum += rating;
     return { id: d.id, customerName: _san(r.customerName, 120) || 'Customer',
       rating, text: _san(r.text, 1000), reply: r.reply ? _san(r.reply, 1000) : null,
-      createdAt: r.createdAt || null };
-  });
+      createdAt: r.createdAt || null,
+      _sort: r.createdAt?.toDate ? r.createdAt.toDate().getTime() : 0 };
+  }).sort((a, b) => b._sort - a._sort).map(({ _sort, ...r }) => r);
   const total = reviews.length;
   return { total, averageRating: total ? sum / total : 0, distribution, reviews };
 };
@@ -269,12 +273,13 @@ _h.providerAddService = async (req) => {
   const name = _san(d.name, 200).trim();
   if (!name) throw new HttpsError('invalid-argument', 'Service name is required.');
 
-  const [subSnap, countSnap] = await Promise.all([
+  const [subSnap, svcSnap] = await Promise.all([
     _db().collection('providerSubscriptions').doc(uid).get(),
-    _db().collection('providerServices').where('providerId', '==', uid).where('active', '==', true).get(),
+    _db().collection('providerServices').where('providerId', '==', uid).limit(200).get(),
   ]);
+  const activeCount = svcSnap.docs.filter((d) => d.data().active !== false).length;
   const cap = subSnap.exists ? Number(subSnap.data().limits?.listings) : 1;
-  if (cap !== -1 && countSnap.size >= cap) {
+  if (cap !== -1 && activeCount >= cap) {
     throw new HttpsError('resource-exhausted',
       `Your plan allows ${cap} active service${cap === 1 ? '' : 's'}. Upgrade to add more.`);
   }
@@ -284,7 +289,7 @@ _h.providerAddService = async (req) => {
     price: Math.max(0, Math.round(Number(d.price) || 0)), active: true,
     createdAt: _ts(), updatedAt: _ts(),
   });
-  return { success: true, serviceId: ref.id, remaining: cap === -1 ? -1 : cap - countSnap.size - 1 };
+  return { success: true, serviceId: ref.id, remaining: cap === -1 ? -1 : cap - activeCount - 1 };
 };
 
 /* ── 11. providerListServices ────────────────────────────────────────────────*/
