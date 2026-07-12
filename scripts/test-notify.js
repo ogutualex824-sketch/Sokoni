@@ -179,6 +179,31 @@ ok('critical types ignore BOTH preferences and quiet hours (OTP always gets thro
     : bad('every order stage would stack as a separate notification');
 }
 
+/* ── 10. The in-app notification is actually VISIBLE ────────────────────────
+   The notification center queries where('targetUid','==',uid). An engine that writes
+   only `userId` produces a notification that is stored perfectly and seen by nobody.
+   Third instance of one bug in this subsystem — two names for one thing:
+     fcmToken / fcmTokens   → push reached no one
+     deepLink / url         → push opened the homepage
+     userId   / targetUid   → the feed showed nothing
+   Each was invisible in production because nothing asserted the two sides agreed. */
+{
+  const engine = fs.readFileSync(path.resolve('functions/notify.js'), 'utf8');
+  const center = fs.readFileSync(path.resolve('sokoni-notif-engine.js'), 'utf8');
+
+  const query = center.match(/where\(\s*['"](\w+)['"]\s*,\s*['"]==['"]/);
+  const queriedField = query && query[1];
+
+  queriedField && new RegExp(`${queriedField}:\\s*uid`).test(engine)
+    ? ok(`engine writes "${queriedField}" — the exact field the notification center queries on`)
+    : bad(`engine does not write "${queriedField}" — notifications would never appear in the feed`);
+
+  /* And the center must understand the engine's link key. */
+  /data\.deepLink\s*\|\|/.test(center)
+    ? ok('notification center opens the engine deepLink (taps reach the order, not the feed)')
+    : bad('notification center ignores deepLink — tapping a notification goes nowhere useful');
+}
+
 console.log('');
 if (fail) { console.error(`Notification engine FAILED (${fail})\n`); process.exit(1); }
 console.log(`Notification engine PASSED (${pass} checks) — nothing sent\n`);

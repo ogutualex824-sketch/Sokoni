@@ -1,4 +1,107 @@
-﻿## [2026-07-12] — Global Footer System v1.0 + Splash Redesign v2.0
+﻿## [2026-07-13] — Communication Engine v1.0 + Order Timeline + Three Silent Push Failures Fixed
+
+### Summary
+
+One Communication Engine (`functions/notify.js`) is now the single entry point for push,
+in-app, SMS and email. Callers declare **intent** (a type); the engine picks the channels.
+Building it surfaced three production failures that had been live and invisible — all the
+same bug, in three places: **two names for one thing, and nothing asserting they agreed.**
+
+| Producer wrote | Consumer read | Consequence |
+| --- | --- | --- |
+| client → `users/{uid}.fcmToken` (field) | `loyalty.js` → `collection('fcmTokens')`<br>`redis-jobs.js` → `users/{uid}/fcmTokens` | Nothing has ever written either collection. Both queries always returned empty — **push from those two modules never reached a single user.** |
+| engine → `data.deepLink` | both service workers → `data.url` | Every rich push would have **opened the homepage** instead of the order it was about. |
+| engine → `userId` | notification center → `where('targetUid','==',uid)` | Notification stored perfectly, **matched by nobody's query** — invisible in the feed. |
+
+All three are now fixed and each has a regression guard in `scripts/test-notify.js`
+(23 checks, sends nothing).
+
+**Order timeline** — 11 stages as data. Monotonic: a retried trigger or duplicate courier
+webhook cannot rewind *Delivered* back to *On The Way*. Two stages deliberately carry no
+notification — eleven pushes per order is how a premium experience becomes a muted app.
+`track.html` renders the journey live from the order doc with per-stage timestamps, and
+now understands the `/track?order=<id>` deep link the push actually sends.
+
+**Rich push** — `image` renders; `group` maps to the webpush tag, so eleven stage updates
+collapse into one updating thread instead of stacking.
+
+### Files affected
+- `functions/notify.js` — engine, 33 types, `ORDER_TIMELINE`, `advanceOrder()`, exported `collectTokens`/`sendPush`/`notify`
+- `functions/index.js` — `orderAdvance` export
+- `functions/loyalty.js`, `functions/redis-jobs.js` — migrated onto the engine's single token source; redis-jobs' dead-token pruning was writing to the same phantom subcollection and never pruned anything
+- `firebase-messaging-sw.js`, `service-worker.js` — read `deepLink`; render image; group by tag. SW cache → v46
+- `sokoni-notif-engine.js` — `_normalize()` reads `deepLink`/`group`/`image`
+- `track.html` — 11-stage live timeline, `?order=` deep link
+- `sokoni-footer.js` — hardcoded obsolete legal name → `SOKONI_COMPANY.legalName`
+- `scripts/test-notify.js`, `docs/COMMUNICATION_ENGINE.md`
+
+### Database changes
+`orders/{id}` gains `timelineStage`, `timelineIndex`, `timeline[]`. Additive; existing
+orders render from stage 1 until first advanced. In-app notifications now carry both
+`userId` and `targetUid`.
+
+### API changes
+New callable `orderAdvance({orderId, stage, ...})` — auth required.
+
+### Security changes
+Cross-user notify remains admin-only (otherwise it is a phishing primitive). Critical
+types (OTP, password reset, wallet debit) stay unsuppressible by preference or quiet hours.
+
+### Breaking changes
+None.
+
+### Not verified
+Push delivery has **never been proven on a real device**. The plumbing is now correct and
+tested; "correct" and "arrived" are different claims. Requires a human with a phone.
+
+---
+
+## [2026-07-12] — Mobile Layout Regression Fixes + Email Enterprise v3.0 + CDN Cache Hardening
+
+### Summary
+Three independent production fixes deployed together.
+
+**Mobile Layout Regression Fixes** — resolved five categories of visual regressions on screens ≤768px introduced
+by the new footer and header systems:
+1. Footer single-column below 768px (was 2-column down to 380px, overflow off-screen on 380–768px range)
+2. Login page card full-width on mobile (was constrained to 340px, footer rendered beside card instead of below)
+3. Header nav logo replaced PNG `Sokoni Logo.png` with transparent `sokoni-icon.svg` (PNG had white background,
+   appeared as a white box on dark header)
+4. Login page brand block updated to SVG icon + typographic wordmark + tagline (matches platform identity)
+5. KASS FAB clearance confirmed — `sokoni-responsive.css` already handled via `--sk-fab-clear` variable
+
+**Email Enterprise Redesign v3.0** — complete rewrite of all 53 email templates to a premium white-canvas
+enterprise design (Stripe/Apple/Shopify quality). New design system with CSS brand icon, white card layout,
+dark mode support, Outlook VML rounded buttons, and an enterprise footer.
+
+**CDN Cache Hardening** — added `Cloudflare-CDN-Cache-Control: no-store` and `Surrogate-Control: no-store`
+to the `**/*.@(js|css)` catch-all rule in `firebase.json`. Previously only `CDN-Cache-Control: no-store`
+was set, which Cloudflare did not honour — causing deployed JS/CSS updates to be invisible to users for
+up to 7 days.
+
+### Files Affected
+| File | Change |
+|------|--------|
+| `sokoni-footer.js` | Mobile breakpoint: `grid-template-columns:1fr` at ≤768px; centred brand, social, links; `padding-bottom:calc(140px + env(safe-area-inset-bottom,0px))` |
+| `auth.css` | `body { display:flex; flex-direction:column }` — footer goes below card; card full-width at ≤600px, ≤380px, ≤320px |
+| `login.html` | Brand block replaced: `<div class="auth-brand">` with SVG icon + wordmark + tagline |
+| `shared-header.js` | Nav logo `src` changed from `assets/Sokoni Logo.png` to `assets/sokoni-icon.svg` |
+| `functions/email-templates.js` | COMPLETE REWRITE to v3.0 — 53 templates, white canvas, CSS "S" brand header, helpers: `statusCard`, `metricCard`, `codeBlock`, `note`, `alertBanner` |
+| `scripts/send-test-email.js` | NEW — standalone test sender (no Firebase admin needed) |
+| `firebase.json` | `**/*.@(js|css)` cache rule: added `Cloudflare-CDN-Cache-Control: no-store` + `Surrogate-Control: no-store` |
+| `shared-header.js` | `EXCLUDED` list: added no-extension variants (`login`, `signup`, `register`, `success`, `profile`, `seller`, dashboard names) — `cleanUrls:true` strips `.html` so `/login` never matched `'login.html'`, causing nav injection on auth pages |
+
+### Security
+- No auth or data access changes
+- Email v3.0 templates do not expose internal system details to recipients
+
+### Performance
+- SVG logo eliminates PNG image load (vector, inline-able)
+- CDN cache fix ensures JS/CSS updates reach users within browser cache TTL (1 hour) rather than CDN TTL (up to 7 days)
+
+---
+
+## [2026-07-12] — Global Footer System v1.0 + Splash Redesign v2.0
 
 ### Summary
 Two interconnected UI system upgrades shipped as a single production release.

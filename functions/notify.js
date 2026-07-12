@@ -316,8 +316,20 @@ async function notify({ uid, type, title, body, vars = {}, phone, image, deepLin
   /* IN-APP — always the cheapest and most reliable surface; it is the record. */
   if (ch.inapp) {
     try {
+      /* BOTH ownership fields, deliberately.
+
+         The notification CENTER queries where('targetUid','==',uid). Writing only
+         `userId` — as this engine originally did, and as ~19 other modules still do —
+         means the notification is stored correctly and is never seen by anyone: it
+         simply does not match the feed's query. Third instance of the same failure in
+         this subsystem (fcmToken/fcmTokens, deepLink/url, and now userId/targetUid):
+         two names for one thing, and no test that would notice.
+
+         Writing both is not redundancy, it is the migration: every caller routed
+         through this engine becomes visible in the feed without touching the caller. */
       await db().collection(INAPP).add({
-        userId: uid, type, category: t.category, priority: t.priority,
+        userId: uid, targetUid: uid,
+        type, category: t.category, priority: t.priority,
         title, body,
         image: image || null,
         deepLink: deepLink || null,

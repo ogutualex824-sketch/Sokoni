@@ -482,8 +482,15 @@
       title:      data.heading     || data.title || '',
       body:       data.sub         || data.body  || '',
       icon:       data.icon        || (CATEGORIES[data.category || ''] || {}).icon || '🔔',
-      actionUrl:  data.link        || data.actionUrl || 'notifications.html',
-      groupKey:   data.groupKey    || (data.category || 'general') + ':' + (data.type || 'default'),
+      /* deepLink is what the server notification engine writes; link/actionUrl are the
+         older keys. Reading only those sent every engine notification to the generic
+         notifications list instead of the order it was actually about. */
+      actionUrl:  data.deepLink    || data.link || data.actionUrl || 'notifications.html',
+      image:      data.image       || null,
+      /* The engine's `group` is 'order:<id>', so all eleven stages of one order
+         collapse into a single thread here too — not eleven rows in the feed. */
+      groupKey:   data.group       || data.groupKey ||
+                  (data.category || 'general') + ':' + (data.type || 'default'),
       actions:    data.actions     || _defaultActions(data),
       read:       !!data.read,
       archived:   !!data.archived,
@@ -508,7 +515,7 @@
 
   function _defaultActions(data) {
     var acts = [ACTIONS.MARK_READ, ACTIONS.ARCHIVE];
-    if (data.link || data.actionUrl) acts.unshift(ACTIONS.VIEW);
+    if (data.deepLink || data.link || data.actionUrl) acts.unshift(ACTIONS.VIEW);
     return acts;
   }
 
