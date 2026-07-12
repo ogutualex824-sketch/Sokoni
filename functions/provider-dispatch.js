@@ -16,7 +16,16 @@ const _OPTS = {
 };
 
 let _mod;
-function _h() { return _mod || (_mod = require('./provider-onboarding')._h); }
+/* Merge onboarding handlers (provider-onboarding) + post-onboarding dashboard /
+   service-management handlers (provider-ops). Both feed this one Cloud Run service. */
+function _h() {
+  if (!_mod) {
+    _mod = Object.assign({},
+      require('./provider-onboarding')._h,
+      require('./provider-ops')._h);
+  }
+  return _mod;
+}
 
 const ROUTES = [
   'providerSaveDraft',
@@ -38,6 +47,19 @@ const ROUTES = [
   'providerSearchProviders',
   'providerGetAnalytics',
   'providerGetPlans',
+  // provider-ops — dashboard + service management (post-onboarding)
+  'providerConfirmBooking',
+  'providerDeclineBooking',
+  'providerCompleteBooking',
+  'providerGetEarnings',
+  'providerRequestPayout',
+  'providerGetReviews',
+  'providerReplyReview',
+  'providerSavePortfolio',
+  'providerGetPortfolio',
+  'providerAddService',
+  'providerListServices',
+  'providerRemoveService',
 ];
 
 const VALID_OPS = ROUTES.sort().join(', ');
@@ -52,7 +74,7 @@ exports.providerDispatch = onCall(_OPTS, async (req) => {
   }
   const handler = _h()[op];
   if (!handler) {
-    throw new HttpsError('internal', `Handler for "${op}" not found in provider-onboarding._h`);
+    throw new HttpsError('internal', `Handler for "${op}" not found in provider handler registry`);
   }
   return handler(req);
 });
