@@ -11,6 +11,13 @@
 
 **One Critical blocker remains: the money path has never been executed.**
 
+> ### The case for CB-M1, in five numbers
+> Static audit of the money path found **5 Critical defects** — P0-1 through P0-5. Three of them (**P0-3**: sellers billed commission twice · **P0-5**: drivers paid twice · **P0-2**: duplicate commission ledger rows) would have **silently corrupted real money**.
+>
+> **None was caught by a test. All five were invisible until someone read the code.**
+>
+> If static analysis alone could surface that much, it is not a substitute for live validation — **it is the argument for it.** Static verification and live operational validation are complements, not alternatives. CB-M1 stands.
+
 Everything else is either PASS or a non-blocking gap. The Critical item is **not a known defect** — it is an **unverified critical path**, and for a platform whose core function is moving money, that distinction does not make it safe.
 
 ---
@@ -19,6 +26,7 @@ Everything else is either PASS or a non-blocking gap. The Critical item is **not
 
 | Area | Status | Evidence |
 |---|---|---|
+| **Financial Code Audit** | ✅ **PASS** *(critical class)* | `audit-financial-safety.js`: **V1 (auto-ID money writes) = 0**. **Both AT-LEAST-ONCE trigger sites fixed** — the only class that double-counts *without* concurrency. **5 Critical defects found & fixed: P0-2…P0-5.** Regression suite `test-financial-idempotency.js` → **25/25 PASS**, each asserting *exactly one ledger record, exactly one financial movement*. ⚠️ **17 residual lower-severity findings tracked** (12×V2, 5×V3 — all `onCall`/credit/stat sites, which duplicate only on a *client* retry, never on at-least-once redelivery). Not bulk-fixed: "do not modify code without verified evidence." |
 | **Deployment Integrity** | ✅ **PASS** | Runtime-exported **1,410** == deployed **1,410** · orphans **0** · undeployed **0** · CI gate `deployment-integrity.js --ci` → **exit 0**. Canonical inventory = runtime enumeration; regex retired. |
 | **Authentication** | ✅ **PASS** | Browser E2E against the live project: email/password (create → sign-in → delete), password reset, email verification, Google OAuth handoff, phone OTP reCAPTCHA. **Zero HTTP 403s.** App Check init precedes Auth; production attests via reCAPTCHA v3 with **no** debug token. |
 | **Legal Compliance** | ✅ **PASS** | **29/29** integration tests. Universal `SokoniLegalGate` in every onboarding flow. Server-side enforcement (dark-launched per role). Immutable, append-only audit. Version-upgrade detection. |
