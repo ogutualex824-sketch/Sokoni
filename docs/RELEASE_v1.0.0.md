@@ -74,6 +74,10 @@ v1.0.0 is the first production-ready release, covering:
 | v43 | PWA connectivity detection hardening — `_doProbe()` response type check; `_setBar()` cross-clear; initial probe 8 s → 3 s; `SokoniOffline.hide()` public API |
 | v44 | Splash screen unified v2.0 — singleton `splash.js`, inline SVG basket icon, shared-header guard |
 | — | **Email enterprise redesign v3.0** — white canvas, CSS brand header, 53 templates; statusCard/metricCard/codeBlock helpers; dark mode; Outlook VML buttons; enterprise footer |
+| — | **Mobile layout regression fixes** — footer single-column ≤768px; login card full-width; header logo PNG→SVG; auth body flex-column; KASS FAB clearance confirmed |
+| — | **CDN cache hardening** — `firebase.json` `**/*.@(js|css)` rule now includes `Cloudflare-CDN-Cache-Control: no-store` + `Surrogate-Control: no-store`; previously Cloudflare cached JS/CSS for up to 7 days post-deploy |
+| — | **cleanUrls nav fix** — `shared-header.js` EXCLUDED list now includes no-extension variants (`login`, `signup`, `profile`, etc.); `cleanUrls:true` strips `.html` so `/login` never matched `'login.html'`, rendering the full platform nav on auth pages |
+| v46 | **Communication Engine v1.0** — `functions/notify.js` is the single entry point for push/in-app/SMS/email; 11-stage monotonic order timeline (`orderAdvance`); `track.html` live journey. Fixed three silent production failures, all the same bug — a producer and a consumer using different names for one field, with nothing asserting they agreed: `fcmToken`/`fcmTokens` (**push from loyalty.js + redis-jobs.js had never reached a single user**), `deepLink`/`url` (**rich push would open the homepage, not the order**), `userId`/`targetUid` (**in-app notifications matched nobody's query**). Guarded by `scripts/test-notify.js` (23 checks). See [[Communication Engine]] |
 
 ---
 
