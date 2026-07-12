@@ -40,7 +40,7 @@
 | Deployment Integrity | 1,410 == 1,410 · CI gate |
 | Architecture | 0 duplicate exports · 13 dispatchers |
 | Authentication | Browser E2E on live project · **zero 403s** · prod attests via reCAPTCHA v3 |
-| Legal Compliance | **29/29** · universal gate in every flow · immutable audit |
+| Legal Compliance | **29/29** · universal gate in every flow · immutable audit · **v2 integration: see LEGAL_INTEGRATION_STATUS** |
 | Financial Code Audit | **P0-1…P0-6 fixed** · V1 = 0 · both at-least-once trigger classes clean · **25/25** idempotency tests · CI ratchet verified both ways |
 | Security Rules | Reviewed **4/5** · `SEC-F1` fixed (ledgers not client-writable) |
 
