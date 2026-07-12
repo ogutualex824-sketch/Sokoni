@@ -43,8 +43,13 @@ function fmt(n) { return "KES " + Number(n || 0).toLocaleString("en-KE"); }
    a space must be %20-encoded in a URL and is mishandled by some clients and
    proxies, so it is published under a clean name.
 
+   Asset: assets/logosokoni.png (the official SOKONI logo), published at this
+   email-only path. Served from /assets/logosokoni.png directly, Cloudflare still
+   holds a stale 1 MB copy of that URL; this path is fresh, so mail clients get the
+   correct 301 KB file immediately.
+
    Verified: HTTP 200 · image/png · no auth · 0 redirects.
-   Source 480x320 (3:2), displayed at 160x107 → 3x, sharp on Retina.
+   Source 512x512 (1:1, square), displayed at 120x120 → 4.3x, sharp on Retina.
 ═══════════════════════════════════════════════════════════ */
 const LOGO_URL = "https://mysokoni.co.ke/assets/sokoni-email-logo.png";
 
@@ -134,7 +139,7 @@ a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important
   .eml-fpad {padding:20px 20px 28px!important;}
   /* Logo scales down on narrow screens. Width AND height are both set so the
      3:2 aspect ratio is preserved — never stretched or squashed. */
-  .eml-logo {width:132px!important;height:88px!important;max-width:132px!important;}
+  .eml-logo {width:96px!important;height:96px!important;max-width:96px!important;}
 }
 </style>
 </head>
@@ -155,8 +160,8 @@ ${hidden}
   <tr><td class="eml-hdr eml-hpad" bgcolor="#ffffff"
     style="padding:36px 40px 28px;text-align:center;border-bottom:1px solid #F1F5F9;">
     <!-- Official SOKONI logo (see LOGO_URL above for the email-client constraints) -->
-    <img class="eml-logo" src="${LOGO_URL}" alt="SOKONI" width="160" height="107"
-      style="display:block;margin:0 auto 14px;width:160px;height:107px;max-width:160px;
+    <img class="eml-logo" src="${LOGO_URL}" alt="SOKONI" width="120" height="120"
+      style="display:block;margin:0 auto 14px;width:120px;height:120px;max-width:120px;
       border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
     <!-- Brand name as typography -->
     <p class="eml-title" style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif;

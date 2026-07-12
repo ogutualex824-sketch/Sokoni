@@ -198,7 +198,10 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 <!-- cart.js handles all rendering — no override -->
 <script src="cart.js"></script>
 <script>
-const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+/* _esc comes from cart.js (loaded above). Re-declaring it here as a `const`
+   collided with cart.js's `function _esc` in the same global scope — a hard
+   SyntaxError that killed THIS ENTIRE inline block, so the promo-code handler
+   and the updateSummary wrapper below never ran. */
 /* ── Hero count — updated after cart.js renders ── */
 function _updateHeroCount(){
   var cart=[]; try{cart=JSON.parse(localStorage.getItem('cart')||'[]');}catch(e){}
