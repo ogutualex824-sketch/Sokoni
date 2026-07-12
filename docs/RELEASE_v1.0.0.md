@@ -8,6 +8,70 @@
 
 ---
 
+## Branding Policy — Verified (2026-07-13)
+
+**Status: VERIFIED.** `CompanyIdentity` is the canonical source for legal-entity information.
+Commit `0f50347` (maintenance — ships in the next **non-hotfix** release, isolated from the
+payment hotfix).
+
+### Policy
+
+| | |
+| --- | --- |
+| **Customer-facing brand** | **SOKONI** — always |
+| **Legal entity** | **Bravilex International Co. Limited** |
+
+The legal entity appears **only** where legally required: certificates, regulatory
+disclosures, tax-issuer information, settlement-entity information, Terms & Conditions,
+Privacy Policy, legal footer. It **never** replaces SOKONI in headers, titles, navigation or
+marketing surfaces.
+
+### Canonical sources
+
+| Concept | Source of truth |
+| --- | --- |
+| `legalName` / company name | `CompanyIdentity.legalName` |
+| Trading / operating name | `CompanyIdentity.operatingName` (`'SOKONI'`) |
+| Consumer brand | `CompanyIdentity.brand` (`'SOKONI'`) |
+| Tax issuer | `invoiceIssuer()` / `receiptIssuer()` — both derive from `legalName` |
+| Settlement entity | `settlement-account.js` `ACCOUNT_NAME` — **deliberately distinct** (see below) |
+
+Two lock-step files: `functions/company-identity.js` (server) and `sokoni-company.js`
+(client). Drift guard: `scripts/verify-company-identity.js`.
+
+> **No `companyName` / `tradingName` aliases were added.** They do not exist and are not
+> used; `legalName` and `operatingName` already carry those meanings. Adding synonyms would
+> create two names for one thing — the exact bug class that produced `fcmToken`/`fcmTokens`,
+> `deepLink`/`url` and `userId`/`targetUid` in this codebase, each of which failed silently
+> in production.
+
+> **The settlement account name is intentionally NOT `legalName`.** It is
+> `"Bravilex International Co. **Ltd**"` — banks match the account name on an exact string,
+> so it must not be "normalised" to `"… Co. Limited"`. Documented in
+> `functions/settlement-account.js`. **Do not fix this.**
+
+### What was fixed
+
+`sokoni-legal-certificate.js` — the Digital Acceptance Certificate carried a
+*"Powered by &lt;legal entity&gt;"* strapline directly beneath its title, the most prominent
+line on the page, under a name that was not even the registered one. The title now reads
+*"Issued by SOKONI."*; the entity moved to the footer as a regulatory disclosure, read from
+`CompanyIdentity` rather than typed. `legal-centre.html` now loads `sokoni-company.js`
+**before** the certificate module — it previously did not, so `window.SOKONI_COMPANY` was
+undefined and the module would have silently fallen back to a hardcoded literal.
+
+### Verification (2026-07-13)
+
+- `verify-company-identity` → **PASS** (exit 0) — *CompanyIdentity consistent across 894 files*
+- Repo-wide sweep: the obsolete literal *"Bravilex International **Company** Limited"* exists in
+  **exactly one place** — inside the guard, as the string it detects. Nowhere else.
+- No occurrence of the legal entity in any customer-facing title, `h1`/`h2`, nav, logo or
+  header. All remaining uses are legal footers, policy pages, JSON-LD `legalName`, the admin
+  panel, or the tax/settlement surfaces above — all permitted.
+- No APIs, schemas, layouts or business logic changed.
+
+---
+
 ## 🚨 HOTFIX P0-7 — Payment Integrity (2026-07-13)
 
 **Deployed outside the feature freeze. Prevents incorrect financial state.**
