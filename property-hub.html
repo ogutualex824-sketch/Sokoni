@@ -14,7 +14,7 @@
 <meta name="twitter:title" content="SOKONI Property Hub — Kenya Real Estate">
 <meta name="twitter:description" content="Find houses, land and commercial property across Kenya on SOKONI.">
 <meta name="twitter:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
-<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#10b981">
 <script type="application/ld+json">
@@ -888,10 +888,11 @@ window._savePropertyBooking = async function(bk) {
 
 // Real-time property listings from Firestore
 const q = query(collection(db,'propertyListings'), orderBy('createdAt','desc'));
-onSnapshot(q, snap => {
+const _propListingsUnsub = onSnapshot(q, snap => {
   const live = snap.docs.map(d=>({id:d.id,...d.data()}));
   if(live.length && typeof window.injectFirestoreProperties === 'function') window.injectFirestoreProperties(live);
 });
+window.addEventListener('beforeunload', () => { if (_propListingsUnsub) _propListingsUnsub(); });
 </script>
 
 <script src="sokoni-pay.js"></script>

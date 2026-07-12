@@ -49,10 +49,9 @@ body.light-mode .kebs-notice{
 }
 
 .seller-nav-logo-img{
-    width:150px;
-    height:auto;
+    height:44px;
+    width:auto;
     object-fit:contain;
-    max-height:44px;
     background:none;
 }
 
@@ -3085,7 +3084,7 @@ body.light-mode .flash-input-group input { background:#fff !important; color:#11
 @media(max-width:600px){
   /* Seller navbar */
   .seller-navbar{height:56px;padding:0 14px;}
-  .seller-nav-logo-img{width:110px;max-height:36px;}
+  .seller-nav-logo-img{height:36px;width:auto;}
   .seller-nav-center{display:none;}
   .seller-nav-right{gap:6px;}
   .seller-nav-icon-btn{width:36px;height:36px;padding:0;font-size:15px;}
@@ -3155,7 +3154,7 @@ body.light-mode .flash-input-group input { background:#fff !important; color:#11
 
 @media(max-width:480px){
   .seller-navbar{height:52px;padding:0 10px;}
-  .seller-nav-logo-img{width:90px;}
+  .seller-nav-logo-img{height:32px;width:auto;}
   /* On very small phones also hide Visit My Store from navbar — available in quick actions */
   .seller-nav-right a[title="Visit My Store"]{display:none !important;}
   .main-content{padding-top:68px !important;}  /* 52px navbar + 16px */

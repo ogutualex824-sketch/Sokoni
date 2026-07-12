@@ -323,8 +323,8 @@
     if (Notification.permission !== "granted") return;
     const n = new Notification(title, {
       body,
-      icon:   icon  || "/assets/Sokoni Logo.png",
-      badge:        "/assets/Sokoni Logo.png",
+      icon:   icon  || "/assets/logosokoni.png",
+      badge:        "/assets/logosokoni.png",
       vibrate:      [200, 100, 200],
       tag:    url   || title,
     });
@@ -535,7 +535,7 @@
     b.innerHTML = `
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:12px;padding:14px 14px 12px;border-bottom:1px solid rgba(255,255,255,0.07);">
-        <img src="assets/Sokoni Logo.png" style="width:42px;height:42px;border-radius:10px;object-fit:cover;border:1px solid rgba(113,255,0,0.25);flex-shrink:0;" onerror="this.style.display='none'">
+        <img src="assets/Sokoni Logo.png" style="width:42px;height:42px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:900;color:#fff;">Install SOKONI</div>
           <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:1px;">Free · Fast · Works offline</div>
@@ -622,8 +622,8 @@
             navigator.serviceWorker.ready.then(reg => {
               reg.showNotification("🎉 SOKONI is installed!", {
                 body:    "Welcome! Shop, sell & discover Kenya's best deals. Tap to open your marketplace.",
-                icon:    "/assets/Sokoni Logo.png",
-                badge:   "/assets/Sokoni Logo.png",
+                icon:    "/assets/logosokoni.png",
+                badge:   "/assets/logosokoni.png",
                 vibrate: [200, 100, 200, 100, 200],
                 tag:     "sokoni-install-welcome",
                 data:    { url: "/index.html" },
@@ -643,8 +643,8 @@
       navigator.serviceWorker.ready.then(reg => {
         reg.showNotification("🎉 SOKONI is installed!", {
           body:    "Welcome! Shop, sell & discover Kenya's best deals.",
-          icon:    "/assets/Sokoni Logo.png",
-          badge:   "/assets/Sokoni Logo.png",
+          icon:    "/assets/logosokoni.png",
+          badge:   "/assets/logosokoni.png",
           vibrate: [200, 100, 200],
           tag:     "sokoni-install-welcome",
           data:    { url: "/index.html" },

@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI — Firebase SDK
    Auth · Firestore · Storage · Cloud Messaging (FCM)
 ================================================================ */
@@ -753,7 +753,7 @@ function _showSokoniPushToast(title, body, icon, url) {
 
   const img = document.createElement("img");
   img.src    = "assets/Sokoni Logo.png"; /* safe default */
-  img.style.cssText = "width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;";
+  img.style.cssText = "width:40px;height:40px;object-fit:contain;flex-shrink:0;";
   img.onerror = () => { img.src = "assets/Sokoni Logo.png"; };
   /* Only set src from icon if it is a same-origin or HTTPS URL */
   if (icon && /^https:\/\//.test(icon)) img.src = icon;

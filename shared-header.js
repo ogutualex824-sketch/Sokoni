@@ -446,8 +446,8 @@
     /* ── Shared top header — floats transparently over the hero, darkens on scroll ── */
     #sk-top-nav {
       position: fixed; top: 0; left: 0; right: 0; z-index: 100001;
-      height: 64px;
-      display: flex; align-items: center; gap: 10px; padding: 0 18px;
+      height: 58px;
+      display: flex; align-items: center; gap: 8px; padding: 0 20px;
       background: transparent;
       backdrop-filter: none; -webkit-backdrop-filter: none;
       border-bottom: none;
@@ -455,22 +455,22 @@
       will-change: transform;
       transform: translateZ(0);
       -webkit-transform: translateZ(0);
-      transition: background .28s ease, backdrop-filter .28s ease,
-                  box-shadow .28s ease, border-color .28s ease;
+      transition: background .3s ease, backdrop-filter .3s ease,
+                  box-shadow .3s ease, border-color .3s ease;
     }
-    /* Subtle gradient veil at top so logo/icons read on any background */
+    /* Gradient veil — ensures logo + icons read on any hero image */
     #sk-top-nav::before {
       content: '';
       position: absolute; inset: 0;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 100%);
+      background: linear-gradient(to bottom, rgba(0,0,0,0.48) 0%, transparent 100%);
       pointer-events: none; z-index: -1;
     }
     /* Darkens once the user scrolls past the hero */
     #sk-top-nav.sk-scrolled {
-      background: rgba(5,5,5,0.94);
-      backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px);
-      border-bottom: 1px solid rgba(255,255,255,0.07);
-      box-shadow: 0 2px 24px rgba(0,0,0,0.55);
+      background: rgba(5,5,5,0.92);
+      backdrop-filter: blur(28px) saturate(1.3); -webkit-backdrop-filter: blur(28px) saturate(1.3);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      box-shadow: 0 1px 0 rgba(113,255,0,0.05), 0 4px 32px rgba(0,0,0,0.5);
     }
     #sk-top-nav.sk-scrolled::before { display: none; }
     /* ── Hide page-specific navs — preserve .sk-sub-nav tab bars ── */
@@ -478,10 +478,10 @@
     body > [role="navigation"]:not(#sk-top-nav):not(.bottom-nav):not(.sk-sub-nav),
     body > header { display: none !important; }
 
-    /* ── Sub-nav tab bars: stick below the 64px shared header ── */
+    /* ── Sub-nav tab bars: stick below the 58px shared header ── */
     body > .sk-sub-nav {
       position: sticky !important;
-      top: 64px !important;
+      top: 58px !important;
       z-index: 100 !important;
     }
 
@@ -493,26 +493,24 @@
     #sokoni-bell-btn { display: none !important; }
 
     /* ── Ensure content is never hidden under the fixed header ── */
-    body { padding-top: max(64px, calc(64px + env(safe-area-inset-top, 0px))) !important; }
+    body { padding-top: max(58px, calc(58px + env(safe-area-inset-top, 0px))) !important; }
 
-    /* ── Logo ── */
+    /* ── Logo — no card, no box, just the mark ── */
     #sk-nav-logo {
       display: flex; align-items: center; flex-shrink: 0; text-decoration: none;
+      margin-right: 2px;
     }
     #sk-nav-logo img {
-      height: 40px; width: auto; object-fit: contain; display: block;
-      filter: drop-shadow(0 1px 10px rgba(0,0,0,0.9)) drop-shadow(0 0 4px rgba(0,0,0,0.8))
-              drop-shadow(0 0 12px rgba(113,255,0,0.20));
-      transition: filter .25s, transform .2s;
+      height: 28px; width: auto; object-fit: contain; display: block;
+      filter: brightness(1.04) drop-shadow(0 0 6px rgba(113,255,0,0.12));
+      transition: filter .22s ease, transform .2s ease;
     }
     #sk-nav-logo:hover img {
-      filter: drop-shadow(0 1px 14px rgba(0,0,0,0.95)) drop-shadow(0 0 18px rgba(113,255,0,0.35)) brightness(1.06);
+      filter: brightness(1.1) drop-shadow(0 0 14px rgba(113,255,0,0.38));
       transform: scale(1.04);
     }
-    #sk-nav-logo-text {
-      font-size: 20px; font-weight: 900; color: #fff; letter-spacing: .03em;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-    }
+    /* Suppress text fallback — logo image is the brand */
+    #sk-nav-logo-text { display: none !important; }
 
     /* ── Search ── */
     #sk-nav-search-wrap {
@@ -572,41 +570,41 @@
     }
 
     /* ── Action buttons ── */
-    #sk-nav-actions { display: flex; align-items: center; gap: 3px; flex-shrink: 0; margin-left: auto; }
+    #sk-nav-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; margin-left: auto; }
     .sk-nav-icon-btn {
       display: flex; align-items: center; justify-content: center;
-      width: 40px; height: 40px; border-radius: 50%;
+      width: 38px; height: 38px; border-radius: 50%;
       background: transparent; border: none; cursor: pointer;
-      font-size: 18px; text-decoration: none; color: inherit; position: relative;
+      font-size: 17px; text-decoration: none; color: inherit; position: relative;
       transition: background .15s;
     }
     .sk-nav-icon-btn:hover { background: rgba(255,255,255,0.08); }
 
-    /* ── Transparent-nav state: icons need a dark backdrop to read over any hero image ── */
+    /* ── Transparent-nav state: gradient veil handles readability — no per-icon dark circles ── */
     #sk-top-nav:not(.sk-scrolled) .sk-nav-icon-btn {
-      background: rgba(0,0,0,0.32);
-      /* text-shadow helps emoji render with contrast on bright backgrounds */
-      text-shadow: 0 1px 8px rgba(0,0,0,0.9), 0 0 3px rgba(0,0,0,0.7);
+      background: transparent;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.75), 0 0 2px rgba(0,0,0,0.6);
     }
     #sk-top-nav:not(.sk-scrolled) .sk-nav-icon-btn:hover {
-      background: rgba(0,0,0,0.55);
+      background: rgba(255,255,255,0.1);
+      text-shadow: none;
     }
     /* Search bar: more opaque when floating over hero */
     #sk-top-nav:not(.sk-scrolled) #sk-nav-search {
-      background: rgba(0,0,0,0.42);
-      border-color: rgba(255,255,255,0.22);
+      background: rgba(0,0,0,0.38);
+      border-color: rgba(255,255,255,0.2);
     }
     #sk-top-nav:not(.sk-scrolled) #sk-nav-search::placeholder {
-      color: rgba(255,255,255,0.48);
+      color: rgba(255,255,255,0.45);
     }
-    /* Cart pill and avatar: keep their own brand colours on transparent nav */
+    /* Cart pill and avatar on transparent nav */
     #sk-top-nav:not(.sk-scrolled) #sk-nav-cart {
-      background: rgba(0,0,0,0.35);
-      border-color: rgba(113,255,0,0.35);
+      background: rgba(0,0,0,0.28);
+      border-color: rgba(113,255,0,0.3);
     }
     #sk-top-nav:not(.sk-scrolled) #sk-nav-avatar {
-      background: rgba(0,0,0,0.4);
-      border-color: rgba(113,255,0,0.45);
+      background: rgba(0,0,0,0.3);
+      border-color: rgba(113,255,0,0.4);
     }
 
     /* ── Theme toggle specific ── */
@@ -645,29 +643,29 @@
 
     /* ── Cart pill ── */
     #sk-nav-cart {
-      display: flex; align-items: center; gap: 5px;
-      padding: 8px 14px; border-radius: 22px;
-      background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.2);
-      color: #71ff00; font-size: 12px; font-weight: 800;
-      text-decoration: none; transition: background .15s; flex-shrink: 0;
+      display: flex; align-items: center; gap: 4px;
+      padding: 7px 12px; border-radius: 20px;
+      background: rgba(113,255,0,0.08); border: 1px solid rgba(113,255,0,0.18);
+      color: #71ff00; font-size: 12px; font-weight: 700;
+      text-decoration: none; transition: background .15s, border-color .15s; flex-shrink: 0;
     }
-    #sk-nav-cart:hover { background: rgba(113,255,0,0.2); }
+    #sk-nav-cart:hover { background: rgba(113,255,0,0.16); border-color: rgba(113,255,0,0.32); }
     #sk-nav-cart-pip {
       background: #71ff00; color: #000; border-radius: 20px;
-      min-width: 16px; height: 16px; font-size: 9px; font-weight: 900;
-      display: flex; align-items: center; justify-content: center; padding: 0 3px;
+      min-width: 15px; height: 15px; font-size: 9px; font-weight: 900;
+      align-items: center; justify-content: center; padding: 0 3px;
       display: none;
     }
 
     /* ── Avatar ── */
     #sk-nav-avatar {
-      width: 34px; height: 34px; border-radius: 50%;
-      background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.28);
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(113,255,0,0.1); border: 1px solid rgba(113,255,0,0.24);
       display: flex; align-items: center; justify-content: center;
-      font-size: 14px; font-weight: 900; color: #71ff00;
-      text-decoration: none; flex-shrink: 0; transition: background .15s;
+      font-size: 13px; font-weight: 900; color: #71ff00;
+      text-decoration: none; flex-shrink: 0; transition: background .15s, border-color .15s;
     }
-    #sk-nav-avatar:hover { background: rgba(113,255,0,0.22); }
+    #sk-nav-avatar:hover { background: rgba(113,255,0,0.18); border-color: rgba(113,255,0,0.4); }
 
     /* ── Site menu drawer — layout handled by sokoni-drawers.css ── */
     /* #sk-menu-drawer is a .sk-drawer; header/close/backdrop/swipe/ESC
@@ -731,51 +729,49 @@
     body.light-mode .sk-theme-chip { border-color: rgba(0,0,0,0.12); background: rgba(0,0,0,0.04); color: rgba(0,0,0,0.5); }
     body.light-mode .sk-theme-chip.active { background: rgba(0,120,0,0.1); border-color: rgba(0,120,0,0.3); color: #1a8800; }
 
-    /* ── Mobile: two-row layout — logo + compact actions top, search below ── */
+    /* ── Tablet: hide cart text label, tighter spacing ── */
     @media (max-width: 768px) {
-      /* Hide cart text label on tablet, keep pill icon */
       #sk-nav-cart-label { display: none; }
+      #sk-top-nav { gap: 6px; padding: 0 16px; }
     }
+    /* ── Mobile: logo+actions row, search second row ── */
     @media (max-width: 600px) {
       #sk-top-nav {
-        height: auto; min-height: 52px; flex-wrap: wrap; padding: 8px 12px 8px; gap: 6px;
+        height: auto; min-height: 48px; flex-wrap: wrap; padding: 7px 12px 6px; gap: 4px;
         align-items: center;
       }
       #sk-nav-logo { order: 0; flex-shrink: 0; }
-      #sk-nav-logo img { height: 46px; }
-      #sk-nav-actions { order: 1; margin-left: auto; gap: 1px; }
-      /* Search drops to full-width second row */
+      #sk-nav-logo img { height: 26px; }
+      #sk-nav-actions { order: 1; margin-left: auto; gap: 0; }
+      /* Search second row — full width */
       #sk-nav-search-wrap {
-        order: 2; flex: 1 1 100%; max-width: 100%; margin: 0;
+        order: 2; flex: 1 1 100%; max-width: 100%; margin: 0; margin-top: 2px;
       }
-      #sk-nav-search { padding: 9px 14px 9px 36px; font-size: 13px; }
-      /* On mobile: show Notifications, Activity, Cart, Avatar, Menu
-         Hide: Messages (use bottom-nav/messages page), Theme (use menu overlay chips) */
-      #sk-nav-actions a[aria-label="Messages"],
+      #sk-nav-search { padding: 8px 14px 8px 36px; font-size: 13px; }
+      /* Mobile: hide Messages + Theme */
       #sk-msg-btn { display: none !important; }
       #sk-theme-btn { display: none !important; }
-      /* Activity visible on mobile per spec */
+      /* Activity visible on mobile */
       #sk-activity-btn { display: flex !important; }
-      /* Cart pill compact on mobile */
-      #sk-nav-cart { padding: 7px 10px; font-size: 11px; }
-      /* Avatar slightly smaller */
-      #sk-nav-avatar { width: 30px; height: 30px; font-size: 12px; }
-      /* Notification + menu icons */
-      .sk-nav-icon-btn { width: 36px; height: 36px; font-size: 17px; }
-      /* Two-row mobile nav (logo+icons row + search row) measures ~114px.
-         Use 120px to give a safe 6px clearance on all mobile devices. */
-      body { padding-top: max(60px, calc(60px + env(safe-area-inset-top, 0px))) !important; }
-      body.sk-has-search { padding-top: max(120px, calc(120px + env(safe-area-inset-top, 0px))) !important; }
+      /* Cart pill: compact */
+      #sk-nav-cart { padding: 6px 10px; font-size: 11px; }
+      /* Avatar */
+      #sk-nav-avatar { width: 28px; height: 28px; font-size: 12px; }
+      /* Icon buttons */
+      .sk-nav-icon-btn { width: 34px; height: 34px; font-size: 16px; }
+      /* Body padding: row1 ~48px + row2 search ~40px + gaps ~6px = ~94px */
+      body { padding-top: max(52px, calc(52px + env(safe-area-inset-top, 0px))) !important; }
+      body.sk-has-search { padding-top: max(106px, calc(106px + env(safe-area-inset-top, 0px))) !important; }
     }
-    /* ── Very small phones ── */
+    /* ── Very small phones (320–380px) ── */
     @media (max-width: 380px) {
-      #sk-top-nav { padding: 7px 10px 6px; }
-      .sk-nav-icon-btn { width: 32px; height: 32px; font-size: 15px; }
-      #sk-nav-cart { padding: 6px 8px; font-size: 10px; }
-      #sk-nav-logo img { height: 40px; }
-      #sk-nav-avatar { width: 28px; height: 28px; font-size: 11px; }
-      body { padding-top: max(55px, calc(55px + env(safe-area-inset-top, 0px))) !important; }
-      body.sk-has-search { padding-top: max(110px, calc(110px + env(safe-area-inset-top, 0px))) !important; }
+      #sk-top-nav { padding: 6px 10px 5px; }
+      .sk-nav-icon-btn { width: 30px; height: 30px; font-size: 15px; }
+      #sk-nav-cart { padding: 5px 8px; font-size: 10px; }
+      #sk-nav-logo img { height: 24px; }
+      #sk-nav-avatar { width: 26px; height: 26px; font-size: 11px; }
+      body { padding-top: max(48px, calc(48px + env(safe-area-inset-top, 0px))) !important; }
+      body.sk-has-search { padding-top: max(100px, calc(100px + env(safe-area-inset-top, 0px))) !important; }
     }
 
     /* ── Global responsive table overflow (applies to all pages) ── */
@@ -848,10 +844,9 @@
     const themeIcon = themeMode === 'light' ? '☀️' : themeMode === 'auto' ? '⚙️' : '🌙';
 
     nav.innerHTML =
-      /* Logo */
+      /* Logo — image only; text fallback suppressed via CSS */
       '<a href="/" id="sk-nav-logo" aria-label="SOKONI Home">' +
-        '<img src="assets/Sokoni Logo.png" alt="" style="height:34px;width:auto;flex-shrink:0">' +
-        '<span id="sk-nav-logo-text">SOKO<em style="font-style:normal;color:#71ff00">NI</em></span>' +
+        '<img src="assets/Sokoni Logo.png" alt="SOKONI">' +
       '</a>' +
 
       /* Search */

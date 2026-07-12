@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI SPOTLIGHT ENGINE  v1.0
    Auto-rotates featured products, sellers & stories on the home page.
    Boosted/paid items are weighted to appear more frequently.

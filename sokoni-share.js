@@ -1,4 +1,4 @@
-/* SOKONI Share — WhatsApp / Copy / Twitter / Native share sheet */
+﻿/* SOKONI Share — WhatsApp / Copy / Twitter / Native share sheet */
 (function () {
   'use strict';
 

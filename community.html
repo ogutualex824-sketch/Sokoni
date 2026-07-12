@@ -11,8 +11,8 @@
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
   <meta name="twitter:card" content="summary">
   <link rel="canonical" href="https://mysokoni.co.ke/community">
-  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
-  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -735,6 +735,7 @@ const DEMO_GROUPS = [
 let _ccFilter = 'all';
 let _myGroups = [];
 let _fsGroups = [];  /* groups created by any user, from Firestore */
+let _fsGroupsUnsub = null;
 
 try { _myGroups = JSON.parse(localStorage.getItem('ccMyGroups')||'[]'); } catch(e){}
 
@@ -828,7 +829,7 @@ async function _initFsGroups() {
     const { collection, query, orderBy, limit, onSnapshot } = await import(FS_URL);
     /* Single orderBy — no composite index needed; filter client-side if needed */
     const q = query(collection(db, 'communityGroups'), orderBy('createdAt', 'desc'), limit(100));
-    onSnapshot(q, snap => {
+    _fsGroupsUnsub = onSnapshot(q, snap => {
       _fsGroups = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
       renderCCGroups();
     }, () => {});
@@ -837,6 +838,7 @@ async function _initFsGroups() {
 
 renderCCGroups();
 _initFsGroups();
+window.addEventListener('beforeunload', () => { if (_fsGroupsUnsub) _fsGroupsUnsub(); });
 </script>
 <!-- ══════════════════════════════════════════════════════
      EVENTS SECTION

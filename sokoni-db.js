@@ -1,8 +1,8 @@
 ﻿/* ================================================================
-   SOKONI â€” Firestore Data Layer  (sokoni-db.js)
+   SOKONI — Firestore Data Layer  (sokoni-db.js)
    Shared real-time helpers for applications, providers,
    bookings, rides, GPS tracking and orders.
-   Import as a module â€” exposes window.SokoniDB for inline scripts.
+   Import as a module — exposes window.SokoniDB for inline scripts.
 ================================================================ */
 import { db, auth } from './firebase.js';
 import {
@@ -12,22 +12,22 @@ import {
 
 const _log = window.SokoniLogger || { log:()=>{}, warn:()=>{}, error:()=>{} };
 
-/* Helper â€” returns the current authenticated user's UID.
+/* Helper — returns the current authenticated user's UID.
    Prefers auth.currentUser (JWT-verified). Falls back to localStorage
    ONLY as a same-tick fallback before Firebase Auth initialises. */
 function _uid() {
   if (auth.currentUser?.uid) return auth.currentUser.uid;
-  /* Minimal localStorage fallback â€” only used for non-privileged metadata */
+  /* Minimal localStorage fallback — only used for non-privileged metadata */
   try {
     return JSON.parse(localStorage.getItem('sokoniUser') || 'null')?.uid ?? null;
   } catch { return null; }
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   WRITE THROTTLE â€” prevents flooding Firestore with duplicate writes
+/* ══════════════════════════════════════════════════════════════
+   WRITE THROTTLE — prevents flooding Firestore with duplicate writes
    keyed by (collection, docId or operation name).
    Minimum gap between identical writes: 2 seconds.
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+══════════════════════════════════════════════════════════════ */
 const _writeThrottle = new Map();
 function _throttleKey(col, id) { return `${col}::${id}`; }
 function _canWrite(col, id, gapMs = 2000) {
@@ -44,10 +44,10 @@ function _canWrite(col, id, gapMs = 2000) {
   return true;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   IDEMPOTENCY KEY STORE  â€” prevents duplicate order/review creation
+/* ══════════════════════════════════════════════════════════════
+   IDEMPOTENCY KEY STORE  — prevents duplicate order/review creation
    on network retry or double-click.
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+══════════════════════════════════════════════════════════════ */
 const _idemKeys = new Set();
 function _idemGuard(key) {
   if (_idemKeys.has(key)) return false;
@@ -58,9 +58,9 @@ function _idemGuard(key) {
 
 const SokoniDB = {
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      APPLICATIONS  (providers, drivers, sellers)
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveApplication(app) {
     const id = app.id || ('APP-' + Date.now());
@@ -84,9 +84,9 @@ const SokoniDB = {
     });
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      PROVIDERS
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveProvider(profile) {
     const id = (profile.phone || profile.id || Date.now())
@@ -117,9 +117,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      BOOKINGS
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveBooking(booking) {
     const normalizedPhone = booking.clientPhone
@@ -167,9 +167,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     PROVIDERS â€” listen for all registered providers
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  /* ════════════════════════════════════════
+     PROVIDERS — listen for all registered providers
+  ════════════════════════════════════════ */
   listenProviders(callback, limitN = 50) {
     const q = query(collection(db, 'providers'), orderBy('updatedAt', 'desc'), limit(limitN));
     return onSnapshot(q,
@@ -178,9 +178,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      RIDES
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveRide(ride) {
     if (!ride?.ref) throw new Error('Ride reference missing');
@@ -203,9 +203,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      PACKAGES / DELIVERIES
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async savePackage(pkg) {
     if (!pkg?.ref) throw new Error('Package reference missing');
@@ -215,11 +215,11 @@ const SokoniDB = {
     return pkg.ref;
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     DRIVER GPS  â€” real-time location
+  /* ════════════════════════════════════════
+     DRIVER GPS  — real-time location
      Document keyed by sanitized driverId; the uid field is validated
      by Firestore rules so only the authenticated driver can write.
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   _gpsWatchId: null,
 
@@ -278,9 +278,9 @@ const SokoniDB = {
     }
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      ORDERS  (marketplace)
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveOrder(order) {
     await setDoc(doc(db, 'orders', order.id), {
@@ -325,9 +325,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      REVIEWS  (platform / seller / product / provider)
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveReview(review) {
     const id = review.id || ('REV-' + Date.now());
@@ -345,18 +345,18 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      UNBOXING REVIEWS  (community photo wall)
-     Photos are base64 â€” too large for Firestore (1 MB doc limit).
+     Photos are base64 — too large for Firestore (1 MB doc limit).
      Firestore stores text metadata + emoji placeholder only.
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveUnboxingReview(review) {
     const id = review.id || ('UBR-' + Date.now());
     const { photos, ...meta } = review;
     await setDoc(doc(db, 'unboxingReviews', id), {
       ...meta, id,
-      photoEmoji: (photos || []).find(p => !p.startsWith('data:')) || meta.photoEmoji || 'ðŸ“¦',
+      photoEmoji: (photos || []).find(p => !p.startsWith('data:')) || meta.photoEmoji || '📦',
       uid: _uid(), createdAt: serverTimestamp()
     }, { merge: true });
     return id;
@@ -370,11 +370,11 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      FOLLOWS  (sellers + providers)
      Firestore: follows/{uid}--{type}--{entityId}
-     Counter:   followerCounts/{type}--{entityId}  â†’ { count }
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+     Counter:   followerCounts/{type}--{entityId}  → { count }
+  ════════════════════════════════════════ */
 
   _followDocId(type, entityId) {
     const uid = _uid() || 'guest';
@@ -447,11 +447,11 @@ const SokoniDB = {
     try { return JSON.parse(localStorage.getItem('sokoniFollowing') || '{}'); } catch(e) { return {}; }
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     NOTIFICATIONS  (admin â†’ user alerts)
+  /* ════════════════════════════════════════
+     NOTIFICATIONS  (admin → user alerts)
      Firestore: notifications/{id}
      Fields: targetUid ('broadcast' or uid), type, icon, heading, sub, link, createdAt
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   listenNotifications(uid, callback) {
     if (!uid) { callback([]); return () => {}; }
@@ -478,9 +478,9 @@ const SokoniDB = {
     await setDoc(doc(db, 'notifications', fsId), { read: true }, { merge: true });
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      REFERRALS  (cross-device referral tracking)
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveReferral(referral) {
     const id = referral.id || ('REF-' + Date.now());
@@ -504,9 +504,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      PUBLIC PRODUCTS CATALOGUE
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveProduct(product) {
     if (!product || !product.id) return;
@@ -551,11 +551,11 @@ const SokoniDB = {
     }, { merge: true });
   },
 
-  /* â•â• SELLER BROADCASTS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ══ SELLER BROADCASTS ══════════════════════════════════════
      sellerBroadcasts/{sellerUid}/broadcasts/{docId}
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ══════════════════════════════════════════════════════════ */
   async saveSellerBroadcast(sellerName, payload) {
-    /* Key by seller name â€” matches the key buyers use in sokoniFollowing */
+    /* Key by seller name — matches the key buyers use in sokoniFollowing */
     const safeKey  = (sellerName || 'unknown').trim();
     const docId    = 'broadcast_' + Date.now();
     const uid      = auth.currentUser?.uid || null;
@@ -581,15 +581,15 @@ const SokoniDB = {
     return () => unsubs.forEach(u => u());
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      CURRENT USER UID  (public helper)
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
   currentUid() { return _uid(); },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     RIDE DRIVERS  â€” online/offline status + GPS
+  /* ════════════════════════════════════════
+     RIDE DRIVERS  — online/offline status + GPS
      Collection: rideDrivers/{sanitised-driverId}
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async setDriverOnline(driverId, isOnline, vehicleType, lat, lng, extra) {
     const id = String(driverId || _uid() || 'unknown').replace(/\W/g, '_');
@@ -623,13 +623,13 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      RIDE REQUESTS
      Collection: rideRequests/{ref}
      Status flow:
-       searching â†’ driver_assigned â†’ driver_accepted â†’
-       driver_arrived â†’ in_progress â†’ completed | cancelled
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+       searching → driver_assigned → driver_accepted →
+       driver_arrived → in_progress → completed | cancelled
+  ════════════════════════════════════════ */
 
   async saveRideRequest(req) {
     if (!req?.ref) throw new Error('Ride request ref missing');
@@ -678,12 +678,12 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      PACKAGE REQUESTS
      Collection: packageRequests/{ref}
      Status flow:
-       pending â†’ driver_assigned â†’ picked_up â†’ in_transit â†’ delivered | cancelled
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+       pending → driver_assigned → picked_up → in_transit → delivered | cancelled
+  ════════════════════════════════════════ */
 
   async savePackageRequest(pkg) {
     if (!pkg?.ref) throw new Error('Package ref missing');
@@ -734,10 +734,10 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      DRIVER RATINGS
      Collection: driverRatings/{rideOrDeliveryRef}
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveDriverRating(ref, driverId, rating, comment, ratingType) {
     const safeId = String(driverId || 'unknown').replace(/\W/g, '_');
@@ -773,10 +773,10 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      ORDER EVENTS  (immutable audit trail)
      Subcollection: orderEvents/{orderId}/events/{autoId}
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveOrderEvent(orderId, event) {
     await addDoc(collection(db, 'orderEvents', orderId, 'events'), {
@@ -797,9 +797,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      SELLER ORDERS  (incoming + active)
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   listenSellerOrders(sellerUid, callback, statusFilter) {
     let q;
@@ -823,9 +823,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-     ADMIN â€” ALL ORDERS + DELIVERIES
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  /* ════════════════════════════════════════
+     ADMIN — ALL ORDERS + DELIVERIES
+  ════════════════════════════════════════ */
 
   listenAllOrders(callback, statusFilter, limitN) {
     let _q;
@@ -857,9 +857,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      DISPUTES
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveDispute(dispute) {
     const id = dispute.id || ('DSP-' + Date.now().toString(36).toUpperCase());
@@ -886,9 +886,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      ESCROW RECORDS  (escrow/{orderId})
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   async saveEscrow(orderId, data) {
     await setDoc(doc(db, 'escrow', orderId), {
@@ -915,9 +915,9 @@ const SokoniDB = {
     );
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      DRIVER EARNINGS  (from completed orders)
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   listenDriverEarnings(driverUid, callback) {
     if (!driverUid) { callback({ today: 0, week: 0, month: 0, total: 0, trips: 0 }); return () => {}; }
@@ -945,9 +945,9 @@ const SokoniDB = {
     }, err => _log.warn('[SokoniDB] driverEarnings:', err.message));
   },
 
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  /* ════════════════════════════════════════
      RIDER ACTIVE ORDERS  (new state machine statuses)
-  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+  ════════════════════════════════════════ */
 
   listenRiderActiveOrders(driverUid, callback) {
     if (!driverUid) { callback([]); return () => {}; }
@@ -976,7 +976,7 @@ const SokoniDB = {
     );
   },
 
-  /* â”€â”€ queryUsers({ phone }) â”€â”€
+  /* ── queryUsers({ phone }) ──
      Look up registered users by phone number.
      Used by POS to find a customer's UID for push receipt delivery. */
   async queryUsers({ phone } = {}) {

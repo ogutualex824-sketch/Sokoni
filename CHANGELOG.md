@@ -1,4 +1,26 @@
-﻿## [2026-07-12] — Production Email Logo Rendering Fix
+﻿## [2026-07-12] — PWA Connectivity Detection Hardening (v43)
+
+### Summary
+Eliminated residual false-offline banner races after the v2.0 probe-based rewrite.
+
+**Root causes fixed:**
+1. `sokoni-ui.js` `_doProbe()` ignored the response object — any resolved promise returned `true`, including a SW-synthesised `503` fallback (if the `generate_204` bypass were ever removed). Now checks `r.type === 'opaque'` to distinguish a real no-cors network response from a synthetic one.
+2. `sokoni-ui.js` `_setBar(false)` cross-clears `#sk-offline-banner` (managed by `sokoni-offline.js`) when connectivity is confirmed. Prevents a stale secondary banner in the brief window before `#sk-offline-bar` is created.
+3. Initial probe delay reduced: 8 000 ms → 3 000 ms. Brings recovery time in line with actual SW-install latency (< 2 s) without the previous over-conservative wait.
+4. `sokoni-offline.js` exposes `SokoniOffline.hide()` on the public API for cross-system coordination.
+5. SW CACHE_VERSION bumped to `v43` (`sokoni-20260712-connectivity-fix-v43`) — ensures existing clients reload updated JS assets.
+
+### Files affected
+- **`sokoni-ui.js`** — `_doProbe()` response type check; `_setBar()` cross-clear; initial probe 8 s → 3 s
+- **`sokoni-offline.js`** — `hide` added to `window.SokoniOffline` public API
+- **`service-worker.js`** — CACHE_VERSION → `v43`
+
+### Security / breaking changes
+None. Client-side connectivity detection only.
+
+---
+
+## [2026-07-12] — Production Email Logo Rendering Fix
 
 ### Summary
 The SOKONI logo rendered **faded / washed out / partly invisible** in delivered production emails. Root cause was **not** the asset's size or a broken transparent PNG — it was **email clients destroying the alpha channel while downscaling it**.

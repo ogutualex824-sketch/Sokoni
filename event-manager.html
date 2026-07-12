@@ -425,7 +425,7 @@
   function renderEventList(containerId, events) {
     const el = document.getElementById(containerId);
     if (!el) return;
-    if (!events.length) { el.innerHTML = '<div class="empty">No events yet. <a href="#" onclick="showSection(\'create\',null)">Create your first event</a></div>'; return; }
+    if (!events.length) { el.innerHTML = '<div class="empty">No events yet. <a href="javascript:void(0)" onclick="showSection(\'create\',null)">Create your first event</a></div>'; return; }
     el.innerHTML = events.map(e => {
       const dateStr = e.startDate ? new Date(e.startDate).toLocaleDateString('en-KE', { day:'numeric', month:'short', year:'numeric' }) : '';
       return `<div class="event-row" onclick="openEditEvent('${esc(e.eventId)}')">

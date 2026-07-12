@@ -9,7 +9,7 @@
   <meta name="description" content="Manage your active deliveries, track riders, and view delivery analytics.">
   <script src="sokoni-permissions.js"></script>
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
   <style>
     .sd-page { padding: 24px 4% 100px; min-height: 100vh; }
 
@@ -157,6 +157,8 @@
   var _unsubFailed = null;
   var _activeDeliveries = [];
   var _miniMaps = {};
+  var _miniMapUnsubs = {};
+  window.addEventListener('beforeunload', function() { Object.values(_miniMapUnsubs).forEach(function(fn){ fn(); }); });
 
   /* ── Bootstrap ── */
   firebase.auth().onAuthStateChanged(function (user) {
@@ -248,8 +250,9 @@
     if (_miniMaps[mapId]) return;
     var riderId = d.riderId || d.assignedRiderId;
     if (!riderId) return;
-    /* Subscribe to rider GPS */
-    firebase.firestore().collection('rideDrivers').doc(riderId)
+    /* Subscribe to rider GPS — guard against stale listener for same map */
+    if (_miniMapUnsubs[mapId]) { _miniMapUnsubs[mapId](); delete _miniMapUnsubs[mapId]; }
+    _miniMapUnsubs[mapId] = firebase.firestore().collection('rideDrivers').doc(riderId)
       .onSnapshot(function (snap) {
         var riderData = snap.data() || {};
         if (!riderData.lat || !riderData.lng) return;

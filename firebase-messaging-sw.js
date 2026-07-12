@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    SOKONI — Firebase Cloud Messaging Service Worker
    This file MUST live at the root of the site (/firebase-messaging-sw.js)
 
@@ -32,8 +32,8 @@ messaging.onBackgroundMessage(payload => {
 
   const title = notification.title || data.title || "SOKONI";
   const body  = notification.body  || data.body  || "You have a new notification from Sokoni";
-  const icon  = notification.icon  || "/assets/Sokoni Logo.png";
-  const badge = "/assets/Sokoni Logo.png";
+  const icon  = notification.icon  || "/assets/logosokoni.png";
+  const badge = "/assets/logosokoni.png";
   const url   = data.url || data.click_action || "/index.html";
 
   /* Show OS notification */

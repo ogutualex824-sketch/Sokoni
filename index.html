@@ -31,7 +31,7 @@
   <link rel="preload" href="script.js" as="script">
 
   <!-- --- iOS Splash Screens --- -->
-  <link rel="apple-touch-startup-image" href="assets/Sokoni%20Logo.png">
+  <link rel="apple-touch-startup-image" href="assets/logosokoni.png">
   <meta name="apple-touch-fullscreen" content="yes">
 
   <!-- --- SEO --- -->
@@ -164,9 +164,7 @@
        shared-header.js (defer) wires auth state, search, and badge counts. -->
   <nav id="sk-top-nav" aria-label="SOKONI top navigation" role="navigation">
     <a href="index.html" id="sk-nav-logo" aria-label="SOKONI Home">
-      <img src="assets/Sokoni Logo.png" alt="SOKONI"
-           onerror="this.style.display='none';document.getElementById('sk-nav-logo-text').style.display='block'">
-      <span id="sk-nav-logo-text" style="display:none;">SOKONI</span>
+      <img src="assets/Sokoni Logo.png" alt="SOKONI">
     </a>
     <div id="sk-nav-search-wrap" role="search">
       <span id="sk-nav-search-icon" aria-hidden="true">🔍</span>
@@ -216,7 +214,7 @@
   <!-- GLASS HERO BANNER -->
   <!-- Negative margin pulls the hero behind the transparent floating nav.
        Extra padding-top inside ensures content clears the nav height. -->
-  <section class="glass-hero" style="margin-top:-64px;padding-top:calc(64px + 24px);box-sizing:border-box;">
+  <section class="glass-hero" style="margin-top:-58px;padding-top:calc(58px + 24px);box-sizing:border-box;">
     <div class="glass-hero-bg" style="position:absolute;inset:0;background:url('assets/backG1.jpeg') center/cover no-repeat;filter:brightness(0.82);transform:scale(1.04);transition:transform 8s ease;pointer-events:none;z-index:0;"></div>
     <div class="glass-hero-card">
       <p class="glass-hero-badge" style="display:inline-flex;align-items:center;gap:6px;"><span style="font-size:20px;line-height:1;flex-shrink:0;">🇰🇪</span> Kenya's #1 Marketplace</p>
@@ -2546,7 +2544,7 @@
 
       <!-- BRAND -->
       <div class="footer-brand">
-        <img loading="lazy" decoding="async" src="assets/Sokoni Logo.png" alt="Sokoni" class="footer-logo" width="120" height="40">
+        <img loading="lazy" decoding="async" src="assets/Sokoni Logo.png" alt="Sokoni" class="footer-logo" width="52" height="52">
         <p>Kenya's #1 marketplace — buy, sell and grow with Sokoni. Connecting buyers, sellers and service providers nationwide.</p>
         <div class="socials">
           <a href="https://facebook.com/SokoniKe" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
@@ -3622,6 +3620,12 @@ document.addEventListener('DOMContentLoaded',function(){
 
   const auth = window.firebaseAuth;
   const db   = window.firebaseDB;
+  let _indexPayUnsub = null;
+  let _indexOrdersUnsub = null;
+  window.addEventListener('beforeunload', () => {
+    if (_indexPayUnsub) _indexPayUnsub();
+    if (_indexOrdersUnsub) _indexOrdersUnsub();
+  });
 
   /* Only run for signed-in sellers */
   auth.onAuthStateChanged(async user => {
@@ -3649,7 +3653,7 @@ document.addEventListener('DOMContentLoaded',function(){
       limit(5)
     );
     let _firstPayLoad = true;
-    onSnapshot(qPay, snap => {
+    _indexPayUnsub = onSnapshot(qPay, snap => {
       if (_firstPayLoad) { _firstPayLoad = false; return; }
       snap.docChanges().forEach(change => {
         if (change.type !== 'added') return;
@@ -3668,7 +3672,7 @@ document.addEventListener('DOMContentLoaded',function(){
       limit(10)
     );
     let _firstOrderLoad = true;
-    onSnapshot(qOrders, snap => {
+    _indexOrdersUnsub = onSnapshot(qOrders, snap => {
       if (_firstOrderLoad) { _firstOrderLoad = false; return; }
       snap.docChanges().forEach(change => {
         if (change.type !== 'added') return;

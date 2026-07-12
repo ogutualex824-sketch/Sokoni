@@ -578,11 +578,12 @@
     function _closeSidebar() { document.getElementById("aosSidebar").classList.remove("open"); }
     document.addEventListener("DOMContentLoaded", function() {
       try {
-        firebase.firestore().collection("supportTickets").where("status","==","open")
+        var _aosTicketUnsub = firebase.firestore().collection("supportTickets").where("status","==","open")
           .onSnapshot(function(snap) {
             var b = document.getElementById("sidebarTicketBadge");
             if (b) { b.textContent = snap.size; b.hidden = snap.size === 0; }
           });
+        window.addEventListener('beforeunload', function() { if (_aosTicketUnsub) _aosTicketUnsub(); });
       } catch(e) {}
     });
   </script>

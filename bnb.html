@@ -9,8 +9,8 @@
   <meta property="og:title" content="SOKONI BnB — Book Hotels, BnBs & Rooms in Kenya">
   <meta property="og:description" content="Find verified BnBs, hotels and apartments across Kenya. Best rates on SOKONI.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
-  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
-  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="landlord.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -404,12 +404,14 @@ let _uid = null;
 onAuthStateChanged(auth, u => { _uid = u ? u.uid : null; });
 
 /* ── Load listings from Firestore and merge with localStorage ── */
+let _bnbUnsub = null;
 try {
-  onSnapshot(query(collection(db,'bnbListings'), orderBy('createdAt','desc')), snap => {
+  _bnbUnsub = onSnapshot(query(collection(db,'bnbListings'), orderBy('createdAt','desc')), snap => {
     const live = snap.docs.map(d=>({...d.data(),id:d.id}));
     if(live.length && typeof window._mergeBnBFirestoreListings === 'function') window._mergeBnBFirestoreListings(live);
   });
 } catch(e) {}
+window.addEventListener('beforeunload', () => { if (_bnbUnsub) _bnbUnsub(); });
 
 /* ── Save booking to Firestore after confirmed payment ── */
 window._saveBnBBookingFS = async function(bk) {

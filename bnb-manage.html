@@ -9,8 +9,8 @@
   <meta property="og:title" content="SOKONI — BnB Host Dashboard">
   <meta property="og:description" content="List and manage your BnB, hotel or apartment on SOKONI Kenya.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
-  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
-  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="landlord.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -550,11 +550,19 @@ window._updateBookingStatusFS = async function(id, status){
   try { await setDoc(doc(db,'bnbBookings',id), {status, updatedAt:serverTimestamp()}, {merge:true}); } catch(e){}
 };
 
+let _bnbListingsUnsub = null;
+let _bnbBookingsUnsub = null;
+window.addEventListener('beforeunload', () => {
+  if (_bnbListingsUnsub) _bnbListingsUnsub();
+  if (_bnbBookingsUnsub) _bnbBookingsUnsub();
+});
+
 /* ── Load host's listings from Firestore ── */
 function loadFSListings(){
   if(!_uid) return;
+  if (_bnbListingsUnsub) { _bnbListingsUnsub(); _bnbListingsUnsub = null; }
   try {
-    onSnapshot(
+    _bnbListingsUnsub = onSnapshot(
       query(collection(db,'bnbListings'), where('hostUid','==',_uid), orderBy('createdAt','desc'), limit(100)),
       snap => {
         if(snap.empty) return;
@@ -572,8 +580,9 @@ function loadFSListings(){
 /* ── Load bookings for host's listings ── */
 function loadFSBookings(){
   if(!_uid) return;
+  if (_bnbBookingsUnsub) { _bnbBookingsUnsub(); _bnbBookingsUnsub = null; }
   try {
-    onSnapshot(
+    _bnbBookingsUnsub = onSnapshot(
       query(collection(db,'bnbBookings'), where('hostUid','==',_uid), orderBy('createdAt','desc'), limit(200)),
       snap => {
         if(snap.empty) return;

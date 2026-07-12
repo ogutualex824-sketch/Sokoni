@@ -13,6 +13,13 @@
   let _db, _user, _fns, _claims;
   let _unsubs = []; // cleanup handles for live listeners
 
+  /* ── Poll / retry / cache state ── */
+  let _pollTimer      = null;   // setTimeout handle for the refresh loop
+  let _pollFailures   = 0;      // consecutive cycles where Firestore was unreachable
+  let _fsUnreachable  = false;  // set by checkHealth(); drives exponential back-off
+  let _reportCache    = null;   // last rendered generateReport() HTML
+  let _reportCacheTime= 0;      // Date.now() when the cache was written
+
   const BASE_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   async function _fs() {
@@ -74,12 +81,13 @@
 
   async function loadActiveUsers() {
     try {
-      const { collection, query, where, getDocs, Timestamp } = await _fs();
+      // getCountFromServer: 1 aggregation read regardless of matching-doc count
+      const { collection, query, where, getCountFromServer, Timestamp } = await _fs();
       const cutoff = Timestamp.fromMillis(Date.now() - 30 * 60 * 1000);
       const q = query(collection(_db, "users"), where("lastSeen", ">=", cutoff));
-      const snap = await getDocs(q);
+      const snap = await getCountFromServer(q);
       _setCard("card-active-users", {
-        value: snap.size,
+        value: snap.data().count,
         subtext: "Seen in the last 30 minutes",
         primary: true,
       });
@@ -90,11 +98,13 @@
 
   async function loadOrdersToday() {
     try {
-      const { collection, query, where, getDocs, Timestamp } = await _fs();
+      const { collection, query, where, getDocs, limit, Timestamp } = await _fs();
       const today = new Date(); today.setHours(0,0,0,0);
+      // limit(1000): reasonable daily-orders cap; prevents runaway reads on busy days
       const q = query(
         collection(_db, "orders"),
-        where("createdAt", ">=", Timestamp.fromDate(today))
+        where("createdAt", ">=", Timestamp.fromDate(today)),
+        limit(1000)
       );
       const snap = await getDocs(q);
       let revenue = 0;
@@ -116,13 +126,15 @@
 
   async function loadActiveDeliveries() {
     try {
-      const { collection, query, where, getDocs } = await _fs();
+      // getCountFromServer: 1 aggregation read — no document payload transferred
+      const { collection, query, where, getCountFromServer } = await _fs();
       const q = query(collection(_db, "deliveries"), where("status", "in", ["assigned","in_transit","picked_up"]));
-      const snap = await getDocs(q);
+      const snap = await getCountFromServer(q);
+      const count = snap.data().count;
       _setCard("card-deliveries", {
-        value: snap.size,
+        value: count,
         subtext: "In-progress deliveries",
-        primary: snap.size > 0,
+        primary: count > 0,
       });
     } catch (e) {
       _setCard("card-deliveries", { value: "—", subtext: "Could not load" });
@@ -131,13 +143,15 @@
 
   async function loadActiveRides() {
     try {
-      const { collection, query, where, getDocs } = await _fs();
+      // getCountFromServer: 1 aggregation read — no document payload transferred
+      const { collection, query, where, getCountFromServer } = await _fs();
       const q = query(collection(_db, "rides"), where("status", "in", ["matched","in_progress","accepted"]));
-      const snap = await getDocs(q);
+      const snap = await getCountFromServer(q);
+      const count = snap.data().count;
       _setCard("card-rides", {
-        value: snap.size,
+        value: count,
         subtext: "Active ride sessions",
-        primary: snap.size > 0,
+        primary: count > 0,
       });
     } catch (e) {
       _setCard("card-rides", { value: "—", subtext: "Could not load" });
@@ -146,13 +160,15 @@
 
   async function loadPendingApplications() {
     try {
-      const { collection, query, where, getDocs } = await _fs();
+      // getCountFromServer: 1 aggregation read — no document payload transferred
+      const { collection, query, where, getCountFromServer } = await _fs();
       const q = query(collection(_db, "applications"), where("status", "==", "pending"));
-      const snap = await getDocs(q);
+      const snap = await getCountFromServer(q);
+      const count = snap.data().count;
       _setCard("card-pending", {
-        value: snap.size,
+        value: count,
         subtext: "Awaiting admin review",
-        warning: snap.size > 5,
+        warning: count > 5,
       });
     } catch (e) {
       _setCard("card-pending", { value: "—", subtext: "Could not load" });
@@ -161,10 +177,14 @@
 
   async function loadOpenFlags() {
     try {
-      const { collection, query, where, getDocs } = await _fs();
-      const q = query(collection(_db, "flags"), where("status", "==", "open"));
-      const snap = await getDocs(q);
-      const count = snap.size;
+      const { collection, query, where, getDocs, getCountFromServer, limit } = await _fs();
+      // Parallel: exact count (1 aggregation read) + first 20 docs for the table (20 reads)
+      // Previously: one unbounded getDocs that could download thousands of documents
+      const [countSnap, docsSnap] = await Promise.all([
+        getCountFromServer(query(collection(_db, "flags"), where("status", "==", "open"))),
+        getDocs(query(collection(_db, "flags"), where("status", "==", "open"), limit(20))),
+      ]);
+      const count = countSnap.data().count;
       _setCard("card-flags", {
         value: count,
         subtext: "Pending content review",
@@ -173,10 +193,10 @@
 
       // Populate flags table
       const tbody = document.getElementById("flags-table");
-      if (snap.empty) {
+      if (docsSnap.empty) {
         tbody.innerHTML = '<tr><td colspan="3" class="no-data">No open flags</td></tr>';
       } else {
-        tbody.innerHTML = snap.docs.slice(0,20).map(d => {
+        tbody.innerHTML = docsSnap.docs.map(d => {
           const f = d.data();
           return `<tr>
             <td>${_esc(f.type||f.contentType||"—")}</td>
@@ -194,10 +214,14 @@
 
   async function loadOpenDisputes() {
     try {
-      const { collection, query, where, getDocs } = await _fs();
-      const q = query(collection(_db, "disputes"), where("status", "==", "open"));
-      const snap = await getDocs(q);
-      const count = snap.size;
+      const { collection, query, where, getDocs, getCountFromServer, limit } = await _fs();
+      // Parallel: exact count (1 aggregation read) + first 20 docs for the table (20 reads)
+      // Previously: one unbounded getDocs that could download thousands of documents
+      const [countSnap, docsSnap] = await Promise.all([
+        getCountFromServer(query(collection(_db, "disputes"), where("status", "==", "open"))),
+        getDocs(query(collection(_db, "disputes"), where("status", "==", "open"), limit(20))),
+      ]);
+      const count = countSnap.data().count;
       _setCard("card-disputes", {
         value: count,
         subtext: "Unresolved disputes",
@@ -205,10 +229,10 @@
       });
 
       const tbody = document.getElementById("disputes-table");
-      if (snap.empty) {
+      if (docsSnap.empty) {
         tbody.innerHTML = '<tr><td colspan="3" class="no-data">No open disputes</td></tr>';
       } else {
-        tbody.innerHTML = snap.docs.slice(0,20).map(d => {
+        tbody.innerHTML = docsSnap.docs.map(d => {
           const dis = d.data();
           return `<tr>
             <td style="font-family:monospace;font-size:10px">${d.id.slice(0,8)}…</td>
@@ -290,14 +314,16 @@
 
   async function loadRevenueChart() {
     try {
-      const { collection, query, where, getDocs, Timestamp } = await _fs();
+      const { collection, query, where, getDocs, limit, Timestamp } = await _fs();
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
       sevenDaysAgo.setHours(0,0,0,0);
 
+      // limit(2000): caps 7-day revenue read; chart stays useful even at high volumes
       const q = query(
         collection(_db, "orders"),
-        where("createdAt", ">=", Timestamp.fromDate(sevenDaysAgo))
+        where("createdAt", ">=", Timestamp.fromDate(sevenDaysAgo)),
+        limit(2000)
       );
       const snap = await getDocs(q);
 
@@ -385,13 +411,14 @@
       _setHealth("h-auth", auth && auth.currentUser ? "ok" : "warn", auth && auth.currentUser ? "Online" : "No user");
     } catch { _setHealth("h-auth", "err", "Error"); }
 
-    // Firestore ping
+    // Firestore ping — also drives exponential back-off in the polling loop
     try {
       const { collection, getDocs, limit, query } = await _fs();
       const q = query(collection(_db, "products"), limit(1));
       await getDocs(q);
       _setHealth("h-db", "ok", "Reachable");
-    } catch { _setHealth("h-db", "err", "Unreachable"); }
+      _fsUnreachable = false;
+    } catch { _setHealth("h-db", "err", "Unreachable"); _fsUnreachable = true; }
 
     // FCM
     const hasFCM = "Notification" in window && "serviceWorker" in navigator;
@@ -439,13 +466,23 @@
 
   async function generateReport() {
     const el = document.getElementById("health-report");
+
+    // ── 60-second in-memory cache ─────────────────────────────────────────────
+    // If the admin clicks "Generate Report" multiple times in quick succession,
+    // return the cached HTML instead of firing 11 Firestore reads every click.
+    if (_reportCache && (Date.now() - _reportCacheTime) < 60_000) {
+      const secsLeft = Math.ceil((60_000 - (Date.now() - _reportCacheTime)) / 1000);
+      el.innerHTML = _reportCache +
+        `<div style="color:var(--muted);font-size:10px;margin-top:6px">Cached — auto-refreshes in ${secsLeft}s</div>`;
+      return;
+    }
+
     el.innerHTML = "<p style='color:var(--muted)'>Generating report…</p>";
 
     try {
-      const { collection, query, where, getDocs, orderBy, limit, Timestamp } = await _fs();
-
-      const today = new Date(); today.setHours(0,0,0,0);
-      const todayTs = Timestamp.fromDate(today);
+      // getCountFromServer costs 1 read per query regardless of matching-doc count.
+      // Orders still uses getDocs so we can sum revenue from the last 500 orders.
+      const { collection, query, where, getDocs, getCountFromServer, orderBy, limit } = await _fs();
 
       const [
         usersSnap, sellersSnap, productsSnap,
@@ -453,22 +490,27 @@
         disputesSnap, deliveriesSnap, ridesSnap,
         providersSnap, verificationSnap
       ] = await Promise.allSettled([
-        // limit(500) added — these are sampled counts; exact totals require server-side aggregation
-        getDocs(query(collection(_db, "users"),    limit(500))),
-        getDocs(query(collection(_db, "sellers"),  limit(500))),
-        getDocs(query(collection(_db, "products"), limit(500))),
+        // Exact counts via aggregation (1 read each — no document bytes transferred)
+        getCountFromServer(query(collection(_db, "users"))),
+        getCountFromServer(query(collection(_db, "sellers"))),
+        getCountFromServer(query(collection(_db, "products"))),
+        // Orders: getDocs needed for revenue sum; bounded to 500
         getDocs(query(collection(_db, "orders"), orderBy("createdAt","desc"), limit(500))),
-        getDocs(query(collection(_db, "applications"), where("status","==","pending"))),
-        getDocs(query(collection(_db, "flags"), where("status","==","open"))),
-        getDocs(query(collection(_db, "disputes"), where("status","==","open"))),
-        getDocs(query(collection(_db, "deliveries"), where("status","in",["assigned","in_transit"]))),
-        getDocs(query(collection(_db, "rides"), where("status","in",["matched","in_progress"]))),
-        getDocs(query(collection(_db, "providers"), where("status","==","active"))),
-        getDocs(query(collection(_db, "verificationRequests"), where("status","==","pending"))),
+        getCountFromServer(query(collection(_db, "applications"), where("status","==","pending"))),
+        getCountFromServer(query(collection(_db, "flags"),         where("status","==","open"))),
+        getCountFromServer(query(collection(_db, "disputes"),      where("status","==","open"))),
+        getCountFromServer(query(collection(_db, "deliveries"),    where("status","in",["assigned","in_transit"]))),
+        getCountFromServer(query(collection(_db, "rides"),         where("status","in",["matched","in_progress"]))),
+        getCountFromServer(query(collection(_db, "providers"),     where("status","==","active"))),
+        getCountFromServer(query(collection(_db, "verificationRequests"), where("status","==","pending"))),
       ]);
 
-      const v = (r) => r.status === "fulfilled" ? r.value.size : "?";
-      const vd = (r) => r.status === "fulfilled" ? r.value : null;
+      // v() handles both AggregateQuerySnapshot (getCountFromServer) and QuerySnapshot (getDocs)
+      const v = (r) => {
+        if (r.status !== "fulfilled") return "?";
+        return typeof r.value.data === "function" ? r.value.data().count : r.value.size;
+      };
+      const vd = (r) => (r.status === "fulfilled" && r.value.docs) ? r.value : null;
 
       let totalRevenue = 0;
       const ordersDoc = vd(ordersSnap);
@@ -486,10 +528,10 @@
 
           <div style="margin-bottom:20px">
             <span style="color:var(--green)">━━ USERS & ACCOUNTS ━━</span><br>
-            Registered users (≤500)  : <strong>${v(usersSnap)}</strong><br>
-            Active sellers (≤500)    : <strong>${v(sellersSnap)}</strong><br>
-            Active providers         : <strong>${v(providersSnap)}</strong><br>
-            Products listed (≤500)   : <strong>${v(productsSnap)}</strong><br>
+            Registered users (exact) : <strong>${v(usersSnap)}</strong><br>
+            Active sellers (exact)   : <strong>${v(sellersSnap)}</strong><br>
+            Active providers (exact) : <strong>${v(providersSnap)}</strong><br>
+            Products listed (exact)  : <strong>${v(productsSnap)}</strong><br>
           </div>
 
           <div style="margin-bottom:20px">
@@ -538,6 +580,9 @@
           </div>
         </div>
       `;
+      // Store in 60-second cache so repeat clicks cost zero Firestore reads
+      _reportCache = el.innerHTML;
+      _reportCacheTime = Date.now();
     } catch (e) {
       el.innerHTML = `<p style="color:var(--red)">Error generating report: ${_esc(e.message)}</p>`;
     }
@@ -686,8 +731,41 @@
 
     await refresh();
 
-    // Auto-refresh every 90 seconds
-    setInterval(refresh, 90_000);
+    // ── Smart polling loop ────────────────────────────────────────────────────
+    // Replaces setInterval(refresh, 90s) with a visibility-aware, back-off-aware loop.
+    //
+    // Behaviour:
+    //   • Tab hidden  → skip the refresh, reschedule at 90s (reads zero Firestore)
+    //   • Tab focused → cancel pending timer, refresh immediately
+    //   • Firestore unreachable (checkHealth sets _fsUnreachable) → back off:
+    //       2s → 4s → 8s → 16s → 32s → 60s (capped); resets to 90s on recovery
+    async function _scheduledRefresh() {
+      if (document.hidden) {
+        // Tab is backgrounded — skip this cycle entirely, no Firestore reads
+        _pollTimer = setTimeout(_scheduledRefresh, 90_000);
+        return;
+      }
+      await refresh(); // checkHealth() inside refresh() updates _fsUnreachable
+      let delay;
+      if (_fsUnreachable) {
+        _pollFailures = Math.min(_pollFailures + 1, 6); // cap exponent at 6 → max 64s
+        delay = Math.min(2000 * Math.pow(2, _pollFailures - 1), 60_000);
+      } else {
+        _pollFailures = 0;
+        delay = 90_000;
+      }
+      _pollTimer = setTimeout(_scheduledRefresh, delay);
+    }
+
+    _pollTimer = setTimeout(_scheduledRefresh, 90_000); // first auto-refresh after 90s
+
+    // Resume with an immediate refresh when the admin tabs back in
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        clearTimeout(_pollTimer);
+        _pollTimer = setTimeout(_scheduledRefresh, 0); // fire on next tick
+      }
+    });
   }
 
   /* ══════════════════════════════════════════════════════════════

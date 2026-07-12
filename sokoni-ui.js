@@ -696,9 +696,16 @@
       var t1 = setTimeout(function() { c1.abort(); }, 4000);
       return fetch('https://www.gstatic.com/generate_204', {
         mode: 'no-cors', cache: 'no-store', signal: c1.signal,
-      }).then(function() {
+      }).then(function(r) {
         clearTimeout(t1);
-        return true;                       /* reached the network → online */
+        /* Defense-in-depth: a real no-cors network response always has
+           r.type === 'opaque'. A SW-synthesised fallback response has
+           r.type === 'default' (status 503). Checking the type means a
+           synthetic response cannot be mistaken for genuine connectivity
+           even if the SKIP_CACHE_PATTERNS bypass is ever removed.
+           Note: opaque responses always have r.ok === false (status 0),
+           so we cannot use r.ok alone here. */
+        return r.type === 'opaque' || r.ok;
       }).catch(function() {
         clearTimeout(t1);
         /* gstatic unreachable. We deliberately do NOT fall back to an own-origin
@@ -755,6 +762,17 @@
       /* Remove any duplicate banner left by older sw-register.js code */
       var legacy = document.getElementById('sokoniOfflineBanner');
       if (legacy) legacy.remove();
+      /* When going online: cross-clear the secondary banner managed by
+         sokoni-offline.js (#sk-offline-banner). That module defers to
+         #sk-offline-bar when we exist, but may have shown its banner
+         during the brief window before this element was created. */
+      if (!visible) {
+        var altBanner = document.getElementById('sk-offline-banner');
+        if (altBanner) altBanner.style.transform = 'translateY(-100%)';
+        if (window.SokoniOffline && typeof window.SokoniOffline.hide === 'function') {
+          window.SokoniOffline.hide();
+        }
+      }
     }
 
     /* ── Dismiss (×) — actually works now ──────────────────────────────────
@@ -784,8 +802,10 @@
       _probe();
     });
 
-    /* First probe shortly after boot (lets the SW finish installing first). */
-    setTimeout(_probe, 8000);
+    /* First probe shortly after boot. 3 s gives the SW time to claim the page
+       (install + activate typically complete in < 2 s) while avoiding the
+       8 s false-offline window the previous value caused on mobile. */
+    setTimeout(_probe, 3000);
   }
 
   /* ─────────────────────────────────────────────────────────────────────────

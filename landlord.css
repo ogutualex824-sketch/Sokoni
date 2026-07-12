@@ -30,7 +30,7 @@
     border-bottom: 1px solid rgba(255,255,255,0.07);
 }
 
-.ll-logo{ width: 130px; height: auto; }
+.ll-logo{ height: 44px; width: auto; }
 
 .ll-nav-title{
     font-size: 16px;
@@ -60,7 +60,7 @@
 .ll-layout{
     display: grid;
     grid-template-columns: 220px 1fr;
-    min-height: calc(100vh - 64px);
+    min-height: calc(100vh - 58px);
 }
 
 .ll-sidebar{
@@ -71,8 +71,8 @@
     flex-direction: column;
     gap: 4px;
     position: sticky;
-    top: 64px;
-    height: calc(100vh - 64px);
+    top: 58px;
+    height: calc(100vh - 58px);
     overflow-y: auto;
 }
 
@@ -1237,7 +1237,7 @@
     /* Horizontal scrollable tab bar — sticky below topnav */
     .ll-sidebar{
         position: sticky;
-        top: 64px;
+        top: 58px;
         z-index: 500;
         height: auto;
         flex-direction: row;
@@ -1287,7 +1287,7 @@
     .rent-row{ grid-template-columns: 1fr; }
     /* Hide verbose nav links on small phones — keep only back arrow */
     .ll-nav-actions .ll-nav-link:not(:last-child){ display: none; }
-    .ll-logo{ width: 90px; }
+    .ll-logo{ height: 36px; width: auto; }
     .ll-nav-title{ font-size: 13px; }
     .ll-section-header{ flex-direction: column; align-items: flex-start; }
 }

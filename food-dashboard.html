@@ -7,7 +7,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Restaurant Dashboard — SOKONI Food</title>
-<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#22c55e">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -642,9 +642,10 @@ let _uid = null;
 onAuthStateChanged(auth, u => { _uid = u ? u.uid : null; });
 
 /* ── Live order feed for this restaurant ── */
+let _fdOrdersUnsub = null;
 const rid = new URLSearchParams(window.location.search).get('id') || 'jambo-burgers';
 try {
-  onSnapshot(
+  _fdOrdersUnsub = onSnapshot(
     query(collection(db,'foodOrders'), where('restaurantId','==',rid), orderBy('placedAt','desc'), limit(100)),
     snap => {
       if (snap.empty) return;
@@ -664,6 +665,7 @@ try {
     }
   );
 } catch(e) { console.warn('[FoodDash] Firestore feed failed:', e); }
+window.addEventListener('beforeunload', () => { if (_fdOrdersUnsub) _fdOrdersUnsub(); });
 
 /* ── Update order status in Firestore ── */
 window._advOrderFS = async function(orderId, status) {

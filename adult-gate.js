@@ -1,4 +1,4 @@
-/* ==============================================
+﻿/* ==============================================
    SOKONI — 18+ AGE + ID VERIFICATION GATE
    Used on any page that has adult products.
    Step 1: Date of birth (18+ check)

@@ -14,7 +14,7 @@
 <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
 <meta property="og:site_name" content="SOKONI">
 <meta property="og:locale" content="en_KE">
-<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#39ff14">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -1433,7 +1433,7 @@ function scheduleBookingReminder(bk) {
   const ms = new Date(bk.date+'T'+(bk.time||'08:00')).getTime() - Date.now() - 3600000;
   if(ms > 0 && ms < 86400000*7 && 'Notification' in window) {
     Notification.requestPermission().then(p=>{
-      if(p==='granted') setTimeout(()=>new Notification('📅 SOKONI Reminder',{body:'Your '+bk.type+' with '+bk.provider+' starts in 1 hour!',icon:'/assets/Sokoni%20Logo.png'}), ms);
+      if(p==='granted') setTimeout(()=>new Notification('📅 SOKONI Reminder',{body:'Your '+bk.type+' with '+bk.provider+' starts in 1 hour!',icon:'/assets/Sokoni Logo.png'}), ms);
     });
   }
 }
@@ -1894,9 +1894,18 @@ onAuthStateChanged(auth, u => {
   if (_uid) loadUserData();
 });
 
+let _fhClassesUnsub = null;
+let _fhClubsUnsub = null;
+let _fhBookingsUnsub = null;
+window.addEventListener('beforeunload', () => {
+  if (_fhClassesUnsub) _fhClassesUnsub();
+  if (_fhClubsUnsub) _fhClubsUnsub();
+  if (_fhBookingsUnsub) _fhBookingsUnsub();
+});
+
 /* ── Real-time: fitness classes ── */
 try {
-  onSnapshot(query(collection(db,'fitness_classes'), orderBy('ts','desc'), limit(30)), snap => {
+  _fhClassesUnsub = onSnapshot(query(collection(db,'fitness_classes'), orderBy('ts','desc'), limit(30)), snap => {
     const live = snap.docs.map(d=>({id:d.id,...d.data()}));
     if(live.length){ window._firestoreClasses = live; if(typeof renderClasses==='function') renderClasses(); }
   });
@@ -1904,7 +1913,7 @@ try {
 
 /* ── Real-time: community clubs ── */
 try {
-  onSnapshot(query(collection(db,'fitness_clubs'), orderBy('ts','desc'), limit(20)), snap => {
+  _fhClubsUnsub = onSnapshot(query(collection(db,'fitness_clubs'), orderBy('ts','desc'), limit(20)), snap => {
     const live = snap.docs.map(d=>({id:d.id,...d.data()}));
     if(live.length){ window._firestoreClubs = live; if(typeof renderClubs==='function') renderClubs(); }
   });
@@ -1918,8 +1927,9 @@ function loadUserData() {
 
 function loadUserBookings() {
   if(!_uid) return;
+  if (_fhBookingsUnsub) { _fhBookingsUnsub(); _fhBookingsUnsub = null; }
   try {
-    onSnapshot(
+    _fhBookingsUnsub = onSnapshot(
       query(collection(db,'fitness_bookings'), where('uid','==',_uid), orderBy('date','asc'), limit(30)),
       snap => {
         const bks = snap.docs.map(d=>({id:d.id,...d.data()}));

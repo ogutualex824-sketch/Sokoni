@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#07070f">
 <meta name="color-scheme" content="dark">
 <title>Daily Operations — SOKONI SmartPOS 4.0</title>
-<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
 <script src="sokoni-config.js"></script>
 <style>
 /* ═══════════════════════════════════════════════════════
@@ -1035,14 +1035,18 @@ function showToast(msg,type=''){
 /* ── Format currency ── */
 function fmt(n){return 'KES '+Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:0,maximumFractionDigits:0})}
 
+let _posDailyUnsub = null;
+window.addEventListener('beforeunload', () => { if (_posDailyUnsub) _posDailyUnsub(); });
+
 /* ── Firebase data loading ── */
 function loadDailyData(){
   if(typeof firebase==='undefined'||!firebase.apps.length)return;
   const db=firebase.firestore();
   const today=new Date().toISOString().slice(0,10);
+  if (_posDailyUnsub) { _posDailyUnsub(); _posDailyUnsub = null; }
 
   /* Daily summary */
-  db.collection('posAnalytics').doc('daily_'+today)
+  _posDailyUnsub = db.collection('posAnalytics').doc('daily_'+today)
     .onSnapshot(snap=>{
       const d=snap.data()||{};
       const rev=d.totalRevenue||0;

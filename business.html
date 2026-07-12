@@ -11,8 +11,8 @@
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
   <meta property="og:site_name" content="SOKONI">
   <meta property="og:locale" content="en_KE">
-  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
-  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#71ff00">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -877,6 +877,9 @@ function renderSocial(social) {
   }).join('');
 }
 
+let _bizFollowerUnsub = null;
+window.addEventListener('beforeunload', () => { if (_bizFollowerUnsub) _bizFollowerUnsub(); });
+
 /* ── Track view ── */
 async function trackView() {
   if (_isOwner || !BIZ_ID) return;
@@ -900,7 +903,7 @@ async function loadFollowState() {
 
   /* live follower count */
   try {
-    onSnapshot(doc(_db, 'businesses', BIZ_ID), snap => {
+    _bizFollowerUnsub = onSnapshot(doc(_db, 'businesses', BIZ_ID), snap => {
       if (snap.exists()) {
         const cnt = snap.data().followerCount || 0;
         document.getElementById('bsFollowers').textContent = cnt.toLocaleString();

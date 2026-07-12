@@ -14,7 +14,7 @@
 <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
 <meta property="og:site_name" content="SOKONI">
 <meta property="og:locale" content="en_KE">
-<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#f59e0b">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -619,8 +619,12 @@ _initFsProviders();
   else if(['find','book','quotes','askhub','myjobs','register'].indexOf(h)>=0){setTimeout(function(){goToPanel(h);},200);}
 })();
 
+let _hsProvidersUnsub = null;
+window.addEventListener('beforeunload', () => { if (_hsProvidersUnsub) _hsProvidersUnsub(); });
+
 /* ── FIRESTORE LISTENER — live provider listings ── */
 async function _initFsProviders(){
+  if (_hsProvidersUnsub) { _hsProvidersUnsub(); _hsProvidersUnsub = null; }
   try{
     const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
     const {getFirestore,collection,query,where,orderBy,limit,onSnapshot}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
@@ -628,7 +632,7 @@ async function _initFsProviders(){
     const _a=getApps().find(a=>a.name==="hs-read")||initializeApp(_cfg,"hs-read");
     /* Single orderBy — no composite index needed; filter status client-side */
     const q=query(collection(getFirestore(_a),'homeServiceProviders'),orderBy('createdAt','desc'),limit(100));
-    onSnapshot(q,snap=>{
+    _hsProvidersUnsub = onSnapshot(q,snap=>{
       _fsProviders=snap.docs.map(d=>({_id:d.id,...d.data()})).filter(d=>d.registrationStatus==='approved'||d.registrationStatus==='active');
       filterProviders();
     },()=>{});

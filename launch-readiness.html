@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>Launch Readiness â€” SOKONI Admin</title>
-  <link rel="icon" href="assets/Sokoni Logo.png">
+  <title>Launch Readiness — SOKONI Admin</title>
+  <link rel="icon" href="assets/logosokoni.png">
   <script src="security.js"></script>
 <script src="shared-header.js"></script>
   <style>
@@ -29,7 +29,7 @@
       min-height:100vh; }
     a { color: inherit; text-decoration: none; }
 
-    /* â”€â”€ Nav â”€â”€ */
+    /* ── Nav ── */
     .lr-nav {
       background: rgba(8,8,8,0.95); border-bottom: 1px solid var(--border);
       padding: 14px 20px; display: flex; align-items: center; gap: 14px;
@@ -46,7 +46,7 @@
       font-size: 12px; font-weight: 700; font-family: inherit; transition: all .12s; }
     .lr-refresh-btn:hover { color: var(--txt); border-color: rgba(255,255,255,0.18); }
 
-    /* â”€â”€ Hero ring â”€â”€ */
+    /* ── Hero ring ── */
     .lr-hero {
       background: linear-gradient(160deg,#0d1a0d 0%,#050505 60%);
       border-bottom: 1px solid var(--border); padding: 36px 20px;
@@ -71,7 +71,7 @@
     .lr-stage-ready     { background: rgba(113,255,0,0.12);  color: #71ff00; border: 1px solid rgba(113,255,0,0.25); }
     .lr-hero-sub { font-size: 12px; color: var(--txt3); text-align: center; max-width: 420px; }
 
-    /* â”€â”€ Main grid â”€â”€ */
+    /* ── Main grid ── */
     .lr-main { max-width: 1100px; margin: 0 auto; padding: 28px 16px 60px; }
     .lr-section-title {
       font-size: 11px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase;
@@ -82,7 +82,7 @@
 
     .lr-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(300px,1fr)); gap: 12px; }
 
-    /* â”€â”€ Criterion card â”€â”€ */
+    /* ── Criterion card ── */
     .lr-card {
       background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
       padding: 18px; display: flex; flex-direction: column; gap: 12px; transition: border-color .12s;
@@ -106,7 +106,7 @@
     .lr-action { font-size: 11px; color: var(--txt3); line-height: 1.5; }
     .lr-action strong { color: var(--txt2); }
 
-    /* â”€â”€ Loading skeleton â”€â”€ */
+    /* ── Loading skeleton ── */
     @keyframes lr-shimmer {
       0%   { background-position: -400px 0; }
       100% { background-position:  400px 0; }
@@ -116,7 +116,7 @@
       background-size: 800px 100%; animation: lr-shimmer 1.4s infinite linear; border-radius: 8px;
     }
 
-    /* â”€â”€ Summary bar â”€â”€ */
+    /* ── Summary bar ── */
     .lr-summary {
       background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
       padding: 20px; display: grid;
@@ -128,7 +128,7 @@
     .lr-sum-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--txt2); }
     .lr-sum-sub   { font-size: 10px; color: var(--txt3); }
 
-    /* â”€â”€ Next actions panel â”€â”€ */
+    /* ── Next actions panel ── */
     .lr-actions-panel {
       background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
       padding: 20px; margin-top: 12px;
@@ -142,7 +142,7 @@
     .lr-action-text strong { color: var(--txt); }
     .lr-action-link { font-size: 11px; font-weight: 800; color: var(--green); display: inline-block; margin-top: 2px; }
 
-    /* â”€â”€ Auth gate â”€â”€ */
+    /* ── Auth gate ── */
     #lr-auth-gate {
       position: fixed; inset: 0; background: var(--bg); z-index: 200;
       display: flex; align-items: center; justify-content: center; padding: 24px;
@@ -166,7 +166,7 @@
     }
     .lr-auth-error { font-size: 11px; color: var(--red); margin-top: 8px; min-height: 16px; }
 
-    /* â”€â”€ Responsive â”€â”€ */
+    /* ── Responsive ── */
     @media (max-width: 600px) {
       .lr-grid { grid-template-columns: 1fr; }
       .lr-summary { grid-template-columns: 1fr 1fr; }
@@ -185,7 +185,7 @@
       onkeydown="if(event.key==='Enter')_lrAuth()" autocomplete="current-password">
     <button class="lr-auth-btn" onclick="_lrAuth()">View Dashboard</button>
     <div class="lr-auth-error" id="lr-auth-err"></div>
-    <div style="margin-top:16px;"><a href="admin.html" style="font-size:11px;color:rgba(255,255,255,0.3);">â† Back to Admin</a></div>
+    <div style="margin-top:16px;"><a href="admin.html" style="font-size:11px;color:rgba(255,255,255,0.3);">← Back to Admin</a></div>
   </div>
 </div>
 
@@ -194,10 +194,10 @@
 
   <nav class="lr-nav">
     <img src="assets/Sokoni Logo.png" class="lr-nav-logo" alt="SOKONI" onerror="this.style.display='none'">
-    <span class="lr-nav-title">ðŸš€ Launch Readiness Dashboard</span>
+    <span class="lr-nav-title">🚀 Launch Readiness Dashboard</span>
     <span class="lr-nav-badge">PRE-LAUNCH</span>
-    <button class="lr-refresh-btn" onclick="_lrLoad()" id="lr-refresh-btn">ðŸ”„ Refresh</button>
-    <a href="admin.html" class="lr-back">â† Admin</a>
+    <button class="lr-refresh-btn" onclick="_lrLoad()" id="lr-refresh-btn">🔄 Refresh</button>
+    <a href="admin.html" class="lr-back">← Admin</a>
   </nav>
 
   <!-- HERO RING -->
@@ -209,12 +209,12 @@
         <circle class="lr-ring-fill"  cx="70" cy="70" r="60" id="lr-ring-fill" stroke="#ef4444"/>
       </svg>
       <div class="lr-ring-center">
-        <span class="lr-ring-pct" id="lr-pct-label" style="color:#ef4444;">â€”</span>
+        <span class="lr-ring-pct" id="lr-pct-label" style="color:#ef4444;">—</span>
         <span class="lr-ring-sub">of target</span>
       </div>
     </div>
-    <span class="lr-stage-pill lr-stage-not-ready" id="lr-stage-pill">Loadingâ€¦</span>
-    <p class="lr-hero-sub" id="lr-hero-sub">Checking platform readiness against all soft launch criteriaâ€¦</p>
+    <span class="lr-stage-pill lr-stage-not-ready" id="lr-stage-pill">Loading…</span>
+    <p class="lr-hero-sub" id="lr-hero-sub">Checking platform readiness against all soft launch criteria…</p>
   </div>
 
   <div class="lr-main">
@@ -222,22 +222,22 @@
     <!-- SUMMARY BAR -->
     <div class="lr-summary" id="lr-summary">
       <div class="lr-sum-item">
-        <span class="lr-sum-val" id="sum-criteria-met" style="color:#71ff00;">â€”</span>
+        <span class="lr-sum-val" id="sum-criteria-met" style="color:#71ff00;">—</span>
         <span class="lr-sum-label">Criteria Met</span>
         <span class="lr-sum-sub">of 8 required</span>
       </div>
       <div class="lr-sum-item">
-        <span class="lr-sum-val" id="sum-sellers" style="color:#60a5fa;">â€”</span>
+        <span class="lr-sum-val" id="sum-sellers" style="color:#60a5fa;">—</span>
         <span class="lr-sum-label">Active Sellers</span>
         <span class="lr-sum-sub">target: 25</span>
       </div>
       <div class="lr-sum-item">
-        <span class="lr-sum-val" id="sum-listings">â€”</span>
+        <span class="lr-sum-val" id="sum-listings">—</span>
         <span class="lr-sum-label">Active Listings</span>
         <span class="lr-sum-sub">target: 500</span>
       </div>
       <div class="lr-sum-item">
-        <span class="lr-sum-val" id="sum-categories">â€”</span>
+        <span class="lr-sum-val" id="sum-categories">—</span>
         <span class="lr-sum-label">Ready Categories</span>
         <span class="lr-sum-sub">target: 6</span>
       </div>
@@ -267,9 +267,9 @@
     <!-- NEXT ACTIONS PANEL -->
     <div class="lr-section-title">Priority Actions</div>
     <div class="lr-actions-panel" id="lr-actions-panel">
-      <div class="lr-actions-title">ðŸŽ¯ What to do next</div>
+      <div class="lr-actions-title">🎯 What to do next</div>
       <div id="lr-actions-list">
-        <div style="color:rgba(255,255,255,.2);font-size:12px;padding:12px 0;">Loading recommendationsâ€¦</div>
+        <div style="color:rgba(255,255,255,.2);font-size:12px;padding:12px 0;">Loading recommendations…</div>
       </div>
     </div>
 
@@ -278,13 +278,13 @@
 
 <script type="module" src="firebase.js"></script>
 <script>
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   LAUNCH READINESS DASHBOARD â€” v1.0
+/* ═══════════════════════════════════════════════════════════
+   LAUNCH READINESS DASHBOARD — v1.0
    Reads live data from Firestore; calls getPlatformHealthScores
    CF when available. Falls back gracefully.
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════ */
 
-/* â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Auth ─────────────────────────────────────────────────── */
 var SESS_KEY = 'sokoniAdminSess';
 var SESS_TS  = 'sokoniAdminSessTs';
 var MAX_AGE  = 4 * 60 * 60 * 1000; /* 4 hours */
@@ -312,7 +312,7 @@ async function _lrAuth() {
     var hash    = await _sha256(pin);
     var stored  = localStorage.getItem('sokoniAdminPin') || localStorage.getItem('sokoniAdminPass');
     if (!stored) {
-      /* No PIN set â€” require Firebase admin claim */
+      /* No PIN set — require Firebase admin claim */
       var fbUser = window.firebaseAuth && window.firebaseAuth.currentUser;
       if (!fbUser) { err.textContent = 'Not signed in as admin.'; return; }
       var tok = await fbUser.getIdTokenResult(true);
@@ -322,7 +322,7 @@ async function _lrAuth() {
       _lrGrant();
       return;
     }
-    if (hash !== stored) { err.textContent = 'âŒ Wrong PIN.'; return; }
+    if (hash !== stored) { err.textContent = '❌ Wrong PIN.'; return; }
     /* Verify Firebase claim */
     var fbUser2 = window.firebaseAuth && window.firebaseAuth.currentUser;
     if (fbUser2) {
@@ -333,11 +333,11 @@ async function _lrAuth() {
         err.textContent = 'Firebase admin claim not found.';
       }
     } else {
-      /* Offline fallback â€” PIN matched, allow with warning */
+      /* Offline fallback — PIN matched, allow with warning */
       _lrGrant();
     }
   } catch(e) {
-    err.textContent = 'Verification error â€” check connection.';
+    err.textContent = 'Verification error — check connection.';
   }
 }
 
@@ -352,91 +352,91 @@ function _lrGrant() {
 /* Auto-unlock if already in an admin session */
 if (_lrCheckSession()) _lrGrant();
 
-/* â”€â”€ Criteria definition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Criteria definition ────────────────────────────────── */
 var CRITERIA = [
   {
-    id: 'sellers', icon: 'ðŸª', name: 'Verified Sellers',
+    id: 'sellers', icon: '🏪', name: 'Verified Sellers',
     desc: 'Merchants with verified stores and at least 20 products',
     target: 25, unit: 'sellers',
     action: 'Recruit from WhatsApp groups, Gikomba, and Facebook Marketplace. Offer 90-day zero commission.',
-    link: 'admin.html', linkLabel: 'â†’ Manage Sellers'
+    link: 'admin.html', linkLabel: '→ Manage Sellers'
   },
   {
-    id: 'listings', icon: 'ðŸ“¦', name: 'Active Listings',
+    id: 'listings', icon: '📦', name: 'Active Listings',
     desc: 'Products that are live, priced, and visible to buyers',
     target: 500, unit: 'listings',
     action: 'Each anchor seller should have 20+ products. Contact sellers with fewer than 20.',
-    link: 'admin.html', linkLabel: 'â†’ View Products'
+    link: 'admin.html', linkLabel: '→ View Products'
   },
   {
-    id: 'categories', icon: 'ðŸ—‚ï¸', name: 'Ready Categories',
+    id: 'categories', icon: '🗂️', name: 'Ready Categories',
     desc: 'Categories with at least 50 active listings',
     target: 6, unit: 'of 11',
     action: 'Priority categories: Electronics, Fashion, Phones, Beauty, Home & Kitchen, Groceries.',
-    link: 'docs/CATEGORY_LAUNCH_TARGETS.md', linkLabel: 'â†’ Category Targets'
+    link: 'docs/CATEGORY_LAUNCH_TARGETS.md', linkLabel: '→ Category Targets'
   },
   {
-    id: 'quality', icon: 'â­', name: 'Listing Quality Score',
-    desc: 'Average quality score across all active listings (0â€“100)',
+    id: 'quality', icon: '⭐', name: 'Listing Quality Score',
+    desc: 'Average quality score across all active listings (0–100)',
     target: 80, unit: '/ 100',
     action: 'Run the quality scanner and send sellers their specific improvement list.',
-    link: 'admin.html', linkLabel: 'â†’ Quality Scanner'
+    link: 'admin.html', linkLabel: '→ Quality Scanner'
   },
   {
-    id: 'payment', icon: 'ðŸ’³', name: 'Payment Success Rate',
+    id: 'payment', icon: '💳', name: 'Payment Success Rate',
     desc: 'Percentage of checkout attempts that complete successfully',
     target: 90, unit: '%',
     action: 'Verify M-Pesa STK push is working. Check IntaSend key in sokoni-config.js.',
-    link: 'payments.html', linkLabel: 'â†’ Payment Logs'
+    link: 'payments.html', linkLabel: '→ Payment Logs'
   },
   {
-    id: 'search', icon: 'ðŸ”', name: 'Search Zero-Result Rate',
+    id: 'search', icon: '🔍', name: 'Search Zero-Result Rate',
     desc: 'Percentage of searches that return no products (lower is better)',
     target: 10, unit: '%', lowerIsBetter: true,
     action: 'Identify top zero-result queries and recruit sellers who sell those products.',
-    link: 'admin.html', linkLabel: 'â†’ Search Insights'
+    link: 'admin.html', linkLabel: '→ Search Insights'
   },
   {
-    id: 'bugs', icon: 'ðŸ›', name: 'Critical Bugs',
+    id: 'bugs', icon: '🐛', name: 'Critical Bugs',
     desc: 'Open P0/critical bugs in the feedback system',
     target: 0, unit: 'open', lowerIsBetter: true,
     action: 'Fix all critical bugs before merchant onboarding begins.',
-    link: 'admin.html', linkLabel: 'â†’ Feedback Queue'
+    link: 'admin.html', linkLabel: '→ Feedback Queue'
   },
   {
-    id: 'health', icon: 'â¤ï¸', name: 'Platform Health Score',
+    id: 'health', icon: '❤️', name: 'Platform Health Score',
     desc: 'Composite platform health from the health scoring engine',
     target: 80, unit: '/ 100',
     action: 'Check the Platform Health dashboard for dimension-level breakdowns.',
-    link: 'platform-health.html', linkLabel: 'â†’ Health Dashboard'
+    link: 'platform-health.html', linkLabel: '→ Health Dashboard'
   }
 ];
 
-/* â”€â”€ Data loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Data loading ───────────────────────────────────────── */
 var _results = {};
 
 async function _lrLoad() {
   var btn = document.getElementById('lr-refresh-btn');
-  if (btn) { btn.textContent = 'â³ Loadingâ€¦'; btn.disabled = true; }
+  if (btn) { btn.textContent = '⏳ Loading…'; btn.disabled = true; }
 
   try {
     var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
     var db = window.firebaseDB;
     if (!db) throw new Error('Firestore not available');
 
-    /* â”€â”€ 1. Verified seller count â”€â”€ */
+    /* ── 1. Verified seller count ── */
     var sellerSnap = await fs.getCountFromServer(
       fs.query(fs.collection(db,'businesses'), fs.where('verified','==',true))
     ).catch(function(){ return null; });
     _results.sellers = sellerSnap ? sellerSnap.data().count : 0;
 
-    /* â”€â”€ 2. Active listing count â”€â”€ */
+    /* ── 2. Active listing count ── */
     var listingSnap = await fs.getCountFromServer(
       fs.query(fs.collection(db,'products'), fs.where('status','==','active'))
     ).catch(function(){ return null; });
     _results.listings = listingSnap ? listingSnap.data().count : 0;
 
-    /* â”€â”€ 3. Category distribution (sample-based) â”€â”€ */
+    /* ── 3. Category distribution (sample-based) ── */
     var catSnap = await fs.getDocs(
       fs.query(fs.collection(db,'products'), fs.where('status','==','active'),
         fs.orderBy('createdAt','desc'), fs.limit(500))
@@ -448,10 +448,10 @@ async function _lrLoad() {
     });
     _results.categories = Object.values(catCounts).filter(function(n){ return n >= 50; }).length;
 
-    /* â”€â”€ 4. Listing quality â€” from health CF or fallback â”€â”€ */
+    /* ── 4. Listing quality — from health CF or fallback ── */
     _results.quality = null; /* will try CF */
 
-    /* â”€â”€ 5â€“8. From getPlatformHealthScores CF â”€â”€ */
+    /* ── 5–8. From getPlatformHealthScores CF ── */
     try {
       var fn = window.firebaseFunctions && window.firebase
         ? window.firebase.functions().httpsCallable('getPlatformHealthScores')
@@ -470,10 +470,10 @@ async function _lrLoad() {
         _results.health  = hData.overall != null ? Math.round(hData.overall) : null;
       }
     } catch(cfErr) {
-      /* CF unavailable â€” show data we have */
+      /* CF unavailable — show data we have */
     }
 
-    /* â”€â”€ 6. Search zero-result rate â”€â”€ */
+    /* ── 6. Search zero-result rate ── */
     try {
       var searchSnap = await fs.getDocs(
         fs.query(fs.collection(db,'searchQueryLog'),
@@ -489,7 +489,7 @@ async function _lrLoad() {
       _results.search = total > 0 ? Math.round((zeroes/total)*100) : null;
     } catch(_) { _results.search = null; }
 
-    /* â”€â”€ 7. Critical bugs â”€â”€ */
+    /* ── 7. Critical bugs ── */
     var bugSnap = await fs.getDocs(
       fs.query(fs.collection(db,'feedback'),
         fs.where('type','==','bug'),
@@ -509,15 +509,15 @@ async function _lrLoad() {
     if (_results.search   === null) _results.search   = null;
 
   } catch(e) {
-    /* Complete fallback â€” show zeros */
+    /* Complete fallback — show zeros */
     _results = { sellers:0, listings:0, categories:0, quality:0, payment:null, search:null, bugs:0, health:null };
   }
 
   _lrRender();
-  if (btn) { btn.textContent = 'ðŸ”„ Refresh'; btn.disabled = false; }
+  if (btn) { btn.textContent = '🔄 Refresh'; btn.disabled = false; }
 }
 
-/* â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Render ─────────────────────────────────────────────── */
 function _lrRender() {
   var VALUES = {
     sellers:    _results.sellers    != null ? _results.sellers    : 0,
@@ -555,10 +555,10 @@ function _lrRender() {
     return 'lr-status-not-met';
   }
   function _statusLabel(pct) {
-    if (pct >= 100) return 'âœ… Met';
-    if (pct >= 75)  return 'ðŸ”µ Close';
-    if (pct >= 40)  return 'ðŸŸ¡ Building';
-    return 'ðŸ”´ Not Met';
+    if (pct >= 100) return '✅ Met';
+    if (pct >= 75)  return '🔵 Close';
+    if (pct >= 40)  return '🟡 Building';
+    return '🔴 Not Met';
   }
   function _barColor(pct) {
     if (pct >= 100) return '#71ff00';
@@ -587,7 +587,7 @@ function _lrRender() {
     var met = has && _met(c, val);
     if (met) metCount++;
     var valColor = met ? '#71ff00' : (p >= 75 ? '#60a5fa' : p >= 40 ? '#f59e0b' : '#ef4444');
-    var displayVal = has ? (c.id === 'search' ? val+'%' : String(val)) : 'â€”';
+    var displayVal = has ? (c.id === 'search' ? val+'%' : String(val)) : '—';
     return [
       '<div class="lr-card">',
         '<div class="lr-card-head">',
@@ -600,7 +600,7 @@ function _lrRender() {
         '<div class="lr-values">',
           '<span class="lr-val-current" style="color:'+valColor+'">'+displayVal+'</span>',
           '<span class="lr-val-target">'+
-            (c.lowerIsBetter ? 'target â‰¤ ' : 'target ')
+            (c.lowerIsBetter ? 'target ≤ ' : 'target ')
             +c.target+' '+c.unit+'</span>',
         '</div>',
         '<div class="lr-progress-track">',
@@ -637,16 +637,16 @@ function _lrRender() {
 
   var stage, stageClass, heroSub;
   if (overallPct >= 87) {
-    stage = 'ðŸš€ Ready for Merchant Onboarding'; stageClass = 'lr-stage-ready';
+    stage = '🚀 Ready for Merchant Onboarding'; stageClass = 'lr-stage-ready';
     heroSub = 'All critical criteria are met. Begin merchant onboarding and soft launch preparation.';
   } else if (overallPct >= 62) {
-    stage = 'ðŸ”µ Nearly Ready'; stageClass = 'lr-stage-nearly';
+    stage = '🔵 Nearly Ready'; stageClass = 'lr-stage-nearly';
     heroSub = 'Strong progress. Address the remaining criteria before merchant onboarding.';
   } else if (overallPct >= 37) {
-    stage = 'ðŸŸ¡ Building'; stageClass = 'lr-stage-building';
+    stage = '🟡 Building'; stageClass = 'lr-stage-building';
     heroSub = 'Platform is active but needs more sellers and listings before going public.';
   } else {
-    stage = 'ðŸ”´ Not Ready for Launch'; stageClass = 'lr-stage-not-ready';
+    stage = '🔴 Not Ready for Launch'; stageClass = 'lr-stage-not-ready';
     heroSub = 'Focus on recruiting anchor sellers and building category inventory.';
   }
   if (stageEl) { stageEl.textContent = stage; stageEl.className = 'lr-stage-pill '+stageClass; }
@@ -668,15 +668,15 @@ function _lrRender() {
       '<div class="lr-action-item">',
         '<div class="lr-action-num">'+(i+1)+'</div>',
         '<div class="lr-action-text">',
-          '<strong>'+c.name+'</strong> â€” currently '+
+          '<strong>'+c.name+'</strong> — currently '+
           (hasMap[c.id] ? String(val)+(c.id==='search'?'%':' '+c.unit) : 'unknown')+
-          ', need '+(c.lowerIsBetter?'â‰¤':'')+c.target+' '+c.unit+'.<br>'+
+          ', need '+(c.lowerIsBetter?'≤':'')+c.target+' '+c.unit+'.<br>'+
           c.action+'<br>',
           '<a class="lr-action-link" href="'+c.link+'">'+c.linkLabel+'</a>',
         '</div>',
       '</div>'
     ].join('');
-  }).join('') : '<div style="color:#71ff00;font-size:12px;font-weight:800;padding:12px 0;">ðŸŽ‰ All criteria are met! The platform is ready for soft launch.</div>';
+  }).join('') : '<div style="color:#71ff00;font-size:12px;font-weight:800;padding:12px 0;">🎉 All criteria are met! The platform is ready for soft launch.</div>';
 
   document.getElementById('lr-actions-list').innerHTML = actHtml;
 }

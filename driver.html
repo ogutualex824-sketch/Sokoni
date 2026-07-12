@@ -10,8 +10,8 @@
   <meta property="og:title" content="SOKONI — Driver Portal">
   <meta property="og:description" content="Track your rides, deliveries and earnings on SOKONI Driver Portal.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
-  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
-  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <script src="sokoni-permissions.js"></script>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -2698,10 +2698,13 @@ window.toggleOnline = async function() {
     }
 
     /* ── Dispatch subscription — listen for new dispatch offers ── */
+    var _driverDispatchUnsub = null;
+    window.addEventListener('beforeunload', function() { if (_driverDispatchUnsub) _driverDispatchUnsub(); });
     function _subscribeDispatch() {
       if (!_riderUid) return;
+      if (_driverDispatchUnsub) { _driverDispatchUnsub(); _driverDispatchUnsub = null; }
       /* Listen for dispatchQueue docs offering this rider */
-      firebase.firestore().collection('dispatchQueue')
+      _driverDispatchUnsub = firebase.firestore().collection('dispatchQueue')
         .where('status', '==', 'offered')
         .onSnapshot(function (snap) {
           snap.docChanges().forEach(function (change) {

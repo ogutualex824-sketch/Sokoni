@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOKONI Email Template Gallery</title>
+<style>
+  :root {
+    --bg:      #050505;
+    --surface: #0d0d12;
+    --border:  rgba(113,255,0,0.14);
+    --accent:  #71ff00;
+    --cyan:    #00d4ff;
+    --text:    rgba(255,255,255,0.85);
+    --muted:   rgba(255,255,255,0.45);
+    --dim:     rgba(255,255,255,0.22);
+    --card:    #0d1117;
+    --foot:    #07090f;
+    --red:     #ff4d6d;
+    --amber:   #ffb400;
+    --sb-w:    260px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;display:flex;min-height:100vh;}
+
+  /* Sidebar */
+  #sb{width:var(--sb-w);min-width:var(--sb-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;}
+  #sb-head{padding:20px 20px 14px;border-bottom:1px solid var(--border);}
+  #sb-head img{width:36px;height:36px;display:inline-block;vertical-align:middle;margin-right:10px;}
+  #sb-head span{font-size:16px;font-weight:900;letter-spacing:0.08em;color:#fff;}
+  #sb-head p{font-size:10px;color:var(--accent);letter-spacing:0.15em;text-transform:uppercase;margin-top:4px;padding-left:46px;}
+  .sb-group{padding:10px 0 4px 16px;font-size:9px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--dim);}
+  .sb-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;transition:background 0.15s;font-size:13px;color:var(--muted);border-left:3px solid transparent;}
+  .sb-item:hover{background:rgba(113,255,0,0.05);color:var(--text);}
+  .sb-item.active{background:rgba(113,255,0,0.08);border-left-color:var(--accent);color:var(--text);}
+  .sb-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0;}
+  .sb-badge{margin-left:auto;background:rgba(113,255,0,0.15);color:var(--accent);font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;}
+
+  /* Main content */
+  #main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+  #toolbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:16px;flex-shrink:0;}
+  #tpl-name{font-size:16px;font-weight:700;color:var(--text);}
+  #tpl-desc{font-size:12px;color:var(--muted);margin-left:auto;}
+  .view-toggle{display:flex;gap:2px;background:rgba(255,255,255,0.06);border-radius:8px;padding:3px;}
+  .view-btn{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all 0.15s;}
+  .view-btn.active{background:var(--accent);color:#050505;}
+
+  /* Preview pane */
+  #preview-pane{flex:1;overflow:auto;background:#111;display:flex;justify-content:center;padding:24px;}
+  #preview-frame{width:100%;max-width:680px;border:none;background:transparent;min-height:600px;}
+  #text-pane{display:none;flex:1;overflow:auto;padding:24px;}
+  #text-content{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;font-family:'Courier New',Courier,monospace;font-size:13px;color:var(--muted);line-height:1.7;white-space:pre-wrap;word-break:break-word;}
+
+  /* Gallery grid mode */
+  #gallery-pane{display:none;flex:1;overflow:auto;padding:24px;gap:20px;display:none;flex-wrap:wrap;align-content:flex-start;}
+  .gallery-card{width:280px;cursor:pointer;border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color 0.2s,transform 0.2s;}
+  .gallery-card:hover{border-color:var(--accent);transform:translateY(-2px);}
+  .gallery-thumb{width:100%;height:180px;overflow:hidden;position:relative;background:#0d1117;}
+  .gallery-thumb iframe{width:200%;height:300%;transform-origin:top left;transform:scale(0.5);pointer-events:none;border:none;}
+  .gallery-label{padding:10px 12px;font-size:12px;font-weight:600;color:var(--text);background:var(--surface);}
+  .gallery-from{font-size:10px;color:var(--muted);margin-top:2px;}
+</style>
+</head>
+<body>
+
+<!-- ░ SIDEBAR ░ -->
+<nav id="sb">
+  <div id="sb-head">
+    <img src="assets/logosokoni.png" alt="SOKONI">
+    <span>SOKONI</span>
+    <p>Email Template Gallery</p>
+  </div>
+
+  <div class="sb-group">Account</div>
+  <div class="sb-item active" data-tpl="welcome"         onclick="show(this)"><span class="sb-icon">👋</span>Welcome Email</div>
+  <div class="sb-item"        data-tpl="email-verify"    onclick="show(this)"><span class="sb-icon">✉️</span>Email Verification</div>
+  <div class="sb-item"        data-tpl="seller-approved" onclick="show(this)"><span class="sb-icon">🏪</span>Merchant Notification</div>
+
+  <div class="sb-group">Security</div>
+  <div class="sb-item"        data-tpl="password-reset"   onclick="show(this)"><span class="sb-icon">🔐</span>Password Reset</div>
+  <div class="sb-item"        data-tpl="login-alert"      onclick="show(this)"><span class="sb-icon">🔔</span>Security Alert</div>
+  <div class="sb-item"        data-tpl="suspicious-login" onclick="show(this)"><span class="sb-icon">⚠️</span>Suspicious Login</div>
+  <div class="sb-item"        data-tpl="2fa-code"         onclick="show(this)"><span class="sb-icon">🛡️</span>2FA Code</div>
+
+  <div class="sb-group">Orders</div>
+  <div class="sb-item"        data-tpl="order-confirmation" onclick="show(this)"><span class="sb-icon">📦</span>Order Confirmation</div>
+  <div class="sb-item"        data-tpl="order-shipped"      onclick="show(this)"><span class="sb-icon">🚚</span>Order Shipped</div>
+  <div class="sb-item"        data-tpl="order-delivered"    onclick="show(this)"><span class="sb-icon">✅</span>Order Delivered</div>
+
+  <div class="sb-group">Payments</div>
+  <div class="sb-item"        data-tpl="payment-success"     onclick="show(this)"><span class="sb-icon">💳</span>Payment / Receipt</div>
+  <div class="sb-item"        data-tpl="refund-issued"        onclick="show(this)"><span class="sb-icon">💸</span>Refund</div>
+  <div class="sb-item"        data-tpl="seller-payout"        onclick="show(this)"><span class="sb-icon">💰</span>Payout</div>
+  <div class="sb-item"        data-tpl="subscription-renewal" onclick="show(this)"><span class="sb-icon">🔄</span>Subscription</div>
+
+  <div class="sb-group">Services</div>
+  <div class="sb-item"        data-tpl="booking-confirmation"     onclick="show(this)"><span class="sb-icon">📅</span>Booking</div>
+  <div class="sb-item"        data-tpl="dispute-opened"           onclick="show(this)"><span class="sb-icon">⚖️</span>Dispute</div>
+  <div class="sb-item"        data-tpl="appointment-confirmation" onclick="show(this)"><span class="sb-icon">🏥</span>Provider Notification</div>
+
+  <div class="sb-group">More Templates</div>
+  <div class="sb-item"        data-tpl="driver-approved"        onclick="show(this)"><span class="sb-icon">🛵</span>Driver Approved</div>
+  <div class="sb-item"        data-tpl="ticket-purchase"        onclick="show(this)"><span class="sb-icon">🎟️</span>Ticket Purchase</div>
+  <div class="sb-item"        data-tpl="delivery-dispatched"    onclick="show(this)"><span class="sb-icon">📍</span>Delivery Dispatched</div>
+  <div class="sb-item"        data-tpl="fraud-alert"            onclick="show(this)"><span class="sb-icon">🚨</span>Fraud Alert</div>
+  <div class="sb-item"        data-tpl="price-drop"             onclick="show(this)"><span class="sb-icon">📉</span>Price Drop</div>
+  <div class="sb-item"        data-tpl="maintenance-notice"     onclick="show(this)"><span class="sb-icon">🔧</span>Maintenance Notice</div>
+</nav>
+
+<!-- ░ MAIN ░ -->
+<div id="main">
+  <div id="toolbar">
+    <span id="tpl-name">Welcome Email</span>
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-html"  onclick="setView('html')">HTML</button>
+      <button class="view-btn"        id="btn-text"  onclick="setView('text')">Plain Text</button>
+    </div>
+    <span id="tpl-desc">noreply@mysokoni.co.ke · category: account</span>
+  </div>
+
+  <div id="preview-pane">
+    <iframe id="preview-frame" sandbox="allow-same-origin" title="Email Preview"></iframe>
+  </div>
+  <div id="text-pane">
+    <pre id="text-content"></pre>
+  </div>
+</div>
+
+<script>
+/* ── Inline template engine (mirrors functions/email-templates.js) ── */
+const LOGO    = "assets/logosokoni.png";
+const BASE    = "https://mysokoni.co.ke";
+const SUPPORT = BASE + "/support.html";
+const PRIVACY = BASE + "/trust.html";
+const TERMS   = BASE + "/trust.html#terms";
+const UNSUB   = BASE + "/profile.html#email-preferences";
+const YEAR    = new Date().getFullYear();
+
+const COMPANY = {
+  legalName:    "Bravilex International Co. Limited",
+  operatedBy:   "Operated by Bravilex International Co. Limited",
+  postalAddress:"P.O. Box 114–50411",
+  town:         "Siaya",
+  country:      "Kenya",
+  supportEmail: "support@mysokoni.co.ke",
+  supportPhone: "+254 705 726 803",
+};
+
+function esc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function fmt(n){ return "KES "+Number(n||0).toLocaleString("en-KE"); }
+
+function base({ title, preheader="", body, cta="", ctaUrl="", ctaColor="#71ff00" }){
+  const ctaText = "#050505";
+  const ctaBlock = cta && ctaUrl ? `
+<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:8px 0 28px;">
+<a href="${esc(ctaUrl)}" style="background:${ctaColor};border-radius:12px;color:${ctaText};display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:900;letter-spacing:0.03em;line-height:48px;min-width:200px;padding:0 32px;text-align:center;text-decoration:none;">${esc(cta)}</a>
+</td></tr></table>` : "";
+  const postalAddr = `${COMPANY.postalAddress}, ${COMPANY.town}, ${COMPANY.country}`;
+
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>${esc(title)}</title>
+<style>
+body,table,td,a{-webkit-text-size-adjust:100%;}
+table,td{mso-table-lspace:0pt;mso-table-rspace:0pt;}
+img{border:0;height:auto;outline:none;text-decoration:none;}
+body{margin:0;padding:0;background-color:#050505;word-break:break-word;}
+@media screen and (max-width:599px){.eml-outer{width:100%!important;}.eml-hpad{padding:22px 18px 18px!important;}.eml-bpad{padding:24px 18px 12px!important;}.eml-fpad{padding:18px 18px 22px!important;}.eml-logo{width:64px!important;height:64px!important;}}
+</style></head>
+<body style="margin:0;padding:0;background-color:#050505;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#050505"><tr><td align="center" style="padding:32px 12px 48px;">
+<table class="eml-outer" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
+  <tr><td class="eml-hpad" bgcolor="#0d1117" style="border-radius:20px 20px 0 0;padding:30px 40px 22px;border-left:1px solid rgba(113,255,0,0.14);border-top:1px solid rgba(113,255,0,0.14);border-right:1px solid rgba(113,255,0,0.14);">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-bottom:14px;">
+      <img src="${LOGO}" width="80" height="80" class="eml-logo" alt="SOKONI — Kenya's Super Platform" style="width:80px;height:80px;display:block;margin:0 auto;">
+      <p style="margin:12px 0 3px;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:900;letter-spacing:0.1em;color:#ffffff;text-align:center;">SOKONI</p>
+      <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:rgba(113,255,0,0.75);text-align:center;">Kenya's Super Platform</p>
+    </td></tr>
+    <tr><td><div style="height:1px;background:linear-gradient(90deg,transparent,rgba(113,255,0,0.65) 35%,rgba(0,212,255,0.45) 65%,transparent);"></div></td></tr></table>
+  </td></tr>
+  <tr><td class="eml-bpad" bgcolor="#0d1117" style="padding:30px 40px 14px;border-left:1px solid rgba(113,255,0,0.14);border-right:1px solid rgba(113,255,0,0.14);font-family:Arial,Helvetica,sans-serif;">
+    ${body}${ctaBlock}
+  </td></tr>
+  <tr><td class="eml-fpad" bgcolor="#07090f" style="border-radius:0 0 20px 20px;padding:18px 40px 24px;border-left:1px solid rgba(113,255,0,0.08);border-bottom:1px solid rgba(113,255,0,0.08);border-right:1px solid rgba(113,255,0,0.08);">
+    <div style="height:1px;background:rgba(255,255,255,0.06);margin-bottom:16px;"></div>
+    <p style="margin:0 0 7px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:11px;">
+      <a href="${BASE}"    style="color:rgba(255,255,255,0.38);text-decoration:none;">Website</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      <a href="${SUPPORT}" style="color:rgba(255,255,255,0.38);text-decoration:none;">Help &amp; Support</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      <a href="${PRIVACY}" style="color:rgba(255,255,255,0.38);text-decoration:none;">Privacy Policy</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      <a href="${TERMS}"   style="color:rgba(255,255,255,0.38);text-decoration:none;">Terms of Service</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      <a href="${UNSUB}"   style="color:rgba(255,255,255,0.38);text-decoration:none;">Unsubscribe</a>
+    </p>
+    <p style="margin:0 0 5px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.22);">SOKONI &mdash; ${esc(COMPANY.operatedBy)}</p>
+    <p style="margin:0 0 5px;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.18);">
+      ${esc(postalAddr)}&nbsp;&nbsp;&middot;&nbsp;&nbsp;
+      <a href="mailto:${esc(COMPANY.supportEmail)}" style="color:rgba(255,255,255,0.25);text-decoration:none;">${esc(COMPANY.supportEmail)}</a>&nbsp;&nbsp;&middot;&nbsp;&nbsp;${esc(COMPANY.supportPhone)}
+    </p>
+    <p style="margin:0;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:rgba(255,255,255,0.13);">&copy; ${YEAR} SOKONI &middot; A product of ${esc(COMPANY.legalName)}. All rights reserved.</p>
+  </td></tr>
+</table></td></tr></table>
+</body></html>`;
+}
+
+function greeting(name){ return `<p style="margin:0 0 18px;font-size:16px;color:rgba(255,255,255,0.85);line-height:1.5;">Hi <strong>${esc(name||"there")}</strong>,</p>`; }
+function divider(){ return `<div style="height:1px;background:rgba(255,255,255,0.06);margin:20px 0;"></div>`; }
+function infoRow(label,value,hi){ return `<tr><td style="padding:7px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:rgba(255,255,255,0.4);">${esc(label)}</td><td style="padding:7px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:${hi?"#71ff00":"rgba(255,255,255,0.85)"};text-align:right;">${esc(value)}</td></tr>`; }
+function card(content){ return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:16px 18px;margin:0 0 20px;">${content}</div>`; }
+function badge(text,color="#71ff00"){ return `<span style="display:inline-block;background:${color}20;border:1px solid ${color}40;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;color:${color};">${esc(text)}</span>`; }
+function trackingSteps(steps,current){ return `<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">${steps.map((s,i)=>{const done=i<current,active=i===current,col=(done||active)?"#71ff00":"rgba(255,255,255,0.15)";return`<tr><td style="padding:6px 0;"><table cellpadding="0" cellspacing="0" border="0"><tr><td width="28" style="text-align:center;vertical-align:top;padding-top:2px;"><div style="width:20px;height:20px;border-radius:50%;background:${active?"#71ff00":done?"rgba(113,255,0,0.3)":"rgba(255,255,255,0.08)"};border:2px solid ${col};margin:0 auto;"></div>${i<steps.length-1?`<div style="width:2px;height:20px;background:${done?"rgba(113,255,0,0.3)":"rgba(255,255,255,0.06)"};margin:2px auto 0;"></div>`:""}</td><td style="padding-left:10px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${active?"#71ff00":done?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.3)"};font-weight:${active?"900":"400"};">${esc(s)}</td></tr></table></td></tr>`;}).join("")}</table>`; }
+
+/* ── Sample data & renderers for all 24 previewed templates ── */
+const TEMPLATES = {
+  "welcome": {
+    label:"Welcome Email", from:"noreply@mysokoni.co.ke", cat:"account",
+    desc:"Sent when a user creates an account",
+    render: ()=> base({ title:"Welcome to SOKONI", preheader:"Your account is ready.", cta:"Explore SOKONI", ctaUrl:BASE+"/index.html", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Welcome to <strong style="color:#71ff00;">SOKONI</strong> — Kenya's super platform. You can now shop, sell, book services, find property, hire professionals and much more.</p>
+      ${card(`<p style="margin:0 0 8px;font-size:10px;font-weight:700;letter-spacing:1px;color:rgba(255,255,255,0.3);">GET STARTED</p><table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Browse Marketplace","index.html")}${infoRow("Complete Your Profile","profile.html")}${infoRow("Set Up Your Store","seller.html")}</table>`)}
+    ` }),
+  },
+  "email-verify": {
+    label:"Email Verification", from:"security@mysokoni.co.ke", cat:"account",
+    desc:"Verification code sent after registration",
+    render: ()=> base({ title:"Verify your email", preheader:"Your code: 847293", cta:"Verify My Email", ctaUrl:BASE+"/verify?token=xxx", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Please verify your email address to activate your SOKONI account.</p>
+      <div style="text-align:center;margin:24px 0;"><div style="display:inline-block;background:rgba(113,255,0,0.08);border:2px solid rgba(113,255,0,0.3);border-radius:16px;padding:18px 32px;">
+        <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,0.35);text-transform:uppercase;">Verification Code</p>
+        <p style="margin:8px 0 0;font-size:32px;font-weight:900;letter-spacing:8px;color:#71ff00;">847293</p>
+      </div></div>
+      <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.3);text-align:center;">This code expires in 10 minutes. Do not share it with anyone.</p>
+    ` }),
+  },
+  "password-reset": {
+    label:"Password Reset", from:"security@mysokoni.co.ke", cat:"security",
+    desc:"Password reset link — expires in 1 hour",
+    render: ()=> base({ title:"Reset your password", preheader:"Click to reset your SOKONI password", cta:"Reset My Password", ctaUrl:BASE+"/reset?token=xxx", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">We received a request to reset your password. Click the button below to create a new password. This link expires in <strong>1 hour</strong>.</p>
+      <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.3);">If you didn't request this, you can safely ignore this email.</p>
+    ` }),
+  },
+  "seller-approved": {
+    label:"Merchant Notification", from:"vendors@mysokoni.co.ke", cat:"account",
+    desc:"Sent when a seller or merchant account is approved",
+    render: ()=> base({ title:"Seller Account Approved", preheader:"Congratulations! Your seller account is live.", cta:"Go to My Store", ctaUrl:BASE+"/seller.html", body:`
+      ${greeting("Wanjiru")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Congratulations! Your seller account on SOKONI has been approved. You can now list products and start selling to thousands of Kenyan customers.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Store Name","Wanjiru's Boutique")}${infoRow("Account Type","Verified Seller")}${infoRow("Commission Rate","8% per sale")}${infoRow("Status",badge("✅ Active"))}</table>`)}
+    ` }),
+  },
+  "login-alert": {
+    label:"Security Alert", from:"security@mysokoni.co.ke", cat:"security",
+    desc:"New sign-in notification",
+    render: ()=> base({ title:"New login detected", preheader:"New sign-in from Chrome on Windows", cta:"Secure My Account", ctaUrl:BASE+"/profile.html", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);">We detected a new sign-in to your SOKONI account.</p>
+      ${card(`<p style="margin:0 0 8px;font-size:10px;font-weight:700;letter-spacing:1px;color:rgba(255,255,255,0.3);">SIGN-IN DETAILS</p><table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Date & Time","12 Jul 2026, 09:42 AM")}${infoRow("Device","Chrome on Windows 11")}${infoRow("Location","Nairobi, Kenya")}${infoRow("IP Address","196.201.xxx.xxx")}</table>`)}
+      <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.45);">If this was not you, please change your password immediately and contact <a href="${SUPPORT}" style="color:#71ff00;">support</a>.</p>
+    ` }),
+  },
+  "suspicious-login": {
+    label:"Suspicious Login", from:"security@mysokoni.co.ke", cat:"security",
+    desc:"Blocked suspicious access attempt",
+    render: ()=> base({ title:"Suspicious Login Detected", ctaColor:"#ff4d6d", preheader:"We blocked a suspicious login attempt", cta:"Review My Account", ctaUrl:BASE+"/profile.html", body:`
+      ${greeting("Alex")}
+      <div style="background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.25);border-radius:12px;padding:14px 18px;margin:0 0 20px;"><p style="margin:0;font-size:14px;color:rgba(255,77,109,0.9);font-weight:700;">⚠ Suspicious Activity Detected</p></div>
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);">We detected an unusual login attempt and have blocked it for your safety.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Time","12 Jul 2026, 02:17 AM")}${infoRow("Location","Lagos, Nigeria")}${infoRow("Device","Unknown browser")}${infoRow("Status","Blocked")}</table>`)}
+      <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.45);">Please change your password immediately.</p>
+    ` }),
+  },
+  "2fa-code": {
+    label:"2FA Code", from:"security@mysokoni.co.ke", cat:"security",
+    desc:"Two-factor authentication one-time code",
+    render: ()=> base({ title:"Your 2FA code", preheader:"Your 2FA code: 591847", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);">Use this code to complete your sign-in:</p>
+      <div style="text-align:center;margin:24px 0;"><div style="display:inline-block;background:rgba(0,212,255,0.08);border:2px solid rgba(0,212,255,0.3);border-radius:16px;padding:16px 40px;">
+        <p style="margin:0;font-size:36px;font-weight:900;letter-spacing:10px;color:#00d4ff;">591847</p>
+      </div></div>
+      <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.3);text-align:center;">Expires in 5 minutes. Never share this code.</p>
+    ` }),
+  },
+  "order-confirmation": {
+    label:"Order Confirmation", from:"orders@mysokoni.co.ke", cat:"order",
+    desc:"Sent immediately after a purchase",
+    render: ()=> base({ title:"Order Confirmed", preheader:"Your order #ORD-8821 is confirmed!", cta:"Track My Order", ctaUrl:BASE+"/track.html?id=ORD-8821", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your order has been confirmed and is being prepared for dispatch. You'll receive a shipping notification soon.</p>
+      ${card(`<p style="margin:0 0 8px;font-size:10px;font-weight:700;letter-spacing:1px;color:rgba(255,255,255,0.3);">ORDER SUMMARY</p><table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Order ID","ORD-8821")}${infoRow("Items","Samsung Galaxy A55 × 1, Case × 2")}${infoRow("Total",fmt(48500),true)}${infoRow("Payment","M-Pesa")}${infoRow("Delivery","Westlands, Nairobi")}</table>`)}
+    ` }),
+  },
+  "order-shipped": {
+    label:"Order Shipped", from:"orders@mysokoni.co.ke", cat:"order",
+    desc:"Sent when the rider picks up the order",
+    render: ()=> base({ title:"Your order is on the way!", preheader:"Your order has been picked up", cta:"Track My Order", ctaUrl:BASE+"/track.html?id=ORD-8821", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Great news! Your order <strong>#ORD-8821</strong> has been picked up and is on the way.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Driver","James M.")}${infoRow("ETA","30–45 minutes",true)}${infoRow("Tracking","TRK-5590")}</table>`)}
+      ${trackingSteps(["Order Placed","Order Confirmed","Picked Up","On the Way","Delivered"],2)}
+    ` }),
+  },
+  "order-delivered": {
+    label:"Order Delivered", from:"orders@mysokoni.co.ke", cat:"order",
+    desc:"Delivery confirmation with review prompt",
+    render: ()=> base({ title:"Your order has been delivered!", preheader:"Order delivered — leave a review!", cta:"Leave a Review", ctaUrl:BASE+"/reviews.html?order=ORD-8821", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your order <strong>#ORD-8821</strong> has been delivered successfully! 🎉 We hope you love it.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Order","ORD-8821")}${infoRow("Delivered","12 Jul 2026, 11:32 AM",true)}${infoRow("Delivered By","James M.")}</table>`)}
+      <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.45);">Got an issue? <a href="${SUPPORT}" style="color:#71ff00;">Contact support</a> or <a href="${BASE}/dispute.html?order=ORD-8821" style="color:#71ff00;">open a dispute</a>.</p>
+    ` }),
+  },
+  "payment-success": {
+    label:"Payment / Receipt", from:"payments@mysokoni.co.ke", cat:"payment",
+    desc:"Payment confirmation and receipt",
+    render: ()=> base({ title:"Payment Received", preheader:"KES 48,500 payment confirmed", cta:"View Receipt", ctaUrl:BASE+"/invoice.html?ref=TXN-9920", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your payment has been received and confirmed.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Amount",fmt(48500),true)}${infoRow("Reference","TXN-9920")}${infoRow("Method","M-Pesa")}${infoRow("Date","12 Jul 2026, 09:44 AM")}</table>`)}
+    ` }),
+  },
+  "refund-issued": {
+    label:"Refund", from:"payments@mysokoni.co.ke", cat:"payment",
+    desc:"Refund processed for a cancelled or disputed order",
+    render: ()=> base({ title:"Refund Processed", preheader:"Your refund of KES 48,500 is being processed", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your refund has been approved and is being processed. It will reflect in your original payment method within 3–5 business days.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Order ID","ORD-8821")}${infoRow("Refund Amount",fmt(48500),true)}${infoRow("Method","M-Pesa")}${infoRow("Processing Time","3–5 business days")}</table>`)}
+    ` }),
+  },
+  "seller-payout": {
+    label:"Payout", from:"payments@mysokoni.co.ke", cat:"payment",
+    desc:"Seller earnings payout via M-Pesa",
+    render: ()=> base({ title:"Payout Processed", preheader:"KES 12,400 sent to your M-Pesa", body:`
+      ${greeting("Wanjiru")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your earnings payout has been processed and sent to your M-Pesa account.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Payout Amount",fmt(12400),true)}${infoRow("Sent To","0712 ***803")}${infoRow("M-Pesa Ref","RCT82810293")}${infoRow("Date","12 Jul 2026")}</table>`)}
+      <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.45);">View your full earnings history in <a href="${BASE}/seller.html#earnings" style="color:#71ff00;">Seller Dashboard</a>.</p>
+    ` }),
+  },
+  "subscription-renewal": {
+    label:"Subscription", from:"billing@mysokoni.co.ke", cat:"payment",
+    desc:"Subscription renewal confirmation",
+    render: ()=> base({ title:"Subscription Renewed", preheader:"Your SOKONI Pro subscription has been renewed", cta:"Manage Subscription", ctaUrl:BASE+"/subscriptions.html", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your SOKONI subscription has been successfully renewed. Thank you for continuing with us!</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Plan","SOKONI Pro")}${infoRow("Amount",fmt(1500),true)}${infoRow("Next Renewal","12 Aug 2026")}</table>`)}
+    ` }),
+  },
+  "booking-confirmation": {
+    label:"Booking", from:"property@mysokoni.co.ke", cat:"order",
+    desc:"Booking confirmation for property, venue, or service",
+    render: ()=> base({ title:"Booking Confirmed", preheader:"Your booking is confirmed — reference #BK-4401", cta:"View Booking", ctaUrl:BASE+"/profile.html#bookings", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your booking has been confirmed. Please keep this reference for check-in.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Booking","Mombasa Beach Cottage",true)}${infoRow("Check In","14 Jul 2026")}${infoRow("Check Out","17 Jul 2026")}${infoRow("Booking Ref","BK-4401")}${infoRow("Total",fmt(18000))}</table>`)}
+    ` }),
+  },
+  "dispute-opened": {
+    label:"Dispute", from:"disputes@mysokoni.co.ke", cat:"order",
+    desc:"Dispute opened — sent to both parties",
+    render: ()=> base({ title:"Dispute Opened", preheader:"Your dispute DSP-0082 has been opened", cta:"View Dispute", ctaUrl:BASE+"/dispute.html?id=DSP-0082", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your dispute has been received. Our team will review it within 24–48 hours and will contact both parties for resolution.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Dispute ID","DSP-0082")}${infoRow("Order","ORD-8821")}${infoRow("Reason","Item not as described")}${infoRow("Status",badge("Under Review","#ffb400"))}</table>`)}
+    ` }),
+  },
+  "appointment-confirmation": {
+    label:"Provider Notification", from:"health@mysokoni.co.ke", cat:"order",
+    desc:"Provider / appointment confirmation (health, legal, home services)",
+    render: ()=> base({ title:"Appointment Confirmed", preheader:"Your appointment with Dr. Ochieng is confirmed", cta:"View Appointment", ctaUrl:BASE+"/healthcare.html", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your appointment has been confirmed. Please arrive 10 minutes early.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Provider","Dr. Ochieng (Cardiologist)",true)}${infoRow("Date","15 Jul 2026")}${infoRow("Time","10:00 AM")}${infoRow("Location","Aga Khan Hospital, Nairobi")}${infoRow("Type","Consultation")}</table>`)}
+    ` }),
+  },
+  "driver-approved": {
+    label:"Driver Approved", from:"drivers@mysokoni.co.ke", cat:"account",
+    desc:"Driver account verification approval",
+    render: ()=> base({ title:"Driver Account Approved", preheader:"Congratulations! Start earning on SOKONI.", cta:"Start Earning", ctaUrl:BASE+"/driver.html", body:`
+      ${greeting("Brian")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">🎉 Congratulations! Your driver account has been verified. You can now start accepting delivery jobs on SOKONI.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Driver ID","DRV-0044")}${infoRow("Vehicle","Motorbike (KDN 812C)")}${infoRow("Zone","Nairobi CBD")}${infoRow("Status",badge("✅ Active"))}</table>`)}
+    ` }),
+  },
+  "ticket-purchase": {
+    label:"Ticket Purchase", from:"tickets@mysokoni.co.ke", cat:"order",
+    desc:"Event ticket confirmation with QR code placeholder",
+    render: ()=> base({ title:"Ticket Confirmed", preheader:"Your ticket for Nairobi Jazz Festival is ready", cta:"View My Ticket", ctaUrl:BASE+"/entertainment.html?ticket=TKT-0892", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your ticket purchase is confirmed. Show the QR code at the gate for entry.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Event","Nairobi Jazz Festival 2026",true)}${infoRow("Date","19 Jul 2026, 7:00 PM")}${infoRow("Venue","KICC, Nairobi")}${infoRow("Ticket Type","VIP")}${infoRow("Ticket ID","TKT-0892")}${infoRow("Paid",fmt(3500))}</table>`)}
+      <div style="text-align:center;margin:20px 0;"><div style="display:inline-block;background:#fff;padding:12px;border-radius:12px;"><svg width="120" height="120" viewBox="0 0 120 120" style="display:block;"><rect width="120" height="120" fill="#fff"/><rect x="10" y="10" width="30" height="30" fill="#000"/><rect x="15" y="15" width="20" height="20" fill="#fff"/><rect x="20" y="20" width="10" height="10" fill="#000"/><rect x="80" y="10" width="30" height="30" fill="#000"/><rect x="85" y="15" width="20" height="20" fill="#fff"/><rect x="90" y="20" width="10" height="10" fill="#000"/><rect x="10" y="80" width="30" height="30" fill="#000"/><rect x="15" y="85" width="20" height="20" fill="#fff"/><rect x="20" y="90" width="10" height="10" fill="#000"/><rect x="50" y="15" width="5" height="5" fill="#000"/><rect x="60" y="10" width="5" height="5" fill="#000"/><rect x="55" y="20" width="10" height="5" fill="#000"/><rect x="10" y="50" width="5" height="5" fill="#000"/><rect x="20" y="45" width="10" height="10" fill="#000"/><rect x="35" y="50" width="5" height="10" fill="#000"/><rect x="50" y="50" width="20" height="5" fill="#000"/><rect x="75" y="50" width="35" height="5" fill="#000"/><rect x="50" y="60" width="5" height="15" fill="#000"/><rect x="60" y="55" width="15" height="5" fill="#000"/><rect x="80" y="60" width="10" height="10" fill="#000"/><rect x="95" y="55" width="15" height="15" fill="#000"/><rect x="50" y="80" width="10" height="5" fill="#000"/><rect x="65" y="75" width="5" height="15" fill="#000"/><rect x="75" y="80" width="15" height="5" fill="#000"/><rect x="95" y="80" width="5" height="5" fill="#000"/><rect x="100" y="75" width="10" height="10" fill="#000"/></svg></div><p style="margin:8px 0 0;font-size:11px;color:rgba(255,255,255,0.3);">TKT-0892 · Scan at gate</p></div>
+    ` }),
+  },
+  "delivery-dispatched": {
+    label:"Delivery Dispatched", from:"delivery@mysokoni.co.ke", cat:"delivery",
+    desc:"Notification when order leaves warehouse",
+    render: ()=> base({ title:"Order Dispatched", preheader:"Your order has left our warehouse", cta:"Track My Delivery", ctaUrl:BASE+"/delivery-tracking.html?id=DEL-7734", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Your order has left our warehouse and is heading your way!</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Order","ORD-8821")}${infoRow("Delivery ID","DEL-7734")}${infoRow("ETA","35–50 minutes",true)}</table>`)}
+      ${trackingSteps(["Order Placed","Order Confirmed","Dispatched","On the Way","Delivered"],2)}
+    ` }),
+  },
+  "fraud-alert": {
+    label:"Fraud Alert", from:"security@mysokoni.co.ke", cat:"security",
+    desc:"Internal fraud detection alert (admin-facing)",
+    render: ()=> base({ title:"Fraud Alert", ctaColor:"#ff4d6d", preheader:"High-risk transaction detected", cta:"Review in Admin", ctaUrl:BASE+"/admin.html", body:`
+      <p style="margin:0 0 16px;font-size:16px;color:rgba(255,255,255,0.85);">Fraud Detection Alert</p>
+      <div style="background:rgba(255,77,109,0.08);border:1px solid rgba(255,77,109,0.3);border-radius:12px;padding:14px 18px;margin:0 0 20px;"><p style="margin:0;font-size:14px;color:rgba(255,77,109,0.9);font-weight:700;">🚨 High-risk transaction detected</p></div>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Fraud Type","Payment Velocity Attack")}${infoRow("Risk Score","94 / 100",true)}${infoRow("User","uid_a72bc91")}${infoRow("Amount",fmt(150000))}${infoRow("Status",badge("Flagged","#ff4d6d"))}</table>`)}
+    ` }),
+  },
+  "price-drop": {
+    label:"Price Drop", from:"marketing@mysokoni.co.ke", cat:"marketing",
+    desc:"Wishlist price-drop notification",
+    render: ()=> base({ title:"Price Drop Alert!", preheader:"A wishlist item just got cheaper!", cta:"Shop Now", ctaUrl:BASE+"/product.html?id=PRD-440", body:`
+      ${greeting("Alex")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">Good news! A product on your wishlist just dropped in price.</p>
+      ${card(`<table width="100%" cellpadding="0" cellspacing="0" border="0">${infoRow("Product","Samsung Galaxy A55 5G",true)}${infoRow("Old Price",fmt(58000))}${infoRow("New Price",fmt(48500),true)}${infoRow("You Save",fmt(9500))}</table>`)}
+    ` }),
+  },
+  "maintenance-notice": {
+    label:"Maintenance Notice", from:"tech@mysokoni.co.ke", cat:"system",
+    desc:"Scheduled maintenance window notification",
+    render: ()=> base({ title:"Scheduled Maintenance", preheader:"SOKONI will be down briefly for maintenance", body:`
+      ${greeting("SOKONI User")}
+      <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.55);line-height:1.7;">We will be performing scheduled maintenance on <strong>15 July 2026</strong> at <strong>2:00 AM EAT</strong>. The platform will be unavailable for approximately <strong>45 minutes</strong>.</p>
+      <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.45);">We apologise for any inconvenience. Thank you for using SOKONI.</p>
+    ` }),
+  },
+};
+
+/* ── Plain-text strip ── */
+function toPlainText(html) {
+  const postalAddr = `${COMPANY.postalAddress}, ${COMPANY.town}, ${COMPANY.country}`;
+  const body = html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi,"")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi,"")
+    .replace(/<!--[\s\S]*?-->/g,"")
+    .replace(/<br\s*\/?>/gi,"\n")
+    .replace(/<\/(?:p|div|h[1-6]|li|ul|ol|tr)>/gi,"\n")
+    .replace(/<td[^>]*>/gi,"  ")
+    .replace(/<strong[^>]*>([\s\S]*?)<\/strong>/gi,"*$1*")
+    .replace(/<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi,(_,url,txt)=>{
+      const clean=txt.replace(/<[^>]+>/g,"").replace(/\s+/g," ").trim();
+      return(clean&&clean.toLowerCase()!==url.toLowerCase())?`${clean} ( ${url} )`:clean||url;
+    })
+    .replace(/<[^>]+>/g,"")
+    .replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">")
+    .replace(/&quot;/g,'"').replace(/&nbsp;/g," ").replace(/&copy;/g,"©")
+    .replace(/&middot;/g,"·").replace(/&mdash;/g,"—").replace(/&ndash;/g,"–")
+    .replace(/&[a-z#0-9]+;/gi," ").replace(/[ \t]+/g," ")
+    .replace(/\n[ \t]+/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
+  return `${body}\n\n──────────────────────────────────────────────\nSOKONI — mysokoni.co.ke\nSupport: ${COMPANY.supportEmail} · ${COMPANY.supportPhone}\n${postalAddr}\n\nPrivacy : ${PRIVACY}\nTerms   : ${TERMS}\nUnsub   : ${UNSUB}\n\n© ${YEAR} SOKONI · A product of ${COMPANY.legalName}. All rights reserved.`;
+}
+
+/* ── State ── */
+let currentTpl = "welcome";
+let currentView = "html";
+
+function show(el) {
+  document.querySelectorAll(".sb-item").forEach(x => x.classList.remove("active"));
+  el.classList.add("active");
+  currentTpl = el.dataset.tpl;
+  const t = TEMPLATES[currentTpl];
+  document.getElementById("tpl-name").textContent = t.label;
+  document.getElementById("tpl-desc").textContent = `${t.from} · ${t.cat} · ${t.desc}`;
+  render();
+}
+
+function setView(v) {
+  currentView = v;
+  document.getElementById("btn-html").classList.toggle("active", v==="html");
+  document.getElementById("btn-text").classList.toggle("active", v==="text");
+  render();
+}
+
+function render() {
+  const t = TEMPLATES[currentTpl];
+  const html = t.render();
+  if (currentView === "html") {
+    document.getElementById("preview-pane").style.display = "flex";
+    document.getElementById("text-pane").style.display = "none";
+    const frame = document.getElementById("preview-frame");
+    /* srcdoc is supported in all modern browsers; also set src for IE fallback */
+    frame.srcdoc = html;
+    frame.style.height = "700px";
+    /* Auto-size after load */
+    frame.onload = () => {
+      try {
+        const h = frame.contentDocument.body.scrollHeight;
+        if (h > 0) frame.style.height = (h + 48) + "px";
+      } catch(_) {}
+    };
+  } else {
+    document.getElementById("preview-pane").style.display = "none";
+    document.getElementById("text-pane").style.display = "flex";
+    document.getElementById("text-content").textContent = toPlainText(html);
+  }
+}
+
+/* ── Init ── */
+render();
+</script>
+</body>
+</html>

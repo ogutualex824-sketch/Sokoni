@@ -9,8 +9,8 @@
 <meta property="og:title" content="SOKONI — My Profile">
 <meta property="og:description" content="Universal profile across all SOKONI hubs.">
 <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
-<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
-<link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
+<link rel="apple-touch-icon" href="assets/logosokoni.png">
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
@@ -165,7 +165,7 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
 .up-role-switcher{
   background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
   border-radius:18px;padding:14px 18px;margin-bottom:12px;
-  position:sticky;top:64px;z-index:90;
+  position:sticky;top:58px;z-index:90;
   backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
 }
 .rs-label{font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
@@ -1006,6 +1006,22 @@ if(!_user || !_user.uid){
   throw new Error('Not authenticated');
 }
 
+/* ── Listener teardown guard — all onSnapshot unsubs collected here ── */
+var _profSellerProductsUnsub = null;
+var _profBookingsUnsub = null;
+var _profReviewsUnsub = null;
+var _profFollowingUnsub = null;
+var _profWalletUnsub = null;
+var _profUserDataUnsub = null;
+window.addEventListener('beforeunload', function() {
+  if (_profSellerProductsUnsub) _profSellerProductsUnsub();
+  if (_profBookingsUnsub) _profBookingsUnsub();
+  if (_profReviewsUnsub) _profReviewsUnsub();
+  if (_profFollowingUnsub) _profFollowingUnsub();
+  if (_profWalletUnsub) _profWalletUnsub();
+  if (_profUserDataUnsub) _profUserDataUnsub();
+});
+
 /* ── Growth & Rewards cards ── */
 function _initGrowthCards(){
   /* Loyalty points from sokoniLoyaltyPoints.total (new schema) or legacy sokoniPoints */
@@ -1476,7 +1492,7 @@ function loadListings(){
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
       var db = window.firebaseDB;
       var q = m.query(m.collection(db,'products'), m.where('sellerUid','==',_user.uid), m.limit(24));
-      m.onSnapshot(q, function(snap){
+      _profSellerProductsUnsub = m.onSnapshot(q, function(snap){
         var list = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         if(list.length){ _render(list); }
       }, function(){});
@@ -1544,7 +1560,7 @@ function loadBookings(){
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
       var db = window.firebaseDB;
       var q = m.query(m.collection(db,'bookings'), m.orderBy('createdAt','desc'), m.limit(100));
-      m.onSnapshot(q, function(snap){
+      _profBookingsUnsub = m.onSnapshot(q, function(snap){
         var fsb = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); }).filter(function(b){ return b.userId===_user.uid; });
         if(fsb.length){ _render(fsb); }
       }, function(){});
@@ -1567,7 +1583,7 @@ function loadReviews(){
   import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
     var db = window.firebaseDB;
     var q = m.query(m.collection(db,'reviews'), m.orderBy('createdAt','desc'), m.limit(100));
-    m.onSnapshot(q, function(snap){
+    _profReviewsUnsub = m.onSnapshot(q, function(snap){
       snap = {docs: snap.docs.filter(function(d){ return d.data().revieweeUid===_user.uid; })};
 
       var reviews = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
@@ -1632,7 +1648,7 @@ function loadFollowing(){
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
       var db = window.firebaseDB;
       var q = m.query(m.collection(db,'follows'), m.where('followerUid','==',_user.uid), m.limit(50));
-      m.onSnapshot(q, function(snap){
+      _profFollowingUnsub = m.onSnapshot(q, function(snap){
         var list = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
         if(list.length) _render(list);
       }, function(){});
@@ -1669,7 +1685,7 @@ function loadWallet(){
 
   import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
     var db = window.firebaseDB;
-    m.onSnapshot(m.doc(db,'wallets',_user.uid), function(snap){
+    _profWalletUnsub = m.onSnapshot(m.doc(db,'wallets',_user.uid), function(snap){
       if(!snap.exists()) return;
       var data = snap.data();
       var bal = data.balance || 0;
@@ -1877,7 +1893,7 @@ function listenFirestoreProfile(uid){
   if(!window.firebaseDB) return;
   import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
     var db = window.firebaseDB;
-    m.onSnapshot(m.doc(db,'users',uid), function(snap){
+    _profUserDataUnsub = m.onSnapshot(m.doc(db,'users',uid), function(snap){
       if(!snap.exists()) return;
       var data = snap.data();
       /* merge non-sensitive fields into localStorage user */

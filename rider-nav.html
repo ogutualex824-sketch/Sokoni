@@ -5,7 +5,7 @@
 <script src="shared-header.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Navigation â€” SOKONI Rider</title>
+  <title>Navigation — SOKONI Rider</title>
   <meta name="robots" content="noindex, nofollow">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#050505">
@@ -16,10 +16,10 @@
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--txt)}
 
-    /* â”€â”€ Map takes full viewport â”€â”€ */
+    /* ── Map takes full viewport ── */
     #map{position:fixed;inset:0;z-index:0}
 
-    /* â”€â”€ Top bar â”€â”€ */
+    /* ── Top bar ── */
     #topBar{
       position:fixed;top:0;left:0;right:0;z-index:100;
       background:linear-gradient(180deg,rgba(0,0,0,.9) 0%,rgba(0,0,0,.7) 80%,transparent 100%);
@@ -33,7 +33,7 @@
     #sosBtn{background:var(--danger);border:none;border-radius:50%;width:46px;height:46px;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 12px rgba(244,67,54,.5);animation:pulse 2s infinite}
     @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(244,67,54,.4)}50%{box-shadow:0 0 0 8px rgba(244,67,54,0)}}
 
-    /* â”€â”€ Instruction panel (bottom) â”€â”€ */
+    /* ── Instruction panel (bottom) ── */
     #instrPanel{
       position:fixed;bottom:0;left:0;right:0;z-index:100;
       background:rgba(10,10,10,.97);
@@ -52,7 +52,7 @@
     #nextInstr .ni-icon{font-size:18px;flex-shrink:0}
     #nextInstr .ni-text{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 
-    /* â”€â”€ ETA bar â”€â”€ */
+    /* ── ETA bar ── */
     #etaBar{display:flex;align-items:center;padding:10px 16px;gap:8px;border-top:1px solid var(--border)}
     .eta-item{flex:1;text-align:center}
     .eta-val{font-size:18px;font-weight:900}
@@ -60,7 +60,7 @@
     #etaTime{color:var(--accent)}
     #etaDistVal{color:var(--info)}
 
-    /* â”€â”€ Stop list â”€â”€ */
+    /* ── Stop list ── */
     #stopListToggle{background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0 16px 10px;display:block;width:100%;text-align:center}
     #stopList{display:none;padding:0 16px 10px;max-height:220px;overflow-y:auto;border-top:1px solid var(--border)}
     #stopList.open{display:block}
@@ -78,28 +78,28 @@
     .sl-status.current{background:rgba(113,255,0,.15);color:var(--accent)}
     .sl-status.completed{background:rgba(255,255,255,.06);color:var(--muted)}
 
-    /* â”€â”€ Action buttons â”€â”€ */
+    /* ── Action buttons ── */
     #actionRow{display:flex;gap:8px;padding:10px 16px;border-top:1px solid var(--border);flex-wrap:wrap}
     .act-btn{flex:1;min-width:80px;height:44px;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--txt);font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:opacity .15s}
     .act-btn:hover{opacity:.8}
     .act-btn.primary{background:var(--accent);color:#000;border-color:transparent}
     .act-btn.danger{background:rgba(244,67,54,.15);border-color:rgba(244,67,54,.3);color:var(--danger)}
 
-    /* â”€â”€ Status ribbon â”€â”€ */
+    /* ── Status ribbon ── */
     #statusRibbon{position:fixed;top:max(12px,env(safe-area-inset-top));right:66px;z-index:101;display:flex;gap:6px}
     .ribbon-chip{background:rgba(0,0,0,.8);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:5px}
     .ribbon-chip.offline{border-color:rgba(244,67,54,.4);color:var(--danger)}
     .ribbon-chip.deviating{border-color:rgba(255,152,0,.4);color:var(--warn)}
     .ribbon-chip.online{border-color:rgba(113,255,0,.3);color:var(--accent)}
 
-    /* â”€â”€ Arrival overlay â”€â”€ */
+    /* ── Arrival overlay ── */
     #arrivalOverlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.85);align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:24px}
     #arrivalOverlay.show{display:flex}
     #arrivalOverlay .arr-icon{font-size:72px}
     #arrivalOverlay h2{font-size:26px;font-weight:900;text-align:center}
     #arrivalOverlay p{font-size:14px;color:var(--muted);text-align:center;line-height:1.6}
 
-    /* â”€â”€ PoD modal â”€â”€ */
+    /* ── PoD modal ── */
     #podModal{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.9);align-items:flex-end;justify-content:center}
     #podModal.show{display:flex}
     #podSheet{background:#1a1d2e;border-radius:20px 20px 0 0;width:100%;max-width:600px;padding:20px 20px max(24px,env(safe-area-inset-bottom))}
@@ -115,13 +115,13 @@
     .pod-input-row input,.pod-input-row textarea{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:10px;color:var(--txt);padding:12px;font-size:15px;outline:none;font-family:inherit}
     .pod-input-row input:focus,.pod-input-row textarea:focus{border-color:var(--accent)}
 
-    /* â”€â”€ Ext nav sheet â”€â”€ */
+    /* ── Ext nav sheet ── */
     #extNavSheet{display:none;position:fixed;inset:0;z-index:250;background:rgba(0,0,0,.85);align-items:flex-end;justify-content:center}
     #extNavSheet.show{display:flex}
     #extNavSheetInner{background:#1a1d2e;border-radius:20px 20px 0 0;width:100%;max-width:600px;padding:20px 20px max(24px,env(safe-area-inset-bottom))}
     .ext-btn{display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;font-size:14px;font-weight:700;width:100%;color:var(--txt)}
 
-    /* â”€â”€ Spinner â”€â”€ */
+    /* ── Spinner ── */
     .spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto}
     @keyframes spin{to{transform:rotate(360deg)}}
     #loadScreen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
@@ -130,78 +130,78 @@
 </head>
 <body>
 
-<div id="loadScreen"><div class="spinner"></div><p>Loading navigationâ€¦</p></div>
+<div id="loadScreen"><div class="spinner"></div><p>Loading navigation…</p></div>
 <div id="map"></div>
 
-<!-- â”€â”€ Top bar â”€â”€ -->
+<!-- ── Top bar ── -->
 <div id="topBar">
   <div id="stopLabel">
     <div id="stopBadge">Stop 1/1</div>
-    <div id="stopName">Locatingâ€¦</div>
+    <div id="stopName">Locating…</div>
     <div id="stopAddr"></div>
   </div>
-  <button id="sosBtn" onclick="_sos()" title="Emergency SOS">ðŸ†˜</button>
+  <button id="sosBtn" onclick="_sos()" title="Emergency SOS">🆘</button>
 </div>
 
-<!-- â”€â”€ Status ribbon â”€â”€ -->
+<!-- ── Status ribbon ── -->
 <div id="statusRibbon">
-  <div class="ribbon-chip online" id="connChip">â— Online</div>
+  <div class="ribbon-chip online" id="connChip">● Online</div>
 </div>
 
-<!-- â”€â”€ Arrival overlay â”€â”€ -->
+<!-- ── Arrival overlay ── -->
 <div id="arrivalOverlay">
-  <div class="arr-icon" id="arrIcon">ðŸ“</div>
+  <div class="arr-icon" id="arrIcon">📍</div>
   <h2 id="arrTitle">You've arrived!</h2>
   <p id="arrBody">You are at your destination.</p>
   <button class="act-btn primary" style="width:100%;max-width:300px;font-size:15px" onclick="_confirmArrival()">Confirm Arrival</button>
   <button class="act-btn" style="width:100%;max-width:300px" onclick="_dismissArrival()">Not here yet</button>
 </div>
 
-<!-- â”€â”€ Instruction panel â”€â”€ -->
+<!-- ── Instruction panel ── -->
 <div id="instrPanel">
   <div id="instrHandle"></div>
   <div id="instrMain">
-    <div id="instrIcon">â¬†</div>
+    <div id="instrIcon">⬆</div>
     <div id="instrRight">
-      <div id="instrText">Starting navigationâ€¦</div>
+      <div id="instrText">Starting navigation…</div>
       <div id="instrDist"></div>
     </div>
   </div>
   <div id="nextInstr">
-    <div class="ni-icon" id="niIcon">â¬†</div>
+    <div class="ni-icon" id="niIcon">⬆</div>
     <div class="ni-text" id="niText">Then continue</div>
   </div>
 
   <div id="etaBar">
-    <div class="eta-item"><div class="eta-val" id="etaTime">â€”</div><div class="eta-lbl">ETA</div></div>
-    <div class="eta-item"><div class="eta-val" id="etaDur">â€”</div><div class="eta-lbl">Travel time</div></div>
-    <div class="eta-item"><div class="eta-val" id="etaDistVal">â€”</div><div class="eta-lbl">Distance</div></div>
+    <div class="eta-item"><div class="eta-val" id="etaTime">—</div><div class="eta-lbl">ETA</div></div>
+    <div class="eta-item"><div class="eta-val" id="etaDur">—</div><div class="eta-lbl">Travel time</div></div>
+    <div class="eta-item"><div class="eta-val" id="etaDistVal">—</div><div class="eta-lbl">Distance</div></div>
   </div>
 
-  <button id="stopListToggle" onclick="_toggleStopList()">â–¼ All stops</button>
+  <button id="stopListToggle" onclick="_toggleStopList()">▼ All stops</button>
   <div id="stopList"></div>
 
   <div id="actionRow">
-    <button class="act-btn" onclick="_extNav()">ðŸ—º Navigate</button>
-    <button class="act-btn" onclick="_callStop()">ðŸ“ž Call</button>
-    <button class="act-btn" onclick="nav && nav.optimizeStopOrder()">ðŸ”€ Optimize</button>
-    <button class="act-btn primary" id="completeBtn" onclick="_showPOD()">âœ… Complete</button>
+    <button class="act-btn" onclick="_extNav()">🗺 Navigate</button>
+    <button class="act-btn" onclick="_callStop()">📞 Call</button>
+    <button class="act-btn" onclick="nav && nav.optimizeStopOrder()">🔀 Optimize</button>
+    <button class="act-btn primary" id="completeBtn" onclick="_showPOD()">✅ Complete</button>
   </div>
 </div>
 
-<!-- â”€â”€ PoD modal â”€â”€ -->
+<!-- ── PoD modal ── -->
 <div id="podModal">
   <div id="podSheet">
-    <h3>ðŸ“‹ Proof of Delivery</h3>
+    <h3>📋 Proof of Delivery</h3>
     <p>Confirm delivery has been made to the customer.</p>
     <div class="pod-option selected" data-type="pin" onclick="_selectPOD(this,'pin')">
-      <div class="pod-icon">ðŸ”¢</div><div><div class="pod-label">Customer PIN</div><div class="pod-sub">Customer confirms with a 4-digit code</div></div>
+      <div class="pod-icon">🔢</div><div><div class="pod-label">Customer PIN</div><div class="pod-sub">Customer confirms with a 4-digit code</div></div>
     </div>
     <div class="pod-option" data-type="photo" onclick="_selectPOD(this,'photo')">
-      <div class="pod-icon">ðŸ“¸</div><div><div class="pod-label">Delivery Photo</div><div class="pod-sub">Take photo of delivered parcel</div></div>
+      <div class="pod-icon">📸</div><div><div class="pod-label">Delivery Photo</div><div class="pod-sub">Take photo of delivered parcel</div></div>
     </div>
     <div class="pod-option" data-type="none" onclick="_selectPOD(this,'none')">
-      <div class="pod-icon">âœ…</div><div><div class="pod-label">Delivered â€” No confirmation</div><div class="pod-sub">Left at door / received without code</div></div>
+      <div class="pod-icon">✅</div><div><div class="pod-label">Delivered — No confirmation</div><div class="pod-sub">Left at door / received without code</div></div>
     </div>
     <div class="pod-input-row" id="podValueRow">
       <label id="podInputLabel">Enter customer PIN</label>
@@ -214,18 +214,18 @@
   </div>
 </div>
 
-<!-- â”€â”€ External nav sheet â”€â”€ -->
+<!-- ── External nav sheet ── -->
 <div id="extNavSheet">
   <div id="extNavSheetInner">
-    <h3 style="font-size:16px;font-weight:800;margin-bottom:14px">Open inâ€¦</h3>
-    <button class="ext-btn" onclick="_extOpen('google')">ðŸ—º Google Maps</button>
-    <button class="ext-btn" onclick="_extOpen('waze')">ðŸ”µ Waze</button>
-    <button class="ext-btn" onclick="_extOpen('apple')">ðŸŽ Apple Maps</button>
+    <h3 style="font-size:16px;font-weight:800;margin-bottom:14px">Open in…</h3>
+    <button class="ext-btn" onclick="_extOpen('google')">🗺 Google Maps</button>
+    <button class="ext-btn" onclick="_extOpen('waze')">🔵 Waze</button>
+    <button class="ext-btn" onclick="_extOpen('apple')">🍎 Apple Maps</button>
     <button class="act-btn" style="width:100%;margin-top:4px" onclick="document.getElementById('extNavSheet').classList.remove('show')">Cancel</button>
   </div>
 </div>
 
-<!-- â”€â”€ Firebase â”€â”€ -->
+<!-- ── Firebase ── -->
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
@@ -233,7 +233,7 @@
 <script src="sokoni-appcheck.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"
-  onerror="document.getElementById('loadScreen').innerHTML='<div style=\'text-align:center;padding:32px\'><p style=\'font-size:28px;margin-bottom:10px\'>ðŸ—º</p><p style=\'font-size:16px;font-weight:700;margin-bottom:6px\'>Map failed to load</p><p style=\'color:rgba(255,255,255,.5);font-size:13px;margin-bottom:20px\'>Check your connection and retry.</p><button onclick=\'location.reload()\' style=\'padding:13px 28px;background:#71ff00;color:#000;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;width:200px\'>Retry</button></div>'">
+  onerror="document.getElementById('loadScreen').innerHTML='<div style=\'text-align:center;padding:32px\'><p style=\'font-size:28px;margin-bottom:10px\'>🗺</p><p style=\'font-size:16px;font-weight:700;margin-bottom:6px\'>Map failed to load</p><p style=\'color:rgba(255,255,255,.5);font-size:13px;margin-bottom:20px\'>Check your connection and retry.</p><button onclick=\'location.reload()\' style=\'padding:13px 28px;background:#71ff00;color:#000;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;width:200px\'>Retry</button></div>'">
 </script>
 <script src="sokoni-config.js"></script>
 <script src="sokoni-navigation.js"></script>
@@ -248,7 +248,7 @@ var _podType = 'pin';
 function _cf(name) { return firebase.functions().httpsCallable(name); }
 function _esc(s)   { return String(s||'').replace(/[<>"'&]/g, c=>({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','&':'&amp;'}[c])); }
 
-/* â”€â”€ Auth â†’ Load trip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Auth → Load trip ─────────────────────────────────────────────────────── */
 firebase.auth().onAuthStateChanged(function(user) {
   if (!user) { location.href = 'login.html'; return; }
   _loadTrip(user.uid);
@@ -256,11 +256,11 @@ firebase.auth().onAuthStateChanged(function(user) {
 
 function _loadTrip(uid) {
   var ls = document.getElementById('loadScreen');
-  ls.innerHTML = '<div class="spin"></div><p>Loading tripâ€¦</p>';
+  ls.innerHTML = '<div class="spin"></div><p>Loading trip…</p>';
   _cf('navGetActiveTrip')({}).then(function(r) {
     var trip = r.data.trip;
     if (!trip) {
-      ls.innerHTML = '<div style="text-align:center;padding:40px"><p style="font-size:22px;margin-bottom:8px">No active trip</p><p style="color:rgba(255,255,255,.5);font-size:14px">Accept a delivery to start navigation.</p><a href="driver.html" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">â† Driver Dashboard</a></div>';
+      ls.innerHTML = '<div style="text-align:center;padding:40px"><p style="font-size:22px;margin-bottom:8px">No active trip</p><p style="color:rgba(255,255,255,.5);font-size:14px">Accept a delivery to start navigation.</p><a href="driver.html" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#71ff00;color:#000;border-radius:10px;font-weight:700;text-decoration:none">← Driver Dashboard</a></div>';
       return;
     }
     _trip = trip;
@@ -269,11 +269,11 @@ function _loadTrip(uid) {
     var isNetwork = e.code === 'functions/unavailable' || e.code === 'functions/internal' ||
       (e.message && (e.message.toLowerCase().includes('network') || e.message.toLowerCase().includes('internet') || e.message.toLowerCase().includes('unavailable')));
     ls.innerHTML = '<div style="text-align:center;padding:32px">' +
-      '<p style="font-size:28px;margin-bottom:10px">' + (isNetwork ? 'ðŸ“¶' : 'âš ï¸') + '</p>' +
+      '<p style="font-size:28px;margin-bottom:10px">' + (isNetwork ? '📶' : '⚠️') + '</p>' +
       '<p style="font-size:16px;font-weight:700;margin-bottom:6px">' + (isNetwork ? 'No connection' : 'Could not load trip') + '</p>' +
       '<p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:20px">' + (isNetwork ? 'Check your data connection and try again.' : _esc(e.message)) + '</p>' +
       '<button onclick="location.reload()" style="padding:13px 28px;background:#71ff00;color:#000;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:10px;width:200px">Retry</button><br>' +
-      '<a href="driver.html" style="color:rgba(255,255,255,.4);font-size:12px;margin-top:4px;display:inline-block">â† Driver Dashboard</a></div>';
+      '<a href="driver.html" style="color:rgba(255,255,255,.4);font-size:12px;margin-top:4px;display:inline-block">← Driver Dashboard</a></div>';
   });
 }
 
@@ -292,10 +292,10 @@ function _initNav(uid, trip) {
     onOfflineQueued:  function(n) { _connChip(false, n + ' queued'); },
   });
 
-  // Init map first â€” show it immediately, don't wait for route
+  // Init map first — show it immediately, don't wait for route
   var mapReady = nav.initMap('map');
   if (!mapReady) {
-    document.getElementById('loadScreen').innerHTML = '<div style="text-align:center;padding:32px"><p style="font-size:28px;margin-bottom:10px">ðŸ—º</p><p style="font-size:16px;font-weight:700;margin-bottom:6px">Map failed to load</p><p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:20px">Check your connection and retry.</p><button onclick="location.reload()" style="padding:13px 28px;background:#71ff00;color:#000;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;width:200px">Retry</button></div>';
+    document.getElementById('loadScreen').innerHTML = '<div style="text-align:center;padding:32px"><p style="font-size:28px;margin-bottom:10px">🗺</p><p style="font-size:16px;font-weight:700;margin-bottom:6px">Map failed to load</p><p style="color:rgba(255,255,255,.5);font-size:13px;margin-bottom:20px">Check your connection and retry.</p><button onclick="location.reload()" style="padding:13px 28px;background:#71ff00;color:#000;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;width:200px">Retry</button></div>';
     return;
   }
   document.getElementById('loadScreen').style.display = 'none';
@@ -303,11 +303,11 @@ function _initNav(uid, trip) {
   _updateTopBar();
   nav.startTracking();
 
-  // Load route in background â€” draws polyline when ready, no blocking
+  // Load route in background — draws polyline when ready, no blocking
   nav.calculateRoute(trip.stops).then(function(route) {
-    if (!route) _addRibbon('no-route', 'âš  No route â€” GPS tracking active');
+    if (!route) _addRibbon('no-route', '⚠ No route — GPS tracking active');
   }).catch(function() {
-    _addRibbon('no-route', 'âš  No route â€” GPS tracking active');
+    _addRibbon('no-route', '⚠ No route — GPS tracking active');
   });
 
   // Connectivity
@@ -315,7 +315,7 @@ function _initNav(uid, trip) {
   window.addEventListener('offline', function() { _connChip(false); });
 }
 
-/* â”€â”€ Position / ETA / Step callbacks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Position / ETA / Step callbacks ─────────────────────────────────────── */
 function _onPos(pos) {
   // Speed chip could go here if needed
 }
@@ -334,7 +334,7 @@ function _onStep(step) {
   var next = nav.getNextStep();
   if (next) {
     document.getElementById('niIcon').textContent = next.icon;
-    document.getElementById('niText').textContent = 'Then in ' + next.distanceText + ' â€” turn';
+    document.getElementById('niText').textContent = 'Then in ' + next.distanceText + ' — turn';
   }
 }
 
@@ -342,7 +342,7 @@ function _onArrival(data) {
   _arrivalStopIdx = data.stopIdx;
   var stop = data.stop;
   var isPick = stop.type === 'pickup';
-  document.getElementById('arrIcon').textContent  = isPick ? 'ðŸ“¦' : 'ðŸŽ¯';
+  document.getElementById('arrIcon').textContent  = isPick ? '📦' : '🎯';
   document.getElementById('arrTitle').textContent = isPick ? 'At pickup location!' : 'Arrived at destination!';
   document.getElementById('arrBody').textContent  = 'You are within 60m of ' + (stop.name || 'the stop') + '.';
   document.getElementById('arrivalOverlay').classList.add('show');
@@ -351,8 +351,8 @@ function _onArrival(data) {
 }
 
 function _onDeviation(data) {
-  document.getElementById('instrText').textContent = 'â†© Route recalculatingâ€¦';
-  _addRibbon('deviating', 'âš  Off route');
+  document.getElementById('instrText').textContent = '↩ Route recalculating…';
+  _addRibbon('deviating', '⚠ Off route');
   setTimeout(function() { _removeRibbon('deviating'); }, 6000);
 }
 
@@ -362,15 +362,15 @@ function _onRecalc() {
   _renderStopList();
 }
 
-/* â”€â”€ Arrival confirmation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Arrival confirmation ─────────────────────────────────────────────────── */
 function _confirmArrival() {
   document.getElementById('arrivalOverlay').classList.remove('show');
   var stop = nav.getStops()[_arrivalStopIdx];
   if (stop && stop.type === 'pickup') {
-    // Auto-advance step for pickup â€” show complete button
+    // Auto-advance step for pickup — show complete button
     _cf('navUpdateTripStatus')({ tripId: _trip.id, status: 'arrived_pickup', stopIdx: _arrivalStopIdx }).catch(function(){});
   } else {
-    // Delivery â€” show PoD
+    // Delivery — show PoD
     _showPOD();
   }
   _updateTopBar();
@@ -380,7 +380,7 @@ function _dismissArrival() {
   document.getElementById('arrivalOverlay').classList.remove('show');
 }
 
-/* â”€â”€ Stop list rendering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Stop list rendering ─────────────────────────────────────────────────── */
 function _renderStopList() {
   var stops  = nav.getStops();
   var curr   = nav.getCurrentStop();
@@ -389,9 +389,9 @@ function _renderStopList() {
     var isCurrent = s._idx === (curr ? curr._idx : -1);
     var dotCls    = s.status === 'completed' ? 'done' : (s.type === 'pickup' ? 'pickup' : 'delivery');
     var statCls   = s.status === 'completed' ? 'completed' : (isCurrent ? 'current' : 'pending');
-    var statTxt   = s.status === 'completed' ? 'âœ“ Done' : (isCurrent ? 'â† Now' : 'Pending');
+    var statTxt   = s.status === 'completed' ? '✓ Done' : (isCurrent ? '← Now' : 'Pending');
     html += '<div class="sl-item"><div class="sl-dot '+dotCls+'">'
-      + (s.type === 'pickup' ? 'ðŸ“¦' : 'ðŸ“') + '</div>'
+      + (s.type === 'pickup' ? '📦' : '📍') + '</div>'
       + '<div class="sl-info"><div class="sl-name">'+_esc(s.name||'')+'</div>'
       + '<div class="sl-type">'+(s.type==='pickup'?'Pickup':'Delivery')+'</div></div>'
       + '<div class="sl-status '+statCls+'">'+statTxt+'</div></div>';
@@ -406,10 +406,10 @@ function _renderStopList() {
 function _toggleStopList() {
   var el = document.getElementById('stopList');
   el.classList.toggle('open');
-  document.getElementById('stopListToggle').textContent = el.classList.contains('open') ? 'â–² Hide stops' : 'â–¼ All stops';
+  document.getElementById('stopListToggle').textContent = el.classList.contains('open') ? '▲ Hide stops' : '▼ All stops';
 }
 
-/* â”€â”€ Top bar update â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Top bar update ───────────────────────────────────────────────────────── */
 function _updateTopBar() {
   var stop = nav.getCurrentStop();
   if (!stop) return;
@@ -417,11 +417,11 @@ function _updateTopBar() {
   document.getElementById('stopAddr').textContent = stop.type === 'pickup' ? 'Collect parcel here' : 'Deliver to customer';
 }
 
-/* â”€â”€ Connectivity chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Connectivity chip ────────────────────────────────────────────────────── */
 function _connChip(online, label) {
   var el = document.getElementById('connChip');
-  if (online) { el.className = 'ribbon-chip online'; el.textContent = 'â— Online'; }
-  else         { el.className = 'ribbon-chip offline'; el.textContent = 'â— ' + (label || 'Offline'); }
+  if (online) { el.className = 'ribbon-chip online'; el.textContent = '● Online'; }
+  else         { el.className = 'ribbon-chip offline'; el.textContent = '● ' + (label || 'Offline'); }
 }
 
 function _addRibbon(id, text) {
@@ -436,7 +436,7 @@ function _removeRibbon(id) {
   if (el) el.remove();
 }
 
-/* â”€â”€ External navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── External navigation ──────────────────────────────────────────────────── */
 function _extNav() { document.getElementById('extNavSheet').classList.add('show'); }
 function _extOpen(app) {
   var stop = nav.getCurrentStop();
@@ -447,14 +447,14 @@ function _extOpen(app) {
   else nav.launchAppleMaps(stop);
 }
 
-/* â”€â”€ Call customer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Call customer ────────────────────────────────────────────────────────── */
 function _callStop() {
   var stop = nav.getCurrentStop();
   if (!stop || !stop.phone) { alert('No phone number for this stop.'); return; }
   window.location.href = 'tel:' + stop.phone;
 }
 
-/* â”€â”€ Proof of Delivery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Proof of Delivery ────────────────────────────────────────────────────── */
 function _showPOD() {
   _podType = 'pin';
   document.getElementById('podValue').value = '';
@@ -470,7 +470,7 @@ function _selectPOD(el, type) {
   var lbl = document.getElementById('podInputLabel');
   var inp = document.getElementById('podValue');
   if (type === 'pin') { row.style.display='block'; lbl.textContent='Enter customer PIN'; inp.type='number'; inp.placeholder='Enter PIN'; }
-  else if (type === 'photo') { row.style.display='block'; lbl.textContent='Photo reference / description'; inp.type='text'; inp.placeholder='Describe delivery locationâ€¦'; }
+  else if (type === 'photo') { row.style.display='block'; lbl.textContent='Photo reference / description'; inp.type='text'; inp.placeholder='Describe delivery location…'; }
   else { row.style.display='none'; }
 }
 
@@ -493,17 +493,17 @@ function _submitPOD() {
 }
 
 function _tripComplete() {
-  document.getElementById('instrText').textContent = 'ðŸŽ‰ All deliveries complete!';
-  document.getElementById('instrIcon').textContent = 'ðŸŽ‰';
+  document.getElementById('instrText').textContent = '🎉 All deliveries complete!';
+  document.getElementById('instrIcon').textContent = '🎉';
   document.getElementById('instrDist').textContent = 'Great work today';
   document.getElementById('completeBtn').style.display = 'none';
   // Navigate to driver dashboard after 4 seconds
   setTimeout(function() { location.href = 'driver.html'; }, 4000);
 }
 
-/* â”€â”€ SOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── SOS ─────────────────────────────────────────────────────────────────── */
 function _sos() {
-  if (!confirm('ðŸ†˜ SEND EMERGENCY SOS?\n\nThis will immediately alert the SOKONI admin team with your location.')) return;
+  if (!confirm('🆘 SEND EMERGENCY SOS?\n\nThis will immediately alert the SOKONI admin team with your location.')) return;
   nav.triggerSOS().then(function() { alert('SOS sent. Help is on the way.'); }).catch(function(e) { alert('SOS failed: '+e.message); });
 }
 </script>

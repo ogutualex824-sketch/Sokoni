@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SOKONI BnB Hub — Short Stays, Hotels &amp; Accommodation Kenya</title>
 <meta name="description" content="Book Airbnb-style stays, hotels, guesthouses, vacation homes and serviced apartments across Kenya. Diani, Nairobi, Mombasa and more.">
-<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ef4444">
 <script src="security.js"></script>
@@ -831,10 +831,11 @@ window._saveBnBBooking = async function(bk) {
 };
 
 const q = query(collection(db,'bnbListings'), orderBy('createdAt','desc'));
-onSnapshot(q, snap => {
+const _bnbListingsUnsub = onSnapshot(q, snap => {
   const live = snap.docs.map(d=>({id:d.id,...d.data()}));
   if(live.length && typeof window.injectFirestoreListings === 'function') window.injectFirestoreListings(live);
 });
+window.addEventListener('beforeunload', () => { if (_bnbListingsUnsub) _bnbListingsUnsub(); });
 </script>
   <!-- REGISTER CTA — universal fallback for other business types -->
   <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">

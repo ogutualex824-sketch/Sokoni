@@ -1,27 +1,27 @@
-/* ================================================================
-   SOKONI Jobs Marketplace â€” Client Engine  v1.0
+﻿/* ================================================================
+   SOKONI Jobs Marketplace — Client Engine  v1.0
    sokoni-jobs.js
 
    IIFE exposing window.SokoniJobs
 
    Requires:
-     â€¢ Firebase JS SDK (compat v9)  loaded via /__/firebase/init.js
-     â€¢ Cloud Functions defined in functions/jobs.js (Gen2, onCall)
+     • Firebase JS SDK (compat v9)  loaded via /__/firebase/init.js
+     • Cloud Functions defined in functions/jobs.js (Gen2, onCall)
 
    Public surface:
-     SokoniJobs.initPublic()     â€” jobs.html bootstrap
-     SokoniJobs.initEmployer()   â€” job-post.html bootstrap
+     SokoniJobs.initPublic()     — jobs.html bootstrap
+     SokoniJobs.initEmployer()   — job-post.html bootstrap
 
    Security:
-     â€¢ All user-supplied text rendered through _esc() before innerHTML
-     â€¢ CV URLs validated as https:// before display
-     â€¢ Auth state via Firebase onAuthStateChanged â€” never trust client uid
+     • All user-supplied text rendered through _esc() before innerHTML
+     • CV URLs validated as https:// before display
+     • Auth state via Firebase onAuthStateChanged — never trust client uid
 ================================================================ */
 'use strict';
 
 window.SokoniJobs = (() => {
 
-  // â”€â”€â”€ Shared state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Shared state ───────────────────────────────────────────────────────────
 
   let _uid             = null;
   let _user            = null;
@@ -37,7 +37,7 @@ window.SokoniJobs = (() => {
   let _searchLocation  = '';
   let _sortMode        = 'latest'; // 'latest' | 'salary'
 
-  // â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Constants ──────────────────────────────────────────────────────────────
 
   const CATEGORIES = [
     'technology','finance','healthcare','retail','logistics',
@@ -45,9 +45,9 @@ window.SokoniJobs = (() => {
   ];
 
   const CAT_ICONS = {
-    technology:'ðŸ’»', finance:'ðŸ’°', healthcare:'ðŸ¥', retail:'ðŸ›’',
-    logistics:'ðŸšš', education:'ðŸ“š', hospitality:'ðŸ½ï¸', marketing:'ðŸ“£',
-    legal:'âš–ï¸', engineering:'âš™ï¸', admin:'ðŸ“‹', other:'ðŸ’¼',
+    technology:'💻', finance:'💰', healthcare:'🏥', retail:'🛒',
+    logistics:'🚚', education:'📚', hospitality:'🍽️', marketing:'📣',
+    legal:'⚖️', engineering:'⚙️', admin:'📋', other:'💼',
   };
 
   const JOB_TYPES = ['full-time','part-time','contract','internship','remote'];
@@ -67,9 +67,9 @@ window.SokoniJobs = (() => {
     rejected:'Rejected', hired:'Hired',
   };
 
-  // â”€â”€â”€ Utility helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Utility helpers ────────────────────────────────────────────────────────
 
-  /** XSS-safe escaping â€” MUST wrap every user-supplied value before innerHTML */
+  /** XSS-safe escaping — MUST wrap every user-supplied value before innerHTML */
   function _esc(s) {
     if (s == null) return '';
     return String(s)
@@ -80,7 +80,7 @@ window.SokoniJobs = (() => {
       .replace(/'/g, '&#39;');
   }
 
-  /** Format numbers KE-locale, e.g. 50000 â†’ "50,000" */
+  /** Format numbers KE-locale, e.g. 50000 → "50,000" */
   function _fmtN(n) {
     if (n == null || isNaN(Number(n))) return '0';
     return Number(n).toLocaleString('en-KE');
@@ -101,7 +101,7 @@ window.SokoniJobs = (() => {
     return new Date(ms).toLocaleDateString('en-KE',{month:'short',day:'numeric',year:'numeric'});
   }
 
-  /** Sanitise and validate a URL â€” only https:// allowed */
+  /** Sanitise and validate a URL — only https:// allowed */
   function _safeUrl(url) {
     if (!url) return '';
     const trimmed = String(url).trim();
@@ -124,7 +124,7 @@ window.SokoniJobs = (() => {
     return String(s).charAt(0).toUpperCase() + String(s).slice(1);
   }
 
-  // â”€â”€â”€ Toast notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Toast notifications ─────────────────────────────────────────────────────
 
   let _toastContainer = null;
 
@@ -136,7 +136,7 @@ window.SokoniJobs = (() => {
     if (!_toastContainer) return;
 
     const colors = { info:'#2196f3', success:'#4caf50', error:'#f44336', warn:'#ff9800' };
-    const icons  = { info:'â„¹ï¸', success:'âœ…', error:'âŒ', warn:'âš ï¸' };
+    const icons  = { info:'ℹ️', success:'✅', error:'❌', warn:'⚠️' };
 
     const el = document.createElement('div');
     el.style.cssText = `
@@ -156,7 +156,7 @@ window.SokoniJobs = (() => {
     }, duration);
   }
 
-  // â”€â”€â”€ Auth state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Auth state ──────────────────────────────────────────────────────────────
 
   function _watchAuth(onLogin, onLogout) {
     firebase.auth().onAuthStateChanged(user => {
@@ -167,7 +167,7 @@ window.SokoniJobs = (() => {
     });
   }
 
-  // â”€â”€â”€ Render: Job card (public grid) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Render: Job card (public grid) ─────────────────────────────────────────
 
   function _renderJobCard(job) {
     const initial    = _esc((job.companyName || 'C')[0].toUpperCase());
@@ -181,11 +181,11 @@ window.SokoniJobs = (() => {
     const jobId      = _esc(job.jobId || job.id || '');
 
     const salaryHtml = (job.salaryMin != null)
-      ? `<div class="job-salary">KSh ${_fmtN(job.salaryMin)}${job.salaryMax ? ' â€“ ' + _fmtN(job.salaryMax) : '+'} /mo</div>`
+      ? `<div class="job-salary">KSh ${_fmtN(job.salaryMin)}${job.salaryMax ? ' – ' + _fmtN(job.salaryMax) : '+'} /mo</div>`
       : '';
 
     const featuredBadge = job.featured
-      ? `<span class="job-featured-badge">â˜… Featured</span>`
+      ? `<span class="job-featured-badge">★ Featured</span>`
       : '';
 
     return `
@@ -200,7 +200,7 @@ window.SokoniJobs = (() => {
           ${featuredBadge}
         </div>
         <div class="job-meta">
-          <span class="job-meta-item">ðŸ“ ${location}</span>
+          <span class="job-meta-item">📍 ${location}</span>
           <span class="job-type-badge job-type-${_esc(type)}">${typeLabel}</span>
         </div>
         ${salaryHtml}
@@ -211,7 +211,7 @@ window.SokoniJobs = (() => {
       </article>`;
   }
 
-  // â”€â”€â”€ Render: Featured card (compact horizontal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Render: Featured card (compact horizontal) ───────────────────────────────
 
   function _renderFeaturedCard(job) {
     const initial   = _esc((job.companyName || 'C')[0].toUpperCase());
@@ -232,14 +232,14 @@ window.SokoniJobs = (() => {
           </div>
         </div>
         <div class="featured-meta">
-          <span>ðŸ“ ${location}</span>
+          <span>📍 ${location}</span>
           <span class="job-type-badge job-type-${_esc(job.type||'')}">${typeLabel}</span>
         </div>
-        <div class="featured-cta">View Job â†’</div>
+        <div class="featured-cta">View Job →</div>
       </article>`;
   }
 
-  // â”€â”€â”€ PUBLIC PAGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── PUBLIC PAGE ─────────────────────────────────────────────────────────────
 
   async function initPublic() {
     _buildCategoryChips();
@@ -355,7 +355,7 @@ window.SokoniJobs = (() => {
     if (el) el.closest('.seeker-section')?.classList.add('hidden');
   }
 
-  // â”€â”€â”€ Load jobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Load jobs ───────────────────────────────────────────────────────────────
 
   async function loadFeaturedJobs() {
     const container = document.getElementById('jobsFeaturedList');
@@ -388,7 +388,7 @@ window.SokoniJobs = (() => {
     const loadMoreEl = document.getElementById('jobsLoadMore');
 
     if (listEl && reset) {
-      listEl.innerHTML = '<div class="jobs-loading">Loading jobsâ€¦</div>';
+      listEl.innerHTML = '<div class="jobs-loading">Loading jobs…</div>';
     }
 
     try {
@@ -435,7 +435,7 @@ window.SokoniJobs = (() => {
         if (_allJobs.length === 0) {
           listEl.innerHTML = `
             <div class="empty-state">
-              <div class="empty-icon">ðŸ”</div>
+              <div class="empty-icon">🔍</div>
               <div class="empty-title">No jobs found</div>
               <div class="empty-sub">Try different filters or check back later.</div>
             </div>`;
@@ -451,7 +451,7 @@ window.SokoniJobs = (() => {
     } catch (err) {
       console.error('[SokoniJobs] loadJobs error:', err);
       if (listEl && reset) {
-        listEl.innerHTML = `<div class="empty-state"><div class="empty-icon">âš ï¸</div><div class="empty-title">Could not load jobs</div><div class="empty-sub">${_esc(err.message)}</div></div>`;
+        listEl.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Could not load jobs</div><div class="empty-sub">${_esc(err.message)}</div></div>`;
       }
       toast('Failed to load jobs. Please try again.', 'error');
     }
@@ -484,7 +484,7 @@ window.SokoniJobs = (() => {
     loadJobs(true);
   }
 
-  // â”€â”€â”€ Job detail modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Job detail modal ────────────────────────────────────────────────────────
 
   async function openJobDetail(jobId) {
     if (!jobId) return;
@@ -499,7 +499,7 @@ window.SokoniJobs = (() => {
     // Reset apply section
     if (applySection) applySection.style.display = 'none';
 
-    contentEl.innerHTML = '<div class="modal-loading">Loadingâ€¦</div>';
+    contentEl.innerHTML = '<div class="modal-loading">Loading…</div>';
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
@@ -527,7 +527,7 @@ window.SokoniJobs = (() => {
     const applyBtn  = document.getElementById('jobApplyBtn');
 
     const salary = job.salaryMin != null
-      ? `KSh ${_fmtN(job.salaryMin)}${job.salaryMax ? ' â€“ ' + _fmtN(job.salaryMax) : '+'} /mo`
+      ? `KSh ${_fmtN(job.salaryMin)}${job.salaryMax ? ' – ' + _fmtN(job.salaryMax) : '+'} /mo`
       : 'Competitive';
 
     const typeLabel  = TYPE_LABELS[job.type] || _cap(job.type || '');
@@ -543,16 +543,16 @@ window.SokoniJobs = (() => {
           <h2 class="job-detail-title">${_esc(job.title)}</h2>
           <div class="job-detail-company">${_esc(job.companyName || '')}</div>
         </div>
-        ${job.featured ? '<span class="job-featured-badge">â˜… Featured</span>' : ''}
+        ${job.featured ? '<span class="job-featured-badge">★ Featured</span>' : ''}
       </div>
 
       <div class="job-detail-meta-grid">
-        <div class="job-detail-meta-item"><span class="meta-icon">ðŸ“</span>${_esc(job.location || 'Kenya')}</div>
-        <div class="job-detail-meta-item"><span class="meta-icon">ðŸ’¼</span>${_esc(typeLabel)}</div>
-        <div class="job-detail-meta-item"><span class="meta-icon">ðŸ·ï¸</span>${catLabel}</div>
-        <div class="job-detail-meta-item"><span class="meta-icon">ðŸ’°</span>${_esc(salary)}</div>
-        <div class="job-detail-meta-item"><span class="meta-icon">ðŸ‘¥</span>${_esc(String(job.applicationCount || 0))} applicants</div>
-        <div class="job-detail-meta-item"><span class="meta-icon">ðŸ•’</span>${_esc(_timeAgo(job.postedAt))}</div>
+        <div class="job-detail-meta-item"><span class="meta-icon">📍</span>${_esc(job.location || 'Kenya')}</div>
+        <div class="job-detail-meta-item"><span class="meta-icon">💼</span>${_esc(typeLabel)}</div>
+        <div class="job-detail-meta-item"><span class="meta-icon">🏷️</span>${catLabel}</div>
+        <div class="job-detail-meta-item"><span class="meta-icon">💰</span>${_esc(salary)}</div>
+        <div class="job-detail-meta-item"><span class="meta-icon">👥</span>${_esc(String(job.applicationCount || 0))} applicants</div>
+        <div class="job-detail-meta-item"><span class="meta-icon">🕒</span>${_esc(_timeAgo(job.postedAt))}</div>
       </div>
 
       <section class="job-detail-section">
@@ -570,7 +570,7 @@ window.SokoniJobs = (() => {
     // Apply button state
     if (applyBtn) {
       if (hasApplied) {
-        applyBtn.textContent = 'âœ… Applied';
+        applyBtn.textContent = '✅ Applied';
         applyBtn.disabled    = true;
         applyBtn.classList.add('applied');
       } else {
@@ -591,7 +591,7 @@ window.SokoniJobs = (() => {
     if (applySection) applySection.style.display = 'none';
   }
 
-  // â”€â”€â”€ Apply form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Apply form ──────────────────────────────────────────────────────────────
 
   function openApplyForm(jobId) {
     if (!_uid) {
@@ -644,7 +644,7 @@ window.SokoniJobs = (() => {
 
     if (submitEl) {
       submitEl.disabled    = true;
-      submitEl.textContent = 'Submittingâ€¦';
+      submitEl.textContent = 'Submitting…';
     }
 
     try {
@@ -658,9 +658,9 @@ window.SokoniJobs = (() => {
       if (res.data && res.data.alreadyApplied) {
         toast('You have already applied for this job.', 'info');
       } else {
-        toast('Application submitted! Good luck ðŸŽ‰', 'success');
+        toast('Application submitted! Good luck 🎉', 'success');
         if (submitEl) {
-          submitEl.textContent = 'âœ… Applied';
+          submitEl.textContent = '✅ Applied';
           submitEl.classList.add('applied');
         }
         const section = document.getElementById('jobApplySection');
@@ -676,7 +676,7 @@ window.SokoniJobs = (() => {
     }
   }
 
-  // â”€â”€â”€ My Applications panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── My Applications panel ───────────────────────────────────────────────────
 
   async function openMyApps() {
     if (!_uid) {
@@ -707,7 +707,7 @@ window.SokoniJobs = (() => {
     const listEl = document.getElementById('myAppsList');
     if (!listEl) return;
 
-    listEl.innerHTML = '<div class="apps-loading">Loading your applicationsâ€¦</div>';
+    listEl.innerHTML = '<div class="apps-loading">Loading your applications…</div>';
 
     try {
       const fn  = _callable('getMyApplications');
@@ -718,7 +718,7 @@ window.SokoniJobs = (() => {
       if (apps.length === 0) {
         listEl.innerHTML = `
           <div class="empty-state-sm">
-            <div class="empty-icon">ðŸ“­</div>
+            <div class="empty-icon">📭</div>
             <div>You haven't applied to any jobs yet.</div>
             <div class="empty-sub">Browse jobs and hit Apply Now!</div>
           </div>`;
@@ -755,7 +755,7 @@ window.SokoniJobs = (() => {
     }
   }
 
-  // â”€â”€â”€ Seeker profile â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Seeker profile ──────────────────────────────────────────────────────────
 
   async function loadSeekerProfile() {
     if (!_uid) return;
@@ -817,7 +817,7 @@ window.SokoniJobs = (() => {
       : [];
 
     const saveBtn = document.querySelector('#jobSeekerForm [type="submit"]');
-    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Savingâ€¦'; }
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
     try {
       const fn = _callable('saveJobSeekerProfile');
@@ -831,7 +831,7 @@ window.SokoniJobs = (() => {
     }
   }
 
-  // â”€â”€â”€ EMPLOYER PAGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── EMPLOYER PAGE ───────────────────────────────────────────────────────────
 
   async function initEmployer() {
     _watchAuth(
@@ -880,7 +880,7 @@ window.SokoniJobs = (() => {
     if (form) form.addEventListener('submit', e => { e.preventDefault(); postJob(); });
   }
 
-  // â”€â”€â”€ Post job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Post job ─────────────────────────────────────────────────────────────────
 
   async function postJob() {
     const title       = (document.getElementById('jpTitle')?.value       || '').trim();
@@ -893,7 +893,7 @@ window.SokoniJobs = (() => {
     const reqs        = (document.getElementById('jpRequirements')?.value || '').trim();
     const expiresIn   = Number(document.getElementById('jpExpiresIn')?.value  || 30);
 
-    // â”€â”€ Validation â”€â”€
+    // ── Validation ──
     if (title.length < 3 || title.length > 100) {
       toast('Job title must be between 3 and 100 characters.', 'warn');
       document.getElementById('jpTitle')?.focus();
@@ -910,7 +910,7 @@ window.SokoniJobs = (() => {
       return;
     }
     if (description.length < 20 || description.length > 5000) {
-      toast('Description must be 20â€“5000 characters.', 'warn');
+      toast('Description must be 20–5000 characters.', 'warn');
       document.getElementById('jpDescription')?.focus();
       return;
     }
@@ -929,7 +929,7 @@ window.SokoniJobs = (() => {
     }
 
     const submitBtn = document.getElementById('jpSubmitBtn');
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Postingâ€¦'; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Posting…'; }
 
     try {
       const fn  = _callable('createJob');
@@ -964,7 +964,7 @@ window.SokoniJobs = (() => {
     }
   }
 
-  // â”€â”€â”€ My posted jobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── My posted jobs ──────────────────────────────────────────────────────────
 
   async function loadMyJobs() {
     if (!_uid) return;
@@ -972,10 +972,10 @@ window.SokoniJobs = (() => {
     const listEl = document.getElementById('jpMyJobsList');
     if (!listEl) return;
 
-    listEl.innerHTML = '<div class="employer-loading">Loading your jobsâ€¦</div>';
+    listEl.innerHTML = '<div class="employer-loading">Loading your jobs…</div>';
 
     try {
-      // Direct Firestore client query â€” rules allow owner reads (employerUid == uid)
+      // Direct Firestore client query — rules allow owner reads (employerUid == uid)
       // Order is done in JS to avoid requiring a composite index
       const snap = await firebase.firestore()
         .collection('jobs')
@@ -990,14 +990,14 @@ window.SokoniJobs = (() => {
       // Populate applications job-selector dropdown
       const selector = document.getElementById('jpAppJobSelector');
       if (selector) {
-        selector.innerHTML = '<option value="">â€” Select a job â€”</option>'
+        selector.innerHTML = '<option value="">— Select a job —</option>'
           + _myJobs.map(j => `<option value="${_esc(j.id)}">${_esc(j.title)}</option>`).join('');
       }
 
       if (_myJobs.length === 0) {
         listEl.innerHTML = `
           <div class="empty-state">
-            <div class="empty-icon">ðŸ“‹</div>
+            <div class="empty-icon">📋</div>
             <div class="empty-title">No jobs posted yet</div>
             <div class="empty-sub">Use the "Post Job" tab to list your first opening.</div>
           </div>`;
@@ -1037,7 +1037,7 @@ window.SokoniJobs = (() => {
             <span class="status-badge" style="background:${statusCol}20;color:${statusCol};border:1px solid ${statusCol}40">
               ${_esc(statusLabel)}
             </span>
-            <span class="employer-apps-count">ðŸ‘¥ ${_esc(String(apps))} applicants</span>
+            <span class="employer-apps-count">👥 ${_esc(String(apps))} applicants</span>
             <span class="employer-posted">Posted ${timeStr}</span>
           </div>
         </div>
@@ -1053,7 +1053,7 @@ window.SokoniJobs = (() => {
       </div>`;
   }
 
-  // â”€â”€â”€ Applications (employer view) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Applications (employer view) ─────────────────────────────────────────────
 
   async function selectJobForApps(jobId) {
     // Switch to Applications tab
@@ -1074,7 +1074,7 @@ window.SokoniJobs = (() => {
     const listEl = document.getElementById('jpAppsList');
     if (!listEl) return;
 
-    listEl.innerHTML = '<div class="employer-loading">Loading applicationsâ€¦</div>';
+    listEl.innerHTML = '<div class="employer-loading">Loading applications…</div>';
 
     try {
       const fn  = _callable('getJobApplications');
@@ -1084,7 +1084,7 @@ window.SokoniJobs = (() => {
       if (apps.length === 0) {
         listEl.innerHTML = `
           <div class="empty-state">
-            <div class="empty-icon">ðŸ“­</div>
+            <div class="empty-icon">📭</div>
             <div class="empty-title">No applications yet</div>
             <div class="empty-sub">Share your job listing to attract candidates!</div>
           </div>`;
@@ -1122,7 +1122,7 @@ window.SokoniJobs = (() => {
       : '';
 
     // Truncate cover letter for card view
-    const coverShort  = cover.length > 250 ? cover.slice(0, 250) + 'â€¦' : cover;
+    const coverShort  = cover.length > 250 ? cover.slice(0, 250) + '…' : cover;
     const coverFull   = cover;
     const hasCoverMore = cover.length > 250;
 
@@ -1133,7 +1133,7 @@ window.SokoniJobs = (() => {
           <div class="app-info">
             <div class="app-name">${name}</div>
             ${headline ? `<div class="app-headline">${headline}</div>` : ''}
-            ${location ? `<div class="app-location">ðŸ“ ${location}</div>` : ''}
+            ${location ? `<div class="app-location">📍 ${location}</div>` : ''}
           </div>
           <div class="app-meta-right">
             <div class="app-date">${timeStr}</div>
@@ -1167,7 +1167,7 @@ window.SokoniJobs = (() => {
         ${cvUrl ? `
         <div class="app-cv">
           <a href="${cvUrl}" target="_blank" rel="noopener noreferrer" class="cv-link">
-            ðŸ“„ View CV / Portfolio
+            📄 View CV / Portfolio
           </a>
         </div>` : ''}
 
@@ -1189,7 +1189,7 @@ window.SokoniJobs = (() => {
     if (!appId || !status) return;
 
     const btn = document.querySelector(`#app-${CSS.escape(appId)} .btn-primary`);
-    if (btn) { btn.disabled = true; btn.textContent = 'Savingâ€¦'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
     try {
       const fn = _callable('updateApplicationStatus');
@@ -1203,7 +1203,7 @@ window.SokoniJobs = (() => {
     }
   }
 
-  // â”€â”€â”€ Close job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Close job ───────────────────────────────────────────────────────────────
 
   async function closeMyJob(jobId) {
     if (!jobId) return;
@@ -1221,7 +1221,7 @@ window.SokoniJobs = (() => {
     }
   }
 
-  // â”€â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ─── Public API ──────────────────────────────────────────────────────────────
 
   return {
     initPublic,

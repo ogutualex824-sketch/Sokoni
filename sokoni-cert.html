@@ -5,7 +5,7 @@
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SOKONI â€” Production Certification Dashboard</title>
+<title>SOKONI — Production Certification Dashboard</title>
 <style>
   :root {
     --bg:   #050505; --card: #141414; --border: #222;
@@ -90,11 +90,11 @@
 <body>
 
 <header>
-  <h1>SOKONI â€” Production Certification</h1>
-  <span id="certDate">â€”</span>
+  <h1>SOKONI — Production Certification</h1>
+  <span id="certDate">—</span>
   <div style="margin-left:auto;display:flex;gap:8px;">
     <button class="btn btn-ghost" onclick="exportReport()">Export JSON</button>
-    <button class="btn btn-primary" id="runBtn" onclick="runAll()">â–¶ Run Tests</button>
+    <button class="btn btn-primary" id="runBtn" onclick="runAll()">▶ Run Tests</button>
   </div>
 </header>
 
@@ -111,13 +111,13 @@
             <circle id="ringCircle" cx="60" cy="60" r="50" fill="none" stroke="var(--accent)" stroke-width="12"
               stroke-dasharray="314" stroke-dashoffset="314" stroke-linecap="round"/>
           </svg>
-          <div class="ring-num"><span id="scoreNum">â€”</span><small>/ 100</small></div>
+          <div class="ring-num"><span id="scoreNum">—</span><small>/ 100</small></div>
         </div>
         <div class="score-breakdown">
-          <div class="score-item"><label>Passed</label><value class="t-pass" id="sPassed">â€”</value></div>
-          <div class="score-item"><label>Failed</label><value class="t-fail" id="sFailed">â€”</value></div>
-          <div class="score-item"><label>Partial</label><value class="t-partial" id="sPartial">â€”</value></div>
-          <div class="score-item"><label>Total</label><value id="sTotal">â€”</value></div>
+          <div class="score-item"><label>Passed</label><value class="t-pass" id="sPassed">—</value></div>
+          <div class="score-item"><label>Failed</label><value class="t-fail" id="sFailed">—</value></div>
+          <div class="score-item"><label>Partial</label><value class="t-partial" id="sPartial">—</value></div>
+          <div class="score-item"><label>Total</label><value id="sTotal">—</value></div>
         </div>
       </div>
     </div>
@@ -128,16 +128,16 @@
     <div class="card-header"><span class="card-title">Phase Status</span></div>
     <div class="card-body">
       <ul class="phase-list" id="phaseList">
-        <li class="phase-item"><span class="phase-icon">â³</span><div class="phase-text"><strong>Phase 1 â€” Codebase Integrity</strong><small>Timer leaks, Firebase guards, listener cleanup</small></div><span class="badge badge-yellow" id="ph1">Pending</span></li>
-        <li class="phase-item"><span class="phase-icon">â³</span><div class="phase-text"><strong>Phase 2 â€” Memory &amp; Resources</strong><small>Unbounded arrays, File object cleanup</small></div><span class="badge badge-yellow" id="ph2">Pending</span></li>
-        <li class="phase-item"><span class="phase-icon">â³</span><div class="phase-text"><strong>Phase 3 â€” Performance Stress</strong><small>100â†’1000 concurrent mock operations</small></div><span class="badge badge-yellow" id="ph3">Pending</span></li>
-        <li class="phase-item"><span class="phase-icon">â³</span><div class="phase-text"><strong>Phase 4 â€” Workflow Reliability</strong><small>Auth, buyer, seller, admin, driver, provider</small></div><span class="badge badge-yellow" id="ph4">Pending</span></li>
-        <li class="phase-item"><span class="phase-icon">â³</span><div class="phase-text"><strong>Phase 5 â€” Payment &amp; Escrow</strong><small>M-Pesa, STK push, idempotency, release</small></div><span class="badge badge-yellow" id="ph5">Pending</span></li>
-        <li class="phase-item"><span class="phase-icon">â³</span><div class="phase-text"><strong>Phase 6 â€” Security Hardening</strong><small>XSS, CSS injection, CORS, CSP, auth guards</small></div><span class="badge badge-yellow" id="ph6">Pending</span></li>
-        <li class="phase-item"><span class="phase-icon">â³</span><div class="phase-text"><strong>Phase 7 â€” PWA Certification</strong><small>Manifest, Service Worker, offline mode</small></div><span class="badge badge-yellow" id="ph7">Pending</span></li>
-        <li class="phase-item"><span class="phase-icon">â³</span><div class="phase-text"><strong>Phase 8 â€” Firestore Rules</strong><small>No open writes, privilege escalation blocked</small></div><span class="badge badge-yellow" id="ph8">Pending</span></li>
-        <li class="phase-item"><span class="phase-icon">â³</span><div class="phase-text"><strong>Phase 9 â€” Regression Suite</strong><small>Automated 80+ assertion test run</small></div><span class="badge badge-yellow" id="ph9">Pending</span></li>
-        <li class="phase-item"><span class="phase-icon">â³</span><div class="phase-text"><strong>Phase 10 â€” Final Certification</strong><small>Score, verdict, deployment recommendation</small></div><span class="badge badge-yellow" id="ph10">Pending</span></li>
+        <li class="phase-item"><span class="phase-icon">⏳</span><div class="phase-text"><strong>Phase 1 — Codebase Integrity</strong><small>Timer leaks, Firebase guards, listener cleanup</small></div><span class="badge badge-yellow" id="ph1">Pending</span></li>
+        <li class="phase-item"><span class="phase-icon">⏳</span><div class="phase-text"><strong>Phase 2 — Memory &amp; Resources</strong><small>Unbounded arrays, File object cleanup</small></div><span class="badge badge-yellow" id="ph2">Pending</span></li>
+        <li class="phase-item"><span class="phase-icon">⏳</span><div class="phase-text"><strong>Phase 3 — Performance Stress</strong><small>100→1000 concurrent mock operations</small></div><span class="badge badge-yellow" id="ph3">Pending</span></li>
+        <li class="phase-item"><span class="phase-icon">⏳</span><div class="phase-text"><strong>Phase 4 — Workflow Reliability</strong><small>Auth, buyer, seller, admin, driver, provider</small></div><span class="badge badge-yellow" id="ph4">Pending</span></li>
+        <li class="phase-item"><span class="phase-icon">⏳</span><div class="phase-text"><strong>Phase 5 — Payment &amp; Escrow</strong><small>M-Pesa, STK push, idempotency, release</small></div><span class="badge badge-yellow" id="ph5">Pending</span></li>
+        <li class="phase-item"><span class="phase-icon">⏳</span><div class="phase-text"><strong>Phase 6 — Security Hardening</strong><small>XSS, CSS injection, CORS, CSP, auth guards</small></div><span class="badge badge-yellow" id="ph6">Pending</span></li>
+        <li class="phase-item"><span class="phase-icon">⏳</span><div class="phase-text"><strong>Phase 7 — PWA Certification</strong><small>Manifest, Service Worker, offline mode</small></div><span class="badge badge-yellow" id="ph7">Pending</span></li>
+        <li class="phase-item"><span class="phase-icon">⏳</span><div class="phase-text"><strong>Phase 8 — Firestore Rules</strong><small>No open writes, privilege escalation blocked</small></div><span class="badge badge-yellow" id="ph8">Pending</span></li>
+        <li class="phase-item"><span class="phase-icon">⏳</span><div class="phase-text"><strong>Phase 9 — Regression Suite</strong><small>Automated 80+ assertion test run</small></div><span class="badge badge-yellow" id="ph9">Pending</span></li>
+        <li class="phase-item"><span class="phase-icon">⏳</span><div class="phase-text"><strong>Phase 10 — Final Certification</strong><small>Score, verdict, deployment recommendation</small></div><span class="badge badge-yellow" id="ph10">Pending</span></li>
       </ul>
     </div>
   </div>
@@ -149,19 +149,19 @@
       <div class="summary-grid">
         <div class="metric"><div class="metric-val" id="mFiles">138</div><div class="metric-lbl">HTML Pages</div></div>
         <div class="metric"><div class="metric-val" id="mJS">183</div><div class="metric-lbl">JS Modules</div></div>
-        <div class="metric"><div class="metric-val" id="mCF">â€”</div><div class="metric-lbl">Cloud Functions</div></div>
+        <div class="metric"><div class="metric-val" id="mCF">—</div><div class="metric-lbl">Cloud Functions</div></div>
         <div class="metric"><div class="metric-val" id="mIdx">184</div><div class="metric-lbl">Firestore Indexes</div></div>
-        <div class="metric"><div class="metric-val t-pass" id="mFixed">21</div><div class="metric-lbl">Issues Fixed (Phase 1â€“3)</div></div>
+        <div class="metric"><div class="metric-val t-pass" id="mFixed">21</div><div class="metric-lbl">Issues Fixed (Phase 1–3)</div></div>
         <div class="metric"><div class="metric-val t-fail" id="mOpen">2</div><div class="metric-lbl">High Issues (CORS audit)</div></div>
         <div class="metric"><div class="metric-val" id="mSW">v261</div><div class="metric-lbl">Service Worker</div></div>
-        <div class="metric"><div class="metric-val t-pass" id="mPWA">âœ“</div><div class="metric-lbl">PWA Manifest Valid</div></div>
+        <div class="metric"><div class="metric-val t-pass" id="mPWA">✓</div><div class="metric-lbl">PWA Manifest Valid</div></div>
       </div>
     </div>
   </div>
 
   <!-- VERIFIED FIXES -->
   <div class="card full-width">
-    <div class="card-header"><span class="card-title">Verified Fixes â€” Phase 1â€“3 Sprint</span><span class="badge badge-green">21 Resolved</span></div>
+    <div class="card-header"><span class="card-title">Verified Fixes — Phase 1–3 Sprint</span><span class="badge badge-green">21 Resolved</span></div>
     <div class="card-body" style="overflow-x:auto">
       <table class="findings">
         <thead><tr><th>Severity</th><th>File</th><th>Issue</th><th>Fix Applied</th><th>Status</th></tr></thead>
@@ -172,8 +172,8 @@
           <tr><td><span class="badge badge-red">CRITICAL</span></td><td>b2b.html, seller.html, home-services.html, legal-hub.html, tech-hub.html</td><td>Placeholder/wrong apiKey + appId</td><td>Canonical config on all 5 pages</td><td><span class="badge badge-green">Fixed</span></td></tr>
           <tr><td><span class="badge badge-red">CRITICAL</span></td><td>seller.js (4 locations)</td><td>XSS via Q&amp;A, DM inbox, chat, product cards</td><td>_esc() applied to all user-generated values</td><td><span class="badge badge-green">Fixed</span></td></tr>
           <tr><td><span class="badge badge-red">CRITICAL</span></td><td>script.js</td><td>CSS injection via s.accentColor in style attribute</td><td>Regex whitelist for CSS color values</td><td><span class="badge badge-green">Fixed</span></td></tr>
-          <tr><td><span class="badge badge-red">CRITICAL</span></td><td>script.js</td><td>Listener leak â€” listenSellerBroadcasts unsub not captured</td><td>Captured unsub; clear on pagehide</td><td><span class="badge badge-green">Fixed</span></td></tr>
-          <tr><td><span class="badge badge-red">CRITICAL</span></td><td>functions/index.js</td><td>kassAIAssistant crashes if ANTHROPIC_API_KEY unset</td><td>Null guard â†’ 503 with user-friendly message</td><td><span class="badge badge-green">Fixed</span></td></tr>
+          <tr><td><span class="badge badge-red">CRITICAL</span></td><td>script.js</td><td>Listener leak — listenSellerBroadcasts unsub not captured</td><td>Captured unsub; clear on pagehide</td><td><span class="badge badge-green">Fixed</span></td></tr>
+          <tr><td><span class="badge badge-red">CRITICAL</span></td><td>functions/index.js</td><td>kassAIAssistant crashes if ANTHROPIC_API_KEY unset</td><td>Null guard → 503 with user-friendly message</td><td><span class="badge badge-green">Fixed</span></td></tr>
           <tr><td><span class="badge badge-red">CRITICAL</span></td><td>pos.js:71</td><td>e.message in body.innerHTML (full-page XSS)</td><td>DOM textContent approach</td><td><span class="badge badge-green">Fixed</span></td></tr>
           <tr><td><span class="badge badge-red">CRITICAL</span></td><td>pos-ai-engine.js:352</td><td>result.error in innerHTML</td><td>DOM textContent with safe wrapper</td><td><span class="badge badge-green">Fixed</span></td></tr>
           <tr><td><span class="badge badge-red">CRITICAL</span></td><td>pos-finance.js:209</td><td>data.error in innerHTML</td><td>DOM textContent with safe wrapper</td><td><span class="badge badge-green">Fixed</span></td></tr>
@@ -194,14 +194,14 @@
 
   <!-- OPEN ITEMS -->
   <div class="card full-width">
-    <div class="card-header"><span class="card-title">Open Items â€” Requires Manual Action</span><span class="badge badge-yellow">5 Remaining</span></div>
+    <div class="card-header"><span class="card-title">Open Items — Requires Manual Action</span><span class="badge badge-yellow">5 Remaining</span></div>
     <div class="card-body" style="overflow-x:auto">
       <table class="findings">
         <thead><tr><th>Severity</th><th>Location</th><th>Issue</th><th>Action Required</th></tr></thead>
         <tbody>
-          <tr><td><span class="badge badge-red">CRITICAL</span></td><td>Firebase Secret Manager</td><td>ANTHROPIC_API_KEY not set â€” AI assistant returns 503</td><td>Set secret: <code>firebase functions:secrets:set ANTHROPIC_API_KEY</code></td></tr>
-          <tr><td><span class="badge badge-red">CRITICAL</span></td><td>Firebase Secret Manager</td><td>INTASEND_PRIVATE_KEY not set â€” live M-Pesa STK push unavailable</td><td>Set secret: <code>firebase functions:secrets:set INTASEND_PRIVATE_KEY</code></td></tr>
-          <tr><td><span class="badge badge-yellow">HIGH</span></td><td>Firebase Secret Manager</td><td>SENDGRID_API_KEY not set â€” transactional emails not sent</td><td>Set secret after obtaining SendGrid key</td></tr>
+          <tr><td><span class="badge badge-red">CRITICAL</span></td><td>Firebase Secret Manager</td><td>ANTHROPIC_API_KEY not set — AI assistant returns 503</td><td>Set secret: <code>firebase functions:secrets:set ANTHROPIC_API_KEY</code></td></tr>
+          <tr><td><span class="badge badge-red">CRITICAL</span></td><td>Firebase Secret Manager</td><td>INTASEND_PRIVATE_KEY not set — live M-Pesa STK push unavailable</td><td>Set secret: <code>firebase functions:secrets:set INTASEND_PRIVATE_KEY</code></td></tr>
+          <tr><td><span class="badge badge-yellow">HIGH</span></td><td>Firebase Secret Manager</td><td>SENDGRID_API_KEY not set — transactional emails not sent</td><td>Set secret after obtaining SendGrid key</td></tr>
           <tr><td><span class="badge badge-yellow">HIGH</span></td><td>CSP / firebase.json</td><td>'unsafe-inline' still present in script-src</td><td>Refactor onclick= handlers to addEventListener; then remove unsafe-inline</td></tr>
           <tr><td><span class="badge badge-blue">LOW</span></td><td>functions/index.js (12 endpoints)</td><td>Admin Cloud Functions use cors:true instead of domain whitelist</td><td>Audit each and restrict to mysokoni.co.ke + sokoni-aeb26.web.app</td></tr>
         </tbody>
@@ -215,18 +215,18 @@
       <span class="card-title">Automated Regression Suite</span>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost" onclick="clearOutput()">Clear</button>
-        <button class="btn btn-primary" id="runBtn2" onclick="runAll()">â–¶ Run All Tests</button>
+        <button class="btn btn-primary" id="runBtn2" onclick="runAll()">▶ Run All Tests</button>
       </div>
     </div>
     <div class="card-body">
       <div id="progressWrap" style="margin-bottom:12px;display:none">
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--txt2);margin-bottom:4px;">
-          <span>Runningâ€¦</span><span id="progressPct">0%</span>
+          <span>Running…</span><span id="progressPct">0%</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
       </div>
       <div id="testOutput">
-        <span class="t-dim">Click "Run All Tests" â€” requires offline mode (?offline=1 or Firebase unavailable).</span>
+        <span class="t-dim">Click "Run All Tests" — requires offline mode (?offline=1 or Firebase unavailable).</span>
       </div>
     </div>
   </div>
@@ -236,14 +236,14 @@
     <div class="card-header"><span class="card-title">PWA Compliance</span><span class="badge badge-green">PASS</span></div>
     <div class="card-body">
       <ul class="phase-list">
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>manifest.json</strong><small>display:standalone, start_url, scope, theme/bg colors</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>Icons</strong><small>192Ã—192 (any + maskable), 512Ã—512</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>Service Worker install</strong><small>skipWaiting() + Promise.allSettled precache</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>Service Worker activate</strong><small>Old caches deleted, clients.claim()</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>Offline fallback</strong><small>/offline.html served for navigation failures</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>Cache versioning</strong><small>v261 â€” v260 caches auto-deleted on activation</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>Shortcuts</strong><small>4 app shortcuts configured</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>Share Target</strong><small>Web Share Target API wired</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>manifest.json</strong><small>display:standalone, start_url, scope, theme/bg colors</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>Icons</strong><small>192Ã—192 (any + maskable), 512Ã—512</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>Service Worker install</strong><small>skipWaiting() + Promise.allSettled precache</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>Service Worker activate</strong><small>Old caches deleted, clients.claim()</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>Offline fallback</strong><small>/offline.html served for navigation failures</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>Cache versioning</strong><small>v261 — v260 caches auto-deleted on activation</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>Shortcuts</strong><small>4 app shortcuts configured</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>Share Target</strong><small>Web Share Target API wired</small></div></li>
       </ul>
     </div>
   </div>
@@ -253,16 +253,16 @@
     <div class="card-header"><span class="card-title">Security Posture</span><span class="badge badge-yellow">HIGH</span></div>
     <div class="card-body">
       <ul class="phase-list">
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>Firestore Rules</strong><small>No open writes; escrow/payments/subscriptions admin-only</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>noAdminFields() guard</strong><small>Prevents privilege escalation via client writes</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>XSS â€” seller.js</strong><small>_esc() applied to all user-controlled innerHTML</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>XSS â€” SmartPOS (6 files)</strong><small>DOM textContent for all error message renders</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>CSS injection guard</strong><small>accentColor sanitized with regex whitelist</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>javascript: href blocked</strong><small>Protocol check in story CTA links</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>CSP 'unsafe-eval' removed</strong><small>No eval() calls exist â€” directive was unnecessary</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âœ…</span><div class="phase-text"><strong>HSTS + X-Frame-Options</strong><small>max-age=63072000; SAMEORIGIN</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âš ï¸</span><div class="phase-text"><strong>CSP 'unsafe-inline'</strong><small>Still present â€” requires onclickâ†’addEventListener refactor</small></div></li>
-        <li class="phase-item"><span class="phase-icon">âš ï¸</span><div class="phase-text"><strong>12 CF endpoints: cors:true</strong><small>Admin routes should use domain whitelist</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>Firestore Rules</strong><small>No open writes; escrow/payments/subscriptions admin-only</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>noAdminFields() guard</strong><small>Prevents privilege escalation via client writes</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>XSS — seller.js</strong><small>_esc() applied to all user-controlled innerHTML</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>XSS — SmartPOS (6 files)</strong><small>DOM textContent for all error message renders</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>CSS injection guard</strong><small>accentColor sanitized with regex whitelist</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>javascript: href blocked</strong><small>Protocol check in story CTA links</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>CSP 'unsafe-eval' removed</strong><small>No eval() calls exist — directive was unnecessary</small></div></li>
+        <li class="phase-item"><span class="phase-icon">✅</span><div class="phase-text"><strong>HSTS + X-Frame-Options</strong><small>max-age=63072000; SAMEORIGIN</small></div></li>
+        <li class="phase-item"><span class="phase-icon">⚠️</span><div class="phase-text"><strong>CSP 'unsafe-inline'</strong><small>Still present — requires onclick→addEventListener refactor</small></div></li>
+        <li class="phase-item"><span class="phase-icon">⚠️</span><div class="phase-text"><strong>12 CF endpoints: cors:true</strong><small>Admin routes should use domain whitelist</small></div></li>
       </ul>
     </div>
   </div>
@@ -281,7 +281,7 @@
 </main>
 
 <script>
-/* â”€â”€â”€ Load scripts â”€â”€â”€ */
+/* ─── Load scripts ─── */
 let _scriptsLoaded = false;
 
 function _loadScripts(cb) {
@@ -296,74 +296,74 @@ function _loadScripts(cb) {
   loadNext(['sokoni-mock-data.js', 'sokoni-dev-mock.js', 'sokoni-test-suite.js'], 0);
 }
 
-/* â”€â”€â”€ Output â”€â”€â”€ */
+/* ─── Output ─── */
 const out = document.getElementById('testOutput');
 function log(html) { out.innerHTML += html + '\n'; out.scrollTop = out.scrollHeight; }
 function clearOutput() { out.innerHTML = ''; }
 
-/* â”€â”€â”€ Dates â”€â”€â”€ */
+/* ─── Dates ─── */
 const now = new Date();
 document.getElementById('certDate').textContent = now.toLocaleDateString('en-KE', { day:'numeric', month:'long', year:'numeric' });
 document.getElementById('footerDate').textContent = now.toISOString().slice(0, 10);
 
-/* â”€â”€â”€ Phase badge helpers â”€â”€â”€ */
+/* ─── Phase badge helpers ─── */
 function phasePass(id) {
   const el = document.getElementById(id);
   if (el) { el.textContent = 'PASS'; el.className = 'badge badge-green'; }
   const item = el?.closest('.phase-item');
-  if (item) item.querySelector('.phase-icon').textContent = 'âœ…';
+  if (item) item.querySelector('.phase-icon').textContent = '✅';
 }
 function phaseFail(id) {
   const el = document.getElementById(id);
   if (el) { el.textContent = 'FAIL'; el.className = 'badge badge-red'; }
   const item = el?.closest('.phase-item');
-  if (item) item.querySelector('.phase-icon').textContent = 'âŒ';
+  if (item) item.querySelector('.phase-icon').textContent = '❌';
 }
 function phasePartial(id) {
   const el = document.getElementById(id);
   if (el) { el.textContent = 'PARTIAL'; el.className = 'badge badge-yellow'; }
   const item = el?.closest('.phase-item');
-  if (item) item.querySelector('.phase-icon').textContent = 'âš ï¸';
+  if (item) item.querySelector('.phase-icon').textContent = '⚠️';
 }
 
-/* â”€â”€â”€ Manual phase checks (static analysis results baked in) â”€â”€â”€ */
+/* ─── Manual phase checks (static analysis results baked in) ─── */
 function runStaticChecks() {
-  /* Phase 1 â€” Codebase Integrity */
-  log('<span class="t-info">â•â•â• Phase 1: Codebase Integrity â•â•â•</span>');
-  log('<span class="t-pass">âœ… Firebase getApps guards â€” all pages verified</span>');
-  log('<span class="t-pass">âœ… sokoni-monitor.js timers â€” clearInterval on pagehide</span>');
-  log('<span class="t-pass">âœ… Service Worker cache cleanup â€” old caches deleted on activate</span>');
-  log('<span class="t-pass">âœ… Firestore rules â€” no allow write:if true found</span>');
-  log('<span class="t-partial">âš ï¸ Camera + story viewer listeners â€” identified, tracked for refactor sprint</span>');
+  /* Phase 1 — Codebase Integrity */
+  log('<span class="t-info">═══ Phase 1: Codebase Integrity ═══</span>');
+  log('<span class="t-pass">✅ Firebase getApps guards — all pages verified</span>');
+  log('<span class="t-pass">✅ sokoni-monitor.js timers — clearInterval on pagehide</span>');
+  log('<span class="t-pass">✅ Service Worker cache cleanup — old caches deleted on activate</span>');
+  log('<span class="t-pass">✅ Firestore rules — no allow write:if true found</span>');
+  log('<span class="t-partial">⚠️ Camera + story viewer listeners — identified, tracked for refactor sprint</span>');
   phasePass('ph1');
 
-  /* Phase 2 â€” Memory */
-  log('<span class="t-info">â•â•â• Phase 2: Memory &amp; Resources â•â•â•</span>');
-  log('<span class="t-pass">âœ… _chatHistory capped at 40 entries (script.js)</span>');
-  log('<span class="t-pass">âœ… /demo-seed.js removed from SW precache (saved 142 KB)</span>');
-  log('<span class="t-partial">âš ï¸ _productImages cleanup â€” tracked; File objects released on form reset</span>');
+  /* Phase 2 — Memory */
+  log('<span class="t-info">═══ Phase 2: Memory &amp; Resources ═══</span>');
+  log('<span class="t-pass">✅ _chatHistory capped at 40 entries (script.js)</span>');
+  log('<span class="t-pass">✅ /demo-seed.js removed from SW precache (saved 142 KB)</span>');
+  log('<span class="t-partial">⚠️ _productImages cleanup — tracked; File objects released on form reset</span>');
   phasePass('ph2');
 
-  /* Phase 7 â€” PWA */
-  log('<span class="t-info">â•â•â• Phase 7: PWA Certification â•â•â•</span>');
-  log('<span class="t-pass">âœ… manifest.json â€” all required fields present</span>');
-  log('<span class="t-pass">âœ… Icons â€” 192Ã—192 + 512Ã—512 with maskable purpose</span>');
-  log('<span class="t-pass">âœ… SW install â€” skipWaiting + Promise.allSettled</span>');
-  log('<span class="t-pass">âœ… SW activate â€” stale cache deletion + clients.claim</span>');
-  log('<span class="t-pass">âœ… Offline fallback â€” /offline.html served correctly</span>');
+  /* Phase 7 — PWA */
+  log('<span class="t-info">═══ Phase 7: PWA Certification ═══</span>');
+  log('<span class="t-pass">✅ manifest.json — all required fields present</span>');
+  log('<span class="t-pass">✅ Icons — 192Ã—192 + 512Ã—512 with maskable purpose</span>');
+  log('<span class="t-pass">✅ SW install — skipWaiting + Promise.allSettled</span>');
+  log('<span class="t-pass">✅ SW activate — stale cache deletion + clients.claim</span>');
+  log('<span class="t-pass">✅ Offline fallback — /offline.html served correctly</span>');
   phasePass('ph7');
 
-  /* Phase 8 â€” Firestore Rules */
-  log('<span class="t-info">â•â•â• Phase 8: Firestore Security Rules â•â•â•</span>');
-  log('<span class="t-pass">âœ… escrow â€” allow create/update/delete: if false</span>');
-  log('<span class="t-pass">âœ… payments â€” allow update: if false (Cloud Function only)</span>');
-  log('<span class="t-pass">âœ… subscriptions â€” allow write: if false</span>');
-  log('<span class="t-pass">âœ… users â€” noAdminFields() blocks privilege escalation</span>');
-  log('<span class="t-pass">âœ… orders â€” multi-party rules with field-level restrictions</span>');
+  /* Phase 8 — Firestore Rules */
+  log('<span class="t-info">═══ Phase 8: Firestore Security Rules ═══</span>');
+  log('<span class="t-pass">✅ escrow — allow create/update/delete: if false</span>');
+  log('<span class="t-pass">✅ payments — allow update: if false (Cloud Function only)</span>');
+  log('<span class="t-pass">✅ subscriptions — allow write: if false</span>');
+  log('<span class="t-pass">✅ users — noAdminFields() blocks privilege escalation</span>');
+  log('<span class="t-pass">✅ orders — multi-party rules with field-level restrictions</span>');
   phasePass('ph8');
 }
 
-/* â”€â”€â”€ Run full test suite â”€â”€â”€ */
+/* ─── Run full test suite ─── */
 async function runAll() {
   const btn1 = document.getElementById('runBtn');
   const btn2 = document.getElementById('runBtn2');
@@ -371,7 +371,7 @@ async function runAll() {
   clearOutput();
   document.getElementById('progressWrap').style.display = 'block';
 
-  log('<span class="t-info">Loading offline mock layerâ€¦</span>');
+  log('<span class="t-info">Loading offline mock layer…</span>');
 
   window.__sokoniForceOffline = true;
 
@@ -379,13 +379,13 @@ async function runAll() {
     await new Promise(r => setTimeout(r, 800));
 
     if (!window._sokoniMock) {
-      log('<span class="t-fail">âŒ Mock layer failed to load. Ensure ?offline=1 or Firebase is unreachable.</span>');
+      log('<span class="t-fail">❌ Mock layer failed to load. Ensure ?offline=1 or Firebase is unreachable.</span>');
       btn1.disabled = btn2.disabled = false;
       return;
     }
 
-    log('<span class="t-pass">âœ… Mock layer loaded</span>');
-    log('<span class="t-pass">âœ… SokoniDB ready: ' + (window.SokoniDB ? 'yes' : 'no') + '</span>');
+    log('<span class="t-pass">✅ Mock layer loaded</span>');
+    log('<span class="t-pass">✅ SokoniDB ready: ' + (window.SokoniDB ? 'yes' : 'no') + '</span>');
     log('');
 
     runStaticChecks();
@@ -403,11 +403,11 @@ async function runAll() {
       log(`<span class="${cls}">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>`);
     };
 
-    log('<span class="t-info">â•â•â• Phase 3 â€” Performance Stress Test â•â•â•</span>');
-    log('<span class="t-info">â•â•â• Phase 4 â€” Workflow Reliability â•â•â•</span>');
-    log('<span class="t-info">â•â•â• Phase 5 â€” Payment &amp; Escrow â•â•â•</span>');
-    log('<span class="t-info">â•â•â• Phase 6 â€” Security â•â•â•</span>');
-    log('<span class="t-info">â•â•â• Phase 9 â€” Regression Suite â•â•â•</span>');
+    log('<span class="t-info">═══ Phase 3 — Performance Stress Test ═══</span>');
+    log('<span class="t-info">═══ Phase 4 — Workflow Reliability ═══</span>');
+    log('<span class="t-info">═══ Phase 5 — Payment &amp; Escrow ═══</span>');
+    log('<span class="t-info">═══ Phase 6 — Security ═══</span>');
+    log('<span class="t-info">═══ Phase 9 — Regression Suite ═══</span>');
     log('');
 
     let result;
@@ -438,7 +438,7 @@ async function runAll() {
     /* Phase badges from results */
     const byPhase = {};
     (result.results || []).forEach(r => {
-      const ph = r.name.split(' â€º ')[0];
+      const ph = r.name.split(' › ')[0];
       if (!byPhase[ph]) byPhase[ph] = { pass:0, fail:0 };
       if (r.status === 'PASS') byPhase[ph].pass++;
       else                     byPhase[ph].fail++;
@@ -456,7 +456,7 @@ async function runAll() {
       'Firestore Mock API': 'ph3',
       'Error Handling & Resilience': 'ph3',
       'Security':           'ph6',
-      'Stress Test (Mock â€” 100 Concurrent Ops)': 'ph3',
+      'Stress Test (Mock — 100 Concurrent Ops)': 'ph3',
     };
 
     Object.entries(byPhase).forEach(([ph, counts]) => {
@@ -467,7 +467,7 @@ async function runAll() {
       else                        phaseFail(phId);
     });
 
-    /* Phase 9 â€” regression itself */
+    /* Phase 9 — regression itself */
     if (result.failed === 0) phasePass('ph9');
     else if (result.failed <= 3) phasePartial('ph9');
     else phaseFail('ph9');
@@ -503,7 +503,7 @@ function renderVerdict(result, score) {
 
   body.innerHTML = `
     <div style="text-align:center;padding:24px 0;">
-      <div style="font-size:48px;margin-bottom:12px;">${certified ? 'ðŸ†' : score >= 75 ? 'âš ï¸' : 'ðŸš«'}</div>
+      <div style="font-size:48px;margin-bottom:12px;">${certified ? '🏆' : score >= 75 ? '⚠️' : '🚫'}</div>
       <div style="font-size:24px;font-weight:800;color:${color};margin-bottom:8px;">${label}</div>
       <div style="color:var(--txt2);font-size:14px;margin-bottom:24px;">
         Score: ${score}/100 Â· ${result.passed} passed Â· ${result.failed} failed Â· ${result.partial} partial
@@ -511,12 +511,12 @@ function renderVerdict(result, score) {
       <div style="background:#0d0d0d;border-radius:12px;padding:16px;text-align:left;max-width:600px;margin:0 auto;">
         <div style="font-weight:700;margin-bottom:10px;">Deployment Recommendation</div>
         ${certified
-          ? `<p style="color:var(--green)">âœ… All automated checks pass. Platform is safe to deploy to production.<br>
+          ? `<p style="color:var(--green)">✅ All automated checks pass. Platform is safe to deploy to production.<br>
              Complete the 5 open items (secrets, CORS hardening) before go-live.</p>`
           : score >= 75
-          ? `<p style="color:var(--yellow)">âš ï¸ Platform is functionally sound but has ${result.failed} failing tests.<br>
-             Review failures above. Conditional approval â€” fix failures before launch.</p>`
-          : `<p style="color:var(--red)">ðŸš« Too many test failures for production deployment.<br>
+          ? `<p style="color:var(--yellow)">⚠️ Platform is functionally sound but has ${result.failed} failing tests.<br>
+             Review failures above. Conditional approval — fix failures before launch.</p>`
+          : `<p style="color:var(--red)">🚫 Too many test failures for production deployment.<br>
              Fix all CRITICAL and HIGH issues before re-running certification.</p>`
         }
       </div>

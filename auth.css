@@ -89,6 +89,9 @@ body{
 /* LOGO */
 
 .auth-logo-wrap{
+    display:flex;
+    align-items:center;
+    justify-content:center;
     margin-bottom:4px;
     animation:logoPop 3s ease-in-out infinite;
 }
@@ -102,10 +105,22 @@ body{
 }
 
 .auth-logo{
-    width:180px;
+    width:160px;
     height:auto;
     display:block;
-    border-radius:8px;
+    object-fit:contain;
+}
+
+.auth-logo-wm{
+    font-size:28px;
+    font-weight:900;
+    color:#fff;
+    letter-spacing:-0.5px;
+    line-height:1;
+}
+.auth-logo-wm em{
+    color:#71ff00;
+    font-style:normal;
 }
 
 /* TITLE */
@@ -252,14 +267,14 @@ body{
 
 @media(max-width:480px){
     .auth-card{ padding:32px 22px; }
-    .auth-logo{ width:150px; }
+    .auth-logo{ width:120px; }
 }
 
 /* ── Auth pages extra breakpoints ── */
 @media(max-width:600px){
   .auth-page{padding:20px 12px 80px;}
   .auth-card{margin:0 auto;border-radius:20px;padding:28px 18px;}
-  .auth-logo{width:150px;}
+  .auth-logo{width:120px;}
   .auth-title{font-size:22px;}
   .auth-input{padding:13px 14px;font-size:16px;}
   .auth-btn{padding:14px;font-size:15px;}

@@ -5,13 +5,13 @@
   <script src="security.js"></script>
 <script src="auth-guard.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>SOKONI â€” Invoice</title>
+  <title>SOKONI — Invoice</title>
   <meta name="description" content="View and print your SOKONI order invoice.">
-  <meta property="og:title" content="SOKONI â€” Invoice">
+  <meta property="og:title" content="SOKONI — Invoice">
   <meta property="og:description" content="View, download or print your SOKONI order invoice.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
-  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
-  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
     :root {
@@ -253,18 +253,18 @@
 
 <div class="no-print">
   <div class="inv-topbar">
-    <div class="inv-topbar-title">ðŸ§¾ Invoice Generator</div>
+    <div class="inv-topbar-title">🧾 Invoice Generator</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <a href="track.html" class="inv-action-btn btn-back">â† Orders</a>
-      <a href="seller.html#tax-section" class="inv-action-btn btn-back" style="text-decoration:none;">ðŸ§¾ Tax Dashboard</a>
-      <button type="button" class="inv-action-btn btn-download" onclick="downloadInvoice()">â¬‡ï¸ Download Invoice</button>
-      <button type="button" class="inv-action-btn btn-print" onclick="window.print()">ðŸ–¨ï¸ Print / Save PDF (KRA)</button>
+      <a href="track.html" class="inv-action-btn btn-back">← Orders</a>
+      <a href="seller.html#tax-section" class="inv-action-btn btn-back" style="text-decoration:none;">🧾 Tax Dashboard</a>
+      <button type="button" class="inv-action-btn btn-download" onclick="downloadInvoice()">⬇️ Download Invoice</button>
+      <button type="button" class="inv-action-btn btn-print" onclick="window.print()">🖨️ Print / Save PDF (KRA)</button>
     </div>
   </div>
 
   <!-- Order Picker -->
   <div class="order-picker" id="orderPicker">
-    <h3>ðŸ§¾ Select an order to generate invoice</h3>
+    <h3>🧾 Select an order to generate invoice</h3>
     <div class="order-picker-list" id="orderPickerList"></div>
   </div>
 </div>
@@ -306,7 +306,7 @@
           <span id="invSellerName">Verified Seller</span><br>
           info@sokoni.co.ke Â· +254 705 726 803<br>
           Nairobi, Kenya<br>
-          KRA PIN: <span id="invSellerKraPin" style="font-weight:700;color:#22a000;">â€”</span><br>
+          KRA PIN: <span id="invSellerKraPin" style="font-weight:700;color:#22a000;">—</span><br>
           <span style="font-size:10px;background:rgba(34,160,0,0.12);color:#22a000;padding:1px 6px;border-radius:4px;font-weight:700;border:1px solid rgba(34,160,0,0.25);">KRA TAX INVOICE</span>
         </div>
       </div>
@@ -348,7 +348,7 @@
         For returns or disputes: info@sokoni.co.ke | dispute.html
       </div>
     </div>
-    <div class="inv-qr">ðŸ§¾</div>
+    <div class="inv-qr">🧾</div>
   </div>
 
 </div>
@@ -367,7 +367,7 @@ if(!orders.length){
         <div class="opi-date">${o.date}</div>
       </div>
       <div class="opi-total">KES ${Number(o.total).toLocaleString()}</div>
-      <button type="button" class="opi-btn" onclick="generateInvoice('${o.id}')">Generate â†’</button>
+      <button type="button" class="opi-btn" onclick="generateInvoice('${o.id}')">Generate →</button>
     </div>
   `).join("");
 }
@@ -390,13 +390,13 @@ function generateInvoice(orderId){
   document.getElementById("invBuyerDetail").textContent = (o.address||"") + (o.phone ? "\n" + o.phone : "");
   document.getElementById("invSellerName").textContent = (o.items&&o.items[0]&&o.items[0].sellerName) || "Sokoni Seller";
   document.getElementById("invPayMethod").textContent = (o.method||"M-PESA").toUpperCase();
-  const kraPin = localStorage.getItem("kraPinSaved") || "â€”";
+  const kraPin = localStorage.getItem("kraPinSaved") || "—";
   const kraEl  = document.getElementById("invSellerKraPin");
   if(kraEl) kraEl.textContent = kraPin;
 
   /* Status ribbon */
   const ribbon = document.getElementById("invRibbon");
-  const statusMap = { processing:"PROCESSING â€” PAYMENT RECEIVED", shipped:"SHIPPED", out_for_delivery:"OUT FOR DELIVERY", delivered:"DELIVERED & PAID", placed:"ORDER PLACED" };
+  const statusMap = { processing:"PROCESSING — PAYMENT RECEIVED", shipped:"SHIPPED", out_for_delivery:"OUT FOR DELIVERY", delivered:"DELIVERED & PAID", placed:"ORDER PLACED" };
   const ribbonClass= { processing:"ribbon-processing", shipped:"ribbon-paid", out_for_delivery:"ribbon-paid", delivered:"ribbon-paid", placed:"ribbon-placed" };
   ribbon.textContent = statusMap[o.status] || "PAID";
   ribbon.className = "inv-status-ribbon " + (ribbonClass[o.status]||"ribbon-paid");
@@ -410,14 +410,14 @@ function generateInvoice(orderId){
         <img loading="lazy" src="${p.image||'assets/default-product.png'}" class="inv-item-img" onerror="this.style.display='none'">
         <span class="inv-item-name">${p.name}</span>
       </td>
-      <td style="color:#888;">${p.category||"â€”"}</td>
+      <td style="color:#888;">${p.category||"—"}</td>
       <td>KES ${Number(p.price).toLocaleString()}</td>
       <td>1</td>
       <td>KES ${Number(p.price).toLocaleString()}</td>
     </tr>
   `).join("") : `<tr><td colspan="6" style="color:#999;text-align:center;padding:20px;">No items</td></tr>`;
 
-  /* â”€â”€ KRA-Compliant VAT Totals â”€â”€ */
+  /* ── KRA-Compliant VAT Totals ── */
   const grossTotal   = Number(o.total) || items.reduce((s,p)=>s+Number(p.price),0);
   const vatRate      = 0.16;
   const vatExcl      = Math.round(grossTotal / (1 + vatRate));
@@ -466,11 +466,11 @@ function downloadInvoice(){
   </style>
 </head><body>
 ${shell.outerHTML}<script>window.onload=()=>{setTimeout(()=>window.print(),400);}<\/script><nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">ðŸ </span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item active-bnav"><span class="bnav-emoji">ðŸ›ï¸</span><span>Shop</span></a>
-  <a href="services.html" class="bnav-item"><span class="bnav-emoji">ðŸ› ï¸</span><span>Services</span></a>
-  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">ðŸ”</span><span>Requests</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">ðŸ‘¤</span><span>Profile</span></a>
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item active-bnav"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 <script>
 /* Nav state init */

@@ -4,14 +4,14 @@
   <script src="security.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Jobs â€” SOKONI</title>
-  <meta name="description" content="Find jobs in Kenya on SOKONI â€” technology, finance, healthcare, retail, logistics and more.">
-  <meta property="og:title" content="Jobs â€” SOKONI">
+  <title>Jobs — SOKONI</title>
+  <meta name="description" content="Find jobs in Kenya on SOKONI — technology, finance, healthcare, retail, logistics and more.">
+  <meta property="og:title" content="Jobs — SOKONI">
   <meta property="og:description" content="Find your next job in Kenya. Browse verified roles across tech, finance, healthcare, logistics and more.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
   <meta property="og:url" content="https://mysokoni.co.ke/jobs.html">
-  <link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
-  <link rel="apple-touch-icon" href="assets/Sokoni Logo.png">
+  <link rel="icon" type="image/png" href="assets/logosokoni.png">
+  <link rel="apple-touch-icon" href="assets/logosokoni.png">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#050505">
   <script src="shared-header.js"></script>
@@ -20,7 +20,7 @@
   <script src="seo.js" defer></script>
 
   <style>
-    /* â”€â”€ Design tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Design tokens ───────────────────────────────────────── */
     :root {
       --bg:      #050505;
       --surface: rgba(255,255,255,0.04);
@@ -38,7 +38,7 @@
       --shadow:  0 2px 20px rgba(0,0,0,0.5);
     }
 
-    /* â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Reset ──────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
@@ -57,13 +57,13 @@
       clip: rect(0,0,0,0); white-space: nowrap; border: 0;
     }
 
-    /* â”€â”€ Toast keyframe â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Toast keyframe ─────────────────────────────────────── */
     @keyframes toastIn {
       from { opacity: 0; transform: translateY(8px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* â”€â”€ Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Buttons ─────────────────────────────────────────────── */
     .btn {
       display: inline-flex;
       align-items: center;
@@ -92,7 +92,7 @@
       cursor: default; border: 1px solid rgba(76,175,80,0.3);
     }
 
-    /* â”€â”€ Hero â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Hero ────────────────────────────────────────────────── */
     .hero {
       background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(0,0,0,0) 60%);
       border-bottom: 1px solid var(--border);
@@ -156,17 +156,17 @@
       .hero-divider { width: auto; height: 1px; }
     }
 
-    /* â”€â”€ Hero action buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Hero action buttons ─────────────────────────────────── */
     .jobs-hero-actions {
       display: flex; gap: 10px; flex-wrap: wrap;
       justify-content: center; margin-top: 20px;
     }
     .jobs-hero-actions .btn.hidden { display: none !important; }
 
-    /* â”€â”€ Section wrapper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Section wrapper ─────────────────────────────────────── */
     .section { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
 
-    /* â”€â”€ Featured strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Featured strip ─────────────────────────────────────── */
     .featured-strip {
       margin: 28px auto 0;
       max-width: 1200px;
@@ -216,10 +216,10 @@
     .featured-cta    { font-size: 12px; font-weight: 700; color: var(--accent); }
     .featured-avatar { width: 36px !important; height: 36px !important; min-width: 36px !important; font-size: 15px !important; }
 
-    /* â”€â”€ Filters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Filters ─────────────────────────────────────────────── */
     .filters-bar {
       position: sticky;
-      top: 64px;
+      top: 58px;
       z-index: 100;
       background: rgba(8,8,8,0.95);
       backdrop-filter: blur(12px);
@@ -257,7 +257,7 @@
     .filter-chip:hover  { border-color: var(--accent); color: #fff; background: rgba(59,130,246,0.1); }
     .filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-    /* â”€â”€ Results bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Results bar ─────────────────────────────────────────── */
     .results-bar {
       display: flex;
       align-items: center;
@@ -278,7 +278,7 @@
     }
     .sort-select option { background: #1a1a2e; }
 
-    /* â”€â”€ Jobs grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Jobs grid ───────────────────────────────────────────── */
     #jobsResultsList {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -288,7 +288,7 @@
     @media (max-width: 900px) { #jobsResultsList { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 560px) { #jobsResultsList { grid-template-columns: 1fr; } }
 
-    /* â”€â”€ Job card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Job card ────────────────────────────────────────────── */
     .job-card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -341,17 +341,17 @@
     .job-salary { font-size: 14px; font-weight: 700; color: #4caf50; }
     .job-footer { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: auto; }
 
-    /* â”€â”€ Load more â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Load more ───────────────────────────────────────────── */
     #jobsLoadMore { display: none; margin: 0 auto 40px; width: 220px; }
 
-    /* â”€â”€ Empty / loading states â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Empty / loading states ──────────────────────────────── */
     .empty-state { grid-column: 1/-1; text-align: center; padding: 60px 20px; color: var(--muted); }
     .empty-icon  { font-size: 52px; margin-bottom: 14px; }
     .empty-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
     .empty-sub   { font-size: 14px; }
     .jobs-loading { grid-column: 1/-1; text-align: center; padding: 40px; color: var(--muted); }
 
-    /* â”€â”€ Job detail modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Job detail modal ────────────────────────────────────── */
     #jobDetailModal {
       display: none;
       position: fixed;
@@ -455,7 +455,7 @@
       position: sticky; bottom: 0; background: #111111;
     }
 
-    /* â”€â”€ My Applications panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── My Applications panel ───────────────────────────────── */
     #myAppsPanel {
       position: fixed; right: 0; top: 0; height: 100%;
       width: min(420px, 100%);
@@ -499,7 +499,7 @@
     .apps-loading { padding: 32px 0; text-align: center; color: var(--muted); }
     .empty-state-sm { text-align: center; padding: 40px 16px; color: var(--muted); }
 
-    /* â”€â”€ Seeker profile section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Seeker profile section ──────────────────────────────── */
     .seeker-section {
       background: linear-gradient(135deg, rgba(59,130,246,0.05) 0%, rgba(0,0,0,0) 60%);
       border-top: 1px solid var(--border);
@@ -516,7 +516,7 @@
     }
     @media (max-width: 520px) { .form-row { grid-template-columns: 1fr; } }
 
-    /* â”€â”€ Login prompt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Login prompt ────────────────────────────────────────── */
     .login-prompt {
       text-align: center; padding: 48px 20px;
       color: var(--muted);
@@ -525,7 +525,7 @@
     }
     .login-prompt p { font-size: 15px; margin-bottom: 14px; }
 
-    /* â”€â”€ Toast container â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Toast container ─────────────────────────────────────── */
     #jobsToasts {
       position: fixed; bottom: 20px;
       left: 50%; transform: translateX(-50%);
@@ -537,18 +537,18 @@
       max-width: calc(100vw - 32px);
     }
 
-    /* â”€â”€ Utility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* ── Utility ─────────────────────────────────────────────── */
     .hidden { display: none !important; }
     .section-gap { margin-top: 28px; }
   </style>
 </head>
 <body>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ══════════════════════════════════════════════
      HERO
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+═══════════════════════════════════════════════ -->
 <section class="hero" aria-label="Job search">
-  <div class="hero-eyebrow">ðŸ’¼ Kenya's Jobs Marketplace</div>
+  <div class="hero-eyebrow">💼 Kenya's Jobs Marketplace</div>
   <h1 class="hero-title">Find Your Next Job in Kenya</h1>
   <p class="hero-sub">Thousands of verified roles across technology, finance, healthcare, logistics and more.</p>
 
@@ -558,7 +558,7 @@
       id="jobsSearch"
       class="hero-input"
       type="search"
-      placeholder="Job title, keyword or companyâ€¦"
+      placeholder="Job title, keyword or company…"
       aria-label="Job title or keyword"
       autocomplete="off"
     >
@@ -568,7 +568,7 @@
       id="jobsLocation"
       class="hero-input"
       type="text"
-      placeholder="ðŸ“ Location (e.g. Nairobi)"
+      placeholder="📍 Location (e.g. Nairobi)"
       aria-label="Location"
       autocomplete="off"
     >
@@ -582,26 +582,26 @@
       onclick="SokoniJobs.openMyApps()"
       aria-label="View my job applications"
       style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);"
-    >ðŸ“‹ My Applications</button>
-    <a href="job-post.html" class="btn btn-primary btn-sm">âœï¸ Post a Job</a>
+    >📋 My Applications</button>
+    <a href="job-post.html" class="btn btn-primary btn-sm">✏️ Post a Job</a>
     <a id="jobsAuthBtn" href="login.html?return=jobs.html" class="btn btn-sm"
        style="background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);">Sign In</a>
   </div>
 </section>
 
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ══════════════════════════════════════════════
      FEATURED JOBS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+═══════════════════════════════════════════════ -->
 <div class="featured-strip" aria-label="Featured jobs">
-  <div class="featured-strip-title">â˜… Featured Roles</div>
+  <div class="featured-strip-title">★ Featured Roles</div>
   <div id="jobsFeaturedList" role="list" aria-label="Featured job listings"></div>
 </div>
 
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ══════════════════════════════════════════════
      FILTERS BAR
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+═══════════════════════════════════════════════ -->
 <div class="filters-bar" aria-label="Job filters">
   <div class="filters-section">
     <div
@@ -623,12 +623,12 @@
 </div>
 
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ══════════════════════════════════════════════
      RESULTS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+═══════════════════════════════════════════════ -->
 <main class="section section-gap" aria-label="Job listings">
   <div class="results-bar">
-    <span id="jobsResultsCount" aria-live="polite">Loading jobsâ€¦</span>
+    <span id="jobsResultsCount" aria-live="polite">Loading jobs…</span>
     <select
       class="sort-select"
       aria-label="Sort jobs"
@@ -640,7 +640,7 @@
   </div>
 
   <div id="jobsResultsList" role="list" aria-label="Job search results">
-    <div class="jobs-loading">Loading jobsâ€¦</div>
+    <div class="jobs-loading">Loading jobs…</div>
   </div>
 
   <div style="text-align:center">
@@ -656,9 +656,9 @@
 </main>
 
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ══════════════════════════════════════════════
      JOB DETAIL MODAL
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+═══════════════════════════════════════════════ -->
 <div
   id="jobDetailModal"
   role="dialog"
@@ -672,16 +672,16 @@
         class="modal-close-btn"
         onclick="SokoniJobs.closeModal()"
         aria-label="Close job details"
-      >âœ•</button>
+      >✕</button>
     </div>
 
     <div id="jobDetailContent" class="modal-body"></div>
 
-    <!-- Apply form â€” shown by JS when user clicks Apply Now -->
+    <!-- Apply form — shown by JS when user clicks Apply Now -->
     <div id="jobApplySection" aria-label="Application form">
       <form id="jobApplyForm" class="modal-body" novalidate
             onsubmit="event.preventDefault(); SokoniJobs.submitApplication()">
-        <div class="apply-section-title">ðŸš€ Apply for this Job</div>
+        <div class="apply-section-title">🚀 Apply for this Job</div>
 
         <div class="form-group">
           <label class="form-label" for="jobCoverLetter">
@@ -690,14 +690,14 @@
           <textarea
             id="jobCoverLetter"
             class="form-input"
-            placeholder="Tell the employer why you're a great fitâ€¦ (minimum 20 characters)"
+            placeholder="Tell the employer why you're a great fit… (minimum 20 characters)"
             rows="5"
             maxlength="2000"
             required
             aria-required="true"
             aria-describedby="coverLetterHint"
           ></textarea>
-          <span id="coverLetterHint" class="char-hint">20 â€“ 2000 characters</span>
+          <span id="coverLetterHint" class="char-hint">20 – 2000 characters</span>
         </div>
 
         <div class="form-group">
@@ -727,9 +727,9 @@
 </div>
 
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ══════════════════════════════════════════════
      MY APPLICATIONS PANEL (slide-in)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+═══════════════════════════════════════════════ -->
 <aside
   id="myAppsPanel"
   role="complementary"
@@ -737,12 +737,12 @@
   aria-hidden="true"
 >
   <div class="panel-header">
-    <span class="panel-title">ðŸ“‹ My Applications</span>
+    <span class="panel-title">📋 My Applications</span>
     <button
       class="modal-close-btn"
       onclick="SokoniJobs.closeMyApps()"
       aria-label="Close applications panel"
-    >âœ•</button>
+    >✕</button>
   </div>
   <div class="panel-body">
     <div id="myAppsList" role="list" aria-label="Application list"></div>
@@ -750,12 +750,12 @@
 </aside>
 
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ══════════════════════════════════════════════
      SEEKER PROFILE SECTION
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+═══════════════════════════════════════════════ -->
 <section class="seeker-section hidden" aria-label="Job seeker profile">
   <div class="seeker-inner">
-    <h2 class="seeker-heading">ðŸ§‘â€ðŸ’¼ Your Job Seeker Profile</h2>
+    <h2 class="seeker-heading">🧑‍💼 Your Job Seeker Profile</h2>
     <p class="seeker-sub">
       Build your profile so employers posting on SOKONI can discover you directly.
     </p>
@@ -831,7 +831,7 @@
         <textarea
           id="seekerBio"
           class="form-input"
-          placeholder="A brief summary of your experience, goals, and what makes you stand outâ€¦"
+          placeholder="A brief summary of your experience, goals, and what makes you stand out…"
           rows="4"
           maxlength="2000"
         ></textarea>
@@ -862,27 +862,27 @@
 </div>
 
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ══════════════════════════════════════════════
      BOTTOM NAV (mobile)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+═══════════════════════════════════════════════ -->
 <nav class="bottom-nav" id="bottomNav">
-  <a href="index.html"   class="bnav-item"><span class="bnav-emoji">ðŸ </span><span>Home</span></a>
-  <a href="search.html"  class="bnav-item"><span class="bnav-emoji">ðŸ”</span><span>Search</span></a>
-  <a href="services.html" class="bnav-item"><span class="bnav-emoji">ðŸ› ï¸</span><span>Services</span></a>
-  <a href="jobs.html"    class="bnav-item active"><span class="bnav-emoji">ðŸ’¼</span><span>Jobs</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">ðŸ‘¤</span><span>Profile</span></a>
+  <a href="index.html"   class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="search.html"  class="bnav-item"><span class="bnav-emoji">🔍</span><span>Search</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="jobs.html"    class="bnav-item active"><span class="bnav-emoji">💼</span><span>Jobs</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ══════════════════════════════════════════════
      TOAST CONTAINER
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+═══════════════════════════════════════════════ -->
 <div id="jobsToasts" aria-live="polite" aria-atomic="false"></div>
 
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+<!-- ══════════════════════════════════════════════
      SCRIPTS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+═══════════════════════════════════════════════ -->
 <script src="sokoni-jobs.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {

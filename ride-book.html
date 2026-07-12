@@ -5,10 +5,10 @@
 <script src="security.js"></script>
 <script src="auth-guard.js"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
-<title>SOKONI â€” Book a Ride</title>
+<title>SOKONI — Book a Ride</title>
 <meta name="description" content="Book a boda boda, tuk-tuk or car ride anywhere in Kenya with SOKONI. Fast, affordable, tracked.">
-<meta property="og:title" content="SOKONI â€” Book a Ride">
-<meta property="og:description" content="Book affordable rides across Kenya â€” boda boda, tuk-tuk, car. Tracked in real-time.">
+<meta property="og:title" content="SOKONI — Book a Ride">
+<meta property="og:description" content="Book affordable rides across Kenya — boda boda, tuk-tuk, car. Tracked in real-time.">
 <meta property="og:image" content="https://mysokoni.co.ke/assets/Sokoni%20Logo.png">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://mysokoni.co.ke/ride-book.html">
@@ -58,10 +58,10 @@ body{background:#050505;color:#fff;font-family:inherit;}
 <script src="splash.js"></script>
 <div class="rb-wrap">
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
-    <a href="index.html" style="width:38px;height:38px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);text-decoration:none;font-size:14px;">â†</a>
+    <a href="index.html" style="width:38px;height:38px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.7);text-decoration:none;font-size:14px;">←</a>
     <div>
       <div class="rb-title">Book a Ride</div>
-      <div class="rb-sub">Boda Â· Tuk-Tuk Â· Car â€” live tracking, fair price</div>
+      <div class="rb-sub">Boda Â· Tuk-Tuk Â· Car — live tracking, fair price</div>
     </div>
   </div>
 
@@ -72,39 +72,39 @@ body{background:#050505;color:#fff;font-family:inherit;}
       <input class="rb-input" id="rbPickup" type="text" placeholder="Enter pickup address or area" style="margin-bottom:10px;">
       <div class="rb-label">Drop-off Location</div>
       <input class="rb-input" id="rbDropoff" type="text" placeholder="Where are you going?">
-      <button type="button" onclick="_rbEstimate()" style="margin-top:12px;width:100%;padding:11px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">ðŸ—º Get Fare Estimate</button>
+      <button type="button" onclick="_rbEstimate()" style="margin-top:12px;width:100%;padding:11px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🗺 Get Fare Estimate</button>
     </div>
 
     <div class="rb-label" style="margin-bottom:10px;">Vehicle Type</div>
     <div class="rb-vehicles">
       <div class="rb-veh sel" data-veh="moto" onclick="_rbSelectVeh(this,'moto')">
-        <div class="rb-veh-ico">ðŸ›µ</div>
+        <div class="rb-veh-ico">🛵</div>
         <div class="rb-veh-name">Boda Boda</div>
         <div class="rb-veh-fare">KES 80 base + 15/km</div>
       </div>
       <div class="rb-veh" data-veh="tuktuk" onclick="_rbSelectVeh(this,'tuktuk')">
-        <div class="rb-veh-ico">ðŸ›º</div>
+        <div class="rb-veh-ico">🛺</div>
         <div class="rb-veh-name">Tuk-Tuk</div>
         <div class="rb-veh-fare">KES 120 base + 20/km</div>
       </div>
       <div class="rb-veh" data-veh="car" onclick="_rbSelectVeh(this,'car')">
-        <div class="rb-veh-ico">ðŸš—</div>
+        <div class="rb-veh-ico">🚗</div>
         <div class="rb-veh-name">Car</div>
         <div class="rb-veh-fare">KES 200 base + 35/km</div>
       </div>
       <div class="rb-veh" data-veh="ebike" onclick="_rbSelectVeh(this,'ebike')">
-        <div class="rb-veh-ico">âš¡</div>
+        <div class="rb-veh-ico">⚡</div>
         <div class="rb-veh-name">E-Bike</div>
         <div class="rb-veh-fare">KES 60 base + 10/km</div>
       </div>
     </div>
 
     <div class="rb-estimate" id="rbEstimate">
-      <div class="rb-est-row"><span class="rb-est-label">Distance</span><span class="rb-est-val" id="rbEstDist">â€”</span></div>
-      <div class="rb-est-row"><span class="rb-est-label">Est. Duration</span><span class="rb-est-val" id="rbEstDur">â€”</span></div>
+      <div class="rb-est-row"><span class="rb-est-label">Distance</span><span class="rb-est-val" id="rbEstDist">—</span></div>
+      <div class="rb-est-row"><span class="rb-est-label">Est. Duration</span><span class="rb-est-val" id="rbEstDur">—</span></div>
       <div class="rb-est-row" style="border-top:1px solid rgba(113,255,0,0.15);padding-top:10px;margin-top:4px;">
         <span class="rb-est-label" style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.7);">Fare Estimate</span>
-        <span class="rb-fare-big" id="rbEstFare">â€”</span>
+        <span class="rb-fare-big" id="rbEstFare">—</span>
       </div>
     </div>
 
@@ -114,7 +114,7 @@ body{background:#050505;color:#fff;font-family:inherit;}
       <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:6px;">Driver will call this number</div>
     </div>
 
-    <button class="rb-btn" id="rbBookBtn" onclick="_rbBook()">ðŸ›µ Book Ride Now</button>
+    <button class="rb-btn" id="rbBookBtn" onclick="_rbBook()">🛵 Book Ride Now</button>
     <div id="rbMsg" style="margin-top:10px;font-size:13px;text-align:center;min-height:18px;color:rgba(255,255,255,0.5);"></div>
   </div>
 
@@ -125,29 +125,29 @@ body{background:#050505;color:#fff;font-family:inherit;}
       <span style="font-weight:800;font-size:15px;" id="rbStatusLabel">Searching for driver...</span>
     </div>
     <div id="rbSteps">
-      <div class="rb-step active" id="step_searching">ðŸ” Searching for nearby driver</div>
-      <div class="rb-step" id="step_assigned">âœ… Driver assigned</div>
-      <div class="rb-step" id="step_en_route">ðŸ›µ Driver on the way</div>
-      <div class="rb-step" id="step_arrived">ðŸ“ Driver arrived</div>
-      <div class="rb-step" id="step_inprogress">ðŸš€ Ride in progress</div>
-      <div class="rb-step" id="step_done">ðŸŽ‰ Ride completed</div>
+      <div class="rb-step active" id="step_searching">🔍 Searching for nearby driver</div>
+      <div class="rb-step" id="step_assigned">✅ Driver assigned</div>
+      <div class="rb-step" id="step_en_route">🛵 Driver on the way</div>
+      <div class="rb-step" id="step_arrived">📍 Driver arrived</div>
+      <div class="rb-step" id="step_inprogress">🚀 Ride in progress</div>
+      <div class="rb-step" id="step_done">🎉 Ride completed</div>
     </div>
     <div id="rbDriverInfo" style="display:none;margin-top:14px;padding:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">
       <div style="font-size:11px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Your Driver</div>
-      <div style="font-weight:800;font-size:15px;" id="rbDriverName">â€”</div>
-      <div style="font-size:13px;color:#71ff00;margin-top:2px;" id="rbDriverVeh">â€”</div>
-      <a id="rbCallDriver" href="tel:" style="display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:9px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;text-decoration:none;">ðŸ“ž Call Driver</a>
+      <div style="font-weight:800;font-size:15px;" id="rbDriverName">—</div>
+      <div style="font-size:13px;color:#71ff00;margin-top:2px;" id="rbDriverVeh">—</div>
+      <a id="rbCallDriver" href="tel:" style="display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:9px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;text-decoration:none;">📞 Call Driver</a>
     </div>
     <button class="rb-cancel" id="rbCancelBtn" onclick="_rbCancel()">Cancel Ride</button>
   </div>
 </div>
 
 <nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">ðŸ </span><span>Home</span></a>
-  <a href="delivery.html" class="bnav-item"><span class="bnav-emoji">ðŸ“¦</span><span>Delivery</span></a>
-  <a href="ride-book.html" class="bnav-item active-bnav"><span class="bnav-emoji">ðŸ›µ</span><span>Ride</span></a>
-  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">ðŸ’¬</span><span>Messages</span></a>
-  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">ðŸ‘¤</span><span>Profile</span></a>
+  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="delivery.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Delivery</span></a>
+  <a href="ride-book.html" class="bnav-item active-bnav"><span class="bnav-emoji">🛵</span><span>Ride</span></a>
+  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
 <script src="sokoni-routing.js"></script>
@@ -199,13 +199,13 @@ async function _rbBook(){
   if(!normPhone.startsWith('254') || normPhone.length < 12){ _rbMsg('Enter a valid Kenyan phone (07XX...)'); return; }
 
   var btn = document.getElementById('rbBookBtn');
-  btn.disabled = true; btn.textContent = 'â³ Booking...';
+  btn.disabled = true; btn.textContent = '⏳ Booking...';
 
   try{
     /* Compute route if not already done */
     if(!_rbRouteData){
       var route = await SokoniRouting.calcRoute(pickup, dropoff, _rbVeh);
-      if(route.error){ _rbMsg('Route error: '+route.error); btn.disabled=false; btn.textContent='ðŸ›µ Book Ride Now'; return; }
+      if(route.error){ _rbMsg('Route error: '+route.error); btn.disabled=false; btn.textContent='🛵 Book Ride Now'; return; }
       _rbRouteData = route;
     }
     var u = null; try{ u = JSON.parse(localStorage.getItem('sokoniUser')); }catch(e){}
@@ -228,7 +228,7 @@ async function _rbBook(){
     _rbListenStatus(_rbRef);
   }catch(e){
     _rbMsg('Booking failed: ' + e.message);
-    btn.disabled=false; btn.textContent='ðŸ›µ Book Ride Now';
+    btn.disabled=false; btn.textContent='🛵 Book Ride Now';
   }
 }
 
@@ -290,7 +290,7 @@ async function _rbCancel(_c){
   document.getElementById('rbStatus').style.display = 'none';
   document.getElementById('rbForm').style.display   = 'block';
   document.getElementById('rbBookBtn').disabled     = false;
-  document.getElementById('rbBookBtn').textContent  = 'ðŸ›µ Book Ride Now';
+  document.getElementById('rbBookBtn').textContent  = '🛵 Book Ride Now';
   _rbRef = null;
 }
 

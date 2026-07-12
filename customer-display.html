@@ -970,8 +970,9 @@ html, body {
   window.addEventListener('sokoni:firestore_ready', e => {
     const db = e.detail?.db;
     if (!db) return;
-    db.collection('posCustomerDisplays').doc(sessionId)
+    const _cdUnsub = db.collection('posCustomerDisplays').doc(sessionId)
       .onSnapshot(snap => { if (snap.exists) handle(snap.data()); }, () => {});
+    window.addEventListener('beforeunload', () => { if (_cdUnsub) _cdUnsub(); });
   });
 
 }());

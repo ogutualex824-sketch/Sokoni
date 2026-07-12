@@ -6,7 +6,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Order Tracking — SOKONI Food</title>
-<link rel="icon" type="image/png" href="assets/Sokoni Logo.png">
+<link rel="icon" type="image/png" href="assets/logosokoni.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#22c55e">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -332,10 +332,14 @@ load();
 import { db } from './firebase.js';
 import { doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
+let _foOrderUnsub = null;
+window.addEventListener('beforeunload', () => { if (_foOrderUnsub) _foOrderUnsub(); });
+
 window._listenFoodOrderFS = function(orderId) {
   if (!orderId) return;
+  if (_foOrderUnsub) { _foOrderUnsub(); _foOrderUnsub = null; }
   try {
-    onSnapshot(doc(db, 'foodOrders', orderId), snap => {
+    _foOrderUnsub = onSnapshot(doc(db, 'foodOrders', orderId), snap => {
       if (!snap.exists()) return;
       const data = { ...snap.data(), id: snap.id };
       /* Merge into local state so renderOrder() shows real status */

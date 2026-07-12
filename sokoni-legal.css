@@ -324,7 +324,7 @@ body {
 @media (max-width: 480px) { .sk-footer-grid { grid-template-columns: 1fr; } }
 
 .sk-footer-brand .fb-logo { display: flex; align-items: center; gap: 8px; text-decoration: none; margin-bottom: 10px; }
-.sk-footer-brand .fb-logo img { width: 28px; height: 28px; border-radius: 7px; object-fit: contain; }
+.sk-footer-brand .fb-logo img { width: 28px; height: 28px; object-fit: contain; }
 .sk-footer-brand .fb-logo span { font-size: 16px; font-weight: 800; color: #fff; }
 .sk-footer-brand .fb-tagline { font-size: 13px; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
 .sk-footer-brand .fb-social { display: flex; gap: 10px; flex-wrap: wrap; }
