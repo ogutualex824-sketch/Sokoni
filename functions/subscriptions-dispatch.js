@@ -16,7 +16,7 @@ const _OPTS = { region: 'us-central1', enforceAppCheck: true, timeoutSeconds: 60
 let _mod;
 function _h() { return _mod || (_mod = require('./subscription-core')._h); }
 
-const ROUTES = ['getUnifiedSubscription', 'listMySubscriptions', 'checkFeature', 'checkLimit'];
+const ROUTES = ['getUnifiedSubscription', 'listMySubscriptions', 'checkFeature', 'checkLimit', 'getSubscriptionDivergence'];
 const VALID = ROUTES.join(', ');
 
 exports.subscriptionsDispatch = onCall(_OPTS, async (req) => {

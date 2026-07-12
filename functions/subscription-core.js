@@ -201,6 +201,43 @@ async function resolveAll(uid) {
   return results.filter(Boolean).map((c) => ({ ...c, status: computeStatus(c) }));
 }
 
+/**
+ * reconcile(uid) — read-only diagnostic. Reports every subscription record found
+ * across the five stores and whether they DIVERGE (the split-brain the audit
+ * found: same account, different tier/status/commission in different stores).
+ * This is the safe precursor to any write-unification: it identifies exactly
+ * which accounts are affected without mutating anything.
+ */
+async function reconcile(uid) {
+  const subs = await resolveAll(uid);
+  // Group records that represent the same conceptual product (role/hubType/product).
+  const key = (c) => c.role || c.hubType || c.product || c.source;
+  const groups = {};
+  for (const c of subs) (groups[key(c)] ||= []).push(c);
+
+  const conflicts = [];
+  for (const [k, recs] of Object.entries(groups)) {
+    if (recs.length < 2) continue;
+    const tiers = new Set(recs.map((r) => r.tier || 'none'));
+    const stats = new Set(recs.map((r) => r.status));
+    const comms = new Set(recs.map((r) => (r.commissionRate == null ? 'n/a' : r.commissionRate)));
+    if (tiers.size > 1 || stats.size > 1 || comms.size > 1) {
+      conflicts.push({
+        product: k,
+        sources: recs.map((r) => r.source),
+        tiers: [...tiers], statuses: [...stats], commissionRates: [...comms],
+      });
+    }
+  }
+  return {
+    uid, recordCount: subs.length,
+    stores: subs.map((c) => ({ source: c.source, role: c.role, hubType: c.hubType,
+      tier: c.tier, status: c.status, commissionRate: c.commissionRate })),
+    diverges: conflicts.length > 0,
+    conflicts,
+  };
+}
+
 /* ── Enforcement API (the point of the whole module) ──────────────────────── */
 
 function isActive(status) { return status === STATUS.ACTIVE || status === STATUS.TRIALING || status === STATUS.GRACE; }
@@ -255,6 +292,16 @@ _h.checkFeature = async (req) => {
   return { feature, allowed };
 };
 
+/* Admin-only divergence diagnostic for a given account (support/reconciliation). */
+_h.getSubscriptionDivergence = async (req) => {
+  const t = req.auth?.token || {};
+  if (!req.auth?.uid) throw new HttpsError('unauthenticated', 'Authentication required.');
+  if (!t.admin && !t.superAdmin) throw new HttpsError('permission-denied', 'Admin only.');
+  const uid = String(req.data?.uid || '').trim();
+  if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
+  return reconcile(uid);
+};
+
 _h.checkLimit = async (req) => {
   const uid = req.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Authentication required.');
@@ -267,7 +314,7 @@ _h.checkLimit = async (req) => {
 };
 
 module.exports = {
-  STATUS, computeStatus, resolveSubscription, resolveAll,
+  STATUS, computeStatus, resolveSubscription, resolveAll, reconcile,
   isActive, getCommissionRate, getFeatures, hasFeature, assertWithinLimit,
   _h,
 };
