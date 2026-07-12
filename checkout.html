@@ -1333,11 +1333,16 @@
           <p>Enter your M-PESA PIN when prompted</p>
         </div>
       </div>
+      <!-- Step 3 fires on IntaSend's COMPLETE event, which arrives in the CUSTOMER'S
+           BROWSER and is therefore not proof. The server verifies afterwards. So this
+           step must stay NEUTRAL: it reports that we are checking, not that we are done.
+           It previously read "✅ Payment Confirmed / Transaction complete!" at exactly the
+           moment we had no confirmation from anyone but the client. -->
       <div class="stk-step" id="stkStep3">
-        <div class="stk-dot">✓</div>
+        <div class="stk-dot">⏳</div>
         <div class="stk-step-text">
-          <h4>✅ Payment Confirmed</h4>
-          <p>Transaction complete! Redirecting...</p>
+          <h4>Confirming payment</h4>
+          <p>Checking with Safaricom…</p>
         </div>
       </div>
     </div>
@@ -1934,8 +1939,11 @@ function processBankTransfer(){
   const ref = (document.getElementById("bankTransRef").value||"").trim();
   if(!ref){ showPushToast("❌ Reference Required","Enter your bank transaction reference","orange"); return; }
   closeModal("bank");
-  showPushToast("✅ Transfer Noted","Order placed! We'll verify your bank transfer and ship within 24h.","green");
-  saveAndRedirect(ref, "bank");
+  /* A reference the customer typed is a claim, not a payment. This used to promise
+     shipping "within 24h" on the strength of it. The order is recorded; nothing moves
+     until finance confirms the transfer actually landed. */
+  showPushToast("Awaiting payment confirmation","We’ve recorded your reference. Your order will be dispatched once we confirm the transfer has landed.","green");
+  saveAndRedirect(ref, "bank", null, null, false);
 }
 
 /* ============================
@@ -2290,7 +2298,10 @@ function processPaypalPayment(){
   if(ppLink){
     window.open(ppLink, "_blank");
   }
-  saveAndRedirect(ref, "paypal");
+  /* Opening a PayPal tab tells us the customer INTENDED to pay. It tells us nothing about
+     whether they did — they may close it, abandon it, or the payment may fail. This used
+     to mark the order paid the instant the window opened. Explicitly unverified. */
+  saveAndRedirect(ref, "paypal", null, null, false);
 }
 
 /* ============================
@@ -2591,12 +2602,32 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
     const zone = document.getElementById("deliveryZone")?.value;
     const etaMap = {"50":"Today","100":"Today","150":"Tomorrow","250":"1–2 business days","500":"2–5 business days"};
     const eta = etaMap[zone]||"Soon";
-    if(msgEl2) msgEl2.innerHTML = `Your order is confirmed! Expected delivery: <strong style="color:#71ff00;">${_esc(eta)}</strong>.<br>You'll receive a confirmation SMS to <strong>${_esc(document.getElementById("coPhone")?.value||"your number")}</strong>.`;
+
+    /* The overlay used to say "✅ Order Placed! / Your order is confirmed and on its way"
+       for EVERY order — including the ones where no money had moved. An unpaid order is
+       not on its way anywhere, and promising a delivery date for it is the same lie as
+       "Payment Confirmed", only softer.
+
+       Paid orders get the celebration. Unverified ones get the truth. */
+    const hEl = overlay.querySelector('h2');
+    const iEl = overlay.querySelector('div[style*="font-size:64px"]');
+    if(_paid){
+      if(hEl) hEl.textContent = '✅ Order Placed!';
+      if(iEl) iEl.textContent = '🎉';
+      if(msgEl2) msgEl2.innerHTML = `Your order is confirmed! Expected delivery: <strong style="color:#71ff00;">${_esc(eta)}</strong>.<br>You'll receive a confirmation SMS to <strong>${_esc(document.getElementById("coPhone")?.value||"your number")}</strong>.`;
+    } else {
+      if(hEl) hEl.textContent = 'Awaiting payment confirmation';
+      if(iEl) iEl.textContent = '⏳';
+      if(msgEl2) msgEl2.innerHTML = `We’ve recorded your order and are waiting for your payment to be confirmed.<br><strong style="color:#71ff00;">It will not be dispatched until payment is verified.</strong><br>We’ll notify you the moment it clears.`;
+    }
     overlay.style.display = "flex";
 
     /* ── Trust: generate receipt + show status ── */
     try {
-      if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('complete', 'Transaction complete — receipt is ready');
+      if (window._checkoutSetTrustStatus) {
+        _paid ? _checkoutSetTrustStatus('complete', 'Transaction complete — receipt is ready')
+              : _checkoutSetTrustStatus('pending',  'Awaiting payment confirmation');
+      }
       const _recItems = currentCart.map(p => ({ name: p.name || p.title || 'Item', qty: p.qty || 1, unitPrice: Number(p.price || 0) }));
       const _recData  = {
         receiptNo:      orderId,

@@ -145,6 +145,62 @@ console.log('\nPayment integrity — the money path\n');
     : bad(`payment fallback(s) still place an order without taking money: ${sims.join(', ')}`);
 }
 
+/* ── 7. No success claim outside a server-verified branch ────────────────────
+   The customer may never read "Payment Confirmed" / "Order Placed" / "Card Approved"
+   unless a server-side confirmation exists. Neutral states only until then:
+   "Confirming payment…", "Awaiting payment confirmation", "Payment request sent". */
+{
+  const CLAIMS = /Payment Confirmed|Payment Successful|Payment Received|Card Approved|Order Placed/i;
+
+  /* The ONLY places allowed to claim success are branches where a PROVIDER or the SERVER
+     has confirmed the money moved. There are exactly three:
+       onSuccess(receipt)     — the M-Pesa provider callback, carrying a real receipt
+       verifyData.verified    — the server confirmed with the provider
+       if(_paid){ … }         — the overlay branch, which only runs when one of the above did
+     Anything else claiming success is a lie told to the customer. */
+  const blocks = [
+    /onSuccess\(receipt\)\s*\{[\s\S]{0,500}?\n\s{8}\}/.exec(checkout),
+    /verifyData\.verified[\s\S]{0,800}?\n\s{6}\}/.exec(checkout),
+    /if\(_paid\)\{[\s\S]{0,900}?\n\s{4}\}/.exec(checkout),
+  ];
+  const exempt = blocks.filter(Boolean).map(b => b[0]).join('\n');
+
+  /* Scan the RAW file so reported line numbers are real, skipping comment lines —
+     the fix's own explanatory comments quote the old strings verbatim. */
+  const offenders = [];
+  let inJs = false, inHtml = false;
+  checkout.split('\n').forEach((line, i) => {
+    const t = line.trim();
+    if (inJs)   { if (t.includes('*/'))  inJs = false;   return; }
+    if (inHtml) { if (t.includes('-->')) inHtml = false; return; }
+    if (t.startsWith('/*'))   { if (!t.includes('*/'))  inJs = true;   return; }
+    if (t.startsWith('<!--')) { if (!t.includes('-->')) inHtml = true; return; }
+    if (t.startsWith('*') || t.startsWith('//')) return;
+
+    if (!CLAIMS.test(line)) return;
+    if (exempt.includes(t)) return;                        /* inside a verified branch — fine */
+    if (/label:\s*"Order Placed"/.test(line)) return;      /* fulfilment timeline label, not a payment claim */
+    if (/hEl\.textContent|<h2 /.test(line)) return;        /* overlay heading — set conditionally on _paid */
+    offenders.push(`L${i + 1}: ${t.slice(0, 90)}`);
+  });
+
+  offenders.length === 0
+    ? ok('no "Payment Confirmed"/"Order Placed" claim outside a server-verified branch')
+    : bad(`the customer is told payment succeeded without server verification:\n        ${offenders.join('\n        ')}`);
+
+  /* The STK progress UI must not declare victory on the client-side COMPLETE event. */
+  !/<h4>✅ Payment Confirmed<\/h4>/.test(checkout)
+    ? ok('the STK progress step stays neutral until the server confirms')
+    : bad('STK step 3 claims "Payment Confirmed" on a client-side event');
+}
+
+/* ── 8. Unverified orders promise nothing ────────────────────────────────────*/
+{
+  /It will not be dispatched until payment is verified/.test(checkout)
+    ? ok('an unverified order tells the customer plainly it will not be dispatched')
+    : bad('an unverified order does not warn the customer it will not ship');
+}
+
 console.log('');
 if (fail) {
   console.error(`Payment integrity FAILED (${fail}) — DO NOT SHIP\n`);
