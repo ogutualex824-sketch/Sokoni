@@ -1,3 +1,5 @@
+> ⚠️ **SUPERSEDED by [[RELEASE_v1.0.0_RC3]] (2026-07-12).** All infrastructure blockers are now closed (scheduled jobs 158/158 healthy; quota approved; backups fixed). Retained for history.
+
 > ⚠️ **SUPERSEDED by [[RELEASE_v1.0.0_RC2]] (2026-07-12).**
 > **Authentication → GO** and **App Check → GO**; both are out of the blocker set.
 > Root cause, evidence, fixes, regression results and the *Human Verification Required*

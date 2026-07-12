@@ -1,3 +1,5 @@
+> ⚠️ **SUPERSEDED by [[RELEASE_v1.0.0_RC3]] (2026-07-12).** All infrastructure blockers are now closed (scheduled jobs 158/158 healthy; quota approved; backups fixed). Retained for history.
+
 # SOKONI v1.0.0 — Release Candidate 2
 
 **Date:** 2026-07-12 · **HEAD:** `96ead7b` · **Branch:** `main`

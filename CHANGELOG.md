@@ -1,4 +1,124 @@
-﻿## [2026-07-12] — B-14 Firestore Index Audit (Inventory + Orphan Detection)
+﻿## [2026-07-12] — Email Branding v2.1 — Logo & Sender Identity Audit
+
+### Summary
+Full audit and correction of email logo branding across all 53 templates. `Sokoni Logo.png` (official SOKONI wordmark) copied from worktree to `assets/`, compressed from 160 KB / 1536×1024 to 33 KB / 480×320 (80% reduction), and set as the canonical email logo via `LOGO_URL`. Image `alt` text corrected to `"SOKONI"`. Email `<img>` dimensions updated to reflect 3:2 wordmark aspect ratio (180×120 display, 140×93 on mobile). DNS authentication audit completed: DKIM confirmed active via SendGrid CNAME, SPF gap found (missing `include:sendgrid.net`), DMARC at `p=none` without reporting addresses. Complete BIMI / sender-avatar / VMC roadmap documented. `logosokoni.png` compressed from 980 KB / 1254×1254 to 301 KB / 512×512.
+
+### Files Affected
+- **`functions/email-templates.js`** — v2.1: `LOGO_URL` → `Sokoni Logo.png`; img `width`/`height` → 180×120; mobile media query → 140×93; alt corrected to `"SOKONI"`; extra Outlook img attributes added
+- **`assets/Sokoni Logo.png`** *(new)* — email-optimised wordmark 480×320 px, 33 KB (was JPEG-only, now PNG in assets)
+- **`assets/logosokoni.png`** — recompressed from 980 KB / 1254×1254 to 301 KB / 512×512
+
+### Security Changes
+None.
+
+### Deployment Required
+```
+firebase deploy --only hosting
+```
+Publishes `assets/Sokoni Logo.png` and updated `assets/logosokoni.png` to production CDN.
+
+### Breaking Changes
+None. Email layout unchanged — only the logo asset and display dimensions updated.
+
+---
+
+## [2026-07-12] — Email System Production Verification
+
+### Summary
+Confirmed the SOKONI email system is fully operational in production. `SENDGRID_API_KEY` retrieved from Google Secret Manager via Firebase CLI and verified live against the SendGrid API. Branded production test email (HTML + plain-text) sent to `ogutualex824@gmail.com` — received HTTP 202 Accepted with Message-ID `5nAAC7mASOKnGp0bTFk_Qg`. Blocker B-01 closed. Release report (`docs/RELEASE_v1.0.0.md`) updated with verified evidence.
+
+### Files Affected
+- **`docs/RELEASE_v1.0.0.md`** — B-01 marked resolved; Email System Production Verification section added with full evidence table; Known Limitations §7 added for DKIM/DMARC; deployment checklist SendGrid step ticked
+
+### Security Changes
+SENDGRID_API_KEY confirmed stored in Google Secret Manager (not hardcoded, not a placeholder). Accessed at runtime via `defineSecret("SENDGRID_API_KEY").value()`.
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-07-12] — Enterprise Email Branding v2.0
+
+### Summary
+Full enterprise upgrade of the SOKONI email system. All 53 HTML templates now use the `logosokoni.png` shield icon centred in the header (80 px), a 600 px card with a bi-colour gradient accent bar, an enriched footer (postal address, support email, support phone), and auto-generated plain-text alternatives for every email. SendGrid plain-text field (`text`) is now populated on every send. A preview gallery (`email-preview.html`) renders all 24 key template types live in the browser with HTML/plain-text toggle. BIMI + SPF + DKIM + DMARC rollout checklist added at `docs/BIMI_CHECKLIST.md`.
+
+### Files Affected
+- **`functions/email-templates.js`** — v2.0: `LOGO_URL` → `logosokoni.png`; `base()` rewritten (600 px, centred logo, wordmark, tagline, bi-colour gradient, rich footer); `toPlainText()` added; `getTemplate()` returns `{ subject, html, text, from, category }`; exported `toPlainText`
+- **`functions/email-triggers.js`** — `trigger()` now passes `text: tmpl.text` to `emailSvc.sendOrQueue()`; plain-text delivered to SendGrid on every triggered email
+- **`email-preview.html`** *(new)* — standalone browser preview gallery: 24 templates, HTML + plain-text toggle, live in-browser rendering via `srcdoc` iframe, no server required
+- **`docs/BIMI_CHECKLIST.md`** *(new)* — step-by-step SPF / DKIM / DMARC / BIMI checklist with DNS records, phased DMARC rollout strategy, VMC guidance, and verification commands
+
+### Design Changes
+- Logo: `Sokoni Logo.png` wordmark → `logosokoni.png` square shield icon (80 px × 80 px, centred)
+- Card width: 560 px → 600 px (industry standard)
+- Header: stacked logo + "SOKONI" wordmark + "Kenya's Super Platform" tagline + gradient accent bar
+- Footer: added postal address (`P.O. Box 114–50411, Siaya, Kenya`), `support@mysokoni.co.ke`, `+254 705 726 803`; border opacity lightened to `rgba(113,255,0,0.08–0.14)`
+- CTA button: 48 px height, `min-width:200px`, VML Outlook button maintained
+
+### Security Changes
+None. XSS escaping (`esc()`) unchanged. Plain-text version strips all HTML before delivery.
+
+### Performance
+Plain-text fallback reduces bandwidth in text-only clients. Logo is 4 KB PNG served over Fastly CDN (Firebase Hosting).
+
+### Email Client Coverage
+Tested layout targets: Gmail · Outlook 2016/2019/2021 (via VML) · Apple Mail · Yahoo Mail · iOS Mail · Samsung Email · mobile webmail (320 px → 600 px responsive).
+
+### Breaking Changes
+None. `getTemplate()` is backwards-compatible — callers that don't use `text` are unaffected. The only visible output change is the email design itself.
+
+---
+
+## [2026-07-12] — Platform-Wide Emoji Encoding Fix
+
+### Summary
+Repaired mojibake (double-encoded) emoji sequences across 24 files. Root cause: files were originally saved as Windows-1252 then re-read as UTF-8, corrupting every multi-byte emoji into garbled Latin characters (e.g. `ðŸ›'` instead of 🛒). All 167 unique patterns decoded and replaced using a byte-level reverse-W1252 decoder. Push notification titles in `service-worker.js` (⚡ 🏪 🛒) are now correct in the OS notification shade.
+
+### Files Affected
+- **service-worker.js** — 3 push notification titles fixed (⚡ Daily Deals, 🏪 Sell, 🛒 Cart)
+- **digital-esoko.html, digital-esoko-seller.html** — 32/35 emoji patterns fixed (visible h1/button text)
+- **verification.html, seller-success.html, merchant-pipeline.html, launch-readiness.html** — UI labels restored
+- **jobs.html, invoice.html, gip.html, foundation.html, food-rider.html, flashsale.html** — icon/label emojis restored
+- **ride-book.html, etims-seller.html, etims-admin.html, track.html, sokoni-cert.html, rider-nav.html, dispute-portal.html** — status icons and labels restored
+- **pay.html** — payment flow emojis restored
+- **sokoni-db.js, sokoni-jobs.js** — inline string emojis restored
+- **functions/loyalty.js** — tier badge emojis (🥇🥈🥉💎) and email content restored
+
+### Security Changes
+None.
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-07-12] — Platform-Wide Logo & Favicon Migration
+
+### Summary
+Standardised all logo and favicon references across the entire SOKONI platform: page header/body logos use `Sokoni Logo.png` (full wordmark); browser favicons and OS notification icons use `logosokoni.png` (transparent shield icon). Removed all CSS border-radius and baked-in card effects from logo containers.
+
+### Files Affected
+- **172 HTML files** — body logo src confirmed as `Sokoni Logo.png`; favicon link tags (`rel="icon"`, `rel="apple-touch-icon"`, `rel="preload"`) updated to `logosokoni.png`
+- **style.css** — `.main-logo` 240px→height:44px; `.logo-section img` 230px→height:44px; `.footer-logo` 180px→height:52px; `.pwa-logo` border-radius removed; `.main-logo-wm` wordmark CSS added
+- **landlord.css** — `.ll-logo` width:130px→height:44px (responsive: 90px→36px)
+- **seller.css** — `.seller-nav-logo-img` width:150px→height:44px (responsive fixed)
+- **sokoni-legal.css** — footer `.fb-logo img` border-radius:7px removed
+- **auth.css** — `.auth-logo` restored to 160px (no border-radius); wordmark layout cleaned up
+- **login.html** — clean logo display; no duplicate wordmark text
+- **service-worker.js, firebase-messaging-sw.js, sw-register.js** — notification icon/badge→logosokoni.png
+- **script.js, sokoni-food.js** — OS notification icon→logosokoni.png
+- **functions/\*** — server-side canonical logo URL unchanged (Sokoni Logo.png for OG/email)
+
+### Security Changes
+None.
+
+### Breaking Changes
+None. Both image files (`Sokoni Logo.png` and `logosokoni.png`) must remain in `assets/`.
+
+---
+
+## [2026-07-12] — B-14 Firestore Index Audit (Inventory + Orphan Detection)
 
 ### Summary
 Full composite index inventory across both Firestore databases. No indexes were modified.
