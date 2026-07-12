@@ -243,24 +243,22 @@ body.page-emergency .back-to-top-btn {
   box-sizing: border-box;
 }
 
-/* Common negative-margin patterns that cause horizontal bleed */
-.row,
-.flex-row,
-.grid-row,
-[class*="-row"] {
-  margin-left: max(-16px, -4vw);
-  margin-right: max(-16px, -4vw);
-}
+/* This block used to APPLY a negative margin here — under a heading about
+   preventing horizontal bleed — and it was the cause of the bleed it claimed to
+   prevent.
 
-@media (max-width: 360px) {
-  .row,
-  .flex-row,
-  .grid-row,
-  [class*="-row"] {
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-  }
-}
+   `[class*="-row"]` matches ANY class containing "-row", so it hit .qlinks-row,
+   .ptrend-view-all-row and others, pulling each one -4vw off both sides. Their
+   parents carry NO horizontal padding, so there was nothing for the negative
+   margin to cancel: measured on a 393px viewport, those rows rendered 424px wide
+   starting at left:-16px, and the overhang was clipped by the body's overflow
+   guard. Buttons inside them were cut off by 2px.
+
+   It was only zeroed below 360px, so every phone from 361px up was affected.
+
+   Rows are laid out by their own containers; they need no negative margin. If a
+   genuine full-bleed row is ever wanted, it must opt in explicitly AND its parent
+   must carry the matching padding — never via a wildcard attribute selector. */
 
 /* ── ISSUE 18: Bottom navigation audit ──────────────────────────────────
    Ensure bottom nav is always full-width and properly inset.            */

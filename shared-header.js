@@ -584,6 +584,27 @@
     }
     .sk-nav-icon-btn:hover { background: rgba(255,255,255,0.08); }
 
+    /* ── Touch targets ──────────────────────────────────────────────────────
+       The header is deliberately slim: icons render 34px (30px on small
+       phones) and the cart pill / avatar measured 34px tall. That is below the
+       44x44 CSS-px minimum in WCAG 2.5.8 and the Apple HIG, so these were
+       genuinely hard to tap.
+
+       Enlarging the boxes would fatten the bar and undo the 64->58px premium
+       header. Instead, extend the HIT AREA with an invisible centred pseudo-
+       element. The visual design is unchanged; only the tappable region grows. */
+    .sk-nav-icon-btn, #sk-nav-cart, #sk-nav-avatar { position: relative; }
+    .sk-nav-icon-btn::after,
+    #sk-nav-cart::after,
+    #sk-nav-avatar::after {
+      content: '';
+      position: absolute;
+      left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      width: 100%; height: 100%;
+      min-width: 44px; min-height: 44px;
+    }
+
     /* ── Transparent-nav state: gradient veil handles readability — no per-icon dark circles ── */
     #sk-top-nav:not(.sk-scrolled) .sk-nav-icon-btn {
       background: transparent;
