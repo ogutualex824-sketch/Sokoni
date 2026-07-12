@@ -93,7 +93,20 @@ async function _loadEntitlements(uid) {
     db().collection('subscriptions').doc(uid).get(),
   ]);
   const ai  = aiSnap.exists  ? aiSnap.data()  : { plan: 'ai_free',  status: 'active' };
-  const mkt = mktSnap.exists ? mktSnap.data() : { plan: 'free',     status: 'active' };
+  let   mkt = mktSnap.exists ? mktSnap.data() : null;
+  if (!mkt) {
+    /* A marketplace plan onboarded via sub-engine (subscriptions/{autoId}) or the
+       UEOE (accountSubscriptions) won't exist at subscriptions/{uid}. Resolve it
+       through the canonical seam so those users aren't wrongly defaulted to free.
+       Additive — subscriptions/{uid} stays authoritative when present. AI path
+       untouched. */
+    try {
+      const subCore = require('./subscription-core');
+      const c = await subCore.resolveSubscription(uid, { role: 'merchant', hubType: 'merchant' });
+      if (c.found) mkt = { plan: c.tier, status: c.status, currentPeriodEnd: c.expiryAt || 0 };
+    } catch (_) { /* seam unavailable → free default */ }
+  }
+  mkt = mkt || { plan: 'free', status: 'active' };
   return {
     uid,
     products: {
