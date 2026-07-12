@@ -749,38 +749,59 @@ exports.processDriverEarning = onDocumentCreated('driverEarningQueue/{docId}', a
   const { riderId, amount, orderId, tripId, source } = data;
   if (!riderId || !amount) return;
 
-  const batch = db.batch();
+  /* P0-5: Firestore triggers are AT-LEAST-ONCE — this handler can fire twice for the
+     same driverEarningQueue doc. The previous code used a batch (atomic, but NOT
+     idempotent):
+       • wallets.balance: FieldValue.increment(amount)   → a redelivery PAID THE DRIVER TWICE
+       • walletTransactions.doc()                        → AUTO-ID: a second credit record
+     It already wrote `processed: true` on the queue doc — but never READ it, so the
+     guard existed in the data and was simply unused.
 
-  // Credit wallet
+     Fix: the queue doc's `processed` flag is now the idempotency marker, checked and
+     set inside ONE transaction, and the wallet-transaction id is derived
+     deterministically from the queue doc id (one credit record per queue entry, by
+     construction). Exactly-once with respect to money. */
+  const docId     = event.params.docId;
   const walletRef = db.collection('wallets').doc(riderId);
-  batch.set(walletRef, {
-    balance:   FieldValue.increment(amount),
-    currency:  'KES',
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  const txRef     = db.collection('walletTransactions').doc(docId);   // deterministic
 
-  // Wallet transaction record
-  const txRef = db.collection('walletTransactions').doc();
-  batch.set(txRef, {
-    userId:      riderId,
-    type:        'credit',
-    amount,
-    currency:    'KES',
-    description: `Delivery earning — Order ${(orderId || '').slice(0, 8).toUpperCase()}`,
-    source:      'delivery_earning',
-    orderId:     orderId || null,
-    tripId:      tripId  || null,
-    status:      'completed',
-    createdAt:   FieldValue.serverTimestamp(),
+  const applied = await db.runTransaction(async (txn) => {
+    const q = await txn.get(snap.ref);
+    if (!q.exists || q.data().processed === true) return false;       // redelivery — already paid
+
+    txn.set(txRef, {
+      userId:      riderId,
+      type:        'credit',
+      amount,
+      currency:    'KES',
+      description: `Delivery earning — Order ${(orderId || '').slice(0, 8).toUpperCase()}`,
+      source:      'delivery_earning',
+      orderId:     orderId || null,
+      tripId:      tripId  || null,
+      status:      'completed',
+      createdAt:   FieldValue.serverTimestamp(),
+    });
+
+    /* Safe here: runs at most once, guarded by the `processed` check above. */
+    txn.set(walletRef, {
+      balance:   FieldValue.increment(amount),
+      currency:  'KES',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    txn.update(snap.ref, {
+      processed:   true,
+      processedAt: FieldValue.serverTimestamp(),
+    });
+
+    return true;
   });
 
-  // Mark queue doc processed
-  batch.update(snap.ref, {
-    processed:   true,
-    processedAt: FieldValue.serverTimestamp(),
-  });
+  if (!applied) {
+    console.log(`Driver earning: duplicate trigger delivery ignored (queue=${docId})`);
+    return;
+  }
 
-  await batch.commit();
   console.log(`Driver earning processed: ${riderId} +KES ${amount} for order ${orderId}`);
 });
 
