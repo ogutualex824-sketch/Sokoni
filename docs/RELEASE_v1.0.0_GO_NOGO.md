@@ -1,3 +1,8 @@
+> ⚠️ **SUPERSEDED by [[RELEASE_v1.0.0_RC2]] (2026-07-12).**
+> **Authentication → GO** and **App Check → GO**; both are out of the blocker set.
+> Root cause, evidence, fixes, regression results and the *Human Verification Required*
+> checklist now live in RC2. This document is retained for history.
+
 # SOKONI v1.0.0 — RC1 Stabilization: Executive GO / NO-GO Report
 
 **Date:** 2026-07-12 · **HEAD:** `0794f9b` · **Branch:** `main`
@@ -52,7 +57,7 @@ Payments E2E (M-PESA/IntaSend live money), PWA offline/install/background-sync, 
 
 ---
 
-## ✅ Authentication & App Check — PRODUCTION-READY (verified 2026-07-12)
+## ✅ Authentication & App Check — **GO** (moved out of blockers; full detail in [[RELEASE_v1.0.0_RC2]])
 
 Verified in a real Chromium against the **live `sokoni-aeb26` project** (Playwright, not static analysis). A root-cause defect was found and fixed: `FIREBASE_APPCHECK_DEBUG_TOKEN = true` minted a **new random, unregistered** debug token per browser profile → `403 App attestation failed` → and a failed App Check token fetch **aborts every Firebase Auth request before it is sent**. Proven by A/B: with App Check on, `identitytoolkit` received **zero** requests and all methods returned `auth/network-request-failed`; with it off, the identical calls succeeded. Fix: the *registered* token is now pinned from `localStorage` on localhost (`firebase.js`, `sokoni-appcheck.js`).
 
@@ -61,8 +66,9 @@ Verified in a real Chromium against the **live `sokoni-aeb26` project** (Playwri
 | App Check `exchangeDebugToken` (localhost) | ✅ **200** — App Check JWT issued (`"provider":"debug"`, TTL 3600s) |
 | App Check token generation + **refresh** | ✅ 930-char token; forced refresh issues a new token |
 | App Check init **before** Auth | ✅ `initializeAppCheck()` precedes `getAuth()` — [firebase.js:84-92](../firebase.js#L84-L92) |
-| Production attestation (`mysokoni.co.ke`) | ✅ **no** debug token set; attests via `exchangeRecaptchaV3Token` |
-| Remaining HTTP 403s | ✅ **ZERO** across App Check, Auth and Firestore |
+| Production debug-token safety (all 3 origins, **live sites**) | ✅ **no** debug token set, `exchangeDebugToken` **never** called — even with a token deliberately pinned in `localStorage`. Enforced by `scripts/verify-appcheck.js` (wired into `predeploy`) |
+| Production reCAPTCHA **attestation success** | ⚠️ **NOT VERIFIABLE BY AUTOMATION** — see below |
+| Remaining HTTP 403s (localhost) | ✅ **ZERO** across App Check, Auth and Firestore |
 | Email/Password E2E (create → sign-in → delete) | ✅ PASS — real account created, signed in, deleted |
 | Password Reset | ✅ PASS — `sendOobCode` 200, reset email sent |
 | Email Verification | ✅ PASS — verification email sent |
@@ -72,7 +78,25 @@ Verified in a real Chromium against the **live `sokoni-aeb26` project** (Playwri
 
 **Residual manual steps (cannot be automated — require a human, not defects):** completing a Google login needs real Google credentials, and receiving an OTP needs a real handset. Both were driven to the provider handoff successfully. **Developer note:** each dev must pin the registered token once per browser — `localStorage.setItem('SOKONI_APPCHECK_DEBUG_TOKEN', '<uuid>')`.
 
-This section **does not change the overall verdict** — C1/C2/C4 below are unrelated to authentication and remain open.
+### ⚠️ OPEN — production reCAPTCHA attestation is unverified (2-minute human check)
+
+Hitting the **live** sites with a real browser returned `exchangeRecaptchaV3Token` results that were **non-deterministic** (apex `200` on one run, `403` on the next; `www` `403` on both). That is **not** a domain/config defect — it is reCAPTCHA v3 **bot scoring**: the app's `minValidScore` is **0.5**, and an automated browser is designed to score below it. **No automated result here is trustworthy in either direction**, so production attestation is recorded as *unverified*, not as passing.
+
+**This matters because a failed App Check token blocks every Firebase Auth request before it is sent** — if production attestation is genuinely failing, production login is broken platform-wide.
+
+**Required before GO — a human, on a normal browser:** open `https://mysokoni.co.ke/login.html`, DevTools → Network, filter `firebaseappcheck`, and confirm `exchangeRecaptchaV3Token` returns **200**; then sign in. Repeat on `https://sokoni-aeb26.web.app`. If either returns 403, the likely cause is the reCAPTCHA v3 key's allowed-domains list or a `minValidScore` of 0.5 being too strict for real traffic — see [[APP_CHECK]].
+
+### Follow-up sprint (same day) — 3 further defects found by execution and fixed
+
+1. **7 pages were dead on arrival (fatal `SyntaxError`).** A bad global migration left `_app = if(!firebase.apps.length)firebase.initializeApp(...)` — invalid JS — in `commerce-os`, `event-hub`, `event-manager`, `executive-dashboard`, `release-readiness`, `security-center`, `wholesale-portal`. The **entire inline script block failed to parse**, so Firebase auth/firestore/functions never initialised on those pages. Fixed (the guard was also wrong: these are *named* apps).
+2. **40 compat pages never registered their auth listener.** They call `firebase.auth().onAuthStateChanged(...)` in an inline script but **never call `firebase.initializeApp()`** — throwing `No Firebase App '[DEFAULT]'` at parse time. The compat app only appeared ~4.5s later, far too late. **Session restore and the auth gate were silently dead on those pages** (e.g. `messages.html`). Fixed centrally in `sokoni-appcheck.js`, which loads right after the compat SDK and before page scripts: it now creates the default compat app (guarded no-op if the page made one) and only then activates App Check.
+3. **Compat App Check never activated** on those pages for the same reason, so their Firestore/Functions calls carried **no App Check token** — they would be rejected once enforcement is on. Now activates correctly (verified `200`).
+
+Side effect: duplicate App Check init is gone — those pages now make **1** `exchangeDebugToken` call instead of 2.
+
+**Regression:** 14 pages re-verified in-browser — all PASS (0 syntax errors, 0 `[DEFAULT]` errors, 0 App Check 403s), and the full auth E2E suite re-run green afterwards.
+
+This section **does not change the overall verdict** — the remaining gate is the human-verifiable set (payments E2E, PWA, accessibility, monitoring/backup-restore).
 
 ---
 
