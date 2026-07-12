@@ -38,6 +38,7 @@
  */
 
 const { defineSecret, defineString } = require('firebase-functions/params');
+const logger = require('firebase-functions/logger');
 
 /* ── Secrets ─────────────────────────────────────────────────────────────────
    Set these in Firebase Secret Manager — never in code or .env:
@@ -73,6 +74,10 @@ const AT_SENDER_ID = defineString('AT_SENDER_ID', { default: '' });
    is rejected by the other. Every SMS — OTP, delivery, rider, merchant — was failing
    with 401, and the failure was only logged, never surfaced.
    ─────────────────────────────────────────────────────────────────────────── */
+function _env() {
+  return String(AT_ENV.value() || 'sandbox').toLowerCase();
+}
+
 function atBaseUrl() {
   const env = String(AT_ENV.value() || 'sandbox').toLowerCase();
   return env === 'production'
@@ -174,22 +179,88 @@ async function atSendSMS(to, message, from) {
       signal: AbortSignal.timeout(15_000),
     });
 
+    /* ── Failures are ERRORS, not warnings ───────────────────────────────────
+       This used to console.warn and return. That is exactly why a total SMS
+       outage (every send 401-ing) went unnoticed: a warning is not an alert, and
+       the caller was told nothing. A silently swallowed SMS failure means a user
+       never gets their OTP and nobody finds out.
+
+       401/403 = credentials. 429 = rate limit. 5xx = provider down.
+       All are logged at ERROR (so they reach Cloud Monitoring) and RETURNED to the
+       caller, which can then decide (e.g. fall back to email). */
     if (!res.ok) {
-      console.warn(`[AT SMS] HTTP ${res.status} from AT API`);
-      return;
+      const body = await res.text().catch(() => '');
+      const fatal = res.status === 401 || res.status === 403;   /* config — retrying cannot help */
+
+      logger.error('[AT SMS] send failed', {
+        status: res.status,
+        fatal,
+        env: _env(),
+        /* Never log the key, the message body, or the full number. */
+        recipients: _logTag(recipients),
+        provider: body.slice(0, 200),
+      });
+
+      return { ok: false, status: res.status, retryable: !fatal, error: body.slice(0, 200) };
     }
 
     const json = await res.json();
-    if (json?.SMSMessageData?.Recipients) {
-      const recs      = json.SMSMessageData.Recipients;
-      const delivered = recs.filter(r => r.status === 'Success').length;
-      console.log(`[AT SMS] ${_logTag(recipients)} ${delivered}/${recs.length} delivered (env=${username === 'sandbox' ? 'sandbox' : 'production'})`);
-    } else {
-      console.log(`[AT SMS] ${_logTag(recipients)}`, json?.SMSMessageData?.Message || JSON.stringify(json));
+    const recs = json?.SMSMessageData?.Recipients || [];
+
+    /* Per-recipient provider response: messageId, status, cost. This is the delivery
+       and cost record — without it there is no way to answer "did it arrive?" or
+       "what did it cost?", both of which the business needs. */
+    const results = recs.map(r => ({
+      messageId: r.messageId || null,
+      status: r.status,            /* Success | UserInBlacklist | InvalidPhoneNumber | … */
+      statusCode: r.statusCode,
+      cost: r.cost || null,        /* e.g. "KES 0.8000" */
+      number: _logTag(r.number),
+    }));
+
+    const delivered = results.filter(r => r.status === 'Success').length;
+
+    /* A 200 from AT does NOT mean the SMS was accepted for every recipient — a bad
+       number comes back inside a 200. Treat a zero-success 200 as a failure. */
+    if (recs.length && delivered === 0) {
+      logger.error('[AT SMS] accepted by API but 0 recipients succeeded', {
+        env: _env(), results,
+      });
+      return { ok: false, status: 200, retryable: false, results };
     }
+
+    logger.info('[AT SMS] sent', {
+      env: _env(),
+      delivered,
+      total: recs.length,
+      sender: sender || '(default shortcode)',
+      results,                       /* messageId + cost per recipient */
+    });
+
+    return { ok: true, delivered, total: recs.length, results };
   } catch (e) {
-    console.warn('[AT SMS] Send error:', e.message);
+    /* Network/timeout — transient by nature, so the caller may retry. */
+    logger.error('[AT SMS] transport error', { error: e.message, env: _env() });
+    return { ok: false, retryable: true, error: e.message };
   }
+}
+
+/* Retry wrapper with exponential backoff, for transient failures only.
+   401/403 are NEVER retried — a wrong credential does not become right on the third
+   attempt, and hammering the provider with bad auth is how an account gets blocked. */
+async function atSendSMSWithRetry(to, message, from, attempts = 3) {
+  let last = null;
+  for (let i = 0; i < attempts; i++) {
+    last = await atSendSMS(to, message, from);
+    if (last && last.ok) return last;
+    if (!last || !last.retryable) return last;      /* fatal — stop immediately */
+    if (i < attempts - 1) {
+      const backoff = 500 * Math.pow(2, i);          /* 500ms, 1s, 2s */
+      await new Promise(r => setTimeout(r, backoff));
+    }
+  }
+  logger.error('[AT SMS] exhausted retries', { attempts, last });
+  return last;
 }
 
 /**
@@ -235,5 +306,6 @@ module.exports = {
   AT_ENV,
   resolveAtCredentials,
   atSendSMS,
+  atSendSMSWithRetry,
   atBuildClient,
 };
