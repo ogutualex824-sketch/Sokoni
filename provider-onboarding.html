@@ -228,23 +228,100 @@ const PLANS=[
 ];
 
 /* ── Steps (14, auth handled separately) ──────────────────────────── */
+/* `k` = the backend draft step name that providerSaveDraft accepts. Steps without
+   a `k` are not persisted server-side (auth/type/uploads/preview/legal/publish).
+   Provider "type" is folded into the `profile` step, which is what publish reads. */
 const STEPS=[
   {t:'Verify Account',   f:'sVerify',    skip:1},
   {t:'Provider Type',    f:'sType'},
-  {t:'Service Profile',  f:'sProfile'},
-  {t:'Coverage',         f:'sCoverage'},
-  {t:'Availability',     f:'sAvail'},
-  {t:'Pricing',          f:'sPricing'},
-  {t:'Choose Plan',      f:'sSub'},
+  {t:'Service Profile',  f:'sProfile',   k:'profile'},
+  {t:'Coverage',         f:'sCoverage',  k:'coverage'},
+  {t:'Availability',     f:'sAvail',     k:'availability'},
+  {t:'Pricing',          f:'sPricing',   k:'pricing'},
+  {t:'Choose Plan',      f:'sSub',       k:'subscription'},
   {t:'Verification',     f:'sVerif',     skip:1},
-  {t:'Payments',         f:'sPayment'},
-  {t:'Portfolio',        f:'sPortfolio', skip:1},
-  {t:'Bookings',         f:'sBookings'},
-  {t:'Notifications',    f:'sNotifs'},
+  {t:'Payments',         f:'sPayment',   k:'payment'},
+  {t:'Portfolio',        f:'sPortfolio', skip:1, k:'portfolio'},
+  {t:'Bookings',         f:'sBookings',  k:'bookings'},
+  {t:'Notifications',    f:'sNotifs',    k:'notifications'},
   {t:'Preview',          f:'sPreview'},
   {t:'Legal Agreements', f:'sLegal'},
   {t:'Publish!',         f:'sPublish',   fin:1}
 ];
+
+/* ══════════════════════════════════════════════════════════════════════
+   FIELD MAPPING — the wizard collects DOM-id-keyed values; the backend
+   stores named draft steps and providerPublish reads specific keys off
+   draft.profile. These two functions are the contract between them.
+   ══════════════════════════════════════════════════════════════════════ */
+const _num = v => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+const _one = v => Array.isArray(v) ? (v[0] || '') : (v || '');   // single-select chips
+
+/* Wizard form data ➜ backend draft shape. `all` is every step's raw form data. */
+function _toBackend(key, d, all){
+  switch(key){
+    case 'profile': return {
+      name: d.pNm||'', bio: d.pBio||'',
+      type: ((all && all.s1 && all.s1.provType) || 'individual'),
+      category: d.pCat||'', subcategory: d.pSub||'', experience: d.pExp||null,
+      qualifications: d.pQual ? [d.pQual] : [],
+      certifications: d.pCert ? [d.pCert] : [],
+      languages: Array.isArray(d.pLng) ? d.pLng : [],
+    };
+    case 'coverage': return {
+      serviceType: _one(d.covT) || 'On-site', county: d.covCo||'', city: d.covCi||'',
+      neighbourhood: d.covNb||'', radiusKm: _num(d.covR), nationwide: !!d.covNat, remoteOnly: !!d.covRem,
+    };
+    case 'availability': return {
+      days: Array.isArray(d.avD) ? d.avD : [], from: d.avF||'', to: d.avT||'',
+      breakFrom: d.avBF||'', breakTo: d.avBT||'', leadTime: d.avLd||'',
+      emergency: !!d.avEm, holidays: !!d.avHol,
+    };
+    case 'pricing': return {
+      hourly: _num(d.prH), fixed: _num(d.prF), inspection: _num(d.prI),
+      emergency: _num(d.prE), travelPerKm: _num(d.prTr),
+      acceptsQuotes: !!d.prQ, packages: d.prPkg||'',
+    };
+    case 'subscription': return { plan: d.tier||'', billingCycle: d.billingCycle||'monthly' };
+    case 'payment': return {
+      mpesa: d.pmMp||'', bank: d.pmBk||'', accountNumber: d.pmAc||'', settlement: _one(d.pmSet),
+    };
+    case 'portfolio': return {
+      website: d.ptWeb||'', linkedin: d.ptLI||'', instagram: d.ptIG||'', whatsapp: d.ptWA||'',
+    };
+    case 'bookings': return {
+      mode: d.bkMode||'request', duration: d.bkDur||'60', maxPerDay: _num(d.bkMaxDay),
+      buffer: _num(d.bkBuf), maxTravelKm: _num(d.bkTrav), maxAdvanceDays: _num(d.bkAdv),
+      cancellation: d.bkCanc||'free24h', reschedule: d.bkRes||'free', requireDeposit: !!d.bkDep,
+    };
+    case 'notifications': return { sms: d.nSMS!==false, email: d.nEmail!==false, push: d.nPush!==false };
+    default: return d || {};
+  }
+}
+
+/* Backend draft shape ➜ wizard form data (so resume re-populates the fields). */
+function _fromBackend(key, b){
+  b = b || {};
+  switch(key){
+    case 'profile': return { pNm:b.name, pBio:b.bio, pCat:b.category, pSub:b.subcategory,
+      pExp:b.experience, pQual:(b.qualifications||[])[0]||'', pCert:(b.certifications||[])[0]||'',
+      pLng:b.languages||[] };
+    case 'coverage': return { covT:b.serviceType, covCo:b.county, covCi:b.city, covNb:b.neighbourhood,
+      covR:b.radiusKm, covNat:b.nationwide, covRem:b.remoteOnly };
+    case 'availability': return { avD:b.days, avF:b.from, avT:b.to, avBF:b.breakFrom, avBT:b.breakTo,
+      avLd:b.leadTime, avEm:b.emergency, avHol:b.holidays };
+    case 'pricing': return { prH:b.hourly, prF:b.fixed, prI:b.inspection, prE:b.emergency,
+      prTr:b.travelPerKm, prQ:b.acceptsQuotes, prPkg:b.packages };
+    case 'subscription': return { tier:b.plan, billingCycle:b.billingCycle };
+    case 'payment': return { pmMp:b.mpesa, pmBk:b.bank, pmAc:b.accountNumber, pmSet:b.settlement };
+    case 'portfolio': return { ptWeb:b.website, ptLI:b.linkedin, ptIG:b.instagram, ptWA:b.whatsapp };
+    case 'bookings': return { bkMode:b.mode, bkDur:b.duration, bkMaxDay:b.maxPerDay, bkBuf:b.buffer,
+      bkTrav:b.maxTravelKm, bkAdv:b.maxAdvanceDays, bkCanc:b.cancellation, bkRes:b.reschedule,
+      bkDep:b.requireDeposit };
+    case 'notifications': return { nSMS:b.sms, nEmail:b.email, nPush:b.push };
+    default: return b;
+  }
+}
 
 /* ── Utils ─────────────────────────────────────────────────────────── */
 const _q=id=>document.getElementById(id);
@@ -289,11 +366,27 @@ const W=(()=>{
     showPh('phWiz');
     _rnd();
   }
+  /* Resume. providerGetDraft returns { draft, completedSteps, status } — rehydrate
+     the wizard's form state from the saved backend draft and resume at the first
+     step that has not been saved yet. */
   async function _loadDraft(){
     try{
       const fn=window.sokoniCallable('providerDispatch');
       const r=await fn({op:'providerGetDraft'});
-      if(r.data&&!r.data.completed){_draft=r.data.stepData||{};_s=r.data.currentStep||0;_t=_draft.tier||null;_rnd()}
+      const res=(r&&r.data)||{};
+      if(res.status==='active')return;                       // already published
+      const draft=res.draft||{}, done=res.completedSteps||{};
+      STEPS.forEach((s,i)=>{ if(s.k&&draft[s.k]) _draft['s'+i]=_fromBackend(s.k,draft[s.k]); });
+      if(draft.profile&&draft.profile.type) _draft.s1={provType:draft.profile.type};
+      if(draft.subscription&&draft.subscription.plan){
+        _t=draft.subscription.plan;
+        _bill=draft.subscription.billingCycle||'monthly';
+      }
+      let resume=STEPS.findIndex(s=>s.k&&!done[s.k]);
+      if(resume<0) resume=STEPS.findIndex(s=>s.f==='sPreview');
+      if(resume<0) resume=0;
+      _s=resume;
+      _rnd();
     }catch(e){}
   }
   function _rnd(){
@@ -312,23 +405,41 @@ const W=(()=>{
     const s=STEPS[_s];if(!s)return;
     if(s.f==='sLegal'&&!_legalOk){toast('Please review and accept the legal agreements to continue.','err');return}
     const data=_collect();
+    _draft['s'+_s]=data; if(_t)_draft.tier=_t;
+
+    /* Publish hard-requires an ACTIVATED subscription — a chosen tier alone is not enough. */
+    if(s.k==='subscription'&&!_t){toast('Please choose a plan to continue.','err');return}
+
     showLoad('Saving…');
     try{
       const fn=window.sokoniCallable('providerDispatch');
-      await fn({op:'providerSaveDraft',step:_s,data});
-      _draft['s'+_s]=data;if(_t)_draft.tier=_t;
+
+      /* Persist this step under its BACKEND step name, in the shape publish reads. */
+      if(s.k){
+        const payload=_toBackend(s.k, Object.assign({}, data, {tier:_t, billingCycle:_bill}), _draft);
+        await fn({op:'providerSaveDraft', step:s.k, data:payload});
+      }
+
+      /* Actually activate the plan (sets providerProfiles.plan, which publish requires). */
+      if(s.k==='subscription'){
+        showLoad('Activating your plan…');
+        await fn({op:'providerSelectPlan', plan:_t, billingCycle:_bill});
+        await fn({op:'providerActivateSubscription', plan:_t, billingCycle:_bill});
+      }
+
       if(s.fin){await _publish();return}
       _s++;hideLoad();_rnd();
-    }catch(e){hideLoad();toast(e.message,'err')}
+    }catch(e){hideLoad();toast(e.message||'Could not save. Please try again.','err')}
   }
   function back(){if(_s===0){showPh('phAuth');_q('progArea').classList.remove('vis');return}_s--;_rnd()}
   function skip(){_draft['s'+_s]={};_s++;_rnd()}
   async function _publish(){
     showLoad('Publishing your profile…');
     try{
-      const all=Object.assign({},...STEPS.map((_,i)=>_draft['s'+i]||{}));all.tier=_t||'free_trial';all.billingCycle=_bill;
+      /* providerPublish reads the SAVED draft from Firestore (draft.profile /
+         draft.coverage / plan) — it ignores any payload, so send none. */
       const fn=window.sokoniCallable('providerDispatch');
-      const r=await fn({op:'providerPublish',profileData:all});
+      const r=await fn({op:'providerPublish'});
       _pid=r.data&&r.data.providerId?r.data.providerId:'';
       hideLoad();
       _q('bNext').style.display='none';_q('bBack').style.display='none';_q('bSkip').style.display='none';
