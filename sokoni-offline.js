@@ -1,15 +1,23 @@
 /* ================================================================
-   sokoni-offline.js — Smart Offline Detection v1.1
-   Shows offline banner ONLY when BOTH conditions are true:
-     1. navigator.onLine === false (browser sees no network), AND
-     2. A lightweight backend ping fails (confirms real disconnect).
+   sokoni-offline.js — Connectivity Detection v2.0
 
-   v1.1 changes:
-   • Removed the proactive "captive portal" ping at page load —
-     it caused false-positive banners when Firebase init was slow.
-   • Added 1 s debounce on the `offline` event to survive brief
-     Android/iOS network transitions that recover instantly.
-   • Re-ping on `online` still required before hiding (unchanged).
+   The banner is driven by an ACTIVE PROBE, never by navigator.onLine.
+
+   v2.0 — fixes "false offline banner with working internet, stuck":
+   • navigator.onLine is NOT authoritative. Installed PWAs, iOS Safari and
+     Android WebViews report it as `false` while the network is healthy.
+     v1.x showed the banner directly from that flag and could only hide it
+     when the flag flipped back — so on those platforms the banner appeared
+     falsely and never cleared.
+   • Now: the flag is only a HINT that schedules a probe.
+       – Only a FAILED probe may SHOW the banner.
+       – A SUCCESSFUL probe always HIDES it, immediately.
+     Recovery therefore can never be blocked and the banner cannot stick.
+   • Re-probes on online/offline, pageshow (bfcache/app-switch) and
+     visibilitychange, so state self-heals after install, backgrounding,
+     refresh and service-worker updates.
+   • Same policy as sokoni-ui.js's #sk-offline-bar — the two detectors no
+     longer contradict each other.
 ================================================================ */
 (function () {
   'use strict';
@@ -74,77 +82,88 @@
     if (_banner) _banner.style.transform = 'translateY(-100%)';
   }
 
-  /* ── Backend ping ──────────────────────────────────────── */
-  function _ping() {
+  /* ── Active connectivity probe — THE SOURCE OF TRUTH ────────────────────
+     `navigator.onLine` is NOT authoritative and must never gate the banner on
+     its own. Installed PWAs, iOS Safari and Android WebViews are known to report
+     `navigator.onLine === false` while the network is perfectly healthy. This
+     module previously treated the flag as authoritative and showed the banner
+     from it directly, so on those platforms the banner appeared with working
+     internet and could never be hidden again (nothing but the flag could clear
+     it) — the "false offline, stuck banner" defect.
+
+     Policy (identical to sokoni-ui.js, so the two detectors can no longer
+     contradict each other):
+       • The flag is a HINT that triggers a probe. It never shows the banner.
+       • Only a FAILED probe may show the banner.
+       • A SUCCESSFUL probe always hides it, immediately — recovery can never
+         be blocked, so the banner cannot get stuck.
+
+     Signal: no-cors GET https://www.gstatic.com/generate_204. Cross-origin and
+     never cached by our service worker, so it fails iff the network is truly
+     down. An own-origin URL would be served from the SW cache while offline and
+     would falsely report "online".                                            */
+  function _probe() {
     var ctrl;
     try { ctrl = new AbortController(); } catch (_) { ctrl = null; }
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 4000);
 
-    /* Abort after 5 s to avoid hanging */
-    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 5000);
-
-    fetch('/__/firebase/init.json', {
-      method:  'GET',
-      cache:   'no-store',
-      signal:  ctrl ? ctrl.signal : undefined,
+    return fetch('https://www.gstatic.com/generate_204', {
+      mode:   'no-cors',
+      cache:  'no-store',
+      signal: ctrl ? ctrl.signal : undefined,
     })
-      .then(function (r) {
-        clearTimeout(timer);
-        if (r.ok) _hide(); else _show();
-      })
+      .then(function () { clearTimeout(timer); return true; })   /* reached the network */
       .catch(function () {
         clearTimeout(timer);
-        _show();
+        /* gstatic unreachable. If the browser still reports a network, assume the
+           probe was blocked (firewall, extension, DNS) rather than declaring the
+           user offline — a blocked probe must not produce a false banner. */
+        return navigator.onLine === true;
       });
   }
 
-  /* ── Decision logic ────────────────────────────────────────────────────
-     `navigator.onLine` is authoritative for "is there a network?" and is the
-     ONLY gate for hiding the banner. Recovery must never depend on a backend
-     ping succeeding — a failed/blocked ping (SW interception, CDN cache, a 404
-     on a reserved URL) used to leave the banner stuck visible after the network
-     had already returned. If onLine is true, hide immediately.               */
+  /* Re-evaluate true connectivity and drive the banner from the RESULT. */
   function _sync() {
-    if (navigator.onLine) _hide();
-    else _show();
+    return _probe().then(function (online) {
+      if (online) _hide(); else _show();
+      return online;
+    });
   }
 
-  /* Kept for API compatibility (window.SokoniOffline.check). navigator.onLine
-     drives visibility; the ping only escalates to "show" if the browser thinks
-     it is online but the backend is unreachable (captive portal) — it can never
-     block a hide. */
-  function _check() {
-    if (!navigator.onLine) { _show(); return; }
-    _hide();
-    _ping();
-  }
+  /* Public API (window.SokoniOffline.check) — same probe-confirmed policy. */
+  function _check() { return _sync(); }
 
   /* ── Network event listeners ───────────────────────────── */
   window.addEventListener('offline', function () {
-    /* Debounce 1 s — Android/iOS briefly fire `offline` during Wi-Fi handoffs
-       that resolve on their own. Only show if still offline after 1 s. */
+    /* The flag only schedules a probe. Debounced 1 s because Android/iOS fire
+       `offline` during Wi-Fi handoffs that recover on their own. The probe —
+       not the flag — decides whether the banner appears. */
     clearTimeout(_debounceTimer);
-    _debounceTimer = setTimeout(function () {
-      if (!navigator.onLine) _show();
-    }, 1000);
+    _debounceTimer = setTimeout(_sync, 1000);
   });
 
   window.addEventListener('online', function () {
-    /* Network restored — trust the browser and hide instantly. Do NOT wait on a
-       ping; that dependency was the cause of the "banner stuck while online" bug. */
+    /* Network restored — hide immediately, then confirm in the background.
+       Hiding is never blocked on the probe, so recovery is guaranteed. */
     clearTimeout(_debounceTimer);
     _hide();
+    _sync();
   });
 
-  /* Re-sync when the tab regains focus or is restored from bfcache/app-switch.
-     Mobile devices that sleep offline and wake online often miss the `online`
-     event, which previously left the banner stranded. */
-  window.addEventListener('pageshow', _sync);
+  /* Re-check whenever the page is restored or refocused. Devices that sleep
+     offline and wake online frequently never fire `online`; without this the
+     banner stayed stranded after app-install, backgrounding, refresh, or a
+     service-worker update. */
+  window.addEventListener('pageshow', function () { _sync(); });
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) _sync();
   });
 
-  /* Initial state: show only if the browser reports offline. */
-  if (!navigator.onLine) { _show(); }
+  /* Initial state: never show from the flag alone. Probe first; the banner
+     appears only if the probe actually fails. */
+  _sync();
 
-  window.SokoniOffline = { check: _check, sync: _sync };
+  /* hide is exposed so sokoni-ui.js can cross-clear this banner when its
+     own probe confirms connectivity — avoids double-banner race conditions. */
+  window.SokoniOffline = { check: _check, sync: _sync, probe: _probe, hide: _hide };
 }());

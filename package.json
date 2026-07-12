@@ -6,6 +6,7 @@
   "scripts": {
     "predeploy": "node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
     "verify:appcheck": "node scripts/verify-appcheck.js",
+    "test:offline": "node scripts/test-offline-detection.js",
     "verify:indexes": "node scripts/verify-index-governance.js",
     "verify:index-drift": "node scripts/reconcile-indexes.js --verify",
     "reconcile:indexes": "node scripts/reconcile-indexes.js --sync",

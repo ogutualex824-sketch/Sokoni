@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260712-prod-readiness-v39";
+const CACHE_VERSION = "sokoni-20260712-connectivity-fix-v43";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -155,7 +155,7 @@ const PRECACHE_PAGES = [
 
 const PRECACHE_STATIC = [
   "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js", "/sokoni-quality.css",
-  "/manifest.json", "/assets/Sokoni Logo.png", "/assets/Sokoni%20Logo.png",
+  "/manifest.json", "/assets/Sokoni Logo.png", "/assets/logosokoni.png",
   "/auth.css", "/checkout.css", "/premium.css",
   "/product.css", "/profile.css", "/seller.css",
   "/landlord.css", "/compact-grid.css", "/sokoni-premium-v2.css",
@@ -281,6 +281,12 @@ const SKIP_CACHE_PATTERNS = [
   "securetoken.googleapis.com",
   "maps.googleapis.com",
   "maps.gstatic.com",
+  /* Connectivity probe (sokoni-ui.js / sokoni-offline.js). MUST bypass the service
+     worker entirely. It previously fell through to networkFirst(), which caches the
+     response and replays it from cache when the network fails — so the probe always
+     resolved and a genuine outage could never be detected. The probe is only a valid
+     connectivity signal if it always hits the real network. */
+  "generate_204",
 ];
 
 
@@ -386,10 +392,16 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  /* Frequently-updated UI scripts â†' Network First so changes are instant */
+  /* Frequently-updated UI scripts â†' Network First so changes are instant.
+     Connectivity-critical scripts MUST be here. They were previously served
+     cache-first (the generic .js rule below), so a fix to the offline detector
+     could not reach a user whose service worker still held the old copy — the
+     false-offline banner survived the fix being deployed. Anything that decides
+     online/offline state must always come from the network when reachable. */
   const ALWAYS_FRESH = ["scroll-top.js","contact-guard.js","script.js","style.css","mobile.css","premium.css","seller.css","adult-gate.js",
     "sokoni-desktop.css","security.js","sokoni-permissions.js","sokoni-pay.js","sokoni-db.js","sokoni-config.js",
-    "sokoni-payment-engine.js","sokoni-payment-trust.js","sokoni-fraud-engine.js","sokoni-webhook-engine.js"];
+    "sokoni-payment-engine.js","sokoni-payment-trust.js","sokoni-fraud-engine.js","sokoni-webhook-engine.js",
+    "sokoni-offline.js","sokoni-ui.js","shared-header.js","sw-register.js"];
   if (ALWAYS_FRESH.some(f => url.pathname.endsWith(f))) {
     event.respondWith(networkFirst(request, STATIC_CACHE));
     return;
@@ -540,13 +552,13 @@ async function cacheFirstImage(request) {
 /* â"€â"€ PUSH NOTIFICATIONS â"€â"€ */
 self.addEventListener("push", event => {
   if (!event.data) return;
-  let data = { title: "SOKONI", body: "You have a new notification!", icon: "/assets/Sokoni Logo.png" };
+  let data = { title: "SOKONI", body: "You have a new notification!", icon: "/assets/logosokoni.png" };
   try { data = { ...data, ...event.data.json() }; } catch {}
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || "/assets/Sokoni Logo.png",
-      badge: "/assets/Sokoni Logo.png",
+      icon: data.icon || "/assets/logosokoni.png",
+      badge: "/assets/logosokoni.png",
       vibrate: [200, 100, 200],
       data: { url: data.url || "/" },
       actions: [
@@ -597,24 +609,24 @@ async function _checkScheduledNotifications() {
     const notifications = [
       {
         id:    "daily-deals",
-        title: "âš¡ Daily Deals on SOKONI",
+        title: "⚡ Daily Deals on SOKONI",
         body:  "New products & flash sales added today - check what's new!",
         url:   "/flashsale",
-        icon:  "/assets/Sokoni Logo.png",
+        icon:  "/assets/logosokoni.png",
       },
       {
         id:    "sell-reminder",
-        title: "ðŸª Got something to sell?",
+        title: "🏪 Got something to sell?",
         body:  "List it on SOKONI for FREE and reach thousands of Kenyan buyers today.",
         url:   "/seller",
-        icon:  "/assets/Sokoni Logo.png",
+        icon:  "/assets/logosokoni.png",
       },
       {
         id:    "cart-reminder",
-        title: "ðŸ›' Items waiting in your cart!",
+        title: "🛒 Items waiting in your cart!",
         body:  "Complete your purchase before items sell out.",
         url:   "/cart",
-        icon:  "/assets/Sokoni Logo.png",
+        icon:  "/assets/logosokoni.png",
       },
     ];
 
@@ -624,7 +636,7 @@ async function _checkScheduledNotifications() {
     await self.registration.showNotification(n.title, {
       body:    n.body,
       icon:    n.icon,
-      badge:   "/assets/Sokoni Logo.png",
+      badge:   "/assets/logosokoni.png",
       vibrate: [100, 50, 100],
       tag:     "sokoni-" + n.id,
       data:    { url: n.url },
