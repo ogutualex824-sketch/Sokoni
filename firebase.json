@@ -51,7 +51,8 @@
       "ss_*.png",
       "tmp_*.png",
       "*.jsonl",
-      "cf-*.html"
+      "cf-*.html",
+      "email-preview.html"
     ],
     "rewrites": [
       {
@@ -224,6 +225,14 @@
           },
           {
             "key": "CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Cloudflare-CDN-Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "Surrogate-Control",
             "value": "no-store"
           }
         ]
