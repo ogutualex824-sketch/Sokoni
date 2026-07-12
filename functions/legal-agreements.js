@@ -115,6 +115,42 @@ async function _catalogueFor(role) {
   }).filter(Boolean);
 }
 
+/* ── Server-side enforcement (dark-launched per role) ────────────────────────
+   assertLegalCompliance(uid, role) is the reusable guard other modules call to
+   protect sensitive ops (payouts, publish, go-online, …). Enforcement is OFF by
+   default per role and flipped on via legalSetEnforcement once the acceptance UI
+   is rolled out for that role — so existing users are never suddenly locked out
+   (no breaking changes). When enabled, it throws failed-precondition listing the
+   missing agreements. */
+let _enfCache = null, _enfAt = 0;
+async function _enforcementFlags() {
+  if (_enfCache && (Date.now() - _enfAt) < 60000) return _enfCache; // 60s TTL
+  try {
+    const snap = await _db().collection('legalConfig').doc('enforcement').get();
+    _enfCache = snap.exists ? (snap.data() || {}) : {};
+  } catch (_) { _enfCache = _enfCache || {}; }
+  _enfAt = Date.now();
+  return _enfCache;
+}
+
+async function assertLegalCompliance(uid, role) {
+  if (!uid) throw new HttpsError('unauthenticated', 'Authentication required.');
+  const flags = await _enforcementFlags();
+  if (!flags[role] && !flags.all) return { enforced: false, compliant: true }; // dark: allow
+  const [required, accSnap] = await Promise.all([
+    _catalogueFor(role),
+    _db().collection('legalAcceptances').where('userId', '==', uid).limit(500).get(),
+  ]);
+  const accepted = {};
+  accSnap.docs.forEach((d) => { const a = d.data(); if (a.accepted) accepted[a.agreementId] = a.version; });
+  const missing = required.filter((a) => accepted[a.id] !== a.version);
+  if (missing.length) {
+    throw new HttpsError('failed-precondition',
+      `Please accept the required agreements before continuing: ${missing.map((m) => m.name).join(', ')}.`);
+  }
+  return { enforced: true, compliant: true };
+}
+
 const _h = {};
 
 /* ── legalGetAgreements({role}) — the agreements a role must accept, current versions ── */
@@ -195,6 +231,11 @@ _h.legalAccept = async (req) => {
     recorded.push({ agreementId, version });
   }
   if (!recorded.length) throw new HttpsError('invalid-argument', 'No valid agreements to accept.');
+  // Immutable audit-trail entry for the batch (append-only, never updated).
+  batch.set(_db().collection('legalAuditLog').doc(`${uid}_${role || 'core'}_${_hash(recorded.map((r) => r.agreementId + r.version).join(','), 'a')}`), {
+    userId: uid, role: role || null, action: 'accept', agreements: recorded,
+    acceptedFrom: ip || null, device: device || null, at: _ts(),
+  }, { merge: true });
   await batch.commit();
   return { recorded, count: recorded.length };
 };
@@ -270,4 +311,35 @@ _h.legalGetStats = async (req) => {
   return { total: snap.size, sampled: snap.size >= 5000, byAgreement, byVersion, byRole };
 };
 
-module.exports = { _h, CORE, ROLE_AGREEMENTS, DEFAULT_VERSION };
+/* ── Admin: toggle server-side enforcement per role (dark-launch control) ── */
+_h.legalSetEnforcement = async (req) => {
+  _assertAdmin(req);
+  const role = _san(req.data?.role || '', 40);
+  const enabled = req.data?.enabled === true;
+  if (!role) throw new HttpsError('invalid-argument', 'role is required (or "all").');
+  await _db().collection('legalConfig').doc('enforcement').set({ [role]: enabled, updatedAt: _ts() }, { merge: true });
+  _enfCache = null; _enfAt = 0; // force re-read
+  return { ok: true, role, enabled };
+};
+
+/* ── Admin: compliance report (acceptance rate, pending, version adoption, by role) ── */
+_h.legalComplianceReport = async (req) => {
+  _assertAdmin(req);
+  const snap = await _db().collection('legalAcceptances').limit(5000).get();
+  const byAgreement = {}, byRole = {}, versionAdoption = {}, users = new Set();
+  snap.docs.forEach((x) => {
+    const a = x.data();
+    users.add(a.userId);
+    byAgreement[a.agreementId] = (byAgreement[a.agreementId] || 0) + 1;
+    if (a.role) byRole[a.role] = (byRole[a.role] || 0) + 1;
+    versionAdoption[`${a.agreementId}@${a.version}`] = (versionAdoption[`${a.agreementId}@${a.version}`] || 0) + 1;
+  });
+  const flags = await _enforcementFlags();
+  return {
+    totalAcceptanceRecords: snap.size, sampled: snap.size >= 5000,
+    distinctUsers: users.size, byAgreement, byRole, versionAdoption,
+    enforcement: flags,
+  };
+};
+
+module.exports = { _h, CORE, ROLE_AGREEMENTS, DEFAULT_VERSION, assertLegalCompliance };

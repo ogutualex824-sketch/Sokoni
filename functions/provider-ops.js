@@ -19,6 +19,7 @@ const { HttpsError }               = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const logger                       = require('firebase-functions/logger');
 const subCore                      = require('./subscription-core');
+const legal                        = require('./legal-agreements');
 
 const _db  = () => getFirestore();
 const _ts  = () => FieldValue.serverTimestamp();
@@ -171,6 +172,7 @@ _h.providerGetEarnings = async (req) => {
    Moves all pending earnings to "requested" (settled by the payout scheduler). */
 _h.providerRequestPayout = async (req) => {
   const uid = _uid(req);
+  await legal.assertLegalCompliance(uid, 'provider'); // dark-launched; no-op until enabled
   const snap = await _db().collection('providerPayouts')
     .where('providerId', '==', uid).limit(600).get();
   const pending = snap.docs.filter((d) => d.data().status === 'pending');
@@ -267,6 +269,7 @@ _h.providerGetPortfolio = async (req) => {
    listing cap (-1 = unlimited). This is the listings-limit enforcement point. */
 _h.providerAddService = async (req) => {
   const uid = _uid(req);
+  await legal.assertLegalCompliance(uid, 'provider'); // dark-launched; no-op until enabled
   const d   = req.data || {};
   const name = _san(d.name, 200).trim();
   if (!name) throw new HttpsError('invalid-argument', 'Service name is required.');
