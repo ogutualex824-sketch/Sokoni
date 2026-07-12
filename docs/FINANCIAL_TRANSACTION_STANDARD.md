@@ -1,11 +1,12 @@
 # SOKONI — FINANCIAL TRANSACTION STANDARD
 
-**Version:** **1.1.0** · **Effective:** 2026-07-12 · **Status:** MANDATORY. **No exceptions.**
-**Enforced by (both are permanent CI gates):**
+**Version:** **1.2.0** · **Effective:** 2026-07-13 · **Status:** MANDATORY. **No exceptions.**
+**Enforced by (all three are permanent CI gates):**
 - `scripts/audit-financial-safety.js --ci` — static compliance
 - `scripts/test-financial-idempotency.js` — behavioural proof (25 tests)
+- `scripts/test-payment-integrity.js` — **the money path** (15 checks): no client may claim a payment happened
 
-**Any new payment-related code MUST pass both.**
+**Any new payment-related code MUST pass all three.**
 
 ## Scope — this standard governs ALL of:
 **Wallets · Payments · Refunds · Settlements · Subscriptions · Commissions · Payouts · Driver earnings · Merchant balances · Ledger operations**
@@ -14,6 +15,7 @@
 ## Version history
 | Version | Date | Change |
 |---|---|---|
+| **1.2.0** | 2026-07-13 | **P0-7.** Added Invariant 9 (**Provider-attested**) and F6 (client asserting a payment). Invariants 1–8 were all rigorous and all assumed the payment was *real* — none said who may claim it happened. Checkout marked orders `paid` atomically, idempotently, with deterministic ids and a clean audit trail, **for payments that never occurred**. New CI gate: `test-payment-integrity.js`. |
 | **1.1.0** | 2026-07-12 | Added: scheduled jobs named as an at-least-once source (P0-6). Added F5 (written-but-never-read guard) and F4 (batch ≠ idempotent). Added the `@financial-safe:` annotation — an explicit, *justified*, **visible** suppression for guards the static tool cannot infer. |
 | **1.0.0** | 2026-07-12 | Initial: 8 invariants, F1–F3, patterns A–D, incident ledger (P0-1…P0-5). |
 
@@ -36,6 +38,17 @@ Every money-touching code path MUST be:
 | 6 | **Audit logged** | Every movement leaves an immutable record |
 | 7 | **Deterministic identifiers** | Ledger doc ids derive from the payment, never auto-generated |
 | 8 | **Atomic state transition** | `pending → final` is claimed by exactly one caller |
+| 9 | **Provider-attested** | **Only a payment provider may assert that money moved.** Not a timer, not the client, not the absence of an error |
+
+> **Why invariant 9 had to be added (2026-07-13).**
+> Invariants 1–8 are all rigorous — and every one of them silently assumes *the payment was
+> real*. None of them says **who is allowed to claim it happened**. Checkout fell straight
+> through that gap: it marked orders `paid`, atomically and idempotently, with perfect
+> deterministic ids and a clean audit trail — **for payments that never occurred**. The
+> ledger was flawlessly consistent about money that did not exist.
+>
+> Idempotency protects you from counting a payment twice. It does nothing to stop you
+> counting a payment *zero times over*.
 
 ---
 
@@ -88,6 +101,36 @@ await batch.commit();
 
 ### F5 — writing an idempotency marker but never reading it
 P0-5 wrote `processed: true` on the queue doc and **never checked it**. A guard you don't read is not a guard.
+
+### F6 — the client asserting that a payment happened
+**Caused: P0-7 (the worst financial defect found to date).**
+
+```js
+/* ❌ EVERY ONE OF THESE SHIPPED TO PRODUCTION */
+setTimeout(() => {                              // a TIMER as proof of payment
+  showToast("✅ Payment Confirmed");
+  saveOrder({ status: "paid" });
+}, 1600);
+
+function _cardFallback(){                       // "the processor failed to load, so approve it"
+  showToast("✅ Card Approved");                //  ← reached on a BLOCKED CDN REQUEST
+  saveOrder({ status: "paid" });
+}
+
+status: "paid"                                  // hardcoded, for every method, unconditionally
+```
+
+**The rule:** only a provider callback or a server-side verification may produce `paid`.
+Everything else is `pending_payment`. **Fail closed.**
+
+**The trap that made this so dangerous:** the two worst paths were not dead code and not
+demo-only. They were *fallbacks*. `_cardFallback` fired whenever the payment SDK **failed
+to load** — a blocked CDN, an ad-blocker, a flaky connection, all routine in Kenya.
+`_runDemoStkPush` fired whenever `INTASEND_PUBLIC_KEY` was an **empty string**. The platform
+was one blank config value, or one ad-blocker, away from giving stock away in production.
+
+> **A simulation path in payment code is a live weapon, not a dev convenience.**
+> Payment code gets no demo mode. If it cannot take money, it says so and stops.
 
 ---
 
@@ -188,7 +231,14 @@ Detects:
 | **P0-3** | `onSellerPaymentCreated` trigger: auto-ID + `increment()` | **Sellers billed commission TWICE** | ✅ `943e8ea` |
 | **P0-4** | Shared webhook wrapper: racy idempotency claim | One payment event processed twice (4 rails) | ✅ `943e8ea` |
 | **P0-5** | `processDriverEarning` trigger: batch + `increment()` + auto-ID | **Drivers PAID TWICE** | ✅ `b026f90` |
+| **P0-7** | **Checkout fabricated payment confirmations.** 4 client paths (`processMobileMoney`, `_runDemoStkPush`, `_cardFallback`, the no-verify branch) told the customer *"✅ Payment Confirmed"* and wrote orders as `paid`. Six offered payment methods (Airtel, T-Kash, Equity, MTN, EcoCash, Chipper) **have no backend at all.** `saveAndRedirect()` hardcoded `status:"paid"` for every method. | **Customers told they paid when no money moved; sellers shipped against it. Revenue, settlement, commission and escrow all overstated.** | ✅ `d7a7ac7` + `af2d632` |
 
-**Every one of these was found by static audit. None was caught by a test. All five would have corrupted money silently.**
+**Every one of P0-1…P0-5 was found by static audit. None was caught by a test. All five would have corrupted money silently.**
+
+**P0-7 was found by neither** — it surfaced while wiring a *cosmetic* "payment successful" animation, because the animation turned out to already be firing without a payment. The static audit passed it, because the code was flawlessly idempotent and atomic *about money that did not exist*. That is precisely why Invariant 9 exists.
+
+> P0-1 through P0-5 are all failures of **how** we record money.
+> **P0-7 is a failure of whether the money was ever there.**
+> The first five make the ledger wrong. The sixth makes it confidently, consistently wrong.
 
 That is why this standard is mandatory — and why static verification alone is still **not sufficient** to release. See `MONEY_PATH_VERIFICATION.md` (**CB-M1 remains NO-GO**).

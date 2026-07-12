@@ -1,4 +1,55 @@
-﻿## [2026-07-13] — Communication Engine v1.0 + Order Timeline + Three Silent Push Failures Fixed
+﻿## [2026-07-13] — 🚨 HOTFIX P0-7: Checkout fabricated payment confirmations
+
+### Summary
+
+**Production financial-integrity hotfix. Deployed immediately, outside the feature freeze.**
+
+Checkout had **four** paths that told the customer *"✅ Payment Confirmed"* and wrote a real
+order with `status: "paid"` — the flag a seller reads to decide it is safe to ship — when
+**no money had moved**.
+
+| Path | What it did |
+| --- | --- |
+| `processMobileMoney()` | Airtel Money, T-Kash, Equity EazzY, MTN MoMo, EcoCash, Chipper Cash: `setTimeout(1600)` → *"✅ Payment Confirmed — KES X received. Order placed!"* → order written. **None of these six providers has any backend anywhere in `functions/`.** |
+| `_runDemoStkPush()` | A complete fake M-Pesa STK push — animated "sending → enter your PIN → confirmed" on timers. Indistinguishable from the real thing. Ran whenever `INTASEND_PUBLIC_KEY` was empty. |
+| `_cardFallback()` | Its own comment: *"Demo/sandbox mode: simulate approval then save order."* Reached whenever the IntaSend SDK **failed to load** — blocked CDN, ad-blocker, flaky network. |
+| no-verify branch | Trusted a client-side IntaSend `COMPLETE` event, which is forgeable from a console. |
+
+And `saveAndRedirect()` hardcoded `status: "paid"` for **every** method — so PayPal marked the
+order paid the instant the tab opened, and bank transfer trusted a customer-typed reference.
+
+**The two worst paths were not dead code — they were fallbacks.** The platform was one blank
+config value, or one ad-blocker, away from giving stock away in production.
+
+### Fix (all failing closed)
+- Payment status is **derived, never assumed**: only a provider callback or server-side
+  verification yields `paid`. Everything else is `pending_payment` — **DO NOT SHIP**.
+- `escrow.held = 0` for unverified orders. Escrow holds money, not intent.
+- Every simulation path **deleted**. Payment code has no demo mode.
+- The six unintegrated methods are refused in `selectPayment()` and shown as "Coming soon",
+  driven from **one list**, so guard and UI cannot drift apart.
+- The customer sees only neutral states until confirmation: *"Confirming payment…"*,
+  *"Awaiting payment confirmation — it will not be dispatched until payment is verified."*
+
+### Files affected
+`checkout.html` · `scripts/test-payment-integrity.js` (new, 15 checks, CI-blocking) ·
+`scripts/audit-payment-integrity.js` (new, **read-only** reconciliation) ·
+`docs/FINANCIAL_TRANSACTION_STANDARD.md` (v1.2.0 — Invariant 9, F6, P0-7)
+
+### Database changes
+Orders now carry `paymentVerified: boolean` and may hold `status: "pending_payment"`.
+Additive. **Downstream consumers must treat anything other than `paid` as DO NOT FULFIL.**
+
+### Breaking changes
+Six payment methods no longer accept orders. This is intentional: they never took money.
+
+### ⚠️ Required follow-up — NOT done automatically
+Historical orders were **not** modified. Run `node scripts/audit-payment-integrity.js` and
+reconcile before trusting any revenue, settlement or commission figure predating 2026-07-13.
+
+---
+
+## [2026-07-13] — Communication Engine v1.0 + Order Timeline + Three Silent Push Failures Fixed
 
 ### Summary
 
