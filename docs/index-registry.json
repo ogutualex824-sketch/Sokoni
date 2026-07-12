@@ -1,0 +1,698 @@
+{
+  "venueBookings|customerId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "workflowInstances|definitionId:ASCENDING,metadata.startedAt:DESCENDING": {
+    "legacy": true
+  },
+  "workflowInstances|status:ASCENDING,metadata.startedAt:DESCENDING": {
+    "legacy": true
+  },
+  "workflowApprovals|status:ASCENDING,requestedAt:DESCENDING": {
+    "legacy": true
+  },
+  "products|category:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "products|sellerId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "orders|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "orders|userId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "orders|sellerId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "reviews|productId:ASCENDING,rating:DESCENDING": {
+    "legacy": true
+  },
+  "services|category:ASCENDING,rating:DESCENDING": {
+    "legacy": true
+  },
+  "auditLogs|uid:ASCENDING,ts:DESCENDING": {
+    "legacy": true
+  },
+  "auditLogs|action:ASCENDING,ts:DESCENDING": {
+    "legacy": true
+  },
+  "auditLogs|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "applications|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "bookings|providerId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "providers|status:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "rides|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "driverLocations|driverId:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "conversations|participants:CONTAINS,lastAt:DESCENDING": {
+    "legacy": true
+  },
+  "communityPosts|type:ASCENDING,timestamp:DESCENDING": {
+    "legacy": true
+  },
+  "communityPosts|status:ASCENDING,timestamp:DESCENDING": {
+    "legacy": true
+  },
+  "notifications|targetUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "referrals|referrerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "packageRequests|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "packageRequests|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "packageRequests|assignedDriverId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "rideRequests|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "rideRequests|driverId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "rideRequests|assignedDriverId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "rideDrivers|isOnline:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "driverRatings|driverId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "disputes|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "entArtists|type:ASCENDING,city:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "entArtists|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "entEvents|status:ASCENDING,date:ASCENDING": {
+    "legacy": true
+  },
+  "entEvents|uid:ASCENDING,date:ASCENDING": {
+    "legacy": true
+  },
+  "entTickets|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "entTickets|eventId:ASCENDING,status:ASCENDING": {
+    "legacy": true
+  },
+  "entVenues|status:ASCENDING,city:ASCENDING": {
+    "legacy": true
+  },
+  "entVenues|type:ASCENDING,status:ASCENDING": {
+    "legacy": true
+  },
+  "entArtistBookings|artistUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "entReviews|targetId:ASCENDING,approved:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "deliveries|senderUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "deliveries|assignedRiderId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "deliveries|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "deliveryRiders|isOnline:ASCENDING,isAvailable:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "sellerPayments|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "sellerPayments|sellerUid:ASCENDING,hub:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "posPayments|sellerUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "posPayments|callerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "commissionLedger|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "commissionLedger|sellerUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "sellerSubscriptions|plan:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "featuredListings|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "featuredListings|status:ASCENDING,endDate:ASCENDING": {
+    "legacy": true
+  },
+  "sokoAds|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "sokoAds|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "invoices|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "users|role:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "verificationRequests|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "listings|hub:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "withdrawals|uid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "walletTxns|uid:ASCENDING,type:ASCENDING,ts:DESCENDING": {
+    "legacy": true
+  },
+  "legalAppointments|uid:ASCENDING,status:ASCENDING,date:ASCENDING": {
+    "legacy": true
+  },
+  "legalServiceRequests|uid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "legalReviews|lawyerId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "offers|productId:ASCENDING,active:ASCENDING": {
+    "legacy": true
+  },
+  "payments|uid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "subscriptions|status:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true
+  },
+  "vouchers|active:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true
+  },
+  "escrows|status:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true
+  },
+  "paymentLedger|debitAccount:ASCENDING,currency:ASCENDING": {
+    "legacy": true
+  },
+  "settlements|sellerId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "settlementQueue|status:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true
+  },
+  "refunds|buyerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "jobs|active:ASCENDING,postedAt:DESCENDING": {
+    "legacy": true
+  },
+  "jobs|active:ASCENDING,featured:DESCENDING,postedAt:DESCENDING": {
+    "legacy": true
+  },
+  "jobs|active:ASCENDING,category:ASCENDING,postedAt:DESCENDING": {
+    "legacy": true
+  },
+  "jobApplications|jobId:ASCENDING,appliedAt:DESCENDING": {
+    "legacy": true
+  },
+  "education|active:ASCENDING,featured:DESCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_products|active:ASCENDING,name:ASCENDING": {
+    "legacy": true
+  },
+  "inventory_products|active:ASCENDING,category:ASCENDING,name:ASCENDING": {
+    "legacy": true
+  },
+  "inventory_products|active:ASCENDING,barcode:ASCENDING": {
+    "legacy": true
+  },
+  "inventory_levels|productId:ASCENDING,warehouseId:ASCENDING": {
+    "legacy": true
+  },
+  "inventory_movements|productId:ASCENDING,timestamp:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_movements|warehouseId:ASCENDING,timestamp:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_purchaseOrders|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_purchaseOrders|supplierId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_batches|productId:ASCENDING,expiryDate:ASCENDING": {
+    "legacy": true
+  },
+  "inventory_fraud_events|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_fraud_events|fraudLevel:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "gipDispatch|region:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "gipDispatch|assignedAssetId:ASCENDING,status:ASCENDING,deliveredAt:DESCENDING": {
+    "legacy": true
+  },
+  "drivers|assetId:ASCENDING,computedAt:DESCENDING": {
+    "legacy": true
+  },
+  "posTransactions|sellerId:ASCENDING,timestamp:DESCENDING": {
+    "legacy": true
+  },
+  "mediaAssets|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "mediaAssets|uid:ASCENDING,dest:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_variants|productId:ASCENDING,active:ASCENDING": {
+    "legacy": true
+  },
+  "inventory_variants|productId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_work_orders|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_transfers|status:ASCENDING,requestedAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_transfers|fromWarehouseId:ASCENDING,status:ASCENDING,requestedAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_grn|purchaseOrderId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_grn|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "inventory_stockcounts|warehouseId:ASCENDING,status:ASCENDING": {
+    "legacy": true
+  },
+  "inventory_stockcounts|status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "aiSubscriptions|status:ASCENDING,activatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "aiSubscriptions|uid:ASCENDING,status:ASCENDING,activatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "aiUsage|uid:ASCENDING,period:DESCENDING": {
+    "legacy": true
+  },
+  "aiCreditLedger|uid:ASCENDING,ts:DESCENDING": {
+    "legacy": true
+  },
+  "aiBoosts|uid:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true
+  },
+  "aiPromotions|active:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true
+  },
+  "entitlements|riskScore:DESCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "entitlements|needsRefresh:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "subscriptionBrain|retentionTier:ASCENDING,churnRisk:DESCENDING": {
+    "legacy": true
+  },
+  "subscriptionBrain|upgradeProb:DESCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "workflowApprovals|status:ASCENDING,deadline:ASCENDING": {
+    "legacy": true
+  },
+  "workflowSchedule|status:ASCENDING,executeAt:ASCENDING": {
+    "legacy": true
+  },
+  "workflowSchedule|status:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true
+  },
+  "platformEvents|publisherUid:ASCENDING,publishedAt:DESCENDING": {
+    "legacy": true
+  },
+  "platformEvents|type:ASCENDING,publishedAt:DESCENDING": {
+    "legacy": true
+  },
+  "platformServices|type:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "platformServices|status:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "orders|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "orders|buyerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "orders|assignedDriverUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "driverLocations|online:ASCENDING,available:ASCENDING": {
+    "legacy": true
+  },
+  "notifications|targetUid:ASCENDING,read:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "notifications|targetUid:ASCENDING,archived:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "productStats|salesTotal:DESCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "productStats|trendingScore:DESCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "orders|status:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true
+  },
+  "checkoutSessions|uid:ASCENDING,status:ASCENDING": {
+    "legacy": true
+  },
+  "checkoutSessions|status:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true
+  },
+  "paymentVerifications|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "etimsInvoices|sellerUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "etimsInvoices|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "etimsInvoices|buyerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "etimsInvoices|isPlatformInvoice:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "etimsBulkJobs|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "hubDocuments|hubId:ASCENDING,issuedAt:DESCENDING": {
+    "legacy": true
+  },
+  "hubDocuments|hubId:ASCENDING,docType:ASCENDING,issuedAt:DESCENDING": {
+    "legacy": true
+  },
+  "hubDocuments|sellerId:ASCENDING,issuedAt:DESCENDING": {
+    "legacy": true
+  },
+  "hubDocuments|buyerId:ASCENDING,issuedAt:DESCENDING": {
+    "legacy": true
+  },
+  "hubInvoices|hubId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "hubInvoices|sellerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "hubInvoices|buyerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "verifications|status:ASCENDING,approvedAt:DESCENDING": {
+    "legacy": true
+  },
+  "venues|status:ASCENDING,rating:DESCENDING": {
+    "legacy": true
+  },
+  "venues|status:ASCENDING,type:ASCENDING,rating:DESCENDING": {
+    "legacy": true
+  },
+  "venues|status:ASCENDING,city:ASCENDING,rating:DESCENDING": {
+    "legacy": true
+  },
+  "venues|status:ASCENDING,indoor:ASCENDING,rating:DESCENDING": {
+    "legacy": true
+  },
+  "bookings|venueId:ASCENDING,endTs:ASCENDING": {
+    "legacy": true
+  },
+  "bookings|venueId:ASCENDING,startTs:ASCENDING": {
+    "legacy": true
+  },
+  "bookings|customerId:ASCENDING,startTs:DESCENDING": {
+    "legacy": true
+  },
+  "bookings|customerId:ASCENDING,status:ASCENDING,startTs:DESCENDING": {
+    "legacy": true
+  },
+  "bookings|status:ASCENDING,endTs:ASCENDING": {
+    "legacy": true
+  },
+  "bookings|status:ASCENDING,startTs:ASCENDING": {
+    "legacy": true
+  },
+  "loyaltyLedger|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "loyaltyLedger|merchantId:ASCENDING,type:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "loyaltyCampaigns|merchantId:ASCENDING,active:ASCENDING,startsAt:ASCENDING": {
+    "legacy": true
+  },
+  "loyaltyGiftCards|issuedTo:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true
+  },
+  "loyaltyCashbackLedger|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "loyaltyAccounting|merchantId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "loyaltyCheckouts|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "loyaltyReferrals|referrerId:ASCENDING,status:ASCENDING": {
+    "legacy": true
+  },
+  "paymentSessions|merchantId:ASCENDING,currentState:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "paymentSessions|uid:ASCENDING,currentState:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "businessHealthScores|merchantId:ASCENDING,date:DESCENDING": {
+    "legacy": true
+  },
+  "hrPayrollRuns|merchantId:ASCENDING,period:DESCENDING": {
+    "legacy": true
+  },
+  "hrLeaves|merchantId:ASCENDING,status:ASCENDING,startDate:DESCENDING": {
+    "legacy": true
+  },
+  "procPurchaseOrders|merchantId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "procSupplierInvoices|merchantId:ASCENDING,status:ASCENDING,dueDate:ASCENDING": {
+    "legacy": true
+  },
+  "mktFlashSales|merchantId:ASCENDING,status:ASCENDING,endAt:ASCENDING": {
+    "legacy": true
+  },
+  "mktBundleDeals|merchantId:ASCENDING,status:ASCENDING,validTo:ASCENDING": {
+    "legacy": true
+  },
+  "mktABTests|merchantId:ASCENDING,status:ASCENDING,startDate:DESCENDING": {
+    "legacy": true
+  },
+  "crmLeads|merchantId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "crmLeadActivities|leadId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "crmCustomerProfiles|merchantId:ASCENDING,churnRiskScore:DESCENDING": {
+    "legacy": true
+  },
+  "crmSupportTickets|merchantId:ASCENDING,status:ASCENDING,priority:ASCENDING": {
+    "legacy": true
+  },
+  "mktCampaigns|merchantId:ASCENDING,type:ASCENDING,status:ASCENDING": {
+    "legacy": true
+  },
+  "crmLeads|merchantId:ASCENDING,assignedTo:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true
+  },
+  "loyaltyDrawEntries|drawId:ASCENDING,uid:ASCENDING": {
+    "legacy": true
+  },
+  "priceAlerts|productId:ASCENDING,active:ASCENDING,uid:ASCENDING": {
+    "legacy": true
+  },
+  "feedback|merchantId:ASCENDING,rating:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "feedback|userId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "priceAlerts|uid:ASCENDING,active:ASCENDING": {
+    "legacy": true
+  },
+  "homeServiceBookings|providerId:ASCENDING,status:ASCENDING,scheduledAt:ASCENDING": {
+    "legacy": true
+  },
+  "homeServiceReviews|providerId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "ledgerEntries|businessId:ASCENDING,date:ASCENDING": {
+    "legacy": true
+  },
+  "_sokoniTaskQueue|status:ASCENDING,priority:ASCENDING,scheduledFor:ASCENDING": {
+    "legacy": true
+  },
+  "_sokoniTaskQueue|status:ASCENDING,completedAt:DESCENDING": {
+    "legacy": true
+  },
+  "_sokoniTaskQueue|status:ASCENDING,cancelledAt:ASCENDING": {
+    "legacy": true
+  },
+  "_sokoniTaskQueue|status:ASCENDING,failedAt:ASCENDING": {
+    "legacy": true
+  },
+  "webhookDeliveries|status:ASCENDING,nextRetryAt:ASCENDING": {
+    "legacy": true
+  },
+  "webhookDeliveries|subscriptionId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "_sokoniPerf|type:ASCENDING,timestamp:DESCENDING": {
+    "legacy": true
+  },
+  "_sokoniErrors|severity:ASCENDING,timestamp:DESCENDING": {
+    "legacy": true
+  },
+  "products|status:ASCENDING,category:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true
+  },
+  "payments|status:ASCENDING,updatedAt:ASCENDING": {
+    "purpose": "Sweep payments stuck in a non-terminal state",
+    "feature": "Payments",
+    "query": "paymentTimeoutSweep: where(status).where(updatedAt<=cutoff)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "_sokoniTaskQueue|status:ASCENDING,scheduleFor:ASCENDING": {
+    "purpose": "Pick up due retry tasks",
+    "feature": "Task Queue",
+    "query": "relScheduledRetryProcessor: where(status).where(scheduleFor<=now)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "etimsQueue|status:ASCENDING,priority:ASCENDING,nextRetryAt:ASCENDING": {
+    "purpose": "Drain the eTIMS submission queue by priority",
+    "feature": "eTIMS",
+    "query": "etimsProcessQueue: where(status).where(nextRetryAt<=now).orderBy(priority,nextRetryAt)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "packageRequests|status:ASCENDING,scheduledTime:ASCENDING": {
+    "purpose": "Dispatch deliveries whose scheduled time has arrived",
+    "feature": "Logistics",
+    "query": "processScheduledDeliveries: where(status).where(scheduledTime<=now)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "dispatchQueue|status:ASCENDING,timeoutAt:ASCENDING": {
+    "purpose": "Cascade an offer to the next rider on timeout",
+    "feature": "Dispatch",
+    "query": "processCascadeTimeouts: where(status==offered).where(timeoutAt<=now)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "asyncJobs|status:ASCENDING,lockedUntil:ASCENDING": {
+    "purpose": "Recover jobs whose worker died holding the lock",
+    "feature": "Async Jobs",
+    "query": "asyncSweeper: where(status==RUNNING).where(lockedUntil<=now)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "mktFlashSales|status:ASCENDING,endAt:ASCENDING": {
+    "purpose": "Conclude flash sales past their end time",
+    "feature": "Marketing",
+    "query": "concludeExpiredFlashSales: where(status).where(endAt<=now)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "managerAuthRequests|status:ASCENDING,expiresAt:ASCENDING": {
+    "purpose": "Expire stale manager authorisation requests",
+    "feature": "SmartPOS Manager Auth",
+    "query": "cleanupAuthRequests: where(status).where(expiresAt<=now)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "typesenseQueue|status:ASCENDING,nextAttemptAt:ASCENDING,priority:ASCENDING": {
+    "purpose": "Drain the Typesense sync queue",
+    "feature": "Search",
+    "query": "processTypesenseQueue: where(status).where(nextAttemptAt<=now)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "workflowSchedule|processed:ASCENDING,runAt:ASCENDING": {
+    "purpose": "Run due workflow delay steps",
+    "feature": "Workflow Automation",
+    "query": "wapProcessDelays: where(processed==false).where(runAt<=now)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "aiSubscriptions|status:ASCENDING,currentPeriodEnd:ASCENDING": {
+    "purpose": "Self-heal subscriptions past their period end",
+    "feature": "AI Subscriptions",
+    "query": "selfHealSubscriptions: where(status).where(currentPeriodEnd<=now)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  },
+  "walletTransactions|status:ASCENDING,createdAt:ASCENDING": {
+    "purpose": "Sweep stale wallet top-ups",
+    "feature": "Wallet",
+    "query": "sweepStaleWalletTopups: where(status).where(createdAt<=cutoff)",
+    "owner": "Platform/Infra",
+    "dateAdded": "2026-07-12",
+    "expectedLifespan": "permanent"
+  }
+}

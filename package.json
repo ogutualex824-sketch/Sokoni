@@ -4,8 +4,10 @@
   "description": "SOKONI — Kenya's Premier Marketplace",
   "private": true,
   "scripts": {
-    "predeploy": "node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js",
+    "predeploy": "node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js",
     "verify:appcheck": "node scripts/verify-appcheck.js",
+    "verify:indexes": "node scripts/verify-index-governance.js",
+    "report:index-capacity": "node scripts/index-capacity-report.js",
     "dev": "http-server . -p 3000 -o --cors -c-1",
     "dev:bs": "browser-sync start --config bs-config.js",
     "deploy": "npx -y firebase-tools@latest deploy --only hosting",
