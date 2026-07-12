@@ -438,11 +438,27 @@ const sasosResetMonthlyUsage = onSchedule(
       const daysSinceStart = (Date.now() - periodStart) / 86400000;
       if (daysSinceStart < 25) continue;  /* Only for subscriptions > 25 days into the period */
 
-      batch.set(db().collection('aiCredits').doc(uid), {
+      /* P0-6: scheduled runs are an AT-LEAST-ONCE source — Cloud Scheduler retries a
+         failed run, and this loop commits INCREMENTALLY (every 499 docs). So a mid-run
+         failure leaves some users already credited, and the retry would credit them
+         AGAIN. `lastCredited` was written here but READ NOWHERE — the same
+         written-but-never-read guard bug as P0-5.
+
+         Fix: use the period as a REAL idempotency marker that is actually read. A retry
+         skips users already credited for this period. FieldValue.increment() is atomic
+         but NOT idempotent, so the guard — not the increment — is what protects us. */
+      const creditRef  = db().collection('aiCredits').doc(uid);
+      const creditSnap = await creditRef.get();
+      if (creditSnap.exists && creditSnap.data().lastCreditedPeriod === newPeriod) {
+        continue;   /* already credited for this period (retry / redelivery) */
+      }
+
+      batch.set(creditRef, {
         uid,
-        balance:        FieldValue.increment(plan.limits.ai_credits),
-        totalPurchased: FieldValue.increment(plan.limits.ai_credits),
-        lastCredited:   Date.now(),
+        balance:            FieldValue.increment(plan.limits.ai_credits),
+        totalPurchased:     FieldValue.increment(plan.limits.ai_credits),
+        lastCredited:       Date.now(),
+        lastCreditedPeriod: newPeriod,   /* ← the marker, now actually READ above */
       }, { merge: true });
 
       credited++;
