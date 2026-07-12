@@ -8967,3 +8967,76 @@ exports.subscriptionsDispatch = subsCoreDisp.subscriptionsDispatch;
 /* ── Legal Agreements & Digital Acceptance — versioned, auditable → 1 CF ── */
 const legalDisp = require('./legal-dispatch');
 exports.legalDispatch = legalDisp.legalDispatch;
+/* ══════════════════════════════════════════════════════════════════════
+   RC1 REPRODUCIBILITY FIX — recovered orphaned Cloud Functions.
+   These were DEPLOYED and live but NOT exported here, so a full
+   `firebase deploy --only functions` would have DELETED them — including
+   every transactional email trigger. Re-exported so source == deployed
+   state and deploys UPDATE them instead of destroying them.
+   ══════════════════════════════════════════════════════════════════════ */
+const _rcApiGateway = require('./api-gateway');
+exports.gwGetMetrics = _rcApiGateway.gwGetMetrics;
+exports.gwManageRateLimit = _rcApiGateway.gwManageRateLimit;
+
+const _rcEmailDmarc = require('./email-dmarc');
+exports.dmarcReportWebhook = _rcEmailDmarc.dmarcReportWebhook;
+exports.getDmarcSummary = _rcEmailDmarc.getDmarcSummary;
+exports.processDmarcReport = _rcEmailDmarc.processDmarcReport;
+
+const _rcEmailTriggers = require('./email-triggers');
+exports.emailDriverDocReminders = _rcEmailTriggers.emailDriverDocReminders;
+exports.emailOnAppointmentCreate = _rcEmailTriggers.emailOnAppointmentCreate;
+exports.emailOnBookingCreate = _rcEmailTriggers.emailOnBookingCreate;
+exports.emailOnDeliveryCreate = _rcEmailTriggers.emailOnDeliveryCreate;
+exports.emailOnDisputeCreate = _rcEmailTriggers.emailOnDisputeCreate;
+exports.emailOnDisputeResolved = _rcEmailTriggers.emailOnDisputeResolved;
+exports.emailOnDriverAssigned = _rcEmailTriggers.emailOnDriverAssigned;
+exports.emailOnDriverCreate = _rcEmailTriggers.emailOnDriverCreate;
+exports.emailOnDriverStatusChange = _rcEmailTriggers.emailOnDriverStatusChange;
+exports.emailOnLegalConsultation = _rcEmailTriggers.emailOnLegalConsultation;
+exports.emailOnOrderCancelled = _rcEmailTriggers.emailOnOrderCancelled;
+exports.emailOnOrderCreated = _rcEmailTriggers.emailOnOrderCreated;
+exports.emailOnOrderDelivered = _rcEmailTriggers.emailOnOrderDelivered;
+exports.emailOnOrderShipped = _rcEmailTriggers.emailOnOrderShipped;
+exports.emailOnPaymentSuccess = _rcEmailTriggers.emailOnPaymentSuccess;
+exports.emailOnProductStatusChange = _rcEmailTriggers.emailOnProductStatusChange;
+exports.emailOnPropertyEnquiry = _rcEmailTriggers.emailOnPropertyEnquiry;
+exports.emailOnSellerPayout = _rcEmailTriggers.emailOnSellerPayout;
+exports.emailOnSellerStatusChange = _rcEmailTriggers.emailOnSellerStatusChange;
+exports.emailOnSubscriptionRenewal = _rcEmailTriggers.emailOnSubscriptionRenewal;
+exports.emailOnTicketCreate = _rcEmailTriggers.emailOnTicketCreate;
+exports.emailOnUserCreate = _rcEmailTriggers.emailOnUserCreate;
+exports.emailSubscriptionReminders = _rcEmailTriggers.emailSubscriptionReminders;
+exports.emailUnassignedDeliveryAlert = _rcEmailTriggers.emailUnassignedDeliveryAlert;
+exports.emailWebhook = _rcEmailTriggers.emailWebhook;
+exports.onLoginEvent = _rcEmailTriggers.onLoginEvent;
+exports.processEmailQueue = _rcEmailTriggers.processEmailQueue;
+exports.resendEmail = _rcEmailTriggers.resendEmail;
+exports.sendBroadcastEmail = _rcEmailTriggers.sendBroadcastEmail;
+exports.updateEmailPreferences = _rcEmailTriggers.updateEmailPreferences;
+
+const _rcReliabilityEngine = require('./reliability-engine');
+exports.relCircuitBreakerState = _rcReliabilityEngine.relCircuitBreakerState;
+exports.relEnqueueTask = _rcReliabilityEngine.relEnqueueTask;
+exports.relGetDeadLetterQueue = _rcReliabilityEngine.relGetDeadLetterQueue;
+exports.relGetSystemMetrics = _rcReliabilityEngine.relGetSystemMetrics;
+exports.relHealthProbeAll = _rcReliabilityEngine.relHealthProbeAll;
+exports.relPurgeDeadLetter = _rcReliabilityEngine.relPurgeDeadLetter;
+exports.relRetryDeadLetter = _rcReliabilityEngine.relRetryDeadLetter;
+
+const _rcTaskQueue = require('./task-queue');
+exports.tqBulkEnqueue = _rcTaskQueue.tqBulkEnqueue;
+exports.tqCancelTask = _rcTaskQueue.tqCancelTask;
+exports.tqEnqueue = _rcTaskQueue.tqEnqueue;
+exports.tqGetQueueStats = _rcTaskQueue.tqGetQueueStats;
+exports.tqGetStatus = _rcTaskQueue.tqGetStatus;
+
+const _rcWebhookEngine = require('./webhook-engine');
+exports.webhookDelete = _rcWebhookEngine.webhookDelete;
+exports.webhookDeliver = _rcWebhookEngine.webhookDeliver;
+exports.webhookGetDeliveries = _rcWebhookEngine.webhookGetDeliveries;
+exports.webhookGetStats = _rcWebhookEngine.webhookGetStats;
+exports.webhookList = _rcWebhookEngine.webhookList;
+exports.webhookRegister = _rcWebhookEngine.webhookRegister;
+exports.webhookTestEndpoint = _rcWebhookEngine.webhookTestEndpoint;
+
