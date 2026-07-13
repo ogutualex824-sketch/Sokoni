@@ -32,8 +32,8 @@
     .hc-hero h1{font-size:clamp(24px,5vw,38px);font-weight:900;margin-bottom:10px;}
     .hc-hero h1 span{color:#00c878;}
     .hc-hero p{color:rgba(255,255,255,0.5);font-size:15px;margin-bottom:24px;}
-    .hc-search-bar{display:flex;max-width:540px;margin:0 auto;gap:8px;}
-    .hc-search-bar input{flex:1;padding:14px 18px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
+    .hc-search-bar{display:flex;flex-wrap:wrap;max-width:540px;margin:0 auto;gap:8px;}
+    .hc-search-bar input{flex:1;min-width:0;padding:14px 18px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
     .hc-search-bar input::placeholder{color:rgba(255,255,255,0.35);}
     .hc-search-btn{padding:14px 22px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:12px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;}
 
@@ -77,7 +77,7 @@
     .bg-dispensary{background:rgba(255,180,0,0.1);border:1px solid rgba(255,180,0,0.2);}
     .bg-ambulance{background:rgba(255,80,0,0.1);border:1px solid rgba(255,80,0,0.2);}
     .hc-card-meta{flex:1;}
-    .hc-card-name{font-size:15px;font-weight:800;color:white;margin-bottom:4px;}
+    .hc-card-name{font-size:15px;font-weight:800;color:white;margin-bottom:4px;overflow-wrap:break-word;word-break:break-word;}
     .hc-card-type{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;display:inline-block;margin-bottom:6px;}
     .type-hospital{background:rgba(255,60,60,0.15);color:#ff6b6b;}
     .type-clinic{background:rgba(0,180,255,0.15);color:#60aaff;}
@@ -88,12 +88,15 @@
     .hc-card-location{font-size:12px;color:rgba(255,255,255,0.4);}
     .hc-card-body{padding:12px 18px 18px;}
     .hc-card-desc{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6;margin-bottom:12px;}
-    .hc-card-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+    .hc-card-footer{display:flex;flex-direction:column;gap:8px;}
+    .hc-card-info-row{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;}
     .hc-card-rating{display:flex;align-items:center;gap:4px;font-size:12px;color:rgba(255,255,255,0.5);}
     .hc-card-rating .star{color:#fbbf24;}
     .hc-card-hours{font-size:11px;color:rgba(255,255,255,0.35);}
-    .hc-book-btn{padding:9px 18px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:10px;color:white;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:filter .2s;}
+    .hc-card-actions{display:flex;gap:6px;flex-wrap:wrap;}
+    .hc-book-btn{padding:9px 14px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:10px;color:white;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:filter .2s;white-space:nowrap;flex-shrink:0;}
     .hc-book-btn:hover{filter:brightness(1.1);}
+    .hc-form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
     .hc-open-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;}
     .open-now{background:rgba(0,200,120,0.15);color:#00c878;border:1px solid rgba(0,200,120,0.2);}
     .closed{background:rgba(255,60,60,0.1);color:#ff6b6b;border:1px solid rgba(255,60,60,0.15);}
@@ -123,14 +126,18 @@
     .tip-card h4{font-size:13px;font-weight:700;color:white;margin-bottom:3px;}
     .tip-card p{font-size:11px;color:rgba(255,255,255,0.45);line-height:1.5;}
 
+    .hc-stats-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin:20px 0;background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:16px;padding:16px 18px;}
     @media(max-width:600px){
       .emg-banner{margin:16px;padding:14px;}
       .hc-cats{grid-template-columns:repeat(3,1fr);}
       .hc-grid{grid-template-columns:1fr;}
       .med-delivery-cta{flex-direction:column;text-align:center;}
+      .hc-form-grid-2{grid-template-columns:1fr !important;}
+      .hc-body{padding-left:16px;padding-right:16px;}
+      .hc-stats-strip{grid-template-columns:repeat(3,1fr);}
     }
     /* ── Tab system ── */
-    .hc-tab-nav{display:flex;gap:4px;padding:10px 24px;overflow-x:auto;scrollbar-width:none;background:rgba(0,0,0,0.5);border-bottom:1px solid rgba(0,200,120,0.1);position:sticky;top:62px;z-index:100;backdrop-filter:blur(14px);}
+    .hc-tab-nav{display:flex;gap:4px;padding:10px 24px;overflow-x:auto;scrollbar-width:none;background:rgba(0,0,0,0.5);border-bottom:1px solid rgba(0,200,120,0.1);position:sticky;top:120px;z-index:100;backdrop-filter:blur(14px);}
     .hc-tab-nav::-webkit-scrollbar{display:none;}
     .hc-tab-btn{flex-shrink:0;padding:7px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
     .hc-tab-btn.active{background:rgba(0,200,120,0.12);border-color:rgba(0,200,120,0.3);color:#00c878;}
@@ -160,14 +167,14 @@
     .hc-record-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:13px;padding:13px 15px;margin-bottom:8px;}
     @media(max-width:600px){.spec-grid{grid-template-columns:1fr;}.hc-dash-stats{grid-template-columns:repeat(2,1fr);}}
     /* ── Bottom nav base (style.css not linked on this page) ── */
-    .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:9996;display:flex;align-items:center;background:rgba(8,8,8,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,0.1);height:66px;}
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:9996;display:flex;align-items:center;background:rgba(8,8,8,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,0.1);height:calc(66px + env(safe-area-inset-bottom,0));padding-bottom:env(safe-area-inset-bottom,0);}
     .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:rgba(255,255,255,0.85);text-decoration:none;font-size:10px;font-weight:700;transition:0.2s ease;height:100%;border:none;background:none;cursor:pointer;padding:10px 0;}
     .bnav-item i{font-size:21px;color:white;}
     .bnav-item span{color:rgba(255,255,255,0.85);}
     .bnav-item:hover,.active-bnav{color:#71ff00;}
     .bnav-item:hover i,.active-bnav i{color:#71ff00;}
     .bnav-item:hover span,.active-bnav span{color:#71ff00;}
-    body{padding-bottom:70px;}
+    body{padding-bottom:calc(80px + env(safe-area-inset-bottom,0));}
   </style>
 <link rel="manifest" href="manifest.json"><meta name="theme-color" content="#00c878">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -257,7 +264,7 @@
 <div class="hc-body">
 
   <!--  Stats Strip  -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:20px 0;background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:16px;padding:16px 18px;">
+  <div class="hc-stats-strip">
     <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#00c878;">28</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Verified Providers</div></div>
     <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#60aaff;">3 Cities</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Nairobi, Mombasa, Kisumu</div></div>
     <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#fbbf24;">4.7 ⭐</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Avg. Rating</div></div>
@@ -403,7 +410,7 @@
     <!-- Booking form -->
     <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:24px;">
       <div style="font-size:16px;font-weight:900;color:#00c878;margin-bottom:16px;">📅 Book Teleconsultation</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div class="hc-form-grid-2" style="gap:12px;">
         <div>
           <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Your Name *</label>
           <input type="text" id="tcName" class="modal-input" placeholder="Full name" style="margin:0;">
@@ -476,7 +483,7 @@
     <!-- Lab booking form -->
     <div class="hc-section-h" style="margin-top:28px;">📋 Book a Lab Test</div>
     <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:22px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="hc-form-grid-2">
         <div>
           <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Your Name *</label>
           <input type="text" id="labName" class="modal-input" placeholder="Full name" style="margin:0;">
@@ -577,7 +584,7 @@
     <div style="background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.14);border-radius:20px;padding:24px;margin-bottom:24px;">
       <div style="font-size:16px;font-weight:900;color:#00c878;margin-bottom:4px;">➕ Register Your Facility</div>
       <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Free listing · Verified badge · More patients</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="hc-form-grid-2">
         <div>
           <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Facility Name *</label>
           <input type="text" id="pvFacName" class="modal-input" placeholder="Hospital / Clinic / Pharmacy name" style="margin:0;">
@@ -818,20 +825,18 @@ function renderProviders(){
       <div class="hc-card-body">
         <div class="hc-card-desc">${p.desc}${p.delivery?'<br><span style="color:#00c878;font-size:11px;font-weight:700;">✓ Delivery available</span>':""}</div>
         <div class="hc-card-footer">
-          <div>
-            <div class="hc-card-rating"><span class="star">⭐</span> ${p.rating} <span>(${p.reviews} reviews)</span></div>
-            <div class="hc-card-hours"><i class="fas fa-clock" style="margin-right:4px;"></i>${p.hours}</div>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+          <div class="hc-card-info-row">
+            <div class="hc-card-rating"><span class="star">⭐</span> ${p.rating} <span>(${p.reviews})</span></div>
             <div data-avail-provider="hc_${p.id}"></div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              ${p.phone?`<a href="tel:${p.phone}" class="hc-book-btn" style="background:rgba(0,200,120,0.15);border:1px solid rgba(0,200,120,0.25);text-decoration:none;">📞 Call</a>`:""}
-              <button type="button" class="hc-book-btn" onclick="openAppt('${p.id}','${p.name.replace(/'/g,"\\'")}')">📅 Book</button>
-              <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'hc_${p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'Healthcare: ${p.name.replace(/'/g,"\\'")}'}):window.location.href='messages.html'">💬 Message</button>
-              <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'hc_'+p.id,name:p.name,category:p.type,tagline:p.desc,rating:p.rating,type:'service'})">📣 Share</button>
-              <button type="button" class="hc-book-btn" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.55);" id="_fhc${p.id}" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('hc_${p.id}','${p.name.replace(/'/g,"\\'")}',this,'hospital')">❤ Follow</button>
-              ${typeof SokoniMarket!=="undefined"?SokoniMarket.btnHTML({id:p.id,name:p.name,price:0,image:'assets/Sokoni Logo.png',category:p.type,source:'healthcare',sellerName:p.name}):""}
-            </div>
+          </div>
+          <div class="hc-card-hours"><i class="fas fa-clock" style="margin-right:4px;"></i>${p.hours}</div>
+          <div class="hc-card-actions">
+            <button type="button" class="hc-book-btn" onclick="openAppt('${p.id}','${p.name.replace(/'/g,"\\'")}')">📅 Book</button>
+            <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'hc_${p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'Healthcare: ${p.name.replace(/'/g,"\\'")}'}):window.location.href='messages.html'">💬 Msg</button>
+            ${p.phone?`<a href="tel:${p.phone}" class="hc-book-btn" style="background:rgba(0,200,120,0.15);border:1px solid rgba(0,200,120,0.25);text-decoration:none;">📞 Call</a>`:""}
+            <button type="button" class="hc-book-btn" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.55);" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'hc_'+p.id,name:p.name,category:p.type,tagline:p.desc,rating:p.rating,type:'service'})">📣 Share</button>
+            <button type="button" class="hc-book-btn" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.55);" id="_fhc${p.id}" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('hc_${p.id}','${p.name.replace(/'/g,"\\'")}',this,'hospital')">❤ Follow</button>
+            ${typeof SokoniMarket!=="undefined"?SokoniMarket.btnHTML({id:p.id,name:p.name,price:0,image:'assets/Sokoni Logo.png',category:p.type,source:'healthcare',sellerName:p.name}):""}
           </div>
         </div>
       </div>

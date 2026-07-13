@@ -81,7 +81,7 @@
 
     /* Logo */
     var logo = document.createElement('img');
-    logo.src = 'assets/Sokoni Logo.png';
+    logo.src = 'assets/sokoni-icon.svg';
     logo.className = 'sg-logo';
     logo.alt = 'SOKONI';
     logo.onerror = function(){ this.style.display = 'none'; };

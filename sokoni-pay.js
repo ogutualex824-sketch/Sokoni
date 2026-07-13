@@ -182,7 +182,7 @@ function showGateway(options){
 
         <!-- SOKONI branding -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-          <img src="assets/sokoni-logo-dark.png" style="height:28px;" onerror="this.style.display='none'">
+          <img src="assets/sokoni-icon.svg" style="height:28px;" onerror="this.style.display='none'">
           <div style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.7);text-transform:uppercase;letter-spacing:.08em;">Secure Booking</div>
         </div>
 

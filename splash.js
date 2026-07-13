@@ -222,19 +222,12 @@
     'position:relative;padding:0 24px}' +
 
     /* ── THE LOGO ─────────────────────────────────────────────────────────────
-       On its own: no card, no frame, no background, no wordmark beside it.
-       MUCH larger than before (was clamp(72,20vw,104) — now clamp(120,42vw,208)),
-       because on a splash the logo IS the content. Everything else is quiet.
-       height + width:auto preserves the 3:2 aspect (480x320); a square box would
-       squash it. */
-    /* Sized by WIDTH, with height:auto — NOT the other way round.
-       A global rule (img,video,canvas{max-width:100% !important}) clamps the image's
-       WIDTH. With a fixed height and width:auto, that clamp squashed the logo: on a
-       412px Android it rendered 234x173 (1.35) instead of 3:2. Driving width and
-       letting height follow means the aspect ratio can never break, whatever any
-       max-width rule does. max-width:none defeats the !important clamp; the width is
-       already capped by 78vw, so nothing can overflow. */
-    '.spl-logo{width:min(78vw,340px);height:auto;max-width:none!important;display:block;' +
+       sokoni-wordmark.svg is a pure vector asset (viewBox 0 0 170 56):
+       bag icon + "SOKONI" text as SVG elements. Because it is SVG, the letterforms
+       are always 100% opaque — no alpha-channel fading, no colour-inversion
+       artefacts from PNG processing. Sizing by WIDTH preserves the 170:56 aspect
+       at every screen size without any max-width override surprises. */
+    '.spl-logo{width:min(78vw,320px);height:auto;max-width:none!important;display:block;' +
     'background:none;border:0;position:relative;z-index:2;' +
     'animation:splIn .9s cubic-bezier(.19,1.32,.34,1) both}' +
 
@@ -309,15 +302,12 @@
   var _el = document.createElement('div');
   _el.id = 'sk-spl';
   _el.setAttribute('aria-hidden', 'true');
-  /* The SOKONI logo PNG on its own. No card, no frame, no background box, and no
-     "SOKO NI" wordmark beside it — the logo already carries the brand, and pairing it
-     with a text wordmark said the name twice. */
+  /* SVG wordmark: bag icon + SOKONI text, pure vector — never fades at any
+     display density. No PNG opacity issues. */
   _el.innerHTML =
     '<div class="spl-inner">' +
-    /* The wrapper exists only to carry the halo (::before, behind) and the light
-       sweep (::after, in front). The logo itself stays a clean, un-decorated PNG. */
     '<div class="spl-mark">' +
-      '<img class="spl-logo" src="assets/sokoni-logo-dark.png" alt="SOKONI">' +
+      '<img class="spl-logo" src="assets/sokoni-wordmark.svg" alt="SOKONI">' +
     '</div>' +
     '<div class="spl-line">' + _line + '</div>' +
     '<div class="spl-dots"><span></span></div>' +
