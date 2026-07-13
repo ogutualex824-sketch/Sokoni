@@ -379,3 +379,41 @@ body.so-light {
   --so-t3:  rgba(0,0,0,0.3);
   background: var(--so-bg);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   iOS SAFARI — THE FORM THAT SCROLLS SIDEWAYS
+   ══════════════════════════════════════════════════════════════════════════════
+   Reported as: "the Add Product form extends past the right edge of the screen on
+   iPhone; I have to drag the page sideways to reach the fields; dropdowns are cut off."
+
+   It is not a layout bug. Every form on the platform MEASURES as fitting — I checked
+   21 pages at 375/390/430px, with the modals forced open, and horizontal overflow was
+   0px on every one. Which is exactly why it does not reproduce in a desktop browser.
+
+   iOS Safari AUTO-ZOOMS the page whenever the user focuses an input whose font-size is
+   under 16px. The zoomed page is then genuinely wider than the viewport — so the form
+   really does run off the right edge, sideways dragging really is required, and the
+   right-hand side of a <select> really is cut off. And Safari does NOT undo the zoom on
+   blur, so the whole form stays broken for the rest of the session after the first tap.
+
+   Every symptom reported, from one CSS declaration. 70 pages carried inputs under 16px.
+
+   16px is the threshold, not a preference: at 16px or above iOS does not zoom at all.
+   Scoped to ≤768px so desktop typography is untouched. !important because these rules
+   live inside 70 individual pages and would otherwise win on specificity — the point is
+   to make the zoom impossible platform-wide rather than to chase each page.
+
+   Checkboxes and radios are excluded: they have no text, and iOS never zooms for them. */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* A grid item's default min-width is AUTO (= min-content), so an <input> in a `1fr`
+     column refuses to shrink below its intrinsic width and pushes its row wider than the
+     container. `minmax(0, 1fr)` is what actually permits the column to shrink; `1fr`
+     alone does not. This is the latent overflow that was waiting behind the zoom. */
+  input, select, textarea { min-width: 0; max-width: 100%; }
+}

@@ -187,12 +187,28 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .form-group{margin-bottom:14px}
 .form-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
   letter-spacing:.4px;display:block;margin-bottom:5px}
-.form-input,.form-select,.form-textarea{width:100%;height:42px;background:var(--bg2);
+.form-input,.form-select,.form-textarea{width:100%;max-width:100%;min-width:0;height:42px;background:var(--bg2);
   border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 12px;
-  font-size:14px;color:var(--text);outline:none;transition:border-color .15s;appearance:none}
+  /* 16px on iOS: Safari ZOOMS the whole page when a focused input is under 16px, and the
+     zoomed page is then wider than the viewport — which is felt as "the form scrolls
+     sideways and I can't reach the right-hand fields". The zoom is not undone on blur.
+     This is the single most common cause of exactly the symptom reported, and it is
+     invisible to a desktop browser. */
+  font-size:16px;color:var(--text);outline:none;transition:border-color .15s;appearance:none}
 .form-input:focus,.form-select:focus{border-color:rgba(113,255,0,.4)}
-.form-textarea{height:80px;padding:10px 12px;resize:vertical}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-textarea{height:80px;padding:10px 12px;resize:vertical;font-size:16px}
+
+/* A grid item's default min-width is AUTO, i.e. min-content — so an <input> in a 1fr
+   column refuses to shrink below its intrinsic size and pushes the row wider than the
+   modal. minmax(0,1fr) is what actually lets the column shrink. `1fr` alone does not. */
+.form-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+
+/* Phones: one field per row. Two 165px-wide inputs side by side on a 375px screen is
+   technically "fitting" and practically unusable — which is the difference between a
+   layout that passes a measurement and one a seller can actually complete one-handed. */
+@media(max-width:600px){
+  .form-row{grid-template-columns:1fr}
+}
 .form-hint{font-size:11px;color:var(--muted);margin-top:4px}
 
 /* ── BUTTONS ── */
