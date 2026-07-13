@@ -6228,8 +6228,8 @@ window.logoutUser = logoutUser;
     if (ov) _renderModuleSummaries(ov);
     _renderPins();
 
-    /* Needs completion */
-    _c7('profileGetCompletion').then(function(comp) {
+    /* Needs completion — cache-first; S6 may have already fetched and cached this */
+    function _s7WithComp(comp) {
       var ov2 = _ov7();
       _renderMorningBrief(ov2, comp);
       _renderBizHealth(ov2, comp);
@@ -6237,20 +6237,30 @@ window.logoutUser = logoutUser;
         _renderModuleSummaries(ov2);
         _renderNotifSummary(ov2);
       }
-    }).catch(function() {
-      var ov2 = _ov7();
-      _renderMorningBrief(ov2, null);
-      _renderBizHealth(ov2, null);
-    });
+    }
+    if (window._piCompletionData) {
+      _s7WithComp(window._piCompletionData);
+    } else {
+      _c7('profileGetCompletion').then(function(comp) {
+        window._piCompletionData = comp;
+        _s7WithComp(comp);
+      }).catch(function() { _s7WithComp(null); });
+    }
 
     /* Cache vault for morning brief doc intel */
     _c7('profileGetDocumentVault').then(function(data) {
       window._pi7VaultCache = (data && data.documents) || [];
       /* Re-render brief if it's already up (add expiry count) */
       if (_el7('pi7Brief') && _el7('pi7Brief').innerHTML) {
-        _c7('profileGetCompletion').then(function(comp) {
-          _renderMorningBrief(_ov7(), comp);
-        }).catch(function() { _renderMorningBrief(_ov7(), null); });
+        /* Re-render brief after vault loads — use cache (vault fetch gives S6 time to resolve) */
+        if (window._piCompletionData) {
+          _renderMorningBrief(_ov7(), window._piCompletionData);
+        } else {
+          _c7('profileGetCompletion').then(function(comp) {
+            window._piCompletionData = comp;
+            _renderMorningBrief(_ov7(), comp);
+          }).catch(function() { _renderMorningBrief(_ov7(), null); });
+        }
       }
     }).catch(function() {});
   }
