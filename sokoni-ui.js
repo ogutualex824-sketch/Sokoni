@@ -631,10 +631,21 @@
       'padding:10px 46px 10px 16px;',
       'z-index:999;',
       'transform:translateY(-100%);',
-      'transition:transform 0.42s cubic-bezier(0.22,1,0.36,1);',
-      'will-change:transform;',
+      'transition:transform 0.42s cubic-bezier(0.22,1,0.36,1),opacity 0.3s ease,visibility 0.3s;',
+      'will-change:transform,opacity;',
+      /* HIDING WITH transform ALONE WAS NEVER ENOUGH.
+         The bar is positioned at top:var(--sk-header-h,64px) and hidden with
+         translateY(-100%), which lifts it only by its OWN height (55px). Sitting
+         64px down, that leaves it at top:9px — still on screen, still readable.
+         Measured live with the "hidden" transform applied and no visible class:
+         top 9px (WebKit), 55px (Chromium). It was never actually hidden.
+         opacity + visibility do not depend on the offset, so the bar is genuinely
+         gone unless it is deliberately shown. */
+      'opacity:0;visibility:hidden;pointer-events:none;',
     '}',
-    '#sk-offline-bar.sk-offline--visible{transform:translateY(0);}',
+    '#sk-offline-bar.sk-offline--visible{',
+      'transform:translateY(0);opacity:1;visibility:visible;pointer-events:auto;',
+    '}',
     '#sk-offline-bar .sk-off-dot{',
       'width:8px;height:8px;border-radius:50%;background:#ff9500;flex-shrink:0;',
       'box-shadow:0 0 0 0 rgba(255,149,0,0.5);animation:skOffPulse 1.6s ease-out infinite;',

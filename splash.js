@@ -218,42 +218,83 @@
     '#sk-spl.spl-out{opacity:0!important;transform:scale(1.04)!important;' +
     'transition:opacity .55s cubic-bezier(.4,0,.2,1),transform .55s cubic-bezier(.4,0,.2,1)!important;' +
     'pointer-events:none}' +
-    '.spl-inner{display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center}' +
-    /* THE LOGO, ON ITS OWN.
-       No card, no frame, no background, no border, no wordmark beside it — the PNG is
-       already the brand. Generous size and breathing room instead of decoration; that
-       is what makes it read as premium.
-       height + width:auto preserves the 3:2 aspect of assets/sokoni-logo-dark.png (480x320).
-       Forcing a square box would squash it — the exact defect the old footer logo had. */
-    '.spl-logo{height:clamp(72px,20vw,104px);width:auto;max-width:72vw;display:block;' +
-    'object-fit:contain;background:none;border:0;' +
-    'animation:splIn .72s cubic-bezier(.22,1.6,.36,1) both,' +
-    'splGlow 3.2s ease-in-out .9s infinite}' +
+    '.spl-inner{display:flex;flex-direction:column;align-items:center;gap:26px;text-align:center;' +
+    'position:relative;padding:0 24px}' +
+
+    /* ── THE LOGO ─────────────────────────────────────────────────────────────
+       On its own: no card, no frame, no background, no wordmark beside it.
+       MUCH larger than before (was clamp(72,20vw,104) — now clamp(120,42vw,208)),
+       because on a splash the logo IS the content. Everything else is quiet.
+       height + width:auto preserves the 3:2 aspect (480x320); a square box would
+       squash it. */
+    '.spl-logo{height:clamp(120px,42vw,208px);width:auto;max-width:86vw;display:block;' +
+    'object-fit:contain;background:none;border:0;position:relative;z-index:2;' +
+    'animation:splIn .9s cubic-bezier(.19,1.32,.34,1) both}' +
+
+    /* The mark carries its own soft green light — a lift, not a neon sign.
+       overflow:hidden is REQUIRED: the sheen below starts at translateX(-130%), so
+       without clipping it parks outside the wrapper as a visible grey slab beside the
+       logo. (It did exactly that — caught in the first render.) */
+    '.spl-mark{position:relative;display:flex;align-items:center;justify-content:center;' +
+    'overflow:hidden;padding:7% 5%;border-radius:20px;' +
+    'animation:splLift 4.6s ease-in-out 1s infinite}' +
+
+    /* A single, slow light sweep across the mark. One pass every 4.4s: enough to feel
+       alive, not so much that it performs. This is the whole "entertainment" budget. */
+    '.spl-mark::after{content:"";position:absolute;inset:0;z-index:3;' +
+    'pointer-events:none;' +
+    'background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.10) 48%,' +
+    'rgba(190,255,140,.13) 52%,transparent 60%);' +
+    'transform:translateX(-120%);' +
+    'animation:splSheen 4.4s cubic-bezier(.5,0,.3,1) 1.5s infinite}' +
+
+    /* Soft halo behind the mark — sits BEHIND (z-index 1), so it lifts the logo off
+       the background instead of washing over it. */
+    '.spl-mark::before{content:"";position:absolute;width:74%;height:74%;z-index:1;' +
+    'border-radius:50%;pointer-events:none;' +
+    'background:radial-gradient(circle,rgba(113,255,0,.20),rgba(113,255,0,.05) 45%,transparent 70%);' +
+    'filter:blur(26px);animation:splHalo 4.6s ease-in-out 1s infinite}' +
+
     /* Per-page tagline */
     '.spl-line{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
-    'font-size:clamp(9px,2.4vw,11px);font-weight:700;letter-spacing:.16em;' +
-    'text-transform:uppercase;color:rgba(255,255,255,.38);' +
-    'animation:splFade .5s .22s cubic-bezier(.4,0,.2,1) both}' +
-    /* Three-dot pulsing loader */
-    '.spl-dots{display:flex;align-items:center;gap:7px;margin-top:6px;' +
-    'animation:splFade .4s .32s cubic-bezier(.4,0,.2,1) both}' +
-    '.spl-dots span{width:6px;height:6px;border-radius:50%;background:#71ff00;display:block;' +
-    'animation:splDot 1.4s ease-in-out infinite}' +
-    '.spl-dots span:nth-child(2){animation-delay:.2s}' +
-    '.spl-dots span:nth-child(3){animation-delay:.4s}' +
+    'font-size:clamp(10px,2.6vw,12px);font-weight:700;letter-spacing:.2em;' +
+    'text-transform:uppercase;color:rgba(255,255,255,.42);' +
+    'animation:splFade .6s .5s cubic-bezier(.4,0,.2,1) both}' +
+
+    /* A single hairline that fills once — calmer and more "premium fintech" than
+       three bouncing dots, and it reads as progress rather than decoration. */
+    '.spl-dots{position:relative;width:clamp(88px,26vw,132px);height:2px;border-radius:2px;' +
+    'background:rgba(255,255,255,.08);overflow:hidden;margin-top:2px;' +
+    'animation:splFade .5s .62s cubic-bezier(.4,0,.2,1) both}' +
+    '.spl-dots span{position:absolute;inset:0;display:block;border-radius:2px;' +
+    'background:linear-gradient(90deg,rgba(113,255,0,0),#71ff00 55%,#a6ff5c);' +
+    'transform:translateX(-100%);' +
+    'animation:splBar 1.5s cubic-bezier(.65,0,.35,1) .7s infinite}' +
+    '.spl-dots span:nth-child(2),.spl-dots span:nth-child(3){display:none}' +
+
     /* Keyframes */
     '@keyframes splIn{' +
-    'from{opacity:0;transform:scale(.72) translateY(10px)}' +
-    'to{opacity:1;transform:scale(1) translateY(0)}}' +
+    'from{opacity:0;transform:scale(.86) translateY(14px);filter:blur(6px)}' +
+    'to{opacity:1;transform:scale(1) translateY(0);filter:blur(0)}}' +
     '@keyframes splFade{' +
     'from{opacity:0;transform:translateY(8px)}' +
     'to{opacity:1;transform:translateY(0)}}' +
-    '@keyframes splGlow{' +
-    '0%,100%{filter:drop-shadow(0 0 8px rgba(113,255,0,.3)) drop-shadow(0 0 18px rgba(113,255,0,.12))}' +
-    '50%{filter:drop-shadow(0 0 22px rgba(113,255,0,.56)) drop-shadow(0 0 42px rgba(113,255,0,.26))}}' +
-    '@keyframes splDot{' +
-    '0%,80%,100%{opacity:.22;transform:scale(.72)}' +
-    '40%{opacity:1;transform:scale(1.05)}}';
+    /* Breathe: a 1.5% scale. Any more and it looks like it is throbbing. */
+    '@keyframes splLift{0%,100%{transform:scale(1)}50%{transform:scale(1.015)}}' +
+    '@keyframes splHalo{0%,100%{opacity:.55}50%{opacity:1}}' +
+    '@keyframes splSheen{' +
+    '0%{transform:translateX(-120%)}' +
+    '58%,100%{transform:translateX(120%)}}' +
+    '@keyframes splBar{' +
+    '0%{transform:translateX(-100%)}' +
+    '55%{transform:translateX(0)}' +
+    '100%{transform:translateX(100%)}}' +
+
+    /* Respect the OS setting: no sheen, no breathing, no sweep. */
+    '@media(prefers-reduced-motion:reduce){' +
+    '.spl-logo,.spl-mark,.spl-mark::before,.spl-mark::after,' +
+    '.spl-line,.spl-dots,.spl-dots span{animation:none!important;transform:none!important}' +
+    '.spl-logo{opacity:1}}';
 
   (document.head || document.documentElement).appendChild(_s);
 
@@ -266,9 +307,13 @@
      with a text wordmark said the name twice. */
   _el.innerHTML =
     '<div class="spl-inner">' +
-    '<img class="spl-logo" src="assets/sokoni-logo-dark.png" alt="SOKONI">' +
+    /* The wrapper exists only to carry the halo (::before, behind) and the light
+       sweep (::after, in front). The logo itself stays a clean, un-decorated PNG. */
+    '<div class="spl-mark">' +
+      '<img class="spl-logo" src="assets/sokoni-logo-dark.png" alt="SOKONI">' +
+    '</div>' +
     '<div class="spl-line">' + _line + '</div>' +
-    '<div class="spl-dots"><span></span><span></span><span></span></div>' +
+    '<div class="spl-dots"><span></span></div>' +
     '</div>';
 
   /* ── Mount (body may not exist yet when run from <head>) ──────────────── */
