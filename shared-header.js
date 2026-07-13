@@ -212,11 +212,14 @@
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-quality.css' }, 'sk-quality-link');
   /* UI library — shared toast / modal / spinner / skeleton */
   _injectAsset('script', { src: 'sokoni-ui.js', defer: true }, 'sk-ui-script');
-  /* Delight layer — the ONE way a "something good just happened" moment is shown.
-     Loaded after sokoni-ui.js so it can reuse SokoniUI.toast (and inherit its a11y)
-     rather than growing a second toast. Moments are keyed by the SAME names the
-     server notification engine uses, so one event has one name end to end. */
-  _injectAsset('script', { src: 'sokoni-delight.js', defer: true }, 'sk-delight-script');
+  /* Delight layer (sokoni-delight.js) — BUILT BUT NOT SHIPPED.
+     The module exists in the repo and is ready, but it has NOT been authorised for
+     production. Injecting it here would ship it on all 302 pages with the next hosting
+     deploy, so the inject stays commented out until it is signed off.
+     To enable: uncomment the line below. Nothing else is required.
+
+     _injectAsset('script', { src: 'sokoni-delight.js', defer: true }, 'sk-delight-script');
+  */
   /* NO footer component is injected here.
      The premium footer is PAGE MARKUP (<footer class="footer">) styled by style.css —
      including .footer::before, which layers the dark gradient over
