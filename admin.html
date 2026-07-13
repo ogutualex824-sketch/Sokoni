@@ -3122,7 +3122,67 @@ function deleteProduct(i,_c){
 /* ════════════════════════════════
    SELLERS
 ════════════════════════════════ */
+/* ── Business tab: Sellers ─────────────────────────────────────────────────────
+   #bizSellersGrid was an empty div that NO code ever populated, and its search box and
+   status dropdown both called filterBizSellers(), which was defined nowhere. The panel
+   rendered a heading, a count stuck at 0, and two controls that did nothing — so it read
+   as "there are no sellers", which is a different and much more alarming statement than
+   "this panel was never wired up".
+
+   Nothing new is invented here: the data (D.sellers) is already loaded, the dropdown's own
+   options declare the semantics (verified / unverified / suspended), and renderSellers()
+   already knows how to draw a seller card. This is the same list, in the Business tab,
+   with the filter its controls always promised. */
+var _bizQ='', _bizStatus='';
+
+function _visibleBizSellers(){
+  var q=(_bizQ||'').toLowerCase();
+  return (D.sellers||[]).filter(function(s){
+    if(_bizStatus==='verified'   && !s.verified)  return false;
+    if(_bizStatus==='unverified' && s.verified)   return false;
+    if(_bizStatus==='suspended'  && !s.suspended) return false;
+    if(!q) return true;
+    return ((s.name||'')+' '+(s.email||'')+' '+(s.location||'')).toLowerCase().indexOf(q)>-1;
+  });
+}
+
+function renderBizSellers(){
+  var grid=document.getElementById('bizSellersGrid'); if(!grid) return;
+  var list=_visibleBizSellers();
+  var c=document.getElementById('bizSellersCount'); if(c) c.textContent=list.length;
+  if(!list.length){
+    grid.innerHTML=empty('🏪', (D.sellers||[]).length ? 'No sellers match this filter' : 'No sellers yet');
+    return;
+  }
+  grid.innerHTML=list.map(function(s){
+    return '<div class="adm-card">'
+      +'<div class="adm-card-head">'
+        +'<div><div class="adm-card-name">🏪 '+h(s.name)+'</div>'
+        +'<div class="adm-card-sub">'+h(s.email||'—')+' · '+h(s.location||'—')+'</div></div>'
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+          +(s.verified?'<span class="badge b-green">✅ Verified</span>':'<span class="badge b-yellow">⚠️ Unverified</span>')
+          +(s.suspended?'<span class="badge b-red">🚫 Suspended</span>':'<span class="badge b-grey">Active</span>')
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+}
+
+function filterBizSellers(){
+  var s=document.getElementById('bizSellerSearch');
+  var f=document.getElementById('bizSellerFilter');
+  _bizQ      = s ? s.value : '';
+  _bizStatus = f ? f.value : '';
+  renderBizSellers();
+}
+window.filterBizSellers=filterBizSellers;
+window.renderBizSellers=renderBizSellers;
+
 function renderSellers(list){
+  /* Keep the Business tab's copy of this list in step. Two views of the same data that
+     refresh independently is how they end up disagreeing about how many sellers exist. */
+  renderBizSellers();
+
   var el=document.getElementById('sellersCount'); if(el) el.textContent=list.length;
   var grid=document.getElementById('sellersGrid'); if(!grid) return;
   if(!list.length){ grid.innerHTML=empty('🏪','No sellers yet'); return; }

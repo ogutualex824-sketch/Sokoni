@@ -965,6 +965,38 @@ async function saveCentralPrice() {
   }
 }
 
+/* ── Edit a central price ──────────────────────────────────────────────────────
+   The "Edit" button beside every central price row called editPrice(), which was defined
+   NOWHERE in the repository. Clicking it threw a ReferenceError and did nothing — and an
+   inline onclick reports that only to the console, so the row just sat there. "Remove"
+   worked; "Edit" did not. The merchant's only way to correct a price was to delete it and
+   retype it from scratch.
+
+   No new endpoint is needed: setCentralPrice already upserts, and the Add-price modal
+   already collects exactly these fields. Editing IS adding, pre-filled. Building a second
+   modal and a second CF for it would have been the wrong instinct entirely. */
+window.editPrice = raw => {
+  let p;
+  try {
+    /* The row serialises the record twice — JSON.stringify(safe(JSON.stringify(p))) — so
+       what arrives is a JSON string, not an object. Parse defensively: a malformed row
+       must not take the whole table down with it. */
+    p = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch (e) {
+    toast('Could not read that price row', 'error');
+    return;
+  }
+  if (!p) return;
+
+  document.getElementById('mp-product').value   = p.name || p.product || '';
+  document.getElementById('mp-price').value     = p.centralPrice != null ? p.centralPrice : '';
+  document.getElementById('mp-sale').value      = p.salePrice != null ? p.salePrice : '';
+  document.getElementById('mp-effective').value = (p.effectiveFrom || '').toString().slice(0, 10);
+  document.getElementById('mp-scope').value     = p.appliesTo || 'all';
+
+  openModal('modal-price');
+};
+
 window.removePrice = async id => {
   if (!confirm('Remove this central price override?')) return;
   try {
