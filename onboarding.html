@@ -9,6 +9,7 @@
 <script src="security.js"></script>
 <script src="sokoni-legal-sign.js"></script>
 <script src="sokoni-legal-gate.js" defer></script>
+<script src="sokoni-form-nav.js" defer></script>
 <style>
 :root{--bg:#050505;--surf:#0d0d0d;--surf2:#141414;--border:#1a1a1a;--acc:#71ff00;--acc-dim:rgba(113,255,0,.12);--acc-glow:0 0 18px rgba(113,255,0,.28);--text:#e8e8e8;--sub:#888;--err:#ff4d4d;--warn:#ffb800;--r:10px;--t:.3s ease}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -25,6 +26,8 @@ a{color:var(--acc);text-decoration:none}
 .prog-bar{height:3px;background:var(--border);border-radius:99px;overflow:hidden}
 .prog-fill{height:100%;background:var(--acc);border-radius:99px;transition:width var(--t)}
 .u-chip{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--sub);flex-shrink:0}
+.onb-exit-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--sub);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--t),color var(--t),border-color var(--t);line-height:1}
+.onb-exit-btn:hover{background:rgba(255,59,59,.1);color:#ff6464;border-color:rgba(255,59,59,.3)}
 .u-chip .ini{width:26px;height:26px;border-radius:50%;background:var(--acc-dim);color:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.68rem}
 .onb-phase{flex:1;display:none;padding:28px 16px 96px}
 .onb-phase.active{display:block}
@@ -140,6 +143,7 @@ a{color:var(--acc);text-decoration:none}
     <div class="prog-bar"><div class="prog-fill" id="pFill"></div></div>
   </div>
   <div class="u-chip" id="uChip" style="display:none"></div>
+  <button class="onb-exit-btn" onclick="SokoniFormNav.goBack()" aria-label="Exit registration" title="Exit form">&#10005;</button>
 </div>
 <div class="lov" id="lov"><div class="spin"></div><div class="lmsg" id="lmsg">Please wait…</div></div>
 <div class="tc" id="tc"></div>
@@ -618,6 +622,11 @@ document.addEventListener('DOMContentLoaded',()=>{
     try{const{account}=await _sdk.getAccount();hideLoad();showPh('phB');R.render(account)}
     catch(e){hideLoad();showPh('phB');R.render({})}
   });
+});
+</script>
+<script>
+window.addEventListener('load', function() {
+  if (window.SokoniFormNav) SokoniFormNav.init({ backUrl: 'index.html', title: 'Get Started' });
 });
 </script>
 </body>

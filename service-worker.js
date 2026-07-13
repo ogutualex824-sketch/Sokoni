@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260713-nav-fallback-v59";
+const CACHE_VERSION = "sokoni-20260713-form-nav-v62";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -154,7 +154,7 @@ const PRECACHE_PAGES = [
 ];
 
 const PRECACHE_STATIC = [
-  "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js", "/sokoni-quality.css",
+  "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js", "/sokoni-quality.css", "/sokoni-form-nav.js",
   "/manifest.json", "/assets/Sokoni Logo.png", "/assets/logosokoni.png",
   "/auth.css", "/checkout.css", "/premium.css",
   "/product.css", "/profile.css", "/seller.css",

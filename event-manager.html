@@ -3,6 +3,7 @@
 <head>
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
+<script src="sokoni-form-nav.js" defer></script>
 <!-- Section history + guaranteed route back to the Events Hub. Loaded early (not defer)
      so showSection() is already routed through it by the time auth fires. -->
 <script src="sokoni-hub-nav.js"></script>
@@ -782,6 +783,11 @@
       document.getElementById('promo-value').value = '';
     } catch(e) { toast('Error: ' + e.message); }
   }
+</script>
+<script>
+window.addEventListener('load', function() {
+  if (window.SokoniFormNav) SokoniFormNav.init({ backUrl: 'event-hub.html', title: 'Event Manager' });
+});
 </script>
 </body>
 </html>

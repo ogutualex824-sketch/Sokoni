@@ -10,6 +10,7 @@
 <script type="module" src="firebase.js"></script>
 <script src="sokoni-legal-sign.js"></script>
 <script src="sokoni-legal-gate.js" defer></script>
+<script src="sokoni-form-nav.js" defer></script>
 <style>
 :root{--bg:#050505;--surf:#0d0d0d;--surf2:#141414;--border:#1a1a1a;--acc:#71ff00;--acc-dim:rgba(113,255,0,.12);--acc-glow:0 0 18px rgba(113,255,0,.28);--text:#e8e8e8;--sub:#888;--err:#ff4d4d;--warn:#ffb800;--r:10px;--t:.3s ease}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -25,7 +26,10 @@ a{color:var(--acc);text-decoration:none}
 .plbl strong{color:var(--text);font-weight:600}
 .pbar{height:3px;background:var(--border);border-radius:99px;overflow:hidden}
 .pfill{height:100%;background:var(--acc);border-radius:99px;transition:width .4s ease}
-.uslot{margin-left:auto;display:none;align-items:center;gap:7px;font-size:.8rem;color:var(--sub)}
+.uslot{display:none;align-items:center;gap:7px;font-size:.8rem;color:var(--sub)}
+.top-r{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.onb-exit-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--sub);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background var(--t),color var(--t),border-color var(--t);line-height:1}
+.onb-exit-btn:hover{background:rgba(255,59,59,.1);color:#ff6464;border-color:rgba(255,59,59,.3)}
 .uslot.vis{display:flex}
 .uava{width:26px;height:26px;border-radius:50%;background:var(--acc-dim);color:var(--acc);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.68rem;flex-shrink:0}
 /* Phases */
@@ -146,7 +150,10 @@ a{color:var(--acc);text-decoration:none}
     <div class="plbl">Step <span id="sCur">1</span> of 14<strong> — <span id="sTitle"></span></strong></div>
     <div class="pbar"><div class="pfill" id="pFill"></div></div>
   </div>
-  <div class="uslot" id="uSlot"></div>
+  <div class="top-r">
+    <div class="uslot" id="uSlot"></div>
+    <button class="onb-exit-btn" onclick="SokoniFormNav.goBack()" aria-label="Exit registration" title="Exit form">&#10005;</button>
+  </div>
 </div>
 
 <div class="lov" id="lov"><div class="spin"></div><div class="slbl" id="lmsg">Please wait…</div></div>
@@ -732,6 +739,11 @@ document.addEventListener('DOMContentLoaded',()=>{
     }catch(e){}
     W.init();
   });
+});
+</script>
+<script>
+window.addEventListener('load', function() {
+  if (window.SokoniFormNav) SokoniFormNav.init({ backUrl: 'index.html', title: 'Become a Provider' });
 });
 </script>
 </body>

@@ -2,6 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <script src="shared-header.js"></script>
+<script src="sokoni-form-nav.js" defer></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Product — SOKONI Inventory</title>
@@ -130,6 +131,7 @@
 
     <!-- HEADER -->
     <header class="inv-header">
+      <button class="inv-header-btn" onclick="SokoniFormNav.goBack()" aria-label="Back to Products" title="Back to Products" style="font-size:18px;font-weight:700;padding:0 10px">←</button>
       <button class="inv-mobile-menu-btn" onclick="openMobileSidebar()">☰</button>
       <nav class="inv-breadcrumb" id="invBreadcrumb">
         <a href="inv-dashboard.html">Inventory</a>
@@ -782,6 +784,11 @@
   }
 
 })();
+</script>
+<script>
+window.addEventListener('load', function() {
+  if (window.SokoniFormNav) SokoniFormNav.init({ backUrl: 'inv-products.html', title: 'Product' });
+});
 </script>
 </body>
 </html>

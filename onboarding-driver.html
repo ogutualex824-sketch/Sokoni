@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <script src="security.js"></script>
+<script src="sokoni-form-nav.js" defer></script>
 <script src="shared-header.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -29,6 +30,8 @@
     .wiz-topbar-title{font-size:15px;font-weight:800;flex:1;}
     .wiz-topbar-logo{height:26px;}
     .wiz-step-counter{font-size:12px;color:rgba(255,255,255,0.4);font-weight:600;white-space:nowrap;}
+    .wiz-exit{background:none;border:none;color:rgba(255,255,255,0.4);font-size:16px;cursor:pointer;padding:6px 4px;border-radius:6px;line-height:1;transition:background .15s,color .15s;}
+    .wiz-exit:hover{color:#ff6464;background:rgba(255,59,59,.1)}
 
     /* ── Progress ── */
     .wiz-progress{display:flex;gap:6px;padding:14px 18px 0;}
@@ -137,6 +140,7 @@
     <img src="assets/sokoni-wordmark.svg" alt="SOKONI" class="wiz-topbar-logo">
     <span class="wiz-topbar-title">Driver Application</span>
     <span class="wiz-step-counter" id="stepCounter">Step 1 of 4</span>
+    <button class="wiz-exit" onclick="SokoniFormNav.goBack()" aria-label="Exit registration" title="Exit registration">&#10005;</button>
   </div>
 
   <!-- Progress -->
@@ -410,6 +414,7 @@
 
     function goBack(){
       if(currentStep > 0) goToStep(currentStep-1);
+      else if(window.SokoniFormNav) SokoniFormNav.goBack();
       else window.location.href = 'onboarding.html';
     }
 
@@ -524,6 +529,11 @@
     window.addEventListener('load', updateProgressUI);
   </script>
 <script src="sokoni-ui-extras.js" defer></script>
+  <script>
+  window.addEventListener('load', function() {
+    if (window.SokoniFormNav) SokoniFormNav.init({ backUrl: 'onboarding.html', title: 'Driver Application' });
+  });
+  </script>
   <!-- Enterprise v2.0: dashboard stack -->
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
