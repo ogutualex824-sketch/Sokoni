@@ -900,6 +900,44 @@
       font-size: 13px; font-weight: 900; color: #71ff00; flex-shrink: 0;
     }
 
+    /* ── Workspace context bar ── */
+    #sk-ws-bar {
+      width: 100%; overflow: hidden;
+      background: rgba(113,255,0,0.05);
+      border-bottom: 1px solid rgba(113,255,0,0.12);
+      transition: max-height .25s ease, opacity .2s ease;
+      max-height: 0; opacity: 0; pointer-events: none;
+    }
+    #sk-ws-bar.visible { max-height: 46px; opacity: 1; pointer-events: auto; }
+    #sk-ws-bar-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 16px;
+    }
+    #sk-ws-bar-logo {
+      width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0; overflow: hidden;
+      background: rgba(255,255,255,.06); display: flex; align-items: center;
+      justify-content: center; font-size: 14px;
+    }
+    #sk-ws-bar-logo img { width: 100%; height: 100%; object-fit: cover; }
+    #sk-ws-bar-biz {
+      font-size: 12.5px; font-weight: 800; color: rgba(255,255,255,.9);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
+    }
+    #sk-ws-bar-divider { color: rgba(255,255,255,.15); font-size: 11px; }
+    #sk-ws-bar-role {
+      font-size: 11.5px; font-weight: 600; color: rgba(255,255,255,.45);
+      white-space: nowrap;
+    }
+    #sk-ws-bar-branch {
+      font-size: 11px; color: rgba(255,255,255,.3);
+      margin-left: auto; white-space: nowrap; flex-shrink: 0;
+    }
+    .sk-ws-bar-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #71ff00; flex-shrink: 0; box-shadow: 0 0 5px #71ff0080;
+    }
+
     /* ── Site menu drawer — layout handled by sokoni-drawers.css ── */
     /* #sk-menu-drawer is a .sk-drawer; header/close/backdrop/swipe/ESC
        are all managed by SokoniDrawer. Content styles below. */
@@ -1248,6 +1286,75 @@
     _menuObserver.observe(drawer, { attributes: true, attributeFilter: ['aria-hidden'] });
   }
 
+  /* ── Workspace context bar ──────────────────────────────────────── */
+  function _ensureWsBar() {
+    if (document.getElementById('sk-ws-bar')) return;
+    var nav = document.getElementById('sk-top-nav');
+    if (!nav) return;
+    var bar = document.createElement('div');
+    bar.id = 'sk-ws-bar';
+    bar.setAttribute('aria-label', 'Active workspace');
+    bar.innerHTML =
+      '<div id="sk-ws-bar-inner">' +
+        '<div class="sk-ws-bar-dot"></div>' +
+        '<div id="sk-ws-bar-logo"></div>' +
+        '<div id="sk-ws-bar-biz"></div>' +
+        '<span id="sk-ws-bar-divider">·</span>' +
+        '<div id="sk-ws-bar-role"></div>' +
+        '<div id="sk-ws-bar-branch"></div>' +
+      '</div>';
+    nav.after(bar);
+  }
+
+  function _updateWsBar(ws) {
+    _ensureWsBar();
+    var bar = document.getElementById('sk-ws-bar');
+    if (!bar) return;
+
+    if (!ws) {
+      bar.classList.remove('visible');
+      bar.style.removeProperty('background');
+      bar.style.removeProperty('border-bottom-color');
+      return;
+    }
+
+    var bizEl    = document.getElementById('sk-ws-bar-biz');
+    var roleEl   = document.getElementById('sk-ws-bar-role');
+    var branchEl = document.getElementById('sk-ws-bar-branch');
+    var logoEl   = document.getElementById('sk-ws-bar-logo');
+
+    if (bizEl)  bizEl.textContent  = ws.businessName || 'Business';
+    if (roleEl) roleEl.textContent = ws.roleTitle || _wsRoleLabel(ws.role);
+    if (branchEl) branchEl.textContent = ws.activeBranchName ? '📍 ' + ws.activeBranchName : '';
+
+    if (logoEl) {
+      if (ws.businessLogo) {
+        logoEl.innerHTML = '<img src="' + _hesc(ws.businessLogo) + '" alt="">';
+      } else {
+        var bizEmoji = { marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥',
+          events:'🎪', property:'🏠', vehicle:'🚗', hotel:'🏨' }[ws.businessType] || '🏢';
+        logoEl.textContent = bizEmoji;
+      }
+    }
+
+    if (ws.brandColor) {
+      bar.style.background = ws.brandColor + '0d';
+      bar.style.borderBottomColor = ws.brandColor + '2a';
+    } else {
+      bar.style.removeProperty('background');
+      bar.style.removeProperty('border-bottom-color');
+    }
+
+    bar.classList.add('visible');
+  }
+
+  function _wsRoleLabel(r) {
+    var M = { owner:'Owner', manager:'Manager', supervisor:'Supervisor', cashier:'Cashier',
+      inventory_officer:'Inventory Officer', accountant:'Accountant', driver:'Driver',
+      receptionist:'Receptionist', waiter:'Waiter', security:'Security', cleaner:'Cleaner' };
+    return M[r] || (r ? r.charAt(0).toUpperCase() + r.slice(1).replace(/_/g,' ') : 'Staff');
+  }
+
   /* ── Update live state without rebuilding ── */
   function _refresh() {
     const { user, cartCount } = _readState();
@@ -1267,6 +1374,16 @@
       /* Not signed in — navigate directly to login on click */
       avatar.onclick = function () { location.href = 'login.html'; };
     }
+
+    /* Render initial workspace bar state from localStorage */
+    try {
+      var wsId = localStorage.getItem('sokoniActiveWorkspace');
+      if (wsId) {
+        var wsList = JSON.parse(localStorage.getItem('sokoniWorkspaces') || '[]');
+        var activeWs = wsList.find(function (w) { return w.businessId === wsId; }) || null;
+        _updateWsBar(activeWs);
+      }
+    } catch (_) {}
   }
 
   /* ── Account dropdown ──────────────────────────────────────────── */
@@ -1412,8 +1529,11 @@
     if (window.SokoniSessionState) window.SokoniSessionState.setRole(role);
     document.dispatchEvent(new CustomEvent('sokoniRoleChanged', { detail: { role: role } }));
     window._skCloseAcct();
-    /* Reload so nav re-renders with new role workspace */
-    location.reload();
+    /* Rebuild popup to reflect new active role */
+    try {
+      var u2 = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      if (u2) _buildAcctPopup(u2);
+    } catch (_) {}
   };
 
   window._skSignOutFromAcct = function () {
@@ -1423,21 +1543,45 @@
 
   window._skSwitchWorkspace = function (businessId) {
     window._skCloseAcct();
+    var targetId = (!businessId || businessId === 'personal') ? null : businessId;
+
     if (window.SokoniWorkspace) {
-      window.SokoniWorkspace.switchTo(businessId === 'personal' ? null : businessId);
+      window.SokoniWorkspace.switchTo(targetId);
     } else {
       /* Fallback: set localStorage directly if SDK not yet loaded */
       try {
-        if (!businessId || businessId === 'personal') {
-          localStorage.removeItem('sokoniActiveWorkspace');
-        } else {
-          localStorage.setItem('sokoniActiveWorkspace', businessId);
+        if (!targetId) localStorage.removeItem('sokoniActiveWorkspace');
+        else           localStorage.setItem('sokoniActiveWorkspace', targetId);
+      } catch (_) {}
+      /* Fire the event manually so _updateWsBar picks it up */
+      try {
+        var wsList = JSON.parse(localStorage.getItem('sokoniWorkspaces') || '[]');
+        var ws = targetId ? (wsList.find(function (w) { return w.businessId === targetId; }) || null) : null;
+        document.dispatchEvent(new CustomEvent('sokoniWorkspaceChanged', { bubbles: true, detail: ws }));
+      } catch (_) {}
+    }
+    /* No reload — the event listener below handles all UI updates */
+  };
+
+  /* ── Listen to workspace changes for instant header updates ── */
+  document.addEventListener('sokoniWorkspaceChanged', function (e) {
+    var ws = e.detail || null;
+
+    /* Update the context bar */
+    _updateWsBar(ws);
+
+    /* Rebuild the account popup if it's currently open */
+    var popup = document.getElementById('sk-acct-popup');
+    if (popup) {
+      try {
+        var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+        if (u) {
+          popup.remove();
+          _buildAcctPopup(u);
         }
       } catch (_) {}
     }
-    /* Reload so the nav engine and role-gated content re-render */
-    location.reload();
-  };
+  });
 
   /* ══════════════════════════════════════════════════════════
      LIVE SEARCH AUTOCOMPLETE

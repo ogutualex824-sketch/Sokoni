@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+  <script src="security.js"></script>
+  <script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>SOKONI — Professional Profile</title>
+  <meta name="theme-color" content="#71ff00">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="shared-header.js" defer></script>
+  <style>
+    :root {
+      --bg:#050505; --sur:#111; --sur2:#181818; --sur3:#1e1e1e;
+      --bor:rgba(255,255,255,0.08); --g:#71ff00;
+      --g-dim:rgba(113,255,0,0.07); --g-mid:rgba(113,255,0,0.15);
+      --txt:#fff; --sub:rgba(255,255,255,0.5); --sub2:rgba(255,255,255,0.28);
+      --red:#ff4d4d; --amber:#ffa94d; --blue:#4dabf7;
+      --radius:14px;
+    }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      background:var(--bg); color:var(--txt);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      padding-bottom:calc(80px + env(safe-area-inset-bottom,0));
+      min-height:100vh;
+    }
+
+    /* ── Shell ─────────────────────────────────── */
+    .pp-shell { max-width:780px; margin:0 auto; padding:24px 16px; }
+
+    /* ── Hero ─────────────────────────────────── */
+    .pp-hero {
+      background:linear-gradient(135deg,rgba(113,255,0,.05) 0%,rgba(113,255,0,.01) 100%);
+      border:1px solid var(--bor); border-radius:20px;
+      padding:28px 24px 24px; margin-bottom:20px; position:relative; overflow:hidden;
+    }
+    .pp-hero::before {
+      content:''; position:absolute; top:-40px; right:-40px;
+      width:140px; height:140px; border-radius:50%;
+      background:radial-gradient(circle,rgba(113,255,0,.07) 0%,transparent 70%);
+      pointer-events:none;
+    }
+    .pp-hero-top { display:flex; align-items:flex-start; gap:18px; margin-bottom:16px; }
+    .pp-avatar {
+      width:72px; height:72px; border-radius:50%; flex-shrink:0;
+      background:var(--g-dim); border:2px solid rgba(113,255,0,.22);
+      display:flex; align-items:center; justify-content:center;
+      font-size:30px; font-weight:900; color:var(--g);
+      overflow:hidden;
+    }
+    .pp-avatar img { width:100%; height:100%; object-fit:cover; }
+    .pp-hero-info { flex:1; min-width:0; }
+    .pp-name { font-size:22px; font-weight:900; letter-spacing:-.02em; margin-bottom:3px; }
+    .pp-headline { font-size:13.5px; color:var(--sub); margin-bottom:8px; }
+    .pp-badges { display:flex; flex-wrap:wrap; gap:6px; }
+    .pp-badge {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700;
+      border:1px solid var(--bor); color:var(--sub2);
+    }
+    .pp-badge.verified { border-color:rgba(113,255,0,.3); color:var(--g); background:var(--g-dim); }
+    .pp-badge.active   { border-color:rgba(77,171,247,.3); color:var(--blue); background:rgba(77,171,247,.07); }
+
+    .pp-hero-actions { display:flex; gap:8px; flex-wrap:wrap; }
+
+    /* ── Stats row ────────────────────────────── */
+    .pp-stats {
+      display:grid; grid-template-columns:repeat(3,1fr);
+      gap:12px; margin-bottom:20px;
+    }
+    .pp-stat {
+      background:var(--sur); border:1px solid var(--bor);
+      border-radius:var(--radius); padding:14px 16px; text-align:center;
+    }
+    .pp-stat-value { font-size:24px; font-weight:900; color:var(--g); }
+    .pp-stat-label { font-size:11px; color:var(--sub); margin-top:3px; }
+
+    /* ── Section card ─────────────────────────── */
+    .pp-card {
+      background:var(--sur); border:1px solid var(--bor);
+      border-radius:var(--radius); margin-bottom:16px; overflow:hidden;
+    }
+    .pp-card-hdr {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 20px; border-bottom:1px solid var(--bor);
+    }
+    .pp-card-title { font-size:14px; font-weight:800; letter-spacing:-.01em; }
+    .pp-card-title i { color:var(--g); margin-right:8px; }
+    .pp-card-body { padding:16px 20px; }
+
+    /* ── Summary ──────────────────────────────── */
+    #ppSummaryText {
+      font-size:14px; line-height:1.65; color:var(--sub);
+      white-space:pre-wrap;
+    }
+    #ppSummaryInput {
+      width:100%; background:rgba(255,255,255,.04); border:1px solid var(--bor);
+      border-radius:10px; padding:12px 14px; color:var(--txt);
+      font-size:14px; line-height:1.6; resize:vertical; min-height:90px;
+      font-family:inherit;
+    }
+    #ppSummaryInput:focus { outline:none; border-color:rgba(113,255,0,.4); }
+
+    /* ── Skills ───────────────────────────────── */
+    .pp-skills { display:flex; flex-wrap:wrap; gap:8px; }
+    .pp-skill {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:5px 12px; border-radius:20px; font-size:12.5px; font-weight:600;
+      background:rgba(255,255,255,.04); border:1px solid var(--bor);
+      color:rgba(255,255,255,.75);
+    }
+    .pp-skill .pp-skill-rm {
+      background:none; border:none; color:rgba(255,77,77,.5);
+      cursor:pointer; padding:0; font-size:11px; line-height:1;
+    }
+    .pp-skill-add {
+      display:flex; gap:8px; margin-top:12px;
+    }
+    .pp-skill-add input {
+      flex:1; background:rgba(255,255,255,.04); border:1px solid var(--bor);
+      border-radius:8px; padding:8px 12px; color:var(--txt);
+      font-size:13px; font-family:inherit;
+    }
+    .pp-skill-add input:focus { outline:none; border-color:rgba(113,255,0,.35); }
+
+    /* ── Employment timeline ──────────────────── */
+    .pp-timeline { position:relative; padding-left:28px; }
+    .pp-timeline::before {
+      content:''; position:absolute; left:9px; top:10px;
+      bottom:10px; width:2px; background:var(--bor);
+    }
+    .pp-timeline-item {
+      position:relative; margin-bottom:22px;
+    }
+    .pp-timeline-item:last-child { margin-bottom:0; }
+    .pp-timeline-dot {
+      position:absolute; left:-22px; top:6px;
+      width:12px; height:12px; border-radius:50%;
+      background:var(--sur); border:2px solid var(--bor);
+    }
+    .pp-timeline-dot.active { border-color:var(--g); background:rgba(113,255,0,.2); }
+    .pp-timeline-biz {
+      display:flex; align-items:center; gap:10px; margin-bottom:4px;
+    }
+    .pp-tl-icon {
+      width:32px; height:32px; border-radius:8px; flex-shrink:0;
+      background:var(--sur2); border:1px solid var(--bor);
+      display:flex; align-items:center; justify-content:center; font-size:15px;
+    }
+    .pp-tl-name { font-size:14px; font-weight:800; }
+    .pp-tl-status {
+      margin-left:auto; font-size:10px; font-weight:700; padding:2px 8px;
+      border-radius:20px;
+    }
+    .pp-tl-status.active   { background:rgba(113,255,0,.1); color:var(--g); }
+    .pp-tl-status.terminated { background:rgba(255,77,77,.08); color:var(--red); }
+    .pp-tl-role { font-size:12.5px; color:var(--sub); margin-left:42px; }
+    .pp-tl-dates { font-size:11.5px; color:var(--sub2); margin-left:42px; margin-top:2px; }
+
+    /* ── Certifications / Training list ───────── */
+    .pp-list-item {
+      display:flex; align-items:flex-start; gap:12px;
+      padding:10px 0; border-bottom:1px solid var(--bor);
+    }
+    .pp-list-item:last-child { border-bottom:none; }
+    .pp-list-icon {
+      width:34px; height:34px; border-radius:8px; flex-shrink:0;
+      background:var(--g-dim); border:1px solid rgba(113,255,0,.12);
+      display:flex; align-items:center; justify-content:center; font-size:15px;
+    }
+    .pp-list-info { flex:1; min-width:0; }
+    .pp-list-name { font-size:13.5px; font-weight:700; margin-bottom:2px; }
+    .pp-list-meta { font-size:12px; color:var(--sub); }
+
+    /* ── Add modal ────────────────────────────── */
+    .pp-modal-bg {
+      display:none; position:fixed; inset:0; z-index:9000;
+      background:rgba(0,0,0,.75); backdrop-filter:blur(4px);
+      align-items:center; justify-content:center; padding:16px;
+    }
+    .pp-modal-bg.open { display:flex; }
+    .pp-modal {
+      background:var(--sur); border:1px solid var(--bor); border-radius:20px;
+      padding:28px; width:100%; max-width:420px; max-height:90vh; overflow-y:auto;
+      position:relative;
+    }
+    .pp-modal-title { font-size:18px; font-weight:800; margin-bottom:6px; }
+    .pp-modal-close {
+      position:absolute; top:16px; right:16px;
+      background:rgba(255,255,255,.06); border:1px solid var(--bor);
+      border-radius:8px; width:30px; height:30px;
+      color:var(--sub); cursor:pointer; font-size:13px;
+    }
+    .pp-label { font-size:11px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--sub); margin-bottom:5px; display:block; }
+    .pp-input {
+      width:100%; background:rgba(255,255,255,.04); border:1px solid var(--bor);
+      border-radius:10px; padding:10px 14px; color:var(--txt); font-size:14px;
+      font-family:inherit; margin-bottom:14px;
+    }
+    .pp-input:focus { outline:none; border-color:rgba(113,255,0,.4); }
+
+    /* ── Buttons ──────────────────────────────── */
+    .pp-btn {
+      padding:10px 20px; border-radius:10px; font-size:13.5px; font-weight:700;
+      cursor:pointer; border:none; transition:all .15s;
+    }
+    .pp-btn-primary { background:var(--g); color:#000; }
+    .pp-btn-primary:hover { filter:brightness(1.1); }
+    .pp-btn-ghost {
+      background:rgba(255,255,255,.05); border:1px solid var(--bor);
+      color:var(--sub);
+    }
+    .pp-btn-ghost:hover { background:rgba(255,255,255,.09); color:var(--txt); }
+    .pp-btn-row { display:flex; gap:8px; margin-top:6px; flex-wrap:wrap; }
+
+    /* ── Empty state ──────────────────────────── */
+    .pp-empty {
+      padding:24px 0; text-align:center;
+      color:var(--sub2); font-size:13px;
+    }
+    .pp-empty-icon { font-size:32px; margin-bottom:8px; }
+
+    /* ── Loader ───────────────────────────────── */
+    .pp-loader { padding:32px; text-align:center; }
+    .pp-spinner {
+      width:28px; height:28px; border:3px solid rgba(113,255,0,.15);
+      border-top-color:var(--g); border-radius:50%; margin:0 auto 10px;
+      animation:pp-spin .8s linear infinite;
+    }
+    @keyframes pp-spin { to { transform:rotate(360deg); } }
+
+    @media (max-width:500px) {
+      .pp-stats { grid-template-columns:repeat(3,1fr); }
+      .pp-stat-value { font-size:20px; }
+      .pp-hero-top { gap:12px; }
+      .pp-avatar { width:58px; height:58px; font-size:24px; }
+    }
+  </style>
+</head>
+<body>
+
+<main class="pp-shell" id="ppMain">
+  <div class="pp-loader" id="ppLoader">
+    <div class="pp-spinner"></div>
+    <div style="color:var(--sub);font-size:13px;">Loading profile…</div>
+  </div>
+
+  <!-- Hero (hidden until loaded) -->
+  <div id="ppContent" style="display:none;">
+
+    <!-- Hero card -->
+    <div class="pp-hero" id="ppHero">
+      <div class="pp-hero-top">
+        <div class="pp-avatar" id="ppAvatar">?</div>
+        <div class="pp-hero-info">
+          <div class="pp-name" id="ppName">—</div>
+          <div class="pp-headline" id="ppHeadline"></div>
+          <div class="pp-badges" id="ppBadges"></div>
+        </div>
+      </div>
+      <div class="pp-hero-actions" id="ppHeroActions"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="pp-stats">
+      <div class="pp-stat">
+        <div class="pp-stat-value" id="statExp">—</div>
+        <div class="pp-stat-label">Years Exp.</div>
+      </div>
+      <div class="pp-stat">
+        <div class="pp-stat-value" id="statEmployers">—</div>
+        <div class="pp-stat-label">Employers</div>
+      </div>
+      <div class="pp-stat">
+        <div class="pp-stat-value" id="statActive">—</div>
+        <div class="pp-stat-label">Active Jobs</div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="pp-card">
+      <div class="pp-card-hdr">
+        <div class="pp-card-title"><i class="fas fa-align-left"></i>Professional Summary</div>
+        <button class="pp-btn pp-btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="ppToggleEdit('summary')" id="btnEditSummary">
+          <i class="fas fa-pen"></i> Edit
+        </button>
+      </div>
+      <div class="pp-card-body">
+        <div id="ppSummaryText" style="display:block;"></div>
+        <textarea id="ppSummaryInput" style="display:none;" placeholder="Describe your professional background, strengths, and goals…"></textarea>
+        <div id="ppSummaryActions" style="display:none;margin-top:12px;">
+          <div class="pp-btn-row">
+            <button class="pp-btn pp-btn-primary" onclick="ppSaveSummary()"><i class="fas fa-check"></i> Save</button>
+            <button class="pp-btn pp-btn-ghost" onclick="ppCancelEdit('summary')">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills -->
+    <div class="pp-card">
+      <div class="pp-card-hdr">
+        <div class="pp-card-title"><i class="fas fa-star"></i>Skills</div>
+      </div>
+      <div class="pp-card-body">
+        <div class="pp-skills" id="ppSkillsList"></div>
+        <div class="pp-skill-add" id="ppSkillAddRow">
+          <input type="text" id="ppSkillInput" placeholder="Add a skill…" maxlength="50"
+            onkeydown="if(event.key==='Enter')ppAddSkill()">
+          <button class="pp-btn pp-btn-primary" style="padding:8px 16px;font-size:13px;" onclick="ppAddSkill()">
+            <i class="fas fa-plus"></i> Add
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Work history -->
+    <div class="pp-card">
+      <div class="pp-card-hdr">
+        <div class="pp-card-title"><i class="fas fa-briefcase"></i>Work History</div>
+      </div>
+      <div class="pp-card-body">
+        <div class="pp-timeline" id="ppTimeline"></div>
+      </div>
+    </div>
+
+    <!-- Certifications -->
+    <div class="pp-card">
+      <div class="pp-card-hdr">
+        <div class="pp-card-title"><i class="fas fa-certificate"></i>Certifications</div>
+        <button class="pp-btn pp-btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="ppOpenCertModal()">
+          <i class="fas fa-plus"></i> Add
+        </button>
+      </div>
+      <div class="pp-card-body">
+        <div id="ppCertList"></div>
+      </div>
+    </div>
+
+    <!-- Training -->
+    <div class="pp-card">
+      <div class="pp-card-hdr">
+        <div class="pp-card-title"><i class="fas fa-graduation-cap"></i>Training &amp; Courses</div>
+        <button class="pp-btn pp-btn-ghost" style="padding:6px 12px;font-size:12px;" onclick="ppOpenTrainingModal()">
+          <i class="fas fa-plus"></i> Add
+        </button>
+      </div>
+      <div class="pp-card-body">
+        <div id="ppTrainingList"></div>
+      </div>
+    </div>
+
+    <!-- Languages -->
+    <div class="pp-card">
+      <div class="pp-card-hdr">
+        <div class="pp-card-title"><i class="fas fa-language"></i>Languages</div>
+      </div>
+      <div class="pp-card-body">
+        <div class="pp-skills" id="ppLangList"></div>
+        <div class="pp-skill-add" id="ppLangAddRow">
+          <input type="text" id="ppLangInput" placeholder="Add a language…" maxlength="30"
+            onkeydown="if(event.key==='Enter')ppAddLang()">
+          <button class="pp-btn pp-btn-primary" style="padding:8px 16px;font-size:13px;" onclick="ppAddLang()">
+            <i class="fas fa-plus"></i> Add
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /ppContent -->
+</main>
+
+<!-- ── Add Certification modal ──────────────────────────── -->
+<div class="pp-modal-bg" id="certModal">
+  <div class="pp-modal">
+    <button class="pp-modal-close" onclick="ppCloseCertModal()"><i class="fas fa-times"></i></button>
+    <div class="pp-modal-title">Add Certification</div>
+    <div style="margin-top:16px;">
+      <label class="pp-label">Certificate Name *</label>
+      <input type="text" class="pp-input" id="certName" placeholder="e.g. Food Handler's Certificate">
+      <label class="pp-label">Issued by *</label>
+      <input type="text" class="pp-input" id="certIssuer" placeholder="e.g. KEBS, Ministry of Health">
+      <label class="pp-label">Year</label>
+      <input type="number" class="pp-input" id="certYear" placeholder="2024" min="1990" max="2030">
+      <label class="pp-label">Certificate URL (optional)</label>
+      <input type="url" class="pp-input" id="certUrl" placeholder="https://…">
+    </div>
+    <div id="certErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+    <div class="pp-btn-row">
+      <button class="pp-btn pp-btn-primary" onclick="ppSaveCert()"><i class="fas fa-check"></i> Save</button>
+      <button class="pp-btn pp-btn-ghost" onclick="ppCloseCertModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Training modal ───────────────────────────────── -->
+<div class="pp-modal-bg" id="trainingModal">
+  <div class="pp-modal">
+    <button class="pp-modal-close" onclick="ppCloseTrainingModal()"><i class="fas fa-times"></i></button>
+    <div class="pp-modal-title">Add Training / Course</div>
+    <div style="margin-top:16px;">
+      <label class="pp-label">Course / Training Name *</label>
+      <input type="text" class="pp-input" id="trainingName" placeholder="e.g. Customer Service Excellence">
+      <label class="pp-label">Provider</label>
+      <input type="text" class="pp-input" id="trainingProvider" placeholder="e.g. Strathmore University, Coursera">
+      <label class="pp-label">Year</label>
+      <input type="number" class="pp-input" id="trainingYear" placeholder="2024" min="1990" max="2030">
+      <label class="pp-label">Duration (hours)</label>
+      <input type="number" class="pp-input" id="trainingHours" placeholder="e.g. 8">
+    </div>
+    <div id="trainingErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+    <div class="pp-btn-row">
+      <button class="pp-btn pp-btn-primary" onclick="ppSaveTraining()"><i class="fas fa-check"></i> Save</button>
+      <button class="pp-btn pp-btn-ghost" onclick="ppCloseTrainingModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+
+const fns           = getFunctions();
+const _getProfile   = httpsCallable(fns, 'wfGetProfessionalProfile');
+const _updateProfile= httpsCallable(fns, 'wfUpdateProfessionalProfile');
+
+/* ── State ─────────────────────────────────────────────── */
+let _profile = null;
+let _isOwner = false;
+let _dirty   = { skills:[], languages:[], certifications:[], training:[], summary:'', headline:'' };
+
+/* ── Helpers ───────────────────────────────────────────── */
+function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _bizEmoji(t) { return { marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥', events:'🎪', property:'🏠', vehicle:'🚗', hotel:'🏨' }[t] || '🏢'; }
+function _roleName(r) {
+  const M = { owner:'Owner', manager:'Manager', supervisor:'Supervisor', cashier:'Cashier',
+    inventory_officer:'Inventory Officer', accountant:'Accountant', driver:'Driver',
+    receptionist:'Receptionist', waiter:'Waiter', security:'Security', cleaner:'Cleaner' };
+  return M[r] || (r ? r.charAt(0).toUpperCase() + r.slice(1).replace(/_/g,' ') : 'Staff');
+}
+function _fmtDate(ms) {
+  if (!ms) return 'Present';
+  return new Date(ms).toLocaleDateString('en-KE', { year:'numeric', month:'short' });
+}
+function _empTypeLabel(t) {
+  return { permanent:'Permanent', contract:'Contract', seasonal:'Seasonal',
+    one_week:'1 Week', one_day:'1 Day', one_shift:'1 Shift' }[t] || (t||'');
+}
+
+/* ── Boot ──────────────────────────────────────────────── */
+async function _boot() {
+  let user;
+  try { user = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch(_) {}
+  if (!user) { location.href = 'login.html'; return; }
+
+  /* ?uid param lets employers view an employee's profile */
+  const params   = new URLSearchParams(location.search);
+  const targetUid = params.get('uid') || user.uid;
+  _isOwner = targetUid === user.uid;
+
+  try {
+    const res = await _getProfile({ uid: targetUid });
+    _profile  = res.data;
+    _dirty    = {
+      summary:        _profile.summary || '',
+      headline:       _profile.headline || '',
+      skills:         [...(_profile.skills || [])],
+      languages:      [...(_profile.languages || [])],
+      certifications: JSON.parse(JSON.stringify(_profile.certifications || [])),
+      training:       JSON.parse(JSON.stringify(_profile.training || [])),
+    };
+    _render();
+  } catch(e) {
+    document.getElementById('ppLoader').innerHTML =
+      `<div style="color:var(--sub);padding:32px;text-align:center;"><div style="font-size:32px;margin-bottom:12px;">⚠️</div><div>${_esc(e.message)}</div></div>`;
+    return;
+  }
+
+  document.getElementById('ppLoader').style.display = 'none';
+  document.getElementById('ppContent').style.display = '';
+}
+
+/* ── Render ────────────────────────────────────────────── */
+function _render() {
+  /* Hero */
+  const avEl = document.getElementById('ppAvatar');
+  if (_profile.avatar) { avEl.innerHTML = `<img src="${_esc(_profile.avatar)}" alt="">`; }
+  else { avEl.textContent = (_profile.name || '?').charAt(0).toUpperCase(); }
+
+  document.getElementById('ppName').textContent = _profile.name || 'Anonymous';
+
+  const headlineEl = document.getElementById('ppHeadline');
+  headlineEl.textContent = _profile.headline || (_profile.employmentHistory?.find(e => e.status === 'active')
+    ? _roleName(_profile.employmentHistory.find(e => e.status === 'active').role) + ' at ' +
+      _profile.employmentHistory.find(e => e.status === 'active').businessName
+    : 'SOKONI Professional');
+
+  const badgesEl = document.getElementById('ppBadges');
+  const vStatus  = _profile.verificationStatus;
+  badgesEl.innerHTML =
+    (vStatus === 'verified' ? '<span class="pp-badge verified"><i class="fas fa-circle-check"></i> Verified</span>' : '') +
+    (_profile.stats?.activeWorkspaces > 0 ? `<span class="pp-badge active"><i class="fas fa-briefcase"></i> ${_profile.stats.activeWorkspaces} Active Job${_profile.stats.activeWorkspaces !== 1 ? 's':''}</span>` : '') +
+    (_profile.languages?.length ? `<span class="pp-badge"><i class="fas fa-language"></i> ${_profile.languages.length} Language${_profile.languages.length !== 1 ? 's':''}</span>` : '');
+
+  /* Actions */
+  const actEl = document.getElementById('ppHeroActions');
+  if (_isOwner) {
+    actEl.innerHTML =
+      `<button class="pp-btn pp-btn-ghost" style="font-size:12px;padding:7px 14px;" onclick="ppEditHeadline()">
+        <i class="fas fa-pen"></i> Edit Headline
+      </button>
+      <a href="account-centre.html#employment" class="pp-btn pp-btn-ghost" style="font-size:12px;padding:7px 14px;text-decoration:none;">
+        <i class="fas fa-id-badge"></i> My Workspaces
+      </a>`;
+  }
+
+  /* Stats */
+  const s = _profile.stats || {};
+  document.getElementById('statExp').textContent       = s.yearsExperience || '0';
+  document.getElementById('statEmployers').textContent = s.totalEmployers   || '0';
+  document.getElementById('statActive').textContent    = s.activeWorkspaces || '0';
+
+  /* Summary */
+  document.getElementById('ppSummaryText').textContent = _profile.summary || 'No summary yet.';
+  if (!_isOwner) {
+    document.getElementById('btnEditSummary').style.display = 'none';
+  }
+
+  /* Skills */
+  _renderSkills();
+
+  /* Timeline */
+  _renderTimeline();
+
+  /* Certifications */
+  _renderCerts();
+
+  /* Training */
+  _renderTraining();
+
+  /* Languages */
+  _renderLangs();
+
+  /* Hide add rows if not owner */
+  if (!_isOwner) {
+    document.getElementById('ppSkillAddRow').style.display  = 'none';
+    document.getElementById('ppLangAddRow').style.display   = 'none';
+  }
+}
+
+function _renderSkills() {
+  const el = document.getElementById('ppSkillsList');
+  if (!_dirty.skills.length) {
+    el.innerHTML = `<span style="color:var(--sub2);font-size:13px;">No skills added yet.</span>`;
+    return;
+  }
+  el.innerHTML = _dirty.skills.map((s, i) =>
+    `<div class="pp-skill">${_esc(s)}` +
+    (_isOwner ? `<button class="pp-skill-rm" onclick="ppRemoveSkill(${i})" aria-label="Remove">✕</button>` : '') +
+    `</div>`
+  ).join('');
+}
+
+function _renderLangs() {
+  const el = document.getElementById('ppLangList');
+  if (!_dirty.languages.length) {
+    el.innerHTML = `<span style="color:var(--sub2);font-size:13px;">No languages added yet.</span>`;
+    return;
+  }
+  el.innerHTML = _dirty.languages.map((l, i) =>
+    `<div class="pp-skill">🌍 ${_esc(l)}` +
+    (_isOwner ? `<button class="pp-skill-rm" onclick="ppRemoveLang(${i})" aria-label="Remove">✕</button>` : '') +
+    `</div>`
+  ).join('');
+}
+
+function _renderTimeline() {
+  const el   = document.getElementById('ppTimeline');
+  const hist = _profile.employmentHistory || [];
+  if (!hist.length) {
+    el.innerHTML = `<div class="pp-empty"><div class="pp-empty-icon">💼</div>No employment history yet.</div>`;
+    return;
+  }
+  el.innerHTML = hist.map(e => {
+    const isActive = e.status === 'active';
+    const startFmt = _fmtDate(e.addedAt || e.startDate);
+    const endFmt   = isActive ? 'Present' : _fmtDate(e.terminatedAt || e.endDate);
+    const roleLabel = _roleName(e.role) + (e.roleTitle && e.roleTitle !== _roleName(e.role) ? ` · ${e.roleTitle}` : '');
+    const deptLabel = e.department ? ` · ${e.department}` : '';
+    const typeLabel = _empTypeLabel(e.employmentType);
+    return `
+      <div class="pp-timeline-item">
+        <div class="pp-timeline-dot ${isActive ? 'active' : ''}"></div>
+        <div class="pp-timeline-biz">
+          <div class="pp-tl-icon">${e.businessLogo ? `<img src="${_esc(e.businessLogo)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" alt="">` : _bizEmoji(e.businessType)}</div>
+          <div class="pp-tl-name">${_esc(e.businessName || 'Business')}</div>
+          <span class="pp-tl-status ${isActive ? 'active' : 'terminated'}">${isActive ? '● Active' : 'Past'}</span>
+        </div>
+        <div class="pp-tl-role">${_esc(roleLabel)}${_esc(deptLabel)} · ${typeLabel}</div>
+        <div class="pp-tl-dates">${startFmt} – ${endFmt}</div>
+      </div>`;
+  }).join('');
+}
+
+function _renderCerts() {
+  const el = document.getElementById('ppCertList');
+  if (!_dirty.certifications.length) {
+    el.innerHTML = `<div class="pp-empty"><div class="pp-empty-icon">🏅</div>No certifications added yet.</div>`;
+    return;
+  }
+  el.innerHTML = _dirty.certifications.map((c, i) => `
+    <div class="pp-list-item">
+      <div class="pp-list-icon">🏅</div>
+      <div class="pp-list-info">
+        <div class="pp-list-name">${_esc(c.name)}</div>
+        <div class="pp-list-meta">${_esc(c.issuer)}${c.year ? ` · ${c.year}` : ''}${c.url ? ` · <a href="${_esc(c.url)}" target="_blank" rel="noopener" style="color:var(--g);">View</a>` : ''}</div>
+      </div>
+      ${_isOwner ? `<button class="pp-btn pp-btn-ghost" style="padding:5px 10px;font-size:11px;flex-shrink:0;" onclick="ppRemoveCert(${i})"><i class="fas fa-trash"></i></button>` : ''}
+    </div>`).join('');
+}
+
+function _renderTraining() {
+  const el = document.getElementById('ppTrainingList');
+  if (!_dirty.training.length) {
+    el.innerHTML = `<div class="pp-empty"><div class="pp-empty-icon">📚</div>No training records added yet.</div>`;
+    return;
+  }
+  el.innerHTML = _dirty.training.map((t, i) => `
+    <div class="pp-list-item">
+      <div class="pp-list-icon">📚</div>
+      <div class="pp-list-info">
+        <div class="pp-list-name">${_esc(t.name)}</div>
+        <div class="pp-list-meta">${_esc(t.provider || '')}${t.year ? ` · ${t.year}` : ''}${t.hours ? ` · ${t.hours}h` : ''}</div>
+      </div>
+      ${_isOwner ? `<button class="pp-btn pp-btn-ghost" style="padding:5px 10px;font-size:11px;flex-shrink:0;" onclick="ppRemoveTraining(${i})"><i class="fas fa-trash"></i></button>` : ''}
+    </div>`).join('');
+}
+
+/* ── Save helper ───────────────────────────────────────── */
+async function _save(patch) {
+  Object.assign(_dirty, patch);
+  await _updateProfile(_dirty);
+}
+
+/* ── Summary edit ──────────────────────────────────────── */
+window.ppToggleEdit = function(section) {
+  if (section === 'summary') {
+    document.getElementById('ppSummaryText').style.display    = 'none';
+    document.getElementById('ppSummaryInput').style.display   = '';
+    document.getElementById('ppSummaryActions').style.display = '';
+    document.getElementById('ppSummaryInput').value = _dirty.summary;
+    document.getElementById('ppSummaryInput').focus();
+  }
+};
+window.ppCancelEdit = function(section) {
+  if (section === 'summary') {
+    document.getElementById('ppSummaryText').style.display    = '';
+    document.getElementById('ppSummaryInput').style.display   = 'none';
+    document.getElementById('ppSummaryActions').style.display = 'none';
+  }
+};
+window.ppSaveSummary = async function() {
+  const val = document.getElementById('ppSummaryInput').value.trim();
+  await _save({ summary: val });
+  _dirty.summary = val;
+  document.getElementById('ppSummaryText').textContent = val || 'No summary yet.';
+  ppCancelEdit('summary');
+};
+
+/* ── Headline edit ─────────────────────────────────────── */
+window.ppEditHeadline = function() {
+  const v = prompt('Edit your professional headline:', _dirty.headline || '');
+  if (v === null) return;
+  _save({ headline: v.trim() });
+  _dirty.headline = v.trim();
+  document.getElementById('ppHeadline').textContent = v.trim() || document.getElementById('ppHeadline').textContent;
+};
+
+/* ── Skills ────────────────────────────────────────────── */
+window.ppAddSkill = function() {
+  const inp = document.getElementById('ppSkillInput');
+  const val = (inp.value || '').trim();
+  if (!val || _dirty.skills.includes(val)) { inp.value = ''; return; }
+  if (_dirty.skills.length >= 30) { alert('Maximum 30 skills.'); return; }
+  _dirty.skills.push(val);
+  inp.value = '';
+  _save({ skills: _dirty.skills });
+  _renderSkills();
+};
+window.ppRemoveSkill = function(i) {
+  _dirty.skills.splice(i, 1);
+  _save({ skills: _dirty.skills });
+  _renderSkills();
+};
+
+/* ── Languages ─────────────────────────────────────────── */
+window.ppAddLang = function() {
+  const inp = document.getElementById('ppLangInput');
+  const val = (inp.value || '').trim();
+  if (!val || _dirty.languages.includes(val)) { inp.value = ''; return; }
+  _dirty.languages.push(val);
+  inp.value = '';
+  _save({ languages: _dirty.languages });
+  _renderLangs();
+};
+window.ppRemoveLang = function(i) {
+  _dirty.languages.splice(i, 1);
+  _save({ languages: _dirty.languages });
+  _renderLangs();
+};
+
+/* ── Certifications ────────────────────────────────────── */
+window.ppOpenCertModal  = function() { document.getElementById('certModal').classList.add('open'); };
+window.ppCloseCertModal = function() {
+  document.getElementById('certModal').classList.remove('open');
+  ['certName','certIssuer','certYear','certUrl'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('certErr').style.display = 'none';
+};
+window.ppSaveCert = async function() {
+  const name   = (document.getElementById('certName').value   || '').trim();
+  const issuer = (document.getElementById('certIssuer').value || '').trim();
+  const errEl  = document.getElementById('certErr');
+  if (!name || !issuer) { errEl.textContent = 'Name and issuer are required.'; errEl.style.display='block'; return; }
+  const cert = {
+    name, issuer,
+    year: parseInt(document.getElementById('certYear').value, 10) || null,
+    url:  (document.getElementById('certUrl').value || '').trim() || '',
+  };
+  _dirty.certifications.push(cert);
+  await _save({ certifications: _dirty.certifications });
+  _renderCerts();
+  ppCloseCertModal();
+};
+window.ppRemoveCert = async function(i) {
+  _dirty.certifications.splice(i, 1);
+  await _save({ certifications: _dirty.certifications });
+  _renderCerts();
+};
+
+/* ── Training ──────────────────────────────────────────── */
+window.ppOpenTrainingModal  = function() { document.getElementById('trainingModal').classList.add('open'); };
+window.ppCloseTrainingModal = function() {
+  document.getElementById('trainingModal').classList.remove('open');
+  ['trainingName','trainingProvider','trainingYear','trainingHours'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('trainingErr').style.display = 'none';
+};
+window.ppSaveTraining = async function() {
+  const name   = (document.getElementById('trainingName').value || '').trim();
+  const errEl  = document.getElementById('trainingErr');
+  if (!name) { errEl.textContent = 'Training name is required.'; errEl.style.display='block'; return; }
+  const t = {
+    name,
+    provider: (document.getElementById('trainingProvider').value || '').trim(),
+    year:     parseInt(document.getElementById('trainingYear').value, 10) || null,
+    hours:    parseFloat(document.getElementById('trainingHours').value) || null,
+  };
+  _dirty.training.push(t);
+  await _save({ training: _dirty.training });
+  _renderTraining();
+  ppCloseTrainingModal();
+};
+window.ppRemoveTraining = async function(i) {
+  _dirty.training.splice(i, 1);
+  await _save({ training: _dirty.training });
+  _renderTraining();
+};
+
+/* ── Run ───────────────────────────────────────────────── */
+document.addEventListener('sokoniAuthReady', function() { _boot(); }, { once: true });
+/* Fallback if auth already resolved */
+setTimeout(function() {
+  try {
+    var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+    if (u && !document.getElementById('ppContent').style.display === '') _boot();
+  } catch(_) {}
+}, 600);
+_boot();
+</script>
+</body>
+</html>

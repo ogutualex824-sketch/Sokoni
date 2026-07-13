@@ -106,10 +106,40 @@
     return MAP[role] || (role ? role.charAt(0).toUpperCase() + role.slice(1).replace(/_/g,' ') : 'Staff');
   }
 
+  /* ── Branding ───────────────────────────────────────────────────────── */
+
+  /**
+   * Apply workspace brand colors as CSS custom properties on :root.
+   * Falls back to transparent/defaults when no brand color is set.
+   */
+  function applyBranding(ws) {
+    try {
+      var r = document.documentElement;
+      if (!ws || !ws.brandColor) {
+        r.style.removeProperty('--ws-brand');
+        r.style.removeProperty('--ws-accent');
+        r.style.removeProperty('--ws-brand-dim');
+        r.style.removeProperty('--ws-brand-mid');
+      } else {
+        var color  = ws.brandColor;
+        var accent = ws.brandAccent || color;
+        r.style.setProperty('--ws-brand',     color);
+        r.style.setProperty('--ws-accent',    accent);
+        r.style.setProperty('--ws-brand-dim', color.slice(0, 7) + '14');
+        r.style.setProperty('--ws-brand-mid', color.slice(0, 7) + '2e');
+      }
+      document.dispatchEvent(new CustomEvent('sokoniWorkspaceBrandingApplied', {
+        bubbles: true,
+        detail:  { ws: ws || null },
+      }));
+    } catch (_) {}
+  }
+
   /* ── Public: switch ─────────────────────────────────────────────────── */
 
   /**
    * Switch to a different workspace (or back to personal mode).
+   * Instant — no page reload. Dispatches sokoniWorkspaceChanged.
    * @param {string|null} businessId  — pass null or 'personal' for personal mode
    */
   function switchTo(businessId) {
@@ -126,16 +156,56 @@
     /* Sync into sokoniUser so the nav engine and other readers see the active workspace */
     try {
       var u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
-      u.activeWorkspace   = ws || null;
-      u.activeBusinessId  = isPersonal ? null : businessId;
+      u.activeWorkspace    = ws || null;
+      u.activeBusinessId   = isPersonal ? null : businessId;
       u.activeBusinessName = ws ? ws.businessName : null;
-      u.activeRole        = ws ? ws.role : (u.roles && u.roles[0]) || 'buyer';
+      u.activeBusinessLogo = ws ? (ws.businessLogo || '') : null;
+      u.activeBranchId     = ws ? (ws.activeBranchId   || null) : null;
+      u.activeBranchName   = ws ? (ws.activeBranchName || null) : null;
+      u.activeRole         = ws ? ws.role : (u.roles && u.roles[0]) || 'buyer';
+      localStorage.setItem('sokoniUser', JSON.stringify(u));
+    } catch (_) {}
+
+    applyBranding(ws);
+
+    document.dispatchEvent(new CustomEvent('sokoniWorkspaceChanged', {
+      bubbles: true,
+      detail:  ws || null,
+    }));
+  }
+
+  /* ── Branch switching ───────────────────────────────────────────────── */
+
+  /**
+   * Switch to a different branch within the active workspace.
+   * Updates localStorage and re-dispatches sokoniWorkspaceChanged.
+   */
+  function setActiveBranch(branchId, branchName) {
+    var ws = getActiveWorkspace();
+    if (!ws) { console.warn('[SokoniWorkspace] No active workspace.'); return; }
+
+    var workspaces = _getWorkspaces().map(function (w) {
+      if (w.businessId === ws.businessId) {
+        return Object.assign({}, w, {
+          activeBranchId:   branchId   || null,
+          activeBranchName: branchName || null,
+        });
+      }
+      return w;
+    });
+    _setWorkspaces(workspaces);
+
+    var updated = workspaces.find(function (w) { return w.businessId === ws.businessId; }) || ws;
+    try {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+      u.activeBranchId   = branchId   || null;
+      u.activeBranchName = branchName || null;
       localStorage.setItem('sokoniUser', JSON.stringify(u));
     } catch (_) {}
 
     document.dispatchEvent(new CustomEvent('sokoniWorkspaceChanged', {
       bubbles: true,
-      detail:  ws || null,
+      detail:  updated,
     }));
   }
 
@@ -248,6 +318,61 @@
     return result.data.sessionId;
   }
 
+  /** Record a break start within the active shift */
+  async function clockBreak() {
+    var ws = getActiveWorkspace();
+    if (!ws) throw new Error('No active workspace.');
+    if (!ws.clockedIn) throw new Error('Not clocked in.');
+    if (ws.onBreak) throw new Error('Already on break.');
+
+    var fnModule = await import(FB_FN_SDK);
+    var getFunctions  = fnModule.getFunctions;
+    var httpsCallable = fnModule.httpsCallable;
+    var fns = getFunctions();
+    var fn  = httpsCallable(fns, 'wfClockBreak');
+
+    await fn({
+      membershipId:   ws.membershipId,
+      businessId:     ws.businessId,
+      shiftSessionId: ws.shiftSessionId || null,
+    });
+
+    var workspaces = _getWorkspaces();
+    workspaces = workspaces.map(function (w) {
+      if (w.businessId === ws.businessId) return Object.assign({}, w, { onBreak: true, breakStartedAt: Date.now() });
+      return w;
+    });
+    _setWorkspaces(workspaces);
+    return true;
+  }
+
+  /** Record break end and resume the shift */
+  async function clockResume() {
+    var ws = getActiveWorkspace();
+    if (!ws) throw new Error('No active workspace.');
+    if (!ws.onBreak) throw new Error('Not on break.');
+
+    var fnModule = await import(FB_FN_SDK);
+    var getFunctions  = fnModule.getFunctions;
+    var httpsCallable = fnModule.httpsCallable;
+    var fns = getFunctions();
+    var fn  = httpsCallable(fns, 'wfClockResume');
+
+    var result = await fn({
+      membershipId:   ws.membershipId,
+      businessId:     ws.businessId,
+      shiftSessionId: ws.shiftSessionId || null,
+    });
+
+    var workspaces = _getWorkspaces();
+    workspaces = workspaces.map(function (w) {
+      if (w.businessId === ws.businessId) return Object.assign({}, w, { onBreak: false, breakStartedAt: null });
+      return w;
+    });
+    _setWorkspaces(workspaces);
+    return result.data;
+  }
+
   /**
    * Record clock-out for the active workspace.
    * Returns hours worked.
@@ -295,18 +420,22 @@
 
   /* ── Expose ─────────────────────────────────────────────────────────── */
   win.SokoniWorkspace = {
-    PERMISSIONS:      PERMISSIONS,
-    ROLE_PERMISSIONS: ROLE_PERMISSIONS,
-    getWorkspaces:    getWorkspaces,
+    PERMISSIONS:        PERMISSIONS,
+    ROLE_PERMISSIONS:   ROLE_PERMISSIONS,
+    getWorkspaces:      getWorkspaces,
     getActiveWorkspace: getActiveWorkspace,
-    hasPermission:    hasPermission,
-    roleName:         roleName,
-    switchTo:         switchTo,
-    loadAndWatch:     loadAndWatch,
-    stopWatch:        stopWatch,
-    clear:            clear,
-    clockIn:          clockIn,
-    clockOut:         clockOut,
+    hasPermission:      hasPermission,
+    roleName:           roleName,
+    switchTo:           switchTo,
+    setActiveBranch:    setActiveBranch,
+    applyBranding:      applyBranding,
+    loadAndWatch:       loadAndWatch,
+    stopWatch:          stopWatch,
+    clear:              clear,
+    clockIn:            clockIn,
+    clockBreak:         clockBreak,
+    clockResume:        clockResume,
+    clockOut:           clockOut,
   };
 
 }(window));

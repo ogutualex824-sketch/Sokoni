@@ -377,34 +377,45 @@ exports.wfAcceptInvitation = onCall({ region: 'us-central1' }, async (request) =
   const userSnap = await db.collection('users').doc(uid).get();
   const userProfile = userSnap.exists ? userSnap.data() : {};
 
+  /* Get business branding */
+  const bizSnap2 = await db.collection('businesses').doc(inv.businessId).get();
+  const biz2 = bizSnap2.exists ? bizSnap2.data() : {};
+
   /* Create the membership */
   const memberRef = await db.collection('workspaceMemberships').add({
     uid,
-    userEmail:      _normaliseEmail(userRecord.email || inv.invitedEmail),
-    userName:       userProfile.name || userRecord.displayName || '',
-    businessId:     inv.businessId,
-    businessName:   inv.businessName,
-    businessType:   inv.businessType,
-    businessLogo:   inv.businessLogo || '',
-    role:           inv.role,
-    roleTitle:      inv.roleTitle || '',
-    permissions:    inv.permissions || (ROLE_PERMISSIONS[inv.role] || []),
-    branches:       inv.branches || [],
-    activeBranchId: (inv.branches || [])[0] || null,
+    userEmail:        _normaliseEmail(userRecord.email || inv.invitedEmail),
+    userName:         userProfile.name || userRecord.displayName || '',
+    businessId:       inv.businessId,
+    businessName:     inv.businessName,
+    businessType:     inv.businessType,
+    businessLogo:     inv.businessLogo || biz2.logo || biz2.logoUrl || '',
+    brandColor:       biz2.brandColor || '',
+    brandAccent:      biz2.brandAccent || '',
+    department:       inv.department || '',
+    role:             inv.role,
+    roleTitle:        inv.roleTitle || '',
+    permissions:      inv.permissions || (ROLE_PERMISSIONS[inv.role] || []),
+    branches:         inv.branches || [],
+    activeBranchId:   (inv.branches || [])[0] || null,
     activeBranchName: null,
-    employmentType: inv.employmentType,
-    startDate:      inv.startDate || admin.firestore.FieldValue.serverTimestamp(),
-    endDate:        inv.endDate || null,
-    salary:         inv.salary || null,
-    salaryType:     inv.salaryType || null,
-    status:         'active',
-    clockedIn:      false,
-    clockedInAt:    null,
-    shiftSessionId: null,
-    invitationId:   invDoc.id,
-    addedAt:        admin.firestore.FieldValue.serverTimestamp(),
-    addedBy:        inv.invitedBy,
-    lastActive:     admin.firestore.FieldValue.serverTimestamp(),
+    employmentType:   inv.employmentType,
+    startDate:        inv.startDate || admin.firestore.FieldValue.serverTimestamp(),
+    endDate:          inv.endDate || null,
+    salary:           inv.salary || null,
+    salaryType:       inv.salaryType || null,
+    notes:            inv.notes || '',
+    status:           'active',
+    clockedIn:        false,
+    clockedInAt:      null,
+    onBreak:          false,
+    breakStartedAt:   null,
+    totalBreakMinutes:0,
+    shiftSessionId:   null,
+    invitationId:     invDoc.id,
+    addedAt:          admin.firestore.FieldValue.serverTimestamp(),
+    addedBy:          inv.invitedBy,
+    lastActive:       admin.firestore.FieldValue.serverTimestamp(),
   });
 
   /* Update invitation status */
@@ -712,29 +723,39 @@ exports.wfGetMyWorkspaces = onCall({ region: 'us-central1' }, async (request) =>
       .get(),
   ]);
 
-  const memberships = membershipsSnap.docs.map(d => {
+  const _ms = ts => ts?.seconds ? ts.seconds * 1000 : null;
+
+  const active = [], past = [];
+  membershipsSnap.docs.forEach(d => {
     const data = d.data();
-    return {
-      membershipId:    d.id,
-      businessId:      data.businessId,
-      businessName:    data.businessName,
-      businessType:    data.businessType,
-      businessLogo:    data.businessLogo,
-      role:            data.role,
-      roleTitle:       data.roleTitle,
-      permissions:     data.permissions,
-      branches:        data.branches,
-      activeBranchId:  data.activeBranchId,
-      employmentType:  data.employmentType,
-      status:          data.status,
-      clockedIn:       data.clockedIn,
-      addedAt:         data.addedAt?.seconds ? data.addedAt.seconds * 1000 : null,
-      startDate:       data.startDate?.seconds ? data.startDate.seconds * 1000 : null,
-      endDate:         data.endDate?.seconds ? data.endDate.seconds * 1000 : null,
+    const m = {
+      membershipId:     d.id,
+      businessId:       data.businessId,
+      businessName:     data.businessName,
+      businessType:     data.businessType,
+      businessLogo:     data.businessLogo || '',
+      brandColor:       data.brandColor || '',
+      role:             data.role,
+      roleTitle:        data.roleTitle || '',
+      department:       data.department || '',
+      permissions:      data.permissions || [],
+      branches:         data.branches || [],
+      activeBranchId:   data.activeBranchId || null,
+      activeBranchName: data.activeBranchName || null,
+      employmentType:   data.employmentType,
+      status:           data.status,
+      clockedIn:        data.clockedIn || false,
+      onBreak:          data.onBreak   || false,
+      addedAt:          _ms(data.addedAt),
+      startDate:        _ms(data.startDate),
+      endDate:          _ms(data.endDate),
+      terminatedAt:     _ms(data.terminatedAt),
     };
+    if (data.status === 'active') active.push(m);
+    else past.push(m);
   });
 
-  const pendingInvites = invitesSnap.docs.map(d => {
+  const pending = invitesSnap.docs.map(d => {
     const data = d.data();
     return {
       invitationId:   d.id,
@@ -742,18 +763,18 @@ exports.wfGetMyWorkspaces = onCall({ region: 'us-central1' }, async (request) =>
       businessId:     data.businessId,
       businessName:   data.businessName,
       businessType:   data.businessType,
-      businessLogo:   data.businessLogo,
+      businessLogo:   data.businessLogo || '',
       role:           data.role,
-      roleTitle:      data.roleTitle,
+      roleTitle:      data.roleTitle || '',
       employmentType: data.employmentType,
-      message:        data.message,
-      inviterName:    data.inviterName,
-      sentAt:         data.sentAt?.seconds ? data.sentAt.seconds * 1000 : null,
-      expiresAt:      data.expiresAt?.seconds ? data.expiresAt.seconds * 1000 : null,
+      message:        data.message || '',
+      inviterName:    data.inviterName || '',
+      sentAt:         _ms(data.sentAt),
+      expiresAt:      _ms(data.expiresAt),
     };
   });
 
-  return { memberships, pendingInvites };
+  return { active, past, pending };
 });
 
 /* ═══════════════════════════════════════════════════════════════
@@ -833,6 +854,268 @@ exports.wfClockOut = onCall({ region: 'us-central1' }, async (request) => {
     durationMinutes: durationMin,
     hoursWorked:     (durationMin / 60).toFixed(2),
   };
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   wfGenerateStaffQR
+   Create an open invitation for QR-code-based staff onboarding.
+   No target email — anyone who scans gets to review and accept.
+═══════════════════════════════════════════════════════════════ */
+exports.wfGenerateStaffQR = onCall({ region: 'us-central1' }, async (request) => {
+  const callerUid      = _assertAuth(request);
+  const d              = request.data || {};
+  const businessId     = _sanitise(d.businessId, 100);
+  const role           = _sanitise(d.role, 50) || 'cashier';
+  const roleTitle      = _sanitise(d.roleTitle, 100);
+  const department     = _sanitise(d.department, 100);
+  const employmentType = VALID_EMPLOYMENT_TYPES.includes(d.employmentType) ? d.employmentType : 'permanent';
+  const maxUses        = Math.min(Math.max(Number(d.maxUses) || 1, 1), 100);
+
+  if (!businessId) throw new HttpsError('invalid-argument', 'businessId is required.');
+
+  await _assertBusinessPermission(callerUid, businessId, 'users');
+
+  const bizSnap = await db.collection('businesses').doc(businessId).get();
+  if (!bizSnap.exists) throw new HttpsError('not-found', 'Business not found.');
+  const biz = bizSnap.data();
+
+  const permissions = Array.isArray(d.permissions)
+    ? d.permissions.filter(p => ALL_PERMISSIONS.includes(p))
+    : (ROLE_PERMISSIONS[role] || []);
+
+  const invitationCode = _makeInviteCode();
+  const expiresAt      = new Date();
+  expiresAt.setDate(expiresAt.getDate() + INVITATION_TTL_DAYS);
+
+  const invRef = await db.collection('workspaceInvitations').add({
+    invitationCode,
+    businessId,
+    businessName:    biz.name || '',
+    businessType:    biz.type || '',
+    businessLogo:    biz.logo || biz.logoUrl || '',
+    brandColor:      biz.brandColor || '',
+    invitedEmail:    '',
+    invitedPhone:    '',
+    invitedUid:      '',
+    role,
+    roleTitle:       roleTitle || '',
+    department:      department || '',
+    permissions,
+    branches:        Array.isArray(d.branches) ? d.branches : [],
+    employmentType,
+    startDate:       d.startDate ? admin.firestore.Timestamp.fromDate(new Date(d.startDate)) : null,
+    endDate:         d.endDate   ? admin.firestore.Timestamp.fromDate(new Date(d.endDate))   : null,
+    salary:          d.salary ? Number(d.salary) : null,
+    salaryType:      _sanitise(d.salaryType, 20) || null,
+    message:         _sanitise(d.message, 500),
+    notes:           _sanitise(d.notes, 500),
+    status:          'pending',
+    isQrInvitation:  true,
+    maxUses,
+    usedCount:       0,
+    sentAt:          admin.firestore.FieldValue.serverTimestamp(),
+    expiresAt:       admin.firestore.Timestamp.fromDate(expiresAt),
+    invitedBy:       callerUid,
+    inviterName:     _sanitise(d.inviterName, 100),
+  });
+
+  await _auditLog('staff_qr_generated', {
+    callerUid, businessId, role, invitationId: invRef.id, invitationCode, maxUses,
+  });
+
+  return {
+    success:        true,
+    invitationId:   invRef.id,
+    invitationCode,
+    deepLink:       `workspace-invite.html?code=${invitationCode}`,
+    expiresAt:      expiresAt.toISOString(),
+    maxUses,
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   wfClockBreak / wfClockResume
+   Record break start/end within an active shift session.
+═══════════════════════════════════════════════════════════════ */
+exports.wfClockBreak = onCall({ region: 'us-central1' }, async (request) => {
+  const uid          = _assertAuth(request);
+  const membershipId = _sanitise(request.data?.membershipId, 100);
+  const sessionId    = _sanitise(request.data?.shiftSessionId, 100);
+
+  const snap = await db.collection('workspaceMemberships').doc(membershipId).get();
+  if (!snap.exists || snap.data().uid !== uid) {
+    throw new HttpsError('not-found', 'Membership not found.');
+  }
+  const m = snap.data();
+  if (!m.clockedIn)  throw new HttpsError('failed-precondition', 'Not clocked in.');
+  if (m.onBreak)     throw new HttpsError('already-exists', 'Already on break.');
+
+  await snap.ref.update({
+    onBreak:        true,
+    breakStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  if (sessionId) {
+    const sSnap = await db.collection('shiftSessions').doc(sessionId).get();
+    if (sSnap.exists) {
+      const existing = sSnap.data().breaks || [];
+      existing.push({ startedAt: new Date().toISOString(), endedAt: null });
+      await sSnap.ref.update({ breaks: existing });
+    }
+  }
+
+  await _auditLog('shift_break_started', { uid, membershipId, sessionId });
+  return { success: true };
+});
+
+exports.wfClockResume = onCall({ region: 'us-central1' }, async (request) => {
+  const uid          = _assertAuth(request);
+  const membershipId = _sanitise(request.data?.membershipId, 100);
+  const sessionId    = _sanitise(request.data?.shiftSessionId, 100);
+
+  const snap = await db.collection('workspaceMemberships').doc(membershipId).get();
+  if (!snap.exists || snap.data().uid !== uid) {
+    throw new HttpsError('not-found', 'Membership not found.');
+  }
+  const m = snap.data();
+  if (!m.onBreak) throw new HttpsError('failed-precondition', 'Not currently on break.');
+
+  const now            = new Date();
+  const breakStartedAt = m.breakStartedAt?.toDate() || now;
+  const breakMinutes   = Math.round((now - breakStartedAt) / 60000);
+
+  await snap.ref.update({
+    onBreak:           false,
+    breakStartedAt:    null,
+    totalBreakMinutes: admin.firestore.FieldValue.increment(breakMinutes),
+  });
+
+  if (sessionId) {
+    const sSnap = await db.collection('shiftSessions').doc(sessionId).get();
+    if (sSnap.exists) {
+      const breaks = (sSnap.data().breaks || []).map((b, i, arr) => {
+        if (i === arr.length - 1 && !b.endedAt) return { ...b, endedAt: now.toISOString(), durationMinutes: breakMinutes };
+        return b;
+      });
+      await sSnap.ref.update({ breaks, totalBreakMinutes: admin.firestore.FieldValue.increment(breakMinutes) });
+    }
+  }
+
+  await _auditLog('shift_break_ended', { uid, membershipId, breakMinutes });
+  return { success: true, breakMinutes };
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   wfGetProfessionalProfile
+   Returns the portable professional profile of any SOKONI user.
+   Sensitive fields (email) only returned to the profile owner.
+═══════════════════════════════════════════════════════════════ */
+exports.wfGetProfessionalProfile = onCall({ region: 'us-central1' }, async (request) => {
+  const callerUid = _assertAuth(request);
+  const targetUid = _sanitise(request.data?.uid, 100) || callerUid;
+
+  const [profileSnap, userSnap, membershipsSnap] = await Promise.all([
+    db.collection('professionalProfiles').doc(targetUid).get(),
+    db.collection('users').doc(targetUid).get(),
+    db.collection('workspaceMemberships')
+      .where('uid', '==', targetUid)
+      .orderBy('addedAt', 'desc')
+      .limit(50)
+      .get(),
+  ]);
+
+  const profile = profileSnap.exists ? profileSnap.data() : {};
+  const user    = userSnap.exists    ? userSnap.data()    : {};
+
+  const employmentHistory = membershipsSnap.docs.map(d => {
+    const data = d.data();
+    return {
+      membershipId:   d.id,
+      businessId:     data.businessId,
+      businessName:   data.businessName,
+      businessType:   data.businessType,
+      businessLogo:   data.businessLogo || '',
+      role:           data.role,
+      roleTitle:      data.roleTitle || '',
+      department:     data.department || '',
+      employmentType: data.employmentType,
+      status:         data.status,
+      addedAt:        data.addedAt?.seconds       ? data.addedAt.seconds * 1000       : null,
+      endDate:        data.endDate?.seconds        ? data.endDate.seconds * 1000        : null,
+      terminatedAt:   data.terminatedAt?.seconds   ? data.terminatedAt.seconds * 1000   : null,
+    };
+  });
+
+  const activeCount = employmentHistory.filter(e => e.status === 'active').length;
+  const uniqueBizIds = [...new Set(membershipsSnap.docs.map(d => d.data().businessId))];
+
+  /* Earliest employment date → years of experience */
+  const earliest = membershipsSnap.docs.reduce((min, d) => {
+    const s = d.data().addedAt?.seconds;
+    return (s && s < min) ? s : min;
+  }, Infinity);
+  const yearsExp = earliest < Infinity ? ((Date.now() / 1000 - earliest) / 31536000).toFixed(1) : '0';
+
+  return {
+    uid:                targetUid,
+    name:               user.name || user.displayName || '',
+    email:              targetUid === callerUid ? (user.email || '') : '',
+    avatar:             user.avatar || user.photoURL || '',
+    headline:           profile.headline || '',
+    summary:            profile.summary  || '',
+    skills:             profile.skills   || [],
+    languages:          profile.languages || [],
+    certifications:     profile.certifications || [],
+    training:           profile.training  || [],
+    achievements:       profile.achievements || [],
+    verificationStatus: user.verificationStatus || 'unverified',
+    employmentHistory,
+    stats: {
+      totalEmployers:   uniqueBizIds.length,
+      activeWorkspaces: activeCount,
+      yearsExperience:  yearsExp,
+    },
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   wfUpdateProfessionalProfile
+   Employee updates their own portable career profile.
+═══════════════════════════════════════════════════════════════ */
+exports.wfUpdateProfessionalProfile = onCall({ region: 'us-central1' }, async (request) => {
+  const uid = _assertAuth(request);
+  const d   = request.data || {};
+  const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+
+  if (typeof d.headline === 'string')
+    update.headline = _sanitise(d.headline, 120);
+  if (typeof d.summary === 'string')
+    update.summary = _sanitise(d.summary, 1000);
+  if (Array.isArray(d.skills))
+    update.skills = d.skills.slice(0, 30).map(s => _sanitise(String(s), 50)).filter(Boolean);
+  if (Array.isArray(d.languages))
+    update.languages = d.languages.slice(0, 10).map(l => _sanitise(String(l), 30)).filter(Boolean);
+  if (Array.isArray(d.certifications))
+    update.certifications = d.certifications.slice(0, 20).map(c => ({
+      name:   _sanitise(c.name   || '', 100),
+      issuer: _sanitise(c.issuer || '', 100),
+      year:   Number(c.year)  || null,
+      url:    _sanitise(c.url   || '', 200),
+    }));
+  if (Array.isArray(d.training))
+    update.training = d.training.slice(0, 30).map(t => ({
+      name:     _sanitise(t.name     || '', 100),
+      provider: _sanitise(t.provider || '', 100),
+      year:     Number(t.year)  || null,
+      hours:    Number(t.hours) || null,
+    }));
+  if (Array.isArray(d.achievements))
+    update.achievements = d.achievements.slice(0, 20).map(a => _sanitise(String(a), 200)).filter(Boolean);
+
+  await db.collection('professionalProfiles').doc(uid).set(update, { merge: true });
+  await _auditLog('professional_profile_updated', { uid });
+
+  return { success: true };
 });
 
 /* ═══════════════════════════════════════════════════════════════

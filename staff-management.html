@@ -258,9 +258,14 @@
       <h1><i class="fas fa-people-group" style="color:var(--g);margin-right:8px;"></i>Staff Management</h1>
       <p>Invite people to join your business. They keep their personal SOKONI account.</p>
     </div>
-    <button class="sm-btn sm-btn-primary" onclick="openInviteModal()">
-      <i class="fas fa-plus"></i> Invite Staff
-    </button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="sm-btn sm-btn-primary" onclick="openInviteModal()">
+        <i class="fas fa-paper-plane"></i> Invite Staff
+      </button>
+      <button class="sm-btn sm-btn-ghost" onclick="openQrModal()" title="Generate a QR code for staff to scan and join">
+        <i class="fas fa-qrcode"></i> Staff QR
+      </button>
+    </div>
   </div>
 
   <!-- Business selector -->
@@ -364,13 +369,38 @@
           </select>
         </div>
         <div>
+          <label class="sm-label">Department (optional)</label>
+          <input type="text" class="sm-input" id="invDepartment" placeholder="e.g. Front Office, Kitchen, Warehouse">
+        </div>
+        <div>
           <label class="sm-label">Start Date</label>
           <input type="date" class="sm-input" id="invStartDate">
+        </div>
+        <div>
+          <label class="sm-label">End Date (optional)</label>
+          <input type="date" class="sm-input" id="invEndDate">
+        </div>
+        <div>
+          <label class="sm-label">Salary (optional)</label>
+          <div style="display:flex;gap:8px;">
+            <input type="number" class="sm-input" id="invSalary" placeholder="Amount" style="flex:1;">
+            <select class="sm-input sm-select" id="invSalaryType" style="width:110px;">
+              <option value="monthly">Monthly</option>
+              <option value="daily">Daily</option>
+              <option value="hourly">Hourly</option>
+              <option value="per_shift">Per Shift</option>
+              <option value="commission">Commission</option>
+            </select>
+          </div>
         </div>
         <div class="sm-form-full">
           <label class="sm-label">Personal Message (optional)</label>
           <textarea class="sm-input" id="invMessage" rows="2"
             placeholder="Welcome to the team! Looking forward to working with you."></textarea>
+        </div>
+        <div class="sm-form-full">
+          <label class="sm-label">Internal Notes (not shown to employee)</label>
+          <textarea class="sm-input" id="invNotes" rows="2" placeholder="e.g. Probation 3 months, reports to Sarah"></textarea>
         </div>
 
         <div class="sm-form-full">
@@ -421,6 +451,83 @@
   </div>
 </div>
 
+<!-- ── Staff QR modal ─────────────────────────────────────── -->
+<div class="sm-modal-bg" id="qrModal">
+  <div class="sm-modal" style="position:relative;max-width:420px;">
+    <button class="sm-modal-close" onclick="closeQrModal()"><i class="fas fa-times"></i></button>
+
+    <!-- QR Config -->
+    <div id="qrFormSection">
+      <div class="sm-modal-title"><i class="fas fa-qrcode" style="color:var(--g);margin-right:8px;"></i>Staff Scan &amp; Join QR</div>
+      <div class="sm-modal-sub">Anyone who scans this QR will be invited to join as the selected role. Perfect for onboarding day.</div>
+
+      <div class="sm-form" style="margin-top:16px;">
+        <div>
+          <label class="sm-label">Role *</label>
+          <select class="sm-input sm-select" id="qrRole" onchange="qrRoleChanged()">
+            <option value="cashier">Cashier</option>
+            <option value="manager">Manager</option>
+            <option value="supervisor">Supervisor</option>
+            <option value="inventory_officer">Inventory Officer</option>
+            <option value="accountant">Accountant</option>
+            <option value="driver">Driver</option>
+            <option value="receptionist">Receptionist</option>
+            <option value="waiter">Waiter</option>
+            <option value="security">Security</option>
+            <option value="cleaner">Cleaner</option>
+          </select>
+        </div>
+        <div>
+          <label class="sm-label">Department (optional)</label>
+          <input type="text" class="sm-input" id="qrDepartment" placeholder="e.g. Kitchen, Checkout, Warehouse">
+        </div>
+        <div>
+          <label class="sm-label">Employment Type</label>
+          <select class="sm-input sm-select" id="qrEmployType">
+            <option value="permanent">Permanent</option>
+            <option value="contract">Contract</option>
+            <option value="one_day">One Day</option>
+            <option value="one_shift">One Shift</option>
+          </select>
+        </div>
+        <div>
+          <label class="sm-label">Max Uses <span style="font-weight:400;text-transform:none;letter-spacing:0;">(how many people can scan)</span></label>
+          <input type="number" class="sm-input" id="qrMaxUses" value="1" min="1" max="100">
+        </div>
+      </div>
+
+      <div id="qrError" style="display:none;color:var(--red);font-size:13px;margin-top:12px;padding:10px 14px;background:var(--red-dim);border-radius:8px;border:1px solid rgba(255,77,77,.2);"></div>
+
+      <div class="sm-btn-row">
+        <button class="sm-btn sm-btn-primary" onclick="generateQr()" id="genQrBtn">
+          <i class="fas fa-qrcode"></i> Generate QR
+        </button>
+        <button class="sm-btn sm-btn-ghost" onclick="closeQrModal()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- QR Result -->
+    <div id="qrResultSection" style="display:none;text-align:center;">
+      <div class="sm-modal-title">Scan to Join</div>
+      <div class="sm-modal-sub" id="qrResultMeta" style="margin-bottom:16px;"></div>
+      <div id="qrCanvas" style="display:inline-block;padding:16px;background:#fff;border-radius:12px;margin-bottom:16px;"></div>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:4px;">Invitation Code</div>
+      <div class="sm-invite-code" id="qrCode" style="margin-bottom:16px;"></div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <button class="sm-btn sm-btn-primary" onclick="downloadQr()"><i class="fas fa-download"></i> Download QR</button>
+        <button class="sm-btn sm-btn-ghost" onclick="shareQr()"><i class="fas fa-share-nodes"></i> Share</button>
+        <button class="sm-btn sm-btn-ghost" onclick="closeQrModal();loadMembers()">Done</button>
+      </div>
+      <div style="font-size:11px;color:var(--sub);margin-top:12px;">
+        Expires in 7 days · <span id="qrUsesLabel"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- QR code library (lightweight, client-side, no server needed) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
 <script type="module">
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
 import { db } from './firebase.js';
@@ -428,6 +535,7 @@ import { collection, query, where, getDocs, orderBy } from 'https://www.gstatic.
 
 const fns         = getFunctions();
 const _invite     = httpsCallable(fns, 'wfInviteEmployee');
+const _generateQr = httpsCallable(fns, 'wfGenerateStaffQR');
 const _revoke     = httpsCallable(fns, 'wfRevokeMembership');
 const _updateRole = httpsCallable(fns, 'wfUpdateRole');
 const _updatePerms= httpsCallable(fns, 'wfUpdatePermissions');
@@ -642,6 +750,104 @@ function _getSelectedPerms() {
 }
 
 /* ── Send invite ──────────────────────────────────────────── */
+/* ── QR generation ────────────────────────────────────────── */
+var _qrInstance = null;
+var _qrInvLink  = '';
+var _qrInvCode  = '';
+
+window.openQrModal = function() {
+  document.getElementById('qrFormSection').style.display  = '';
+  document.getElementById('qrResultSection').style.display = 'none';
+  document.getElementById('qrError').style.display = 'none';
+  var c = document.getElementById('qrCanvas');
+  if (c) c.innerHTML = '';
+  _qrInstance = null;
+  document.getElementById('qrModal').classList.add('open');
+};
+window.closeQrModal = function() {
+  document.getElementById('qrModal').classList.remove('open');
+};
+window.qrRoleChanged = function() {};
+
+window.generateQr = async function() {
+  const role      = document.getElementById('qrRole').value;
+  const dept      = (document.getElementById('qrDepartment').value || '').trim();
+  const empType   = document.getElementById('qrEmployType').value;
+  const maxUses   = parseInt(document.getElementById('qrMaxUses').value, 10) || 1;
+  const errEl     = document.getElementById('qrError');
+  const btn       = document.getElementById('genQrBtn');
+
+  if (!_activeBizId) { errEl.textContent = 'Select a business first.'; errEl.style.display = 'block'; return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating…';
+  errEl.style.display = 'none';
+
+  try {
+    const res = await _generateQr({
+      businessId:     _activeBizId,
+      role,
+      department:     dept || null,
+      employmentType: empType,
+      maxUses,
+      inviterName:    _user.name || _user.displayName || '',
+    });
+
+    const d     = res.data;
+    _qrInvCode  = d.invitationCode;
+    _qrInvLink  = `${location.origin}/workspace-invite.html?code=${d.invitationCode}`;
+
+    /* Render QR code */
+    const canvasEl = document.getElementById('qrCanvas');
+    canvasEl.innerHTML = '';
+    if (window.QRCode) {
+      _qrInstance = new QRCode(canvasEl, {
+        text:          _qrInvLink,
+        width:         200,
+        height:        200,
+        colorDark:     '#000000',
+        colorLight:    '#ffffff',
+        correctLevel:  QRCode.CorrectLevel.M,
+      });
+    } else {
+      canvasEl.innerHTML = `<div style="padding:20px;font-size:12px;color:#333;">${_qrInvLink}</div>`;
+    }
+
+    document.getElementById('qrCode').textContent       = d.invitationCode;
+    document.getElementById('qrResultMeta').textContent = `Role: ${_roleName(role)} · ${empType}` + (dept ? ` · ${dept}` : '');
+    document.getElementById('qrUsesLabel').textContent  = maxUses === 1 ? 'Single use' : `Up to ${maxUses} people`;
+    document.getElementById('qrFormSection').style.display  = 'none';
+    document.getElementById('qrResultSection').style.display = '';
+  } catch (e) {
+    errEl.textContent = e.message || 'Failed to generate QR. Please try again.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-qrcode"></i> Generate QR';
+  }
+};
+
+window.downloadQr = function() {
+  var canvasEl = document.getElementById('qrCanvas');
+  var img = canvasEl.querySelector('img');
+  var canvas = canvasEl.querySelector('canvas');
+  var src = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+  if (!src) return;
+  var a = document.createElement('a');
+  a.href = src;
+  a.download = 'sokoni-staff-qr-' + _qrInvCode + '.png';
+  a.click();
+};
+
+window.shareQr = function() {
+  if (navigator.share) {
+    navigator.share({ title: 'Join our team on SOKONI', text: `Scan this QR or use code: ${_qrInvCode}`, url: _qrInvLink });
+  } else {
+    try { navigator.clipboard.writeText(_qrInvLink); alert('Link copied!'); } catch (_) { prompt('Copy this link:', _qrInvLink); }
+  }
+};
+
+/* ── Send invite ──────────────────────────────────────────── */
 window.sendInvite = async function() {
   const email    = (document.getElementById('invEmail').value || '').trim();
   const phone    = (document.getElementById('invPhone').value || '').trim();
@@ -664,9 +870,14 @@ window.sendInvite = async function() {
       phone:          phone || null,
       role,
       roleTitle:      document.getElementById('invTitle').value.trim() || null,
+      department:     (document.getElementById('invDepartment')?.value || '').trim() || null,
       employmentType: document.getElementById('invEmployType').value,
       startDate:      document.getElementById('invStartDate').value || null,
+      endDate:        (document.getElementById('invEndDate')?.value || '') || null,
+      salary:         document.getElementById('invSalary')?.value ? Number(document.getElementById('invSalary').value) : null,
+      salaryType:     document.getElementById('invSalaryType')?.value || null,
       message:        document.getElementById('invMessage').value.trim() || null,
+      notes:          (document.getElementById('invNotes')?.value || '').trim() || null,
       permissions:    _getSelectedPerms(),
       inviterName:    _user.name || _user.displayName || '',
     });

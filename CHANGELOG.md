@@ -1,4 +1,84 @@
-﻿﻿## [2026-07-13] — Workforce Identity System v1.0 — "One Person. One Account. Unlimited Businesses."
+﻿## [2026-07-13] — Workforce Identity Platform v2.0 — Instant Workspace Switching, Professional Profile, QR Onboarding
+
+### Summary
+
+Enterprise-grade upgrade to the Workforce Identity layer. Workspace switching is now instant with
+zero reload, zero logout. A Workspace Context Bar slides in below the header showing business name,
+logo/emoji, role badge, and branch — live-updated via `sokoniWorkspaceChanged` CustomEvent. QR-based
+staff onboarding lets employers generate a scannable code employees can use without any email exchange.
+Every employee now has a portable Professional Profile they own and carry across all employers. Break/
+Resume shift management tracks break time within shifts. Enhanced invite fields cover department, end
+date, salary, and internal notes.
+
+### Files Added
+
+| File | Purpose |
+|---|---|
+| `professional-profile.html` | Portable career profile — skills, certifications, training, work history timeline, language badges; editable by owner, viewable by others via `?uid=` param |
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `sokoni-workspace.js` | `applyBranding()` CSS vars; `setActiveBranch()`; `clockBreak()` / `clockResume()`; stores `activeBusinessLogo`, `activeBranchId`, `activeBranchName` on switch |
+| `shared-header.js` | Workspace Context Bar (`#sk-ws-bar`) with animated slide-in; `sokoniWorkspaceChanged` listener drives all UI updates without reload; `_skSwitchWorkspace()` no longer calls `location.reload()` |
+| `staff-management.html` | Staff QR modal (role, dept, max-uses, download/share); enhanced invite form (department, end date, salary + type, internal notes) |
+| `account-centre.html` | Professional Profile link card in Employment panel; Break/Resume buttons on clocked-in workspaces; timeline-style work history with status colours; `acWsBreak()` / `acWsResume()` helpers |
+| `functions/workforce-identity.js` | 5 new CFs appended; `wfGetMyWorkspaces` returns `{active, past, pending}`; `wfAcceptInvitation` stores `brandColor`, `brandAccent`, `department`, `onBreak`, `totalBreakMinutes` |
+| `functions/index.js` | 5 new CF exports added |
+
+### Cloud Functions (new — 5)
+
+| Function | Description |
+|---|---|
+| `wfGenerateStaffQR` | Creates open invitation with `isQrInvitation:true`, `maxUses` 1–100; no target email required |
+| `wfClockBreak` | Sets `onBreak:true`, `breakStartedAt:serverTimestamp` on membership; pushes break record to `shiftSessions` |
+| `wfClockResume` | Sets `onBreak:false`; increments `totalBreakMinutes`; closes break record |
+| `wfGetProfessionalProfile` | Returns portable career profile from `professionalProfiles/{uid}` + verified employment history from `workspaceMemberships` |
+| `wfUpdateProfessionalProfile` | Updates `headline`, `summary`, `skills`, `languages`, `certifications`, `training`, `achievements` — always scoped to caller uid |
+
+### Firestore Collections (new)
+
+| Collection | Purpose |
+|---|---|
+| `professionalProfiles/{uid}` | Employee-owned career data: headline, summary, skills, languages, certifications, training, achievements |
+
+### Custom Events (new)
+
+| Event | Detail | Fired by |
+|---|---|---|
+| `sokoniWorkspaceChanged` | `ws` object or `null` | `SokoniWorkspace.switchTo()`, `setActiveBranch()`, revocation |
+| `sokoniWorkspaceBrandingApplied` | `{ ws }` | `applyBranding()` after CSS vars are written |
+
+### Security
+
+- `wfGetProfessionalProfile`: public read for verified profiles; private draft data only visible to owner
+- `wfUpdateProfessionalProfile`: scoped to `req.auth.uid`; no uid parameter accepted from client
+- `wfGenerateStaffQR`: requires owner or `users` permission on the business
+- QR invitation stores `maxUses` + `usedCount`; server rejects further uses once exhausted
+
+### Performance
+
+- Workspace switch is zero-latency: reads from `sokoniWorkspaces` localStorage cache, fires events, no Firestore round-trip
+- Professional profile lazy-loads on first open; cached in module-level variable for the session
+- Workspace Context Bar CSS transition uses `max-height` + `opacity` — no layout reflow on show/hide
+
+### Backward Compatibility
+
+- No breaking changes: all existing `wfXxx` CF signatures unchanged
+- `wfGetMyWorkspaces` response shape extended (adds `active`, `past`, `pending` keys alongside legacy fields)
+- `_skSwitchWorkspace()` global function signature unchanged (businessId string or null)
+
+### Migration / Deployment
+
+1. Deploy 5 new CFs: `firebase deploy --only functions:wfGenerateStaffQR,functions:wfClockBreak,functions:wfClockResume,functions:wfGetProfessionalProfile,functions:wfUpdateProfessionalProfile`
+2. Add `professional-profile.html` to Firebase Hosting deploy
+3. No new secrets required
+4. No new Firestore indexes required (single-field queries on `professionalProfiles` covered by default)
+
+---
+
+## [2026-07-13] — Workforce Identity System v1.0 — "One Person. One Account. Unlimited Businesses."
 
 ### Summary
 

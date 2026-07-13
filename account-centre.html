@@ -948,6 +948,20 @@
       <h1 class="ac-panel-title">Employment &amp; Workspaces</h1>
       <p class="ac-panel-sub">Your active jobs, pending invitations, and work history across all businesses on SOKONI.</p>
 
+      <!-- Professional Profile card -->
+      <div class="ac-card" style="background:linear-gradient(135deg,rgba(113,255,0,.04) 0%,rgba(113,255,0,.01) 100%);border-color:rgba(113,255,0,.18);">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="width:44px;height:44px;border-radius:12px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">💼</div>
+          <div style="flex:1;">
+            <div style="font-size:14px;font-weight:800;margin-bottom:2px;">Professional Profile</div>
+            <div style="font-size:12px;color:var(--sub);">Your portable career profile — skills, certifications, work history and achievements.</div>
+          </div>
+          <a href="professional-profile.html" class="ac-btn ac-btn-ghost" style="padding:7px 14px;font-size:12px;text-decoration:none;flex-shrink:0;">
+            <i class="fas fa-arrow-right"></i> View
+          </a>
+        </div>
+      </div>
+
       <!-- Active workspaces -->
       <div class="ac-card">
         <div class="ac-card-title">Active Workspaces</div>
@@ -964,9 +978,12 @@
         </div>
       </div>
 
-      <!-- Past jobs -->
+      <!-- Work history timeline -->
       <div class="ac-card">
-        <div class="ac-card-title">Work History</div>
+        <div class="ac-card-title" style="display:flex;align-items:center;justify-content:space-between;">
+          Work History Timeline
+          <a href="professional-profile.html#work-history" style="font-size:11px;color:var(--g);font-weight:600;text-decoration:none;">Full Profile →</a>
+        </div>
         <div id="acEmpHistory">
           <div class="ac-loader"><div class="ac-spinner"></div></div>
         </div>
@@ -978,6 +995,9 @@
         <div class="ac-btn-row">
           <button class="ac-btn ac-btn-ghost" onclick="location.href='staff-management.html'">
             <i class="fas fa-users-gear"></i> Manage Staff
+          </button>
+          <button class="ac-btn ac-btn-ghost" onclick="location.href='professional-profile.html'">
+            <i class="fas fa-id-card"></i> My Profile
           </button>
         </div>
       </div>
@@ -1727,24 +1747,36 @@ async function _loadEmployment() {
 
     if (activeEl) {
       if (!workspaces.length) {
-        activeEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-icon">💼</div><div class="ac-empty-text">Not employed at any business yet.</div></div>';
+        activeEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-icon">💼</div><div class="ac-empty-text">Not employed at any business yet.<br><small>Accept an invitation to join a business.</small></div></div>';
       } else {
         activeEl.innerHTML = workspaces.map(ws => {
-          const isActive = ws.businessId === activeWsId;
-          const roleTitle = ws.roleTitle && ws.roleTitle !== wsRoleName(ws.role) ? ` · ${_esc(ws.roleTitle)}` : '';
-          const empType   = empTypeLabel(ws.employmentType);
-          const clocked   = ws.clockedIn ? '<span class="ac-badge" style="background:rgba(113,255,0,.15);color:#71ff00;">Clocked In</span>' : '';
+          const isActive   = ws.businessId === activeWsId;
+          const roleTitle  = ws.roleTitle && ws.roleTitle !== wsRoleName(ws.role) ? ` · ${_esc(ws.roleTitle)}` : '';
+          const empType    = empTypeLabel(ws.employmentType);
+          const deptLabel  = ws.department ? ` · ${_esc(ws.department)}` : '';
+          const branchLabel = ws.activeBranchName ? ` <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:rgba(255,255,255,.07);margin-left:4px;">${_esc(ws.activeBranchName)}</span>` : '';
+          const clockedBadge = ws.clockedIn && !ws.onBreak
+            ? '<span class="ac-badge" style="background:rgba(113,255,0,.12);color:#71ff00;"><i class="fas fa-circle" style="font-size:6px;margin-right:3px;"></i>Clocked In</span>'
+            : ws.onBreak
+            ? '<span class="ac-badge" style="background:rgba(255,169,77,.12);color:#ffa94d;"><i class="fas fa-pause" style="font-size:8px;margin-right:3px;"></i>On Break</span>'
+            : '';
+          const breakBtn = ws.clockedIn && !ws.onBreak
+            ? `<button class="ac-btn ac-btn-ghost" style="padding:5px 10px;font-size:11px;" onclick="acWsBreak('${_esc(ws.businessId)}')"><i class="fas fa-pause"></i> Break</button>`
+            : ws.onBreak
+            ? `<button class="ac-btn ac-btn-ghost" style="padding:5px 10px;font-size:11px;" onclick="acWsResume('${_esc(ws.businessId)}')"><i class="fas fa-play"></i> Resume</button>`
+            : '';
           return `
-            <div class="ac-biz-card" style="${isActive ? 'border-color:rgba(113,255,0,.4);' : ''}">
-              <div class="ac-biz-icon">${bizEmoji(ws.businessType)}</div>
-              <div class="ac-biz-info" style="flex:1;">
-                <div class="ac-biz-name">${_esc(ws.businessName || 'Business')}${isActive ? ' <span class="ac-badge" style="font-size:10px;">Active</span>' : ''}</div>
-                <div class="ac-biz-meta">${wsRoleName(ws.role)}${roleTitle} · ${empType} ${clocked}</div>
+            <div class="ac-biz-card" style="${isActive ? 'border-color:rgba(113,255,0,.38);background:rgba(113,255,0,.03);' : ''}">
+              <div class="ac-biz-icon">${ws.businessLogo ? `<img src="${_esc(ws.businessLogo)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;" alt="">` : bizEmoji(ws.businessType)}</div>
+              <div class="ac-biz-info" style="flex:1;min-width:0;">
+                <div class="ac-biz-name">${_esc(ws.businessName || 'Business')}${branchLabel}${isActive ? ' <span class="ac-badge" style="font-size:10px;background:rgba(113,255,0,.1);color:#71ff00;">● Active</span>' : ''}</div>
+                <div class="ac-biz-meta" style="margin-top:3px;">${wsRoleName(ws.role)}${roleTitle}${deptLabel} · ${empType} ${clockedBadge}</div>
               </div>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <button class="ac-btn ac-btn-ghost" style="padding:6px 12px;font-size:11px;"
+              <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0;">
+                ${breakBtn}
+                <button class="ac-btn ac-btn-ghost" style="padding:5px 10px;font-size:11px;"
                   onclick="window._skSwitchWorkspace && window._skSwitchWorkspace('${_esc(ws.businessId)}')">
-                  ${isActive ? '✓ Active' : 'Switch'}
+                  ${isActive ? '<i class="fas fa-check"></i> Active' : '<i class="fas fa-right-left"></i> Switch'}
                 </button>
               </div>
             </div>`;
@@ -1799,19 +1831,33 @@ async function _loadEmployment() {
       if (!past.length) {
         historyEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-text">No past employment records.</div></div>';
       } else {
-        historyEl.innerHTML = past.map(p => {
-          const endDate  = p.endDate  ? new Date(p.endDate).toLocaleDateString('en-KE',{year:'numeric',month:'short'}) : 'Ongoing';
-          const startDate = p.addedAt ? new Date(p.addedAt).toLocaleDateString('en-KE',{year:'numeric',month:'short'}) : '–';
-          const statusLabel = { terminated:'Terminated', resigned:'Resigned', completed:'Completed', suspended:'Suspended' }[p.status] || p.status;
-          return `
-            <div class="ac-device-card">
-              <div class="ac-device-icon">${bizEmoji2(p.businessType)}</div>
-              <div class="ac-device-info">
-                <div class="ac-device-name">${_esc(p.businessName || 'Business')}</div>
-                <div class="ac-device-meta">${wsRoleName2(p.role)} · ${startDate} – ${endDate} · ${statusLabel}</div>
+        const statusColor = { terminated:'#ff4d4d', resigned:'#ffa94d', completed:'#71ff00', suspended:'#ffa94d', expired:'#888' };
+        historyEl.innerHTML = `<div style="position:relative;padding-left:26px;">
+          <div style="position:absolute;left:9px;top:10px;bottom:10px;width:2px;background:rgba(255,255,255,.07);"></div>
+          ${past.map((p, i) => {
+            const endDate   = p.terminatedAt || p.endDate
+              ? new Date(p.terminatedAt || p.endDate).toLocaleDateString('en-KE',{year:'numeric',month:'short'})
+              : 'Ongoing';
+            const startDate = p.addedAt
+              ? new Date(p.addedAt).toLocaleDateString('en-KE',{year:'numeric',month:'short'})
+              : '–';
+            const statusLabel = { terminated:'Terminated', resigned:'Resigned', completed:'Completed', suspended:'Suspended', expired:'Expired' }[p.status] || (p.status || 'Past');
+            const sColor = statusColor[p.status] || '#888';
+            const deptStr = p.department ? ` · ${_esc(p.department)}` : '';
+            return `
+            <div style="position:relative;margin-bottom:${i === past.length-1 ? 0 : 20}px;">
+              <div style="position:absolute;left:-22px;top:8px;width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.15);"></div>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">${bizEmoji2(p.businessType)}</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:13.5px;font-weight:700;">${_esc(p.businessName || 'Business')}</div>
+                  <div style="font-size:11.5px;color:var(--sub);margin-top:2px;">${wsRoleName2(p.role)}${deptStr}</div>
+                  <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:2px;">${startDate} – ${endDate} · <span style="color:${sColor};">${statusLabel}</span></div>
+                </div>
               </div>
             </div>`;
-        }).join('');
+          }).join('')}
+        </div>`;
       }
     }
   } catch (e) {
@@ -1820,6 +1866,28 @@ async function _loadEmployment() {
     console.warn('[AccountCentre] loadEmployment error:', e.message);
   }
 }
+
+/* ── Break / Resume helpers (call SokoniWorkspace SDK) ──────── */
+window.acWsBreak = async function(businessId) {
+  if (!window.SokoniWorkspace) return;
+  try {
+    const ws = window.SokoniWorkspace.getActiveWorkspace();
+    if (!ws || ws.businessId !== businessId) window.SokoniWorkspace.switchTo(businessId);
+    await window.SokoniWorkspace.clockBreak();
+    _empLoaded = false;
+    await _loadEmployment();
+  } catch(e) { alert('Break failed: ' + e.message); }
+};
+window.acWsResume = async function(businessId) {
+  if (!window.SokoniWorkspace) return;
+  try {
+    const ws = window.SokoniWorkspace.getActiveWorkspace();
+    if (!ws || ws.businessId !== businessId) window.SokoniWorkspace.switchTo(businessId);
+    await window.SokoniWorkspace.clockResume();
+    _empLoaded = false;
+    await _loadEmployment();
+  } catch(e) { alert('Resume failed: ' + e.message); }
+};
 
 /* ── Panel switching ────────────────────────────────────────── */
 window.acShow = function(id) {
