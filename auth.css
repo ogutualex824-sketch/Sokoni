@@ -16,20 +16,33 @@ body{
 
 /* BACKGROUND */
 
+/* Decorative only. It must NEVER receive a pointer event.
+ *
+ * This layer is an empty <div> painting a background image. It was intercepting every tap on
+ * the login page — email, password, Remember Me, Sign In, Google, Facebook, Phone — because it
+ * is position:fixed, covers the viewport, and defaulted to pointer-events:auto.
+ *
+ * pointer-events:none is the correct fix for a decorative layer, and it is also load-bearing
+ * defence: sokoni-sheet.js promotes full-screen fixed elements above the header, and it skips
+ * anything that cannot receive pointer events. Belt and braces — the design is untouched. */
 .auth-bg{
     position:fixed;
     inset:0;
     background:url("assets/backG2.jpeg") center/cover no-repeat;
     filter:brightness(0.3) saturate(1.2);
     z-index:0;
+    pointer-events:none;
 }
 
 /* OVERLAY GRADIENT */
 
+/* The gradient wash. Decorative, and it inherits nothing — a pseudo-element gets its own
+   pointer-events, so it must be told explicitly or it keeps eating taps. */
 .auth-bg::after{
     content:"";
     position:absolute;
     inset:0;
+    pointer-events:none;
     background:radial-gradient(
         circle at 30% 50%,
         rgba(113,255,0,0.08),

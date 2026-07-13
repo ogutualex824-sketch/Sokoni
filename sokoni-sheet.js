@@ -363,6 +363,29 @@
       var b = el.getBoundingClientRect();
       if (b.width < vw * 0.92 || b.height < vh * 0.92) continue;
 
+      /* ── A SHEET IS SOMETHING THE USER INTERACTS WITH ──────────────────────────────────
+       * Every test above is GEOMETRIC, and geometry cannot tell a modal apart from a
+       * decorative backdrop. login.html's `<div class="auth-bg"></div>` is a full-screen
+       * background image: position:fixed, inset:0, z-index:0 — it satisfies every condition
+       * above. It was being promoted to z-index 100010, which put an empty div on top of the
+       * entire login form. The Sign In button, the Google button and every input became
+       * unclickable on desktop, iOS and Android. Login was impossible by pointer.
+       *
+       * So: if it has no content and is not declared a dialog, it is decoration, not a sheet.
+       * Promoting it can only ever create an invisible click-eater — there is nothing inside
+       * it for the user to reach.
+       *
+       * A bare scrim is excluded by this too, and that is the right call: leaving a scrim
+       * beneath the header is cosmetic, whereas promoting one above the page is a trap. */
+      var isDialog = el.getAttribute('role') === 'dialog'
+                  || el.getAttribute('aria-modal') === 'true';
+      var hasContent = el.children.length > 0
+                    || (el.textContent || '').trim().length > 0;
+      if (!isDialog && !hasContent) continue;
+
+      /* It cannot block anything, so it does not need hoisting either. */
+      if (st.pointerEvents === 'none') continue;
+
       el.style.setProperty('z-index', 'var(--sk-z-sheet,100010)', 'important');
       el.__skPromoted = true;
       el.setAttribute('data-sk-promoted', String(z));    /* visible in DevTools; auditable */
