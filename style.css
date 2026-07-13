@@ -1184,13 +1184,30 @@ body{
     transition: all 0.25s;
 }
 
+/* The icons are now inline SVG (they used to be Font Awesome glyphs, which render as
+   NOTHING if the CDN is slow or blocked — six empty circles). currentColor makes them
+   inherit the link colour, so every hover state below still works unchanged. */
+.socials a svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+    pointer-events: none;      /* the <a> owns the click, not the glyph */
+}
+.socials a:focus-visible {
+    outline: 2px solid var(--sk-green, #71ff00);
+    outline-offset: 2px;
+}
+
 .socials a:hover { transform: translateY(-3px); }
-.socials a[title="Facebook"]:hover  { background: rgba(24,119,242,0.18);  border-color: rgba(24,119,242,0.5);  color: #4f9cf9; }
-.socials a[title="Twitter / X"]:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); color: #fff; }
-.socials a[title="Instagram"]:hover { background: linear-gradient(135deg,rgba(214,41,118,0.2),rgba(131,58,180,0.15)); border-color: rgba(214,41,118,0.45); color: #e1306c; }
-.socials a[title="TikTok"]:hover    { background: rgba(105,201,208,0.12); border-color: rgba(105,201,208,0.4);  color: #69c9d0; }
-.socials a[title="YouTube"]:hover   { background: rgba(255,0,0,0.12);     border-color: rgba(255,0,0,0.35);    color: #ff4444; }
-.socials a[title="WhatsApp"]:hover  { background: rgba(37,211,102,0.12);  border-color: rgba(37,211,102,0.4);  color: #25d366; }
+/* Keyed on aria-label, not title — the markup now carries a real accessible name
+   instead of a tooltip, and these brand hovers must follow it or they silently stop
+   matching. */
+.socials a[aria-label*="Facebook"]:hover  { background: rgba(24,119,242,0.18);  border-color: rgba(24,119,242,0.5);  color: #4f9cf9; }
+.socials a[aria-label*="X"]:hover         { background: rgba(255,255,255,0.1);  border-color: rgba(255,255,255,0.3); color: #fff; }
+.socials a[aria-label*="Instagram"]:hover { background: linear-gradient(135deg,rgba(214,41,118,0.2),rgba(131,58,180,0.15)); border-color: rgba(214,41,118,0.45); color: #e1306c; }
+.socials a[aria-label*="TikTok"]:hover    { background: rgba(105,201,208,0.12); border-color: rgba(105,201,208,0.4);  color: #69c9d0; }
+.socials a[aria-label*="YouTube"]:hover   { background: rgba(255,0,0,0.12);     border-color: rgba(255,0,0,0.35);    color: #ff4444; }
+.socials a[aria-label*="WhatsApp"]:hover  { background: rgba(37,211,102,0.12);  border-color: rgba(37,211,102,0.4);  color: #25d366; }
 
 /* LINKS */
 .footer-links h3 {
@@ -1276,21 +1293,37 @@ body{
     justify-content: center;
 }
 
+/* Payment marks.
+   Each source PNG has a different aspect ratio (M-Pesa 250x98, Visa 215x68,
+   Mastercard 203x119, PayPal 246x70). With `width:auto` every chip came out a
+   different width — 53px, 60px, 42px, 64px — so the row looked ragged.
+
+   A FIXED chip with object-fit:contain gives one uniform size and letterboxes each
+   mark inside it, so none of them is ever stretched. The chip is near-white because
+   the marks are dark-on-light brand artwork: on a 6%-white chip they were muddy and
+   the M-Pesa mark was barely readable. Card brands are always presented on light
+   ground for exactly this reason. */
 .payments img {
-    height: 32px;
-    width: auto;
+    width: 62px;
+    height: 38px;
     object-fit: contain;
-    background: rgba(255,255,255,0.06);
-    padding: 5px 10px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.08);
-    transition: all 0.2s;
+    background: rgba(255,255,255,0.94);
+    padding: 6px 9px;
+    border-radius: 9px;
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.28);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .payments img:hover {
     transform: translateY(-2px);
-    background: rgba(255,255,255,0.1);
-    border-color: rgba(255,255,255,0.15);
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.36);
+}
+
+@media (max-width: 420px) {
+    .payments { gap: 8px; }
+    .payments img { width: 56px; height: 35px; }
 }
 
 /* TABLET â€” 3 columns so brand + 4 links have no orphan */
