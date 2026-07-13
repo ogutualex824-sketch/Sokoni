@@ -441,6 +441,21 @@
   <div class="law-badge">⚖️ SOKONI Legal Hub</div>
   <h1>Your Legal Partner<br>in Kenya</h1>
   <p>Find verified advocates, generate court-ready legal documents, book consultations and know your rights  all in one place.</p>
+  <!-- Global search. legalGlobalSearch(), heroSearchLawyers(), debouncedLegalSearch() and the
+       #legalSearchResults pane below were all written and wired — but the input they read
+       (#heroLawyerSearch) was never added to the page, so the whole search feature was
+       unreachable dead code. This is that input. -->
+  <div style="max-width:560px;margin:0 auto 16px;position:relative;">
+    <input id="heroLawyerSearch" type="search" autocomplete="off"
+           placeholder="Search advocates, documents or your rights…"
+           aria-label="Search the Legal Hub"
+           oninput="debouncedLegalSearch(this.value)"
+           onsearch="debouncedLegalSearch(this.value)"
+           style="width:100%;box-sizing:border-box;padding:14px 16px 14px 44px;min-height:48px;font-size:16px;font-family:inherit;
+                  background:rgba(255,255,255,0.05);border:1px solid rgba(113,255,0,0.25);border-radius:14px;color:#fff;outline:none;">
+    <span aria-hidden="true"
+          style="position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:15px;opacity:.6;pointer-events:none;">🔎</span>
+  </div>
   <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
     <button type="button" onclick="showLawTab('lawyers');setTimeout(()=>{const s=document.getElementById('lawyerSearch');if(s){s.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>s.focus(),400);}},300);" style="padding:13px 24px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;border:none;border-radius:12px;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">👨‍⚖️ Find an Advocate</button>
     <button type="button" onclick="showLawTab('documents')" style="padding:13px 24px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:#c8ff80;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;">📄 Generate Legal Document</button>
