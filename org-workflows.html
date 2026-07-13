@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+  <script src="security.js"></script>
+  <script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>SOKONI — Org Workflows & Controls</title>
+  <meta name="theme-color" content="#71ff00">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="shared-header.js" defer></script>
+  <style>
+    :root {
+      --bg:#050505; --sur:#111; --sur2:#161616; --sur3:#1c1c1c;
+      --bor:rgba(255,255,255,.07); --bor2:rgba(255,255,255,.04);
+      --g:#71ff00; --g-dim:rgba(113,255,0,.06); --g-mid:rgba(113,255,0,.15);
+      --txt:#fff; --sub:rgba(255,255,255,.5); --sub2:rgba(255,255,255,.25);
+      --red:#ff4d4d; --amber:#ffa94d; --blue:#4dabf7; --radius:14px;
+    }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      background:var(--bg); color:var(--txt);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      min-height:100vh; padding-bottom:calc(80px + env(safe-area-inset-bottom,0));
+    }
+    .ow-shell { max-width:860px; margin:0 auto; padding:24px 16px; }
+
+    /* ── Page header ── */
+    .ow-page-hdr { display:flex; align-items:center; gap:14px; margin-bottom:24px; flex-wrap:wrap; }
+    .ow-page-title { font-size:20px; font-weight:900; letter-spacing:-.02em; }
+    .ow-page-sub   { font-size:12.5px; color:var(--sub); margin-top:2px; }
+
+    /* ── Tabs ── */
+    .ow-tabs { display:flex; gap:4px; overflow-x:auto; padding-bottom:2px; margin-bottom:22px;
+      scrollbar-width:none; }
+    .ow-tabs::-webkit-scrollbar { display:none; }
+    .ow-tab {
+      padding:8px 16px; border-radius:10px; font-size:13px; font-weight:700;
+      background:none; border:1px solid var(--bor); color:var(--sub);
+      cursor:pointer; white-space:nowrap; transition:all .15s;
+    }
+    .ow-tab:hover  { background:rgba(255,255,255,.05); color:var(--txt); }
+    .ow-tab.active { background:var(--g); color:#000; border-color:var(--g); }
+
+    .ow-panel { display:none; }
+    .ow-panel.active { display:block; }
+
+    /* ── Cards ── */
+    .ow-card { background:var(--sur); border:1px solid var(--bor); border-radius:var(--radius); margin-bottom:14px; }
+    .ow-card-hdr {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:14px 18px; border-bottom:1px solid var(--bor);
+    }
+    .ow-card-title { font-size:13.5px; font-weight:800; }
+    .ow-card-title i { color:var(--g); margin-right:7px; }
+    .ow-card-body { padding:16px 18px; }
+
+    /* ── Workflow chain ── */
+    .ow-chain { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0; }
+    .ow-step {
+      display:flex; align-items:center; gap:8px; flex-shrink:0;
+    }
+    .ow-step-pill {
+      background:var(--sur2); border:1px solid var(--bor); border-radius:10px;
+      padding:7px 14px; font-size:12.5px; font-weight:700;
+    }
+    .ow-step-arrow { color:var(--sub2); font-size:13px; }
+    .ow-step-pill.final { border-color:rgba(113,255,0,.3); color:var(--g); }
+
+    /* ── Workflow item ── */
+    .ow-wf-item {
+      padding:14px 0; border-bottom:1px solid var(--bor); display:flex; gap:12px;
+    }
+    .ow-wf-item:last-child { border-bottom:none; }
+    .ow-wf-icon {
+      width:38px; height:38px; border-radius:10px; flex-shrink:0;
+      background:var(--g-dim); border:1px solid rgba(113,255,0,.12);
+      display:flex; align-items:center; justify-content:center; font-size:17px;
+    }
+    .ow-wf-info { flex:1; }
+    .ow-wf-name { font-size:13.5px; font-weight:700; margin-bottom:6px; }
+    .ow-wf-steps { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+    .ow-wf-step  { font-size:11.5px; color:var(--sub); }
+    .ow-wf-arrow { font-size:10px; color:var(--bor); }
+
+    /* ── Permission request / temp access / delegation rows ── */
+    .ow-list-item {
+      display:flex; align-items:flex-start; gap:12px;
+      padding:12px 0; border-bottom:1px solid var(--bor);
+    }
+    .ow-list-item:last-child { border-bottom:none; }
+    .ow-list-icon {
+      width:36px; height:36px; border-radius:9px; flex-shrink:0;
+      background:rgba(255,255,255,.04); border:1px solid var(--bor);
+      display:flex; align-items:center; justify-content:center; font-size:16px;
+    }
+    .ow-list-info { flex:1; min-width:0; }
+    .ow-list-name { font-size:13.5px; font-weight:700; margin-bottom:2px; }
+    .ow-list-meta { font-size:12px; color:var(--sub); }
+
+    /* ── Status badges ── */
+    .ow-badge {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 9px; border-radius:20px; font-size:10.5px; font-weight:700; flex-shrink:0;
+    }
+    .ow-badge.pending  { background:rgba(255,169,77,.1); color:var(--amber); border:1px solid rgba(255,169,77,.2); }
+    .ow-badge.approved { background:rgba(113,255,0,.1);  color:var(--g);     border:1px solid rgba(113,255,0,.2); }
+    .ow-badge.rejected { background:rgba(255,77,77,.08); color:var(--red);   border:1px solid rgba(255,77,77,.2); }
+    .ow-badge.active   { background:rgba(77,171,247,.1); color:var(--blue);  border:1px solid rgba(77,171,247,.2); }
+
+    /* ── Audit log ── */
+    .ow-audit-table { width:100%; border-collapse:collapse; }
+    .ow-audit-table th {
+      font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+      color:var(--sub2); padding:6px 10px; border-bottom:1px solid var(--bor); text-align:left;
+    }
+    .ow-audit-table td {
+      padding:9px 10px; border-bottom:1px solid var(--bor2); font-size:12.5px; vertical-align:top;
+    }
+    .ow-audit-table tr:last-child td { border-bottom:none; }
+    .ow-audit-action { font-size:11px; font-weight:700; color:var(--g); font-family:monospace; }
+
+    /* ── Step builder ── */
+    .ow-step-builder { display:flex; flex-direction:column; gap:8px; margin:12px 0; }
+    .ow-step-row {
+      display:flex; align-items:center; gap:8px; background:var(--sur2);
+      border:1px solid var(--bor); border-radius:10px; padding:10px 14px;
+    }
+    .ow-step-order { font-size:12px; font-weight:800; color:var(--sub2); width:20px; text-align:center; }
+    .ow-step-row input  { flex:1; background:rgba(255,255,255,.04); border:1px solid var(--bor);
+      border-radius:8px; padding:7px 12px; color:var(--txt); font-size:13px; font-family:inherit; }
+    .ow-step-row input:focus { outline:none; border-color:rgba(113,255,0,.4); }
+    .ow-step-row select { background:rgba(255,255,255,.04); border:1px solid var(--bor);
+      border-radius:8px; padding:7px 10px; color:var(--txt); font-size:13px; font-family:inherit; }
+    .ow-step-row select option { background:#1a1a1a; }
+
+    /* ── Form fields ── */
+    .ow-field { display:flex; flex-direction:column; gap:5px; margin-bottom:13px; }
+    .ow-label { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--sub); }
+    .ow-input, .ow-select {
+      background:rgba(255,255,255,.04); border:1px solid var(--bor);
+      border-radius:9px; padding:10px 13px; color:var(--txt);
+      font-size:14px; font-family:inherit; width:100%;
+    }
+    .ow-input:focus, .ow-select:focus { outline:none; border-color:rgba(113,255,0,.4); }
+    .ow-select option { background:#1a1a1a; }
+
+    /* ── Modal ── */
+    .ow-modal-bg {
+      display:none; position:fixed; inset:0; z-index:9000;
+      background:rgba(0,0,0,.75); backdrop-filter:blur(4px);
+      align-items:center; justify-content:center; padding:16px;
+    }
+    .ow-modal-bg.open { display:flex; }
+    .ow-modal {
+      background:var(--sur); border:1px solid var(--bor); border-radius:20px;
+      padding:26px; width:100%; max-width:480px; position:relative;
+      max-height:90vh; overflow-y:auto;
+    }
+    .ow-modal-title { font-size:17px; font-weight:800; margin-bottom:18px; }
+    .ow-modal-close {
+      position:absolute; top:14px; right:14px;
+      background:rgba(255,255,255,.06); border:1px solid var(--bor);
+      border-radius:8px; width:29px; height:29px; color:var(--sub); cursor:pointer; font-size:13px;
+    }
+
+    /* ── Buttons ── */
+    .ow-btn {
+      padding:9px 18px; border-radius:10px; font-size:13px; font-weight:700;
+      cursor:pointer; border:none; transition:all .15s;
+    }
+    .ow-btn-primary  { background:var(--g); color:#000; }
+    .ow-btn-primary:hover { filter:brightness(1.1); }
+    .ow-btn-ghost    { background:rgba(255,255,255,.05); border:1px solid var(--bor); color:var(--sub); }
+    .ow-btn-ghost:hover { background:rgba(255,255,255,.09); color:var(--txt); }
+    .ow-btn-approve  { background:rgba(113,255,0,.12); border:1px solid rgba(113,255,0,.25); color:var(--g); }
+    .ow-btn-reject   { background:rgba(255,77,77,.08);  border:1px solid rgba(255,77,77,.18);  color:var(--red); }
+    .ow-btn-danger   { background:rgba(255,77,77,.08);  border:1px solid rgba(255,77,77,.18);  color:var(--red); }
+    .ow-btn-sm { padding:5px 11px; font-size:11px; border-radius:8px; }
+    .ow-btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+
+    /* ── Empty / loader ── */
+    .ow-empty  { padding:24px; text-align:center; color:var(--sub2); font-size:13px; }
+    .ow-loader { padding:32px; text-align:center; }
+    .ow-spinner {
+      width:26px; height:26px; border:3px solid var(--g-dim);
+      border-top-color:var(--g); border-radius:50%; margin:0 auto 10px;
+      animation:ow-spin .8s linear infinite;
+    }
+    @keyframes ow-spin { to { transform:rotate(360deg); } }
+
+    /* ── Toast ── */
+    #owToast {
+      position:fixed; bottom:calc(20px + env(safe-area-inset-bottom,0)); left:50%;
+      transform:translateX(-50%) translateY(16px); z-index:9999;
+      background:var(--sur3); border:1px solid var(--bor); border-radius:12px;
+      padding:9px 18px; font-size:13px; font-weight:600;
+      opacity:0; transition:all .22s; pointer-events:none;
+    }
+    #owToast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+<main class="ow-shell">
+
+  <div class="ow-loader" id="owLoader"><div class="ow-spinner"></div></div>
+  <div id="owContent" style="display:none;">
+
+    <div class="ow-page-hdr">
+      <div>
+        <div class="ow-page-title" id="owOrgName">Workflows &amp; Controls</div>
+        <div class="ow-page-sub">Approval Chains · Temp Access · Delegation · Permission Requests · Audit</div>
+      </div>
+      <a href="org-structure.html" id="owStructLink" style="margin-left:auto;text-decoration:none;
+         font-size:12px;font-weight:700;color:var(--sub);padding:7px 14px;
+         border-radius:9px;border:1px solid var(--bor);background:rgba(255,255,255,.03);">
+        <i class="fas fa-sitemap"></i> Structure
+      </a>
+    </div>
+
+    <div class="ow-tabs">
+      <button class="ow-tab active" onclick="owTab('workflows')"  id="tab-workflows"><i class="fas fa-diagram-project"></i> Workflows</button>
+      <button class="ow-tab"        onclick="owTab('tempaccess')" id="tab-tempaccess"><i class="fas fa-clock"></i> Temp Access</button>
+      <button class="ow-tab"        onclick="owTab('delegation')" id="tab-delegation"><i class="fas fa-user-shield"></i> Delegation</button>
+      <button class="ow-tab"        onclick="owTab('requests')"   id="tab-requests"><i class="fas fa-inbox"></i> Requests</button>
+      <button class="ow-tab"        onclick="owTab('audit')"      id="tab-audit"><i class="fas fa-shield-halved"></i> Audit Log</button>
+    </div>
+
+    <!-- ── Approval Workflows ── -->
+    <div class="ow-panel active" id="panel-workflows">
+      <div class="ow-card">
+        <div class="ow-card-hdr">
+          <div class="ow-card-title"><i class="fas fa-diagram-project"></i>Approval Workflows</div>
+          <button class="ow-btn ow-btn-primary ow-btn-sm" onclick="owWfModal()">
+            <i class="fas fa-plus"></i> New Workflow
+          </button>
+        </div>
+        <div class="ow-card-body" id="wfList">
+          <div class="ow-loader"><div class="ow-spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Default templates ── -->
+      <div class="ow-card">
+        <div class="ow-card-hdr">
+          <div class="ow-card-title" style="color:var(--sub);"><i class="fas fa-bolt"></i>Quick Templates</div>
+        </div>
+        <div class="ow-card-body" style="display:flex;flex-wrap:wrap;gap:8px;">
+          <button class="ow-btn ow-btn-ghost ow-btn-sm" onclick="owWfTemplate('refund')">💸 Refund Chain</button>
+          <button class="ow-btn ow-btn-ghost ow-btn-sm" onclick="owWfTemplate('discount')">🏷️ Discount Chain</button>
+          <button class="ow-btn ow-btn-ghost ow-btn-sm" onclick="owWfTemplate('inventory')">📦 Inventory Chain</button>
+          <button class="ow-btn ow-btn-ghost ow-btn-sm" onclick="owWfTemplate('payroll')">💰 Payroll Chain</button>
+          <button class="ow-btn ow-btn-ghost ow-btn-sm" onclick="owWfTemplate('booking')">📅 Booking Chain</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Temporary Access ── -->
+    <div class="ow-panel" id="panel-tempaccess">
+      <div class="ow-card">
+        <div class="ow-card-hdr">
+          <div class="ow-card-title"><i class="fas fa-clock"></i>Active Temp Access Grants</div>
+          <button class="ow-btn ow-btn-primary ow-btn-sm" onclick="owTempModal()">
+            <i class="fas fa-plus"></i> Grant Access
+          </button>
+        </div>
+        <div class="ow-card-body" id="tempList">
+          <div class="ow-loader"><div class="ow-spinner"></div></div>
+        </div>
+      </div>
+      <div class="ow-card" style="border-color:rgba(255,169,77,.15);background:rgba(255,169,77,.02);">
+        <div class="ow-card-body" style="display:flex;align-items:flex-start;gap:10px;">
+          <i class="fas fa-triangle-exclamation" style="color:var(--amber);margin-top:1px;flex-shrink:0;"></i>
+          <div style="font-size:12.5px;color:var(--sub);line-height:1.6;">
+            Temporary access grants automatically revoke when they expire. Managers can also revoke them early.
+            Permissions are re-evaluated at next login if the grant expires during an active session.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Delegation ── -->
+    <div class="ow-panel" id="panel-delegation">
+      <div class="ow-card">
+        <div class="ow-card-hdr">
+          <div class="ow-card-title"><i class="fas fa-user-shield"></i>Active Delegations</div>
+          <button class="ow-btn ow-btn-primary ow-btn-sm" onclick="owDelModal()">
+            <i class="fas fa-plus"></i> Delegate
+          </button>
+        </div>
+        <div class="ow-card-body" id="delList">
+          <div class="ow-loader"><div class="ow-spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Permission Requests ── -->
+    <div class="ow-panel" id="panel-requests">
+      <div class="ow-card">
+        <div class="ow-card-hdr">
+          <div class="ow-card-title"><i class="fas fa-inbox"></i>Permission Requests</div>
+          <div style="display:flex;gap:6px;">
+            <button class="ow-btn ow-btn-ghost ow-btn-sm" onclick="owLoadRequests('pending')"   id="reqFilterPending">Pending</button>
+            <button class="ow-btn ow-btn-ghost ow-btn-sm" onclick="owLoadRequests('approved')"  id="reqFilterApproved">Approved</button>
+            <button class="ow-btn ow-btn-ghost ow-btn-sm" onclick="owLoadRequests('rejected')"  id="reqFilterRejected">Rejected</button>
+          </div>
+        </div>
+        <div class="ow-card-body" id="reqList">
+          <div class="ow-loader"><div class="ow-spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Audit Log ── -->
+    <div class="ow-panel" id="panel-audit">
+      <div class="ow-card">
+        <div class="ow-card-hdr">
+          <div class="ow-card-title"><i class="fas fa-shield-halved"></i>Audit Log</div>
+          <span style="font-size:11px;color:var(--sub);">Immutable · Last 50 entries</span>
+        </div>
+        <div class="ow-card-body" style="overflow-x:auto;">
+          <table class="ow-audit-table" id="auditTable">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="auditBody"><tr><td colspan="5" class="ow-empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /owContent -->
+</main>
+
+<!-- ── Workflow modal ── -->
+<div class="ow-modal-bg" id="wfModal">
+  <div class="ow-modal">
+    <button class="ow-modal-close" onclick="owWfModalClose()"><i class="fas fa-times"></i></button>
+    <div class="ow-modal-title" id="wfModalTitle">New Approval Workflow</div>
+    <input type="hidden" id="wfEditId">
+    <div class="ow-field">
+      <label class="ow-label">Operation Type</label>
+      <select class="ow-select" id="wfType">
+        <option value="refund">Refund / Return</option>
+        <option value="discount">Discount / Price Override</option>
+        <option value="inventory">Inventory Adjustment</option>
+        <option value="payroll">Payroll Approval</option>
+        <option value="booking">Booking Confirmation</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+    <div class="ow-field">
+      <label class="ow-label">Workflow Name</label>
+      <input class="ow-input" id="wfName" placeholder="e.g. Standard Refund Process">
+    </div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+      color:var(--sub);margin-bottom:8px;">Approval Steps</div>
+    <div id="wfStepBuilder" class="ow-step-builder"></div>
+    <button class="ow-btn ow-btn-ghost ow-btn-sm" style="margin:4px 0 14px;" onclick="owAddStep()">
+      <i class="fas fa-plus"></i> Add Step
+    </button>
+    <div id="wfErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+    <div class="ow-btn-row" style="margin-top:0;">
+      <button class="ow-btn ow-btn-primary" onclick="owSaveWf()"><i class="fas fa-check"></i> Save Workflow</button>
+      <button class="ow-btn ow-btn-ghost"   onclick="owWfModalClose()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Grant Temp Access modal ── -->
+<div class="ow-modal-bg" id="tempModal">
+  <div class="ow-modal">
+    <button class="ow-modal-close" onclick="owTempModalClose()"><i class="fas fa-times"></i></button>
+    <div class="ow-modal-title">Grant Temporary Access</div>
+    <div class="ow-field">
+      <label class="ow-label">Employee *</label>
+      <select class="ow-select" id="tempEmployee"></select>
+    </div>
+    <div class="ow-field">
+      <label class="ow-label">Duration</label>
+      <select class="ow-select" id="tempDuration">
+        <option value="30">30 Minutes</option>
+        <option value="120">2 Hours</option>
+        <option value="480">8 Hours (1 Day)</option>
+        <option value="1440" selected>1 Day (24 Hours)</option>
+        <option value="10080">1 Week</option>
+        <option value="43200">1 Month (30 Days)</option>
+      </select>
+    </div>
+    <div class="ow-field">
+      <label class="ow-label">Permissions to Grant (select all that apply)</label>
+      <div id="tempPermsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;"></div>
+    </div>
+    <div id="tempErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+    <div class="ow-btn-row" style="margin-top:0;">
+      <button class="ow-btn ow-btn-primary" onclick="owGrantTemp()"><i class="fas fa-clock"></i> Grant Access</button>
+      <button class="ow-btn ow-btn-ghost"   onclick="owTempModalClose()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Delegation modal ── -->
+<div class="ow-modal-bg" id="delModal">
+  <div class="ow-modal">
+    <button class="ow-modal-close" onclick="owDelModalClose()"><i class="fas fa-times"></i></button>
+    <div class="ow-modal-title">Delegate Authority</div>
+    <div class="ow-field">
+      <label class="ow-label">Delegate To *</label>
+      <select class="ow-select" id="delEmployee"></select>
+    </div>
+    <div class="ow-field">
+      <label class="ow-label">End Date *</label>
+      <input class="ow-input" id="delEndDate" type="date">
+    </div>
+    <div class="ow-field">
+      <label class="ow-label">Permissions to Delegate</label>
+      <div id="delPermsGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;"></div>
+    </div>
+    <div class="ow-field">
+      <label class="ow-label">Reason</label>
+      <input class="ow-input" id="delReason" placeholder="e.g. Annual leave 15–22 July">
+    </div>
+    <div id="delErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+    <div class="ow-btn-row" style="margin-top:0;">
+      <button class="ow-btn ow-btn-primary" onclick="owSaveDel()"><i class="fas fa-check"></i> Create Delegation</button>
+      <button class="ow-btn ow-btn-ghost"   onclick="owDelModalClose()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Approve permission request modal ── -->
+<div class="ow-modal-bg" id="approveModal">
+  <div class="ow-modal">
+    <button class="ow-modal-close" onclick="owApproveModalClose()"><i class="fas fa-times"></i></button>
+    <div class="ow-modal-title">Approve Permission Request</div>
+    <input type="hidden" id="approveReqId">
+    <div style="background:var(--sur2);border:1px solid var(--bor);border-radius:10px;padding:14px;margin-bottom:16px;" id="approveReqDetail"></div>
+    <div class="ow-field">
+      <label class="ow-label">Grant Duration (optional — leave blank for permanent)</label>
+      <select class="ow-select" id="approveGrantDays">
+        <option value="">Permanent</option>
+        <option value="1">1 Day</option>
+        <option value="7">1 Week</option>
+        <option value="30">1 Month</option>
+        <option value="90">3 Months</option>
+        <option value="180">6 Months</option>
+        <option value="365">1 Year</option>
+      </select>
+    </div>
+    <div class="ow-btn-row" style="margin-top:0;">
+      <button class="ow-btn ow-btn-approve" onclick="owReviewRequest('approved')"><i class="fas fa-check"></i> Approve</button>
+      <button class="ow-btn ow-btn-reject"  onclick="owReviewRequest('rejected')"><i class="fas fa-times"></i> Reject</button>
+      <button class="ow-btn ow-btn-ghost"   onclick="owApproveModalClose()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="owToast"></div>
+
+<script type="module">
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+
+const fns = getFunctions();
+const _getWfs      = httpsCallable(fns, 'orgGetApprovalWorkflows');
+const _saveWf      = httpsCallable(fns, 'orgSaveApprovalWorkflow');
+const _deleteWf    = httpsCallable(fns, 'orgDeleteApprovalWorkflow');
+const _getTempGrants = httpsCallable(fns, 'orgGetTempAccessGrants');
+const _grantTemp   = httpsCallable(fns, 'orgGrantTempAccess');
+const _revokeTemp  = httpsCallable(fns, 'orgRevokeTempAccess');
+const _getDels     = httpsCallable(fns, 'orgGetDelegations');
+const _createDel   = httpsCallable(fns, 'orgCreateDelegation');
+const _revokeDel   = httpsCallable(fns, 'orgRevokeDelegation');
+const _getRequests = httpsCallable(fns, 'orgGetPermissionRequests');
+const _reviewReq   = httpsCallable(fns, 'orgReviewPermissionRequest');
+const _getAudit    = httpsCallable(fns, 'orgGetAuditLog');
+const _getTree     = httpsCallable(fns, 'orgGetReportingTree');
+
+let _bid = '';
+let _members = [];
+let _wfSteps = [];
+let _currentReqStatus = 'pending';
+
+const ALL_PERMISSIONS = [
+  'view_products','manage_products','pos','inventory','refunds','discounts',
+  'finance','payroll','reports','customers','bookings','drivers','deliveries',
+  'branches','users','analytics','settings',
+];
+
+/* ── Boot ── */
+async function _boot() {
+  const user = _user();
+  if (!user) { location.href = 'login.html'; return; }
+  const params = new URLSearchParams(location.search);
+  _bid = params.get('bid') || user.activeBusinessId || localStorage.getItem('sokoniActiveWorkspace');
+  if (!_bid) { _showErr('No organization selected.'); return; }
+
+  document.getElementById('owOrgName').textContent    = (user.activeBusinessName || 'Organization') + ' — Workflows';
+  document.getElementById('owStructLink').href        = `org-structure.html?bid=${_esc(_bid)}`;
+
+  document.getElementById('owLoader').style.display  = 'none';
+  document.getElementById('owContent').style.display = '';
+
+  /* Load visible panels */
+  await Promise.all([
+    _loadWorkflows(),
+    _loadMembers(),
+    _loadTempGrants(),
+    _loadDelegations(),
+    _loadRequests('pending'),
+  ]);
+
+  _renderTempPermsGrid('tempPermsGrid');
+  _renderTempPermsGrid('delPermsGrid');
+}
+
+async function _loadMembers() {
+  try {
+    const res = await _getTree({ businessId: _bid });
+    _members = res.data.members || [];
+    _populateMemberSelects();
+  } catch(_) {}
+}
+
+/* ── Workflows ── */
+async function _loadWorkflows() {
+  const el = document.getElementById('wfList');
+  try {
+    const res = await _getWfs({ businessId: _bid });
+    const wfs = res.data.workflows || [];
+    if (!wfs.length) {
+      el.innerHTML = '<div class="ow-empty">No approval workflows configured yet. Use the templates to get started.</div>';
+      return;
+    }
+    el.innerHTML = wfs.map(w => `
+      <div class="ow-wf-item">
+        <div class="ow-wf-icon">${_wfEmoji(w.type)}</div>
+        <div class="ow-wf-info">
+          <div class="ow-wf-name">${_esc(w.name || w.type)}</div>
+          <div class="ow-wf-steps">
+            ${(w.steps || []).map((s, i) => `
+              <span class="ow-wf-step">${_esc(s.label || _roleName(s.approverRole))}</span>
+              ${i < w.steps.length-1 ? '<span class="ow-wf-arrow">→</span>' : '<span style="font-size:11px;color:var(--g);">✓ Done</span>'}
+            `).join('')}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="ow-btn ow-btn-ghost ow-btn-sm" onclick="owWfModal('${_esc(w.workflowId)}')">Edit</button>
+          <button class="ow-btn ow-btn-danger ow-btn-sm" onclick="owDeleteWf('${_esc(w.workflowId)}','${_esc(w.name||w.type)}')">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="ow-empty">${_esc(e.message)}</div>`;
+  }
+}
+
+function _wfEmoji(type) {
+  return { refund:'💸', discount:'🏷️', inventory:'📦', payroll:'💰', booking:'📅' }[type] || '⚙️';
+}
+
+const WF_TEMPLATES = {
+  refund:    { name:'Standard Refund', steps:[{approverRole:'cashier',label:'Cashier Initiates'},{approverRole:'supervisor',label:'Supervisor Review'},{approverRole:'manager',label:'Manager Approves'}] },
+  discount:  { name:'Discount Approval', steps:[{approverRole:'cashier',label:'Salesperson'},{approverRole:'manager',label:'Manager Approves'}] },
+  inventory: { name:'Inventory Adjustment', steps:[{approverRole:'inventory_officer',label:'Inventory Officer'},{approverRole:'manager',label:'Warehouse Manager'}] },
+  payroll:   { name:'Payroll Run', steps:[{approverRole:'accountant',label:'HR Prepares'},{approverRole:'accountant',label:'Finance Reviews'},{approverRole:'manager',label:'Manager Approves'}] },
+  booking:   { name:'Booking Confirmation', steps:[{approverRole:'receptionist',label:'Reception'},{approverRole:'manager',label:'Manager Confirms'}] },
+};
+
+window.owWfTemplate = function(type) {
+  const t = WF_TEMPLATES[type];
+  if (!t) return;
+  owWfModal(); // open blank modal
+  document.getElementById('wfType').value = type;
+  document.getElementById('wfName').value = t.name;
+  _wfSteps = t.steps.map((s, i) => ({ ...s, order: i+1 }));
+  _renderStepBuilder();
+};
+
+window.owWfModal = async function(workflowId) {
+  let wf = null;
+  if (workflowId) {
+    try {
+      const res = await _getWfs({ businessId: _bid });
+      wf = (res.data.workflows || []).find(w => w.workflowId === workflowId);
+    } catch(_) {}
+  }
+  document.getElementById('wfModalTitle').textContent = wf ? 'Edit Workflow' : 'New Approval Workflow';
+  document.getElementById('wfEditId').value = wf?.workflowId || '';
+  document.getElementById('wfType').value   = wf?.type       || 'refund';
+  document.getElementById('wfName').value   = wf?.name       || '';
+  _wfSteps = wf?.steps ? [...wf.steps] : [{ order:1, approverRole:'manager', label:'Manager Approves' }];
+  _renderStepBuilder();
+  document.getElementById('wfErr').style.display = 'none';
+  document.getElementById('wfModal').classList.add('open');
+};
+window.owWfModalClose = () => { document.getElementById('wfModal').classList.remove('open'); _wfSteps = []; };
+
+function _renderStepBuilder() {
+  const el = document.getElementById('wfStepBuilder');
+  el.innerHTML = _wfSteps.map((s, i) => `
+    <div class="ow-step-row">
+      <div class="ow-step-order">${i+1}</div>
+      <input value="${_esc(s.label || '')}" placeholder="Step label" onchange="_wfSteps[${i}].label=this.value">
+      <select onchange="_wfSteps[${i}].approverRole=this.value">
+        ${['owner','manager','supervisor','cashier','inventory_officer','accountant','driver','receptionist'].map(r =>
+          `<option value="${r}" ${r === s.approverRole ? 'selected' : ''}>${_roleName(r)}</option>`
+        ).join('')}
+      </select>
+      ${_wfSteps.length > 1 ? `<button style="background:rgba(255,77,77,.08);border:1px solid rgba(255,77,77,.15);border-radius:7px;padding:5px 9px;color:var(--red);cursor:pointer;"
+        onclick="owRemoveStep(${i})"><i class="fas fa-trash"></i></button>` : ''}
+    </div>`).join('');
+}
+window.owAddStep = function() {
+  _wfSteps.push({ order: _wfSteps.length+1, approverRole:'manager', label:`Step ${_wfSteps.length+1}` });
+  _renderStepBuilder();
+};
+window.owRemoveStep = function(i) {
+  _wfSteps.splice(i, 1);
+  _wfSteps.forEach((s,idx) => s.order = idx+1);
+  _renderStepBuilder();
+};
+
+window.owSaveWf = async function() {
+  const type = document.getElementById('wfType').value;
+  const name = document.getElementById('wfName').value.trim();
+  if (!type || !name) {
+    document.getElementById('wfErr').textContent = 'Type and name are required.';
+    document.getElementById('wfErr').style.display = 'block';
+    return;
+  }
+  const editId = document.getElementById('wfEditId').value;
+  try {
+    await _saveWf({ businessId: _bid, workflowId: editId || undefined, type, name, steps: _wfSteps });
+    await _loadWorkflows();
+    _toast('Workflow saved ✓');
+    owWfModalClose();
+  } catch(e) {
+    document.getElementById('wfErr').textContent = e.message;
+    document.getElementById('wfErr').style.display = 'block';
+  }
+};
+window.owDeleteWf = async function(workflowId, name) {
+  if (!confirm(`Delete workflow "${name}"?`)) return;
+  try { await _deleteWf({ businessId: _bid, workflowId }); await _loadWorkflows(); _toast('Deleted'); }
+  catch(e) { _toast(e.message, true); }
+};
+
+/* ── Temp Access ── */
+async function _loadTempGrants() {
+  const el = document.getElementById('tempList');
+  try {
+    const res = await _getTempGrants({ businessId: _bid });
+    const grants = res.data.grants || [];
+    if (!grants.length) {
+      el.innerHTML = '<div class="ow-empty">No active temporary access grants.</div>';
+      return;
+    }
+    el.innerHTML = grants.map(g => `
+      <div class="ow-list-item">
+        <div class="ow-list-icon">⏱️</div>
+        <div class="ow-list-info">
+          <div class="ow-list-name">${_esc(g.userName || g.uid)}</div>
+          <div class="ow-list-meta">
+            Permissions: ${(g.permissions || []).join(', ')} ·
+            Expires: ${g.expiresAt ? _fmtDate(g.expiresAt) : '—'} ·
+            By: ${_esc(g.grantedByName || 'Manager')}
+          </div>
+        </div>
+        <span class="ow-badge active">Active</span>
+        <button class="ow-btn ow-btn-danger ow-btn-sm" onclick="owRevokeTemp('${_esc(g.accessId)}')">Revoke</button>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<div class="ow-empty">${_esc(e.message)}</div>`; }
+}
+
+function _renderTempPermsGrid(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.innerHTML = ALL_PERMISSIONS.map(p => `
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;padding:4px 0;">
+      <input type="checkbox" value="${_esc(p)}" style="accent-color:var(--g);">
+      ${_esc(p.replace(/_/g,' '))}
+    </label>`).join('');
+}
+
+function _getSelectedPerms(gridId) {
+  return [...document.querySelectorAll(`#${gridId} input[type=checkbox]:checked`)].map(el => el.value);
+}
+
+window.owTempModal    = () => document.getElementById('tempModal').classList.add('open');
+window.owTempModalClose = () => document.getElementById('tempModal').classList.remove('open');
+
+window.owGrantTemp = async function() {
+  const targetUid      = document.getElementById('tempEmployee').value;
+  const durationMinutes = parseInt(document.getElementById('tempDuration').value, 10);
+  const permissions    = _getSelectedPerms('tempPermsGrid');
+  const errEl          = document.getElementById('tempErr');
+  if (!targetUid || !permissions.length) {
+    errEl.textContent = 'Please select an employee and at least one permission.';
+    errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
+  try {
+    await _grantTemp({ businessId: _bid, targetUid, permissions, durationMinutes });
+    await _loadTempGrants();
+    _toast('Temp access granted ✓');
+    owTempModalClose();
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+};
+
+window.owRevokeTemp = async function(accessId) {
+  if (!confirm('Revoke this temporary access?')) return;
+  try { await _revokeTemp({ accessId }); await _loadTempGrants(); _toast('Access revoked'); }
+  catch(e) { _toast(e.message, true); }
+};
+
+/* ── Delegation ── */
+async function _loadDelegations() {
+  const el = document.getElementById('delList');
+  try {
+    const res = await _getDels({ businessId: _bid });
+    const dels = res.data.delegations || [];
+    if (!dels.length) {
+      el.innerHTML = '<div class="ow-empty">No active delegations.</div>';
+      return;
+    }
+    el.innerHTML = dels.map(d => `
+      <div class="ow-list-item">
+        <div class="ow-list-icon">🤝</div>
+        <div class="ow-list-info">
+          <div class="ow-list-name">${_esc(d.fromName || '?')} → ${_esc(d.toName || '?')}</div>
+          <div class="ow-list-meta">
+            ${(d.permissions||[]).join(', ')} · Until: ${d.endDate ? _fmtDate(d.endDate) : '—'}
+            ${d.reason ? ` · ${_esc(d.reason)}` : ''}
+          </div>
+        </div>
+        <span class="ow-badge active">Active</span>
+        <button class="ow-btn ow-btn-danger ow-btn-sm" onclick="owRevokeDel('${_esc(d.delegationId)}')">Revoke</button>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<div class="ow-empty">${_esc(e.message)}</div>`; }
+}
+
+window.owDelModal     = () => { document.getElementById('delModal').classList.add('open'); };
+window.owDelModalClose = () => document.getElementById('delModal').classList.remove('open');
+
+window.owSaveDel = async function() {
+  const toUid   = document.getElementById('delEmployee').value;
+  const endDate = document.getElementById('delEndDate').value;
+  const permissions = _getSelectedPerms('delPermsGrid');
+  const errEl   = document.getElementById('delErr');
+  if (!toUid || !endDate || !permissions.length) {
+    errEl.textContent = 'Please select employee, end date, and at least one permission.';
+    errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
+  try {
+    await _createDel({ businessId: _bid, toUid, permissions, endDate, reason: document.getElementById('delReason').value.trim() });
+    await _loadDelegations();
+    _toast('Delegation created ✓');
+    owDelModalClose();
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+};
+
+window.owRevokeDel = async function(delegationId) {
+  if (!confirm('Revoke this delegation?')) return;
+  try { await _revokeDel({ delegationId }); await _loadDelegations(); _toast('Delegation revoked'); }
+  catch(e) { _toast(e.message, true); }
+};
+
+/* ── Permission Requests ── */
+async function _loadRequests(status) {
+  _currentReqStatus = status || 'pending';
+  ['pending','approved','rejected'].forEach(s => {
+    const btn = document.getElementById(`reqFilter${s.charAt(0).toUpperCase()+s.slice(1)}`);
+    if (btn) btn.classList.toggle('ow-btn-primary', s === _currentReqStatus);
+    if (btn) btn.style.color = s === _currentReqStatus ? '#000' : '';
+  });
+  const el = document.getElementById('reqList');
+  try {
+    const res = await _getRequests({ businessId: _bid, status: _currentReqStatus });
+    const reqs = res.data.requests || [];
+    if (!reqs.length) {
+      el.innerHTML = `<div class="ow-empty">No ${_currentReqStatus} permission requests.</div>`;
+      return;
+    }
+    el.innerHTML = reqs.map(r => `
+      <div class="ow-list-item">
+        <div class="ow-list-icon">🔑</div>
+        <div class="ow-list-info">
+          <div class="ow-list-name">${_esc(r.userName || r.uid)} — <code style="font-size:12px;color:var(--g);">${_esc(r.permission)}</code></div>
+          <div class="ow-list-meta">
+            ${_esc(r.role)} · ${_esc(r.department || '—')} · ${r.createdAt ? _fmtDate(r.createdAt) : ''}
+            ${r.reason ? ` · "${_esc(r.reason)}"` : ''}
+          </div>
+        </div>
+        <span class="ow-badge ${r.status}">${r.status}</span>
+        ${r.status === 'pending' ? `<button class="ow-btn ow-btn-approve ow-btn-sm" onclick="owOpenApproveModal('${_esc(r.requestId)}','${_esc(r.userName||r.uid)}','${_esc(r.permission)}','${_esc(r.reason||'')}')">Review</button>` : ''}
+      </div>`).join('');
+  } catch(e) { el.innerHTML = `<div class="ow-empty">${_esc(e.message)}</div>`; }
+}
+window.owLoadRequests = _loadRequests;
+
+window.owOpenApproveModal = function(reqId, name, perm, reason) {
+  document.getElementById('approveReqId').value = reqId;
+  document.getElementById('approveGrantDays').value = '';
+  document.getElementById('approveReqDetail').innerHTML =
+    `<div style="font-size:13.5px;font-weight:700;margin-bottom:6px;">${_esc(name)}</div>
+     <div style="font-size:12px;color:var(--sub);">Requesting: <code style="color:var(--g);">${_esc(perm)}</code></div>
+     ${reason ? `<div style="font-size:12px;color:var(--sub);margin-top:4px;">Reason: "${_esc(reason)}"</div>` : ''}`;
+  document.getElementById('approveModal').classList.add('open');
+};
+window.owApproveModalClose = () => document.getElementById('approveModal').classList.remove('open');
+
+window.owReviewRequest = async function(action) {
+  const requestId = document.getElementById('approveReqId').value;
+  const grantDaysVal = document.getElementById('approveGrantDays').value;
+  const grantDays = grantDaysVal ? parseInt(grantDaysVal, 10) : undefined;
+  try {
+    await _reviewReq({ requestId, action, grantDays });
+    await _loadRequests('pending');
+    _toast(action === 'approved' ? 'Permission approved ✓' : 'Request rejected');
+    owApproveModalClose();
+  } catch(e) { _toast(e.message, true); }
+};
+
+/* ── Audit Log ── */
+async function _loadAuditLog() {
+  const tbody = document.getElementById('auditBody');
+  try {
+    const res = await _getAudit({ businessId: _bid, limitN: 50 });
+    const entries = res.data.entries || [];
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="ow-empty">No audit entries yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = entries.map(e => `
+      <tr>
+        <td style="white-space:nowrap;color:var(--sub2);font-size:11.5px;">${e.timestamp ? _fmtDateTime(e.timestamp) : '—'}</td>
+        <td>${_esc(e.actorName || e.actorUid?.slice(0,8) || '?')}</td>
+        <td><span class="ow-audit-action">${_esc(e.action)}</span></td>
+        <td style="color:var(--sub);">${e.targetUid ? e.targetUid.slice(0,8) + '…' : '—'}</td>
+        <td style="color:var(--sub2);font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+          ${_esc(JSON.stringify(e.details || {})).slice(0,80)}
+        </td>
+      </tr>`).join('');
+  } catch(e) { tbody.innerHTML = `<tr><td colspan="5" class="ow-empty">${_esc(e.message)}</td></tr>`; }
+}
+
+/* ── Tab switching ── */
+window.owTab = function(id) {
+  document.querySelectorAll('.ow-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.ow-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`panel-${id}`)?.classList.add('active');
+  document.getElementById(`tab-${id}`)?.classList.add('active');
+  if (id === 'audit') _loadAuditLog();
+};
+
+/* ── Populate selects ── */
+function _populateMemberSelects() {
+  const opts = _members.map(m => `<option value="${_esc(m.uid)}">${_esc(m.name||'Unknown')} · ${_roleName(m.role)}</option>`).join('');
+  ['tempEmployee','delEmployee'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '<option value="">— Select employee —</option>' + opts;
+  });
+}
+
+/* ── Helpers ── */
+function _user() { try { return JSON.parse(localStorage.getItem('sokoniUser')||'null'); } catch(_){return null;} }
+function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _roleName(r) {
+  return {owner:'Owner',manager:'Manager',supervisor:'Supervisor',cashier:'Cashier',
+    inventory_officer:'Inventory Officer',accountant:'Accountant',driver:'Driver',
+    receptionist:'Receptionist',waiter:'Waiter',security:'Security',cleaner:'Cleaner'}[r]
+    || (r ? r.charAt(0).toUpperCase()+r.slice(1).replace(/_/g,' ') : 'Staff');
+}
+function _fmtDate(ms) { return new Date(ms).toLocaleDateString('en-KE',{year:'numeric',month:'short',day:'numeric'}); }
+function _fmtDateTime(ms) { return new Date(ms).toLocaleString('en-KE',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function _showErr(msg) { document.getElementById('owLoader').innerHTML = `<div class="ow-empty">⚠️ ${_esc(msg)}</div>`; }
+let _toastT;
+function _toast(msg, isErr) {
+  const el = document.getElementById('owToast');
+  el.textContent = msg;
+  el.style.color = isErr ? 'var(--red)' : 'var(--g)';
+  el.classList.add('show');
+  clearTimeout(_toastT);
+  _toastT = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+_boot();
+</script>
+</body>
+</html>

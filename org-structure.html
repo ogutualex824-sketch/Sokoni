@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+  <script src="security.js"></script>
+  <script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>SOKONI — Organization Structure</title>
+  <meta name="theme-color" content="#71ff00">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="shared-header.js" defer></script>
+  <style>
+    :root {
+      --bg:#050505; --sur:#111; --sur2:#161616; --sur3:#1c1c1c;
+      --bor:rgba(255,255,255,.07); --bor2:rgba(255,255,255,.04);
+      --g:#71ff00; --g-dim:rgba(113,255,0,.06); --g-mid:rgba(113,255,0,.15);
+      --txt:#fff; --sub:rgba(255,255,255,.5); --sub2:rgba(255,255,255,.25);
+      --red:#ff4d4d; --amber:#ffa94d; --blue:#4dabf7; --radius:14px;
+    }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      background:var(--bg); color:var(--txt);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      min-height:100vh; padding-bottom:calc(80px + env(safe-area-inset-bottom,0));
+    }
+
+    .os-shell { max-width:900px; margin:0 auto; padding:24px 16px; }
+
+    /* ── Page header ── */
+    .os-page-hdr { display:flex; align-items:center; gap:14px; margin-bottom:24px; flex-wrap:wrap; }
+    .os-page-title { font-size:20px; font-weight:900; letter-spacing:-.02em; }
+    .os-page-sub   { font-size:12.5px; color:var(--sub); margin-top:2px; }
+
+    /* ── Tabs ── */
+    .os-tabs { display:flex; gap:4px; overflow-x:auto; padding-bottom:2px; margin-bottom:22px;
+      scrollbar-width:none; }
+    .os-tabs::-webkit-scrollbar { display:none; }
+    .os-tab {
+      padding:8px 16px; border-radius:10px; font-size:13px; font-weight:700;
+      background:none; border:1px solid var(--bor); color:var(--sub);
+      cursor:pointer; white-space:nowrap; transition:all .15s;
+    }
+    .os-tab:hover  { background:rgba(255,255,255,.05); color:var(--txt); }
+    .os-tab.active { background:var(--g); color:#000; border-color:var(--g); }
+
+    .os-panel { display:none; }
+    .os-panel.active { display:block; }
+
+    /* ── Cards ── */
+    .os-card { background:var(--sur); border:1px solid var(--bor); border-radius:var(--radius); margin-bottom:14px; }
+    .os-card-hdr {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:14px 18px; border-bottom:1px solid var(--bor);
+    }
+    .os-card-title { font-size:13.5px; font-weight:800; }
+    .os-card-title i { color:var(--g); margin-right:7px; }
+    .os-card-body { padding:16px 18px; }
+
+    /* ── Department list ── */
+    .os-dept-item {
+      display:flex; align-items:center; gap:12px;
+      padding:12px 0; border-bottom:1px solid var(--bor);
+    }
+    .os-dept-item:last-child { border-bottom:none; }
+    .os-dept-icon {
+      width:38px; height:38px; border-radius:10px; flex-shrink:0;
+      background:var(--g-dim); border:1px solid rgba(113,255,0,.12);
+      display:flex; align-items:center; justify-content:center; font-size:18px;
+    }
+    .os-dept-info { flex:1; min-width:0; }
+    .os-dept-name { font-size:14px; font-weight:700; }
+    .os-dept-meta { font-size:12px; color:var(--sub); margin-top:2px; }
+    .os-dept-count {
+      font-size:11px; font-weight:800; padding:3px 10px; border-radius:10px;
+      background:rgba(255,255,255,.05); color:var(--sub); flex-shrink:0;
+    }
+    .os-dept-actions { display:flex; gap:6px; }
+
+    /* ── Team chips ── */
+    .os-team-chip {
+      display:inline-flex; align-items:center; gap:6px; padding:5px 12px;
+      border-radius:20px; font-size:12px; font-weight:600;
+      background:rgba(255,255,255,.04); border:1px solid var(--bor); color:rgba(255,255,255,.7);
+    }
+    .os-team-type {
+      font-size:9px; font-weight:800; letter-spacing:.07em; text-transform:uppercase;
+      padding:2px 6px; border-radius:8px;
+    }
+    .os-team-type.shift   { background:rgba(113,255,0,.12); color:var(--g); }
+    .os-team-type.project { background:rgba(77,171,247,.1); color:var(--blue); }
+    .os-team-type.general { background:rgba(255,255,255,.05); color:var(--sub); }
+
+    /* ── Reporting table ── */
+    .os-rep-table { width:100%; border-collapse:collapse; }
+    .os-rep-table th {
+      font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+      color:var(--sub2); padding:6px 10px; border-bottom:1px solid var(--bor); text-align:left;
+    }
+    .os-rep-table td {
+      padding:10px; border-bottom:1px solid var(--bor2); font-size:13px;
+      vertical-align:middle;
+    }
+    .os-rep-table tr:last-child td { border-bottom:none; }
+    .os-rep-table tr:hover td { background:rgba(255,255,255,.02); }
+    .os-avatar {
+      width:28px; height:28px; border-radius:50%; flex-shrink:0;
+      background:var(--g-dim); border:1px solid rgba(113,255,0,.15);
+      display:inline-flex; align-items:center; justify-content:center;
+      font-size:11px; font-weight:800; color:var(--g); vertical-align:middle;
+      margin-right:8px;
+    }
+
+    /* ── Org Chart ── */
+    .os-chart { overflow-x:auto; padding:16px 0; }
+    .os-chart-node-wrap { padding-left:28px; margin-top:6px; }
+    .os-chart-node {
+      display:flex; align-items:flex-start; gap:8px; position:relative; margin-bottom:8px;
+    }
+    .os-chart-node::before {
+      content:''; position:absolute; left:-20px; top:14px;
+      width:20px; height:2px; background:var(--bor);
+    }
+    .os-chart-node-wrap > .os-chart-node:first-child::before { top:14px; }
+    .os-chart-pill {
+      display:inline-flex; align-items:center; gap:8px;
+      background:var(--sur2); border:1px solid var(--bor); border-radius:10px;
+      padding:7px 12px; cursor:pointer; transition:border-color .15s; flex-shrink:0;
+    }
+    .os-chart-pill:hover { border-color:rgba(113,255,0,.3); }
+    .os-chart-pill.root { border-color:rgba(113,255,0,.35); background:rgba(113,255,0,.04); }
+    .os-chart-pill .pill-name { font-size:13px; font-weight:700; }
+    .os-chart-pill .pill-role { font-size:11px; color:var(--sub); }
+    .os-chart-pill .pill-dept {
+      font-size:10px; font-weight:700; padding:2px 6px; border-radius:6px;
+      background:rgba(255,255,255,.05); color:var(--sub2);
+    }
+    .os-chart-children { margin-left:16px; border-left:2px solid var(--bor); padding-left:0; }
+
+    /* ── Form elements ── */
+    .os-field { display:flex; flex-direction:column; gap:5px; margin-bottom:14px; }
+    .os-label { font-size:11px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--sub); }
+    .os-input, .os-select, .os-textarea {
+      background:rgba(255,255,255,.04); border:1px solid var(--bor);
+      border-radius:9px; padding:10px 13px; color:var(--txt);
+      font-size:14px; font-family:inherit; width:100%;
+    }
+    .os-input:focus, .os-select:focus { outline:none; border-color:rgba(113,255,0,.4); }
+    .os-select option { background:#1a1a1a; }
+
+    /* ── Modal ── */
+    .os-modal-bg {
+      display:none; position:fixed; inset:0; z-index:9000;
+      background:rgba(0,0,0,.75); backdrop-filter:blur(4px);
+      align-items:center; justify-content:center; padding:16px;
+    }
+    .os-modal-bg.open { display:flex; }
+    .os-modal {
+      background:var(--sur); border:1px solid var(--bor); border-radius:20px;
+      padding:26px; width:100%; max-width:440px; position:relative;
+      max-height:90vh; overflow-y:auto;
+    }
+    .os-modal-title { font-size:17px; font-weight:800; margin-bottom:18px; }
+    .os-modal-close {
+      position:absolute; top:14px; right:14px;
+      background:rgba(255,255,255,.06); border:1px solid var(--bor);
+      border-radius:8px; width:29px; height:29px; color:var(--sub); cursor:pointer; font-size:13px;
+    }
+
+    /* ── Buttons ── */
+    .os-btn {
+      padding:9px 18px; border-radius:10px; font-size:13px; font-weight:700;
+      cursor:pointer; border:none; transition:all .15s;
+    }
+    .os-btn-primary { background:var(--g); color:#000; }
+    .os-btn-primary:hover { filter:brightness(1.1); }
+    .os-btn-ghost  { background:rgba(255,255,255,.05); border:1px solid var(--bor); color:var(--sub); }
+    .os-btn-ghost:hover  { background:rgba(255,255,255,.09); color:var(--txt); }
+    .os-btn-danger { background:rgba(255,77,77,.08); border:1px solid rgba(255,77,77,.18); color:var(--red); }
+    .os-btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+    .os-btn-sm { padding:5px 11px; font-size:11px; border-radius:8px; }
+
+    /* ── Empty / loader ── */
+    .os-empty { padding:24px; text-align:center; color:var(--sub2); font-size:13px; }
+    .os-loader { padding:32px; text-align:center; }
+    .os-spinner {
+      width:26px; height:26px; border:3px solid var(--g-dim);
+      border-top-color:var(--g); border-radius:50%; margin:0 auto 10px;
+      animation:os-spin .8s linear infinite;
+    }
+    @keyframes os-spin { to { transform:rotate(360deg); } }
+
+    /* ── Toast ── */
+    #osToast {
+      position:fixed; bottom:calc(20px + env(safe-area-inset-bottom,0)); left:50%;
+      transform:translateX(-50%) translateY(16px); z-index:9999;
+      background:var(--sur3); border:1px solid var(--bor); border-radius:12px;
+      padding:9px 18px; font-size:13px; font-weight:600;
+      opacity:0; transition:all .22s; pointer-events:none;
+    }
+    #osToast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+<main class="os-shell">
+
+  <div class="os-loader" id="osLoader"><div class="os-spinner"></div></div>
+  <div id="osContent" style="display:none;">
+
+    <div class="os-page-hdr">
+      <div>
+        <div class="os-page-title" id="osOrgName">Organization Structure</div>
+        <div class="os-page-sub">Departments · Teams · Org Chart · Reporting Lines</div>
+      </div>
+      <a href="org-directory.html" id="osDirLink" style="margin-left:auto;text-decoration:none;
+         font-size:12px;font-weight:700;color:var(--sub);padding:7px 14px;
+         border-radius:9px;border:1px solid var(--bor);background:rgba(255,255,255,.03);">
+        <i class="fas fa-building"></i> Directory
+      </a>
+    </div>
+
+    <div class="os-tabs">
+      <button class="os-tab active" onclick="osTab('depts')"    id="tab-depts"><i class="fas fa-folder-tree"></i> Departments</button>
+      <button class="os-tab"        onclick="osTab('teams')"    id="tab-teams"><i class="fas fa-users"></i> Teams</button>
+      <button class="os-tab"        onclick="osTab('chart')"    id="tab-chart"><i class="fas fa-sitemap"></i> Org Chart</button>
+      <button class="os-tab"        onclick="osTab('reporting')" id="tab-reporting"><i class="fas fa-code-branch"></i> Reporting Lines</button>
+    </div>
+
+    <!-- ── Departments ── -->
+    <div class="os-panel active" id="panel-depts">
+      <div class="os-card">
+        <div class="os-card-hdr">
+          <div class="os-card-title"><i class="fas fa-folder-tree"></i>Departments</div>
+          <button class="os-btn os-btn-primary os-btn-sm" onclick="osDeptModal()">
+            <i class="fas fa-plus"></i> New Department
+          </button>
+        </div>
+        <div class="os-card-body" id="deptList">
+          <div class="os-loader"><div class="os-spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Teams ── -->
+    <div class="os-panel" id="panel-teams">
+      <div class="os-card">
+        <div class="os-card-hdr">
+          <div class="os-card-title"><i class="fas fa-users"></i>Teams</div>
+          <button class="os-btn os-btn-primary os-btn-sm" onclick="osTeamModal()">
+            <i class="fas fa-plus"></i> New Team
+          </button>
+        </div>
+        <div class="os-card-body">
+          <div class="os-field" style="margin-bottom:14px;">
+            <select class="os-select" id="teamFilterDept" onchange="osRenderTeams()">
+              <option value="">All Departments</option>
+            </select>
+          </div>
+          <div id="teamList"><div class="os-loader"><div class="os-spinner"></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Org Chart ── -->
+    <div class="os-panel" id="panel-chart">
+      <div class="os-card">
+        <div class="os-card-hdr">
+          <div class="os-card-title"><i class="fas fa-sitemap"></i>Organization Chart</div>
+          <span style="font-size:11px;color:var(--sub);">Based on reporting lines</span>
+        </div>
+        <div class="os-card-body">
+          <div class="os-chart" id="orgChart">
+            <div class="os-loader"><div class="os-spinner"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Reporting Lines ── -->
+    <div class="os-panel" id="panel-reporting">
+      <div class="os-card">
+        <div class="os-card-hdr">
+          <div class="os-card-title"><i class="fas fa-code-branch"></i>Reporting Lines</div>
+        </div>
+        <div class="os-card-body" style="overflow-x:auto;">
+          <table class="os-rep-table" id="repTable">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Role</th>
+                <th>Department</th>
+                <th>Reports To</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="repBody"><tr><td colspan="5" class="os-empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /osContent -->
+</main>
+
+<!-- ── Department modal ── -->
+<div class="os-modal-bg" id="deptModal">
+  <div class="os-modal">
+    <button class="os-modal-close" onclick="osDeptModalClose()"><i class="fas fa-times"></i></button>
+    <div class="os-modal-title" id="deptModalTitle">New Department</div>
+    <input type="hidden" id="deptEditId">
+    <div class="os-field">
+      <label class="os-label">Department Name *</label>
+      <input class="os-input" id="deptName" placeholder="e.g. Sales, Kitchen, Pharmacy…">
+    </div>
+    <div class="os-field">
+      <label class="os-label">Description</label>
+      <textarea class="os-textarea os-input" id="deptDesc" rows="2" style="resize:vertical;" placeholder="What does this department do?"></textarea>
+    </div>
+    <div class="os-field">
+      <label class="os-label">Department Head (optional)</label>
+      <select class="os-select" id="deptHead">
+        <option value="">— None —</option>
+      </select>
+    </div>
+    <div id="deptErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+    <div class="os-btn-row" style="margin-top:0;">
+      <button class="os-btn os-btn-primary" onclick="osSaveDept()"><i class="fas fa-check"></i> Save</button>
+      <button class="os-btn os-btn-ghost"   onclick="osDeptModalClose()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Team modal ── -->
+<div class="os-modal-bg" id="teamModal">
+  <div class="os-modal">
+    <button class="os-modal-close" onclick="osTeamModalClose()"><i class="fas fa-times"></i></button>
+    <div class="os-modal-title" id="teamModalTitle">New Team</div>
+    <input type="hidden" id="teamEditId">
+    <div class="os-field">
+      <label class="os-label">Department *</label>
+      <select class="os-select" id="teamDept"></select>
+    </div>
+    <div class="os-field">
+      <label class="os-label">Team Name *</label>
+      <input class="os-input" id="teamName" placeholder="e.g. Morning Shift, Weekend Team…">
+    </div>
+    <div class="os-field">
+      <label class="os-label">Team Type</label>
+      <select class="os-select" id="teamType">
+        <option value="general">General</option>
+        <option value="shift">Shift</option>
+        <option value="project">Project</option>
+      </select>
+    </div>
+    <div class="os-field">
+      <label class="os-label">Schedule</label>
+      <select class="os-select" id="teamSchedule">
+        <option value="">None</option>
+        <option value="morning">Morning</option>
+        <option value="afternoon">Afternoon</option>
+        <option value="evening">Evening</option>
+        <option value="night">Night</option>
+        <option value="weekend">Weekend</option>
+        <option value="weekday">Weekday</option>
+      </select>
+    </div>
+    <div class="os-field">
+      <label class="os-label">Team Lead</label>
+      <select class="os-select" id="teamLead">
+        <option value="">— None —</option>
+      </select>
+    </div>
+    <div id="teamErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+    <div class="os-btn-row" style="margin-top:0;">
+      <button class="os-btn os-btn-primary" onclick="osSaveTeam()"><i class="fas fa-check"></i> Save</button>
+      <button class="os-btn os-btn-ghost"   onclick="osTeamModalClose()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Set reporting line modal ── -->
+<div class="os-modal-bg" id="reportModal">
+  <div class="os-modal">
+    <button class="os-modal-close" onclick="osRepModalClose()"><i class="fas fa-times"></i></button>
+    <div class="os-modal-title">Set Reporting Line</div>
+    <input type="hidden" id="repTargetUid">
+    <div style="font-size:13px;color:var(--sub);margin-bottom:14px;" id="repTargetLabel">Employee</div>
+    <div class="os-field">
+      <label class="os-label">Reports To (Direct Manager)</label>
+      <select class="os-select" id="repManagerSelect">
+        <option value="">— No direct manager —</option>
+      </select>
+    </div>
+    <div class="os-btn-row" style="margin-top:0;">
+      <button class="os-btn os-btn-primary" onclick="osSaveReportingLine()"><i class="fas fa-check"></i> Save</button>
+      <button class="os-btn os-btn-ghost"   onclick="osRepModalClose()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="osToast"></div>
+
+<script type="module">
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+
+const fns            = getFunctions();
+const _getDepts      = httpsCallable(fns, 'orgGetDepartments');
+const _createDept    = httpsCallable(fns, 'orgCreateDepartment');
+const _updateDept    = httpsCallable(fns, 'orgUpdateDepartment');
+const _archiveDept   = httpsCallable(fns, 'orgArchiveDepartment');
+const _getTeams      = httpsCallable(fns, 'orgGetTeams');
+const _createTeam    = httpsCallable(fns, 'orgCreateTeam');
+const _updateTeam    = httpsCallable(fns, 'orgUpdateTeam');
+const _archiveTeam   = httpsCallable(fns, 'orgArchiveTeam');
+const _getTree       = httpsCallable(fns, 'orgGetReportingTree');
+const _setRepLine    = httpsCallable(fns, 'orgSetReportingLine');
+
+let _bid = '';
+let _depts = [];
+let _teams = [];
+let _members = [];
+
+/* ── Boot ── */
+async function _boot() {
+  const user = _user();
+  if (!user) { location.href = 'login.html'; return; }
+  const params = new URLSearchParams(location.search);
+  _bid = params.get('bid') || user.activeBusinessId || localStorage.getItem('sokoniActiveWorkspace');
+  if (!_bid) { _showErr('No organization selected.'); return; }
+
+  document.getElementById('osOrgName').textContent = user.activeBusinessName || 'Organization Structure';
+  document.getElementById('osDirLink').href  = `org-directory.html?bid=${_esc(_bid)}`;
+
+  await Promise.all([_loadDepts(), _loadTeams(), _loadTree()]);
+
+  document.getElementById('osLoader').style.display  = 'none';
+  document.getElementById('osContent').style.display = '';
+}
+
+async function _loadDepts() {
+  try {
+    const res = await _getDepts({ businessId: _bid });
+    _depts = res.data.departments || [];
+    _renderDepts();
+    _populateDeptSelects();
+  } catch(e) {
+    document.getElementById('deptList').innerHTML = `<div class="os-empty">${_esc(e.message)}</div>`;
+  }
+}
+
+async function _loadTeams() {
+  try {
+    const res = await _getTeams({ businessId: _bid });
+    _teams = res.data.teams || [];
+    _renderTeams();
+  } catch(e) {
+    document.getElementById('teamList').innerHTML = `<div class="os-empty">${_esc(e.message)}</div>`;
+  }
+}
+
+async function _loadTree() {
+  try {
+    const res = await _getTree({ businessId: _bid });
+    _members = res.data.members || [];
+    _renderChart();
+    _renderReportingTable();
+    _populateMemberSelects();
+  } catch(e) {
+    document.getElementById('orgChart').innerHTML   = `<div class="os-empty">${_esc(e.message)}</div>`;
+    document.getElementById('repBody').innerHTML    = `<tr><td colspan="5" class="os-empty">${_esc(e.message)}</td></tr>`;
+  }
+}
+
+/* ── Departments ── */
+function _renderDepts() {
+  const el = document.getElementById('deptList');
+  if (!_depts.length) {
+    el.innerHTML = '<div class="os-empty">No departments yet. Create the first one to organise your team.</div>';
+    return;
+  }
+  el.innerHTML = _depts.map(d => `
+    <div class="os-dept-item">
+      <div class="os-dept-icon">${_deptEmoji(d.name)}</div>
+      <div class="os-dept-info">
+        <div class="os-dept-name">${_esc(d.name)}</div>
+        <div class="os-dept-meta">${d.description ? _esc(d.description) : 'No description'}</div>
+      </div>
+      <div class="os-dept-count">${_teams.filter(t => t.departmentId === d.deptId).length} team${_teams.filter(t=>t.departmentId===d.deptId).length!==1?'s':''}</div>
+      <div class="os-dept-actions">
+        <button class="os-btn os-btn-ghost os-btn-sm" onclick="osDeptModal('${_esc(d.deptId)}')">Edit</button>
+        <button class="os-btn os-btn-danger os-btn-sm" onclick="osArchiveDept('${_esc(d.deptId)}','${_esc(d.name)}')">Archive</button>
+      </div>
+    </div>`).join('');
+}
+
+function _deptEmoji(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('sale')  || n.includes('retail'))  return '🛍️';
+  if (n.includes('kitch') || n.includes('food'))    return '🍳';
+  if (n.includes('financ') || n.includes('account')) return '💰';
+  if (n.includes('hr')    || n.includes('human'))   return '👥';
+  if (n.includes('it')    || n.includes('tech'))    return '💻';
+  if (n.includes('logist') || n.includes('deliv'))  return '🚚';
+  if (n.includes('medic') || n.includes('health'))  return '🏥';
+  if (n.includes('legal') || n.includes('compli'))  return '⚖️';
+  if (n.includes('market'))                          return '📣';
+  if (n.includes('secur'))                           return '🔒';
+  if (n.includes('receip') || n.includes('front'))  return '🏨';
+  if (n.includes('warehouse') || n.includes('stock')) return '📦';
+  return '🏢';
+}
+
+window.osDeptModal = function(deptId) {
+  const d = deptId ? _depts.find(x => x.deptId === deptId) : null;
+  document.getElementById('deptModalTitle').textContent = d ? 'Edit Department' : 'New Department';
+  document.getElementById('deptEditId').value = d?.deptId || '';
+  document.getElementById('deptName').value   = d?.name   || '';
+  document.getElementById('deptDesc').value   = d?.description || '';
+  document.getElementById('deptHead').value   = d?.headUid || '';
+  document.getElementById('deptErr').style.display = 'none';
+  document.getElementById('deptModal').classList.add('open');
+};
+window.osDeptModalClose = () => document.getElementById('deptModal').classList.remove('open');
+
+window.osSaveDept = async function() {
+  const name = document.getElementById('deptName').value.trim();
+  if (!name) {
+    document.getElementById('deptErr').textContent = 'Department name is required.';
+    document.getElementById('deptErr').style.display = 'block';
+    return;
+  }
+  const editId  = document.getElementById('deptEditId').value;
+  const headUid = document.getElementById('deptHead').value || null;
+  const desc    = document.getElementById('deptDesc').value.trim();
+  try {
+    if (editId) {
+      await _updateDept({ businessId: _bid, deptId: editId, name, description: desc, headUid });
+    } else {
+      await _createDept({ businessId: _bid, name, description: desc, headUid });
+    }
+    await _loadDepts();
+    _toast('Department saved ✓');
+    osDeptModalClose();
+  } catch(e) {
+    document.getElementById('deptErr').textContent = e.message;
+    document.getElementById('deptErr').style.display = 'block';
+  }
+};
+
+window.osArchiveDept = async function(deptId, name) {
+  if (!confirm(`Archive department "${name}"? Teams within it will not be deleted.`)) return;
+  try {
+    await _archiveDept({ businessId: _bid, deptId });
+    await _loadDepts();
+    _toast('Department archived');
+  } catch(e) { _toast(e.message, true); }
+};
+
+/* ── Teams ── */
+function _renderTeams() {
+  const filterDeptId = document.getElementById('teamFilterDept')?.value || '';
+  const el = document.getElementById('teamList');
+  const filtered = filterDeptId ? _teams.filter(t => t.departmentId === filterDeptId) : _teams;
+
+  if (!filtered.length) {
+    el.innerHTML = '<div class="os-empty">No teams yet.</div>';
+    return;
+  }
+
+  const grouped = {};
+  filtered.forEach(t => {
+    const key = t.departmentName || 'Unassigned';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(t);
+  });
+
+  el.innerHTML = Object.entries(grouped).map(([dept, teams]) => `
+    <div style="margin-bottom:18px;">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+        color:var(--sub2);margin-bottom:10px;">${_esc(dept)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${teams.map(t => `
+          <div class="os-team-chip">
+            <span class="os-team-type ${t.type || 'general'}">${t.type || 'general'}</span>
+            ${_esc(t.name)}
+            ${t.schedule ? `<span style="font-size:10px;color:var(--sub2);">${t.schedule}</span>` : ''}
+            <button style="background:none;border:none;color:var(--sub);cursor:pointer;font-size:10px;padding:0 0 0 4px;"
+              onclick="osTeamModal('${_esc(t.teamId)}')"><i class="fas fa-pen"></i></button>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+window.osRenderTeams = _renderTeams;
+
+window.osTeamModal = function(teamId) {
+  const t = teamId ? _teams.find(x => x.teamId === teamId) : null;
+  document.getElementById('teamModalTitle').textContent = t ? 'Edit Team' : 'New Team';
+  document.getElementById('teamEditId').value    = t?.teamId   || '';
+  document.getElementById('teamName').value      = t?.name     || '';
+  document.getElementById('teamType').value      = t?.type     || 'general';
+  document.getElementById('teamSchedule').value  = t?.schedule || '';
+  document.getElementById('teamDept').value      = t?.departmentId || '';
+  document.getElementById('teamLead').value      = t?.leadUid  || '';
+  document.getElementById('teamErr').style.display = 'none';
+  document.getElementById('teamModal').classList.add('open');
+};
+window.osTeamModalClose = () => document.getElementById('teamModal').classList.remove('open');
+
+window.osSaveTeam = async function() {
+  const name   = document.getElementById('teamName').value.trim();
+  const deptId = document.getElementById('teamDept').value;
+  if (!name || !deptId) {
+    document.getElementById('teamErr').textContent = 'Team name and department are required.';
+    document.getElementById('teamErr').style.display = 'block';
+    return;
+  }
+  const editId   = document.getElementById('teamEditId').value;
+  const type     = document.getElementById('teamType').value;
+  const schedule = document.getElementById('teamSchedule').value || null;
+  const leadUid  = document.getElementById('teamLead').value || null;
+  try {
+    if (editId) {
+      await _updateTeam({ businessId: _bid, teamId: editId, name, type, schedule, leadUid });
+    } else {
+      await _createTeam({ businessId: _bid, departmentId: deptId, name, type, schedule, leadUid });
+    }
+    await _loadTeams();
+    _toast('Team saved ✓');
+    osTeamModalClose();
+  } catch(e) {
+    document.getElementById('teamErr').textContent = e.message;
+    document.getElementById('teamErr').style.display = 'block';
+  }
+};
+
+/* ── Org Chart ── */
+function _renderChart() {
+  const el = document.getElementById('orgChart');
+  if (!_members.length) {
+    el.innerHTML = '<div class="os-empty">No members with reporting structure yet.</div>';
+    return;
+  }
+
+  // Build uid → member map and children map
+  const byUid = {};
+  const children = {};
+  _members.forEach(m => { byUid[m.uid] = m; children[m.uid] = []; });
+  const roots = [];
+  _members.forEach(m => {
+    if (m.reportsToUid && byUid[m.reportsToUid]) {
+      children[m.reportsToUid].push(m.uid);
+    } else {
+      roots.push(m.uid);
+    }
+  });
+
+  function _renderNode(uid, isRoot) {
+    const m = byUid[uid];
+    if (!m) return '';
+    const ch = children[uid] || [];
+    const initial = (m.name || '?').charAt(0).toUpperCase();
+    return `
+      <div>
+        <div class="os-chart-pill ${isRoot ? 'root' : ''}">
+          <span class="os-avatar" style="width:24px;height:24px;font-size:10px;">${initial}</span>
+          <div>
+            <div class="pill-name">${_esc(m.name || 'Unknown')}</div>
+            <div class="pill-role">${_roleName(m.role)}${m.roleTitle && m.roleTitle !== _roleName(m.role) ? ' · ' + _esc(m.roleTitle) : ''}</div>
+          </div>
+          ${m.department ? `<span class="pill-dept">${_esc(m.department)}</span>` : ''}
+        </div>
+        ${ch.length ? `<div class="os-chart-children">${ch.map(c => `<div class="os-chart-node-wrap">${_renderNode(c, false)}</div>`).join('')}</div>` : ''}
+      </div>`;
+  }
+
+  el.innerHTML = `<div>${roots.map(uid => _renderNode(uid, true)).join('')}</div>`;
+}
+
+/* ── Reporting Lines Table ── */
+function _renderReportingTable() {
+  const tbody = document.getElementById('repBody');
+  if (!_members.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="os-empty">No employees yet.</td></tr>';
+    return;
+  }
+  const byUid = {};
+  _members.forEach(m => { byUid[m.uid] = m; });
+
+  tbody.innerHTML = _members.map(m => {
+    const manager = m.reportsToUid ? byUid[m.reportsToUid] : null;
+    const initial = (m.name || '?').charAt(0).toUpperCase();
+    return `<tr>
+      <td><span class="os-avatar">${initial}</span>${_esc(m.name || 'Unknown')}</td>
+      <td>${_roleName(m.role)}</td>
+      <td>${_esc(m.department || '—')}</td>
+      <td>${manager ? `<span class="os-avatar" style="width:20px;height:20px;font-size:9px;">${(manager.name||'?').charAt(0).toUpperCase()}</span>${_esc(manager.name)}` : '<span style="color:var(--sub2);">—</span>'}</td>
+      <td><button class="os-btn os-btn-ghost os-btn-sm" onclick="osRepModal('${_esc(m.uid)}','${_esc(m.name||'')}','${_esc(m.reportsToUid||'')}')">Set</button></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Reporting modal ── */
+window.osRepModal = function(uid, name, currentMgrUid) {
+  document.getElementById('repTargetUid').value = uid;
+  document.getElementById('repTargetLabel').textContent = `Set reporting manager for: ${name}`;
+  const sel = document.getElementById('repManagerSelect');
+  sel.innerHTML = '<option value="">— No direct manager —</option>' +
+    _members.filter(m => m.uid !== uid).map(m =>
+      `<option value="${_esc(m.uid)}" ${m.uid === currentMgrUid ? 'selected' : ''}>${_esc(m.name||'Unknown')} · ${_roleName(m.role)}</option>`
+    ).join('');
+  document.getElementById('reportModal').classList.add('open');
+};
+window.osRepModalClose = () => document.getElementById('reportModal').classList.remove('open');
+
+window.osSaveReportingLine = async function() {
+  const targetUid    = document.getElementById('repTargetUid').value;
+  const reportsToUid = document.getElementById('repManagerSelect').value || null;
+  try {
+    await _setRepLine({ businessId: _bid, targetUid, reportsToUid });
+    await _loadTree();
+    _toast('Reporting line updated ✓');
+    osRepModalClose();
+  } catch(e) { _toast(e.message, true); }
+};
+
+/* ── Populate selects ── */
+function _populateDeptSelects() {
+  const filter = document.getElementById('teamFilterDept');
+  const deptHead = document.getElementById('deptHead');
+  const teamDept = document.getElementById('teamDept');
+  if (filter) filter.innerHTML = '<option value="">All Departments</option>' + _depts.map(d => `<option value="${_esc(d.deptId)}">${_esc(d.name)}</option>`).join('');
+  if (teamDept) teamDept.innerHTML = _depts.map(d => `<option value="${_esc(d.deptId)}">${_esc(d.name)}</option>`).join('') || '<option value="">No departments</option>';
+}
+
+function _populateMemberSelects() {
+  const deptHead  = document.getElementById('deptHead');
+  const teamLead  = document.getElementById('teamLead');
+  const opts = '<option value="">— None —</option>' + _members.map(m => `<option value="${_esc(m.uid)}">${_esc(m.name||'Unknown')} · ${_roleName(m.role)}</option>`).join('');
+  if (deptHead) deptHead.innerHTML = opts;
+  if (teamLead) teamLead.innerHTML = opts;
+}
+
+/* ── Tab switching ── */
+window.osTab = function(id) {
+  document.querySelectorAll('.os-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.os-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`panel-${id}`)?.classList.add('active');
+  document.getElementById(`tab-${id}`)?.classList.add('active');
+};
+
+/* ── Helpers ── */
+function _user() { try { return JSON.parse(localStorage.getItem('sokoniUser')||'null'); } catch(_){return null;} }
+function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _roleName(r) {
+  return {owner:'Owner',manager:'Manager',supervisor:'Supervisor',cashier:'Cashier',
+    inventory_officer:'Inventory Officer',accountant:'Accountant',driver:'Driver',
+    receptionist:'Receptionist',waiter:'Waiter',security:'Security',cleaner:'Cleaner'}[r]
+    || (r ? r.charAt(0).toUpperCase()+r.slice(1).replace(/_/g,' ') : 'Staff');
+}
+function _showErr(msg) { document.getElementById('osLoader').innerHTML = `<div class="os-empty">⚠️ ${_esc(msg)}</div>`; }
+let _toastT;
+function _toast(msg, isErr) {
+  const el = document.getElementById('osToast');
+  el.textContent = msg;
+  el.style.color = isErr ? 'var(--red)' : 'var(--g)';
+  el.classList.add('show');
+  clearTimeout(_toastT);
+  _toastT = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+_boot();
+</script>
+</body>
+</html>

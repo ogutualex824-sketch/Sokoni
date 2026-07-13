@@ -1,4 +1,110 @@
-﻿## [2026-07-13] — Workforce Identity Platform v2.0 — Instant Workspace Switching, Professional Profile, QR Onboarding
+﻿## [2026-07-13] — Enterprise Organization & Workforce Management Platform v1.0 — One Person · One Identity · Unlimited Organizations
+
+### Summary
+
+Full enterprise organizational management layer — comparable in scope to Google Workspace, Microsoft 365, and SAP SuccessFactors. Every business can now model its entire corporate structure: branches → departments → teams → employees with visual org charts, configurable multi-step approval workflows, time-bounded temporary access, authority delegation with automatic permission propagation, and an immutable audit trail. The employment lifecycle state machine tracks every status transition from probation through termination. All new capability is additive — zero breaking changes to existing Firebase Auth, Business Engine, Role Engine, or Session Engine.
+
+### Files Added
+
+| File | Purpose |
+|---|---|
+| `functions/org-engine.js` | 25 Cloud Functions: org directory, departments, teams, org chart, approval workflows, permission requests, temporary access, delegation, employment lifecycle, audit log, dashboard |
+| `org-directory.html` | Organization profile page — tabs for Profile, Contact, Legal & Tax (KRA PIN, eTIMS, VAT), Banking (accounts + settlement); `?bid=` scoped |
+| `org-structure.html` | Structure management — Departments, Teams, Org Chart (recursive pure-JS/CSS tree), Reporting Lines; `?bid=` scoped |
+| `org-workflows.html` | Workflows & Controls — Approval Workflow builder, Temp Access grants, Authority Delegation, Permission Requests, Audit Log; `?bid=` scoped |
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `staff-management.html` | Employment lifecycle section in staff modal (Probation → Confirm → On Leave → Suspend → Terminate); `smSetStatus()` + `smOpenRepModal()` helpers; links to org-workflows.html temp access and professional-profile.html |
+| `functions/index.js` | Import + 25 exports for `org-engine.js` appended |
+
+### Cloud Functions (new — 25)
+
+| Function | Description |
+|---|---|
+| `orgGetDirectory` | Reads corporate profile from `businesses/{bid}` |
+| `orgUpdateDirectory` | Patches org profile fields with FIELD_MAP validation |
+| `orgCreateDepartment` | Creates `orgDepartments` doc; rejects duplicate names (case-insensitive) |
+| `orgGetDepartments` | Lists departments by businessId; filters archived client-side |
+| `orgUpdateDepartment` | Patches department fields + head assignment |
+| `orgArchiveDepartment` | Soft-deletes: `status:'archived'` |
+| `orgCreateTeam` | Creates `orgTeams` doc; stores departmentName via lookup |
+| `orgGetTeams` | Lists teams by businessId ± optional departmentId filter |
+| `orgUpdateTeam` | Patches team fields |
+| `orgArchiveTeam` | Soft-deletes team |
+| `orgSetReportingLine` | Writes `reportsToUid` onto `workspaceMemberships` doc |
+| `orgGetReportingTree` | Returns all active members with reporting fields for tree rendering |
+| `orgSaveApprovalWorkflow` | Create or update workflow by `workflowId`; validates steps array |
+| `orgGetApprovalWorkflows` | Lists workflows by businessId |
+| `orgDeleteApprovalWorkflow` | Soft-deletes: `isActive:false` |
+| `orgRequestPermission` | Creates `orgPermissionRequests`; blocks duplicate pending requests |
+| `orgReviewPermissionRequest` | Approve (merges perms onto membership) or reject |
+| `orgGetPermissionRequests` | Lists requests by businessId ± status filter |
+| `orgGrantTempAccess` | Validates duration against whitelist; merges perms; sets `tempAccessExp` |
+| `orgRevokeTempAccess` | Strips temp perms; clears `tempAccessId` / `tempAccessExp` on membership |
+| `orgGetTempAccessGrants` | Lists active grants (filtered client-side) |
+| `orgCreateDelegation` | Applies delegated perms immediately to delegate's membership |
+| `orgRevokeDelegation` | Strips delegated perms from delegate |
+| `orgGetDelegations` | Lists active delegations |
+| `orgUpdateEmploymentStatus` | Lifecycle state machine: probation/confirmed/suspended/on_leave/transferred/resigned/terminated/archived; terminal states set `membership.status='terminated'` |
+| `orgGetAuditLog` | Last 50 entries ordered by `timestamp DESC`; composite index required |
+| `orgGetDashboard` | Parallel reads: members + departments + teams + pending invites + clocked-in count |
+
+### Firestore Collections (new — 7)
+
+| Collection | Purpose |
+|---|---|
+| `orgDepartments` | Department records per business: name, head, headUid, status, emoji |
+| `orgTeams` | Team records per department: type (shift/project/general), schedule, lead |
+| `orgApprovalWorkflows` | Multi-step workflow configs: steps[] with approverRole + label |
+| `orgPermissionRequests` | Employee permission requests pending manager review |
+| `orgTempAccess` | Time-bounded access grants with `expiresAt` and granted permissions |
+| `orgDelegations` | Authority delegation records: fromUid → toUid, date range, permissions |
+| `orgAuditLog` | Immutable audit trail; never deleted |
+
+### Firestore Indexes (new — 2, total now 199/200)
+
+| Collection | Fields | Scope |
+|---|---|---|
+| `orgTeams` | `businessId ASC` + `departmentId ASC` | Collection |
+| `orgAuditLog` | `businessId ASC` + `timestamp DESC` | Collection |
+
+### `workspaceMemberships` Schema Extensions (additive)
+
+| Field | Type | Purpose |
+|---|---|---|
+| `employmentStatus` | string | lifecycle state: probation/confirmed/suspended/on_leave/transferred/resigned/terminated/archived |
+| `statusReason` | string | free-text reason for last status change |
+| `statusUpdatedAt` | Timestamp | when status last changed |
+| `reportsToUid` | string | direct manager UID for org chart |
+| `tempAccessId` | string | active temp access grant ID |
+| `tempAccessExp` | Timestamp | when temp access expires |
+| `delegationId` | string | active delegation ID |
+
+### Security
+
+- All CFs call `_assertAuth(req)` — unauthenticated calls rejected immediately
+- Admin-only operations (create/update/archive departments, teams, workflows; grant temp access; create delegations; review permission requests; update employment status) call `_assertAdmin(uid, businessId)` which checks `owner` role or `users` permission
+- Temp access durations server-validated against whitelist `[30, 120, 480, 1440, 10080, 43200]` minutes — clients cannot set arbitrary durations
+- `orgAuditLog` is write-only from CFs; no CF deletes from it; Firestore rules should deny client delete
+- Employment lifecycle terminal states (`resigned`, `terminated`, `archived`) also set `workspaceMemberships.status='terminated'` to immediately revoke active workspace access
+- `orgGetDirectory` returns full corporate profile only to authenticated admin/owner of that business
+
+### Performance
+
+- `orgGetDashboard` uses `Promise.all` for parallel Firestore reads (members, departments, teams, pending invites, clocked-in) — single round-trip latency
+- Most new collections query by single field (`businessId`) to avoid composite indexes; only `orgTeams` and `orgAuditLog` add composite indexes
+- Org chart tree built client-side from flat member array — zero extra Firestore reads
+
+### Migration
+
+No schema migration required. All `workspaceMemberships` field extensions are additive with `undefined` defaults. Existing workforce data is unaffected.
+
+---
+
+## [2026-07-13] — Workforce Identity Platform v2.0 — Instant Workspace Switching, Professional Profile, QR Onboarding
 
 ### Summary
 

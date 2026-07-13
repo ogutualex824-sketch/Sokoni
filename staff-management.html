@@ -534,13 +534,16 @@ import { db } from './firebase.js';
 import { collection, query, where, getDocs, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const fns         = getFunctions();
-const _invite     = httpsCallable(fns, 'wfInviteEmployee');
-const _generateQr = httpsCallable(fns, 'wfGenerateStaffQR');
-const _revoke     = httpsCallable(fns, 'wfRevokeMembership');
-const _updateRole = httpsCallable(fns, 'wfUpdateRole');
-const _updatePerms= httpsCallable(fns, 'wfUpdatePermissions');
-const _cancelInv  = httpsCallable(fns, 'wfCancelInvitation');
-const _getMembers = httpsCallable(fns, 'wfGetBusinessMembers');
+const _invite       = httpsCallable(fns, 'wfInviteEmployee');
+const _generateQr   = httpsCallable(fns, 'wfGenerateStaffQR');
+const _revoke       = httpsCallable(fns, 'wfRevokeMembership');
+const _updateRole   = httpsCallable(fns, 'wfUpdateRole');
+const _updatePerms  = httpsCallable(fns, 'wfUpdatePermissions');
+const _cancelInv    = httpsCallable(fns, 'wfCancelInvitation');
+const _getMembers   = httpsCallable(fns, 'wfGetBusinessMembers');
+const _updateStatus = httpsCallable(fns, 'orgUpdateEmploymentStatus');
+const _setRepLine   = httpsCallable(fns, 'orgSetReportingLine');
+const _grantTemp    = httpsCallable(fns, 'orgGrantTempAccess');
 
 /* ── Global state ─────────────────────────────────────────── */
 let _user      = null;
@@ -962,6 +965,45 @@ window.openStaffModal = function(membershipId) {
       <button class="sm-btn sm-btn-ghost" onclick="document.getElementById('staffModal').classList.remove('open')">
         Cancel
       </button>
+    </div>
+
+    <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:16px;margin-top:6px;">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+        color:rgba(255,255,255,.3);margin-bottom:10px;">Employment Lifecycle</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:10px;">
+        Current status: <span style="color:#71ff00;font-weight:700;">${_esc(m.employmentStatus || 'active')}</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <button class="sm-btn sm-btn-ghost" style="font-size:11px;padding:5px 11px;"
+          onclick="smSetStatus('${_esc(membershipId)}','probation')">🔄 Probation</button>
+        <button class="sm-btn sm-btn-ghost" style="font-size:11px;padding:5px 11px;"
+          onclick="smSetStatus('${_esc(membershipId)}','confirmed')">✅ Confirm</button>
+        <button class="sm-btn sm-btn-ghost" style="font-size:11px;padding:5px 11px;"
+          onclick="smSetStatus('${_esc(membershipId)}','on_leave')">🏖️ On Leave</button>
+        <button class="sm-btn sm-btn-ghost" style="font-size:11px;padding:5px 11px;"
+          onclick="smSetStatus('${_esc(membershipId)}','suspended')">⏸️ Suspend</button>
+        <button class="sm-btn sm-btn-ghost" style="font-size:11px;padding:5px 11px;color:#ff4d4d;border-color:rgba(255,77,77,.2);"
+          onclick="smSetStatus('${_esc(membershipId)}','terminated')">🚫 Terminate</button>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid rgba(255,255,255,.07);padding-top:14px;margin-top:6px;">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+        color:rgba(255,255,255,.3);margin-bottom:10px;">Quick Actions</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <button class="sm-btn sm-btn-ghost" style="font-size:11px;padding:5px 11px;"
+          onclick="smOpenRepModal('${_esc(membershipId)}','${_esc(m.uid)}','${_esc(m.userName||'')}')">
+          <i class="fas fa-code-branch"></i> Set Manager
+        </button>
+        <a href="org-workflows.html?bid=${_esc(_activeBizId)}&tab=tempaccess" style="text-decoration:none;"
+           class="sm-btn sm-btn-ghost" style="font-size:11px;padding:5px 11px;">
+          <i class="fas fa-clock"></i> Temp Access
+        </a>
+        <a href="professional-profile.html?uid=${_esc(m.uid)}" target="_blank"
+           style="text-decoration:none;" class="sm-btn sm-btn-ghost" style="font-size:11px;padding:5px 11px;">
+          <i class="fas fa-id-card"></i> Profile
+        </a>
+      </div>
     </div>`;
 
   modal.classList.add('open');
@@ -1007,6 +1049,38 @@ window.confirmCancelInv = async function(invitationId, target) {
   } catch (e) {
     alert('Failed to cancel: ' + e.message);
   }
+};
+
+/* ── Employment lifecycle ─────────────────────────────────── */
+window.smSetStatus = async function(membershipId, newStatus) {
+  const labels = {
+    probation:'probation', confirmed:'confirmed', on_leave:'on leave',
+    suspended:'suspended', terminated:'terminated',
+  };
+  const reason = prompt(`Set status to "${labels[newStatus] || newStatus}".\n\nReason (optional):`);
+  if (reason === null) return;
+  try {
+    await _updateStatus({ membershipId, newStatus, reason: reason.trim() });
+    document.getElementById('staffModal').classList.remove('open');
+    await loadMembers();
+    alert(`Status updated to: ${newStatus}`);
+  } catch(e) { alert('Failed: ' + e.message); }
+};
+
+/* ── Reporting line ───────────────────────────────────────── */
+window.smOpenRepModal = async function(membershipId, targetUid, name) {
+  /* Build a quick inline select using current members */
+  const others = (_members || []).filter(m => m.uid !== targetUid);
+  const sel = `<select id="smRepMgrSelect" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:8px 12px;color:#fff;font-size:14px;">
+    <option value="">— No direct manager —</option>
+    ${others.map(m => `<option value="${_esc(m.uid)}">${_esc(m.userName||m.userEmail)} · ${_roleName(m.role)}</option>`).join('')}
+  </select>`;
+  const chosen = prompt(`Set reporting manager for ${name}:\n\nEnter manager UID or leave blank to remove:\n(Use org-structure.html for a richer interface)`);
+  if (chosen === null) return;
+  try {
+    await _setRepLine({ businessId: _activeBizId, targetUid, reportsToUid: chosen.trim() || null });
+    alert('Reporting line updated.');
+  } catch(e) { alert('Failed: ' + e.message); }
 };
 
 /* ── Utilities ────────────────────────────────────────────── */

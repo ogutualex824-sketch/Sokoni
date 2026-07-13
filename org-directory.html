@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+  <script src="security.js"></script>
+  <script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>SOKONI — Organization Directory</title>
+  <meta name="theme-color" content="#71ff00">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="shared-header.js" defer></script>
+  <style>
+    :root {
+      --bg:#050505; --sur:#111; --sur2:#161616; --sur3:#1c1c1c;
+      --bor:rgba(255,255,255,.07); --bor2:rgba(255,255,255,.04);
+      --g:#71ff00; --g-dim:rgba(113,255,0,.06); --g-mid:rgba(113,255,0,.15);
+      --txt:#fff; --sub:rgba(255,255,255,.5); --sub2:rgba(255,255,255,.25);
+      --red:#ff4d4d; --amber:#ffa94d; --blue:#4dabf7; --radius:14px;
+    }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      background:var(--bg); color:var(--txt);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      min-height:100vh; padding-bottom:calc(80px + env(safe-area-inset-bottom,0));
+    }
+
+    /* ── Shell ── */
+    .od-shell { max-width:820px; margin:0 auto; padding:24px 16px; }
+
+    /* ── Page header ── */
+    .od-page-hdr { display:flex; align-items:center; gap:14px; margin-bottom:24px; }
+    .od-page-icon {
+      width:52px; height:52px; border-radius:14px; flex-shrink:0;
+      background:var(--g-dim); border:1px solid rgba(113,255,0,.18);
+      display:flex; align-items:center; justify-content:center; font-size:24px;
+      overflow:hidden;
+    }
+    .od-page-icon img { width:100%; height:100%; object-fit:cover; border-radius:13px; }
+    .od-page-title { font-size:20px; font-weight:900; letter-spacing:-.02em; }
+    .od-page-sub   { font-size:12.5px; color:var(--sub); margin-top:2px; }
+
+    /* ── Tabs ── */
+    .od-tabs { display:flex; gap:4px; overflow-x:auto; padding-bottom:2px; margin-bottom:22px;
+      scrollbar-width:none; -ms-overflow-style:none; }
+    .od-tabs::-webkit-scrollbar { display:none; }
+    .od-tab {
+      padding:8px 16px; border-radius:10px; font-size:13px; font-weight:700;
+      background:none; border:1px solid var(--bor); color:var(--sub);
+      cursor:pointer; white-space:nowrap; transition:all .15s;
+    }
+    .od-tab:hover  { background:rgba(255,255,255,.05); color:var(--txt); }
+    .od-tab.active { background:var(--g); color:#000; border-color:var(--g); }
+
+    /* ── Panel ── */
+    .od-panel { display:none; }
+    .od-panel.active { display:block; }
+
+    /* ── Card ── */
+    .od-card { background:var(--sur); border:1px solid var(--bor); border-radius:var(--radius); margin-bottom:16px; }
+    .od-card-hdr {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 20px; border-bottom:1px solid var(--bor);
+    }
+    .od-card-title { font-size:13.5px; font-weight:800; }
+    .od-card-title i { color:var(--g); margin-right:7px; }
+    .od-card-body { padding:20px; }
+
+    /* ── Form elements ── */
+    .od-grid  { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .od-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+    @media(max-width:580px) {
+      .od-grid, .od-grid3 { grid-template-columns:1fr; }
+    }
+    .od-field { display:flex; flex-direction:column; gap:5px; }
+    .od-label { font-size:11px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--sub); }
+    .od-input, .od-select, .od-textarea {
+      background:rgba(255,255,255,.04); border:1px solid var(--bor);
+      border-radius:9px; padding:10px 13px; color:var(--txt);
+      font-size:14px; font-family:inherit; width:100%;
+      transition:border-color .15s;
+    }
+    .od-input:focus, .od-select:focus, .od-textarea:focus {
+      outline:none; border-color:rgba(113,255,0,.4); background:rgba(113,255,0,.03);
+    }
+    .od-select option { background:#1a1a1a; }
+    .od-textarea { resize:vertical; min-height:72px; line-height:1.5; }
+    .od-input[readonly] { color:var(--sub); cursor:default; }
+
+    /* ── Status badge ── */
+    .od-status {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:4px 11px; border-radius:20px; font-size:11.5px; font-weight:700;
+    }
+    .od-status.ok     { background:rgba(113,255,0,.1); color:var(--g); border:1px solid rgba(113,255,0,.2); }
+    .od-status.warn   { background:rgba(255,169,77,.08); color:var(--amber); border:1px solid rgba(255,169,77,.2); }
+    .od-status.off    { background:rgba(255,255,255,.05); color:var(--sub); border:1px solid var(--bor); }
+    .od-status.danger { background:rgba(255,77,77,.08); color:var(--red); border:1px solid rgba(255,77,77,.2); }
+
+    /* ── Bank account list ── */
+    .od-bank-list { display:flex; flex-direction:column; gap:10px; }
+    .od-bank-item {
+      display:flex; align-items:center; gap:12px;
+      background:rgba(255,255,255,.03); border:1px solid var(--bor);
+      border-radius:10px; padding:12px 16px;
+    }
+    .od-bank-icon {
+      width:36px; height:36px; border-radius:9px; flex-shrink:0;
+      background:var(--g-dim); border:1px solid rgba(113,255,0,.12);
+      display:flex; align-items:center; justify-content:center; font-size:16px;
+    }
+    .od-bank-info { flex:1; min-width:0; }
+    .od-bank-name { font-size:13.5px; font-weight:700; }
+    .od-bank-meta { font-size:12px; color:var(--sub); margin-top:2px; }
+    .od-bank-primary {
+      font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px;
+      background:rgba(113,255,0,.1); color:var(--g); flex-shrink:0;
+    }
+
+    /* ── Add bank modal ── */
+    .od-modal-bg {
+      display:none; position:fixed; inset:0; z-index:9000;
+      background:rgba(0,0,0,.75); backdrop-filter:blur(4px);
+      align-items:center; justify-content:center; padding:16px;
+    }
+    .od-modal-bg.open { display:flex; }
+    .od-modal {
+      background:var(--sur); border:1px solid var(--bor); border-radius:20px;
+      padding:28px; width:100%; max-width:440px; position:relative;
+      max-height:90vh; overflow-y:auto;
+    }
+    .od-modal-title { font-size:18px; font-weight:800; margin-bottom:18px; }
+    .od-modal-close {
+      position:absolute; top:16px; right:16px;
+      background:rgba(255,255,255,.06); border:1px solid var(--bor);
+      border-radius:8px; width:30px; height:30px; color:var(--sub); cursor:pointer;
+    }
+
+    /* ── Buttons ── */
+    .od-btn {
+      padding:10px 20px; border-radius:10px; font-size:13.5px; font-weight:700;
+      cursor:pointer; border:none; transition:all .15s;
+    }
+    .od-btn-primary { background:var(--g); color:#000; }
+    .od-btn-primary:hover { filter:brightness(1.1); }
+    .od-btn-ghost  {
+      background:rgba(255,255,255,.05); border:1px solid var(--bor); color:var(--sub);
+    }
+    .od-btn-ghost:hover { background:rgba(255,255,255,.09); color:var(--txt); }
+    .od-btn-danger { background:rgba(255,77,77,.1); border:1px solid rgba(255,77,77,.2); color:var(--red); }
+    .od-btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:18px; }
+
+    /* ── Toast ── */
+    #odToast {
+      position:fixed; bottom:calc(24px + env(safe-area-inset-bottom,0)); left:50%;
+      transform:translateX(-50%) translateY(20px); z-index:9999;
+      background:var(--sur3); border:1px solid var(--bor); border-radius:12px;
+      padding:10px 20px; font-size:13.5px; font-weight:600;
+      opacity:0; transition:all .25s; pointer-events:none; white-space:nowrap;
+    }
+    #odToast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+    /* ── Loader ── */
+    .od-loader { padding:40px; text-align:center; }
+    .od-spinner {
+      width:28px; height:28px; border:3px solid var(--g-dim);
+      border-top-color:var(--g); border-radius:50%; margin:0 auto 10px;
+      animation:od-spin .8s linear infinite;
+    }
+    @keyframes od-spin { to { transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<main class="od-shell">
+
+  <div class="od-loader" id="odLoader">
+    <div class="od-spinner"></div>
+    <div style="color:var(--sub);font-size:13px;">Loading organization…</div>
+  </div>
+
+  <div id="odContent" style="display:none;">
+
+    <!-- Page header -->
+    <div class="od-page-hdr">
+      <div class="od-page-icon" id="odLogoWrap">🏢</div>
+      <div>
+        <div class="od-page-title" id="odOrgName">Organization</div>
+        <div class="od-page-sub" id="odOrgType"></div>
+      </div>
+      <a href="org-structure.html" id="odStructureLink"
+         style="margin-left:auto;text-decoration:none;display:flex;align-items:center;gap:6px;
+                font-size:12px;font-weight:700;color:var(--g);padding:7px 14px;
+                border-radius:9px;border:1px solid rgba(113,255,0,.2);background:var(--g-dim);">
+        <i class="fas fa-sitemap"></i> Structure
+      </a>
+    </div>
+
+    <!-- Tabs -->
+    <div class="od-tabs" role="tablist">
+      <button class="od-tab active" onclick="odTab('profile')"   id="tab-profile">Profile</button>
+      <button class="od-tab"        onclick="odTab('contact')"   id="tab-contact">Contact</button>
+      <button class="od-tab"        onclick="odTab('legal')"     id="tab-legal">Legal &amp; Tax</button>
+      <button class="od-tab"        onclick="odTab('banking')"   id="tab-banking">Banking</button>
+    </div>
+
+    <!-- ── Panel: Profile ── -->
+    <div class="od-panel active" id="panel-profile">
+      <div class="od-card">
+        <div class="od-card-hdr">
+          <div class="od-card-title"><i class="fas fa-building"></i>Organization Profile</div>
+        </div>
+        <div class="od-card-body">
+          <div class="od-grid" style="margin-bottom:16px;">
+            <div class="od-field">
+              <label class="od-label">Organization Name</label>
+              <input class="od-input" id="fName" readonly placeholder="Legal name">
+            </div>
+            <div class="od-field">
+              <label class="od-label">Trading / Brand Name</label>
+              <input class="od-input" id="fTradingName" placeholder="e.g. SOKONI Foods">
+            </div>
+          </div>
+          <div class="od-grid" style="margin-bottom:16px;">
+            <div class="od-field">
+              <label class="od-label">Industry</label>
+              <input class="od-input" id="fIndustry" readonly>
+            </div>
+            <div class="od-field">
+              <label class="od-label">Organization Type</label>
+              <input class="od-input" id="fType" readonly>
+            </div>
+          </div>
+          <div class="od-grid">
+            <div class="od-field">
+              <label class="od-label">Country</label>
+              <input class="od-input" id="fCountry" value="Kenya" readonly>
+            </div>
+            <div class="od-field">
+              <label class="od-label">County</label>
+              <input class="od-input" id="fCounty" placeholder="e.g. Nairobi">
+            </div>
+          </div>
+          <div class="od-btn-row">
+            <button class="od-btn od-btn-primary" onclick="odSaveProfile()"><i class="fas fa-floppy-disk"></i> Save Profile</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subscription -->
+      <div class="od-card">
+        <div class="od-card-hdr">
+          <div class="od-card-title"><i class="fas fa-crown"></i>Subscription</div>
+        </div>
+        <div class="od-card-body" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:16px;font-weight:800;" id="subPlan">—</div>
+            <div style="font-size:12px;color:var(--sub);margin-top:3px;">Current plan</div>
+          </div>
+          <a href="subscription.html" class="od-btn od-btn-ghost" style="text-decoration:none;">
+            <i class="fas fa-arrow-up-right-from-square"></i> Manage
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Panel: Contact ── -->
+    <div class="od-panel" id="panel-contact">
+      <div class="od-card">
+        <div class="od-card-hdr">
+          <div class="od-card-title"><i class="fas fa-address-card"></i>Contact Information</div>
+        </div>
+        <div class="od-card-body">
+          <div class="od-grid" style="margin-bottom:16px;">
+            <div class="od-field">
+              <label class="od-label">Business Email</label>
+              <input class="od-input" id="fEmail" type="email" readonly placeholder="contact@business.co.ke">
+            </div>
+            <div class="od-field">
+              <label class="od-label">Business Phone</label>
+              <input class="od-input" id="fPhone" type="tel" readonly placeholder="+254 700 000 000">
+            </div>
+          </div>
+          <div class="od-field" style="margin-bottom:16px;">
+            <label class="od-label">Website</label>
+            <input class="od-input" id="fWebsite" type="url" placeholder="https://www.business.co.ke">
+          </div>
+          <div class="od-field" style="margin-bottom:16px;">
+            <label class="od-label">Physical Address</label>
+            <textarea class="od-textarea" id="fPhysicalAddress" rows="2"
+              placeholder="Street, Building, Floor/Unit…"></textarea>
+          </div>
+          <div class="od-grid">
+            <div class="od-field">
+              <label class="od-label">City</label>
+              <input class="od-input" id="fCity" placeholder="e.g. Nairobi">
+            </div>
+            <div class="od-field">
+              <label class="od-label">Postal Address / Box</label>
+              <input class="od-input" id="fPostalAddress" placeholder="P.O. Box 12345-00100">
+            </div>
+          </div>
+          <div class="od-btn-row">
+            <button class="od-btn od-btn-primary" onclick="odSaveContact()"><i class="fas fa-floppy-disk"></i> Save Contact</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Panel: Legal & Tax ── -->
+    <div class="od-panel" id="panel-legal">
+      <div class="od-card">
+        <div class="od-card-hdr">
+          <div class="od-card-title"><i class="fas fa-scale-balanced"></i>Legal &amp; Tax</div>
+        </div>
+        <div class="od-card-body">
+          <div class="od-grid" style="margin-bottom:16px;">
+            <div class="od-field">
+              <label class="od-label">Company Registration No.</label>
+              <input class="od-input" id="fRegNumber" placeholder="PVT-XXXX or CPR/…">
+            </div>
+            <div class="od-field">
+              <label class="od-label">KRA PIN</label>
+              <input class="od-input" id="fKraPin" placeholder="A000000000X"
+                maxlength="11" style="letter-spacing:.05em; text-transform:uppercase;">
+            </div>
+          </div>
+          <div class="od-grid" style="margin-bottom:16px;">
+            <div class="od-field">
+              <label class="od-label">eTIMS Status</label>
+              <select class="od-select" id="fEtimsStatus">
+                <option value="inactive">Inactive</option>
+                <option value="pending">Pending Registration</option>
+                <option value="active">Active</option>
+              </select>
+            </div>
+            <div class="od-field">
+              <label class="od-label">VAT Status</label>
+              <select class="od-select" id="fVatStatus">
+                <option value="not_registered">Not VAT Registered</option>
+                <option value="registered">VAT Registered</option>
+              </select>
+            </div>
+          </div>
+          <div class="od-field" style="margin-bottom:16px;">
+            <label class="od-label">Company Certificate URL (CR12 / Certificate of Incorporation)</label>
+            <input class="od-input" id="fCompanyCertUrl" type="url" placeholder="https://…">
+          </div>
+
+          <!-- Status summary row -->
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;" id="legalStatusRow"></div>
+
+          <div class="od-btn-row">
+            <button class="od-btn od-btn-primary" onclick="odSaveLegal()"><i class="fas fa-floppy-disk"></i> Save Legal Info</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Panel: Banking ── -->
+    <div class="od-panel" id="panel-banking">
+      <div class="od-card">
+        <div class="od-card-hdr">
+          <div class="od-card-title"><i class="fas fa-landmark"></i>Bank Accounts</div>
+          <button class="od-btn od-btn-ghost" style="padding:7px 14px;font-size:12px;" onclick="odOpenBankModal()">
+            <i class="fas fa-plus"></i> Add Account
+          </button>
+        </div>
+        <div class="od-card-body">
+          <div class="od-bank-list" id="bankList">
+            <div style="color:var(--sub2);font-size:13px;padding:12px 0;">No bank accounts added yet.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="od-card">
+        <div class="od-card-hdr">
+          <div class="od-card-title"><i class="fas fa-money-bill-transfer"></i>Settlement Account</div>
+        </div>
+        <div class="od-card-body">
+          <div class="od-grid3" style="margin-bottom:14px;">
+            <div class="od-field">
+              <label class="od-label">Bank Name</label>
+              <input class="od-input" id="setBank" placeholder="e.g. Equity Bank">
+            </div>
+            <div class="od-field">
+              <label class="od-label">Account Name</label>
+              <input class="od-input" id="setAcctName" placeholder="Legal entity name">
+            </div>
+            <div class="od-field">
+              <label class="od-label">Account Number</label>
+              <input class="od-input" id="setAcctNum" placeholder="0123456789">
+            </div>
+          </div>
+          <div class="od-btn-row">
+            <button class="od-btn od-btn-primary" onclick="odSaveSettlement()"><i class="fas fa-floppy-disk"></i> Save Settlement Account</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /odContent -->
+</main>
+
+<!-- ── Add Bank Account modal ── -->
+<div class="od-modal-bg" id="bankModal">
+  <div class="od-modal">
+    <button class="od-modal-close" onclick="odCloseBankModal()"><i class="fas fa-times"></i></button>
+    <div class="od-modal-title">Add Bank Account</div>
+    <div class="od-field" style="margin-bottom:13px;">
+      <label class="od-label">Bank Name *</label>
+      <input class="od-input" id="bBankName" placeholder="e.g. KCB, Equity, Cooperative">
+    </div>
+    <div class="od-field" style="margin-bottom:13px;">
+      <label class="od-label">Account Name *</label>
+      <input class="od-input" id="bAcctName" placeholder="As per bank records">
+    </div>
+    <div class="od-field" style="margin-bottom:13px;">
+      <label class="od-label">Account Number *</label>
+      <input class="od-input" id="bAcctNum" placeholder="0123456789">
+    </div>
+    <div class="od-field" style="margin-bottom:13px;">
+      <label class="od-label">Branch</label>
+      <input class="od-input" id="bBranch" placeholder="e.g. Westlands">
+    </div>
+    <div class="od-field" style="margin-bottom:13px;">
+      <label class="od-label">SWIFT / BIC (optional)</label>
+      <input class="od-input" id="bSwift" placeholder="e.g. KCBLKENX">
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <input type="checkbox" id="bIsPrimary" style="accent-color:var(--g);">
+      <label for="bIsPrimary" style="font-size:13.5px;cursor:pointer;">Set as primary account</label>
+    </div>
+    <div id="bankErr" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px;"></div>
+    <div class="od-btn-row" style="margin-top:0;">
+      <button class="od-btn od-btn-primary" onclick="odSaveBank()"><i class="fas fa-check"></i> Save</button>
+      <button class="od-btn od-btn-ghost"   onclick="odCloseBankModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="odToast"></div>
+
+<script type="module">
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+
+const fns = getFunctions();
+const _getDir    = httpsCallable(fns, 'orgGetDirectory');
+const _updateDir = httpsCallable(fns, 'orgUpdateDirectory');
+
+let _biz = null;     // active business from localStorage
+let _dir = null;     // fetched directory data
+let _banks = [];     // working bank accounts array
+
+/* ── Boot ── */
+async function _boot() {
+  const user = _user();
+  if (!user) { location.href = 'login.html'; return; }
+
+  /* Use ?bid param or fall back to first owned/active business */
+  const params = new URLSearchParams(location.search);
+  const bid    = params.get('bid') || user.activeBusinessId || localStorage.getItem('sokoniActiveWorkspace');
+
+  if (!bid) {
+    _showError('No organization selected. Please select a business first.');
+    return;
+  }
+
+  try {
+    const res = await _getDir({ businessId: bid });
+    _dir   = res.data;
+    _dir.businessId = bid;
+    _banks = [...(_dir.bankAccounts || [])];
+    _populate();
+  } catch (e) {
+    _showError(e.message);
+  }
+
+  document.getElementById('odLoader').style.display  = 'none';
+  document.getElementById('odContent').style.display = '';
+}
+
+function _user() {
+  try { return JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch(_) { return null; }
+}
+
+/* ── Populate ── */
+function _populate() {
+  const d = _dir;
+  /* Header */
+  const logoWrap = document.getElementById('odLogoWrap');
+  if (d.logo) { logoWrap.innerHTML = `<img src="${_esc(d.logo)}" alt="">`; }
+  document.getElementById('odOrgName').textContent = d.name || 'Organization';
+  document.getElementById('odOrgType').textContent = [d.industry, d.type].filter(Boolean).join(' · ');
+
+  /* Nav link */
+  document.getElementById('odStructureLink').href = `org-structure.html?bid=${_esc(d.businessId)}`;
+
+  /* Profile panel */
+  _val('fName',        d.name);
+  _val('fTradingName', d.tradingName);
+  _val('fIndustry',    d.industry);
+  _val('fType',        d.type);
+  _val('fCounty',      d.county);
+
+  /* Subscription */
+  document.getElementById('subPlan').textContent = d.subscriptionPlan || 'Free';
+
+  /* Contact panel */
+  _val('fEmail',           d.email);
+  _val('fPhone',           d.phone);
+  _val('fWebsite',         d.website);
+  _val('fPhysicalAddress', d.physicalAddress);
+  _val('fCity',            d.city);
+  _val('fPostalAddress',   d.postalAddress);
+
+  /* Legal panel */
+  _val('fRegNumber',      d.regNumber);
+  _val('fKraPin',         d.kraPin);
+  _sel('fEtimsStatus',    d.etimsStatus);
+  _sel('fVatStatus',      d.vatStatus);
+  _val('fCompanyCertUrl', d.companyCertUrl);
+  _renderLegalStatus();
+
+  /* Banking panel */
+  _renderBanks();
+  if (d.settlementAccount) {
+    _val('setBank',     d.settlementAccount.bankName    || '');
+    _val('setAcctName', d.settlementAccount.accountName || '');
+    _val('setAcctNum',  d.settlementAccount.accountNumber || '');
+  }
+}
+
+function _renderLegalStatus() {
+  const row = document.getElementById('legalStatusRow');
+  const etims = document.getElementById('fEtimsStatus').value;
+  const vat   = document.getElementById('fVatStatus').value;
+  const kra   = (document.getElementById('fKraPin').value || '').trim();
+  row.innerHTML =
+    `<span class="od-status ${kra ? 'ok' : 'warn'}"><i class="fas fa-${kra ? 'circle-check' : 'triangle-exclamation'}"></i>${kra ? 'KRA PIN Set' : 'KRA PIN Missing'}</span>` +
+    `<span class="od-status ${etims === 'active' ? 'ok' : etims === 'pending' ? 'warn' : 'off'}"><i class="fas fa-receipt"></i>eTIMS: ${etims === 'active' ? 'Active' : etims === 'pending' ? 'Pending' : 'Inactive'}</span>` +
+    `<span class="od-status ${vat === 'registered' ? 'ok' : 'off'}"><i class="fas fa-percent"></i>${vat === 'registered' ? 'VAT Registered' : 'Not VAT Registered'}</span>`;
+}
+
+function _renderBanks() {
+  const el = document.getElementById('bankList');
+  if (!_banks.length) {
+    el.innerHTML = '<div style="color:var(--sub2);font-size:13px;padding:12px 0;">No bank accounts added yet.</div>';
+    return;
+  }
+  el.innerHTML = _banks.map((b, i) => `
+    <div class="od-bank-item">
+      <div class="od-bank-icon">🏦</div>
+      <div class="od-bank-info">
+        <div class="od-bank-name">${_esc(b.bankName)}${b.branch ? ` — ${_esc(b.branch)}` : ''}</div>
+        <div class="od-bank-meta">${_esc(b.accountName)} · ${_esc(b.accountNumber)}${b.swift ? ` · ${_esc(b.swift)}` : ''}</div>
+      </div>
+      ${b.isPrimary ? '<span class="od-bank-primary">Primary</span>' : ''}
+      <button class="od-btn od-btn-danger" style="padding:5px 10px;font-size:11px;"
+        onclick="window._odRemoveBank(${i})"><i class="fas fa-trash"></i></button>
+    </div>`).join('');
+}
+
+/* ── Save handlers ── */
+async function _save(patch) {
+  try {
+    await _updateDir({ businessId: _dir.businessId, ...patch });
+    _toast('Saved ✓');
+  } catch(e) { _toast(e.message, true); }
+}
+
+window.odSaveProfile = () => _save({
+  tradingName: _v('fTradingName'),
+  county:      _v('fCounty'),
+});
+
+window.odSaveContact = () => _save({
+  website:         _v('fWebsite'),
+  physicalAddress: _v('fPhysicalAddress'),
+  postalAddress:   _v('fPostalAddress'),
+  city:            _v('fCity'),
+});
+
+window.odSaveLegal = () => {
+  _renderLegalStatus();
+  _save({
+    regNumber:      _v('fRegNumber'),
+    kraPin:         _v('fKraPin').toUpperCase(),
+    etimsStatus:    _v('fEtimsStatus'),
+    vatStatus:      _v('fVatStatus'),
+    companyCertUrl: _v('fCompanyCertUrl'),
+  });
+};
+
+window.odSaveSettlement = () => _save({
+  settlementAccount: {
+    bankName:      _v('setBank'),
+    accountName:   _v('setAcctName'),
+    accountNumber: _v('setAcctNum'),
+  },
+});
+
+/* ── Bank account management ── */
+window.odOpenBankModal  = () => { document.getElementById('bankModal').classList.add('open'); };
+window.odCloseBankModal = () => {
+  document.getElementById('bankModal').classList.remove('open');
+  ['bBankName','bAcctName','bAcctNum','bBranch','bSwift'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('bIsPrimary').checked = false;
+  document.getElementById('bankErr').style.display = 'none';
+};
+
+window.odSaveBank = async () => {
+  const name = _v('bBankName'), acct = _v('bAcctName'), num = _v('bAcctNum');
+  if (!name || !acct || !num) {
+    document.getElementById('bankErr').textContent = 'Bank name, account name and number are required.';
+    document.getElementById('bankErr').style.display = 'block';
+    return;
+  }
+  const isPrimary = document.getElementById('bIsPrimary').checked;
+  if (isPrimary) _banks.forEach(b => { b.isPrimary = false; });
+  _banks.push({ bankName: name, accountName: acct, accountNumber: num, branch: _v('bBranch'), swift: _v('bSwift'), isPrimary });
+  await _save({ bankAccounts: _banks });
+  _renderBanks();
+  odCloseBankModal();
+};
+
+window._odRemoveBank = async (i) => {
+  _banks.splice(i, 1);
+  await _save({ bankAccounts: _banks });
+  _renderBanks();
+};
+
+/* ── Tab switching ── */
+window.odTab = function(id) {
+  document.querySelectorAll('.od-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.od-tab').forEach(t => t.classList.remove('active'));
+  const panelEl = document.getElementById(`panel-${id}`);
+  const tabEl   = document.getElementById(`tab-${id}`);
+  if (panelEl) panelEl.classList.add('active');
+  if (tabEl)   tabEl.classList.add('active');
+  if (id === 'legal') _renderLegalStatus();
+};
+
+/* ── Helpers ── */
+function _val(id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; }
+function _sel(id, v) { const el = document.getElementById(id); if (el) el.value = v || el.value; }
+function _v(id)      { return (document.getElementById(id)?.value || '').trim(); }
+function _esc(s)     { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+let _toastTimer;
+function _toast(msg, isErr) {
+  const el = document.getElementById('odToast');
+  el.textContent = msg;
+  el.style.borderColor = isErr ? 'rgba(255,77,77,.3)' : 'rgba(113,255,0,.2)';
+  el.style.color       = isErr ? 'var(--red)' : 'var(--g)';
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+function _showError(msg) {
+  document.getElementById('odLoader').innerHTML =
+    `<div style="padding:40px;text-align:center;"><div style="font-size:32px;margin-bottom:12px;">⚠️</div>
+     <div style="color:var(--sub);font-size:13px;">${_esc(msg)}</div></div>`;
+}
+
+/* ── Deep-link to tab ── */
+const tabParam = new URLSearchParams(location.search).get('tab');
+if (tabParam) setTimeout(() => window.odTab && window.odTab(tabParam), 0);
+
+_boot();
+</script>
+</body>
+</html>
