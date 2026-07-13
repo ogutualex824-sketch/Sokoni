@@ -550,25 +550,85 @@ const SokoniSecurity = (() => {
 
            A consent banner is allowed to be prominent. It is not allowed to quietly eat
            the controls underneath it. */
+        /* The page's OWN bottom padding, read BEFORE we touch it (bottom-nav pages already
+           reserve ~80px). The old code assigned the banner height straight over the top of it,
+           so on a page reserving 80px for a 184px banner it actually reserved LESS space than
+           the page already had. Add to it; never replace it. */
+        var _basePad = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
+
         var _pad = function(){
           var h = (b.offsetHeight || 72);
-          /* Normal page content: push it up so the banner sits below it. */
-          document.body.style.paddingBottom = h + 'px';
+          /* Normal page content: push it up so the banner sits below it.
+             Set with `important`: mobile.css:43 declares
+                 body { padding-bottom: max(80px, calc(64px + safe-area)) !important }
+             and a plain inline style loses to an !important rule. That is why the previous
+             attempt silently did nothing on a phone — the assignment ran, and the cascade
+             threw it away. */
+          document.body.style.setProperty('padding-bottom', (_basePad + h) + 'px', 'important');
           /* FIXED panels cannot be moved by body padding — they are out of flow. The
              seller dashboard's sidebar is `position:fixed; height:calc(100vh - 68px)`,
              so the banner was sitting on top of its last entries (Messages, Marketing)
              and swallowing those taps regardless of any body padding.
              Publish the banner's height so fixed layouts can subtract it. */
           document.documentElement.style.setProperty('--sk-consent-h', h + 'px');
+          _liftFabs(h);
         };
-        _pad();
+
+        /* The floating buttons are position:fixed at the foot of the screen, so no amount of
+           body padding moves them — the banner sat squarely on top of the KASS button and the
+           back-to-top button and swallowed their taps.
+
+           TWO stylesheets already fight over these buttons with !important —
+           sokoni-responsive.css  { bottom: var(--sk-fab-clear) !important }  and
+           sokoni-mobile-fixes.css { bottom: max(82px, …) !important }
+           so setting a CSS variable is not reliable: whichever rule wins the cascade may not
+           read it. (That is exactly why lifting --sk-kass-bottom did nothing.) An inline
+           !important cannot be out-cascaded by either. Each button's own base offset is
+           remembered, so Accept restores it exactly. */
+        var FAB_SEL = '#sokoniScrollTop,#kassBtn,#sokoni-wa-support,.back-to-top-btn,.sk-fab,.fab';
+        var _liftFabs = function (h) {
+          document.querySelectorAll(FAB_SEL).forEach(function (el) {
+            if (el.__skFabBase == null) {
+              el.__skFabBase = parseFloat(getComputedStyle(el).bottom) || 82;
+            }
+            el.style.setProperty('bottom', (el.__skFabBase + h) + 'px', 'important');
+          });
+        };
+        var _dropFabs = function () {
+          document.querySelectorAll(FAB_SEL).forEach(function (el) {
+            el.style.removeProperty('bottom');
+            el.__skFabBase = null;
+          });
+        };
+
+        /* MEASURE AFTER LAYOUT, NOT DURING IT.
+           _pad() used to run synchronously on the line after appendChild, when the banner had
+           not yet reflowed. On a phone it wraps to ~184px, but the height read at that instant
+           was ~80px — so most of the banner still overlaid the page. On /login that left
+           "Create Account", "Continue as Guest" and the phone-number fields underneath it,
+           looking perfectly normal and simply not responding to a tap.
+
+           Two frames for the initial read (one to lay out, one to settle), then a
+           ResizeObserver so the reservation tracks the banner through font loading, text
+           wrapping and rotation — the cases where its height actually changes. */
+        requestAnimationFrame(function(){ requestAnimationFrame(_pad); });
+        /* The FABs are injected by deferred scripts (kass-widget, scroll-top) that may not have
+           run yet. Re-apply a few times so a late arrival is lifted too. */
+        [400, 1200, 2500, 5000].forEach(function (ms) { setTimeout(function () { _pad(); }, ms); });
+        if (typeof ResizeObserver === 'function') {
+          var _ro = new ResizeObserver(_pad);
+          _ro.observe(b);
+          b.__skRO = _ro;                          /* so accept() can disconnect it */
+        }
         window.addEventListener('resize', _pad);   /* it reflows/wraps on narrow screens */
 
         document.getElementById("_sokoniPrivacyAcceptBtn").onclick = function(){
           localStorage.setItem("sokoniPrivacyAccepted", Date.now().toString());
           b.style.cssText += ";transform:translateY(100%);transition:transform .35s ease;";
           window.removeEventListener('resize', _pad);
-          document.body.style.paddingBottom = '';   /* give the space straight back */
+          if (b.__skRO) { b.__skRO.disconnect(); b.__skRO = null; }  /* or it re-pads on the slide-out */
+          _dropFabs();                             /* buttons ride back down */
+          document.body.style.removeProperty('padding-bottom');  /* back to the page's own padding */
           document.documentElement.style.setProperty('--sk-consent-h', '0px');
           setTimeout(function(){ if(b.isConnected) b.remove(); }, 400);
         };
