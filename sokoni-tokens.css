@@ -160,7 +160,20 @@
   --sk-z-scroll-top: 520; /* scroll-to-top button */
 
   /* In-page overlays (below marketing popups) */
-  --sk-z-drawer:   600;   /* side drawers / sheets */
+  --sk-z-drawer:   600;   /* side drawers that sit WITHIN the page, below the header */
+
+  /* ── Full-screen sheets — MUST be above the header ─────────────────────────
+     A sheet that covers the whole screen (Notifications, Messages, Wishlist…) is a
+     MODAL, not an in-page drawer. It must sit ABOVE --sk-z-header.
+
+     The Notification Centre used --sk-z-drawer (600) while the header is 100001 — so the
+     header rendered ON TOP of the sheet, covering its title, its "Mark all read" control,
+     its search box and its ✕. The close button was 44px, present, and physically
+     unreachable: the user could open Notifications and then could not get out.
+
+     Use --sk-z-sheet for anything that covers the header. That is the whole distinction:
+     if it covers the header, it must out-rank the header.                              */
+  --sk-z-sheet:    100010;  /* full-screen sheets — above the header, below modals */
 
   /* ── Above-marketing-popup layer (marketing popups sit at ~99997–99999) ── */
   --sk-z-header:   100001; /* top app bar — must beat all marketing overlays */

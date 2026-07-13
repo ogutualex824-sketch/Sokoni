@@ -235,6 +235,12 @@
   /* Notification engine — real-time engine, preferences, grouping */
   _injectAsset('script', { src: 'sokoni-notif-engine.js', defer: true }, 'sk-notif-engine-script');
   /* Notification center — bell UI, slide-in panel, inline actions */
+  /* Canonical full-screen sheet: header, 44px close, safe-area, five ways out.
+     Loaded BEFORE the notification centre so any overlay can adopt it. Every future
+     hub/overlay (Messages, Wishlist, Orders, Settings…) should use SokoniSheet rather
+     than hand-rolling a panel and picking the wrong z-index tier, which is exactly how
+     Notifications became impossible to close. */
+  _injectAsset('script', { src: 'sokoni-sheet.js', defer: true }, 'sk-sheet-script');
   _injectAsset('script', { src: 'sokoni-notif-center.js', defer: true }, 'sk-notif-center-script');
   /* Zero Trust client SDK — device fingerprint, risk cache, step-up auth guard */
   _injectAsset('script', { src: 'sokoni-zero-trust.js', defer: true }, 'sk-zero-trust-script');
@@ -349,6 +355,19 @@
     (document.head || document.documentElement).appendChild(pv2Link);
   }
 
+  /* Menu button opener — resilient to SokoniDrawer not being ready at tap time.
+     Dynamic scripts ignore `defer` and load async, creating a window where
+     window.SokoniDrawer is undefined. This queues the open and flushes it on load. */
+  window._skOpenMenu = function(btn) {
+    if (window.SokoniDrawer) {
+      window.SokoniDrawer.open('sk-menu-drawer');
+      if (btn) btn.setAttribute('aria-expanded', 'true');
+    } else {
+      // Store the button reference so onload can set aria-expanded
+      window._skMenuPending = btn || document.getElementById('sk-menu-btn');
+    }
+  };
+
   /* Universal drawer system — CSS + JS (once) */
   if (!document.getElementById('sk-drawers-link')) {
     const drawLink = document.createElement('link');
@@ -361,7 +380,14 @@
     const drawScript = document.createElement('script');
     drawScript.id = 'sk-drawer-script';
     drawScript.src = 'sokoni-drawer.js';
-    drawScript.defer = true;
+    drawScript.onload = function() {
+      if (window._skMenuPending && window.SokoniDrawer) {
+        const _pendBtn = window._skMenuPending;
+        window._skMenuPending = null;
+        window.SokoniDrawer.open('sk-menu-drawer');
+        if (_pendBtn && _pendBtn.setAttribute) _pendBtn.setAttribute('aria-expanded', 'true');
+      }
+    };
     (document.head || document.documentElement).appendChild(drawScript);
   }
 
@@ -695,6 +721,7 @@
       transition: background .15s;
     }
     .sk-nav-icon-btn:hover { background: rgba(255,255,255,0.08); }
+    .sk-nav-icon-btn:active { background: rgba(255,255,255,0.18); }
 
     /* ── Touch targets ──────────────────────────────────────────────────────
        The header is deliberately slim: icons render 34px (30px on small
@@ -1180,7 +1207,7 @@
 
         /* Menu (hamburger) */
         '<button type="button" class="sk-nav-icon-btn" id="sk-menu-btn" aria-label="Menu" aria-expanded="false" ' +
-          'onclick="var _sd=window.SokoniDrawer;_sd?_sd.open(\'sk-menu-drawer\'):void 0;this.setAttribute(\'aria-expanded\',\'true\');">' +
+          'onclick="_skOpenMenu(this);">' +
           '<span aria-hidden="true" style="font-size:13px;font-weight:900;letter-spacing:0px;display:flex;flex-direction:column;gap:3px;">' +
             '<span style="display:block;width:18px;height:2px;background:currentColor;border-radius:2px;"></span>' +
             '<span style="display:block;width:14px;height:2px;background:currentColor;border-radius:2px;"></span>' +

@@ -85,9 +85,27 @@
       '#sk-notif-badge-v2.priority-low,#sk-notif-badge.priority-low          {background:#455a64;color:#fff;}',
 
       /* ── Panel overlay ── */
+      /* ── THE BUG ────────────────────────────────────────────────────────────
+         This was z-index: var(--sk-z-drawer, 600).
+
+         --sk-z-drawer means "a side drawer WITHIN the page". But this is a FULL-SCREEN
+         sheet, and the global header sits at --sk-z-header (100001) — 99,401 above it.
+         So the header rendered ON TOP of this panel: over its title, over "Mark all
+         read", over its search box, and over its ✕.
+
+         Measured: elementFromPoint at the centre of the close button returned
+         NAV#sk-top-nav. The ✕ was present and 44px and completely unreachable. The user
+         could open Notifications and then could not get out.
+
+         Every reported symptom — header overlapping the nav, the tiny half-hidden ✕,
+         overlapping controls, the two search bars stacking, no way to dismiss — is this
+         ONE mistake seen from five angles.
+
+         --sk-z-sheet is the tier for anything that COVERS the header. If it covers the
+         header, it must out-rank the header.                                          */
       '#sk-nc-overlay{',
         'position:fixed;inset:0;',
-        'z-index:var(--sk-z-drawer,600);',
+        'z-index:var(--sk-z-sheet,100010);',
         'pointer-events:none;',
         'visibility:hidden;',
       '}',
@@ -118,11 +136,18 @@
       '#sk-nc-overlay.open #sk-nc-panel{transform:translateX(0);}',
 
       /* ── Panel header ── */
+      /* Safe area: the sheet now sits ABOVE the header, so it owns the top of the screen —
+         including whatever the notch or the Dynamic Island is occupying. A flat 16px put
+         the title and the ✕ underneath it. env() adds the inset only where one exists, so
+         nothing changes on a device without a notch. */
       '#sk-nc-head{',
         'display:flex;align-items:center;gap:10px;',
-        'padding:16px 18px;',
+        'padding:calc(16px + env(safe-area-inset-top,0px)) 18px 16px;',
+        'padding-left:calc(18px + env(safe-area-inset-left,0px));',
+        'padding-right:calc(18px + env(safe-area-inset-right,0px));',
         'border-bottom:1px solid rgba(255,255,255,0.07);',
         'flex-shrink:0;',
+        'min-height:56px;',
       '}',
       '#sk-nc-title{',
         'flex:1;font-size:17px;font-weight:900;color:#fff;',
@@ -141,19 +166,25 @@
         '-webkit-tap-highlight-color:transparent;',
       '}',
       '.sk-nc-head-btn:hover{background:rgba(255,255,255,0.1);}',
+      /* 44×44 — the iOS touch-target floor. It was 34×34: small enough to be reliably
+         mis-tapped even when it was NOT being covered by the header.
+         flex:0 0 44px so a long title can never squeeze the one control that gets the
+         user out. */
       '.sk-nc-close{',
-        'width:34px;height:34px;',
-        'border-radius:10px;',
-        'border:1px solid rgba(255,255,255,0.1);',
-        'background:rgba(255,255,255,0.05);',
-        'color:rgba(255,255,255,0.75);',
-        'font-size:16px;',
+        'width:44px;height:44px;',
+        'flex:0 0 44px;',
+        'border-radius:12px;',
+        'border:1px solid rgba(255,255,255,0.12);',
+        'background:rgba(255,255,255,0.06);',
+        'color:#fff;',
+        'font-size:18px;line-height:1;',
         'cursor:pointer;',
         'display:flex;align-items:center;justify-content:center;',
-        'flex-shrink:0;',
         'transition:background 150ms ease;',
       '}',
       '.sk-nc-close:hover{background:rgba(255,255,255,0.12);}',
+      /* A keyboard user must be able to SEE where focus is. */
+      '.sk-nc-close:focus-visible{outline:2px solid var(--sk-green,#71ff00);outline-offset:2px;}',
 
       /* ── Search ── */
       '#sk-nc-search-wrap{',
@@ -1025,6 +1056,13 @@
     _overlayEl.classList.add('open');
     _overlayEl.setAttribute('aria-hidden', 'false');
 
+    /* A history entry, so Back (and the iOS swipe-back gesture) closes the panel instead
+       of navigating the user off the page entirely. */
+    try { history.pushState({ skNotifCenter: true }, ''); _pushedHistory = true; } catch (e) {}
+    global.addEventListener('popstate', _onPop);
+    _overlayEl.addEventListener('touchstart', _onTouchStart, { passive: true });
+    _overlayEl.addEventListener('touchmove',  _onTouchMove,  { passive: true });
+
     _listEl   = document.getElementById('sk-nc-list');
     _tabsEl   = document.getElementById('sk-nc-tabs');
     _searchEl = document.getElementById('sk-nc-search');
@@ -1054,7 +1092,41 @@
     }, 310);
   }
 
-  function closePanel() {
+  /* ── Dismissal ────────────────────────────────────────────────────────────────
+     The panel already closed on ✕, Escape and backdrop tap. It did NOT close on browser
+     Back — and on iOS the back GESTURE (swipe from the left edge) is the back button. So
+     the most natural way a phone user tries to leave a full-screen sheet did nothing, and
+     the ✕ that should have caught them was underneath the header.
+
+     One way out is one bug away from none. There are now five: ✕, Escape, backdrop,
+     Back/swipe-back, and swipe-down.                                                    */
+  var _pushedHistory = false;
+  var _touchY0 = null;
+
+  function _onPop() {
+    _pushedHistory = false;               /* the entry has already been popped */
+    if (_open) closePanel(true);
+  }
+
+  function _onTouchStart(e) {
+    var t = e.touches && e.touches[0];
+    if (!t) return;
+    /* Only from the header/grip, or when the list is already at the top. Otherwise a
+       downward flick while READING would fling the panel shut and lose the user's place —
+       which is a worse bug than the one being fixed. */
+    var listEl = document.getElementById('sk-nc-list');
+    var fromChrome = e.target.closest && e.target.closest('#sk-nc-head');
+    _touchY0 = (fromChrome || !listEl || listEl.scrollTop <= 0) ? t.clientY : null;
+  }
+
+  function _onTouchMove(e) {
+    if (_touchY0 == null) return;
+    var t = e.touches && e.touches[0];
+    if (!t) return;
+    if (t.clientY - _touchY0 > 90) { _touchY0 = null; closePanel(); }
+  }
+
+  function closePanel(fromPop) {
     if (!_overlayEl) return;
     _open = false;
     _overlayEl.classList.remove('open');
@@ -1062,6 +1134,19 @@
 
     if (global.SokoniLayout) global.SokoniLayout.unlockScroll();
     else document.body.style.overflow = '';
+
+    /* Remove every listener we added. A panel opened and closed fifty times must not leave
+       fifty handlers behind — that is how a long-lived PWA session gets slow. */
+    global.removeEventListener('popstate', _onPop);
+    _overlayEl.removeEventListener('touchstart', _onTouchStart);
+    _overlayEl.removeEventListener('touchmove',  _onTouchMove);
+
+    /* Consume the history entry we pushed — unless Back is what closed us, in which case
+       it is already gone and calling back() again would navigate the user off the page. */
+    if (_pushedHistory && !fromPop) {
+      _pushedHistory = false;
+      try { history.back(); } catch (e) {}
+    }
 
     if (_bellEl) {
       _bellEl.setAttribute('aria-expanded', 'false');
