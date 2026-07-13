@@ -43,9 +43,27 @@
     .law-badge  { display:inline-block; padding:5px 14px; background:rgba(113,255,0,0.15); border:1px solid rgba(113,255,0,0.35); border-radius:20px; font-size:11px; font-weight:800; color:#c8ff80; margin-bottom:16px; text-transform:uppercase; letter-spacing:1px; }
 
     /* Tab nav */
-    .law-tabs{ display:flex; gap:6px; padding:18px 24px 0; overflow-x:auto; scrollbar-width:none; border-bottom:1px solid rgba(255,255,255,0.06); }
+    /* Sticky quick-nav: the 12 sections stay reachable while scrolling a 4,700px page.
+       Sits directly beneath the global header (--sk-header-h, 64px), which is itself fixed.
+       Opaque background is required — the panes scroll underneath it. */
+    .law-tabs{ display:flex; gap:6px; padding:18px 24px 0; overflow-x:auto; scrollbar-width:none; border-bottom:1px solid rgba(255,255,255,0.06);
+               position:sticky; top:var(--sk-header-h, 64px); z-index:40;
+               background:#050505; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; }
+    .law-tabs::-webkit-scrollbar{ display:none; }
+    /* Anchor offset so a tab click never parks a heading under the sticky bar. */
+    .law-pane{ scroll-margin-top:calc(var(--sk-header-h, 64px) + 62px); }
     .law-tab{ padding:10px 20px; border-radius:12px 12px 0 0; border:1px solid rgba(255,255,255,0.08); border-bottom:none; background:rgba(255,255,255,0.02); color:rgba(255,255,255,0.5); font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; font-family:inherit; transition:all .2s; }
     .law-tab.active{ background:rgba(113,255,0,0.1); border-color:rgba(113,255,0,0.3); color:#c8ff80; }
+
+    /* Tap targets. The court-directory phone numbers and the WhatsApp links were rendering
+       at ~16px tall — well under the 44px minimum, and they are the primary way a user
+       actually contacts a court or the legal desk. Padding grows the hit area without
+       moving anything: these already sit on their own lines. */
+    .law-pane a[href^="tel:"],
+    .law-pane a[href^="https://wa.me"],
+    .law-pane a[href^="mailto:"]{
+      display:inline-flex; align-items:center; min-height:44px; padding:2px 4px; margin:-2px -4px;
+    }
 
     .law-body{ max-width:1100px; margin:0 auto; padding:36px 24px 100px; }
     .law-pane{ display:none; }
@@ -4721,6 +4739,10 @@ function _setPct(labelId, barId, pct){
 </script><script src="sokoni-audit.js" defer></script>
 <script src="sokoni-mpesa.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
+<!-- Powers the Follow and Share buttons on every lawyer card. Without it,
+     window.SokoniSocial is undefined and both buttons silently do nothing —
+     they are guarded by `&&`, so they failed without any error. -->
+<script src="sokoni-social.js" defer></script>
   <!-- REGISTER CTA — universal fallback for other business types -->
   <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
     <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
@@ -4743,15 +4765,64 @@ function _setPct(labelId, barId, pct){
     const grid = document.getElementById("lawyersGrid");
     if (!grid) return;
     const cards = [...grid.querySelectorAll(".lawyer-card[data-provider-id]")];
-    if (!_lglOpenNow) { cards.forEach(c => c.style.display = ""); return; }
+    if (!_lglOpenNow) {
+      cards.forEach(c => (c.style.display = ""));
+      const empty = grid.querySelector("#lglOpenNowEmpty");
+      if (empty) empty.remove();
+      const count = document.getElementById("lawyerResultCount");
+      if (count) count.textContent = cards.length + (cards.length === 1 ? " advocate found" : " advocates found");
+      return;
+    }
     const ids = cards.map(c => c.dataset.providerId).filter(Boolean);
-    if (!ids.length || !window.db) return;
-    const snaps = await Promise.all(ids.map(id => db.collection("availabilityStatus").doc(id).get().catch(() => null)));
-    cards.forEach((card, i) => {
-      const snap = snaps[i];
-      const isOpen = snap && snap.exists ? snap.data().isOpen : false;
-      card.style.display = isOpen ? "" : "none";
-    });
+    if (!ids.length) return;
+
+    /* This used to read `window.db` with the compat API (db.collection(...).doc(...).get()).
+       Nothing in the repo ever assigns window.db, and this page uses modular Firebase v9,
+       so `if (!window.db) return;` fired every single time: the button toggled its own
+       colour and filtered nothing at all. Use the page's own accessor and the modular API. */
+    const db = await _getDb();
+    if (!db) { _lglOpenNowFailed(btn); return; }
+
+    try {
+      const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+      const snaps = await Promise.all(
+        ids.map(id => getDoc(doc(db, "availabilityStatus", id)).catch(() => null))
+      );
+      let shown = 0;
+      cards.forEach((card, i) => {
+        const snap = snaps[i];
+        const isOpen = snap && snap.exists() ? snap.data().isOpen === true : false;
+        card.style.display = isOpen ? "" : "none";
+        if (isOpen) shown++;
+      });
+      const count = document.getElementById("lawyerResultCount");
+      if (count) count.textContent = shown === 1 ? "1 advocate open now" : shown + " advocates open now";
+      if (!shown) _lglOpenNowEmpty(grid);
+    } catch (e) {
+      console.warn("[Legal Hub] Open Now filter:", e.message);
+      _lglOpenNowFailed(btn);
+    }
+  }
+
+  /* The filter could not run. Undo the toggle rather than leave it looking applied
+     over an unfiltered list — a filter that lies is worse than one that is off. */
+  function _lglOpenNowFailed(btn) {
+    _lglOpenNow = false;
+    if (btn) { btn.style.background = ""; btn.classList.remove("active-lf"); }
+    const grid = document.getElementById("lawyersGrid");
+    if (grid) grid.querySelectorAll(".lawyer-card").forEach(c => (c.style.display = ""));
+    const count = document.getElementById("lawyerResultCount");
+    if (count) count.textContent = "Availability is unavailable right now — showing all advocates.";
+  }
+
+  /* It ran, but nobody is open. Say so instead of showing a blank grid. */
+  function _lglOpenNowEmpty(grid) {
+    if (grid.querySelector("#lglOpenNowEmpty")) return;
+    const d = document.createElement("div");
+    d.id = "lglOpenNowEmpty";
+    d.style.cssText = "grid-column:1/-1;padding:28px 16px;text-align:center;color:rgba(255,255,255,.55);font-size:14px;";
+    d.textContent = "No advocates are marked open right now. Turn off “Open Now” to see everyone.";
+    grid.appendChild(d);
   }
   </script>
 </body>
