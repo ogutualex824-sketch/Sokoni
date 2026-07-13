@@ -110,12 +110,27 @@ console.log('\nNavigation — the Home button\n');
     : bad('the Home redirect requires the network — Home would fail offline');
 }
 
-/* ── 6. The cache version must have been bumped ────────────────────────────── */
+/* ── 6. The cache version must be at or past the fix ───────────────────────────
+   The Home fix landed in v50. Anything older means users are still being served the
+   worker that returns ERR_FAILED.
+
+   This asserts the VERSION NUMBER, not the version NAME. An earlier draft of this
+   check required the string "home" in the version — which failed the moment someone
+   legitimately bumped to "logo-png-v51", a strictly NEWER worker that carries the fix
+   perfectly well. A guard that enforces a naming convention rather than a real property
+   is a guard that cries wolf, and a guard that cries wolf gets disabled. */
 {
-  const v = /CACHE_VERSION\s*=\s*["']([^"']+)["']/.exec(sw);
-  v && /home/i.test(v[1])
-    ? ok(`cache version bumped for this fix (${v[1]}) — users get the corrected worker`)
-    : bad('CACHE_VERSION not bumped — users would keep the old worker and Home would stay broken');
+  const FIX_LANDED_IN = 50;
+  const v   = /CACHE_VERSION\s*=\s*["']([^"']+)["']/.exec(sw);
+  const num = v && /v(\d+)\s*$/.exec(v[1]);
+
+  if (!v || !num) {
+    bad('CACHE_VERSION is missing or does not end in -vNN — cannot verify users get the fixed worker');
+  } else if (Number(num[1]) >= FIX_LANDED_IN) {
+    ok(`cache version is v${num[1]} (fix landed in v${FIX_LANDED_IN}) — users receive the corrected worker`);
+  } else {
+    bad(`CACHE_VERSION is v${num[1]}, older than v${FIX_LANDED_IN} — users would keep the broken worker and Home would stay broken`);
+  }
 }
 
 console.log('');
