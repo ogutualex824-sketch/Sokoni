@@ -183,7 +183,8 @@ exports.purchaseDigitalProduct = onCall(CF_OPTS, async (req) => {
     .where('buyerUid', '==', uid).where('productId', '==', productId).limit(1).get();
   if (!existing.empty) return { purchaseId: existing.docs[0].id, alreadyOwned: true };
 
-  const platformFeeRate = 0.10; // 10% platform fee on digital products
+  /* Rate from the single config (digital_products). Was a bare 0.10 literal here. */
+  const platformFeeRate = require('./commission-config').resolveRate('digital_products').pct / 100;
   const platformFee = product.price === 0 ? 0 : Math.round(product.price * platformFeeRate * 100) / 100;
   const sellerAmount = product.price - platformFee;
   const licenseKey = product.price === 0 ? null : crypto.randomBytes(12).toString('hex').toUpperCase();
@@ -297,7 +298,7 @@ exports.getDigitalSellerDashboard = onCall(CF_OPTS, async (req) => {
   return {
     totalProducts: products.length, activeProducts: active.length,
     totalRevenue, totalSales,
-    platformFeeTotal: Math.round(totalRevenue * 0.10 * 100) / 100,
+    platformFeeTotal: Math.round(totalRevenue * (require('./commission-config').resolveRate('digital_products').pct / 100) * 100) / 100,
     sellerRevenue: Math.round(totalRevenue * 0.90 * 100) / 100,
     products: products.map(p => ({
       productId: p.productId, title: p.title, category: p.category,

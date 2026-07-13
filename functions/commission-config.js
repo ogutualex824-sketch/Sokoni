@@ -52,6 +52,15 @@ const RATES = {
   hotel:            { pct: 5,   fixedKES: 0,    _was: 'hub bnb 5%' },
   digital_products: { pct: 10,  fixedKES: 0,    _was: 'hub digital 10% / category 20%' },
 
+  /* ── rates that were buried inside hub Cloud Functions as bare literals ──
+   * These were never in any table. They were `const platformFeeRate = 0.03;` sitting in the
+   * middle of a purchase handler, which is why no audit of the "commission tables" ever found
+   * them. They are distinct products — a pay-per-view stream is not an event ticket is not a
+   * venue booking — so they get their own categories rather than being flattened into `events`
+   * and silently repriced. The values are exactly what those functions were charging. */
+  event_tickets:    { pct: 3,   fixedKES: 0,    _was: 'event-hub.js:493 `const platformFeeRate = 0.03`' },
+  ppv:              { pct: 15,  fixedKES: 0,    _was: 'entertainment-hub.js:215 `listing.price * 0.15`' },
+
   /* ── no hub counterpart, so no conflict: the existing category rate stands ── */
   services:         { pct: 15,  fixedKES: 0,    _was: 'category only' },
   education:        { pct: 15,  fixedKES: 0,    _was: 'category only' },

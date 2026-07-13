@@ -380,7 +380,7 @@ window.SokoniFood = (function () {
       ...data,
       status:'placed',
       statusHistory:[{status:'placed',ts:Date.now()}],
-      commission:Math.round((data.subtotal||0)*0.10),
+      commission:Math.round((data.subtotal||0) * (SokoniCommission.pct("food_delivery") / 100)),
       createdAt:Date.now(),
     };
     const orders=lsArr(ORDERS_KEY);

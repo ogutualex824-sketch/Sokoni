@@ -115,6 +115,30 @@ for (const f of files) {
   });
 }
 
+/* ── 3b. bare-literal commission rates ─────────────────────────────────────────
+   The nine tables were the easy half. Five MORE commission rates were hiding as bare literals
+   inside hub purchase handlers — `const platformFeeRate = 0.03;` in the middle of event-hub's
+   ticket flow — which is why no audit of the "commission tables" ever found them. A rate is a
+   rate whether or not it lives in an object. */
+/* A plausible commission rate is 1%–30%. Restricting the range keeps the guard off Math.random()
+   seeds, score weightings, and percentile maths, which are full of harmless 0.5s and 0.25s. */
+const RATE = '0\\.(?:0[1-9]|[12]\\d)\\b';
+const BARE_RATE = new RegExp('\\b(?:platformFee(?:Rate)?|commission(?:Rate|Pct)?|takeRate|serviceFee)\\s*=\\s*' + RATE, 'i');
+const BARE_MULT = new RegExp('\\*\\s*' + RATE + '[^\\n]{0,40}(?:commission|platform\\s*fee)', 'i');
+const COMMISSION_MULT = new RegExp('(?:commission|platformFee)[^\\n]{0,40}\\*\\s*' + RATE, 'i');
+for (const f of files) {
+  if (ALLOWLIST[f]) continue;
+  SRC[f].split('\n').forEach((l, i) => {
+    if (/resolveRate|SokoniCommission|calculateCommission|COMMISSION_CONFIG/.test(l)) return;
+    /* VAT/WHT/DST are taxes ON the commission, not commission rates. They have their own
+       config (TAX_CONFIG) and must not be confused with a take rate. */
+    if (/\bvat|\bwht|\bdst|\btax/i.test(l)) return;
+    if (BARE_RATE.test(l) || BARE_MULT.test(l) || COMMISSION_MULT.test(l)) {
+      errors.push(f + ':' + (i + 1) + '  hardcoded commission rate: ' + l.trim().slice(0, 62));
+    }
+  });
+}
+
 /* ── 4. magic fallbacks on a commission lookup ─────────────────────────────── */
 for (const f of files) {
   if (ALLOWLIST[f]) continue;

@@ -212,7 +212,9 @@ exports.purchaseEntertainment = onCall(CF_OPTS, async (req) => {
     .where('status', '==', 'completed').limit(1).get();
   if (!existing.empty) return { purchaseId: existing.docs[0].id, alreadyOwned: true };
 
-  const platformFee = Math.round(listing.price * 0.15 * 100) / 100; // 15% on PPV
+  /* Rate from the single config (ppv). Was a bare 0.15 literal here, in no table anywhere. */
+  const _ppvPct = require('./commission-config').resolveRate('ppv').pct;
+  const platformFee = Math.round(listing.price * (_ppvPct / 100) * 100) / 100;
   const ref = db().collection('entertainmentPurchases').doc();
   await db().runTransaction(async t => {
     t.set(ref, {

@@ -584,7 +584,10 @@ async function executeTool(name, input) {
 
       case "get_tax_stats": {
         const now = new Date();
-        const COMMISSION = 0.10; // SOKONI takes 10% commission
+        /* The tax report assumed a flat 10% take. The platform has never charged 10% on
+           marketplace orders — it charges 3% — so this analytic overstated commission revenue
+           by more than 3x. Rate now comes from the single config. */
+        const COMMISSION = COMMISSION_CONFIG.RATES.default.pct / 100;
         const period = input.period || "month";
 
         /* ── Year path: aggregate pre-built daily FinOS snapshots (avoids full orders scan) ── */
@@ -2589,7 +2592,9 @@ exports.onOrderStatusChange = onDocumentUpdated(
     /* ── Delivery platform fee on order completion ── */
     if (toStatus === "delivered" && after.sellerUid) {
       const deliveryFee = Number(after.deliveryFee || 0);
-      const platformFee = Math.round(deliveryFee * 0.08 * 100) / 100;
+      /* Rate from the single config (hub). Was a bare 0.08 literal. */
+      const _delPct = COMMISSION_CONFIG.resolveRate('hub').pct;
+      const platformFee = Math.round(deliveryFee * (_delPct / 100) * 100) / 100;
       const riderFee    = Math.round((deliveryFee - platformFee) * 100) / 100;
       db.collection("deliveryFees").add({
         orderId,
@@ -3388,48 +3393,32 @@ const SUBSCRIPTION_PLANS = {
 const FEATURED_PRICING = { daily: 200, weekly: 800, monthly: 2500 };
 
 /* ── Helper: resolve effective commission for a payment ── */
+/* Thin adapter over the ONE commission engine.
+ *
+ * This used to be a second engine: its own precedence chain over revenueConfig, its own
+ * arithmetic (the KES 10 floor, the flat fee), and it never looked at commissionRules — so a
+ * rate an admin set as a rule had no effect on any payment that took this rail, and a
+ * revenueConfig override had no effect on any payment that took the other one. Both now
+ * resolve inside calculateCommission(), which is the single entry point for every rail.
+ *
+ * Kept only to preserve the { pct, fixedKES, commissionKES, totalOwed } shape that
+ * onSellerPaymentCreated writes into commissionLedger. */
 async function _resolveCommission(sellerUid, hub, grossAmount) {
-  let pct = null;
-  let fixedKES = 0;
-
-  /* 1. Seller-specific override (highest priority) */
-  const sellerCfg = await db.collection("revenueConfig").doc(`seller_${sellerUid}`).get().catch(() => null);
-  if (sellerCfg?.exists) {
-    const d = sellerCfg.data();
-    if (typeof d.commissionPct === "number") { pct = d.commissionPct; }
-    if (typeof d.fixedFee     === "number") { fixedKES = d.fixedFee; }
-  }
-
-  /* 2. Hub-level config */
-  if (pct === null) {
-    const hubCfg = await db.collection("revenueConfig").doc(`hub_${hub || "default"}`).get().catch(() => null);
-    if (hubCfg?.exists) {
-      const d = hubCfg.data();
-      if (typeof d.commissionPct === "number") { pct = d.commissionPct; }
-      if (typeof d.fixedFee     === "number") { fixedKES = d.fixedFee; }
-    }
-  }
-
-  /* 3. Global platform default */
-  if (pct === null) {
-    const globalCfg = await db.collection("revenueConfig").doc("global").get().catch(() => null);
-    if (globalCfg?.exists && typeof globalCfg.data().defaultCommissionPct === "number") {
-      pct = globalCfg.data().defaultCommissionPct;
-    }
-  }
-
-  /* 4. Hard-coded fallback */
-  if (pct === null) {
-    const fallback = COMMISSION_CONFIG.resolveRate(hub);
-    pct = fallback.pct;
-    if (fixedKES === 0) fixedKES = fallback.fixedKES;
-  }
-
-  const commissionKES = Math.round(grossAmount * pct / 100 * 100) / 100;
-  const minKES = COMMISSION_CONFIG.MIN_COMMISSION_KES;
-  const totalOwed = Math.max(commissionKES, pct > 0 ? minKES : 0) + fixedKES;
-
-  return { pct, fixedKES, commissionKES, totalOwed };
+  const { calculateCommission } = require('./finos-utils');
+  const r = await calculateCommission(db, {
+    orderAmountCents: Math.round(Number(grossAmount) * 100),
+    category:         hub,
+    sellerId:         sellerUid,
+    hubId:            hub,
+  });
+  return {
+    pct:           r.effectiveRate,
+    fixedKES:      r.fixedKES || 0,
+    /* commissionKES excludes the flat fee; totalOwed includes it — the shape callers expect.
+       calculateCommission already applied the minimum and the flat fee, so do NOT re-apply. */
+    commissionKES: Math.round((r.commissionCents - (r.fixedKES || 0) * 100)) / 100,
+    totalOwed:     r.commissionCents / 100,
+  };
 }
 
 /* ── Auto-record commission when a seller payment is confirmed ── */

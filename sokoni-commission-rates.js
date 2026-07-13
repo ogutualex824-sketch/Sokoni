@@ -55,6 +55,14 @@
       "pct": 10,
       "fixedKES": 0
     },
+    "event_tickets": {
+      "pct": 3,
+      "fixedKES": 0
+    },
+    "ppv": {
+      "pct": 15,
+      "fixedKES": 0
+    },
     "services": {
       "pct": 15,
       "fixedKES": 0

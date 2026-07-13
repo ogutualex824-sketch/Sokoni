@@ -422,7 +422,7 @@ function generateInvoice(orderId){
   const vatRate      = 0.16;
   const vatExcl      = Math.round(grossTotal / (1 + vatRate));
   const vatAmount    = grossTotal - vatExcl;
-  const commission   = Math.round(grossTotal * 0.12);
+  const commission   = Math.round(grossTotal * (SokoniCommission.pct("marketplace") / 100));
   const sellerPayout = grossTotal - commission;
   document.getElementById("invTotalsBox").innerHTML = `
     <div class="inv-total-row"><span class="inv-total-label">Subtotal (VAT Excl.)</span><span class="inv-total-val">KES ${vatExcl.toLocaleString()}</span></div>

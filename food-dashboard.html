@@ -494,7 +494,7 @@ function delPromo(idx) {
 function renderAnalytics() {
   const orders = _vendorOrders.filter(o => ['delivered','picked_up'].includes(o.status));
   const totalRevenue = orders.reduce((s, o) => { const v = (o.vendors||[]).find(v=>v.restaurantId===_restaurant.id); return s + (v ? v.subtotal : o.total); }, 0);
-  const commission = Math.round(totalRevenue * 0.1);
+  const commission = Math.round(totalRevenue * (SokoniCommission.pct("food_delivery") / 100));
   const ratings = SokoniFood.getRatings(_restaurant.id);
   const avgRating = ratings.length ? (ratings.reduce((s, r) => s + r.rating, 0) / ratings.length).toFixed(1) : _restaurant.rating || '4.5';
 

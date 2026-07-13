@@ -883,7 +883,7 @@ function buildSellersTable(){
   }
   const tbody=document.getElementById('sellersBody');
   tbody.innerHTML=sellers.map((s,i)=>{
-    const commission=Math.round((s.gmv||0)*0.12);
+    const commission=Math.round((s.gmv||0) * (SokoniCommission.pct("marketplace") / 100));
     const badgeCls=s.status==='Featured'?'badge-blue':'badge-green';
     return `<tr>
       <td style="color:var(--muted);font-weight:700;">${i+1}</td>

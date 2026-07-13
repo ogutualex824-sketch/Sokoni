@@ -1289,7 +1289,7 @@ function updateSellerStats(){
 
     const count = sellerProducts.length;
     const totalRevenue = sellerProducts.reduce((sum, p) => sum + Number(p.price || 0), 0);
-    const commission = Math.round(totalRevenue * 0.05);
+    const commission = Math.round(totalRevenue * (SokoniCommission.pct("marketplace") / 100));
     const netEarnings = totalRevenue - commission;
 
     const set = (id, val) => {
@@ -2461,7 +2461,7 @@ function renderSalesHistory(){
         (o.items||[]).forEach(item => {
             const prod = productMap[item.id];
             const revenue = Number(item.price||0);
-            const fee     = Math.round(revenue * 0.05);
+            const fee     = Math.round(revenue * (SokoniCommission.pct("marketplace") / 100));
             allSalesRows.push({
                 orderId:   o.id,
                 date:      o.date || "—",
@@ -3025,7 +3025,7 @@ function loadKraSection(){
     /* Revenue calculations */
     const grossRevenue     = orders.reduce((s,o)=>s+Number(o.total||0),0);
     const annualisedRev    = grossRevenue * (12 / monthsTraded);
-    const commission       = Math.round(grossRevenue * 0.12); /* 12% Sokoni fee */
+    const commission       = Math.round(grossRevenue * (SokoniCommission.pct("marketplace") / 100)); /* 12% Sokoni fee */
     const netRevenue       = grossRevenue - commission;
     const vatExclusive     = Math.round(grossRevenue / 1.16);
     const vatCollected     = grossRevenue - vatExclusive; /* 16% VAT embedded in price */
@@ -3166,7 +3166,7 @@ function downloadTaxReport(){
     const pin            = localStorage.getItem("kraPinSaved") || "NOT SET";
     const user           = JSON.parse(localStorage.getItem("sokoniUser")||"null");
     const date           = new Date().toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"});
-    const commission     = Math.round(grossRevenue * 0.12);
+    const commission     = Math.round(grossRevenue * (SokoniCommission.pct("marketplace") / 100));
     const netRevenue     = grossRevenue - commission;
     const vatExclusive   = Math.round(grossRevenue / 1.16);
     const vatCollected   = grossRevenue - vatExclusive;
@@ -3242,7 +3242,7 @@ function downloadTaxPDF(){
     const pin           = localStorage.getItem("kraPinSaved") || "NOT SET";
     const user          = JSON.parse(localStorage.getItem("sokoniUser")||"null");
     const date          = new Date().toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"});
-    const commission    = Math.round(grossRevenue * 0.12);
+    const commission    = Math.round(grossRevenue * (SokoniCommission.pct("marketplace") / 100));
     const netRevenue    = grossRevenue - commission;
     const vatExclusive  = Math.round(grossRevenue / 1.16);
     const vatCollected  = grossRevenue - vatExclusive;
@@ -3760,7 +3760,7 @@ function renderSalesAnalytics(tab){
     const revenue  = filtered.reduce((s,o)=>s+Number(o.total||0),0);
     const count    = filtered.length;
     const avgOrder = count > 0 ? Math.round(revenue/count) : 0;
-    const commission = Math.round(revenue * 0.05);
+    const commission = Math.round(revenue * (SokoniCommission.pct("marketplace") / 100));
     const net      = revenue - commission;
 
     /* Summary cards */
@@ -4001,7 +4001,7 @@ function renderMpesaInsights(){
     const delivered    = mpesaOrders.filter(o=>o.status==="delivered");
     const pending      = mpesaOrders.filter(o=>o.status!=="delivered");
     const avgOrder     = mpesaOrders.length ? Math.round(totalRevenue/mpesaOrders.length) : 0;
-    const commission   = Math.round(totalRevenue*0.05);
+    const commission   = Math.round(totalRevenue * (SokoniCommission.pct("marketplace") / 100));
     const netRevenue   = totalRevenue - commission;
 
     /* Monthly breakdown */

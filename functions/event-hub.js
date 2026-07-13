@@ -490,7 +490,8 @@ exports.purchaseTickets = onCall(CF_OPTS, async (req) => {
   }
 
   const subtotal = tier.price * qty;
-  const platformFeeRate = 0.03; // 3% platform commission
+  /* Rate from the single config (event_tickets). Was a bare 0.03 literal here. */
+  const platformFeeRate = require('./commission-config').resolveRate('event_tickets').pct / 100;
   const platformFee = tier.price === 0 ? 0 : Math.round((subtotal - discountAmount) * platformFeeRate * 100) / 100;
   const totalAmount = Math.max(0, subtotal - discountAmount);
   const organizerAmount = totalAmount - platformFee;

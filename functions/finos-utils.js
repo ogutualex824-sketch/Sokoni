@@ -304,8 +304,44 @@ async function calculateCommission(db, opts) {
     || rules.find(r => !r.entityId && r.category === 'all')
     || null;
 
+  /* revenueConfig overrides — the SECOND override system.
+   *
+   * index.js/_resolveCommission had its own precedence chain over revenueConfig/{seller_UID,
+   * hub_NAME, global} and never looked at commissionRules; calculateCommission had
+   * commissionRules and never looked at revenueConfig. The two collections were completely
+   * disjoint: a rate an admin set in one had ZERO effect on payments that happened to take the
+   * other rail. Both now resolve here, so there is one engine with one precedence.
+   *
+   * commissionRules wins over revenueConfig: rules are the richer, newer system (tiers, caps,
+   * holidays, date windows), and putting them first preserves the behaviour of every payment
+   * that already went through this function. */
+  let rcPct = null, rcFixedKES = 0;
+  if (!rule) {
+    const rcDocs = await Promise.all([
+      sellerId ? db.collection('revenueConfig').doc('seller_' + sellerId).get().catch(() => null) : null,
+      db.collection('revenueConfig').doc('hub_' + (hubId || category || 'default')).get().catch(() => null),
+      db.collection('revenueConfig').doc('global').get().catch(() => null),
+    ]);
+    const [sellerCfg, hubCfg, globalCfg] = rcDocs;
+    for (const snap of [sellerCfg, hubCfg]) {
+      if (snap && snap.exists) {
+        const d = snap.data();
+        if (rcPct === null && typeof d.commissionPct === 'number') rcPct = d.commissionPct;
+        if (!rcFixedKES && typeof d.fixedFee === 'number') rcFixedKES = d.fixedFee;
+      }
+    }
+    if (rcPct === null && globalCfg && globalCfg.exists
+        && typeof globalCfg.data().defaultCommissionPct === 'number') {
+      rcPct = globalCfg.data().defaultCommissionPct;
+    }
+  }
+
+  const base = CC.resolveRate(category);
   let commissionCents;
-  let effectiveRate = rule ? rule.rate : CC.resolveRate(category).pct;
+  let effectiveRate = rule ? rule.rate
+                    : (rcPct !== null ? rcPct : base.pct);
+  /* Flat fees: a revenueConfig override wins, else the config's own fixedKES (e.g. vehicles). */
+  const fixedKES = rcFixedKES || base.fixedKES || 0;
 
   if (rule && rule.type === 'fixed') {
     commissionCents = rule.amountCents || 0;
@@ -326,6 +362,16 @@ async function calculateCommission(db, opts) {
   /* Apply caps in order: ceiling first, then floor (floor wins over ceiling if min > max would occur) */
   if (rule && rule.maxCommissionCents) commissionCents = Math.min(commissionCents, rule.maxCommissionCents);
   if (rule && rule.minCommissionCents) commissionCents = Math.max(commissionCents, rule.minCommissionCents);
+
+  /* Flat fee and the platform minimum. Both used to live only in index.js/_resolveCommission,
+     so a payment on the FinOS rail never picked up the vehicles KES 2,000 listing fee and never
+     applied the KES 10 floor. Doing it here means every rail gets identical arithmetic. */
+  if (!rule) {
+    if (effectiveRate > 0) {
+      commissionCents = Math.max(commissionCents, CC.MIN_COMMISSION_KES * 100);
+    }
+    if (fixedKES) commissionCents += fixedKES * 100;
+  }
 
   /* Commission holiday: if currently in a campaign with 0% rate */
   const now = admin.firestore.Timestamp.now();
@@ -349,8 +395,13 @@ async function calculateCommission(db, opts) {
     effectiveRate,
     commissionCents,
     sellerNetCents,
+    /* fixedKES and category are surfaced so index.js/_resolveCommission can be a thin adapter
+       over this function instead of a second engine with its own table and its own arithmetic. */
+    fixedKES,
+    category:   base.category,
     ruleId:     rule ? rule.id : 'default',
-    ruleSource: rule ? (rule.entityId ? 'entity_specific' : rule.category) : 'default_table',
+    ruleSource: rule ? (rule.entityId ? 'entity_specific' : rule.category)
+              : (rcPct !== null ? 'revenue_config' : 'default_table'),
   };
 }
 
