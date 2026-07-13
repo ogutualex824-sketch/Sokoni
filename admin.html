@@ -4638,6 +4638,29 @@ function verifyCourier(i){ D.couriers[i].verified=true; localStorage.setItem('so
 /* ════════════════════════════════
    PROPERTIES
 ════════════════════════════════ */
+/* Search text + type filter for the property table. Kept beside renderProperties so the
+   two cannot drift apart. */
+var _propQ='', _propType='';
+
+function _visibleProperties(){
+  var q=(_propQ||'').toLowerCase();
+  return (D.bnbListings||[]).filter(function(l){
+    if(_propType && (l.type||l.listingType||'')!==_propType) return false;
+    if(!q) return true;
+    return ((l.name||l.title||'')+' '+(l.location||'')+' '+(l.owner||l.host||''))
+      .toLowerCase().indexOf(q)>-1;
+  });
+}
+
+function filterProperties(){
+  var s=document.getElementById('propSearch');
+  var t=document.getElementById('propTypeFilter');
+  _propQ    = s ? s.value : '';
+  _propType = t ? t.value : '';
+  renderProperties();
+}
+window.filterProperties=filterProperties;
+
 function renderProperties(){
   document.getElementById('propStats').innerHTML=
     statBox('🏠','b-blue',D.bnbListings.length,'BnB Listings')+
@@ -4645,8 +4668,15 @@ function renderProperties(){
     statBox('🏘️','b-purple',D.landlordProps.length,'Landlord Props')+
     statBox('⏳','b-yellow',D.bnbListings.filter(function(l){return l.status==='pending';}).length,'Pending Review');
   var body=document.getElementById('bnbBody'); if(!body) return;
-  if(!D.bnbListings.length){ body.innerHTML=emptyRow(7,'🏠','No BnB listings'); }
-  else body.innerHTML=D.bnbListings.map(function(l,i){
+  /* The search box and type dropdown above this table both called filterProperties(),
+     which was defined NOWHERE. Typing did nothing at all — silently, because an inline
+     oninput reports its failure only to the console. An admin searching a property list
+     that never filters concludes the data is missing, not that the control is dead.
+     The stat boxes above deliberately keep counting EVERYTHING: a filter should narrow
+     what you are looking at, not quietly rewrite the totals you are judging it by. */
+  var _rows = _visibleProperties();
+  if(!_rows.length){ body.innerHTML=emptyRow(7,'🏠', D.bnbListings.length ? 'No properties match this filter' : 'No BnB listings'); }
+  else body.innerHTML=_rows.map(function(l,i){
     var sc={pending:'b-yellow',active:'b-green',rejected:'b-red',suspended:'b-red'}[l.status||'pending']||'b-yellow';
     return '<tr>'
       +'<td><b>'+h(l.name||l.title||'Property '+(i+1))+'</b></td>'
