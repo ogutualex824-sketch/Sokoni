@@ -4,7 +4,7 @@
 **Legal Entity:** Bravilex International Co. Limited *(corrected 2026-07-13 — this file said "Bravilex Systems Ltd", which is not the registered entity; canonical source is `CompanyIdentity` / `company-identity.js`)*  
 **Platform URL:** https://mysokoni.co.ke  
 **Release Tag:** v1.0.0  
-**Service Worker:** `sokoni-20260713-authfix-v47` (current)
+**Service Worker:** `sokoni-20260713-homefix-v50` (current)
 
 ---
 
@@ -259,7 +259,7 @@ v1.0.0 is the first production-ready release, covering:
 
 ---
 
-## Post-Launch Fixes (v40 → v47)
+## Post-Launch Fixes (v40 → v50)
 
 | SW Version | Change |
 |---|---|
@@ -272,6 +272,7 @@ v1.0.0 is the first production-ready release, covering:
 | — | **CDN cache hardening** — `firebase.json` `**/*.@(js|css)` rule now includes `Cloudflare-CDN-Cache-Control: no-store` + `Surrogate-Control: no-store`; previously Cloudflare cached JS/CSS for up to 7 days post-deploy |
 | — | **cleanUrls nav fix** — `shared-header.js` EXCLUDED list now includes no-extension variants (`login`, `signup`, `profile`, etc.); `cleanUrls:true` strips `.html` so `/login` never matched `'login.html'`, rendering the full platform nav on auth pages |
 | v46 | **Communication Engine v1.0** — `functions/notify.js` is the single entry point for push/in-app/SMS/email; 11-stage monotonic order timeline (`orderAdvance`); `track.html` live journey. Fixed three silent production failures, all the same bug — a producer and a consumer using different names for one field, with nothing asserting they agreed: `fcmToken`/`fcmTokens` (**push from loyalty.js + redis-jobs.js had never reached a single user**), `deepLink`/`url` (**rich push would open the homepage, not the order**), `userId`/`targetUid` (**in-app notifications matched nobody's query**). Guarded by `scripts/test-notify.js` (23 checks). See [[Communication Engine]] |
+| v50 | **P0-9: Flash Deals chip overflow + UTF-8 encoding + Mobile UI polish** — Three UI defects: (1) Flash Deals category chips compressed on iPhone Safari — `flex-shrink:0` missing from `.fs-cat`; `touch-action:pan-x` missing from `.fs-cats` and `.fs-feat-scroll` scroll containers. (2) Middle dot rendered as "Â·" due to UTF-8/Latin-1 double-encoding — replaced with `&middot;` entity in `flashsale.html`. (3) Story nav arrows were 28×28 px (below 44×44 WCAG minimum) — enlarged to 44×44; `storiesRing` and hub pills row missing `touch-action:pan-x;overscroll-behavior-x:contain` on iOS. |
 | v47 | **P0-8: Google Sign-In broken + False offline banner** — Two compounding root causes: (1) `_isPopupSupported()` forced all iOS users through `signInWithRedirect`, which fails silently on iOS Safari (ITP blocks the `sokoni-aeb26.firebaseapp.com` iframe from reading cross-site storage → `getRedirectResult()` returns null). Fixed: regular iOS Safari now uses popup. (2) No already-logged-in guard on login.html — when the SW `controllerchange` reload fired during the 900ms + 1200ms auth timers, the user was stranded on the login page while Firebase had already set the session. Fixed: `_alreadyLoggedInGuard()` IIFE redirects immediately from localStorage (fast) or `sokoniAuthReady` event (slow path). Also fixed: `navigator.onLine` gate removed (unreliable on iOS/PWA); `setPersistence(browserLocalPersistence)` added before every redirect; `sokoniAuthReady` event now dispatched from `onAuthStateChanged` in `firebase.js`; `firebase.js`/`auth.js`/`session-manager.js` moved to `ALWAYS_FRESH` (no more stale auth SDK). Offline banner: `sokoni-offline.js` initial probe delayed from 0 ms to 3500 ms — eliminates false banner on PWA launch when `navigator.onLine` is transiently false during startup. |
 
 ---

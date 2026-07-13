@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260713-authfix-v47";
+const CACHE_VERSION = "sokoni-20260713-homefix-v50";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -163,7 +163,7 @@ const PRECACHE_STATIC = [
   "/auth.js", "/sokoni-db.js", "/sokoni-pay.js", "/sokoni-social.js", "/sokoni-referral.js",
   "/sokoni-desktop.css", "/sokoni-routing.js", "/sokoni-delivery.js", "/sokoni-delivery-pricing.js", "/sokoni-dispatch.js", "/sokoni-logistics.js", "/sokoni-invoice.js", "/sokoni-config.js", "/sokoni-mpesa.js", "/sokoni-revenue.js", "/sokoni-featured.js",
   "/category.js", "/profile.js", "/product.js", "/analytics.js",
-  "/security.js", "/sokoni-company.js", "/nav-active.js", "/splash.js", "/sokoni-footer.js", "/scroll-top.js",
+  "/security.js", "/sokoni-company.js", "/nav-active.js", "/splash.js", "/scroll-top.js",
   "/auth-guard.js", "/shared-header.js", "/entertainment-hub.js", "/delivery-hub.js",
   "/sokoni-carhub-pro.js", "/sokoni-banking-pro.js", "/sokoni-food.js", "/sokoni-security.js", "/sokoni-audit.js", "/sokoni-b2b.js",
   "/sokoni-property.js", "/sokoni-bnb.js", "/sokoni-sports.js", "/sokoni-marketing.js", "/sokoni-inbox.js",
@@ -423,10 +423,32 @@ self.addEventListener("fetch", event => {
      follows that redirect internally Chrome receives a navigation response
      whose final URL differs from the request URL and raises ERR_FAILED.
      Returning an explicit redirect lets the browser resolve it natively;
-     the SW then handles the clean URL on the second navigation pass. */
-  if (ext === "html" && url.pathname !== "/index.html") {
+     the SW then handles the clean URL on the second navigation pass.
+
+     ── THE HOME BUTTON BUG (ERR_FAILED) ────────────────────────────────────
+     This guard used to read `ext === "html" && url.pathname !== "/index.html"`.
+
+     index.html is the Home button's target — 118 links across the app point at it.
+     It was the ONE path excluded from the protection above, so every Home tap fell
+     through to networkFirstPage(), which fetches with redirect:"follow". Firebase
+     301s /index.html → /, fetch follows it, and the SW hands the browser a response
+     with redirected:true for a NAVIGATION request. Navigation requests have redirect
+     mode "manual"; the spec forbids a service worker returning a redirected response
+     to one, and Chrome rejects it as ERR_FAILED. Home, and only Home, was broken.
+
+     The exclusion existed because the naive strip is WRONG for this one path:
+       "/index.html".replace(/\.html$/, "")  →  "/index"   ✗  not the homepage
+     Rather than map it correctly, index.html was carved out of the fix — which
+     handed it straight to the code path the fix was written to avoid.
+
+     The canonical homepage is "/". Map it there explicitly, in ONE hop. */
+  if (ext === "html") {
     const clean = new URL(request.url);
-    clean.pathname = clean.pathname.replace(/\.html$/, "");
+    clean.pathname = clean.pathname === "/index.html"
+      ? "/"                                             /* the canonical homepage */
+      : clean.pathname.replace(/\.html$/, "");
+    /* Query string and hash are preserved — only the pathname is rewritten, so
+       /index.html?source=pwa#deals still lands on /?source=pwa#deals. */
     event.respondWith(Promise.resolve(Response.redirect(clean.toString(), 301)));
     return;
   }
@@ -478,6 +500,25 @@ async function networkFirstPage(request) {
        prevents the SW from contributing to ERR_TOO_MANY_REDIRECTS chains.
        When fetch() itself hits a redirect loop it throws TypeError — caught below. */
     const res = await fetch(new Request(request, { redirect: "follow" }));
+
+    /* ── NEVER hand a redirected response to a NAVIGATION request ──────────────
+       Navigation requests have redirect mode "manual". The spec forbids a service
+       worker fulfilling one with a response whose `redirected` flag is set, and
+       Chrome rejects it as ERR_FAILED — a blank "This site can't be reached" page.
+
+       This is what broke the Home button: /index.html 301s to /, fetch followed it,
+       and the SW returned the followed response to a navigation. The .html guard in
+       the fetch handler now redirects before we ever get here, but that only covers
+       paths ending in .html. ANY other hosting redirect — a trailing slash, a rewrite,
+       a future redirect rule — would reproduce the identical failure.
+
+       So: re-issue it as a real redirect and let the BROWSER follow it natively. The
+       browser then re-navigates, the SW sees the final URL, and the address bar is
+       correct. One class of bug, closed at the seam rather than per-path. */
+    if (res.redirected && request.mode === "navigate") {
+      return Response.redirect(res.url, 301);
+    }
+
     if (res.ok) {
       /* Guard: never cache a redirected response whose final URL differs from
          the request URL by only a query string pointing back at itself —

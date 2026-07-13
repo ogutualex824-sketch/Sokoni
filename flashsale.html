@@ -62,9 +62,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 .fshs-lbl{font-size:10px;color:rgba(255,255,255,0.4);font-weight:600;}
 
 /* CATEGORY PILLS */
-.fs-cats{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.fs-cats{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06);
+  /* iOS Safari: without pan-x the browser hijacks horizontal swipes for page scroll
+     and without overscroll-behavior-x chips can drag the whole page sideways. */
+  touch-action:pan-x;overscroll-behavior-x:contain;}
 .fs-cats::-webkit-scrollbar{display:none;}
-.fs-cat{display:flex;align-items:center;gap:6px;padding:9px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.65);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;font-family:inherit;}
+/* flex-shrink:0 is critical — without it Safari's flex algorithm compresses chips
+   to fit the container width instead of letting the row overflow and scroll. */
+.fs-cat{display:flex;align-items:center;gap:6px;padding:9px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.65);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;font-family:inherit;flex-shrink:0;}
 .fs-cat:hover,.fs-cat.active{background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.35);color:#ef4444;}
 
 /* BODY */
@@ -83,7 +88,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 .fpb-code:hover{background:rgba(239,68,68,0.2);}
 
 /* FEATURED SCROLL */
-.fs-feat-scroll{display:flex;gap:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px;}
+.fs-feat-scroll{display:flex;gap:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px;touch-action:pan-x;overscroll-behavior-x:contain;}
 .fs-feat-scroll::-webkit-scrollbar{display:none;}
 .fs-feat-card{flex-shrink:0;width:220px;border-radius:18px;overflow:hidden;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);cursor:pointer;transition:all .2s;}
 .fs-feat-card:hover{transform:translateY(-3px);border-color:rgba(239,68,68,0.3);}
@@ -204,7 +209,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
     <div class="fpb-icon">🎉</div>
     <div class="fpb-info">
       <h3>Extra 10% off any flash deal!</h3>
-      <p>New customers only Â· Use at checkout Â· Min order KES 1,000</p>
+      <p>New customers only &middot; Use at checkout &middot; Min order KES 1,000</p>
     </div>
     <div class="fpb-code" onclick="copyCode('FLASH10')" title="Tap to copy">FLASH10 📋</div>
   </div>

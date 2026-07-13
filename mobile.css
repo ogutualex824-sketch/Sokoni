@@ -47,7 +47,10 @@ body {
 .rd-tabs,
 .urgency-row,
 .social-handles,
-.scroll-x-row {
+.scroll-x-row,
+/* flashsale.html: category chips + top-picks horizontal scroll */
+.fs-cats,
+.fs-feat-scroll {
   overflow-x: auto !important;
   overflow-y: hidden !important;
   -webkit-overflow-scrolling: touch !important;
@@ -66,7 +69,12 @@ body {
 .rd-tabs::-webkit-scrollbar,
 .urgency-row::-webkit-scrollbar,
 .social-handles::-webkit-scrollbar,
-.scroll-x-row::-webkit-scrollbar { display: none !important; }
+.scroll-x-row::-webkit-scrollbar,
+.fs-cats::-webkit-scrollbar,
+.fs-feat-scroll::-webkit-scrollbar { display: none !important; }
+
+/* flashsale.html chips: must not compress in the flex row */
+.fs-cat { flex-shrink: 0 !important; }
 
 /* ── BETTER TAP TARGETS ── */
 button, a, [role="button"] {

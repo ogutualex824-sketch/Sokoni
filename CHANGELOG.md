@@ -1,4 +1,42 @@
-﻿## [2026-07-13] — 🚨 HOTFIX P0-8: Google Sign-In fails after redirect + False offline banner
+﻿## [2026-07-13] — 🩹 HOTFIX P0-9: Flash Deals chip overflow + UTF-8 encoding + Mobile UI polish
+
+### Summary
+
+Three production UI defects fixed under code freeze. No new features.
+
+**ISSUE 1 — Flash Deals category chips compressed/overlapping on iPhone Safari**
+Safari's flex algorithm shrinks flex children to fit the container rather than letting them overflow and scroll. `.fs-cat` chips had no `flex-shrink:0`, so they were compressed together instead of enabling horizontal scroll. Additionally, the `.fs-cats` container and `.fs-feat-scroll` lacked `touch-action:pan-x`, causing iOS to intercept swipes for page scroll instead of chip scroll.
+
+**ISSUE 2 — UTF-8 encoding bug: "Â· Use at checkout Â·" in Flash Deals**
+Middle dot `·` (U+00B7) has UTF-8 bytes `0xC2 0xB7`. The source file had been saved with those bytes misread as Latin-1 (ISO-8859-1), rendering "Â·". Replaced with `&middot;` HTML entity which is encoding-independent.
+
+**ISSUE 3 — Mobile UI: story arrows and hub pill row touch targets / scroll**
+Story navigation arrow buttons were 28×28 px (below 44×44 WCAG minimum). Hub pill row and storiesRing scroll containers lacked `touch-action:pan-x` and `overscroll-behavior-x:contain`, causing iOS to steal swipe gestures for page scroll.
+
+### Fix
+
+| Change | File | Effect |
+|---|---|---|
+| `.fs-cat { flex-shrink:0 }` | `flashsale.html` + `mobile.css` | Chips maintain natural width; container scrolls horizontally |
+| `.fs-cats` + `.fs-feat-scroll` — added `touch-action:pan-x;overscroll-behavior-x:contain` | `flashsale.html` + `mobile.css` | iOS routes horizontal swipes to chip scroll, not page scroll |
+| `Â·` → `&middot;` in coupon description | `flashsale.html` | Middle dot renders correctly on all browsers/encodings |
+| Story nav arrows: 28×28 → 44×44 px, font-size 15→17 / 16→18 px | `index.html` | Meets 44×44 WCAG touch-target minimum |
+| `storiesRing` div — added `touch-action:pan-x;overscroll-behavior-x:contain` | `index.html` | Horizontal story ring scroll works on iOS |
+| Hub pills row — added `touch-action:pan-x;overscroll-behavior-x:contain` | `index.html` | Horizontal hub pill scroll works on iOS |
+| `.fs-cats`, `.fs-feat-scroll` added to mobile scroll allowlist | `mobile.css` | Global CSS reinforces inline styles for both containers |
+
+### Files affected
+`flashsale.html` · `mobile.css` · `index.html`
+
+### Security changes
+None.
+
+### Breaking changes
+None.
+
+---
+
+## [2026-07-13] — 🚨 HOTFIX P0-8: Google Sign-In fails after redirect + False offline banner
 
 ### Summary
 
