@@ -525,5 +525,27 @@
   </div>
 </div>
 <script src="hub-register.js" defer></script>
+
+<!-- Preserve hub state across a trip into the Organizer.
+     SokoniHubNav.hub() saves scroll position and every [data-hub-state] control on
+     pagehide, and restores them on return — so coming back is instant instead of a
+     reload that drops you at the top with your search and filters cleared.
+
+     pagehide, not unload: unload does not fire reliably on iOS Safari, which is the one
+     browser this most needs to work in. -->
+<script src="sokoni-hub-nav.js" defer></script>
+<script>
+  window.addEventListener('load', function () {
+    if (!window.SokoniHubNav) return;
+    /* Mark what is worth restoring. The search box is the obvious one; any filter or tab
+       can opt in the same way by carrying data-hub-state. */
+    var s = document.getElementById('search-input');
+    if (s && !s.hasAttribute('data-hub-state')) s.setAttribute('data-hub-state', 'search');
+    document.querySelectorAll('.cat-pill').forEach(function (p, i) {
+      if (!p.hasAttribute('data-hub-state')) p.setAttribute('data-hub-state', 'cat' + i);
+    });
+    window.SokoniHubNav.hub();
+  });
+</script>
 </body>
 </html>

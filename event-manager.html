@@ -3,6 +3,9 @@
 <head>
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
+<!-- Section history + guaranteed route back to the Events Hub. Loaded early (not defer)
+     so showSection() is already routed through it by the time auth fires. -->
+<script src="sokoni-hub-nav.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Event Manager — SOKONI</title>
@@ -87,6 +90,19 @@
     .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .6s linear infinite;}
     @keyframes spin{to{transform:rotate(360deg);}}
     .promo-code-badge{font-family:monospace;font-size:12px;color:var(--green);background:rgba(63,185,80,.08);padding:2px 8px;border-radius:4px;border:1px solid rgba(63,185,80,.2);}
+
+    /* Mobile section bar — the sidebar is display:none below 900px, so without this the
+       organizer has no section navigation on a phone at all. Desktop keeps the sidebar. */
+    #em-mobile-nav{display:none;}
+    @media(max-width:900px){
+      #em-mobile-nav{display:flex;background:var(--bg2);border-bottom:1px solid var(--border);}
+      .em-mtab{
+        min-height:44px;padding:0 14px;border-radius:999px;white-space:nowrap;
+        background:var(--bg3);border:1px solid var(--border);color:var(--text2);
+        font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;
+      }
+      .em-mtab.active{background:rgba(88,166,255,.14);border-color:rgba(88,166,255,.45);color:var(--blue);}
+    }
   </style>
 </head>
 <body>
@@ -95,21 +111,43 @@
   <div class="hdr-logo">SOKONI <span>Event Manager</span></div>
   <div class="hdr-right">
     <span id="uid-badge" style="font-size:11px;color:var(--text2)"></span>
-    <a href="/event-hub.html" class="btn-sm">← Browse Events</a>
+    <!-- "Browse Events" read like a link to a listing, not a way out of the tool. This
+         link already worked — it is sticky and 44px — so SokoniHubNav leaves it alone
+         rather than injecting a second, competing back control beside it. -->
+    <a href="/event-hub.html" class="btn-sm">← Events Hub</a>
     <button class="btn-sm" onclick="firebase.auth(app).signOut().then(()=>location.href='/login.html')">Sign Out</button>
   </div>
 </header>
 
+<!-- MOBILE SECTION BAR
+     The sidebar is `display:none` below 900px. So on a phone the organizer had NO section
+     navigation whatsoever: you landed on Dashboard and could not reach Analytics,
+     Check-In, Orders or Promo Codes at all. Not a dead end for want of a back button — a
+     tool with six of its seven sections unreachable.
+
+     This is the same set of sections, as a sticky Quick Actions bar (sokoni-quick-actions.js
+     adopts [data-sticky-actions] and pins it below the header). Hidden on desktop, where
+     the sidebar already does the job. -->
+<div id="em-mobile-nav" data-sticky-actions>
+  <button class="em-mtab" data-sec="dashboard" onclick="showSection('dashboard')">📊 Dashboard</button>
+  <button class="em-mtab" data-sec="events"    onclick="showSection('events')">📅 My Events</button>
+  <button class="em-mtab" data-sec="create"    onclick="showSection('create')">➕ Create</button>
+  <button class="em-mtab" data-sec="orders"    onclick="showSection('orders')">🎟 Orders</button>
+  <button class="em-mtab" data-sec="checkin"   onclick="showSection('checkin')">✅ Check-In</button>
+  <button class="em-mtab" data-sec="analytics" onclick="showSection('analytics')">📈 Analytics</button>
+  <button class="em-mtab" data-sec="promo"     onclick="showSection('promo')">🏷 Promo</button>
+</div>
+
 <div class="layout">
   <nav class="sidebar">
-    <div class="nav-item active" onclick="showSection('dashboard',this)"><span class="nav-icon">📊</span>Dashboard</div>
-    <div class="nav-item" onclick="showSection('events',this)"><span class="nav-icon">📅</span>My Events</div>
-    <div class="nav-item" onclick="showSection('create',this)"><span class="nav-icon">➕</span>Create Event</div>
+    <div class="nav-item active" data-sec="dashboard" onclick="showSection('dashboard')"><span class="nav-icon">📊</span>Dashboard</div>
+    <div class="nav-item" data-sec="events" onclick="showSection('events')"><span class="nav-icon">📅</span>My Events</div>
+    <div class="nav-item" data-sec="create" onclick="showSection('create')"><span class="nav-icon">➕</span>Create Event</div>
     <div class="nav-divider"></div>
-    <div class="nav-item" onclick="showSection('orders',this)"><span class="nav-icon">🎟</span>Orders</div>
-    <div class="nav-item" onclick="showSection('checkin',this)"><span class="nav-icon">✅</span>Gate Check-In</div>
-    <div class="nav-item" onclick="showSection('analytics',this)"><span class="nav-icon">📈</span>Analytics</div>
-    <div class="nav-item" onclick="showSection('promo',this)"><span class="nav-icon">🏷</span>Promo Codes</div>
+    <div class="nav-item" data-sec="orders" onclick="showSection('orders')"><span class="nav-icon">🎟</span>Orders</div>
+    <div class="nav-item" data-sec="checkin" onclick="showSection('checkin')"><span class="nav-icon">✅</span>Gate Check-In</div>
+    <div class="nav-item" data-sec="analytics" onclick="showSection('analytics')"><span class="nav-icon">📈</span>Analytics</div>
+    <div class="nav-item" data-sec="promo" onclick="showSection('promo')"><span class="nav-icon">🏷</span>Promo Codes</div>
   </nav>
 
   <div class="content">
@@ -375,15 +413,51 @@
       return;
     }
     document.getElementById('uid-badge').textContent = user.email || user.uid;
+
+    /* Section routing + a guaranteed way back to the Events Hub.
+       Initialised AFTER auth, so a deep link (#analytics from a notification or QR code)
+       is honoured only once the user is actually allowed to see it. */
+    if (window.SokoniHubNav) {
+      window.SokoniHubNav.init({
+        hub:      { url: '/event-hub.html', label: 'Events Hub' },
+        sections: ['dashboard','events','create','orders','checkin','analytics','promo'],
+        show:     applySection,
+        home:     'dashboard',
+      });
+    }
+
     loadDashboard();
   });
 
-  function showSection(name, el) {
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  /* ── Section routing ────────────────────────────────────────────────────────
+     These seven "pages" are sections of ONE document. Switching them used to toggle a
+     CSS class and nothing else — no history entry, no hash. So the browser/device BACK
+     gesture did not step back through them: it left the organizer entirely. On iOS a
+     swipe-back from Analytics threw you out of the tool, discarding everything you had
+     done. That was the dead end — not a missing button (there is a working one in the
+     header), but a back gesture that overshot the whole tool.
+
+     applySection() is now the pure DOM change. showSection() routes through
+     SokoniHubNav, which pushes a real history entry per section, so:
+       • Back steps back through the sections actually visited
+       • Back from the FIRST section goes to the Events Hub — never out of the app
+       • #analytics deep-links from a notification, QR code or shared link
+       • a reload keeps you where you were                                            */
+  function applySection(name) {
+    /* Both navigators — the desktop sidebar and the mobile sticky bar — are driven from
+       the SAME data-sec attribute, so they cannot drift out of sync. */
+    document.querySelectorAll('[data-sec]').forEach(n => n.classList.remove('active'));
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-    if (el) el.classList.add('active');
-    document.getElementById('sec-' + name).classList.add('active');
+    document.querySelectorAll('[data-sec="' + name + '"]').forEach(n => n.classList.add('active'));
+    const sec = document.getElementById('sec-' + name);
+    if (sec) sec.classList.add('active');
   }
+
+  function showSection(name) {
+    if (window.SokoniHubNav) window.SokoniHubNav.go(name);
+    else applySection(name);                 /* module missing — never break navigation */
+  }
+  window.showSection = showSection;
 
   /* ── Dashboard ── */
   async function loadDashboard() {
