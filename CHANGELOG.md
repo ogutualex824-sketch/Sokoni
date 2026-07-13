@@ -1,4 +1,39 @@
-﻿## [2026-07-13] — Identity Command Center Sprint 5 — Executive Intelligence & Adaptive Workspace
+﻿## [2026-07-13] — Identity Command Center Sprint 6 — Adaptive Identity Intelligence
+
+### Summary
+
+Sprint 6 elevates the Profile into a genuine **Executive Operating System**. Rather than showing every user the same dashboard, the system now detects the user's primary role (10 roles: admin, healthcare, hotel, restaurant, property, employer, driver, provider, merchant, buyer) and renders the appropriate **Adaptive Role Cards** — four contextual metric tiles showing the data that matters most for that role (today's revenue for merchants, bookings for providers, earnings for drivers, etc.). A composite **Profile Health Score** (0–100, graded Excellent / Good / Needs Attention / Critical) is computed client-side from verifications + completion data and displayed with an animated SVG ring and component checklist. A **Goals panel** shows up to 5 personalised objectives (priority: incomplete first) with progress bars — universal goals (phone, identity, KRA, bank, 100% profile) plus role-specific ones (Gold Merchant, first business, driver deliveries). **Executive Commands** replace the generic Quick Actions with 6 role-specific deep-link command tiles (Open POS, Go Online, New Booking, Post Job, etc.). A **Resume Context bar** reads from `localStorage` and surfaces a one-tap "Continue: Orders" banner whenever the user left a non-overview tab within the past 24 hours. The `switchTab` chain is extended to save context on every tab switch. Zero new Cloud Functions. Index count unchanged at 199/200.
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `profile.html` | Sprint 6 CSS (resume bar, adaptive role cards, health ring, goals, exec commands, skeleton shimmer); HTML (resume bar after search, role card wrap after command summary, health + goals + exec commands wrap before Quick Actions); Sprint 6 IIFE (role detection, `_renderAdaptiveCards`, `_renderProfileHealth`, `_renderGoals`, `_renderExecCmds`, `_saveContext`/`_loadResume`, `pi6Resume`/`pi6ResumeClose` globals, `_s6Boot`, chained `switchTab`, auth boot at 1800ms) |
+
+### Architecture
+
+- **Role detection priority**: admin → healthcare → hotel → restaurant → property → employer → driver → provider → merchant → buyer
+- **ROLE\_CARDS + EXEC\_CMDS**: 10 role definitions, 4 cards each, 6 commands each; all extend cleanly as new roles are added
+- **Profile Health formula**: email(+10) + phone(+10) + identity(+20) + KRA(+10) + bank(+10) + photo(+5) + completion×0.25 (up to 25) = 100
+- **switchTab chain**: S6 → S5 → S4 → S3 → original (each IIFE captures predecessor via closure variable)
+- **Boot sequencing**: S3 0ms → S4 900ms → S5 1400ms → S6 1800ms; each independently polls for `_piOverview`
+
+### Security
+- All intelligence is derived from already-authenticated CF response data cached in `window._piOverview`
+- `localStorage` stores only `{tab, label, ts}` — no PII, no tokens
+- Executive Command links are static hrefs; no dynamic URL construction from user data
+
+### Performance
+- Role cards and resume bar render synchronously from `_piOverview` — no network delay
+- Health + Goals defer to `profileGetCompletion` (already called by S5 boot); S6 reuses the same response
+- Executive Commands render from in-memory config — zero CF calls
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-07-13] — Identity Command Center Sprint 5 — Executive Intelligence & Adaptive Workspace
 
 ### Summary
 

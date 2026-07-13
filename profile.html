@@ -1204,6 +1204,111 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 .pi-hub-chip.primary{
   background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.2);color:#71ff00;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 6 — Adaptive Identity Intelligence
+══════════════════════════════════════════════════════════════ */
+
+/* ── Resume Context Bar ── */
+.pi6-resume-bar{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;
+  background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);
+  border-radius:14px;margin:0;
+}
+.pi6-resume-icon{font-size:16px;flex-shrink:0;}
+.pi6-resume-text{flex:1;font-size:12px;font-weight:800;color:rgba(255,255,255,0.8);}
+.pi6-resume-btn{
+  padding:5px 12px;border-radius:8px;background:rgba(113,255,0,0.14);
+  border:1px solid rgba(113,255,0,0.28);color:#71ff00;font-size:11px;
+  font-weight:900;cursor:pointer;white-space:nowrap;flex-shrink:0;
+}
+.pi6-resume-btn:hover{background:rgba(113,255,0,0.22);}
+.pi6-resume-close{
+  background:none;border:none;color:rgba(255,255,255,0.25);font-size:14px;
+  cursor:pointer;padding:4px;flex-shrink:0;line-height:1;
+}
+.pi6-resume-close:hover{color:rgba(255,255,255,0.6);}
+
+/* ── Adaptive Role Cards ── */
+.pi6-role-grid{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:0;
+}
+@media(min-width:500px){.pi6-role-grid{grid-template-columns:repeat(4,1fr);}}
+.pi6-role-card{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;padding:14px 12px;display:flex;flex-direction:column;
+  gap:6px;transition:border-color .15s,background .15s;
+}
+.pi6-role-card:hover{background:rgba(255,255,255,0.055);border-color:rgba(255,255,255,0.13);}
+.pi6-rc-icon{font-size:20px;line-height:1;}
+.pi6-rc-val{font-size:22px;font-weight:900;color:#fff;letter-spacing:-.02em;line-height:1.1;margin-top:2px;}
+.pi6-rc-lbl{font-size:11px;font-weight:800;color:rgba(255,255,255,0.6);margin-top:2px;}
+.pi6-rc-sub{font-size:10px;font-weight:700;color:rgba(255,255,255,0.28);text-transform:uppercase;letter-spacing:.05em;}
+
+/* ── Profile Health ── */
+.pi6-health-layout{display:flex;align-items:center;gap:20px;}
+.pi6-health-ring-wrap{position:relative;flex-shrink:0;width:76px;height:76px;}
+.pi6-health-inner{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+}
+.pi6-health-num{font-size:18px;font-weight:900;color:#fff;line-height:1;}
+.pi6-health-pct{font-size:9px;font-weight:800;color:rgba(255,255,255,0.4);}
+.pi6-health-body{flex:1;}
+.pi6-health-grade{
+  font-size:13px;font-weight:900;margin-bottom:10px;
+}
+.pi6-health-grade.excellent{color:#71ff00;}
+.pi6-health-grade.good     {color:#a8ff57;}
+.pi6-health-grade.warn     {color:#ffc800;}
+.pi6-health-grade.critical {color:#ff6b6b;}
+.pi6-health-components{display:flex;flex-wrap:wrap;gap:6px 14px;}
+.pi6-health-comp{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.55);}
+.pi6-hc-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.pi6-hc-dot.done   {background:#71ff00;}
+.pi6-hc-dot.pending{background:rgba(255,255,255,0.18);}
+
+/* ── Goals ── */
+.pi6-goal-item{
+  display:flex;align-items:center;gap:10px;padding:8px 0;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.pi6-goal-item:last-child{border-bottom:none;}
+.pi6-goal-item.done .pi6-goal-label{color:rgba(255,255,255,0.4);text-decoration:line-through;}
+.pi6-goal-icon{font-size:16px;flex-shrink:0;width:22px;text-align:center;}
+.pi6-goal-body{flex:1;}
+.pi6-goal-label{font-size:12px;font-weight:800;color:rgba(255,255,255,0.8);margin-bottom:5px;}
+.pi6-goal-track{height:3px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden;}
+.pi6-goal-fill{height:100%;background:#71ff00;border-radius:2px;transition:width .4s ease;}
+.pi6-goal-done{font-size:14px;color:#71ff00;font-weight:900;flex-shrink:0;}
+.pi6-goal-pct{font-size:11px;font-weight:800;color:rgba(255,255,255,0.3);flex-shrink:0;}
+
+/* ── Executive Commands ── */
+.pi6-exec-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+}
+@media(min-width:500px){.pi6-exec-grid{grid-template-columns:repeat(6,1fr);}}
+.pi6-exec-cmd{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:14px 6px;border-radius:14px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  text-decoration:none;color:#fff;cursor:pointer;font-family:inherit;
+  transition:background .12s,border-color .12s,transform .1s;
+}
+.pi6-exec-cmd:hover{
+  background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.2);
+  color:#71ff00;transform:translateY(-1px);
+}
+.pi6-ec-icon{font-size:22px;line-height:1;}
+.pi6-ec-lbl{font-size:10px;font-weight:800;text-align:center;line-height:1.2;}
+
+/* ── Skeleton shimmer ── */
+@keyframes pi6Shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.pi6-skel{
+  background:linear-gradient(90deg,rgba(255,255,255,0.04) 25%,rgba(255,255,255,0.08) 50%,rgba(255,255,255,0.04) 75%);
+  background-size:400px;animation:pi6Shimmer 1.4s infinite;
+  border-radius:6px;color:transparent;user-select:none;
+}
 </style>
 </head>
 
@@ -1402,6 +1507,14 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       </div>
     </div>
 
+    <!-- ── S6: Resume Last Context ── -->
+    <div id="pi6ResumeBar" class="pi6-resume-bar" style="display:none;">
+      <span class="pi6-resume-icon">↩️</span>
+      <span class="pi6-resume-text" id="pi6ResumeText">Continue where you left off</span>
+      <button type="button" class="pi6-resume-btn" onclick="pi6Resume()">Resume →</button>
+      <button type="button" class="pi6-resume-close" onclick="pi6ResumeClose()" aria-label="Dismiss">✕</button>
+    </div>
+
     <!-- ── Command Summary (populated by Sprint-4 IIFE on first open) ── -->
     <div class="pi-cmd-grid" id="piCmdGrid">
       <div class="pi-cmd-card accent">
@@ -1426,6 +1539,11 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       </div>
     </div>
 
+    <!-- ── S6: Adaptive Role Cards ── -->
+    <div class="up-card" id="pi6RoleCardWrap" style="padding:12px 16px;display:none;">
+      <div class="pi6-role-grid" id="pi6RoleCards"></div>
+    </div>
+
     <!-- ── S5: Smart Insights Strip ── -->
     <div class="up-card" style="padding:12px 16px;">
       <div class="pi-insights-strip" id="piInsightsStrip">
@@ -1438,6 +1556,15 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       <div class="up-card-title" style="margin-bottom:8px;">📋 My Day</div>
       <div class="pi-myday-wrap" id="piMyDay"></div>
     </div>
+
+    <!-- ── S6: Profile Health ── -->
+    <div class="up-card" id="pi6ProfileHealth" style="padding:14px 16px;display:none;"></div>
+
+    <!-- ── S6: Goals ── -->
+    <div class="up-card" id="pi6Goals" style="padding:14px 16px;display:none;"></div>
+
+    <!-- ── S6: Executive Commands ── -->
+    <div class="up-card" id="pi6ExecCmdsWrap" style="padding:14px 16px;display:none;"></div>
 
     <!-- ── Quick Actions ── -->
     <div class="up-card" style="padding:16px;">
@@ -4851,6 +4978,453 @@ window.logoutUser = logoutUser;
     document.addEventListener('DOMContentLoaded', _boot5);
   } else {
     _boot5();
+  }
+
+})();
+
+/* ══════════════════════════════════════════════════════════════════════
+   SPRINT 6 — Adaptive Identity Intelligence
+   Executive Operating System layer: role-adaptive cards, Profile Health,
+   Goals, Executive Commands, Resume Context. Zero new Cloud Functions.
+══════════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  /* ── local helpers ── */
+  function _c6(name, data) {
+    if (!window.firebase || !firebase.functions) return Promise.reject(new Error('SDK not ready'));
+    return firebase.functions().httpsCallable(name)(data || {}).then(function(r) { return r.data; });
+  }
+  function _ov6()    { return window._piOverview || null; }
+  function _el6(id)  { return document.getElementById(id); }
+
+  /* ── role detection — priority ordered ── */
+  function _role(ov) {
+    var roles = (ov && ov.roles) || [];
+    if (roles.indexOf('superAdmin') !== -1 || roles.indexOf('admin') !== -1) return 'admin';
+    if (roles.indexOf('doctor') !== -1 || roles.indexOf('healthcare') !== -1) return 'healthcare';
+    if (roles.indexOf('hotel') !== -1) return 'hotel';
+    if (roles.indexOf('restaurant') !== -1 || roles.indexOf('restaurantOwner') !== -1) return 'restaurant';
+    if (roles.indexOf('propertyOwner') !== -1 || roles.indexOf('landlord') !== -1) return 'property';
+    if (roles.indexOf('employer') !== -1) return 'employer';
+    if (roles.indexOf('driver') !== -1) return 'driver';
+    if (roles.indexOf('provider') !== -1) return 'provider';
+    if (roles.indexOf('seller') !== -1 || roles.indexOf('vendor') !== -1 || roles.indexOf('merchant') !== -1) return 'merchant';
+    return 'buyer';
+  }
+
+  /* ── adaptive role card definitions ── */
+  var ROLE_CARDS = {
+    buyer: [
+      { key:'orderCount',    label:'My Orders',   sub:'Total',     icon:'📦' },
+      { key:'walletBalance', label:'Wallet',       sub:'Available', icon:'💰', fmt:'KES' },
+      { key:'loyaltyPoints', label:'Loyalty',      sub:'Points',    icon:'🏅' },
+      { key:'reviewCount',   label:'Reviews',      sub:'Given',     icon:'⭐' },
+    ],
+    merchant: [
+      { key:'todayRevenue',  label:"Today's Sales",sub:'KES',       icon:'💰', fmt:'KES' },
+      { key:'pendingOrders', label:'Pending Orders',sub:'Awaiting',  icon:'📦' },
+      { key:'businessCount', label:'Businesses',   sub:'Registered',icon:'🏬' },
+      { key:'trustScore',    label:'Trust Score',  sub:'/ 100',     icon:'📊' },
+    ],
+    driver: [
+      { key:'todayEarnings', label:"Today's Earnings",sub:'KES',    icon:'💵', fmt:'KES' },
+      { key:'completedToday',label:'Deliveries',   sub:'Today',     icon:'🚗' },
+      { key:'acceptanceRate',label:'Acceptance',   sub:'Rate',      icon:'✅', fmt:'%' },
+      { key:'walletBalance', label:'Wallet',        sub:'Balance',  icon:'💳', fmt:'KES' },
+    ],
+    provider: [
+      { key:'bookingsToday', label:'Bookings',     sub:'Today',     icon:'📅' },
+      { key:'rating',        label:'Rating',       sub:'Score',     icon:'⭐' },
+      { key:'pendingPayments',label:'Pending Pay', sub:'KES',       icon:'💳', fmt:'KES' },
+      { key:'reviewCount',   label:'Reviews',      sub:'Total',     icon:'💬' },
+    ],
+    employer: [
+      { key:'employeeCount', label:'Team Size',    sub:'Members',   icon:'👥' },
+      { key:'pendingApprovals',label:'Approvals',  sub:'Pending',   icon:'✅' },
+      { key:'businessCount', label:'Businesses',   sub:'Registered',icon:'🏢' },
+      { key:'activeJobs',    label:'Open Jobs',    sub:'Hiring',    icon:'📋' },
+    ],
+    admin: [
+      { key:'platformHealth',label:'Platform',     sub:'Health',    icon:'🟢' },
+      { key:'supportTickets',label:'Tickets',      sub:'Open',      icon:'🎫' },
+      { key:'totalUsers',    label:'Users',        sub:'Total',     icon:'👥' },
+      { key:'systemAlerts',  label:'Alerts',       sub:'Active',    icon:'🚨' },
+    ],
+    healthcare: [
+      { key:'appointmentsToday',label:'Appointments',sub:'Today',   icon:'🏥' },
+      { key:'totalPatients', label:'Patients',     sub:'Total',     icon:'👤' },
+      { key:'pendingPayments',label:'Pending Pay', sub:'KES',       icon:'💳', fmt:'KES' },
+      { key:'rating',        label:'Rating',       sub:'Score',     icon:'⭐' },
+    ],
+    hotel: [
+      { key:'guestsToday',   label:"Today's Guests",sub:'Checked In',icon:'🛏️' },
+      { key:'occupancyRate', label:'Occupancy',    sub:'Rate',      icon:'📊', fmt:'%' },
+      { key:'checkInsToday', label:'Check-ins',    sub:'Today',     icon:'✅' },
+      { key:'todayRevenue',  label:'Revenue',      sub:'KES',       icon:'💰', fmt:'KES' },
+    ],
+    restaurant: [
+      { key:'reservationsToday',label:'Reservations',sub:'Today',   icon:'🍽️' },
+      { key:'kitchenQueue',  label:'Kitchen Queue',sub:'Orders',    icon:'🍳' },
+      { key:'todayRevenue',  label:'Revenue',      sub:'KES',       icon:'💰', fmt:'KES' },
+      { key:'staffOnline',   label:'Staff',        sub:'On Shift',  icon:'👨‍🍳' },
+    ],
+    property: [
+      { key:'occupancyRate', label:'Occupancy',    sub:'Rate',      icon:'🏠', fmt:'%' },
+      { key:'activeBookings',label:'Bookings',     sub:'Active',    icon:'📅' },
+      { key:'pendingPayments',label:'Pending Rent',sub:'KES',       icon:'💳', fmt:'KES' },
+      { key:'vacancies',     label:'Vacancies',    sub:'Available', icon:'🔑' },
+    ],
+  };
+
+  /* render known values from overview directly into card display */
+  var DIRECT_KEYS = { businessCount: true, trustScore: true, orderCount: true, walletBalance: true };
+
+  function _renderAdaptiveCards(ov) {
+    var wrap6    = _el6('pi6RoleCardWrap');
+    var grid     = _el6('pi6RoleCards');
+    if (!grid) return;
+    var role  = _role(ov);
+    var cards = ROLE_CARDS[role] || ROLE_CARDS.buyer;
+
+    grid.innerHTML = cards.map(function(c) {
+      var raw = (ov && ov[c.key] != null) ? ov[c.key] : null;
+      var val = '—';
+      if (raw !== null && raw !== undefined) {
+        if (c.fmt === 'KES')  val = 'KES ' + Number(raw).toLocaleString();
+        else if (c.fmt === '%') val = Number(raw).toFixed(0) + '%';
+        else val = raw;
+      }
+      return '<div class="pi6-role-card">' +
+             '<div class="pi6-rc-icon">' + c.icon + '</div>' +
+             '<div class="pi6-rc-val">' + val + '</div>' +
+             '<div class="pi6-rc-lbl">' + c.label + '</div>' +
+             '<div class="pi6-rc-sub">' + c.sub + '</div>' +
+             '</div>';
+    }).join('');
+
+    if (wrap6) wrap6.style.display = '';
+  }
+
+  /* ── Profile Health Score ── */
+  function _calcHealth(ov, comp) {
+    var score = 0;
+    var v = (ov && ov.verifications) || {};
+    if (v.email || v.emailVerified)       score += 10;
+    if (v.phone)                          score += 10;
+    if (v.identity || v.identityVerified) score += 20;
+    if (v.kra)                            score += 10;
+    if (v.bank || v.bankAccount)          score += 10;
+    if (ov && ov.photoURL)                score += 5;
+    var pct = (comp && comp.percent) || 0;
+    score += Math.floor(pct * 0.25);      /* up to 25 pts from completion */
+    return Math.min(100, score);
+  }
+
+  function _healthGrade(s) {
+    if (s >= 80) return { label: 'Excellent', cls: 'excellent', stroke: '#71ff00' };
+    if (s >= 60) return { label: 'Good',      cls: 'good',      stroke: '#a8ff57' };
+    if (s >= 40) return { label: 'Needs Attention', cls: 'warn', stroke: '#ffc800' };
+    return               { label: 'Critical', cls: 'critical',  stroke: '#ff6b6b' };
+  }
+
+  function _renderProfileHealth(ov, comp) {
+    var wrap = _el6('pi6ProfileHealth');
+    if (!wrap) return;
+    var score = _calcHealth(ov, comp);
+    var grade = _healthGrade(score);
+    var circ  = 188.5;
+    var offset = +(circ - circ * score / 100).toFixed(1);
+    var v = (ov && ov.verifications) || {};
+    var pct = (comp && comp.percent) || 0;
+
+    var components = [
+      { label:'Identity', done: !!(v.identity || v.identityVerified) },
+      { label:'Phone',    done: !!v.phone },
+      { label:'KRA PIN',  done: !!v.kra },
+      { label:'Bank',     done: !!(v.bank || v.bankAccount) },
+      { label:'Profile',  done: pct >= 80 },
+    ];
+
+    wrap.innerHTML =
+      '<div class="up-card-title" style="margin-bottom:12px;">🏥 Profile Health</div>' +
+      '<div class="pi6-health-layout">' +
+        '<div class="pi6-health-ring-wrap">' +
+          '<svg width="76" height="76" viewBox="0 0 76 76" style="display:block;">' +
+            '<circle cx="38" cy="38" r="30" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="8"/>' +
+            '<circle cx="38" cy="38" r="30" fill="none" stroke="' + grade.stroke + '" stroke-width="8"' +
+            ' stroke-dasharray="' + circ + '" stroke-dashoffset="' + offset + '"' +
+            ' stroke-linecap="round" transform="rotate(-90 38 38)"/>' +
+          '</svg>' +
+          '<div class="pi6-health-inner">' +
+            '<span class="pi6-health-num">' + score + '</span>' +
+            '<span class="pi6-health-pct">/100</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="pi6-health-body">' +
+          '<div class="pi6-health-grade ' + grade.cls + '">' + grade.label + '</div>' +
+          '<div class="pi6-health-components">' +
+            components.map(function(c) {
+              return '<div class="pi6-health-comp">' +
+                     '<span class="pi6-hc-dot ' + (c.done ? 'done' : 'pending') + '"></span>' +
+                     '<span class="pi6-hc-lbl">' + c.label + '</span>' +
+                     '</div>';
+            }).join('') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    wrap.style.display = '';
+  }
+
+  /* ── Goals ── */
+  function _renderGoals(ov, comp) {
+    var wrap = _el6('pi6Goals');
+    if (!wrap) return;
+    var v     = (ov && ov.verifications) || {};
+    var score = (ov && ov.trustScore) || 0;
+    var pct   = (comp && comp.percent) || 0;
+    var roles = (ov && ov.roles) || [];
+    var bizCt = (ov && ov.businessCount) || 0;
+
+    var all = [
+      { icon:'📱', label:'Verify phone number',         done: !!v.phone,                       progress: v.phone ? 100 : 0 },
+      { icon:'🪪', label:'Complete identity verification',done: !!(v.identity||v.identityVerified), progress: (v.identity||v.identityVerified) ? 100 : 0 },
+      { icon:'⚡', label:'Reach Silver Trust (45 pts)', done: score >= 45,                     progress: Math.min(100, Math.round(score / 45 * 100)) },
+      { icon:'📝', label:'Complete profile 100%',       done: pct >= 100,                      progress: pct },
+      { icon:'🏦', label:'Link bank account',           done: !!(v.bank || v.bankAccount),     progress: (v.bank||v.bankAccount) ? 100 : 0 },
+      { icon:'🔐', label:'Verify KRA PIN',              done: !!v.kra,                         progress: v.kra ? 100 : 0 },
+    ];
+
+    if (roles.indexOf('seller') !== -1 || roles.indexOf('vendor') !== -1) {
+      all.push({ icon:'🥇', label:'Reach Gold Merchant', done: score >= 70, progress: Math.min(100, Math.round(score / 70 * 100)) });
+    }
+    if (bizCt === 0) {
+      all.push({ icon:'🏬', label:'Register your first business', done: false, progress: 0 });
+    }
+    if (roles.indexOf('driver') !== -1) {
+      all.push({ icon:'🚗', label:'Complete 10 deliveries', done: !!(ov && ov.completedDeliveries >= 10), progress: Math.min(100, Math.round(((ov && ov.completedDeliveries) || 0) / 10 * 100)) });
+    }
+
+    /* Incomplete goals first, complete last; show max 5 */
+    var incomplete = all.filter(function(g){ return !g.done; });
+    var complete   = all.filter(function(g){ return  g.done; });
+    var shown = incomplete.concat(complete).slice(0, 5);
+
+    wrap.innerHTML = '<div class="up-card-title" style="margin-bottom:10px;">🎯 Goals</div>' +
+      shown.map(function(g) {
+        var doneHtml = g.done
+          ? '<span class="pi6-goal-done">✓</span>'
+          : '<span class="pi6-goal-pct">' + (g.progress || 0) + '%</span>';
+        return '<div class="pi6-goal-item' + (g.done ? ' done' : '') + '">' +
+               '<span class="pi6-goal-icon">' + g.icon + '</span>' +
+               '<div class="pi6-goal-body">' +
+               '<div class="pi6-goal-label">' + g.label + '</div>' +
+               '<div class="pi6-goal-track"><div class="pi6-goal-fill" style="width:' + (g.progress || 0) + '%"></div></div>' +
+               '</div>' + doneHtml + '</div>';
+      }).join('');
+
+    wrap.style.display = '';
+  }
+
+  /* ── Executive Commands ── */
+  var EXEC_CMDS = {
+    buyer:      [ {i:'🛍️',l:'Shop Now',      href:'marketplace.html'},
+                  {i:'📦',l:'My Orders',     tab:'orders'},
+                  {i:'💰',l:'Wallet',         tab:'wallet'},
+                  {i:'❤️',l:'Wishlist',       href:'wishlist.html'},
+                  {i:'🤖',l:'Ask KASS',       act:'if(window.piOpenKass)piOpenKass()'},
+                  {i:'🎫',l:'Bookings',       tab:'bookings'} ],
+    merchant:   [ {i:'🖥️',l:'Open POS',      href:'pos.html'},
+                  {i:'📦',l:'New Product',   href:'seller.html#add'},
+                  {i:'📊',l:'Orders',         tab:'orders'},
+                  {i:'💸',l:'Withdraw',       href:'wallet.html'},
+                  {i:'📈',l:'Analytics',      href:'seller-analytics.html'},
+                  {i:'👥',l:'Staff',          href:'staff-management.html'} ],
+    driver:     [ {i:'🟢',l:'Go Online',     href:'driver-dashboard.html'},
+                  {i:'📍',l:'Navigate',       href:'driver-dashboard.html#nav'},
+                  {i:'💵',l:'Earnings',       href:'driver-dashboard.html#earnings'},
+                  {i:'💳',l:'Wallet',         tab:'wallet'},
+                  {i:'📊',l:'Performance',    href:'driver-dashboard.html#stats'},
+                  {i:'🆘',l:'Support',        href:'help.html'} ],
+    provider:   [ {i:'📅',l:'New Booking',   href:'services.html#book'},
+                  {i:'🗓️',l:'Availability',   href:'services.html#calendar'},
+                  {i:'⭐',l:'Reviews',        tab:'reviews'},
+                  {i:'💳',l:'Payments',       tab:'wallet'},
+                  {i:'📊',l:'Analytics',      href:'services.html#analytics'},
+                  {i:'🔔',l:'Schedule',       href:'services.html#schedule'} ],
+    employer:   [ {i:'👥',l:'Team',          href:'staff-management.html'},
+                  {i:'📋',l:'Post Job',       href:'jobs.html#employer'},
+                  {i:'✅',l:'Approvals',      href:'staff-management.html#approvals'},
+                  {i:'📊',l:'Reports',        href:'seller-analytics.html'},
+                  {i:'💰',l:'Payroll',        href:'pos.html#payroll'},
+                  {i:'🏢',l:'Business',       href:'my-businesses.html'} ],
+    admin:      [ {i:'🖥️',l:'Admin OS',      href:'admin-os.html'},
+                  {i:'🔒',l:'Security',       href:'security-center.html'},
+                  {i:'📊',l:'Analytics',      href:'admin-os.html#analytics'},
+                  {i:'🎫',l:'Tickets',        href:'admin-os.html#support'},
+                  {i:'💰',l:'Finance',        href:'financial-os.html'},
+                  {i:'⚙️',l:'Settings',      href:'admin-os.html#config'} ],
+    healthcare: [ {i:'📅',l:'Appointments',  href:'services.html#appointments'},
+                  {i:'👤',l:'Patients',       href:'services.html#patients'},
+                  {i:'📋',l:'Records',        tab:'vault'},
+                  {i:'💳',l:'Payments',       tab:'wallet'},
+                  {i:'📊',l:'Reports',        href:'services.html#reports'},
+                  {i:'🔔',l:'Availability',   href:'services.html#schedule'} ],
+    hotel:      [ {i:'🛏️',l:'Reservations',  href:'venue-booking.html'},
+                  {i:'✅',l:'Check-ins',      href:'venue-booking.html#checkins'},
+                  {i:'🧹',l:'Housekeeping',   href:'venue-booking.html#housekeeping'},
+                  {i:'💰',l:'Revenue',        href:'seller-analytics.html'},
+                  {i:'👥',l:'Staff',          href:'staff-management.html'},
+                  {i:'📊',l:'Reports',        href:'seller-analytics.html'} ],
+    restaurant: [ {i:'🍽️',l:'Reservations',  href:'venue-booking.html'},
+                  {i:'🍳',l:'Kitchen Queue',  href:'pos.html#kitchen'},
+                  {i:'📦',l:'Orders',         tab:'orders'},
+                  {i:'💰',l:'Revenue',        href:'seller-analytics.html'},
+                  {i:'👨‍🍳',l:'Staff',          href:'staff-management.html'},
+                  {i:'📊',l:'Analytics',      href:'seller-analytics.html'} ],
+    property:   [ {i:'🏠',l:'Properties',    href:'property-hub.html'},
+                  {i:'📅',l:'Bookings',       tab:'bookings'},
+                  {i:'🔑',l:'Vacancies',      href:'property-hub.html#vacancies'},
+                  {i:'💳',l:'Rent',           href:'wallet.html'},
+                  {i:'🔧',l:'Maintenance',    href:'property-hub.html#maintenance'},
+                  {i:'📊',l:'Reports',        href:'seller-analytics.html'} ],
+  };
+
+  function _renderExecCmds(ov) {
+    var wrap = _el6('pi6ExecCmdsWrap');
+    if (!wrap) return;
+    var role = _role(ov);
+    var cmds = EXEC_CMDS[role] || EXEC_CMDS.buyer;
+
+    var inner = cmds.slice(0, 6).map(function(c) {
+      var cls  = 'pi6-exec-cmd';
+      var body = '<span class="pi6-ec-icon">' + c.i + '</span><span class="pi6-ec-lbl">' + c.l + '</span>';
+      if (c.href) return '<a class="' + cls + '" href="' + c.href + '">' + body + '</a>';
+      if (c.tab)  return '<button type="button" class="' + cls + '" onclick="switchTab(\'' + c.tab + '\')">' + body + '</button>';
+      return '<button type="button" class="' + cls + '" onclick="' + (c.act || '') + '">' + body + '</button>';
+    }).join('');
+
+    wrap.innerHTML = '<div class="up-card-title" style="margin-bottom:10px;">⚡ Executive Commands</div>' +
+                     '<div class="pi6-exec-grid">' + inner + '</div>';
+    wrap.style.display = '';
+  }
+
+  /* ── Resume Last Context ── */
+  var TAB_LABELS = {
+    orders:'Orders', listings:'My Listings', bookings:'Bookings',
+    reviews:'Reviews', wallet:'Wallet', career:'Career', vault:'Documents',
+    identity:'Identity', employment:'Employment', achievements:'Achievements',
+    security:'Security', card:'ID Card'
+  };
+
+  function _saveContext(tab) {
+    if (tab === 'overview') return;
+    try {
+      localStorage.setItem('_pi6ctx', JSON.stringify({ tab: tab, label: TAB_LABELS[tab] || tab, ts: Date.now() }));
+    } catch(e) {}
+  }
+
+  function _loadResume() {
+    try {
+      var raw = localStorage.getItem('_pi6ctx');
+      if (!raw) return;
+      var ctx = JSON.parse(raw);
+      if (!ctx || !ctx.tab) return;
+      if (Date.now() - ctx.ts > 24 * 3600 * 1000) { localStorage.removeItem('_pi6ctx'); return; }
+      var bar  = _el6('pi6ResumeBar');
+      var txt  = _el6('pi6ResumeText');
+      if (!bar) return;
+      if (txt)  txt.textContent = 'Continue: ' + (ctx.label || ctx.tab);
+      bar.dataset.resumeTab = ctx.tab;
+      bar.style.display = '';
+    } catch(e) {}
+  }
+
+  window.pi6Resume = function() {
+    try {
+      var ctx = JSON.parse(localStorage.getItem('_pi6ctx') || 'null');
+      if (ctx && ctx.tab) { switchTab(ctx.tab); }
+    } catch(e) {}
+    var bar = _el6('pi6ResumeBar');
+    if (bar) bar.style.display = 'none';
+  };
+
+  window.pi6ResumeClose = function() {
+    var bar = _el6('pi6ResumeBar');
+    if (bar) bar.style.display = 'none';
+    try { localStorage.removeItem('_pi6ctx'); } catch(e) {}
+  };
+
+  /* ── Main boot ── */
+  var _s6Loaded = false;
+
+  function _s6Boot() {
+    if (_s6Loaded) return;
+    _s6Loaded = true;
+    var ov = _ov6();
+
+    /* Resume bar — instant, from localStorage */
+    _loadResume();
+
+    /* Role cards + exec commands — instant if overview ready */
+    if (ov) {
+      _renderAdaptiveCards(ov);
+      _renderExecCmds(ov);
+    }
+
+    /* Health + Goals — need completion data */
+    _c6('profileGetCompletion').then(function(comp) {
+      var ov2 = _ov6();   /* re-read in case it loaded after _s6Loaded set */
+      _renderProfileHealth(ov2, comp);
+      _renderGoals(ov2, comp);
+      if (ov2 && !ov) {   /* was null at boot, now available */
+        _renderAdaptiveCards(ov2);
+        _renderExecCmds(ov2);
+      }
+    }).catch(function() {
+      var ov2 = _ov6();
+      _renderProfileHealth(ov2, null);
+      _renderGoals(ov2, null);
+    });
+  }
+
+  /* ── Chain switchTab (S6 wraps S5 wrapper) ── */
+  var _s5Switch = window.switchTab;
+  window.switchTab = function(id) {
+    _saveContext(id);
+    if (_s5Switch) _s5Switch(id);
+    /* Refresh role cards + exec commands on return to overview */
+    if (id === 'overview') {
+      setTimeout(function() {
+        var ov = _ov6();
+        if (ov) { _renderAdaptiveCards(ov); _renderExecCmds(ov); }
+      }, 150);
+    }
+  };
+
+  /* ── Auth boot — fires at 1800ms (after S5's 1400ms) ── */
+  function _boot6() {
+    if (!window.firebase || !firebase.auth) { setTimeout(_boot6, 500); return; }
+    firebase.auth().onAuthStateChanged(function(user) {
+      if (!user) return;
+      setTimeout(function() {
+        _s6Boot();
+        /* Poll if overview not yet populated */
+        if (!_ov6()) {
+          var _poll6 = setInterval(function() {
+            if (_ov6()) { clearInterval(_poll6); if (!_s6Loaded) _s6Boot(); }
+          }, 500);
+          setTimeout(function() { clearInterval(_poll6); }, 15000);
+        }
+      }, 1800);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _boot6);
+  } else {
+    _boot6();
   }
 
 })();
