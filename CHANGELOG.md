@@ -1,4 +1,34 @@
-﻿## [2026-07-13] — 🩹 HOTFIX: Mobile Homepage Stabilization Sprint (SW v53)
+﻿## [2026-07-13] — Premium Product Card & Buy Button Enhancement (SW v60)
+
+### Summary
+
+Full purchase-area redesign across the product grid. Three distinct actions — ❤️ Wishlist, 🛒 Cart, ⚡ Buy Now — are now clearly separated on both desktop and mobile. Touch targets meet WCAG 2.1 AA (≥ 40 px on mobile, ≥ 44 px on desktop). Double-tap prevention guards all cart/buy actions. Wishlist state is reflected live on the card (filled heart, pink glow). Low-stock chips appear when ≤ 5 units remain.
+
+**Desktop:** `pcard-actions` section now rendered in the card return for the first time. Buttons at `min-height: 44px`. Wish button reflects saved state.
+
+**Mobile (≤ 600 px + 601–767 px tablet):** Three-button strip — heart circle (40 px) | cart circle (40 px) | Buy pill (flex:1, 40 px). Previously only two buttons at 28–32 px. `pcard-actions` explicitly hidden via media query so both areas never overlap.
+
+**Double-tap prevention:** `_productCardClick` checks `btn.disabled || btn.dataset.loading === '1'` before dispatching any action. `buyProduct` and `buyNow` set `data-loading="1"` + `disabled` on the triggering button and clear both after completion (or on early return from age-gate / product-not-found).
+
+**Wishlist state:** `buildProductCard` reads `wishlist` global (same source as `addToWishlist`) via `inWishlist` flag. Active buttons get `.pcard-btn--wish-active` / `.pcard-m-wish--active` CSS classes.
+
+**Low-stock chip:** `stockChip` variable emits `⚡ Only N left` when `product.stock` is 1–5 and product is not OOS. Shown on desktop inside product-body; shown in mobile strip top row.
+
+### Files affected
+`script.js` · `style.css` · `compact-grid.css` · `service-worker.js`
+
+### Performance implications
+Zero extra Firestore reads. Wishlist state derived from existing in-memory `wishlist` array already loaded. Stock chip derived from existing `product.stock` field already present on the product object.
+
+### Security changes
+None.
+
+### Breaking changes
+None. `buildProductCard()` signature unchanged. `buyProduct(id)` and `buyNow(id)` remain callable without the second argument — `_trigBtn` defaults to `undefined` (no-op).
+
+---
+
+## [2026-07-13] — 🩹 HOTFIX: Mobile Homepage Stabilization Sprint (SW v53)
 
 ### Summary
 
