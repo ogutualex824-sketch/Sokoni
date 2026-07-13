@@ -509,7 +509,7 @@
     overlay.id        = '_sm-overlay';
     overlay.innerHTML = `
 <style>
-#_sm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}
+#_sm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:var(--sk-z-sheet,100010);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}
 #_sm-box{background:#111;border:1px solid rgba(113,255,0,.18);border-radius:18px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;padding:26px;color:#fff}
 #_sm-box::-webkit-scrollbar{width:4px}#_sm-box::-webkit-scrollbar-thumb{background:rgba(113,255,0,.3);border-radius:2px}
 ._smh{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}

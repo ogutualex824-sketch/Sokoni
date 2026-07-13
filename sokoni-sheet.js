@@ -225,6 +225,33 @@
       if (dy > 90) { y0 = null; sheet.close(); }
     }
 
+    /* ── inert the background ──────────────────────────────────────────────────
+       A focus trap stops TAB escaping. It does not stop a screen reader wandering into
+       the page behind the sheet, and it does not stop a click landing there. `inert`
+       does both: the browser removes the subtree from the a11y tree and from hit-testing
+       entirely.
+
+       Applied to body's direct children EXCEPT the sheet itself, so it works no matter
+       where the sheet is mounted. Only elements we set are cleared again — a page that
+       already marked something inert keeps it. */
+    var inerted = [];
+    function setInert(on) {
+      if (on) {
+        Array.prototype.forEach.call(doc.body.children, function (c) {
+          if (c === el || c.hasAttribute('inert')) return;
+          c.setAttribute('inert', '');
+          c.setAttribute('aria-hidden', 'true');
+          inerted.push(c);
+        });
+      } else {
+        inerted.forEach(function (c) {
+          c.removeAttribute('inert');
+          c.removeAttribute('aria-hidden');
+        });
+        inerted = [];
+      }
+    }
+
     sheet.open = function () {
       if (sheet.isOpen) return;
       sheet.isOpen = true;
@@ -232,6 +259,7 @@
 
       el.classList.add('open');
       doc.body.style.overflow = 'hidden';       /* the page behind must not scroll */
+      setInert(true);
 
       try { history.pushState({ skSheet: id }, ''); pushed = true; } catch (e) {}
 
@@ -252,6 +280,7 @@
       sheet.isOpen = false;
 
       el.classList.remove('open');
+      setInert(false);                         /* the page behind is usable again */
       if (!_open.filter(function (s) { return s !== sheet && s.isOpen; }).length) {
         doc.body.style.overflow = '';
       }
@@ -276,10 +305,98 @@
     return sheet;
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════════
+     AUTO-PROMOTION — the architectural fix, applied to overlays nobody will migrate
+
+     An audit found 223 full-screen dismissible overlays across the platform with
+     HARDCODED z-index values, every one BELOW the header (100001): .aos-modal (1000),
+     .adm-lock-overlay (9999), #bidSheet (500), .drawer-overlay (200), .modal-bg (300)…
+     Each is the Notification Centre bug lying in wait: open it, and the header covers the
+     top of it — including, on a short viewport, the control you close it with.
+
+     Rewriting 223 files is not a fix, it is 223 chances to break something. And the brief
+     is right: patch the architecture, not the pages.
+
+     So: when a full-screen fixed element becomes VISIBLE, and it cannot beat the header,
+     raise it. By definition an overlay that COVERS the viewport must out-rank the header —
+     if it did not, part of it would be hidden behind the header, which is the bug. There
+     is no legitimate case for a visible full-screen overlay sitting under the top bar.
+
+     Deliberately NOT touched:
+       • anything that does not cover the viewport (toasts, badges, FABs, sticky bars)
+       • side drawers that sit WITHIN the page — they belong below the header
+       • the header, the bottom nav, and anything already above the header
+       • hidden elements — display:none costs nothing and promoting it proves nothing
+
+     Cost: one rAF-debounced pass on DOMContentLoaded and after a click (overlays open on
+     click). No polling, no MutationObserver on the whole document, no scroll listener.
+  ══════════════════════════════════════════════════════════════════════════════ */
+  var Z_HEADER_FALLBACK = 100001;
+
+  function headerZ() {
+    var h = doc.getElementById('sk-top-nav');
+    if (!h) return Z_HEADER_FALLBACK;
+    var z = parseInt(getComputedStyle(h).zIndex, 10);
+    return isFinite(z) ? z : Z_HEADER_FALLBACK;
+  }
+
+  function promote() {
+    var hz = headerZ();
+    var vw = global.innerWidth, vh = global.innerHeight;
+    var all = doc.querySelectorAll('div,section,aside,dialog');
+
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el.__skPromoted) continue;
+      if (el.id === 'sk-top-nav') continue;
+
+      var st = getComputedStyle(el);
+      if (st.position !== 'fixed') continue;
+      if (st.display === 'none' || st.visibility === 'hidden') continue;
+      if (Number(st.opacity) < 0.05) continue;
+
+      var z = parseInt(st.zIndex, 10);
+      if (!isFinite(z) || z > hz) continue;              /* already wins, or auto */
+
+      /* Must actually COVER the viewport — that is what makes it a sheet rather than a
+         drawer, a toast or a banner. 92% allows for a hair of rounding and safe-area. */
+      var b = el.getBoundingClientRect();
+      if (b.width < vw * 0.92 || b.height < vh * 0.92) continue;
+
+      el.style.setProperty('z-index', 'var(--sk-z-sheet,100010)', 'important');
+      el.__skPromoted = true;
+      el.setAttribute('data-sk-promoted', String(z));    /* visible in DevTools; auditable */
+
+      if (global.console && console.info) {
+        console.info('[SokoniSheet] promoted a full-screen overlay above the header ' +
+                     '(was z-index ' + z + '): ' + (el.id ? '#' + el.id : el.className));
+      }
+    }
+  }
+
+  var _raf = 0;
+  function schedulePromote() {
+    if (_raf) cancelAnimationFrame(_raf);
+    _raf = requestAnimationFrame(promote);
+  }
+
+  function watch() {
+    schedulePromote();
+    /* Overlays open on a tap. Re-check after one — debounced to a single frame, so the
+       cost is a layout read, not a listener storm. */
+    doc.addEventListener('click', schedulePromote, { passive: true, capture: true });
+    global.addEventListener('resize', schedulePromote, { passive: true });
+  }
+
+  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', watch, { once: true });
+  else watch();
+
   global.SokoniSheet = {
     create: create,
     closeTop: function () { var s = _open[_open.length - 1]; if (s) s.close(); },
     openCount: function () { return _open.length; },
+    /* Exposed so a page that renders an overlay asynchronously can force a pass. */
+    promote: promote,
   };
 
 })(typeof window !== 'undefined' ? window : this);

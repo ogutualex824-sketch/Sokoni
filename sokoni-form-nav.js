@@ -116,7 +116,7 @@
     // Styles
     const s = document.createElement('style');
     s.textContent =
-      '#sfn-dlg{display:none;position:fixed;inset:0;z-index:99999;align-items:center;' +
+      '#sfn-dlg{display:none;position:fixed;inset:0;z-index:var(--sk-z-sheet,100010);align-items:center;' +
         'justify-content:center;padding:20px;box-sizing:border-box}' +
       '#sfn-dlg.sfn-on{display:flex}' +
       '#sfn-bg{position:absolute;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(6px)}' +

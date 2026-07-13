@@ -9,7 +9,7 @@
     var s = document.createElement('style');
     s.id = _styleId;
     s.textContent =
-      '#sokoni-share-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99999;display:flex;align-items:flex-end;justify-content:center;animation:ssOverIn .18s ease;}'
+      '#sokoni-share-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:var(--sk-z-sheet,100010);display:flex;align-items:flex-end;justify-content:center;animation:ssOverIn .18s ease;}'
       + '@keyframes ssOverIn{from{opacity:0}to{opacity:1}}'
       + '#sokoni-share-sheet{background:#1c1c1c;border:1px solid rgba(255,255,255,.1);border-radius:22px 22px 0 0;width:100%;max-width:480px;padding-bottom:max(env(safe-area-inset-bottom),8px);animation:ssSheetIn .25s cubic-bezier(.32,.72,0,1);overflow:hidden;}'
       + '@keyframes ssSheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}'

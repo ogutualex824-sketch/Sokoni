@@ -57,7 +57,7 @@
    SOKONI INVOICE MODAL
 ═══════════════════════════════ */
 #sokoni-inv-overlay{
-  position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.85);
+  position:fixed;inset:0;z-index:var(--sk-z-sheet,100010);background:rgba(0,0,0,0.85);
   backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;
   padding:16px;animation:invFadeIn .25s ease;
 }

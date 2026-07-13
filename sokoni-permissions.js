@@ -491,7 +491,7 @@
     s.id = "sokoni-perm-css";
     s.textContent = `
       .sokoni-access-modal{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;
-        align-items:center;justify-content:center;padding:24px;z-index:9999;
+        align-items:center;justify-content:center;padding:24px;z-index:var(--sk-z-sheet,100010);
         opacity:0;transition:opacity .25s}
       .sokoni-access-modal.show{opacity:1}
       .sokoni-access-modal-content{background:#111;border:1px solid rgba(113,255,0,.3);

@@ -3970,7 +3970,7 @@ body{
 
     align-items:center;
 
-    z-index:9999;
+    z-index:var(--sk-z-sheet,100010);
 
 }
 
@@ -4596,7 +4596,7 @@ body{
 
     align-items:center;
 
-    z-index:99999;
+    z-index:var(--sk-z-sheet,100010);
 
     padding:20px;
 
@@ -9501,7 +9501,7 @@ body.light-mode{
     inset:0;
     background:rgba(0,0,0,0.7);
     backdrop-filter:blur(8px);
-    z-index:9999;
+    z-index:var(--sk-z-sheet,100010);
     display:flex;
     align-items:center;
     justify-content:center;
@@ -13271,7 +13271,7 @@ body.light-mode .product-card .buy-btn{      background:rgba(255,140,0,0.07) !im
     inset:0;
     background:rgba(0,0,0,0.88);
     backdrop-filter:blur(16px);
-    z-index:99999;
+    z-index:var(--sk-z-sheet,100010);
     display:flex;
     align-items:flex-start;
     justify-content:center;
