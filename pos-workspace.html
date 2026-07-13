@@ -1815,6 +1815,60 @@
         setTimeout(measureConnectionQuality, 5000);
       }
     }, 3000);
+
+    /* ── USB device test ───────────────────────────────────────────────────────
+       The "Test" button beside every paired USB device called testUsbDevice(), which
+       was defined NOWHERE in the repository. Clicking it threw a ReferenceError and did
+       nothing — silently, because an inline onclick reports its failure only to the
+       console. A merchant checking whether their receipt printer works got no answer at
+       all, which is worse than a plain "not supported": it looks like the hardware is
+       broken.
+
+       An honest test opens the device. That is the one thing that actually proves the
+       browser can talk to it — the device appearing in getDevices() only proves it was
+       paired at some point, not that it is reachable now (it may be unplugged, claimed
+       by the OS, or asleep). We open, then close, and change nothing about its state. */
+    async function testUsbDevice(productId) {
+      if (!('usb' in navigator)) {
+        showToast('WebUSB is not supported in this browser. Use Chrome or Edge on desktop.');
+        return;
+      }
+
+      let device;
+      try {
+        const devices = await navigator.usb.getDevices();
+        device = devices.find(d => d.productId === productId);
+      } catch (e) {
+        showToast('Could not read USB devices: ' + e.message);
+        return;
+      }
+
+      if (!device) {
+        showToast('That device is no longer paired. Reconnect it and refresh.');
+        return;
+      }
+
+      const name = device.productName || 'USB device';
+      try {
+        await device.open();
+        /* Opened successfully — the browser can reach it. Close again immediately: we are
+           testing reachability, not claiming the device, and leaving it open would block
+           the printer driver from using it. */
+        await device.close();
+        showToast('✅ ' + name + ' responded — connection OK');
+      } catch (e) {
+        /* Report the ACTUAL reason. "Access denied" (the OS owns it) and "device
+           unavailable" (unplugged) need completely different actions from the merchant,
+           and a generic "test failed" tells them neither. */
+        const msg = /denied|SecurityError/i.test(e.name + e.message)
+          ? name + ': access denied — another program is using it, or the browser lacks permission.'
+          : /NotFound|unavailable|disconnected/i.test(e.name + e.message)
+            ? name + ': not responding — check it is plugged in and powered on.'
+            : name + ': ' + (e.message || 'could not connect');
+        showToast('⚠ ' + msg);
+      }
+    }
+    window.testUsbDevice = testUsbDevice;
   </script>
 </body>
 </html>

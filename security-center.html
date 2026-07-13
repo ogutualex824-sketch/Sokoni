@@ -1422,6 +1422,125 @@
     } catch (e) { toast('Error: ' + e.message); }
   }
 
+  /* ── TOTP MFA enrolment ──────────────────────────────────────────────────────
+     The "Enroll TOTP MFA" button called setupTOTP(), which was defined NOWHERE in the
+     repository. Clicking it threw a ReferenceError and did nothing at all — silently,
+     because an inline onclick reports its failure only to the console.
+
+     The backend was never the problem: security-identity.js has fourteen handlers
+     (initiateTOTPEnrollment, verifyTOTPEnrollment, verifyTOTP, disableMFA,
+     regenerateBackupCodes, …) already routed through servicesDispatch. Two-factor
+     authentication was fully built on the server and completely unreachable from the UI.
+
+     A security control that cannot be switched on is worse than one that is absent: the
+     page displays an MFA panel, so it looks available, and nobody goes looking for it.
+
+     Two steps, per RFC 6238: the server issues a Base32 secret + otpauth:// URI, the user
+     scans it, and enrolment only completes once they prove possession by returning a
+     valid code. Backup codes are shown ONCE — the server stores only their hashes and
+     cannot show them again. */
+  async function setupTOTP() {
+    const card = document.getElementById('mfaStatusCard');
+    if (!card) return;
+
+    let init;
+    try {
+      init = await callCF('initiateTOTPEnrollment');
+    } catch (e) {
+      toast('Could not start MFA setup: ' + e.message);
+      return;
+    }
+
+    card.innerHTML = `
+      <div class="domain-name" style="margin-bottom:10px">Set up two-factor authentication</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:12px">
+        Scan this with Google Authenticator, 1Password or Authy, then enter the 6-digit code it shows.
+      </div>
+      <div id="totpQr" style="background:#fff;padding:10px;border-radius:10px;display:inline-block;min-height:60px"></div>
+      <div style="margin-top:10px;font-size:11px;color:var(--text2)">Or enter this key manually:</div>
+      <code style="display:block;margin-top:4px;padding:8px;background:var(--bg3);border-radius:6px;
+                   font-size:12px;word-break:break-all;user-select:all">${escHtml(init.secret || '')}</code>
+      <input id="totpCode" class="form-input" inputmode="numeric" autocomplete="one-time-code"
+             maxlength="6" placeholder="6-digit code" style="margin-top:12px;font-size:16px">
+      <button class="btn btn-primary" style="margin-top:10px" onclick="confirmTOTP()">Verify &amp; enable</button>
+      <button class="btn-sm" style="margin-top:10px;margin-left:6px" onclick="loadIdentity()">Cancel</button>
+      <div id="totpErr" style="margin-top:8px;font-size:12px;color:var(--red)"></div>`;
+
+    /* The QR is rendered LOCALLY from the otpauth:// URI the server produced — the client
+       never invents the secret.
+
+       Deliberately not an external QR image service: the CSP img-src allows only 'self',
+       data:, blob: and a short list of Google/Firebase hosts, so a third-party QR URL
+       would simply be blocked and the user would stare at a broken image. cdnjs IS
+       allowed by script-src (and already used by pos-modules.js for exactly this), and
+       the library draws into a local canvas — no external request for the image itself,
+       and the TOTP secret never leaves the page. Sending a live MFA secret to a
+       third-party image host to be rendered would be a poor trade in any case.
+
+       If the library cannot load, the manual key above still works — every authenticator
+       app accepts it. The QR is the convenience; the key is the feature. */
+    try {
+      if (!window.QRCode) {
+        await new Promise((res, rej) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+          s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+      new window.QRCode(document.getElementById('totpQr'), {
+        text: init.qrUri || '', width: 180, height: 180,
+        correctLevel: window.QRCode.CorrectLevel.M,
+      });
+    } catch (e) {
+      const q = document.getElementById('totpQr');
+      if (q) q.innerHTML = '<div style="font-size:11px;color:#666;padding:14px">' +
+        'QR unavailable — use the key below.</div>';
+    }
+  }
+
+  async function confirmTOTP() {
+    const input = document.getElementById('totpCode');
+    const err   = document.getElementById('totpErr');
+    const code  = (input.value || '').trim();
+
+    /* Say what is wrong. The whole failure mode here was a control that did nothing and
+       explained nothing. */
+    if (!/^\d{6}$/.test(code)) { err.textContent = 'Enter the 6-digit code from your authenticator app.'; return; }
+    err.textContent = '';
+
+    let res;
+    try {
+      res = await callCF('verifyTOTPEnrollment', { code });
+    } catch (e) {
+      err.textContent = e.message || 'That code was not accepted. Codes expire every 30 seconds — try the current one.';
+      return;
+    }
+
+    /* Backup codes are shown ONCE. The server keeps only hashes, so this really is the
+       only time the user can see them — say so plainly rather than letting them close
+       the panel and lock themselves out. */
+    const codes = res.backupCodes || [];
+    document.getElementById('mfaStatusCard').innerHTML = `
+      <div class="domain-name" style="margin-bottom:8px">✅ Two-factor authentication is on</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">
+        <strong>Save these backup codes now.</strong> They are the only way back into your account if you
+        lose your phone, and they cannot be shown again — we store only their hashes.
+      </div>
+      <code style="display:block;padding:10px;background:var(--bg3);border-radius:8px;font-size:13px;
+                   line-height:1.9;letter-spacing:.06em;user-select:all">${codes.map(escHtml).join('<br>')}</code>
+      <button class="btn-sm" style="margin-top:10px"
+              onclick="navigator.clipboard?.writeText(${JSON.stringify(codes.join('\n'))}).then(()=>toast('Backup codes copied'))">
+        Copy codes
+      </button>
+      <button class="btn btn-primary" style="margin-top:10px;margin-left:6px" onclick="loadIdentity()">Done</button>`;
+
+    toast('Two-factor authentication enabled');
+  }
+
+  window.setupTOTP   = setupTOTP;
+  window.confirmTOTP = confirmTOTP;
+
   async function registerPasskey() {
     const el = document.getElementById('passkeysResult');
     el.innerHTML = '<div class="loading">Initiating passkey registration…</div>';

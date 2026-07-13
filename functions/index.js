@@ -7238,6 +7238,7 @@ exports.inventoryTransferStock       = inventoryEngine.inventoryTransferStock;
 exports.inventoryReceivePO           = inventoryEngine.inventoryReceivePO;
 exports.inventoryProcessStockCount   = inventoryEngine.inventoryProcessStockCount;
 exports.inventoryAggregateAnalytics  = inventoryEngine.inventoryAggregateAnalytics;
+exports.inventoryGetDashboardStats   = inventoryEngine.inventoryGetDashboardStats;
 exports.inventoryOnMovement          = inventoryEngine.inventoryOnMovement;
 exports.inventoryCleanupOldMovements = inventoryEngine.inventoryCleanupOldMovements;
 
