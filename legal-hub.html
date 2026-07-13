@@ -64,6 +64,10 @@
     .law-pane a[href^="mailto:"]{
       display:inline-flex; align-items:center; min-height:44px; padding:2px 4px; margin:-2px -4px;
     }
+    /* The external resource links (Judiciary, LSK, Kenya Law, ICJ) are block-level rows
+       that came out at 42px — 2px short. Links sitting inside a prose sentence are left
+       alone on purpose: WCAG 2.5.8 exempts them, and padding them would break the line. */
+    .law-pane a[target="_blank"][style*="display:flex"]{ min-height:44px; }
 
     .law-body{ max-width:1100px; margin:0 auto; padding:36px 24px 100px; }
     .law-pane{ display:none; }
@@ -235,12 +239,24 @@
 <style>
 /* ── Legal Hub phone fixes — must load AFTER compact-grid.css ── */
 @media(max-width:600px){
-  /* compact-grid.css forces 5 cols on .lawyers-grid — override it here */
-  .lawyers-grid{
+  /* compact-grid.css forces .lawyers-grid to 2 columns under 600px (compact-grid.css:1284),
+     and it was winning: the class-level !important here was not enough. Two columns at 393px
+     leaves ~165px per card, which starves the card's internal flex layout — .lc-info
+     collapsed to 0px wide (so the practice-area label spilled out of a zero-width box) and
+     the Message/Follow buttons clipped their own labels (63px of text in a 42px button).
+     The ID selector settles it: one card per row on a phone, which is what a 4-button
+     action row and a full name actually need. */
+  #lawyersGrid.lawyers-grid,
+  .law-body .lawyers-grid{
     grid-template-columns:1fr !important;
     padding:8px 14px 16px !important;
     gap:12px !important;
   }
+  /* Belt and braces: even if a card is ever narrow again, the action row wraps instead
+     of clipping, and the share button meets the 44px tap minimum. */
+  .lawyer-card [data-lid]{ flex-wrap:wrap !important; }
+  .lawyer-card [data-lid] > button{ min-height:44px; white-space:nowrap; }
+  .lawyer-card [data-lid] > button:last-child{ width:44px !important; height:44px !important; }
   /* Doc cards: 2-col icon grid looks great on phone */
   .doc-grid{
     grid-template-columns:repeat(2,1fr) !important;
@@ -408,7 +424,7 @@
 
 <!-- NAV -->
 <nav class="navbar" style="background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(113,255,0,0.15);">
-  <div class="logo-section"><a href="index.html"><img loading="lazy" src="assets/Sokoni Logo.png" class="main-logo" alt="SOKONI"></a></div>
+  <div class="logo-section"><a href="index.html"><img loading="lazy" src="assets/sokoni logoo.jpeg" class="main-logo" alt="SOKONI"></a></div>
   <div class="law-nav-links" style="gap:8px;display:flex;align-items:center;">
     <a href="legal.html" style="padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.6);text-decoration:none;font-size:12px;font-weight:600;">📋 Legal Docs</a>
     <button type="button" onclick="showLawTab('lawyers');setTimeout(()=>{const s=document.getElementById('lawyerSearch');if(s){s.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>s.focus(),400);}},300);" style="padding:8px 14px;border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#c8ff80;background:rgba(113,255,0,0.08);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">⚖️ Find a Lawyer</button>
