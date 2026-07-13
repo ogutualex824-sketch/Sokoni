@@ -104,10 +104,39 @@ _h.providerCompleteBooking = async (req) => {
     throw new HttpsError('failed-precondition', `Cannot complete a "${data.status}" booking.`);
   }
 
-  const gross      = Math.max(0, Math.round(Number(data.price) || 0)); // cents
-  const rate       = await _commissionRate(uid);
-  const commission = Math.round(gross * rate);
+  const gross = Math.max(0, Math.round(Number(data.price) || 0)); // cents
+
+  /* ── COMMISSION: the ONE engine ────────────────────────────────────────────────────────
+   * This used to compute commission itself:
+   *     const rate = await _commissionRate(uid);          // subscription-core, a fraction
+   *     const commission = Math.round(gross * rate);
+   * That bypassed the Commission Engine entirely, so provider bookings ignored
+   * commissionRules, revenueConfig overrides, promotional/holiday campaigns, plan adjustments
+   * and the audit trail. It was the last money path on the platform outside the engine.
+   *
+   * PRICING IS UNCHANGED. `subscriptionRole: 'provider'` puts the engine in compatibility
+   * mode, where it consumes the provider's own plan rate through the SAME
+   * subscription-core.getCommissionRate() call this code used to make. Free Trial 20%,
+   * Starter 15%, Professional 10%, Business 7%, Enterprise 5% — exactly as before.
+   * Migrating to the engine's flat `services` rate would have charged an Enterprise provider
+   * 15% instead of 5%; that is a commercial decision, and it is not taken here.
+   *
+   * What the provider GAINS: commissionRules and revenueConfig now reach these bookings for
+   * the first time, so the platform can price, discount or run a commission holiday for
+   * providers without a deploy. An operator retires compatibility mode by writing
+   * revenueConfig/hub_provider — no code change. */
+  const { calculateCommission } = require('./finos-utils');
+  const comm = await calculateCommission(_db(), {
+    orderAmountCents: gross,
+    category:         'services',
+    sellerId:         uid,
+    hubId:            'provider',
+    subscriptionRole: 'provider',   /* compatibility mode: the plan rate is authoritative */
+  });
+
+  const commission = comm.commissionCents;
   const net        = gross - commission;
+  const rate       = comm.effectiveRate / 100;   /* fraction — the shape every reader expects */
   const dayKey     = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
   const batch = _db().batch();
@@ -118,6 +147,29 @@ _h.providerCompleteBooking = async (req) => {
     providerId: uid, bookingId: ref.id, gross, commission, commissionRate: rate,
     net, amount: net, currency: 'KES', method: null, reference: null,
     status: 'pending', createdAt: _ts(),
+
+    /* ── AUDIT TRAIL ──────────────────────────────────────────────────────────────────────
+     * A provider booking now carries the same evidence as every other payment on the
+     * platform, so a settlement is reproducible years later: which authority priced it,
+     * which rule, which plan, what adjustment, and under which engine version.
+     * `commissionRate` above is retained unchanged so existing analytics, receipts,
+     * exports, dashboards and payout reports keep working untouched. */
+    commissionPct:   comm.effectiveRate,
+    baseRate:        comm.baseRate,
+    pricingSource:   comm.pricingSource,
+    ruleId:          comm.ruleId,
+    ruleSource:      comm.ruleSource,
+    planId:          comm.planId,
+    planName:        comm.planName,
+    planAdjustment:  comm.planAdjustment,
+    adjustmentType:  comm.adjustmentType,
+    planApplied:     comm.planApplied,
+    reason:          comm.reason,
+    hubType:         'provider',
+    category:        comm.category,
+    idempotencyKey:  ref.id,        /* the booking id IS the key — one payout per booking */
+    calculatedAt:    comm.calculatedAt,
+    engineVersion:   comm.engineVersion,
   }, { merge: true });
 
   // Profile counters

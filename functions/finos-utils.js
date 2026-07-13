@@ -339,7 +339,26 @@ async function calculateCommission(db, opts) {
       'be defaulted to zero or to a flat rate. Fix the call site.'
     );
   }
-  const { orderAmountCents, category, sellerId, hubId } = opts || {};
+  const { orderAmountCents, category, sellerId, hubId,
+          /* ── COMPATIBILITY MODE: subscription-defined ABSOLUTE rate ──────────────────────
+           * Some hubs price by PLAN, not by category. A provider's plan rate is the commercial
+           * promise of that plan — Free Trial 20%, Starter 15%, Professional 10%, Business 7%,
+           * Enterprise 5%: the more you pay for the plan, the LOWER your commission.
+           *
+           * The engine's `services` category is a single 15% for everyone. Those are different
+           * concepts, and flattening one into the other is a repricing, not a refactor: it would
+           * charge Enterprise providers 15% instead of 5% — KES 1,000 more on a KES 10,000
+           * booking — and every paid tier would pay MORE the more they had paid for their plan.
+           *
+           * So the engine CONSUMES the plan rate rather than overwriting it. Set
+           * `subscriptionRole` to opt a call site in. The rate comes from the canonical
+           * Subscription Engine (subscription-core.getCommissionRate) — the exact function the
+           * old bespoke path used — so pricing is byte-identical by construction.
+           *
+           * commissionRules and revenueConfig still take precedence, so platform governance now
+           * reaches provider bookings for the first time; previously nothing could override them.
+           */
+          subscriptionRole } = opts || {};
 
   /* Fetch rules; small collection — fetch all and pick best match */
   const rulesSnap = await db.collection('commissionRules').where('isActive', '==', true).get().catch(() => null);
@@ -385,12 +404,45 @@ async function calculateCommission(db, opts) {
     }
   }
 
+  /* ── PRECEDENCE 3: subscription-defined ABSOLUTE plan rate (compatibility mode) ──────────
+   * Only when the call site opts in with `subscriptionRole`, and only after rules and
+   * revenueConfig have had their say — so an admin can still override a provider's rate,
+   * which was impossible before this migration.
+   *
+   * The number comes from subscription-core.getCommissionRate(uid, {role}) — the SAME call
+   * the bespoke provider path made — so a migrated booking is charged exactly what it was
+   * charged yesterday. It returns a FRACTION (0.05); the engine speaks percent (5).
+   *
+   * An operator can retire this compatibility mode without a deploy by writing
+   * revenueConfig/hub_provider { commissionPct: 15 }, which outranks it. That is the
+   * deliberate business decision; this code does not make it. */
+  let subRatePct = null;
+  if (!rule && rcPct === null && subscriptionRole && sellerId) {
+    try {
+      const subCore = require('./subscription-core');
+      const frac = await subCore.getCommissionRate(sellerId, { role: subscriptionRole });
+      /* 0.07 * 100 is 7.000000000000001 in IEEE-754. Round to 3dp: a rate written into an
+         immutable ledger must not carry float dust. The commission itself is unaffected —
+         Math.round() absorbs it — but the RECORDED rate would have been wrong forever. */
+      if (Number.isFinite(frac) && frac >= 0 && frac <= 1) {
+        subRatePct = Math.round(frac * 100 * 1000) / 1000;
+      }
+    } catch (_) {
+      /* Subscription Engine unavailable: fall through to the category default rather than
+         guess. A wrong rate is worse than a well-defined one. */
+    }
+  }
+
   const base = CC.resolveRate(category);
   let commissionCents;
   let effectiveRate = rule ? rule.rate
-                    : (rcPct !== null ? rcPct : base.pct);
+                    : (rcPct !== null ? rcPct
+                    : (subRatePct !== null ? subRatePct : base.pct));
   /* Flat fees: a revenueConfig override wins, else the config's own fixedKES (e.g. vehicles). */
   const fixedKES = rcFixedKES || base.fixedKES || 0;
+  /* True when the plan rate is the authority for this booking — used below to keep the
+     platform minimum off a flow that never had one. */
+  const usingSubRate = (!rule && rcPct === null && subRatePct !== null);
 
   /* ── STEP 4: subscription plan adjustment ──────────────────────────────────────────────
    * Applied to whatever base survived rules -> revenueConfig -> category, so the seller's
@@ -469,7 +521,12 @@ async function calculateCommission(db, opts) {
      so a payment on the FinOS rail never picked up the vehicles KES 2,000 listing fee and never
      applied the KES 10 floor. Doing it here means every rail gets identical arithmetic. */
   if (!rule) {
-    if (effectiveRate > 0) {
+    /* The KES 10 platform minimum must NOT be applied to a booking priced by its subscription
+       plan. The bespoke provider path never had a minimum: a KES 20 booking at 20% charged
+       KES 4. Introducing the floor here would silently raise it to KES 10 — a 150% increase on
+       small bookings, and exactly the kind of unapproved repricing this migration must avoid.
+       Compatibility mode means compatible, including at the edges. */
+    if (effectiveRate > 0 && !usingSubRate) {
       commissionCents = Math.max(commissionCents, CC.MIN_COMMISSION_KES * 100);
     }
     if (fixedKES) commissionCents += fixedKES * 100;
@@ -508,7 +565,14 @@ async function calculateCommission(db, opts) {
     category:   base.category,
     ruleId:     rule ? rule.id : 'default',
     ruleSource: rule ? (rule.entityId ? 'entity_specific' : rule.category)
-              : (rcPct !== null ? 'revenue_config' : 'default_table'),
+              : (rcPct !== null ? 'revenue_config'
+              : (usingSubRate ? 'subscription_plan_rate' : 'default_table')),
+    /* Which authority actually priced this transaction. Written to the ledger so a settlement
+       can be explained years later without re-deriving it. */
+    pricingSource: rule ? 'commission_rule'
+                 : (rcPct !== null ? 'revenue_config'
+                 : (usingSubRate ? 'subscription_plan_rate (compatibility mode)'
+                 : 'category_default')),
 
     /* ── AUDIT BREAKDOWN ────────────────────────────────────────────────────────────────
      * Written verbatim into commissionLedger and shown verbatim to the seller, so a
